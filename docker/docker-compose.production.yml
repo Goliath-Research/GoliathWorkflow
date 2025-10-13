@@ -1,0 +1,37 @@
+services:
+  gpu_env:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    image: methylpipeline-gpu-env:production
+    container_name: methylpipeline-prod
+    user: "999:999"  # ubuntu user
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ipc: host
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack:
+        soft: 67108864
+        hard: 67108864
+    volumes:
+      - /home/ubuntu/working_dir:/home/ubuntu/working_dir
+      - /home/ubuntu/Work:/home/ubuntu/Work
+    stdin_open: true
+    tty: true
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONPATH=/opt/methylpipeline/lib/python3.10/site-packages
+      - CUPY_CACHE_DIR=/home/ubuntu/.cupy/kernel_cache
+    shm_size: '16gb'
+    restart: unless-stopped
+    command: sleep infinity
+

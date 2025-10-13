@@ -1,0 +1,58 @@
+# Auto detect text files and normalize line endings
+* text=auto
+
+# Python files
+*.py text eol=lf
+*.pyx text eol=lf
+*.pxd text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+
+# YAML and configuration files
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+
+# Documentation
+*.md text eol=lf
+*.txt text eol=lf
+*.rst text eol=lf
+
+# Docker files
+Dockerfile* text eol=lf
+*.dockerignore text eol=lf
+
+# Binary files
+*.pkl binary
+*.h5 binary
+*.hdf5 binary
+*.npy binary
+*.npz binary
+*.tar binary
+*.gz binary
+*.zip binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+
+# Archives
+*.7z binary
+*.jar binary
+*.rar binary
+*.tar binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.bz2 binary
+
+# Executables
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+

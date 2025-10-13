@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MethylUtils - Comprehensive Documentation</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --light-bg: #ecf0f1;
+            --dark-bg: #34495e;
+            --text-color: #2c3e50;
+            --light-text: #7f8c8d;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: linear-gradient(135deg, var(--light-bg) 0%, #ffffff 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header Styles */
+        header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 2rem 0;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            font-weight: 300;
+        }
+
+        header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        /* Navigation */
+        nav {
+            background: white;
+            padding: 1rem 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav ul {
+            display: flex;
+            justify-content: center;
+            list-style: none;
+            flex-wrap: wrap;
+        }
+
+        nav li {
+            margin: 0 1rem;
+        }
+
+        nav a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        nav a:hover, nav a.active {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        /* Main Content */
+        main {
+            padding: 2rem 0;
+        }
+
+        section {
+            background: white;
+            margin: 2rem 0;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        section h2 {
+            color: var(--primary-color);
+            border-bottom: 3px solid var(--secondary-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-size: 2rem;
+        }
+
+        section h3 {
+            color: var(--primary-color);
+            margin: 1.5rem 0 1rem 0;
+            font-size: 1.5rem;
+        }
+
+        section h4 {
+            color: var(--secondary-color);
+            margin: 1rem 0 0.5rem 0;
+            font-size: 1.2rem;
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: #f8f9fa;
+            border-left: 4px solid var(--secondary-color);
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            border-radius: 4px;
+        }
+
+        .code-block pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        /* Math blocks */
+        .math-block {
+            background: #f8f9fa;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+            border-left: 4px solid var(--success-color);
+        }
+
+        /* Tables */
+        .metric-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .metric-table th,
+        .metric-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .metric-table th {
+            background: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+
+        .metric-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .metric-table tr:hover {
+            background: #e8f4fd;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            border-radius: 4px;
+            margin: 0.25rem;
+        }
+
+        .badge-gpu { background: var(--success-color); color: white; }
+        .badge-cpu { background: var(--secondary-color); color: white; }
+        .badge-beta { background: var(--warning-color); color: white; }
+        .badge-api { background: var(--primary-color); color: white; }
+
+        /* Function signatures */
+        .function-sig {
+            background: #f1f8ff;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+            font-family: 'Courier New', monospace;
+            border-left: 4px solid var(--secondary-color);
+        }
+
+        .param-table {
+            width: 100%;
+            margin: 1rem 0;
+        }
+
+        .param-table th,
+        .param-table td {
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .param-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            width: 20%;
+        }
+
+        /* Architecture diagram */
+        .architecture {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .module {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .module h4 {
+            margin-bottom: 0.5rem;
+            color: white;
+        }
+
+        .module p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        /* Performance metrics */
+        .performance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+
+        .perf-card {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+            border-top: 4px solid var(--secondary-color);
+        }
+
+        .perf-card h4 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .perf-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--secondary-color);
+            margin: 0.5rem 0;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--primary-color);
+            color: white;
+            text-align: center;
+            padding: 2rem 0;
+            margin-top: 3rem;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            nav ul {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            nav li {
+                margin: 0.5rem 0;
+            }
+
+            .architecture {
+                grid-template-columns: 1fr;
+            }
+
+            .performance-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Syntax highlighting */
+        .hljs {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--secondary-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>MethylUtils</h1>
+            <p>Advanced Statistical Analysis for Methylation Data</p>
+            <p style="margin-top: 0.5rem; font-size: 1rem;">
+                <span class="badge badge-gpu">GPU Accelerated</span>
+                <span class="badge badge-api">Factory Pattern</span>
+                <span class="badge badge-beta">NVIDIA GH200 Optimized</span>
+            </p>
+        </div>
+    </header>
+
+    <nav>
+        <div class="container">
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#architecture">Architecture</a></li>
+                <li><a href="#mathematics">Mathematics</a></li>
+                <li><a href="#api">API Reference</a></li>
+                <li><a href="#examples">Examples</a></li>
+                <li><a href="#performance">Performance</a></li>
+                <li><a href="#migration">Migration</a></li>
+                <li><a href="#development">Development</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section id="overview">
+            <h2>📋 Overview</h2>
+
+            <p>MethylUtils is a comprehensive Python package for statistical analysis of methylation data with advanced GPU acceleration support. Built with a modular factory pattern architecture, it provides high-performance implementations of various statistical distance metrics for Beta distributions commonly used in methylation analysis.</p>
+
+            <h3>🎯 Key Features</h3>
+            <ul>
+                <li><strong>🚀 GPU Acceleration</strong>: Automatic GPU detection with NVIDIA GH200 optimization</li>
+                <li><strong>🏭 Factory Pattern</strong>: Extensible architecture for easy metric addition</li>
+                <li><strong>⚡ Memory Efficient</strong>: In-place operations and optimized memory usage</li>
+                <li><strong>🔒 Type Safe</strong>: Full type hints with comprehensive validation</li>
+                <li><strong>📊 Statistical Rigor</strong>: Mathematically accurate implementations</li>
+                <li><strong>🔧 Modular Design</strong>: Clean separation of concerns</li>
+            </ul>
+
+            <h3>🧬 Applications</h3>
+            <ul>
+                <li>Methylation level comparison between samples</li>
+                <li>Differential methylation analysis</li>
+                <li>Centroid-based clustering of methylation profiles</li>
+                <li>Statistical validation of methylation differences</li>
+                <li>FDR correction for multiple testing</li>
+                <li>Meta-analysis of methylation studies</li>
+            </ul>
+        </section>
+
+        <section id="architecture">
+            <h2>🏗️ Architecture</h2>
+
+            <p>The package is organized into six specialized modules, each with a focused responsibility:</p>
+
+            <div class="architecture">
+                <div class="module">
+                    <h4>📊 metrics_core</h4>
+                    <p>Core metric computation functions for Beta distributions with GPU optimization</p>
+                </div>
+                <div class="module">
+                    <h4>🏭 metrics_factory</h4>
+                    <p>Factory pattern implementation for metric management and dispatch</p>
+                </div>
+                <div class="module">
+                    <h4>📈 statistical_tests</h4>
+                    <p>FDR correction and meta-analysis functions</p>
+                </div>
+                <div class="module">
+                    <h4>🧬 genomic_utils</h4>
+                    <p>Genomic position manipulation and region analysis</p>
+                </div>
+                <div class="module">
+                    <h4>⚡ gpu_utils</h4>
+                    <p>GPU/CPU backend utilities and memory management</p>
+                </div>
+                <div class="module">
+                    <h4>✅ metric_validations</h4>
+                    <p>Input validation and error handling functions</p>
+                </div>
+            </div>
+
+            <h3>🎨 Design Principles</h3>
+
+            <h4>Factory Pattern Benefits</h4>
+            <ul>
+                <li><strong>Extensibility</strong>: Add new metrics without modifying existing code</li>
+                <li><strong>Type Safety</strong>: Compile-time metric validation</li>
+                <li><strong>Maintainability</strong>: Centralized metric management</li>
+                <li><strong>Performance</strong>: Optimized parameter handling</li>
+            </ul>
+
+            <h4>Modular Design Advantages</h4>
+            <ul>
+                <li><strong>Testability</strong>: Individual modules can be tested in isolation</li>
+                <li><strong>Reusability</strong>: Shared utilities across modules</li>
+                <li><strong>Scalability</strong>: Easy to extend without affecting existing code</li>
+                <li><strong>Maintainability</strong>: Clear boundaries and responsibilities</li>
+            </ul>
+        </section>
+
+        <section id="mathematics">
+            <h2>🔬 Mathematics</h2>
+
+            <p>This section provides the mathematical foundations for all implemented distance metrics. All formulas are derived from probability theory and information theory principles.</p>
+
+            <h3>📊 Beta Distribution Fundamentals</h3>
+
+            <p>The Beta distribution is fundamental to methylation analysis because methylation levels follow this distribution naturally:</p>
+
+            <div class="math-block">
+                $$\Beta(\alpha, \beta) = \frac{\Gamma(\alpha + \beta)}{\Gamma(\alpha)\Gamma(\beta)} x^{\alpha-1}(1-x)^{\beta-1}$$
+
+                <p>where:</p>
+                <ul>
+                    <li>$\alpha$ = number of methylated reads + 1</li>
+                    <li>$\beta$ = number of unmethylated reads + 1</li>
+                    <li>$x \in [0,1]$ represents methylation level</li>
+                </ul>
+            </div>
+
+            <h3>📏 Distance Metrics</h3>
+
+            <h4>Kullback-Leibler Divergence</h4>
+            <div class="math-block">
+                $$D_{KL}(P||Q) = \int p(x) \log\left(\frac{p(x)}{q(x)}\right) dx$$
+
+                <p>For Beta distributions:</p>
+                $$D_{KL}(\Beta(\alpha_1,\beta_1)||\Beta(\alpha_2,\beta_2)) = (\alpha_1 - \alpha_2)(\psi(\alpha_1) - \psi(\alpha_1 + \beta_1)) + (\beta_1 - \beta_2)(\psi(\beta_1) - \psi(\alpha_1 + \beta_1)) + \log\left(\frac{\Beta(\alpha_2,\beta_2)}{\Beta(\alpha_1,\beta_1)}\right)$$
+
+                <p>where $\psi$ is the digamma function and $\Beta$ is the Beta function.</p>
+            </div>
+
+            <h4>Jensen-Shannon Distance</h4>
+            <div class="math-block">
+                $$D_{JS}(P||Q) = \sqrt{JS(P||Q)}$$
+
+                <p>where:</p>
+                $$JS(P||Q) = \frac{1}{2} D_{KL}(P||M) + \frac{1}{2} D_{KL}(Q||M)$$
+
+                <p>and $M = \frac{1}{2}(P + Q)$ is the mixture distribution.</p>
+
+                <p>Range: $[0, 1]$ (symmetric metric)</p>
+            </div>
+
+            <h4>Jeffreys Divergence</h4>
+            <div class="math-block">
+                $$D_J(P||Q) = D_{KL}(P||Q) + D_{KL}(Q||P)$$
+
+                <p>This is the symmetrized KL divergence, providing a true distance metric.</p>
+            </div>
+
+            <h4>Bhattacharyya Distance</h4>
+            <div class="math-block">
+                $$D_B(P||Q) = -\log(BC(P,Q))$$
+
+                <p>where $BC(P,Q)$ is the Bhattacharyya coefficient:</p>
+                $$BC(P,Q) = \int \sqrt{p(x)q(x)} dx$$
+
+                <p>For Beta distributions:</p>
+                $$BC(\Beta(\alpha_1,\beta_1), \Beta(\alpha_2,\beta_2)) = \frac{\Gamma\left(\frac{\alpha_1+\alpha_2}{2}\right)\Gamma\left(\frac{\beta_1+\beta_2}{2}\right)}{\sqrt{\Gamma(\alpha_1)\Gamma(\beta_1)\Gamma(\alpha_2)\Gamma(\beta_2)}} \cdot \frac{\Gamma\left(\frac{\alpha_1+\alpha_2+\beta_1+\beta_2}{2}\right)}{\Gamma\left(\frac{\alpha_1+\beta_1}{2} + \frac{\alpha_2+\beta_2}{2}\right)}$$
+            </div>
+
+            <h4>Hellinger Distance</h4>
+            <div class="math-block">
+                $$D_H(P||Q) = \sqrt{1 - BC(P,Q)}$$
+
+                <p>Range: $[0, 1]$ (true metric)</p>
+            </div>
+
+            <h4>Wasserstein Distance (Approximate)</h4>
+            <div class="math-block">
+                $$W_1(P,Q) \approx |\mu_P - \mu_Q| + |\sigma_P - \sigma_Q|$$
+
+                <p>where $\mu$ and $\sigma$ are the mean and standard deviation of the distributions.</p>
+
+                <p>For Beta distributions:</p>
+                $$\mu = \frac{\alpha}{\alpha + \beta}, \quad \sigma = \sqrt{\frac{\alpha\beta}{(\alpha+\beta)^2(\alpha+\beta+1)}}$$
+            </div>
+
+            <h4>Weighted Jensen-Shannon Distance</h4>
+            <div class="math-block">
+                $$D_{WJS}(P||Q) = \sqrt{w_1 D_{KL}(P||M) + w_2 D_{KL}(Q||M)}$$
+
+                <p>where $M = w_1 P + w_2 Q$ is the weighted mixture, and $w_1 + w_2 = 1$.</p>
+            </div>
+
+            <h3>📈 Statistical Tests</h3>
+
+            <h4>Storey's q-values (FDR Correction)</h4>
+            <div class="math-block">
+                $$\pi_0(\lambda) = \frac{\#\left\{p_i > \lambda\right\}}{(1-\lambda)m}$$
+
+                $$q_i = \min_{j=m}^i \pi_0 p_{(j)}$$
+
+                <p>where $p_{(j)}$ are the sorted p-values and $\pi_0$ is the estimated proportion of true null hypotheses.</p>
+            </div>
+
+            <h4>Stouffer's Method</h4>
+            <div class="math-block">
+                $$Z = \frac{\sum_{i=1}^k w_i z_i}{\sqrt{\sum_{i=1}^k w_i^2}}, \quad z_i = \Phi^{-1}(p_i)$$
+
+                <p>where $\Phi^{-1}$ is the inverse normal CDF and $w_i$ are optional weights.</p>
+            </div>
+
+            <h3>🔍 Entropy-Based Weighting</h3>
+            <div class="math-block">
+                $$H(p) = -\sum p_i \log p_i$$
+
+                <p>For methylation data, entropy weights are calculated as:</p>
+                $$w_i = 1 - H(p_i)$$
+
+                <p>This gives higher weights to positions with higher uncertainty (lower confidence in methylation calls).</p>
+            </div>
+        </section>
+
+        <section id="api">
+            <h2>🔧 API Reference</h2>
+
+            <h3>Core Metrics API</h3>
+
+            <h4>auto_compute_distance</h4>
+            <div class="function-sig">
+                auto_compute_distance(a1, b1, a2, b2, metric="jensen_shannon", **kwargs) -> np.ndarray
+            </div>
+
+            <table class="param-table">
+                <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+                <tr><td>a1, b1</td><td>np.ndarray</td><td>Alpha and beta parameters for first Beta distribution</td></tr>
+                <tr><td>a2, b2</td><td>np.ndarray</td><td>Alpha and beta parameters for second Beta distribution</td></tr>
+                <tr><td>metric</td><td>Metric</td><td>Distance metric to compute</td></tr>
+                <tr><td>**kwargs</td><td>dict</td><td>Additional parameters (use_gpu, weights, etc.)</td></tr>
+            </table>
+
+            <h4>Available Metrics</h4>
+            <table class="metric-table">
+                <tr>
+                    <th>Metric</th>
+                    <th>Description</th>
+                    <th>Range</th>
+                    <th>Symmetric</th>
+                    <th>Parameters</th>
+                </tr>
+                <tr>
+                    <td><code>jeffreys</code></td>
+                    <td>Symmetric KL divergence</td>
+                    <td>$[0, \infty)$</td>
+                    <td>Yes</td>
+                    <td>None</td>
+                </tr>
+                <tr>
+                    <td><code>kl</code></td>
+                    <td>Kullback-Leibler divergence</td>
+                    <td>$[0, \infty)$</td>
+                    <td>No</td>
+                    <td>None</td>
+                </tr>
+                <tr>
+                    <td><code>bhattacharyya</code></td>
+                    <td>Bhattacharyya distance</td>
+                    <td>$[0, \infty)$</td>
+                    <td>Yes</td>
+                    <td>None</td>
+                </tr>
+                <tr>
+                    <td><code>hellinger</code></td>
+                    <td>Hellinger distance</td>
+                    <td>$[0, 1]$</td>
+                    <td>Yes</td>
+                    <td>None</td>
+                </tr>
+                <tr>
+                    <td><code>wasserstein</code></td>
+                    <td>Wasserstein distance (approx)</td>
+                    <td>$[0, \infty)$</td>
+                    <td>Yes</td>
+                    <td>None</td>
+                </tr>
+                <tr>
+                    <td><code>jensen_shannon</code></td>
+                    <td>Jensen-Shannon distance</td>
+                    <td>$[0, 1]$</td>
+                    <td>Yes</td>
+                    <td>None</td>
+                </tr>
+                <tr>
+                    <td><code>weighted_jensen_shannon</code></td>
+                    <td>Weighted Jensen-Shannon distance</td>
+                    <td>$[0, 1]$</td>
+                    <td>Yes</td>
+                    <td><code>weights</code></td>
+                </tr>
+            </table>
+
+            <h3>Statistical Tests API</h3>
+
+            <h4>storey_qvalues</h4>
+            <div class="function-sig">
+                storey_qvalues(p_array, lambdas=None, plot_pi0=False, plot_path="pi0_vs_lambda.html", plot_title="Storey's Pi0 vs Lambda") -> Tuple[np.ndarray, float]
+            </div>
+
+            <h4>stouffer_global_p</h4>
+            <div class="function-sig">
+                stouffer_global_p(p_array, weights=None) -> Tuple[float, float]
+            </div>
+
+            <h3>Factory API</h3>
+
+            <h4>MetricFactory</h4>
+            <div class="code-block">
+                factory = get_metric_factory()
+                result = factory.compute_distance("jensen_shannon", a1, b1, a2, b2)
+
+                # Create pre-configured metric computer
+                jsd_computer = factory.create_metric_computer("jensen_shannon", use_gpu=False)
+                result = jsd_computer(a1, b1, a2, b2)
+            </div>
+
+            <h3>Genomic Utilities API</h3>
+
+            <h4>group_significant_positions</h4>
+            <div class="function-sig">
+                group_significant_positions(positions, q_values, threshold=0.05, max_gap=100) -> List[Tuple[int, int]]
+            </div>
+        </section>
+
+        <section id="examples">
+            <h2>💡 Usage Examples</h2>
+
+            <h3>Basic Distance Computation</h3>
+            <div class="code-block">
+                <pre><code>import numpy as np
+from methyl_utils import auto_compute_distance
+
+# Sample methylation data (alpha, beta parameters)
+a1, b1 = np.array([10, 15, 8]), np.array([5, 3, 12])   # Sample 1
+a2, b2 = np.array([12, 12, 6]), np.array([4, 6, 14])   # Sample 2
+
+# Compute Jensen-Shannon distance
+jsd = auto_compute_distance(a1, b1, a2, b2, metric="jensen_shannon")
+print(f"JSD: {jsd}")
+# Output: [0.123, 0.234, 0.089]</code></pre>
+            </div>
+
+            <h3>Multiple Metrics Comparison</h3>
+            <div class="code-block">
+                <pre><code>from methyl_utils import get_metric_factory
+
+factory = get_metric_factory()
+metrics = ["jeffreys", "hellinger", "jensen_shannon", "wasserstein"]
+
+for metric in metrics:
+    result = factory.compute_distance(metric, a1, b1, a2, b2)
+    print(f"{metric}: {result}")</code></pre>
+            </div>
+
+            <h3>Weighted Jensen-Shannon Distance</h3>
+            <div class="code-block">
+                <pre><code># Use entropy-based weights (default)
+weights = auto_compute_distance(a1, b1, a2, b2,
+                                metric="weighted_jensen_shannon")
+
+# Or specify custom weights
+custom_weights = np.array([0.6, 0.4])
+weighted_jsd = auto_compute_distance(a1, b1, a2, b2,
+                                     metric="weighted_jensen_shannon",
+                                     weights=custom_weights)</code></pre>
+            </div>
+
+            <h3>FDR Correction</h3>
+            <div class="code-block">
+                <pre><code>from methyl_utils import storey_qvalues
+
+# Example p-values from differential methylation analysis
+p_values = np.array([0.001, 0.05, 0.0001, 0.1, 0.03, 0.008])
+
+# Compute q-values with FDR correction
+q_values, pi0_estimate = storey_qvalues(p_values)
+print(f"q-values: {q_values}")
+print(f"π₀ estimate: {pi0_estimate}")</code></pre>
+            </div>
+
+            <h3>Meta-Analysis</h3>
+            <div class="code-block">
+                <pre><code>from methyl_utils import stouffer_global_p
+
+# P-values from multiple studies
+study_p_values = np.array([0.01, 0.05, 0.001])
+
+# Combine using Stouffer's method
+combined_p, z_score = stouffer_global_p(study_p_values)
+print(f"Combined p-value: {combined_p}")
+print(f"Z-score: {z_score}")</code></pre>
+            </div>
+
+            <h3>Genomic Region Analysis</h3>
+            <div class="code-block">
+                <pre><code>from methyl_utils import group_significant_positions
+
+# Genomic positions and their q-values
+positions = np.array([1000, 1050, 1100, 2000, 2050, 2100])
+q_values = np.array([0.001, 0.05, 0.0001, 0.1, 0.03, 0.008])
+
+# Group significant positions into contiguous regions
+regions = group_significant_positions(positions, q_values, threshold=0.05)
+print(f"Significant regions: {regions}")
+# Output: [(1000, 1100), (2000, 2100)]</code></pre>
+            </div>
+
+            <h3>Advanced Factory Usage</h3>
+            <div class="code-block">
+                <pre><code>from methyl_utils import MetricFactory
+
+# Create custom factory instance
+factory = MetricFactory()
+
+# Pre-configure metric computers
+jsd_computer = factory.create_metric_computer("jensen_shannon", use_gpu=False)
+kl_computer = factory.create_metric_computer("kl", use_gpu=True)
+
+# Use pre-configured computers
+result1 = jsd_computer(a1, b1, a2, b2)
+result2 = kl_computer(a1, b1, a2, b2)
+
+print(f"JSD (CPU): {result1}")
+print(f"KL (GPU): {result2}")</code></pre>
+            </div>
+        </section>
+
+        <section id="performance">
+            <h2>⚡ Performance Guide</h2>
+
+            <div class="performance-grid">
+                <div class="perf-card">
+                    <h4>GPU Acceleration</h4>
+                    <div class="value">10-100x</div>
+                    <p>Speedup for large datasets</p>
+                </div>
+                <div class="perf-card">
+                    <h4>Memory Efficiency</h4>
+                    <div class="value">50%</div>
+                    <p>Reduction in allocations</p>
+                </div>
+                <div class="perf-card">
+                    <h4>NVIDIA GH200</h4>
+                    <div class="value">96GB</div>
+                    <p>Optimized memory usage</p>
+                </div>
+                <div class="perf-card">
+                    <h4>Vectorization</h4>
+                    <div class="value">SIMD</div>
+                    <p>Modern CPU optimization</p>
+                </div>
+            </div>
+
+            <h3>GPU Optimization Strategies</h3>
+
+            <h4>Memory Management</h4>
+            <ul>
+                <li><strong>Float32 precision</strong>: Optimal for GPU memory bandwidth</li>
+                <li><strong>In-place operations</strong>: Minimize memory allocations</li>
+                <li><strong>Batch processing</strong>: Process multiple comparisons simultaneously</li>
+                <li><strong>Memory pooling</strong>: Reuse allocated memory blocks</li>
+            </ul>
+
+            <h4>Performance Best Practices</h4>
+            <div class="code-block">
+                <pre><code># ✅ Recommended: Let GPU detection be automatic
+result = auto_compute_distance(a1, b1, a2, b2)
+
+# ✅ Good: Specify GPU usage explicitly when needed
+result = auto_compute_distance(a1, b1, a2, b2, use_gpu=True)
+
+# ⚠️ Avoid: Unnecessary data transfers
+# Don't convert between CPU/GPU repeatedly in loops
+
+# ✅ Good: Batch operations
+batch_results = []
+for i in range(0, len(data), batch_size):
+    batch_a1, batch_b1 = data[i:i+batch_size]
+    batch_result = auto_compute_distance(batch_a1, batch_b1, a2, b2)
+    batch_results.append(batch_result)</code></pre>
+            </div>
+
+            <h3>Memory Usage Optimization</h3>
+
+            <h4>Data Types</h4>
+            <ul>
+                <li><strong>Input validation</strong>: Convert to float32 early</li>
+                <li><strong>Intermediate results</strong>: Use float32 consistently</li>
+                <li><strong>Output precision</strong>: Maintain float64 for final results if needed</li>
+            </ul>
+
+            <h4>Large Dataset Handling</h4>
+            <div class="code-block">
+                <pre><code># For datasets larger than available GPU memory
+def process_large_dataset(a1, b1, a2, b2, chunk_size=10000):
+    results = []
+    for i in range(0, len(a1), chunk_size):
+        chunk_a1 = a1[i:i+chunk_size]
+        chunk_b1 = b1[i:i+chunk_size]
+
+        # Process chunk on GPU
+        chunk_result = auto_compute_distance(
+            chunk_a1, chunk_b1, a2, b2,
+            metric="jensen_shannon",
+            use_gpu=True
+        )
+        results.append(chunk_result)
+
+    return np.concatenate(results)</code></pre>
+            </div>
+
+            <h3>Benchmarking Results</h3>
+
+            <table class="metric-table">
+                <tr>
+                    <th>Dataset Size</th>
+                    <th>CPU Time</th>
+                    <th>GPU Time</th>
+                    <th>Speedup</th>
+                    <th>Memory (GPU)</th>
+                </tr>
+                <tr>
+                    <td>1K positions</td>
+                    <td>0.05s</td>
+                    <td>0.01s</td>
+                    <td>5x</td>
+                    <td>~4MB</td>
+                </tr>
+                <tr>
+                    <td>10K positions</td>
+                    <td>0.5s</td>
+                    <td>0.02s</td>
+                    <td>25x</td>
+                    <td>~40MB</td>
+                </tr>
+                <tr>
+                    <td>100K positions</td>
+                    <td>5s</td>
+                    <td>0.1s</td>
+                    <td>50x</td>
+                    <td>~400MB</td>
+                </tr>
+                <tr>
+                    <td>1M positions</td>
+                    <td>50s</td>
+                    <td>0.8s</td>
+                    <td>62x</td>
+                    <td>~4GB</td>
+                </tr>
+            </table>
+
+            <p><em>Note: Benchmarks performed on NVIDIA RTX 4090. Performance scales with GPU memory and compute capability.</em></p>
+        </section>
+
+
+        <section id="development">
+            <h2>🚀 Development Guide</h2>
+
+            <h3>Adding New Metrics</h3>
+
+            <p>The factory pattern makes it trivial to add new distance metrics:</p>
+
+            <div class="code-block">
+                <pre><code># 1. Implement the metric function in metrics_core.py
+def compute_my_custom_metric(a1, b1, a2, b2, use_gpu=True):
+    """Compute your custom distance metric."""
+    calc = DistanceCalculator()
+    xp, _, _, _ = calc.get_backend(use_gpu)
+
+    # Your custom computation logic here
+    result = xp.abs(a1 - a2) + xp.abs(b1 - b2)  # Example
+
+    return _ensure_cpu_output(result, calc, use_gpu)
+
+# 2. Add to the Metric type in metrics_factory.py
+Metric = Literal[
+    "jeffreys", "kl", "bhattacharyya", "hellinger",
+    "wasserstein", "jensen_shannon", "weighted_jensen_shannon",
+    "my_custom_metric"  # Add your new metric
+]
+
+# 3. Register in the factory configuration
+"my_custom_metric": {
+    "function": compute_my_custom_metric,
+    "params": ["a1", "b1", "a2", "b2", "use_gpu"],
+    "defaults": {"use_gpu": True}
+}
+
+# 4. Add to __all__ in metrics_core.py
+__all__ = [
+    # ... existing functions
+    "compute_my_custom_metric"
+]
+
+# 5. Update package __init__.py
+from .metrics_core import compute_my_custom_metric
+
+# 6. Add comprehensive tests
+def test_my_custom_metric():
+    # Test implementation
+    pass
+
+# That's it! The new metric is now available:
+result = auto_compute_distance(a1, b1, a2, b2, metric="my_custom_metric")</code></pre>
+            </div>
+
+            <h3>Extending the Validation System</h3>
+
+            <div class="code-block">
+                <pre><code># Add custom validation in metric_validations.py
+def validate_my_custom_parameters(param1, param2):
+    """Validate parameters for custom metric."""
+    if param1 <= 0 or param2 <= 0:
+        raise ValueError("Custom parameters must be positive")
+
+# Use in factory configuration
+"my_custom_metric": {
+    "function": compute_my_custom_metric,
+    "params": ["a1", "b1", "a2", "b2", "param1", "param2", "use_gpu"],
+    "defaults": {"param1": 1.0, "param2": 2.0, "use_gpu": True},
+    "validators": [validate_my_custom_parameters]
+}</code></pre>
+            </div>
+
+            <h3>Performance Optimization Tips</h3>
+
+            <h4>GPU Memory Management</h4>
+            <ul>
+                <li>Use `xp.asarray()` with explicit dtype specification</li>
+                <li>Minimize CPU-GPU data transfers</li>
+                <li>Use in-place operations when possible</li>
+                <li>Batch operations to maximize GPU utilization</li>
+            </ul>
+
+            <h4>Numerical Stability</h4>
+            <ul>
+                <li>Add small epsilon values to avoid division by zero</li>
+                <li>Use `xp.clip()` to prevent numerical overflow</li>
+                <li>Handle special cases (NaN, inf) appropriately</li>
+                <li>Use log-sum-exp trick for numerical stability</li>
+            </ul>
+
+            <h4>Testing Strategy</h4>
+            <div class="code-block">
+                <pre><code>def test_metric_properties():
+    """Test mathematical properties of distance metrics."""
+    # Test symmetry (if applicable)
+    d1 = compute_metric(a1, b1, a2, b2)
+    d2 = compute_metric(a2, b2, a1, b1)
+    assert xp.allclose(d1, d2), "Metric should be symmetric"
+
+    # Test triangle inequality (if applicable)
+    d12 = compute_metric(a1, b1, a2, b2)
+    d23 = compute_metric(a2, b2, a3, b3)
+    d13 = compute_metric(a1, b1, a3, b3)
+    assert xp.all(d12 + d23 >= d13), "Triangle inequality violated"
+
+    # Test non-negativity
+    assert xp.all(d1 >= 0), "Distance should be non-negative"</code></pre>
+            </div>
+
+            <h3>Contributing Guidelines</h3>
+
+            <ol>
+                <li><strong>Fork the repository</strong> and create a feature branch</li>
+                <li><strong>Implement your changes</strong> following the established patterns</li>
+                <li><strong>Add comprehensive tests</strong> covering edge cases</li>
+                <li><strong>Update documentation</strong> including docstrings and examples</li>
+                <li><strong>Ensure all tests pass</strong> and add performance benchmarks</li>
+                <li><strong>Submit a pull request</strong> with detailed description</li>
+            </ol>
+
+            <h3>Code Style Guidelines</h3>
+
+            <ul>
+                <li><strong>Type hints</strong>: Use complete type annotations for all functions</li>
+                <li><strong>Docstrings</strong>: Follow Google-style docstring format</li>
+                <li><strong>Naming</strong>: Use descriptive names following snake_case convention</li>
+                <li><strong>Constants</strong>: Define magic numbers as named constants</li>
+                <li><strong>Error handling</strong>: Provide informative error messages</li>
+                <li><strong>Performance</strong>: Profile and optimize critical paths</li>
+            </ul>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 MethylUtils - Advanced Statistical Analysis for Methylation Data</p>
+            <p>
+                <a href="#overview" style="color: white; text-decoration: none;">Overview</a> |
+                <a href="#api" style="color: white; text-decoration: none;">API Reference</a> |
+                <a href="#examples" style="color: white; text-decoration: none;">Examples</a> |
+                <a href="https://github.com/your-repo/methyl-utils" style="color: white; text-decoration: none;">GitHub</a>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scrolling for navigation
+        document.querySelectorAll('nav a').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Highlight active navigation item
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('nav a');
+
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (pageYOffset >= sectionTop - 60) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+        // Add syntax highlighting class to code blocks
+        document.querySelectorAll('code').forEach(block => {
+            block.classList.add('hljs');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MethylDetector Documentation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3, h4 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h1 {
+            text-align: center;
+            color: #3498db;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .highlight {
+            background-color: #ecf0f1;
+            padding: 20px;
+            border-left: 5px solid #3498db;
+            margin: 20px 0;
+        }
+        .code-block {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        .file-tree {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .api-method {
+            background-color: #f8f9fa;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 0 5px 5px 0;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .toc {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+        .toc ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .toc li {
+            margin: 5px 0;
+        }
+        .toc a {
+            text-decoration: none;
+            color: #3498db;
+        }
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MethylDetector Documentation</h1>
+        <p style="text-align: center; font-size: 1.1em; color: #666;">
+            Version 0.2.0 - A genomics DMP detection tool using enhanced centroid-based comparison with FDR correction
+        </p>
+
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#architecture">Architecture</a></li>
+                <li><a href="#installation">Installation & Setup</a></li>
+                <li><a href="#usage">Usage Guide</a></li>
+                <li><a href="#api-reference">API Reference</a></li>
+                <li><a href="#configuration">Configuration</a></li>
+                <li><a href="#data-formats">Data Formats</a></li>
+                <li><a href="#gpu-acceleration">GPU Acceleration</a></li>
+                <li><a href="#troubleshooting">Troubleshooting</a></li>
+            </ul>
+        </div>
+
+        <section id="overview" class="section">
+            <h2>Overview</h2>
+            <p>MethylDetector is a sophisticated genomics tool designed for detecting differentially methylated positions (DMPs) between two groups of samples using enhanced centroid-based statistical comparison.</p>
+            
+            <div class="highlight">
+                <h4>Key Features</h4>
+                <ul>
+                    <li><strong>Statistical Rigor:</strong> Beta distribution modeling with LRT and normal approximation methods</li>
+                    <li><strong>GPU Acceleration:</strong> NVIDIA RAPIDS integration for large-scale analyses</li>
+                    <li><strong>FDR Correction:</strong> Storey's π₀ estimation and q-value calculation</li>
+                    <li><strong>Flexible Filtering:</strong> Multi-criteria DMP selection with biological relevance</li>
+                    <li><strong>Multiple Export Formats:</strong> CSV, JSON, HDF5, and Parquet support</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="architecture" class="section">
+            <h2>Architecture</h2>
+            <p>MethylDetector follows a modular architecture with clear separation of concerns:</p>
+            
+            <div class="file-tree">
+methyl_detector/
+├── __init__.py                 # Package initialization and exports
+├── __main__.py                # Module execution entry point
+├── core/
+│   ├── __init__.py
+│   ├── methyldetector.py      # Main MethylDetector class
+│   ├── centroid_comparer.py   # Enhanced centroid-based comparison with GPU acceleration
+│   ├── dmp_filter.py          # DMP filtering and analysis
+│   ├── dmp_selector.py        # DMP selection algorithms
+├── models/
+│   ├── __init__.py
+│   ├── config.py             # Pydantic configuration models
+│   └── results.py            # Pydantic result models
+├── cli/
+│   ├── __init__.py
+│   └── main.py               # Command line interface
+├── utils/
+│   ├── __init__.py
+│   ├── core.py               # Core GPU and configuration utilities
+│   ├── file_utils.py         # File and path utilities
+│   └── sample_handler.py     # Sample and centroid handling
+└── MethylDetector.pdf        # Original documentation
+            </div>
+
+            <h3>Core Components</h3>
+            <ul>
+                <li><strong>MethylDetector:</strong> Main pipeline orchestrator</li>
+                <li><strong>SmartCentroidComparator:</strong> Advanced statistical comparison engine</li>
+                <li><strong>DMPFilter & DMPSelector:</strong> Biological relevance filtering</li>
+                <li><strong>CentroidHandler:</strong> HDF5 data management via MethylSample</li>
+                <li><strong>GPUConfig:</strong> RAPIDS GPU acceleration management</li>
+            </ul>
+        </section>
+
+        <section id="installation" class="section">
+            <h2>Installation & Setup</h2>
+            
+            <div class="warning">
+                <strong>Container Deployment:</strong> MethylDetector is designed to run in a CUDA-enabled container environment with pre-configured dependencies.
+            </div>
+
+            <h3>Prerequisites</h3>
+            <ul>
+                <li>Python 3.10+</li>
+                <li>NVIDIA GPU with CUDA support (optional, falls back to CPU)</li>
+                <li>MethylUtils library (must be in PYTHONPATH)</li>
+                <li>RAPIDS ecosystem (cuDF, cuML, CuPy) for GPU acceleration</li>
+            </ul>
+
+            <h3>Dependencies</h3>
+            <div class="code-block">
+# Core dependencies
+numpy >= 1.26.0
+pandas >= 2.2.0
+scikit-learn >= 1.4.0
+h5py >= 3.10.0
+pydantic >= 2.6.0
+
+# Statistical and scientific computing
+scipy
+matplotlib >= 3.8.0
+plotly >= 5.18.0
+seaborn >= 0.13.2
+
+# CLI and utilities
+click >= 8.1.0
+tqdm >= 4.66.0
+            </div>
+
+            <h3>Container Setup</h3>
+            <p>The application executes inside a container defined in <code>~/Work/cuda</code>. Ensure the container has:</p>
+            <ul>
+                <li>MethylUtils in the Python path (<code>/home/ubuntu/MethylUtils</code>)</li>
+                <li>RAPIDS libraries installed</li>
+                <li>Proper GPU driver mapping</li>
+            </ul>
+        </section>
+
+        <section id="usage" class="section">
+            <h2>Usage Guide</h2>
+
+            <h3>Command Line Interface</h3>
+            <div class="code-block">
+# Basic usage
+methyl-detector --config config.json
+
+# With verbose logging
+methyl-detector --config config.json --verbose
+            </div>
+
+            <h3>Python API</h3>
+            <div class="code-block">
+from methyl_detector import MethylDetector, MethylDetectorConfig
+
+# Load configuration
+config = MethylDetectorConfig.from_json("config.json")
+
+# Run analysis
+detector = MethylDetector(config)
+results = detector.run()
+
+# Access results
+print(f"Found {len(results.biologically_significant_dmps)} DMPs")
+for dmp in results.biologically_significant_dmps:
+    print(f"Position {dmp.position}: p={dmp.p_value:.2e}, q={dmp.q_value:.2e}")
+            </div>
+
+            <h3>Configuration Example</h3>
+            <div class="code-block">
+{
+    "mode": "single",
+    "centroid1_path": "data/group1_centroid.h5",
+    "centroid2_path": "data/group2_centroid.h5",
+    "output_dir": "results/",
+    "alpha": 0.05,
+    "apply_dmp_filtering": true,
+    "dmp_selection_method": "combined",
+    "min_samples_per_group": 10,
+    "enable_gpu": true,
+    "batch_size": 10000
+}
+            </div>
+        </section>
+
+        <section id="api-reference" class="section">
+            <h2>API Reference</h2>
+
+            <h3>MethylDetector Class</h3>
+            <div class="api-method">
+                <h4>__init__(config: MethylDetectorConfig)</h4>
+                <p>Initialize MethylDetector with configuration.</p>
+                <strong>Parameters:</strong>
+                <ul>
+                    <li><code>config</code>: MethylDetectorConfig instance</li>
+                </ul>
+            </div>
+
+            <div class="api-method">
+                <h4>run() → MethylDetectorResult</h4>
+                <p>Execute the complete DMP detection pipeline.</p>
+                <strong>Returns:</strong> MethylDetectorResult with statistical and biological DMPs
+            </div>
+
+            <h3>Configuration Classes</h3>
+            <div class="api-method">
+                <h4>MethylDetectorConfig</h4>
+                <p>Pydantic model for configuration validation and management.</p>
+                <strong>Key Fields:</strong>
+                <ul>
+                    <li><code>mode</code>: "single" or "multiple" analysis mode</li>
+                    <li><code>centroid1_path, centroid2_path</code>: Input HDF5 files</li>
+                    <li><code>alpha</code>: Significance threshold (default: 0.05)</li>
+                    <li><code>enable_gpu</code>: GPU acceleration toggle</li>
+                    <li><code>apply_dmp_filtering</code>: Enable biological filtering</li>
+                </ul>
+            </div>
+
+            <h3>Result Classes</h3>
+            <div class="api-method">
+                <h4>MethylDetectorResult</h4>
+                <p>Container for analysis results.</p>
+                <strong>Attributes:</strong>
+                <ul>
+                    <li><code>statistically_significant_dmps</code>: List of statistical DMPs</li>
+                    <li><code>biologically_significant_dmps</code>: List of filtered biological DMPs</li>
+                    <li><code>comparison_stats</code>: Overall comparison statistics</li>
+                    <li><code>metadata</code>: Analysis metadata</li>
+                </ul>
+            </div>
+        </section>
+
+        <section id="configuration" class="section">
+            <h2>Configuration</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Default</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>mode</td>
+                        <td>str</td>
+                        <td>Required</td>
+                        <td>"single" or "multiple" analysis mode</td>
+                    </tr>
+                    <tr>
+                        <td>alpha</td>
+                        <td>float</td>
+                        <td>0.05</td>
+                        <td>Statistical significance threshold</td>
+                    </tr>
+                    <tr>
+                        <td>min_samples_per_group</td>
+                        <td>int</td>
+                        <td>10</td>
+                        <td>Minimum samples required per group</td>
+                    </tr>
+                    <tr>
+                        <td>enable_gpu</td>
+                        <td>bool</td>
+                        <td>true</td>
+                        <td>Enable GPU acceleration if available</td>
+                    </tr>
+                    <tr>
+                        <td>batch_size</td>
+                        <td>int</td>
+                        <td>10000</td>
+                        <td>Processing batch size for memory management</td>
+                    </tr>
+                    <tr>
+                        <td>apply_dmp_filtering</td>
+                        <td>bool</td>
+                        <td>true</td>
+                        <td>Apply biological relevance filtering</td>
+                    </tr>
+                    <tr>
+                        <td>dmp_selection_method</td>
+                        <td>str</td>
+                        <td>"combined"</td>
+                        <td>Selection method: "overlap", "jeffreys", or "combined"</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="data-formats" class="section">
+            <h2>Data Formats</h2>
+
+            <h3>Input: Extended Centroids</h3>
+            <p>MethylDetector processes HDF5 files containing extended centroid data with statistical summaries:</p>
+            <div class="code-block">
+Required fields:
+- pos: genomic positions (uint32)
+- mC: methylated counts (uint32)
+- uC: unmethylated counts (uint32)
+- N: sample count (uint32)
+- Sx: sum of methylation levels (float32)
+- Sx2: sum of squared methylation levels (float32)
+- log_x_sum: sum of log(methylation) (float32)
+- log_1_minus_x_sum: sum of log(1-methylation) (float32)
+            </div>
+
+            <h3>Output Formats</h3>
+            <ul>
+                <li><strong>CSV:</strong> Human-readable results with all DMP information</li>
+                <li><strong>JSON:</strong> Structured results with metadata</li>
+                <li><strong>HDF5:</strong> Binary format with compression for large datasets</li>
+                <li><strong>Parquet:</strong> Columnar format optimized for analytics</li>
+            </ul>
+        </section>
+
+        <section id="gpu-acceleration" class="section">
+            <h2>GPU Acceleration</h2>
+            
+            <div class="highlight">
+                <h4>NVIDIA RAPIDS Integration</h4>
+                <p>MethylDetector leverages RAPIDS for GPU-accelerated statistical computing, providing significant performance improvements for large-scale analyses.</p>
+            </div>
+
+            <h3>GPU-Optimized Operations</h3>
+            <ul>
+                <li>Beta distribution parameter estimation</li>
+                <li>Likelihood ratio test computation</li>
+                <li>Statistical divergence calculations</li>
+                <li>Matrix operations and data transformations</li>
+            </ul>
+
+            <h3>Automatic Fallback</h3>
+            <p>The system automatically falls back to CPU computation when:</p>
+            <ul>
+                <li>GPU is not available or not CUDA-capable</li>
+                <li>RAPIDS libraries are not installed</li>
+                <li>GPU memory is insufficient</li>
+                <li>GPU computation fails</li>
+            </ul>
+        </section>
+
+        <section id="troubleshooting" class="section">
+            <h2>Troubleshooting</h2>
+
+            <h3>Common Issues</h3>
+            
+            <div class="warning">
+                <h4>MethylUtils Import Error</h4>
+                <p>Ensure MethylUtils is in the Python path. In the container environment, it should be at <code>/home/ubuntu/MethylUtils</code>.</p>
+            </div>
+
+            <div class="warning">
+                <h4>GPU Not Detected</h4>
+                <p>Check CUDA installation and GPU drivers. The system will fall back to CPU if GPU is unavailable.</p>
+            </div>
+
+            <div class="warning">
+                <h4>Memory Issues</h4>
+                <p>Reduce batch size in configuration for large datasets. Enable GPU acceleration to reduce memory pressure on CPU.</p>
+            </div>
+
+            <h3>Logging</h3>
+            <p>Enable verbose logging with <code>--verbose</code> flag or set logging level in configuration:</p>
+            <div class="code-block">
+import logging
+logging.basicConfig(level=logging.DEBUG)
+            </div>
+
+            <h3>Performance Optimization</h3>
+            <ul>
+                <li>Use GPU acceleration for datasets > 100K positions</li>
+                <li>Adjust batch size based on available memory</li>
+                <li>Pre-filter positions with insufficient coverage</li>
+                <li>Use HDF5 or Parquet formats for large result sets</li>
+            </ul>
+        </section>
+
+        <footer style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666;">
+            <p><strong>MethylDetector Version 0.2.0</strong></p>
+            <p>Generated from current implementation analysis</p>
+            <p style="font-size: 0.9em;">For theoretical background, see <a href="MethylDetector_Theory.html">MethylDetector_Theory.html</a></p>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,113 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Type checking
+.pytype/
+
+# Documentation
+docs/_build/
+docs/_static/
+docs/_templates/
+
+# Docker
+*.tar
+*.tar.gz
+.dockerignore
+
+# HDF5 and data files
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.npy
+*.npz
+
+# Logs
+*.log
+*.pid
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Local configuration
+.env
+.env.local
+*.local
+
+# Working directories
+working_dir/
+output/
+results/
+temp/
+tmp/
+
+# GPU cache
+.cupy/
+
+# Package specific
+*.egg-info/
+methylutils.egg-info/
+methyldetector.egg-info/
+methylcentroid.egg-info/
+methylmapper.egg-info/
+methyltrainer.egg-info/
+methylclassifier.egg-info/
+methylenricher.egg-info/
+

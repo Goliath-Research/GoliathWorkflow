@@ -1,0 +1,224 @@
+ubuntu@192-222-59-212:~/MethylUtils$  cd /home/ubuntu/MethylUtils ; /usr/bin/env /bin/python /home/ubuntu/.cursor-server/extensions/ms-python.python-2023.6.0/pythonFiles/lib/python/debugpy/adapter/../../debugpy/launcher 53581 -- /home/ubuntu/MethylUtils/beta_classifier.py 
+✅ Loaded classifier: ProbabilisticBetaClassifier(n_features=3060)
+📋 Classifier trained on chromosome 2, context CG
+
+🔍 Loading samples from: /home/ubuntu/Work/samples/humans/psomagen/AN00025834/data (2-CG)
+Found 4596 total .h5 files, 64 match 2-CG
+    ✅ Loaded DBCST-051425-111148 (sample, avg coverage: 15.5)
+    ✅ Loaded DBCST-060525-111386 (sample, avg coverage: 13.6)
+    ✅ Loaded DBCST-060525-111387 (sample, avg coverage: 13.0)
+    ✅ Loaded DBCST-060625-111394 (sample, avg coverage: 16.3)
+    ✅ Loaded DBCST-061025-111424 (sample, avg coverage: 22.0)
+    ✅ Loaded DBCST-061025-111427 (sample, avg coverage: 20.7)
+    ✅ Loaded DBCST-061325-111495 (sample, avg coverage: 17.9)
+    ✅ Loaded DBCST-062725-111661 (sample, avg coverage: 13.9)
+    ✅ Loaded DBCST-063025-111652 (sample, avg coverage: 13.9)
+    ✅ Loaded DBCST-071025-111803 (sample, avg coverage: 13.0)
+    ✅ Loaded DBCST-071025-111804 (sample, avg coverage: 13.5)
+    ✅ Loaded DBCST-071025-111805 (sample, avg coverage: 17.7)
+    ✅ Loaded DBCST-071025-111806 (sample, avg coverage: 26.2)
+    ✅ Loaded DBCST-071025-111807 (sample, avg coverage: 21.8)
+    ✅ Loaded DBCST-071125-111814 (sample, avg coverage: 19.3)
+    ✅ Loaded DPLST-051425-111148 (sample, avg coverage: 12.5)
+    ✅ Loaded DPLST-060525-111386 (sample, avg coverage: 13.9)
+    ✅ Loaded DPLST-060525-111387 (sample, avg coverage: 13.0)
+    ✅ Loaded DPLST-060625-111394 (sample, avg coverage: 13.6)
+    ✅ Loaded DPLST-061025-111424 (sample, avg coverage: 12.8)
+    ✅ Loaded DPLST-061025-111427 (sample, avg coverage: 14.5)
+    ✅ Loaded DPLST-061325-111495 (sample, avg coverage: 12.8)
+    ✅ Loaded DPLST-062725-111661 (sample, avg coverage: 12.7)
+    ✅ Loaded DPLST-063025-111652 (sample, avg coverage: 13.4)
+    ✅ Loaded DPLST-071025-111803 (sample, avg coverage: 12.3)
+    ✅ Loaded DPLST-071025-111804 (sample, avg coverage: 14.2)
+    ✅ Loaded DPLST-071025-111805 (sample, avg coverage: 14.6)
+    ✅ Loaded DPLST-071025-111806 (sample, avg coverage: 14.4)
+    ✅ Loaded DPLST-071025-111807 (sample, avg coverage: 14.7)
+    ✅ Loaded DPLST-071125-111814 (sample, avg coverage: 14.4)
+    ✅ Loaded HBCST-042525-95676 (sample, avg coverage: 27.0)
+    ✅ Loaded HBCST-042825-39553 (sample, avg coverage: 17.1)
+    ✅ Loaded HBCST-042925-105788 (sample, avg coverage: 16.7)
+    ✅ Loaded HBCST-051325-25543 (sample, avg coverage: 14.6)
+    ✅ Loaded HBCST-051425-74294 (sample, avg coverage: 12.8)
+    ✅ Loaded HBCST-052125-32336 (sample, avg coverage: 26.3)
+    ✅ Loaded HBCST-052125-87293 (sample, avg coverage: 25.7)
+    ✅ Loaded HBCST-052225-74758 (sample, avg coverage: 14.2)
+    ✅ Loaded HBCST-060425-107956 (sample, avg coverage: 20.4)
+    ✅ Loaded HBCST-060625-104673 (sample, avg coverage: 14.2)
+    ✅ Loaded HBCST-060925-66247 (sample, avg coverage: 17.6)
+    ✅ Loaded HBCST-061125-42608 (sample, avg coverage: 14.2)
+    ✅ Loaded HBCST-061825-52197 (sample, avg coverage: 16.5)
+    ✅ Loaded HBCST-063025-77476 (sample, avg coverage: 13.8)
+    ✅ Loaded HBCST-071625-48267 (sample, avg coverage: 14.3)
+    ✅ Loaded HPLST-042525-95676 (sample, avg coverage: 17.0)
+    ✅ Loaded HPLST-042825-39553 (sample, avg coverage: 14.3)
+    ✅ Loaded HPLST-042925-105788 (sample, avg coverage: 13.6)
+    ✅ Loaded HPLST-051325-25543 (sample, avg coverage: 21.8)
+    ✅ Loaded HPLST-051425-74294 (sample, avg coverage: 13.7)
+    ✅ Loaded HPLST-052125-32336 (sample, avg coverage: 14.2)
+    ✅ Loaded HPLST-052125-87293 (sample, avg coverage: 13.2)
+    ✅ Loaded HPLST-052225-74758 (sample, avg coverage: 14.7)
+    ✅ Loaded HPLST-060425-107956 (sample, avg coverage: 13.2)
+    ✅ Loaded HPLST-060625-104673 (sample, avg coverage: 23.3)
+    ✅ Loaded HPLST-060925-66247 (sample, avg coverage: 26.1)
+    ✅ Loaded HPLST-061125-42608 (sample, avg coverage: 12.6)
+    ✅ Loaded HPLST-061825-52197 (sample, avg coverage: 14.1)
+    ✅ Loaded HPLST-063025-77476 (sample, avg coverage: 17.0)
+    ✅ Loaded HPLST-071625-48267 (sample, avg coverage: 15.1)
+    ✅ Loaded pb-cancer (extended_centroid, avg coverage: 16.7)
+    ✅ Loaded pb-healthy (extended_centroid, avg coverage: 17.3)
+    ✅ Loaded pp-cancer (extended_centroid, avg coverage: 13.1)
+    ✅ Loaded pp-healthy (extended_centroid, avg coverage: 15.8)
+
+📊 Extracting features for 64 samples...
+  ⚠️ DBCST-051425-111148 (sample): 2814/3060 DMP positions missing
+  ⚠️ DBCST-060525-111386 (sample): 2867/3060 DMP positions missing
+  ⚠️ DBCST-060525-111387 (sample): 2847/3060 DMP positions missing
+  ⚠️ DBCST-060625-111394 (sample): 2846/3060 DMP positions missing
+  ⚠️ DBCST-061025-111424 (sample): 2591/3060 DMP positions missing
+  ⚠️ DBCST-061025-111427 (sample): 2585/3060 DMP positions missing
+  ⚠️ DBCST-061325-111495 (sample): 2732/3060 DMP positions missing
+  ⚠️ DBCST-062725-111661 (sample): 2870/3060 DMP positions missing
+  ⚠️ DBCST-063025-111652 (sample): 2811/3060 DMP positions missing
+  ⚠️ DBCST-071025-111803 (sample): 2867/3060 DMP positions missing
+  ⚠️ DBCST-071025-111804 (sample): 2919/3060 DMP positions missing
+  ⚠️ DBCST-071025-111805 (sample): 2753/3060 DMP positions missing
+  ⚠️ DBCST-071025-111806 (sample): 2488/3060 DMP positions missing
+  ⚠️ DBCST-071025-111807 (sample): 2655/3060 DMP positions missing
+  ⚠️ DBCST-071125-111814 (sample): 2705/3060 DMP positions missing
+  ⚠️ DPLST-051425-111148 (sample): 2942/3060 DMP positions missing
+  ⚠️ DPLST-060525-111386 (sample): 2855/3060 DMP positions missing
+  ⚠️ DPLST-060525-111387 (sample): 2830/3060 DMP positions missing
+  ⚠️ DPLST-060625-111394 (sample): 2862/3060 DMP positions missing
+  ⚠️ DPLST-061025-111424 (sample): 2924/3060 DMP positions missing
+  ⚠️ DPLST-061025-111427 (sample): 2821/3060 DMP positions missing
+  ⚠️ DPLST-061325-111495 (sample): 2917/3060 DMP positions missing
+  ⚠️ DPLST-062725-111661 (sample): 2895/3060 DMP positions missing
+  ⚠️ DPLST-063025-111652 (sample): 2873/3060 DMP positions missing
+  ⚠️ DPLST-071025-111803 (sample): 2918/3060 DMP positions missing
+  ⚠️ DPLST-071025-111804 (sample): 2876/3060 DMP positions missing
+  ⚠️ DPLST-071025-111805 (sample): 2834/3060 DMP positions missing
+  ⚠️ DPLST-071025-111806 (sample): 2858/3060 DMP positions missing
+  ⚠️ DPLST-071025-111807 (sample): 2854/3060 DMP positions missing
+  ⚠️ DPLST-071125-111814 (sample): 2819/3060 DMP positions missing
+  ⚠️ HBCST-042525-95676 (sample): 2372/3060 DMP positions missing
+  ⚠️ HBCST-042825-39553 (sample): 2797/3060 DMP positions missing
+  ⚠️ HBCST-042925-105788 (sample): 2735/3060 DMP positions missing
+  ⚠️ HBCST-051325-25543 (sample): 2841/3060 DMP positions missing
+  ⚠️ HBCST-051425-74294 (sample): 2834/3060 DMP positions missing
+  ⚠️ HBCST-052125-32336 (sample): 2374/3060 DMP positions missing
+  ⚠️ HBCST-052125-87293 (sample): 2444/3060 DMP positions missing
+  ⚠️ HBCST-052225-74758 (sample): 2808/3060 DMP positions missing
+  ⚠️ HBCST-060425-107956 (sample): 2690/3060 DMP positions missing
+  ⚠️ HBCST-060625-104673 (sample): 2835/3060 DMP positions missing
+  ⚠️ HBCST-060925-66247 (sample): 2732/3060 DMP positions missing
+  ⚠️ HBCST-061125-42608 (sample): 2805/3060 DMP positions missing
+  ⚠️ HBCST-061825-52197 (sample): 2808/3060 DMP positions missing
+  ⚠️ HBCST-063025-77476 (sample): 2869/3060 DMP positions missing
+  ⚠️ HBCST-071625-48267 (sample): 2891/3060 DMP positions missing
+  ⚠️ HPLST-042525-95676 (sample): 2776/3060 DMP positions missing
+  ⚠️ HPLST-042825-39553 (sample): 2878/3060 DMP positions missing
+  ⚠️ HPLST-042925-105788 (sample): 2819/3060 DMP positions missing
+  ⚠️ HPLST-051325-25543 (sample): 2669/3060 DMP positions missing
+  ⚠️ HPLST-051425-74294 (sample): 2818/3060 DMP positions missing
+  ⚠️ HPLST-052125-32336 (sample): 2866/3060 DMP positions missing
+  ⚠️ HPLST-052125-87293 (sample): 2907/3060 DMP positions missing
+  ⚠️ HPLST-052225-74758 (sample): 2754/3060 DMP positions missing
+  ⚠️ HPLST-060425-107956 (sample): 2907/3060 DMP positions missing
+  ⚠️ HPLST-060625-104673 (sample): 2610/3060 DMP positions missing
+  ⚠️ HPLST-060925-66247 (sample): 2513/3060 DMP positions missing
+  ⚠️ HPLST-061125-42608 (sample): 2858/3060 DMP positions missing
+  ⚠️ HPLST-061825-52197 (sample): 2867/3060 DMP positions missing
+  ⚠️ HPLST-063025-77476 (sample): 2799/3060 DMP positions missing
+  ⚠️ HPLST-071625-48267 (sample): 2803/3060 DMP positions missing
+  ⚠️ pp-cancer (extended_centroid): 1897/3060 DMP positions missing
+  ⚠️ pp-healthy (extended_centroid): 1570/3060 DMP positions missing
+
+🤖 Classifying samples...
+Debugging sample 0:
+  Available positions: 246/3060
+  Used positions: 246
+  Log-likelihoods: Class0=-271.76, Class1=-8161517.88
+Final probabilities: [1. 0.]
+Debugging sample 0:
+  Available positions: 246/3060
+  Used positions: 246
+  Log-likelihoods: Class0=-271.76, Class1=-8161517.88
+Final probabilities: [1. 0.]
+
+📋 Classification Results:
+----------------------------------------------------------------------------------------------------
+Sample                              Type         Predicted  Prob_Class0  Prob_Class1  Coverage
+----------------------------------------------------------------------------------------------------
+DBCST-051425-111148                 sample       Class_0    1.0000       0.0000       15.5    
+DBCST-060525-111386                 sample       Class_0    1.0000       0.0000       13.6    
+DBCST-060525-111387                 sample       Class_0    1.0000       0.0000       13.0    
+DBCST-060625-111394                 sample       Class_0    1.0000       0.0000       16.3    
+DBCST-061025-111424                 sample       Class_0    1.0000       0.0000       22.0    
+DBCST-061025-111427                 sample       Class_0    1.0000       0.0000       20.7    
+DBCST-061325-111495                 sample       Class_0    1.0000       0.0000       17.9    
+DBCST-062725-111661                 sample       Class_0    1.0000       0.0000       13.9    
+DBCST-063025-111652                 sample       Class_0    1.0000       0.0000       13.9    
+DBCST-071025-111803                 sample       Class_0    1.0000       0.0000       13.0    
+DBCST-071025-111804                 sample       Class_0    1.0000       0.0000       13.5    
+DBCST-071025-111805                 sample       Class_0    1.0000       0.0000       17.7    
+DBCST-071025-111806                 sample       Class_0    1.0000       0.0000       26.2    
+DBCST-071025-111807                 sample       Class_0    1.0000       0.0000       21.8    
+DBCST-071125-111814                 sample       Class_0    1.0000       0.0000       19.3    
+DPLST-051425-111148                 sample       Class_1    0.0000       1.0000       12.5    
+DPLST-060525-111386                 sample       Class_1    0.0000       1.0000       13.9    
+DPLST-060525-111387                 sample       Class_1    0.0000       1.0000       13.0    
+DPLST-060625-111394                 sample       Class_1    0.0000       1.0000       13.6    
+DPLST-061025-111424                 sample       Class_1    0.0000       1.0000       12.8    
+DPLST-061025-111427                 sample       Class_1    0.0000       1.0000       14.5    
+DPLST-061325-111495                 sample       Class_0    1.0000       0.0000       12.8    
+DPLST-062725-111661                 sample       Class_1    0.0000       1.0000       12.7    
+DPLST-063025-111652                 sample       Class_1    0.0000       1.0000       13.4    
+DPLST-071025-111803                 sample       Class_1    0.0000       1.0000       12.3    
+DPLST-071025-111804                 sample       Class_1    0.0000       1.0000       14.2    
+DPLST-071025-111805                 sample       Class_1    0.0000       1.0000       14.6    
+DPLST-071025-111806                 sample       Class_1    0.0000       1.0000       14.4    
+DPLST-071025-111807                 sample       Class_1    0.0000       1.0000       14.7    
+DPLST-071125-111814                 sample       Class_1    0.0000       1.0000       14.4    
+HBCST-042525-95676                  sample       Class_1    0.0000       1.0000       27.0    
+HBCST-042825-39553                  sample       Class_1    0.0000       1.0000       17.1    
+HBCST-042925-105788                 sample       Class_1    0.0000       1.0000       16.7    
+HBCST-051325-25543                  sample       Class_1    0.0000       1.0000       14.6    
+HBCST-051425-74294                  sample       Class_1    0.0000       1.0000       12.8    
+HBCST-052125-32336                  sample       Class_1    0.0000       1.0000       26.3    
+HBCST-052125-87293                  sample       Class_1    0.0000       1.0000       25.7    
+HBCST-052225-74758                  sample       Class_1    0.0000       1.0000       14.2    
+HBCST-060425-107956                 sample       Class_1    0.0000       1.0000       20.4    
+HBCST-060625-104673                 sample       Class_1    0.0000       1.0000       14.2    
+HBCST-060925-66247                  sample       Class_1    0.0000       1.0000       17.6    
+HBCST-061125-42608                  sample       Class_1    0.0000       1.0000       14.2    
+HBCST-061825-52197                  sample       Class_1    0.0000       1.0000       16.5    
+HBCST-063025-77476                  sample       Class_1    0.0000       1.0000       13.8    
+HBCST-071625-48267                  sample       Class_1    0.0000       1.0000       14.3    
+HPLST-042525-95676                  sample       Class_1    0.0000       1.0000       17.0    
+HPLST-042825-39553                  sample       Class_1    0.0000       1.0000       14.3    
+HPLST-042925-105788                 sample       Class_1    0.0000       1.0000       13.6    
+HPLST-051325-25543                  sample       Class_1    0.0000       1.0000       21.8    
+HPLST-051425-74294                  sample       Class_1    0.0000       1.0000       13.7    
+HPLST-052125-32336                  sample       Class_1    0.0000       1.0000       14.2    
+HPLST-052125-87293                  sample       Class_1    0.0000       1.0000       13.2    
+HPLST-052225-74758                  sample       Class_1    0.0000       1.0000       14.7    
+HPLST-060425-107956                 sample       Class_0    1.0000       0.0000       13.2    
+HPLST-060625-104673                 sample       Class_0    1.0000       0.0000       23.3    
+HPLST-060925-66247                  sample       Class_1    0.0000       1.0000       26.1    
+HPLST-061125-42608                  sample       Class_1    0.0000       1.0000       12.6    
+HPLST-061825-52197                  sample       Class_1    0.0000       1.0000       14.1    
+HPLST-063025-77476                  sample       Class_1    0.0000       1.0000       17.0    
+HPLST-071625-48267                  sample       Class_1    0.0000       1.0000       15.1    
+pb-cancer                           extended_centroid Class_0    1.0000       0.0000       16.7    
+pb-healthy                          extended_centroid Class_1    0.0000       1.0000       17.3    
+pp-cancer                           extended_centroid Class_1    0.0000       1.0000       13.1    
+pp-healthy                          extended_centroid Class_0    1.0000       0.0000       15.8    
+--------------------------------------------------------------------------------
+Total samples: 64
+Class 0: 20 samples
+Class 1: 44 samples
+
+Sample type breakdown:
+  sample: 60 samples
+  extended_centroid: 4 samples
+❌ Classification failed: [Errno 2] No such file or directory: '/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/classification/single/pb-ch-2-CG.CSV'
