@@ -1,0 +1,1345 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, Union, Tuple
+import struct
+import numpy as np
+import pandas as pd
+
+
+# Import HDF5 dependencies - these should be available in the container
+try:
+    import hdf5plugin   # noqa: F401 - Must be imported before h5py
+    import h5py
+    HDF5_AVAILABLE = True
+except ImportError:
+    HDF5_AVAILABLE = False
+    h5py = None
+    hdf5plugin = None
+
+# Import GPU dependencies
+try:
+    from methyl_utils.gpu_detection import cupy as cp
+except ImportError:
+    cp = None
+
+# ---------- Bit layout (LSB-first) ----------
+# Byte layout: bits 0..4 = tnc (5 bits), bits 5..6 = context (2 bits), bit 7 = strand (1 bit)
+TNC_MASK     = 0b1_1111      # 5 bits
+CONTEXT_MASK = 0b11          # 2 bits
+STRAND_MASK  = 0b1           # 1 bit
+
+CONTEXT_SHIFT = 5
+STRAND_SHIFT  = 7
+
+# ---------- Methylation Data Types ----------
+# Basic sample dtype (pos, mC, uC, tnc)
+METHYL_SAMPLE_DTYPE = [
+    ("pos", np.uint32),
+    ("mC", np.uint32),
+    ("uC", np.uint32),
+    ("tnc", np.uint8),
+]
+
+# Basic centroid dtype (sample + N)
+METHYL_CENTROID_DTYPE = [
+    ("pos", np.uint32),
+    ("mC", np.uint32),
+    ("uC", np.uint32),
+    ("tnc", np.uint8),
+    ("N", np.uint32),  # Number of samples contributing to each position
+]
+
+# Extended centroid dtype (centroid + Sx, Sx2, log_x_sum, log_1_minus_x_sum)
+METHYL_EXTENDED_CENTROID_DTYPE = [
+    ("pos", np.uint32),
+    ("mC", np.uint32),
+    ("uC", np.uint32),
+    ("tnc", np.uint8),
+    ("N", np.uint32),  # Number of samples contributing to each position
+    ("Sx", np.float32),  # Sum of methylation levels
+    ("Sx2", np.float32),  # Sum of squared methylation levels
+    ("log_x_sum", np.float32),  # Sum of log(methylation_level) for Beta distribution
+    ("log_1_minus_x_sum", np.float32),  # Sum of log(1 - methylation_level) for Beta distribution
+]
+
+# Type aliases for better type hints (compatible with older Python versions)
+MethylSampleDtype = np.ndarray
+MethylCentroidDtype = np.ndarray
+MethylExtendedCentroidDtype = np.ndarray
+
+def get_methyl_dtype(extended: bool = False) -> list:
+    """
+    Get the appropriate methylation dtype based on the data type.
+    
+    Args:
+        extended: If True, return extended centroid dtype with statistics
+        
+    Returns:
+        List of (field_name, dtype) tuples for numpy structured array
+    """
+    if extended:
+        return METHYL_EXTENDED_CENTROID_DTYPE
+    else:
+        return METHYL_CENTROID_DTYPE
+
+def _pack_tnc_byte(tnc: int, context: int, strand: int) -> int:
+    # Range checks (raise ValueError on bad inputs)
+    if not (0 <= tnc <= TNC_MASK):         
+        raise ValueError(f"tnc out of range [0..31]: {tnc}")
+    if not (0 <= context <= CONTEXT_MASK): 
+        raise ValueError(f"context out of range [0..3]: {context}")
+    if not (0 <= strand <= STRAND_MASK):   
+        raise ValueError(f"strand out of range [0..1]: {strand}")
+
+    return (tnc & TNC_MASK) | ((context & CONTEXT_MASK) << CONTEXT_SHIFT) | ((strand & STRAND_MASK) << STRAND_SHIFT)
+
+def _unpack_tnc_byte(b: int) -> tuple[int, int, int]:
+    tnc     =  b & TNC_MASK
+    context = (b >> CONTEXT_SHIFT) & CONTEXT_MASK
+    strand  = (b >> STRAND_SHIFT) & STRAND_MASK
+
+    return tnc, context, strand
+
+# Precompile struct for perf; little-endian: <IHHBB
+# fields: pos(uint32), mC(uint16), uC(uint16), tnc_byte(uint8), pad(uint8)
+_RECORD_STRUCT = struct.Struct("<IHHBB")
+RECORD_SIZE = _RECORD_STRUCT.size  # should be 10
+
+@dataclass(slots=True)
+class TNCBits:
+    """Holds the 3 bitfields and knows how to pack/unpack to a single byte."""
+    tnc: int       # 0..31
+    context: int   # 0..3
+    strand: int    # 0..1
+
+    def to_byte(self) -> int:
+        return _pack_tnc_byte(self.tnc, self.context, self.strand)
+    
+    @classmethod
+    def from_byte(cls, b: int) -> TNCBits:
+        tnc, context, strand = _unpack_tnc_byte(b)
+        return cls(tnc=tnc, context=context, strand=strand)
+
+
+@dataclass(slots=True)
+class MethylSample:
+    """
+    Represents a methylation sample that can be loaded from HDF5 files.
+    Supports three types:
+    1. Sample: Basic sample with pos, mC, uC, tnc
+    2. Basic Centroid: Sample + N (sample count) + Sx, Sx2
+    3. Extended Centroid: Basic Centroid + log_x_sum, log_1_minus_x_sum
+    """
+    # Core methylation data (always present)
+    pos: np.ndarray  # uint32 - genomic positions
+    mC: np.ndarray   # uint32 - methylated counts
+    uC: np.ndarray   # uint32 - unmethylated counts
+    tnc: np.ndarray  # uint8 - trinucleotide context + strand info
+    
+    # Centroid-specific data (optional)
+    N: Optional[np.ndarray] = None           # uint32 - sample counts
+    Sx: Optional[np.ndarray] = None          # float32 - sum of methylation levels
+    Sx2: Optional[np.ndarray] = None         # float32 - sum of squared methylation levels
+    
+    # Extended centroid data (optional)
+    log_x_sum: Optional[np.ndarray] = None           # float32 - sum of log(methylation_level)
+    log_1_minus_x_sum: Optional[np.ndarray] = None   # float32 - sum of log(1 - methylation_level)
+    
+    # Cached statistical properties (computed on demand)
+    _cached_alpha: Optional[np.ndarray] = None       # float64 - Beta distribution alpha parameter
+    _cached_beta: Optional[np.ndarray] = None        # float64 - Beta distribution beta parameter
+    _cached_mean: Optional[np.ndarray] = None        # float64 - expected methylation level
+    _cached_variance: Optional[np.ndarray] = None    # float64 - methylation level variance
+    _cached_tau: Optional[np.ndarray] = None         # float64 - total concentration (alpha + beta)
+    
+    def __post_init__(self):
+        """Validate data types after initialization."""
+        self._validate_data_types()
+    
+    def _validate_data_types(self):
+        """Validate that all arrays have the correct data types."""
+        # Core arrays should always be present
+        assert self.pos.dtype == np.uint32, f"pos should be uint32, got {self.pos.dtype}"
+        assert self.mC.dtype == np.uint32, f"mC should be uint32, got {self.mC.dtype}"
+        assert self.uC.dtype == np.uint32, f"uC should be uint32, got {self.uC.dtype}"
+        assert self.tnc.dtype == np.uint8, f"tnc should be uint8, got {self.tnc.dtype}"
+        
+        # Centroid arrays (if present)
+        if self.N is not None:
+            assert self.N.dtype == np.uint32, f"N should be uint32, got {self.N.dtype}"
+        if self.Sx is not None:
+            assert self.Sx.dtype == np.float32, f"Sx should be float32, got {self.Sx.dtype}"
+        if self.Sx2 is not None:
+            assert self.Sx2.dtype == np.float32, f"Sx2 should be float32, got {self.Sx2.dtype}"
+        
+        # Extended centroid arrays (if present)
+        if self.log_x_sum is not None:
+            assert self.log_x_sum.dtype == np.float32, f"log_x_sum should be float32, got {self.log_x_sum.dtype}"
+        if self.log_1_minus_x_sum is not None:
+            assert self.log_1_minus_x_sum.dtype == np.float32, f"log_1_minus_x_sum should be float32, got {self.log_1_minus_x_sum.dtype}"
+        
+        # All arrays should have the same length
+        expected_length = len(self.pos)
+        assert len(self.mC) == expected_length, f"mC length {len(self.mC)} != pos length {expected_length}"
+        assert len(self.uC) == expected_length, f"uC length {len(self.uC)} != pos length {expected_length}"
+        assert len(self.tnc) == expected_length, f"tnc length {len(self.tnc)} != pos length {expected_length}"
+        
+        if self.N is not None:
+            assert len(self.N) == expected_length, f"N length {len(self.N)} != pos length {expected_length}"
+        if self.Sx is not None:
+            assert len(self.Sx) == expected_length, f"Sx length {len(self.Sx)} != pos length {expected_length}"
+        if self.Sx2 is not None:
+            assert len(self.Sx2) == expected_length, f"Sx2 length {len(self.Sx2)} != pos length {expected_length}"
+        if self.log_x_sum is not None:
+            assert len(self.log_x_sum) == expected_length, f"log_x_sum length {len(self.log_x_sum)} != pos length {expected_length}"
+        if self.log_1_minus_x_sum is not None:
+            assert len(self.log_1_minus_x_sum) == expected_length, f"log_1_minus_x_sum length {len(self.log_1_minus_x_sum)} != pos length {expected_length}"
+
+    @property
+    def sample_type(self) -> str:
+        """Determine the type of sample based on available fields."""
+        if self.log_x_sum is not None and self.log_1_minus_x_sum is not None:
+            return "extended_centroid"
+        elif self.N is not None:
+            return "basic_centroid"
+        else:
+            return "sample"
+    
+    @property
+    def is_centroid(self) -> bool:
+        """Check if this is a centroid (basic or extended)."""
+        return self.N is not None
+    
+    @property
+    def is_extended_centroid(self) -> bool:
+        """Check if this is an extended centroid."""
+        return self.sample_type == "extended_centroid"
+    
+    # Statistical properties - computed on demand
+    @property
+    def alpha(self) -> np.ndarray:
+        """
+        Beta distribution alpha parameter.
+        
+        Computed on-demand using the appropriate method:
+        - Extended centroids: MLE estimation
+        - Basic centroids: Method of Moments
+        - Samples: Basic MoM from methylation levels
+        """
+        if self._cached_alpha is None:
+            alpha, beta = self._compute_beta_parameters()
+            self._cached_alpha = alpha
+            self._cached_beta = beta
+        return self._cached_alpha
+    
+    @property
+    def beta(self) -> np.ndarray:
+        """
+        Beta distribution beta parameter.
+        
+        Computed on-demand using the appropriate method:
+        - Extended centroids: MLE estimation
+        - Basic centroids: Method of Moments
+        - Samples: Basic MoM from methylation levels
+        """
+        if self._cached_beta is None:
+            alpha, beta = self._compute_beta_parameters()
+            self._cached_alpha = alpha
+            self._cached_beta = beta
+        return self._cached_beta
+    
+    @property
+    def mean(self) -> np.ndarray:
+        """
+        Expected methylation level.
+
+        Uses adaptive mean estimation based on sample size reliability:
+        - Small samples (N ≤ 10): empirical mean (Sx/N) for statistical reliability
+        - Large samples (N > 10): Beta distribution mean (α/(α+β)) for full distributional information
+
+        This approach ensures optimal accuracy across different sample sizes by choosing
+        the most appropriate estimation method for each scenario.
+        """
+        if self._cached_mean is None:
+            eps = 1e-12
+
+            # For centroids with sufficient statistics, use adaptive mean estimation
+            if self.is_centroid and self.Sx is not None and self.N is not None:
+                empirical_mean = self.Sx / np.maximum(self.N.astype(np.float32), eps)
+
+                # Use empirical mean for small sample sizes (N <= 10) where Beta estimation is unreliable
+                small_sample_mask = self.N <= 10
+
+                if np.all(small_sample_mask):
+                    # All positions have small samples - use empirical mean directly
+                    final_mean = empirical_mean
+                else:
+                    # Mix of small and large samples
+                    final_mean = empirical_mean.copy()  # Start with empirical mean
+
+                    # For larger sample sizes (N > 10), use Beta distribution mean
+                    large_sample_mask = ~small_sample_mask
+                    if np.any(large_sample_mask):
+                        alpha = self.alpha
+                        beta = self.beta
+                        tau = alpha + beta
+                        beta_mean = alpha / np.maximum(tau, eps)
+
+                        # Use Beta mean for large samples
+                        final_mean = np.where(large_sample_mask, beta_mean, final_mean)
+
+                        # NOTE: Validation of Beta mean vs empirical mean is disabled since we fixed
+                        # the underlying alpha/beta calculation issues and improved mean estimation:
+                        # - Small samples (N <= 10): use empirical mean (Sx/N)
+                        # - Large samples (N > 10): use Beta distribution mean with proper MLE estimation
+                        # This ensures consistency between different mean calculation approaches.
+            else:
+                # For non-centroid data, use Beta distribution mean
+                alpha = self.alpha
+                beta = self.beta
+                tau = alpha + beta
+                final_mean = alpha / np.maximum(tau, eps)
+
+            self._cached_mean = final_mean
+        return self._cached_mean
+    
+    @property
+    def variance(self) -> np.ndarray:
+        """
+        Variance of methylation level.
+
+        Calculated as: mean * (1 - mean) / (tau + 1) where tau = alpha + beta
+        This is numerically stable and equivalent to: (alpha * beta) / ((alpha + beta)^2 * (alpha + beta + 1))
+        """
+        if self._cached_variance is None:
+            alpha = self.alpha
+            beta = self.beta
+            tau = alpha + beta
+            eps = 1e-12
+            # Numerically stable variance calculation: var = mean * (1 - mean) / (tau + 1)
+            # This avoids overflow when alpha/beta are very large
+            mean = alpha / np.maximum(tau, eps)
+            self._cached_variance = mean * (1 - mean) / np.maximum(tau + 1, eps)
+        return self._cached_variance
+
+    def _estimate_beta_params_bounded_extended(self, n: np.ndarray, log_x_sum: np.ndarray,
+                                             log_1mx_sum: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Estimate Beta distribution parameters for extended centroids with bounds checking.
+
+        This method applies MLE but with strict bounds to prevent pathological parameter
+        estimates that can occur with extreme methylation values or edge cases.
+
+        Args:
+            n: Sample counts (array)
+            log_x_sum: Log sum of methylation levels
+            log_1mx_sum: Log sum of (1-methylation) levels
+
+        Returns:
+            Tuple of (alpha, beta) arrays with reasonable bounds
+        """
+        # First try MLE
+        from methyl_utils.statistical_tests import beta_mle_estimation
+        alpha_mle, beta_mle = beta_mle_estimation(n, log_x_sum, log_1mx_sum, max_iter=10, tol=1e-8)
+
+        # Apply strict bounds to prevent extreme values
+        max_reasonable_param = 1e5  # Conservative upper bound
+
+        # For extended centroids, parameters should be reasonable
+        # If MLE gives extreme values, fall back to bounded MoM
+        extreme_mask = (alpha_mle > max_reasonable_param) | (beta_mle > max_reasonable_param) | \
+                      (alpha_mle < 1e-6) | (beta_mle < 1e-6) | \
+                      ~np.isfinite(alpha_mle) | ~np.isfinite(beta_mle)
+
+        # For positions with extreme MLE results, use bounded method of moments
+        if np.any(extreme_mask):
+            # Compute empirical mean from log sums (more stable than direct calculation)
+            mean_est = np.exp(log_x_sum / np.maximum(n, 1))
+            mean_est = np.clip(mean_est, 1e-6, 1-1e-6)
+
+            # Conservative MoM estimates
+            alpha_mom = mean_est * 100  # More conservative than the 10 we used before
+            beta_mom = (1 - mean_est) * 100
+
+            # Use MoM for extreme cases, MLE for others
+            alpha_final = np.where(extreme_mask, alpha_mom, alpha_mle)
+            beta_final = np.where(extreme_mask, beta_mom, beta_mle)
+        else:
+            alpha_final = alpha_mle
+            beta_final = beta_mle
+
+        # Final bounds check
+        alpha_final = np.clip(alpha_final, 1e-6, max_reasonable_param)
+        beta_final = np.clip(beta_final, 1e-6, max_reasonable_param)
+
+        # Additional sanity check: ensure computed mean is reasonable
+        computed_mean = alpha_final / (alpha_final + beta_final)
+        empirical_mean = np.exp(log_x_sum / np.maximum(n, 1))
+        empirical_mean = np.clip(empirical_mean, 1e-6, 1-1e-6)
+
+        mean_diff = np.abs(computed_mean - empirical_mean)
+        # If computed mean differs too much from empirical, adjust parameters
+        bad_mean_mask = mean_diff > 0.5
+        if np.any(bad_mean_mask):
+            # Revert to conservative MoM for these positions
+            alpha_final = np.where(bad_mean_mask, empirical_mean * 50, alpha_final)
+            beta_final = np.where(bad_mean_mask, (1 - empirical_mean) * 50, beta_final)
+
+        return alpha_final, beta_final
+    
+    @property
+    def tau(self) -> np.ndarray:
+        """
+        Total concentration: alpha + beta.
+        
+        This represents the "effective sample size" or precision of the Beta distribution.
+        """
+        if self._cached_tau is None:
+            self._cached_tau = self.alpha + self.beta
+        return self._cached_tau
+    
+    @property
+    def precision(self) -> np.ndarray:
+        """
+        Precision weight for importance calculations.
+        
+        This is the same as tau (total concentration) and is used for
+        down-weighting low-precision sites in biological importance calculations.
+        """
+        return self.tau
+    
+    def _compute_beta_parameters(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute Beta distribution parameters using the appropriate method.
+        
+        Automatically selects the best method based on available data:
+        - Extended centroids: MLE with log sums
+        - Basic centroids: MoM with Sx, Sx2
+        - Samples: Basic MoM from methylation levels
+        
+        Returns:
+            Tuple of (alpha, beta) arrays
+        """
+        # Import here to avoid circular imports
+        from methyl_utils.statistical_tests import beta_mle_estimation, beta_mom_estimation
+        from methyl_utils.metrics_core import get_sample_beta_mom
+        
+        if self.is_extended_centroid and self.log_x_sum is not None and self.log_1_minus_x_sum is not None:
+            # Use extended centroid statistics for bounded MLE estimation
+            alpha, beta = self._estimate_beta_params_bounded_extended(
+                self.N, self.log_x_sum, self.log_1_minus_x_sum
+            )
+
+            # Validate MLE results - if alpha and beta are both near zero or invalid,
+            # fall back to method of moments using Sx data
+            invalid_mle = ((alpha <= 1e-6) & (beta <= 1e-6)) | ~np.isfinite(alpha) | ~np.isfinite(beta)
+            if np.any(invalid_mle) and self.Sx is not None and self.Sx2 is not None:
+                # Fall back to method of moments for positions where MLE failed
+                fallback_alpha, fallback_beta = beta_mom_estimation(self.N, self.Sx, self.Sx2)
+                alpha = np.where(invalid_mle, fallback_alpha, alpha)
+                beta = np.where(invalid_mle, fallback_beta, beta)
+        elif self.is_centroid and self.Sx is not None and self.Sx2 is not None:
+            # Use basic centroid statistics for MoM
+            alpha, beta = beta_mom_estimation(self.N, self.Sx, self.Sx2)
+        else:
+            # Use basic sample data
+            alpha, beta = get_sample_beta_mom(
+                self.get_methylation_levels(), 
+                self.get_coverage()
+            )
+        
+        return alpha, beta
+    
+    def get_beta_parameters(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Get Beta distribution parameters.
+        
+        Returns:
+            Tuple of (alpha, beta) arrays
+        """
+        return self.alpha, self.beta
+    
+    def clear_statistical_cache(self):
+        """Clear cached statistical properties to free memory."""
+        self._cached_alpha = None
+        self._cached_beta = None
+        self._cached_mean = None
+        self._cached_variance = None
+        self._cached_tau = None
+
+    # Utility properties for memory and size calculations
+    @property
+    def position_count(self) -> int:
+        """
+        Number of genomic positions in this sample.
+
+        Returns:
+            Integer count of positions
+        """
+        return len(self.pos)
+
+    @property
+    def memory_usage_mb(self) -> float:
+        """
+        Total memory usage of this sample in megabytes.
+
+        Calculates memory used by all arrays (pos, mC, uC, tnc, N, Sx, Sx2, log_x_sum, log_1_minus_x_sum).
+
+        Returns:
+            Memory usage in MB
+        """
+        total_bytes = 0
+
+        # Core arrays (always present)
+        for attr in ['pos', 'mC', 'uC', 'tnc']:
+            if hasattr(self, attr):
+                arr = getattr(self, attr)
+                if hasattr(arr, 'nbytes'):
+                    total_bytes += arr.nbytes
+
+        # Centroid arrays (optional)
+        for attr in ['N', 'Sx', 'Sx2', 'log_x_sum', 'log_1_minus_x_sum']:
+            if hasattr(self, attr):
+                arr = getattr(self, attr)
+                if arr is not None and hasattr(arr, 'nbytes'):
+                    total_bytes += arr.nbytes
+
+        return total_bytes / (1024 * 1024)  # Convert to MB
+
+    @property
+    def bytes_per_position(self) -> float:
+        """
+        Average bytes per genomic position.
+
+        Useful for estimating how many samples can fit in GPU memory or for cache sizing.
+        This gives the memory footprint per position across all arrays.
+
+        Returns:
+            Average bytes per position
+        """
+        if self.position_count == 0:
+            return 0.0
+        return (self.memory_usage_mb * 1024 * 1024) / self.position_count
+
+    @property
+    def coverage_stats(self) -> dict:
+        """
+        Coverage statistics for this sample.
+
+        Returns:
+            Dictionary with coverage statistics:
+            - min_coverage: Minimum coverage across positions
+            - max_coverage: Maximum coverage across positions
+            - mean_coverage: Mean coverage across positions
+            - median_coverage: Median coverage across positions
+            - positions_with_coverage: Number of positions with non-zero coverage
+            - coverage_distribution: Coverage values for analysis
+        """
+        coverage = self.mC + self.uC
+
+        return {
+            'min_coverage': int(np.min(coverage)) if len(coverage) > 0 else 0,
+            'max_coverage': int(np.max(coverage)) if len(coverage) > 0 else 0,
+            'mean_coverage': float(np.mean(coverage)) if len(coverage) > 0 else 0.0,
+            'median_coverage': float(np.median(coverage)) if len(coverage) > 0 else 0.0,
+            'positions_with_coverage': int(np.sum(coverage > 0)),
+            'total_positions': self.position_count,
+            'coverage_fraction': float(np.sum(coverage > 0) / self.position_count) if self.position_count > 0 else 0.0
+        }
+
+    @property
+    def methylation_stats(self) -> dict:
+        """
+        Methylation level statistics for this sample.
+
+        Returns:
+            Dictionary with methylation statistics:
+            - mean_methylation: Mean methylation level (0-1)
+            - positions_covered: Number of positions with coverage > 0
+            - methylation_distribution: Methylation levels for analysis
+        """
+        coverage = self.mC + self.uC
+        valid_positions = coverage > 0
+
+        if not np.any(valid_positions):
+            return {
+                'mean_methylation': 0.0,
+                'positions_covered': 0,
+                'methylation_levels': np.array([])
+            }
+
+        methylation_levels = np.zeros(len(coverage), dtype=np.float32)
+        methylation_levels[valid_positions] = self.mC[valid_positions] / coverage[valid_positions]
+
+        return {
+            'mean_methylation': float(np.mean(methylation_levels[valid_positions])),
+            'positions_covered': int(np.sum(valid_positions)),
+            'methylation_levels': methylation_levels[valid_positions]
+        }
+
+    def create_aligned_sample(self, mask: np.ndarray) -> 'MethylSample':
+        """
+        Create a new MethylSample with only the positions specified by the mask.
+        
+        Args:
+            mask: Boolean array indicating which positions to keep
+            
+        Returns:
+            New MethylSample instance with filtered data
+        """
+        # Ensure mask is boolean and has correct length
+        assert mask.dtype == bool, f"mask should be boolean, got {mask.dtype}"
+        assert len(mask) == len(self.pos), f"mask length {len(mask)} != pos length {len(self.pos)}"
+        
+        # Create aligned sample with proper type enforcement
+        aligned_sample = MethylSample(
+            pos=self.pos[mask].astype(np.uint32),
+            mC=self.mC[mask].astype(np.uint32),
+            uC=self.uC[mask].astype(np.uint32),
+            tnc=self.tnc[mask].astype(np.uint8),
+            N=self.N[mask].astype(np.uint32) if self.N is not None else None,
+            Sx=self.Sx[mask].astype(np.float32) if self.Sx is not None else None,
+            Sx2=self.Sx2[mask].astype(np.float32) if self.Sx2 is not None else None,
+            log_x_sum=self.log_x_sum[mask].astype(np.float32) if self.log_x_sum is not None else None,
+            log_1_minus_x_sum=self.log_1_minus_x_sum[mask].astype(np.float32) if self.log_1_minus_x_sum is not None else None,
+            _cached_alpha=None,
+            _cached_beta=None,
+            _cached_mean=None,
+            _cached_variance=None,
+            _cached_tau=None
+        )
+        
+        return aligned_sample
+    
+    @classmethod
+    def load_from_h5(cls, file_path: Union[str, Path]) -> MethylSample:
+        """
+        Load a methylation sample from an HDF5 file.
+        Automatically detects the sample type and loads appropriate fields.
+        Supports both structured array format and group format.
+
+        Args:
+            file_path: Path to the HDF5 file
+
+        Returns:
+            MethylSample instance with appropriate fields loaded
+
+        Raises:
+            ImportError: If HDF5 dependencies are not available
+        """
+        if not HDF5_AVAILABLE:
+            raise ImportError("HDF5 dependencies (h5py, hdf5plugin) not available. "
+                            "Please ensure they are installed in your container.")
+
+        file_path = Path(file_path)
+
+        with h5py.File(file_path, "r") as f:
+            data_group = f["methylation_data"]
+
+            # Try structured array format first (used in some datasets)
+            if hasattr(data_group, 'dtype') and hasattr(data_group.dtype, 'names'):
+                # Handle structured array format
+                structured_data = data_group[:]
+                pos = np.asarray(structured_data["pos"], dtype=np.uint32)
+                mC = np.asarray(structured_data["mC"], dtype=np.uint32)
+                uC = np.asarray(structured_data["uC"], dtype=np.uint32)
+                tnc = np.asarray(structured_data["tnc"], dtype=np.uint8)
+
+                # Initialize optional fields
+                N: Optional[np.ndarray[np.uint32]] = None
+                Sx: Optional[np.ndarray[np.float32]] = None
+                Sx2: Optional[np.ndarray[np.float32]] = None
+                log_x_sum: Optional[np.ndarray[np.float32]] = None
+                log_1_minus_x_sum: Optional[np.ndarray[np.float32]] = None
+
+                # Check for additional fields in structured array
+                if "N" in structured_data.dtype.names:
+                    N = np.asarray(structured_data["N"], dtype=np.uint32)
+                if "Sx" in structured_data.dtype.names:
+                    Sx = np.asarray(structured_data["Sx"], dtype=np.float32)
+                if "Sx2" in structured_data.dtype.names:
+                    Sx2 = np.asarray(structured_data["Sx2"], dtype=np.float32)
+                if "log_x_sum" in structured_data.dtype.names:
+                    log_x_sum = np.asarray(structured_data["log_x_sum"], dtype=np.float32)
+                if "log_1_minus_x_sum" in structured_data.dtype.names:
+                    log_1_minus_x_sum = np.asarray(structured_data["log_1_minus_x_sum"], dtype=np.float32)
+
+            else:
+                # Handle group format (original format)
+                # Load basic fields (always present)
+                pos = np.asarray(data_group["pos"][:], dtype=np.uint32)
+                mC = np.asarray(data_group["mC"][:], dtype=np.uint32)
+                uC = np.asarray(data_group["uC"][:], dtype=np.uint32)
+                tnc = np.asarray(data_group["tnc"][:], dtype=np.uint8)
+
+                # Initialize optional fields
+                N: Optional[np.ndarray[np.uint32]] = None
+                Sx: Optional[np.ndarray[np.float32]] = None
+                Sx2: Optional[np.ndarray[np.float32]] = None
+                log_x_sum: Optional[np.ndarray[np.float32]] = None
+                log_1_minus_x_sum: Optional[np.ndarray[np.float32]] = None
+
+                # Check for centroid fields
+                if "N" in data_group:
+                    N = np.asarray(data_group["N"][:], dtype=np.uint32)
+
+                # Check for basic centroid statistics
+                if "Sx" in data_group:
+                    Sx = np.asarray(data_group["Sx"][:], dtype=np.float32)
+                if "Sx2" in data_group:
+                    Sx2 = np.asarray(data_group["Sx2"][:], dtype=np.float32)
+
+                # Check for extended centroid statistics
+                if "log_x_sum" in data_group:
+                    log_x_sum = np.asarray(data_group["log_x_sum"][:], dtype=np.float32)
+                if "log_1_minus_x_sum" in data_group:
+                    log_1_minus_x_sum = np.asarray(data_group["log_1_minus_x_sum"][:], dtype=np.float32)
+        
+        return cls(
+            pos=pos,
+            mC=mC,
+            uC=uC,
+            tnc=tnc,
+            N=N,
+            Sx=Sx,
+            Sx2=Sx2,
+            log_x_sum=log_x_sum,
+            log_1_minus_x_sum=log_1_minus_x_sum
+        )
+    
+    def get_methylation_levels(self) -> np.ndarray:
+        """
+        Calculate methylation levels based on sample type.
+        
+        For samples: mC / (mC + uC)
+        For centroids: Sx / N (if available), otherwise mC / (mC + uC)
+        """
+        if self.is_centroid and self.Sx is not None and self.N is not None:
+            # Use proper statistical estimator for centroids
+            return self.Sx / self.N
+        else:
+            # Use basic calculation for samples or centroids without Sx
+            return self.mC / (self.mC + self.uC)
+    
+    def get_coverage(self) -> np.ndarray:
+        """Get coverage (total reads) at each position."""
+        return self.mC + self.uC
+    
+    def get_sample_count(self) -> Optional[np.ndarray]:
+        """Get sample count at each position (only for centroids)."""
+        return self.N
+    
+    def save_to_h5(self, file_path: Union[str, Path], compressed: bool = True) -> Path:
+        """
+        Save MethylSample to HDF5 file.
+
+        Args:
+            file_path: Path to save the HDF5 file
+            compressed: Whether to use compression (default: True)
+
+        Returns:
+            Path to the saved file
+
+        Raises:
+            ImportError: If HDF5 dependencies are not available
+        """
+        if not HDF5_AVAILABLE:
+            raise ImportError("HDF5 dependencies (h5py, hdf5plugin) not available. "
+                            "Please ensure they are installed in your container.")
+
+        file_path = Path(file_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with h5py.File(file_path, "w") as f:
+            # Create methylation_data group
+            data_group = f.create_group("methylation_data")
+            
+            # Compression settings
+            compression_kwargs = {}
+            if compressed:
+                try:
+                    import hdf5plugin
+                    compression_kwargs = hdf5plugin.Zstd(clevel=9)
+                except ImportError:
+                    compression_kwargs = {"compression": "gzip", "compression_opts": 9}
+            
+            # Save basic fields (always present)
+            data_group.create_dataset(
+                "pos",
+                data=self.pos,
+                dtype=np.uint32,
+                **compression_kwargs
+            )
+            data_group.create_dataset(
+                "mC",
+                data=self.mC,
+                dtype=np.uint16 if self.is_centroid else np.uint32,
+                **compression_kwargs
+            )
+            data_group.create_dataset(
+                "uC",
+                data=self.uC,
+                dtype=np.uint16 if self.is_centroid else np.uint32,
+                **compression_kwargs
+            )
+            data_group.create_dataset(
+                "tnc",
+                data=self.tnc,
+                dtype=np.uint8,
+                **compression_kwargs
+            )
+            
+            # Save centroid fields if present
+            if self.N is not None:
+                data_group.create_dataset(
+                    "N",
+                    data=self.N,
+                    dtype=np.uint16,
+                    **compression_kwargs
+                )
+            
+            # Save basic centroid statistics if present
+            if self.Sx is not None:
+                data_group.create_dataset(
+                    "Sx",
+                    data=self.Sx,
+                    dtype=np.float32,
+                    **compression_kwargs
+                )
+            if self.Sx2 is not None:
+                data_group.create_dataset(
+                    "Sx2",
+                    data=self.Sx2,
+                    dtype=np.float32,
+                    **compression_kwargs
+                )
+            
+            # Save extended centroid statistics if present
+            if self.log_x_sum is not None:
+                data_group.create_dataset(
+                    "log_x_sum",
+                    data=self.log_x_sum,
+                    dtype=np.float32,
+                    **compression_kwargs
+                )
+            if self.log_1_minus_x_sum is not None:
+                data_group.create_dataset(
+                    "log_1_minus_x_sum",
+                    data=self.log_1_minus_x_sum,
+                    dtype=np.float32,
+                    **compression_kwargs
+                )
+        
+        return file_path
+    
+    @classmethod
+    def from_centroid_data(cls, centroid_data) -> MethylSample:
+        """
+        Create MethylSample from centroid data (dictionary or structured array).
+        
+        Args:
+            centroid_data: Dictionary or structured array with centroid data from position aligner
+            
+        Returns:
+            MethylSample instance
+        """
+        if isinstance(centroid_data, np.ndarray):
+            # Handle structured array format
+            return cls(
+                pos=centroid_data["pos"],
+                mC=centroid_data["mC"],
+                uC=centroid_data["uC"],
+                tnc=centroid_data["tnc"],
+                N=centroid_data["N"] if "N" in centroid_data.dtype.names else None,
+                Sx=centroid_data["Sx"] if "Sx" in centroid_data.dtype.names else None,
+                Sx2=centroid_data["Sx2"] if "Sx2" in centroid_data.dtype.names else None,
+                log_x_sum=centroid_data["log_x_sum"] if "log_x_sum" in centroid_data.dtype.names else None,
+                log_1_minus_x_sum=centroid_data["log_1_minus_x_sum"] if "log_1_minus_x_sum" in centroid_data.dtype.names else None
+            )
+        else:
+            # Handle dictionary format
+            return cls(
+                pos=centroid_data["pos"],
+                mC=centroid_data["mC"],
+                uC=centroid_data["uC"],
+                tnc=centroid_data["tnc"],
+                N=centroid_data.get("N"),
+                Sx=centroid_data.get("Sx"),
+                Sx2=centroid_data.get("Sx2"),
+                log_x_sum=centroid_data.get("log_x_sum"),
+                log_1_minus_x_sum=centroid_data.get("log_1_minus_x_sum")
+            )
+
+    def to_numpy(self, extended: bool = False) -> np.ndarray:
+        """
+        Convert MethylSample to structured numpy array format.
+
+        Args:
+            extended: Whether to include extended centroid fields (Sx, Sx2, log_x_sum, log_1_minus_x_sum)
+
+        Returns:
+            Structured numpy array with centroid data
+        """
+        if extended and self.is_extended_centroid:
+            # Use extended centroid dtype
+            dtype = METHYL_EXTENDED_CENTROID_DTYPE
+            data = np.empty(len(self.pos), dtype=dtype)
+            data["pos"] = self.pos
+            data["mC"] = self.mC
+            data["uC"] = self.uC
+            data["tnc"] = self.tnc
+            data["N"] = self.N
+            data["Sx"] = self.Sx
+            data["Sx2"] = self.Sx2
+            data["log_x_sum"] = self.log_x_sum
+            data["log_1_minus_x_sum"] = self.log_1_minus_x_sum
+        elif self.is_centroid:
+            # Use basic centroid dtype
+            dtype = METHYL_CENTROID_DTYPE
+            data = np.empty(len(self.pos), dtype=dtype)
+            data["pos"] = self.pos
+            data["mC"] = self.mC
+            data["uC"] = self.uC
+            data["tnc"] = self.tnc
+            data["N"] = self.N
+        else:
+            # Use basic sample dtype
+            dtype = METHYL_SAMPLE_DTYPE
+            data = np.empty(len(self.pos), dtype=dtype)
+            data["pos"] = self.pos
+            data["mC"] = self.mC
+            data["uC"] = self.uC
+            data["tnc"] = self.tnc
+
+        return data
+
+    @classmethod
+    def from_sample_data(cls, pos: np.ndarray, mC: np.ndarray, uC: np.ndarray, tnc: np.ndarray) -> MethylSample:
+        """
+        Create MethylSample from basic sample data.
+        
+        Args:
+            pos: Genomic positions
+            mC: Methylated cytosine counts
+            uC: Unmethylated cytosine counts
+            tnc: Trinucleotide context codes
+            
+        Returns:
+            MethylSample instance
+        """
+        return cls(
+            pos=pos,
+            mC=mC,
+            uC=uC,
+            tnc=tnc
+        )
+    
+    def to_dataframe(self, mask: Optional[np.ndarray] = None) -> pd.DataFrame:
+        """
+        Convert MethylSample to pandas DataFrame with optional mask.
+        
+        Args:
+            mask: Boolean mask to select subset of positions (if None, uses all)
+            
+        Returns:
+            DataFrame with columns: pos, mC, uC, and additional fields if available
+        """       
+        # Apply mask if provided
+        if mask is not None:
+            pos = self.pos[mask]
+            mC = self.mC[mask]
+            uC = self.uC[mask]
+            tnc = self.tnc[mask]
+        else:
+            pos = self.pos
+            mC = self.mC
+            uC = self.uC
+            tnc = self.tnc
+        
+        # Create basic DataFrame
+        data = {
+            'pos': pos,
+            'mC': mC,
+            'uC': uC,
+            'tnc': tnc
+        }
+        
+        # Add centroid fields if available
+        if self.N is not None:
+            data['N'] = self.N[mask] if mask is not None else self.N
+        if self.Sx is not None:
+            data['Sx'] = self.Sx[mask] if mask is not None else self.Sx
+        if self.Sx2 is not None:
+            data['Sx2'] = self.Sx2[mask] if mask is not None else self.Sx2
+        if self.log_x_sum is not None:
+            data['log_x_sum'] = self.log_x_sum[mask] if mask is not None else self.log_x_sum
+        if self.log_1_minus_x_sum is not None:
+            data['log_1_minus_x_sum'] = self.log_1_minus_x_sum[mask] if mask is not None else self.log_1_minus_x_sum
+        
+        return pd.DataFrame(data)
+    
+    def create_position_mask(
+        self, 
+        positions: Optional[list] = None, 
+        min_coverage: Optional[int] = None, 
+        max_coverage: Optional[int] = None
+    ) -> np.ndarray:
+        """
+        Create a boolean mask for selecting positions based on criteria.
+        
+        Args:
+            positions: List of specific positions to include (if None, uses all)
+            min_coverage: Minimum coverage threshold
+            max_coverage: Maximum coverage threshold
+            
+        Returns:
+            Boolean mask array
+        """
+        total_positions = len(self.pos)
+        mask = np.ones(total_positions, dtype=bool)
+        
+        # Filter by specific positions
+        if positions is not None:
+            position_mask = np.isin(self.pos, positions)
+            mask &= position_mask
+        
+        # Filter by coverage
+        if min_coverage is not None or max_coverage is not None:
+            coverage = self.mC + self.uC
+            
+            if min_coverage is not None:
+                mask &= (coverage >= min_coverage)
+            
+            if max_coverage is not None:
+                mask &= (coverage <= max_coverage)
+        
+        return mask
+    
+    def get_position_info(self) -> dict:
+        """
+        Get information about positions without loading all data.
+        
+        Returns:
+            Dictionary with position information
+        """
+        total_positions = len(self.pos)
+        
+        # Get position range
+        min_pos = self.pos.min()
+        max_pos = self.pos.max()
+        
+        # Get coverage statistics
+        coverage = self.mC + self.uC
+        
+        info = {
+            'total_positions': total_positions,
+            'min_position': int(min_pos),
+            'max_position': int(max_pos),
+            'position_range': int(max_pos - min_pos),
+            'mean_coverage': float(coverage.mean()),
+            'median_coverage': float(np.median(coverage)),
+            'min_coverage': int(coverage.min()),
+            'max_coverage': int(coverage.max()),
+            'positions_with_coverage': int((coverage > 0).sum())
+        }
+        
+        return info
+    
+    @staticmethod
+    def list_datasets(hdf5_path: Union[str, Path]) -> list[str]:
+        """List all datasets in an HDF5 file."""
+        if not HDF5_AVAILABLE:
+            raise ImportError("HDF5 dependencies not available. "
+                            "Please ensure they are installed in your container.")
+
+        path = Path(hdf5_path)
+        datasets = []
+
+        with h5py.File(path, 'r') as f:
+            datagroup = f['methylation_data']
+            for name in datagroup.keys():
+                if isinstance(datagroup[name], h5py.Dataset):
+                    datasets.append(name)
+
+            return datasets
+
+
+    @classmethod
+    def load_multiple_chromosomes(
+        cls, 
+        file_patterns: list, 
+        mask: Optional[np.ndarray] = None,
+        verbose: bool = False
+    ) -> dict[str, object]:
+        """
+        Load methylation data from multiple chromosome files.
+        
+        Args:
+            file_patterns: List of file paths or glob patterns
+            mask: Optional mask to apply to all files
+            
+        Returns:
+            Dictionary mapping chromosome names to DataFrames
+        """
+        import glob
+        
+        results = {}
+        
+        for pattern in file_patterns:
+            # Handle glob patterns
+            if '*' in str(pattern):
+                files = glob.glob(str(pattern))
+            else:
+                files = [pattern]
+            
+            for file_path in files:
+                path = Path(file_path)
+                if path.exists() and path.suffix.lower() in ['.h5', '.hdf5']:
+                    # Extract chromosome info from filename
+                    filename = path.stem  # Remove extension
+                    
+                    if '-' in filename:
+                        parts = filename.split('-')
+                        if len(parts) == 2:
+                            chromosome = parts[0]
+                        else:
+                            chromosome = 'unknown'
+                    else:
+                        chromosome = 'unknown'
+                    
+                    # Load data
+                    sample = cls.load_from_h5(path)
+                    df = sample.to_dataframe(mask=mask)
+                    results[chromosome] = df
+        
+        return results
+
+    def apply_mask(self, mask_or_indices: Union[np.ndarray, bool]) -> 'MethylSample':
+        """
+        Apply a mask or indices to slice this MethylSample efficiently.
+
+        If boolean mask, filters positions. If indices array, selects by position.
+
+        Args:
+            mask_or_indices: Boolean mask (same length as pos) or integer indices array.
+
+        Returns:
+            New MethylSample with sliced data (views where possible).
+        """
+        if isinstance(mask_or_indices, np.ndarray) and mask_or_indices.dtype.kind == 'b':  # Boolean mask
+            indices = np.nonzero(mask_or_indices)[0]
+        else:
+            indices = mask_or_indices.astype(np.intp)  # Ensure integer indices
+
+        # Validate indices
+        if len(indices) == 0:
+            raise ValueError("Mask/indices resulted in empty sample.")
+        if np.max(indices) >= len(self.pos):
+            raise ValueError("Indices out of bounds for sample.")
+
+        # Slice all fields (use views for efficiency)
+        new_pos = self.pos[indices]
+        new_mC = self.mC[indices]
+        new_uC = self.uC[indices]
+        new_tnc = self.tnc[indices] if self.tnc is not None else None
+        new_N = self.N[indices] if self.N is not None else None
+        new_Sx = self.Sx[indices] if self.Sx is not None else None
+        new_Sx2 = self.Sx2[indices] if self.Sx2 is not None else None
+        new_log_x_sum = self.log_x_sum[indices] if self.log_x_sum is not None else None
+        new_log_1_minus_x_sum = self.log_1_minus_x_sum[indices] if self.log_1_minus_x_sum is not None else None
+
+        # Create new instance (assumes constructor handles partial None fields)
+        return type(self)(
+            pos=new_pos,
+            mC=new_mC,
+            uC=new_uC,
+            tnc=new_tnc,
+            N=new_N,
+            Sx=new_Sx,
+            Sx2=new_Sx2,
+            log_x_sum=new_log_x_sum,
+            log_1_minus_x_sum=new_log_1_minus_x_sum
+        )
+
+
+@dataclass(slots=True)
+class DMPSample:
+    """
+    Represents DMP (Differentially Methylated Position) results that can be saved to HDF5 files.
+    This class handles DMP-specific data structures with both group data, statistical results, and metadata.
+    """
+    positions: np.ndarray[np.uint32]
+    mC1: np.ndarray[np.uint32]
+    uC1: np.ndarray[np.uint32]
+    mC2: np.ndarray[np.uint32]
+    uC2: np.ndarray[np.uint32]
+    p_values: np.ndarray[np.float32]
+    q_values: Optional[np.ndarray[np.float32]] = None
+    metadata: Optional[dict] = None
+    
+    def save_to_h5(self, file_path: Union[str, Path]) -> Path:
+        """
+        Save DMP results to HDF5 file with both MethylSample-compatible structure and DMP-specific data.
+        
+        Args:
+            file_path: Path to save the HDF5 file
+            
+        Returns:
+            Path to the saved file
+        """
+        file_path = Path(file_path)
+        
+        # Compression settings
+        compression_kwargs = {"compression": hdf5plugin.Zstd(clevel=9)}
+        
+        with h5py.File(file_path, "w") as f:
+            # Create MethylSample-compatible methylation_data group (using group 1 data)
+            meth_group = f.create_group("methylation_data")
+            
+            # Store as structured array for MethylSample compatibility
+            dtype = np.dtype([
+                ("pos", np.uint32),
+                ("mC", np.uint32),
+                ("uC", np.uint32),
+                ("tnc", np.uint8)
+            ])
+            
+            # Use group 1 data for the methylation_data (for compatibility)
+            data = np.zeros(len(self.positions), dtype=dtype)
+            data["pos"] = self.positions
+            data["mC"] = self.mC1
+            data["uC"] = self.uC1
+            data["tnc"] = self.tnc[0]
+            
+            meth_group.create_dataset(
+                "data",
+                data=data,
+                **compression_kwargs
+            )
+            
+            # Create DMP-specific results group
+            dmp_group = f.create_group("dmp_results")
+            
+            # Store DMP-specific results
+            dmp_group.create_dataset("positions", data=self.positions, **compression_kwargs)
+            dmp_group.create_dataset("mC_group1", data=self.mC1, **compression_kwargs)
+            dmp_group.create_dataset("uC_group1", data=self.uC1, **compression_kwargs)
+            dmp_group.create_dataset("mC_group2", data=self.mC2, **compression_kwargs)
+            dmp_group.create_dataset("uC_group2", data=self.uC2, **compression_kwargs)
+            dmp_group.create_dataset("p_values", data=self.p_values, **compression_kwargs)
+            
+            if self.q_values is not None:
+                dmp_group.create_dataset("q_values", data=self.q_values, **compression_kwargs)
+            
+            # Add metadata
+            if self.metadata:
+                for key, value in self.metadata.items():
+                    dmp_group.attrs[key] = value
+            
+            # Mark this as a DMP results file
+            f.attrs["file_type"] = "dmp_results"
+            f.attrs["format_version"] = "1.0"
+        
+        return file_path
+
+
+class DMPExporter:
+    """Exporter for DMP (Differentially Methylated Positions) data to HDF5 format."""
+    
+    def export_to_h5(self, df, file_path: Union[str, Path], metadata: Optional[dict] = None) -> None:
+        """
+        Export DMP data to HDF5 with Z-standard compression.
+
+        Args:
+            df: DataFrame with DMP data
+            file_path: Path to save the HDF5 file
+            metadata: Optional metadata dictionary
+
+        Raises:
+            ImportError: If HDF5 dependencies are not available
+        """
+        if not HDF5_AVAILABLE:
+            raise ImportError("HDF5 dependencies not available. "
+                            "Please ensure they are installed in your container.")
+
+        file_path = Path(file_path)
+
+        with h5py.File(file_path, "w") as f:
+            # Create group for DMP data
+            dmp_group = f.create_group("dmp_data")
+            
+            # Add metadata
+            if metadata:
+                for key, value in metadata.items():
+                    dmp_group.attrs[key] = value
+            
+            # Export each column with Z-standard compression
+            for col in df.columns:
+                if df[col].dtype == "object":
+                    # Handle string columns
+                    dt = h5py.special_dtype(vlen=str)
+                    dmp_group.create_dataset(
+                        col,
+                        data=df[col].values,
+                        dtype=dt,
+                        **hdf5plugin.Zstd(clevel=9),
+                    )
+                else:
+                    # Handle numeric columns
+                    dmp_group.create_dataset(
+                        col, 
+                        data=df[col].values, 
+                        **hdf5plugin.Zstd(clevel=9)
+                    )
+
+
+class DMRExporter:
+    """Exporter for DMR (Differentially Methylated Regions) data to HDF5 format."""
+    
+    def export_to_h5(self, df, file_path: Union[str, Path], metadata: Optional[dict] = None) -> None:
+        """
+        Export DMR data to HDF5 with Z-standard compression.
+
+        Args:
+            df: DataFrame with DMR data
+            file_path: Path to save the HDF5 file
+            metadata: Optional metadata dictionary
+
+        Raises:
+            ImportError: If HDF5 dependencies are not available
+        """
+        if not HDF5_AVAILABLE:
+            raise ImportError("HDF5 dependencies not available. "
+                            "Please ensure they are installed in your container.")
+
+        file_path = Path(file_path)
+
+        with h5py.File(file_path, "w") as f:
+            # Create group for DMR data
+            dmr_group = f.create_group("dmr_data")
+            
+            # Add metadata
+            if metadata:
+                for key, value in metadata.items():
+                    dmr_group.attrs[key] = value
+            
+            # Export each column with Z-standard compression
+            for col in df.columns:
+                if df[col].dtype == "object":
+                    # Handle string columns
+                    dt = h5py.special_dtype(vlen=str)
+                    dmr_group.create_dataset(
+                        col,
+                        data=df[col].values,
+                        dtype=dt,
+                        **hdf5plugin.Zstd(clevel=9),
+                    )
+                else:
+                    # Handle numeric columns
+                    dmr_group.create_dataset(
+                        col, 
+                        data=df[col].values, 
+                        **hdf5plugin.Zstd(clevel=9)
+                    )

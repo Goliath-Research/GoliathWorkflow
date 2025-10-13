@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MethylCentroid - High-Performance Methylation Analysis</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1, h2, h3, h4 {
+            color: #2c3e50;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+
+        h1 {
+            text-align: center;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 20px;
+            color: #3498db;
+        }
+
+        h2 {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            color: #3498db;
+        }
+
+        .code-block {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+
+        .highlight {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-left: 4px solid #2196f3;
+            margin: 15px 0;
+        }
+
+        .parameter-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        .parameter-table th, .parameter-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .parameter-table th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            color: #495057;
+        }
+
+        .parameter-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+
+        .feature-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .feature-item {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #28a745;
+        }
+
+        .feature-item h4 {
+            margin-top: 0;
+            color: #28a745;
+        }
+
+        .navigation {
+            background-color: #343a40;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+
+        .navigation ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .navigation a {
+            color: #adb5bd;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            transition: all 0.3s ease;
+        }
+
+        .navigation a:hover {
+            color: white;
+            background-color: #495057;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge.python {
+            background-color: #3776ab;
+            color: white;
+        }
+
+        .badge.gpu {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .badge.beta {
+            background-color: #ffc107;
+            color: black;
+        }
+
+        .math-formula {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Times New Roman', serif;
+            text-align: center;
+        }
+
+        .example-section {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .example-section h4 {
+            color: #495057;
+            margin-top: 0;
+        }
+
+        .toc {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+
+        .toc ul {
+            list-style-type: none;
+            padding-left: 20px;
+        }
+
+        .toc li {
+            margin: 5px 0;
+        }
+
+        .toc a {
+            color: #495057;
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            color: #007bff;
+        }
+
+        @media (max-width: 768px) {
+            .feature-list {
+                grid-template-columns: 1fr;
+            }
+
+            .navigation ul {
+                flex-direction: column;
+            }
+
+            body {
+                padding: 10px;
+            }
+
+            .container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MethylCentroid</h1>
+        <p style="text-align: center; font-size: 1.2em; color: #666;">
+            High-Performance Python Package for Methylation Centroid Calculation with GPU Acceleration and Multi-Metric Consensus-Based Outlier Detection
+        </p>
+
+        <div style="text-align: center; margin: 20px 0;">
+            <span class="badge python">Python 3.8+</span>
+            <span class="badge gpu">GPU Support</span>
+            <span class="badge beta">Scientific Software</span>
+        </div>
+
+        <div class="navigation">
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#installation">Installation</a></li>
+                <li><a href="#quick-start">Quick Start</a></li>
+                <li><a href="#usage">Usage</a></li>
+                <li><a href="#configuration">Configuration</a></li>
+                <li><a href="#multi-metric-system">Multi-Metric System</a></li>
+                <li><a href="#api-reference">API Reference</a></li>
+                <li><a href="#examples">Examples</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#troubleshooting">Troubleshooting</a></li>
+                <li><a href="#license">License</a></li>
+            </ul>
+        </div>
+
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ul>
+                <li><a href="#overview">Project Overview</a></li>
+                <li><a href="#installation">Installation</a>
+                    <ul>
+                        <li><a href="#cpu-installation">CPU Installation</a></li>
+                        <li><a href="#gpu-installation">GPU Installation</a></li>
+                    </ul>
+                </li>
+                <li><a href="#quick-start">Quick Start</a></li>
+                <li><a href="#usage">Usage</a>
+                    <ul>
+                        <li><a href="#python-api">Python API</a></li>
+                        <li><a href="#cli">Command Line Interface</a></li>
+                    </ul>
+                </li>
+                <li><a href="#configuration">Configuration Management</a></li>
+                <li><a href="#multi-metric-system">Multi-Metric Consensus System</a></li>
+                <li><a href="#api-reference">API Reference</a></li>
+                <li><a href="#examples">Examples & Tutorials</a></li>
+                <li><a href="#features">Key Features</a></li>
+                <li><a href="#troubleshooting">Troubleshooting</a></li>
+                <li><a href="#license">License & Citation</a></li>
+            </ul>
+        </div>
+
+        <section id="overview">
+            <h2>Project Overview</h2>
+            <p>MethylCentroid is a high-performance Python package for calculating methylation centroids from genomic data. It provides both basic and extended centroid calculations with multi-metric consensus outlier detection, making it ideal for analyzing methylation patterns across biological replicates or similar samples.</p>
+
+            <div class="highlight">
+                <strong>Key Innovation:</strong> MethylCentroid uses a multi-metric consensus approach for robust outlier detection, combining Jeffreys Divergence, Jensen-Shannon Divergence, Weighted Jensen-Shannon Divergence, and Hellinger Distance. The system requires multiple metrics to agree before classifying a sample as an outlier, significantly reducing false positives and improving reliability. All metrics are bounded [0,1] and automatically select between Normal and Beta distribution models using optimized parameter estimation.
+            </div>
+            
+            <h3>Multiple Distance Metrics for Robust Outlier Detection</h3>
+            <p>MethylCentroid supports multiple distance metrics and can require consensus across metrics for more reliable outlier detection:</p>
+            
+            <h4>Available Distance Metrics</h4>
+            <ul>
+                <li><strong>Jeffreys Divergence:</strong> Symmetric version of Kullback-Leibler divergence</li>
+                <li><strong>Jensen-Shannon Divergence:</strong> Bounded [0,1], symmetric, satisfies triangle inequality</li>
+                <li><strong>Weighted Jensen-Shannon Divergence:</strong> Entropy-weighted version emphasizing certain positions</li>
+                <li><strong>Hellinger Distance:</strong> Bounded [0,1], symmetric, robust to outliers</li>
+            </ul>
+            
+            <h4>Multi-Metric Consensus</h4>
+            <ul>
+                <li><strong>Configurable Metrics:</strong> Choose one or more distance metrics (default: all four metrics)</li>
+                <li><strong>Consensus Requirement:</strong> Require multiple metrics to agree on outliers (default: 3 out of 4)</li>
+                <li><strong>Robust Detection:</strong> Significantly reduces false positives and improves reliability</li>
+                <li><strong>Flexible Configuration:</strong> Adapt to different data characteristics via config.json</li>
+                <li><strong>Statistical Rigor:</strong> Each metric provides independent evidence for outlier classification</li>
+            </ul>
+            
+            <h3>Optimized Parameter Estimation</h3>
+            <p>MethylCentroid uses a three-tier approach for maximum efficiency:</p>
+            <ol>
+                <li><strong>Method of Moments (Fast):</strong> O(1) conversion from Normal to Beta parameters</li>
+                <li><strong>Maximum Likelihood (Robust):</strong> Falls back to MLE when needed</li>
+                <li><strong>Simple Estimation (Safety):</strong> Ensures algorithm never fails</li>
+            </ol>
+
+            <h3>Core Capabilities</h3>
+            <ul>
+                <li><strong>Centroid Calculation:</strong> Compute average methylation patterns across sample groups</li>
+                <li><strong>Multi-Metric Outlier Detection:</strong> Identify outliers using consensus of multiple distance metrics</li>
+                <li><strong>GPU Acceleration:</strong> Transparent GPU support for large-scale genomic data processing</li>
+                <li><strong>Adaptive Statistics:</strong> Automatic selection of appropriate statistical distributions</li>
+                <li><strong>Configuration Management:</strong> JSON-based configuration for easy setup and reproducibility</li>
+                <li><strong>Batch Processing:</strong> Efficient processing of multiple chromosomes/contexts</li>
+            </ul>
+        </section>
+
+        <section id="installation">
+            <h2>Installation</h2>
+
+            <h3 id="cpu-installation">CPU Installation</h3>
+            <div class="code-block">
+pip install methylcentroid
+            </div>
+
+            <h3 id="gpu-installation">GPU Installation</h3>
+            <div class="code-block">
+pip install methylcentroid[gpu]
+            </div>
+
+            <p><strong>Note:</strong> GPU installation requires CUDA-compatible hardware and drivers.</p>
+
+            <h3>Development Installation</h3>
+            <div class="code-block">
+git clone https://github.com/your-repo/methylcentroid.git
+cd methylcentroid
+pip install -e .[dev]
+            </div>
+
+            <h3>Requirements</h3>
+            <ul>
+                <li>Python 3.8+</li>
+                <li>NumPy</li>
+                <li>SciPy</li>
+                <li>HDF5 (h5py)</li>
+                <li>Pandas</li>
+                <li>Plotly (for visualization)</li>
+                <li>Pydantic (for configuration)</li>
+                <li>Optional: CuPy (for GPU acceleration)</li>
+            </ul>
+        </section>
+
+        <section id="quick-start">
+            <h2>Quick Start</h2>
+
+            <h4>Configuration-Based Usage (Recommended)</h4>
+            <div class="code-block">
+import json
+from methylcentroid.methyl_centroid import MethylCentroid
+
+# Load configuration from JSON file
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+# Create MethylCentroid instance from config
+mc = MethylCentroid.from_json(config)
+
+# Build centroid with multi-metric outlier detection
+results = mc.build_centroid()
+
+print(f"Outliers removed: {results.total_samples_removed}")
+print(f"Final centroid: {results.final_centroid_path}")
+            </div>
+
+            <h4>Direct Instantiation</h4>
+            <div class="code-block">
+from methylcentroid.methyl_centroid import MethylCentroid, DistanceMetric
+
+# Create MethylCentroid instance with multi-metric configuration
+mc = MethylCentroid(
+    samples=["data/sample1", "data/sample2", "data/sample3"],
+    chrom="1",
+    ctx="CG",
+    output_dir="output",
+    distance_metrics=[
+        DistanceMetric.JEFFREYS,
+        DistanceMetric.JENSEN_SHANNON,
+        DistanceMetric.WEIGHTED_JENSEN_SHANNON,
+        DistanceMetric.HELLINGER
+    ],
+    min_metrics_agree=3  # Require 3 out of 4 metrics to agree
+)
+
+# Build centroid with automatic outlier removal
+results = mc.build_centroid()
+            </div>
+
+            <div class="highlight">
+                <strong>Tip:</strong> The package automatically detects and uses GPU acceleration if available, providing significant performance improvements for large datasets.
+            </div>
+        </section>
+
+        <section id="usage">
+            <h2>Usage</h2>
+
+            <h3 id="python-api">Python API</h3>
+
+            <h4>Basic Usage</h4>
+            <div class="code-block">
+from methylcentroid.methyl_centroid import MethylCentroid
+
+# Initialize with sample paths
+mc = MethylCentroid(
+    samples=["path/to/sample1", "path/to/sample2"],
+    chrom="1",
+    ctx="CG",
+    output_dir="./output"
+)
+
+# Build centroid (includes outlier detection)
+results = mc.build_centroid()
+            </div>
+
+            <h4>Manual Multi-Metric Outlier Detection</h4>
+            <div class="code-block">
+# Manual step-by-step multi-metric outlier detection
+outlier_path, outlier_id, p_value = mc.find_most_extreme_outlier()
+
+if outlier_path is not None and p_value <= mc.α:
+    print(f"Outlier detected: {outlier_path} (p-value: {p_value:.4f})")
+    print(f"Metrics used: {[m.value for m in mc.distance_metrics]}")
+    print(f"Min metrics required: {mc.min_metrics_agree}")
+    mc.remove_sample(outlier_id[1], is_new_sample=outlier_id[0])
+else:
+    print("No significant outliers found")
+            </div>
+
+            <h4>Configuration Management</h4>
+            <div class="code-block">
+# Save configuration
+config = mc.get_config()
+config_dict = config.model_dump()
+
+# Save to JSON
+import json
+with open('config.json', 'w') as f:
+    json.dump(config_dict, f, indent=2)
+
+# Load configuration later
+with open('config.json', 'r') as f:
+    saved_config = json.load(f)
+mc_new = MethylCentroid.from_json(saved_config)
+            </div>
+
+            <h3 id="cli">Command Line Interface</h3>
+
+            <h4>Basic Usage</h4>
+            <div class="code-block">
+# Process single chromosome/context
+python -m methylcentroid.cli -c 1 -x CG -s samples.csv -o ./output
+
+# With custom parameters
+python -m methylcentroid.cli -c 1 -x CG -s samples.csv -o ./output \
+    --max-iterations 15 --alpha 0.01 --min-coverage 5
+
+# Using percentage-based iterations (recommended)
+python -m methylcentroid.cli -c 1 -x CG -s samples.csv -o ./output \
+    --max-iterations-percentage 0.15  # 15% of samples
+            </div>
+
+            <h4>Batch Processing</h4>
+            <div class="code-block">
+# Process multiple chromosomes
+chromosomes = [str(i) for i in range(1, 23)] + ["X"]
+contexts = ["CG", "CHG", "CHH"]
+
+for chrom in chromosomes:
+    for ctx in contexts:
+        mc = MethylCentroid(
+            samples=sample_paths,
+            chrom=chrom,
+            ctx=ctx,
+            output_dir=output_dir,
+            max_iterations_percentage=0.1  # 10% of samples
+        )
+        results = mc.build_centroid()
+        print(f"Completed {chrom}-{ctx}: {results.total_samples_removed} outliers")
+            </div>
+        </section>
+
+        <section id="configuration">
+            <h2>Configuration Management</h2>
+
+            <h3>Configuration Parameters</h3>
+            <table class="parameter-table">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Type</th>
+                        <th>Default</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>samples</code></td>
+                        <td>List[str]</td>
+                        <td>Required</td>
+                        <td>Sample directory paths containing {chrom}-{ctx}.h5 files</td>
+                    </tr>
+                    <tr>
+                        <td><code>chrom</code></td>
+                        <td>str</td>
+                        <td>Required</td>
+                        <td>Chromosome identifier (e.g., '1', 'X')</td>
+                    </tr>
+                    <tr>
+                        <td><code>ctx</code></td>
+                        <td>str</td>
+                        <td>Required</td>
+                        <td>Context type (CG, CHG, CHH)</td>
+                    </tr>
+                    <tr>
+                        <td><code>output_dir</code></td>
+                        <td>str</td>
+                        <td>Required</td>
+                        <td>Output directory for centroid files</td>
+                    </tr>
+                    <tr>
+                        <td><code>new_samples</code></td>
+                        <td>List[str]</td>
+                        <td>[]</td>
+                        <td>Additional samples to add incrementally</td>
+                    </tr>
+                    <tr>
+                        <td><code>min_coverage</code></td>
+                        <td>int</td>
+                        <td>4</td>
+                        <td>Minimum mC+uC coverage for positions</td>
+                    </tr>
+                    <tr>
+                        <td><code>max_iterations</code></td>
+                        <td>int</td>
+                        <td>10</td>
+                        <td>Maximum outlier removal iterations</td>
+                    </tr>
+                    <tr>
+                        <td><code>max_iterations_percentage</code></td>
+                        <td>float</td>
+                        <td>0.1</td>
+                        <td>Percentage of samples for max iterations (overrides max_iterations if > 0)</td>
+                    </tr>
+                    <tr>
+                        <td><code>α</code></td>
+                        <td>float</td>
+                        <td>0.05</td>
+                        <td>Significance level for outlier detection</td>
+                    </tr>
+                    <tr>
+                        <td><code>min_samples</code></td>
+                        <td>int</td>
+                        <td>3</td>
+                        <td>Minimum samples to continue outlier removal</td>
+                    </tr>
+                    <tr>
+                        <td><code>distance_metrics</code></td>
+                        <td>List[DistanceMetric]</td>
+                        <td>[WEIGHTED_JENSEN_SHANNON]</td>
+                        <td>Distance metrics for outlier detection</td>
+                    </tr>
+                    <tr>
+                        <td><code>min_metrics_agree</code></td>
+                        <td>int</td>
+                        <td>1</td>
+                        <td>Minimum metrics that must agree for outlier classification</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>JSON Configuration</h3>
+            <div class="code-block">
+{
+  "samples": ["data/sample1", "data/sample2", "data/sample3"],
+  "chrom": "1",
+  "ctx": "CG",
+  "output_dir": "./output",
+  "min_coverage": 4,
+  "max_iterations": 10,
+  "max_iterations_percentage": 0.1,
+  "α": 0.05,
+  "min_samples": 3,
+  "distance_metrics": [
+    "jeffreys",
+    "jensen_shannon", 
+    "weighted_jensen_shannon",
+    "hellinger"
+  ],
+  "min_metrics_agree": 3
+}
+            </div>
+
+            <div class="example-section">
+                <h4>Example: Loading from JSON</h4>
+                <div class="code-block">
+import json
+from methylcentroid.methyl_centroid import MethylCentroid
+
+# Load from JSON file
+with open('config.json', 'r') as f:
+    config_dict = json.load(f)
+
+mc = MethylCentroid.from_json(config_dict)
+                </div>
+            </div>
+        </section>
+
+        <section id="api-reference">
+            <h2>API Reference</h2>
+
+            <h3>MethylCentroid Class</h3>
+
+            <h4>Constructor</h4>
+            <div class="code-block">
+MethylCentroid(
+    samples: List[str],
+    chrom: str,
+    ctx: str,
+    output_dir: Path,
+    new_samples: List[str] = None,
+    min_coverage: int = 4,
+    max_iterations: int = 10,
+    max_iterations_percentage: float = 0.1,
+    α: float = 0.05,
+    min_samples: int = 3
+)
+            </div>
+
+            <h4>Methods</h4>
+
+            <h5>build_centroid() -> OutlierRemovalResults</h5>
+            <p>Build extended centroid with automatic outlier removal.</p>
+
+            <h5>find_most_extreme_outlier() -> Tuple[str, Tuple[bool, int], float]</h5>
+            <p>Find the most extreme outlier using multi-metric consensus approach.</p>
+            <p><strong>Returns:</strong> (outlier_path, (is_new_sample, sample_index), p_value)</p>
+
+            <h5>remove_sample(sample_index: int, is_new_sample: bool) -> None</h5>
+            <p>Remove a sample from the analysis.</p>
+
+            <h5>get_config() -> MethylCentroidConfig</h5>
+            <p>Get current configuration as a Pydantic model.</p>
+
+            <h5>add_sample(sample_index: int, is_new_sample: bool) -> None</h5>
+            <p>Add a sample to the analysis incrementally.</p>
+
+            <h4>Class Methods</h4>
+
+            <h5>from_config(config: MethylCentroidConfig) -> MethylCentroid</h5>
+            <p>Create instance from Pydantic configuration.</p>
+
+            <h5>from_json(json_data: str | dict) -> MethylCentroid</h5>
+            <p>Create instance from JSON data.</p>
+
+            <h3>MethylCentroidConfig Class</h3>
+            <p>Pydantic model for MethylCentroid configuration parameters.</p>
+
+            <h3>OutlierIterationInfo Class</h3>
+            <p>Pydantic model containing information about each outlier removal iteration.</p>
+
+            <div class="math-formula">
+                <strong>Multi-Metric Distance Formulas:</strong><br>
+                <strong>Jeffreys:</strong> J(x,c) = (1/n) Σᵢ [xᵢlog(xᵢ/cᵢ) + cᵢlog(cᵢ/xᵢ)]<br>
+                <strong>Jensen-Shannon:</strong> JS(x,c) = (1/2)[D(x||m) + D(c||m)] where m = (x+c)/2<br>
+                <strong>Weighted JS:</strong> JS_w(x,c) = Σᵢ wᵢ·JSᵢ(xᵢ,cᵢ) where wᵢ = 1/(H(cᵢ)+ε)<br>
+                <strong>Hellinger:</strong> H(x,c) = √(1/2 Σᵢ (√xᵢ - √cᵢ)²)
+            </div>
+
+            <h4>Methylation Level Calculation</h4>
+            <div class="highlight">
+                <strong>Important Distinction:</strong> Methylation levels are calculated differently for basic vs extended centroids:
+                <ul>
+                    <li><strong>Basic Centroid:</strong> <code>methylation_level = mC / (mC + uC)</code> (average of raw counts)</li>
+                    <li><strong>Extended Centroid:</strong> <code>methylation_level = Sx / N</code> (correct statistical estimator)</li>
+                </ul>
+                <strong>Note:</strong> These formulas are <strong>not equivalent</strong> when different positions have different sample counts. The extended centroid formula <code>Sx/N</code> is the correct statistical estimator used in outlier detection.
+            </div>
+        </section>
+
+        <section id="examples">
+            <h2>Examples & Tutorials</h2>
+
+            <h3>Complete Multi-Metric Analysis Workflow</h3>
+            <div class="example-section">
+                <div class="code-block">
+from methylcentroid.methyl_centroid import MethylCentroid
+import json
+
+# 1. Setup multi-metric configuration
+config = {
+    "samples": ["data/replicate1", "data/replicate2", "data/replicate3"],
+    "chrom": "1",
+    "ctx": "CG",
+    "output_dir": "./results",
+    "max_iterations_percentage": 0.15,  # 15% of samples
+    "α": 0.01,  # Stricter significance level
+    "distance_metrics": [
+        "jeffreys",
+        "jensen_shannon", 
+        "weighted_jensen_shannon",
+        "hellinger"
+    ],
+    "min_metrics_agree": 3  # Require 3 out of 4 metrics to agree
+}
+
+# 2. Create and run analysis
+mc = MethylCentroid.from_json(config)
+results = mc.build_centroid()
+
+# 3. Save results
+print(f"Multi-metric analysis completed!")
+print(f"Samples processed: {len(mc.samples)}")
+print(f"Outliers removed: {results.total_samples_removed}")
+print(f"Metrics used: {[m.value for m in mc.distance_metrics]}")
+print(f"Consensus required: {mc.min_metrics_agree}")
+print(f"Final centroid saved to: {results.final_centroid_path}")
+
+# 4. Save configuration for reproducibility
+with open('./results/analysis_config.json', 'w') as f:
+    json.dump(config, f, indent=2)
+                </div>
+            </div>
+
+            <h3>Custom Outlier Detection Strategy</h3>
+            <div class="example-section">
+                <div class="code-block">
+# Custom outlier detection with manual control
+mc = MethylCentroid(
+    samples=sample_paths,
+    chrom="1",
+    ctx="CG",
+    output_dir="./output",
+    max_iterations_percentage=0.2,  # More iterations
+    α=0.01  # Stricter threshold
+)
+
+iteration = 0
+while len(mc.active_samples) > mc.min_samples and iteration < 20:
+    outlier_path, outlier_id, p_value = mc.find_most_extreme_outlier()
+
+    if outlier_path is None:
+        print(f"Iteration {iteration}: No outliers found")
+        break
+
+    if p_value <= mc.α:
+        print(f"Iteration {iteration}: Removed {outlier_path} (p={p_value:.4f})")
+        mc.remove_sample(outlier_id[1], is_new_sample=outlier_id[0])
+        iteration += 1
+    else:
+        print(f"Iteration {iteration}: No significant outliers (p={p_value:.4f})")
+        break
+
+# Save final results
+results = mc.save_centroid()
+                </div>
+            </div>
+
+            <h3>GPU Performance Monitoring</h3>
+            <div class="example-section">
+                <div class="code-block">
+from methylcentroid.utils import print_gpu_status
+import time
+
+# Check GPU availability
+print_gpu_status()
+
+# Time analysis with GPU
+start_time = time.time()
+mc = MethylCentroid(
+    samples=large_sample_list,
+    chrom="1",
+    ctx="CG",
+    output_dir="./gpu_results"
+)
+results = mc.build_centroid()
+gpu_time = time.time() - start_time
+
+print(f"GPU analysis completed in {gpu_time:.2f} seconds")
+print(f"Samples processed: {len(mc.samples)}")
+print(f"Outliers removed: {results.total_samples_removed}")
+                </div>
+            </div>
+        </section>
+
+        <section id="features">
+            <h2>Key Features</h2>
+
+            <div class="feature-list">
+                <div class="feature-item">
+                    <h4>🚀 High Performance</h4>
+                    <p>Optimized algorithms with automatic GPU acceleration for processing large genomic datasets efficiently.</p>
+                </div>
+
+                <div class="feature-item">
+                    <h4>🧬 Scientific Rigor</h4>
+                    <p>Uses Jeffreys divergence for statistically sound methylation pattern comparison with adaptive distribution fitting.</p>
+                </div>
+
+                <div class="feature-item">
+                    <h4>🎯 Adaptive Statistics</h4>
+                    <p>Automatically selects between Normal and Beta distributions based on AIC for robust statistical testing.</p>
+                </div>
+
+                <div class="feature-item">
+                    <h4>💾 Memory Efficient</h4>
+                    <p>Leverages pre-computed extended centroid statistics to minimize memory usage during analysis.</p>
+                </div>
+
+                <div class="feature-item">
+                    <h4>🔧 Flexible Configuration</h4>
+                    <p>Comprehensive configuration management with Pydantic models and JSON serialization support.</p>
+                </div>
+
+                <div class="feature-item">
+                    <h4>📊 Rich Visualization</h4>
+                    <p>Interactive Plotly-based histograms showing distance distributions and fitted statistical models.</p>
+                </div>
+
+                <div class="feature-item">
+                    <h4>⚡ Incremental Processing</h4>
+                    <p>Add or remove samples without full recalculation, enabling efficient iterative analysis workflows.</p>
+                </div>
+
+                <div class="feature-item">
+                    <h4>🔬 Batch Processing</h4>
+                    <p>Streamlined processing of multiple chromosomes and contexts with percentage-based iteration limits.</p>
+                </div>
+
+                <div class="feature-item">
+                    <h4>📈 Scalable Architecture</h4>
+                    <p>Handles datasets from small experiments to large-scale genomic studies with consistent performance.</p>
+                </div>
+
+                <div class="feature-item">
+                    <h4>🔍 Reproducible Research</h4>
+                    <p>Configuration persistence and comprehensive logging ensure reproducible scientific analyses.</p>
+                </div>
+            </div>
+
+            <h3>Statistical Innovation</h3>
+            <p>MethylCentroid introduces several statistical innovations for methylation analysis:</p>
+            <ul>
+                <li><strong>Multi-Metric Consensus:</strong> Combines multiple distance metrics for robust outlier detection</li>
+                <li><strong>Entropy-Weighted Jensen-Shannon:</strong> Emphasizes positions with higher certainty in the centroid</li>
+                <li><strong>Bounded Data Handling:</strong> Proper statistical treatment of methylation data bounded in [0,1]</li>
+                <li><strong>Adaptive Distribution Fitting:</strong> Automatic model selection between Normal and Beta distributions</li>
+                <li><strong>Consensus-Based Testing:</strong> Requires multiple metrics to agree before classifying outliers</li>
+                <li><strong>Percentage-based Iteration Limits:</strong> Dynamic iteration limits based on sample size</li>
+                <li><strong>Robust P-value Calculation:</strong> Handles edge cases where all distances are identical (σ=0) with appropriate p-value assignment</li>
+            </ul>
+            
+            <h4>P-value Calculation for Bounded Metrics</h4>
+            <p>For bounded distance metrics like Hellinger distance [0,1], MethylCentroid uses sophisticated p-value calculation:</p>
+            <ul>
+                <li><strong>Normal Distribution:</strong> When σ > 0, uses standard normal CDF: p = 1 - Φ((x - μ)/σ)</li>
+                <li><strong>Beta Distribution:</strong> When data characteristics suggest Beta distribution, uses Beta CDF for more accurate modeling</li>
+                <li><strong>Edge Case Handling:</strong> When σ = 0 (all distances identical), assigns p-values based on distance magnitude:
+                    <ul>
+                        <li>Maximum distance (≈1.0): p-value = 0.0 (most extreme)</li>
+                        <li>Minimum distance (≈0.0): p-value = 1.0 (least extreme)</li>
+                        <li>Intermediate distances: p-value = 0.5 (neutral)</li>
+                    </ul>
+                </li>
+            </ul>
+        </section>
+
+        <section id="multi-metric-system">
+            <h2>Multi-Metric Consensus System</h2>
+            
+            <h3>Overview</h3>
+            <p>MethylCentroid's multi-metric consensus system provides robust outlier detection by combining multiple distance metrics and requiring agreement across metrics before classifying a sample as an outlier. This approach significantly reduces false positives and improves the reliability of outlier detection.</p>
+
+            <h3>Distance Metrics</h3>
+            <div class="feature-list">
+                <div class="feature-item">
+                    <h4>Jeffreys Divergence</h4>
+                    <p>Symmetric version of Kullback-Leibler divergence, providing information-theoretic distance between probability distributions.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Jensen-Shannon Divergence</h4>
+                    <p>Bounded [0,1], symmetric, and satisfies the triangle inequality. Provides stable distance measurement.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Weighted Jensen-Shannon Divergence</h4>
+                    <p>Entropy-weighted version that emphasizes positions with higher certainty in the centroid, making it more sensitive to informative positions.</p>
+                </div>
+                <div class="feature-item">
+                    <h4>Hellinger Distance</h4>
+                    <p>Bounded [0,1], symmetric, and robust to outliers. Provides complementary information to divergence-based metrics.</p>
+                </div>
+            </div>
+
+            <h3>Consensus Mechanism</h3>
+            <p>The consensus system works as follows:</p>
+            <ol>
+                <li><strong>Distance Calculation:</strong> Each configured metric calculates distances between samples and the centroid</li>
+                <li><strong>P-value Computation:</strong> Statistical p-values are computed for each metric using appropriate distributions</li>
+                <li><strong>Outlier Voting:</strong> Each metric "votes" for samples with p-value < α</li>
+                <li><strong>Consensus Decision:</strong> Samples are classified as outliers only if they receive votes from at least <code>min_metrics_agree</code> metrics</li>
+                <li><strong>Most Extreme Selection:</strong> Among consensus outliers, the sample with the lowest combined p-value is selected (most extreme)</li>
+            </ol>
+
+            <h3>Configuration Examples</h3>
+            
+            <h4>Conservative Approach (3 out of 4 metrics)</h4>
+            <div class="code-block">
+{
+  "distance_metrics": [
+    "jeffreys",
+    "jensen_shannon", 
+    "weighted_jensen_shannon",
+    "hellinger"
+  ],
+  "min_metrics_agree": 3
+}
+            </div>
+
+            <h4>Strict Approach (All metrics must agree)</h4>
+            <div class="code-block">
+{
+  "distance_metrics": [
+    "jeffreys",
+    "jensen_shannon", 
+    "weighted_jensen_shannon",
+    "hellinger"
+  ],
+  "min_metrics_agree": 4
+}
+            </div>
+
+            <h4>Single Metric (Traditional approach)</h4>
+            <div class="code-block">
+{
+  "distance_metrics": ["weighted_jensen_shannon"],
+  "min_metrics_agree": 1
+}
+            </div>
+
+            <h3>Benefits of Multi-Metric Consensus</h3>
+            <ul>
+                <li><strong>Reduced False Positives:</strong> Multiple metrics must agree, reducing spurious outlier classifications</li>
+                <li><strong>Improved Reliability:</strong> Consensus approach is more robust to metric-specific biases</li>
+                <li><strong>Flexible Configuration:</strong> Adapt the consensus requirement to your data characteristics</li>
+                <li><strong>Statistical Rigor:</strong> Each metric provides independent evidence for outlier classification</li>
+                <li><strong>Comprehensive Coverage:</strong> Different metrics capture different aspects of sample-centroid relationships</li>
+            </ul>
+        </section>
+
+        <section id="troubleshooting">
+            <h2>Troubleshooting</h2>
+
+            <h3>Common Issues</h3>
+
+            <h4>GPU Memory Errors</h4>
+            <div class="highlight">
+                <strong>Solution:</strong> Reduce batch size or use CPU mode by setting appropriate memory limits in your GPU configuration.
+            </div>
+
+            <h4>Import Errors</h4>
+            <div class="code-block">
+# Ensure all dependencies are installed
+pip install methylcentroid[gpu]
+
+# Check Python version compatibility
+python --version  # Should be 3.8+
+            </div>
+
+            <h4>Configuration Validation Errors</h4>
+            <div class="highlight">
+                <strong>Check:</strong> Ensure all required parameters are provided and have correct types. Use the Pydantic model validation for detailed error messages.
+            </div>
+
+            <h4>Performance Issues</h4>
+            <ul>
+                <li>Use GPU acceleration when available</li>
+                <li>Increase min_coverage to reduce data size</li>
+                <li>Use percentage-based max_iterations for optimal performance</li>
+                <li>Process chromosomes in parallel if possible</li>
+            </ul>
+
+            <h3>Debug Mode</h3>
+            <div class="code-block">
+# Enable verbose logging
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Check GPU status
+from methylcentroid.utils import print_gpu_status
+print_gpu_status()
+            </div>
+
+            <h3>Getting Help</h3>
+            <ul>
+                <li>Check the <a href="#examples">examples section</a> for common use cases</li>
+                <li>Review the <a href="#api-reference">API documentation</a> for method signatures</li>
+                <li>Examine the generated log files for detailed error information</li>
+                <li>Create an issue on the GitHub repository with your configuration and error details</li>
+            </ul>
+        </section>
+
+        <section id="license">
+            <h2>License & Citation</h2>
+
+            <h3>License</h3>
+            <p>MethylCentroid is released under the MIT License. See the LICENSE file for details.</p>
+
+            <h3>Citation</h3>
+            <div class="code-block">
+@software{methylcentroid,
+  title = {MethylCentroid: High-Performance Methylation Analysis with Jeffreys Divergence},
+  author = {Your Name},
+  year = {2024},
+  url = {https://github.com/your-repo/methylcentroid},
+  version = {1.0.0}
+}
+            </div>
+
+            <h3>Acknowledgments</h3>
+            <p>This project builds upon research in information-theoretic methods for genomic data analysis and benefits from the broader scientific community's work on methylation analysis techniques.</p>
+
+            <h3>Contributing</h3>
+            <p>Contributions are welcome! Please see the CONTRIBUTING.md file for guidelines on how to contribute to the project.</p>
+
+            <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #dee2e6; color: #666;">
+                <p>Generated from MethylCentroid v1.0.0 documentation</p>
+                <p>For the latest updates, visit <a href="https://github.com/your-repo/methylcentroid" style="color: #007bff;">GitHub</a></p>
+            </div>
+        </section>
+    </div>
+</body>
+</html>

@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""
+Setup script for MethylMapper
+"""
+
+from setuptools import setup, find_packages
+from pathlib import Path
+
+# Read the README file
+readme_file = Path(__file__).parent / "README.md"
+long_description = readme_file.read_text() if readme_file.exists() else ""
+
+setup(
+    name="methylmapper",
+    version="0.1.0",
+    author="MethylDetector Team",
+    description="DMP-to-gene mapping tool using Azure SQL Database and STRING-DB",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    packages=find_packages(),
+    python_requires=">=3.8",
+    install_requires=[
+        "sqlalchemy>=1.4.0",
+        "pandas>=1.3.0",
+        "numpy>=1.20.0",
+        "pydantic>=2.0.0",
+        "pyodbc>=4.0.0",  # For Azure SQL ODBC connection
+    ],
+    entry_points={
+        "console_scripts": [
+            "methylmapper=methylmapper.cli:main",
+        ],
+    },
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Intended Audience :: Science/Research",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+    ],
+)
+

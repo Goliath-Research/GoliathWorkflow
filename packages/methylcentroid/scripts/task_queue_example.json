@@ -1,0 +1,42 @@
+{
+  "tasks": [
+    {
+      "name": "bc-cancer-chr1-cg",
+      "command": ["python", "-m", "methylcentroid.centroid_cli", "--config", "methylcentroid/configs/bc-cancer_config.json", "--chromosome", "1", "--context", "CG"],
+      "requires_gpu": true,
+      "priority": 1,
+      "estimated_memory_gb": 4,
+      "delay_seconds": 5
+    },
+    {
+      "name": "bc-cancer-chr2-cg", 
+      "command": ["python", "-m", "methylcentroid.centroid_cli", "--config", "methylcentroid/configs/bc-cancer_config.json", "--chromosome", "2", "--context", "CG"],
+      "requires_gpu": true,
+      "priority": 1,
+      "estimated_memory_gb": 4,
+      "delay_seconds": 5
+    },
+    {
+      "name": "bc-cancer-chr3-cg",
+      "command": ["python", "-m", "methylcentroid.centroid_cli", "--config", "methylcentroid/configs/bc-cancer_config.json", "--chromosome", "3", "--context", "CG"],
+      "requires_gpu": true,
+      "priority": 1,
+      "estimated_memory_gb": 4,
+      "delay_seconds": 5
+    },
+    {
+      "name": "post-processing",
+      "command": ["python", "-m", "methylcentroid.post_process", "--input_dir", "output/", "--output_dir", "final_output/"],
+      "requires_gpu": false,
+      "priority": 2,
+      "estimated_memory_gb": 1,
+      "delay_seconds": 0
+    }
+  ],
+  "settings": {
+    "max_concurrent_gpu_tasks": 1,
+    "memory_cleanup_threshold_percent": 85.0,
+    "container_restart_interval": 5,
+    "timeout_seconds": 3600
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "database": {
+    "server": "your-server.database.windows.net",
+    "database": "your_database",
+    "username": "your_username",
+    "password": "your_password",
+    "driver": "ODBC Driver 18 for SQL Server",
+    "port": 1433
+  },
+  "stored_procedure": {
+    "upstream_size": 5000,
+    "downstream_size": 2000,
+    "min_intron_size": 0,
+    "w_promoter": 2.0,
+    "w_terminator": 0.5,
+    "w_gene_body": 1.0,
+    "w_exon": 1.5,
+    "w_intron": 0.7,
+    "w_unknown": 1.0
+  }
+}
+
