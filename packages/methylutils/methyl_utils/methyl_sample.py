@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Union, Tuple
+from typing import Optional, Union, Tuple, Dict, Any
 import struct
 import numpy as np
 import pandas as pd
@@ -147,6 +147,9 @@ class MethylSample:
     log_x_sum: Optional[np.ndarray] = None           # float32 - sum of log(methylation_level)
     log_1_minus_x_sum: Optional[np.ndarray] = None   # float32 - sum of log(1 - methylation_level)
     
+    # Metadata (optional - for centroids saved with metadata)
+    _metadata: Optional[Dict[str, Any]] = None
+    
     # Cached statistical properties (computed on demand)
     _cached_alpha: Optional[np.ndarray] = None       # float64 - Beta distribution alpha parameter
     _cached_beta: Optional[np.ndarray] = None        # float64 - Beta distribution beta parameter
@@ -216,6 +219,42 @@ class MethylSample:
     def is_extended_centroid(self) -> bool:
         """Check if this is an extended centroid."""
         return self.sample_type == "extended_centroid"
+    
+    # Metadata properties (available for centroids with metadata)
+    @property
+    def laboratory(self) -> Optional[str]:
+        """Get laboratory name from metadata (if available)."""
+        return self._metadata.get("laboratory") if self._metadata else None
+    
+    @property
+    def disease(self) -> Optional[str]:
+        """Get disease from metadata (if available)."""
+        return self._metadata.get("disease") if self._metadata else None
+    
+    @property
+    def group(self) -> Optional[str]:
+        """Get group identifier from metadata (if available)."""
+        return self._metadata.get("group") if self._metadata else None
+    
+    @property
+    def batch(self) -> Optional[str]:
+        """Get batch identifier from metadata (if available)."""
+        return self._metadata.get("batch") if self._metadata else None
+    
+    @property
+    def chromosome(self) -> Optional[str]:
+        """Get chromosome from metadata (if available)."""
+        return self._metadata.get("chromosome") if self._metadata else None
+    
+    @property
+    def context(self) -> Optional[str]:
+        """Get methylation context from metadata (if available)."""
+        return self._metadata.get("context") if self._metadata else None
+    
+    @property
+    def metadata(self) -> Optional[Dict[str, Any]]:
+        """Get all metadata (if available)."""
+        return self._metadata
     
     # Statistical properties - computed on demand
     @property
@@ -636,6 +675,23 @@ class MethylSample:
         file_path = Path(file_path)
 
         with h5py.File(file_path, "r") as f:
+            # Load metadata from file-level attributes if available
+            metadata = {}
+            if f.attrs:
+                import json
+                for key, value in f.attrs.items():
+                    # Try to parse JSON strings
+                    if isinstance(value, (str, bytes)):
+                        try:
+                            if isinstance(value, bytes):
+                                value = value.decode('utf-8')
+                            parsed = json.loads(value)
+                            metadata[key] = parsed
+                        except (json.JSONDecodeError, UnicodeDecodeError):
+                            metadata[key] = value
+                    else:
+                        metadata[key] = value
+            
             data_group = f["methylation_data"]
 
             # Try structured array format first (used in some datasets)
@@ -706,7 +762,8 @@ class MethylSample:
             Sx=Sx,
             Sx2=Sx2,
             log_x_sum=log_x_sum,
-            log_1_minus_x_sum=log_1_minus_x_sum
+            log_1_minus_x_sum=log_1_minus_x_sum,
+            _metadata=metadata if metadata else None
         )
     
     def get_methylation_levels(self) -> np.ndarray:
@@ -731,13 +788,14 @@ class MethylSample:
         """Get sample count at each position (only for centroids)."""
         return self.N
     
-    def save_to_h5(self, file_path: Union[str, Path], compressed: bool = True) -> Path:
+    def save_to_h5(self, file_path: Union[str, Path], compressed: bool = True, metadata: Optional[Dict[str, Any]] = None) -> Path:
         """
         Save MethylSample to HDF5 file.
 
         Args:
             file_path: Path to save the HDF5 file
             compressed: Whether to use compression (default: True)
+            metadata: Optional dictionary of metadata to save as file attributes
 
         Returns:
             Path to the saved file
@@ -831,16 +889,40 @@ class MethylSample:
                     dtype=np.float32,
                     **compression_kwargs
                 )
+            
+            # Save metadata as file attributes if provided
+            if metadata:
+                for key, value in metadata.items():
+                    # Handle different data types for HDF5 attributes
+                    if isinstance(value, (list, tuple)):
+                        # Convert list/tuple to JSON string for storage
+                        if value and isinstance(value[0], str):
+                            # For string lists, store as JSON
+                            import json
+                            f.attrs[key] = json.dumps(value)
+                        else:
+                            # For numeric lists, store directly
+                            f.attrs[key] = value
+                    elif isinstance(value, (str, int, float, bool)):
+                        f.attrs[key] = value
+                    elif value is None:
+                        # Skip None values
+                        continue
+                    else:
+                        # For other types, convert to string
+                        import json
+                        f.attrs[key] = json.dumps(value)
         
         return file_path
     
     @classmethod
-    def from_centroid_data(cls, centroid_data) -> MethylSample:
+    def from_centroid_data(cls, centroid_data, metadata: Optional[Dict[str, Any]] = None) -> MethylSample:
         """
         Create MethylSample from centroid data (dictionary or structured array).
         
         Args:
             centroid_data: Dictionary or structured array with centroid data from position aligner
+            metadata: Optional metadata dictionary to attach to the centroid
             
         Returns:
             MethylSample instance
@@ -856,7 +938,8 @@ class MethylSample:
                 Sx=centroid_data["Sx"] if "Sx" in centroid_data.dtype.names else None,
                 Sx2=centroid_data["Sx2"] if "Sx2" in centroid_data.dtype.names else None,
                 log_x_sum=centroid_data["log_x_sum"] if "log_x_sum" in centroid_data.dtype.names else None,
-                log_1_minus_x_sum=centroid_data["log_1_minus_x_sum"] if "log_1_minus_x_sum" in centroid_data.dtype.names else None
+                log_1_minus_x_sum=centroid_data["log_1_minus_x_sum"] if "log_1_minus_x_sum" in centroid_data.dtype.names else None,
+                _metadata=metadata
             )
         else:
             # Handle dictionary format
@@ -869,7 +952,8 @@ class MethylSample:
                 Sx=centroid_data.get("Sx"),
                 Sx2=centroid_data.get("Sx2"),
                 log_x_sum=centroid_data.get("log_x_sum"),
-                log_1_minus_x_sum=centroid_data.get("log_1_minus_x_sum")
+                log_1_minus_x_sum=centroid_data.get("log_1_minus_x_sum"),
+                _metadata=metadata
             )
 
     def to_numpy(self, extended: bool = False) -> np.ndarray:

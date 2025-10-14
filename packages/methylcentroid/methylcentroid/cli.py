@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Optional, List
 
-from .config import MethylCentroidConfig, BatchProcessingConfig
+from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig
 from .core import MethylCentroid
 from methyl_utils.logging_utils import setup_logging
 
@@ -66,6 +66,25 @@ Examples:
         '--output-dir', '-o',
         type=Path,
         help='Output directory for results'
+    )
+    
+    # Metadata parameters
+    metadata_group = parser.add_argument_group('Metadata')
+    metadata_group.add_argument(
+        '--laboratory',
+        help='Laboratory or institution name'
+    )
+    metadata_group.add_argument(
+        '--disease',
+        help='Disease or condition being studied'
+    )
+    metadata_group.add_argument(
+        '--group',
+        help='Sample group identifier (e.g., "cancer", "control")'
+    )
+    metadata_group.add_argument(
+        '--batch',
+        help='Batch identifier for sample processing'
     )
 
     # Processing options
@@ -153,10 +172,18 @@ def create_config_from_args(args: argparse.Namespace) -> MethylCentroidConfig:
     if not all([args.chromosome, args.context, args.samples, args.output_dir]):
         raise ValueError("When not using --config, all of --chromosome, --context, --samples, and --output-dir are required")
 
+    # Check that all metadata fields are provided
+    if not all([args.laboratory, args.disease, args.group, args.batch]):
+        raise ValueError("When not using --config, all metadata fields (--laboratory, --disease, --group, --batch) are required")
+
     # Read samples from CSV
     sample_paths = read_samples_from_csv(args.samples)
 
     return MethylCentroidConfig(
+        laboratory=args.laboratory,
+        disease=args.disease,
+        group=args.group,
+        batch=args.batch,
         chrom=args.chromosome,
         ctx=args.context,
         output_dir=str(args.output_dir),
@@ -167,7 +194,7 @@ def create_config_from_args(args: argparse.Namespace) -> MethylCentroidConfig:
     )
 
 
-def create_processing_config(args: argparse.Namespace) -> 'ProcessingConfig':
+def create_processing_config(args: argparse.Namespace) -> ProcessingConfig:
     """
     Create processing configuration from arguments.
 
@@ -177,8 +204,6 @@ def create_processing_config(args: argparse.Namespace) -> 'ProcessingConfig':
     Returns:
         ProcessingConfig instance
     """
-    from .config import ProcessingConfig
-
     return ProcessingConfig(
         enable_profiling=True,  # Always enable profiling for CLI
         save_intermediate=args.save_intermediate,
@@ -189,7 +214,7 @@ def create_processing_config(args: argparse.Namespace) -> 'ProcessingConfig':
 
 
 def run_single_processing(config: MethylCentroidConfig,
-                         processing_config: 'ProcessingConfig') -> None:
+                         processing_config: ProcessingConfig) -> None:
     """
     Run single chromosome/context processing.
 
@@ -262,8 +287,8 @@ def run_batch_processing(batch_config: BatchProcessingConfig) -> None:
                     ctx=ctx
                 )
 
-                # Create processing config (inherit from batch config if available)
-                processing_config = create_processing_config_from_batch(batch_config)
+                # Create default processing config
+                processing_config = ProcessingConfig()
 
                 # Run processing
                 run_single_processing(combination_config, processing_config)
@@ -287,12 +312,6 @@ def run_batch_processing(batch_config: BatchProcessingConfig) -> None:
     print(f"📊 Total combinations processed: {processed_combinations}")
     print(f"📈 Total outliers removed: {total_outliers}")
     print('='*60)
-
-
-def create_processing_config_from_batch(batch_config: BatchProcessingConfig) -> 'ProcessingConfig':
-    """Create processing config from batch config (placeholder)."""
-    from .config import ProcessingConfig
-    return ProcessingConfig()
 
 
 def main() -> None:
