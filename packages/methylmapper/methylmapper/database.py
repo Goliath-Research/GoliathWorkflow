@@ -1,15 +1,18 @@
 """
-Azure SQL Database connection and operations for MethylMapper
+Azure SQL Database connection and operations for MethylMapper.
+
+Uses SQLModel for ORM operations, combining Pydantic validation and SQLAlchemy power.
 """
 
 import logging
-from typing import Dict, List, Any, Optional
+from typing import List, Optional
 import pandas as pd
-from sqlalchemy import create_engine, text, Table, Column, Integer, BigInteger, String, Float, MetaData
+from sqlmodel import SQLModel, Session, create_engine, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
 
 from .config import AzureSQLConfig, StoredProcedureConfig
+from .models import DMPStaging
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +21,7 @@ class AzureSQLConnection:
     """
     Manages Azure SQL Database connection and operations for DMP-to-gene mapping.
     
-    Uses SQLAlchemy for connection management and pandas for bulk data operations.
+    Uses SQLModel for ORM operations and pandas for bulk data handling.
     """
     
     def __init__(self, config: AzureSQLConfig):
@@ -30,21 +33,6 @@ class AzureSQLConnection:
         """
         self.config = config
         self.engine: Optional[Engine] = None
-        self.metadata = MetaData()
-        
-        # Define staging table structure
-        self.dmp_staging_table = Table(
-            'dmp_staging',
-            self.metadata,
-            Column('SampleID', Integer, nullable=False),
-            Column('position', BigInteger, nullable=False),
-            Column('chromosome', String(10), nullable=False),
-            Column('context', String(3), nullable=False),
-            Column('q_value', Float, nullable=True),
-            Column('delta_mean', Float, nullable=True),
-            Column('overlap', Float, nullable=True),
-            Column('effect_size', Float, nullable=True),
-        )
     
     def connect(self) -> None:
         """
@@ -65,42 +53,29 @@ class AzureSQLConnection:
             )
             
             # Test connection
-            with self.engine.connect() as conn:
-                result = conn.execute(text("SELECT @@VERSION"))
-                version = result.fetchone()[0]
+            with Session(self.engine) as session:
+                result = session.exec(text("SELECT @@VERSION")).one()
                 logger.info(f"✅ Connected to Azure SQL Server")
-                logger.debug(f"Server version: {version[:100]}...")
+                logger.debug(f"Server version: {result[:100]}...")
                 
         except Exception as e:
             logger.error(f"Failed to connect to Azure SQL: {e}")
             raise
     
-    def ensure_staging_table_exists(self) -> None:
+    def create_tables(self) -> None:
         """
-        Ensure the dmp_staging table exists in the database.
-        Creates it if it doesn't exist.
+        Create all SQLModel tables in the database if they don't exist.
+        This is the SQLModel way - much simpler than manual table creation!
         """
         if self.engine is None:
             raise RuntimeError("Database not connected. Call connect() first.")
         
         try:
-            # Check if table exists
-            with self.engine.connect() as conn:
-                result = conn.execute(text(
-                    "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES "
-                    "WHERE TABLE_NAME = 'dmp_staging'"
-                ))
-                exists = result.fetchone()[0] > 0
-                
-                if not exists:
-                    logger.info("Creating dmp_staging table...")
-                    self.metadata.create_all(self.engine, tables=[self.dmp_staging_table])
-                    logger.info("✅ dmp_staging table created")
-                else:
-                    logger.debug("dmp_staging table already exists")
-                    
+            logger.info("Ensuring database tables exist...")
+            SQLModel.metadata.create_all(self.engine)
+            logger.info("✅ Database tables ready")
         except Exception as e:
-            logger.error(f"Failed to ensure staging table exists: {e}")
+            logger.error(f"Failed to create tables: {e}")
             raise
     
     def clear_sample_data(self, sample_id: int) -> int:
@@ -117,16 +92,23 @@ class AzureSQLConnection:
             raise RuntimeError("Database not connected. Call connect() first.")
         
         try:
-            with self.engine.connect() as conn:
-                result = conn.execute(
-                    text("DELETE FROM dmp_staging WHERE SampleID = :sample_id"),
-                    {"sample_id": sample_id}
-                )
-                conn.commit()
-                deleted = result.rowcount
-                if deleted > 0:
-                    logger.info(f"Cleared {deleted} existing rows for SampleID={sample_id}")
-                return deleted
+            with Session(self.engine) as session:
+                # Use SQLModel ORM query
+                statement = select(DMPStaging).where(DMPStaging.SampleID == sample_id)
+                results = session.exec(statement).all()
+                
+                deleted_count = len(results)
+                
+                # Delete the records
+                for record in results:
+                    session.delete(record)
+                
+                session.commit()
+                
+                if deleted_count > 0:
+                    logger.info(f"Cleared {deleted_count} existing rows for SampleID={sample_id}")
+                return deleted_count
+                
         except Exception as e:
             logger.error(f"Failed to clear sample data: {e}")
             raise
@@ -136,7 +118,9 @@ class AzureSQLConnection:
         Upload DMPs to staging table using bulk insert.
         
         Args:
-            dmps_df: DataFrame with DMP data (must have: position, chromosome, context, q_value, delta_mean, overlap, effect_size)
+            dmps_df: DataFrame with DMP data
+                     Required columns: position, chromosome, context
+                     Optional columns: q_value, delta_mean, overlap, effect_size
             sample_id: Sample ID for tracking
             
         Returns:
@@ -150,17 +134,26 @@ class AzureSQLConnection:
             upload_df = dmps_df.copy()
             upload_df['SampleID'] = sample_id
             
-            # Select and rename columns to match staging table
-            required_cols = ['SampleID', 'position', 'chromosome', 'context', 'q_value', 'delta_mean', 'overlap', 'effect_size']
-            
-            # Ensure all required columns exist
+            # Validate required columns
+            required_cols = ['position', 'chromosome', 'context']
             missing_cols = [col for col in required_cols if col not in upload_df.columns]
             if missing_cols:
                 raise ValueError(f"Missing required columns: {missing_cols}")
             
-            upload_df = upload_df[required_cols]
+            # Optional columns (fill with None if missing)
+            optional_cols = ['q_value', 'delta_mean', 'overlap', 'effect_size']
+            for col in optional_cols:
+                if col not in upload_df.columns:
+                    upload_df[col] = None
+            
+            # Select columns in the order expected by the model
+            db_cols = ['SampleID', 'position', 'chromosome', 'context', 
+                      'q_value', 'delta_mean', 'overlap', 'effect_size']
+            upload_df = upload_df[db_cols]
             
             # Upload using pandas to_sql (fast bulk insert)
+            # Note: pandas to_sql doesn't go through SQLModel validation,
+            # but it's much faster for bulk operations
             logger.info(f"Uploading {len(upload_df):,} DMPs for SampleID={sample_id}...")
             
             upload_df.to_sql(
@@ -177,6 +170,61 @@ class AzureSQLConnection:
             
         except Exception as e:
             logger.error(f"Failed to upload DMPs: {e}")
+            raise
+    
+    def upload_dmps_orm(self, dmps: List[DMPStaging]) -> int:
+        """
+        Upload DMPs using SQLModel ORM (slower but validates through Pydantic).
+        
+        Use this when you need full validation. For bulk operations, use upload_dmps().
+        
+        Args:
+            dmps: List of DMPStaging objects
+            
+        Returns:
+            Number of rows uploaded
+        """
+        if self.engine is None:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        
+        try:
+            logger.info(f"Uploading {len(dmps):,} DMPs using ORM...")
+            
+            with Session(self.engine) as session:
+                # Add all records
+                for dmp in dmps:
+                    session.add(dmp)
+                
+                # Commit in one transaction
+                session.commit()
+            
+            logger.info(f"✅ Uploaded {len(dmps):,} DMPs via ORM")
+            return len(dmps)
+            
+        except Exception as e:
+            logger.error(f"Failed to upload DMPs via ORM: {e}")
+            raise
+    
+    def get_sample_dmps(self, sample_id: int) -> List[DMPStaging]:
+        """
+        Retrieve all DMPs for a sample using SQLModel ORM.
+        
+        Args:
+            sample_id: Sample ID to retrieve
+            
+        Returns:
+            List of DMPStaging objects
+        """
+        if self.engine is None:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        
+        try:
+            with Session(self.engine) as session:
+                statement = select(DMPStaging).where(DMPStaging.SampleID == sample_id)
+                results = session.exec(statement).all()
+                return list(results)
+        except Exception as e:
+            logger.error(f"Failed to retrieve sample DMPs: {e}")
             raise
     
     def execute_stored_procedure(
@@ -236,9 +284,9 @@ class AzureSQLConnection:
                 'w_unknown': sp_config.w_unknown
             }
             
-            # Execute and fetch results
-            with self.engine.connect() as conn:
-                result = conn.execute(sp_call, params)
+            # Execute and fetch results using SQLModel Session
+            with Session(self.engine) as session:
+                result = session.exec(sp_call, params=params)
                 
                 # Fetch all rows
                 rows = result.fetchall()
@@ -258,18 +306,18 @@ class AzureSQLConnection:
             raise
     
     def close(self) -> None:
-        """Close database connection."""
+        """Close database connection and dispose of engine."""
         if self.engine is not None:
             self.engine.dispose()
             logger.info("Database connection closed")
             self.engine = None
     
     def __enter__(self):
-        """Context manager entry."""
+        """Context manager entry - automatically connects."""
         self.connect()
+        self.create_tables()  # Ensure tables exist
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
+        """Context manager exit - automatically closes."""
         self.close()
-
