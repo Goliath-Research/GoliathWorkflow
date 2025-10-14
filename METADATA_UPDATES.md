@@ -40,14 +40,20 @@ Enhanced `load_from_h5()` method:
 - Automatically loads metadata from HDF5 file attributes
 - Stores metadata in `_metadata` field
 
-Added metadata properties for easy access:
-- `laboratory` - Get laboratory name
-- `disease` - Get disease name
-- `group` - Get group identifier
-- `batch` - Get batch identifier
-- `chromosome` - Get chromosome
-- `context` - Get methylation context
-- `metadata` - Get all metadata as dictionary
+Added metadata properties for easy access (read-write):
+- `laboratory` - Get/set laboratory name
+- `disease` - Get/set disease name
+- `group` - Get/set group identifier
+- `batch` - Get/set batch identifier
+- `chromosome` - Get/set chromosome
+- `context` - Get/set methylation context
+- `metadata` - Get/set all metadata as dictionary
+
+These properties are **read-write**, making it easy to modify metadata:
+```python
+centroid.laboratory = "psomagen"
+centroid.disease = "prostate cancer"
+```
 
 Updated `from_centroid_data()` method:
 - Added optional `metadata` parameter to attach metadata when creating from centroid data
@@ -180,7 +186,7 @@ Note: Metadata fields are only specified in `base_config`, not at the batch leve
 
 ### Method 1: Using MethylSample Properties (Recommended)
 
-The easiest way to access metadata is through `MethylSample` properties:
+The easiest way to access and modify metadata is through `MethylSample` properties:
 
 ```python
 from methyl_utils import MethylSample
@@ -188,7 +194,7 @@ from methyl_utils import MethylSample
 # Load centroid
 centroid = MethylSample.load_from_h5('1-CG.h5')
 
-# Access metadata as properties
+# Read metadata properties
 print(f"Laboratory: {centroid.laboratory}")
 print(f"Disease: {centroid.disease}")
 print(f"Group: {centroid.group}")
@@ -196,10 +202,19 @@ print(f"Batch: {centroid.batch}")
 print(f"Chromosome: {centroid.chromosome}")
 print(f"Context: {centroid.context}")
 
+# Modify metadata properties (much cleaner than using dictionaries!)
+centroid.laboratory = "new_lab"
+centroid.disease = "updated_disease"
+centroid.group = "control"
+centroid.batch = "new_batch"
+
 # Access all metadata
 if centroid.metadata:
     print(f"All metadata: {centroid.metadata}")
     print(f"Samples: {centroid.metadata.get('samples')}")
+
+# Save with updated metadata
+centroid.save_to_h5('updated-1-CG.h5', metadata=centroid.metadata)
 ```
 
 ### Method 2: Using the Test Script
@@ -207,13 +222,13 @@ if centroid.metadata:
 Use the provided test script to verify metadata in H5 files:
 
 ```bash
-python test_metadata.py /path/to/centroid/1-CG.h5
+python methylcentroid/examples/test_metadata.py /path/to/centroid/1-CG.h5
 ```
 
 Or the example script to see all metadata:
 
 ```bash
-python example_metadata_access.py /path/to/centroid/1-CG.h5
+python methylcentroid/examples/example_metadata_access.py /path/to/centroid/1-CG.h5
 ```
 
 ### Method 3: Direct h5py Access
@@ -254,12 +269,21 @@ with h5py.File('1-CG.h5', 'r') as f:
 
 ## Testing
 
-A test script (`test_metadata.py`) is provided to verify metadata is correctly saved:
+Test and example scripts are provided in `methylcentroid/examples/`:
 
 ```bash
-# After building a centroid
-python test_metadata.py /path/to/output/1-CG.h5
+# Test metadata reading from H5 file
+python methylcentroid/examples/test_metadata.py /path/to/output/1-CG.h5
+
+# Example of accessing and modifying metadata
+python methylcentroid/examples/example_metadata_access.py /path/to/output/1-CG.h5
+
+# Demo of R/W properties
+python methylcentroid/examples/example_metadata_access.py --demo
+
+# Validate configuration files
+python methylcentroid/examples/validate_config.py
 ```
 
-This will display all metadata attributes stored in the file.
+These scripts will display all metadata attributes and demonstrate usage.
 
