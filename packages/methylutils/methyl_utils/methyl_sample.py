@@ -220,41 +220,88 @@ class MethylSample:
         """Check if this is an extended centroid."""
         return self.sample_type == "extended_centroid"
     
-    # Metadata properties (available for centroids with metadata)
+    # Metadata properties (read-write for easy manipulation)
     @property
     def laboratory(self) -> Optional[str]:
-        """Get laboratory name from metadata (if available)."""
+        """Get laboratory name from metadata."""
         return self._metadata.get("laboratory") if self._metadata else None
+    
+    @laboratory.setter
+    def laboratory(self, value: str):
+        """Set laboratory name in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["laboratory"] = value
     
     @property
     def disease(self) -> Optional[str]:
-        """Get disease from metadata (if available)."""
+        """Get disease from metadata."""
         return self._metadata.get("disease") if self._metadata else None
+    
+    @disease.setter
+    def disease(self, value: str):
+        """Set disease in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["disease"] = value
     
     @property
     def group(self) -> Optional[str]:
-        """Get group identifier from metadata (if available)."""
+        """Get group identifier from metadata."""
         return self._metadata.get("group") if self._metadata else None
+    
+    @group.setter
+    def group(self, value: str):
+        """Set group identifier in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["group"] = value
     
     @property
     def batch(self) -> Optional[str]:
-        """Get batch identifier from metadata (if available)."""
+        """Get batch identifier from metadata."""
         return self._metadata.get("batch") if self._metadata else None
+    
+    @batch.setter
+    def batch(self, value: str):
+        """Set batch identifier in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["batch"] = value
     
     @property
     def chromosome(self) -> Optional[str]:
-        """Get chromosome from metadata (if available)."""
+        """Get chromosome from metadata."""
         return self._metadata.get("chromosome") if self._metadata else None
+    
+    @chromosome.setter
+    def chromosome(self, value: str):
+        """Set chromosome in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["chromosome"] = value
     
     @property
     def context(self) -> Optional[str]:
-        """Get methylation context from metadata (if available)."""
+        """Get methylation context from metadata."""
         return self._metadata.get("context") if self._metadata else None
+    
+    @context.setter
+    def context(self, value: str):
+        """Set methylation context in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["context"] = value
     
     @property
     def metadata(self) -> Optional[Dict[str, Any]]:
-        """Get all metadata (if available)."""
+        """Get all metadata."""
         return self._metadata
+    
+    @metadata.setter
+    def metadata(self, value: Dict[str, Any]):
+        """Set all metadata at once."""
+        self._metadata = value
     
     # Statistical properties - computed on demand
     @property

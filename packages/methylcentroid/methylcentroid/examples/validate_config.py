@@ -9,7 +9,8 @@ from pathlib import Path
 
 # Import directly from the config module file to avoid __init__.py imports
 import importlib.util
-config_path = Path(__file__).parent / "packages" / "methylcentroid" / "methylcentroid" / "config.py"
+# Go up from examples/ to methylcentroid/ to config.py
+config_path = Path(__file__).parent.parent / "config.py"
 spec = importlib.util.spec_from_file_location("config", config_path)
 config_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(config_module)
@@ -88,7 +89,8 @@ def validate_single_config(config_path: Path):
 def main():
     """Main validation function."""
     # Test the batch config files
-    config_dir = Path(__file__).parent / "packages" / "methylcentroid" / "methylcentroid" / "configs"
+    # Go up from examples/ to methylcentroid/ to configs/
+    config_dir = Path(__file__).parent.parent / "configs"
     
     configs_to_test = [
         config_dir / "pb-cancer_batch_config.json",
