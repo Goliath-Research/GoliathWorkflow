@@ -1,9 +1,12 @@
 """
-Configuration models for MethylMapper
+Configuration models for MethylMapper.
+
+Note: These are pure Pydantic models (not database tables).
+For database models, see models.py which uses SQLModel.
 """
 
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AzureSQLConfig(BaseModel):
@@ -60,40 +63,57 @@ class StoredProcedureConfig(BaseModel):
     
     upstream_size: int = Field(
         default=5000,
+        ge=0,
         description="Upstream region size for promoter mapping (bp)"
     )
     downstream_size: int = Field(
         default=2000,
+        ge=0,
         description="Downstream region size for terminator mapping (bp)"
     )
     min_intron_size: int = Field(
         default=0,
+        ge=0,
         description="Minimum intron size to consider (bp)"
     )
     w_promoter: float = Field(
         default=2.0,
+        gt=0.0,
         description="Weight for promoter region DMPs"
     )
     w_terminator: float = Field(
         default=0.5,
+        gt=0.0,
         description="Weight for terminator region DMPs"
     )
     w_gene_body: float = Field(
         default=1.0,
+        gt=0.0,
         description="Weight for gene body DMPs"
     )
     w_exon: float = Field(
         default=1.5,
+        gt=0.0,
         description="Weight for exon DMPs"
     )
     w_intron: float = Field(
         default=0.7,
+        gt=0.0,
         description="Weight for intron DMPs"
     )
     w_unknown: float = Field(
         default=1.0,
+        gt=0.0,
         description="Weight for unknown region DMPs"
     )
+    
+    @field_validator('upstream_size', 'downstream_size', 'min_intron_size')
+    @classmethod
+    def validate_sizes(cls, v):
+        """Validate region sizes are reasonable."""
+        if v > 1_000_000:  # 1 Mb
+            raise ValueError(f"Region size {v} seems too large (max 1Mb)")
+        return v
 
 
 class MethylMapperConfig(BaseModel):
