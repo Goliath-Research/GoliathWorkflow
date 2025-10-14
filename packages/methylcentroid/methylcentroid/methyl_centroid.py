@@ -349,6 +349,11 @@ class MethylCentroid:
         distance_metrics: List[DistanceMetric] = None,
         min_metrics_agree: int = 1,
         verbose: bool = False,
+        # Metadata fields
+        laboratory: str = None,
+        disease: str = None,
+        group: str = None,
+        batch: str = None,
     ):
         from contextlib import contextmanager
         import logging
@@ -477,6 +482,12 @@ class MethylCentroid:
         self.α = α
         self.min_samples = min_samples
         
+        # Store metadata fields
+        self.laboratory = laboratory
+        self.disease = disease
+        self.group = group
+        self.batch = batch
+        
         # Initialize distance metrics with defaults if not provided
         if distance_metrics is None:
             self.distance_metrics = [DistanceMetric.WEIGHTED_JENSEN_SHANNON]
@@ -560,6 +571,11 @@ class MethylCentroid:
             distance_metrics=config.distance_metrics,
             min_metrics_agree=config.min_metrics_agree,
             verbose=verbose,
+            # Metadata fields
+            laboratory=config.laboratory,
+            disease=config.disease,
+            group=config.group,
+            batch=config.batch,
         )
 
     @classmethod
@@ -585,6 +601,11 @@ class MethylCentroid:
             "min_samples": self.min_samples,
             "distance_metrics": self.distance_metrics,
             "min_metrics_agree": self.min_metrics_agree,
+            # Metadata fields
+            "laboratory": self.laboratory,
+            "disease": self.disease,
+            "group": self.group,
+            "batch": self.batch,
         }
 
         return MethylCentroidConfig(**config_dict)
@@ -1122,9 +1143,24 @@ class MethylCentroid:
             print("No valid centroid data to save")
             return None
 
-        # Create MethylSample from centroid data
+        # Prepare metadata for H5 file
+        metadata = {
+            "laboratory": self.laboratory,
+            "disease": self.disease,
+            "group": self.group,
+            "batch": self.batch,
+            "chromosome": self.chrom,
+            "context": self.ctx,
+            "samples": self._original_samples if hasattr(self, '_original_samples') else [],
+            "min_coverage": self.min_coverage,
+            "alpha": self.α,
+            "distance_metrics": [str(m.value) for m in self.distance_metrics],
+            "max_iterations": self.max_iterations,
+        }
+
+        # Create MethylSample from centroid data with metadata
         from methyl_utils import MethylSample
-        methyl_sample = MethylSample.from_centroid_data(centroid_data)
+        methyl_sample = MethylSample.from_centroid_data(centroid_data, metadata=metadata)
 
         # Save using MethylSample
         output_path = Path(output_dir)
@@ -1151,7 +1187,8 @@ class MethylCentroid:
         filename = f"{self.chrom}-{self.ctx}.h5"
         centroid_path = output_path / filename
 
-        methyl_sample.save_to_h5(centroid_path, compressed=True)
+        # Save centroid (metadata already embedded in MethylSample)
+        methyl_sample.save_to_h5(centroid_path, compressed=True, metadata=metadata)
 
         # Store reference to centroid
         self.centroid = centroid_path

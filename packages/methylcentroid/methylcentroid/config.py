@@ -43,6 +43,13 @@ class MethylCentroidConfig(BaseModel):
     - When adding new samples, previous outliers are automatically re-included for fair centroid building
     """
 
+    # Metadata fields (saved to H5 file)
+    laboratory: str = Field(..., description="Laboratory or institution name")
+    disease: str = Field(..., description="Disease or condition being studied")
+    group: str = Field(..., description="Sample group identifier (e.g., 'cancer', 'control')")
+    batch: str = Field(..., description="Batch identifier for sample processing")
+    
+    # Core parameters
     chrom: str = Field(..., description="Chromosome identifier (e.g., '1', 'X')")
     ctx: str = Field(..., description="Context type (e.g., 'CG', 'CHG', 'CHH')")
     output_dir: str = Field(..., description="Directory to save centroid files")
@@ -114,6 +121,26 @@ class MethylCentroidConfig(BaseModel):
         if not v or not isinstance(v, str):
             raise ValueError("Chromosome must be a non-empty string")
         return v
+
+    def get_metadata(self) -> Dict[str, Any]:
+        """
+        Extract metadata fields to be saved with the centroid H5 file.
+        
+        Returns:
+            Dictionary containing metadata fields
+        """
+        return {
+            "laboratory": self.laboratory,
+            "disease": self.disease,
+            "group": self.group,
+            "batch": self.batch,
+            "chromosome": self.chrom,
+            "context": self.ctx,
+            "samples": self.samples if self.samples else self.add_samples,
+            "min_coverage": self.min_coverage,
+            "alpha": self.α,
+            "distance_metrics": [str(metric.value) for metric in self.distance_metrics]
+        }
 
     def to_file(self, file_path: Path) -> None:
         """Save configuration to JSON file."""
