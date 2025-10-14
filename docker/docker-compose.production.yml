@@ -30,7 +30,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=0
       - PYTHONPATH=/opt/methylpipeline/lib/python3.10/site-packages
-      - CUPY_CACHE_DIR=/home/ubuntu/.cupy/kernel_cache
+      - CUPY_CACHE_DIR=/tmp/.cupy
     shm_size: '16gb'
     restart: unless-stopped
     command: sleep infinity
