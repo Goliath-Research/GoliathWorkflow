@@ -3,6 +3,17 @@
 ## Overview
 This update adds comprehensive metadata support to the MethylCentroid package, allowing important provenance information to be validated in the configuration and saved directly within the centroid H5 files.
 
+## Environment Setup
+
+Before using the examples and scripts, set up the MethylPipeline environment:
+
+```bash
+cd /home/ubuntu/MethylPipeline
+source setup_env.sh
+```
+
+This sets the `METHYLPIPELINE` environment variable which all projects use to locate resources. See `ENV_SETUP.md` for details.
+
 ## Changes Made
 
 ### 1. Updated Pydantic Configuration Model (`config.py`)
@@ -272,18 +283,21 @@ with h5py.File('1-CG.h5', 'r') as f:
 Test and example scripts are provided in `methylcentroid/examples/`:
 
 ```bash
+# Set up environment first
+source setup_env.sh
+
 # Test metadata reading from H5 file
-python methylcentroid/examples/test_metadata.py /path/to/output/1-CG.h5
+python packages/methylcentroid/methylcentroid/examples/test_metadata.py /path/to/output/1-CG.h5
 
 # Example of accessing and modifying metadata
-python methylcentroid/examples/example_metadata_access.py /path/to/output/1-CG.h5
+python packages/methylcentroid/methylcentroid/examples/example_metadata_access.py /path/to/output/1-CG.h5
 
 # Demo of R/W properties
-python methylcentroid/examples/example_metadata_access.py --demo
+python packages/methylcentroid/methylcentroid/examples/example_metadata_access.py --demo
 
 # Validate configuration files
-python methylcentroid/examples/validate_config.py
+python packages/methylcentroid/methylcentroid/examples/validate_config.py
 ```
 
-These scripts will display all metadata attributes and demonstrate usage.
+**Note:** All scripts require the `METHYLPIPELINE` environment variable. See `ENV_SETUP.md` for details.
 

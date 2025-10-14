@@ -1,16 +1,31 @@
 #!/usr/bin/env python3
 """
 Standalone script to validate configuration files without importing full methylcentroid module.
+
+Requires METHYLPIPELINE environment variable to be set.
+Run: source setup_env.sh
 """
 
 import json
 import sys
+import os
 from pathlib import Path
+
+# Check for METHYLPIPELINE environment variable
+if 'METHYLPIPELINE' not in os.environ:
+    print("❌ Error: METHYLPIPELINE environment variable is not set.")
+    print("Please run: source setup_env.sh")
+    sys.exit(1)
 
 # Import directly from the config module file to avoid __init__.py imports
 import importlib.util
-# Go up from examples/ to methylcentroid/ to config.py
-config_path = Path(__file__).parent.parent / "config.py"
+methylpipeline_root = Path(os.environ['METHYLPIPELINE'])
+config_path = methylpipeline_root / "packages" / "methylcentroid" / "methylcentroid" / "config.py"
+
+if not config_path.exists():
+    print(f"❌ Error: Config file not found at {config_path}")
+    sys.exit(1)
+
 spec = importlib.util.spec_from_file_location("config", config_path)
 config_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(config_module)
@@ -88,9 +103,9 @@ def validate_single_config(config_path: Path):
 
 def main():
     """Main validation function."""
-    # Test the batch config files
-    # Go up from examples/ to methylcentroid/ to configs/
-    config_dir = Path(__file__).parent.parent / "configs"
+    # Test the batch config files using METHYLPIPELINE
+    methylpipeline_root = Path(os.environ['METHYLPIPELINE'])
+    config_dir = methylpipeline_root / "packages" / "methylcentroid" / "methylcentroid" / "configs"
     
     configs_to_test = [
         config_dir / "pb-cancer_batch_config.json",
