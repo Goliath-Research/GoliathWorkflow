@@ -24,43 +24,36 @@ RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor
     ACCEPT_EULA=Y apt-get install -y msodbcsql18 && \
     rm -rf /var/lib/apt/lists/*
 
-# Create ubuntu user and set up permissions
-RUN groupadd -r ubuntu && useradd -r -g ubuntu -d /home/ubuntu -s /bin/bash ubuntu
-RUN mkdir -p /home/ubuntu && chown -R ubuntu:ubuntu /home/ubuntu
-RUN usermod -aG sudo ubuntu
-RUN echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-
-# Create Python virtual environment
-RUN python3.10 -m venv /opt/methylutils
-ENV PATH="/opt/methylutils/bin:$PATH"
-
-# Make sure ubuntu user can access the virtual environment
-RUN chown -R ubuntu:ubuntu /opt/methylutils
-
 # Install Python packages with CUDA support
+# Install pip
+RUN apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*
 RUN pip install --upgrade pip setuptools wheel
 
 # Install CuPy with CUDA 12.1 support
 RUN pip install cupy-cuda12x
 
-# Install scientific computing libraries
-RUN pip install \
-    numpy \
-    scipy \
-    pandas \
-    h5py \
-    hdf5plugin \
-    nvidia-ml-py>=12.535.0 \
-    psutil \
-    plotly \
-    matplotlib \
-    seaborn \
-    pydantic \
-    click \
-    zarr \
-    tqdm \
-    statsmodels \
-    sqlalchemy
+# Install core scientific libraries first
+RUN pip install --no-cache-dir --retries 3 numpy scipy pandas
+
+# Install pydantic from source to avoid zlib issues
+RUN pip install --no-cache-dir --retries 3 --timeout 300 --no-binary pydantic,pydantic-core pydantic
+
+# Install HDF5 and data libraries
+RUN pip install --no-cache-dir --retries 3 h5py hdf5plugin zarr
+
+# Install visualization libraries
+RUN pip install --no-cache-dir --retries 3 plotly matplotlib seaborn
+
+# Install utility libraries one by one
+RUN pip install --no-cache-dir --retries 3 psutil
+RUN pip install --no-cache-dir --retries 3 click
+RUN pip install --no-cache-dir --retries 3 tqdm
+
+# Install statistical libraries
+RUN pip install --no-cache-dir --retries 3 statsmodels sqlalchemy
+
+# Install NVIDIA libraries
+RUN pip install --no-cache-dir --retries 3 nvidia-ml-py>=12.535.0
 
 # Install SQL drivers (pyodbc for ODBC, pymssql as fallback for ARM64)
 RUN pip install pyodbc || echo "pyodbc installation failed" && \
@@ -72,14 +65,12 @@ RUN pip install cudf-cu12 --no-cache-dir
 # Install numba after RAPIDS to avoid version conflicts
 RUN pip install numba
 
+# Install sqlmodel after all other packages
+RUN pip install --no-cache-dir --retries 3 sqlmodel
+
 # Create workspace directory
 RUN mkdir -p /workspace
 WORKDIR /workspace
-
-# Create CuPy cache directory with proper permissions
-RUN mkdir -p /home/ubuntu/.cupy && \
-    chown -R ubuntu:ubuntu /home/ubuntu/.cupy && \
-    chmod 755 /home/ubuntu/.cupy
 
 # Set environment variables for optimization
 ENV CUDA_VISIBLE_DEVICES=0 \
@@ -88,16 +79,16 @@ ENV CUDA_VISIBLE_DEVICES=0 \
     NUMEXPR_NUM_THREADS=8 \
     PYTHONUNBUFFERED=1 \
     HDF5_USE_FILE_LOCKING=FALSE \
-    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 \
-    CUPY_CACHE_DIR=/home/ubuntu/.cupy/kernel_cache
+    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 
 
 # Health check - basic Python/CUDA check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python3 -c "import cupy; print('CUDA container ready')"
 
-# Switch to ubuntu user
-USER ubuntu
-WORKDIR /home/ubuntu
+# Switch to root user and ensure proper home directory
+USER root
+RUN mkdir -p /root && chown root:root /root
+WORKDIR /root
 
 # Default command
 CMD ["python3", "-c", "print('MethylUtils CUDA container ready - run setup_methyl_packages.sh to install packages')"]
