@@ -8,11 +8,12 @@ MethylPipeline is a comprehensive monorepo containing all components required fo
 
 ## Architecture
 
-The pipeline consists of 7 integrated Python packages:
+The pipeline consists of 8 integrated Python packages:
 
 - **methylutils** - Core utilities: logging, GPU management, HDF5 file handling, genomic sample classes (MethylSample), and GPU-optimized mathematical/statistical functions
 - **methylcentroid** - Centroid generation for sample clustering
 - **methyldetector** - DMP (Differentially Methylated Position) detection with effect size calculations
+- **methylcluster** - Sample clustering using Jensen-Shannon or Hellinger distance with HDBSCAN
 - **methylmapper** - DMP-to-gene mapping with Azure SQL integration
 - **methyltrainer** - Machine learning model training for classification
 - **methylclassifier** - Sample classification using trained models
@@ -92,6 +93,7 @@ MethylPipeline/
 │   ├── methylutils/
 │   ├── methylcentroid/
 │   ├── methyldetector/
+│   ├── methylcluster/
 │   ├── methylmapper/
 │   ├── methyltrainer/
 │   ├── methylclassifier/
