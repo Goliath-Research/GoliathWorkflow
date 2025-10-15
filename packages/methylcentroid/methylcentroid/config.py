@@ -126,9 +126,14 @@ class MethylCentroidConfig(BaseModel):
         """
         Extract metadata fields to be saved with the centroid H5 file.
         
+        Note: This method provides initial metadata. The actual samples_used
+        and outliers_removed will be determined during centroid creation
+        based on which samples are active after outlier removal.
+        
         Returns:
             Dictionary containing metadata fields
         """
+        from datetime import datetime
         return {
             "laboratory": self.laboratory,
             "disease": self.disease,
@@ -136,7 +141,10 @@ class MethylCentroidConfig(BaseModel):
             "batch": self.batch,
             "chromosome": self.chrom,
             "context": self.ctx,
-            "samples": self.samples if self.samples else self.add_samples,
+            "samples": self.samples if self.samples else self.add_samples,  # Initial samples
+            "samples_used": [],  # Will be populated during save_centroid
+            "outliers_removed": self.outliers,
+            "creation_date": datetime.now().isoformat(),
             "min_coverage": self.min_coverage,
             "alpha": self.α,
             "distance_metrics": [str(metric.value) for metric in self.distance_metrics]

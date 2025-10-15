@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
@@ -192,15 +192,26 @@ class MethylDetector:
                 pickle.dump(model_package, f)
             logger.info(f"Classifier saved to {model_path}")
             
-            # Validate on synthetic samples generated from Beta distributions
+            # Validate classifier using configured validation mode
             if not biological_dmps_df.empty:
-                n_validation_samples = self.config.n_validation_samples  # Default 100 per class
-                accuracy = self._validate_classifier_on_synthetic_samples(
-                    classifier, 
-                    biological_dmps_df, 
-                    n_validation_samples
-                )
-                logger.info(f"Classifier validation on {n_validation_samples} synthetic samples per class: accuracy {accuracy * 100:.1f}%")
+                if self.config.validation_mode == "real":
+                    # Validate on real samples from centroids
+                    logger.info("Using real sample validation mode")
+                    accuracy = self._validate_classifier_on_real_samples(
+                        classifier,
+                        biological_dmps_df
+                    )
+                    logger.info(f"Classifier validation on real samples: accuracy {accuracy * 100:.1f}%")
+                else:
+                    # Validate on synthetic samples (default)
+                    n_validation_samples = self.config.n_validation_samples  # Default 100 per class
+                    logger.info("Using synthetic sample validation mode")
+                    accuracy = self._validate_classifier_on_synthetic_samples(
+                        classifier, 
+                        biological_dmps_df, 
+                        n_validation_samples
+                    )
+                    logger.info(f"Classifier validation on {n_validation_samples} synthetic samples per class: accuracy {accuracy * 100:.1f}%")
                 result.training_accuracy = float(accuracy)
                 result.classifier_model_path = str(model_path)
         
@@ -276,6 +287,190 @@ class MethylDetector:
         logger.debug(f"  Class 1 accuracy: {np.mean(y_pred[n_samples:] == 1) * 100:.1f}%")
         
         return accuracy
+    
+    def _validate_classifier_on_real_samples(
+        self,
+        classifier,
+        biological_dmps_df: pd.DataFrame
+    ) -> float:
+        """
+        Validate classifier on real samples from the centroids.
+        
+        This loads actual sample data from HDF5 files (either from config or centroid metadata)
+        and tests the classifier's accuracy on these real samples.
+        
+        Args:
+            classifier: Trained ProbabilisticBetaClassifier
+            biological_dmps_df: DataFrame with DMP data including positions
+            
+        Returns:
+            Accuracy (float) on real samples
+        """
+        logger.info("Validating classifier on real samples...")
+        
+        # Get validation sample paths
+        sample_paths_1 = self._get_validation_sample_paths(self.config.centroid1_path, 
+                                                           self.config.centroid1_validation_samples)
+        sample_paths_2 = self._get_validation_sample_paths(self.config.centroid2_path,
+                                                           self.config.centroid2_validation_samples)
+        
+        if not sample_paths_1 or not sample_paths_2:
+            logger.warning("No validation samples available, falling back to synthetic validation")
+            return self._validate_classifier_on_synthetic_samples(
+                classifier, biological_dmps_df, self.config.n_validation_samples
+            )
+        
+        logger.info(f"Loading {len(sample_paths_1)} samples from centroid 1")
+        logger.info(f"Loading {len(sample_paths_2)} samples from centroid 2")
+        
+        # Extract DMP positions
+        dmp_positions = biological_dmps_df['pos'].values
+        
+        # Get chromosome and context from first centroid
+        from ..utils.file_utils import get_chromosome_context_from_filename
+        chrom, ctx = get_chromosome_context_from_filename(self.config.centroid1_path)
+        
+        # Load methylation values for class 0 (centroid 1 samples)
+        samples_class0_data = []
+        for sample_path in sample_paths_1:
+            try:
+                sample_values = self._load_sample_methylation_at_dmps(
+                    sample_path, chrom, ctx, dmp_positions
+                )
+                if sample_values is not None:
+                    samples_class0_data.append(sample_values)
+            except Exception as e:
+                logger.warning(f"Failed to load sample {sample_path}: {e}")
+        
+        # Load methylation values for class 1 (centroid 2 samples)
+        samples_class1_data = []
+        for sample_path in sample_paths_2:
+            try:
+                sample_values = self._load_sample_methylation_at_dmps(
+                    sample_path, chrom, ctx, dmp_positions
+                )
+                if sample_values is not None:
+                    samples_class1_data.append(sample_values)
+            except Exception as e:
+                logger.warning(f"Failed to load sample {sample_path}: {e}")
+        
+        if len(samples_class0_data) == 0 or len(samples_class1_data) == 0:
+            logger.warning("Failed to load sufficient samples, falling back to synthetic validation")
+            return self._validate_classifier_on_synthetic_samples(
+                classifier, biological_dmps_df, self.config.n_validation_samples
+            )
+        
+        # Stack samples
+        X_val_class0 = np.vstack(samples_class0_data)
+        X_val_class1 = np.vstack(samples_class1_data)
+        X_val = np.vstack([X_val_class0, X_val_class1])
+        
+        # Create labels
+        y_true = np.array([0] * len(samples_class0_data) + [1] * len(samples_class1_data))
+        
+        # Predict
+        y_pred = classifier.predict(X_val)
+        
+        # Calculate accuracy
+        accuracy = np.mean(y_pred == y_true)
+        
+        logger.info(f"Validation: {len(samples_class0_data)} samples from centroid 1, "
+                   f"{len(samples_class1_data)} samples from centroid 2")
+        logger.info(f"  Class 0 accuracy: {np.mean(y_pred[:len(samples_class0_data)] == 0) * 100:.1f}%")
+        logger.info(f"  Class 1 accuracy: {np.mean(y_pred[len(samples_class0_data):] == 1) * 100:.1f}%")
+        
+        return accuracy
+    
+    def _get_validation_sample_paths(self, centroid_path: Path, config_samples) -> List[str]:
+        """
+        Get validation sample paths from config or centroid metadata.
+        
+        Args:
+            centroid_path: Path to the centroid file
+            config_samples: Sample specification from config (can be "use_metadata" or list of paths)
+            
+        Returns:
+            List of sample directory paths
+        """
+        # If config specifies sample paths, use them
+        if config_samples and config_samples != "use_metadata":
+            if isinstance(config_samples, list):
+                return config_samples
+            elif isinstance(config_samples, str):
+                return [config_samples]
+        
+        # Otherwise, try to read from centroid metadata
+        try:
+            centroid = MethylSample.load_from_h5(centroid_path)
+            if hasattr(centroid, 'metadata') and centroid.metadata:
+                # Try new metadata fields first
+                if 'samples_used' in centroid.metadata and centroid.metadata['samples_used']:
+                    return centroid.metadata['samples_used']
+                # Fall back to old 'samples' field
+                elif 'samples' in centroid.metadata and centroid.metadata['samples']:
+                    return centroid.metadata['samples']
+        except Exception as e:
+            logger.warning(f"Could not read metadata from {centroid_path}: {e}")
+        
+        return []
+    
+    def _load_sample_methylation_at_dmps(
+        self,
+        sample_dir: Union[str, Path],
+        chrom: str,
+        ctx: str,
+        dmp_positions: np.ndarray
+    ) -> Optional[np.ndarray]:
+        """
+        Load methylation values from a sample at specific DMP positions.
+        
+        Args:
+            sample_dir: Directory containing the sample HDF5 file
+            chrom: Chromosome identifier
+            ctx: Context (CG, CHG, CHH)
+            dmp_positions: Array of genomic positions to extract
+            
+        Returns:
+            Array of methylation levels (mC/(mC+uC)) at DMP positions, or None if failed
+        """
+        sample_path = Path(sample_dir) / f"{chrom}-{ctx}.h5"
+        
+        if not sample_path.exists():
+            logger.warning(f"Sample file not found: {sample_path}")
+            return None
+        
+        try:
+            # Load sample
+            sample = MethylSample.load_from_h5(sample_path)
+            
+            # Find matching positions (DMP positions that exist in this sample)
+            # Use numpy's searchsorted for efficient lookup
+            sample_pos_idx = np.searchsorted(sample.pos, dmp_positions)
+            
+            # Verify positions actually match (handle out of bounds)
+            valid_mask = (sample_pos_idx < len(sample.pos)) & (sample.pos[sample_pos_idx] == dmp_positions)
+            
+            # Extract methylation values
+            methyl_values = np.full(len(dmp_positions), np.nan, dtype=np.float32)
+            
+            if np.any(valid_mask):
+                valid_indices = sample_pos_idx[valid_mask]
+                mC = sample.mC[valid_indices].astype(np.float32)
+                uC = sample.uC[valid_indices].astype(np.float32)
+                
+                # Calculate methylation levels with safe division
+                total = mC + uC
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    methyl_values[valid_mask] = np.where(total > 0, mC / total, 0.0)
+            
+            # Replace NaNs with 0.0 for positions not in sample
+            methyl_values = np.nan_to_num(methyl_values, nan=0.0)
+            
+            return methyl_values
+            
+        except Exception as e:
+            logger.warning(f"Error loading sample {sample_path}: {e}")
+            return None
     
     def timer(func):
         """Decorator to time and log function execution."""
