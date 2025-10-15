@@ -30,7 +30,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=0
-      - PYTHONPATH=/workspace/packages/methylutils:/workspace/packages/methyldetector:/workspace/packages/methylcentroid:/workspace/packages/methylmapper:/workspace/packages/methyltrainer:/workspace/packages/methylclassifier:/workspace/packages/methylenricher
+      - PYTHONPATH=/workspace/packages/methylutils:/workspace/packages/methyldetector:/workspace/packages/methylcentroid:/workspace/packages/methylmapper:/workspace/packages/methyltrainer:/workspace/packages/methylclassifier:/workspace/packages/methylenricher:/workspace/packages/methylcluster
       - METHYL_UTILS_PATH=/workspace/packages/methylutils
       - CUPY_CACHE_DIR=/tmp/.cupy
     shm_size: '16gb'

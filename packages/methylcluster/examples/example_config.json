@@ -1,0 +1,20 @@
+{
+  "samples": [
+    "/home/ubuntu/Work/samples/sample1",
+    "/home/ubuntu/Work/samples/sample2",
+    "/home/ubuntu/Work/samples/sample3",
+    "/home/ubuntu/Work/samples/sample4",
+    "/home/ubuntu/Work/samples/sample5"
+  ],
+  "chrom": "1",
+  "ctx": "CG",
+  "metric": "jensen_shannon",
+  "min_cluster_size": 2,
+  "min_samples": 2,
+  "cluster_selection_epsilon": 0.0,
+  "cluster_selection_method": "eom",
+  "output_dir": "./clustering_results",
+  "cache_distance_matrix": true,
+  "use_gpu": true
+}
+
