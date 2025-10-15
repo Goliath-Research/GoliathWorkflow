@@ -96,6 +96,22 @@ class MethylDetectorConfig(BaseModel):
         default=100, ge=10,
         description="Number of synthetic samples per class to generate for classifier validation (from Beta distributions)"
     )
+    
+    # ----------------
+    # Validation Configuration
+    # ----------------
+    validation_mode: str = Field(
+        default="synthetic",
+        description="Validation mode: 'synthetic' (generate from Beta distributions) or 'real' (use actual samples)"
+    )
+    centroid1_validation_samples: Optional[Union[str, List[str]]] = Field(
+        default=None,
+        description="Validation samples for centroid1. Can be 'use_metadata' to read from centroid metadata, or list of sample directory paths"
+    )
+    centroid2_validation_samples: Optional[Union[str, List[str]]] = Field(
+        default=None,
+        description="Validation samples for centroid2. Can be 'use_metadata' to read from centroid metadata, or list of sample directory paths"
+    )
 
     # ----------------
     # System Settings
@@ -165,6 +181,14 @@ class MethylDetectorConfig(BaseModel):
         for f in v:
             if f not in valid_filters:
                 raise ValueError(f"Biological filter must be one of: {valid_filters}, got: {f}")
+        return v
+    
+    @field_validator('validation_mode')
+    @classmethod
+    def validate_validation_mode(cls, v):
+        valid_modes = ['synthetic', 'real']
+        if v not in valid_modes:
+            raise ValueError(f"Validation mode must be one of: {valid_modes}, got: {v}")
         return v
 
     @model_validator(mode='after')

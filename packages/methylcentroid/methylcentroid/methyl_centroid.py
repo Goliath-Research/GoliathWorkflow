@@ -737,6 +737,29 @@ class MethylCentroid:
         self.active_samples.remove(index)
         self.outlier_samples.add(index)
 
+    def _get_active_sample_paths(self) -> list:
+        """
+        Get the paths of all samples currently active in the centroid.
+        
+        Returns:
+            List of sample directory paths (as strings)
+        """
+        active_paths = []
+        for is_new_sample, sample_index in sorted(self.active_samples):
+            if is_new_sample:
+                # Sample from add_samples list
+                if sample_index < len(self.add_samples):
+                    sample_path = self.add_samples[sample_index]
+                    # Extract directory path (remove the H5 filename)
+                    active_paths.append(str(sample_path.parent) if hasattr(sample_path, 'parent') else str(Path(sample_path).parent))
+            else:
+                # Sample from original samples list
+                if sample_index < len(self.samples):
+                    sample_path = self.samples[sample_index]
+                    # Extract directory path (remove the H5 filename)
+                    active_paths.append(str(sample_path.parent) if hasattr(sample_path, 'parent') else str(Path(sample_path).parent))
+        return active_paths
+
     def add_samples_parallel(self):
 
         def load_sample_data(sample_path: Path) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -1143,7 +1166,16 @@ class MethylCentroid:
             print("No valid centroid data to save")
             return None
 
+        # Get active sample paths (those currently in the centroid)
+        active_sample_paths = self._get_active_sample_paths()
+        
+        # Get outlier sample paths (those removed during outlier detection)
+        # outliers are stored as Path objects to H5 files, so extract parent directories
+        outlier_paths = [str(p.parent) if hasattr(p, 'parent') else str(Path(p).parent) 
+                        for p in self.outliers] if self.outliers else []
+
         # Prepare metadata for H5 file
+        from datetime import datetime
         metadata = {
             "laboratory": self.laboratory,
             "disease": self.disease,
@@ -1151,7 +1183,9 @@ class MethylCentroid:
             "batch": self.batch,
             "chromosome": self.chrom,
             "context": self.ctx,
-            "samples": self._original_samples if hasattr(self, '_original_samples') else [],
+            "samples_used": active_sample_paths,  # NEW: Active samples in centroid
+            "outliers_removed": outlier_paths,     # NEW: Samples removed as outliers
+            "creation_date": datetime.now().isoformat(),  # NEW: Creation timestamp
             "min_coverage": self.min_coverage,
             "alpha": self.α,
             "distance_metrics": [str(m.value) for m in self.distance_metrics],
