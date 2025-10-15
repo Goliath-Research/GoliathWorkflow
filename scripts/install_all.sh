@@ -32,6 +32,7 @@ PACKAGES=(
     "methyltrainer"
     "methylclassifier"
     "methylenricher"
+    "methylcluster"
 )
 
 for pkg in "${PACKAGES[@]}"; do
@@ -63,6 +64,7 @@ echo "   • methylmapper   - DMP-to-gene mapping (Azure SQL)"
 echo "   • methyltrainer  - Model training"
 echo "   • methylclassifier - Sample classification"
 echo "   • methylenricher - Gene enrichment analysis"
+echo "   • methylcluster  - HDBSCAN sample clustering"
 echo ""
 echo "🧪 Test the installation:"
 echo "   python -c \"from methyl_utils import get_logger; print('✓ MethylUtils OK')\""
