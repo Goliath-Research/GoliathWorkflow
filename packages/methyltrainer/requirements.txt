@@ -1,8 +1,0 @@
-numpy>=1.20.0
-scipy>=1.7.0
-h5py>=3.0.0
-
-# MethylUtils is the core dependency
-# Install from local path or package repository
-# -e /path/to/MethylUtils
-

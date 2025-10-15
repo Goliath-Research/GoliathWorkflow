@@ -41,7 +41,7 @@ for pkg in "${PACKAGES[@]}"; do
         if [ -f "$PKG_PATH/setup.py" ] || [ -f "$PKG_PATH/pyproject.toml" ]; then
             echo "📦 Installing $pkg..."
             cd "$PKG_PATH"
-            pip install -e . --quiet
+            poetry install
             echo "   ✓ $pkg installed"
         else
             echo "   ⚠ Skipping $pkg (missing setup.py or pyproject.toml)"
