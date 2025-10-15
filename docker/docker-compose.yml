@@ -32,6 +32,6 @@ services:
       - CUDA_VISIBLE_DEVICES=0
       - PYTHONPATH=/workspace/packages/methylutils:/workspace/packages/methyldetector:/workspace/packages/methylcentroid:/workspace/packages/methylmapper:/workspace/packages/methyltrainer:/workspace/packages/methylclassifier:/workspace/packages/methylenricher
       - METHYL_UTILS_PATH=/workspace/packages/methylutils
-      - CUPY_CACHE_DIR=/home/ubuntu/.cupy/kernel_cache
+      - CUPY_CACHE_DIR=/tmp/.cupy
     shm_size: '16gb'
     command: sleep infinity

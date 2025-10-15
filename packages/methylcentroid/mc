@@ -2,16 +2,14 @@
 # MethylCentroid Container Wrapper
 # Usage: ./mc [args...]
 
-if ! docker ps --format 'table {{.Names}}' | grep -q "^epimethyl$"; then
-    echo "❌ Error: epimethyl container is not running."
-    echo "Start it with: docker run -d --name epimethyl <your-image>"
+if ! docker ps --format 'table {{.Names}}' | grep -q "^methylpipeline$"; then
+    echo "❌ Error: methylpipeline container is not running."
+    echo "Start it with: cd /home/ubuntu/MethylPipeline/docker && docker compose up -d"
     exit 1
 fi
 
-# Execute the command inside the container with host user permissions
-# Set CUPY_CACHE_DIR to /tmp which is writable by all users in the container
-# This is needed because the user mapping doesn't have write access to /home/ubuntu/.cupy
-exec docker exec -u $(id -u):$(id -g) \
-  -e CUPY_CACHE_DIR=/tmp/.cupy_cache_$(id -u) \
-  -w /home/ubuntu/MethylCentroid \
-  epimethyl python -m methylcentroid.cli "$@"
+# Execute the command inside the container
+# Working directory is /workspace which maps to /home/ubuntu/MethylPipeline
+# Use cli.py for batch configs (--batch-config flag), centroid_cli.py for single processing (--config flag)
+exec docker exec -w /workspace methylpipeline \
+  python3 -m methylcentroid.cli "$@"
