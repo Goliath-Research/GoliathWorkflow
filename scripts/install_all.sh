@@ -42,6 +42,7 @@ for pkg in "${PACKAGES[@]}"; do
             echo "📦 Installing $pkg..."
             cd "$PKG_PATH"
             poetry install
+            poetry add mkdocs mkdocs-material
             echo "   ✓ $pkg installed"
         else
             echo "   ⚠ Skipping $pkg (missing setup.py or pyproject.toml)"
