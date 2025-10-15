@@ -4,7 +4,7 @@
     "base_config": {
         "laboratory": "psomagen",
         "disease": "prostate cancer",
-        "group": "cancer",
+        "group": "early-stage",
         "batch": "AN00026418",
         "chrom": "1",
         "ctx": "CG",
