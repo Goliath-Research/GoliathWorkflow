@@ -6,15 +6,14 @@ Test script to verify GPU detection and fallback logic in MethylCentroid
 import sys
 from pathlib import Path
 
-# Add MethylUtils to Python path
-methyl_utils_path = Path(__file__).parent.parent / "MethylUtils"
-if str(methyl_utils_path) not in sys.path:
+# Add methylutils from monorepo to Python path
+# In monorepo: packages/methylcentroid/methyl_centroid/tests/../../methylutils
+methyl_utils_path = Path(__file__).parent.parent.parent.parent / "methylutils"
+if methyl_utils_path.exists() and str(methyl_utils_path) not in sys.path:
     sys.path.insert(0, str(methyl_utils_path))
 
-# Add genomic_position_aligner to Python path
-gpa_path = Path(__file__).parent.parent / "MethylUtils" / "gpa_pkg"
-if str(gpa_path) not in sys.path:
-    sys.path.insert(0, str(gpa_path))
+# Note: genomic_position_aligner (gpa_pkg) is now part of methylutils package
+# No separate path addition needed
 
 try:
     from methyl_utils import is_gpu_available
