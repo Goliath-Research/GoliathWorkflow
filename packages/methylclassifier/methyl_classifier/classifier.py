@@ -158,9 +158,35 @@ class MethylClassifier:
             raise RuntimeError("No classifier loaded")
 
         return self.classifier.get_feature_info()
+    
+    def _choose_prediction_method(self) -> bool:
+        """
+        Choose prediction method based on smart defaults.
+        
+        Logic:
+        1. If metadata specifies prediction_method, use it
+        2. Otherwise, use sklearn for >10 DMPs (fast), beta for ≤10 DMPs (exact)
+        
+        Returns:
+            True for sklearn, False for beta
+        """
+        # Check metadata first
+        if 'prediction_method' in self.metadata:
+            return self.metadata['prediction_method'] == 'sklearn'
+        
+        # Smart default based on number of DMPs
+        n_dmps = self.metadata.get('n_dmps', 0)
+        
+        if n_dmps <= 10:
+            # Few DMPs: beta is fast enough and more precise
+            return False
+        else:
+            # Many DMPs: sklearn is much faster with excellent precision
+            return True
 
     def predict(self, methylation_data: np.ndarray,
                 availability_mask: Optional[np.ndarray] = None,
+                use_sklearn: Optional[bool] = None,
                 debug: bool = False) -> np.ndarray:
         """
         Predict classes for methylation data.
@@ -168,6 +194,8 @@ class MethylClassifier:
         Args:
             methylation_data: Array of methylation values
             availability_mask: Boolean mask indicating available positions
+            use_sklearn: If None, uses model's preferred method from metadata.
+                        If True, uses sklearn (fast). If False, uses beta (exact).
             debug: Enable debug output
 
         Returns:
@@ -175,11 +203,16 @@ class MethylClassifier:
         """
         if self.classifier is None:
             raise RuntimeError("No classifier loaded")
+        
+        # Smart default if not specified
+        if use_sklearn is None:
+            use_sklearn = self._choose_prediction_method()
 
-        return self.classifier.predict(methylation_data, availability_mask, debug)
+        return self.classifier.predict(methylation_data, availability_mask, use_sklearn, debug)
 
     def predict_proba(self, methylation_data: np.ndarray,
                      availability_mask: Optional[np.ndarray] = None,
+                     use_sklearn: Optional[bool] = None,
                      debug: bool = False) -> np.ndarray:
         """
         Predict class probabilities for methylation data.
@@ -187,6 +220,8 @@ class MethylClassifier:
         Args:
             methylation_data: Array of methylation values
             availability_mask: Boolean mask indicating available positions
+            use_sklearn: If None, uses model's preferred method from metadata.
+                        If True, uses sklearn (fast). If False, uses beta (exact).
             debug: Enable debug output
 
         Returns:
@@ -194,8 +229,12 @@ class MethylClassifier:
         """
         if self.classifier is None:
             raise RuntimeError("No classifier loaded")
+        
+        # Smart default if not specified
+        if use_sklearn is None:
+            use_sklearn = self._choose_prediction_method()
 
-        return self.classifier.predict_proba(methylation_data, availability_mask, debug)
+        return self.classifier.predict_proba(methylation_data, availability_mask, use_sklearn, debug)
 
 
 def extract_chrom_context_from_classifier(classifier_path: Path) -> Tuple[str, str]:
