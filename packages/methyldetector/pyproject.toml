@@ -20,6 +20,7 @@ pathlib = "^1.0.1"
 # Note: MethylUtils should be available in PYTHONPATH or installed separately
 # The container should have /home/ubuntu/MethylUtils in the Python path
 methylutils = {path = "../methylutils", develop = true}
+methyl-trainer = {path = "../methyltrainer", develop = true}
 
 # RAPIDS dependencies for GPU acceleration (installed in base image)
 # cudf = "^25.6.0"

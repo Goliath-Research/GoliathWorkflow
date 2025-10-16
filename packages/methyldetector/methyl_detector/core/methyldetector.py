@@ -29,6 +29,14 @@ from methyl_utils import MethylSample
 # Import MethylCentroidPair from MethylUtils for mathematical operations
 from methyl_utils import MethylCentroidPair
 
+# Import MethylTrainer for delegating training logic
+try:
+    from methyl_trainer import MethylTrainer, TrainingConfig
+except ImportError:
+    MethylTrainer = None
+    TrainingConfig = None
+    logger.warning("MethylTrainer not available - training delegation will not work")
+
 # Handle relative imports - try module import first, fall back to direct execution setup
 try:
     from ..models.config import MethylDetectorConfig
@@ -86,6 +94,40 @@ class MethylDetector:
         self.gpu_config = GPUConfig()  # From MethylUtils for memory management
         self.df = None  # Current working dataframe
         logger.debug("Initialized MethylDetector")
+    
+    def _create_trainer_config(self) -> 'TrainingConfig':
+        """Convert MethylDetectorConfig to TrainingConfig for delegation."""
+        if TrainingConfig is None:
+            raise ImportError("TrainingConfig not available")
+        
+        return TrainingConfig(
+            centroid1_path=str(self.config.centroid1_path),
+            centroid2_path=str(self.config.centroid2_path),
+            output_path=str(Path(self.config.output_dir) / f"classifier-{self.chrom}-{self.ctx}.pkl"),
+            chromosome=self.chrom,
+            context=self.ctx,
+            # Advanced filtering configuration
+            alpha=self.config.alpha,
+            min_N_pct=self.config.min_N_pct,
+            min_delta_mean=self.config.min_delta_mean,
+            max_bc=self.config.max_bc,
+            gamma=self.config.gamma,
+            min_effect_size=self.config.min_effect_size if hasattr(self.config, 'min_effect_size') else None,
+            biological_filters=True,
+            # Binary search configuration
+            target_auc=self.config.target_auc,
+            min_selected_dmps=self.config.min_selected_dmps if hasattr(self.config, 'min_selected_dmps') else None,
+            min_dmps_for_export=self.config.min_dmps_for_export,
+            # Validation configuration
+            validation_mode=self.config.validation_mode,
+            centroid1_validation_samples=self.config.centroid1_validation_samples,
+            centroid2_validation_samples=self.config.centroid2_validation_samples,
+            n_validation_samples=self.config.n_validation_samples,
+            # GPU configuration
+            use_gpu=self.config.use_gpu,
+            random_state=self.config.random_state,
+            verbose=True
+        )
 
     def run(self) -> MethylDetectorResult:
         """Run the complete DMP detection and filtering pipeline."""
@@ -103,18 +145,59 @@ class MethylDetector:
             traceback.print_exc()
             raise
 
-        # Step 2: Filter and select biological DMPs (DataFrame-centric)
-        logger.info("=== DMP FILTERING AND SELECTION PHASE ===")
-        logger.info("🚀 Applying biological filters...")
-        try:
-            # _filter_and_select_dmps returns ONLY the selected DMPs (not all with a flag)
-            biological_dmps_df = self._filter_and_select_dmps(dmp_df)
-            logger.info(f"✅ Found {len(biological_dmps_df):,} biological DMPs")
-        except Exception as e:
-            logger.error(f"❌ DMP filtering/selection failed: {e}")
-            import traceback
-            traceback.print_exc()
-            biological_dmps_df = pd.DataFrame()
+        # Step 2: Train classifier using MethylTrainer (DELEGATED)
+        # This includes filtering, binary search, and validation
+        biological_dmps_df = pd.DataFrame()
+        accuracy = None
+        
+        if not dmp_df.empty and self.config.output_dir and MethylTrainer is not None:
+            logger.info("Step 2: Training classifier using MethylTrainer...")
+            try:
+                # Create TrainingConfig from MethylDetectorConfig
+                trainer_config = self._create_trainer_config()
+                
+                # Create trainer and train from DMPs
+                trainer = MethylTrainer(trainer_config)
+                model_package = trainer.train_from_dmps(
+                    dmp_df=dmp_df,
+                    centroid1_path=Path(self.config.centroid1_path),
+                    centroid2_path=Path(self.config.centroid2_path),
+                    chromosome=self.chrom,
+                    context=self.ctx
+                )
+                
+                # Extract results
+                biological_dmps_df = model_package.get('selected_dmps_df', pd.DataFrame())
+                accuracy = model_package.get('validation_accuracy')
+                classifier = model_package.get('classifier')
+                
+                # Save model
+                if classifier is not None:
+                    output_dir = Path(self.config.output_dir)
+                    model_path = output_dir / f"classifier-{self.chrom}-{self.ctx}.pkl"
+                    
+                    import pickle
+                    with open(model_path, 'wb') as f:
+                        pickle.dump(model_package, f)
+                    logger.info(f"✅ Classifier saved to {model_path}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Training with MethylTrainer failed: {e}")
+                import traceback
+                traceback.print_exc()
+                biological_dmps_df = pd.DataFrame()
+                accuracy = None
+        elif MethylTrainer is None:
+            logger.warning("MethylTrainer not available, falling back to legacy method")
+            # Fallback to legacy method (keep old code for compatibility)
+            try:
+                biological_dmps_df = self._filter_and_select_dmps(dmp_df)
+                logger.info(f"✅ Found {len(biological_dmps_df):,} biological DMPs (legacy method)")
+            except Exception as e:
+                logger.error(f"❌ DMP filtering/selection failed: {e}")
+                import traceback
+                traceback.print_exc()
+                biological_dmps_df = pd.DataFrame()
 
         logger.debug("About to start Step 3...")
         # Step 3: Generate final results
@@ -123,92 +206,13 @@ class MethylDetector:
             dmp_df, biological_dmps_df=biological_dmps_df
         )
         logger.debug("Step 3 completed successfully")
-
-        # Step 4: Build classifier model
-        if not biological_dmps_df.empty and self.config.output_dir:
-            logger.info("Step 4: Building classifier model...")
-            output_dir = Path(self.config.output_dir)
-            model_path = output_dir / f"classifier-{self.chrom}-{self.ctx}.pkl"
-            
-            # Build classifier data from DataFrame (matching probabilistic_beta_classifier.py interface)
-            # Compute directions based on LLR moments (like in binary search)
-            alpha1 = biological_dmps_df['alpha1'].values
-            beta1 = biological_dmps_df['beta1'].values
-            alpha2 = biological_dmps_df['alpha2'].values
-            beta2 = biological_dmps_df['beta2'].values
-            
-            # Compute LLR moments to determine correct orientation
-            da = alpha1 - alpha2
-            db = beta1 - beta2
-            mu1_ind, _ = compute_beta_llr_moments(alpha1, beta1, da, db, use_gpu=False)
-            mu2_ind, _ = compute_beta_llr_moments(alpha2, beta2, da, db, use_gpu=False)
-            
-            # Direction: 1 if mu1 > mu2, else -1
-            directions = np.where(mu1_ind > mu2_ind, 1, -1)
-            
-            # Create classifier data
-            # Prepare weights - use equal weights if 'weight' column doesn't exist
-            if 'weight' in biological_dmps_df.columns:
-                weights = biological_dmps_df['weight'].values
-            else:
-                weights = np.ones(len(biological_dmps_df))
-            
-            classifier_data = {
-                'positions': biological_dmps_df['position'].values,
-                'alpha1': alpha1,
-                'beta1': beta1,
-                'alpha2': alpha2,
-                'beta2': beta2,
-                'weights': weights,
-                'directions': directions
-            }
-            
-            # Create and save classifier
-            from methyl_utils import ProbabilisticBetaClassifier
-            classifier = ProbabilisticBetaClassifier(classifier_data)
-            
-            # Package the model
-            model_package = {
-                'classifier': classifier,
-                'data': classifier_data,
-                'chromosome': self.chrom,
-                'context': self.ctx,
-                'n_dmps': len(biological_dmps_df),
-                'config': {
-                    'alpha': self.config.alpha,
-                    'min_delta_mean': self.config.min_delta_mean,
-                    'max_bc': self.config.max_bc,
-                    'target_auc': self.config.target_auc
-                }
-            }
-            
-            # Save the trained model
-            import pickle
-            with open(model_path, 'wb') as f:
-                pickle.dump(model_package, f)
-            logger.info(f"Classifier saved to {model_path}")
-            
-            # Validate classifier using configured validation mode
-            if not biological_dmps_df.empty:
-                if self.config.validation_mode == "real":
-                    # Validate on real samples from centroids
-                    logger.info("Using real sample validation mode")
-                    accuracy = self._validate_classifier_on_real_samples(
-                        classifier,
-                        biological_dmps_df
-                    )
-                    logger.info(f"Classifier validation on real samples: accuracy {accuracy * 100:.1f}%")
-                else:
-                    # Validate on synthetic samples (default)
-                    n_validation_samples = self.config.n_validation_samples  # Default 100 per class
-                    logger.info("Using synthetic sample validation mode")
-                    accuracy = self._validate_classifier_on_synthetic_samples(
-                        classifier, 
-                        biological_dmps_df, 
-                        n_validation_samples
-                    )
-                    logger.info(f"Classifier validation on {n_validation_samples} synthetic samples per class: accuracy {accuracy * 100:.1f}%")
-                result.training_accuracy = float(accuracy)
+        
+        # Update result with training accuracy if available
+        if accuracy is not None:
+            result.training_accuracy = float(accuracy)
+            if self.config.output_dir:
+                output_dir = Path(self.config.output_dir)
+                model_path = output_dir / f"classifier-{self.chrom}-{self.ctx}.pkl"
                 result.classifier_model_path = str(model_path)
         
         # Step 5: Save results
@@ -292,8 +296,7 @@ class MethylDetector:
         """
         Validate classifier on real samples from the centroids.
         
-        This loads actual sample data from HDF5 files (either from config or centroid metadata)
-        and tests the classifier's accuracy on these real samples.
+        This reuses samples loaded during binary search if available, otherwise loads them.
         
         Args:
             classifier: Trained ProbabilisticBetaClassifier
@@ -303,6 +306,38 @@ class MethylDetector:
             Accuracy (float) on real samples
         """
         logger.info("Validating classifier on real samples...")
+        
+        # Check if we already have samples loaded from binary search
+        if (hasattr(self, '_validation_samples') and 
+            self._validation_samples is not None and 
+            self._validation_labels is not None):
+            logger.info("✅ Reusing validation samples from binary search (already in memory)")
+            
+            # Extract DMP positions from biological_dmps_df
+            selected_positions = biological_dmps_df['position'].values
+            
+            # Find indices of selected positions in the cached validation data
+            position_indices = np.isin(self._validation_dmp_positions, selected_positions)
+            
+            if not np.any(position_indices):
+                logger.warning("No matching positions in cached samples, falling back to synthetic validation")
+                return self._validate_classifier_on_synthetic_samples(
+                    classifier, biological_dmps_df, self.config.n_validation_samples
+                )
+            
+            # Extract features for selected DMPs
+            X_val = self._validation_samples[:, position_indices]
+            y_val = self._validation_labels
+            
+            # Evaluate classifier
+            y_pred = classifier.predict(X_val)
+            accuracy = np.mean(y_pred == y_val)
+            
+            logger.info(f"Classifier validation on real samples: accuracy {accuracy*100:.1f}%")
+            return accuracy
+        
+        # If samples not cached, load them (original logic)
+        logger.info("Loading validation samples...")
         
         # Get validation sample paths
         sample_paths_1 = self._get_validation_sample_paths(self.config.centroid1_path, 
@@ -320,11 +355,13 @@ class MethylDetector:
         logger.info(f"Loading {len(sample_paths_2)} samples from centroid 2")
         
         # Extract DMP positions
-        dmp_positions = biological_dmps_df['pos'].values
+        dmp_positions = biological_dmps_df['position'].values
         
         # Get chromosome and context from first centroid
         from ..utils.file_utils import get_chromosome_context_from_filename
-        chrom, ctx = get_chromosome_context_from_filename(self.config.centroid1_path)
+        chrom_info = get_chromosome_context_from_filename(self.config.centroid1_path)
+        chrom = chrom_info['chromosome']
+        ctx = chrom_info['context']
         
         # Load methylation values for class 0 (centroid 1 samples)
         samples_class0_data = []
@@ -410,6 +447,127 @@ class MethylDetector:
         
         return []
     
+    def _load_validation_samples_for_binary_search(self, dmp_df: pd.DataFrame) -> Optional[tuple]:
+        """
+        Load validation samples once before binary search.
+        
+        Args:
+            dmp_df: DataFrame with all candidate DMPs
+            
+        Returns:
+            Tuple of (samples_array, labels_array, dmp_positions) or None if loading fails
+        """
+        try:
+            # Get sample paths from both centroids
+            centroid1_samples = self.config.centroid1_validation_samples or []
+            centroid2_samples = self.config.centroid2_validation_samples or []
+            
+            sample_paths_1 = self._get_validation_sample_paths(
+                self.config.centroid1_path, 
+                centroid1_samples if isinstance(centroid1_samples, list) else []
+            )
+            sample_paths_2 = self._get_validation_sample_paths(
+                self.config.centroid2_path,
+                centroid2_samples if isinstance(centroid2_samples, list) else []
+            )
+            
+            if not sample_paths_1 or not sample_paths_2:
+                logger.warning("No validation samples available for binary search")
+                return None
+            
+            # Extract DMP positions
+            dmp_positions = dmp_df['position'].values
+            
+            # Get chromosome and context
+            from ..utils.file_utils import get_chromosome_context_from_filename
+            chrom_info = get_chromosome_context_from_filename(self.config.centroid1_path)
+            chrom = chrom_info['chromosome']
+            ctx = chrom_info['context']
+            
+            logger.info(f"Loading {len(sample_paths_1)} samples from centroid 1 at {len(dmp_positions)} positions")
+            logger.info(f"Loading {len(sample_paths_2)} samples from centroid 2 at {len(dmp_positions)} positions")
+            
+            # Load all samples
+            samples_list = []
+            labels_list = []
+            
+            # Load class 0 samples (centroid 1)
+            for sample_path in sample_paths_1:
+                sample_values = self._load_sample_methylation_at_dmps(
+                    sample_path, chrom, ctx, dmp_positions
+                )
+                if sample_values is not None:
+                    samples_list.append(sample_values)
+                    labels_list.append(0)
+            
+            # Load class 1 samples (centroid 2)
+            for sample_path in sample_paths_2:
+                sample_values = self._load_sample_methylation_at_dmps(
+                    sample_path, chrom, ctx, dmp_positions
+                )
+                if sample_values is not None:
+                    samples_list.append(sample_values)
+                    labels_list.append(1)
+            
+            if len(samples_list) < 4:  # Need at least 2 samples per class
+                logger.warning(f"Too few samples loaded ({len(samples_list)}), need at least 4")
+                return None
+            
+            # Stack into arrays
+            samples_array = np.vstack(samples_list)  # Shape: (n_samples, n_positions)
+            labels_array = np.array(labels_list)
+            
+            logger.info(f"✅ Loaded validation data: {samples_array.shape[0]} samples × {samples_array.shape[1]} positions")
+            
+            return (samples_array, labels_array, dmp_positions)
+            
+        except Exception as e:
+            logger.warning(f"Failed to load validation samples for binary search: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _compute_real_auc_from_samples(self, df_subset: pd.DataFrame) -> float:
+        """
+        Compute real AUC using pre-loaded validation samples.
+        
+        Args:
+            df_subset: Subset of DMPs to evaluate
+            
+        Returns:
+            AUC value
+        """
+        try:
+            from sklearn.linear_model import LogisticRegression
+            from sklearn.metrics import roc_auc_score
+            
+            # Get positions for this subset
+            subset_positions = df_subset['position'].values
+            
+            # Find indices of subset positions in the full validation data
+            position_indices = np.isin(self._validation_dmp_positions, subset_positions)
+            
+            if not np.any(position_indices):
+                return 0.5
+            
+            # Extract features for this subset
+            X = self._validation_samples[:, position_indices]
+            y = self._validation_labels
+            
+            # Train simple classifier
+            clf = LogisticRegression(max_iter=1000, random_state=42, solver='lbfgs')
+            clf.fit(X, y)
+            
+            # Compute AUC
+            y_pred = clf.predict_proba(X)[:, 1]
+            auc = roc_auc_score(y, y_pred)
+            
+            return auc
+            
+        except Exception as e:
+            logger.debug(f"Failed to compute real AUC: {e}")
+            return 0.5
+    
     def _load_sample_methylation_at_dmps(
         self,
         sample_dir: Union[str, Path],
@@ -444,7 +602,19 @@ class MethylDetector:
             sample_pos_idx = np.searchsorted(sample.pos, dmp_positions)
             
             # Verify positions actually match (handle out of bounds)
-            valid_mask = (sample_pos_idx < len(sample.pos)) & (sample.pos[sample_pos_idx] == dmp_positions)
+            # IMPORTANT: Check bounds BEFORE accessing sample.pos with the indices
+            valid_mask = (sample_pos_idx < len(sample.pos))
+            
+            # For valid indices, check if positions actually match
+            if np.any(valid_mask):
+                # Only access sample.pos for valid indices
+                valid_sample_pos_idx = sample_pos_idx[valid_mask]
+                position_match = sample.pos[valid_sample_pos_idx] == dmp_positions[valid_mask]
+                
+                # Update valid_mask to include only matching positions
+                temp_mask = np.zeros(len(dmp_positions), dtype=bool)
+                temp_mask[valid_mask] = position_match
+                valid_mask = temp_mask
             
             # Extract methylation values
             methyl_values = np.full(len(dmp_positions), np.nan, dtype=np.float32)
@@ -862,7 +1032,7 @@ class MethylDetector:
 
     def _compute_subset_performance(self, df_subset: pd.DataFrame, use_gpu: bool = False) -> float:
         """
-        Compute AUC performance metric for a subset of DMPs using LLR moments.
+        Compute AUC performance metric for a subset of DMPs using LLR moments or real samples.
         Based on oldselection.py compute_subset_performance.
         
         Args:
@@ -874,6 +1044,12 @@ class MethylDetector:
         """
         if len(df_subset) == 0:
             return 0.5
+        
+        # If we have pre-loaded validation samples, use them for real AUC
+        if self._validation_samples is not None and self._validation_labels is not None:
+            return self._compute_real_auc_from_samples(df_subset)
+        
+        # Otherwise, use theoretical performance from Beta moments
         
         try:
             import cupy as cp
@@ -965,6 +1141,19 @@ class MethylDetector:
         
         # Sort by effect size (descending)
         sorted_df = dmp_df.sort_values('effect_size', ascending=False).reset_index(drop=True)
+        
+        # Load validation samples once if available (for real AUC computation during binary search)
+        self._validation_samples = None
+        self._validation_labels = None
+        self._validation_dmp_positions = None
+        
+        if (self.config.validation_mode == "real" and 
+            (self.config.centroid1_validation_samples or self.config.centroid2_validation_samples)):
+            logger.info("📊 Loading validation samples for binary search...")
+            samples_data = self._load_validation_samples_for_binary_search(sorted_df)
+            if samples_data is not None:
+                self._validation_samples, self._validation_labels, self._validation_dmp_positions = samples_data
+                logger.info(f"✅ Loaded {len(self._validation_samples)} validation samples with {len(self._validation_dmp_positions)} positions")
         
         # If min_selected_dmps is specified and we have fewer DMPs, return all
         if min_selected and n_dmps <= min_selected:

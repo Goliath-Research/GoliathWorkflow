@@ -72,6 +72,9 @@ class ProbabilisticBetaClassifier:
 
         self.data = data
         self.n_dmps = n_positions
+        
+        # Optional sklearn model for fast prediction
+        self._sklearn_model = None
 
     def predict_proba(self, X: np.ndarray,
                      availability_mask: Optional[np.ndarray] = None,
@@ -171,22 +174,47 @@ class ProbabilisticBetaClassifier:
 
         return posterior_probs
 
+    def fit_sklearn_model(self, X: np.ndarray, y: np.ndarray):
+        """
+        Train a fast sklearn model from methylation values.
+        
+        This provides a faster prediction method that can be used when speed
+        is more important than exact probabilistic inference. The Beta distribution
+        parameters are still stored for probabilistic interpretation.
+        
+        Args:
+            X: Methylation values (n_samples, n_dmps)
+            y: Class labels (n_samples,)
+        """
+        from sklearn.linear_model import LogisticRegression
+        self._sklearn_model = LogisticRegression(max_iter=1000, random_state=42)
+        self._sklearn_model.fit(X, y)
+    
     def predict(self, X: np.ndarray,
                availability_mask: Optional[np.ndarray] = None,
+               use_sklearn: bool = True,
                debug: bool = False) -> np.ndarray:
         """
         Predict class labels for samples in X.
+        
+        Uses sklearn model (fast) if available and requested, otherwise falls back
+        to Beta distribution method (slower, more accurate).
 
         Args:
             X: Feature matrix of shape (n_samples, n_features)
-            availability_mask: Boolean mask indicating available positions
-            debug: If True, print debug information
+            availability_mask: Boolean mask indicating available positions (only for Beta method)
+            use_sklearn: If True and sklearn model available, use it for prediction
+            debug: If True, print debug information (only for Beta method)
 
         Returns:
             Array of class predictions (0 or 1) of shape (n_samples,)
         """
-        probs = self.predict_proba(X, availability_mask, debug)
-        return np.argmax(probs, axis=1)
+        if use_sklearn and self._sklearn_model is not None:
+            return self._sklearn_model.predict(X)
+        else:
+            # Fall back to Beta distribution method
+            probs = self.predict_proba(X, availability_mask, debug)
+            return np.argmax(probs, axis=1)
 
     def predict_log_proba(self, X: np.ndarray,
                          availability_mask: Optional[np.ndarray] = None,
