@@ -56,6 +56,9 @@ class TrainingConfig:
     centroid2_validation_samples: Optional[List[str]] = None
     n_validation_samples: int = 100
     
+    # Prediction method configuration
+    prediction_method: str = "sklearn"  # "sklearn" (fast, trained model) or "beta" (exact probabilistic)
+    
     # GPU configuration
     use_gpu: bool = True
     random_state: int = 42

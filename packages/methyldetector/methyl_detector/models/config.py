@@ -100,6 +100,14 @@ class MethylDetectorConfig(BaseModel):
         default=None,
         description="Validation samples for centroid2. Can be 'use_metadata' to read from centroid metadata, or list of sample directory paths"
     )
+    
+    # ----------------
+    # Prediction Method
+    # ----------------
+    prediction_method: str = Field(
+        default="sklearn",
+        description="Prediction method: 'sklearn' (fast, trained logistic regression) or 'beta' (exact probabilistic using Beta distributions). Both return proper probabilities, but sklearn is faster."
+    )
 
     # ----------------
     # System Settings

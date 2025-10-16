@@ -129,22 +129,26 @@ class MethylTrainer:
             'chromosome': chromosome,
             'context': context,
             'n_dmps': len(biological_dmps_df),
+            'prediction_method': self.config.prediction_method,  # Store user's preferred prediction method
             'metadata': {
                 'chromosome': chromosome,
                 'context': context,
                 'n_dmps': len(biological_dmps_df),
                 'validation_accuracy': accuracy,
+                'prediction_method': self.config.prediction_method,
                 'config': {
                     'alpha': self.config.alpha,
                     'min_delta_mean': self.config.min_delta_mean,
                     'max_bc': self.config.max_bc,
                     'target_auc': self.config.target_auc,
-                    'validation_mode': self.config.validation_mode
+                    'validation_mode': self.config.validation_mode,
+                    'prediction_method': self.config.prediction_method
                 }
             }
         }
         
-        logger.info(f"✅ Training complete: {len(biological_dmps_df)} DMPs, accuracy={accuracy:.3f if accuracy else 'N/A'}")
+        accuracy_str = f"{accuracy:.3f}" if accuracy is not None else "N/A"
+        logger.info(f"✅ Training complete: {len(biological_dmps_df)} DMPs, accuracy={accuracy_str}")
         
         return model_package
     
@@ -197,7 +201,28 @@ class MethylTrainer:
         logger.info(f"✅ Biological filtering complete: {initial_count:,} → {len(self.df):,} DMPs ({(len(self.df)/initial_count)*100:.1f}% overall retention)")
     
     def _compute_effect_size(self) -> None:
-        """Compute effect size metric combining statistical and biological significance."""
+        """
+        Compute variance-weighted, overlap-penalized effect size.
+        
+        Effect Size Formula:
+            effect_size = |delta_mu| / sqrt(var1² + var2²) * (1 - BC)^gamma
+        
+        Where:
+            - delta_mu: Difference in log-likelihood ratio means between centroids
+            - var1, var2: Variance of LLR distributions for each centroid
+            - BC: Bhattacharyya Coefficient (distribution overlap, 0=distinct, 1=identical)
+            - gamma: Overlap penalty exponent (default 1.5)
+        
+        This is NOT simply |delta_mean| / (BC + eps), but a more sophisticated metric that:
+            1. Weights by statistical confidence (variance of LLR distributions)
+            2. Penalizes overlapping distributions with (1-BC)^gamma
+            3. Uses log-likelihood ratio moments for proper probabilistic interpretation
+        
+        Higher effect_size values indicate DMPs with:
+            - Large mean methylation differences
+            - Low variance (high confidence)
+            - Minimal distribution overlap
+        """
         if len(self.df) == 0:
             return
         
@@ -207,30 +232,33 @@ class MethylTrainer:
         alpha2 = self.df['alpha2'].values
         beta2 = self.df['beta2'].values
         
-        # Compute LLR moments
+        # Compute LLR moments for variance-weighted effect size
+        # This uses the log-likelihood ratio distributions, not simple delta_mean
         da = alpha1 - alpha2
         db = beta1 - beta2
         mu_d, var_d = compute_beta_llr_moments(alpha1, beta1, da, db, use_gpu=self.config.use_gpu)
         mu_h, var_h = compute_beta_llr_moments(alpha2, beta2, da, db, use_gpu=self.config.use_gpu)
         
-        # Effect size = |delta_mu| / sqrt(var_d + var_h)
+        # Standardized effect: |delta_mu| / sqrt(total_variance)
+        # This is analogous to Cohen's d but for LLR distributions
         delta_mu = np.abs(mu_d - mu_h)
         total_var = var_d + var_h
         
-        # Handle zero variance
+        # Handle zero variance (numerical stability)
         total_var = np.where(total_var > 1e-10, total_var, 1e-10)
         standardized_effect = delta_mu / np.sqrt(total_var)
         
-        # Get Bhattacharyya coefficient
+        # Get Bhattacharyya coefficient (distribution overlap)
         if 'bhattacharyya_coefficient' in self.df.columns:
             bc = self.df['bhattacharyya_coefficient'].values
         else:
             bc = np.ones(len(self.df)) * 0.5
         
-        # Overlap penalty: (1 - BC)^gamma
+        # Apply overlap penalty: (1 - BC)^gamma
+        # This heavily penalizes DMPs with overlapping distributions
         overlap_penalty = np.power(1.0 - bc, self.config.gamma)
         
-        # Final effect size
+        # Final effect size = standardized_effect * overlap_penalty
         self.df['effect_size'] = standardized_effect * overlap_penalty
         
         logger.debug(f"Effect size range: {self.df['effect_size'].min():.6f} - {self.df['effect_size'].max():.6f}")
@@ -688,9 +716,12 @@ class MethylTrainer:
             if np.any(position_indices):
                 X_val = self._validation_samples[:, position_indices]
                 y_val = self._validation_labels
-                y_pred = classifier.predict(X_val)
+                # Use configured prediction method
+                use_sklearn = (self.config.prediction_method == "sklearn")
+                logger.info(f"🔄 Predicting with {self.config.prediction_method} method on {X_val.shape[0]} samples × {X_val.shape[1]} DMPs...")
+                y_pred = classifier.predict(X_val, use_sklearn=use_sklearn)
                 accuracy = np.mean(y_pred == y_val)
-                logger.info(f"Classifier validation: accuracy {accuracy*100:.1f}%")
+                logger.info(f"Classifier validation: accuracy {accuracy*100:.1f}% (method: {self.config.prediction_method})")
                 return accuracy
         
         # Perform validation based on mode
@@ -731,13 +762,14 @@ class MethylTrainer:
         X_val = np.vstack([samples_class0, samples_class1])
         y_true = np.array([0] * n_samples + [1] * n_samples)
         
-        # Predict
-        y_pred = classifier.predict(X_val)
+        # Predict using configured method
+        use_sklearn = (self.config.prediction_method == "sklearn")
+        y_pred = classifier.predict(X_val, use_sklearn=use_sklearn)
         
         # Calculate accuracy
         accuracy = np.mean(y_pred == y_true)
         
-        logger.info(f"Validation on {n_samples} synthetic samples per class: accuracy {accuracy*100:.1f}%")
+        logger.info(f"Validation on {n_samples} synthetic samples per class: accuracy {accuracy*100:.1f}% (method: {self.config.prediction_method})")
         
         return accuracy
     
@@ -803,13 +835,14 @@ class MethylTrainer:
         # Create labels
         y_true = np.array([0] * len(samples_class0_data) + [1] * len(samples_class1_data))
         
-        # Predict
-        y_pred = classifier.predict(X_val)
+        # Predict using configured method
+        use_sklearn = (self.config.prediction_method == "sklearn")
+        y_pred = classifier.predict(X_val, use_sklearn=use_sklearn)
         
         # Calculate accuracy
         accuracy = np.mean(y_pred == y_true)
         
-        logger.info(f"Classifier validation on real samples: accuracy {accuracy*100:.1f}%")
+        logger.info(f"Classifier validation on real samples: accuracy {accuracy*100:.1f}% (method: {self.config.prediction_method})")
         
         return accuracy
 
