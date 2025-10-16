@@ -12,14 +12,14 @@ with open(os.path.join(this_directory, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name="methylclassifier",
+    name="methyl_classifier",
     version="0.1.0",
     author="MethylClassifier Development Team",
     author_email="",
     description="Command Line Tool for Methylation-Based Sample Classification",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/your-org/methylclassifier",
+    url="https://github.com/your-org/methyl_classifier",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 3 - Alpha",
@@ -54,7 +54,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "methylclassifier=methylclassifier.cli:main",
+            "methyl_classifier=methyl_classifier.cli:main",
         ],
     },
     include_package_data=True,

@@ -24,13 +24,13 @@ poetry install
 ### Command Line
 
 ```bash
-python -m methylcluster.cli --config config.json
+python -m methyl_cluster.cli --config config.json
 ```
 
 ### Python API
 
 ```python
-from methylcluster import MethylCluster, MethylClusterConfig
+from methyl_cluster import MethylCluster, MethylClusterConfig
 
 config = MethylClusterConfig.from_file("config.json")
 cluster = MethylCluster(config)

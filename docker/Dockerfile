@@ -25,9 +25,14 @@ RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor
     rm -rf /var/lib/apt/lists/*
 
 # Install Python packages with CUDA support
-# Install pip
+# Install pip and Poetry
 RUN apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*
 RUN pip install --upgrade pip setuptools wheel
+
+# Install Poetry for package management
+RUN curl -sSL https://install.python-poetry.org | python3 - && \
+    ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
+    poetry config virtualenvs.create false
 
 # Install CuPy with CUDA 12.1 support
 RUN pip install cupy-cuda12x

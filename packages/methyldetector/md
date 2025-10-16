@@ -10,6 +10,6 @@ fi
 
 # Execute the command inside the container
 # Working directory is /workspace which maps to /home/ubuntu/MethylPipeline
-exec docker exec -w /workspace methylpipeline \
-  python3 -m methyl_detector.cli.main "$@"
+exec docker exec -it -w /workspace methylpipeline \
+    poetry run python -m methyl_detector.cli.main "$@"
 

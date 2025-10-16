@@ -33,7 +33,7 @@ python -m methylcentroid.centroid_cli --config config.json
 ### Python API
 
 ```python
-from methylcentroid.methyl_centroid import MethylCentroid
+from methyl_centroid.methyl_centroid import MethylCentroid
 
 mc = MethylCentroid(
     add_samples=["path/to/sample1", "path/to/sample2"],

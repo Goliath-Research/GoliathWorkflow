@@ -76,7 +76,7 @@ pip install -r requirements.txt
 
 ```bash
 # Test CLI is available
-methylmapper --version
+methyl_mapper --version
 
 # Should output: MethylMapper 0.1.0
 ```
@@ -84,7 +84,7 @@ methylmapper --version
 ### Test Python Import
 
 ```bash
-python -c "from methylmapper import DMPMapper, MethylMapperConfig; print('✓ MethylMapper installed successfully')"
+python -c "from methyl_mapper import DMPMapper, MethylMapperConfig; print('✓ MethylMapper installed successfully')"
 ```
 
 ### Test ODBC Driver
@@ -136,7 +136,7 @@ Edit `my_config.json` with your credentials:
 
 ```bash
 python -c "
-from methylmapper import MethylMapperConfig, AzureSQLConnection
+from methyl_mapper import MethylMapperConfig, AzureSQLConnection
 config = MethylMapperConfig.parse_file('my_config.json')
 with AzureSQLConnection(config.database) as db:
     print('✓ Database connection successful')
@@ -189,7 +189,7 @@ position,chromosome,context,q_value,delta_mean,overlap,effect_size
 ### Run Test Mapping
 
 ```bash
-methylmapper --input test_dmps.csv \
+methyl_mapper --input test_dmps.csv \
              --config my_config.json \
              --sample-id 99999 \
              --verbose
@@ -357,14 +357,14 @@ Modify `config.py` `get_connection_string()` method for custom connection parame
 ## Uninstallation
 
 ```bash
-pip uninstall methylmapper
+pip uninstall methyl_mapper
 ```
 
 ## Next Steps
 
 1. **Run with MethylDetector output**:
    ```bash
-   methylmapper --input ../MethylDetector/output/biological_dmps-chr1-CG.csv \
+   methyl_mapper --input ../MethylDetector/output/biological_dmps-chr1-CG.csv \
                 --config my_config.json \
                 --sample-id 12345
    ```

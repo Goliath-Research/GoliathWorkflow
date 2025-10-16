@@ -105,19 +105,15 @@ class MethylDetector:
 
         # Step 2: Filter and select biological DMPs (DataFrame-centric)
         logger.info("=== DMP FILTERING AND SELECTION PHASE ===")
-        if self.config.apply_dmp_filtering:
-            logger.info("🚀 Applying biological filters...")
-            try:
-                # _filter_and_select_dmps returns ONLY the selected DMPs (not all with a flag)
-                biological_dmps_df = self._filter_and_select_dmps(dmp_df)
-                logger.info(f"✅ Found {len(biological_dmps_df):,} biological DMPs")
-            except Exception as e:
-                logger.error(f"❌ DMP filtering/selection failed: {e}")
-                import traceback
-                traceback.print_exc()
-                biological_dmps_df = pd.DataFrame()
-        else:
-            logger.info("⏭️ DMP filtering disabled")
+        logger.info("🚀 Applying biological filters...")
+        try:
+            # _filter_and_select_dmps returns ONLY the selected DMPs (not all with a flag)
+            biological_dmps_df = self._filter_and_select_dmps(dmp_df)
+            logger.info(f"✅ Found {len(biological_dmps_df):,} biological DMPs")
+        except Exception as e:
+            logger.error(f"❌ DMP filtering/selection failed: {e}")
+            import traceback
+            traceback.print_exc()
             biological_dmps_df = pd.DataFrame()
 
         logger.debug("About to start Step 3...")

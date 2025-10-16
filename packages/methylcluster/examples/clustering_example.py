@@ -8,7 +8,7 @@ This script shows how to:
 """
 
 from pathlib import Path
-from methylcluster import MethylCluster, MethylClusterConfig, ClusterMetric
+from methyl_cluster import MethylCluster, MethylClusterConfig, ClusterMetric
 
 
 def main():

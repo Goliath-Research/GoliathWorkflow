@@ -107,7 +107,7 @@ git remote -v
 
 Your new repository will contain:
 
-- `methylclassifier/` - Main Python package
+- `methyl_classifier/` - Main Python package
 - `tests/` - Test suite
 - `setup.py` - Package configuration
 - `requirements.txt` - Dependencies

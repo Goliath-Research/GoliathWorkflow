@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 
 # Add paths
-methylclassifier_dir = Path(__file__).parent / 'methylclassifier'
-sys.path.insert(0, str(methylclassifier_dir))
+methyl_classifier_dir = Path(__file__).parent / 'methyl_classifier'
+sys.path.insert(0, str(methyl_classifier_dir))
 
 print("Testing imports...")
 

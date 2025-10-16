@@ -9,6 +9,7 @@ readme = "README.md"
 repository = "https://github.com/methylutils/methylutils"
 documentation = "https://methylutils.readthedocs.io/"
 keywords = ["methylation", "genomics", "bioinformatics", "gpu", "cuda", "nvidia", "gh200"]
+packages = [{include = "methyl_utils"}]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",

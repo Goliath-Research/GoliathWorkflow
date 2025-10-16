@@ -24,13 +24,13 @@ poetry install
 ### Command Line
 
 ```bash
-methyltrainer --centroid1 group1_chr1-CG.h5 --centroid2 group2_chr1-CG.h5 --output model.pkl
+methyl_trainer --centroid1 group1_chr1-CG.h5 --centroid2 group2_chr1-CG.h5 --output model.pkl
 ```
 
 ### Python API
 
 ```python
-from methyltrainer import MethylTrainerConfig, train_classifier
+from methyl_trainer import MethylTrainerConfig, train_classifier
 
 config = MethylTrainerConfig(centroid1_path="c1.h5", centroid2_path="c2.h5", output_path="model.pkl")
 model = train_classifier(config)

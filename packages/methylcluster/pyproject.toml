@@ -1,13 +1,14 @@
 [tool.poetry]
-name = "methylcluster"
+name = "methyl_cluster"
 version = "1.0.0"
 description = "HDBSCAN clustering for methylation samples with GPU acceleration"
 authors = ["David Izada Rodriguez <dizada@epimethyl.com>"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/epimethyl/MethylPipeline"
-documentation = "https://github.com/epimethyl/MethylPipeline/tree/main/packages/methylcluster"
+documentation = "https://github.com/epimethyl/MethylPipeline/tree/main/packages/methyl_cluster"
 keywords = ["bioinformatics", "methylation", "clustering", "HDBSCAN", "GPU"]
+packages = [{include = "methyl_cluster"}]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -39,7 +40,7 @@ flake8 = ">=4.0.0"
 mypy = ">=0.950"
 
 [tool.poetry.scripts]
-methylcluster = "methylcluster.cli:main"
+methyl_cluster = "methyl_cluster.cli:main"
 
 [tool.black]
 line-length = 100

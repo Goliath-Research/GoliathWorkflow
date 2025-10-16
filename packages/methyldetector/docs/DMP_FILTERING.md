@@ -19,32 +19,65 @@ Traditional DMPs: All significant positions (q < 0.05)
 Filtered DMPs: Highly discriminative subset with maximum biological meaning
 ```
 
-## Available Filtering Methods
+## DMP Filtering in MethylDetector
 
-### 1. Combined Method (Recommended)
-Uses multiple metrics simultaneously for robust selection:
-- Distribution overlap ≤ 0.6 (configurable)
-- Jeffreys divergence ≥ 0.5 (configurable)
-- AUC score ≥ 0.7 (configurable)
-- Delta mean ≥ 0.2 (configurable)
+MethylDetector provides advanced filtering of Differentially Methylated Positions (DMPs) to select those with the highest discrimination power between experimental groups.
 
-### 2. Overlap-Based Filtering
-Selects DMPs with minimal distribution overlap:
-- Measures shared area between Beta distributions
-- Lower overlap = higher discrimination
-- Computationally intensive but highly accurate
+### Key Features
+- **Effect Size Metrics**: Delta mean, distribution overlap, Jeffreys divergence, Cohen's d, AUC
+- **GPU Acceleration**: For large-scale computations
+- **Flexible Thresholds**: Customizable filtering criteria
+- **Export Options**: CSV and JSON outputs with statistics
 
-### 3. Divergence-Based Filtering
-Uses Jeffreys divergence for distribution dissimilarity:
-- Symmetric KL divergence between Beta distributions
-- Higher values indicate greater difference
-- Fast closed-form calculation
+### Configuration
+Enable DMP filtering in your config:
 
-### 4. AUC-Based Filtering
-Treats methylation levels as binary classifiers:
-- Simulates samples from fitted Beta distributions
-- Computes ROC AUC for discriminative power
-- Most biologically interpretable metric
+```json
+{
+    "apply_dmp_filtering": true,
+    "dmp_filter_method": "combined",
+    "min_overlap": 0.6,
+    "min_delta_mean": 0.2,
+    "min_jeffreys_divergence": 0.5,
+    "min_cohen_d": 0.8,
+    "min_auc": 0.7,
+    "max_selected_dmps": 100
+}
+```
+
+### Usage Example
+```python
+from methyl_detector import MethylDetector
+from methyl_detector.models.config import MethylDetectorConfig
+from methyl_detector.core.dmp_filter import DMPFilter
+
+config = MethylDetectorConfig(
+    # ... other params ...
+    apply_dmp_filtering=True,
+    dmp_filter_method="combined",
+    # ... filtering thresholds ...
+)
+
+detector = MethylDetector(config)
+result = detector.run()
+
+# For manual filtering (advanced)
+dmp_filter = DMPFilter(
+    min_overlap=0.6,
+    min_Δμ=0.2,
+    # ... other params ...
+)
+filtered = dmp_filter.filter_dmps(result.statistical_dmps)  # Assuming result provides DMP data
+```
+
+### Effect Size Metrics Explained
+- **Delta Mean (Δμ)**: Absolute difference in means (|μ1 - μ2|)
+- **Distribution Overlap**: Fraction of overlapping probability mass
+- **Jeffreys Divergence (JD)**: Symmetric KL divergence measure
+- **Cohen's d**: Standardized mean difference
+- **AUC**: Area under ROC curve for single-feature classification
+
+For detailed formulas and implementation, see the source code.
 
 ## Mathematical Background
 

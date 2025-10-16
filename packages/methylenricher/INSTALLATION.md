@@ -27,7 +27,7 @@ pip install -e .
 ### 2. Verify Installation
 
 ```bash
-methylenricher --version
+methyl_enricher --version
 ```
 
 You should see: `MethylEnricher 0.1.0`
@@ -36,7 +36,7 @@ You should see: `MethylEnricher 0.1.0`
 
 ```bash
 # Run enrichment on example gene list
-methylenricher --input example_genes.txt --outdir test_results --top 30
+methyl_enricher --input example_genes.txt --outdir test_results --top 30
 
 # Check results
 ls test_results/
@@ -61,20 +61,20 @@ MethylEnricher requires the following Python packages:
 ### Basic Usage
 
 ```bash
-methylenricher --input genes.txt --outdir results
+methyl_enricher --input genes.txt --outdir results
 ```
 
 ### Advanced Usage
 
 ```bash
 # Analyze top 100 genes with custom libraries
-methylenricher --input genes.txt \
+methyl_enricher --input genes.txt \
                --outdir results \
                --top 100 \
                --libraries KEGG_2021_Human Reactome_2022
 
 # Use stricter significance cutoff
-methylenricher --input genes.txt \
+methyl_enricher --input genes.txt \
                --outdir results \
                --cutoff 0.01
 ```
@@ -82,7 +82,7 @@ methylenricher --input genes.txt \
 ### List Available Libraries
 
 ```bash
-methylenricher --list-libraries
+methyl_enricher --list-libraries
 ```
 
 ## Integration with Methylation Workflow
@@ -107,7 +107,7 @@ if 'gene' in df.columns:
 
 # 3. Run enrichment analysis
 cd /home/ubuntu/MethylEnricher
-methylenricher --input genes_for_enrichment.txt \
+methyl_enricher --input genes_for_enrichment.txt \
                --outdir enrichment_results \
                --top 200
 ```
@@ -146,7 +146,7 @@ pip install -e .
 ## Uninstallation
 
 ```bash
-pip uninstall methylenricher
+pip uninstall methyl_enricher
 ```
 
 ## Development Installation

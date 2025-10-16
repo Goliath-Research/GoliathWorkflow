@@ -214,7 +214,7 @@ docker run --gpus all -v $(pwd):/workspace methylcentroid-gpu python benchmark_g
 
 ### **Basic Usage**
 ```python
-from methylcentroid.methyl_centroid import MethylCentroid
+from methyl_centroid.methyl_centroid import MethylCentroid
 
 # Automatic GPU detection and acceleration - no code changes needed!
 mc = MethylCentroid(
