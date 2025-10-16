@@ -6,7 +6,9 @@ models from pairs of methylation centroids.
 """
 
 __version__ = "0.1.0"
-__all__ = ["train_from_centroids"]
+__all__ = ["MethylTrainer", "TrainingConfig", "train_from_centroids"]
 
+from .trainer_class import MethylTrainer
+from .config import TrainingConfig
 from .trainer import train_from_centroids
 

@@ -29,10 +29,13 @@ RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor
 RUN apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*
 RUN pip install --upgrade pip setuptools wheel
 
-# Install Poetry for package management
-RUN curl -sSL https://install.python-poetry.org | python3 - && \
-    ln -s /root/.local/bin/poetry /usr/local/bin/poetry && \
-    poetry config virtualenvs.create false
+# Install Poetry for package management (via pip for system-wide access)
+# Configure Poetry to not use virtualenvs and set cache to /tmp for non-root users
+RUN pip install poetry && \
+    poetry config virtualenvs.create false && \
+    poetry config cache-dir /tmp/poetry-cache && \
+    mkdir -p /tmp/poetry-cache && chmod 777 /tmp/poetry-cache && \
+    poetry --version
 
 # Install CuPy with CUDA 12.1 support
 RUN pip install cupy-cuda12x
@@ -84,7 +87,10 @@ ENV CUDA_VISIBLE_DEVICES=0 \
     NUMEXPR_NUM_THREADS=8 \
     PYTHONUNBUFFERED=1 \
     HDF5_USE_FILE_LOCKING=FALSE \
-    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 
+    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 \
+    POETRY_HOME=/tmp/poetry \
+    POETRY_CACHE_DIR=/tmp/poetry-cache \
+    POETRY_CONFIG_DIR=/tmp/poetry-config 
 
 # Health check - basic Python/CUDA check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

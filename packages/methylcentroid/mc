@@ -8,8 +8,18 @@ if ! docker ps --format 'table {{.Names}}' | grep -q "^methylpipeline$"; then
     exit 1
 fi
 
-# Execute the command inside the container
-# Working directory is /workspace which maps to /home/ubuntu/MethylPipeline
+# Convert current directory to container path
+# Host: /home/ubuntu/MethylPipeline/* -> Container: /workspace/*
+HOST_DIR="$(pwd)"
+CONTAINER_DIR="${HOST_DIR/\/home\/ubuntu\/MethylPipeline/\/workspace}"
+
+# Execute the command inside the container with the correct working directory
 # Use cli.py for batch configs (--batch-config flag), centroid_cli.py for single processing (--config flag)
-exec docker exec -w /workspace methylpipeline \
-  python3 -m methyl_centroid.cli "$@"
+# Use -i only if stdin is a terminal (for proper non-interactive support)
+if [ -t 0 ]; then
+    exec docker exec -it -w "$CONTAINER_DIR" methylpipeline \
+        python3 -m methyl_centroid.cli "$@"
+else
+    exec docker exec -w "$CONTAINER_DIR" methylpipeline \
+        python3 -m methyl_centroid.cli "$@"
+fi

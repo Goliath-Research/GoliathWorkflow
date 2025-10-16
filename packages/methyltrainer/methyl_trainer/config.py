@@ -4,7 +4,7 @@ Configuration management for MethylTrainer
 
 import json
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 
 from methyl_utils import FilterConfig
@@ -28,7 +28,7 @@ class TrainingConfig:
     # Comparison configuration
     min_coverage: int = 10
     
-    # Filter configuration
+    # Filter configuration (basic)
     max_q_value: float = 0.05
     min_delta_mean: float = 0.1
     max_overlap: float = 0.6
@@ -36,6 +36,29 @@ class TrainingConfig:
     min_auc: Optional[float] = 0.6
     max_dmps: Optional[int] = 1000
     sort_by: str = "jeffreys_divergence"
+    
+    # Advanced filtering configuration (from MethylDetector)
+    alpha: float = 0.05
+    min_N_pct: float = 0.1
+    max_bc: float = 0.6
+    gamma: float = 1.5
+    min_effect_size: Optional[float] = None
+    biological_filters: bool = True
+    
+    # Binary search configuration
+    target_auc: float = 0.95
+    min_selected_dmps: Optional[int] = None
+    min_dmps_for_export: int = 1000
+    
+    # Validation configuration
+    validation_mode: str = "synthetic"  # "synthetic" or "real"
+    centroid1_validation_samples: Optional[List[str]] = None
+    centroid2_validation_samples: Optional[List[str]] = None
+    n_validation_samples: int = 100
+    
+    # GPU configuration
+    use_gpu: bool = True
+    random_state: int = 42
     
     # Output options
     verbose: bool = True
