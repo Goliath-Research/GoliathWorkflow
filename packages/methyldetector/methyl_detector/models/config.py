@@ -28,14 +28,6 @@ class MethylDetectorConfig(BaseModel):
         default=0.05, ge=0.0, le=1.0,
         description="Significance level for statistical tests (q-value threshold)"
     )
-    apply_fdr_correction: bool = Field(
-        default=True,
-        description="Apply FDR correction to p-values"
-    )
-    fdr_method: str = Field(
-        default="bh",
-        description="Multiple testing correction method (bh, by, bonferroni, etc.)"
-    )
 
     # ----------------
     # Coverage Filter
@@ -52,10 +44,6 @@ class MethylDetectorConfig(BaseModel):
     # ----------------
     # Biological Filters
     # ----------------
-    apply_dmp_filtering: bool = Field(
-        default=True,
-        description="Apply biological DMP filtering (delta_mean, bhattacharyya)"
-    )
     min_delta_mean: float = Field(
         default=0.2, ge=0.0, le=1.0,
         description="Minimum absolute delta mean (|mean1 - mean2|) for biological significance"
@@ -163,17 +151,6 @@ class MethylDetectorConfig(BaseModel):
                 raise ValueError("Output directory cannot be empty")
         return v
 
-    @field_validator('fdr_method')
-    @classmethod
-    def validate_fdr_method(cls, v):
-        valid_methods = [
-            'storey', 'bh', 'by', 'adaptive_bh',
-            'bonferroni', 'sidak', 'holm'
-        ]
-        if v not in valid_methods:
-            raise ValueError(f"FDR method must be one of: {valid_methods}")
-        return v
-
     @field_validator('biological_filters')
     @classmethod
     def validate_biological_filters(cls, v):
@@ -194,9 +171,6 @@ class MethylDetectorConfig(BaseModel):
     @model_validator(mode='after')
     def validate_config(self):
         """Validate configuration consistency."""
-        # FDR correction must be on when significance filtering is used
-        if self.alpha < 1.0 and not self.apply_fdr_correction:
-            raise ValueError("apply_fdr_correction must be True when alpha < 1.0")
         return self
 
     # ---------------

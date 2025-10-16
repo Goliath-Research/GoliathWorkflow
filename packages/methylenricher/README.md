@@ -24,13 +24,13 @@ poetry install
 ### Command Line
 
 ```bash
-methylenricher --input genes.txt --outdir enrichment_results
+methyl_enricher --input genes.txt --outdir enrichment_results
 ```
 
 ### Python API
 
 ```python
-from methylenricher import run_enrichment
+from methyl_enricher import run_enrichment
 
 results = run_enrichment(genes=genes, libraries=libraries, outdir='results')
 ```

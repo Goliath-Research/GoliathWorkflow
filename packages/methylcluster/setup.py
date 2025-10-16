@@ -8,7 +8,7 @@ readme_file = Path(__file__).parent / "README.md"
 long_description = readme_file.read_text() if readme_file.exists() else ""
 
 setup(
-    name="methylcluster",
+    name="methyl_cluster",
     version="1.0.0",
     description="HDBSCAN clustering for methylation samples with GPU acceleration",
     long_description=long_description,
@@ -31,7 +31,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'methylcluster=methylcluster.cli:main',
+            'methyl_cluster=methyl_cluster.cli:main',
         ],
     },
     classifiers=[

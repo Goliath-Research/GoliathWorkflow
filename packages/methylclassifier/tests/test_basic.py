@@ -5,8 +5,8 @@ Basic tests for MethylClassifier
 import pytest
 import numpy as np
 from pathlib import Path
-from methylclassifier.classifier import MethylClassifier
-from methylclassifier.data_loader import DataLoader
+from methyl_classifier.classifier import MethylClassifier
+from methyl_classifier.data_loader import DataLoader
 
 
 def test_classifier_initialization():
@@ -21,7 +21,7 @@ def test_classifier_initialization():
 
 def test_extract_chrom_context():
     """Test chromosome/context extraction from classifier path."""
-    from methylclassifier.classifier import extract_chrom_context_from_classifier
+    from methyl_classifier.classifier import extract_chrom_context_from_classifier
 
     # Test fallback format - directory names ending with -CG/-CHG/-CHH
     test_path = Path("/path/to/pb-ch-2-CG/methyl_detector_classifier.pkl")
@@ -43,7 +43,7 @@ def test_extract_chrom_context():
 
 def test_data_loader_filtering():
     """Test H5 file filtering by chromosome and context."""
-    from methylclassifier.data_loader import DataLoader
+    from methyl_classifier.data_loader import DataLoader
 
     # Mock H5 files - the filtering expects exact filename match: {chrom}-{context}.h5
     mock_files = [
@@ -63,7 +63,7 @@ def test_data_loader_filtering():
 def test_cli_import():
     """Test that CLI module can be imported."""
     try:
-        from methylclassifier import cli
+        from methyl_classifier import cli
         assert cli.main is not None
     except ImportError as e:
         pytest.fail(f"CLI import failed: {e}")

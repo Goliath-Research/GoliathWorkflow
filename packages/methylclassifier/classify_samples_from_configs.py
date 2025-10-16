@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 import numpy as np
 
-# Add the methylclassifier directory to path
-methylclassifier_dir = Path(__file__).parent / 'methylclassifier'
-sys.path.insert(0, str(methylclassifier_dir))
+# Add the methyl_classifier directory to path
+methyl_classifier_dir = Path(__file__).parent / 'methyl_classifier'
+sys.path.insert(0, str(methyl_classifier_dir))
 
 # Import the modules directly
 from classifier import MethylClassifier

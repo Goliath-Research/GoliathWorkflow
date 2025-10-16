@@ -48,15 +48,27 @@ def main():
     print(f"📁 Output directory: {output_dir}")
     print()
     
-    # Create configuration
+    # Example configuration with DMP filtering enabled
     config = MethylDetectorConfig(
-        centroid1_path=centroid1_path,
-        centroid2_path=centroid2_path,
+        centroid1_path=Path("/home/ubuntu/Work/output_workflows/arabidopsis/centroids/WT/1-CG.h5"),
+        centroid2_path=Path("/home/ubuntu/Work/output_workflows/arabidopsis/centroids/msh1/1-CG.h5"),
+        output_dir=Path("./example_results"),
         alpha=0.05,
-        output_dir=output_dir,
+        min_N=10,
         apply_fdr_correction=True,
         fdr_method="storey",
-        global_significance_threshold=0.05
+        global_significance_threshold=0.05,
+        use_gpu=True,
+
+        # DMP filtering parameters
+        apply_dmp_filtering=True,
+        dmp_filter_method="combined",
+        min_overlap=0.6,
+        min_delta_mean=0.2,
+        min_jeffreys_divergence=0.5,
+        min_cohen_d=0.8,
+        min_auc=0.7,
+        max_selected_dmps=100
     )
     
     print("🔧 Configuration created successfully")

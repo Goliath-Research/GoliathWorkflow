@@ -33,7 +33,7 @@ cp example_config.json my_config.json
 ### Basic Command
 
 ```bash
-methylmapper --input biological_dmps.csv \
+methyl_mapper --input biological_dmps.csv \
              --config my_config.json \
              --sample-id 12345
 ```
@@ -42,7 +42,7 @@ methylmapper --input biological_dmps.csv \
 
 ```bash
 # After running MethylDetector
-methylmapper --input /home/ubuntu/MethylDetector/output/biological_dmps-chr1-CG.csv \
+methyl_mapper --input /home/ubuntu/MethylDetector/output/biological_dmps-chr1-CG.csv \
              --config my_config.json \
              --sample-id 12345 \
              --output-csv chr1_CG_genes.csv \
@@ -52,7 +52,7 @@ methylmapper --input /home/ubuntu/MethylDetector/output/biological_dmps-chr1-CG.
 ### Python API
 
 ```python
-from methylmapper import DMPMapper, MethylMapperConfig
+from methyl_mapper import DMPMapper, MethylMapperConfig
 
 config = MethylMapperConfig.parse_file("my_config.json")
 mapper = DMPMapper(config)
@@ -80,7 +80,7 @@ cd /home/ubuntu/MethylDetector
 python -m methyl_detector config.json
 
 cd /home/ubuntu/MethylMapper
-methylmapper --input ../MethylDetector/output/biological_dmps-*.csv \
+methyl_mapper --input ../MethylDetector/output/biological_dmps-*.csv \
              --config db_config.json \
              --sample-id 12345
 

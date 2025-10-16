@@ -24,13 +24,13 @@ poetry install
 ### Command Line
 
 ```bash
-methylclassifier --model classifier.pkl --input sample.h5
+methyl_classifier --model classifier.pkl --input sample.h5
 ```
 
 ### Python API
 
 ```python
-from methylclassifier import classify_sample
+from methyl_classifier import classify_sample
 
 result = classify_sample(classifier=classifier, sample_path='sample.h5', metadata=metadata)
 ```

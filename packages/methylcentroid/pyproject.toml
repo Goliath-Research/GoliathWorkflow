@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "Methylation Centroid Calculation"
 authors = ["David Izada Rodriguez <dizada@epimethyl.com>"]
 readme = "README.md"
-packages = [{include = "methylcentroid"}]
+packages = [{include = "methyl_centroid"}]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"

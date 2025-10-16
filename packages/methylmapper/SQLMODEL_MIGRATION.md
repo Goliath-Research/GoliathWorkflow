@@ -93,7 +93,7 @@ class StoredProcedureConfig(BaseModel):
 
 **Create and validate:**
 ```python
-from methylmapper import DMPStaging
+from methyl_mapper import DMPStaging
 
 # Automatic validation on creation
 dmp = DMPStaging(
@@ -152,7 +152,7 @@ SQLModel.metadata.create_all(engine)
 If you have existing code using the old API:
 
 - [x] Install SQLModel: `pip install sqlmodel`
-- [x] Update imports: `from methylmapper import DMPStaging`
+- [x] Update imports: `from methyl_mapper import DMPStaging`
 - [x] Use `AzureSQLConnection` context manager for automatic cleanup
 - [x] Replace raw SQL with SQLModel queries where appropriate
 - [x] Keep pandas-based bulk operations for large datasets
@@ -163,7 +163,7 @@ If you have existing code using the old API:
 ### Complete Example
 
 ```python
-from methylmapper import (
+from methyl_mapper import (
     AzureSQLConfig,
     AzureSQLConnection,
     DMPStaging,
@@ -219,7 +219,7 @@ Run the test suite to verify the migration:
 ```bash
 cd /home/ubuntu/MethylPipeline
 source setup_env.sh
-python packages/methylmapper/methylmapper/examples/test_sqlmodel_migration.py
+python packages/methyl_mapper/methyl_mapper/examples/test_sqlmodel_migration.py
 ```
 
 Expected output:

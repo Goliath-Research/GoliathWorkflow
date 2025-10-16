@@ -88,10 +88,7 @@ def example_2_command_line_with_json_config() -> None:
             centroid2_path=Path("/path/to/centroid2.h5"),
             output_dir=Path("/home/ubuntu/Work/output_workflows/arabidopsis/detection/WT-msh1"),
             alpha=0.05,
-            min_N=10,
-            apply_fdr_correction=True,
-            fdr_method="storey",
-            global_significance_threshold=0.05,
+            min_N_pct=0.1,
             use_gpu=True
         )
         

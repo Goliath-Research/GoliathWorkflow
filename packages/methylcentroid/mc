@@ -12,4 +12,4 @@ fi
 # Working directory is /workspace which maps to /home/ubuntu/MethylPipeline
 # Use cli.py for batch configs (--batch-config flag), centroid_cli.py for single processing (--config flag)
 exec docker exec -w /workspace methylpipeline \
-  python3 -m methylcentroid.cli "$@"
+  python3 -m methyl_centroid.cli "$@"

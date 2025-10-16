@@ -8,14 +8,14 @@ readme_file = Path(__file__).parent / "README.md"
 long_description = readme_file.read_text() if readme_file.exists() else ""
 
 setup(
-    name="methyltrainer",
+    name="methyl_trainer",
     version="0.1.0",
     description="Train Bayesian classifiers from methylation centroids",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="MethylAnalysis Team",
     author_email="",
-    url="https://github.com/your-org/methyltrainer",
+    url="https://github.com/your-org/methyl_trainer",
     packages=find_packages(),
     python_requires=">=3.8",
     install_requires=[
@@ -26,7 +26,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "methyltrainer=methyltrainer.cli:main",
+            "methyl_trainer=methyl_trainer.cli:main",
         ],
     },
     classifiers=[

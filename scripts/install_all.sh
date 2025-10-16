@@ -38,14 +38,24 @@ PACKAGES=(
 for pkg in "${PACKAGES[@]}"; do
     PKG_PATH="$PACKAGES_DIR/$pkg"
     if [ -d "$PKG_PATH" ]; then
-        if [ -f "$PKG_PATH/setup.py" ] || [ -f "$PKG_PATH/pyproject.toml" ]; then
+        if [ -f "$PKG_PATH/pyproject.toml" ]; then
             echo "📦 Installing $pkg..."
             cd "$PKG_PATH"
-            poetry install
-            poetry add mkdocs mkdocs-material
+            # Use poetry install for proper dependency management
+            # Use full path to poetry if not in PATH
+            if command -v poetry &> /dev/null; then
+                poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
+            elif [ -f /root/.local/bin/poetry ]; then
+                /root/.local/bin/poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
+            elif [ -f /usr/local/bin/poetry ]; then
+                /usr/local/bin/poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
+            else
+                echo "   ⚠ Poetry not found, trying pip install as fallback..."
+                python3 -m pip install -e . --no-cache-dir 2>&1 | grep -v "WARNING"
+            fi
             echo "   ✓ $pkg installed"
         else
-            echo "   ⚠ Skipping $pkg (missing setup.py or pyproject.toml)"
+            echo "   ⚠ Skipping $pkg (missing pyproject.toml)"
         fi
     else
         echo "   ⚠ Skipping $pkg (directory not found)"
@@ -58,16 +68,17 @@ echo "✅ Package installation complete!"
 echo "============================================="
 echo ""
 echo "📦 Installed packages:"
-echo "   • methylutils    - Core utilities and GPU support"
-echo "   • methylcentroid - Centroid generation"
-echo "   • methyldetector - DMP detection with effect_size"
-echo "   • methylmapper   - DMP-to-gene mapping (Azure SQL)"
-echo "   • methyltrainer  - Model training"
-echo "   • methylclassifier - Sample classification"
-echo "   • methylenricher - Gene enrichment analysis"
-echo "   • methylcluster  - HDBSCAN sample clustering"
+echo "   • methylutils     - Core utilities and GPU support (methyl_utils)"
+echo "   • methylcentroid  - Centroid generation (methyl_centroid)"
+echo "   • methyldetector  - DMP detection with effect_size (methyl_detector)"
+echo "   • methylmapper    - DMP-to-gene mapping (methyl_mapper)"
+echo "   • methyltrainer   - Model training (methyl_trainer)"
+echo "   • methylclassifier - Sample classification (methyl_classifier)"
+echo "   • methylenricher  - Gene enrichment analysis (methyl_enricher)"
+echo "   • methylcluster   - HDBSCAN sample clustering (methyl_cluster)"
 echo ""
 echo "🧪 Test the installation:"
 echo "   python -c \"from methyl_utils import get_logger; print('✓ MethylUtils OK')\""
+echo "   python -c \"from methyl_detector import MethylDetector; print('✓ MethylDetector OK')\"" 
 echo ""
 

@@ -25,13 +25,13 @@ poetry install
 ### Command Line
 
 ```bash
-methylmapper --input biological_dmps.csv --config db_config.json --sample-id 12345
+methyl_mapper --input biological_dmps.csv --config db_config.json --sample-id 12345
 ```
 
 ### Python API
 
 ```python
-from methylmapper import DMPMapper, MethylMapperConfig
+from methyl_mapper import DMPMapper, MethylMapperConfig
 
 config = MethylMapperConfig.parse_file("db_config.json")
 mapper = DMPMapper(config)

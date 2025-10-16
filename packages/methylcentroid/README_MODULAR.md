@@ -80,7 +80,7 @@ High-level modules depend on abstractions, not concretions:
 ### Configuration Management (`config.py`)
 
 ```python
-from methylcentroid.config import MethylCentroidConfig
+from methyl_centroid.config import MethylCentroidConfig
 
 # Create configuration
 config = MethylCentroidConfig(
@@ -101,7 +101,7 @@ config = MethylCentroidConfig.from_file("config.json")
 Intelligent caching with memory management:
 
 ```python
-from methylcentroid.core.sample_manager import SampleManager, SmartSampleCache
+from methyl_centroid.core.sample_manager import SampleManager, SmartSampleCache
 
 sample_manager = SampleManager(processing_config, chrom, ctx)
 samples = sample_manager.load_samples_parallel(sample_paths)
@@ -115,7 +115,7 @@ cache_stats = sample_manager.get_cache_stats()
 Factory pattern for algorithm selection:
 
 ```python
-from methylcentroid.outlier_detection import OutlierDetectorFactory
+from methyl_centroid.outlier_detection import OutlierDetectorFactory
 
 # Automatically selects best algorithm based on sample size
 detector = OutlierDetectorFactory.create_detector(
@@ -225,7 +225,7 @@ mc = MethylCentroid(
 results = mc.build_centroid()
 
 # New modular usage (same API)
-from methylcentroid import MethylCentroid
+from methyl_centroid import MethylCentroid
 
 mc = MethylCentroid.from_config(config, processing_config)
 results = mc.build_centroid()
@@ -237,7 +237,7 @@ results = mc.build_centroid()
 
 1. **New Outlier Detector**:
    ```python
-   from methylcentroid.outlier_detection.base_detector import BaseOutlierDetector
+   from methyl_centroid.outlier_detection.base_detector import BaseOutlierDetector
 
    class MyDetector(BaseOutlierDetector):
        def detect_outlier(self, samples, indices):

@@ -13,33 +13,24 @@ A production-ready pipeline for detecting differentially methylated positions (D
 - Gene-level feature importance analysis
 - Production-ready CLI interface
 
-## Installation
+## Quick Start
 
-```bash
-poetry install
-```
-
-## Usage
-
-### Command Line
-
-```bash
-python run_methyl_detector.py path/to/config.json --verbose
-```
-
-### Python API
-
-```python
-from methyl_detector.core.methyl_detector import MethylDetector, MethylDetectorConfig
-
-config = MethylDetectorConfig.from_json("config.json")
-detector = MethylDetector(config)
-selected_df, classifier = detector.run_analysis()
-```
+1. Install dependencies: `poetry install`
+2. Run analysis: `poetry run methyl-detector path/to/config.json`
 
 ## Configuration
 
-See example config.json in the original content.
+Key parameters in `MethylDetectorConfig`:
+
+- `centroid1_path`, `centroid2_path`: Input centroid files
+- `output_dir`: Results directory
+- `alpha`: Significance level (default: 0.05)
+- `min_N_pct`: Minimum coverage fraction (default: 0.10)
+- `apply_dmp_filtering`: Enable biological filtering (default: true)
+- `min_delta_mean`: Minimum effect size (default: 0.2)
+- `max_bc`: Maximum overlap (default: 0.6)
+- `target_auc`: Target performance (default: 0.95)
+- `use_gpu`: Enable GPU acceleration (default: true)
 
 ## Output
 

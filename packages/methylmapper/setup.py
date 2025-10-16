@@ -11,7 +11,7 @@ readme_file = Path(__file__).parent / "README.md"
 long_description = readme_file.read_text() if readme_file.exists() else ""
 
 setup(
-    name="methylmapper",
+    name="methyl_mapper",
     version="0.1.0",
     author="MethylDetector Team",
     description="DMP-to-gene mapping tool using Azure SQL Database and STRING-DB",
@@ -28,7 +28,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "methylmapper=methylmapper.cli:main",
+            "methyl_mapper=methyl_mapper.cli:main",
         ],
     },
     classifiers=[

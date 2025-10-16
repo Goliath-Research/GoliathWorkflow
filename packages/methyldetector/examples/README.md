@@ -68,10 +68,8 @@ This will run comparisons for:
 - `centroid2_path`: Path to second centroid H5 file (required)
 - `output_dir`: Output directory for results (required)
 - `alpha`: Significance level for individual tests (default: 0.05)
-- `min_N`: Minimum sample size for reliable p-value calculation (default: 10)
-- `apply_fdr_correction`: Whether to apply FDR correction (default: true)
-- `fdr_method`: FDR correction method ("storey") (default: "storey")
-- `global_significance_threshold`: Threshold for global significance (default: 0.05)
+- `min_N_pct`: Minimum fraction of samples covering a position (default: 0.10)
+- `min_N_abs`: Absolute minimum sample count (optional, default: None)
 - `use_gpu`: Whether to use GPU acceleration (default: true)
 
 ### Multiple Comparison Parameters
@@ -90,7 +88,6 @@ For multiple comparisons, the tool expects centroid files to follow this naming 
 ## Tips
 
 1. **GPU Usage**: Set `use_gpu: true` for faster processing (requires CUDA environment)
-2. **Sample Size**: Increase `min_N` for more reliable results but fewer positions analyzed
-3. **FDR Correction**: Use `apply_fdr_correction: true` for multiple testing correction
-4. **Significance Levels**: Adjust `alpha` and `global_significance_threshold` based on your research needs
-5. **Config Detection**: The tool automatically detects whether to use single or multiple comparison mode based on the presence of `centroid1_path` vs `centroid1_dir` in the config file
+2. **Sample Size**: Increase `min_N_pct` for more reliable results but fewer positions analyzed
+3. **Significance Levels**: Adjust `alpha` based on your research needs
+4. **Config Detection**: The tool automatically detects whether to use single or multiple comparison mode based on the presence of `centroid1_path` vs `centroid1_dir` in the config file

@@ -77,7 +77,7 @@ print(f"Recommendation: {capabilities['recommendation']}")
 ### 2. Basic Usage with GPU Acceleration
 
 ```python
-from methylcentroid.methyl_centroid import MethylCentroid
+from methyl_centroid.methyl_centroid import MethylCentroid
 
 # Initialize with automatic GPU detection
 mc = MethylCentroid(
@@ -95,7 +95,7 @@ print(f"Centroid built with {results['total_samples']} samples")
 ### 3. Advanced GPU Operations
 
 ```python
-from methylcentroid.gpu_acceleration import gpu_ops
+from methyl_centroid.gpu_acceleration import gpu_ops
 
 # Check if GPU is available
 if gpu_ops.gpu_available:
@@ -119,7 +119,7 @@ if gpu_ops.gpu_available:
 The GPU-optimized version includes advanced memory management:
 
 ```python
-from methylcentroid.gpu_acceleration import gpu_ops
+from methyl_centroid.gpu_acceleration import gpu_ops
 
 # Enable memory pooling for large datasets
 if gpu_ops.memory_pool:
@@ -172,7 +172,7 @@ cat benchmark_results/performance_report.txt
 
 ```python
 # For datasets > 1GB, enable memory pooling
-from methylcentroid.gpu_acceleration import GPUMemoryPool
+from methyl_centroid.gpu_acceleration import GPUMemoryPool
 
 memory_pool = GPUMemoryPool(initial_size_mb=2048)  # 2GB pool
 
@@ -239,7 +239,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Enable detailed GPU logging
-from methylcentroid.gpu_acceleration import gpu_ops
+from methyl_centroid.gpu_acceleration import gpu_ops
 print(f"GPU available: {gpu_ops.gpu_available}")
 print(f"Memory pool: {gpu_ops.memory_pool is not None}")
 print(f"Streams: {len(gpu_ops.streams)}")

@@ -91,8 +91,7 @@ config = MethylDetectorConfig(
     centroid2_path=Path("/path/to/centroid2.h5"),
     output_dir=Path("./results"),
     alpha=0.05,
-    min_N=10,
-    apply_fdr_correction=True,
+    min_N_pct=0.1,
     use_gpu=True
 )
 

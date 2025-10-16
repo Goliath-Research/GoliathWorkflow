@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "methylenricher"
+name = "methyl_enricher"
 version = "0.1.0"
 description = "Gene enrichment analysis tool for methylation DMPs"
 authors = ["MethylDetector Team"]
 readme = "README.md"
-packages = [{include = "methylenricher"}]
+packages = [{include = "methyl_enricher"}]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
@@ -14,7 +14,7 @@ numpy = ">=1.20.0,<1.28.0"
 methylutils = {path = "../methylutils", develop = true}
 
 [tool.poetry.scripts]
-methylenricher = "methylenricher.cli:main"
+methyl_enricher = "methyl_enricher.cli:main"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.0.0"
