@@ -140,10 +140,11 @@ MethylDetector (1400 lines)
 
 ### After (Modular)
 ```
-MethylDetector (600 lines)
+MethylDetector (742 lines) - 47% SMALLER!
 ├── Statistical DMP detection
 ├── Orchestration (delegates to MethylTrainer)
-└── Result packaging
+├── Result packaging
+└── Legacy fallback (if MethylTrainer unavailable)
 
 MethylTrainer (810 lines)
 ├── Biological filtering

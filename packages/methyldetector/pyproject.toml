@@ -17,8 +17,7 @@ plotly = "^5.18.0"
 tqdm = "^4.66.0"
 click = "^8.1.0"
 pathlib = "^1.0.1"
-# Note: MethylUtils should be available in PYTHONPATH or installed separately
-# The container should have /home/ubuntu/MethylUtils in the Python path
+# Note: methylutils is part of the MethylPipeline monorepo at packages/methylutils
 methylutils = {path = "../methylutils", develop = true}
 methyl-trainer = {path = "../methyltrainer", develop = true}
 
