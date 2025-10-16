@@ -78,20 +78,22 @@ class ProbabilisticBetaClassifier:
 
     def predict_proba(self, X: np.ndarray,
                      availability_mask: Optional[np.ndarray] = None,
+                     use_sklearn: bool = True,
                      debug: bool = False) -> np.ndarray:
         """
         Predict posterior probabilities for samples in X.
 
-        Only uses positions that are available in each sample (marked True in availability_mask).
-        Missing positions are completely ignored rather than using neutral values.
+        Uses sklearn model (fast) if available and requested, otherwise uses
+        Beta distribution method (slower, more accurate probabilistic inference).
 
         Args:
             X: Feature matrix of shape (n_samples, n_features) where n_features
                matches the number of DMPs used in training. Values should be
                methylation levels in [0, 1].
             availability_mask: Boolean mask of shape (n_samples, n_features)
-                             indicating which positions are available. If None,
-                             all positions are assumed available.
+                             indicating which positions are available. Only used
+                             for Beta distribution method.
+            use_sklearn: If True and sklearn model available, use it for prediction
             debug: If True, print debug information for the first sample.
 
         Returns:
@@ -103,6 +105,10 @@ class ProbabilisticBetaClassifier:
         """
         if X.shape[1] != self.n_dmps:
             raise ValueError(f"Expected {self.n_dmps} features, got {X.shape[1]}")
+        
+        # Use sklearn model if available and requested (much faster)
+        if use_sklearn and self._sklearn_model is not None:
+            return self._sklearn_model.predict_proba(X)
 
         n_samples = X.shape[0]
         log_likelihoods = np.zeros((n_samples, 2))  # [log P(data|centroid1), log P(data|centroid2)]
@@ -213,24 +219,26 @@ class ProbabilisticBetaClassifier:
             return self._sklearn_model.predict(X)
         else:
             # Fall back to Beta distribution method
-            probs = self.predict_proba(X, availability_mask, debug)
+            probs = self.predict_proba(X, availability_mask, use_sklearn=False, debug=debug)
             return np.argmax(probs, axis=1)
 
     def predict_log_proba(self, X: np.ndarray,
                          availability_mask: Optional[np.ndarray] = None,
+                         use_sklearn: bool = True,
                          debug: bool = False) -> np.ndarray:
         """
         Return log posterior probabilities.
 
         Args:
             X: Feature matrix of shape (n_samples, n_features)
-            availability_mask: Boolean mask indicating available positions
+            availability_mask: Boolean mask indicating available positions (only for Beta method)
+            use_sklearn: If True and sklearn model available, use it for prediction
             debug: If True, print debug information
 
         Returns:
             Array of log posterior probabilities of shape (n_samples, 2)
         """
-        probs = self.predict_proba(X, availability_mask, debug)
+        probs = self.predict_proba(X, availability_mask, use_sklearn, debug)
         return np.log(probs + 1e-15)  # Add small epsilon to avoid log(0)
 
     def get_feature_info(self) -> Dict[str, Any]:

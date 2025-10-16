@@ -29,13 +29,8 @@ from methyl_utils import MethylSample
 # Import MethylCentroidPair from MethylUtils for mathematical operations
 from methyl_utils import MethylCentroidPair
 
-# Import MethylTrainer for delegating training logic
-try:
-    from methyl_trainer import MethylTrainer, TrainingConfig
-except ImportError:
-    MethylTrainer = None
-    TrainingConfig = None
-    logger.warning("MethylTrainer not available - training delegation will not work")
+# Import MethylTrainer for delegating training logic (required dependency)
+from methyl_trainer import MethylTrainer, TrainingConfig
 
 # Handle relative imports - try module import first, fall back to direct execution setup
 try:
@@ -123,6 +118,8 @@ class MethylDetector:
             centroid1_validation_samples=self.config.centroid1_validation_samples,
             centroid2_validation_samples=self.config.centroid2_validation_samples,
             n_validation_samples=self.config.n_validation_samples,
+            # Prediction method configuration
+            prediction_method=self.config.prediction_method if hasattr(self.config, 'prediction_method') else "sklearn",
             # GPU configuration
             use_gpu=self.config.use_gpu,
             random_state=self.config.random_state,
@@ -150,7 +147,7 @@ class MethylDetector:
         biological_dmps_df = pd.DataFrame()
         accuracy = None
         
-        if not dmp_df.empty and self.config.output_dir and MethylTrainer is not None:
+        if not dmp_df.empty and self.config.output_dir:
             logger.info("Step 2: Training classifier using MethylTrainer...")
             try:
                 # Create TrainingConfig from MethylDetectorConfig
@@ -187,42 +184,32 @@ class MethylDetector:
                 traceback.print_exc()
                 biological_dmps_df = pd.DataFrame()
                 accuracy = None
-        elif MethylTrainer is None:
-            logger.warning("MethylTrainer not available, falling back to legacy method")
-            # Fallback to legacy method (keep old code for compatibility)
-            try:
-                biological_dmps_df = self._filter_and_select_dmps(dmp_df)
-                logger.info(f"✅ Found {len(biological_dmps_df):,} biological DMPs (legacy method)")
-            except Exception as e:
-                logger.error(f"❌ DMP filtering/selection failed: {e}")
-                import traceback
-                traceback.print_exc()
-                biological_dmps_df = pd.DataFrame()
 
-        logger.debug("About to start Step 3...")
-        # Step 3: Generate final results
-        logger.info("Step 3: Generating final results...")
+        logger.info("🔄 Step 3: Generating final results...")
         result = self._create_final_result(
             dmp_df, biological_dmps_df=biological_dmps_df
         )
-        logger.debug("Step 3 completed successfully")
-        
+        logger.info("✅ Step 3 completed successfully")
+
         # Update result with training accuracy if available
+        logger.info("🔄 Updating result with training accuracy...")
         if accuracy is not None:
             result.training_accuracy = float(accuracy)
             if self.config.output_dir:
                 output_dir = Path(self.config.output_dir)
                 model_path = output_dir / f"classifier-{self.chrom}-{self.ctx}.pkl"
                 result.classifier_model_path = str(model_path)
+        logger.info("✅ Result updated with training accuracy")
         
         # Step 5: Save results
         if self.config.output_dir:
-            logger.info("Step 5: Saving results...")
+            logger.info("🔄 Step 5: Saving results...")
             self._save_results(result)
+            logger.info("✅ Step 5: Results saved")
 
         dmp_count = len(result.biologically_significant_dmps_df) if result.biologically_significant_dmps_df is not None else 0
         logger.info(
-            f"Analysis complete! Found {dmp_count} DMPs"
+            f"✅ Analysis complete! Found {dmp_count} DMPs"
         )
         return result
 
@@ -235,7 +222,7 @@ class MethylDetector:
     # - _compute_real_auc_from_samples, _load_sample_methylation_at_dmps
     #
     # MethylDetector now delegates training to MethylTrainer (see run() method above)
-
+    
     def timer(func):
         """Decorator to time and log function execution."""
         import time
@@ -652,10 +639,13 @@ class MethylDetector:
             f"  Max Overlap (Bhattacharyya Coefficient): {self.config.max_bc} ({self.config.max_bc*100:.0f}%)",
             f"  Target AUC: {self.config.target_auc}",
             "",
-            "Biological Importance:",
-            f"  Formula: |delta_mean| / (BC + eps)",
-            f"  BC = overlap coefficient (0=no overlap, 1=complete overlap)",
-            f"  Higher effect size and lower overlap = higher importance",
+            "Biological Importance (Effect Size):",
+            f"  Formula: effect_size = |delta_mu| / sqrt(var1² + var2²) * (1 - BC)^gamma",
+            f"  This is a variance-weighted, overlap-penalized metric combining:",
+            f"    • Standardized mean difference (confidence-weighted)",
+            f"    • Distribution overlap penalty: (1 - BC)^{self.config.gamma}",
+            f"  where BC = Bhattacharyya Coefficient (0=no overlap, 1=complete overlap)",
+            f"  Higher values indicate more reliable, biologically significant DMPs",
             "",
             "Results:",
             f"  Statistical DMPs (q≤{self.config.alpha}): {result.total_statistical_dmps:,}",
