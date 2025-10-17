@@ -95,40 +95,6 @@ class MethylDetectorConfig(BaseModel):
         description="Maximum k to test during validation optimization (default: all available DMPs). Algorithm tests this k first to find best achievable accuracy, then binary searches for minimum k."
     )
     
-    # Improved algorithm parameters (analytical approach)
-    target_fpr: float = Field(
-        default=0.01, ge=0.0, le=1.0,
-        description="Target false positive rate for analytical DMP selection (default 1%)"
-    )
-    target_fnr: float = Field(
-        default=0.01, ge=0.0, le=1.0,
-        description="Target false negative rate for analytical DMP selection (default 1%)"
-    )
-    rank_gamma: float = Field(
-        default=1.0, ge=0.0, le=5.0,
-        description="Exponent for (1-BC) term in precision-weighted ranking: score = (|Δμ|/√var) × (1-BC)^γ. Higher values increase penalty for overlapping distributions"
-    )
-    var_pool: str = Field(
-        default="sum",
-        description="Variance pooling method for precision-weighted scoring: 'sum' (default), 'max', or 'harmonic'"
-    )
-    prior_cancer: float = Field(
-        default=0.5, ge=0.0, le=1.0,
-        description="Prior probability for cancer/disease class in Bayesian classification"
-    )
-    prior_healthy: float = Field(
-        default=0.5, ge=0.0, le=1.0,
-        description="Prior probability for healthy/control class in Bayesian classification"
-    )
-    centroid1_label: str = Field(
-        default="cancer",
-        description="Class label for centroid1: 'cancer' or 'healthy'. Determines which Beta parameters represent which class."
-    )
-    centroid2_label: str = Field(
-        default="healthy",
-        description="Class label for centroid2: 'cancer' or 'healthy'. Must be opposite of centroid1_label."
-    )
-    
     # ----------------
     # Validation Configuration
     # ----------------
@@ -212,36 +178,6 @@ class MethylDetectorConfig(BaseModel):
             raise ValueError(f"Validation mode must be one of: {valid_modes}, got: {v}")
         return v
     
-    @field_validator('var_pool')
-    @classmethod
-    def validate_var_pool(cls, v):
-        valid_methods = ['sum', 'max', 'harmonic']
-        if v not in valid_methods:
-            raise ValueError(f"var_pool must be one of: {valid_methods}, got: {v}")
-        return v
-    
-    @field_validator('centroid1_label', 'centroid2_label')
-    @classmethod
-    def validate_centroid_labels(cls, v):
-        """Validate centroid class labels."""
-        valid_labels = ['cancer', 'healthy']
-        v_lower = v.lower()
-        if v_lower not in valid_labels:
-            raise ValueError(f"Centroid label must be one of: {valid_labels}, got: {v}")
-        return v_lower
-
-    @model_validator(mode='after')
-    def validate_config(self):
-        """Validate configuration consistency."""
-        # Ensure priors sum to 1.0
-        if abs(self.prior_cancer + self.prior_healthy - 1.0) > 1e-6:
-            raise ValueError(f"Priors must sum to 1.0, got: {self.prior_cancer} + {self.prior_healthy} = {self.prior_cancer + self.prior_healthy}")
-        
-        # Ensure centroid labels are different
-        if self.centroid1_label == self.centroid2_label:
-            raise ValueError(f"centroid1_label and centroid2_label must be different, both are '{self.centroid1_label}'")
-        
-        return self
 
     # ---------------
     # Helper Methods

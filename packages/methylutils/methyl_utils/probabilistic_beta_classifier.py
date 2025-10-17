@@ -223,21 +223,12 @@ class ProbabilisticBetaClassifier:
         if X.shape[1] != self.n_dmps:
             raise ValueError(f"Expected {self.n_dmps} features, got {X.shape[1]}")
         
-        # Extract parameters - assign based on centroid labels if available
-        centroid1_label = self.data.get('centroid1_label', 'cancer').lower()
-        
-        if centroid1_label == 'cancer':
-            # centroid1 is cancer, centroid2 is healthy
-            alpha_C = self.data['alpha1']
-            beta_C = self.data['beta1']
-            alpha_H = self.data['alpha2']
-            beta_H = self.data['beta2']
-        else:
-            # centroid1 is healthy, centroid2 is cancer
-            alpha_C = self.data['alpha2']
-            beta_C = self.data['beta2']
-            alpha_H = self.data['alpha1']
-            beta_H = self.data['beta1']
+        # Extract parameters - direct assignment without label mapping
+        # centroid1 = class 0, centroid2 = class 1
+        alpha_C = self.data['alpha1']
+        beta_C = self.data['beta1']
+        alpha_H = self.data['alpha2']
+        beta_H = self.data['beta2']
         
         llr_const = self.data.get('llr_const', np.zeros(self.n_dmps))
         
