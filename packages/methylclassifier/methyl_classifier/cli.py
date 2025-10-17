@@ -20,7 +20,6 @@ def classify_samples(classifier: MethylClassifier,
                     chrom: str = None,
                     context: str = None,
                     output_file: Optional[Path] = None,
-                    use_sklearn: Optional[bool] = None,
                     debug: bool = False) -> None:
     """
     Load samples from .h5 files and classify them using the trained classifier.
@@ -77,11 +76,10 @@ def classify_samples(classifier: MethylClassifier,
     availability_mask = np.array(availability_mask)
 
     # Display prediction method
-    method_name = "metadata default" if use_sklearn is None else ("sklearn (fast)" if use_sklearn else "beta (exact)")
-    print(f"\n🤖 Classifying samples using {method_name} method...")
+    print(f"\n🤖 Classifying samples using Beta prediction method...")
     
     predictions, probabilities = classify_samples_batch(
-        classifier, feature_matrix, availability_mask, use_sklearn, debug
+        classifier, feature_matrix, availability_mask, debug
     )
 
     # Print classification genes (DMPs) information
@@ -321,7 +319,6 @@ def classify_samples(classifier: MethylClassifier,
 def classify_samples_batch(classifier: MethylClassifier,
                           methylation_data: np.ndarray,
                           availability_mask: Optional[np.ndarray] = None,
-                          use_sklearn: Optional[bool] = None,
                           debug: bool = False):
     """
     Classify a batch of samples using the trained classifier.
@@ -331,7 +328,6 @@ def classify_samples_batch(classifier: MethylClassifier,
         methylation_data: Array of methylation values for the DMP positions
                          Shape should be (n_samples, n_features)
         availability_mask: Boolean mask indicating which positions are available
-        use_sklearn: If None, uses model's preferred method. If True, uses sklearn. If False, uses beta.
         debug: If True, enable debug output
 
     Returns:
@@ -339,8 +335,8 @@ def classify_samples_batch(classifier: MethylClassifier,
         probabilities: Array of posterior probabilities for each class
     """
     # Get predictions and probabilities
-    predictions = classifier.predict(methylation_data, availability_mask, use_sklearn, debug)
-    probabilities = classifier.predict_proba(methylation_data, availability_mask, use_sklearn, debug)
+    predictions = classifier.predict(methylation_data, availability_mask, debug)
+    probabilities = classifier.predict_proba(methylation_data, availability_mask, debug)
 
     return predictions, probabilities
 
@@ -356,16 +352,10 @@ Examples:
   methyl_classifier --config classification_config.json
 
   # Config file with command-line overrides
-  methyl_classifier --config config.json --use-sklearn --debug
+  methyl_classifier --config config.json --debug
 
-  # Direct command-line arguments (smart default: sklearn for >10 DMPs, beta for ≤10)
+  # Direct command-line arguments
   methyl_classifier --model classifier.pkl --input samples/ --output results.csv
-
-  # Force sklearn method (fast, 28000x faster than beta)
-  methyl_classifier --model classifier.pkl --input samples/ --use-sklearn
-
-  # Force beta method (exact Bayesian, slower)
-  methyl_classifier --model classifier.pkl --input samples/ --use-beta
 
   # Classify single sample with debug output
   methyl_classifier --model classifier.pkl --input sample.h5 --debug
@@ -403,18 +393,6 @@ Examples:
         help='Enable debug output for first sample'
     )
 
-    # Prediction method selection (mutually exclusive)
-    method_group = parser.add_mutually_exclusive_group()
-    method_group.add_argument(
-        '--use-sklearn',
-        action='store_true',
-        help='Force sklearn prediction method (fast, ~0.3%% different from beta)'
-    )
-    method_group.add_argument(
-        '--use-beta',
-        action='store_true',
-        help='Force beta prediction method (exact Bayesian, slower)'
-    )
 
     parser.add_argument(
         '--no-filter',
@@ -447,10 +425,6 @@ Examples:
                 config.debug = args.debug
             if args.no_filter:
                 config.no_filter = args.no_filter
-            if hasattr(args, 'use_sklearn') and args.use_sklearn:
-                config.prediction_method = 'sklearn'
-            elif hasattr(args, 'use_beta') and args.use_beta:
-                config.prediction_method = 'beta'
             if args.log_level != 'INFO':
                 config.log_level = args.log_level
         except Exception as e:
@@ -462,17 +436,10 @@ Examples:
             parser.error("--model and --input are required when not using --config")
         
         # Create config from command-line arguments
-        prediction_method = None
-        if args.use_sklearn:
-            prediction_method = 'sklearn'
-        elif args.use_beta:
-            prediction_method = 'beta'
-        
         config = ClassificationConfig(
             model_path=str(args.model),
             input_path=str(args.input),
             output_path=str(args.output) if args.output else None,
-            prediction_method=prediction_method,
             debug=args.debug,
             no_filter=args.no_filter,
             log_level=args.log_level
@@ -495,18 +462,7 @@ Examples:
             print(f"⚠️ {e}")
             print("Will process all .h5 files (use --no-filter to suppress this warning)")
 
-    # Determine prediction method
-    use_sklearn = None  # Default: smart choice based on DMPs
-    if config.prediction_method == 'sklearn':
-        use_sklearn = True
-        print("🚀 Using sklearn prediction method (fast)")
-    elif config.prediction_method == 'beta':
-        use_sklearn = False
-        print("🔬 Using beta prediction method (exact)")
-    else:
-        print("🧠 Using smart default (sklearn for >10 DMPs, beta for ≤10 DMPs)")
-
-    # Classify samples
+    # Classify samples using Beta method
     try:
         classify_samples(
             classifier=classifier,
@@ -514,7 +470,6 @@ Examples:
             chrom=chrom,
             context=context,
             output_file=Path(config.output_path) if config.output_path else None,
-            use_sklearn=use_sklearn,
             debug=config.debug
         )
     except Exception as e:
