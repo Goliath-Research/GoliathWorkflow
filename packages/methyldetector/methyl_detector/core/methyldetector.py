@@ -121,15 +121,6 @@ class MethylDetector:
             # Validation-accuracy optimization
             optimize_for_validation_accuracy=self.config.optimize_for_validation_accuracy,
             validation_search_max_k=self.config.validation_search_max_k,
-            # Improved algorithm parameters (analytical approach)
-            target_fpr=self.config.target_fpr,
-            target_fnr=self.config.target_fnr,
-            rank_gamma=self.config.rank_gamma,
-            var_pool=self.config.var_pool,
-            prior_cancer=self.config.prior_cancer,
-            prior_healthy=self.config.prior_healthy,
-            centroid1_label=self.config.centroid1_label,
-            centroid2_label=self.config.centroid2_label,
             # GPU configuration
             use_gpu=self.config.use_gpu,
             random_state=self.config.random_state,

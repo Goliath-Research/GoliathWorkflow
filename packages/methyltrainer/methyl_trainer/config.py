@@ -54,15 +54,6 @@ class TrainingConfig:
     optimize_for_validation_accuracy: bool = False  # Enable accuracy-based optimization after AUC search
     validation_search_max_k: Optional[int] = None  # Max k to test (default: all available DMPs)
     
-    # Improved algorithm parameters (analytical approach)
-    target_fpr: float = 0.01  # Target false positive rate
-    target_fnr: float = 0.01  # Target false negative rate
-    rank_gamma: float = 1.0  # Exponent for (1-BC) in precision-weighted ranking: score = (|Δμ|/√var) × (1-BC)^γ
-    var_pool: str = "sum"  # Variance pooling: "sum", "max", or "harmonic"
-    prior_cancer: float = 0.5  # Prior probability for cancer/disease class
-    prior_healthy: float = 0.5  # Prior probability for healthy/control class
-    centroid1_label: str = "cancer"  # Class label for centroid1: 'cancer' or 'healthy'
-    centroid2_label: str = "healthy"  # Class label for centroid2: 'cancer' or 'healthy'
     
     # Validation configuration
     validation_mode: str = "synthetic"  # "synthetic" or "real"

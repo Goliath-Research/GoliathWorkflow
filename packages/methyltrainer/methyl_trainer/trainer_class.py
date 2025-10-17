@@ -130,14 +130,8 @@ class MethylTrainer:
             'chromosome': chromosome,
             'context': context,
             'n_dmps': len(biological_dmps_df),
-            # Improved algorithm fields
             'threshold': getattr(self, '_cum_stats', {}).get('threshold', 0.0),
-            'target_fpr': self.config.target_fpr,
-            'target_fnr': self.config.target_fnr,
-            'priors': (self.config.prior_cancer, self.config.prior_healthy),
             'cum_stats': getattr(self, '_cum_stats', {}),  # Cumulative LLR statistics
-            'rank_gamma': self.config.rank_gamma,
-            'var_pool': self.config.var_pool,
             'metadata': {
                 'chromosome': chromosome,
                 'context': context,
@@ -148,13 +142,7 @@ class MethylTrainer:
                     'min_delta_mean': self.config.min_delta_mean,
                     'max_bc': self.config.max_bc,
                     'target_auc': self.config.target_auc,
-                    'target_fpr': self.config.target_fpr,
-                    'target_fnr': self.config.target_fnr,
-                    'validation_mode': self.config.validation_mode,
-                    'rank_gamma': self.config.rank_gamma,
-                    'var_pool': self.config.var_pool,
-                    'prior_cancer': self.config.prior_cancer,
-                    'prior_healthy': self.config.prior_healthy
+                    'validation_mode': self.config.validation_mode
                 }
             }
         }
@@ -452,7 +440,7 @@ class MethylTrainer:
     
     def _compute_real_auc_from_samples(self, df_subset: pd.DataFrame) -> float:
         """
-        Compute real AUC using pre-loaded validation samples.
+        Compute real AUC using pre-loaded validation samples with Beta classifier.
         
         Args:
             df_subset: Subset of DMPs to evaluate
@@ -461,8 +449,6 @@ class MethylTrainer:
             AUC value
         """
         try:
-            from sklearn.linear_model import LogisticRegression
-            from sklearn.metrics import roc_auc_score
             
             # Get positions for this subset
             subset_positions = df_subset['position'].values
@@ -477,13 +463,59 @@ class MethylTrainer:
             X = self._validation_samples[:, position_indices]
             y = self._validation_labels
             
-            # Train simple classifier
-            clf = LogisticRegression(max_iter=1000, random_state=42, solver='lbfgs')
-            clf.fit(X, y)
+            # Extract Beta parameters for temporary classifier
+            alpha1 = df_subset['alpha1'].values
+            beta1 = df_subset['beta1'].values
+            alpha2 = df_subset['alpha2'].values
+            beta2 = df_subset['beta2'].values
             
-            # Compute AUC
-            y_pred = clf.predict_proba(X)[:, 1]
-            auc = roc_auc_score(y, y_pred)
+            # Compute llr_const on the fly
+            from scipy.special import betaln
+            llr_const = -(betaln(alpha1, beta1) - betaln(alpha2, beta2))
+            
+            # Create temporary classifier data
+            classifier_data = {
+                'positions': subset_positions,
+                'alpha1': alpha1,
+                'beta1': beta1,
+                'alpha2': alpha2,
+                'beta2': beta2,
+                'llr_const': llr_const,
+                'directions': np.ones(len(alpha1))
+            }
+            
+            # Create temporary Beta classifier
+            temp_classifier = ProbabilisticBetaClassifier(classifier_data)
+            
+            # Get probability predictions (column 1 = class 1 probability)
+            y_pred_proba = temp_classifier.predict_proba(X, debug=False)
+            y_pred = y_pred_proba[:, 1]
+            
+            # Compute AUC manually without sklearn
+            # Sort by predicted probability
+            sorted_indices = np.argsort(y_pred)[::-1]
+            y_sorted = y[sorted_indices]
+            
+            # Count positives and negatives
+            n_pos = np.sum(y_sorted == 1)
+            n_neg = np.sum(y_sorted == 0)
+            
+            if n_pos == 0 or n_neg == 0:
+                return 0.5
+            
+            # Calculate AUC using trapezoidal rule
+            tp = 0
+            fp = 0
+            auc = 0.0
+            
+            for label in y_sorted:
+                if label == 1:
+                    tp += 1
+                else:
+                    fp += 1
+                    auc += tp
+            
+            auc = auc / (n_pos * n_neg)
             
             return auc
             
@@ -647,10 +679,7 @@ class MethylTrainer:
             
             # Compute llr_const on the fly (same logic as in _create_classifier)
             from scipy.special import betaln
-            if self.config.centroid1_label.lower() == 'cancer':
-                llr_const = -(betaln(alpha1, beta1) - betaln(alpha2, beta2))
-            else:
-                llr_const = -(betaln(alpha2, beta2) - betaln(alpha1, beta1))
+            llr_const = -(betaln(alpha1, beta1) - betaln(alpha2, beta2))
             
             # Create temporary classifier data
             classifier_data = {
@@ -660,9 +689,7 @@ class MethylTrainer:
                 'alpha2': alpha2,
                 'beta2': beta2,
                 'llr_const': llr_const,
-                'directions': np.ones(len(alpha1)),  # Default directions
-                'centroid1_label': self.config.centroid1_label,
-                'centroid2_label': self.config.centroid2_label
+                'directions': np.ones(len(alpha1))  # Default directions
             }
             
             # Create classifier
@@ -892,13 +919,8 @@ class MethylTrainer:
             weights = np.ones(len(biological_dmps_df))
         
         # Compute LLR constants (betaln differences) for threshold-based classification
-        # Assign based on config labels to ensure correct class mapping
-        if self.config.centroid1_label.lower() == 'cancer':
-            # centroid1 is cancer, centroid2 is healthy
-            llr_const = -(betaln(alpha1, beta1) - betaln(alpha2, beta2))
-        else:
-            # centroid1 is healthy, centroid2 is cancer (swap the sign)
-            llr_const = -(betaln(alpha2, beta2) - betaln(alpha1, beta1))
+        # Direct assignment: centroid1=class0, centroid2=class1
+        llr_const = -(betaln(alpha1, beta1) - betaln(alpha2, beta2))
         
         classifier_data = {
             'positions': biological_dmps_df['position'].values,
@@ -908,9 +930,7 @@ class MethylTrainer:
             'beta2': beta2,
             'weights': weights,
             'directions': directions,
-            'llr_const': llr_const,  # Add LLR constants for improved algorithm
-            'centroid1_label': self.config.centroid1_label,  # Store label info
-            'centroid2_label': self.config.centroid2_label
+            'llr_const': llr_const  # Add LLR constants for improved algorithm
         }
         
         # Create classifier

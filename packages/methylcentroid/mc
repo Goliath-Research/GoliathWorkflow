@@ -8,9 +8,13 @@ if ! docker ps --format 'table {{.Names}}' | grep -q "^methylpipeline$"; then
     exit 1
 fi
 
-# Convert current directory to container path
+# Change to the script's directory so relative paths work
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Convert script directory to container path
 # Host: /home/ubuntu/MethylPipeline/* -> Container: /workspace/*
-HOST_DIR="$(pwd)"
+HOST_DIR="$SCRIPT_DIR"
 CONTAINER_DIR="${HOST_DIR/\/home\/ubuntu\/MethylPipeline/\/workspace}"
 
 # Execute the command inside the container with the correct working directory
