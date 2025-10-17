@@ -50,6 +50,10 @@ class TrainingConfig:
     min_selected_dmps: Optional[int] = None
     min_dmps_for_export: int = 1000
     
+    # Validation-accuracy optimization (requires real validation samples)
+    optimize_for_validation_accuracy: bool = False  # Enable accuracy-based optimization after AUC search
+    validation_search_max_k: Optional[int] = None  # Max k to test (default: all available DMPs)
+    
     # Improved algorithm parameters (analytical approach)
     target_fpr: float = 0.01  # Target false positive rate
     target_fnr: float = 0.01  # Target false negative rate

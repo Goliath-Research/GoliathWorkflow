@@ -85,6 +85,16 @@ class MethylDetectorConfig(BaseModel):
         description="Number of synthetic samples per class to generate for classifier validation (from Beta distributions)"
     )
     
+    # Validation-accuracy optimization (requires real samples)
+    optimize_for_validation_accuracy: bool = Field(
+        default=False,
+        description="Enable accuracy-based DMP optimization using real validation samples (requires validation_mode='real' and validation samples). Uses binary search to find minimum k that achieves maximum accuracy."
+    )
+    validation_search_max_k: Optional[int] = Field(
+        default=None, ge=1,
+        description="Maximum k to test during validation optimization (default: all available DMPs). Algorithm tests this k first to find best achievable accuracy, then binary searches for minimum k."
+    )
+    
     # Improved algorithm parameters (analytical approach)
     target_fpr: float = Field(
         default=0.01, ge=0.0, le=1.0,

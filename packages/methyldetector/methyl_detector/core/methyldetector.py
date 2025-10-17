@@ -118,6 +118,9 @@ class MethylDetector:
             centroid1_validation_samples=self.config.centroid1_validation_samples,
             centroid2_validation_samples=self.config.centroid2_validation_samples,
             n_validation_samples=self.config.n_validation_samples,
+            # Validation-accuracy optimization
+            optimize_for_validation_accuracy=self.config.optimize_for_validation_accuracy,
+            validation_search_max_k=self.config.validation_search_max_k,
             # Improved algorithm parameters (analytical approach)
             target_fpr=self.config.target_fpr,
             target_fnr=self.config.target_fnr,
