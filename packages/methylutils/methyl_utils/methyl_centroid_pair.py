@@ -346,18 +346,20 @@ class MethylCentroidPair:
         indices1 = np.searchsorted(centroid1.pos, positions)
         indices2 = np.searchsorted(centroid2.pos, positions)
 
-        # Extract data directly as arrays for vectorized operations
+        # Use pre-computed Beta parameters from centroids (already bounded correctly)
+        # These are computed by MethylSample._estimate_beta_params_bounded_extended
+        alpha1 = centroid1.alpha[indices1].astype(np.float32)
+        beta1 = centroid1.beta[indices1].astype(np.float32)
+        alpha2 = centroid2.alpha[indices2].astype(np.float32)
+        beta2 = centroid2.beta[indices2].astype(np.float32)
+        
+        # Extract other data needed for statistical tests
         N1 = centroid1.N[indices1].astype(np.float32)
+        N2 = centroid2.N[indices2].astype(np.float32)
         log_x_sum1 = centroid1.log_x_sum[indices1].astype(np.float32)
         log_1mx_sum1 = centroid1.log_1_minus_x_sum[indices1].astype(np.float32)
-
-        N2 = centroid2.N[indices2].astype(np.float32)
         log_x_sum2 = centroid2.log_x_sum[indices2].astype(np.float32)
         log_1mx_sum2 = centroid2.log_1_minus_x_sum[indices2].astype(np.float32)
-
-        # Estimate Beta parameters using MLE (vectorized)
-        alpha1, beta1 = beta_mle_estimation(N1, log_x_sum1, log_1mx_sum1)
-        alpha2, beta2 = beta_mle_estimation(N2, log_x_sum2, log_1mx_sum2)
 
         # Compute means and delta_mean (vectorized)
         mean1 = alpha1 / (alpha1 + beta1)

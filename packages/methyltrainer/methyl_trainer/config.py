@@ -50,14 +50,21 @@ class TrainingConfig:
     min_selected_dmps: Optional[int] = None
     min_dmps_for_export: int = 1000
     
+    # Improved algorithm parameters (analytical approach)
+    target_fpr: float = 0.01  # Target false positive rate
+    target_fnr: float = 0.01  # Target false negative rate
+    rank_gamma: float = 1.0  # Exponent for (1-BC) in precision-weighted ranking: score = (|Δμ|/√var) × (1-BC)^γ
+    var_pool: str = "sum"  # Variance pooling: "sum", "max", or "harmonic"
+    prior_cancer: float = 0.5  # Prior probability for cancer/disease class
+    prior_healthy: float = 0.5  # Prior probability for healthy/control class
+    centroid1_label: str = "cancer"  # Class label for centroid1: 'cancer' or 'healthy'
+    centroid2_label: str = "healthy"  # Class label for centroid2: 'cancer' or 'healthy'
+    
     # Validation configuration
     validation_mode: str = "synthetic"  # "synthetic" or "real"
     centroid1_validation_samples: Optional[List[str]] = None
     centroid2_validation_samples: Optional[List[str]] = None
     n_validation_samples: int = 100
-    
-    # Prediction method configuration
-    prediction_method: str = "sklearn"  # "sklearn" (fast, trained model) or "beta" (exact probabilistic)
     
     # GPU configuration
     use_gpu: bool = True

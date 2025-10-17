@@ -20,6 +20,7 @@ from methyl_utils import (
 )
 from methyl_utils.logging_utils import setup_module_logging
 from scipy.stats import norm
+from scipy.stats import beta  # Add this
 
 from .config import TrainingConfig
 
@@ -129,20 +130,31 @@ class MethylTrainer:
             'chromosome': chromosome,
             'context': context,
             'n_dmps': len(biological_dmps_df),
-            'prediction_method': self.config.prediction_method,  # Store user's preferred prediction method
+            # Improved algorithm fields
+            'threshold': getattr(self, '_cum_stats', {}).get('threshold', 0.0),
+            'target_fpr': self.config.target_fpr,
+            'target_fnr': self.config.target_fnr,
+            'priors': (self.config.prior_cancer, self.config.prior_healthy),
+            'cum_stats': getattr(self, '_cum_stats', {}),  # Cumulative LLR statistics
+            'rank_gamma': self.config.rank_gamma,
+            'var_pool': self.config.var_pool,
             'metadata': {
                 'chromosome': chromosome,
                 'context': context,
                 'n_dmps': len(biological_dmps_df),
                 'validation_accuracy': accuracy,
-                'prediction_method': self.config.prediction_method,
                 'config': {
                     'alpha': self.config.alpha,
                     'min_delta_mean': self.config.min_delta_mean,
                     'max_bc': self.config.max_bc,
                     'target_auc': self.config.target_auc,
+                    'target_fpr': self.config.target_fpr,
+                    'target_fnr': self.config.target_fnr,
                     'validation_mode': self.config.validation_mode,
-                    'prediction_method': self.config.prediction_method
+                    'rank_gamma': self.config.rank_gamma,
+                    'var_pool': self.config.var_pool,
+                    'prior_cancer': self.config.prior_cancer,
+                    'prior_healthy': self.config.prior_healthy
                 }
             }
         }
@@ -637,11 +649,13 @@ class MethylTrainer:
     
     def _create_classifier(self, biological_dmps_df: pd.DataFrame) -> tuple:
         """
-        Create classifier from selected DMPs.
+        Create classifier from selected DMPs with improved algorithm support.
         
         Returns:
             Tuple of (classifier_data dict, ProbabilisticBetaClassifier)
         """
+        from scipy.special import betaln
+        
         # Extract Beta parameters
         alpha1 = biological_dmps_df['alpha1'].values
         beta1 = biological_dmps_df['beta1'].values
@@ -663,6 +677,15 @@ class MethylTrainer:
         else:
             weights = np.ones(len(biological_dmps_df))
         
+        # Compute LLR constants (betaln differences) for threshold-based classification
+        # Assign based on config labels to ensure correct class mapping
+        if self.config.centroid1_label.lower() == 'cancer':
+            # centroid1 is cancer, centroid2 is healthy
+            llr_const = -(betaln(alpha1, beta1) - betaln(alpha2, beta2))
+        else:
+            # centroid1 is healthy, centroid2 is cancer (swap the sign)
+            llr_const = -(betaln(alpha2, beta2) - betaln(alpha1, beta1))
+        
         classifier_data = {
             'positions': biological_dmps_df['position'].values,
             'alpha1': alpha1,
@@ -670,27 +693,90 @@ class MethylTrainer:
             'alpha2': alpha2,
             'beta2': beta2,
             'weights': weights,
-            'directions': directions
+            'directions': directions,
+            'llr_const': llr_const,  # Add LLR constants for improved algorithm
+            'centroid1_label': self.config.centroid1_label,  # Store label info
+            'centroid2_label': self.config.centroid2_label
         }
         
         # Create classifier
         classifier = ProbabilisticBetaClassifier(classifier_data)
-        
-        # Train sklearn model for fast prediction if we have validation samples
-        if self._validation_samples is not None:
-            logger.info("Training sklearn model for fast prediction...")
-            # Get positions that match our DMPs
-            selected_positions = biological_dmps_df['position'].values
-            position_indices = np.isin(self._validation_dmp_positions, selected_positions)
-            
-            if np.any(position_indices):
-                X_train = self._validation_samples[:, position_indices]
-                y_train = self._validation_labels
-                classifier.fit_sklearn_model(X_train, y_train)
-                logger.info("✅ Sklearn model trained for fast prediction")
+
+        # NOTE: Directions calibration removed - following copilot.py approach
+        # Direct centroid1=class0, centroid2=class1 assignment without per-position flipping
         
         return classifier_data, classifier
     
+    def _calibrate_directions(self, classifier, classifier_data):
+        """Calibrate directions by checking sample alignments. Returns possibly updated classifier."""
+        # Get positions
+        positions = classifier_data['positions']
+        
+        # Find matching indices in validation data
+        position_indices = np.isin(self._validation_dmp_positions, positions)
+        if not np.any(position_indices):
+            logger.warning("No matching positions for calibration")
+            return classifier # Return the original classifier if no match
+        
+        X_val = self._validation_samples[:, position_indices]
+        
+        # Split by class
+        class0_mask = self._validation_labels == 0
+        class1_mask = self._validation_labels == 1
+        
+        x_class0 = X_val[class0_mask]
+        x_class1 = X_val[class1_mask]
+        
+        if len(x_class0) == 0 or len(x_class1) == 0:
+            logger.warning("Insufficient samples for calibration")
+            return classifier # Return the original classifier if insufficient samples
+        
+        # Per-position calibration (vectorized)
+        n_dmps = X_val.shape[1]
+        directions = classifier_data['directions'].copy()
+
+        # Broadcast params
+        a0 = np.where(directions == 1, classifier.data['alpha1'], classifier.data['alpha2'])[np.newaxis, :]
+        b0 = np.where(directions == 1, classifier.data['beta1'], classifier.data['beta2'])[np.newaxis, :]
+        a1 = np.where(directions == 1, classifier.data['alpha2'], classifier.data['alpha1'])[np.newaxis, :]
+        b1 = np.where(directions == 1, classifier.data['beta2'], classifier.data['beta1'])[np.newaxis, :]
+
+        # Validate params per position
+        valid1 = (classifier.data['alpha1'] > 0) & (classifier.data['beta1'] > 0) & np.isfinite(classifier.data['alpha1']) & np.isfinite(classifier.data['beta1'])
+        valid2 = (classifier.data['alpha2'] > 0) & (classifier.data['beta2'] > 0) & np.isfinite(classifier.data['alpha2']) & np.isfinite(classifier.data['beta2'])
+        valid = valid1 & valid2
+
+        # Mask invalid in logpdf (use nan for nanmean)
+        log_p0_class0 = np.where(valid[np.newaxis, :], beta.logpdf(x_class0, a0, b0), np.nan)
+        log_p1_class0 = np.where(valid[np.newaxis, :], beta.logpdf(x_class0, a1, b1), np.nan)
+        log_p0_class1 = np.where(valid[np.newaxis, :], beta.logpdf(x_class1, a0, b0), np.nan)
+        log_p1_class1 = np.where(valid[np.newaxis, :], beta.logpdf(x_class1, a1, b1), np.nan)
+
+        # Use np.nanmean to ignore nans
+        correct_current_class0 = np.nanmean(log_p0_class0, axis=0)
+        correct_current_class1 = np.nanmean(log_p1_class1, axis=0)
+        avg_correct_current = np.nanmean([correct_current_class0, correct_current_class1], axis=0)  # Per position
+
+        correct_flipped_class0 = np.nanmean(log_p1_class0, axis=0)
+        correct_flipped_class1 = np.nanmean(log_p0_class1, axis=0)
+        avg_correct_flipped = np.nanmean([correct_flipped_class0, correct_flipped_class1], axis=0)
+
+        # Flip where flipped better and valid
+        flip_mask = (avg_correct_flipped > avg_correct_current) & valid
+        directions[flip_mask] = -directions[flip_mask]
+        flipped_better_count = np.sum(flip_mask)
+
+        if flipped_better_count > 0:
+            improvement = avg_correct_flipped[flip_mask] - avg_correct_current[flip_mask]
+            avg_improvement = np.mean(improvement)
+            logger.info(f"Per-position calibration: flipped {flipped_better_count}/{n_dmps} ({flipped_better_count/n_dmps*100:.1f}%), avg improvement {avg_improvement:.3f}")
+            classifier_data['directions'] = directions
+            classifier = ProbabilisticBetaClassifier(classifier_data)
+        else:
+            logger.info("Per-position calibration: no flips needed")
+
+        return classifier
+
     def _validate_classifier(
         self, 
         classifier, 
@@ -716,12 +802,12 @@ class MethylTrainer:
             if np.any(position_indices):
                 X_val = self._validation_samples[:, position_indices]
                 y_val = self._validation_labels
-                # Use configured prediction method
-                use_sklearn = (self.config.prediction_method == "sklearn")
-                logger.info(f"🔄 Predicting with {self.config.prediction_method} method on {X_val.shape[0]} samples × {X_val.shape[1]} DMPs...")
-                y_pred = classifier.predict(X_val, use_sklearn=use_sklearn)
+                logger.info(f"🔄 Predicting on {X_val.shape[0]} samples × {X_val.shape[1]} DMPs...")
+                proba = classifier.predict_proba(X_val)
+                y_pred = np.argmax(proba, axis=1)
                 accuracy = np.mean(y_pred == y_val)
-                logger.info(f"Classifier validation: accuracy {accuracy*100:.1f}% (method: {self.config.prediction_method})")
+                
+                logger.info(f"Classifier validation: accuracy {accuracy*100:.1f}%")
                 return accuracy
         
         # Perform validation based on mode
@@ -762,14 +848,13 @@ class MethylTrainer:
         X_val = np.vstack([samples_class0, samples_class1])
         y_true = np.array([0] * n_samples + [1] * n_samples)
         
-        # Predict using configured method
-        use_sklearn = (self.config.prediction_method == "sklearn")
-        y_pred = classifier.predict(X_val, use_sklearn=use_sklearn)
+        # Predict
+        y_pred = classifier.predict(X_val)
         
         # Calculate accuracy
         accuracy = np.mean(y_pred == y_true)
         
-        logger.info(f"Validation on {n_samples} synthetic samples per class: accuracy {accuracy*100:.1f}% (method: {self.config.prediction_method})")
+        logger.info(f"Validation on {n_samples} synthetic samples per class: accuracy {accuracy*100:.1f}%")
         
         return accuracy
     
@@ -832,17 +917,22 @@ class MethylTrainer:
         X_val_class1 = np.vstack(samples_class1_data)
         X_val = np.vstack([X_val_class0, X_val_class1])
         
-        # Create labels
-        y_true = np.array([0] * len(samples_class0_data) + [1] * len(samples_class1_data))
-        
-        # Predict using configured method
-        use_sklearn = (self.config.prediction_method == "sklearn")
-        y_pred = classifier.predict(X_val, use_sklearn=use_sklearn)
-        
-        # Calculate accuracy
+        # Create labels: centroid1 samples → 0, centroid2 samples → 1
+        y_true = np.array([0] * len(X_val_class0) + [1] * len(X_val_class1))
+
+        # Predict
+        proba = classifier.predict_proba(X_val, debug=False)
+        y_pred = np.argmax(proba, axis=1)
         accuracy = np.mean(y_pred == y_true)
         
-        logger.info(f"Classifier validation on real samples: accuracy {accuracy*100:.1f}% (method: {self.config.prediction_method})")
+        # Debug: show predictions vs truth for first 10 samples
+        print("\n" + "="*60)
+        print("DEBUG: First 10 predictions vs truth:")
+        for i in range(min(10, len(y_pred))):
+            print(f"  Sample {i}: pred={y_pred[i]}, true={y_true[i]}, P(0)={proba[i,0]:.3f}, P(1)={proba[i,1]:.3f}")
+        print("="*60 + "\n")
+        
+        logger.info(f"Classifier validation on real samples: accuracy {accuracy*100:.1f}%")
         
         return accuracy
 

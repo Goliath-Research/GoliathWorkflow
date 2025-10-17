@@ -1,11 +1,12 @@
 # MethylUtils CUDA-Optimized Container
 FROM nvidia/cuda:12.8.0-devel-ubuntu22.04
 
-# Install system dependencies
+# Install system dependencies including python3-pip
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3.10-dev \
     python3.10-venv \
+    python3-pip \
     build-essential \
     git \
     hdf5-tools \
@@ -15,7 +16,8 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     apt-transport-https \
     unixodbc-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --upgrade pip setuptools wheel
 
 # Install Microsoft ODBC Driver 18 for SQL Server
 RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg && \
@@ -26,10 +28,6 @@ RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor
 
 # Install Python packages with CUDA support
 # Install pip and Poetry
-RUN apt-get update && apt-get install -y python3-pip && rm -rf /var/lib/apt/lists/*
-RUN pip install --upgrade pip setuptools wheel
-
-# Install Poetry for package management (via pip for system-wide access)
 # Configure Poetry to not use virtualenvs and set cache to /tmp for non-root users
 RUN pip install poetry && \
     poetry config virtualenvs.create false && \
@@ -40,8 +38,11 @@ RUN pip install poetry && \
 # Install CuPy with CUDA 12.1 support
 RUN pip install cupy-cuda12x
 
-# Install core scientific libraries first
-RUN pip install --no-cache-dir --retries 3 numpy scipy pandas
+# Install core scientific and utility libraries in one layer
+RUN pip install --no-cache-dir --retries 3 \
+    numpy scipy pandas numba h5py pydantic psutil pyarrow tqdm cupy-cuda12x \
+    scikit-learn statsmodels sqlalchemy plotly matplotlib seaborn \
+    click nvidia-ml-py cudf-cu12 sqlmodel pyodbc pymssql hdf5plugin zarr
 
 # Install pydantic from source to avoid zlib issues
 RUN pip install --no-cache-dir --retries 3 --timeout 300 --no-binary pydantic,pydantic-core pydantic
@@ -58,7 +59,7 @@ RUN pip install --no-cache-dir --retries 3 click
 RUN pip install --no-cache-dir --retries 3 tqdm
 
 # Install statistical libraries
-RUN pip install --no-cache-dir --retries 3 statsmodels sqlalchemy
+RUN pip install --no-cache-dir --retries 3 statsmodels sqlalchemy scikit-learn
 
 # Install NVIDIA libraries
 RUN pip install --no-cache-dir --retries 3 nvidia-ml-py>=12.535.0
