@@ -159,43 +159,15 @@ class MethylClassifier:
 
         return self.classifier.get_feature_info()
     
-    def _choose_prediction_method(self) -> bool:
-        """
-        Choose prediction method based on smart defaults.
-        
-        Logic:
-        1. If metadata specifies prediction_method, use it
-        2. Otherwise, use sklearn for >10 DMPs (fast), beta for ≤10 DMPs (exact)
-        
-        Returns:
-            True for sklearn, False for beta
-        """
-        # Check metadata first
-        if 'prediction_method' in self.metadata:
-            return self.metadata['prediction_method'] == 'sklearn'
-        
-        # Smart default based on number of DMPs
-        n_dmps = self.metadata.get('n_dmps', 0)
-        
-        if n_dmps <= 10:
-            # Few DMPs: beta is fast enough and more precise
-            return False
-        else:
-            # Many DMPs: sklearn is much faster with excellent precision
-            return True
-
     def predict(self, methylation_data: np.ndarray,
                 availability_mask: Optional[np.ndarray] = None,
-                use_sklearn: Optional[bool] = None,
                 debug: bool = False) -> np.ndarray:
         """
-        Predict classes for methylation data.
+        Predict classes for methylation data using Beta distributions.
 
         Args:
             methylation_data: Array of methylation values
             availability_mask: Boolean mask indicating available positions
-            use_sklearn: If None, uses model's preferred method from metadata.
-                        If True, uses sklearn (fast). If False, uses beta (exact).
             debug: Enable debug output
 
         Returns:
@@ -203,25 +175,18 @@ class MethylClassifier:
         """
         if self.classifier is None:
             raise RuntimeError("No classifier loaded")
-        
-        # Smart default if not specified
-        if use_sklearn is None:
-            use_sklearn = self._choose_prediction_method()
 
-        return self.classifier.predict(methylation_data, availability_mask, use_sklearn, debug)
+        return self.classifier.predict(methylation_data, availability_mask, debug)
 
     def predict_proba(self, methylation_data: np.ndarray,
                      availability_mask: Optional[np.ndarray] = None,
-                     use_sklearn: Optional[bool] = None,
                      debug: bool = False) -> np.ndarray:
         """
-        Predict class probabilities for methylation data.
+        Predict class probabilities for methylation data using Beta distributions.
 
         Args:
             methylation_data: Array of methylation values
             availability_mask: Boolean mask indicating available positions
-            use_sklearn: If None, uses model's preferred method from metadata.
-                        If True, uses sklearn (fast). If False, uses beta (exact).
             debug: Enable debug output
 
         Returns:
@@ -229,12 +194,60 @@ class MethylClassifier:
         """
         if self.classifier is None:
             raise RuntimeError("No classifier loaded")
-        
-        # Smart default if not specified
-        if use_sklearn is None:
-            use_sklearn = self._choose_prediction_method()
 
-        return self.classifier.predict_proba(methylation_data, availability_mask, use_sklearn, debug)
+        return self.classifier.predict_proba(methylation_data, availability_mask, debug)
+    
+    def predict_with_threshold(
+        self,
+        methylation_data: np.ndarray,
+        availability_mask: Optional[np.ndarray] = None,
+        adjust_for_missing: bool = True,
+        debug: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Predict using threshold-based classification (improved algorithm).
+        
+        This method uses the analytical threshold-based approach if the model
+        was trained with the improved algorithm. Falls back to standard prediction
+        if threshold information is not available.
+        
+        Args:
+            methylation_data: Array of methylation values
+            availability_mask: Boolean mask indicating available positions
+            adjust_for_missing: Whether to adjust threshold for missing positions
+            debug: Enable debug output
+        
+        Returns:
+            Dictionary with predictions, probabilities, and diagnostic info
+        """
+        if self.classifier is None:
+            raise RuntimeError("No classifier loaded")
+        
+        # Check if model has threshold (improved algorithm)
+        if 'threshold' not in self.metadata or not hasattr(self.classifier, 'predict_with_threshold'):
+            # Fallback to standard prediction
+            if debug:
+                print("⚠️ Model does not support threshold-based prediction, using standard method")
+            proba = self.predict_proba(methylation_data, availability_mask, debug=debug)
+            predictions = np.argmax(proba, axis=1)
+            return {
+                'predictions': predictions,
+                'P_C': proba[:, 1],
+                'P_H': proba[:, 0],
+                'decision': np.where(predictions == 1, 'Cancer', 'Healthy')
+            }
+        
+        # Use threshold-based prediction
+        threshold = self.metadata['threshold']
+        priors = self.metadata.get('priors', (0.5, 0.5))
+        
+        return self.classifier.predict_with_threshold(
+            methylation_data,
+            threshold=threshold,
+            priors=priors,
+            adjust_for_missing=adjust_for_missing,
+            availability_mask=availability_mask
+        )
 
 
 def extract_chrom_context_from_classifier(classifier_path: Path) -> Tuple[str, str]:

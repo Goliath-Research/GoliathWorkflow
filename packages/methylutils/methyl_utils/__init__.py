@@ -225,6 +225,16 @@ from .bayesian_classifier_trainer import (
     train_classifier_from_centroids
 )
 
+# Import Beta Analytics (improved algorithm functions)
+from .beta_analytics import (
+    compute_per_site_llr_stats,
+    compute_precision_weighted_score,
+    compute_bhattacharyya_coefficient,
+    beta_log_pdf,
+    compute_beta_mean,
+    compute_beta_variance
+)
+
 __version__ = "1.0.0"
 __all__ = [
     # GPU detection functions
@@ -280,6 +290,13 @@ __all__ = [
     "compute_entropy",
     "compute_sample_centroid_jsd",
     "get_sample_beta_mom",
+    # Beta analytics functions (improved algorithm)
+    "compute_per_site_llr_stats",
+    "compute_precision_weighted_score",
+    "compute_bhattacharyya_coefficient",
+    "beta_log_pdf",
+    "compute_beta_mean",
+    "compute_beta_variance",
     # Factory functions
     "MetricFactory",
     "get_metric_factory",

@@ -151,62 +151,52 @@ def compute_beta_llr_moments(
     This function computes the moments of the log-likelihood ratio statistic
     for comparing two Beta distributions with parameters (alpha1, beta1) and (alpha2, beta2),
     where dalpha = alpha1 - alpha2 and dbeta = beta1 - beta2.
+    
+    Uses analytical formulas with digamma and trigamma functions for exact computation.
 
     Args:
-        alpha: Alpha parameters of the Beta distributions
-        beta: Beta parameters of the Beta distributions
+        alpha: Alpha parameters of the first Beta distribution
+        beta: Beta parameters of the first Beta distribution
         dalpha: Difference in alpha parameters (alpha1 - alpha2)
         dbeta: Difference in beta parameters (beta1 - beta2)
         use_gpu: Whether to use GPU acceleration if available
 
     Returns:
-        Tuple of (mean, variance) arrays
+        Tuple of (mean, variance) arrays computed under the first distribution
     """
     calc = DistanceCalculator()
-    xp, xdigamma, _, _ = calc.get_backend(use_gpu)
+    xp, xdigamma, xpolygamma, _ = calc.get_backend(use_gpu)
 
     # Prepare arrays for backend
     (alpha, beta, dalpha, dbeta), _ = _prepare_arrays_for_backend([alpha, beta, dalpha, dbeta], calc, use_gpu)
+    
+    # Helper function for trigamma
+    def trigamma(x):
+        return xpolygamma(1, x)
+    
+    # Compute E[log X] and E[log(1-X)] under Beta(alpha, beta)
+    sum_ab = alpha + beta
+    e_logX = xdigamma(alpha) - xdigamma(sum_ab)
+    e_log1mX = xdigamma(beta) - xdigamma(sum_ab)
+    
+    # Compute Var[log X], Var[log(1-X)], and Cov[log X, log(1-X)]
+    var_logX = trigamma(alpha) - trigamma(sum_ab)
+    var_log1mX = trigamma(beta) - trigamma(sum_ab)
+    cov_logX_log1mX = -trigamma(sum_ab)
+    
+    # Mean of LLR under the first distribution
+    # LLR = dalpha * log(X) + dbeta * log(1-X) + const
+    # E[LLR] = dalpha * E[log X] + dbeta * E[log(1-X)]
+    mean = dalpha * e_logX + dbeta * e_log1mX
+    
+    # Variance of LLR under the first distribution
+    # Var[LLR] = dalpha² Var[log X] + dbeta² Var[log(1-X)] + 2×dalpha×dbeta×Cov[log X, log(1-X)]
+    var = (dalpha ** 2) * var_logX + (dbeta ** 2) * var_log1mX + 2 * dalpha * dbeta * cov_logX_log1mX
+    var = xp.maximum(var, 1e-12)  # Ensure positive variance
 
-    # For Beta distributions, the log-likelihood ratio involves digamma functions
-    # This is a simplified approximation - the actual implementation should be in MethylUtils
-
-    # Use digamma function approximation for Beta distribution moments
-    # ψ(x) ≈ ln(x) - 1/(2x) for large x, with numerical stability
-    def digamma_approx(x):
-        # Clip x to reasonable bounds to prevent overflow/underflow
-        x_clipped = xp.clip(x, 1e-10, 1e10)
-        return xp.log(x_clipped) - 1/(2*x_clipped)
-
-    # Mean of log-likelihood ratio (simplified approximation)
-    # LLR ≈ (α1 - α2) * ψ(α1) + (β1 - β2) * ψ(β1) - (α1 - α2 + β1 - β2) * ψ(α1 + β1)
-    # This is a rough approximation - actual implementation needs proper statistical treatment
-
-    # Simplified implementation - this should be replaced with proper statistical calculation
-    # For now, return reasonable approximations based on parameter differences
-
-    # Mean approximation based on parameter differences
-    # Add numerical stability by avoiding problematic subtractions
-    alpha_safe = xp.maximum(alpha, 1e-6)
-    beta_safe = xp.maximum(beta, 1e-6)
-    dalpha_safe = xp.clip(dalpha, -1e6, 1e6)
-    dbeta_safe = xp.clip(dbeta, -1e6, 1e6)
-
-    # Simplified mean approximation to avoid numerical issues
-    mean = dalpha_safe * digamma_approx(alpha_safe) + dbeta_safe * digamma_approx(beta_safe)
-
-    # Variance approximation (simplified)
-    # Variance of LLR involves trigamma functions - using approximation
-    def trigamma_approx(x):
-        x_clipped = xp.clip(x, 1e-10, 1e10)
-        return 1/x_clipped + 1/(2*x_clipped**2)
-
-    # Simplified variance to avoid overflow
-    var = xp.maximum(dalpha_safe**2 + dbeta_safe**2, 1e-10)
-
-    # Ensure output is CPU arrays with additional clipping
-    mean_cpu = _ensure_cpu_output(xp.clip(mean, -1e12, 1e12), calc, use_gpu)
-    var_cpu = _ensure_cpu_output(xp.clip(var, 1e-10, 1e12), calc, use_gpu)
+    # Ensure output is CPU arrays
+    mean_cpu = _ensure_cpu_output(mean, calc, use_gpu)
+    var_cpu = _ensure_cpu_output(var, calc, use_gpu)
 
     return mean_cpu, var_cpu
 

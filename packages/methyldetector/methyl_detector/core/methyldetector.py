@@ -118,8 +118,15 @@ class MethylDetector:
             centroid1_validation_samples=self.config.centroid1_validation_samples,
             centroid2_validation_samples=self.config.centroid2_validation_samples,
             n_validation_samples=self.config.n_validation_samples,
-            # Prediction method configuration
-            prediction_method=self.config.prediction_method if hasattr(self.config, 'prediction_method') else "sklearn",
+            # Improved algorithm parameters (analytical approach)
+            target_fpr=self.config.target_fpr,
+            target_fnr=self.config.target_fnr,
+            rank_gamma=self.config.rank_gamma,
+            var_pool=self.config.var_pool,
+            prior_cancer=self.config.prior_cancer,
+            prior_healthy=self.config.prior_healthy,
+            centroid1_label=self.config.centroid1_label,
+            centroid2_label=self.config.centroid2_label,
             # GPU configuration
             use_gpu=self.config.use_gpu,
             random_state=self.config.random_state,

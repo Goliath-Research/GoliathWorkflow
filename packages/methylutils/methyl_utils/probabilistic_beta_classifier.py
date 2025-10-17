@@ -11,7 +11,7 @@ integrates seamlessly with the MethylUtils ecosystem.
 
 import numpy as np
 from scipy.stats import beta
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, Tuple
 
 
 class ProbabilisticBetaClassifier:
@@ -72,28 +72,19 @@ class ProbabilisticBetaClassifier:
 
         self.data = data
         self.n_dmps = n_positions
-        
-        # Optional sklearn model for fast prediction
-        self._sklearn_model = None
 
     def predict_proba(self, X: np.ndarray,
                      availability_mask: Optional[np.ndarray] = None,
-                     use_sklearn: bool = True,
                      debug: bool = False) -> np.ndarray:
         """
-        Predict posterior probabilities for samples in X.
-
-        Uses sklearn model (fast) if available and requested, otherwise uses
-        Beta distribution method (slower, more accurate probabilistic inference).
+        Predict posterior probabilities for samples in X using Beta distributions.
 
         Args:
             X: Feature matrix of shape (n_samples, n_features) where n_features
                matches the number of DMPs used in training. Values should be
                methylation levels in [0, 1].
             availability_mask: Boolean mask of shape (n_samples, n_features)
-                             indicating which positions are available. Only used
-                             for Beta distribution method.
-            use_sklearn: If True and sklearn model available, use it for prediction
+                             indicating which positions are available.
             debug: If True, print debug information for the first sample.
 
         Returns:
@@ -105,69 +96,79 @@ class ProbabilisticBetaClassifier:
         """
         if X.shape[1] != self.n_dmps:
             raise ValueError(f"Expected {self.n_dmps} features, got {X.shape[1]}")
-        
-        # Use sklearn model if available and requested (much faster)
-        if use_sklearn and self._sklearn_model is not None:
-            return self._sklearn_model.predict_proba(X)
 
         n_samples = X.shape[0]
         log_likelihoods = np.zeros((n_samples, 2))  # [log P(data|centroid1), log P(data|centroid2)]
 
-        for i in range(n_samples):
-            sample = X[i, :]
+        methylation_vals = np.clip(X, 1e-6, 1-1e-6)  # Shape: (n_samples, n_dmps)
 
-            # Compute log-likelihood for each centroid
-            log_like1 = 0.0
-            log_like2 = 0.0
-            valid_positions = 0
+        # Get base parameters (should now be bounded from methyl_centroid_pair.py)
+        # Following copilot.py: NO DIRECTIONS - directly assign centroid1=class0, centroid2=class1
+        alpha1_base = self.data['alpha1']
+        beta1_base = self.data['beta1']
+        alpha2_base = self.data['alpha2']
+        beta2_base = self.data['beta2']
+        
+        # Direct assignment: class0=centroid1, class1=centroid2
+        alpha_class0 = alpha1_base
+        beta_class0 = beta1_base
+        alpha_class1 = alpha2_base
+        beta_class1 = beta2_base
+        
+        # Broadcast across samples
+        alpha0 = np.repeat(alpha_class0[np.newaxis, :], n_samples, axis=0)
+        beta0 = np.repeat(beta_class0[np.newaxis, :], n_samples, axis=0)
+        alpha1 = np.repeat(alpha_class1[np.newaxis, :], n_samples, axis=0)
+        beta1 = np.repeat(beta_class1[np.newaxis, :], n_samples, axis=0)
 
-            if debug and i == 0:  # Debug first sample
-                print(f"Debugging sample {i}:")
-                available_count = np.sum(availability_mask[i]) if availability_mask is not None else self.n_dmps
-                print(f"  Available positions: {available_count}/{self.n_dmps}")
+        # Compute logpdf under each class
+        log_p_class0 = beta.logpdf(methylation_vals, alpha0, beta0)
+        log_p_class1 = beta.logpdf(methylation_vals, alpha1, beta1)
 
-            for j in range(self.n_dmps):
-                # Skip if position is not available
-                if availability_mask is not None and not availability_mask[i, j]:
-                    continue
+        # Validate parameters: mask invalid positions (alpha/beta <=0 or inf/nan)
+        valid0 = (alpha0 > 0) & (beta0 > 0) & np.isfinite(alpha0) & np.isfinite(beta0)
+        valid1 = (alpha1 > 0) & (beta1 > 0) & np.isfinite(alpha1) & np.isfinite(beta1)
+        valid = valid0 & valid1  # Only use positions valid for both classes
 
-                methylation_val = sample[j]
+        # Mask unavailable or invalid positions
+        if availability_mask is not None:
+            effective_mask = availability_mask & valid
+            log_p_class0 = np.where(effective_mask, log_p_class0, 0.0)
+            log_p_class1 = np.where(effective_mask, log_p_class1, 0.0)
+            valid_counts = np.sum(effective_mask, axis=1)
+        else:
+            effective_mask = valid
+            log_p_class0 = np.where(effective_mask, log_p_class0, 0.0)
+            log_p_class1 = np.where(effective_mask, log_p_class1, 0.0)
+            valid_counts = np.sum(effective_mask, axis=1)
 
-                # Clamp to valid range [0,1] to avoid numerical issues
-                methylation_val = np.clip(methylation_val, 1e-6, 1-1e-6)
+        log_like_class0 = np.sum(log_p_class0, axis=1)
+        log_like_class1 = np.sum(log_p_class1, axis=1)
 
-                # Use directions to determine which Beta distribution corresponds to each class
-                if self.data['directions'][j] == 1:
-                    # Direction 1: class 0 = centroid1, class 1 = centroid2
-                    a0, b0 = self.data['alpha1'][j], self.data['beta1'][j]  # Class 0
-                    a1_class, b1_class = self.data['alpha2'][j], self.data['beta2'][j]  # Class 1
-                else:
-                    # Direction -1: class 0 = centroid2, class 1 = centroid1 (swapped)
-                    a0, b0 = self.data['alpha2'][j], self.data['beta2'][j]  # Class 0
-                    a1_class, b1_class = self.data['alpha1'][j], self.data['beta1'][j]  # Class 1
+        # DO NOT AVERAGE - copilot.py sums log-likelihoods
+        # Handle no valid positions (set to same neutral value)
+        mask_no_valid = valid_counts == 0
+        log_like_class0[mask_no_valid] = 0.0
+        log_like_class1[mask_no_valid] = 0.0
 
-                log_p0 = beta.logpdf(methylation_val, a0, b0)
-                log_p1_class = beta.logpdf(methylation_val, a1_class, b1_class)
+        # Assign to classes: Column 0 = class0, Column 1 = class1
+        log_likelihoods[:, 0] = log_like_class0
+        log_likelihoods[:, 1] = log_like_class1
 
-                # Accumulate log-likelihoods
-                log_like1 += log_p0        # Class 0 likelihood
-                log_like2 += log_p1_class  # Class 1 likelihood
+        # Debug first sample if requested
+        if debug:
+            i = 0
+            available_count = valid_counts[i] if valid_counts[i] > 0 else 0
+            print(f"Debugging sample {i}:")
+            print(f"  Available positions: {available_count}/{self.n_dmps}")
+            print(f"  Used positions: {available_count}")
+            print(f"  Log-likelihoods: Class0={log_like_class0[i]:.2f}, Class1={log_like_class1[i]:.2f}")
 
-                valid_positions += 1
-
-            if debug and i == 0:
-                print(f"  Used positions: {valid_positions}")
-                print(f"  Log-likelihoods: Class0={log_like1:.2f}, Class1={log_like2:.2f}")
-                print(f"  Direction for position {j}: {self.data['directions'][j]}")
-
-            # Store the log-likelihoods
-            if valid_positions > 0:
-                log_likelihoods[i, 0] = log_like1
-                log_likelihoods[i, 1] = log_like2
-            else:
-                # If no positions are available, use neutral classification
-                log_likelihoods[i, 0] = 0.0
-                log_likelihoods[i, 1] = 0.0
+        # Debug: add stats on invalid params
+        if debug:
+            print(f"  Fraction valid for class0: {np.mean(valid0):.3f}")
+            print(f"  Fraction valid for class1: {np.mean(valid1):.3f}")
+            print(f"  Fraction valid for both: {np.mean(valid):.3f}")
 
         # Convert to probabilities using log-sum-exp trick for numerical stability
         # P(class|data) ∝ P(data|class) * P(class) (assuming equal priors)
@@ -179,66 +180,187 @@ class ProbabilisticBetaClassifier:
             print(f"Final probabilities: {posterior_probs[0]}")
 
         return posterior_probs
-
-    def fit_sklearn_model(self, X: np.ndarray, y: np.ndarray):
+    
+    def predict_with_threshold(
+        self,
+        X: np.ndarray,
+        threshold: float,
+        priors: Tuple[float, float] = (0.5, 0.5),
+        adjust_for_missing: bool = True,
+        availability_mask: Optional[np.ndarray] = None
+    ) -> Dict[str, Any]:
         """
-        Train a fast sklearn model from methylation values.
+        Classify using LLR threshold instead of posterior probabilities (improved algorithm).
         
-        This provides a faster prediction method that can be used when speed
-        is more important than exact probabilistic inference. The Beta distribution
-        parameters are still stored for probabilistic interpretation.
+        This method implements the threshold-based classification from the improved algorithm:
+        1. Computes log-likelihoods for available positions
+        2. Sums LLR across positions
+        3. Adjusts threshold if positions missing (optional)
+        4. Makes decision based on LLR + log prior odds vs threshold
+        5. Computes posteriors via log-sum-exp for interpretability
         
         Args:
-            X: Methylation values (n_samples, n_dmps)
-            y: Class labels (n_samples,)
+            X: Methylation values array of shape (n_samples, n_features)
+            threshold: LLR threshold for classification
+            priors: Tuple of (prior_cancer, prior_healthy)
+            adjust_for_missing: Whether to adjust threshold for missing positions
+            availability_mask: Boolean mask indicating available positions
+        
+        Returns:
+            Dictionary with:
+                - 'predictions': Array of predicted classes (0 or 1)
+                - 'P_C': Posterior probability for cancer/class1
+                - 'P_H': Posterior probability for healthy/class0
+                - 'sumLLR': Sum of log-likelihood ratios
+                - 'decision': Array of decision strings ('Cancer' or 'Healthy')
+                - 'threshold_used': Threshold used (adjusted if missing positions)
+                - 'used_positions': Number of positions used per sample
         """
-        from sklearn.linear_model import LogisticRegression
-        self._sklearn_model = LogisticRegression(max_iter=1000, random_state=42)
-        self._sklearn_model.fit(X, y)
-    
+        from methyl_utils import beta_log_pdf, compute_per_site_llr_stats
+        from scipy.stats import norm
+        
+        n_samples = X.shape[0]
+        if X.shape[1] != self.n_dmps:
+            raise ValueError(f"Expected {self.n_dmps} features, got {X.shape[1]}")
+        
+        # Extract parameters - assign based on centroid labels if available
+        centroid1_label = self.data.get('centroid1_label', 'cancer').lower()
+        
+        if centroid1_label == 'cancer':
+            # centroid1 is cancer, centroid2 is healthy
+            alpha_C = self.data['alpha1']
+            beta_C = self.data['beta1']
+            alpha_H = self.data['alpha2']
+            beta_H = self.data['beta2']
+        else:
+            # centroid1 is healthy, centroid2 is cancer
+            alpha_C = self.data['alpha2']
+            beta_C = self.data['beta2']
+            alpha_H = self.data['alpha1']
+            beta_H = self.data['beta1']
+        
+        llr_const = self.data.get('llr_const', np.zeros(self.n_dmps))
+        
+        # Clip methylation values
+        X_clipped = np.clip(X, 1e-12, 1.0 - 1e-12)
+        
+        # Determine availability
+        if availability_mask is None:
+            availability_mask = ~np.isnan(X) & (X >= 0) & (X <= 1)
+        
+        # Initialize results
+        sumLLR = np.zeros(n_samples)
+        used_counts = np.zeros(n_samples, dtype=int)
+        
+        # Compute LLR for each sample
+        for i in range(n_samples):
+            available = availability_mask[i] if availability_mask.ndim > 1 else availability_mask
+            x_vals = X_clipped[i, available]
+            
+            if len(x_vals) == 0:
+                continue
+            
+            # Compute log-likelihoods
+            logL_C = beta_log_pdf(x_vals, alpha_C[available], beta_C[available], use_gpu=False)
+            logL_H = beta_log_pdf(x_vals, alpha_H[available], beta_H[available], use_gpu=False)
+            
+            # Sum LLR
+            sumLLR[i] = np.sum(logL_C - logL_H)
+            used_counts[i] = len(x_vals)
+        
+        # Adjust threshold for missing positions if requested
+        threshold_used = threshold
+        if adjust_for_missing and np.any(used_counts < self.n_dmps):
+            # Recompute threshold based on available positions
+            # This requires per-site LLR moments
+            muC_site, varC_site, muH_site, varH_site, _ = compute_per_site_llr_stats(
+                alpha_C, beta_C, alpha_H, beta_H, use_gpu=False
+            )
+            
+            # For each unique count of used positions, compute adjusted threshold
+            unique_counts = np.unique(used_counts[used_counts > 0])
+            threshold_map = {}
+            
+            for count in unique_counts:
+                if count == self.n_dmps:
+                    threshold_map[count] = threshold
+                else:
+                    # Estimate threshold for subset (assuming uniform distribution of missing)
+                    # This is an approximation - ideally we'd know which specific positions
+                    # For now, scale by proportion of positions
+                    scale = count / self.n_dmps
+                    threshold_map[count] = threshold * scale
+            
+            # Apply mapped thresholds
+            threshold_used = np.array([threshold_map.get(c, 0.0) for c in used_counts])
+        
+        # Log prior odds
+        prior_C, prior_H = priors
+        log_prior_odds = np.log(prior_C) - np.log(prior_H)
+        
+        # Make decisions
+        if isinstance(threshold_used, np.ndarray):
+            predictions = ((sumLLR + log_prior_odds) > threshold_used).astype(int)
+        else:
+            predictions = ((sumLLR + log_prior_odds) > threshold_used).astype(int)
+        
+        # Compute posteriors for interpretability (using log-sum-exp)
+        logL_C_total = sumLLR / 2 + np.log(prior_C)  # Approximation
+        logL_H_total = -sumLLR / 2 + np.log(prior_H)
+        
+        max_log = np.maximum(logL_C_total, logL_H_total)
+        exp_C = np.exp(logL_C_total - max_log)
+        exp_H = np.exp(logL_H_total - max_log)
+        denom = exp_C + exp_H
+        
+        P_C = exp_C / denom
+        P_H = exp_H / denom
+        
+        # Create decision labels
+        decisions = np.where(predictions == 1, 'Cancer', 'Healthy')
+        
+        return {
+            'predictions': predictions,
+            'P_C': P_C,
+            'P_H': P_H,
+            'sumLLR': sumLLR,
+            'decision': decisions,
+            'threshold_used': threshold_used,
+            'used_positions': used_counts
+        }
+
     def predict(self, X: np.ndarray,
                availability_mask: Optional[np.ndarray] = None,
-               use_sklearn: bool = True,
                debug: bool = False) -> np.ndarray:
         """
-        Predict class labels for samples in X.
-        
-        Uses sklearn model (fast) if available and requested, otherwise falls back
-        to Beta distribution method (slower, more accurate).
+        Predict class labels for samples in X using Beta distributions.
 
         Args:
             X: Feature matrix of shape (n_samples, n_features)
-            availability_mask: Boolean mask indicating available positions (only for Beta method)
-            use_sklearn: If True and sklearn model available, use it for prediction
-            debug: If True, print debug information (only for Beta method)
+            availability_mask: Boolean mask indicating available positions
+            debug: If True, print debug information
 
         Returns:
             Array of class predictions (0 or 1) of shape (n_samples,)
         """
-        if use_sklearn and self._sklearn_model is not None:
-            return self._sklearn_model.predict(X)
-        else:
-            # Fall back to Beta distribution method
-            probs = self.predict_proba(X, availability_mask, use_sklearn=False, debug=debug)
-            return np.argmax(probs, axis=1)
+        probs = self.predict_proba(X, availability_mask, debug=debug)
+        return np.argmax(probs, axis=1)
 
     def predict_log_proba(self, X: np.ndarray,
                          availability_mask: Optional[np.ndarray] = None,
-                         use_sklearn: bool = True,
                          debug: bool = False) -> np.ndarray:
         """
         Return log posterior probabilities.
 
         Args:
             X: Feature matrix of shape (n_samples, n_features)
-            availability_mask: Boolean mask indicating available positions (only for Beta method)
-            use_sklearn: If True and sklearn model available, use it for prediction
+            availability_mask: Boolean mask indicating available positions
             debug: If True, print debug information
 
         Returns:
             Array of log posterior probabilities of shape (n_samples, 2)
         """
-        probs = self.predict_proba(X, availability_mask, use_sklearn, debug)
+        probs = self.predict_proba(X, availability_mask, debug)
         return np.log(probs + 1e-15)  # Add small epsilon to avoid log(0)
 
     def get_feature_info(self) -> Dict[str, Any]:
