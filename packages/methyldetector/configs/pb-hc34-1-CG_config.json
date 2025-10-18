@@ -1,6 +1,6 @@
 {
   "centroid1_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/centroids/pb-healthy/1-CG.h5",
-  "centroid2_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/centroids/pb-cancer-12/1-CG.h5",
+  "centroid2_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/centroids/pb-cancer-34/1-CG.h5",
   "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-hc-34",
   "alpha": 0.01,
   "min_delta_mean": 0.2,
@@ -52,7 +52,7 @@
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-042825-50082"
   ],
   "centroid2_validation_samples": [
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/034011_18N_24_36",	
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/034011_18N_24_36",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/009650_9K7_89",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/030057_16L_10_26",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/016429_10I_11_45",
