@@ -130,7 +130,7 @@ class MethylTrainer:
             'chromosome': chromosome,
             'context': context,
             'n_dmps': len(biological_dmps_df),
-C            'threshold': getattr(self, '_cum_stats', {}).get('threshold', 0.0),
+            'threshold': getattr(self, '_cum_stats', {}).get('threshold', 0.0),
             'cum_stats': getattr(self, '_cum_stats', {}),  # Cumulative LLR statistics
             'metadata': {
                 'chromosome': chromosome,
