@@ -9,7 +9,7 @@ set -e  # Exit on error
 cd "$(dirname "$0")"
 
 # Define chromosomes and contexts
-CHROMOSOMES=(4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X)
+CHROMOSOMES=(1 2 34 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 X)
 CONTEXTS=(CG CHG CHH)
 
 # Maximum number of parallel jobs (adjust based on your GPU memory)
@@ -21,7 +21,7 @@ mkdir -p "$LOG_DIR"
 
 MAIN_LOG="${LOG_DIR}/main.log"
 
-echo "Starting MethylDetector analysis for chromosomes 4-22 and X" | tee "$MAIN_LOG"
+echo "Starting MethylDetector analysis for chromosomes 1-22 and X" | tee "$MAIN_LOG"
 echo "Running with up to $MAX_JOBS parallel jobs" | tee -a "$MAIN_LOG"
 echo "Log directory: $LOG_DIR" | tee -a "$MAIN_LOG"
 echo "Started at: $(date)" | tee -a "$MAIN_LOG"
@@ -31,7 +31,7 @@ echo "======================================================" | tee -a "$MAIN_LO
 run_analysis() {
   local CHROM=$1
   local CTX=$2
-  local CONFIG="configs/pb-hc12-${CHROM}-${CTX}_config.json"
+  local CONFIG="configs/pb-hc34-${CHROM}-${CTX}_config.json"
   local LOG_FILE="${LOG_DIR}/${CHROM}-${CTX}.log"
   
   echo "[$(date)] Starting: Chromosome $CHROM, Context $CTX" > "$LOG_FILE"
