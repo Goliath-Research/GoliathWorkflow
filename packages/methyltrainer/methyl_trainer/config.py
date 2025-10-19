@@ -52,7 +52,11 @@ class TrainingConfig:
     
     # Validation-accuracy optimization (requires real validation samples)
     optimize_for_validation_accuracy: bool = False  # Enable accuracy-based optimization after AUC search
-    validation_search_max_k: Optional[int] = None  # Max k to test (default: all available DMPs)
+    
+    # Differential Evolution optimization parameters
+    de_max_iterations: int = 50  # Max iterations for differential evolution
+    de_population_size: int = 15  # Population size (default: 15 for 1D problem)
+    de_tolerance: float = 0.001  # Stop if improvement < 0.1% accuracy
     
     
     # Validation configuration

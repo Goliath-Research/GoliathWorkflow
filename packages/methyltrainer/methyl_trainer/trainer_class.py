@@ -54,6 +54,9 @@ class MethylTrainer:
         self._validation_labels = None
         self._validation_dmp_positions = None
         
+        # Accuracy evaluation cache for optimization
+        self._accuracy_cache = {}
+        
         np.random.seed(config.random_state)
         logger.debug("Initialized MethylTrainer")
     
@@ -147,7 +150,7 @@ class MethylTrainer:
             }
         }
         
-        accuracy_str = f"{accuracy:.3f}" if accuracy is not None else "N/A"
+        accuracy_str = f"{accuracy:.6f}" if accuracy is not None else "N/A"
         logger.info(f"✅ Training complete: {len(biological_dmps_df)} DMPs, accuracy={accuracy_str}")
         
         return model_package
@@ -314,7 +317,7 @@ class MethylTrainer:
             test_subset = sorted_df.iloc[:mid]
             performance = self._compute_subset_performance(test_subset, use_gpu=self.config.use_gpu)
             
-            logger.info(f"  Testing k={mid}: AUC={performance:.4f}")
+            logger.info(f"  Testing k={mid}: AUC={performance:.6f}")
             
             if performance >= target_auc:
                 # This k achieves target - try smaller k
@@ -346,7 +349,7 @@ class MethylTrainer:
         final_subset = sorted_df.iloc[:best_k]
         final_performance = self._compute_subset_performance(final_subset, use_gpu=self.config.use_gpu)
         
-        logger.info(f"✅ Binary search complete: selected k={best_k} DMPs with AUC={final_performance:.4f}")
+        logger.info(f"✅ Binary search complete: selected k={best_k} DMPs with AUC={final_performance:.6f}")
         
         # Optional: optimize for validation accuracy (requires real samples)
         if (self.config.optimize_for_validation_accuracy and 
@@ -525,11 +528,10 @@ class MethylTrainer:
     
     def _optimize_for_validation_accuracy(self, sorted_df: pd.DataFrame, start_k: int) -> int:
         """
-        Optimize DMP count for maximum validation accuracy using binary search.
+        Optimize DMP count for maximum validation accuracy using Differential Evolution.
         
-        Strategy:
-        1. Sample a few k values to find the peak accuracy region
-        2. Binary search around the peak to find minimum k that achieves peak accuracy
+        Handles multimodal accuracy functions by using global optimization.
+        Strategy: Find maximum accuracy globally, then find minimum k achieving it.
         
         Args:
             sorted_df: Sorted DataFrame of DMPs (descending by effect size)
@@ -538,64 +540,79 @@ class MethylTrainer:
         Returns:
             Minimum k that achieves maximum validation accuracy
         """
+        from scipy.optimize import differential_evolution
+        
         n_dmps = len(sorted_df)
-        max_k = self.config.validation_search_max_k or n_dmps
+        # Use the number of biological DMPs as max_k
+        max_k = n_dmps
+        
+        # Ensure max_k is at least as large as start_k
+        max_k = max(max_k, start_k)
         
         logger.info(f"  Configuration: start_k={start_k}, max_k={max_k}")
         
-        # Step 1: Sample k values to find peak accuracy (test 5-7 strategic points)
-        logger.info(f"  📊 Sampling k values to find peak accuracy...")
-        sample_ks = []
-        sample_accs = []
+        # If start_k equals max_k, no optimization needed
+        if start_k >= max_k:
+            logger.info(f"  ⚠️ start_k ({start_k}) >= max_k ({max_k}), skipping optimization")
+            return start_k
         
-        # Test at logarithmic intervals to quickly find the peak
-        # Use smaller increments (10-15%) to avoid missing the peak
-        test_points = [start_k]
-        current = start_k
-        while current < max_k:
-            next_k = min(int(current * 1.15), max_k)  # ~15% increments (more granular)
-            if next_k > current:
-                test_points.append(next_k)
-                current = next_k
-            else:
-                break
+        # Clear accuracy cache at start of optimization
+        self._accuracy_cache.clear()
         
-        # Ensure max_k is tested
-        if test_points[-1] != max_k:
-            test_points.append(max_k)
+        # Phase 1: Find maximum achievable accuracy using Differential Evolution
+        logger.info(f"  🎯 Phase 1: Finding maximum accuracy using Differential Evolution...")
         
-        # Test each point
-        for k in test_points:
+        def objective_function(k_float):
+            """Objective function for DE: minimize negative accuracy = maximize accuracy"""
+            # Handle both scalar and array inputs
+            if hasattr(k_float, '__len__') and len(k_float) > 1:
+                # If array, take first element
+                k_float = k_float[0]
+            
+            k = int(round(float(k_float)))
+            k = max(start_k, min(k, max_k))  # Ensure k is within bounds
+            
             test_subset = sorted_df.iloc[:k]
             accuracy = self._compute_validation_accuracy(test_subset)
-            sample_ks.append(k)
-            sample_accs.append(accuracy)
-            logger.info(f"    k={k}: accuracy={accuracy:.4f}")
+            
+            # Return negative accuracy (minimize = maximize)
+            return -accuracy
         
-        # Find the peak accuracy and its k
-        peak_idx = sample_accs.index(max(sample_accs))
-        peak_accuracy = sample_accs[peak_idx]
-        peak_k = sample_ks[peak_idx]
+        # Run Differential Evolution
+        bounds = [(start_k, max_k)]
+        result = differential_evolution(
+            objective_function,
+            bounds,
+            maxiter=self.config.de_max_iterations,
+            popsize=self.config.de_population_size,
+            tol=self.config.de_tolerance,
+            seed=self.config.random_state,
+            strategy='best1bin'
+        )
         
-        logger.info(f"  🎯 Peak accuracy {peak_accuracy:.4f} found around k={peak_k}")
+        # Extract results
+        k_max = int(round(result.x[0]))
+        accuracy_max = -result.fun  # Convert back from negative
         
-        # Step 2: Binary search to find minimum k that achieves peak accuracy
-        # Search between the k before peak and the peak k itself
-        if peak_idx > 0:
-            search_low = sample_ks[peak_idx - 1]
-            search_high = peak_k
-            
-            logger.info(f"  🔍 Binary search for minimum k between {search_low} and {search_high} that achieves {peak_accuracy:.4f}...")
-            
-            optimal_k = self._binary_search_for_accuracy(sorted_df, search_low, search_high, peak_accuracy)
-            
-            logger.info(f"  🏆 Final optimal: k={optimal_k} achieves accuracy={peak_accuracy:.4f}")
-            
-            return optimal_k
-        else:
-            # Peak is at start_k, no refinement needed
-            logger.info(f"  🏆 Peak is at start_k={peak_k}, no refinement needed")
-            return peak_k
+        logger.info(f"  ✅ DE found maximum accuracy {accuracy_max:.6f} at k={k_max}")
+        logger.info(f"  📊 DE converged: {result.success}, iterations: {result.nit}, evaluations: {result.nfev}")
+        
+        # Phase 2: Find minimum k that achieves maximum accuracy
+        logger.info(f"  🔍 Phase 2: Finding minimum k that achieves {accuracy_max:.6f}...")
+        
+        # Use binary search to find minimum k achieving the maximum accuracy
+        # Allow small tolerance to prefer smaller k values
+        target_accuracy = accuracy_max - self.config.de_tolerance
+        
+        optimal_k = self._binary_search_for_accuracy(sorted_df, start_k, k_max, target_accuracy)
+        
+        # Verify final result
+        final_subset = sorted_df.iloc[:optimal_k]
+        final_accuracy = self._compute_validation_accuracy(final_subset)
+        
+        logger.info(f"  🏆 Final optimal: k={optimal_k} achieves accuracy={final_accuracy:.6f}")
+        
+        return optimal_k
     
     def _binary_search_for_accuracy(self, sorted_df: pd.DataFrame, k_low: int, k_high: int, target_accuracy: float) -> int:
         """
@@ -622,12 +639,12 @@ class MethylTrainer:
             test_subset = sorted_df.iloc[:mid]
             accuracy = self._compute_validation_accuracy(test_subset)
             
-            logger.info(f"    k={mid}: accuracy={accuracy:.4f}")
+            logger.info(f"    k={mid}: accuracy={accuracy:.6f}")
             
             # Track if we find better accuracy
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
-                logger.info(f"    ✨ Found better accuracy: {best_accuracy:.4f}")
+                logger.info(f"    ✨ Found better accuracy: {best_accuracy:.6f}")
             
             if accuracy >= target_accuracy:
                 # This k achieves target - try smaller k
@@ -637,11 +654,11 @@ class MethylTrainer:
                 # Need larger k
                 low = mid + 1
         
-        logger.info(f"  ✅ Binary search complete: minimum k={best_k} achieves {best_accuracy:.4f}")
+        logger.info(f"  ✅ Binary search complete: minimum k={best_k} achieves {best_accuracy:.6f}")
         
         # If we found better accuracy, re-search for minimum k achieving it
         if best_accuracy > target_accuracy:
-            logger.info(f"  🔄 Re-searching for minimum k that achieves improved accuracy {best_accuracy:.4f}...")
+            logger.info(f"  🔄 Re-searching for minimum k that achieves improved accuracy {best_accuracy:.6f}...")
             return self._binary_search_for_accuracy(sorted_df, k_low, k_high, best_accuracy)
         
         return best_k
@@ -656,16 +673,24 @@ class MethylTrainer:
         Returns:
             Accuracy score [0, 1]
         """
+        # Create cache key based on subset positions
+        subset_positions = df_subset['position'].values
+        cache_key = tuple(sorted(subset_positions))
+        
+        # Check cache first
+        if cache_key in self._accuracy_cache:
+            logger.debug(f"Using cached accuracy for {len(subset_positions)} DMPs")
+            return self._accuracy_cache[cache_key]
+        
         try:
-            # Get positions for this subset
-            subset_positions = df_subset['position'].values
-            
             # Find indices in validation data
             position_indices = np.isin(self._validation_dmp_positions, subset_positions)
             
             if not np.any(position_indices):
                 logger.debug(f"No matching positions found for validation")
-                return 0.0
+                accuracy = 0.0
+                self._accuracy_cache[cache_key] = accuracy
+                return accuracy
             
             # Extract features
             X = self._validation_samples[:, position_indices]
@@ -702,13 +727,18 @@ class MethylTrainer:
             # Compute accuracy
             accuracy = np.mean(y_pred == y_true)
             
+            # Cache the result
+            self._accuracy_cache[cache_key] = accuracy
+            
             return accuracy
             
         except Exception as e:
             logger.warning(f"Failed to compute validation accuracy: {e}")
             import traceback
             logger.debug(traceback.format_exc())
-            return 0.0
+            accuracy = 0.0
+            self._accuracy_cache[cache_key] = accuracy
+            return accuracy
     
     def _load_validation_samples_for_binary_search(self, dmp_df: pd.DataFrame) -> Optional[tuple]:
         """

@@ -171,7 +171,7 @@ Each analysis produces:
 
 ### Optimize for Memory
 1. **Use sequential execution** for guaranteed completion
-2. **Reduce `validation_search_max_k`** in configs if needed
+2. **Adjust DE parameters** (`de_max_iterations`, `de_population_size`) if needed
 3. **Process large chromosomes separately** (chr 1, 2 already done)
 
 ## Estimated Completion Times
