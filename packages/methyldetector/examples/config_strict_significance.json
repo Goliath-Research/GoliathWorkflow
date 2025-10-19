@@ -1,0 +1,11 @@
+{
+    "centroid1_path": "/path/to/control/centroid1.h5",
+    "centroid2_path": "/path/to/treatment/centroid2.h5",
+    "output_dir": "/home/ubuntu/Work/output_workflows/arabidopsis/detection/strict_analysis",
+    "alpha": 0.01,
+    "min_N_pct": 0.2,
+    "min_delta_mean": 0.3,
+    "max_bc": 0.5,
+    "target_auc": 0.98,
+    "use_gpu": true
+}

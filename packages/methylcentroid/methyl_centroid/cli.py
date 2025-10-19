@@ -230,7 +230,7 @@ def run_single_processing(config: MethylCentroidConfig,
 
     try:
         # Create and run MethylCentroid
-        mc = MethylCentroid.from_config(config, processing_config)
+        mc = MethylCentroid.from_config(config)
         results = mc.build_centroid()
 
         # Print results

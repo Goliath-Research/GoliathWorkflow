@@ -1,0 +1,14 @@
+{
+    "mode": "multiple",
+    "centroid1_dir": "/home/ubuntu/Work/OEP00000860/centroids/tissue_benign",
+    "centroid2_dir": "/home/ubuntu/Work/OEP00000860/centroids/tissue_malignant",
+    "chromosomes": ["1", "2", "3", "4", "5"],
+    "contexts": ["CG", "CHG", "CHH"],
+    "output_dir": "/home/ubuntu/Work/output_workflows/methyl_detector/tissue_benign_vs_malignant",
+    "alpha": 0.05,
+    "min_N": 10,
+    "apply_fdr_correction": true,
+    "fdr_method": "storey",
+    "global_significance_threshold": 0.05,
+    "use_gpu": true
+}

@@ -347,7 +347,7 @@ class MethylCentroid:
         min_samples: int = 3,
         distance_metrics: List[DistanceMetric] = None,
         min_metrics_agree: int = 1,
-        verbose: bool = False,
+        verbose: bool = True,
         # Metadata fields
         laboratory: str = None,
         disease: str = None,
@@ -552,7 +552,9 @@ class MethylCentroid:
                 print(f"Warning: Sample {sample} does not exist")
 
     @classmethod
-    def from_config(cls, config: MethylCentroidConfig, verbose: bool = False) -> "MethylCentroid":
+    def from_config(cls, config: MethylCentroidConfig, verbose: bool = None) -> "MethylCentroid":
+        # Use config.verbose if verbose parameter is not provided, otherwise use the parameter
+        verbose_value = verbose if verbose is not None else config.verbose
 
         return cls(
             samples=getattr(config, 'samples', None),
@@ -569,7 +571,7 @@ class MethylCentroid:
             min_samples=config.min_samples,
             distance_metrics=config.distance_metrics,
             min_metrics_agree=config.min_metrics_agree,
-            verbose=verbose,
+            verbose=verbose_value,
             # Metadata fields
             laboratory=config.laboratory,
             disease=config.disease,
@@ -2726,6 +2728,9 @@ class MethylCentroid:
         active_sample_paths: List[Path],
         dists_array: np.ndarray,
     ) -> None:
+        # Add this check at the beginning
+        if not self.verbose:
+            return
         
         try:
             import pandas as pd
@@ -2781,6 +2786,9 @@ class MethylCentroid:
         sample_distances: Dict[DistanceMetric, np.ndarray],
         sample_p_values: Dict[DistanceMetric, np.ndarray],
     ) -> None:
+        # Add this check at the beginning
+        if not self.verbose:
+            return
         
         try:
             import pandas as pd
@@ -2846,6 +2854,9 @@ class MethylCentroid:
         sample: str,
         metric: DistanceMetric = None,
     ) -> None:
+        # Add this check at the beginning
+        if not self.verbose:
+            return
 
         try:
             import plotly.graph_objects as go
