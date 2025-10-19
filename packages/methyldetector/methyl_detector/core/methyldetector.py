@@ -120,7 +120,6 @@ class MethylDetector:
             n_validation_samples=self.config.n_validation_samples,
             # Validation-accuracy optimization
             optimize_for_validation_accuracy=self.config.optimize_for_validation_accuracy,
-            validation_search_max_k=self.config.validation_search_max_k,
             # GPU configuration
             use_gpu=self.config.use_gpu,
             random_state=self.config.random_state,
