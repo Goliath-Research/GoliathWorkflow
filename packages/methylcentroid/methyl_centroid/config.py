@@ -105,6 +105,10 @@ class MethylCentroidConfig(BaseModel):
         ge=0,
         description="Minimum number of distance metrics that must agree for a sample to be considered an outlier. Set to 0 to use General Simes formula."
     )
+    verbose: bool = Field(
+        default=True,
+        description="Enable verbose output (CSV files and charts during outlier removal)"
+    )
 
     @field_validator('ctx')
     @classmethod

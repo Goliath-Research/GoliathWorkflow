@@ -161,15 +161,12 @@ cython_debug/
 # Project-specific
 data/
 results/
-*.csv
 *.tsv
 *.parquet
 *.h5
 *.hdf5
-*.json
 *.log
 *.png
-*.pdf
 
 # Docker
 .dockerignore

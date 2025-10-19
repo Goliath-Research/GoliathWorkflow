@@ -1,0 +1,13 @@
+{
+    "centroid1_dir": "/path/to/control/centroids",
+    "centroid2_dir": "/path/to/treatment/centroids",
+    "chromosomes": ["1", "2", "3", "4", "5"],
+    "contexts": ["CG", "CHG", "CHH"],
+    "output_dir": "/home/ubuntu/Work/output_workflows/arabidopsis/detection/multiple_chromosomes",
+    "alpha": 0.05,
+    "min_N": 10,
+    "apply_fdr_correction": true,
+    "fdr_method": "storey",
+    "global_significance_threshold": 0.05,
+    "use_gpu": true
+}

@@ -1,0 +1,20 @@
+{
+  "centroid1_path": "/home/ubuntu/Work/samples/centroids/healthy/1-CG.h5",
+  "centroid2_path": "/home/ubuntu/Work/samples/centroids/cancer/1-CG.h5",
+  "output_dir": "./detection_results",
+  
+  "alpha": 0.01,
+  "min_delta_mean": 0.2,
+  "max_bc": 0.6,
+  "target_auc": 0.95,
+  "min_dmps_for_export": 1000,
+  "gamma": 1.5,
+  
+  "validation_mode": "real",
+  "centroid1_validation_samples": "use_metadata",
+  "centroid2_validation_samples": "use_metadata",
+  
+  "use_gpu": true,
+  "random_state": 42
+}
+
