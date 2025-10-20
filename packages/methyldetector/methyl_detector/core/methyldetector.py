@@ -88,6 +88,7 @@ class MethylDetector:
         np.random.seed(config.random_state)
         self.gpu_config = GPUConfig()  # From MethylUtils for memory management
         self.df = None  # Current working dataframe
+        self._exported_csv_path = None  # Path to exported CSV file
         logger.debug("Initialized MethylDetector")
     
     def _create_trainer_config(self) -> 'TrainingConfig':
@@ -167,6 +168,10 @@ class MethylDetector:
                 biological_dmps_df = model_package.get('selected_dmps_df', pd.DataFrame())
                 accuracy = model_package.get('validation_accuracy')
                 classifier = model_package.get('classifier')
+                
+                # Export selected DMPs to CSV
+                if not biological_dmps_df.empty:
+                    self._export_selected_dmps_csv(biological_dmps_df)
                 
                 # Save model
                 if classifier is not None:
@@ -516,6 +521,42 @@ class MethylDetector:
         
         return filtered
 
+    def _export_selected_dmps_csv(self, biological_dmps_df: pd.DataFrame) -> None:
+        """Export selected DMPs to CSV with required columns."""
+        if biological_dmps_df.empty:
+            logger.warning("No biological DMPs to export")
+            return
+
+        # Define required columns
+        required_cols = [
+            'chromosome', 'context', 'position', 'p_value', 'q_value', 'delta_mean',
+            'overlap', 'effect_size'
+        ]
+        
+        # Map overlap from bhattacharyya_coefficient if needed
+        if 'overlap' not in biological_dmps_df.columns and 'bhattacharyya_coefficient' in biological_dmps_df.columns:
+            biological_dmps_df = biological_dmps_df.assign(overlap=biological_dmps_df['bhattacharyya_coefficient'])
+            logger.debug("Mapped bhattacharyya_coefficient to overlap column")
+        
+        # Select only available required columns
+        export_cols = [c for c in required_cols if c in biological_dmps_df.columns]
+        missing_cols = [c for c in required_cols if c not in biological_dmps_df.columns]
+        
+        if missing_cols:
+            logger.warning(f"Missing columns in selected DMPs: {missing_cols}")
+        
+        # Create output directory and CSV path
+        output_dir = Path(self.config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = output_dir / f"dmps-{self.chrom}-{self.ctx}.csv"
+        
+        # Export selected columns
+        biological_dmps_df[export_cols].to_csv(csv_path, index=False)
+        logger.info(f"✅ Exported {len(biological_dmps_df):,} selected DMPs to {csv_path} with columns: {export_cols}")
+        
+        # Store CSV path for result summary
+        self._exported_csv_path = csv_path
+
     def _save_single_chrom_context_results(self, df: pd.DataFrame, output_dir: Path, chromosome: str, context: str) -> None:
         """Save biological DMPs CSV with all columns."""
         if df.empty:
@@ -597,8 +638,10 @@ class MethylDetector:
             "centroid1": self.config.centroid1_path,
             "centroid2": self.config.centroid2_path,
         }
-        # CSV path for single
-        csv_path = output_dir / f"{prefix}.csv" if result.biologically_significant_dmps_df is not None and not result.biologically_significant_dmps_df.empty else None
+        # CSV path for single - use exported CSV path if available, otherwise construct from prefix
+        csv_path = getattr(self, '_exported_csv_path', None)
+        if csv_path is None and result.biologically_significant_dmps_df is not None and not result.biologically_significant_dmps_df.empty:
+            csv_path = output_dir / f"{prefix}.csv"
         # Get top DMP importance
         top_dmp_importance = None
         if result.biologically_significant_dmps_df is not None and not result.biologically_significant_dmps_df.empty:
