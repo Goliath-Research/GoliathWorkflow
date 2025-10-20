@@ -13,7 +13,6 @@
   "prediction_method": "beta",
   "validation_mode": "real",
   "optimize_for_validation_accuracy": true,
-  "validation_search_max_k": 100000,
   "centroid1_validation_samples": [
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-090225-111626",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-082925-82326",
