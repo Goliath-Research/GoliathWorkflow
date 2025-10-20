@@ -309,6 +309,7 @@ class MethylTrainer:
         # Binary search for smallest k that achieves target AUC
         low, high = 1, n_dmps
         best_k = n_dmps  # Default to all DMPs
+        best_auc = 0.0  # Track best AUC found
         
         logger.info(f"Binary search range: {low}-{high}")
         
@@ -318,6 +319,11 @@ class MethylTrainer:
             performance = self._compute_subset_performance(test_subset, use_gpu=self.config.use_gpu)
             
             logger.info(f"  Testing k={mid}: AUC={performance:.6f}")
+            
+            # Track best AUC found
+            if performance > best_auc:
+                best_auc = performance
+                best_k = mid
             
             if performance >= target_auc:
                 # This k achieves target - try smaller k
@@ -349,7 +355,10 @@ class MethylTrainer:
         final_subset = sorted_df.iloc[:best_k]
         final_performance = self._compute_subset_performance(final_subset, use_gpu=self.config.use_gpu)
         
-        logger.info(f"✅ Binary search complete: selected k={best_k} DMPs with AUC={final_performance:.6f}")
+        if final_performance >= target_auc:
+            logger.info(f"✅ Binary search complete: selected k={best_k} DMPs with AUC={final_performance:.6f} (target achieved)")
+        else:
+            logger.info(f"✅ Binary search complete: selected k={best_k} DMPs with AUC={final_performance:.6f} (best found, target {target_auc:.3f} not reached)")
         
         # Optional: optimize for validation accuracy (requires real samples)
         if (self.config.optimize_for_validation_accuracy and 

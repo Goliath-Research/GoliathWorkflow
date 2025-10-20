@@ -527,20 +527,37 @@ class MethylDetector:
             logger.warning("No biological DMPs to export")
             return
 
-        # Define required columns
-        required_cols = [
-            'chromosome', 'context', 'position', 'p_value', 'q_value', 'delta_mean',
-            'overlap', 'effect_size'
-        ]
+        # Create a copy to avoid modifying the original DataFrame
+        export_df = biological_dmps_df.copy()
+        
+        # Add sign of delta_mean (sign of mean1 - mean2)
+        if 'mean1' in export_df.columns and 'mean2' in export_df.columns:
+            export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2'])
+            logger.debug("Added delta_sign column (sign of mean1 - mean2)")
+        else:
+            logger.warning("mean1 and/or mean2 columns not found, cannot compute delta_sign")
+        
+        # Map effect_size to weight if effect_size exists
+        if 'effect_size' in export_df.columns:
+            export_df['weight'] = export_df['effect_size']
+            logger.debug("Mapped effect_size to weight column")
+        elif 'weight' not in export_df.columns:
+            logger.warning("Neither effect_size nor weight column found")
         
         # Map overlap from bhattacharyya_coefficient if needed
-        if 'overlap' not in biological_dmps_df.columns and 'bhattacharyya_coefficient' in biological_dmps_df.columns:
-            biological_dmps_df = biological_dmps_df.assign(overlap=biological_dmps_df['bhattacharyya_coefficient'])
+        if 'overlap' not in export_df.columns and 'bhattacharyya_coefficient' in export_df.columns:
+            export_df['overlap'] = export_df['bhattacharyya_coefficient']
             logger.debug("Mapped bhattacharyya_coefficient to overlap column")
         
+        # Define required columns (with weight instead of effect_size)
+        required_cols = [
+            'chromosome', 'context', 'position', 'p_value', 'q_value', 'delta_mean', 'delta_sign',
+            'overlap', 'weight'
+        ]
+        
         # Select only available required columns
-        export_cols = [c for c in required_cols if c in biological_dmps_df.columns]
-        missing_cols = [c for c in required_cols if c not in biological_dmps_df.columns]
+        export_cols = [c for c in required_cols if c in export_df.columns]
+        missing_cols = [c for c in required_cols if c not in export_df.columns]
         
         if missing_cols:
             logger.warning(f"Missing columns in selected DMPs: {missing_cols}")
@@ -551,8 +568,8 @@ class MethylDetector:
         csv_path = output_dir / f"dmps-{self.chrom}-{self.ctx}.csv"
         
         # Export selected columns
-        biological_dmps_df[export_cols].to_csv(csv_path, index=False)
-        logger.info(f"✅ Exported {len(biological_dmps_df):,} selected DMPs to {csv_path} with columns: {export_cols}")
+        export_df[export_cols].to_csv(csv_path, index=False)
+        logger.info(f"✅ Exported {len(export_df):,} selected DMPs to {csv_path} with columns: {export_cols}")
         
         # Store CSV path for result summary
         self._exported_csv_path = csv_path
