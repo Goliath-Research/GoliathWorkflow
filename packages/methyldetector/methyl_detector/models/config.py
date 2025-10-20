@@ -126,14 +126,6 @@ class MethylDetectorConfig(BaseModel):
     # ----------------
     # Output Options
     # ----------------
-    verbose: bool = Field(
-        default=False,
-        description="Enable verbose logging and progress reporting"
-    )
-    generate_histograms: bool = Field(
-        default=False,
-        description="Generate interactive HTML histograms for filter statistics"
-    )
 
     # -----------------
     # Validators / Utils
