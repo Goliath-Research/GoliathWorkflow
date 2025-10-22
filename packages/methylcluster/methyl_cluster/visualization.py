@@ -122,10 +122,34 @@ class ClusterVisualizer:
         
         # Create the plot
         plt.figure(figsize=(12, 8))
-        self.cluster.clusterer.condensed_tree_.plot(
-            select_clusters=True,
-            selection_palette='Set1'
-        )
+        
+        # Get number of clusters to determine if we should show selection
+        n_clusters = len(set(self.cluster.cluster_labels)) - (1 if -1 in self.cluster.cluster_labels else 0)
+        
+        try:
+            if n_clusters > 0:
+                # Use matplotlib colormap instead of seaborn palette name
+                import matplotlib.cm as cm
+                # Create a colormap with enough colors
+                colors = cm.get_cmap('Set1', max(n_clusters, 3))
+                color_palette = [colors(i) for i in range(n_clusters)]
+                
+                self.cluster.clusterer.condensed_tree_.plot(
+                    select_clusters=True,
+                    selection_palette=color_palette
+                )
+            else:
+                # No clusters, just plot the tree without selection
+                self.cluster.clusterer.condensed_tree_.plot(
+                    select_clusters=False
+                )
+        except Exception as e:
+            # Fallback: plot without cluster selection
+            logger.debug(f"Could not plot with cluster selection: {e}, plotting without selection")
+            self.cluster.clusterer.condensed_tree_.plot(
+                select_clusters=False
+            )
+        
         plt.title(f'HDBSCAN Cluster Tree\n{self.cluster.config.chrom}-{self.cluster.config.ctx}')
         
         output_file = output_dir / 'cluster_tree.png'

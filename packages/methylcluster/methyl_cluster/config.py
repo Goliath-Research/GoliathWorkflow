@@ -67,6 +67,26 @@ class MethylClusterConfig(BaseModel):
         default="eom",
         description="Cluster selection method (eom or leaf)"
     )
+    allow_single_cluster: bool = Field(
+        default=False,
+        description="Allow HDBSCAN to form a single cluster if all samples are close"
+    )
+    
+    # Hierarchical/K-means fallback parameters
+    enable_kmeans_fallback: bool = Field(
+        default=False,
+        description="Enable K-means clustering with automatic K selection if HDBSCAN finds ambiguous results"
+    )
+    max_k: Optional[int] = Field(
+        default=None,
+        description="Maximum K to test for K-means (defaults to sqrt(n_samples))"
+    )
+    silhouette_threshold: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Minimum silhouette score to accept clusters as meaningful"
+    )
     
     # Output configuration
     output_dir: str = Field(

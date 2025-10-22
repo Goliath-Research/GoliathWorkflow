@@ -10,7 +10,9 @@ import hdbscan
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 # Import local modules
 from .config import MethylClusterConfig
@@ -98,10 +100,12 @@ class MethylCluster:
         """
         logger.info("Computing pairwise distance matrix...")
         
-        cache_dir = Path(self.config.output_dir) / "cache" if self.config.cache_distance_matrix else None
+        cache_dir = Path(self.config.output_dir) if self.config.cache_distance_matrix else None
         
         computer = DistanceMatrixComputer(
             metric=self.config.metric.value,
+            chrom=self.config.chrom,
+            ctx=self.config.ctx,
             use_gpu=self.config.use_gpu,
             cache_dir=cache_dir
         )
@@ -143,7 +147,8 @@ class MethylCluster:
         logger.info(f"HDBSCAN parameters: min_cluster_size={self.config.min_cluster_size}, "
                    f"min_samples={min_samples}, "
                    f"cluster_selection_epsilon={self.config.cluster_selection_epsilon}, "
-                   f"cluster_selection_method={self.config.cluster_selection_method}")
+                   f"cluster_selection_method={self.config.cluster_selection_method}, "
+                   f"allow_single_cluster={self.config.allow_single_cluster}")
         
         # Create and fit HDBSCAN clusterer
         self.clusterer = hdbscan.HDBSCAN(
@@ -151,6 +156,7 @@ class MethylCluster:
             min_samples=min_samples,
             cluster_selection_epsilon=self.config.cluster_selection_epsilon,
             cluster_selection_method=self.config.cluster_selection_method,
+            allow_single_cluster=self.config.allow_single_cluster,
             metric='precomputed'
         )
         
@@ -161,6 +167,19 @@ class MethylCluster:
         # Compile and return results
         results = self._compile_results()
         logger.info(f"Found {results['n_clusters']} clusters with {results['n_noise']} noise samples")
+        
+        # Check if K-means fallback should be used
+        if self.config.enable_kmeans_fallback:
+            should_use_fallback = self._should_use_kmeans_fallback(results)
+            if should_use_fallback:
+                logger.info("HDBSCAN results are ambiguous, trying K-means with automatic K selection...")
+                kmeans_results = self._kmeans_clustering_with_silhouette()
+                if kmeans_results is not None:
+                    logger.info(f"K-means found {kmeans_results['n_clusters']} clusters "
+                               f"(silhouette={kmeans_results.get('silhouette_score', 0):.4f})")
+                    results = kmeans_results
+                else:
+                    logger.info("K-means did not find meaningful clusters, keeping HDBSCAN results")
         
         return results
     
@@ -207,6 +226,130 @@ class MethylCluster:
                 cluster_sizes['noise'] = int(np.sum(self.cluster_labels == -1))
             else:
                 cluster_sizes[f'cluster_{label}'] = int(np.sum(self.cluster_labels == label))
+        results['cluster_sizes'] = cluster_sizes
+        
+        return results
+    
+    def _should_use_kmeans_fallback(self, hdbscan_results: Dict[str, Any]) -> bool:
+        """
+        Determine if K-means fallback should be used based on HDBSCAN results.
+        
+        Args:
+            hdbscan_results: Results from HDBSCAN clustering
+        
+        Returns:
+            True if K-means fallback should be attempted
+        """
+        n_clusters = hdbscan_results['n_clusters']
+        n_noise = hdbscan_results['n_noise']
+        n_samples = len(self.cluster_labels)
+        noise_pct = n_noise / n_samples
+        
+        # Use fallback if:
+        # 1. No clusters found (all noise)
+        # 2. Only 1 cluster with > 20% noise (ambiguous)
+        # 3. Multiple clusters but > 50% noise (weak structure)
+        
+        if n_clusters == 0:
+            logger.info("  Reason: HDBSCAN found no clusters (all noise)")
+            return True
+        
+        if n_clusters == 1 and noise_pct > 0.2:
+            logger.info(f"  Reason: Single cluster with {noise_pct*100:.1f}% noise (ambiguous)")
+            return True
+        
+        if n_clusters >= 2 and noise_pct > 0.5:
+            logger.info(f"  Reason: {n_clusters} clusters but {noise_pct*100:.1f}% noise (weak structure)")
+            return True
+        
+        return False
+    
+    def _kmeans_clustering_with_silhouette(self) -> Optional[Dict[str, Any]]:
+        """
+        Perform K-means clustering with automatic K selection using silhouette analysis.
+        
+        Tests K from 2 to max_k and selects the K with the highest silhouette score.
+        If the best silhouette score is below the threshold, returns None (no meaningful clusters).
+        
+        Returns:
+            Dictionary with clustering results or None if no meaningful clusters found
+        """
+        n_samples = len(self.distance_matrix)
+        
+        # Determine max_k
+        if self.config.max_k is not None:
+            max_k = min(self.config.max_k, n_samples - 1)
+        else:
+            max_k = min(int(np.sqrt(n_samples)), n_samples - 1)
+        
+        if max_k < 2:
+            logger.warning("Not enough samples for K-means clustering")
+            return None
+        
+        logger.info(f"Testing K-means for K=2 to K={max_k}...")
+        
+        # Convert distance matrix to feature space using MDS
+        # K-means needs coordinates, not distances
+        from sklearn.manifold import MDS
+        
+        logger.info("Converting distance matrix to feature space using MDS...")
+        mds = MDS(n_components=min(10, n_samples - 1), dissimilarity='precomputed', random_state=42)
+        X = mds.fit_transform(self.distance_matrix)
+        
+        best_k = 2
+        best_score = -1
+        best_labels = None
+        silhouette_scores = {}
+        
+        for k in range(2, max_k + 1):
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(X)
+            
+            # Calculate silhouette score using original distance matrix
+            score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+            silhouette_scores[k] = score
+            
+            logger.info(f"  K={k}: silhouette={score:.4f}")
+            
+            if score > best_score:
+                best_score = score
+                best_k = k
+                best_labels = labels
+        
+        logger.info(f"Best K={best_k} with silhouette={best_score:.4f}")
+        
+        # Check if silhouette score meets threshold
+        if best_score < self.config.silhouette_threshold:
+            logger.info(f"Best silhouette score {best_score:.4f} < threshold {self.config.silhouette_threshold:.4f}")
+            logger.info("No meaningful clusters found - population appears homogeneous")
+            return None
+        
+        # Update cluster_labels for visualization
+        self.cluster_labels = best_labels
+        
+        # Compile results
+        results = {
+            'n_clusters': best_k,
+            'n_noise': 0,  # K-means doesn't have noise
+            'cluster_assignments': {},
+            'labels': best_labels.tolist(),
+            'sample_paths': [str(p) for p in self.sample_paths],
+            'config': self.config.model_dump(),
+            'clustering_method': 'kmeans',
+            'silhouette_score': float(best_score),
+            'silhouette_scores_by_k': {int(k): float(v) for k, v in silhouette_scores.items()}
+        }
+        
+        # Create cluster assignments
+        for k in range(best_k):
+            indices = np.where(best_labels == k)[0]
+            sample_list = [str(self.sample_paths[i]) for i in indices]
+            results['cluster_assignments'][f'cluster_{k}'] = sample_list
+        
+        # Add cluster sizes
+        cluster_sizes = {}
+        for k in range(best_k):
+            cluster_sizes[f'cluster_{k}'] = int(np.sum(best_labels == k))
         results['cluster_sizes'] = cluster_sizes
         
         return results

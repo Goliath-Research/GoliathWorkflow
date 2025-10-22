@@ -40,6 +40,8 @@ class DistanceMatrixComputer:
     def __init__(
         self,
         metric: str,
+        chrom: str,
+        ctx: str,
         use_gpu: bool = True,
         cache_dir: Optional[Path] = None
     ):
@@ -48,11 +50,15 @@ class DistanceMatrixComputer:
         
         Args:
             metric: Distance metric name (e.g., 'jensen_shannon', 'hellinger')
+            chrom: Chromosome identifier (e.g., '1', 'X')
+            ctx: Context type (e.g., 'CG', 'CHG', 'CHH')
             use_gpu: Whether to use GPU acceleration
-            cache_dir: Directory for caching distance matrices
+            cache_dir: Directory for caching distance matrices (output directory)
         """
         self.metric_factory = get_metric_factory()
         self.metric = metric
+        self.chrom = chrom
+        self.ctx = ctx
         self.use_gpu = use_gpu
         self.cache_dir = Path(cache_dir) if cache_dir else None
         
@@ -68,8 +74,11 @@ class DistanceMatrixComputer:
         """
         Compute pairwise distance matrix using Beta parameters.
         
+        Each sample pair is aligned to their common positions independently,
+        maximizing the number of positions used for distance calculation.
+        
         Args:
-            samples: List of MethylSample instances
+            samples: List of MethylSample instances (unaligned)
             sample_paths: List of sample directory paths (for cache key)
         
         Returns:
@@ -84,28 +93,26 @@ class DistanceMatrixComputer:
             return self._load_cached_matrix(cache_path)
         
         n_samples = len(samples)
-        distance_matrix = np.zeros((n_samples, n_samples), dtype=np.float32)
-        
-        # Compute Beta parameters for all samples
-        logger.info("Computing Beta parameters from mC/uC counts")
-        beta_params = [self._compute_beta_params(s) for s in samples]
+        distance_matrix = np.zeros((n_samples, n_samples), dtype=np.float64)
         
         # Compute pairwise distances (upper triangle only, since matrix is symmetric)
-        logger.info("Computing pairwise distances...")
+        logger.info("Computing pairwise distances with individual sample-pair alignment...")
         total_pairs = (n_samples * (n_samples - 1)) // 2
         computed = 0
+        common_positions_stats = []
         
         for i in range(n_samples):
             for j in range(i + 1, n_samples):
-                a1, b1 = beta_params[i]
-                a2, b2 = beta_params[j]
+                # Align this specific pair to their common positions
+                a1, b1, a2, b2, n_common = self._align_sample_pair(samples[i], samples[j])
+                common_positions_stats.append(n_common)
                 
                 # Compute distance using MethylUtils metric factory
                 dist = self.metric_factory.compute_distance(
                     self.metric, a1, b1, a2, b2, use_gpu=self.use_gpu
                 )
                 
-                # Average distance across all positions
+                # Average distance across all pairwise common positions
                 avg_dist = float(np.mean(dist))
                 distance_matrix[i, j] = avg_dist
                 distance_matrix[j, i] = avg_dist
@@ -113,6 +120,11 @@ class DistanceMatrixComputer:
                 computed += 1
                 if computed % 100 == 0:
                     logger.info(f"Computed {computed}/{total_pairs} pairwise distances")
+        
+        # Log statistics about common positions
+        if common_positions_stats:
+            logger.info(f"Common positions per pair: min={min(common_positions_stats)}, "
+                       f"max={max(common_positions_stats)}, mean={np.mean(common_positions_stats):.0f}")
         
         logger.info(f"Distance matrix computation complete: shape {distance_matrix.shape}")
         
@@ -122,34 +134,64 @@ class DistanceMatrixComputer:
         
         return distance_matrix
     
-    def _compute_beta_params(
+    def _align_sample_pair(
         self,
-        sample: MethylSample
-    ) -> Tuple[np.ndarray, np.ndarray]:
+        sample1: MethylSample,
+        sample2: MethylSample
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, int]:
         """
-        Compute Beta distribution parameters from mC/uC counts.
+        Align two samples to their common positions and compute Beta parameters.
         
-        Uses pseudocounts for numerical stability:
-        alpha = mC + 1
-        beta = uC + 1
+        This method finds positions common to both samples and extracts the
+        aligned mC/uC values, then computes Beta distribution parameters.
         
         Args:
-            sample: MethylSample instance
+            sample1: First MethylSample instance
+            sample2: Second MethylSample instance
         
         Returns:
-            Tuple of (alpha, beta) arrays
+            Tuple of (alpha1, beta1, alpha2, beta2, n_common_positions)
+            where alpha and beta are Beta distribution parameters
         """
-        # Add pseudocounts for numerical stability
-        alpha = sample.mC.astype(np.float32) + 1.0
-        beta = sample.uC.astype(np.float32) + 1.0
-        return alpha, beta
+        # Find common positions between this pair (using numpy intersection)
+        common_pos = np.intersect1d(sample1.pos, sample2.pos, assume_unique=True)
+        
+        if len(common_pos) == 0:
+            logger.warning("No common positions between sample pair, using pseudocounts only")
+            # Return minimal arrays with pseudocounts
+            alpha1 = np.array([1.0], dtype=np.float32)
+            beta1 = np.array([1.0], dtype=np.float32)
+            alpha2 = np.array([1.0], dtype=np.float32)
+            beta2 = np.array([1.0], dtype=np.float32)
+            return alpha1, beta1, alpha2, beta2, 0
+        
+        # Fast index lookup with searchsorted (O(log n) per query)
+        idx1 = np.searchsorted(sample1.pos, common_pos)
+        idx2 = np.searchsorted(sample2.pos, common_pos)
+        
+        # Extract aligned mC/uC arrays
+        aligned_mC1 = sample1.mC[idx1]
+        aligned_uC1 = sample1.uC[idx1]
+        aligned_mC2 = sample2.mC[idx2]
+        aligned_uC2 = sample2.uC[idx2]
+        
+        # Compute Beta parameters with pseudocounts for numerical stability
+        alpha1 = aligned_mC1.astype(np.float32) + 1.0
+        beta1 = aligned_uC1.astype(np.float32) + 1.0
+        alpha2 = aligned_mC2.astype(np.float32) + 1.0
+        beta2 = aligned_uC2.astype(np.float32) + 1.0
+        
+        return alpha1, beta1, alpha2, beta2, len(common_pos)
     
     def _get_cache_path(self, sample_paths: List[Path]) -> Optional[Path]:
         """
-        Generate cache file path based on sample paths and metric.
+        Generate cache file path using descriptive naming scheme.
+        
+        The filename format is: distance-{metric}-{chrom}-{ctx}.npz
+        This makes it easy to identify which distance matrix is cached.
         
         Args:
-            sample_paths: List of sample paths
+            sample_paths: List of sample paths (unused, kept for compatibility)
         
         Returns:
             Path to cache file or None if caching is disabled
@@ -157,13 +199,8 @@ class DistanceMatrixComputer:
         if not self.cache_dir:
             return None
         
-        # Create a hash of sample paths and metric for unique identification
-        path_str = '|'.join(sorted([str(p) for p in sample_paths]))
-        cache_key = f"{path_str}|{self.metric}"
-        hash_obj = hashlib.sha256(cache_key.encode())
-        cache_hash = hash_obj.hexdigest()[:16]
-        
-        cache_filename = f"distance_matrix_{cache_hash}.npz"
+        # Use descriptive filename: distance-{metric}-{chrom}-{ctx}.npz
+        cache_filename = f"distance-{self.metric}-{self.chrom}-{self.ctx}.npz"
         return self.cache_dir / cache_filename
     
     def _save_cached_matrix(
@@ -190,15 +227,31 @@ class DistanceMatrixComputer:
     
     def _load_cached_matrix(self, cache_path: Path) -> np.ndarray:
         """
-        Load distance matrix from cache file.
+        Load distance matrix from cache file with metric validation.
         
         Args:
             cache_path: Path to cache file
         
         Returns:
             Cached distance matrix
+        
+        Raises:
+            ValueError: If cached metric doesn't match current metric
         """
         data = np.load(cache_path)
+        
+        # Validate that cached metric matches current metric
+        if 'metric' in data:
+            cached_metric = str(data['metric'])
+            if cached_metric != self.metric:
+                raise ValueError(
+                    f"Cached metric '{cached_metric}' does not match current metric '{self.metric}'. "
+                    f"Please delete the cache file: {cache_path}"
+                )
+        else:
+            logger.warning(f"Cache file {cache_path} does not contain metric metadata. "
+                          "Assuming it matches current metric.")
+        
         return data['distance_matrix']
 
 
