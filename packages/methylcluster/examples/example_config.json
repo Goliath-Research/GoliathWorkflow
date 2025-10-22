@@ -1,10 +1,10 @@
 {
   "samples": [
-    "/home/ubuntu/Work/samples/sample1",
-    "/home/ubuntu/Work/samples/sample2",
-    "/home/ubuntu/Work/samples/sample3",
-    "/home/ubuntu/Work/samples/sample4",
-    "/home/ubuntu/Work/samples/sample5"
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/013361_10C26_34",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/010608_9N27_56",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/006655_9A_27_12",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/005315_9E16_11",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/028479_17D_23_51"
   ],
   "chrom": "1",
   "ctx": "CG",

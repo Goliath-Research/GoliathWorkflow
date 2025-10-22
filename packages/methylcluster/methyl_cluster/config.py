@@ -84,6 +84,13 @@ class MethylClusterConfig(BaseModel):
         description="Use GPU acceleration for distance computation"
     )
     
+    @field_validator('output_dir')
+    @classmethod
+    def normalize_output_dir(cls, v):
+        """Normalize output directory path."""
+        from pathlib import Path
+        return str(Path(v).resolve())
+    
     @field_validator('ctx')
     @classmethod
     def validate_context(cls, v):
