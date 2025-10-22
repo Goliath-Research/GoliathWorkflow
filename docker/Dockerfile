@@ -59,7 +59,7 @@ RUN pip install --no-cache-dir --retries 3 click
 RUN pip install --no-cache-dir --retries 3 tqdm
 
 # Install statistical libraries
-RUN pip install --no-cache-dir --retries 3 statsmodels sqlalchemy scikit-learn
+RUN pip install --no-cache-dir --retries 3 statsmodels sqlalchemy scikit-learn hdbscan
 
 # Install NVIDIA libraries
 RUN pip install --no-cache-dir --retries 3 nvidia-ml-py>=12.535.0

@@ -5,7 +5,6 @@ services:
       dockerfile: Dockerfile
     image: methylpipeline-gpu-env
     container_name: methylpipeline
-    user: "1000:1000"  # ubuntu user
     deploy:
       resources:
         reservations:
