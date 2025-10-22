@@ -132,6 +132,7 @@ class MethylClusterConfig(BaseModel):
         le=1.0,
         description="[Centroid only] Convergence threshold (fraction of samples changing clusters)"
     )
+    num_restarts: int = Field(3, description="Number of EM restarts for centroid clustering (1 = no multiple starts)")
     
     # Legacy K-means fallback (deprecated, use hierarchical method instead)
     enable_kmeans_fallback: bool = Field(
