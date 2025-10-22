@@ -1,10 +1,10 @@
 {
   "centroid1_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/centroids/pb-healthy/21-CHG.h5",
   "centroid2_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/centroids/pb-cancer-12/21-CHG.h5",
-  "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-hc-12",
+  "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-hc-12_G",
   "alpha": 0.01,
   "min_delta_mean": 0.2,
-  "max_bc": 0.6,
+  "max_bc": 0.5,
   "target_auc": 0.9999,
   "min_dmps_for_export": 5000,
   "gamma": 1.5,
@@ -13,7 +13,6 @@
   "prediction_method": "beta",
   "validation_mode": "real",
   "optimize_for_validation_accuracy": true,
-  "validation_search_max_k": 50000,
   "centroid1_validation_samples": [
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-090225-111626",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-082925-82326",
