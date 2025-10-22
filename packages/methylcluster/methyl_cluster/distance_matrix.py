@@ -89,8 +89,13 @@ class DistanceMatrixComputer:
         # Check for cached matrix
         cache_path = self._get_cache_path(sample_paths)
         if cache_path and cache_path.exists():
-            logger.info(f"Loading cached distance matrix from {cache_path}")
-            return self._load_cached_matrix(cache_path)
+            logger.info(f"Found cached distance matrix at {cache_path}")
+            cached_matrix = self._load_cached_matrix(cache_path, sample_paths)
+            if cached_matrix is not None:
+                logger.info(f"Using cached distance matrix")
+                return cached_matrix
+            else:
+                logger.info(f"Cache invalid, recomputing distances")
         
         n_samples = len(samples)
         distance_matrix = np.zeros((n_samples, n_samples), dtype=np.float64)
@@ -114,6 +119,20 @@ class DistanceMatrixComputer:
                 
                 # Average distance across all pairwise common positions
                 avg_dist = float(np.mean(dist))
+                
+                # Check for NaN or Inf values
+                if not np.isfinite(avg_dist):
+                    logger.warning(f"Non-finite distance between samples {i} and {j}: {avg_dist}. "
+                                  f"Using median distance as fallback.")
+                    # Use median of finite distances as fallback
+                    finite_dist = dist[np.isfinite(dist)]
+                    if len(finite_dist) > 0:
+                        avg_dist = float(np.median(finite_dist))
+                    else:
+                        # If all distances are non-finite, use a large value
+                        avg_dist = 1.0
+                        logger.warning(f"All distances non-finite for pair ({i}, {j}), using 1.0")
+                
                 distance_matrix[i, j] = avg_dist
                 distance_matrix[j, i] = avg_dist
                 
@@ -127,6 +146,14 @@ class DistanceMatrixComputer:
                        f"max={max(common_positions_stats)}, mean={np.mean(common_positions_stats):.0f}")
         
         logger.info(f"Distance matrix computation complete: shape {distance_matrix.shape}")
+        
+        # Final validation: check for any remaining non-finite values
+        n_nan = np.sum(np.isnan(distance_matrix))
+        n_inf = np.sum(np.isinf(distance_matrix))
+        if n_nan > 0 or n_inf > 0:
+            logger.error(f"Distance matrix contains {n_nan} NaN and {n_inf} Inf values!")
+            logger.error("This indicates numerical issues with the distance metric.")
+            raise ValueError(f"Distance matrix contains non-finite values: {n_nan} NaN, {n_inf} Inf")
         
         # Cache the matrix
         if cache_path:
@@ -225,34 +252,46 @@ class DistanceMatrixComputer:
             metric=self.metric
         )
     
-    def _load_cached_matrix(self, cache_path: Path) -> np.ndarray:
+    def _load_cached_matrix(self, cache_path: Path, sample_paths: List[Path]) -> Optional[np.ndarray]:
         """
-        Load distance matrix from cache file with metric validation.
+        Load distance matrix from cache file with validation.
         
         Args:
             cache_path: Path to cache file
+            sample_paths: Current sample paths for validation
         
         Returns:
-            Cached distance matrix
-        
-        Raises:
-            ValueError: If cached metric doesn't match current metric
+            Cached distance matrix if valid, None if invalid
         """
-        data = np.load(cache_path)
-        
-        # Validate that cached metric matches current metric
-        if 'metric' in data:
-            cached_metric = str(data['metric'])
-            if cached_metric != self.metric:
-                raise ValueError(
-                    f"Cached metric '{cached_metric}' does not match current metric '{self.metric}'. "
-                    f"Please delete the cache file: {cache_path}"
-                )
-        else:
-            logger.warning(f"Cache file {cache_path} does not contain metric metadata. "
-                          "Assuming it matches current metric.")
-        
-        return data['distance_matrix']
+        try:
+            data = np.load(cache_path)
+            
+            # Validate that cached metric matches current metric
+            if 'metric' in data:
+                cached_metric = str(data['metric'])
+                if cached_metric != self.metric:
+                    logger.warning(f"Cached metric '{cached_metric}' != current metric '{self.metric}'. Ignoring cache.")
+                    return None
+            
+            # Validate matrix dimensions match number of samples
+            dist_matrix = data['distance_matrix']
+            if dist_matrix.shape[0] != len(sample_paths):
+                logger.warning(f"Cached matrix size {dist_matrix.shape[0]} != current samples {len(sample_paths)}. Ignoring cache.")
+                return None
+            
+            # Validate sample paths match (if available)
+            if 'sample_paths' in data:
+                cached_paths = set(str(p) for p in data['sample_paths'])
+                current_paths = set(str(p) for p in sample_paths)
+                if cached_paths != current_paths:
+                    logger.warning(f"Cached sample paths don't match current samples. Ignoring cache.")
+                    return None
+            
+            return dist_matrix
+            
+        except Exception as e:
+            logger.warning(f"Error loading cache: {e}. Ignoring cache.")
+            return None
 
 
 __all__ = ['DistanceMatrixComputer']
