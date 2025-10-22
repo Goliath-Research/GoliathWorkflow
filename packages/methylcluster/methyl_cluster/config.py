@@ -12,6 +12,12 @@ import json
 from enum import Enum
 
 
+class ClusteringMethod(str, Enum):
+    """Enumeration of available clustering methods."""
+    HDBSCAN = "hdbscan"
+    HIERARCHICAL = "hierarchical"
+
+
 class ClusterMetric(str, Enum):
     """Enumeration of available distance metrics for clustering."""
     JENSEN_SHANNON = "jensen_shannon"
@@ -50,6 +56,10 @@ class MethylClusterConfig(BaseModel):
     )
     
     # Clustering parameters
+    clustering_method: ClusteringMethod = Field(
+        default=ClusteringMethod.HIERARCHICAL,
+        description="Clustering algorithm to use (hierarchical recommended for methylation data)"
+    )
     metric: ClusterMetric = Field(
         default=ClusterMetric.JENSEN_SHANNON,
         description="Distance metric for clustering"
@@ -74,23 +84,45 @@ class MethylClusterConfig(BaseModel):
     )
     allow_single_cluster: bool = Field(
         default=False,
-        description="Allow HDBSCAN to form a single cluster if all samples are close"
+        description="[HDBSCAN only] Allow HDBSCAN to form a single cluster if all samples are close"
     )
     
-    # Hierarchical/K-means fallback parameters
-    enable_kmeans_fallback: bool = Field(
-        default=False,
-        description="Enable K-means clustering with automatic K selection if HDBSCAN finds ambiguous results"
+    # Hierarchical clustering parameters
+    linkage_method: str = Field(
+        default="average",
+        description="[Hierarchical only] Linkage method: average, ward, complete, single"
     )
     max_k: Optional[int] = Field(
         default=None,
-        description="Maximum K to test for K-means (defaults to sqrt(n_samples))"
+        description="Maximum K to test for hierarchical/k-means (defaults to sqrt(n_samples))"
+    )
+    force_k: Optional[int] = Field(
+        default=None,
+        ge=2,
+        description="Force specific number of clusters (bypasses silhouette threshold). Use when K is known a priori."
     )
     silhouette_threshold: float = Field(
         default=0.2,
         ge=0.0,
         le=1.0,
-        description="Minimum silhouette score to accept clusters as meaningful"
+        description="Minimum silhouette score to accept clusters as meaningful (ignored if force_k is set)"
+    )
+    
+    # K-medoids refinement parameters
+    enable_medoid_refinement: bool = Field(
+        default=True,
+        description="Refine clusters using K-medoids with farthest-point initialization"
+    )
+    max_medoid_iterations: int = Field(
+        default=50,
+        ge=1,
+        description="Maximum iterations for K-medoids refinement"
+    )
+    
+    # Legacy K-means fallback (deprecated, use hierarchical method instead)
+    enable_kmeans_fallback: bool = Field(
+        default=False,
+        description="[Deprecated] Enable K-means fallback for HDBSCAN. Use clustering_method='hierarchical' instead."
     )
     
     # Output configuration
