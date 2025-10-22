@@ -16,6 +16,7 @@ class ClusteringMethod(str, Enum):
     """Enumeration of available clustering methods."""
     HDBSCAN = "hdbscan"
     HIERARCHICAL = "hierarchical"
+    CENTROID = "centroid"
 
 
 class ClusterMetric(str, Enum):
@@ -117,6 +118,19 @@ class MethylClusterConfig(BaseModel):
         default=50,
         ge=1,
         description="Maximum iterations for K-medoids refinement"
+    )
+    
+    # Centroid-based clustering parameters
+    max_em_iterations: int = Field(
+        default=50,
+        ge=1,
+        description="[Centroid only] Maximum EM iterations for centroid-based clustering"
+    )
+    convergence_threshold: float = Field(
+        default=0.01,
+        ge=0.0,
+        le=1.0,
+        description="[Centroid only] Convergence threshold (fraction of samples changing clusters)"
     )
     
     # Legacy K-means fallback (deprecated, use hierarchical method instead)

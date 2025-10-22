@@ -19,6 +19,7 @@ from scipy.spatial.distance import squareform
 # Import local modules
 from .config import MethylClusterConfig
 from .distance_matrix import DistanceMatrixComputer
+from .centroid_manager import ClusterCentroid
 
 # Import MethylUtils components
 try:
@@ -125,7 +126,7 @@ class MethylCluster:
     
     def cluster(self) -> Dict[str, Any]:
         """
-        Perform clustering using the configured method (HDBSCAN or Hierarchical).
+        Perform clustering using the configured method (HDBSCAN, Hierarchical, or Centroid).
         
         Returns:
             Dictionary containing clustering results:
@@ -137,12 +138,20 @@ class MethylCluster:
             - silhouette_score: Quality metric (if applicable)
         
         Raises:
-            ValueError: If distance matrix hasn't been computed
+            ValueError: If distance matrix hasn't been computed (except for centroid method)
         """
+        # Choose clustering method
+        if self.config.clustering_method.value == "centroid":
+            # Centroid-based clustering doesn't require distance matrix upfront
+            if self.config.force_k is not None:
+                return self._centroid_based_clustering(self.config.force_k)
+            else:
+                return self._centroid_based_clustering_auto_k()
+        
+        # Other methods require distance matrix
         if self.distance_matrix is None:
             raise ValueError("Distance matrix must be computed before clustering. Call compute_distances() first.")
         
-        # Choose clustering method
         if self.config.clustering_method.value == "hierarchical":
             return self._hierarchical_clustering()
         else:
@@ -480,6 +489,332 @@ class MethylCluster:
             medoid_indices.append(int(medoid))
         
         return medoid_indices
+    
+    def _load_all_samples(self) -> List:
+        """
+        Get all samples as MethylSample instances.
+        
+        Samples are already loaded by load_samples() in the run() method.
+        This method simply returns the cached samples.
+        
+        Returns:
+            List of MethylSample objects
+        """
+        if not self.samples:
+            raise RuntimeError("Samples not loaded. Call load_samples() first.")
+        
+        logger.info(f"Using {len(self.samples)} already-loaded samples")
+        return self.samples
+    
+    def _centroid_based_clustering(self, k: int) -> Dict[str, Any]:
+        """
+        Perform centroid-based clustering with EM-like iteration.
+        
+        Algorithm:
+        1. Load all samples as MethylSample instances
+        2. Initialize k centroids using farthest-point heuristic
+        3. E-step: Assign each sample to centroid with highest log-likelihood
+        4. M-step: Update centroids (automatic via PositionAligner)
+        5. Repeat until convergence
+        
+        Args:
+            k: Number of clusters
+            
+        Returns:
+            Dictionary containing clustering results
+        """
+        logger.info(f"Starting centroid-based clustering with K={k}")
+        
+        # Load all samples
+        samples = self._load_all_samples()
+        n_samples = len(samples)
+        
+        # Initialize centroids using farthest-point heuristic
+        centroids = self._initialize_centroids_farthest(samples, k)
+        
+        # EM iteration
+        old_assignments = np.full(n_samples, -1, dtype=int)
+        
+        for iteration in range(self.config.max_em_iterations):
+            logger.info(f"EM iteration {iteration + 1}/{self.config.max_em_iterations}")
+            
+            # E-step: assign samples to best centroid
+            new_assignments = self._assign_samples_to_centroids(samples, centroids)
+            
+            # Check convergence
+            n_changed = np.sum(new_assignments != old_assignments)
+            frac_changed = n_changed / n_samples
+            
+            logger.info(f"  {n_changed} samples changed clusters ({frac_changed:.2%})")
+            
+            if frac_changed < self.config.convergence_threshold:
+                logger.info(f"Converged after {iteration + 1} iterations")
+                break
+            
+            # M-step: update centroids
+            centroids = self._update_centroids(samples, new_assignments, centroids)
+            old_assignments = new_assignments.copy()
+        else:
+            logger.info(f"Reached maximum iterations ({self.config.max_em_iterations})")
+        
+        # Store final assignments
+        self.cluster_labels = new_assignments
+        
+        # Compile results
+        results = self._compile_centroid_results(centroids)
+        results['clustering_method'] = 'centroid'
+        results['em_iterations'] = iteration + 1
+        
+        return results
+    
+    def _centroid_based_clustering_auto_k(self) -> Dict[str, Any]:
+        """
+        Perform centroid-based clustering with automatic K selection using silhouette analysis.
+        
+        Returns:
+            Dictionary containing clustering results
+        """
+        logger.info("Starting centroid-based clustering with automatic K selection")
+        
+        # Load all samples
+        samples = self._load_all_samples()
+        n_samples = len(samples)
+        
+        # Determine max_k
+        if self.config.max_k is not None:
+            max_k = min(self.config.max_k, n_samples - 1)
+        else:
+            max_k = min(int(np.sqrt(n_samples)), n_samples - 1)
+        
+        if max_k < 2:
+            logger.warning("Not enough samples for clustering")
+            self.cluster_labels = np.zeros(n_samples, dtype=int)
+            return self._compile_results()
+        
+        logger.info(f"Testing K from 2 to {max_k}")
+        
+        best_k = 2
+        best_score = -1
+        best_labels = None
+        silhouette_scores = {}
+        
+        # Test different K values
+        for k in range(2, max_k + 1):
+            logger.info(f"Testing K={k}")
+            
+            # Run clustering for this K
+            result = self._centroid_based_clustering(k)
+            labels = np.array(result['labels'])
+            
+            # Compute silhouette score (need distance matrix)
+            if self.distance_matrix is None:
+                logger.info("Computing distance matrix for silhouette score...")
+                self.distance_matrix = self._compute_distance_matrix_from_samples(samples)
+            
+            score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+            silhouette_scores[k] = score
+            
+            logger.info(f"  K={k}: silhouette={score:.4f}")
+            
+            if score > best_score:
+                best_score = score
+                best_k = k
+                best_labels = labels
+        
+        logger.info(f"Best K={best_k} with silhouette={best_score:.4f}")
+        
+        # Use best clustering
+        self.cluster_labels = best_labels
+        
+        # Check if score meets threshold
+        if best_score < self.config.silhouette_threshold:
+            logger.info(f"Best silhouette score {best_score:.4f} < threshold {self.config.silhouette_threshold:.4f}")
+            logger.info("No meaningful clusters found - population appears homogeneous")
+            self.cluster_labels = np.zeros(n_samples, dtype=int)
+        
+        # Compile results
+        results = self._compile_results()
+        results['clustering_method'] = 'centroid'
+        results['silhouette_score'] = float(best_score)
+        results['silhouette_scores_by_k'] = {int(k): float(v) for k, v in silhouette_scores.items()}
+        
+        return results
+    
+    def _initialize_centroids_farthest(self, samples: List, k: int) -> List[ClusterCentroid]:
+        """
+        Initialize k centroids using farthest-point heuristic.
+        
+        Args:
+            samples: List of MethylSample instances
+            k: Number of centroids to initialize
+            
+        Returns:
+            List of ClusterCentroid instances
+        """
+        logger.info(f"Initializing {k} centroids using farthest-point heuristic")
+        
+        n_samples = len(samples)
+        
+        # Compute or use cached distance matrix for initialization
+        if self.distance_matrix is None:
+            logger.info("Computing distance matrix for centroid initialization...")
+            self.distance_matrix = self._compute_distance_matrix_from_samples(samples)
+        
+        # Select k farthest points
+        medoid_indices = self._initialize_farthest_medoids(k)
+        
+        logger.info(f"Selected initial samples: {medoid_indices}")
+        
+        # Create centroids
+        centroids = []
+        for i, idx in enumerate(medoid_indices):
+            centroid = ClusterCentroid(
+                cluster_id=i,
+                chrom=self.config.chrom,
+                ctx=self.config.ctx,
+                min_coverage=self.config.min_coverage if hasattr(self.config, 'min_coverage') else 4,
+                use_gpu=self.config.use_gpu,
+                max_samples=n_samples
+            )
+            
+            # Add initial sample to centroid
+            success = centroid.add_sample(idx, samples[idx], self.sample_paths[idx])
+            if not success:
+                logger.error(f"Failed to initialize centroid {i} with sample {idx}")
+                raise RuntimeError(f"Failed to initialize centroid {i}")
+            
+            centroids.append(centroid)
+            logger.info(f"Initialized centroid {i} with sample {idx}")
+        
+        return centroids
+    
+    def _assign_samples_to_centroids(self, samples: List, centroids: List[ClusterCentroid]) -> np.ndarray:
+        """
+        Assign each sample to centroid with highest log-likelihood.
+        
+        Args:
+            samples: List of MethylSample instances
+            centroids: List of ClusterCentroid instances
+            
+        Returns:
+            Array of cluster assignments
+        """
+        n_samples = len(samples)
+        assignments = np.zeros(n_samples, dtype=int)
+        
+        logger.info("Assigning samples to centroids based on log-likelihood...")
+        
+        for i, sample in enumerate(samples):
+            best_centroid = -1
+            best_log_likelihood = -np.inf
+            
+            for j, centroid in enumerate(centroids):
+                log_likelihood = centroid.compute_log_likelihood(sample)
+                
+                if log_likelihood > best_log_likelihood:
+                    best_log_likelihood = log_likelihood
+                    best_centroid = j
+            
+            assignments[i] = best_centroid
+            
+            if (i + 1) % 10 == 0:
+                logger.debug(f"Assigned {i + 1}/{n_samples} samples")
+        
+        # Log cluster sizes
+        for j in range(len(centroids)):
+            count = np.sum(assignments == j)
+            logger.info(f"  Cluster {j}: {count} samples")
+        
+        return assignments
+    
+    def _update_centroids(
+        self,
+        samples: List,
+        assignments: np.ndarray,
+        centroids: List[ClusterCentroid]
+    ) -> List[ClusterCentroid]:
+        """
+        Update centroids based on new assignments.
+        
+        Args:
+            samples: List of MethylSample instances
+            assignments: Array of cluster assignments
+            centroids: List of ClusterCentroid instances
+            
+        Returns:
+            Updated list of ClusterCentroid instances
+        """
+        logger.info("Updating centroids based on new assignments...")
+        
+        # Track which samples should be in each centroid
+        target_assignments = {i: set() for i in range(len(centroids))}
+        for sample_idx, centroid_idx in enumerate(assignments):
+            target_assignments[centroid_idx].add(sample_idx)
+        
+        # Update each centroid
+        for centroid_idx, centroid in enumerate(centroids):
+            current = set(centroid.get_sample_indices())
+            target = target_assignments[centroid_idx]
+            
+            # Remove samples no longer in this cluster
+            to_remove = current - target
+            for idx in to_remove:
+                centroid.remove_sample(idx, samples[idx])
+            
+            # Add samples newly assigned to this cluster
+            to_add = target - current
+            for idx in to_add:
+                centroid.add_sample(idx, samples[idx], self.sample_paths[idx])
+            
+            logger.info(f"  Cluster {centroid_idx}: removed {len(to_remove)}, added {len(to_add)}, "
+                       f"now {centroid.get_sample_count()} samples")
+        
+        return centroids
+    
+    def _compute_distance_matrix_from_samples(self, samples: List) -> np.ndarray:
+        """
+        Compute distance matrix from loaded MethylSample instances.
+        
+        Args:
+            samples: List of MethylSample instances
+            
+        Returns:
+            Distance matrix
+        """
+        # Use existing DistanceMatrixComputer
+        distance_computer = DistanceMatrixComputer(
+            metric=self.config.metric.to_factory_name(),
+            chrom=self.config.chrom,
+            ctx=self.config.ctx,
+            use_gpu=self.config.use_gpu,
+            cache_dir=None  # Don't cache when computing from loaded samples
+        )
+        
+        return distance_computer.compute_pairwise_distances(samples, self.sample_paths)
+    
+    def _compile_centroid_results(self, centroids: List[ClusterCentroid]) -> Dict[str, Any]:
+        """
+        Compile results from centroid-based clustering.
+        
+        Args:
+            centroids: List of ClusterCentroid instances
+            
+        Returns:
+            Dictionary with clustering results
+        """
+        # Use standard compile_results
+        results = self._compile_results()
+        
+        # Add centroid-specific information
+        results['centroid_info'] = []
+        for centroid in centroids:
+            results['centroid_info'].append({
+                'cluster_id': centroid.cluster_id,
+                'n_samples': centroid.get_sample_count(),
+                'sample_indices': centroid.get_sample_indices()
+            })
+        
+        return results
     
     def _compile_results(self) -> Dict[str, Any]:
         """
