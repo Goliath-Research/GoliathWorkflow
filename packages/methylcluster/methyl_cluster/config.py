@@ -15,7 +15,12 @@ from enum import Enum
 class ClusterMetric(str, Enum):
     """Enumeration of available distance metrics for clustering."""
     JENSEN_SHANNON = "jensen_shannon"
+    WEIGHTED_JENSEN_SHANNON = "weighted_jensen_shannon"
     HELLINGER = "hellinger"
+    BHATTACHARYYA = "bhattacharyya"
+    WASSERSTEIN = "wasserstein"
+    JEFFREYS = "jeffreys"
+    KL = "kl"
     
     def to_factory_name(self) -> str:
         """Convert ClusterMetric enum to MethylUtils factory metric name."""
