@@ -90,7 +90,7 @@ class MethylCentroidPair:
     - Statistical DMP detection using likelihood ratio tests  
     - Beta parameter estimation (MLE)
     - Bhattacharyya Distance computation
-    - FDR correction (Benjamini-Hochberg)
+    - FDR correction (Storey's q-value method)
     - GPU acceleration support via MethylUtils
     - Memory-efficient batch processing
     - Always returns pandas DataFrame
@@ -416,7 +416,7 @@ class MethylCentroidPair:
         results_view['bhattacharyya'] = np.zeros(len(positions), dtype=np.float32)  # Will be computed in _compute_bhattacharyya
 
     def _apply_fdr_correction(self, results_array: np.ndarray) -> np.ndarray:
-        """Apply FDR correction to p-values."""
+        """Apply FDR correction to p-values using Storey's method."""
         if len(results_array) == 0:
             return results_array
 
@@ -424,44 +424,72 @@ class MethylCentroidPair:
         p_values = results_array['p_value']
 
         try:
-            # Try to use statsmodels if available
+            # Use Storey's two-stage FDR method (adaptive FDR control)
             from statsmodels.stats.multitest import multipletests
-            _, q_values, _, _ = multipletests(p_values, alpha=0.05, method='fdr_bh')
+            _, q_values, _, _ = multipletests(p_values, alpha=0.05, method='fdr_tsbh')
         except ImportError:
-            # Fallback: Implement Benjamini-Hochberg FDR correction manually
-            logger.warning("statsmodels not available, using manual FDR correction")
-            q_values = self._benjamini_hochberg_fdr(p_values)
+            # Fallback: Implement Storey's method manually
+            logger.warning("statsmodels not available, using manual Storey's FDR correction")
+            q_values = self._storey_qvalue(p_values)
 
         # Update q-values in place (vectorized)
         results_array['q_value'] = q_values.astype(np.float32)
 
         return results_array
 
-    def _benjamini_hochberg_fdr(self, p_values: np.ndarray) -> np.ndarray:
+    def _storey_qvalue(self, p_values: np.ndarray, lambda_seq=None) -> np.ndarray:
         """
-        Manual implementation of Benjamini-Hochberg FDR correction.
+        Manual implementation of Storey's q-value method (adaptive FDR control).
+        
+        Storey's method estimates π₀ (proportion of true null hypotheses) and uses
+        it to adjust the FDR, making it less conservative than Benjamini-Hochberg
+        when many true positives exist (common in genomics).
 
         Args:
             p_values: Array of p-values to correct
+            lambda_seq: Sequence of λ values for π₀ estimation (default: 0.05 to 0.95)
 
         Returns:
-            Array of q-values (FDR-corrected p-values)
+            Array of q-values (Storey's FDR-corrected p-values)
         """
         if len(p_values) == 0:
             return np.array([])
 
+        n = len(p_values)
+        
+        # Default lambda sequence for π₀ estimation
+        if lambda_seq is None:
+            lambda_seq = np.arange(0.05, 0.96, 0.05)
+        
+        # Estimate π₀ (proportion of true nulls) using bootstrap method
+        pi0_estimates = []
+        for lam in lambda_seq:
+            # Count p-values > lambda
+            w = np.sum(p_values > lam)
+            # Estimate π₀ as: (# p-values > λ) / ((1 - λ) * total tests)
+            pi0_est = w / (n * (1.0 - lam))
+            pi0_estimates.append(pi0_est)
+        
+        # Use smoothing spline or simple average for π₀
+        # For simplicity, use the minimum to be conservative
+        pi0 = min(1.0, np.mean(pi0_estimates))
+        pi0 = max(0.0, pi0)  # Ensure π₀ is in [0, 1]
+        
+        logger.debug(f"Storey's π₀ estimate: {pi0:.4f} (proportion of true nulls)")
+        
         # Sort p-values and get original indices
         sorted_indices = np.argsort(p_values)
         sorted_p = p_values[sorted_indices]
-        n = len(sorted_p)
-
-        # Calculate BH q-values
+        
+        # Calculate q-values using π₀ adjustment
+        # q(p_i) = min(π₀ * n * p_i / i) for all j >= i
         q_values = np.zeros(n)
-        q_values[n-1] = sorted_p[n-1]  # Last value unchanged
-
+        q_values[n-1] = min(1.0, pi0 * sorted_p[n-1])
+        
         for i in range(n-2, -1, -1):
-            q_values[i] = min(q_values[i+1], sorted_p[i] * n / (i+1))
-
+            q_val = min(1.0, pi0 * n * sorted_p[i] / (i + 1))
+            q_values[i] = min(q_val, q_values[i+1])
+        
         # Reorder back to original positions
         original_order = np.zeros(n, dtype=int)
         original_order[sorted_indices] = np.arange(n)

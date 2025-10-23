@@ -39,7 +39,7 @@
     "max_filtered_dmps": 50000,
     "min_filtered_dmps": 1000,
     "max_selected_dmps": null,
-    "target_auc": 0.95,
+    "target_balanced_accuracy": 0.95,
     "use_gpu_selection": true,
     "selection_metric": "auc",
     "target_youden": 0.9,

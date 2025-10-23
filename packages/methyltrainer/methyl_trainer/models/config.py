@@ -47,12 +47,12 @@ class TrainingConfig:
     biological_filters: bool = True
     
     # Binary search configuration
-    target_auc: float = 0.95
+    target_balanced_accuracy: float = 0.95
     min_selected_dmps: Optional[int] = None
     min_dmps_for_export: int = 1000
     
     # Validation-accuracy optimization (requires real validation samples)
-    optimize_for_validation_accuracy: bool = False  # Enable accuracy-based optimization after AUC search
+    optimize_for_validation_accuracy: bool = False  # Enable accuracy-based optimization after Balanced Accuracy search
     
     # Differential Evolution optimization parameters
     de_max_iterations: int = 50  # Max iterations for differential evolution
