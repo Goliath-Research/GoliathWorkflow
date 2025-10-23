@@ -52,7 +52,11 @@
   "ctx": "CG",
   "clustering_method": "centroid",
   "metric": "jensen_shannon",
-  "force_k": 3,
+  "force_k": 2,
+  "forced_groups": {
+    "Healthy": 35,
+    "Cancer Early-Stage1": 12
+  },
   "num_restarts": 1,
   "max_em_iterations": 50,
   "convergence_threshold": 0.01,

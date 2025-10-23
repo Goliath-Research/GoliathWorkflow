@@ -6,8 +6,8 @@ clustering of methylation samples using Pydantic models.
 """
 
 from pathlib import Path
-from typing import List, Optional
-from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional, Dict
+from pydantic import BaseModel, Field, field_validator, model_validator
 import json
 from enum import Enum
 
@@ -102,13 +102,23 @@ class MethylClusterConfig(BaseModel):
         ge=2,
         description="Force specific number of clusters (bypasses silhouette threshold). Use when K is known a priori."
     )
+
     silhouette_threshold: float = Field(
         default=0.2,
         ge=0.0,
         le=1.0,
         description="Minimum silhouette score to accept clusters as meaningful (ignored if force_k is set)"
     )
-    
+
+    forced_groups: Optional[Dict[str, int]] = Field(
+        default=None,
+        description="Dictionary of forced group labels (keys) and sizes (values) for supervised/confirmation clustering. Sizes must sum to len(samples). Example: {\"Healthy\": 35, \"Cancer\": 15}. Requires clustering_method='centroid'."
+    )
+
+    # Deprecated: Use forced_groups dict instead
+    # group_labels: Optional[List[str]] = Field(...)
+    # group_sizes: Optional[List[int]] = Field(...)
+
     # K-medoids refinement parameters
     enable_medoid_refinement: bool = Field(
         default=True,
@@ -188,7 +198,41 @@ class MethylClusterConfig(BaseModel):
         if len(v) < 2:
             raise ValueError("At least 2 samples are required for clustering")
         return v
-    
+
+    @model_validator(mode='after')
+    def validate_forced_groups_after(self):
+        """Validate forced groups configuration after all fields are parsed."""
+        forced_groups = self.forced_groups
+        
+        if forced_groups is not None:
+            if len(forced_groups) < 2:
+                raise ValueError("At least 2 groups required for forced clustering")
+            
+            labels = list(forced_groups.keys())
+            sizes = list(forced_groups.values())
+            
+            if any(size <= 0 for size in sizes):
+                raise ValueError("All group sizes must be positive")
+            
+            if sum(sizes) != len(self.samples):
+                raise ValueError(f"Sum of group_sizes ({sum(sizes)}) must equal number of samples ({len(self.samples)})")
+            
+            if self.clustering_method != 'centroid':
+                raise ValueError("Forced groups only supported with clustering_method='centroid'")
+            
+            if self.force_k is not None and self.force_k != len(forced_groups):
+                raise ValueError("force_k must equal number of forced groups")
+            
+            # Store parsed lists internally for backward compat or easy access
+            self._parsed_group_labels = labels
+            self._parsed_group_sizes = sizes
+        
+        # Fallback for deprecated fields (if you want to keep support)
+        # if self.group_labels is not None or self.group_sizes is not None:
+        #     ... (old validation)
+        
+        return self
+
     def to_file(self, file_path: Path) -> None:
         """Save configuration to JSON file."""
         file_path = Path(file_path)
