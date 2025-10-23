@@ -681,6 +681,116 @@ class MethylSample:
             'methylation_levels': methylation_levels[valid_positions]
         }
 
+    def prob_belongs(self, sample: 'MethylSample', use_gpu: bool = True) -> float:
+        """
+        Test if a sample belongs to this centroid using Z-score test with CLT.
+        
+        This method performs a statistical test using the Central Limit Theorem (CLT).
+        The sum of methylation levels approximately follows a Normal distribution,
+        allowing us to compute a Z-score and corresponding p-value.
+        
+        Uses GPU-optimized functions from MethylUtils for high-performance computation.
+        
+        Args:
+            sample: Test sample to evaluate
+            use_gpu: Whether to use GPU acceleration if available (default: True)
+            
+        Returns:
+            p_value: Two-tailed p-value from Z-test
+                     - p > 0.05: Sample likely belongs to this centroid
+                     - p < 0.05: Sample likely does not belong (outlier/different group)
+                     
+        Example:
+            >>> centroid_healthy = MethylSample.load_from_h5("healthy.h5")
+            >>> test_sample = MethylSample.load_from_h5("patient.h5")
+            >>> p_value = centroid_healthy.prob_belongs(test_sample)
+            >>> print(f"P-value: {p_value:.4f}")
+        """
+        from scipy.stats import norm
+        try:
+            from methyl_utils.beta_analytics import compute_beta_mean, compute_beta_variance
+            from methyl_utils.gpu_detection import is_gpu_available
+            from methyl_utils.metrics_core import DistanceCalculator
+            from methyl_utils.gpu_utils import _prepare_arrays_for_backend, _ensure_cpu_output
+        except ImportError:
+            # Handle relative imports when running as module
+            from .beta_analytics import compute_beta_mean, compute_beta_variance
+            from .gpu_detection import is_gpu_available
+            from .metrics_core import DistanceCalculator
+            from .gpu_utils import _prepare_arrays_for_backend, _ensure_cpu_output
+        
+        # Determine if GPU should be used
+        use_gpu = use_gpu and is_gpu_available()
+        calc = DistanceCalculator()
+        xp = calc.get_backend(use_gpu)[0]  # Get numpy or cupy
+        
+        # 1. Find common positions
+        common_pos = np.intersect1d(self.pos, sample.pos, assume_unique=True)
+        if len(common_pos) == 0:
+            return 0.0  # No overlap = doesn't belong
+        
+        # 2. Get indices for alignment
+        self_idx = np.searchsorted(self.pos, common_pos)
+        sample_idx = np.searchsorted(sample.pos, common_pos)
+        
+        # 3. Get centroid's Beta parameters (mean and variance)
+        alpha = self.alpha[self_idx]
+        beta = self.beta[self_idx]
+        
+        # Use optimized GPU functions for Beta statistics
+        centroid_mean = compute_beta_mean(alpha, beta)  # E[X] = α/(α+β)
+        centroid_var = compute_beta_variance(alpha, beta)  # Var[X] = αβ/((α+β)²(α+β+1))
+        
+        # 4. Get sample's methylation levels
+        sample_mC = sample.mC[sample_idx]
+        sample_uC = sample.uC[sample_idx]
+        sample_total = sample_mC + sample_uC
+        
+        # Filter valid positions (coverage > 0)
+        valid = sample_total > 0
+        if np.sum(valid) == 0:
+            return 0.0  # No valid positions = doesn't belong
+        
+        # Methylation levels at valid positions
+        sample_meth = sample_mC[valid] / sample_total[valid]
+        centroid_mean_valid = centroid_mean[valid]
+        centroid_var_valid = centroid_var[valid]
+        
+        # Transfer to GPU if requested
+        if use_gpu:
+            arrays, _ = _prepare_arrays_for_backend(
+                [sample_meth, centroid_mean_valid, centroid_var_valid], 
+                calc, 
+                use_gpu
+            )
+            sample_meth_gpu, centroid_mean_gpu, centroid_var_gpu = arrays
+        else:
+            sample_meth_gpu = sample_meth
+            centroid_mean_gpu = centroid_mean_valid
+            centroid_var_gpu = centroid_var_valid
+        
+        # 5. Compute Z-score using CLT (GPU-accelerated)
+        # Sum of independent random variables ~ Normal by CLT
+        sum_observed = xp.sum(sample_meth_gpu)
+        sum_expected = xp.sum(centroid_mean_gpu)
+        sum_variance = xp.sum(centroid_var_gpu**2)  # Variance of sum
+        
+        # Convert back to CPU for final computation
+        if use_gpu:
+            sum_observed = float(_ensure_cpu_output(sum_observed, calc, use_gpu))
+            sum_expected = float(_ensure_cpu_output(sum_expected, calc, use_gpu))
+            sum_variance = float(_ensure_cpu_output(sum_variance, calc, use_gpu))
+        
+        if sum_variance < 1e-12:
+            return 1.0  # No variance = perfect match (edge case)
+        
+        z_score = (sum_observed - sum_expected) / np.sqrt(sum_variance)
+        
+        # 6. Two-tailed p-value
+        p_value = 2 * (1 - norm.cdf(np.abs(z_score)))
+        
+        return float(p_value)
+
     def create_aligned_sample(self, mask: np.ndarray) -> 'MethylSample':
         """
         Create a new MethylSample with only the positions specified by the mask.

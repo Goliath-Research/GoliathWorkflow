@@ -11,6 +11,10 @@ import numpy as np
 # Module mapping for pickle compatibility
 import importlib
 
+# Import from parent package
+from methyl_utils import ProbabilisticBetaClassifier
+from ..models.config import ClassifierConfig
+
 # Create a mapping for old module names to new ones
 MODULE_MAPPING = {
     'methyl_detector': 'methyl_utils',

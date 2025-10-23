@@ -8,8 +8,8 @@ from pathlib import Path
 
 from methyl_utils import get_logger
 
-from .trainer import train_from_centroids, train_from_config_file
-from .config import create_default_config
+from ..core.trainer import train_from_centroids, train_from_config_file
+from ..models.config import create_default_config
 
 logger = get_logger(__name__)
 

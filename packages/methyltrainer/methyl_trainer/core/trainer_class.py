@@ -22,7 +22,7 @@ from methyl_utils.logging_utils import setup_module_logging
 from scipy.stats import norm
 from scipy.stats import beta  # Add this
 
-from .config import TrainingConfig
+from ..models.config import TrainingConfig
 
 logger = setup_module_logging(__name__)
 

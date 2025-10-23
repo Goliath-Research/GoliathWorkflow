@@ -10,10 +10,10 @@ from typing import Optional
 import numpy as np
 import json # Added for loading config file
 
-from .classifier import MethylClassifier
-from .data_loader import DataLoader
-from .utils import setup_logging, extract_chrom_context_from_classifier
-from .config_schema import ClassificationConfig
+from ..core.classifier import MethylClassifier
+from ..utils.data_loader import DataLoader
+from ..utils.utils import extract_chrom_context_from_classifier
+from ..models.config_schema import ClassificationConfig
 
 
 def classify_samples(classifier: MethylClassifier,

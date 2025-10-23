@@ -11,7 +11,7 @@ Version: 0.1.0
 __version__ = "0.1.0"
 __author__ = "MethylClassifier Development Team"
 
-from .classifier import MethylClassifier
-from .utils import setup_logging
+from .core.classifier import MethylClassifier
+from .models.config import ClassifierConfig
 
-__all__ = ['MethylClassifier', 'setup_logging']
+__all__ = ['MethylClassifier', 'ClassifierConfig']

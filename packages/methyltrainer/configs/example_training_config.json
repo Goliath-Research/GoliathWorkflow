@@ -1,0 +1,28 @@
+{
+  "centroid1_path": "/path/to/centroid1_chr1-CG.h5",
+  "centroid2_path": "/path/to/centroid2_chr1-CG.h5",
+  "output_path": "/path/to/output/classifier_chr1-CG.pkl",
+  "chromosome": "1",
+  "context": "CG",
+  "alpha": 0.01,
+  "min_N_pct": 0.1,
+  "min_delta_mean": 0.2,
+  "max_bc": 0.5,
+  "gamma": 1.5,
+  "min_effect_size": null,
+  "biological_filters": true,
+  "target_auc": 0.95,
+  "min_selected_dmps": 50,
+  "min_dmps_for_export": 100,
+  "validation_mode": "synthetic",
+  "n_validation_samples": 100,
+  "centroid1_validation_samples": [],
+  "centroid2_validation_samples": [],
+  "optimize_for_validation_accuracy": false,
+  "use_gpu": true,
+  "random_state": 42,
+  "verbose": true,
+  "temperature": 1.0,
+  "enable_platt_calibration": false
+}
+
