@@ -143,7 +143,31 @@ class MethylClusterConfig(BaseModel):
         description="[Centroid only] Convergence threshold (fraction of samples changing clusters)"
     )
     num_restarts: int = Field(3, description="Number of EM restarts for centroid clustering (1 = no multiple starts)")
-    
+
+    # Soft assignment parameters (new)
+    soft_assignment: bool = Field(
+        default=False,
+        description="Enable soft cluster assignments with membership probabilities (centroid method only)"
+    )
+    assignment_temperature: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=10.0,
+        description="Temperature parameter for softmax in soft assignments (higher values increase uncertainty)"
+    )
+
+    # New: Forced init validation
+    validate_init: bool = Field(
+        default=False,
+        description="Validate forced init by checking own-sample fit and swapping bad seeds (centroid only)"
+    )
+
+    # New: Cluster balancing
+    balance_clusters: bool = Field(
+        default=True,
+        description="Enable post-assignment balancing of cluster sizes (centroid only)"
+    )
+
     # Legacy K-means fallback (deprecated, use hierarchical method instead)
     enable_kmeans_fallback: bool = Field(
         default=False,
@@ -197,6 +221,16 @@ class MethylClusterConfig(BaseModel):
         """Validate that at least 2 samples are provided."""
         if len(v) < 2:
             raise ValueError("At least 2 samples are required for clustering")
+        return v
+
+    @field_validator('assignment_temperature')
+    @classmethod
+    def validate_temperature(cls, v):
+        """Validate temperature is within reasonable bounds."""
+        if v < 0.1:
+            raise ValueError("assignment_temperature must be >= 0.1 to avoid numerical issues")
+        if v > 10.0:
+            raise ValueError("assignment_temperature must be <= 10.0 (excessive softening)")
         return v
 
     @model_validator(mode='after')

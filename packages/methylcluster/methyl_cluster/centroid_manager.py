@@ -187,7 +187,8 @@ class ClusterCentroid:
             RuntimeError: If no samples in cluster or no valid positions
         """
         if len(self.samples) == 0:
-            raise RuntimeError(f"Cluster {self.cluster_id} has no samples")
+            logger.warning(f"Cluster {self.cluster_id} is empty, cannot get centroid")
+            return None  # Allow callers to handle gracefully
         
         return self.position_aligner.get_centroid_sample()
     
@@ -208,6 +209,8 @@ class ClusterCentroid:
         try:
             # Get current centroid
             centroid = self.get_centroid()
+            if centroid is None:
+                return -np.inf  # Empty cluster: impossible likelihood
             
             # Find common positions between sample and centroid
             common_pos = np.intersect1d(sample.pos, centroid.pos, assume_unique=True)
@@ -295,6 +298,11 @@ class ClusterCentroid:
             
             # Handle -inf: set to very low value to avoid NaN in softmax
             all_log_l = np.where(np.isfinite(all_log_l), all_log_l, -1e6)
+            
+            # Warn if many empty (inf from empty clusters)
+            num_empty = np.sum(np.isneginf(np.array([log_l_this] + log_l_others)))
+            if num_empty / len(all_log_l) > 0.5:
+                logger.warning(f"Many empty clusters ({num_empty}/{len(all_log_l)} in membership probs for sample)—consider more restarts")
             
             # Softmax with temperature: preserves uncertainty
             scaled_log_l = all_log_l / temperature

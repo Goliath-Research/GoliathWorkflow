@@ -124,7 +124,11 @@ class MethylDetector:
             # GPU configuration
             use_gpu=self.config.use_gpu,
             random_state=self.config.random_state,
-            verbose=True
+            verbose=True,
+            # New params
+            temperature=self.config.temperature,
+            enable_platt_calibration=self.config.enable_platt_calibration
+            # No validation_data_path
         )
 
     def run(self) -> MethylDetectorResult:
@@ -142,6 +146,11 @@ class MethylDetector:
 
             traceback.print_exc()
             raise
+
+        # Add DMP indices for auto-calibration
+        self.dmp_positions = dmp_df['position'].values
+        self.selected_dmps_indices = np.searchsorted(self.centroid1.pos, self.dmp_positions)
+        logger.info(f"Set selected_dmps_indices with {len(self.selected_dmps_indices)} DMPs for auto-calibration")
 
         # Step 2: Train classifier using MethylTrainer (DELEGATED)
         # This includes filtering, binary search, and validation
@@ -163,6 +172,9 @@ class MethylDetector:
                     chromosome=self.chrom,
                     context=self.ctx
                 )
+
+                self.classifier = model_package['classifier']  # Add this line - extract from package
+                logger.info("Extracted classifier for auto-calibration")
                 
                 # Extract results
                 biological_dmps_df = model_package.get('selected_dmps_df', pd.DataFrame())
@@ -183,6 +195,44 @@ class MethylDetector:
                         pickle.dump(model_package, f)
                     logger.info(f"✅ Classifier saved to {model_path}")
                     
+                    # Update model_metadata with new parameters
+                    model_metadata = model_package.get('metadata', {})
+                    model_metadata['temperature'] = self.config.temperature
+                    model_metadata['enable_platt_calibration'] = self.config.enable_platt_calibration                    # Save updated metadata with model
+                    with open(model_path, 'rb') as f:
+                        model_package_data = pickle.load(f)
+                    model_package_data['metadata'] = model_metadata
+                    with open(model_path, 'wb') as f:
+                        pickle.dump(model_package_data, f)
+                    logger.info(f"✅ Model metadata updated and saved to {model_path}")
+                    
+                    if self.config.enable_platt_calibration:
+                        # Load centroids if not loaded
+                        self.centroid1 = MethylSample.load_from_h5(self.config.centroid1_path)
+                        self.centroid2 = MethylSample.load_from_h5(self.config.centroid2_path)
+                        paths0 = self.centroid1.samples
+                        paths1 = self.centroid2.samples
+                        samples0 = [MethylSample.load_from_h5(p) for p in paths0]
+                        samples1 = [MethylSample.load_from_h5(p) for p in paths1]
+                        dmp_indices = self.selected_dmps_indices
+                        X0 = np.array([s.methylation_levels[dmp_indices] for s in samples0])
+                        X1 = np.array([s.methylation_levels[dmp_indices] for s in samples1])
+                        X_val = np.vstack([X0, X1])
+                        y_val = np.array([0] * len(samples0) + [1] * len(samples1))
+                        if self.classifier.n_dmps == 0 or len(X_val[0]) != self.classifier.n_dmps:
+                            logger.warning("Model has 0 DMPs or shape mismatch—skipping calibration")
+                        else:
+                            self.classifier.calibrate_platt(X_val, y_val)
+                            logger.info(f"Auto-calibrated Platt using {len(y_val)} samples from centroids")
+                        
+                        # Save calibrator in metadata
+                        model_metadata = model_package.get('metadata', {})
+                        model_metadata['platt_calibrator'] = pickle.dumps(self.classifier.calibrator)
+                        model_package['metadata'] = model_metadata
+                        with open(model_path, 'wb') as f:
+                            pickle.dump(model_package, f)
+                        logger.info("Saved pre-fitted Platt calibrator in model metadata")
+
             except Exception as e:
                 logger.error(f"❌ Training with MethylTrainer failed: {e}")
                 import traceback

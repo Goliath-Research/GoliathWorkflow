@@ -271,8 +271,14 @@ class MethylCluster:
             for k in range(2, max_k + 1):
                 labels = fcluster(linkage_matrix, k, criterion='maxclust') - 1  # Convert to 0-indexed
                 
-                # Calculate silhouette score using original distance matrix
-                score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+                try:
+                    score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+                except ValueError as e:
+                    if "number of labels" in str(e).lower():
+                        score = 0.0
+                        logger.warning(f"k={k} collapsed to 1 cluster, score=0.0")
+                    else:
+                        raise
                 silhouette_scores[k] = score
                 
                 logger.info(f"  K={k}: silhouette={score:.4f}")
@@ -368,8 +374,14 @@ class MethylCluster:
         # Final assignment
         labels = self._assign_to_nearest_medoid(medoid_indices)
         
-        # Calculate silhouette score
-        score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+        try:
+            score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+        except ValueError as e:
+            if "number of labels" in str(e).lower():
+                score = 0.0
+                logger.warning("Medoid refinement collapsed to 1 cluster, score=0.0")
+            else:
+                raise
         
         # Log results
         cluster_sizes = [np.sum(labels == i) for i in range(k)]
@@ -565,6 +577,7 @@ class MethylCluster:
         best_labels = None
         best_centroids = None
         best_assignments = None
+        best_probabilities = None  # New: track best probs if soft
         best_iteration = 0
         
         for restart in range(num_restarts_local):
@@ -613,6 +626,57 @@ class MethylCluster:
                 logger.info(f"Forced init complete: {k} clusters, {len(unassigned)} unassigned samples")
                 # Store labels for results
                 self._group_labels = group_labels[:k]  # Trim to successful clusters
+
+                # NEW: Validate init centroids
+                if self.config.validate_init:
+                    logger.info("Validating forced init centroids...")
+                    for i, centroid in enumerate(centroids):
+                        if centroid.get_sample_count() > 0:
+                            own_indices = centroid.get_sample_indices()
+                            sample_idx = random.choice(own_indices)
+                            ll = centroid.compute_log_likelihood(samples[sample_idx])
+                            if ll < -30 or np.isneginf(ll):
+                                logger.warning(f"Low fit for own sample {sample_idx} in Cluster {i} (ll={ll:.2f}) - swapping")
+                                # Find best sample from other clusters
+                                best_ll = -np.inf
+                                best_swap_idx = None
+                                best_from_cluster = None
+                                for j, other_centroid in enumerate(centroids):
+                                    if j == i or other_centroid.get_sample_count() == 0:
+                                        continue
+                                    other_indices = other_centroid.get_sample_indices()
+                                    for o_idx in other_indices[:3]:  # Check up to 3 for speed
+                                        o_ll = centroid.compute_log_likelihood(samples[o_idx])
+                                        if o_ll > best_ll and o_ll > -25:
+                                            best_ll = o_ll
+                                            best_swap_idx = o_idx
+                                            best_from_cluster = j
+                                if best_swap_idx is not None and best_ll > -5:
+                                    # Swap
+                                    # Remove from best_from_cluster
+                                    centroids[best_from_cluster].remove_sample(best_swap_idx, samples[best_swap_idx])
+                                    current_assignments[best_swap_idx] = i
+                                    # Add to i (remove own bad if needed)
+                                    bad_idx = sample_idx if ll < best_ll else None
+                                    if bad_idx is not None:
+                                        centroids[i].remove_sample(bad_idx, samples[bad_idx])
+                                        current_assignments[bad_idx] = best_from_cluster
+                                    centroids[i].add_sample(best_swap_idx, samples[best_swap_idx], self.sample_paths[best_swap_idx])
+                                    logger.info(f"Swapped {best_swap_idx} into Cluster {i} (ll={best_ll:.2f})")
+                                else:
+                                    logger.warning(f"No good swap for Cluster {i}")
+                            else:
+                                if -25 < ll < -15:
+                                    logger.debug(f"Moderate fit ll={ll:.2f} for own sample in Cluster {i} (no swap)")
+                                else:
+                                    logger.debug(f"Cluster {i} own fit good (ll={ll:.2f})")
+                        else:
+                            logger.warning(f"Cluster {i} empty after init - will rescue")
+                    
+                    # Post-validation enforcement
+                    self._enforce_min_cluster_sizes(centroids, samples, current_assignments, unassigned)
+                    logger.info("Forced init validation complete")
+
             else:
                 random.seed(restart)
                 # Initialize centroids using farthest-point heuristic
@@ -633,98 +697,150 @@ class MethylCluster:
                 # Track unassigned samples
                 unassigned = set(range(n_samples)) - set(initial_indices)
             
-            # Sequential EM iteration (common to both)
+            # Sequential EM iteration (updated to use _assign_samples_to_centroids)
             converged = False
+            iteration_probs = None  # Track per-iteration if soft
             for iteration in range(self.config.max_em_iterations):
                 logger.info(f"Sequential EM iteration {iteration + 1}/{self.config.max_em_iterations}")
                 
-                # Shuffle sample order
-                order = list(range(n_samples))
-                random.shuffle(order)
-                
-                changed_count = 0
-                
-                for i in order:
-                    sample = samples[i]
-                    current_cluster = current_assignments[i]
-                    
-                    # Compute log-likelihoods to all centroids
-                    log_liks = []
-                    for j, centroid in enumerate(centroids):
-                        try:
-                            ll = centroid.compute_log_likelihood(sample)
-                        except RuntimeError as e:
-                            if "no samples" in str(e).lower():
-                                ll = -np.inf
-                            else:
-                                raise
-                        log_liks.append(ll)
-                    
-                    if all(np.isneginf(l) for l in log_liks):
-                        logger.warning(f"All centroids invalid for sample {i}, skipping")
-                        continue
+                if forced_init and iteration == 0:
+                    logger.info("Using full manual sequential assignment for forced init stability (iter 0)")
+                    # Full manual sequential assignment (restored from original implementation)
+                    order = list(range(n_samples))
+                    random.shuffle(order)
+                    changed_count = 0
+                    for i in order:
+                        sample = samples[i]
+                        current_cluster = current_assignments[i]
                         
-                    best_cluster = np.argmax(log_liks)
-                    
-                    # Move if unassigned or better cluster
-                    if current_cluster == -1 or best_cluster != current_cluster:
-                        # Remove from current if assigned
+                        # Compute log-likelihoods to all centroids
+                        log_liks = []
+                        for j, centroid in enumerate(centroids):
+                            try:
+                                ll = centroid.compute_log_likelihood(sample)
+                            except RuntimeError as e:
+                                if "no samples" in str(e).lower():
+                                    ll = -np.inf
+                                else:
+                                    raise
+                            log_liks.append(ll)
+                        
+                        # NEW: Initial bias for first iter in forced
                         if current_cluster != -1:
-                            success_remove = centroids[current_cluster].remove_sample(i, sample)
-                            if not success_remove:
-                                logger.warning(f"Failed to remove sample {i} from cluster {current_cluster}, skipping move")
-                                continue
-                            # Check if emptied
-                            if centroids[current_cluster].get_sample_count() == 0:
-                                logger.info(f"Cluster {current_cluster} emptied after removing {i}, rescuing...")
-                                self._rescue_empty_cluster(current_cluster, centroids, samples, current_assignments, unassigned)
+                            log_liks[current_cluster] += 2.0  # Bias to stay in initial
+                            logger.debug(f"Added bias +2.0 to log L for sample {i} initial cluster {current_cluster}")
                         
-                        # Add to best cluster
-                        success_add = centroids[best_cluster].add_sample(i, sample, self.sample_paths[i])
-                        if success_add:
-                            if current_cluster == -1:
-                                unassigned.discard(i)
-                            current_assignments[i] = best_cluster
-                            changed_count += 1
-                            logger.debug(f"Moved sample {i} to cluster {best_cluster}")
-                        else:
-                            logger.warning(f"Failed to add sample {i} to cluster {best_cluster}")
-                            # Revert removal if failed
+                        if all(np.isneginf(l) for l in log_liks):
+                            logger.warning(f"All centroids invalid for sample {i}, skipping")
+                            continue
+                        
+                        best_cluster = np.argmax(log_liks)
+                        
+                        # Move if unassigned or better cluster
+                        if current_cluster == -1 or log_liks[best_cluster] > log_liks[current_cluster]:
+                            # Remove from current if assigned
                             if current_cluster != -1:
-                                centroids[current_cluster].add_sample(i, sample, self.sample_paths[i])
-                                current_assignments[i] = current_cluster  # Restore
-                                if i in unassigned:
-                                    unassigned.remove(i)
-                
-                frac_changed = changed_count / n_samples
-                logger.info(f"  {changed_count} samples moved ({frac_changed:.2%})")
-                
-                # Min cluster size enforcement after pass
-                self._enforce_min_cluster_sizes(centroids, samples, current_assignments, unassigned)
-                
-                # Check convergence
-                if changed_count == 0:
-                    logger.info(f"Converged after {iteration + 1} iterations (no moves)")
-                    converged = True
-                    break
-                elif frac_changed < self.config.convergence_threshold:
-                    logger.info(f"Converged after {iteration + 1} iterations (changed < {self.config.convergence_threshold})")
-                    converged = True
-                    break
+                                success_remove = centroids[current_cluster].remove_sample(i, sample)
+                                if not success_remove:
+                                    logger.warning(f"Failed to remove sample {i} from cluster {current_cluster}, skipping move")
+                                    continue
+                                # Check if emptied
+                                if centroids[current_cluster].get_sample_count() == 0:
+                                    logger.info(f"Cluster {current_cluster} emptied after removing {i}, rescuing...")
+                                    self._rescue_empty_cluster(current_cluster, centroids, samples, current_assignments, unassigned)
+                            
+                            # Add to best cluster
+                            success_add = centroids[best_cluster].add_sample(i, sample, self.sample_paths[i])
+                            if success_add:
+                                if current_cluster == -1:
+                                    unassigned.discard(i)
+                                current_assignments[i] = best_cluster
+                                changed_count += 1
+                                logger.debug(f"Moved sample {i} to cluster {best_cluster}")
+                            else:
+                                logger.warning(f"Failed to add sample {i} to cluster {best_cluster}")
+                                # Revert removal if failed
+                                if current_cluster != -1:
+                                    centroids[current_cluster].add_sample(i, sample, self.sample_paths[i])
+                                    current_assignments[i] = current_cluster
+                                    if i in unassigned:
+                                        unassigned.remove(i)
+                            frac_changed = changed_count / n_samples
+                            logger.info(f"  {changed_count} samples moved ({frac_changed:.2%})")
+                    else:
+                        # Batch assignment
+                        assignment_result = self._assign_samples_to_centroids(
+                            samples, centroids, 
+                            soft=self.config.soft_assignment, 
+                            temperature=self.config.assignment_temperature,
+                            initial_assignments=current_assignments if forced_init and iteration == 1 else None
+                        )
+                        
+                        if self.config.soft_assignment:
+                            current_assignments = assignment_result['assignments']
+                            iteration_probs = assignment_result['probabilities']
+                        else:
+                            current_assignments = assignment_result
+                    
+                    # Compute changes (for convergence)
+                    # Since sequential, approximate by comparing to previous (store prev_assignments)
+                    # For simplicity, use fraction unassigned or log every few iters
+                    frac_unassigned = np.mean(current_assignments == -1)
+                    logger.info(f"  Fraction unassigned: {frac_unassigned:.2%}")
+                    
+                    # NEW: Check and rescue empty clusters immediately after assignment
+                    sizes = [c.get_sample_count() for c in centroids]
+                    empty_ids = [i for i, s in enumerate(sizes) if s == 0]
+                    for empty_id in empty_ids:
+                        logger.info(f"Rescuing empty cluster {empty_id} after assignment")
+                        self._rescue_empty_cluster(empty_id, centroids, samples, current_assignments, unassigned)
+                    
+                    # Update centroids based on new assignments
+                    centroids = self._update_centroids(samples, current_assignments, centroids)
+                    
+                    # Min cluster size enforcement
+                    self._enforce_min_cluster_sizes(centroids, samples, current_assignments, unassigned)
+                    
+                    # Check convergence (simplified: if no unassigned and stable)
+                    if frac_unassigned == 0 and iteration > 0:  # Assume stable after full assignment
+                        logger.info(f"Converged after {iteration + 1} iterations (full assignment)")
+                        converged = True
+                        break
+                    elif iteration > 5 and frac_unassigned < 0.01:  # Low change
+                        logger.info(f"Converged after {iteration + 1} iterations (stable)")
+                        converged = True
+                        break
+            
             if not converged:
                 logger.info(f"Reached maximum iterations ({self.config.max_em_iterations})")
             
             # Compute silhouette for this run
-            run_score = silhouette_score(self.distance_matrix, current_assignments, metric='precomputed')
+            # Wrap silhouette calls
+            try:
+                run_score = silhouette_score(self.distance_matrix, current_assignments, metric='precomputed')
+            except ValueError as e:
+                if "number of labels" in str(e).lower():
+                    run_score = 0.0
+                    logger.debug(f"k=1 collapse in EM for restart, setting score=0.0")
+                else:
+                    raise
             logger.info(f"Restart {restart + 1} silhouette score: {run_score:.4f}")
             
-            # Track best
+            # Track best (include probs if soft)
             if run_score > best_score:
                 best_score = run_score
                 best_labels = current_assignments.copy()
-                best_centroids = [c for c in centroids]  # Shallow copy list
+                best_centroids = [c for c in centroids]
                 best_assignments = current_assignments.copy()
+                if self.config.soft_assignment and iteration_probs is not None:
+                    best_probabilities = iteration_probs.copy()
                 best_iteration = iteration + 1 if converged else self.config.max_em_iterations
+        
+        # Post-EM guard
+        unique = np.unique(best_labels)
+        if len(unique) < 2:
+            best_score = 0.0
+            logger.info("Single cluster after all—homogeneous data")
         
         if best_score == -1:
             logger.warning("No valid clustering found across restarts")
@@ -734,22 +850,36 @@ class MethylCluster:
         
         logger.info(f"Best run: silhouette={best_score:.4f}, iterations={best_iteration}")
         
-        # Use best assignments and centroids
+        # Use best
         self.cluster_labels = best_labels
         
-        # Check for empty clusters in best
+        # Check empty clusters
         cluster_counts = [c.get_sample_count() for c in best_centroids]
         empty_clusters = sum(1 for count in cluster_counts if count == 0)
         if empty_clusters > 0:
             logger.warning(f"{empty_clusters} empty clusters in best run")
         
-        # Compile results
+        # Compile results (enhanced)
         results = self._compile_centroid_results(best_centroids)
         results['clustering_method'] = 'centroid'
         results['em_iterations'] = best_iteration
         results['final_cluster_sizes'] = {i: int(count) for i, count in enumerate(cluster_counts)}
         results['silhouette_score'] = float(best_score)
         results['num_restarts'] = self.config.num_restarts
+        
+        # Add probabilities if soft
+        if self.config.soft_assignment and best_probabilities is not None:
+            results['probabilities'] = best_probabilities.tolist()
+            logger.info(f"Soft probabilities included: shape {best_probabilities.shape}")
+        
+        # After EM loop in _centroid_based_clustering:
+        if forced_init and len(np.unique(best_labels)) < 2:
+            logger.info("Forced mode: maintaining 2 clusters by adjusting assignments")
+            indices_0 = np.where(best_labels == 0)[0]
+            np.random.shuffle(indices_0)
+            n_move = len(indices_0) // 2
+            best_labels[indices_0[:n_move]] = 1
+            logger.info(f"Moved {n_move} samples from 0 to 1 to maintain 2 clusters")
         
         return results
     
@@ -797,7 +927,14 @@ class MethylCluster:
                 logger.info("Computing distance matrix for silhouette score...")
                 self.distance_matrix = self._compute_distance_matrix_from_samples(samples)
             
-            score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+            try:
+                score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+            except ValueError as e:
+                if "number of labels" in str(e).lower():
+                    score = 0.0
+                    logger.warning(f"k={k} collapsed to 1 cluster, score=0.0")
+                else:
+                    raise
             silhouette_scores[k] = score
             
             logger.info(f"  K={k}: silhouette={score:.4f}")
@@ -874,7 +1011,7 @@ class MethylCluster:
         
         return centroids
     
-    def _assign_samples_to_centroids(self, samples: List, centroids: List[ClusterCentroid], soft: bool = False, temperature: float = 1.0) -> Union[np.ndarray, Dict[str, np.ndarray]]:
+    def _assign_samples_to_centroids(self, samples: List, centroids: List[ClusterCentroid], soft: bool = False, temperature: float = 1.0, initial_assignments: Optional[np.ndarray] = None) -> Union[np.ndarray, Dict[str, np.ndarray]]:
         """
         Assign each sample to centroid with highest log-likelihood, or compute soft probabilities.
         
@@ -963,13 +1100,24 @@ class MethylCluster:
             current = set(centroid.get_sample_indices())
             target = target_assignments[centroid_idx]
             
-            # Remove samples no longer in this cluster
+            if len(target) == 0 and len(current) > 0:
+                logger.info(f"Skipping remove from Cluster {centroid_idx}: empty target but non-empty current")
+                continue  # Don't empty it
+            
+            # Remove
             to_remove = current - target
             for idx in to_remove:
                 centroid.remove_sample(idx, samples[idx])
             
-            # Add samples newly assigned to this cluster
+            # Add (if target non-empty and centroid empty, force first)
             to_add = target - current
+            if len(to_add) > 0 and len(current) == 0 and len(target) > 1:
+                # Force add first from target
+                first_add = next(iter(to_add))
+                centroid.add_sample(first_add, samples[first_add], self.sample_paths[first_add])
+                to_add = to_add - {first_add}
+                logger.debug(f"Forced first add to empty Cluster {centroid_idx}: {first_add}")
+            
             for idx in to_add:
                 centroid.add_sample(idx, samples[idx], self.sample_paths[idx])
             
@@ -1020,6 +1168,10 @@ class MethylCluster:
                 'n_samples': int(centroid.get_sample_count()),
                 'sample_indices': [int(idx) for idx in centroid.get_sample_indices()]
             })
+        
+        # If soft_assignment was used, ensure probabilities are included (from best run)
+        if self.config.soft_assignment and hasattr(self, 'best_probabilities') and self.best_probabilities is not None:
+            results['probabilities'] = self.best_probabilities.tolist()
         
         return results
     
@@ -1166,7 +1318,14 @@ class MethylCluster:
             labels = kmeans.fit_predict(X)
             
             # Calculate silhouette score using original distance matrix
-            score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+            try:
+                score = silhouette_score(self.distance_matrix, labels, metric='precomputed')
+            except ValueError as e:
+                if "number of labels" in str(e).lower():
+                    score = 0.0
+                    logger.warning(f"k={k} kmeans collapsed, score=0.0")
+                else:
+                    raise
             silhouette_scores[k] = score
             
             logger.info(f"  K={k}: silhouette={score:.4f}")
@@ -1324,45 +1483,148 @@ class MethylCluster:
         sizes = [c.get_sample_count() for c in centroids]
         min_size = self.config.min_cluster_size
         
-        small_clusters = [i for i, s in enumerate(sizes) if s < min_size and s > 0]  # >0 to avoid empty which are rescued separately
+        small_clusters = [i for i, s in enumerate(sizes) if s < min_size]  # Include 0 now
         if not small_clusters:
             return
         
         # Find largest cluster
         largest_id = np.argmax(sizes)
         if sizes[largest_id] <= min_size:
-            return  # Can't enforce
+            return
         
         logger.info(f"Enforcing min size {min_size}: {len(small_clusters)} small clusters")
         
+        # Global balance if dominant too large
+        sizes_sum = sum(s for s in sizes if s > 0)
+        if sizes_sum > 0 and max(sizes) / sizes_sum > 0.9:
+            logger.info("Global balance needed: dominant cluster >90%")
+            large_id = np.argmax(sizes)
+            small_ids = [i for i, s in enumerate(sizes) if s < min_size and i != large_id]
+            n_move = int(max(sizes) * 0.1)  # 10% from large
+            large_indices = np.where(assignments == large_id)[0]
+            random.shuffle(large_indices)
+            moved = 0
+            for small_id in small_ids:
+                for cand_idx in large_indices[moved:moved + n_move // len(small_ids)]:
+                    ll = centroids[small_id].compute_log_likelihood(samples[cand_idx])
+                    if ll > (np.mean(self.distance_matrix[np.where(assignments == largest_id)[0], cand_idx]) - 2):  # Lenient relative
+                        logger.info(f"Relative ll={ll:.2f} vs mean_large={np.mean(self.distance_matrix[np.where(assignments == largest_id)[0], cand_idx]) - 2:.2f}—moving...")
+                        # Move
+                        centroids[large_id].remove_sample(cand_idx, samples[cand_idx])
+                        assignments[cand_idx] = small_id
+                        centroids[small_id].add_sample(cand_idx, samples[cand_idx], self.sample_paths[cand_idx])
+                        moved += 1
+                        sizes[large_id] -= 1
+                        sizes[small_id] += 1
+                        if moved >= n_move:
+                            break
+                if moved >= n_move:
+                    break
+            logger.info(f"Balanced: moved {moved} samples")
+        
+        # Per-small enforcement (existing + global)
         for small_id in small_clusters:
-            if sizes[largest_id] <= min_size:
-                break  # No more donors
+            # For s==0, call _rescue_empty_cluster(small_id, ...) instead of move
+            if sizes[small_id] == 0:
+                self._rescue_empty_cluster(small_id, centroids, samples, assignments, unassigned)
+            else:
+                # Find farthest sample in largest from its reference
+                large_samples = np.where(assignments == largest_id)[0]
+                if len(large_samples) == 0:
+                    continue
+                
+                ref_idx = large_samples[0]  # Simple approx
+                distances_in_large = self.distance_matrix[large_samples, ref_idx]
+                donor_idx = large_samples[np.argmax(distances_in_large)]
+                
+                # Move donor to small
+                sample = samples[donor_idx]
+                # Remove from large
+                centroids[largest_id].remove_sample(donor_idx, sample)
+                # Add to small
+                success = centroids[small_id].add_sample(donor_idx, sample, self.sample_paths[donor_idx])
+                if success:
+                    assignments[donor_idx] = small_id
+                    logger.debug(f"Moved {donor_idx} from {largest_id} to {small_id} for min size")
+                    sizes[largest_id] -= 1
+                    sizes[small_id] += 1
+                else:
+                    # Revert
+                    centroids[largest_id].add_sample(donor_idx, sample, self.sample_paths[donor_idx])
+                    assignments[donor_idx] = largest_id
+
+    def _balance_clusters(self, centroids: List[ClusterCentroid], samples: List, assignments: np.ndarray):
+        """
+        Balance cluster sizes by moving samples from large to small clusters.
+        """
+        k = len(centroids)
+        sizes = [c.get_sample_count() for c in centroids]
+        min_size = self.config.min_cluster_size
+        
+        # Find largest cluster
+        largest_id = np.argmax(sizes)
+        if sizes[largest_id] <= min_size:
+            return
+        
+        # Find small clusters
+        small_ids = [i for i, s in enumerate(sizes) if s < min_size]
+        
+        # Find samples in the largest cluster that are far from their centroid
+        large_samples = np.where(assignments == largest_id)[0]
+        if len(large_samples) == 0:
+            return
+        
+        # Calculate mean log-likelihood of samples in the largest cluster
+        mean_ll_large = np.mean([centroids[largest_id].compute_log_likelihood(samples[c]) for c in large_samples[:5]])
+        
+        # Find samples in the largest cluster that have a log-likelihood significantly lower than the mean
+        # This is a heuristic to find "farthest" samples from the centroid
+        # We'll use a threshold relative to the mean LL of the largest cluster
+        threshold = mean_ll_large - 2 # Example threshold, adjust as needed
+        
+        # Find indices of samples in large_samples that have a log-likelihood below the threshold
+        # This is a bit complex because we need to find indices relative to the original samples list
+        # We'll iterate through large_samples and check their log-likelihoods against the mean
+        indices_to_move = []
+        for i in range(len(large_samples)):
+            sample_idx = large_samples[i]
+            ll = self.distance_matrix[sample_idx, large_samples[0]] # Use a reference sample's distance
+            if ll < threshold:
+                indices_to_move.append(sample_idx)
+        
+        # Shuffle the indices to move
+        random.shuffle(indices_to_move)
+        
+        # Move samples from large to small clusters
+        moved_count = 0
+        for donor_idx in indices_to_move:
+            # Find the current cluster of the donor
+            current_cluster = assignments[donor_idx]
             
-            # Find farthest sample in largest from its reference
-            large_samples = np.where(assignments == largest_id)[0]
-            if len(large_samples) == 0:
+            # If the donor is already in a small cluster, skip
+            if current_cluster in small_ids:
                 continue
             
-            ref_idx = large_samples[0]  # Simple approx
-            distances_in_large = self.distance_matrix[large_samples, ref_idx]
-            donor_idx = large_samples[np.argmax(distances_in_large)]
+            # Find the smallest cluster to move to
+            smallest_id = min(small_ids, key=lambda x: sizes[x])
             
-            # Move donor to small
+            # Move the donor
             sample = samples[donor_idx]
-            # Remove from large
-            centroids[largest_id].remove_sample(donor_idx, sample)
-            # Add to small
-            success = centroids[small_id].add_sample(donor_idx, sample, self.sample_paths[donor_idx])
-            if success:
-                assignments[donor_idx] = small_id
-                logger.debug(f"Moved {donor_idx} from {largest_id} to {small_id} for min size")
-                sizes[largest_id] -= 1
-                sizes[small_id] += 1
-            else:
-                # Revert
-                centroids[largest_id].add_sample(donor_idx, sample, self.sample_paths[donor_idx])
-                assignments[donor_idx] = largest_id
+            centroids[current_cluster].remove_sample(donor_idx, sample)
+            centroids[smallest_id].add_sample(donor_idx, sample, self.sample_paths[donor_idx])
+            assignments[donor_idx] = smallest_id
+            sizes[current_cluster] -= 1
+            sizes[smallest_id] += 1
+            moved_count += 1
+            
+            # If the smallest cluster is now at min_size, remove it from the list
+            if sizes[smallest_id] == min_size:
+                small_ids.remove(smallest_id)
+            
+            if moved_count >= int(max(sizes) * 0.1): # Move up to 10% of the largest cluster
+                break
+        
+        logger.info(f"Balanced: moved {moved_count} samples")
 
 
 __all__ = ['MethylCluster']

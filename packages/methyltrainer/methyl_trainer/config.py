@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
+from pydantic import Field, field_validator
 
 from methyl_utils import FilterConfig
 
@@ -64,6 +65,27 @@ class TrainingConfig:
     centroid1_validation_samples: Optional[List[str]] = None
     centroid2_validation_samples: Optional[List[str]] = None
     n_validation_samples: int = 100
+    
+    # New fields
+    temperature: float = Field(
+        default=1.0,
+        ge=0.1,
+        le=10.0,
+        description="Temperature for softmax in trained classifier (1.0 = original, higher softens probabilities)"
+    )
+    enable_platt_calibration: bool = Field(
+        default=False,
+        description="Enable Platt scaling calibration on validation data during classification (auto-fit using centroid samples)"
+    )
+
+    @field_validator('temperature')
+    @classmethod
+    def validate_temperature(cls, v):
+        if v < 0.1:
+            raise ValueError("Temperature must be >= 0.1")
+        if v > 10.0:
+            raise ValueError("Temperature must be <= 10.0")
+        return v
     
     # GPU configuration
     use_gpu: bool = True
