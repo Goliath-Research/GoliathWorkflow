@@ -8,7 +8,7 @@ distance matrices, cluster trees, and dimensionality reduction projections.
 import numpy as np
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from .cluster import MethylCluster
@@ -68,35 +68,74 @@ class ClusterVisualizer:
         except Exception as e:
             logger.warning(f"Failed to create cluster statistics: {e}")
     
+    def _get_label_map(self) -> Dict[int, str]:
+        """Get custom label mapping if available."""
+        cluster = self.cluster
+        label_map = {}
+        
+        # From forced_groups in config
+        if cluster.config.forced_groups is not None:
+            labels = list(cluster.config.forced_groups.keys())
+            for i, label in enumerate(labels):
+                label_map[i] = label
+        
+        # From internal _group_labels (set during forced init)
+        elif hasattr(cluster, '_group_labels') and cluster._group_labels:
+            for i, label in enumerate(cluster._group_labels):
+                label_map[i] = label
+        
+        return label_map
+    
     def plot_distance_heatmap(self, output_dir: Path) -> None:
         """
-        Create interactive heatmap of distance matrix.
+        Create distance matrix heatmap with cluster annotations.
         
         Args:
             output_dir: Directory to save plot
         """
         import plotly.graph_objects as go
+        import plotly.express as px
         
-        logger.info("Creating distance matrix heatmap...")
+        logger.info("Creating distance heatmap...")
         
-        # Create sample labels
-        labels = [f"Sample {i}" for i in range(len(self.cluster.samples))]
+        if self.cluster.distance_matrix is None:
+            logger.warning("Distance matrix not available, skipping heatmap")
+            return
         
-        fig = go.Figure(data=go.Heatmap(
-            z=self.cluster.distance_matrix,
-            x=labels,
-            y=labels,
-            colorscale='Viridis',
-            colorbar=dict(title='Distance')
-        ))
+        # Prepare sample names
+        sample_names = [str(p.name) for p in self.cluster.sample_paths]
+        n_samples = len(sample_names)
         
-        fig.update_layout(
-            title=f'Distance Matrix Heatmap ({self.cluster.config.metric.value})<br>' +
-                  f'{self.cluster.config.chrom}-{self.cluster.config.ctx}',
-            xaxis_title='Sample',
-            yaxis_title='Sample',
-            width=800,
-            height=800
+        # Get custom label map
+        label_map = self._get_label_map()
+        
+        # Create cluster annotations
+        annotations = []
+        for i in range(n_samples):
+            cluster_id = self.cluster.cluster_labels[i]
+            if cluster_id == -1:
+                label = 'Noise'
+            elif cluster_id in label_map:
+                label = label_map[cluster_id]
+            else:
+                label = f'Cluster {cluster_id}'
+            annotations.append(label)
+        
+        # Create the heatmap
+        fig = px.imshow(
+            self.cluster.distance_matrix,
+            labels=dict(x="Sample", y="Sample", color="Distance"),
+            x=sample_names,
+            y=sample_names,
+            title=f'Distance Matrix Heatmap - {self.cluster.config.chrom}-{self.cluster.config.ctx}',
+            aspect="auto",
+            color_continuous_scale='Viridis'
+        )
+        
+        # Add cluster annotations to hover
+        fig.update_traces(
+            hovertemplate='<b>Sample X: %{y}</b><br>Sample Y: %{x}<br>Distance: %{z:.4f}<br>Cluster X: ' + 
+                          str(annotations) + '[%{y}%<br>Cluster Y: ' + str(annotations) + '[%{x}%<extra></extra>'
         )
         
         output_file = output_dir / 'distance_heatmap.html'
@@ -120,11 +159,20 @@ class ClusterVisualizer:
             logger.warning("Condensed tree not available, skipping tree plot")
             return
         
+        # Get custom label map for title
+        label_map = self._get_label_map()
+        custom_title = "HDBSCAN Cluster Tree"
+        if label_map:
+            group_names = ', '.join(label_map.values())
+            custom_title += f' - Groups: {group_names}'
+        custom_title += f'\n{self.cluster.config.chrom}-{self.cluster.config.ctx}'
+        
         # Create the plot
         plt.figure(figsize=(12, 8))
         
         # Get number of clusters to determine if we should show selection
-        n_clusters = len(set(self.cluster.cluster_labels)) - (1 if -1 in self.cluster.cluster_labels else 0)
+        unique_labels = set(self.cluster.cluster_labels)
+        n_clusters = len(unique_labels - {-1})
         
         try:
             if n_clusters > 0:
@@ -150,70 +198,114 @@ class ClusterVisualizer:
                 select_clusters=False
             )
         
-        plt.title(f'HDBSCAN Cluster Tree\n{self.cluster.config.chrom}-{self.cluster.config.ctx}')
+        plt.title(custom_title)
         
         output_file = output_dir / 'cluster_tree.png'
-        plt.savefig(str(output_file), dpi=300, bbox_inches='tight')
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
         plt.close()
         logger.info(f"Saved cluster tree to {output_file}")
     
     def plot_mds_projection(self, output_dir: Path) -> None:
         """
-        Create MDS projection of samples colored by cluster.
+        Create MDS projection plot with custom cluster labels.
         
         Args:
             output_dir: Directory to save plot
         """
         import plotly.graph_objects as go
+        import plotly.express as px  # Add this for px.colors
         from sklearn.manifold import MDS
         
         logger.info("Creating MDS projection...")
+        
+        if self.cluster.distance_matrix is None:
+            logger.warning("Distance matrix not available, skipping MDS projection")
+            return
+        
+        # Get custom label map
+        label_map = self._get_label_map()
         
         # Perform MDS
         mds = MDS(n_components=2, dissimilarity='precomputed', random_state=42)
         coords = mds.fit_transform(self.cluster.distance_matrix)
         
-        # Prepare data for plotting
+        # Prepare cluster labels for plotting
         cluster_labels = self.cluster.cluster_labels
-        unique_labels = sorted(set(cluster_labels))
+        hover_labels = []
+        sample_paths = self.cluster.sample_paths
+        for i, lbl in enumerate(cluster_labels):
+            basename = sample_paths[i].name
+            if lbl == -1:
+                hover_labels.append(f'<b>{basename}</b>: Noise')
+            elif lbl in label_map:
+                hover_labels.append(f'<b>{basename}</b>: {label_map[lbl]}')
+            else:
+                hover_labels.append(f'<b>{basename}</b>: Cluster {lbl}')
+        
+        # Get unique clusters and colors
+        unique_clusters = sorted(set(cluster_labels) - {-1})
+        colors = px.colors.qualitative.Set1[:len(unique_clusters)]
         
         # Create traces for each cluster
         fig = go.Figure()
+        for idx, cluster_id in enumerate(unique_clusters):
+            mask = cluster_labels == cluster_id
+            cluster_name = label_map.get(cluster_id, f'Cluster {cluster_id}')
+            mask_indices = np.where(mask)[0]
+            fig.add_trace(
+                go.Scatter(
+                    x=coords[mask, 0],
+                    y=coords[mask, 1],
+                    mode='markers',
+                    name=cluster_name,
+                    marker=dict(
+                        color=colors[idx % len(colors)],
+                        size=8,
+                        opacity=0.7
+                    ),
+                    text=[hover_labels[j] for j in mask_indices],
+                    hovertemplate='%{text}<extra></extra>'
+                )
+            )
         
-        for label in unique_labels:
-            mask = cluster_labels == label
-            cluster_name = 'Noise' if label == -1 else f'Cluster {label}'
-            
-            fig.add_trace(go.Scatter(
-                x=coords[mask, 0],
-                y=coords[mask, 1],
-                mode='markers',
-                name=cluster_name,
-                marker=dict(
-                    size=10,
-                    opacity=0.7,
-                    line=dict(width=1, color='white')
-                ),
-                text=[f"Sample {i}" for i in np.where(mask)[0]],
-                hovertemplate='%{text}<br>x: %{x:.3f}<br>y: %{y:.3f}<extra></extra>'
-            ))
+        # Add noise points if any
+        noise_mask = cluster_labels == -1
+        if np.any(noise_mask):
+            noise_indices = np.where(noise_mask)[0]
+            fig.add_trace(
+                go.Scatter(
+                    x=coords[noise_mask, 0],
+                    y=coords[noise_mask, 1],
+                    mode='markers',
+                    name='Noise',
+                    marker=dict(
+                        color='gray',
+                        size=8,
+                        opacity=0.5,
+                        symbol='x'
+                    ),
+                    text=[hover_labels[j] for j in noise_indices],
+                    hovertemplate='%{text}<extra></extra>'
+                )
+            )
         
         fig.update_layout(
-            title=f'MDS Projection of Samples<br>{self.cluster.config.chrom}-{self.cluster.config.ctx}',
-            xaxis_title='MDS Dimension 1',
-            yaxis_title='MDS Dimension 2',
-            width=900,
-            height=700,
+            title=f'MDS Projection - {self.cluster.config.chrom}-{self.cluster.config.ctx}',
+            xaxis_title='MDS Component 1',
+            yaxis_title='MDS Component 2',
+            legend_title='Clusters',
             hovermode='closest'
         )
         
         output_file = output_dir / 'mds_projection.html'
         fig.write_html(str(output_file))
         logger.info(f"Saved MDS projection to {output_file}")
+        if not label_map:
+            logger.debug("No custom labels detected for MDS; using numeric cluster IDs")
     
     def plot_cluster_statistics(self, output_dir: Path) -> None:
         """
-        Create bar chart of cluster sizes and statistics.
+        Create bar chart of cluster sizes and statistics with custom labels.
         
         Args:
             output_dir: Directory to save plot
@@ -221,6 +313,9 @@ class ClusterVisualizer:
         import plotly.graph_objects as go
         
         logger.info("Creating cluster statistics plot...")
+        
+        # Get custom label map
+        label_map = self._get_label_map()
         
         # Count samples per cluster
         unique_labels = sorted(set(self.cluster.cluster_labels))
@@ -231,6 +326,8 @@ class ClusterVisualizer:
             count = int(np.sum(self.cluster.cluster_labels == label))
             if label == -1:
                 cluster_names.append('Noise')
+            elif label in label_map:
+                cluster_names.append(label_map[label])
             else:
                 cluster_names.append(f'Cluster {label}')
             cluster_sizes.append(count)
@@ -252,7 +349,7 @@ class ClusterVisualizer:
         ])
         
         fig.update_layout(
-            title=f'Cluster Sizes<br>{self.cluster.config.chrom}-{self.cluster.config.ctx}',
+            title=f'Cluster Sizes - {self.cluster.config.chrom}-{self.cluster.config.ctx}',
             xaxis_title='Cluster',
             yaxis_title='Number of Samples',
             width=800,
