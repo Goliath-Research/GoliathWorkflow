@@ -2,6 +2,8 @@
 
 ## 📊 **Comprehensive Analysis: Probabilistic vs. ML Classification**
 
+> **Note on Balanced Accuracy (Updated)**: The DMP selection algorithm now uses **Balanced Accuracy** instead of AUC for binary search. Balanced Accuracy = (Sensitivity + Specificity) / 2 and is robust to class imbalance, making it ideal for comparing healthy vs. cancer samples where group sizes may differ significantly. The classifier maintains equal priors (0.5, 0.5) for unbiased predictions on new samples.
+
 ### **🎯 Your Observation is Absolutely Correct**
 
 You are absolutely right to question the need for machine learning. The **Beta distributions already contain all the probabilistic information needed** for both centroid discrimination evaluation and sample classification. Here's why:

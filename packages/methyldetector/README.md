@@ -29,7 +29,7 @@ Key parameters in `MethylDetectorConfig`:
 - `apply_dmp_filtering`: Enable biological filtering (default: true)
 - `min_delta_mean`: Minimum effect size (default: 0.2)
 - `max_bc`: Maximum overlap (default: 0.6)
-- `target_auc`: Target performance (default: 0.95)
+- `target_balanced_accuracy`: Target Balanced Accuracy for DMP selection (default: 0.95). Balanced Accuracy = (Sensitivity + Specificity) / 2, robust to class imbalance.
 - `use_gpu`: Enable GPU acceleration (default: true)
 
 ## Output

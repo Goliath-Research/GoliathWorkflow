@@ -96,9 +96,9 @@ class MethylDetectorConfig(BaseModel):
         default=1000, ge=1,
         description="Minimum number of DMPs to export to CSV, even if binary search finds fewer DMPs are sufficient. Ensures enough DMPs for gene mapping and downstream analysis"
     )
-    target_auc: float = Field(
+    target_balanced_accuracy: float = Field(
         default=0.95, ge=0.5, le=1.0,
-        description="Target AUC for binary search DMP selection"
+        description="Target Balanced Accuracy for binary search DMP selection. Balanced Accuracy = (Sensitivity + Specificity) / 2, robust to class imbalance."
     )
     n_validation_samples: int = Field(
         default=100, ge=10,

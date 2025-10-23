@@ -111,7 +111,7 @@ class MethylDetector:
             min_effect_size=self.config.min_effect_size if hasattr(self.config, 'min_effect_size') else None,
             biological_filters=True,
             # Binary search configuration
-            target_auc=self.config.target_auc,
+            target_balanced_accuracy=self.config.target_balanced_accuracy,
             min_selected_dmps=self.config.min_selected_dmps if hasattr(self.config, 'min_selected_dmps') else None,
             min_dmps_for_export=self.config.min_dmps_for_export,
             # Validation configuration
@@ -658,7 +658,7 @@ class MethylDetector:
             "alpha": self.config.alpha,
             "min_delta_mean": self.config.min_delta_mean,
             "max_bc": self.config.max_bc,
-            "target_auc": self.config.target_auc,
+            "target_balanced_accuracy": self.config.target_balanced_accuracy,
             "min_selected_dmps": self.config.min_selected_dmps,
             "biological_filters": self.config.biological_filters,
             "eps": self.config.eps,
@@ -710,7 +710,7 @@ class MethylDetector:
             f"  Alpha (q-value threshold): {self.config.alpha}",
             f"  Min Delta Mean: {self.config.min_delta_mean}",
             f"  Max Overlap (Bhattacharyya Coefficient): {self.config.max_bc} ({self.config.max_bc*100:.0f}%)",
-            f"  Target AUC: {self.config.target_auc}",
+            f"  Target Balanced Accuracy: {self.config.target_balanced_accuracy}",
             "",
             "Biological Importance (Effect Size):",
             f"  Formula: effect_size = |delta_mu| / sqrt(var1² + var2²) * (1 - BC)^gamma",

@@ -144,7 +144,7 @@ class MethylTrainer:
                     'alpha': self.config.alpha,
                     'min_delta_mean': self.config.min_delta_mean,
                     'max_bc': self.config.max_bc,
-                    'target_auc': self.config.target_auc,
+                    'target_balanced_accuracy': self.config.target_balanced_accuracy,
                     'validation_mode': self.config.validation_mode
                 }
             }
@@ -277,10 +277,10 @@ class MethylTrainer:
             DataFrame with top k DMPs selected
         """
         n_dmps = len(dmp_df)
-        target_auc = self.config.target_auc
+        target_balanced_accuracy = self.config.target_balanced_accuracy
         min_selected = self.config.min_selected_dmps
         
-        logger.info(f"🔍 Binary search DMP selection: {n_dmps} candidates, target AUC={target_auc:.3f}")
+        logger.info(f"🔍 Binary search DMP selection: {n_dmps} candidates, target Balanced Accuracy={target_balanced_accuracy:.3f}")
         
         if n_dmps == 0:
             return dmp_df
@@ -306,10 +306,10 @@ class MethylTrainer:
             logger.info(f"Only {n_dmps} DMPs available, less than min_selected_dmps={min_selected}, returning all")
             return sorted_df
         
-        # Binary search for smallest k that achieves target AUC
+        # Binary search for smallest k that achieves target Balanced Accuracy
         low, high = 1, n_dmps
         best_k = n_dmps  # Default to all DMPs
-        best_auc = 0.0  # Track best AUC found
+        best_balanced_accuracy = 0.0  # Track best Balanced Accuracy found
         
         logger.info(f"Binary search range: {low}-{high}")
         
@@ -318,14 +318,14 @@ class MethylTrainer:
             test_subset = sorted_df.iloc[:mid]
             performance = self._compute_subset_performance(test_subset, use_gpu=self.config.use_gpu)
             
-            logger.info(f"  Testing k={mid}: AUC={performance:.6f}")
+            logger.info(f"  Testing k={mid}: Balanced Accuracy={performance:.6f}")
             
-            # Track best AUC found
-            if performance > best_auc:
-                best_auc = performance
+            # Track best Balanced Accuracy found
+            if performance > best_balanced_accuracy:
+                best_balanced_accuracy = performance
                 best_k = mid
             
-            if performance >= target_auc:
+            if performance >= target_balanced_accuracy:
                 # This k achieves target - try smaller k
                 best_k = mid
                 high = mid - 1
@@ -355,10 +355,10 @@ class MethylTrainer:
         final_subset = sorted_df.iloc[:best_k]
         final_performance = self._compute_subset_performance(final_subset, use_gpu=self.config.use_gpu)
         
-        if final_performance >= target_auc:
-            logger.info(f"✅ Binary search complete: selected k={best_k} DMPs with AUC={final_performance:.6f} (target achieved)")
+        if final_performance >= target_balanced_accuracy:
+            logger.info(f"✅ Binary search complete: selected k={best_k} DMPs with Balanced Accuracy={final_performance:.6f} (target achieved)")
         else:
-            logger.info(f"✅ Binary search complete: selected k={best_k} DMPs with AUC={final_performance:.6f} (best found, target {target_auc:.3f} not reached)")
+            logger.info(f"✅ Binary search complete: selected k={best_k} DMPs with Balanced Accuracy={final_performance:.6f} (best found, target {target_balanced_accuracy:.3f} not reached)")
         
         # Optional: optimize for validation accuracy (requires real samples)
         if (self.config.optimize_for_validation_accuracy and 
@@ -379,19 +379,28 @@ class MethylTrainer:
     
     def _compute_subset_performance(self, df_subset: pd.DataFrame, use_gpu: bool = True) -> float:
         """
-        Compute performance metric (AUC) for a subset of DMPs.
+        Compute performance metric (Balanced Accuracy) for a subset of DMPs.
         
         Uses real samples if available (faster, more accurate), otherwise theoretical Beta moments.
+        Balanced Accuracy = (Sensitivity + Specificity) / 2, robust to class imbalance.
         """
-        # Use real AUC if validation samples are loaded
+        # Use real Balanced Accuracy if validation samples are loaded
         if self._validation_samples is not None:
-            return self._compute_real_auc_from_samples(df_subset)
+            return self._compute_real_balanced_accuracy(df_subset)
         
-        # Fall back to theoretical Beta distribution AUC
-        return self._compute_theoretical_auc(df_subset, use_gpu)
+        # Fall back to theoretical Beta distribution Balanced Accuracy
+        return self._compute_theoretical_balanced_accuracy(df_subset, use_gpu)
     
-    def _compute_theoretical_auc(self, df_subset: pd.DataFrame, use_gpu: bool = True) -> float:
-        """Compute theoretical AUC based on Beta distribution moments."""
+    def _compute_theoretical_balanced_accuracy(self, df_subset: pd.DataFrame, use_gpu: bool = True) -> float:
+        """
+        Compute theoretical Balanced Accuracy based on Beta distribution moments.
+        
+        Balanced Accuracy = (Sensitivity + Specificity) / 2
+        
+        We use the cumulative log-likelihood ratio distribution to estimate:
+        - Sensitivity: P(LLR > 0 | Class 1) - correctly classified class 1 samples
+        - Specificity: P(LLR < 0 | Class 0) - correctly classified class 0 samples
+        """
         if len(df_subset) == 0:
             return 0.5
         
@@ -417,51 +426,74 @@ class MethylTrainer:
         else:
             xp = np
         
-        # Compute LLR moments
+        # Compute LLR moments for both classes
         da = alpha1 - alpha2
         db = beta1 - beta2
-        mu_d, var_d = compute_beta_llr_moments(alpha1, beta1, da, db, use_gpu=gpu_enabled)
-        mu_h, var_h = compute_beta_llr_moments(alpha2, beta2, da, db, use_gpu=gpu_enabled)
         
-        # Combine moments
-        combined_mu_d = xp.sum(mu_d)
-        combined_var_d = xp.sum(var_d)
-        combined_mu_h = xp.sum(mu_h)
-        combined_var_h = xp.sum(var_h)
+        # For class 0 (centroid 1): compute LLR distribution when samples come from centroid 1
+        mu_class0, var_class0 = compute_beta_llr_moments(alpha1, beta1, da, db, use_gpu=gpu_enabled)
         
-        delta_mu = xp.abs(combined_mu_d - combined_mu_h)
-        total_var = combined_var_d + combined_var_h
+        # For class 1 (centroid 2): compute LLR distribution when samples come from centroid 2
+        mu_class1, var_class1 = compute_beta_llr_moments(alpha2, beta2, da, db, use_gpu=gpu_enabled)
+        
+        # Sum across DMPs to get cumulative LLR distribution
+        combined_mu_class0 = xp.sum(mu_class0)  # Expected LLR for class 0 samples
+        combined_var_class0 = xp.sum(var_class0)
+        combined_mu_class1 = xp.sum(mu_class1)  # Expected LLR for class 1 samples
+        combined_var_class1 = xp.sum(var_class1)
         
         # Handle numerical stability
-        if total_var <= 1e-10 or not xp.isfinite(total_var):
+        if combined_var_class0 <= 1e-10 or combined_var_class1 <= 1e-10:
+            return 0.5
+        if not xp.isfinite(combined_var_class0) or not xp.isfinite(combined_var_class1):
             return 0.5
         
-        d_val = delta_mu / xp.sqrt(total_var)
-        d_val = xp.clip(d_val, 0, 10)
+        # Compute probability of correct classification for each class
+        # Class 0: P(LLR < 0 | Class 0) - should be negative for correct classification
+        # Using normal approximation: specificity = P(LLR < 0 | class 0)
+        z_class0 = (0 - combined_mu_class0) / xp.sqrt(combined_var_class0)
+        z_class0 = xp.clip(z_class0, -10, 10)
+        
+        # Class 1: P(LLR > 0 | Class 1) - should be positive for correct classification  
+        # Using normal approximation: sensitivity = P(LLR > 0 | class 1)
+        z_class1 = (0 - combined_mu_class1) / xp.sqrt(combined_var_class1)
+        z_class1 = xp.clip(z_class1, -10, 10)
         
         # Convert to CPU for norm.cdf if using GPU
         if gpu_enabled:
-            d_val_cpu = float(d_val.get())
+            z_class0_cpu = float(z_class0.get())
+            z_class1_cpu = float(z_class1.get())
         else:
-            d_val_cpu = float(d_val)
+            z_class0_cpu = float(z_class0)
+            z_class1_cpu = float(z_class1)
         
-        if not np.isfinite(d_val_cpu):
+        if not np.isfinite(z_class0_cpu) or not np.isfinite(z_class1_cpu):
             return 0.5
         
-        return norm.cdf(d_val_cpu)
+        # Specificity: P(LLR < 0 | Class 0)
+        specificity = norm.cdf(z_class0_cpu)
+        
+        # Sensitivity: P(LLR > 0 | Class 1) = 1 - P(LLR < 0 | Class 1)
+        sensitivity = 1.0 - norm.cdf(z_class1_cpu)
+        
+        # Balanced Accuracy
+        balanced_accuracy = (sensitivity + specificity) / 2.0
+        
+        return balanced_accuracy
     
-    def _compute_real_auc_from_samples(self, df_subset: pd.DataFrame) -> float:
+    def _compute_real_balanced_accuracy(self, df_subset: pd.DataFrame) -> float:
         """
-        Compute real AUC using pre-loaded validation samples with Beta classifier.
+        Compute real Balanced Accuracy using pre-loaded validation samples with Beta classifier.
+        
+        Balanced Accuracy = (Sensitivity + Specificity) / 2
         
         Args:
             df_subset: Subset of DMPs to evaluate
             
         Returns:
-            AUC value
+            Balanced Accuracy value
         """
         try:
-            
             # Get positions for this subset
             subset_positions = df_subset['position'].values
             
@@ -499,40 +531,42 @@ class MethylTrainer:
             # Create temporary Beta classifier
             temp_classifier = ProbabilisticBetaClassifier(classifier_data)
             
-            # Get probability predictions (column 1 = class 1 probability)
+            # Get predictions
             y_pred_proba = temp_classifier.predict_proba(X, debug=False)
-            y_pred = y_pred_proba[:, 1]
+            y_pred = np.argmax(y_pred_proba, axis=1)
             
-            # Compute AUC manually without sklearn
-            # Sort by predicted probability
-            sorted_indices = np.argsort(y_pred)[::-1]
-            y_sorted = y[sorted_indices]
+            # Compute confusion matrix components
+            # True Positives: predicted 1, actual 1
+            tp = np.sum((y_pred == 1) & (y == 1))
+            # True Negatives: predicted 0, actual 0
+            tn = np.sum((y_pred == 0) & (y == 0))
+            # False Positives: predicted 1, actual 0
+            fp = np.sum((y_pred == 1) & (y == 0))
+            # False Negatives: predicted 0, actual 1
+            fn = np.sum((y_pred == 0) & (y == 1))
             
-            # Count positives and negatives
-            n_pos = np.sum(y_sorted == 1)
-            n_neg = np.sum(y_sorted == 0)
+            # Compute sensitivity and specificity
+            # Sensitivity (True Positive Rate): TP / (TP + FN)
+            n_pos = tp + fn
+            if n_pos > 0:
+                sensitivity = tp / n_pos
+            else:
+                sensitivity = 0.0
             
-            if n_pos == 0 or n_neg == 0:
-                return 0.5
+            # Specificity (True Negative Rate): TN / (TN + FP)
+            n_neg = tn + fp
+            if n_neg > 0:
+                specificity = tn / n_neg
+            else:
+                specificity = 0.0
             
-            # Calculate AUC using trapezoidal rule
-            tp = 0
-            fp = 0
-            auc = 0.0
+            # Balanced Accuracy
+            balanced_accuracy = (sensitivity + specificity) / 2.0
             
-            for label in y_sorted:
-                if label == 1:
-                    tp += 1
-                else:
-                    fp += 1
-                    auc += tp
-            
-            auc = auc / (n_pos * n_neg)
-            
-            return auc
+            return balanced_accuracy
             
         except Exception as e:
-            logger.debug(f"Failed to compute real AUC: {e}")
+            logger.debug(f"Failed to compute real Balanced Accuracy: {e}")
             return 0.5
     
     def _optimize_for_validation_accuracy(self, sorted_df: pd.DataFrame, start_k: int) -> int:
