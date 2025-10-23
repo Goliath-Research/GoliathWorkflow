@@ -1,0 +1,20 @@
+{
+  "model_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-hc-1_G/classifier-1-CG.pkl",
+  "samples": [
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/015826_10_H5_1",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/015885_10_H10_12",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/016429_10I_11_45",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/016687_10J_28_23",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/016830_10_J13_67",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-042825-50082",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-051325-68854",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-051325-90743",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-051425-25914",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-052125-71538"
+  ],
+  "output_path": "/home/ubuntu/working_dir/MethylClassifierResults/sample_list_example.csv",
+  "prediction_method": null,
+  "debug": false,
+  "no_filter": false,
+  "log_level": "INFO"
+}

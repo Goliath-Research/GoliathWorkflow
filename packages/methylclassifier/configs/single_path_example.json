@@ -1,0 +1,9 @@
+{
+  "model_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-hc-1_G/classifier-1-CG.pkl",
+  "input_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/",
+  "output_path": "/home/ubuntu/working_dir/MethylClassifierResults/MethylClassifier_pb_hc1/1-CG/pilot_cancer.csv",
+  "prediction_method": null,
+  "debug": false,
+  "no_filter": false,
+  "log_level": "INFO"
+}
