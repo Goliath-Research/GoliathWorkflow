@@ -541,39 +541,99 @@ class MethylCluster:
         samples = self._load_all_samples()
         n_samples = len(samples)
         
+        # Handle forced group initialization
+        forced_init = self.config.forced_groups is not None
+        if forced_init:
+            logger.info(f"Using forced group initialization with {len(self.config.forced_groups)} groups from dict")
+            group_labels = list(self.config.forced_groups.keys())
+            group_sizes = list(self.config.forced_groups.values())
+            k = len(group_sizes)
+            num_restarts_local = 1
+        else:
+            # Fallback to deprecated fields if present
+            if self.config.group_labels is not None and self.config.group_sizes is not None:
+                logger.warning("Using deprecated group_labels/group_sizes; migrate to forced_groups dict")
+                group_labels = self.config.group_labels
+                group_sizes = self.config.group_sizes
+                k = len(group_sizes)
+                num_restarts_local = 1
+                forced_init = True
+            else:
+                num_restarts_local = self.config.num_restarts
+        
         best_score = -1
         best_labels = None
         best_centroids = None
         best_assignments = None
         best_iteration = 0
         
-        for restart in range(self.config.num_restarts):
-            logger.info(f"Restart {restart + 1}/{self.config.num_restarts}")
-            random.seed(restart)  # Different seed for each restart
+        for restart in range(num_restarts_local):
+            logger.info(f"Restart {restart + 1}/{num_restarts_local}")
             
-            # Initialize centroids using farthest-point heuristic
-            centroids = self._initialize_centroids_farthest(samples, k)
+            if forced_init:
+                # Forced group initialization from dict or lists
+                centroids = []
+                current_assignments = np.full(n_samples, -1, dtype=int)
+                current_idx = 0
+                for cluster_id, (label, size) in enumerate(zip(group_labels, group_sizes)):
+                    if size == 0:
+                        continue
+                    group_sample_idxs = list(range(current_idx, current_idx + size))
+                    centroid = ClusterCentroid(
+                        cluster_id=cluster_id,
+                        chrom=self.config.chrom,
+                        ctx=self.config.ctx,
+                        min_coverage=4,
+                        use_gpu=self.config.use_gpu,
+                        max_samples=n_samples
+                    )
+                    added_count = 0
+                    for s_idx in group_sample_idxs:
+                        sample = samples[s_idx]
+                        path_str = str(self.sample_paths[s_idx])
+                        if centroid.add_sample(s_idx, sample, path_str):
+                            current_assignments[s_idx] = cluster_id
+                            added_count += 1
+                        else:
+                            logger.warning(f"Failed to add sample {s_idx} to cluster {cluster_id} ({label})")
+                    if added_count > 0:
+                        centroids.append(centroid)
+                        logger.info(f"Cluster {cluster_id} ({label}): added {added_count}/{size} samples")
+                    else:
+                        logger.warning(f"No samples added to cluster {cluster_id} ({label})")
+                    current_idx += size
+                k = len(centroids)  # Update k to number of successful clusters
+                if k < 2:
+                    logger.warning("Forced init resulted in fewer than 2 clusters, falling back to standard method")
+                    forced_init = False
+                    num_restarts_local = self.config.num_restarts
+                    restart = 0  # Restart loop
+                    continue
+                unassigned = set(i for i in range(n_samples) if current_assignments[i] == -1)
+                logger.info(f"Forced init complete: {k} clusters, {len(unassigned)} unassigned samples")
+                # Store labels for results
+                self._group_labels = group_labels[:k]  # Trim to successful clusters
+            else:
+                random.seed(restart)
+                # Initialize centroids using farthest-point heuristic
+                centroids = self._initialize_centroids_farthest(samples, k)
+                # Initialize assignments: -1 for unassigned
+                current_assignments = np.full(n_samples, -1, dtype=int)
+                # Set initial assignments for the seed samples
+                initial_indices = []
+                for i, centroid in enumerate(centroids):
+                    init_idxs = centroid.get_sample_indices()
+                    if len(init_idxs) != 1:
+                        logger.warning(f"Centroid {i} has {len(init_idxs)} initial samples, expected 1")
+                    else:
+                        init_idx = init_idxs[0]
+                        current_assignments[init_idx] = i
+                        initial_indices.append(init_idx)
+                logger.info(f"Initialized {len(initial_indices)} seed samples in their centroids")
+                # Track unassigned samples
+                unassigned = set(range(n_samples)) - set(initial_indices)
             
-            # Initialize assignments: -1 for unassigned
-            current_assignments = np.full(n_samples, -1, dtype=int)
-            
-            # Set initial assignments for the seed samples
-            initial_indices = []
-            for i, centroid in enumerate(centroids):
-                init_idxs = centroid.get_sample_indices()
-                if len(init_idxs) != 1:
-                    logger.warning(f"Centroid {i} has {len(init_idxs)} initial samples, expected 1")
-                else:
-                    init_idx = init_idxs[0]
-                    current_assignments[init_idx] = i
-                    initial_indices.append(init_idx)
-            
-            logger.info(f"Initialized {len(initial_indices)} seed samples in their centroids")
-            
-            # Track unassigned samples
-            unassigned = set(range(n_samples)) - set(initial_indices)
-            
-            # Sequential EM iteration
+            # Sequential EM iteration (common to both)
             converged = False
             for iteration in range(self.config.max_em_iterations):
                 logger.info(f"Sequential EM iteration {iteration + 1}/{self.config.max_em_iterations}")
@@ -954,6 +1014,13 @@ class MethylCluster:
         n_clusters = int(len(unique_labels - {-1}))  # Exclude noise label (-1)
         n_noise = int(np.sum(self.cluster_labels == -1))
         
+        # Create label map if group labels provided (from forced_groups or deprecated)
+        label_map = None
+        if hasattr(self, '_group_labels') and self._group_labels:
+            label_map = {i: self._group_labels[i] for i in range(len(self._group_labels))}
+        elif self.config.forced_groups is not None:
+            label_map = {i: list(self.config.forced_groups.keys())[i] for i in range(len(self.config.forced_groups))}
+        
         # Create cluster assignments
         clusters = {}
         for label in sorted(unique_labels):
@@ -966,7 +1033,11 @@ class MethylCluster:
             if label == -1:
                 clusters['noise'] = sample_list
             else:
-                clusters[f'cluster_{label}'] = sample_list
+                if label_map and label in label_map:
+                    key = label_map[label]
+                else:
+                    key = f'cluster_{label}'
+                clusters[key] = sample_list
         
         # Compile results
         results = {
@@ -978,6 +1049,10 @@ class MethylCluster:
             'config': self.config.model_dump()
         }
         
+        # Add forced_groups to results if used
+        if label_map:
+            results['forced_groups_used'] = {key: int(np.sum(self.cluster_labels == i)) for i, key in label_map.items()}
+        
         # Add probabilities if available
         if hasattr(self.clusterer, 'probabilities_'):
             results['probabilities'] = self.clusterer.probabilities_.tolist()
@@ -988,7 +1063,8 @@ class MethylCluster:
             if label == -1:
                 cluster_sizes['noise'] = int(np.sum(self.cluster_labels == -1))
             else:
-                cluster_sizes[f'cluster_{label}'] = int(np.sum(self.cluster_labels == label))
+                key = label_map[label] if label_map and label in label_map else f'cluster_{label}'
+                cluster_sizes[key] = int(np.sum(self.cluster_labels == label))
         results['cluster_sizes'] = cluster_sizes
         
         return results
