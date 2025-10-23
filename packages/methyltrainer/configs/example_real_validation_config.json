@@ -1,0 +1,29 @@
+{
+  "centroid1_path": "/path/to/healthy_centroid_chr1-CG.h5",
+  "centroid2_path": "/path/to/cancer_centroid_chr1-CG.h5",
+  "output_path": "/path/to/output/classifier_chr1-CG.pkl",
+  "chromosome": "1",
+  "context": "CG",
+  "alpha": 0.01,
+  "min_delta_mean": 0.2,
+  "max_bc": 0.5,
+  "target_auc": 0.9999,
+  "min_dmps_for_export": 5000,
+  "validation_mode": "real",
+  "centroid1_validation_samples": [
+    "/path/to/healthy_samples/sample1.h5",
+    "/path/to/healthy_samples/sample2.h5",
+    "/path/to/healthy_samples/sample3.h5"
+  ],
+  "centroid2_validation_samples": [
+    "/path/to/cancer_samples/sample1.h5",
+    "/path/to/cancer_samples/sample2.h5",
+    "/path/to/cancer_samples/sample3.h5"
+  ],
+  "optimize_for_validation_accuracy": true,
+  "temperature": 2.5,
+  "enable_platt_calibration": true,
+  "use_gpu": true,
+  "verbose": true
+}
+

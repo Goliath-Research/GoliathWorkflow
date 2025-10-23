@@ -1,0 +1,25 @@
+# MethylClassifier Configuration Example
+
+# Path to trained classifier model (PKL file from MethylTrainer)
+model_path: "/path/to/classifier_chr1-CG.pkl"
+
+# Input samples to classify
+input_samples:
+  - "/path/to/samples/patient_001.h5"
+  - "/path/to/samples/patient_002.h5"
+  - "/path/to/samples/patient_003.h5"
+
+# Output configuration
+output_dir: "/path/to/classification_results"
+output_format: "csv"  # Options: csv, json, both
+
+# Classification parameters
+temperature: 1.0  # Temperature for probability calibration
+enable_platt_calibration: false  # Use Platt scaling if model supports it
+confidence_threshold: 0.5  # Minimum probability for confident classification
+
+# Output options
+include_probabilities: true  # Include class probabilities in output
+include_metadata: true  # Include sample metadata
+verbose: true  # Verbose logging
+

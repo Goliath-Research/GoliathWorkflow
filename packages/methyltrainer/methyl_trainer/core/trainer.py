@@ -14,7 +14,7 @@ from methyl_utils import (
     get_logger
 )
 
-from .config import TrainingConfig
+from ..models.config import TrainingConfig
 
 # Set up logging
 logger = get_logger(__name__)
