@@ -55,8 +55,10 @@ class MethylClassifier:
     Supports both binary and multi-class classification scenarios.
     """
 
-    def __init__(self):
-        self.classifier = None
+    def __init__(self, config: ClassifierConfig):
+        self.config = config
+        self.classifier = ProbabilisticBetaClassifier.load(self.config.model_path)  # Assume load method
+        self.classifier.set_temperature(self.config.temperature)
         self.chromosome = None
         self.context = None
         self.n_classes = None
@@ -106,6 +108,15 @@ class MethylClassifier:
                     val = self.metadata['validation']
                     print(f"✅ Validation accuracy: {val.get('overall_accuracy', 0):.1%}")
                     
+                # Load pre-fitted calibrator if available
+                if 'platt_calibrator' in self.metadata and self.config.enable_platt_calibration:
+                    import pickle
+                    self.classifier.calibrator = pickle.loads(self.metadata['platt_calibrator'])
+                    self._calibrated = True
+                    print("Loaded pre-fitted Platt calibrator from model metadata")
+                else:
+                    self._calibrated = False
+
             else:
                 # Old format: raw ProbabilisticBetaClassifier
                 print(f"✅ Loaded classifier (legacy format)")
@@ -195,7 +206,10 @@ class MethylClassifier:
         if self.classifier is None:
             raise RuntimeError("No classifier loaded")
 
-        return self.classifier.predict_proba(methylation_data, availability_mask, debug)
+        if hasattr(self, '_calibrated') and self._calibrated:
+            return self.classifier.predict_proba_calibrated(methylation_data, availability_mask)
+        else:
+            return self.classifier.predict_proba(methylation_data, availability_mask, debug)
     
     def predict_with_threshold(
         self,

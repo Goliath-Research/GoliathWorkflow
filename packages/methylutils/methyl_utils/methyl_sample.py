@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Union, Tuple, Dict, Any
+from typing import Optional, Union, Tuple, Dict, Any, List
 import struct
 import numpy as np
 import pandas as pd
+import json  # For serialization if needed
 
 
 # Import HDF5 dependencies - these should be available in the container
@@ -302,6 +303,21 @@ class MethylSample:
     def metadata(self, value: Dict[str, Any]):
         """Set all metadata at once."""
         self._metadata = value
+    
+    @property
+    def samples(self) -> List[str]:
+        """List of sample file paths that form this centroid (from metadata)."""
+        return self._metadata.get('sample_paths', []) if self._metadata else []
+
+    @property
+    def group_name(self) -> str:
+        """Group name or label for this centroid (from metadata)."""
+        return self._metadata.get('group_name', 'Unknown') if self._metadata else 'Unknown'
+
+    @property
+    def metadata(self) -> Optional[Dict[str, Any]]:
+        """Full metadata dictionary (read-only)."""
+        return self._metadata
     
     # Statistical properties - computed on demand
     @property

@@ -52,13 +52,15 @@
   "ctx": "CG",
   "clustering_method": "centroid",
   "metric": "jensen_shannon",
-  "force_k": 2,
   "forced_groups": {
     "Healthy": 35,
     "Cancer Early-Stage1": 12
   },
-  "num_restarts": 1,
   "max_em_iterations": 50,
+  "num_restarts": 3,
+  "validate_init": true,
+  "soft_assignment": true,
+  "assignment_temperature": 2.5,
   "convergence_threshold": 0.01,
   "min_cluster_size": 5,
   "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/cluster-hc1-centroid/",

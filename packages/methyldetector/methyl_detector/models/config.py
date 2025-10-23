@@ -52,6 +52,26 @@ class MethylDetectorConfig(BaseModel):
         default=0.6, ge=0.0, le=1.0,
         description="Maximum Bhattacharyya Coefficient (overlap) allowed. BC ranges 0-1 where 0=no overlap (perfect separation), 1=complete overlap. Lower values = stricter filtering. Example: 0.6 means 'keep only DMPs with ≤60% overlap'"
     )
+
+    # New calibration parameters (for trained classifier metadata)
+    temperature: float = Field(
+        default=1.0, ge=0.1, le=10.0,
+        description="Temperature for softmax in trained classifier (1.0 = original, higher softens probabilities)"
+    )
+    enable_platt_calibration: bool = Field(
+        default=False,
+        description="Enable Platt scaling calibration on validation data during classification"
+    )
+
+    @field_validator('temperature')
+    @classmethod
+    def validate_temperature(cls, v):
+        if v < 0.1:
+            raise ValueError("Temperature must be >= 0.1")
+        if v > 10.0:
+            raise ValueError("Temperature must be <= 10.0")
+        return v
+
     min_effect_size: Optional[float] = Field(
         default=None, ge=0.0,
         description="Minimum effect size threshold for filtering. Effect size = |delta_mu / var_delta_mu| * (1 - BC)^gamma. None = no effect size filtering"

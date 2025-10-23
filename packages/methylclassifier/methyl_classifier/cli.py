@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 import numpy as np
+import json # Added for loading config file
 
 from .classifier import MethylClassifier
 from .data_loader import DataLoader
@@ -348,110 +349,100 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Using config file (recommended for reproducibility)
+  # Using config file (recommended)
   methyl_classifier --config classification_config.json
 
-  # Config file with command-line overrides
-  methyl_classifier --config config.json --debug
-
-  # Direct command-line arguments
+  # Direct arguments
   methyl_classifier --model classifier.pkl --input samples/ --output results.csv
 
-  # Classify single sample with debug output
-  methyl_classifier --model classifier.pkl --input sample.h5 --debug
+Config fields (in JSON):
+  {
+    "model_path": "models/classifier.pkl",
+    "input_path": "samples/",
+    "temperature": 1.0,  // Softmax temperature
+    "enable_platt_calibration": false,  // Enable calibration
+    "validation_data_path": null  // Path to val data for Platt
+  }
         """
     )
-
+    
+    # Required/optional args (keep existing, remove new ones)
     parser.add_argument(
         '--config', '-c',
         type=Path,
-        help='Path to configuration JSON file (alternative to individual arguments)'
+        help='Path to configuration JSON file (includes all params like temperature/calibration)'
     )
-
+    
     parser.add_argument(
         '--model', '-m',
         type=Path,
-        help='Path to trained classifier model (.pkl file)'
+        help='Path to trained classifier model (.pkl file) - overrides config if provided'
     )
-
+    
     parser.add_argument(
         '--input', '-i',
         type=Path,
-        help='Path to input .h5 file or directory containing .h5 files'
+        help='Path to input .h5 file or directory - overrides config if provided'
     )
-
+    
     parser.add_argument(
         '--output', '-o',
         type=Path,
-        help='Optional output CSV file for classification results'
+        help='Optional output CSV file - overrides config if provided'
     )
-
+    
     parser.add_argument(
         '--debug', '-d',
         action='store_true',
         default=False,
-        help='Enable debug output for first sample'
+        help='Enable debug output'
     )
-
-
-    parser.add_argument(
-        '--no-filter',
-        action='store_true',
-        help='Process all .h5 files without chromosome/context filtering'
-    )
-
+    
     parser.add_argument(
         '--log-level',
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
         default='INFO',
         help='Set logging level (default: INFO)'
     )
-
+    
+    # No new args for temperature/calibration - handled in config
+    
     args = parser.parse_args()
-
-    # Handle config file if provided
+    
+    # Load config if provided
     if args.config:
-        print(f"📋 Loading configuration from: {args.config}")
-        try:
-            config = ClassificationConfig.from_json(args.config)
-            # Override with command-line arguments if provided
-            if args.model:
-                config.model_path = str(args.model)
-            if args.input:
-                config.input_path = str(args.input)
-            if args.output:
-                config.output_path = str(args.output)
-            if args.debug:
-                config.debug = args.debug
-            if args.no_filter:
-                config.no_filter = args.no_filter
-            if args.log_level != 'INFO':
-                config.log_level = args.log_level
-        except Exception as e:
-            print(f"❌ Failed to load config file: {e}")
-            sys.exit(1)
+        with open(args.config, 'r') as f:
+            config_data = json.load(f)
+        config = ClassificationConfig(**config_data)
+        # Override with CLI args (model, input, output, etc.)
+        if args.model:
+            config.model_path = str(args.model)
+        if args.input:
+            config.input_path = str(args.input)
+        if args.output:
+            config.output_path = str(args.output)
+        # No overrides for temperature/calibration - use config values
     else:
-        # Validate required arguments when not using config file
-        if not args.model or not args.input:
-            parser.error("--model and --input are required when not using --config")
-        
-        # Create config from command-line arguments
+        # Construct config from CLI args (existing logic)
         config = ClassificationConfig(
             model_path=str(args.model),
             input_path=str(args.input),
             output_path=str(args.output) if args.output else None,
             debug=args.debug,
-            no_filter=args.no_filter,
             log_level=args.log_level
         )
-
+        # Defaults for new params
+        config.temperature = 1.0
+        config.enable_platt_calibration = False
+        config.validation_data_path = None
+    
     # Setup logging
     setup_logging(config.log_level)
-
-    # Load classifier
-    classifier = MethylClassifier()
-    classifier.load_classifier(Path(config.model_path))
-
+    
+    # Create classifier and run
+    classifier = MethylClassifier(config)
+    results = classifier.run()  # Assumes run method uses config for prediction/calibration
+    
     # Extract chromosome and context from classifier path (unless disabled)
     chrom, context = None, None
     if not config.no_filter:

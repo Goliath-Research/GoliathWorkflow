@@ -45,6 +45,9 @@ Examples:
   # Run with verbose output
   python -m methyl_cluster.cli --config config.json --verbose
 
+  # Enable soft assignments with temperature
+  python -m methyl_cluster.cli --config config.json --soft --temperature 2.5
+
 Configuration file format:
   {
     "samples": ["/path/to/sample1", "/path/to/sample2", ...],
@@ -54,7 +57,9 @@ Configuration file format:
     "min_cluster_size": 5,
     "output_dir": "./results",
     "cache_distance_matrix": true,
-    "use_gpu": true
+    "use_gpu": true,
+    "soft_assignment": false,  # New: Enable soft probabilities
+    "assignment_temperature": 1.0  # New: Softmax temperature (>=0.1, <=10.0)
   }
 
 Available metrics:
@@ -80,6 +85,20 @@ For more information, see the README.md file.
         help="Enable verbose output (DEBUG level logging)"
     )
     
+    # New arguments for overrides
+    parser.add_argument(
+        "--soft",
+        action="store_true",
+        help="Enable soft cluster assignments with membership probabilities (overrides config)"
+    )
+    
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=1.0,
+        help="Temperature parameter for softmax in soft assignments (overrides config; default=1.0, range [0.1,10.0])"
+    )
+    
     args = parser.parse_args()
     
     # Setup logging
@@ -97,12 +116,20 @@ For more information, see the README.md file.
         with open(args.config, 'r') as f:
             config_data = json.load(f)
         
-        # Validate configuration
-        try:
-            config = MethylClusterConfig(**config_data)
-        except Exception as e:
-            logger.error(f"Invalid configuration: {e}")
-            sys.exit(1)
+        # Create and validate config
+        config = MethylClusterConfig(**config_data)
+        
+        # Apply CLI overrides after loading
+        if args.soft:
+            config.soft_assignment = True
+            logger.info("CLI override: soft_assignment = True")
+        
+        if args.temperature != 1.0:
+            config.assignment_temperature = args.temperature
+            logger.info(f"CLI override: assignment_temperature = {args.temperature}")
+        
+        # Re-validate after overrides (Pydantic ensures bounds)
+        config = MethylClusterConfig.model_validate(config.model_dump())
         
         # Log configuration summary
         logger.info("="*60)
@@ -116,6 +143,8 @@ For more information, see the README.md file.
         logger.info(f"Output directory: {config.output_dir}")
         logger.info(f"GPU acceleration: {config.use_gpu}")
         logger.info(f"Cache distance matrix: {config.cache_distance_matrix}")
+        logger.info(f"Soft assignment: {config.soft_assignment}")
+        logger.info(f"Assignment temperature: {config.assignment_temperature}")
         logger.info("="*60)
         
         # Normalize output directory path
