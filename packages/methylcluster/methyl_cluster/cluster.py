@@ -10,7 +10,7 @@ import hdbscan
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from scipy.cluster.hierarchy import linkage, fcluster
@@ -874,44 +874,65 @@ class MethylCluster:
         
         return centroids
     
-    def _assign_samples_to_centroids(self, samples: List, centroids: List[ClusterCentroid]) -> np.ndarray:
+    def _assign_samples_to_centroids(self, samples: List, centroids: List[ClusterCentroid], soft: bool = False, temperature: float = 1.0) -> Union[np.ndarray, Dict[str, np.ndarray]]:
         """
-        Assign each sample to centroid with highest log-likelihood.
+        Assign each sample to centroid with highest log-likelihood, or compute soft probabilities.
         
         Args:
             samples: List of MethylSample instances
             centroids: List of ClusterCentroid instances
-            
+            soft: If True, return soft probabilities instead of hard assignments
+            temperature: Softmax temperature for soft assignments
+        
         Returns:
-            Array of cluster assignments
+            If soft=False: Array of cluster assignments
+            If soft=True: Dict with 'assignments' (hard) and 'probabilities' (n_samples x n_clusters)
         """
         n_samples = len(samples)
         assignments = np.zeros(n_samples, dtype=int)
+        probabilities = np.zeros((n_samples, len(centroids)))
         
         logger.info("Assigning samples to centroids based on log-likelihood...")
         
         for i, sample in enumerate(samples):
-            best_centroid = -1
-            best_log_likelihood = -np.inf
-            
-            for j, centroid in enumerate(centroids):
-                log_likelihood = centroid.compute_log_likelihood(sample)
+            if soft:
+                # Compute soft probabilities
+                prob_row = np.zeros(len(centroids))
+                for j, centroid in enumerate(centroids):
+                    # For each centroid, compute prob relative to others
+                    prob_row[j] = centroid.compute_membership_probabilities(sample, [c for c in centroids if c != centroid], temperature)
+                probabilities[i] = prob_row
+                # Hard assignment from argmax for consistency
+                best_centroid = np.argmax(prob_row)
+            else:
+                best_centroid = -1
+                best_log_likelihood = -np.inf
                 
-                if log_likelihood > best_log_likelihood:
-                    best_log_likelihood = log_likelihood
-                    best_centroid = j
-            
-            assignments[i] = best_centroid
+                for j, centroid in enumerate(centroids):
+                    log_likelihood = centroid.compute_log_likelihood(sample)
+                    
+                    if log_likelihood > best_log_likelihood:
+                        best_log_likelihood = log_likelihood
+                        best_centroid = j
+                
+                assignments[i] = best_centroid
+                probabilities[i, best_centroid] = 1.0  # One-hot for hard
             
             if (i + 1) % 10 == 0:
                 logger.debug(f"Assigned {i + 1}/{n_samples} samples")
         
         # Log cluster sizes
+        cluster_counts = np.bincount(assignments, minlength=len(centroids))
         for j in range(len(centroids)):
-            count = np.sum(assignments == j)
-            logger.info(f"  Cluster {j}: {count} samples")
+            logger.info(f"  Cluster {j}: {cluster_counts[j]} samples")
         
-        return assignments
+        if soft:
+            return {
+                'assignments': assignments,
+                'probabilities': probabilities
+            }
+        else:
+            return assignments
     
     def _update_centroids(
         self,

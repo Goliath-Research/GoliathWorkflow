@@ -12,6 +12,8 @@ integrates seamlessly with the MethylUtils ecosystem.
 import numpy as np
 from scipy.stats import beta
 from typing import Dict, Any, Optional, Union, Tuple
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import StandardScaler
 
 
 class ProbabilisticBetaClassifier:
@@ -72,6 +74,12 @@ class ProbabilisticBetaClassifier:
 
         self.data = data
         self.n_dmps = n_positions
+        self.temperature = 1.0  # Default temperature for softmax
+        self.calibrator = None  # For Platt scaling
+
+    def set_temperature(self, temperature: float = 1.0):
+        """Set the temperature for softmax to control sharpness of probabilities."""
+        self.temperature = max(temperature, 0.1)  # Avoid too low temperatures
 
     def predict_proba(self, X: np.ndarray,
                      availability_mask: Optional[np.ndarray] = None,
@@ -102,8 +110,7 @@ class ProbabilisticBetaClassifier:
 
         methylation_vals = np.clip(X, 1e-6, 1-1e-6)  # Shape: (n_samples, n_dmps)
 
-        # Get base parameters (should now be bounded from methyl_centroid_pair.py)
-        # Following copilot.py: NO DIRECTIONS - directly assign centroid1=class0, centroid2=class1
+        # Get base parameters
         alpha1_base = self.data['alpha1']
         beta1_base = self.data['beta1']
         alpha2_base = self.data['alpha2']
@@ -142,18 +149,18 @@ class ProbabilisticBetaClassifier:
             log_p_class1 = np.where(effective_mask, log_p_class1, 0.0)
             valid_counts = np.sum(effective_mask, axis=1)
 
-        log_like_class0 = np.sum(log_p_class0, axis=1)
-        log_like_class1 = np.sum(log_p_class1, axis=1)
+        # AVERAGE log-likelihoods by number of valid positions (instead of summing)
+        avg_log_like_class0 = np.sum(log_p_class0, axis=1) / np.maximum(valid_counts, 1)
+        avg_log_like_class1 = np.sum(log_p_class1, axis=1) / np.maximum(valid_counts, 1)
 
-        # DO NOT AVERAGE - copilot.py sums log-likelihoods
         # Handle no valid positions (set to same neutral value)
         mask_no_valid = valid_counts == 0
-        log_like_class0[mask_no_valid] = 0.0
-        log_like_class1[mask_no_valid] = 0.0
+        avg_log_like_class0[mask_no_valid] = 0.0
+        avg_log_like_class1[mask_no_valid] = 0.0
 
         # Assign to classes: Column 0 = class0, Column 1 = class1
-        log_likelihoods[:, 0] = log_like_class0
-        log_likelihoods[:, 1] = log_like_class1
+        log_likelihoods[:, 0] = avg_log_like_class0
+        log_likelihoods[:, 1] = avg_log_like_class1
 
         # Debug first sample if requested
         if debug:
@@ -162,7 +169,7 @@ class ProbabilisticBetaClassifier:
             print(f"Debugging sample {i}:")
             print(f"  Available positions: {available_count}/{self.n_dmps}")
             print(f"  Used positions: {available_count}")
-            print(f"  Log-likelihoods: Class0={log_like_class0[i]:.2f}, Class1={log_like_class1[i]:.2f}")
+            print(f"  Avg log-likelihoods: Class0={avg_log_like_class0[i]:.2f}, Class1={avg_log_like_class1[i]:.2f}")
 
         # Debug: add stats on invalid params
         if debug:
@@ -171,15 +178,119 @@ class ProbabilisticBetaClassifier:
             print(f"  Fraction valid for both: {np.mean(valid):.3f}")
 
         # Convert to probabilities using log-sum-exp trick for numerical stability
-        # P(class|data) ∝ P(data|class) * P(class) (assuming equal priors)
-        max_log_like = np.max(log_likelihoods, axis=1, keepdims=True)
-        likelihood_ratios = np.exp(log_likelihoods - max_log_like)  # Avoid underflow
+        # Apply temperature to soften: divide by temperature before softmax
+        scaled_log_likelihoods = log_likelihoods / self.temperature
+        max_log_like = np.max(scaled_log_likelihoods, axis=1, keepdims=True)
+        likelihood_ratios = np.exp(scaled_log_likelihoods - max_log_like)  # Avoid underflow
         posterior_probs = likelihood_ratios / np.sum(likelihood_ratios, axis=1, keepdims=True)
 
         if debug:
-            print(f"Final probabilities: {posterior_probs[0]}")
+            print(f"Final probabilities (T={self.temperature}): {posterior_probs[0]}")
 
         return posterior_probs
+
+    def calibrate_platt(self, X_val: np.ndarray, y_val: np.ndarray, availability_mask: Optional[np.ndarray] = None):
+        """
+        Calibrate probabilities using Platt scaling on validation data.
+        
+        Fits a logistic regression: P(y=1 | logit) = 1 / (1 + exp(-(a * logit + b))),
+        where logit = avg_log_like_class1 - avg_log_like_class0.
+        
+        Args:
+            X_val: Validation features (n_samples, n_features)
+            y_val: Validation labels (0 or 1)
+            availability_mask: Optional mask for validation data
+        """
+        # Compute raw logits (difference of averaged log L)
+        log_likelihoods = self._compute_averaged_log_likelihoods(X_val, availability_mask)
+        logits = log_likelihoods[:, 1] - log_likelihoods[:, 0]  # Class1 - Class0
+
+        # Fit Platt scaling (logistic regression on logits)
+        scaler = StandardScaler()
+        logits_scaled = scaler.fit_transform(logits.reshape(-1, 1)).flatten()
+
+        self.calibrator_scaler = scaler
+        self.calibrator = LogisticRegression(fit_intercept=True, max_iter=1000)
+        self.calibrator.fit(logits_scaled.reshape(-1, 1), y_val)
+
+    def _compute_averaged_log_likelihoods(self, X: np.ndarray, availability_mask: Optional[np.ndarray] = None):
+        """Helper to compute averaged log-likelihoods (extracted for calibration)."""
+        # Reuse the computation from predict_proba up to averaged log_likes
+        n_samples = X.shape[0]
+        methylation_vals = np.clip(X, 1e-6, 1-1e-6)
+
+        alpha1_base = self.data['alpha1']
+        beta1_base = self.data['beta1']
+        alpha2_base = self.data['alpha2']
+        beta2_base = self.data['beta2']
+
+        alpha_class0 = alpha1_base
+        beta_class0 = beta1_base
+        alpha_class1 = alpha2_base
+        beta_class1 = beta2_base
+
+        alpha0 = np.repeat(alpha_class0[np.newaxis, :], n_samples, axis=0)
+        beta0 = np.repeat(beta_class0[np.newaxis, :], n_samples, axis=0)
+        alpha1 = np.repeat(alpha_class1[np.newaxis, :], n_samples, axis=0)
+        beta1 = np.repeat(beta_class1[np.newaxis, :], n_samples, axis=0)
+
+        log_p_class0 = beta.logpdf(methylation_vals, alpha0, beta0)
+        log_p_class1 = beta.logpdf(methylation_vals, alpha1, beta1)
+
+        valid0 = (alpha0 > 0) & (beta0 > 0) & np.isfinite(alpha0) & np.isfinite(beta0)
+        valid1 = (alpha1 > 0) & (beta1 > 0) & np.isfinite(alpha1) & np.isfinite(beta1)
+        valid = valid0 & valid1
+
+        if availability_mask is not None:
+            effective_mask = availability_mask & valid
+            log_p_class0 = np.where(effective_mask, log_p_class0, 0.0)
+            log_p_class1 = np.where(effective_mask, log_p_class1, 0.0)
+            valid_counts = np.sum(effective_mask, axis=1)
+        else:
+            effective_mask = valid
+            log_p_class0 = np.where(effective_mask, log_p_class0, 0.0)
+            log_p_class1 = np.where(effective_mask, log_p_class1, 0.0)
+            valid_counts = np.sum(effective_mask, axis=1)
+
+        avg_log_like_class0 = np.sum(log_p_class0, axis=1) / np.maximum(valid_counts, 1)
+        avg_log_like_class1 = np.sum(log_p_class1, axis=1) / np.maximum(valid_counts, 1)
+
+        mask_no_valid = valid_counts == 0
+        avg_log_like_class0[mask_no_valid] = 0.0
+        avg_log_like_class1[mask_no_valid] = 0.0
+
+        log_likelihoods = np.zeros((n_samples, 2))
+        log_likelihoods[:, 0] = avg_log_like_class0
+        log_likelihoods[:, 1] = avg_log_like_class1
+
+        return log_likelihoods
+
+    def predict_proba_calibrated(self, X: np.ndarray, availability_mask: Optional[np.ndarray] = None) -> np.ndarray:
+        """
+        Predict calibrated probabilities using Platt scaling if fitted.
+        """
+        if self.calibrator is None:
+            return self.predict_proba(X, availability_mask)
+
+        # Compute raw averaged log L
+        log_likelihoods = self._compute_averaged_log_likelihoods(X, availability_mask)
+        logits = log_likelihoods[:, 1] - log_likelihoods[:, 0]
+
+        # Scale logits
+        if hasattr(self, 'calibrator_scaler'):
+            logits_scaled = self.calibrator_scaler.transform(logits.reshape(-1, 1)).flatten()
+        else:
+            logits_scaled = logits  # Fallback if no scaler
+
+        # Apply Platt scaling
+        calibrated_probs = self.calibrator.predict_proba(logits_scaled.reshape(-1, 1))[:, 1]  # P(class1)
+
+        # Return as (n_samples, 2)
+        probs = np.zeros((len(X), 2))
+        probs[:, 0] = 1 - calibrated_probs
+        probs[:, 1] = calibrated_probs
+
+        return probs
     
     def predict_with_threshold(
         self,
