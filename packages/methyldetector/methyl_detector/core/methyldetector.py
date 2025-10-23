@@ -267,17 +267,7 @@ class MethylDetector:
             f"✅ Analysis complete! Found {dmp_count} DMPs"
         )
         return result
-
-    # NOTE: Training methods moved to MethylTrainer (packages/methyltrainer)
-    # The following methods have been moved:
-    # - _filter_and_select_dmps, _apply_biological_filters, _compute_effect_size
-    # - _select_dmps_binary_search, _compute_subset_performance
-    # - _validate_classifier_on_synthetic_samples, _validate_classifier_on_real_samples
-    # - _get_validation_sample_paths, _load_validation_samples_for_binary_search
-    # - _compute_real_auc_from_samples, _load_sample_methylation_at_dmps
-    #
-    # MethylDetector now delegates training to MethylTrainer (see run() method above)
-    
+   
     def timer(func):
         """Decorator to time and log function execution."""
         import time
@@ -297,7 +287,6 @@ class MethylDetector:
                 raise
         return wrapper
 
-    @timer
     def _detect_statistical_dmps(self) -> pd.DataFrame:
         """Detect statistically significant DMPs using MethylCentroidPair. Returns a DataFrame-centric result."""
         logger.debug("Processing centroids...")
@@ -358,7 +347,6 @@ class MethylDetector:
         return dmp_df
 
 
-    @timer
     def _structured_array_to_dmp_df(self, structured_array: np.ndarray) -> pd.DataFrame:
         """Convert structured array to DataFrame with basic fields (fast, no objects)."""
         df = pd.DataFrame(structured_array)
@@ -389,7 +377,6 @@ class MethylDetector:
                 df[col] = df[col].astype(dtype)
         return df
 
-    @timer
     def _compute_missing_metrics_df(self, df: pd.DataFrame) -> pd.DataFrame:
         """Vectorized computation of missing biological metrics on DataFrame. GPU-memory aware chunking."""
         import time
@@ -419,7 +406,6 @@ class MethylDetector:
         else:
             return self._compute_chunk_metrics_df(df)
 
-    @timer
     def _compute_chunk_metrics_df(self, chunk_df: pd.DataFrame) -> pd.DataFrame:
         """Compute only essential metrics for a chunk DataFrame (vectorized, GPU-optimized)."""
         import time
@@ -548,29 +534,6 @@ class MethylDetector:
         chrom_fig.write_html(chrom_html)
         logger.info(f"📊 Chromosome/context breakdown saved: {chrom_html}")
 
-    # NOTE: Legacy fallback method kept for backward compatibility when MethylTrainer is not available
-    def _filter_and_select_dmps(self, dmp_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        LEGACY FALLBACK: Filter and select biological DMPs.
-        
-        This method is kept for backward compatibility when MethylTrainer is not available.
-        In normal operation, this logic has been moved to MethylTrainer.
-        """
-        logger.warning("Using legacy filtering method - MethylTrainer not available or failed")
-        # Simplified fallback: just return top DMPs by delta_mean
-        filtered = dmp_df[dmp_df['delta_mean'].abs() >= self.config.min_delta_mean]
-        if len(filtered) > self.config.min_dmps_for_export:
-            filtered = filtered.nlargest(self.config.min_dmps_for_export, 'delta_mean')
-        
-        # Save results
-        chromosome = getattr(self, 'chrom', 'unknown')
-        context = getattr(self, 'ctx', 'unknown')
-        output_dir = Path(self.config.output_dir) if self.config.output_dir else Path.cwd()
-        output_dir.mkdir(parents=True, exist_ok=True)
-        self._save_single_chrom_context_results(filtered, output_dir, str(chromosome), context)
-        
-        return filtered
-
     def _export_selected_dmps_csv(self, biological_dmps_df: pd.DataFrame) -> None:
         """Export selected DMPs to CSV with required columns."""
         if biological_dmps_df.empty:
@@ -638,7 +601,7 @@ class MethylDetector:
     def _create_final_result(self, dmp_df: pd.DataFrame,
                              biological_dmps_df: Optional[pd.DataFrame] = None) -> MethylDetectorResult:
         """Create final result object from DataFrames."""
-        # Log biological importance range (no normalization needed)
+        # Log biological importance range
         if biological_dmps_df is not None and not biological_dmps_df.empty:
             if 'effect_size' in biological_dmps_df.columns:
                 bio_scores = biological_dmps_df['effect_size'].dropna()
@@ -731,7 +694,7 @@ class MethylDetector:
             classifier_model_file=model_path,
             key_parameters=key_params,
             classifier_accuracy=training_accuracy,
-            top_dmp_significance=top_dmp_importance,  # Note: field name kept for backward compat
+            top_dmp_significance=top_dmp_importance, 
         )
         save_json(
             summary.model_dump(),
