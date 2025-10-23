@@ -9,6 +9,7 @@ import numpy as np
 import logging
 from typing import List, Tuple, Optional
 from pathlib import Path
+from methyl_utils.beta_analytics import beta_log_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -203,7 +204,6 @@ class ClusterCentroid:
         Returns:
             Log-likelihood value (higher = better fit)
         """
-        from methyl_utils.beta_analytics import beta_log_pdf
         
         try:
             # Get current centroid
@@ -267,6 +267,47 @@ class ClusterCentroid:
         except Exception as e:
             logger.error(f"Error computing log-likelihood for cluster {self.cluster_id}: {e}")
             return -np.inf
+    
+    def compute_membership_probabilities(self, sample: 'MethylSample', other_centroids: List['ClusterCentroid'], temperature: float = 1.0) -> float:
+        """
+        Compute the posterior probability of the sample belonging to this centroid
+        relative to other centroids using softmax of averaged log-likelihoods.
+        
+        Args:
+            sample: MethylSample to evaluate
+            other_centroids: List of other ClusterCentroid instances for comparison
+            temperature: Softmax temperature to control uncertainty (default 1.0)
+        
+        Returns:
+            Probability that sample belongs to this centroid (0-1)
+        """
+        try:
+            # Compute log-likelihood for this centroid (already averaged)
+            log_l_this = self.compute_log_likelihood(sample)
+            
+            # Compute log-likelihoods for other centroids
+            log_l_others = []
+            for other in other_centroids:
+                log_l_others.append(other.compute_log_likelihood(sample))
+            
+            # Stack all log L (this + others)
+            all_log_l = np.array([log_l_this] + log_l_others)
+            
+            # Handle -inf: set to very low value to avoid NaN in softmax
+            all_log_l = np.where(np.isfinite(all_log_l), all_log_l, -1e6)
+            
+            # Softmax with temperature: preserves uncertainty
+            scaled_log_l = all_log_l / temperature
+            max_log = np.max(scaled_log_l)
+            exp_terms = np.exp(scaled_log_l - max_log)
+            probs = exp_terms / np.sum(exp_terms)
+            
+            # Return probability for this centroid (index 0)
+            return float(probs[0])
+            
+        except Exception as e:
+            logger.error(f"Error computing membership probabilities for cluster {self.cluster_id}: {e}")
+            return 0.5  # Neutral probability on error
     
     def get_sample_count(self) -> int:
         """Get the number of samples in this cluster."""
