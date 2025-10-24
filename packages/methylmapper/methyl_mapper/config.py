@@ -13,19 +13,19 @@ class AzureSQLConfig(BaseModel):
     """Azure SQL Database connection configuration."""
     
     server: str = Field(
-        ...,
+        default="em-maindb.database.windows.net",
         description="Azure SQL Server hostname (e.g., your-server.database.windows.net)"
     )
     database: str = Field(
-        ...,
+        default="STRING-DB",
         description="Database name"
     )
     username: str = Field(
-        ...,
+        default="dba",
         description="Database username"
     )
     password: str = Field(
-        ...,
+        default="MonteCarlo001*",
         description="Database password"
     )
     driver: str = Field(
