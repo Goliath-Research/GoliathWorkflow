@@ -63,7 +63,7 @@ def test_beta_binomial_classifier():
     print("TEST 2: BetaBinomialClassifier")
     print("=" * 60)
     
-    from methyl_detector.core.beta_binomial_classifier import BetaBinomialClassifier
+    from methyl_utils import BetaBinomialClassifier
     
     # Create synthetic test data
     n_dmps = 100
@@ -166,7 +166,7 @@ def test_dataframe_integration():
     print("TEST 3: DataFrame Integration")
     print("=" * 60)
     
-    from methyl_detector.core.beta_binomial_classifier import BetaBinomialClassifier
+    from methyl_utils import BetaBinomialClassifier
     
     # Create synthetic DataFrame (simulating DMP output)
     n_dmps = 150

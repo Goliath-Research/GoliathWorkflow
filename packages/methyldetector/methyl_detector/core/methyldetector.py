@@ -29,8 +29,8 @@ from methyl_utils import MethylSample
 # Import MethylCentroidPair from MethylUtils for mathematical operations
 from methyl_utils import MethylCentroidPair
 
-# Import Beta-Binomial classifier
-from .beta_binomial_classifier import BetaBinomialClassifier
+# Import Beta-Binomial classifier from MethylUtils
+from methyl_utils import BetaBinomialClassifier
 
 # Import MethylTrainer conditionally (only when needed)
 # This allows the module to be imported even if methyl_trainer is not available
@@ -101,63 +101,12 @@ class MethylDetector:
         self._exported_csv_path = None  # Path to exported CSV file
         logger.debug("Initialized MethylDetector")
     
-    def _create_trainer_config(self) -> 'TrainingConfig':
-        """Convert MethylDetectorConfig to TrainingConfig for delegation."""
-        if TrainingConfig is None:
-            raise ImportError("TrainingConfig not available")
-        
-        return TrainingConfig(
-            centroid1_path=str(self.config.centroid1_path),
-            centroid2_path=str(self.config.centroid2_path),
-            output_path=str(Path(self.config.output_dir) / f"classifier-{self.chrom}-{self.ctx}.pkl"),
-            chromosome=self.chrom,
-            context=self.ctx,
-            # Advanced filtering configuration
-            alpha=self.config.alpha,
-            min_N_pct=self.config.min_N_pct,
-            min_delta_mean=self.config.min_delta_mean,
-            max_bc=self.config.max_bc,
-            gamma=self.config.gamma,
-            min_effect_size=self.config.min_effect_size if hasattr(self.config, 'min_effect_size') else None,
-            biological_filters=True,
-            # Binary search configuration
-            target_balanced_accuracy=self.config.target_balanced_accuracy,
-            min_selected_dmps=self.config.min_selected_dmps if hasattr(self.config, 'min_selected_dmps') else None,
-            min_dmps_for_export=self.config.min_dmps_for_export,
-            # Validation configuration
-            validation_mode=self.config.validation_mode,
-            centroid1_validation_samples=self.config.centroid1_validation_samples,
-            centroid2_validation_samples=self.config.centroid2_validation_samples,
-            n_validation_samples=self.config.n_validation_samples,
-            # Validation-accuracy optimization
-            optimize_for_validation_accuracy=self.config.optimize_for_validation_accuracy,
-            # GPU configuration
-            use_gpu=self.config.use_gpu,
-            random_state=self.config.random_state,
-            verbose=True,
-            # New params
-            temperature=self.config.temperature,
-            enable_platt_calibration=self.config.enable_platt_calibration
-            # No validation_data_path
-        )
-
     def run(self) -> MethylDetectorResult:
         """Run the complete DMP detection and filtering pipeline."""
         logger.debug("Starting MethylDetector analysis pipeline...")
         
-        # Check if using multi-context mode or legacy single-context mode
-        use_multi_context = (
-            hasattr(self.config, 'chromosome') and 
-            hasattr(self.config, 'centroid1_dir') and
-            hasattr(self.config, 'centroid2_dir') and
-            self.config.centroid1_dir is not None and
-            self.config.centroid2_dir is not None
-        )
-        
-        if use_multi_context:
-            return self._run_multi_context()
-        else:
-            return self._run_single_context()
+        # Single unified implementation for all cases
+        return self._run_multi_context()
     
     def _run_multi_context(self) -> MethylDetectorResult:
         """Run multi-context analysis (new unified approach)."""
@@ -220,161 +169,37 @@ class MethylDetector:
         bio_dmps_df = self._filter_biological_dmps(dmps_df)
         logger.info(f"✅ Biological DMPs: {len(bio_dmps_df):,} (retention: {len(bio_dmps_df)/len(dmps_df)*100:.1f}%)")
         
+        # Binary search for optimal DMP selection (if enabled)
+        selected_dmps_df = bio_dmps_df
+        if not self.config.export_all_biological_dmps:
+            logger.info("🎯 Running binary search to optimize DMP selection...")
+            selected_dmps_df = self._select_dmps_binary_search_multicontext(bio_dmps_df)
+            logger.info(f"✅ Selected {len(selected_dmps_df):,} DMPs out of {len(bio_dmps_df):,} biological DMPs")
+        else:
+            logger.info("📋 Using all biological DMPs (export_all_biological_dmps=True)")
+        
         # Train Beta-Binomial classifier
         logger.info("🤖 Training Beta-Binomial classifier...")
-        classifier = BetaBinomialClassifier.from_dataframe(bio_dmps_df, self.config.chromosome)
+        classifier = BetaBinomialClassifier.from_dataframe(selected_dmps_df, self.config.chromosome)
         logger.info(f"✅ Classifier created: {classifier}")
         
         # Export unified CSV
         if self.config.output_dir:
             logger.info("💾 Exporting unified CSV...")
-            self._export_unified_csv(bio_dmps_df)
+            self._export_unified_csv(selected_dmps_df)
             
             # Save model
             logger.info("💾 Saving classifier model...")
-            self._save_unified_model(classifier, bio_dmps_df)
+            self._save_unified_model(classifier, selected_dmps_df)
+            
+            # Save validation results if binary search was performed
+            if hasattr(self, '_final_validation_results') and self._final_validation_results:
+                self._save_validation_results()
         
-        # Create result
-        result = self._create_multi_context_result(dmps_df, bio_dmps_df)
+        # Create result (use selected DMPs for result stats)
+        result = self._create_multi_context_result(dmps_df, selected_dmps_df)
         logger.info(f"✅ Multi-context analysis complete for chromosome {self.config.chromosome}!")
         
-        return result
-    
-    def _run_single_context(self) -> MethylDetectorResult:
-        """Run legacy single-context analysis (backward compatibility)."""
-        logger.debug("Starting MethylDetector analysis pipeline (single-context mode)...")
-
-        # Step 1: Detect statistical DMPs (DataFrame-centric)
-        logger.debug("Step 1: Detecting statistical DMPs...")
-        try:
-            dmp_df = self._detect_statistical_dmps()
-            logger.debug(f"Step 1 completed: {len(dmp_df):,} DMPs detected")
-        except Exception as e:
-            logger.error(f"Step 1 failed: {e}")
-            import traceback
-
-            traceback.print_exc()
-            raise
-
-        # Add DMP indices for auto-calibration
-        self.dmp_positions = dmp_df['position'].values
-        self.selected_dmps_indices = np.searchsorted(self.centroid1.pos, self.dmp_positions)
-        logger.info(f"Set selected_dmps_indices with {len(self.selected_dmps_indices)} DMPs for auto-calibration")
-
-        # Step 2: Train classifier using MethylTrainer (DELEGATED)
-        # This includes filtering, binary search, and validation
-        biological_dmps_df = pd.DataFrame()
-        accuracy = None
-        
-        if not dmp_df.empty and self.config.output_dir:
-            logger.info("Step 2: Training classifier using MethylTrainer...")
-            try:
-                # Create TrainingConfig from MethylDetectorConfig
-                trainer_config = self._create_trainer_config()
-                
-                # Create trainer and train from DMPs
-                trainer = MethylTrainer(trainer_config)
-                model_package = trainer.train_from_dmps(
-                    dmp_df=dmp_df,
-                    centroid1_path=Path(self.config.centroid1_path),
-                    centroid2_path=Path(self.config.centroid2_path),
-                    chromosome=self.chrom,
-                    context=self.ctx
-                )
-
-                self.classifier = model_package['classifier']  # Add this line - extract from package
-                logger.info("Extracted classifier for auto-calibration")
-                
-                # Extract results
-                biological_dmps_df = model_package.get('selected_dmps_df', pd.DataFrame())
-                accuracy = model_package.get('validation_accuracy')
-                classifier = model_package.get('classifier')
-                
-                # Export selected DMPs to CSV
-                if not biological_dmps_df.empty:
-                    self._export_selected_dmps_csv(biological_dmps_df)
-                
-                # Save model
-                if classifier is not None:
-                    output_dir = Path(self.config.output_dir)
-                    model_path = output_dir / f"classifier-{self.chrom}-{self.ctx}.pkl"
-                    
-                    import pickle
-                    with open(model_path, 'wb') as f:
-                        pickle.dump(model_package, f)
-                    logger.info(f"✅ Classifier saved to {model_path}")
-                    
-                    # Update model_metadata with new parameters
-                    model_metadata = model_package.get('metadata', {})
-                    model_metadata['temperature'] = self.config.temperature
-                    model_metadata['enable_platt_calibration'] = self.config.enable_platt_calibration                    # Save updated metadata with model
-                    with open(model_path, 'rb') as f:
-                        model_package_data = pickle.load(f)
-                    model_package_data['metadata'] = model_metadata
-                    with open(model_path, 'wb') as f:
-                        pickle.dump(model_package_data, f)
-                    logger.info(f"✅ Model metadata updated and saved to {model_path}")
-                    
-                    if self.config.enable_platt_calibration:
-                        # Load centroids if not loaded
-                        self.centroid1 = MethylSample.load_from_h5(self.config.centroid1_path)
-                        self.centroid2 = MethylSample.load_from_h5(self.config.centroid2_path)
-                        paths0 = self.centroid1.samples
-                        paths1 = self.centroid2.samples
-                        samples0 = [MethylSample.load_from_h5(p) for p in paths0]
-                        samples1 = [MethylSample.load_from_h5(p) for p in paths1]
-                        dmp_indices = self.selected_dmps_indices
-                        X0 = np.array([s.methylation_levels[dmp_indices] for s in samples0])
-                        X1 = np.array([s.methylation_levels[dmp_indices] for s in samples1])
-                        X_val = np.vstack([X0, X1])
-                        y_val = np.array([0] * len(samples0) + [1] * len(samples1))
-                        if self.classifier.n_dmps == 0 or len(X_val[0]) != self.classifier.n_dmps:
-                            logger.warning("Model has 0 DMPs or shape mismatch—skipping calibration")
-                        else:
-                            self.classifier.calibrate_platt(X_val, y_val)
-                            logger.info(f"Auto-calibrated Platt using {len(y_val)} samples from centroids")
-                        
-                        # Save calibrator in metadata
-                        model_metadata = model_package.get('metadata', {})
-                        model_metadata['platt_calibrator'] = pickle.dumps(self.classifier.calibrator)
-                        model_package['metadata'] = model_metadata
-                        with open(model_path, 'wb') as f:
-                            pickle.dump(model_package, f)
-                        logger.info("Saved pre-fitted Platt calibrator in model metadata")
-
-            except Exception as e:
-                logger.error(f"❌ Training with MethylTrainer failed: {e}")
-                import traceback
-                traceback.print_exc()
-                biological_dmps_df = pd.DataFrame()
-                accuracy = None
-
-        logger.info("🔄 Step 3: Generating final results...")
-        result = self._create_final_result(
-            dmp_df, biological_dmps_df=biological_dmps_df
-        )
-        logger.info("✅ Step 3 completed successfully")
-
-        # Update result with training accuracy if available
-        logger.info("🔄 Updating result with training accuracy...")
-        if accuracy is not None:
-            result.training_accuracy = float(accuracy)
-            if self.config.output_dir:
-                output_dir = Path(self.config.output_dir)
-                model_path = output_dir / f"classifier-{self.chrom}-{self.ctx}.pkl"
-                result.classifier_model_path = str(model_path)
-        logger.info("✅ Result updated with training accuracy")
-        
-        # Step 5: Save results
-        if self.config.output_dir:
-            logger.info("🔄 Step 5: Saving results...")
-            self._save_results(result)
-            logger.info("✅ Step 5: Results saved")
-
-        dmp_count = len(result.biologically_significant_dmps_df) if result.biologically_significant_dmps_df is not None else 0
-        logger.info(
-            f"✅ Analysis complete! Found {dmp_count} DMPs"
-        )
         return result
    
     def timer(func):
@@ -396,65 +221,6 @@ class MethylDetector:
                 raise
         return wrapper
 
-    def _detect_statistical_dmps(self) -> pd.DataFrame:
-        """Detect statistically significant DMPs using MethylCentroidPair. Returns a DataFrame-centric result."""
-        logger.debug("Processing centroids...")
-        output_dir = Path(self.config.output_dir) if self.config.output_dir else Path.cwd()
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Load and align centroids directly via MethylCentroidPair
-        min_coverage = self.config.effective_min_N(10)  # Fallback cohort size
-        centroid1, centroid2, common_positions = MethylCentroidPair.load_and_align(
-            self.config.centroid1_path, 
-            self.config.centroid2_path, 
-            min_coverage=min_coverage
-        )
-        # Store centroids for later model training
-        self.centroid1 = centroid1
-        self.centroid2 = centroid2
-        # Determine cohort size from centroid data (max coverage across both centroids)
-        max_coverage = max(centroid1.N.max() if centroid1.N is not None else 0,
-                    centroid2.N.max() if centroid2.N is not None else 0)
-        cohort_size = max(max_coverage, 10)  # Use at least 10 as fallback
-        effective_min_coverage = self.config.effective_min_N(cohort_size)
-        
-        # Use MethylCentroidPair for all mathematical operations
-        centroid_pair = MethylCentroidPair(min_coverage=effective_min_coverage)
-        
-        # Time the centroid comparison
-        import time
-        start_time = time.time()
-        logger.debug(f"Starting compare_centroids for single with {len(centroid1.pos):,} positions")
-        
-        # Get results as DataFrame (always)
-        comparison_results = centroid_pair.compare_centroids(centroid1, centroid2)
-        processing_time_seconds = time.time() - start_time
-        logger.info(f"compare_centroids completed in {processing_time_seconds:.2f}s for single")
-        logger.debug(f"DataFrame shape: {comparison_results.shape}")
-        
-        # Apply statistical filtering: keep only q_value <= alpha
-        import numpy as np
-        total_positions = len(comparison_results)
-        filtered_results = comparison_results[comparison_results['q_value'] <= self.config.alpha].copy()
-        statistical_dmps_count = len(filtered_results)
-        logger.info(f"📊 Statistical filtering for single: {statistical_dmps_count:,} significant DMPs (q≤{self.config.alpha}) out of {total_positions:,} positions ({(statistical_dmps_count/total_positions)*100:.1f}% pass rate)")
-        
-        # Already have DataFrame, just compute missing metrics
-        dmp_df = self._compute_missing_metrics_df(filtered_results)
-        # Extract chromosome and context from centroid filename
-        chrom_info = get_chromosome_context_from_filename(self.config.centroid1_path)
-        chromosome = chrom_info.get('chromosome', 'unknown')
-        context = chrom_info.get('context', 'unknown')
-        dmp_df['chromosome'] = chromosome
-        dmp_df['context'] = context
-        # Store metadata for later use
-        self.chrom = chromosome
-        self.ctx = context
-        self.total_positions = total_positions
-        self.statistical_dmps_count = statistical_dmps_count
-        self.processing_time_seconds = processing_time_seconds
-        return dmp_df
-    
     def _detect_statistical_dmps_for_context(
         self, 
         centroid1_path: Path, 
@@ -560,18 +326,36 @@ class MethylDetector:
                 w_c = S.mean() if len(S) > 0 else 0.0
             
             weight_map[context] = w_c
-            logger.debug(f"Context {context}: trimmed mean = {w_c:.6f} "
-                        f"(n_trimmed={len(S_trimmed)}, n_total={len(S)})")
         
         # Normalize weights to sum=1
         total_weight = sum(weight_map.values())
         if total_weight > 0:
+            # Compute raw (unnormalized) weights for logging
+            raw_weights = weight_map.copy()
             weight_map = {k: v / total_weight for k, v in weight_map.items()}
         else:
             # Fallback to equal weights if all zeros
             n_contexts = len(weight_map)
             weight_map = {k: 1.0 / n_contexts for k in weight_map.keys()}
             logger.warning("All context weights are zero, using equal weights")
+            raw_weights = weight_map.copy()
+        
+        # Log summary table showing why weights differ
+        logger.info("")
+        logger.info("="*60)
+        logger.info("Context Weighting Summary (Trimmed-Mean Normalization):")
+        logger.info("="*60)
+        logger.info(f"{'Context':<10} {'N_DMPs':>10} {'Mean_EffectSize':>16} {'Weight':>10}")
+        logger.info("-" * 50)
+        for ctx in sorted(weight_map.keys()):
+            n_dmps = len(dmps_df[dmps_df['context'] == ctx])
+            logger.info(f"{ctx:<10} {n_dmps:>10,} {raw_weights[ctx]:>16.4f} {weight_map[ctx]:>10.4f}")
+        logger.info("-" * 50)
+        logger.info("Note: Weights based on average effect size (|delta_mean|) after")
+        logger.info("      trimming top/bottom 10%. Higher weight = stronger methylation")
+        logger.info("      differences on average, NOT necessarily more biological importance.")
+        logger.info("="*60)
+        logger.info("")
         
         # Map weights to DataFrame
         dmps_df['context_weight'] = dmps_df['context'].map(weight_map)
@@ -621,6 +405,803 @@ class MethylDetector:
         
         return bio_df
     
+    def _compute_biological_importance(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Compute biological importance score for multi-context DMPs.
+        
+        Importance = weighted combination of:
+        - |delta_mean|: effect size (normalized)
+        - (1 - overlap): distribution separation (normalized)
+        - context_weight: context importance
+        
+        Args:
+            dmps_df: DataFrame with DMPs
+            
+        Returns:
+            DataFrame with added 'importance' column, sorted by importance (descending)
+        """
+        df = dmps_df.copy()
+        
+        # Ensure required columns exist
+        if 'effect_size' not in df.columns and 'delta_mean' in df.columns:
+            df['effect_size'] = np.abs(df['delta_mean'])
+        
+        # Normalize delta_mean to [0, 1]
+        delta_max = np.abs(df['delta_mean']).max()
+        if delta_max > 0:
+            delta_norm = np.abs(df['delta_mean']) / delta_max
+        else:
+            delta_norm = np.zeros(len(df))
+        
+        # Normalize (1 - overlap) to [0, 1] - higher is better
+        if 'overlap' in df.columns:
+            overlap_max = (1 - df['overlap']).max()
+            if overlap_max > 0:
+                overlap_norm = (1 - df['overlap']) / overlap_max
+            else:
+                overlap_norm = np.zeros(len(df))
+        else:
+            overlap_norm = np.ones(len(df))  # Default if not available
+        
+        # Use context_weight as third component (already normalized)
+        if 'context_weight' in df.columns:
+            context_norm = df['context_weight']
+        else:
+            context_norm = np.ones(len(df))
+        
+        # Combined importance (equal weighting of three components)
+        df['importance'] = (delta_norm + overlap_norm + context_norm) / 3.0
+        
+        # Sort by importance (descending)
+        df = df.sort_values('importance', ascending=False).reset_index(drop=True)
+        
+        return df
+    
+    def _get_validation_samples(
+        self,
+        config_samples: Optional[Union[str, List[str]]],
+        centroid_dir: Optional[str],
+        centroid_name: str
+    ) -> List[str]:
+        """
+        Get validation sample paths from config or centroid metadata.
+        
+        Args:
+            config_samples: Config value - can be "use_metadata", a list of paths, or None
+            centroid_dir: Directory containing centroids
+            centroid_name: Name of centroid for logging (e.g., "centroid1")
+            
+        Returns:
+            List of validation sample paths
+        """
+        from pathlib import Path
+        
+        # If config explicitly provides a list, use it
+        if isinstance(config_samples, list):
+            logger.debug(f"Using {len(config_samples)} validation samples from config for {centroid_name}")
+            return config_samples
+        
+        # If config says "use_metadata", read from centroid
+        if config_samples == "use_metadata":
+            try:
+                # Load first context to get metadata
+                if centroid_dir:
+                    first_ctx = self.config.contexts[0] if hasattr(self.config, 'contexts') else 'CG'
+                    centroid_path = Path(centroid_dir) / f"{self.config.chromosome}-{first_ctx}.h5"
+                    
+                    if centroid_path.exists():
+                        centroid = MethylSample.load_from_h5(str(centroid_path))
+                        if centroid.metadata and 'sample_paths' in centroid.metadata:
+                            samples = centroid.metadata['sample_paths']
+                            logger.info(f"✅ Loaded {len(samples)} validation samples from {centroid_name} metadata")
+                            return samples
+                        else:
+                            logger.warning(f"No sample_paths in {centroid_name} metadata")
+                    else:
+                        logger.warning(f"Centroid file not found: {centroid_path}")
+            except Exception as e:
+                logger.warning(f"Failed to read validation samples from {centroid_name} metadata: {e}")
+        
+        return []
+    
+    def _generate_synthetic_validation_samples(
+        self,
+        dmps_df: pd.DataFrame
+    ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+        """
+        Generate synthetic validation samples from Beta distributions.
+        
+        Args:
+            dmps_df: DataFrame with DMPs including alpha1, beta1, alpha2, beta2
+            
+        Returns:
+            Tuple of (X_calib, y_calib, X_test, y_test, positions, contexts)
+        """
+        try:
+            from scipy.stats import beta as beta_dist
+            
+            n_samples_per_class = self.config.n_validation_samples
+            
+            # Extract DMP parameters
+            positions = dmps_df['position'].values
+            contexts = dmps_df['context'].values
+            alpha1 = dmps_df['alpha1'].values
+            beta1 = dmps_df['beta1'].values
+            alpha2 = dmps_df['alpha2'].values
+            beta2 = dmps_df['beta2'].values
+            
+            n_positions = len(positions)
+            
+            logger.info(f"Generating {n_samples_per_class} synthetic samples per class from {n_positions:,} DMPs...")
+            
+            # Generate class 1 (healthy) samples
+            X_class1 = np.zeros((n_samples_per_class, n_positions))
+            for i in range(n_positions):
+                # Sample from Beta(alpha1, beta1)
+                X_class1[:, i] = beta_dist.rvs(alpha1[i], beta1[i], size=n_samples_per_class, random_state=self.config.random_state + i)
+            
+            # Generate class 2 (cancer) samples
+            X_class2 = np.zeros((n_samples_per_class, n_positions))
+            for i in range(n_positions):
+                # Sample from Beta(alpha2, beta2)
+                X_class2[:, i] = beta_dist.rvs(alpha2[i], beta2[i], size=n_samples_per_class, random_state=self.config.random_state + n_positions + i)
+            
+            # Combine classes
+            X_all = np.vstack([X_class1, X_class2])
+            y_all = np.concatenate([np.zeros(n_samples_per_class, dtype=int), np.ones(n_samples_per_class, dtype=int)])
+            
+            # Split into calibration (70%) and test (30%)
+            n_total = len(X_all)
+            n_calib = int(n_total * 0.7)
+            
+            # Stratified split
+            np.random.seed(self.config.random_state)
+            indices = np.arange(n_total)
+            np.random.shuffle(indices)
+            
+            calib_indices = indices[:n_calib]
+            test_indices = indices[n_calib:]
+            
+            X_calib, y_calib = X_all[calib_indices], y_all[calib_indices]
+            X_test, y_test = X_all[test_indices], y_all[test_indices]
+            
+            logger.info(f"✅ Generated {len(X_all)} synthetic samples")
+            logger.info(f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test")
+            
+            return X_calib, y_calib, X_test, y_test, positions, contexts
+            
+        except Exception as e:
+            logger.error(f"Failed to generate synthetic samples: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _load_validation_samples_multicontext(
+        self,
+        dmps_df: pd.DataFrame
+    ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+        """
+        Load validation samples for multi-context binary search.
+        
+        Returns:
+            Tuple of (X, y, positions, contexts) or None if loading fails
+            - X: methylation matrix (n_samples x n_positions)
+            - y: labels (0 for class1, 1 for class2)
+            - positions: genomic positions
+            - contexts: methylation contexts
+        """
+        try:
+            from pathlib import Path
+            
+            # Get validation sample paths from config or centroid metadata
+            class1_paths = self._get_validation_samples(
+                self.config.centroid1_validation_samples,
+                self.config.centroid1_dir,
+                "centroid1"
+            )
+            class2_paths = self._get_validation_samples(
+                self.config.centroid2_validation_samples,
+                self.config.centroid2_dir,
+                "centroid2"
+            )
+            
+            if not class1_paths and not class2_paths:
+                logger.warning("No validation samples specified")
+                return None
+            
+            logger.info(f"Loading {len(class1_paths)} healthy + {len(class2_paths)} cancer validation samples...")
+            
+            # Extract positions and contexts from DMPs
+            dmp_positions = dmps_df['position'].values
+            dmp_contexts = dmps_df['context'].values
+            
+            # Create methylation matrix
+            all_sample_paths = [(p, 0) for p in class1_paths] + [(p, 1) for p in class2_paths]
+            n_samples = len(all_sample_paths)
+            n_positions = len(dmp_positions)
+            X = np.zeros((n_samples, n_positions))
+            y = np.zeros(n_samples, dtype=int)
+            
+            # Load each sample and extract methylation values - VECTORIZED
+            successful_samples = 0
+            for i, (sample_path, label) in enumerate(all_sample_paths):
+                try:
+                    sample_dir = Path(sample_path)
+                    
+                    # Load samples for all needed contexts for this sample
+                    # Group DMP positions by context for vectorized extraction
+                    context_groups = {}
+                    for ctx in np.unique(dmp_contexts):
+                        # Get indices of DMPs with this context
+                        ctx_mask = dmp_contexts == ctx
+                        context_groups[ctx] = {
+                            'indices': np.where(ctx_mask)[0],
+                            'positions': dmp_positions[ctx_mask]
+                        }
+                        
+                        # Determine the H5 file for this context
+                        if sample_dir.suffix == '.h5':
+                            h5_file = sample_dir
+                        else:
+                            h5_file = sample_dir / f"{self.config.chromosome}-{ctx}.h5"
+                        
+                        if h5_file.exists():
+                            try:
+                                # Load sample for this context
+                                context_sample = MethylSample.load_from_h5(str(h5_file))
+                                
+                                # Vectorized position lookup using searchsorted
+                                # Assumes positions are sorted (which they usually are in H5 files)
+                                if not np.all(np.diff(context_sample.pos) >= 0):
+                                    # Not sorted, use slower but safe method
+                                    sort_idx = np.argsort(context_sample.pos)
+                                    sorted_pos = context_sample.pos[sort_idx]
+                                    sorted_mC = context_sample.mC[sort_idx]
+                                    sorted_uC = context_sample.uC[sort_idx]
+                                else:
+                                    sorted_pos = context_sample.pos
+                                    sorted_mC = context_sample.mC
+                                    sorted_uC = context_sample.uC
+                                
+                                # Find positions using searchsorted (O(log n) per position)
+                                search_indices = np.searchsorted(sorted_pos, context_groups[ctx]['positions'])
+                                
+                                # Validate found positions
+                                valid_mask = (search_indices < len(sorted_pos)) & (sorted_pos[search_indices] == context_groups[ctx]['positions'])
+                                
+                                # Extract methylation fractions vectorized
+                                mC_vals = np.where(valid_mask, sorted_mC[search_indices], 0)
+                                uC_vals = np.where(valid_mask, sorted_uC[search_indices], 0)
+                                total_vals = mC_vals + uC_vals
+                                
+                                # Compute methylation fractions, handling division by zero
+                                with np.errstate(divide='ignore', invalid='ignore'):
+                                    meth_fractions = np.where(total_vals > 0, mC_vals / total_vals, np.nan)
+                                meth_fractions = np.where(valid_mask, meth_fractions, np.nan)
+                                
+                                # Assign to X matrix
+                                X[i, context_groups[ctx]['indices']] = meth_fractions
+                                
+                            except Exception as e:
+                                logger.debug(f"Failed to load {h5_file}: {e}")
+                                X[i, context_groups[ctx]['indices']] = np.nan
+                        else:
+                            X[i, context_groups[ctx]['indices']] = np.nan
+                    
+                    y[i] = label
+                    successful_samples += 1
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to load sample {sample_path}: {e}")
+                    # Fill with NaN
+                    X[i, :] = np.nan
+                    y[i] = label
+            
+            if successful_samples == 0:
+                logger.error("No validation samples could be loaded")
+                return None
+            
+            logger.debug(f"Loaded validation data: X shape={X.shape}, y shape={y.shape}, successful={successful_samples}/{n_samples}")
+            
+            return X, y, dmp_positions, dmp_contexts
+            
+        except Exception as e:
+            logger.error(f"Failed to load validation samples: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _validate_classifier_subset(
+        self,
+        dmps_subset: pd.DataFrame,
+        X_calib: np.ndarray,
+        y_calib: np.ndarray,
+        X_test: np.ndarray,
+        y_test: np.ndarray,
+        all_positions: np.ndarray,
+        all_contexts: np.ndarray
+    ) -> dict:
+        """
+        Validate a DMP subset using BetaBinomialClassifier with proper train/test split.
+        
+        Args:
+            dmps_subset: Subset of DMPs to validate
+            X_calib: Calibration methylation matrix (for Platt fitting)
+            y_calib: Calibration labels
+            X_test: Test methylation matrix (for evaluation)
+            y_test: Test labels
+            all_positions: All validation positions
+            all_contexts: All validation contexts
+            
+        Returns:
+            Dictionary with balanced accuracy and metrics
+        """
+        try:
+            # Get positions for this subset
+            subset_positions = dmps_subset['position'].values
+            subset_contexts = dmps_subset['context'].values
+            
+            # Find indices in validation data - VECTORIZED
+            subset_indices = []
+            for pos, ctx in zip(subset_positions, subset_contexts):
+                matches = np.where((all_positions == pos) & (all_contexts == ctx))[0]
+                if len(matches) > 0:
+                    subset_indices.append(matches[0])
+            
+            subset_indices = np.array(subset_indices)
+            
+            if len(subset_indices) == 0:
+                logger.warning(f"No matching positions found in validation data")
+                return {
+                    'balanced_accuracy': 0.5,
+                    'confusion_matrix': {'tp': 0, 'tn': 0, 'fp': 0, 'fn': 0},
+                    'metrics': {'sensitivity': 0.0, 'specificity': 0.0, 'accuracy': 0.0, 'precision': 0.0},
+                    'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0}
+                }
+            
+            # Extract subset of positions
+            X_calib_subset = X_calib[:, subset_indices]
+            X_test_subset = X_test[:, subset_indices]
+            
+            # Get the actual positions/contexts that matched (in order)
+            matched_positions = all_positions[subset_indices]
+            matched_contexts = all_contexts[subset_indices]
+            
+            # Create temporary classifier using ONLY the matched DMPs
+            matched_mask = np.isin(
+                [f"{p}_{c}" for p, c in zip(subset_positions, subset_contexts)],
+                [f"{p}_{c}" for p, c in zip(matched_positions, matched_contexts)]
+            )
+            dmps_for_classifier = dmps_subset[matched_mask].reset_index(drop=True)
+            
+            temp_classifier = BetaBinomialClassifier.from_dataframe(
+                dmps_for_classifier,
+                self.config.chromosome
+            )
+            
+            # PHASE 1: Fit Platt calibration using calibration set
+            depth = 100
+            calib_llrs = []
+            
+            for i in range(len(X_calib_subset)):
+                methylation_fractions = X_calib_subset[i]
+                valid_mask = ~np.isnan(methylation_fractions)
+                
+                if not np.any(valid_mask):
+                    calib_llrs.append(0.0)
+                    continue
+                
+                meth_valid = methylation_fractions[valid_mask]
+                m_counts = np.round(meth_valid * depth).astype(int)
+                u_counts = depth - m_counts
+                
+                result = temp_classifier.predict_sample(
+                    sample_positions=matched_positions[valid_mask],
+                    sample_contexts=matched_contexts[valid_mask],
+                    sample_m=m_counts,
+                    sample_u=u_counts
+                )
+                calib_llrs.append(result['chromosome_llr'])
+            
+            calib_llrs = np.array(calib_llrs)
+            
+            # Fit Platt calibration on calibration set
+            temp_classifier.fit_platt_calibration(calib_llrs, y_calib)
+            
+            # PHASE 2: Evaluate on held-out test set
+            y_pred = np.zeros(len(X_test_subset), dtype=int)
+            probabilities = []
+            
+            for i in range(len(X_test_subset)):
+                methylation_fractions = X_test_subset[i]
+                valid_mask = ~np.isnan(methylation_fractions)
+                
+                if not np.any(valid_mask):
+                    y_pred[i] = 0
+                    probabilities.append(0.5)
+                    continue
+                
+                meth_valid = methylation_fractions[valid_mask]
+                m_counts = np.round(meth_valid * depth).astype(int)
+                u_counts = depth - m_counts
+                
+                result = temp_classifier.predict_sample(
+                    sample_positions=matched_positions[valid_mask],
+                    sample_contexts=matched_contexts[valid_mask],
+                    sample_m=m_counts,
+                    sample_u=u_counts
+                )
+                
+                prob = result['probability']  # Now calibrated!
+                probabilities.append(prob)
+                
+                y_pred[i] = 1 if prob >= 0.5 else 0
+            
+            # Compute metrics on TEST set only
+            probabilities = np.array(probabilities)
+            
+            # Compute confusion matrix on TEST set
+            tp = np.sum((y_pred == 1) & (y_test == 1))
+            tn = np.sum((y_pred == 0) & (y_test == 0))
+            fp = np.sum((y_pred == 1) & (y_test == 0))
+            fn = np.sum((y_pred == 0) & (y_test == 1))
+            
+            # Compute balanced accuracy
+            n_pos = tp + fn
+            n_neg = tn + fp
+            
+            sensitivity = tp / n_pos if n_pos > 0 else 0.0
+            specificity = tn / n_neg if n_neg > 0 else 0.0
+            
+            balanced_accuracy = (sensitivity + specificity) / 2.0
+            
+            # Return both balanced accuracy and confusion matrix details
+            return {
+                'balanced_accuracy': balanced_accuracy,
+                'confusion_matrix': {
+                    'tp': int(tp), 'tn': int(tn), 'fp': int(fp), 'fn': int(fn)
+                },
+                'metrics': {
+                    'sensitivity': sensitivity,
+                    'specificity': specificity,
+                    'accuracy': (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0,
+                    'precision': tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                },
+                'counts': {
+                    'n_positive': int(n_pos),
+                    'n_negative': int(n_neg),
+                    'n_total': int(n_pos + n_neg)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Validation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'balanced_accuracy': 0.5,
+                'confusion_matrix': {'tp': 0, 'tn': 0, 'fp': 0, 'fn': 0},
+                'metrics': {'sensitivity': 0.0, 'specificity': 0.0, 'accuracy': 0.0, 'precision': 0.0},
+                'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0}
+            }
+    
+    def _select_dmps_binary_search_multicontext(self, bio_dmps_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Select optimal subset of DMPs using binary search for multi-context mode.
+        
+        Args:
+            bio_dmps_df: DataFrame of biologically filtered DMPs
+            
+        Returns:
+            DataFrame with optimal subset of DMPs
+        """
+        n_dmps = len(bio_dmps_df)
+        target_ba = self.config.target_balanced_accuracy
+        
+        logger.info(f"🔍 Binary search DMP selection: {n_dmps:,} candidates, target BA={target_ba:.3f}")
+        
+        if n_dmps == 0:
+            return bio_dmps_df
+        
+        # Compute importance scores and sort
+        logger.debug("Computing biological importance scores...")
+        sorted_df = self._compute_biological_importance(bio_dmps_df)
+        
+        # Load validation samples if in real mode
+        validation_data = None
+        if self.config.validation_mode == "real":
+            logger.info("📊 Loading validation samples for binary search...")
+            validation_data = self._load_validation_samples_multicontext(sorted_df)
+            if validation_data is not None:
+                X_val, y_val, val_positions, val_contexts = validation_data
+                logger.info(f"✅ Loaded {len(X_val)} validation samples with {len(val_positions)} positions")
+                
+                # Split validation set for proper evaluation (avoid data leakage)
+                # Use 70% for Platt calibration, 30% for testing
+                n_samples = len(X_val)
+                n_calib = int(n_samples * 0.7)
+                
+                # Stratified split to maintain class balance
+                idx_class0 = np.where(y_val == 0)[0]
+                idx_class1 = np.where(y_val == 1)[0]
+                
+                n_calib_class0 = int(len(idx_class0) * 0.7)
+                n_calib_class1 = int(len(idx_class1) * 0.7)
+                
+                np.random.seed(self.config.random_state)
+                calib_idx_class0 = np.random.choice(idx_class0, n_calib_class0, replace=False)
+                calib_idx_class1 = np.random.choice(idx_class1, n_calib_class1, replace=False)
+                
+                calib_indices = np.concatenate([calib_idx_class0, calib_idx_class1])
+                test_indices = np.array([i for i in range(n_samples) if i not in calib_indices])
+                
+                X_calib, y_calib = X_val[calib_indices], y_val[calib_indices]
+                X_test, y_test = X_val[test_indices], y_val[test_indices]
+                
+                logger.info(f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test")
+                
+                # Store both sets for binary search
+                validation_data = (X_calib, y_calib, X_test, y_test, val_positions, val_contexts)
+            else:
+                logger.warning("Failed to load validation samples, falling back to all DMPs")
+                return sorted_df
+        else:
+            # Synthetic validation mode
+            logger.info("📊 Generating synthetic validation samples from Beta distributions...")
+            validation_data = self._generate_synthetic_validation_samples(sorted_df)
+            if validation_data is None:
+                logger.warning("Failed to generate synthetic samples, using all DMPs")
+                return sorted_df
+        
+        # Binary search for optimal k
+        low, high = max(10, self.config.min_selected_dmps or 10), n_dmps
+        best_k = n_dmps
+        best_ba = 0.0
+        
+        logger.info(f"Binary search range: {low}-{high}")
+        
+        # Unpack validation data (now includes calibration split)
+        X_calib, y_calib, X_test, y_test, val_positions, val_contexts = validation_data
+        
+        iteration = 0
+        best_result = None
+        no_improvement_count = 0
+        
+        while low <= high:
+            mid = (low + high) // 2
+            test_subset = sorted_df.iloc[:mid]
+            
+            iteration += 1
+            logger.info(f"  Iteration {iteration}: Testing k={mid:,} DMPs...")
+            
+            import time
+            start_time = time.time()
+            result = self._validate_classifier_subset(
+                test_subset,
+                X_calib, y_calib,  # Use calibration set for Platt
+                X_test, y_test,    # Use test set for evaluation
+                val_positions, val_contexts
+            )
+            elapsed = time.time() - start_time
+            
+            ba = result['balanced_accuracy']
+            
+            # Track best result
+            if ba > best_ba:
+                best_ba = ba
+                best_k = mid
+                best_result = result
+                no_improvement_count = 0
+                logger.info(f"  → k={mid:,}: BA={ba:.6f} ✓ New best!")
+            else:
+                no_improvement_count += 1
+                logger.info(f"  → k={mid:,}: BA={ba:.6f}")
+            
+            if ba >= target_ba:
+                # Target achieved, try fewer DMPs
+                high = mid - 1
+            else:
+                # Need more DMPs, but check if we're making progress
+                if no_improvement_count >= 3:
+                    logger.info(f"  Stopping early: no improvement for {no_improvement_count} iterations")
+                    break
+                low = mid + 1
+        
+        # Apply min_dmps_for_export
+        original_k = best_k
+        best_k = max(best_k, self.config.min_dmps_for_export)
+        best_k = min(best_k, n_dmps)
+        
+        if best_k != original_k:
+            logger.info(f"Adjusting k from {original_k:,} to {best_k:,} (min_dmps_for_export={self.config.min_dmps_for_export:,})")
+        
+        # Final subset and validation
+        final_subset = sorted_df.iloc[:best_k]
+        final_result = self._validate_classifier_subset(
+            final_subset,
+            X_calib, y_calib,
+            X_test, y_test,
+            val_positions, val_contexts
+        )
+        
+        final_ba = final_result['balanced_accuracy']
+        cm = final_result['confusion_matrix']
+        metrics = final_result['metrics']
+        counts = final_result['counts']
+        
+        # Log final results with confusion matrix
+        logger.info("")
+        logger.info("="*60)
+        logger.info(f"✅ Binary Search Complete - Selected {best_k:,} DMPs")
+        logger.info("="*60)
+        logger.info(f"Balanced Accuracy: {final_ba:.4f}" + (" ✓ Target Achieved" if final_ba >= target_ba else f" (Target: {target_ba:.3f})"))
+        logger.info("")
+        logger.info("📊 Confusion Matrix:")
+        logger.info(f"                     Predicted")
+        logger.info(f"                Negative  Positive")
+        logger.info(f"  Actual Negative:  {cm['tn']:3d}      {cm['fp']:3d}      (Class 1: {counts['n_negative']} samples)")
+        logger.info(f"  Actual Positive:  {cm['fn']:3d}      {cm['tp']:3d}      (Class 2: {counts['n_positive']} samples)")
+        logger.info("")
+        logger.info("📈 Performance Metrics:")
+        logger.info(f"  Sensitivity (Recall):  {metrics['sensitivity']:.4f}  ({cm['tp']}/{counts['n_positive']} positives correctly identified)")
+        logger.info(f"  Specificity:           {metrics['specificity']:.4f}  ({cm['tn']}/{counts['n_negative']} negatives correctly identified)")
+        logger.info(f"  Precision (PPV):       {metrics['precision']:.4f}  ({cm['tp']}/{cm['tp']+cm['fp']} predicted positives were correct)")
+        logger.info(f"  Overall Accuracy:      {metrics['accuracy']:.4f}  ({cm['tp']+cm['tn']}/{counts['n_total']} total correct)")
+        logger.info("="*60)
+        logger.info("")
+        
+        # Store validation results for later use
+        self._final_validation_results = final_result
+        
+        # Optional: Differential Evolution optimization (if enabled)
+        if self.config.optimize_for_validation_accuracy and best_k < n_dmps:
+            logger.info("")
+            logger.info(f"🧬 Starting Differential Evolution optimization from k={best_k}...")
+            optimized_k = self._optimize_dmps_differential_evolution(
+                sorted_df, best_k, n_dmps,
+                X_calib, y_calib, X_test, y_test,
+                val_positions, val_contexts
+            )
+            
+            if optimized_k != best_k:
+                logger.info(f"📈 DE optimization: k={best_k:,} → k={optimized_k:,}")
+                final_subset = sorted_df.iloc[:optimized_k]
+                
+                # Re-validate final result
+                final_result = self._validate_classifier_subset(
+                    final_subset,
+                    X_calib, y_calib,
+                    X_test, y_test,
+                    val_positions, val_contexts
+                )
+                self._final_validation_results = final_result
+                logger.info(f"✅ Final BA after DE: {final_result['balanced_accuracy']:.4f}")
+            else:
+                logger.info(f"📊 DE optimization: k={best_k:,} is already optimal")
+        
+        return final_subset
+    
+    def _optimize_dmps_differential_evolution(
+        self,
+        sorted_df: pd.DataFrame,
+        start_k: int,
+        max_k: int,
+        X_calib: np.ndarray,
+        y_calib: np.ndarray,
+        X_test: np.ndarray,
+        y_test: np.ndarray,
+        val_positions: np.ndarray,
+        val_contexts: np.ndarray
+    ) -> int:
+        """
+        Optimize DMP count using Differential Evolution for global search.
+        
+        Args:
+            sorted_df: Sorted DMPs by importance
+            start_k: Starting k from binary search
+            max_k: Maximum k to consider
+            X_calib, y_calib: Calibration set for Platt
+            X_test, y_test: Test set for evaluation
+            val_positions, val_contexts: Validation data positions
+            
+        Returns:
+            Optimal k value
+        """
+        from scipy.optimize import differential_evolution
+        
+        logger.info(f"  Search range: k ∈ [10, {max_k:,}]")
+        logger.info(f"  Starting hint: k={start_k:,}")
+        
+        # Cache for performance evaluations
+        evaluation_cache = {}
+        
+        def objective_function(k_float):
+            """Minimize negative BA = maximize BA"""
+            k = int(round(k_float[0]))
+            k = max(10, min(k, max_k))
+            
+            # Check cache
+            if k in evaluation_cache:
+                return -evaluation_cache[k]  # Return negative (we minimize)
+            
+            # Evaluate this k
+            test_subset = sorted_df.iloc[:k]
+            result = self._validate_classifier_subset(
+                test_subset,
+                X_calib, y_calib,
+                X_test, y_test,
+                val_positions, val_contexts
+            )
+            ba = result['balanced_accuracy']
+            
+            # Cache result
+            evaluation_cache[k] = ba
+            
+            # Only log improvements or every 10th evaluation
+            if ba > max(evaluation_cache.values(), default=0) or len(evaluation_cache) % 10 == 0:
+                logger.info(f"    DE eval #{len(evaluation_cache)}: k={k:,} → BA={ba:.6f}")
+            
+            return -ba  # Minimize negative = maximize
+        
+        # Run Differential Evolution
+        logger.info(f"  Running DE (maxiter=30, popsize=10)...")
+        bounds = [(10, max_k)]
+        
+        result = differential_evolution(
+            objective_function,
+            bounds,
+            maxiter=30,
+            popsize=10,
+            tol=0.001,
+            seed=self.config.random_state,
+            strategy='best1bin',
+            workers=1
+        )
+        
+        optimal_k = int(round(result.x[0]))
+        optimal_ba = -result.fun
+        
+        logger.info(f"  ✅ DE complete: k={optimal_k:,}, BA={optimal_ba:.6f}")
+        logger.info(f"  DE stats: {result.nfev} evaluations, {result.nit} iterations, success={result.success}")
+        
+        return optimal_k
+    
+    def _save_validation_results(self):
+        """Save validation results to JSON file."""
+        import json
+        from datetime import datetime
+        
+        output_dir = Path(self.config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        results_path = output_dir / f"validation_results-{self.config.chromosome}.json"
+        
+        # Prepare results for JSON serialization
+        results = {
+            'chromosome': self.config.chromosome,
+            'timestamp': datetime.now().isoformat(),
+            'config': {
+                'target_balanced_accuracy': self.config.target_balanced_accuracy,
+                'validation_mode': self.config.validation_mode,
+                'min_dmps_for_export': self.config.min_dmps_for_export
+            },
+            'performance': {
+                'balanced_accuracy': self._final_validation_results['balanced_accuracy'],
+                'sensitivity': self._final_validation_results['metrics']['sensitivity'],
+                'specificity': self._final_validation_results['metrics']['specificity'],
+                'precision': self._final_validation_results['metrics']['precision'],
+                'accuracy': self._final_validation_results['metrics']['accuracy']
+            },
+            'confusion_matrix': self._final_validation_results['confusion_matrix'],
+            'sample_counts': self._final_validation_results['counts']
+        }
+        
+        # Save to JSON
+        with open(results_path, 'w') as f:
+            json.dump(results, f, indent=2)
+        
+        logger.info(f"💾 Saved validation results to {results_path}")
+    
     def _export_unified_csv(self, bio_dmps_df: pd.DataFrame) -> Path:
         """
         Export unified CSV with all contexts combined.
@@ -648,15 +1229,16 @@ class MethylDetector:
         # Filter to only columns that exist
         available_cols = [c for c in export_cols if c in bio_dmps_df.columns]
         
-        # Add delta_sign if possible
-        if 'mean1' in bio_dmps_df.columns and 'mean2' in bio_dmps_df.columns:
-            if 'delta_sign' not in bio_dmps_df.columns:
-                bio_dmps_df['delta_sign'] = np.sign(bio_dmps_df['mean1'] - bio_dmps_df['mean2'])
+        # Add delta_sign if possible - make explicit copy to avoid SettingWithCopyWarning
+        export_df = bio_dmps_df.copy()
+        if 'mean1' in export_df.columns and 'mean2' in export_df.columns:
+            if 'delta_sign' not in export_df.columns:
+                export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2'])
             if 'delta_sign' not in available_cols:
                 available_cols.insert(available_cols.index('delta_mean') + 1, 'delta_sign')
         
         # Export to CSV
-        bio_dmps_df[available_cols].to_csv(csv_path, index=False)
+        export_df[available_cols].to_csv(csv_path, index=False)
         
         logger.info(f"📁 Exported {len(bio_dmps_df):,} DMPs to {csv_path}")
         logger.info(f"📊 Columns: {', '.join(available_cols)}")

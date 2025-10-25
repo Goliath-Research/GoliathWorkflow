@@ -7,6 +7,27 @@ from typing import Optional, Dict, Any
 from pathlib import Path
 
 
+def stable_sigmoid(x: float) -> float:
+    """
+    Numerically stable sigmoid function.
+    
+    Avoids overflow by using different formulas for positive/negative inputs:
+    - If x >= 0: sigmoid(x) = 1 / (1 + exp(-x))
+    - If x < 0: sigmoid(x) = exp(x) / (1 + exp(x))
+    
+    Args:
+        x: Input value
+        
+    Returns:
+        sigmoid(x) in range [0, 1]
+    """
+    if x >= 0:
+        return 1.0 / (1.0 + np.exp(-x))
+    else:
+        exp_x = np.exp(x)
+        return exp_x / (1.0 + exp_x)
+
+
 class BetaBinomialClassifier:
     """
     Unified Beta-Binomial classifier for multi-context chromosome analysis.
@@ -69,6 +90,11 @@ class BetaBinomialClassifier:
         self.alpha2 = np.asarray(alpha2, dtype=np.float64)
         self.beta2 = np.asarray(beta2, dtype=np.float64)
         self.weights = np.asarray(weights, dtype=np.float64)
+        
+        # Platt calibration parameters (fitted from validation data)
+        self.platt_A = None
+        self.platt_B = None
+        self.is_calibrated = False
         
         # Validate shapes
         n = len(self.positions)
@@ -219,14 +245,25 @@ class BetaBinomialClassifier:
                 per_context_llr[ctx] = 0.0
             per_context_llr[ctx] += weighted_llr
         
-        # Compute probability using sigmoid
-        prob = 1.0 / (1.0 + np.exp(-llr_sum))
+        # Compute probability using numerically stable sigmoid
+        # Apply Platt calibration if available
+        if self.is_calibrated and hasattr(self, 'platt_A_normalized'):
+            # Normalize LLR then apply calibration
+            llr_normalized = (llr_sum - self.platt_llr_mean) / self.platt_llr_std
+            prob = stable_sigmoid(self.platt_A_normalized * llr_normalized + self.platt_B_normalized)
+        elif self.is_calibrated and self.platt_A is not None:
+            # Legacy: use denormalized parameters
+            prob = stable_sigmoid(self.platt_A * llr_sum + self.platt_B)
+        else:
+            # Uncalibrated sigmoid
+            prob = stable_sigmoid(llr_sum)
         
         return {
             'chromosome_llr': float(llr_sum),
             'probability': float(prob),
             'n_sites_used': n_used,
-            'per_context_llr': per_context_llr
+            'per_context_llr': per_context_llr,
+            'is_calibrated': self.is_calibrated
         }
     
     def predict_proba(self, sample) -> Dict[str, Any]:
@@ -276,6 +313,60 @@ class BetaBinomialClassifier:
             np.array(sample_m),
             np.array(sample_u)
         )
+    
+    def fit_platt_calibration(self, llrs: np.ndarray, y_true: np.ndarray):
+        """
+        Fit Platt calibration parameters from validation data.
+        
+        Platt scaling fits: P(y=1 | llr) = sigmoid(A * llr + B)
+        
+        Args:
+            llrs: Array of LLR values (chromosome_llr for each sample)
+            y_true: Array of true labels (0 or 1)
+        """
+        from scipy.optimize import minimize, Bounds
+        
+        # Normalize LLRs to improve numerical stability
+        llr_mean = np.mean(llrs)
+        llr_std = np.std(llrs)
+        if llr_std > 0:
+            llrs_normalized = (llrs - llr_mean) / llr_std
+        else:
+            llrs_normalized = llrs - llr_mean
+        
+        # Objective function: negative log-likelihood
+        def objective(params):
+            A, B = params
+            # Compute calibrated probabilities on normalized LLRs
+            probs = np.array([stable_sigmoid(A * llr_norm + B) for llr_norm in llrs_normalized])
+            # Avoid log(0)
+            probs = np.clip(probs, 1e-10, 1 - 1e-10)
+            # Negative log-likelihood
+            nll = -np.sum(y_true * np.log(probs) + (1 - y_true) * np.log(1 - probs))
+            return nll
+        
+        # Initial guess based on class balance
+        n_pos = np.sum(y_true == 1)
+        n_neg = np.sum(y_true == 0)
+        prior = n_pos / len(y_true)
+        
+        # Start with A=1 (no scaling on normalized), B from prior
+        initial_B = np.log(prior / (1 - prior)) if 0 < prior < 1 else 0.0
+        
+        # Use bounds to ensure reasonable parameters
+        bounds = Bounds(lb=[0.1, -10], ub=[10, 10])
+        result = minimize(objective, x0=[1.0, initial_B], method='L-BFGS-B', bounds=bounds)
+        
+        # Store normalized parameters (need to denormalize when predicting)
+        self.platt_A_normalized = result.x[0]
+        self.platt_B_normalized = result.x[1]
+        self.platt_llr_mean = llr_mean
+        self.platt_llr_std = llr_std if llr_std > 0 else 1.0
+        
+        # Denormalized parameters for backward compatibility
+        self.platt_A = self.platt_A_normalized / self.platt_llr_std
+        self.platt_B = self.platt_B_normalized - (self.platt_A_normalized * llr_mean / self.platt_llr_std)
+        self.is_calibrated = True
     
     def save(self, path: Path):
         """Save classifier to pickle file."""

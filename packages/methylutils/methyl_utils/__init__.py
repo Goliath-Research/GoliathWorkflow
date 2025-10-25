@@ -215,6 +215,9 @@ from .probabilistic_beta_classifier import (
     create_classifier_from_results
 )
 
+# Import Beta-Binomial Classifier (for multi-context analysis)
+from .beta_binomial_classifier import BetaBinomialClassifier
+
 # Import MethylCentroidPair for centroid comparison
 from .methyl_centroid_pair import MethylCentroidPair
 
@@ -348,6 +351,8 @@ __all__ = [
     # Probabilistic Beta Classifier
     "ProbabilisticBetaClassifier",
     "create_classifier_from_results",
+    # Beta-Binomial Classifier (multi-context)
+    "BetaBinomialClassifier",
     # MethylCentroidPair for centroid comparison
     "MethylCentroidPair",
     # Bayesian Classifier Trainer
