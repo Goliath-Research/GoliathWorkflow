@@ -953,110 +953,120 @@ class MethylDetector:
                 logger.warning("Failed to generate synthetic samples, using all DMPs")
                 return sorted_df
         
-        # Binary search for optimal k
-        low, high = max(10, self.config.min_selected_dmps or 10), n_dmps
-        best_k = n_dmps
-        best_ba = 0.0
-        
-        logger.info(f"Binary search range: {low}-{high}")
-        
         # Unpack validation data (now includes calibration split)
         X_calib, y_calib, X_test, y_test, val_positions, val_contexts = validation_data
         
-        iteration = 0
-        best_result = None
-        no_improvement_count = 0
-        
-        while low <= high:
-            mid = (low + high) // 2
-            test_subset = sorted_df.iloc[:mid]
+        # Binary search for optimal k (only for real validation - synthetic gives BA=1.0 everywhere)
+        if self.config.validation_mode == "real":
+            low, high = max(10, self.config.min_selected_dmps or 10), n_dmps
+            best_k = n_dmps
+            best_ba = 0.0
             
-            iteration += 1
-            logger.info(f"  Iteration {iteration}: Testing k={mid:,} DMPs...")
+            logger.info(f"Binary search range: {low}-{high}")
             
-            import time
-            start_time = time.time()
-            result = self._validate_classifier_subset(
-                test_subset,
-                X_calib, y_calib,  # Use calibration set for Platt
-                X_test, y_test,    # Use test set for evaluation
+            iteration = 0
+            best_result = None
+            no_improvement_count = 0
+            
+            while low <= high:
+                mid = (low + high) // 2
+                test_subset = sorted_df.iloc[:mid]
+                
+                iteration += 1
+                logger.info(f"  Iteration {iteration}: Testing k={mid:,} DMPs...")
+                
+                import time
+                start_time = time.time()
+                result = self._validate_classifier_subset(
+                    test_subset,
+                    X_calib, y_calib,
+                    X_test, y_test,
+                    val_positions, val_contexts
+                )
+                elapsed = time.time() - start_time
+                
+                ba = result['balanced_accuracy']
+                
+                # Track best result
+                if ba > best_ba:
+                    best_ba = ba
+                    best_k = mid
+                    best_result = result
+                    no_improvement_count = 0
+                    logger.info(f"  → k={mid:,}: BA={ba:.6f} ✓ New best!")
+                else:
+                    no_improvement_count += 1
+                    logger.info(f"  → k={mid:,}: BA={ba:.6f}")
+                
+                if ba >= target_ba:
+                    # Target achieved, try fewer DMPs
+                    high = mid - 1
+                else:
+                    # Need more DMPs, but check if we're making progress
+                    if no_improvement_count >= 3:
+                        logger.info(f"  Stopping early: no improvement for {no_improvement_count} iterations")
+                        break
+                    low = mid + 1
+            
+            # Apply min_dmps_for_export
+            original_k = best_k
+            best_k = max(best_k, self.config.min_dmps_for_export)
+            best_k = min(best_k, n_dmps)
+            
+            if best_k != original_k:
+                logger.info(f"Adjusting k from {original_k:,} to {best_k:,} (min_dmps_for_export={self.config.min_dmps_for_export:,})")
+            
+            # Final subset and validation
+            final_subset = sorted_df.iloc[:best_k]
+            final_result = self._validate_classifier_subset(
+                final_subset,
+                X_calib, y_calib,
+                X_test, y_test,
                 val_positions, val_contexts
             )
-            elapsed = time.time() - start_time
+        else:
+            # Synthetic mode: skip binary search (BA=1.0 everywhere), go straight to DE
+            logger.info("⏭️  Skipping binary search for synthetic validation (BA=1.0 trivially achievable)")
+            logger.info("   Proceeding directly to Differential Evolution optimization...")
+            best_k = n_dmps // 2  # Start DE from middle
+            best_ba = 1.0
+            final_result = None
+        
+        # Log results only if binary search ran (real mode)
+        if final_result is not None:
+            final_ba = final_result['balanced_accuracy']
+            cm = final_result['confusion_matrix']
+            metrics = final_result['metrics']
+            counts = final_result['counts']
             
-            ba = result['balanced_accuracy']
+            # Log final results with confusion matrix
+            logger.info("")
+            logger.info("="*60)
+            logger.info(f"✅ Binary Search Complete - Selected {best_k:,} DMPs")
+            logger.info("="*60)
+            logger.info(f"Balanced Accuracy: {final_ba:.4f}" + (" ✓ Target Achieved" if final_ba >= target_ba else f" (Target: {target_ba:.3f})"))
+            logger.info("")
+            logger.info("📊 Confusion Matrix:")
+            logger.info(f"                     Predicted")
+            logger.info(f"                Negative  Positive")
+            logger.info(f"  Actual Negative:  {cm['tn']:3d}      {cm['fp']:3d}      (Class 1: {counts['n_negative']} samples)")
+            logger.info(f"  Actual Positive:  {cm['fn']:3d}      {cm['tp']:3d}      (Class 2: {counts['n_positive']} samples)")
+            logger.info("")
+            logger.info("📈 Performance Metrics:")
+            logger.info(f"  Sensitivity (Recall):  {metrics['sensitivity']:.4f}  ({cm['tp']}/{counts['n_positive']} positives correctly identified)")
+            logger.info(f"  Specificity:           {metrics['specificity']:.4f}  ({cm['tn']}/{counts['n_negative']} negatives correctly identified)")
+            logger.info(f"  Precision (PPV):       {metrics['precision']:.4f}  ({cm['tp']}/{cm['tp']+cm['fp']} predicted positives were correct)")
+            logger.info(f"  Overall Accuracy:      {metrics['accuracy']:.4f}  ({cm['tp']+cm['tn']}/{counts['n_total']} total correct)")
+            logger.info("="*60)
+            logger.info("")
             
-            # Track best result
-            if ba > best_ba:
-                best_ba = ba
-                best_k = mid
-                best_result = result
-                no_improvement_count = 0
-                logger.info(f"  → k={mid:,}: BA={ba:.6f} ✓ New best!")
-            else:
-                no_improvement_count += 1
-                logger.info(f"  → k={mid:,}: BA={ba:.6f}")
-            
-            if ba >= target_ba:
-                # Target achieved, try fewer DMPs
-                high = mid - 1
-            else:
-                # Need more DMPs, but check if we're making progress
-                if no_improvement_count >= 3:
-                    logger.info(f"  Stopping early: no improvement for {no_improvement_count} iterations")
-                    break
-                low = mid + 1
-        
-        # Apply min_dmps_for_export
-        original_k = best_k
-        best_k = max(best_k, self.config.min_dmps_for_export)
-        best_k = min(best_k, n_dmps)
-        
-        if best_k != original_k:
-            logger.info(f"Adjusting k from {original_k:,} to {best_k:,} (min_dmps_for_export={self.config.min_dmps_for_export:,})")
-        
-        # Final subset and validation
-        final_subset = sorted_df.iloc[:best_k]
-        final_result = self._validate_classifier_subset(
-            final_subset,
-            X_calib, y_calib,
-            X_test, y_test,
-            val_positions, val_contexts
-        )
-        
-        final_ba = final_result['balanced_accuracy']
-        cm = final_result['confusion_matrix']
-        metrics = final_result['metrics']
-        counts = final_result['counts']
-        
-        # Log final results with confusion matrix
-        logger.info("")
-        logger.info("="*60)
-        logger.info(f"✅ Binary Search Complete - Selected {best_k:,} DMPs")
-        logger.info("="*60)
-        logger.info(f"Balanced Accuracy: {final_ba:.4f}" + (" ✓ Target Achieved" if final_ba >= target_ba else f" (Target: {target_ba:.3f})"))
-        logger.info("")
-        logger.info("📊 Confusion Matrix:")
-        logger.info(f"                     Predicted")
-        logger.info(f"                Negative  Positive")
-        logger.info(f"  Actual Negative:  {cm['tn']:3d}      {cm['fp']:3d}      (Class 1: {counts['n_negative']} samples)")
-        logger.info(f"  Actual Positive:  {cm['fn']:3d}      {cm['tp']:3d}      (Class 2: {counts['n_positive']} samples)")
-        logger.info("")
-        logger.info("📈 Performance Metrics:")
-        logger.info(f"  Sensitivity (Recall):  {metrics['sensitivity']:.4f}  ({cm['tp']}/{counts['n_positive']} positives correctly identified)")
-        logger.info(f"  Specificity:           {metrics['specificity']:.4f}  ({cm['tn']}/{counts['n_negative']} negatives correctly identified)")
-        logger.info(f"  Precision (PPV):       {metrics['precision']:.4f}  ({cm['tp']}/{cm['tp']+cm['fp']} predicted positives were correct)")
-        logger.info(f"  Overall Accuracy:      {metrics['accuracy']:.4f}  ({cm['tp']+cm['tn']}/{counts['n_total']} total correct)")
-        logger.info("="*60)
-        logger.info("")
-        
-        # Store validation results for later use
-        self._final_validation_results = final_result
+            # Store validation results for later use
+            self._final_validation_results = final_result
         
         # Optional: Differential Evolution optimization (if enabled)
         if self.config.optimize_for_validation_accuracy and best_k < n_dmps:
             logger.info("")
-            logger.info(f"🧬 Starting Differential Evolution optimization from k={best_k}...")
+            logger.info(f"🧬 Starting Differential Evolution optimization from k={best_k:,}...")
             optimized_k = self._optimize_dmps_differential_evolution(
                 sorted_df, best_k, n_dmps,
                 X_calib, y_calib, X_test, y_test,
@@ -1065,19 +1075,27 @@ class MethylDetector:
             
             if optimized_k != best_k:
                 logger.info(f"📈 DE optimization: k={best_k:,} → k={optimized_k:,}")
-                final_subset = sorted_df.iloc[:optimized_k]
-                
-                # Re-validate final result
-                final_result = self._validate_classifier_subset(
-                    final_subset,
-                    X_calib, y_calib,
-                    X_test, y_test,
-                    val_positions, val_contexts
-                )
-                self._final_validation_results = final_result
-                logger.info(f"✅ Final BA after DE: {final_result['balanced_accuracy']:.4f}")
+                best_k = optimized_k
             else:
                 logger.info(f"📊 DE optimization: k={best_k:,} is already optimal")
+            
+            # Always validate final result after DE
+            final_subset = sorted_df.iloc[:best_k]
+            final_result = self._validate_classifier_subset(
+                final_subset,
+                X_calib, y_calib,
+                X_test, y_test,
+                val_positions, val_contexts
+            )
+            self._final_validation_results = final_result
+            
+            # Log final DE results
+            final_ba = final_result['balanced_accuracy']
+            cm = final_result['confusion_matrix']
+            logger.info(f"✅ Final: k={best_k:,} DMPs, BA={final_ba:.4f}, TP={cm['tp']}, TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}")
+        else:
+            # No DE optimization, use binary search result
+            final_subset = sorted_df.iloc[:best_k]
         
         return final_subset
     
