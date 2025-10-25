@@ -29,8 +29,18 @@ from methyl_utils import MethylSample
 # Import MethylCentroidPair from MethylUtils for mathematical operations
 from methyl_utils import MethylCentroidPair
 
-# Import MethylTrainer for delegating training logic (required dependency)
-from methyl_trainer import MethylTrainer, TrainingConfig
+# Import Beta-Binomial classifier
+from .beta_binomial_classifier import BetaBinomialClassifier
+
+# Import MethylTrainer conditionally (only when needed)
+# This allows the module to be imported even if methyl_trainer is not available
+try:
+    from methyl_trainer import MethylTrainer, TrainingConfig
+    METHYL_TRAINER_AVAILABLE = True
+except ImportError:
+    MethylTrainer = None
+    TrainingConfig = None
+    METHYL_TRAINER_AVAILABLE = False
 
 # Handle relative imports - try module import first, fall back to direct execution setup
 try:
@@ -134,6 +144,105 @@ class MethylDetector:
     def run(self) -> MethylDetectorResult:
         """Run the complete DMP detection and filtering pipeline."""
         logger.debug("Starting MethylDetector analysis pipeline...")
+        
+        # Check if using multi-context mode or legacy single-context mode
+        use_multi_context = (
+            hasattr(self.config, 'chromosome') and 
+            hasattr(self.config, 'centroid1_dir') and
+            hasattr(self.config, 'centroid2_dir') and
+            self.config.centroid1_dir is not None and
+            self.config.centroid2_dir is not None
+        )
+        
+        if use_multi_context:
+            return self._run_multi_context()
+        else:
+            return self._run_single_context()
+    
+    def _run_multi_context(self) -> MethylDetectorResult:
+        """Run multi-context analysis (new unified approach)."""
+        logger.info(f"🧬 Starting multi-context analysis for chromosome {self.config.chromosome}")
+        logger.info(f"📍 Contexts: {', '.join(self.config.contexts)}")
+        
+        all_dmps = []  # List to collect DataFrames from each context
+        
+        # Loop over all contexts
+        for context in self.config.contexts:
+            logger.info(f"🔬 Processing context: {context}")
+            
+            # Build paths to centroid files
+            c1_path = Path(self.config.centroid1_dir) / f"{self.config.chromosome}-{context}.h5"
+            c2_path = Path(self.config.centroid2_dir) / f"{self.config.chromosome}-{context}.h5"
+            
+            # Check if files exist
+            if not c1_path.exists():
+                logger.warning(f"Centroid1 file not found: {c1_path}, skipping context {context}")
+                continue
+            if not c2_path.exists():
+                logger.warning(f"Centroid2 file not found: {c2_path}, skipping context {context}")
+                continue
+            
+            # Detect DMPs for this context
+            try:
+                dmp_df = self._detect_statistical_dmps_for_context(c1_path, c2_path, context)
+                logger.info(f"✅ Context {context}: {len(dmp_df):,} statistical DMPs detected")
+                all_dmps.append(dmp_df)
+            except Exception as e:
+                logger.error(f"❌ Context {context} failed: {e}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        if not all_dmps:
+            raise ValueError("No DMPs detected in any context")
+        
+        # Combine all contexts into single DataFrame
+        logger.info("📊 Combining all contexts into unified DataFrame...")
+        dmps_df = pd.concat(all_dmps, ignore_index=True)
+        logger.info(f"✅ Combined DataFrame: {len(dmps_df):,} total DMPs across {len(all_dmps)} contexts")
+        
+        # Compute context weights and add to DataFrame
+        if self.config.use_context_weights:
+            logger.info("⚖️  Computing context weights using trimmed-mean normalization...")
+            dmps_df = self._compute_context_weights(dmps_df)
+            
+            # Log weights
+            weight_summary = dmps_df.groupby('context')['context_weight'].first().to_dict()
+            for ctx, w in sorted(weight_summary.items()):
+                logger.info(f"  Context {ctx}: weight = {w:.4f}")
+        else:
+            # Equal weights
+            dmps_df['context_weight'] = 1.0 / len(self.config.contexts)
+            logger.info("Using equal context weights")
+        
+        # Filter biological DMPs (apply biological filters)
+        logger.info("🔬 Filtering biologically significant DMPs...")
+        bio_dmps_df = self._filter_biological_dmps(dmps_df)
+        logger.info(f"✅ Biological DMPs: {len(bio_dmps_df):,} (retention: {len(bio_dmps_df)/len(dmps_df)*100:.1f}%)")
+        
+        # Train Beta-Binomial classifier
+        logger.info("🤖 Training Beta-Binomial classifier...")
+        classifier = BetaBinomialClassifier.from_dataframe(bio_dmps_df, self.config.chromosome)
+        logger.info(f"✅ Classifier created: {classifier}")
+        
+        # Export unified CSV
+        if self.config.output_dir:
+            logger.info("💾 Exporting unified CSV...")
+            self._export_unified_csv(bio_dmps_df)
+            
+            # Save model
+            logger.info("💾 Saving classifier model...")
+            self._save_unified_model(classifier, bio_dmps_df)
+        
+        # Create result
+        result = self._create_multi_context_result(dmps_df, bio_dmps_df)
+        logger.info(f"✅ Multi-context analysis complete for chromosome {self.config.chromosome}!")
+        
+        return result
+    
+    def _run_single_context(self) -> MethylDetectorResult:
+        """Run legacy single-context analysis (backward compatibility)."""
+        logger.debug("Starting MethylDetector analysis pipeline (single-context mode)...")
 
         # Step 1: Detect statistical DMPs (DataFrame-centric)
         logger.debug("Step 1: Detecting statistical DMPs...")
@@ -345,6 +454,305 @@ class MethylDetector:
         self.statistical_dmps_count = statistical_dmps_count
         self.processing_time_seconds = processing_time_seconds
         return dmp_df
+    
+    def _detect_statistical_dmps_for_context(
+        self, 
+        centroid1_path: Path, 
+        centroid2_path: Path, 
+        context: str
+    ) -> pd.DataFrame:
+        """
+        Detect statistical DMPs for a specific context.
+        
+        Args:
+            centroid1_path: Path to centroid1 H5 file
+            centroid2_path: Path to centroid2 H5 file
+            context: Context string (e.g., "CG", "CHG", "CHH")
+            
+        Returns:
+            DataFrame with DMPs including chromosome and context columns
+        """
+        logger.debug(f"Processing centroids for context {context}...")
+        
+        # Load and align centroids
+        min_coverage = self.config.effective_min_N(10)  # Fallback cohort size
+        centroid1, centroid2, common_positions = MethylCentroidPair.load_and_align(
+            centroid1_path, 
+            centroid2_path, 
+            min_coverage=min_coverage
+        )
+        
+        # Determine cohort size
+        max_coverage = max(centroid1.N.max() if centroid1.N is not None else 0,
+                          centroid2.N.max() if centroid2.N is not None else 0)
+        cohort_size = max(max_coverage, 10)
+        effective_min_coverage = self.config.effective_min_N(cohort_size)
+        
+        # Create centroid pair for comparison
+        centroid_pair = MethylCentroidPair(min_coverage=effective_min_coverage)
+        
+        # Compare centroids
+        import time
+        start_time = time.time()
+        comparison_results = centroid_pair.compare_centroids(centroid1, centroid2)
+        processing_time = time.time() - start_time
+        
+        logger.info(f"Context {context}: Compared {len(comparison_results):,} positions in {processing_time:.2f}s")
+        
+        # Apply statistical filtering
+        total_positions = len(comparison_results)
+        filtered_results = comparison_results[comparison_results['q_value'] <= self.config.alpha].copy()
+        statistical_dmps_count = len(filtered_results)
+        
+        logger.info(f"Context {context}: {statistical_dmps_count:,} significant DMPs (q≤{self.config.alpha}) "
+                   f"out of {total_positions:,} ({(statistical_dmps_count/total_positions)*100:.1f}% pass rate)")
+        
+        # Compute missing metrics
+        dmp_df = self._compute_missing_metrics_df(filtered_results)
+        
+        # Add chromosome and context columns
+        dmp_df['chromosome'] = self.config.chromosome
+        dmp_df['context'] = context
+        
+        return dmp_df
+    
+    def _compute_context_weights(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Compute trimmed-mean context weights and add to DataFrame.
+        
+        Uses trimmed mean (removing top and bottom percentiles) to compute
+        robust average effect size per context, then normalizes to sum=1.
+        
+        Args:
+            dmps_df: DataFrame with 'context' and 'effect_size' columns
+            
+        Returns:
+            DataFrame with added 'context_weight' column
+        """
+        weight_map = {}
+        
+        # Use effect_size if available, otherwise delta_mean
+        if 'effect_size' in dmps_df.columns:
+            score_col = 'effect_size'
+        elif 'delta_mean' in dmps_df.columns:
+            score_col = 'delta_mean'
+            dmps_df['effect_size'] = np.abs(dmps_df['delta_mean'])  # Fallback
+            score_col = 'effect_size'
+        else:
+            raise ValueError("DataFrame must have 'effect_size' or 'delta_mean' column")
+        
+        # Compute trimmed mean per context
+        for context, group in dmps_df.groupby('context'):
+            S = group[score_col].values
+            
+            # Trim bottom and top percentiles
+            qlo = self.config.trimmed_percentile
+            qhi = 1.0 - self.config.trimmed_percentile
+            q_low, q_high = np.quantile(S, [qlo, qhi])
+            
+            # Keep only trimmed values
+            S_trimmed = S[(S >= q_low) & (S <= q_high)]
+            
+            # Compute mean (fallback to full mean if trimmed is empty)
+            if len(S_trimmed) > 0:
+                w_c = S_trimmed.mean()
+            else:
+                w_c = S.mean() if len(S) > 0 else 0.0
+            
+            weight_map[context] = w_c
+            logger.debug(f"Context {context}: trimmed mean = {w_c:.6f} "
+                        f"(n_trimmed={len(S_trimmed)}, n_total={len(S)})")
+        
+        # Normalize weights to sum=1
+        total_weight = sum(weight_map.values())
+        if total_weight > 0:
+            weight_map = {k: v / total_weight for k, v in weight_map.items()}
+        else:
+            # Fallback to equal weights if all zeros
+            n_contexts = len(weight_map)
+            weight_map = {k: 1.0 / n_contexts for k in weight_map.keys()}
+            logger.warning("All context weights are zero, using equal weights")
+        
+        # Map weights to DataFrame
+        dmps_df['context_weight'] = dmps_df['context'].map(weight_map)
+        
+        return dmps_df
+    
+    def _filter_biological_dmps(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Filter DMPs by biological significance criteria.
+        
+        Applies filters based on config settings:
+        - min_delta_mean: minimum absolute methylation difference
+        - max_bc: maximum Bhattacharyya coefficient (overlap)
+        - min_effect_size: minimum effect size threshold
+        
+        Args:
+            dmps_df: DataFrame with all DMPs
+            
+        Returns:
+            DataFrame with only biologically significant DMPs
+        """
+        bio_df = dmps_df.copy()
+        initial_count = len(bio_df)
+        
+        # Filter by delta_mean if configured
+        if 'delta_mean' in self.config.biological_filters and self.config.min_delta_mean > 0:
+            bio_df = bio_df[np.abs(bio_df['delta_mean']) >= self.config.min_delta_mean]
+            logger.info(f"After delta_mean filter (≥{self.config.min_delta_mean}): "
+                       f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
+        
+        # Filter by Bhattacharyya coefficient if configured
+        if 'bhattacharyya' in self.config.biological_filters and self.config.max_bc is not None:
+            if 'bhattacharyya_coefficient' in bio_df.columns:
+                bio_df = bio_df[bio_df['bhattacharyya_coefficient'] <= self.config.max_bc]
+                logger.info(f"After BC filter (≤{self.config.max_bc}): "
+                           f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
+            elif 'overlap' in bio_df.columns:
+                bio_df = bio_df[bio_df['overlap'] <= self.config.max_bc]
+                logger.info(f"After overlap filter (≤{self.config.max_bc}): "
+                           f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
+        
+        # Filter by effect size if configured
+        if self.config.min_effect_size is not None and 'effect_size' in bio_df.columns:
+            bio_df = bio_df[bio_df['effect_size'] >= self.config.min_effect_size]
+            logger.info(f"After effect_size filter (≥{self.config.min_effect_size}): "
+                       f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
+        
+        return bio_df
+    
+    def _export_unified_csv(self, bio_dmps_df: pd.DataFrame) -> Path:
+        """
+        Export unified CSV with all contexts combined.
+        
+        Args:
+            bio_dmps_df: DataFrame with biological DMPs
+            
+        Returns:
+            Path to exported CSV file
+        """
+        output_dir = Path(self.config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        csv_path = output_dir / f"dmps-{self.config.chromosome}.csv"
+        
+        # Define export columns (include all relevant data)
+        export_cols = [
+            'chromosome', 'context', 'position',
+            'p_value', 'q_value', 'delta_mean',
+            'overlap', 'effect_size', 'context_weight',
+            'alpha1', 'beta1', 'alpha2', 'beta2',
+            'mean1', 'mean2'
+        ]
+        
+        # Filter to only columns that exist
+        available_cols = [c for c in export_cols if c in bio_dmps_df.columns]
+        
+        # Add delta_sign if possible
+        if 'mean1' in bio_dmps_df.columns and 'mean2' in bio_dmps_df.columns:
+            if 'delta_sign' not in bio_dmps_df.columns:
+                bio_dmps_df['delta_sign'] = np.sign(bio_dmps_df['mean1'] - bio_dmps_df['mean2'])
+            if 'delta_sign' not in available_cols:
+                available_cols.insert(available_cols.index('delta_mean') + 1, 'delta_sign')
+        
+        # Export to CSV
+        bio_dmps_df[available_cols].to_csv(csv_path, index=False)
+        
+        logger.info(f"📁 Exported {len(bio_dmps_df):,} DMPs to {csv_path}")
+        logger.info(f"📊 Columns: {', '.join(available_cols)}")
+        
+        # Log per-context counts
+        context_counts = bio_dmps_df.groupby('context').size()
+        for ctx, count in context_counts.items():
+            logger.info(f"  {ctx}: {count:,} DMPs")
+        
+        return csv_path
+    
+    def _save_unified_model(self, classifier: BetaBinomialClassifier, bio_dmps_df: pd.DataFrame):
+        """
+        Save unified Beta-Binomial classifier model.
+        
+        Args:
+            classifier: BetaBinomialClassifier instance
+            bio_dmps_df: DataFrame with biological DMPs
+        """
+        output_dir = Path(self.config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        model_path = output_dir / f"classifier-{self.config.chromosome}.pkl"
+        
+        # Create model package
+        import pickle
+        model_package = {
+            'classifier': classifier,
+            'context_weights_summary': bio_dmps_df.groupby('context')['context_weight'].first().to_dict(),
+            'chromosome': self.config.chromosome,
+            'n_dmps': len(bio_dmps_df),
+            'n_dmps_per_context': bio_dmps_df.groupby('context').size().to_dict(),
+            'metadata': {
+                'version': '2.0.0',
+                'classifier_type': 'BetaBinomialClassifier',
+                'config': self.config.model_dump(),
+                'trimmed_percentile': self.config.trimmed_percentile,
+            }
+        }
+        
+        # Save to pickle
+        with open(model_path, 'wb') as f:
+            pickle.dump(model_package, f)
+        
+        logger.info(f"💾 Saved model to {model_path}")
+        logger.info(f"📦 Model package includes:")
+        logger.info(f"  - Classifier: {classifier}")
+        logger.info(f"  - Context weights: {model_package['context_weights_summary']}")
+        logger.info(f"  - Total DMPs: {model_package['n_dmps']}")
+        logger.info(f"  - DMPs per context: {model_package['n_dmps_per_context']}")
+    
+    def _create_multi_context_result(
+        self, 
+        dmps_df: pd.DataFrame, 
+        bio_dmps_df: pd.DataFrame
+    ) -> MethylDetectorResult:
+        """
+        Create result object for multi-context analysis.
+        
+        Args:
+            dmps_df: DataFrame with all statistical DMPs
+            bio_dmps_df: DataFrame with biological DMPs
+            
+        Returns:
+            MethylDetectorResult
+        """
+        # Compute per-context statistics
+        comparison_stats = []
+        for context in self.config.contexts:
+            ctx_dmps = dmps_df[dmps_df['context'] == context]
+            ctx_bio = bio_dmps_df[bio_dmps_df['context'] == context]
+            
+            if len(ctx_dmps) > 0:
+                stats = ComparisonStats(
+                    comparison_name=f"{self.config.chromosome}-{context}",
+                    total_positions=len(ctx_dmps),
+                    statistical_dmps=len(ctx_dmps),
+                    biological_dmps=len(ctx_bio),
+                    processing_time_seconds=0.0,  # TODO: track per-context timing
+                    gpu_used=self.gpu_config.GPU_AVAILABLE
+                )
+                comparison_stats.append(stats)
+        
+        # Create result
+        result = MethylDetectorResult(
+            biologically_significant_dmps_df=bio_dmps_df,
+            total_statistical_dmps=len(dmps_df),
+            total_biological_dmps=len(bio_dmps_df),
+            biological_retention_rate=len(bio_dmps_df) / max(1, len(dmps_df)),
+            comparison_stats=comparison_stats,
+            timestamp=datetime.now().isoformat(),
+            version="2.0.0-multi-context",
+            config_summary=self.config.model_dump()
+        )
+        
+        return result
 
 
     def _structured_array_to_dmp_df(self, structured_array: np.ndarray) -> pd.DataFrame:

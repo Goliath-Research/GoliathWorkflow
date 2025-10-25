@@ -11,12 +11,28 @@ class MethylDetectorConfig(BaseModel):
     # ----------------
     # Input/Output
     # ----------------
-    centroid1_path: Union[str, Path] = Field(
-        ..., description="Path to first extended centroid .h5 file"
+    chromosome: str = Field(
+        ..., description="Chromosome to process (e.g., '1', 'X', '22')"
     )
-    centroid2_path: Union[str, Path] = Field(
-        ..., description="Path to second extended centroid .h5 file"
+    contexts: List[str] = Field(
+        default=["CG", "CHG", "CHH"],
+        description="List of methylation contexts to process"
     )
+    centroid1_dir: Union[str, Path] = Field(
+        ..., description="Directory containing centroid1 .h5 files (format: {chrom}-{context}.h5)"
+    )
+    centroid2_dir: Union[str, Path] = Field(
+        ..., description="Directory containing centroid2 .h5 files (format: {chrom}-{context}.h5)"
+    )
+    
+    # Backward compatibility: allow old centroid paths (optional)
+    centroid1_path: Optional[Union[str, Path]] = Field(
+        default=None, description="[Deprecated] Path to single centroid .h5 file (for single-context mode)"
+    )
+    centroid2_path: Optional[Union[str, Path]] = Field(
+        default=None, description="[Deprecated] Path to single centroid .h5 file (for single-context mode)"
+    )
+    
     output_dir: Optional[Union[str, Path]] = Field(
         default=None, description="Output directory for results"
     )
@@ -84,6 +100,22 @@ class MethylDetectorConfig(BaseModel):
         default=["delta_mean", "bhattacharyya"],
         description="List of biological filters to apply: 'delta_mean' filters by effect size, 'bhattacharyya' filters by distribution separation (Bhattacharyya Distance)"
     )
+    
+    # ----------------
+    # Context Weighting
+    # ----------------
+    use_context_weights: bool = Field(
+        default=True,
+        description="Enable trimmed-mean context weighting for multi-context analysis"
+    )
+    trimmed_percentile: float = Field(
+        default=0.10, ge=0.0, le=0.5,
+        description="Percentile for trimmed mean (e.g., 0.10 = trim bottom 10% and top 10%)"
+    )
+    export_all_biological_dmps: bool = Field(
+        default=True,
+        description="Export all biologically significant DMPs instead of just minimum for target accuracy"
+    )
 
     # ----------------
     # DMP Selection
@@ -150,15 +182,35 @@ class MethylDetectorConfig(BaseModel):
     # -----------------
     # Validators / Utils
     # -----------------
+    @field_validator('centroid1_dir', 'centroid2_dir')
+    @classmethod
+    def validate_centroid_dirs(cls, v):
+        if v is not None:
+            path = Path(v)
+            if not path.exists():
+                raise ValueError(f"Centroid directory does not exist: {path}")
+            if not path.is_dir():
+                raise ValueError(f"Centroid path must be a directory: {path}")
+        return path
+    
     @field_validator('centroid1_path', 'centroid2_path')
     @classmethod
     def validate_centroid_paths(cls, v):
-        path = Path(v)
-        if not path.exists():
-            raise ValueError(f"Centroid file does not exist: {path}")
-        if path.suffix != '.h5':
-            raise ValueError(f"Centroid file must be .h5 format: {path}")
+        if v is not None:
+            path = Path(v)
+            if not path.exists():
+                raise ValueError(f"Centroid file does not exist: {path}")
+            if path.suffix != '.h5':
+                raise ValueError(f"Centroid file must be .h5 format: {path}")
         return path
+    
+    @field_validator('chromosome')
+    @classmethod
+    def validate_chromosome(cls, v):
+        valid_chroms = [str(i) for i in range(1, 23)] + ['X', 'Y', 'M', 'MT']
+        if v not in valid_chroms:
+            raise ValueError(f"Chromosome must be one of: {valid_chroms}, got: {v}")
+        return v
 
     @field_validator('output_dir')
     @classmethod
