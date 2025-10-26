@@ -1,7 +1,7 @@
 {
   "centroid1_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/centroids/pb-healthy/6-CHG.h5",
   "centroid2_path": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/centroids/pb-cancer-2/6-CHG.h5",
-  "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-hc-2_G",
+  "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-hc2_G",
   "alpha": 0.01,
   "min_delta_mean": 0.2,
   "max_bc": 0.5,
