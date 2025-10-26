@@ -158,6 +158,10 @@ class MethylDetectorConfig(BaseModel):
         default=None,
         description="Validation samples for centroid2. Can be 'use_metadata' to read from centroid metadata, or list of sample directory paths"
     )
+    validation_split_ratio: float = Field(
+        default=0.0, ge=0.0, le=0.9,
+        description="Ratio of validation samples to hold out for testing during optimization (0.0-0.9). If 0.0, uses all samples for Platt calibration without splitting. If >0, splits into calibration and test sets to avoid overfitting during binary search/DE. Set to 0.0 if you have a separate independent test set."
+    )
     
     # ----------------
     # System Settings

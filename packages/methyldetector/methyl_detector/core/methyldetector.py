@@ -550,23 +550,31 @@ class MethylDetector:
             X_all = np.vstack([X_class1, X_class2])
             y_all = np.concatenate([np.zeros(n_samples_per_class, dtype=int), np.ones(n_samples_per_class, dtype=int)])
             
-            # Split into calibration (70%) and test (30%)
-            n_total = len(X_all)
-            n_calib = int(n_total * 0.7)
-            
-            # Stratified split
-            np.random.seed(self.config.random_state)
-            indices = np.arange(n_total)
-            np.random.shuffle(indices)
-            
-            calib_indices = indices[:n_calib]
-            test_indices = indices[n_calib:]
-            
-            X_calib, y_calib = X_all[calib_indices], y_all[calib_indices]
-            X_test, y_test = X_all[test_indices], y_all[test_indices]
-            
             logger.info(f"✅ Generated {len(X_all)} synthetic samples")
-            logger.info(f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test")
+            
+            # Split based on config
+            if self.config.validation_split_ratio > 0:
+                # Split for evaluation during optimization
+                n_total = len(X_all)
+                test_ratio = self.config.validation_split_ratio
+                n_test = int(n_total * test_ratio)
+                
+                np.random.seed(self.config.random_state)
+                indices = np.arange(n_total)
+                np.random.shuffle(indices)
+                
+                test_indices = indices[:n_test]
+                calib_indices = indices[n_test:]
+                
+                X_calib, y_calib = X_all[calib_indices], y_all[calib_indices]
+                X_test, y_test = X_all[test_indices], y_all[test_indices]
+                
+                logger.info(f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test (split_ratio={test_ratio})")
+            else:
+                # No split: use all for calibration
+                X_calib, y_calib = X_all, y_all
+                X_test, y_test = X_all, y_all
+                logger.info(f"   Using all {len(X_all)} samples for calibration (no split)")
             
             return X_calib, y_calib, X_test, y_test, positions, contexts
             
@@ -826,29 +834,38 @@ class MethylDetector:
                 X_val, y_val, val_positions, val_contexts = validation_data
                 logger.info(f"✅ Loaded {len(X_val)} validation samples with {len(val_positions)} positions")
                 
-                # Split validation set for proper evaluation (avoid data leakage)
-                # Use 70% for Platt calibration, 30% for testing
-                n_samples = len(X_val)
-                n_calib = int(n_samples * 0.7)
-                
-                # Stratified split to maintain class balance
-                idx_class0 = np.where(y_val == 0)[0]
-                idx_class1 = np.where(y_val == 1)[0]
-                
-                n_calib_class0 = int(len(idx_class0) * 0.7)
-                n_calib_class1 = int(len(idx_class1) * 0.7)
-                
-                np.random.seed(self.config.random_state)
-                calib_idx_class0 = np.random.choice(idx_class0, n_calib_class0, replace=False)
-                calib_idx_class1 = np.random.choice(idx_class1, n_calib_class1, replace=False)
-                
-                calib_indices = np.concatenate([calib_idx_class0, calib_idx_class1])
-                test_indices = np.array([i for i in range(n_samples) if i not in calib_indices])
-                
-                X_calib, y_calib = X_val[calib_indices], y_val[calib_indices]
-                X_test, y_test = X_val[test_indices], y_val[test_indices]
-                
-                logger.info(f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test")
+                # Split validation set based on config
+                if self.config.validation_split_ratio > 0:
+                    # Split for proper evaluation during optimization
+                    n_samples = len(X_val)
+                    test_ratio = self.config.validation_split_ratio
+                    n_test = int(n_samples * test_ratio)
+                    n_calib = n_samples - n_test
+                    
+                    # Stratified split to maintain class balance
+                    idx_class0 = np.where(y_val == 0)[0]
+                    idx_class1 = np.where(y_val == 1)[0]
+                    
+                    n_test_class0 = int(len(idx_class0) * test_ratio)
+                    n_test_class1 = int(len(idx_class1) * test_ratio)
+                    
+                    np.random.seed(self.config.random_state)
+                    test_idx_class0 = np.random.choice(idx_class0, n_test_class0, replace=False)
+                    test_idx_class1 = np.random.choice(idx_class1, n_test_class1, replace=False)
+                    
+                    test_indices = np.concatenate([test_idx_class0, test_idx_class1])
+                    calib_indices = np.array([i for i in range(n_samples) if i not in test_indices])
+                    
+                    X_calib, y_calib = X_val[calib_indices], y_val[calib_indices]
+                    X_test, y_test = X_val[test_indices], y_val[test_indices]
+                    
+                    logger.info(f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test (split_ratio={test_ratio})")
+                else:
+                    # No split: use all samples for both calibration and evaluation
+                    # User has separate independent test set
+                    X_calib, y_calib = X_val, y_val
+                    X_test, y_test = X_val, y_val
+                    logger.info(f"   Using all {len(X_val)} samples for calibration (no split, validation_split_ratio=0)")
                 
                 # Store both sets for binary search
                 validation_data = (X_calib, y_calib, X_test, y_test, val_positions, val_contexts)
