@@ -8,7 +8,7 @@
         "batch": "AN00025834",
         "chrom": "1",
         "ctx": "CG",
-        "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/centroids/pb-healthy_pilot",
+        "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/centroids/pb-healthy_pilot",
         "samples": [],
         "add_samples": [
             "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-090225-111626",
