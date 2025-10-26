@@ -1035,20 +1035,20 @@ class MethylDetector:
             Validation results dict or None if real samples not available
         """
         try:
-            # Try to get real samples from centroid metadata
+            # Get real samples from config (they should be specified there)
             real_class1_paths = self._get_validation_samples(
-                "use_metadata",
+                self.config.centroid1_validation_samples,
                 self.config.centroid1_dir,
                 "centroid1"
             )
             real_class2_paths = self._get_validation_samples(
-                "use_metadata",
+                self.config.centroid2_validation_samples,
                 self.config.centroid2_dir,
                 "centroid2"
             )
             
             if not real_class1_paths and not real_class2_paths:
-                logger.warning("No real samples available in centroid metadata")
+                logger.warning("No real samples specified in config for verification")
                 return None
             
             logger.info(f"   Loading {len(real_class1_paths)} healthy + {len(real_class2_paths)} cancer samples from metadata...")
