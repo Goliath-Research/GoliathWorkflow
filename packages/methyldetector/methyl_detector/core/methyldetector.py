@@ -611,99 +611,9 @@ class MethylDetector:
             
             logger.info(f"Loading {len(class1_paths)} healthy + {len(class2_paths)} cancer validation samples...")
             
-            # Extract positions and contexts from DMPs
-            dmp_positions = dmps_df['position'].values
-            dmp_contexts = dmps_df['context'].values
-            
-            # Create methylation matrix
-            all_sample_paths = [(p, 0) for p in class1_paths] + [(p, 1) for p in class2_paths]
-            n_samples = len(all_sample_paths)
-            n_positions = len(dmp_positions)
-            X = np.zeros((n_samples, n_positions))
-            y = np.zeros(n_samples, dtype=int)
-            
-            # Load each sample and extract methylation values - VECTORIZED
-            successful_samples = 0
-            for i, (sample_path, label) in enumerate(all_sample_paths):
-                try:
-                    sample_dir = Path(sample_path)
-                    
-                    # Load samples for all needed contexts for this sample
-                    # Group DMP positions by context for vectorized extraction
-                    context_groups = {}
-                    for ctx in np.unique(dmp_contexts):
-                        # Get indices of DMPs with this context
-                        ctx_mask = dmp_contexts == ctx
-                        context_groups[ctx] = {
-                            'indices': np.where(ctx_mask)[0],
-                            'positions': dmp_positions[ctx_mask]
-                        }
-                        
-                        # Determine the H5 file for this context
-                        if sample_dir.suffix == '.h5':
-                            h5_file = sample_dir
-                        else:
-                            h5_file = sample_dir / f"{self.config.chromosome}-{ctx}.h5"
-                        
-                        if h5_file.exists():
-                            try:
-                                # Load sample for this context
-                                context_sample = MethylSample.load_from_h5(str(h5_file))
-                                
-                                # Vectorized position lookup using searchsorted
-                                # Assumes positions are sorted (which they usually are in H5 files)
-                                if not np.all(np.diff(context_sample.pos) >= 0):
-                                    # Not sorted, use slower but safe method
-                                    sort_idx = np.argsort(context_sample.pos)
-                                    sorted_pos = context_sample.pos[sort_idx]
-                                    sorted_mC = context_sample.mC[sort_idx]
-                                    sorted_uC = context_sample.uC[sort_idx]
-                                else:
-                                    sorted_pos = context_sample.pos
-                                    sorted_mC = context_sample.mC
-                                    sorted_uC = context_sample.uC
-                                
-                                # Find positions using searchsorted (O(log n) per position)
-                                search_indices = np.searchsorted(sorted_pos, context_groups[ctx]['positions'])
-                                
-                                # Validate found positions
-                                valid_mask = (search_indices < len(sorted_pos)) & (sorted_pos[search_indices] == context_groups[ctx]['positions'])
-                                
-                                # Extract methylation fractions vectorized
-                                mC_vals = np.where(valid_mask, sorted_mC[search_indices], 0)
-                                uC_vals = np.where(valid_mask, sorted_uC[search_indices], 0)
-                                total_vals = mC_vals + uC_vals
-                                
-                                # Compute methylation fractions, handling division by zero
-                                with np.errstate(divide='ignore', invalid='ignore'):
-                                    meth_fractions = np.where(total_vals > 0, mC_vals / total_vals, np.nan)
-                                meth_fractions = np.where(valid_mask, meth_fractions, np.nan)
-                                
-                                # Assign to X matrix
-                                X[i, context_groups[ctx]['indices']] = meth_fractions
-                                
-                            except Exception as e:
-                                logger.debug(f"Failed to load {h5_file}: {e}")
-                                X[i, context_groups[ctx]['indices']] = np.nan
-                        else:
-                            X[i, context_groups[ctx]['indices']] = np.nan
-                    
-                    y[i] = label
-                    successful_samples += 1
-                    
-                except Exception as e:
-                    logger.warning(f"Failed to load sample {sample_path}: {e}")
-                    # Fill with NaN
-                    X[i, :] = np.nan
-                    y[i] = label
-            
-            if successful_samples == 0:
-                logger.error("No validation samples could be loaded")
-                return None
-            
-            logger.debug(f"Loaded validation data: X shape={X.shape}, y shape={y.shape}, successful={successful_samples}/{n_samples}")
-            
-            return X, y, dmp_positions, dmp_contexts
+            # Use common implementation
+            val_data = self._load_validation_samples_multicontext_impl(dmps_df, class1_paths, class2_paths)
+            return val_data
             
         except Exception as e:
             logger.error(f"Failed to load validation samples: {e}")
@@ -1097,7 +1007,180 @@ class MethylDetector:
             # No DE optimization, use binary search result
             final_subset = sorted_df.iloc[:best_k]
         
+        # If we used synthetic validation, verify on real samples from centroid metadata
+        if self.config.validation_mode == "synthetic":
+            logger.info("")
+            logger.info("🔬 Verifying model on real samples from centroid metadata...")
+            real_validation = self._validate_on_real_samples(final_subset)
+            if real_validation is not None:
+                logger.info(f"✅ Real validation: BA={real_validation['balanced_accuracy']:.4f}")
+                logger.info(f"   TP={real_validation['confusion_matrix']['tp']}, "
+                          f"TN={real_validation['confusion_matrix']['tn']}, "
+                          f"FP={real_validation['confusion_matrix']['fp']}, "
+                          f"FN={real_validation['confusion_matrix']['fn']}")
+                # Store real validation results alongside synthetic
+                self._real_validation_results = real_validation
+        
         return final_subset
+    
+    def _validate_on_real_samples(self, selected_dmps_df: pd.DataFrame) -> Optional[dict]:
+        """
+        Validate final model on real samples from centroid metadata.
+        Used after synthetic optimization to verify real-world performance.
+        
+        Args:
+            selected_dmps_df: Final selected DMPs
+            
+        Returns:
+            Validation results dict or None if real samples not available
+        """
+        try:
+            # Try to get real samples from centroid metadata
+            real_class1_paths = self._get_validation_samples(
+                "use_metadata",
+                self.config.centroid1_dir,
+                "centroid1"
+            )
+            real_class2_paths = self._get_validation_samples(
+                "use_metadata",
+                self.config.centroid2_dir,
+                "centroid2"
+            )
+            
+            if not real_class1_paths and not real_class2_paths:
+                logger.warning("No real samples available in centroid metadata")
+                return None
+            
+            logger.info(f"   Loading {len(real_class1_paths)} healthy + {len(real_class2_paths)} cancer samples from metadata...")
+            
+            # Load real samples
+            real_val_data = self._load_validation_samples_multicontext_impl(
+                selected_dmps_df,
+                real_class1_paths,
+                real_class2_paths
+            )
+            
+            if real_val_data is None:
+                return None
+            
+            X_val, y_val, val_positions, val_contexts = real_val_data
+            
+            # Use all samples for validation (no need to split since we already optimized)
+            X_calib = X_val[:int(len(X_val) * 0.7)]
+            y_calib = y_val[:int(len(y_val) * 0.7)]
+            X_test = X_val[int(len(X_val) * 0.7):]
+            y_test = y_val[int(len(y_val) * 0.7):]
+            
+            # Validate
+            result = self._validate_classifier_subset(
+                selected_dmps_df,
+                X_calib, y_calib,
+                X_test, y_test,
+                val_positions, val_contexts
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.warning(f"Failed to validate on real samples: {e}")
+            return None
+    
+    def _load_validation_samples_multicontext_impl(
+        self,
+        dmps_df: pd.DataFrame,
+        class1_paths: List[str],
+        class2_paths: List[str]
+    ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+        """
+        Implementation of validation sample loading (extracted for reuse).
+        """
+        from pathlib import Path
+        
+        if not class1_paths and not class2_paths:
+            return None
+        
+        # Extract positions and contexts from DMPs
+        dmp_positions = dmps_df['position'].values
+        dmp_contexts = dmps_df['context'].values
+        
+        # Create methylation matrix
+        all_sample_paths = [(p, 0) for p in class1_paths] + [(p, 1) for p in class2_paths]
+        n_samples = len(all_sample_paths)
+        n_positions = len(dmp_positions)
+        X = np.zeros((n_samples, n_positions))
+        y = np.zeros(n_samples, dtype=int)
+        
+        # Load each sample and extract methylation values - VECTORIZED
+        successful_samples = 0
+        for i, (sample_path, label) in enumerate(all_sample_paths):
+            try:
+                sample_dir = Path(sample_path)
+                
+                # Group DMP positions by context for vectorized extraction
+                context_groups = {}
+                for ctx in np.unique(dmp_contexts):
+                    ctx_mask = dmp_contexts == ctx
+                    context_groups[ctx] = {
+                        'indices': np.where(ctx_mask)[0],
+                        'positions': dmp_positions[ctx_mask]
+                    }
+                    
+                    # Determine the H5 file for this context
+                    if sample_dir.suffix == '.h5':
+                        h5_file = sample_dir
+                    else:
+                        h5_file = sample_dir / f"{self.config.chromosome}-{ctx}.h5"
+                    
+                    if h5_file.exists():
+                        try:
+                            # Load sample for this context
+                            context_sample = MethylSample.load_from_h5(str(h5_file))
+                            
+                            # Vectorized position lookup using searchsorted
+                            if not np.all(np.diff(context_sample.pos) >= 0):
+                                sort_idx = np.argsort(context_sample.pos)
+                                sorted_pos = context_sample.pos[sort_idx]
+                                sorted_mC = context_sample.mC[sort_idx]
+                                sorted_uC = context_sample.uC[sort_idx]
+                            else:
+                                sorted_pos = context_sample.pos
+                                sorted_mC = context_sample.mC
+                                sorted_uC = context_sample.uC
+                            
+                            search_indices = np.searchsorted(sorted_pos, context_groups[ctx]['positions'])
+                            valid_mask = (search_indices < len(sorted_pos)) & (sorted_pos[search_indices] == context_groups[ctx]['positions'])
+                            
+                            mC_vals = np.where(valid_mask, sorted_mC[search_indices], 0)
+                            uC_vals = np.where(valid_mask, sorted_uC[search_indices], 0)
+                            total_vals = mC_vals + uC_vals
+                            
+                            with np.errstate(divide='ignore', invalid='ignore'):
+                                meth_fractions = np.where(total_vals > 0, mC_vals / total_vals, np.nan)
+                            meth_fractions = np.where(valid_mask, meth_fractions, np.nan)
+                            
+                            X[i, context_groups[ctx]['indices']] = meth_fractions
+                            
+                        except Exception as e:
+                            logger.debug(f"Failed to load {h5_file}: {e}")
+                            X[i, context_groups[ctx]['indices']] = np.nan
+                    else:
+                        X[i, context_groups[ctx]['indices']] = np.nan
+                
+                y[i] = label
+                successful_samples += 1
+                
+            except Exception as e:
+                logger.warning(f"Failed to load sample {sample_path}: {e}")
+                X[i, :] = np.nan
+                y[i] = label
+        
+        if successful_samples == 0:
+            logger.error("No validation samples could be loaded")
+            return None
+        
+        logger.debug(f"Loaded validation data: X shape={X.shape}, y shape={y.shape}, successful={successful_samples}/{n_samples}")
+        
+        return X, y, dmp_positions, dmp_contexts
     
     def _optimize_dmps_differential_evolution(
         self,
@@ -1201,18 +1284,46 @@ class MethylDetector:
             'config': {
                 'target_balanced_accuracy': self.config.target_balanced_accuracy,
                 'validation_mode': self.config.validation_mode,
-                'min_dmps_for_export': self.config.min_dmps_for_export
-            },
-            'performance': {
-                'balanced_accuracy': self._final_validation_results['balanced_accuracy'],
-                'sensitivity': self._final_validation_results['metrics']['sensitivity'],
-                'specificity': self._final_validation_results['metrics']['specificity'],
-                'precision': self._final_validation_results['metrics']['precision'],
-                'accuracy': self._final_validation_results['metrics']['accuracy']
-            },
-            'confusion_matrix': self._final_validation_results['confusion_matrix'],
-            'sample_counts': self._final_validation_results['counts']
+                'min_dmps_for_export': self.config.min_dmps_for_export,
+                'optimize_for_validation_accuracy': self.config.optimize_for_validation_accuracy
+            }
         }
+        
+        # Add main validation results (from optimization)
+        if hasattr(self, '_final_validation_results') and self._final_validation_results:
+            results['optimization_validation'] = {
+                'type': self.config.validation_mode,
+                'performance': {
+                    'balanced_accuracy': self._final_validation_results['balanced_accuracy'],
+                    'sensitivity': self._final_validation_results['metrics']['sensitivity'],
+                    'specificity': self._final_validation_results['metrics']['specificity'],
+                    'precision': self._final_validation_results['metrics']['precision'],
+                    'accuracy': self._final_validation_results['metrics']['accuracy']
+                },
+                'confusion_matrix': self._final_validation_results['confusion_matrix'],
+                'sample_counts': self._final_validation_results['counts']
+            }
+        
+        # Add real validation results if available (from synthetic mode verification)
+        if hasattr(self, '_real_validation_results') and self._real_validation_results:
+            results['real_validation'] = {
+                'type': 'real',
+                'performance': {
+                    'balanced_accuracy': self._real_validation_results['balanced_accuracy'],
+                    'sensitivity': self._real_validation_results['metrics']['sensitivity'],
+                    'specificity': self._real_validation_results['metrics']['specificity'],
+                    'precision': self._real_validation_results['metrics']['precision'],
+                    'accuracy': self._real_validation_results['metrics']['accuracy']
+                },
+                'confusion_matrix': self._real_validation_results['confusion_matrix'],
+                'sample_counts': self._real_validation_results['counts']
+            }
+        
+        # Legacy format for backward compatibility (use optimization results)
+        if hasattr(self, '_final_validation_results') and self._final_validation_results:
+            results['performance'] = results['optimization_validation']['performance']
+            results['confusion_matrix'] = results['optimization_validation']['confusion_matrix']
+            results['sample_counts'] = results['optimization_validation']['sample_counts']
         
         # Save to JSON
         with open(results_path, 'w') as f:
