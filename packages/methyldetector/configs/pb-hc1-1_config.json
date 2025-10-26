@@ -15,7 +15,7 @@
   "enable_platt_calibration": true,  
   "use_gpu": true,
   "random_state": 42,
-  "validation_mode": "synthetic",
+  "validation_mode": "real",
   "optimize_for_validation_accuracy": true,
   "centroid1_validation_samples": [
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-090225-111626",
@@ -66,6 +66,15 @@
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/022046_14H_14_89",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/016830_10_J13_67",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/016955_10_J18_23",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/030955_17P_18_71"
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/030955_17P_18_71",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-060925-111425",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-060925-111426",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-062725-111665",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-071525-111841",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-071525-111843",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-081225-112009",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-081425-112029",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-081425-112031",
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-081425-112032"
   ]
 }
