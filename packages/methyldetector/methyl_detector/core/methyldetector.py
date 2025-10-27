@@ -169,12 +169,27 @@ class MethylDetector:
         bio_dmps_df = self._filter_biological_dmps(dmps_df)
         logger.info(f"✅ Biological DMPs: {len(bio_dmps_df):,} (retention: {len(bio_dmps_df)/len(dmps_df)*100:.1f}%)")
         
+        # Export Stage 1: Biological DMPs
+        if self.config.output_dir:
+            logger.info("💾 Exporting Stage 1: Biological DMPs...")
+            self._export_unified_csv(bio_dmps_df, suffix="-1-biological")
+        
         # Binary search for optimal DMP selection (if enabled)
         selected_dmps_df = bio_dmps_df
+        binary_search_dmps_df = None
         if not self.config.export_all_biological_dmps:
             logger.info("🎯 Running binary search to optimize DMP selection...")
             selected_dmps_df = self._select_dmps_binary_search_multicontext(bio_dmps_df)
             logger.info(f"✅ Selected {len(selected_dmps_df):,} DMPs out of {len(bio_dmps_df):,} biological DMPs")
+            
+            # Store binary search result before potential DE optimization
+            binary_search_dmps_df = selected_dmps_df.copy()
+            
+            # Export Stage 2: Binary Search DMPs (before DE optimization)
+            if self.config.output_dir and not self.config.optimize_for_validation_accuracy:
+                # Only export now if DE is not enabled (otherwise export after DE)
+                logger.info("💾 Exporting Stage 2: Binary Search DMPs...")
+                self._export_unified_csv(selected_dmps_df, suffix="-2-binary-search")
         else:
             logger.info("📋 Using all biological DMPs (export_all_biological_dmps=True)")
         
@@ -183,10 +198,21 @@ class MethylDetector:
         classifier = BetaBinomialClassifier.from_dataframe(selected_dmps_df, self.config.chromosome)
         logger.info(f"✅ Classifier created: {classifier}")
         
-        # Export unified CSV
+        # Export unified CSVs
         if self.config.output_dir:
-            logger.info("💾 Exporting unified CSV...")
-            self._export_unified_csv(selected_dmps_df)
+            # Export Stage 2: Binary Search DMPs (if DE was enabled, export now)
+            if binary_search_dmps_df is not None and self.config.optimize_for_validation_accuracy:
+                logger.info("💾 Exporting Stage 2: Binary Search DMPs...")
+                self._export_unified_csv(binary_search_dmps_df, suffix="-2-binary-search")
+            
+            # Export Stage 3: Final DMPs (after DE optimization if enabled)
+            if self.config.optimize_for_validation_accuracy and binary_search_dmps_df is not None:
+                logger.info("💾 Exporting Stage 3: Differential Evolution Optimized DMPs...")
+                self._export_unified_csv(selected_dmps_df, suffix="-3-differential-evolution")
+            else:
+                # Export final CSV with default name
+                logger.info("💾 Exporting final DMPs...")
+                self._export_unified_csv(selected_dmps_df)
             
             # Save model
             logger.info("💾 Saving classifier model...")
@@ -1348,12 +1374,13 @@ class MethylDetector:
         
         logger.info(f"💾 Saved validation results to {results_path}")
     
-    def _export_unified_csv(self, bio_dmps_df: pd.DataFrame) -> Path:
+    def _export_unified_csv(self, bio_dmps_df: pd.DataFrame, suffix: str = "") -> Path:
         """
         Export unified CSV with all contexts combined.
         
         Args:
             bio_dmps_df: DataFrame with biological DMPs
+            suffix: Optional suffix to add to filename (e.g., "-1-biological")
             
         Returns:
             Path to exported CSV file
@@ -1361,7 +1388,10 @@ class MethylDetector:
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        csv_path = output_dir / f"dmps-{self.config.chromosome}.csv"
+        if suffix:
+            csv_path = output_dir / f"dmps-{self.config.chromosome}{suffix}.csv"
+        else:
+            csv_path = output_dir / f"dmps-{self.config.chromosome}.csv"
         
         # Define export columns (include all relevant data)
         export_cols = [
@@ -1390,9 +1420,10 @@ class MethylDetector:
         logger.info(f"📊 Columns: {', '.join(available_cols)}")
         
         # Log per-context counts
-        context_counts = bio_dmps_df.groupby('context').size()
-        for ctx, count in context_counts.items():
-            logger.info(f"  {ctx}: {count:,} DMPs")
+        if 'context' in bio_dmps_df.columns:
+            context_counts = bio_dmps_df.groupby('context').size()
+            for ctx, count in context_counts.items():
+                logger.info(f"  {ctx}: {count:,} DMPs")
         
         return csv_path
     

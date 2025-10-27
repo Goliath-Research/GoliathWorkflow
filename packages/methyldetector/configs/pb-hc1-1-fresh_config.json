@@ -3,7 +3,7 @@
   "contexts": ["CG"],
   "centroid1_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/centroids/pb-healthy-pilot",
   "centroid2_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/centroids/pb-cancer-stage1",
-  "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-healthy-pilot-stage1-CG",
+  "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-healthy-pilot-stage1-CG-fresh",
   "alpha": 0.01,
   "min_delta_mean": 0.2,
   "max_bc": 0.5,
@@ -68,15 +68,6 @@
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/022046_14H_14_89",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/016830_10_J13_67",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/016955_10_J18_23",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/030955_17P_18_71",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-060925-111425",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-060925-111426",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-062725-111665",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-071525-111841",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-071525-111843",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-081225-112009",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-081425-112029",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-081425-112031",
-    "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/2401-081425-112032"
+    "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/030955_17P_18_71"
   ]
 }

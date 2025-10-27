@@ -1,0 +1,25 @@
+{
+  "_comment": "Template for multi-context analysis with context weighting",
+  "_description": "Use for plant studies or when you need comprehensive methylation analysis across all contexts",
+  
+  "chromosome": "1",
+  "contexts": ["CG", "CHG", "CHH"],
+  
+  "centroid1_dir": "/path/to/control/centroids",
+  "centroid2_dir": "/path/to/treatment/centroids",
+  "output_dir": "/path/to/output",
+  
+  "alpha": 0.05,
+  "min_delta_mean": 0.2,
+  "max_bc": 0.6,
+  
+  "use_context_weights": true,
+  "trimmed_percentile": 0.10,
+  
+  "export_all_biological_dmps": true,
+  
+  "gamma": 1.5,
+  "use_gpu": true,
+  "random_state": 42
+}
+

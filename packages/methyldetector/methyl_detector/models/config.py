@@ -15,8 +15,8 @@ class MethylDetectorConfig(BaseModel):
         ..., description="Chromosome to process (e.g., '1', 'X', '22')"
     )
     contexts: List[str] = Field(
-        default=["CG", "CHG", "CHH"],
-        description="List of methylation contexts to process"
+        default=["CG"],
+        description="List of methylation contexts to process (e.g., ['CG'], ['CG', 'CHG'], or ['CG', 'CHG', 'CHH']). Default is ['CG'] as it typically provides the strongest signal for most analyses."
     )
     centroid1_dir: Union[str, Path] = Field(
         ..., description="Directory containing centroid1 .h5 files (format: {chrom}-{context}.h5)"
@@ -78,6 +78,18 @@ class MethylDetectorConfig(BaseModel):
         default=False,
         description="Enable Platt scaling calibration on validation data during classification"
     )
+
+    @field_validator('contexts')
+    @classmethod
+    def validate_contexts(cls, v):
+        """Validate that contexts are valid methylation contexts."""
+        valid_contexts = {"CG", "CHG", "CHH"}
+        if not v:
+            raise ValueError("At least one context must be specified")
+        for ctx in v:
+            if ctx not in valid_contexts:
+                raise ValueError(f"Invalid context '{ctx}'. Valid contexts are: {valid_contexts}")
+        return v
 
     @field_validator('temperature')
     @classmethod
