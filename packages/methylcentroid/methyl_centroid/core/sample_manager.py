@@ -12,6 +12,7 @@ from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import psutil
+from functools import lru_cache
 
 from methyl_utils import MethylSample, get_memory_usage, get_memory_manager
 from ..config import ProcessingConfig
@@ -172,6 +173,8 @@ class SampleManager:
 
         # Initialize memory manager
         self.memory_manager = get_memory_manager()
+        self.max_cache_size = self.memory_manager.get_recommended_cache_size()
+        self._aligned_cache = {}
 
         # Initialize cache if enabled
         if processing_config.enable_caching:
@@ -451,6 +454,20 @@ class SampleManager:
         """Clear the sample cache."""
         if self.sample_cache:
             self.sample_cache.clear()
+        self._aligned_cache.clear()
+
+    def get_aligned_sample(self, sample_path: Path) -> Tuple[np.ndarray, np.ndarray]:
+        if sample_path not in self._aligned_cache:
+            if len(self._aligned_cache) >= self.max_cache_size:
+                # Evict least recently used (simple FIFO for now)
+                oldest_key = next(iter(self._aligned_cache))
+                del self._aligned_cache[oldest_key]
+            sample_obj = self.load_sample(sample_path)
+            mC, uC = self.position_aligner.align_sample_to_centroid(sample_obj)
+            self._aligned_cache[sample_path] = (mC, uC)
+        return self._aligned_cache[sample_path]
+
+    # Call clear_cache() after removing outliers or updating centroid
 
     # Logger setup (would be injected via dependency injection in production)
     @property

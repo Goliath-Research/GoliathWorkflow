@@ -30,6 +30,20 @@ A **methylation centroid** is a statistical summary that represents the average 
 - **Output**: A single centroid that captures the group's typical methylation pattern
 - **Purpose**: Enable comparisons between groups, quality control, and downstream classification
 
+### MethylSample: Unified Data Structure
+
+MethylCentroid uses `MethylSample` (from MethylUtils) as a unified container that supports three data types:
+
+1. **Basic Sample**: Individual methylation sample with `pos`, `mC`, `uC`, `tnc` fields
+2. **Basic Centroid**: Aggregated sample with additional `N` (sample count), `Sx`, `Sx2` (sufficient statistics for mean/variance)
+3. **Extended Centroid**: Basic centroid plus `log_x_sum`, `log_1_minus_x_sum` (sufficient statistics for Beta distribution MLE)
+
+This unified design allows MethylCentroid to:
+- Process individual samples during centroid calculation
+- Accumulate statistics (Sx, Sx2, log sums) incrementally
+- Extract Beta distribution parameters (α, β) from extended centroids for probabilistic outlier detection
+- Maintain backward compatibility with existing HDF5 files
+
 ### Key Features
 
 - **Robust Outlier Detection**: Automatically identifies and removes aberrant samples using multiple statistical methods
