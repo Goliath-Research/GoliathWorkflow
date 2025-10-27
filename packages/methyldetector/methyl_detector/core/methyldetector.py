@@ -66,6 +66,9 @@ except ImportError:
     get_chromosome_context_from_filename = None
 import psutil  # For mem tracking (pip install psutil if needed)
 
+# Add import at top if not present
+from methyl_utils.classifier_factory import ClassifierFactory
+
 logger = setup_module_logging(__name__)
 
 
@@ -193,9 +196,26 @@ class MethylDetector:
         else:
             logger.info("📋 Using all biological DMPs (export_all_biological_dmps=True)")
         
-        # Train Beta-Binomial classifier
-        logger.info("🤖 Training Beta-Binomial classifier...")
-        classifier = BetaBinomialClassifier.from_dataframe(selected_dmps_df, self.config.chromosome)
+        # Prepare classifier data
+        classifier_data = {
+            'positions': selected_dmps_df['position'].values,
+            'contexts': selected_dmps_df['context'].values,
+            'alpha1': selected_dmps_df['alpha1'].values,
+            'beta1': selected_dmps_df['beta1'].values,
+            'alpha2': selected_dmps_df['alpha2'].values,
+            'beta2': selected_dmps_df['beta2'].values,
+            'weights': selected_dmps_df.get('effect_size', np.ones(len(selected_dmps_df))).values
+        }
+
+        # Create classifier using factory based on config
+        classifier_type_str = self.config.classifier_type
+        classifier = ClassifierFactory.create(
+            classifier_type_str,
+            classifier_data,
+            min_sample_coverage=self.config.min_sample_coverage,
+            coverage_weighting=self.config.classifier_coverage_weighting
+        )
+
         logger.info(f"✅ Classifier created: {classifier}")
         
         # Export unified CSVs

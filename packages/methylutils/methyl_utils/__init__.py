@@ -209,12 +209,6 @@ from .models import (
     create_analysis_results
 )
 
-# Import Probabilistic Beta Classifier
-from .probabilistic_beta_classifier import (
-    ProbabilisticBetaClassifier,
-    create_classifier_from_results
-)
-
 # Import Beta-Binomial Classifier (for multi-context analysis)
 from .beta_binomial_classifier import BetaBinomialClassifier
 
@@ -237,6 +231,17 @@ from .beta_analytics import (
     compute_beta_mean,
     compute_beta_variance
 )
+
+from .beta_classifier import BetaClassifier
+
+# Backward compatibility
+from .beta_classifier import ProbabilisticBetaClassifier
+
+# Add ClassifierFactory if it exists
+try:
+    from .classifier_factory import ClassifierFactory
+except ImportError:
+    pass
 
 __version__ = "1.0.0"
 __all__ = [
@@ -367,5 +372,7 @@ __all__ = [
     "aggregate_pvalues_edgington",
     "aggregate_pvalues_mudholkar_george",
     "aggregate_pvalues_simes",
-    "PVALUE_AGGREGATION_METHODS"
+    "PVALUE_AGGREGATION_METHODS",
+    'BetaClassifier',
+    'ClassifierFactory',  # if added
 ]

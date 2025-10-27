@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass
 
-from .probabilistic_beta_classifier import ProbabilisticBetaClassifier
+from .beta_classifier import BetaClassifier
 from .methyl_sample import MethylSample
 from .logging_utils import setup_module_logging
 
@@ -244,7 +244,7 @@ class BayesianClassifierTrainer:
         
         return filtered
     
-    def _create_classifier(self, filtered_dmps_df) -> ProbabilisticBetaClassifier:
+    def _create_classifier(self, filtered_dmps_df) -> BetaClassifier:
         """
         Create ProbabilisticBetaClassifier from filtered DMPs DataFrame.
 
@@ -286,7 +286,7 @@ class BayesianClassifierTrainer:
         logger.info(f"📊 Probabilistic classifier created with {n_dmps} DMP positions")
 
         # Create classifier instance
-        classifier = ProbabilisticBetaClassifier(classifier_data)
+        classifier = BetaClassifier(classifier_data)
 
         # Evaluate classifier performance on synthetic data
         logger.info("📊 Evaluating probabilistic classifier...")
@@ -325,7 +325,7 @@ class BayesianClassifierTrainer:
     
     def _validate_classifier(
         self, 
-        classifier: ProbabilisticBetaClassifier,
+        classifier: BetaClassifier,
         filtered_dmps: np.ndarray
     ) -> Dict[str, float]:
         """
@@ -376,7 +376,7 @@ class BayesianClassifierTrainer:
     
     def create_model_package(
         self,
-        classifier: ProbabilisticBetaClassifier,
+        classifier: BetaClassifier,
         filter_config: FilterConfig,
         centroid1_name: str,
         centroid2_name: str,

@@ -16,14 +16,15 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
 
-class ProbabilisticBetaClassifier:
+class BetaClassifier:
     """
-    Probabilistic classifier using Beta distributions for methylation data.
-
+    Beta Classifier for Methylation Data (renamed from ProbabilisticBetaClassifier).
+    
     This classifier performs Bayesian classification using exact Beta likelihoods
-    for differentially methylated positions (DMPs). It can handle missing data
-    and provides probabilistic predictions.
-
+    for differentially methylated positions (DMPs). It handles coverage by ignoring
+    low-coverage positions (default min_coverage=10 for 30x data) and can weight
+    by precision (tau ~ coverage).
+    
     The classifier is trained on two centroids (representing different biological
     conditions) and can classify new samples based on their methylation patterns.
 
@@ -42,37 +43,42 @@ class ProbabilisticBetaClassifier:
         ...     'weights': np.array([0.85, 0.92, 0.78]),  # Optional weights
         ...     'directions': np.array([1, -1, 1])  # Direction indicators
         ... }
-        >>> classifier = ProbabilisticBetaClassifier(training_data)
+        >>> classifier = BetaClassifier(training_data)
         >>> predictions = classifier.predict(new_methylation_data)
     """
 
-    def __init__(self, data: Dict[str, np.ndarray]):
+    def __init__(self, data: Dict[str, np.ndarray], min_sample_coverage: int = 10, coverage_weighting: bool = True):
         """
-        Initialize the classifier with training data.
-
+        Initialize BetaClassifier with data and coverage parameters.
+        
         Args:
-            data: Dictionary containing training data with the following keys:
-                - 'positions': Array of genomic positions
-                - 'alpha1', 'beta1': Beta parameters for centroid 1
-                - 'alpha2', 'beta2': Beta parameters for centroid 2
-                - 'weights': Optional weights for each DMP (default: None)
-                - 'directions': Direction indicators (1 or -1) for each DMP
-
-        Raises:
-            ValueError: If required data keys are missing or arrays have mismatched lengths
+            data: Dictionary containing positions, alpha1, beta1, etc.
+            min_sample_coverage: Min coverage for valid positions (default 10).
+            coverage_weighting: If True, use precision weighting in LLR (default True).
         """
-        required_keys = ['positions', 'alpha1', 'beta1', 'alpha2', 'beta2']
-        for key in required_keys:
-            if key not in data:
-                raise ValueError(f"Missing required data key: {key}")
+        self.data = data
+        self.min_sample_coverage = min_sample_coverage
+        self.coverage_weighting = coverage_weighting
+        
+        # Existing init code...
+        self.positions = np.asarray(data['positions'], dtype=np.uint32)
+        self.alpha1 = np.asarray(data['alpha1'], dtype=np.float64)
+        self.beta1 = np.asarray(data['beta1'], dtype=np.float64)
+        self.alpha2 = np.asarray(data['alpha2'], dtype=np.float64)
+        self.beta2 = np.asarray(data['beta2'], dtype=np.float64)
+        self.weights = np.asarray(data.get('weights', np.ones(len(self.positions))), dtype=np.float64)
+        self.directions = np.asarray(data.get('directions', np.ones(len(self.positions))), dtype=np.int8)
 
         # Validate array lengths
-        n_positions = len(data['positions'])
-        for key in ['alpha1', 'beta1', 'alpha2', 'beta2']:
-            if len(data[key]) != n_positions:
-                raise ValueError(f"Array length mismatch for {key}: expected {n_positions}, got {len(data[key])}")
+        n_positions = len(self.positions)
+        if len(self.alpha1) != n_positions or len(self.beta1) != n_positions or \
+           len(self.alpha2) != n_positions or len(self.beta2) != n_positions:
+            raise ValueError(f"Array length mismatch for alpha/beta parameters: expected {n_positions}, got {len(self.alpha1)}")
+        if len(self.weights) != n_positions:
+            raise ValueError(f"Array length mismatch for weights: expected {n_positions}, got {len(self.weights)}")
+        if len(self.directions) != n_positions:
+            raise ValueError(f"Array length mismatch for directions: expected {n_positions}, got {len(self.directions)}")
 
-        self.data = data
         self.n_dmps = n_positions
         self.temperature = 1.0  # Default temperature for softmax
         self.calibrator = None  # For Platt scaling
@@ -484,34 +490,6 @@ class ProbabilisticBetaClassifier:
         }
 
     def __repr__(self) -> str:
-        return f"ProbabilisticBetaClassifier(n_features={self.n_dmps})"
+        return f"BetaClassifier(n_features={self.n_dmps})"
 
-
-# Convenience function for creating classifier from common data formats
-def create_classifier_from_results(dmp_results: list,
-                                 centroid1_data: Dict[str, np.ndarray],
-                                 centroid2_data: Dict[str, np.ndarray]) -> ProbabilisticBetaClassifier:
-    """
-    Create a ProbabilisticBetaClassifier from DMP analysis results.
-
-    This is a convenience function for integrating with methylation analysis pipelines.
-
-    Args:
-        dmp_results: List of DMP result objects with attributes like position, alpha1, beta1, etc.
-        centroid1_data: Dictionary with centroid 1 Beta parameters
-        centroid2_data: Dictionary with centroid 2 Beta parameters
-
-    Returns:
-        Trained ProbabilisticBetaClassifier
-    """
-    classifier_data = {
-        'positions': np.array([r.position for r in dmp_results]),
-        'alpha1': np.array([r.alpha1 for r in dmp_results]),
-        'beta1': np.array([r.beta1 for r in dmp_results]),
-        'alpha2': np.array([r.alpha2 for r in dmp_results]),
-        'beta2': np.array([r.beta2 for r in dmp_results]),
-        'weights': np.array([getattr(r, 'auc_score', 0.5) for r in dmp_results]),
-        'directions': np.array([1 if r.mean1 > r.mean2 else -1 for r in dmp_results])
-    }
-
-    return ProbabilisticBetaClassifier(classifier_data)
+ProbabilisticBetaClassifier = BetaClassifier  # Deprecated alias

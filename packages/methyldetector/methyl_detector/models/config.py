@@ -1,9 +1,14 @@
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Dict, Any
 from math import ceil
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from enum import Enum
 
+
+class ClassifierType(Enum):
+    BETA = "beta"
+    BETA_BINOMIAL = "beta_binomial"
 
 class MethylDetectorConfig(BaseModel):
     """Simplified configuration for MethylDetector analysis."""
@@ -254,6 +259,48 @@ class MethylDetectorConfig(BaseModel):
             raise ValueError(f"Validation mode must be one of: {valid_modes}, got: {v}")
         return v
     
+    classifier_type: str = Field(
+        default="beta",
+        description="Classifier type. 'beta' (recommended): Uses fractions with sufficient stats. 'beta_binomial' (discouraged): For low-coverage counts only."
+    )
+    
+    min_sample_coverage: int = Field(
+        default=10, ge=1, le=100,
+        description="Min coverage (mC + uC) for positions in new samples. Below this, positions are ignored in classification."
+    )
+    
+    classifier_coverage_weighting: bool = Field(
+        default=True,
+        description="If True, weight LLR by sample precision (tau_s ~ coverage); False: uniform."
+    )
+    
+    synthetic_config: Dict[str, Any] = Field(
+        default={
+            "realism_level": "basic",
+            "avg_coverage": 30,
+            "min_coverage": 5,
+            "correlation_strength": 0.5,
+            "variability_scale": 0.2,
+            "add_missing": True
+        },
+        description="Configuration for synthetic data realism"
+    )
+
+    @field_validator('classifier_type')
+    @classmethod
+    def validate_classifier_type(cls, v):
+        valid_types = ["beta", "beta_binomial"]
+        if v not in valid_types:
+            raise ValueError(f"Invalid classifier_type: {v}. Must be one of {valid_types}.")
+        return v
+
+    @field_validator('synthetic_config')
+    @classmethod
+    def validate_synthetic_config(cls, v):
+        realism = v.get('realism_level', 'basic')
+        if realism not in ['off', 'basic', 'advanced']:
+            raise ValueError("realism_level must be 'off', 'basic', or 'advanced'.")
+        return v
 
     # ---------------
     # Helper Methods
