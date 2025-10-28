@@ -2,9 +2,13 @@
     "chromosomes": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
     "contexts": ["CG", "CHG", "CHH"],
     "base_config": {
+        "laboratory": "psomagen",
+        "disease": "healthy",
+        "group": "all",
+        "batch": "AN00025834",
         "chrom": "1",
         "ctx": "CG",
-        "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/centroids/pb-healthy",
+        "output_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/h",
         "samples": [],
         "add_samples": [
             "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/HBCST-042525-95676",
