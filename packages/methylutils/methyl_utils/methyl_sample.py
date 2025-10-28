@@ -307,7 +307,10 @@ class MethylSample:
     @property
     def samples(self) -> List[str]:
         """List of sample file paths that form this centroid (from metadata)."""
-        return self._metadata.get('sample_paths', []) if self._metadata else []
+        if not self._metadata:
+            return []
+        # Check for 'sample_paths' first, fall back to 'samples_used'
+        return self._metadata.get('sample_paths') or self._metadata.get('samples_used', [])
 
     @property
     def group_name(self) -> str:
