@@ -1479,6 +1479,7 @@ class MethylDetector:
         Returns:
             Optimal k value
         """
+        import warnings
         from scipy.stats import norm
         from sklearn.gaussian_process import GaussianProcessRegressor
         from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
@@ -1537,47 +1538,52 @@ class MethylDetector:
         # Bayesian Optimization loop: 15-25 iterations
         n_iterations = min(20, max_k - 10)
 
-        for iteration in range(n_iterations):
-            # Fit GP surrogate model
-            kernel = C(1.0, (1e-6, 1e6)) * RBF(10, (1e-3, 1e6))
-            gp = GaussianProcessRegressor(
-                kernel=kernel,
-                alpha=1e-6,
-                normalize_y=True,
-                n_restarts_optimizer=3
-            )
-            gp.fit(X_observed, y_observed)
+        # Suppress GP kernel convergence warnings (bounds hitting is normal for BO)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=UserWarning,
+                                  message=".*optimal value found.*close to the specified.*bound.*")
 
-            # Expected Improvement acquisition function
-            def expected_improvement(X):
-                X = X.reshape(-1, 1)
-                mu, sigma = gp.predict(X, return_std=True)
-                best_y = np.min(y_observed)
+            for iteration in range(n_iterations):
+                # Fit GP surrogate model
+                kernel = C(1.0, (1e-6, 1e6)) * RBF(10, (1e-3, 1e6))
+                gp = GaussianProcessRegressor(
+                    kernel=kernel,
+                    alpha=1e-6,
+                    normalize_y=True,
+                    n_restarts_optimizer=3
+                )
+                gp.fit(X_observed, y_observed)
 
-                with np.errstate(divide='ignore', invalid='ignore'):
-                    Z = (best_y - mu) / sigma
-                    ei = (best_y - mu) * norm.cdf(Z) + sigma * norm.pdf(Z)
-                    ei[sigma == 0.0] = 0.0
+                # Expected Improvement acquisition function
+                def expected_improvement(X):
+                    X = X.reshape(-1, 1)
+                    mu, sigma = gp.predict(X, return_std=True)
+                    best_y = np.min(y_observed)
 
-                return ei
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        Z = (best_y - mu) / sigma
+                        ei = (best_y - mu) * norm.cdf(Z) + sigma * norm.pdf(Z)
+                        ei[sigma == 0.0] = 0.0
 
-            # Evaluate EI at candidate points and select next evaluation
-            candidate_points = np.linspace(10, max_k, min(100, max_k - 10 + 1)).reshape(-1, 1)
-            ei_values = expected_improvement(candidate_points)
+                    return ei
 
-            best_idx = np.argmax(ei_values)
-            next_k = int(candidate_points[best_idx, 0])
+                # Evaluate EI at candidate points and select next evaluation
+                candidate_points = np.linspace(10, max_k, min(100, max_k - 10 + 1)).reshape(-1, 1)
+                ei_values = expected_improvement(candidate_points)
 
-            # Evaluate objective and update observations
-            next_y = objective_function(next_k)
-            X_observed = np.vstack([X_observed, [[next_k]]])
-            y_observed = np.append(y_observed, next_y)
+                best_idx = np.argmax(ei_values)
+                next_k = int(candidate_points[best_idx, 0])
 
-            # Log progress every 5 iterations or when improvement found
-            current_best_k = X_observed[np.argmin(y_observed), 0]
-            current_best_ba = -np.min(y_observed)
-            if iteration % 5 == 0 or -next_y > current_best_ba - 0.001:
-                logger.info(f"    BO iter {iteration+1}: k={next_k:,} → BA={-next_y:.6f}, best: k={int(current_best_k):,} BA={current_best_ba:.6f}")
+                # Evaluate objective and update observations
+                next_y = objective_function(next_k)
+                X_observed = np.vstack([X_observed, [[next_k]]])
+                y_observed = np.append(y_observed, next_y)
+
+                # Log progress every 5 iterations or when improvement found
+                current_best_k = X_observed[np.argmin(y_observed), 0]
+                current_best_ba = -np.min(y_observed)
+                if iteration % 5 == 0 or -next_y > current_best_ba - 0.001:
+                    logger.info(f"    BO iter {iteration+1}: k={next_k:,} → BA={-next_y:.6f}, best: k={int(current_best_k):,} BA={current_best_ba:.6f}")
 
         # Return best result
         best_idx = np.argmin(y_observed)
