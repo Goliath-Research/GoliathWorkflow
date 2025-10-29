@@ -17,7 +17,6 @@
   "enable_platt_calibration": true,
   "use_gpu": true,
   "random_state": 42,
-  "prediction_method": "beta",
   
   "validation_mode": "real",
   "centroid1_validation_samples": "use_metadata",

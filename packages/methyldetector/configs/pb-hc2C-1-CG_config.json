@@ -10,7 +10,6 @@
   "gamma": 1.5,
   "use_gpu": true,
   "random_state": 42,
-  "prediction_method": "beta",
   "validation_mode": "real",
   "optimize_for_validation_accuracy": true,
   "centroid1_validation_samples": [
