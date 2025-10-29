@@ -158,6 +158,69 @@ class MethylDetectorSummary(BaseModel):
     }
 
 
+class ConfusionMatrix(NumpyCompatibleModel):
+    """Confusion matrix for classification results."""
+    tp: int = Field(..., description="True positives")
+    tn: int = Field(..., description="True negatives")
+    fp: int = Field(..., description="False positives")
+    fn: int = Field(..., description="False negatives")
+
+
+class SampleCounts(NumpyCompatibleModel):
+    """Sample counts for validation."""
+    n_positive: int = Field(..., description="Number of positive samples")
+    n_negative: int = Field(..., description="Number of negative samples")
+    n_total: int = Field(..., description="Total number of samples")
+
+
+class PerformanceMetrics(NumpyCompatibleModel):
+    """Performance metrics for classification."""
+    balanced_accuracy: float = Field(..., description="Balanced accuracy score")
+    sensitivity: float = Field(..., description="Sensitivity (recall)")
+    specificity: float = Field(..., description="Specificity")
+    precision: float = Field(..., description="Precision")
+    accuracy: float = Field(..., description="Overall accuracy")
+
+
+class ValidationResults(NumpyCompatibleModel):
+    """Results from a validation run."""
+    type: str = Field(..., description="Type of validation ('real' or 'synthetic')")
+    performance: PerformanceMetrics = Field(..., description="Performance metrics")
+    confusion_matrix: ConfusionMatrix = Field(..., description="Confusion matrix")
+    sample_counts: SampleCounts = Field(..., description="Sample counts")
+
+
+class MethylDetectorValidationResults(NumpyCompatibleModel):
+    """Final validation results from MethylDetector analysis."""
+
+    # Core identification
+    chromosome: str = Field(..., description="Chromosome analyzed")
+    timestamp: str = Field(..., description="Analysis completion timestamp")
+
+    # Configuration used
+    config: Dict[str, Any] = Field(..., description="Complete configuration used for analysis")
+
+    # Validation results
+    optimization_validation: Optional[ValidationResults] = Field(
+        default=None,
+        description="Results from optimization validation (real validation mode)"
+    )
+    real_validation: Optional[ValidationResults] = Field(
+        default=None,
+        description="Results from real validation (synthetic mode verification)"
+    )
+
+    # Export summary
+    n_dmps_exported: Optional[int] = Field(
+        default=None,
+        description="Number of DMPs exported to final CSV"
+    )
+
+    model_config = {
+        "arbitrary_types_allowed": True,
+    }
+
+
 # ✅ IMPLEMENTED: Full DataFrame Architecture
 #
 # The system uses pandas DataFrames throughout the entire pipeline:

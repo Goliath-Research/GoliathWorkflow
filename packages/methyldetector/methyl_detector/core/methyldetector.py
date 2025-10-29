@@ -1591,83 +1591,77 @@ class MethylDetector:
 
     
     def _save_validation_results(self, n_dmps_exported: Optional[int] = None):
-        """Save validation results to JSON file."""
+        """Save validation results to JSON file using Pydantic model."""
         import json
         from datetime import datetime
-        
+
+        from ..models import (
+            MethylDetectorValidationResults,
+            ValidationResults,
+            PerformanceMetrics,
+            ConfusionMatrix,
+            SampleCounts
+        )
+
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         results_path = output_dir / f"results-{self.config.chromosome}.json"
-        
-        # Prepare results for JSON serialization
-        # Convert Path objects to strings for JSON serialization
-        def convert_paths(obj):
-            """Recursively convert Path objects to strings."""
-            if isinstance(obj, Path):
-                return str(obj)
-            elif isinstance(obj, dict):
-                return {k: convert_paths(v) for k, v in obj.items()}
-            elif isinstance(obj, (list, tuple)):
-                return [convert_paths(item) for item in obj]
-            else:
-                return obj
-        
-        # Get config dict and convert Path objects to strings
+
+        # Get config dict (Pydantic v2 mode='json' handles Path conversion)
         try:
-            # Try using mode='json' which should convert Paths automatically (Pydantic v2)
             config_dict = self.config.model_dump(mode='json')
         except (TypeError, ValueError):
-            # Fallback: manually convert Path objects
-            config_dict = convert_paths(self.config.model_dump())
-        else:
-            # If mode='json' worked, double-check for any remaining Path objects
-            config_dict = convert_paths(config_dict)
-        
-        results = {
-            'chromosome': self.config.chromosome,
-            'timestamp': datetime.now().isoformat(),
-            'config': config_dict
-        }
-        
-        # Add main validation results (from optimization)
+            # Fallback for older Pydantic versions
+            config_dict = self.config.model_dump()
+
+        # Create validation results objects
+        optimization_validation = None
         if hasattr(self, '_final_validation_results') and self._final_validation_results:
-            results['optimization_validation'] = {
-                'type': self.config.validation_mode,
-                'performance': {
-                    'balanced_accuracy': self._final_validation_results['balanced_accuracy'],
-                    'sensitivity': self._final_validation_results['metrics']['sensitivity'],
-                    'specificity': self._final_validation_results['metrics']['specificity'],
-                    'precision': self._final_validation_results['metrics']['precision'],
-                    'accuracy': self._final_validation_results['metrics']['accuracy']
-                },
-                'confusion_matrix': self._final_validation_results['confusion_matrix'],
-                'sample_counts': self._final_validation_results['counts']
-            }
-        
-        # Add real validation results if available (from synthetic mode verification)
+            result = self._final_validation_results
+            optimization_validation = ValidationResults(
+                type=self.config.validation_mode,
+                performance=PerformanceMetrics(
+                    balanced_accuracy=result['balanced_accuracy'],
+                    sensitivity=result['metrics']['sensitivity'],
+                    specificity=result['metrics']['specificity'],
+                    precision=result['metrics']['precision'],
+                    accuracy=result['metrics']['accuracy']
+                ),
+                confusion_matrix=ConfusionMatrix(**result['confusion_matrix']),
+                sample_counts=SampleCounts(**result['counts'])
+            )
+
+        real_validation = None
         if hasattr(self, '_real_validation_results') and self._real_validation_results:
-            results['real_validation'] = {
-                'type': 'real',
-                'performance': {
-                    'balanced_accuracy': self._real_validation_results['balanced_accuracy'],
-                    'sensitivity': self._real_validation_results['metrics']['sensitivity'],
-                    'specificity': self._real_validation_results['metrics']['specificity'],
-                    'precision': self._real_validation_results['metrics']['precision'],
-                    'accuracy': self._real_validation_results['metrics']['accuracy']
-                },
-                'confusion_matrix': self._real_validation_results['confusion_matrix'],
-                'sample_counts': self._real_validation_results['counts']
-            }
-        
-        # Add number of DMPs exported
-        if n_dmps_exported is not None:
-            results['n_dmps_exported'] = n_dmps_exported
-        
-        # Save to JSON
+            result = self._real_validation_results
+            real_validation = ValidationResults(
+                type='real',
+                performance=PerformanceMetrics(
+                    balanced_accuracy=result['balanced_accuracy'],
+                    sensitivity=result['metrics']['sensitivity'],
+                    specificity=result['metrics']['specificity'],
+                    precision=result['metrics']['precision'],
+                    accuracy=result['metrics']['accuracy']
+                ),
+                confusion_matrix=ConfusionMatrix(**result['confusion_matrix']),
+                sample_counts=SampleCounts(**result['counts'])
+            )
+
+        # Create the main results object
+        results = MethylDetectorValidationResults(
+            chromosome=self.config.chromosome,
+            timestamp=datetime.now().isoformat(),
+            config=config_dict,
+            optimization_validation=optimization_validation,
+            real_validation=real_validation,
+            n_dmps_exported=n_dmps_exported
+        )
+
+        # Save to JSON using Pydantic's model_dump_json for proper serialization
         with open(results_path, 'w') as f:
-            json.dump(results, f, indent=2)
-        
+            f.write(results.model_dump_json(indent=2))
+
         logger.info(f"💾 Saved results to {results_path}")
     
     def _export_unified_csv(self, bio_dmps_df: pd.DataFrame, suffix: str = "") -> Path:
