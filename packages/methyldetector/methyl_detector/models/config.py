@@ -158,14 +158,14 @@ class MethylDetectorConfig(BaseModel):
         description="Number of synthetic samples per class to generate for classifier validation (from Beta distributions)"
     )
     
-    # Validation-accuracy optimization (requires real samples)
-    optimize_for_validation_accuracy: bool = Field(
+    # DMP optimization (requires real samples)
+    optimize_dmps: bool = Field(
         default=False,
-        description="Enable accuracy-based DMP optimization using real validation samples (requires validation_mode='real' and validation samples). Uses binary search to find minimum k that achieves maximum accuracy."
+        description="Enable DMP count optimization using real validation samples (requires validation_mode='real' and validation samples). Uses Bayesian Optimization or FeatureCuts to find optimal DMP count."
     )
-    enable_binary_search: bool = Field(
-        default=True,
-        description="Enable binary search optimization before Differential Evolution. If False, skips binary search and DE will start with a uniform exploration strategy across the full search space."
+    optimization_method: str = Field(
+        default="bayesian_optimization",
+        description="Optimization method: 'bayesian_optimization' or 'featurecuts'. Both handle non-monotonic BA(k) functions efficiently."
     )
     
     # ----------------

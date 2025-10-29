@@ -177,22 +177,22 @@ class MethylDetector:
             logger.info("💾 Exporting Stage 1: Biological DMPs...")
             self._export_unified_csv(bio_dmps_df, suffix="-1-biological")
         
-        # Binary search for optimal DMP selection (if enabled)
+        # Prepare DMPs for validation and optimization
         selected_dmps_df = bio_dmps_df
-        binary_search_dmps_df = None
+        pre_optimization_dmps_df = None
         if not self.config.export_all_biological_dmps:
-            logger.info("🎯 Running binary search to optimize DMP selection...")
-            selected_dmps_df = self._select_dmps_binary_search_multicontext(bio_dmps_df)
-            logger.info(f"✅ Selected {len(selected_dmps_df):,} DMPs out of {len(bio_dmps_df):,} biological DMPs")
+            logger.info("🎯 Preparing DMPs for validation and optimization...")
+            selected_dmps_df = self._select_dmps_multicontext(bio_dmps_df)
+            logger.info(f"✅ Prepared {len(selected_dmps_df):,} DMPs for validation")
+
+            # Store pre-optimization result for export comparison
+            pre_optimization_dmps_df = selected_dmps_df.copy()
             
-            # Store binary search result before potential DE optimization
-            binary_search_dmps_df = selected_dmps_df.copy()
-            
-            # Export Stage 2: Binary Search DMPs (before DE optimization)
-            if self.config.output_dir and not self.config.optimize_for_validation_accuracy:
-                # Only export now if DE is not enabled (otherwise export after DE)
-                logger.info("💾 Exporting Stage 2: Binary Search DMPs...")
-                self._export_unified_csv(selected_dmps_df, suffix="-2-binary-search")
+            # Export Stage 2: Pre-optimization DMPs (before optimization)
+            if self.config.output_dir and not self.config.optimize_dmps:
+                # Only export now if optimization is not enabled (otherwise export after optimization)
+                logger.info("💾 Exporting Stage 2: Pre-optimization DMPs...")
+                self._export_unified_csv(pre_optimization_dmps_df, suffix="-2-pre-optimization")
         else:
             logger.info("📋 Using all biological DMPs (export_all_biological_dmps=True)")
         
@@ -220,15 +220,15 @@ class MethylDetector:
         
         # Export unified CSVs
         if self.config.output_dir:
-            # Export Stage 2: Binary Search DMPs (if DE was enabled, export now)
-            if binary_search_dmps_df is not None and self.config.optimize_for_validation_accuracy:
-                logger.info("💾 Exporting Stage 2: Binary Search DMPs...")
-                self._export_unified_csv(binary_search_dmps_df, suffix="-2-binary-search")
+            # Export Stage 2: Pre-optimization DMPs (if optimization was enabled, export now)
+            if pre_optimization_dmps_df is not None and self.config.optimize_dmps:
+                logger.info("💾 Exporting Stage 2: Pre-optimization DMPs...")
+                self._export_unified_csv(pre_optimization_dmps_df, suffix="-2-pre-optimization")
             
-            # Export Stage 3: Final DMPs (after DE optimization if enabled)
-            if self.config.optimize_for_validation_accuracy and binary_search_dmps_df is not None:
-                logger.info("💾 Exporting Stage 3: Differential Evolution Optimized DMPs...")
-                self._export_unified_csv(selected_dmps_df, suffix="-3-differential-evolution")
+            # Export Stage 3: Final DMPs (after optimization if enabled)
+            if self.config.optimize_dmps and pre_optimization_dmps_df is not None:
+                logger.info("💾 Exporting Stage 3: Optimized DMPs...")
+                self._export_unified_csv(selected_dmps_df, suffix="-3-optimized")
             else:
                 # Export final CSV with default name
                 logger.info("💾 Exporting final DMPs...")
@@ -850,20 +850,23 @@ class MethylDetector:
                 'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0}
             }
     
-    def _select_dmps_binary_search_multicontext(self, bio_dmps_df: pd.DataFrame) -> pd.DataFrame:
+    def _select_dmps_multicontext(self, bio_dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Select optimal subset of DMPs using binary search for multi-context mode.
-        
+        Prepare DMPs for validation and optimization in multi-context mode.
+
+        Loads validation data and sorts DMPs by biological importance.
+        Returns all DMPs for subsequent optimization if enabled.
+
         Args:
             bio_dmps_df: DataFrame of biologically filtered DMPs
-            
+
         Returns:
-            DataFrame with optimal subset of DMPs
+            DataFrame with sorted DMPs ready for optimization
         """
         n_dmps = len(bio_dmps_df)
         target_ba = self.config.target_balanced_accuracy
         
-        logger.info(f"🔍 Binary search DMP selection: {n_dmps:,} candidates, target BA={target_ba:.3f}")
+        logger.info(f"🔍 Preparing DMPs for validation: {n_dmps:,} candidates")
         
         if n_dmps == 0:
             return bio_dmps_df
@@ -930,153 +933,62 @@ class MethylDetector:
         # Unpack validation data (now includes calibration split)
         X_calib, y_calib, X_test, y_test, val_positions, val_contexts = validation_data
         
-        # Binary search for optimal k (only for real validation - synthetic gives BA=1.0 everywhere)
-        # Can be disabled with enable_binary_search=False
-        if self.config.validation_mode == "real" and self.config.enable_binary_search:
-            low, high = max(10, self.config.min_selected_dmps or 10), n_dmps
-            best_k = n_dmps
-            best_ba = 0.0
-            
-            logger.info(f"Binary search range: {low}-{high}")
-            
-            iteration = 0
-            best_result = None
-            no_improvement_count = 0
-            
-            while low <= high:
-                mid = (low + high) // 2
-                test_subset = sorted_df.iloc[:mid]
-                
-                iteration += 1
-                logger.info(f"  Iteration {iteration}: Testing k={mid:,} DMPs...")
-                
-                import time
-                start_time = time.time()
-                result = self._validate_classifier_subset(
-                    test_subset,
-                    X_calib, y_calib,
-                    X_test, y_test,
-                    val_positions, val_contexts
-                )
-                elapsed = time.time() - start_time
-                
-                ba = result['balanced_accuracy']
-                
-                # Track best result
-                if ba > best_ba:
-                    best_ba = ba
-                    best_k = mid
-                    best_result = result
-                    no_improvement_count = 0
-                    logger.info(f"  → k={mid:,}: BA={ba:.6f} ✓ New best!")
-                else:
-                    no_improvement_count += 1
-                    logger.info(f"  → k={mid:,}: BA={ba:.6f}")
-                
-                if ba >= target_ba:
-                    # Target achieved, try fewer DMPs
-                    high = mid - 1
-                else:
-                    # Need more DMPs, but check if we're making progress
-                    if no_improvement_count >= 3:
-                        logger.info(f"  Stopping early: no improvement for {no_improvement_count} iterations")
-                        break
-                    low = mid + 1
-            
-            # Apply min_dmps_for_export
-            original_k = best_k
-            best_k = max(best_k, self.config.min_dmps_for_export)
-            best_k = min(best_k, n_dmps)
-            
-            if best_k != original_k:
-                logger.info(f"Adjusting k from {original_k:,} to {best_k:,} (min_dmps_for_export={self.config.min_dmps_for_export:,})")
-            
-            # Final subset and validation
-            final_subset = sorted_df.iloc[:best_k]
-            final_result = self._validate_classifier_subset(
-                final_subset,
-                X_calib, y_calib,
-                X_test, y_test,
-                val_positions, val_contexts
-            )
-        elif not self.config.enable_binary_search:
-            # Binary search disabled: skip and go straight to DE (if enabled) or use default
-            logger.info("⏭️  Binary search disabled (enable_binary_search=False)")
-            if self.config.optimize_for_validation_accuracy:
-                logger.info("   Proceeding directly to Differential Evolution optimization...")
-                best_k = n_dmps // 2  # Will be ignored by DE (uses uniform exploration)
+        # Simple DMP selection (no optimization)
+        if self.config.validation_mode == "real":
+            # Start with a reasonable initial k for optimization, or all DMPs if no optimization
+            if self.config.optimize_dmps:
+                # Start optimization from min_dmps_for_export as initial guess
+                best_k = max(self.config.min_dmps_for_export, min(10000, n_dmps // 10))  # Reasonable starting point
             else:
-                # Neither binary search nor DE: use default (respect min_dmps_for_export)
-                best_k = max(self.config.min_dmps_for_export, n_dmps // 2)
-                best_k = min(best_k, n_dmps)
-                logger.info(f"   Using default selection: {best_k:,} DMPs (min_dmps_for_export={self.config.min_dmps_for_export:,})")
-            best_ba = 0.0
+                best_k = n_dmps
             final_result = None
         else:
-            # Synthetic mode: skip binary search (BA=1.0 everywhere), go straight to DE
-            logger.info("⏭️  Skipping binary search for synthetic validation (BA=1.0 trivially achievable)")
-            logger.info("   Proceeding directly to Differential Evolution optimization...")
-            best_k = n_dmps // 2  # Start DE from middle
-            best_ba = 1.0
+            # Synthetic mode: use all DMPs (BA=1.0 trivially achievable)
+            logger.info("⏭️  Using synthetic validation (BA=1.0 trivially achievable)")
+            best_k = n_dmps  # Use all DMPs
             final_result = None
-        
-        # Log results only if binary search ran (real mode)
-        if final_result is not None:
-            final_ba = final_result['balanced_accuracy']
-            cm = final_result['confusion_matrix']
-            metrics = final_result['metrics']
-            counts = final_result['counts']
-            
-            # Log final results with confusion matrix
+                
+        # Optional: DMP optimization (if enabled and using real validation)
+        if self.config.optimize_dmps and self.config.validation_mode == "real":
             logger.info("")
-            logger.info("="*60)
-            logger.info(f"✅ Binary Search Complete - Selected {best_k:,} DMPs")
-            logger.info("="*60)
-            logger.info(f"Balanced Accuracy: {final_ba:.4f}" + (" ✓ Target Achieved" if final_ba >= target_ba else f" (Target: {target_ba:.3f})"))
-            logger.info("")
-            logger.info("📊 Confusion Matrix:")
-            logger.info(f"                     Predicted")
-            logger.info(f"                Negative  Positive")
-            logger.info(f"  Actual Negative:  {cm['tn']:3d}      {cm['fp']:3d}      (Class 1: {counts['n_negative']} samples)")
-            logger.info(f"  Actual Positive:  {cm['fn']:3d}      {cm['tp']:3d}      (Class 2: {counts['n_positive']} samples)")
-            logger.info("")
-            logger.info("📈 Performance Metrics:")
-            logger.info(f"  Sensitivity (Recall):  {metrics['sensitivity']:.4f}  ({cm['tp']}/{counts['n_positive']} positives correctly identified)")
-            logger.info(f"  Specificity:           {metrics['specificity']:.4f}  ({cm['tn']}/{counts['n_negative']} negatives correctly identified)")
-            logger.info(f"  Precision (PPV):       {metrics['precision']:.4f}  ({cm['tp']}/{cm['tp']+cm['fp']} predicted positives were correct)")
-            logger.info(f"  Overall Accuracy:      {metrics['accuracy']:.4f}  ({cm['tp']+cm['tn']}/{counts['n_total']} total correct)")
-            logger.info("="*60)
-            logger.info("")
-            
-            # Store validation results for later use
-            self._final_validation_results = final_result
-        
-        # Optional: Differential Evolution optimization (if enabled)
-        if self.config.optimize_for_validation_accuracy and best_k < n_dmps:
-            logger.info("")
-            # Pass start_k as None if binary search was disabled, otherwise pass best_k
-            de_start_k = None if not self.config.enable_binary_search else best_k
-            if de_start_k is not None:
-                logger.info(f"🧬 Starting Differential Evolution optimization from k={best_k:,}...")
+            logger.info(f"🎯 Starting DMP optimization from k={best_k:,} towards optimal balance")
+
+            # Choose optimization method: Bayesian Optimization or FeatureCuts
+            if self.config.optimization_method == "featurecuts":
+                # FeatureCuts: BO variant that balances min k + max BA
+                logger.info("🧬 FeatureCuts: Optimizing DMP count with weighted BA + sparsity objective")
+                logger.info("   Balances classification performance with biomarker parsimony")
+
+                optimized_k = self._optimize_dmps_featurecuts(
+                    sorted_df,
+                    start_k=best_k,  # Start from initial k
+                    max_k=n_dmps,
+                    X_calib=X_calib, y_calib=y_calib,
+                    X_test=X_test, y_test=y_test,
+                    val_positions=val_positions, val_contexts=val_contexts
+                )
             else:
-                logger.info(f"🧬 Starting Differential Evolution optimization (no binary search hint)...")
-            optimized_k = self._optimize_dmps_differential_evolution(
-                sorted_df, de_start_k, n_dmps,
-                X_calib, y_calib, X_test, y_test,
-                val_positions, val_contexts
-            )
-            
-            if de_start_k is not None and optimized_k != best_k:
-                logger.info(f"📈 DE optimization: k={best_k:,} → k={optimized_k:,}")
-                best_k = optimized_k
-            elif de_start_k is None:
-                logger.info(f"📈 DE optimization found optimal: k={optimized_k:,}")
-                best_k = optimized_k
-            else:
-                logger.info(f"📊 DE optimization: k={best_k:,} is already optimal")
-            
-            # Always validate final result after DE
-            final_subset = sorted_df.iloc[:best_k]
+                # Bayesian Optimization (default)
+                logger.info("🧬 Bayesian Optimization: Maximizing BA with GP surrogate model")
+                logger.info("   Efficient global optimization using Expected Improvement acquisition")
+
+                optimized_k = self._optimize_dmps_bayesian(
+                    sorted_df,
+                    start_k=best_k,  # Start from initial k
+                    max_k=n_dmps,
+                    X_calib=X_calib, y_calib=y_calib,
+                    X_test=X_test, y_test=y_test,
+                    val_positions=val_positions, val_contexts=val_contexts
+                )
+
+            best_k = optimized_k
+            logger.info(f"📈 Optimization complete: final k={best_k:,}")
+
+            # Update selected DataFrame to optimized subset
+            selected_dmps_df = sorted_df.iloc[:best_k].copy()
+
+            # Always validate final result after optimization
+            final_subset = selected_dmps_df
             final_result = self._validate_classifier_subset(
                 final_subset,
                 X_calib, y_calib,
@@ -1085,18 +997,16 @@ class MethylDetector:
             )
             self._final_validation_results = final_result
             
-            # Log final DE results
+            # Log final optimization results
             final_ba = final_result['balanced_accuracy']
             cm = final_result['confusion_matrix']
             logger.info(f"✅ Final: k={best_k:,} DMPs, BA={final_ba:.4f}, TP={cm['tp']}, TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}")
         else:
-            # No DE optimization, use binary search result or default
-            # If binary search was also disabled, ensure we respect min_dmps_for_export
-            if not self.config.enable_binary_search:
-                best_k = max(self.config.min_dmps_for_export, best_k)
-                best_k = min(best_k, n_dmps)
-                logger.info(f"   Using {best_k:,} DMPs (respecting min_dmps_for_export={self.config.min_dmps_for_export:,})")
-            final_subset = sorted_df.iloc[:best_k]
+            # No optimization: use all DMPs (respect min_dmps_for_export)
+            best_k = max(self.config.min_dmps_for_export, n_dmps)
+            logger.info(f"   Using all {best_k:,} DMPs (respecting min_dmps_for_export={self.config.min_dmps_for_export:,})")
+            selected_dmps_df = sorted_df.iloc[:best_k].copy()
+            final_subset = selected_dmps_df
         
         # If we used synthetic validation, verify on real samples from centroid metadata
         if self.config.validation_mode == "synthetic":
@@ -1286,7 +1196,7 @@ class MethylDetector:
         val_contexts: np.ndarray
     ) -> int:
         """
-        Optimize DMP count using Differential Evolution for global search.
+        Optimize DMP count using Bayesian Optimization for global search.
         
         Args:
             sorted_df: Sorted DMPs by importance
@@ -1305,7 +1215,7 @@ class MethylDetector:
         if start_k is not None:
             logger.info(f"  Starting hint from binary search: k={start_k:,}")
         else:
-            logger.info(f"  No binary search hint (enable_binary_search=False), using uniform exploration")
+            logger.info(f"  Using uniform exploration across DMP range")
         
         # Cache for performance evaluations
         evaluation_cache = {}
@@ -1334,12 +1244,12 @@ class MethylDetector:
             
             # Only log improvements or every 10th evaluation
             if ba > max(evaluation_cache.values(), default=0) or len(evaluation_cache) % 10 == 0:
-                logger.info(f"    DE eval #{len(evaluation_cache)}: k={k:,} → BA={ba:.6f}")
+                logger.info(f"    BO eval #{len(evaluation_cache)}: k={k:,} → BA={ba:.6f}")
             
             return -ba  # Minimize negative = maximize
         
-        # Run Differential Evolution
-        logger.info(f"  Running DE (maxiter=30, popsize=10)...")
+        # Run Bayesian Optimization
+        logger.info(f"  Running Bayesian Optimization...")
         bounds = [(10, max_k)]
         
         # Initialize population based on whether binary search was used
@@ -1436,6 +1346,249 @@ class MethylDetector:
         logger.info(f"  DE stats: {result.nfev} evaluations, {result.nit} iterations, success={result.success}")
         
         return optimal_k
+
+
+    def _optimize_dmps_featurecuts(
+        self,
+        sorted_df: pd.DataFrame,
+        start_k: Optional[int],
+        max_k: int,
+        X_calib: np.ndarray,
+        y_calib: np.ndarray,
+        X_test: np.ndarray,
+        y_test: np.ndarray,
+        val_positions: np.ndarray,
+        val_contexts: np.ndarray
+    ) -> int:
+        """
+        Optimize DMP count using FeatureCuts: BO variant for top-k cutoff optimization.
+
+        FeatureCuts balances minimal DMP count with maximal BA using a weighted objective:
+        Score = BA + λ * (1 - k/max_k)  # λ weights sparsity vs performance
+
+        This implements the "Ultra-fast; balances min k + max BA built-in" approach
+        from the optimization comparison table.
+
+        Args:
+            sorted_df: Sorted DMPs by importance
+            start_k: Starting k from binary search (None if binary search was disabled)
+            max_k: Maximum k to consider
+            X_calib, y_calib, X_test, y_test: Validation data
+            val_positions, val_contexts: Position/context arrays
+
+        Returns:
+            Optimal k value balancing performance and sparsity
+        """
+        from scipy.optimize import minimize_scalar
+
+        logger.info(f"  FeatureCuts search range: k ∈ [10, {max_k:,}]")
+
+        # Sparsity-performance trade-off parameter (λ)
+        # Higher λ favors fewer DMPs, lower λ favors higher BA
+        lambda_sparsity = 0.3  # Balances BA vs sparsity
+
+        # Cache for performance evaluations
+        evaluation_cache = {}
+
+        def combined_objective(k):
+            """Minimize: -BA - λ*(1-k/max_k) = maximize BA + λ*sparsity"""
+            k = int(round(k))
+            k = max(10, min(k, max_k))
+
+            if k in evaluation_cache:
+                ba = evaluation_cache[k]
+            else:
+                test_subset = sorted_df.iloc[:k]
+                result = self._validate_classifier_subset(
+                    test_subset, X_calib, y_calib, X_test, y_test, val_positions, val_contexts
+                )
+                ba = result['balanced_accuracy']
+                evaluation_cache[k] = ba
+
+            # Sparsity bonus: higher for smaller k
+            sparsity_score = 1.0 - (k - 10) / (max_k - 10)  # 1.0 for k=10, 0.0 for k=max_k
+
+            # Combined score: BA + λ * sparsity (higher is better)
+            combined_score = ba + lambda_sparsity * sparsity_score
+
+            return -combined_score  # Minimize negative for maximization
+
+        # Initial evaluations at key points
+        initial_points = [10, max_k // 4, max_k // 2, 3 * max_k // 4, max_k]
+        if start_k is not None and start_k not in initial_points:
+            initial_points.append(start_k)
+
+        initial_points = sorted(list(set([max(10, min(p, max_k)) for p in initial_points])))
+
+        # Evaluate initial points
+        initial_scores = []
+        for k in initial_points:
+            score = combined_objective(k)
+            initial_scores.append((k, -score))  # Convert back to positive BA + sparsity
+
+        logger.info(f"  Initial FeatureCuts evaluations: {len(initial_points)} points")
+        for k, score in initial_scores:
+            logger.info(f"    k={k:,}: BA={evaluation_cache[k]:.6f}, combined score={score:.6f}")
+
+        # Use bounded optimization to find optimal k
+        bounds = (10, max_k)
+        result = minimize_scalar(
+            combined_objective,
+            bounds=bounds,
+            method='bounded',
+            options={'maxiter': 50, 'xatol': 1}
+        )
+
+        optimal_k = int(round(result.x))
+        optimal_k = max(10, min(optimal_k, max_k))
+
+        # Evaluate final result
+        final_score = combined_objective(optimal_k)
+        optimal_ba = evaluation_cache[optimal_k]
+
+        logger.info(f"  ✅ FeatureCuts complete: k={optimal_k:,}, BA={optimal_ba:.6f}")
+        logger.info(f"  FeatureCuts stats: {len(evaluation_cache)} evaluations, λ={lambda_sparsity}")
+
+        return optimal_k
+
+    def _optimize_dmps_bayesian(
+        self,
+        sorted_df: pd.DataFrame,
+        start_k: Optional[int],
+        max_k: int,
+        X_calib: np.ndarray,
+        y_calib: np.ndarray,
+        X_test: np.ndarray,
+        y_test: np.ndarray,
+        val_positions: np.ndarray,
+        val_contexts: np.ndarray
+    ) -> int:
+        """
+        Optimize DMP count using Bayesian Optimization with Gaussian Process surrogate.
+
+        This implements BO using sklearn's GP regressor and Expected Improvement acquisition.
+        More efficient than DE for non-monotonic functions, typically requiring 20-50 evaluations.
+
+        Args:
+            sorted_df: Sorted DMPs by importance
+            start_k: Starting k from binary search (None if binary search was disabled)
+            max_k: Maximum k to consider
+            X_calib, y_calib, X_test, y_test: Validation data
+            val_positions, val_contexts: Position/context arrays
+
+        Returns:
+            Optimal k value
+        """
+        from scipy.stats import norm
+        from sklearn.gaussian_process import GaussianProcessRegressor
+        from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+
+        logger.info(f"  BO search range: k ∈ [10, {max_k:,}]")
+
+        # Cache for performance evaluations
+        evaluation_cache = {}
+
+        def objective_function(k):
+            """Evaluate BA for given k (return negative BA for minimization)"""
+            k = int(round(k))
+            k = max(10, min(k, max_k))
+
+            if k in evaluation_cache:
+                return -evaluation_cache[k]
+
+            test_subset = sorted_df.iloc[:k]
+            result = self._validate_classifier_subset(
+                test_subset, X_calib, y_calib, X_test, y_test, val_positions, val_contexts
+            )
+            ba = result['balanced_accuracy']
+            evaluation_cache[k] = ba
+
+            return -ba  # Minimize negative BA = maximize BA
+
+        # Initial evaluations: 8-12 diverse points
+        n_initial = min(10, max_k - 10 + 1)
+
+        # Generate initial points
+        if start_k is not None:
+            # Informed initialization: include start_k and nearby points
+            initial_points = [start_k]
+            for offset in [-25, -10, 10, 25]:
+                candidate = start_k + offset
+                if 10 <= candidate <= max_k:
+                    initial_points.append(candidate)
+        else:
+            # Uninformed initialization: uniform sampling
+            initial_points = []
+
+        # Fill with random points for diversity
+        while len(initial_points) < n_initial:
+            candidate = np.random.randint(10, max_k + 1)
+            if candidate not in initial_points:
+                initial_points.append(candidate)
+
+        initial_points = sorted(list(set(initial_points)))[:n_initial]
+
+        # Evaluate initial points
+        X_observed = np.array([[k] for k in initial_points])
+        y_observed = np.array([objective_function(k) for k in initial_points])
+
+        logger.info(f"  Initial BO evaluations: {len(initial_points)} points, best BA: {-np.min(y_observed):.6f}")
+
+        # Bayesian Optimization loop: 15-25 iterations
+        n_iterations = min(20, max_k - 10)
+
+        for iteration in range(n_iterations):
+            # Fit GP surrogate model
+            kernel = C(1.0, (1e-3, 1e3)) * RBF(10, (1e-2, 1e3))
+            gp = GaussianProcessRegressor(
+                kernel=kernel,
+                alpha=1e-6,
+                normalize_y=True,
+                n_restarts_optimizer=3
+            )
+            gp.fit(X_observed, y_observed)
+
+            # Expected Improvement acquisition function
+            def expected_improvement(X):
+                X = X.reshape(-1, 1)
+                mu, sigma = gp.predict(X, return_std=True)
+                best_y = np.min(y_observed)
+
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    Z = (best_y - mu) / sigma
+                    ei = (best_y - mu) * norm.cdf(Z) + sigma * norm.pdf(Z)
+                    ei[sigma == 0.0] = 0.0
+
+                return ei
+
+            # Evaluate EI at candidate points and select next evaluation
+            candidate_points = np.linspace(10, max_k, min(100, max_k - 10 + 1)).reshape(-1, 1)
+            ei_values = expected_improvement(candidate_points)
+
+            best_idx = np.argmax(ei_values)
+            next_k = int(candidate_points[best_idx, 0])
+
+            # Evaluate objective and update observations
+            next_y = objective_function(next_k)
+            X_observed = np.vstack([X_observed, [[next_k]]])
+            y_observed = np.append(y_observed, next_y)
+
+            # Log progress every 5 iterations or when improvement found
+            current_best_k = X_observed[np.argmin(y_observed), 0]
+            current_best_ba = -np.min(y_observed)
+            if iteration % 5 == 0 or -next_y > current_best_ba - 0.001:
+                logger.info(f"    BO iter {iteration+1}: k={next_k:,} → BA={-next_y:.6f}, best: k={int(current_best_k):,} BA={current_best_ba:.6f}")
+
+        # Return best result
+        best_idx = np.argmin(y_observed)
+        optimal_k = int(X_observed[best_idx, 0])
+        optimal_ba = -y_observed[best_idx]
+
+        logger.info(f"  ✅ BO complete: k={optimal_k:,}, BA={optimal_ba:.6f}")
+        logger.info(f"  BO stats: {len(y_observed)} evaluations ({n_initial} initial + {n_iterations} BO)")
+
+        return optimal_k
+
     
     def _save_validation_results(self, n_dmps_exported: Optional[int] = None):
         """Save validation results to JSON file."""
@@ -1448,10 +1601,33 @@ class MethylDetector:
         results_path = output_dir / f"results-{self.config.chromosome}.json"
         
         # Prepare results for JSON serialization
+        # Convert Path objects to strings for JSON serialization
+        def convert_paths(obj):
+            """Recursively convert Path objects to strings."""
+            if isinstance(obj, Path):
+                return str(obj)
+            elif isinstance(obj, dict):
+                return {k: convert_paths(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [convert_paths(item) for item in obj]
+            else:
+                return obj
+        
+        # Get config dict and convert Path objects to strings
+        try:
+            # Try using mode='json' which should convert Paths automatically (Pydantic v2)
+            config_dict = self.config.model_dump(mode='json')
+        except (TypeError, ValueError):
+            # Fallback: manually convert Path objects
+            config_dict = convert_paths(self.config.model_dump())
+        else:
+            # If mode='json' worked, double-check for any remaining Path objects
+            config_dict = convert_paths(config_dict)
+        
         results = {
             'chromosome': self.config.chromosome,
             'timestamp': datetime.now().isoformat(),
-            'config': self.config.model_dump()
+            'config': config_dict
         }
         
         # Add main validation results (from optimization)

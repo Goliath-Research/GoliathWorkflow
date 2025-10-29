@@ -1,6 +1,10 @@
 {
   "chromosome": "1",
-  "contexts": ["CG", "CHG", "CHH"],
+  "contexts": [
+    "CG",
+    "CHG",
+    "CHH"
+  ],
   "centroid1_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/h",
   "centroid2_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/c",
   "output_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/detections/hc",
@@ -8,21 +12,22 @@
   "min_delta_mean": 0.2,
   "max_bc": 0.5,
   "use_context_weights": true,
-  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_low": 0.1,
   "trimmed_percentile_high": 0.01,
   "export_all_biological_dmps": false,
-  "target_balanced_accuracy": 0.99,
+  "target_balanced_accuracy": 0.999,
   "n_validation_samples": 100,
   "min_dmps_for_export": 5000,
   "gamma": 1.5,
   "temperature": 2.5,
-  "enable_platt_calibration": true,  
+  "enable_platt_calibration": true,
   "use_gpu": true,
   "random_state": 42,
+  "optimization_method": "bayesian_optimization",
   "prediction_method": "beta",
   "validation_mode": "real",
   "validation_split_ratio": 0.0,
-  "optimize_for_validation_accuracy": true,
+  "optimize_dmps": true,
   "centroid1_validation_samples": [
     "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/HBCST-042525-95676",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/HBCST-042825-39553",
@@ -39,7 +44,7 @@
     "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/HBCST-061825-52197",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/HBCST-063025-77476",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/HBCST-071625-48267"
-  ], 
+  ],
   "centroid2_validation_samples": [
     "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/DBCST-051425-111148",
     "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/DBCST-060525-111386",
