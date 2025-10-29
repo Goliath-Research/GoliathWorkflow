@@ -1539,7 +1539,7 @@ class MethylDetector:
 
         for iteration in range(n_iterations):
             # Fit GP surrogate model
-            kernel = C(1.0, (1e-3, 1e3)) * RBF(10, (1e-2, 1e3))
+            kernel = C(1.0, (1e-6, 1e6)) * RBF(10, (1e-3, 1e6))
             gp = GaussianProcessRegressor(
                 kernel=kernel,
                 alpha=1e-6,
