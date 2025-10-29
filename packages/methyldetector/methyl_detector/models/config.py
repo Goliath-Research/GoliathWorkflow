@@ -163,6 +163,10 @@ class MethylDetectorConfig(BaseModel):
         default=False,
         description="Enable accuracy-based DMP optimization using real validation samples (requires validation_mode='real' and validation samples). Uses binary search to find minimum k that achieves maximum accuracy."
     )
+    enable_binary_search: bool = Field(
+        default=True,
+        description="Enable binary search optimization before Differential Evolution. If False, skips binary search and DE will start with a uniform exploration strategy across the full search space."
+    )
     
     # ----------------
     # Validation Configuration

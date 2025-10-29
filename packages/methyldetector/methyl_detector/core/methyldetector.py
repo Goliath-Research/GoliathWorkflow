@@ -240,7 +240,7 @@ class MethylDetector:
             
             # Save validation results if binary search was performed
             if hasattr(self, '_final_validation_results') and self._final_validation_results:
-                self._save_validation_results()
+                self._save_validation_results(n_dmps_exported=len(selected_dmps_df))
         
         # Create result (use selected DMPs for result stats)
         result = self._create_multi_context_result(dmps_df, selected_dmps_df)
@@ -931,7 +931,8 @@ class MethylDetector:
         X_calib, y_calib, X_test, y_test, val_positions, val_contexts = validation_data
         
         # Binary search for optimal k (only for real validation - synthetic gives BA=1.0 everywhere)
-        if self.config.validation_mode == "real":
+        # Can be disabled with enable_binary_search=False
+        if self.config.validation_mode == "real" and self.config.enable_binary_search:
             low, high = max(10, self.config.min_selected_dmps or 10), n_dmps
             best_k = n_dmps
             best_ba = 0.0
@@ -998,6 +999,19 @@ class MethylDetector:
                 X_test, y_test,
                 val_positions, val_contexts
             )
+        elif not self.config.enable_binary_search:
+            # Binary search disabled: skip and go straight to DE (if enabled) or use default
+            logger.info("⏭️  Binary search disabled (enable_binary_search=False)")
+            if self.config.optimize_for_validation_accuracy:
+                logger.info("   Proceeding directly to Differential Evolution optimization...")
+                best_k = n_dmps // 2  # Will be ignored by DE (uses uniform exploration)
+            else:
+                # Neither binary search nor DE: use default (respect min_dmps_for_export)
+                best_k = max(self.config.min_dmps_for_export, n_dmps // 2)
+                best_k = min(best_k, n_dmps)
+                logger.info(f"   Using default selection: {best_k:,} DMPs (min_dmps_for_export={self.config.min_dmps_for_export:,})")
+            best_ba = 0.0
+            final_result = None
         else:
             # Synthetic mode: skip binary search (BA=1.0 everywhere), go straight to DE
             logger.info("⏭️  Skipping binary search for synthetic validation (BA=1.0 trivially achievable)")
@@ -1040,15 +1054,23 @@ class MethylDetector:
         # Optional: Differential Evolution optimization (if enabled)
         if self.config.optimize_for_validation_accuracy and best_k < n_dmps:
             logger.info("")
-            logger.info(f"🧬 Starting Differential Evolution optimization from k={best_k:,}...")
+            # Pass start_k as None if binary search was disabled, otherwise pass best_k
+            de_start_k = None if not self.config.enable_binary_search else best_k
+            if de_start_k is not None:
+                logger.info(f"🧬 Starting Differential Evolution optimization from k={best_k:,}...")
+            else:
+                logger.info(f"🧬 Starting Differential Evolution optimization (no binary search hint)...")
             optimized_k = self._optimize_dmps_differential_evolution(
-                sorted_df, best_k, n_dmps,
+                sorted_df, de_start_k, n_dmps,
                 X_calib, y_calib, X_test, y_test,
                 val_positions, val_contexts
             )
             
-            if optimized_k != best_k:
+            if de_start_k is not None and optimized_k != best_k:
                 logger.info(f"📈 DE optimization: k={best_k:,} → k={optimized_k:,}")
+                best_k = optimized_k
+            elif de_start_k is None:
+                logger.info(f"📈 DE optimization found optimal: k={optimized_k:,}")
                 best_k = optimized_k
             else:
                 logger.info(f"📊 DE optimization: k={best_k:,} is already optimal")
@@ -1068,7 +1090,12 @@ class MethylDetector:
             cm = final_result['confusion_matrix']
             logger.info(f"✅ Final: k={best_k:,} DMPs, BA={final_ba:.4f}, TP={cm['tp']}, TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}")
         else:
-            # No DE optimization, use binary search result
+            # No DE optimization, use binary search result or default
+            # If binary search was also disabled, ensure we respect min_dmps_for_export
+            if not self.config.enable_binary_search:
+                best_k = max(self.config.min_dmps_for_export, best_k)
+                best_k = min(best_k, n_dmps)
+                logger.info(f"   Using {best_k:,} DMPs (respecting min_dmps_for_export={self.config.min_dmps_for_export:,})")
             final_subset = sorted_df.iloc[:best_k]
         
         # If we used synthetic validation, verify on real samples from centroid metadata
@@ -1249,7 +1276,7 @@ class MethylDetector:
     def _optimize_dmps_differential_evolution(
         self,
         sorted_df: pd.DataFrame,
-        start_k: int,
+        start_k: Optional[int],
         max_k: int,
         X_calib: np.ndarray,
         y_calib: np.ndarray,
@@ -1263,7 +1290,7 @@ class MethylDetector:
         
         Args:
             sorted_df: Sorted DMPs by importance
-            start_k: Starting k from binary search
+            start_k: Starting k from binary search (None if binary search was disabled)
             max_k: Maximum k to consider
             X_calib, y_calib: Calibration set for Platt
             X_test, y_test: Test set for evaluation
@@ -1275,7 +1302,10 @@ class MethylDetector:
         from scipy.optimize import differential_evolution
         
         logger.info(f"  Search range: k ∈ [10, {max_k:,}]")
-        logger.info(f"  Starting hint: k={start_k:,}")
+        if start_k is not None:
+            logger.info(f"  Starting hint from binary search: k={start_k:,}")
+        else:
+            logger.info(f"  No binary search hint (enable_binary_search=False), using uniform exploration")
         
         # Cache for performance evaluations
         evaluation_cache = {}
@@ -1312,15 +1342,91 @@ class MethylDetector:
         logger.info(f"  Running DE (maxiter=30, popsize=10)...")
         bounds = [(10, max_k)]
         
+        # Initialize population based on whether binary search was used
+        popsize = 10
+        init_population = []
+        
+        if start_k is not None:
+            # Binary search was used: initialize with strategic points around start_k
+            # Since BA=f(k) is non-monotonic, optimal k might be less than binary search result
+            strategic_points = []
+            
+            # Minimum bound
+            strategic_points.append(10)
+            
+            # Add fractional points below start_k (key for finding optimal that might be smaller)
+            if start_k > 30:
+                strategic_points.extend([
+                    max(10, int(start_k * 0.3)),  # 30% of binary search k
+                    max(10, int(start_k * 0.5)),  # 50% of binary search k
+                ])
+            if start_k > 20:
+                strategic_points.extend([
+                    max(10, int(start_k * 0.7)),  # 70% of binary search k
+                    max(10, int(start_k * 0.85)),  # 85% of binary search k
+                ])
+            
+            # Binary search result
+            strategic_points.append(start_k)
+            
+            # Add points above start_k for completeness
+            strategic_points.extend([
+                min(max_k, int(start_k * 1.15)),  # 15% above
+                min(max_k, int(start_k * 1.3)),  # 30% above
+            ])
+            
+            # Clip all strategic points to bounds and remove duplicates
+            strategic_points = [max(10, min(int(p), max_k)) for p in strategic_points]
+            strategic_points = sorted(list(set(strategic_points)))  # Remove duplicates and sort
+            
+            # Add strategic points to initial population
+            for point in strategic_points[:popsize]:
+                init_population.append([float(point)])
+            
+            logger.info(f"  Using strategic initialization based on binary search result")
+        else:
+            # Binary search was disabled: use uniform exploration across the full range
+            # Distribute initial population evenly across the search space
+            np.random.seed(self.config.random_state)
+            
+            # Use Latin Hypercube-style sampling for better coverage
+            # Divide search space into evenly spaced intervals
+            n_intervals = popsize
+            interval_size = (max_k - 10) / n_intervals
+            
+            for i in range(n_intervals):
+                # Sample uniformly from each interval
+                lower_bound = 10 + i * interval_size
+                upper_bound = 10 + (i + 1) * interval_size
+                point = np.random.uniform(lower_bound, upper_bound)
+                init_population.append([float(point)])
+            
+            logger.info(f"  Using uniform exploration (no binary search hint)")
+        
+        # Fill remaining population slots with random points to ensure diversity
+        remaining = popsize - len(init_population)
+        if remaining > 0:
+            # Use random sampling for the remaining points, ensuring diversity
+            np.random.seed(self.config.random_state)
+            random_points = np.random.uniform(10, max_k, size=remaining)
+            for point in random_points:
+                init_population.append([float(point)])
+        
+        # Ensure we have exactly popsize points
+        init_population = init_population[:popsize]
+        
+        logger.info(f"  Initial population includes k values: {sorted([int(p[0]) for p in init_population])}")
+        
         result = differential_evolution(
             objective_function,
             bounds,
             maxiter=30,
-            popsize=10,
+            popsize=popsize,
             tol=0.001,
             seed=self.config.random_state,
             strategy='best1bin',
-            workers=1
+            workers=1,
+            init=np.array(init_population)  # Use strategic initial population
         )
         
         optimal_k = int(round(result.x[0]))
@@ -1331,7 +1437,7 @@ class MethylDetector:
         
         return optimal_k
     
-    def _save_validation_results(self):
+    def _save_validation_results(self, n_dmps_exported: Optional[int] = None):
         """Save validation results to JSON file."""
         import json
         from datetime import datetime
@@ -1339,18 +1445,13 @@ class MethylDetector:
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        results_path = output_dir / f"validation_results-{self.config.chromosome}.json"
+        results_path = output_dir / f"results-{self.config.chromosome}.json"
         
         # Prepare results for JSON serialization
         results = {
             'chromosome': self.config.chromosome,
             'timestamp': datetime.now().isoformat(),
-            'config': {
-                'target_balanced_accuracy': self.config.target_balanced_accuracy,
-                'validation_mode': self.config.validation_mode,
-                'min_dmps_for_export': self.config.min_dmps_for_export,
-                'optimize_for_validation_accuracy': self.config.optimize_for_validation_accuracy
-            }
+            'config': self.config.model_dump()
         }
         
         # Add main validation results (from optimization)
@@ -1383,17 +1484,15 @@ class MethylDetector:
                 'sample_counts': self._real_validation_results['counts']
             }
         
-        # Legacy format for backward compatibility (use optimization results)
-        if hasattr(self, '_final_validation_results') and self._final_validation_results:
-            results['performance'] = results['optimization_validation']['performance']
-            results['confusion_matrix'] = results['optimization_validation']['confusion_matrix']
-            results['sample_counts'] = results['optimization_validation']['sample_counts']
+        # Add number of DMPs exported
+        if n_dmps_exported is not None:
+            results['n_dmps_exported'] = n_dmps_exported
         
         # Save to JSON
         with open(results_path, 'w') as f:
             json.dump(results, f, indent=2)
         
-        logger.info(f"💾 Saved validation results to {results_path}")
+        logger.info(f"💾 Saved results to {results_path}")
     
     def _export_unified_csv(self, bio_dmps_df: pd.DataFrame, suffix: str = "") -> Path:
         """
