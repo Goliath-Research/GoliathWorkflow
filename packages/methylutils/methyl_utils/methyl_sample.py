@@ -1375,6 +1375,118 @@ class MethylSample:
                     results[chromosome] = df
         
         return results
+    
+    @classmethod
+    def merge_contexts(cls, context_samples: List['MethylSample']) -> 'MethylSample':
+        """
+        Merge multiple MethylSample instances from different contexts (CG, CHG, CHH).
+        
+        Each position belongs to exactly one context, so positions from different contexts
+        are mutually exclusive. This method concatenates all positions from all contexts,
+        preserving each position's mC/uC/tnc from its original context.
+        
+        Args:
+            context_samples: List of MethylSample instances from different contexts
+        
+        Returns:
+            Merged MethylSample with all positions from all contexts combined
+        
+        Example:
+            >>> cg_sample = MethylSample.load_from_h5("1-CG.h5")
+            >>> chg_sample = MethylSample.load_from_h5("1-CHG.h5")
+            >>> chh_sample = MethylSample.load_from_h5("1-CHH.h5")
+            >>> merged = MethylSample.merge_contexts([cg_sample, chg_sample, chh_sample])
+        """
+        if len(context_samples) == 0:
+            raise ValueError("At least one context sample required")
+        
+        if len(context_samples) == 1:
+            return context_samples[0]
+        
+        # Collect all positions and data from all contexts
+        # Since positions are mutually exclusive between contexts, we can concatenate
+        all_positions = []
+        all_mC = []
+        all_uC = []
+        all_tnc = []
+        
+        # Optional centroid fields (if any sample is a centroid)
+        all_N = []
+        all_Sx = []
+        all_Sx2 = []
+        all_log_x_sum = []
+        all_log_1_minus_x_sum = []
+        
+        has_centroid_data = False
+        
+        for sample in context_samples:
+            # Append all data from this context
+            all_positions.append(sample.pos)
+            all_mC.append(sample.mC)
+            all_uC.append(sample.uC)
+            all_tnc.append(sample.tnc)
+            
+            # Handle optional centroid fields
+            if sample.N is not None:
+                has_centroid_data = True
+                all_N.append(sample.N)
+            if sample.Sx is not None:
+                all_Sx.append(sample.Sx)
+            if sample.Sx2 is not None:
+                all_Sx2.append(sample.Sx2)
+            if sample.log_x_sum is not None:
+                all_log_x_sum.append(sample.log_x_sum)
+            if sample.log_1_minus_x_sum is not None:
+                all_log_1_minus_x_sum.append(sample.log_1_minus_x_sum)
+        
+        # Concatenate all arrays
+        merged_positions = np.concatenate(all_positions).astype(np.uint32)
+        merged_mC = np.concatenate(all_mC).astype(np.uint32)
+        merged_uC = np.concatenate(all_uC).astype(np.uint32)
+        merged_tnc = np.concatenate(all_tnc).astype(np.uint8)
+        
+        # Sort by position to maintain genomic order
+        sort_indices = np.argsort(merged_positions)
+        merged_positions = merged_positions[sort_indices]
+        merged_mC = merged_mC[sort_indices]
+        merged_uC = merged_uC[sort_indices]
+        merged_tnc = merged_tnc[sort_indices]
+        
+        # Handle optional centroid fields
+        merged_N = None
+        merged_Sx = None
+        merged_Sx2 = None
+        merged_log_x_sum = None
+        merged_log_1_minus_x_sum = None
+        
+        if has_centroid_data:
+            # For centroids, we need to handle missing fields in some contexts
+            # If any context has centroid data, we should merge it
+            if all_N:
+                merged_N = np.concatenate(all_N)[sort_indices].astype(np.uint32)
+            if all_Sx:
+                merged_Sx = np.concatenate(all_Sx)[sort_indices].astype(np.float32)
+            if all_Sx2:
+                merged_Sx2 = np.concatenate(all_Sx2)[sort_indices].astype(np.float32)
+            if all_log_x_sum:
+                merged_log_x_sum = np.concatenate(all_log_x_sum)[sort_indices].astype(np.float32)
+            if all_log_1_minus_x_sum:
+                merged_log_1_minus_x_sum = np.concatenate(all_log_1_minus_x_sum)[sort_indices].astype(np.float32)
+        
+        # Create merged sample
+        merged_sample = cls(
+            pos=merged_positions,
+            mC=merged_mC,
+            uC=merged_uC,
+            tnc=merged_tnc,
+            N=merged_N,
+            Sx=merged_Sx,
+            Sx2=merged_Sx2,
+            log_x_sum=merged_log_x_sum,
+            log_1_minus_x_sum=merged_log_1_minus_x_sum
+        )
+        
+        return merged_sample
 
     def apply_mask(self, mask_or_indices: Union[np.ndarray, bool]) -> 'MethylSample':
         """

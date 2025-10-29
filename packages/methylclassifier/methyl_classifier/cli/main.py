@@ -6,25 +6,40 @@ import argparse
 import csv
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Tuple, Dict, Any
 import numpy as np
 import json # Added for loading config file
 
 from ..core.classifier import MethylClassifier
 from ..utils.data_loader import DataLoader
-from ..utils.utils import extract_chrom_context_from_classifier
+from ..utils.utils import extract_chrom_context_from_classifier, setup_logging
 from ..models.config_schema import ClassificationConfig
+from ..models.config import ClassifierConfig
 
 
 def classify_samples(classifier: MethylClassifier,
-                    h5_path: Path,
+                    h5_path: Optional[Path] = None,
+                    samples_list: Optional[List[str]] = None,
                     chrom: str = None,
                     context: str = None,
                     output_file: Optional[Path] = None,
                     debug: bool = False) -> None:
     """
     Load samples from .h5 files and classify them using the trained classifier.
+    
+    Supports:
+    - Single .h5 file via h5_path
+    - Directory of .h5 files via h5_path
+    - List of sample directories (each with {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5) via samples_list
     """
+    # Handle samples list (multi-chromosome with merged contexts)
+    if samples_list:
+        return classify_samples_from_list(classifier, samples_list, output_file, debug)
+    
+    # Legacy: single file or directory
+    if h5_path is None:
+        raise ValueError("Either h5_path or samples_list must be provided")
+    
     filter_info = f" ({chrom}-{context})" if chrom and context else ""
     print(f"\n🔍 Loading samples from: {h5_path}{filter_info}")
 
@@ -104,7 +119,7 @@ def classify_samples(classifier: MethylClassifier,
 
         # Check a few individual samples to see their position ranges
         for i, (name, (_, sample)) in enumerate(zip(sample_names[:3], samples[:3])):
-            positions = sample.positions
+            positions = sample.pos
             if len(positions) > 0:
                 print(f"  {name} ({sample.sample_type}): {len(positions)} positions, range {positions.min()} to {positions.max()}")
                 # Check overlap with classifier DMPs
@@ -222,7 +237,7 @@ def classify_samples(classifier: MethylClassifier,
             'prediction': int(pred),
             'predicted_class': predicted_label,
             'avg_coverage': stats.get('avg_coverage', 0),
-            'total_positions': len(samples[i][1].positions),
+            'total_positions': len(samples[i][1].pos),
             'dmps_used': int(dmps_used),
             'dmps_total': len(dmp_positions),
             'dmp_coverage_pct': float(dmps_used / len(dmp_positions) * 100)
@@ -317,6 +332,277 @@ def classify_samples(classifier: MethylClassifier,
         print(f"\n💾 Results saved to: {output_file}")
 
 
+def classify_samples_from_list(
+    classifier: MethylClassifier,
+    samples_list: List[str],
+    output_file: Optional[Path] = None,
+    debug: bool = False
+) -> None:
+    """
+    Classify samples from a list of directories, merging CG, CHG, CHH contexts.
+    
+    Each directory should contain {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5 files.
+    Contexts are merged per chromosome before classification.
+    
+    Args:
+        classifier: MethylClassifier instance (single or multi-chromosome)
+        samples_list: List of sample directory paths
+        output_file: Optional output CSV file
+        debug: Enable debug output
+    """
+    print(f"\n🔍 Loading {len(samples_list)} samples from directories...")
+    
+    # Load samples (merged contexts per chromosome)
+    loaded_samples = DataLoader.load_samples_from_list(samples_list)
+    
+    if not loaded_samples:
+        raise ValueError("No samples loaded from provided paths")
+    
+    if classifier.is_multi_chromosome:
+        # Multi-chromosome mode: extract features per chromosome and combine
+        _classify_multi_chromosome_samples(classifier, loaded_samples, output_file, debug)
+    else:
+        # Single chromosome mode: use first chromosome from merged samples
+        # Extract chromosome from classifier
+        classifier_chrom = classifier.chromosome
+        
+        if classifier_chrom == 'unknown':
+            # Try to infer from available chromosomes
+            available_chroms = set()
+            for _, chrom_samples in loaded_samples:
+                available_chroms.update(chrom_samples.keys())
+            
+            if not available_chroms:
+                raise ValueError("No chromosomes found in loaded samples")
+            
+            classifier_chrom = sorted(available_chroms)[0]
+            print(f"⚠️ Classifier chromosome unknown, using first available: {classifier_chrom}")
+        
+        # Convert to single-sample format
+        single_samples = []
+        for sample_name, chrom_samples in loaded_samples:
+            if classifier_chrom in chrom_samples:
+                single_samples.append((sample_name, chrom_samples[classifier_chrom]))
+            else:
+                print(f"⚠️ Sample {sample_name}: chromosome {classifier_chrom} not found, skipping")
+        
+        if not single_samples:
+            raise ValueError(f"No samples found with chromosome {classifier_chrom}")
+        
+        # Use existing single-chromosome classification
+        feature_info = classifier.get_feature_info()
+        dmp_positions = feature_info['positions']
+        
+        feature_matrix = []
+        availability_mask = []
+        sample_names = []
+        
+        for sample_name, sample in single_samples:
+            features, mask, stats = DataLoader.extract_sample_features(sample, dmp_positions)
+            feature_matrix.append(features)
+            availability_mask.append(mask)
+            sample_names.append(sample_name)
+        
+        feature_matrix = np.array(feature_matrix)
+        availability_mask = np.array(availability_mask)
+        
+        predictions, probabilities = classify_samples_batch(
+            classifier, feature_matrix, availability_mask, debug
+        )
+        
+        # Save results
+        _save_classification_results(
+            classifier, sample_names, predictions, probabilities, 
+            availability_mask, dmp_positions, output_file
+        )
+
+
+def _classify_multi_chromosome_samples(
+    classifier: MethylClassifier,
+    loaded_samples: List[Tuple[str, Dict[str, Any]]],
+    output_file: Optional[Path] = None,
+    debug: bool = False
+) -> None:
+    """
+    Classify samples using multi-chromosome classifier.
+    
+    Extracts features per chromosome from merged samples and combines predictions.
+    """
+    print(f"\n📊 Extracting features per chromosome for {len(loaded_samples)} samples...")
+    
+    # Get all chromosomes from classifier
+    classifier_chroms = sorted(classifier.classifiers.keys())
+    
+    # Collect features per chromosome
+    chrom_features = {chrom: [] for chrom in classifier_chroms}
+    chrom_masks = {chrom: [] for chrom in classifier_chroms}
+    sample_names = []
+    
+    for sample_name, chrom_samples in loaded_samples:
+        sample_names.append(sample_name)
+        
+        # Extract features for each chromosome
+        for chrom in classifier_chroms:
+            if chrom in chrom_samples:
+                # Get this chromosome's classifier feature info
+                chrom_classifier = classifier.classifiers[chrom]
+                feature_info = chrom_classifier.get_feature_info()
+                dmp_positions = feature_info['positions']
+                
+                # Extract features from merged sample for this chromosome
+                sample = chrom_samples[chrom]
+                features, mask, _ = DataLoader.extract_sample_features(sample, dmp_positions)
+                
+                chrom_features[chrom].append(features)
+                chrom_masks[chrom].append(mask)
+            else:
+                # Missing chromosome: use zeros with all unavailable
+                feature_info = classifier.classifiers[chrom].get_feature_info()
+                n_dmps = feature_info['n_features']
+                chrom_features[chrom].append(np.zeros(n_dmps))
+                chrom_masks[chrom].append(np.zeros(n_dmps, dtype=bool))
+                if debug:
+                    print(f"  ⚠️ Sample {sample_name}: missing chromosome {chrom}")
+    
+    # Convert to arrays per chromosome
+    for chrom in classifier_chroms:
+        chrom_features[chrom] = np.array(chrom_features[chrom])
+        chrom_masks[chrom] = np.array(chrom_masks[chrom])
+    
+    # Get combined predictions from multi-chromosome classifier
+    # We need to concatenate all chromosome features for the classifier
+    # But the current implementation expects concatenated data, which is complex
+    # Let's use a simpler approach: run each chromosome classifier separately and combine
+    
+    print(f"\n🤖 Classifying using {len(classifier_chroms)} chromosome classifier(s)...")
+    
+    n_samples = len(sample_names)
+    n_classes = classifier.n_classes
+    
+    # Initialize weighted probability sum
+    weighted_probas = np.zeros((n_samples, n_classes))
+    
+    for chrom in classifier_chroms:
+        weight = classifier.chromosome_weights.get(chrom, 0.0)
+        
+        if weight == 0.0:
+            continue
+        
+        chrom_classifier = classifier.classifiers[chrom]
+        
+        # Get probabilities from this chromosome
+        try:
+            chrom_probas = chrom_classifier.predict_proba(
+                chrom_features[chrom],
+                chrom_masks[chrom],
+                debug=False
+            )
+            
+            # Weight and accumulate
+            weighted_probas += weight * chrom_probas
+            
+            if debug:
+                print(f"  Chromosome {chrom} (weight={weight:.4f}): avg probas={np.mean(chrom_probas, axis=0)}")
+        except Exception as e:
+            if debug:
+                print(f"  ⚠️ Chromosome {chrom} prediction failed: {e}")
+            continue
+    
+    # Normalize probabilities
+    proba_sums = np.sum(weighted_probas, axis=1, keepdims=True)
+    proba_sums = np.where(proba_sums == 0, 1.0, proba_sums)
+    probabilities = weighted_probas / proba_sums
+    
+    # Get predictions
+    predictions = np.argmax(probabilities, axis=1)
+    
+    # Get combined feature info for output
+    first_chrom = classifier_chroms[0]
+    feature_info = classifier.classifiers[first_chrom].get_feature_info()
+    dmp_positions = feature_info['positions']  # Just for display, actual DMPs are per-chromosome
+    
+    # Create combined availability mask (any chromosome available)
+    combined_mask = np.zeros((n_samples, len(dmp_positions)), dtype=bool)
+    for chrom in classifier_chroms:
+        if chrom in chrom_masks and len(chrom_masks[chrom]) > 0:
+            # Merge masks (simplified - just use first chromosome's mask structure)
+            if combined_mask.shape[1] == chrom_masks[chrom].shape[1]:
+                combined_mask |= chrom_masks[chrom]
+    
+    # Save results
+    _save_classification_results(
+        classifier, sample_names, predictions, probabilities,
+        combined_mask, dmp_positions, output_file,
+        multi_chromosome=True, chromosomes=classifier_chroms
+    )
+
+
+def _save_classification_results(
+    classifier: MethylClassifier,
+    sample_names: List[str],
+    predictions: np.ndarray,
+    probabilities: np.ndarray,
+    availability_mask: np.ndarray,
+    dmp_positions: np.ndarray,
+    output_file: Optional[Path],
+    multi_chromosome: bool = False,
+    chromosomes: Optional[List[str]] = None
+) -> None:
+    """Helper to save classification results to CSV."""
+    if output_file is None:
+        return
+    
+    import csv
+    
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Prepare results data
+    results_data = []
+    
+    for i, (name, pred, prob) in enumerate(zip(sample_names, predictions, probabilities)):
+        if classifier.class_names is not None and pred < len(classifier.class_names):
+            predicted_label = str(classifier.class_names[pred])
+        else:
+            predicted_label = f"Class_{pred}"
+        
+        dmps_used = np.sum(availability_mask[i]) if i < len(availability_mask) else 0
+        
+        result_entry = {
+            'sample': name,
+            'prediction': int(pred),
+            'predicted_class': predicted_label,
+        }
+        
+        # Add probabilities for all classes
+        for j in range(classifier.n_classes):
+            result_entry[f'prob_class{j}'] = float(prob[j])
+        
+        result_entry.update({
+            'dmps_used': int(dmps_used),
+            'dmps_total': len(dmp_positions)
+        })
+        
+        if multi_chromosome and chromosomes:
+            result_entry['chromosomes'] = ','.join(chromosomes)
+        
+        results_data.append(result_entry)
+    
+    # Write CSV
+    fieldnames = ['sample', 'prediction', 'predicted_class'] + \
+                 [f'prob_class{i}' for i in range(classifier.n_classes)] + \
+                 ['dmps_used', 'dmps_total']
+    
+    if multi_chromosome and chromosomes:
+        fieldnames.append('chromosomes')
+    
+    with open(output_file, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results_data)
+    
+    print(f"\n💾 Results saved to: {output_file}")
+
+
 def classify_samples_batch(classifier: MethylClassifier,
                           methylation_data: np.ndarray,
                           availability_mask: Optional[np.ndarray] = None,
@@ -357,11 +643,19 @@ Examples:
 
 Config fields (in JSON):
   {
-    "model_path": "models/classifier.pkl",
+    "model_path": "models/classifier-1-CG.pkl",
+    "model_dir": null,
     "input_path": "samples/",
-    "temperature": 1.0,  // Softmax temperature
-    "enable_platt_calibration": false,  // Enable calibration
-    "validation_data_path": null  // Path to val data for Platt
+    "output_path": "results.csv",
+    "temperature": 1.0,
+    "enable_platt_calibration": false,
+    "validation_data_path": null,
+    "trimmed_percentile_low": 0.10,
+    "trimmed_percentile_high": 0.01,
+    "chromosome_weights": null,
+    "debug": false,
+    "no_filter": false,
+    "log_level": "INFO"
   }
         """
     )
@@ -377,6 +671,12 @@ Config fields (in JSON):
         '--model', '-m',
         type=Path,
         help='Path to trained classifier model (.pkl file) - overrides config if provided'
+    )
+    
+    parser.add_argument(
+        '--model-dir', '-M',
+        type=Path,
+        help='Path to directory containing classifier-{chrom}.pkl files (multi-chromosome mode)'
     )
     
     parser.add_argument(
@@ -414,9 +714,11 @@ Config fields (in JSON):
         with open(args.config, 'r') as f:
             config_data = json.load(f)
         config = ClassificationConfig(**config_data)
-        # Override with CLI args (model, input, output, etc.)
+        # Override with CLI args (model, model_dir, input, output, etc.)
         if args.model:
             config.model_path = str(args.model)
+        if args.model_dir:
+            config.model_dir = str(args.model_dir)
         if args.input:
             config.input_path = str(args.input)
         if args.output:
@@ -439,30 +741,56 @@ Config fields (in JSON):
     # Setup logging
     setup_logging(config.log_level)
     
-    # Create classifier and run
-    classifier = MethylClassifier(config)
-    results = classifier.run()  # Assumes run method uses config for prediction/calibration
+    # Convert ClassificationConfig to ClassifierConfig for MethylClassifier
+    classifier_config = ClassifierConfig(
+        model_path=config.model_path,
+        model_dir=config.model_dir,
+        temperature=config.temperature,
+        enable_platt_calibration=config.enable_platt_calibration,
+        validation_data_path=config.validation_data_path,
+        trimmed_percentile_low=config.trimmed_percentile_low,
+        trimmed_percentile_high=config.trimmed_percentile_high,
+        chromosome_weights=config.chromosome_weights
+    )
     
-    # Extract chromosome and context from classifier path (unless disabled)
+    # Create classifier
+    classifier = MethylClassifier(classifier_config)
+    
+    # Extract chromosome and context from classifier path (unless disabled or multi-chromosome mode)
     chrom, context = None, None
-    if not config.no_filter:
-        try:
-            chrom, context = extract_chrom_context_from_classifier(Path(config.model_path))
-            print(f"📋 Classifier trained on chromosome {chrom}, context {context}")
-        except ValueError as e:
-            print(f"⚠️ {e}")
-            print("Will process all .h5 files (use --no-filter to suppress this warning)")
+    if not config.no_filter and not classifier.is_multi_chromosome:
+        # Only try to extract chrom/context for single-file mode
+        model_path_str = config.model_dir or config.model_path
+        if model_path_str:
+            try:
+                chrom, context = extract_chrom_context_from_classifier(Path(model_path_str))
+                print(f"📋 Classifier trained on chromosome {chrom}, context {context}")
+            except ValueError as e:
+                print(f"⚠️ {e}")
+                print("Will process all .h5 files (use --no-filter to suppress this warning)")
+    elif classifier.is_multi_chromosome:
+        print(f"📋 Multi-chromosome classifier mode: {len(classifier.classifiers)} chromosomes")
 
     # Classify samples using Beta method
     try:
-        classify_samples(
-            classifier=classifier,
-            h5_path=Path(config.input_path),
-            chrom=chrom,
-            context=context,
-            output_file=Path(config.output_path) if config.output_path else None,
-            debug=config.debug
-        )
+        # Handle samples list (with context merging)
+        if config.samples:
+            classify_samples(
+                classifier=classifier,
+                samples_list=config.samples,
+                output_file=Path(config.output_path) if config.output_path else None,
+                debug=config.debug
+            )
+        else:
+            # Legacy: single path
+            classify_samples(
+                classifier=classifier,
+                h5_path=Path(config.input_path) if config.input_path else None,
+                chrom=chrom,
+                context=context,
+                output_file=Path(config.output_path) if config.output_path else None,
+                debug=config.debug
+            )
     except Exception as e:
         print(f"❌ Classification failed: {e}")
         sys.exit(1)

@@ -14,7 +14,8 @@
   "max_bc": 0.6,
   
   "use_context_weights": true,
-  "trimmed_percentile": 0.10,
+  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_high": 0.01,
   
   "export_all_biological_dmps": true,
   

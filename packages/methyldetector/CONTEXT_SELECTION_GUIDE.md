@@ -136,7 +136,8 @@ When using multiple contexts, MethylDetector can apply context weighting:
 {
   "contexts": ["CG", "CHG", "CHH"],
   "use_context_weights": true,
-  "trimmed_percentile": 0.10
+  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_high": 0.01
 }
 ```
 

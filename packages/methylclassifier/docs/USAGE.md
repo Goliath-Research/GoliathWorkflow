@@ -15,47 +15,72 @@ poetry install
 
 ### Basic Classification
 
-Classify samples using a trained model:
+Classify samples using a trained model (single chromosome):
 
 ```bash
-methyl-classifier --model classifier_chr1-CG.pkl \
+methyl-classifier --model classifier-1-CG.pkl \
                   --samples patient_001.h5 patient_002.h5 \
                   --output results.csv
 ```
 
+### Multi-Chromosome Classification
+
+Classify samples using all chromosome classifiers from a directory:
+
+```bash
+methyl-classifier --model-dir /path/to/classifiers/ \
+                  --input samples/ \
+                  --output results.csv
+```
+
+The directory should contain files matching pattern `classifier-{chrom}.pkl` (e.g., `classifier-1.pkl`, `classifier-2.pkl`). Probabilities from each chromosome classifier are weighted by trimmed-mean effect_size and combined.
+
 ### Classification with Configuration File
 
 ```bash
-methyl-classifier --config example_classification_config.yaml
+methyl-classifier --config example_classification_config.json
 ```
 
-See `configs/example_classification_config.yaml` for a complete example.
+See `configs/example_classification_config.json` for a complete example. 
+
+For multi-chromosome mode, see `configs/example_multi_chromosome_config.json`.
+
+For classifying a list of samples with merged contexts (CG+CHG+CHH), see `configs/example_samples_list_config.json`.
 
 ### Batch Classification
 
-Classify all samples in a directory:
+Classify all samples in a directory (single chromosome):
 
 ```bash
-methyl-classifier --model classifier_chr1-CG.pkl \
+methyl-classifier --model classifier-1-CG.pkl \
                   --input-dir /path/to/samples/ \
                   --output-dir /path/to/results/
 ```
 
+### Multi-Chromosome Batch Classification
+
+Classify all samples using multiple chromosome classifiers:
+
+```bash
+methyl-classifier --model-dir /path/to/classifiers/ \
+                  --input /path/to/samples/ \
+                  --output results.csv
+```
+
 ## Python API
 
-### Basic Classification
+### Basic Classification (Single Chromosome)
 
 ```python
 from methyl_classifier import MethylClassifier, ClassifierConfig
 from methyl_utils import MethylSample
 
-# Load classifier
+# Load single classifier
 config = ClassifierConfig(
-    model_path="classifier_chr1-CG.pkl",
+    model_path="classifier-1-CG.pkl",
     temperature=1.0
 )
 classifier = MethylClassifier(config)
-classifier.load_classifier(config.model_path)
 
 # Load and classify sample
 sample = MethylSample.load_from_h5("patient_001.h5")
@@ -66,6 +91,78 @@ probabilities = classifier.predict_proba(methylation_data)
 
 print(f"Prediction: {prediction}")
 print(f"Probabilities: {probabilities}")
+```
+
+### Multi-Chromosome Classification
+
+```python
+from methyl_classifier import MethylClassifier, ClassifierConfig
+
+# Load all chromosome classifiers from directory
+config = ClassifierConfig(
+    model_dir="/path/to/classifiers/",  # Contains classifier-1.pkl, classifier-2.pkl, etc.
+    temperature=1.0,
+    trimmed_percentile_low=0.10,   # Remove bottom 10% of effect sizes (less informative DMPs)
+    trimmed_percentile_high=0.01   # Remove only top 1% of effect sizes (outliers, preserving important DMPs)
+)
+
+# Or use predefined weights:
+# config = ClassifierConfig(
+#     model_dir="/path/to/classifiers/",
+#     chromosome_weights={'1': 0.4, '2': 0.3, '3': 0.3}
+# )
+
+classifier = MethylClassifier(config)
+
+# Classify sample (will combine weighted probabilities from all chromosomes)
+prediction = classifier.predict(methylation_data)
+probabilities = classifier.predict_proba(methylation_data)
+
+print(f"Multi-chromosome prediction: {prediction}")
+print(f"Weighted probabilities: {probabilities}")
+print(f"Chromosome weights: {classifier.chromosome_weights}")
+```
+
+### Classifying Multiple Samples with Merged Contexts
+
+```python
+from methyl_classifier import MethylClassifier, ClassifierConfig
+
+# Load multi-chromosome classifier
+config = ClassifierConfig(
+    model_dir="/path/to/classifiers/",
+    trimmed_percentile=0.10
+)
+classifier = MethylClassifier(config)
+
+# Load and classify multiple samples (each with merged CG+CHG+CHH contexts)
+from methyl_classifier.cli import classify_samples
+
+sample_dirs = [
+    "/path/to/sample1/",  # Contains 1-CG.h5, 1-CHG.h5, 1-CHH.h5, etc.
+    "/path/to/sample2/",
+    "/path/to/sample3/"
+]
+
+classify_samples(
+    classifier=classifier,
+    samples_list=sample_dirs,
+    output_file="results.csv",
+    debug=False
+)
+```
+
+Or using a config file:
+```json
+{
+  "model_dir": "/path/to/classifiers/",
+  "samples": [
+    "/path/to/sample1/",
+    "/path/to/sample2/",
+    "/path/to/sample3/"
+  ],
+  "output_path": "results.csv"
+}
 ```
 
 ### Classification with P-Values
@@ -101,14 +198,17 @@ else:
 ## Configuration Parameters
 
 ### Model
-- `model_path`: Path to trained classifier PKL file (from MethylTrainer)
+- `model_path`: Path to trained classifier PKL file (single chromosome) or directory (multi-chromosome mode)
+- `model_dir`: Path to directory containing `classifier-{chrom}.pkl` files (alternative to `model_path`)
 - `temperature`: Temperature for probability calibration (default: 1.0)
 - `enable_platt_calibration`: Use Platt scaling if available (default: false)
+- `trimmed_percentile_low`: Lower percentile for trimmed-mean effect_size calculation - removes bottom X% (default: 0.10, range: 0.0-0.5)
+- `trimmed_percentile_high`: Upper percentile for trimmed-mean effect_size calculation - removes top X% (default: 0.01, range: 0.0-0.5). High effect_size DMPs are critical for disease classification, so only extreme outliers are removed.
+- `chromosome_weights`: Optional predefined chromosome weights dict (e.g., `{'1': 0.4, '2': 0.3, '3': 0.3}`) - bypasses trimmed-mean calculation if provided
 
 ### Input
-- `input_samples`: List of sample paths to classify
-- `input_dir`: Directory containing samples (alternative to list)
-- `file_pattern`: Pattern to match files (default: "*.h5")
+- `input_path`: Path to single .h5 file or directory containing .h5 files (legacy)
+- `samples`: List of sample directory paths. Each directory should contain `{chrom}-CG.h5`, `{chrom}-CHG.h5`, `{chrom}-CHH.h5` files for each chromosome. Contexts are automatically merged per chromosome before classification.
 
 ### Output
 - `output_dir`: Directory for results

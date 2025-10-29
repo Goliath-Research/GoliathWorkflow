@@ -1,0 +1,16 @@
+{
+  "model_dir": "/path/to/classifiers/",
+  "model_path": null,
+  "input_path": "/path/to/samples/",
+  "output_path": "/path/to/classification_results/multi_chromosome_results.csv",
+  "temperature": 1.0,
+  "enable_platt_calibration": false,
+  "validation_data_path": null,
+  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_high": 0.01,
+  "chromosome_weights": null,
+  "prediction_method": null,
+  "debug": false,
+  "no_filter": false,
+  "log_level": "INFO"
+}

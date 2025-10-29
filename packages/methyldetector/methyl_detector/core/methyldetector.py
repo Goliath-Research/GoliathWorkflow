@@ -357,9 +357,10 @@ class MethylDetector:
         for context, group in dmps_df.groupby('context'):
             S = group[score_col].values
             
-            # Trim bottom and top percentiles
-            qlo = self.config.trimmed_percentile
-            qhi = 1.0 - self.config.trimmed_percentile
+            # Calculate asymmetric trimmed percentiles
+            # Remove more from bottom (low effect sizes) and less from top (high effect sizes are important)
+            qlo = self.config.trimmed_percentile_low
+            qhi = 1.0 - self.config.trimmed_percentile_high
             q_low, q_high = np.quantile(S, [qlo, qhi])
             
             # Keep only trimmed values
@@ -1447,13 +1448,13 @@ class MethylDetector:
         
         return csv_path
     
-    def _save_unified_model(self, classifier: BetaBinomialClassifier, bio_dmps_df: pd.DataFrame):
+    def _save_unified_model(self, classifier: BetaBinomialClassifier, selected_dmps_df: pd.DataFrame):
         """
         Save unified Beta-Binomial classifier model.
         
         Args:
             classifier: BetaBinomialClassifier instance
-            bio_dmps_df: DataFrame with biological DMPs
+            selected_dmps_df: DataFrame with selected DMPs (final DMPs used by classifier)
         """
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -1464,15 +1465,17 @@ class MethylDetector:
         import pickle
         model_package = {
             'classifier': classifier,
-            'context_weights_summary': bio_dmps_df.groupby('context')['context_weight'].first().to_dict(),
+            'selected_dmps_df': selected_dmps_df,  # Save selected_dmps_df for weight calculation
+            'context_weights_summary': selected_dmps_df.groupby('context')['context_weight'].first().to_dict() if 'context' in selected_dmps_df.columns else {},
             'chromosome': self.config.chromosome,
-            'n_dmps': len(bio_dmps_df),
-            'n_dmps_per_context': bio_dmps_df.groupby('context').size().to_dict(),
+            'n_dmps': len(selected_dmps_df),
+            'n_dmps_per_context': selected_dmps_df.groupby('context').size().to_dict() if 'context' in selected_dmps_df.columns else {},
             'metadata': {
                 'version': '2.0.0',
                 'classifier_type': 'BetaBinomialClassifier',
                 'config': self.config.model_dump(),
-                'trimmed_percentile': self.config.trimmed_percentile,
+                'trimmed_percentile_low': self.config.trimmed_percentile_low,
+                'trimmed_percentile_high': self.config.trimmed_percentile_high,
             }
         }
         
@@ -1483,9 +1486,12 @@ class MethylDetector:
         logger.info(f"💾 Saved model to {model_path}")
         logger.info(f"📦 Model package includes:")
         logger.info(f"  - Classifier: {classifier}")
+        logger.info(f"  - Selected DMPs DataFrame: {len(selected_dmps_df)} DMPs")
         logger.info(f"  - Context weights: {model_package['context_weights_summary']}")
         logger.info(f"  - Total DMPs: {model_package['n_dmps']}")
         logger.info(f"  - DMPs per context: {model_package['n_dmps_per_context']}")
+        if 'effect_size' in selected_dmps_df.columns:
+            logger.info(f"  - Effect size range: {selected_dmps_df['effect_size'].min():.4f} to {selected_dmps_df['effect_size'].max():.4f}")
     
     def _create_multi_context_result(
         self, 

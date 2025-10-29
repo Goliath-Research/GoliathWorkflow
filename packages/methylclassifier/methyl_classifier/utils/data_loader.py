@@ -2,128 +2,21 @@
 Data loading functionality for MethylClassifier
 """
 
-from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 import numpy as np
-
-
-class MethylationSample(ABC):
-    """
-    Abstract base class for methylation samples.
-
-    This provides a common interface for different methylation data formats.
-    """
-
-    @property
-    @abstractmethod
-    def positions(self) -> np.ndarray:
-        """Get genomic positions."""
-        pass
-
-    @property
-    @abstractmethod
-    def methylation_levels(self) -> np.ndarray:
-        """Get methylation levels."""
-        pass
-
-    @property
-    @abstractmethod
-    def coverage(self) -> np.ndarray:
-        """Get coverage information."""
-        pass
-
-    @property
-    @abstractmethod
-    def sample_type(self) -> str:
-        """Get sample type identifier."""
-        pass
-
-    @property
-    @abstractmethod
-    def is_centroid(self) -> bool:
-        """Check if this is a centroid sample."""
-        pass
-
-    @abstractmethod
-    def get_beta_parameters(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Get beta distribution parameters (for centroids)."""
-        pass
-
-
-class H5MethylationSample(MethylationSample):
-    """
-    H5-based methylation sample implementation.
-
-    This implementation works with .h5 files from methyl_utils.
-    """
-
-    def __init__(self, h5_path: Path):
-        self.h5_path = h5_path
-        self._sample = None
-        self._load_sample()
-
-    def _load_sample(self):
-        """Load the sample from H5 file."""
-        try:
-            # Try to import methyl_utils classes
-            from methyl_utils import MethylSample
-            self._sample = MethylSample.load_from_h5(self.h5_path)
-        except ImportError:
-            raise ImportError(
-                "methyl_utils package is required for H5 file support. "
-                "Please install it or use a different data format."
-            )
-
-    @property
-    def positions(self) -> np.ndarray:
-        """Get genomic positions."""
-        return self._sample.pos
-
-    @property
-    def methylation_levels(self) -> np.ndarray:
-        """Get methylation levels."""
-        # Use the new get_methylation_levels() method which automatically handles different sample types
-        levels = self._sample.get_methylation_levels()
-
-        # Handle NaN values and ensure proper range
-        levels = np.nan_to_num(levels, nan=0.5)
-        levels = np.clip(levels, 0.0, 1.0)
-
-        return levels
-
-    @property
-    def coverage(self) -> np.ndarray:
-        """Get coverage information."""
-        return self._sample.get_coverage()
-
-    @property
-    def sample_type(self) -> str:
-        """Get sample type identifier."""
-        return self._sample.sample_type
-
-    @property
-    def is_centroid(self) -> bool:
-        """Check if this is a centroid sample."""
-        return self._sample.is_centroid
-
-    def get_beta_parameters(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Get beta distribution parameters (for centroids)."""
-        if not self.is_centroid:
-            raise ValueError("Beta parameters only available for centroid samples")
-
-        return self._sample.get_beta_parameters()
+from collections import defaultdict
 
 
 class DataLoader:
     """
     Data loader for methylation samples.
-
+    
     Handles loading samples from various sources and formats.
     """
 
     @staticmethod
-    def load_sample(h5_path: Path) -> MethylationSample:
+    def load_sample(h5_path: Path):
         """
         Load a single methylation sample from file.
 
@@ -131,17 +24,19 @@ class DataLoader:
             h5_path: Path to the sample file
 
         Returns:
-            MethylationSample instance
+            MethylSample instance
         """
+        from methyl_utils import MethylSample
+        
         if h5_path.suffix.lower() == '.h5':
-            return H5MethylationSample(h5_path)
+            return MethylSample.load_from_h5(h5_path)
         else:
             raise ValueError(f"Unsupported file format: {h5_path.suffix}")
 
     @staticmethod
     def load_samples_from_directory(h5_dir: Path,
                                  chrom: str = None,
-                                 context: str = None) -> List[Tuple[str, MethylationSample]]:
+                                 context: str = None) -> List[Tuple[str, Any]]:
         """
         Load all methylation samples from a directory.
 
@@ -153,6 +48,8 @@ class DataLoader:
         Returns:
             List of (sample_name, sample) tuples
         """
+        from methyl_utils import MethylSample
+        
         samples = []
         all_h5_files = list(h5_dir.rglob("*.h5"))
 
@@ -177,7 +74,7 @@ class DataLoader:
                 sample_name = h5_file.parent.name  # Use parent directory name as sample identifier
 
                 # Collect statistical information for enhanced analysis
-                coverage = sample.coverage
+                coverage = sample.get_coverage()
                 avg_coverage = np.mean(coverage) if len(coverage) > 0 else 0
 
                 samples.append((sample_name, sample))
@@ -209,19 +106,141 @@ class DataLoader:
         return filtered_files
 
     @staticmethod
-    def extract_sample_features(sample: MethylationSample,
+    def load_sample_from_directory(
+        sample_dir: Path,
+        chromosomes: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Load a sample from a directory, merging CG, CHG, and CHH contexts.
+        
+        Each sample directory should contain files named {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5
+        for each chromosome. The contexts are merged per chromosome using MethylSample.merge_contexts().
+        
+        Args:
+            sample_dir: Directory containing {chrom}-{context}.h5 files
+            chromosomes: Optional list of chromosomes to load. If None, auto-detect from files.
+        
+        Returns:
+            Dictionary mapping chromosome to merged MethylSample (all contexts combined)
+        """
+        from methyl_utils import MethylSample
+        
+        sample_dir = Path(sample_dir)
+        
+        # Find all chromosome-context files
+        h5_files = list(sample_dir.glob("*-CG.h5")) + list(sample_dir.glob("*-CHG.h5")) + list(sample_dir.glob("*-CHH.h5"))
+        
+        if not h5_files:
+            raise FileNotFoundError(f"No .h5 files found in {sample_dir}")
+        
+        # Group files by chromosome
+        chrom_files: Dict[str, Dict[str, Path]] = defaultdict(dict)
+        
+        for h5_file in h5_files:
+            # Extract chromosome from filename (e.g., "1-CG.h5" -> chrom="1", context="CG")
+            parts = h5_file.stem.split('-')
+            if len(parts) >= 2:
+                chrom = parts[0]
+                context = parts[-1]  # Last part is context
+                if context in ['CG', 'CHG', 'CHH']:
+                    chrom_files[chrom][context] = h5_file
+        
+        # Filter chromosomes if specified
+        if chromosomes:
+            chrom_files = {chrom: files for chrom, files in chrom_files.items() if chrom in chromosomes}
+        
+        if not chrom_files:
+            raise FileNotFoundError(f"No valid chromosome files found in {sample_dir}")
+        
+        merged_samples = {}
+        
+        # Merge contexts for each chromosome
+        for chrom, context_files in chrom_files.items():
+            # Load and merge contexts
+            contexts_to_merge = []
+            
+            # Load CG (required as base)
+            if 'CG' in context_files:
+                cg_sample = MethylSample.load_from_h5(context_files['CG'])
+                contexts_to_merge.append(cg_sample)
+            else:
+                print(f"⚠️ Warning: {chrom}-CG.h5 not found in {sample_dir}, skipping chromosome {chrom}")
+                continue
+            
+            # Load CHG and CHH if available
+            for context in ['CHG', 'CHH']:
+                if context in context_files:
+                    try:
+                        context_sample = MethylSample.load_from_h5(context_files[context])
+                        contexts_to_merge.append(context_sample)
+                    except Exception as e:
+                        print(f"⚠️ Warning: Failed to load {chrom}-{context}.h5: {e}")
+            
+            if len(contexts_to_merge) == 0:
+                continue
+            
+            # Merge all contexts using MethylSample.merge_contexts()
+            merged_sample = MethylSample.merge_contexts(contexts_to_merge)
+            merged_samples[chrom] = merged_sample
+            print(f"✅ Loaded {chrom}: merged {len(contexts_to_merge)} context(s)")
+        
+        return merged_samples
+    
+    @staticmethod
+    def load_samples_from_list(
+        sample_paths: List[str],
+        chromosomes: Optional[List[str]] = None
+    ) -> List[Tuple[str, Dict[str, Any]]]:
+        """
+        Load multiple samples from a list of directory paths.
+        
+        Each directory should contain {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5 files.
+        Contexts are merged per chromosome using MethylSample.merge_contexts().
+        
+        Args:
+            sample_paths: List of sample directory paths
+            chromosomes: Optional list of chromosomes to load. If None, auto-detect.
+        
+        Returns:
+            List of (sample_name, {chrom: merged_MethylSample}) tuples
+        """
+        samples = []
+        
+        for sample_path in sample_paths:
+            sample_dir = Path(sample_path)
+            sample_name = sample_dir.name
+            
+            try:
+                # Load and merge contexts for this sample
+                merged_samples = DataLoader.load_sample_from_directory(sample_dir, chromosomes)
+                samples.append((sample_name, merged_samples))
+                print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes)")
+            except Exception as e:
+                print(f"❌ Failed to load sample {sample_name}: {e}")
+                continue
+        
+        return samples
+
+    @staticmethod
+    def extract_sample_features(sample: Any,
                               dmp_positions: np.ndarray) -> Tuple[np.ndarray, np.ndarray, Dict[str, Any]]:
         """
         Extract DMP features from a methylation sample.
 
         Args:
-            sample: MethylationSample instance
+            sample: MethylSample instance
             dmp_positions: Array of DMP positions used by the classifier
 
         Returns:
             Tuple of (feature_vector, availability_mask, stats_info)
         """
-        pos_to_methylation = dict(zip(sample.positions, sample.methylation_levels))
+        # Get methylation levels with proper handling
+        methylation_levels = sample.get_methylation_levels()
+        # Handle NaN values and ensure proper range
+        methylation_levels = np.nan_to_num(methylation_levels, nan=0.5)
+        methylation_levels = np.clip(methylation_levels, 0.0, 1.0)
+        
+        pos_to_methylation = dict(zip(sample.pos, methylation_levels))
 
         feature_vector = []
         availability_mask = []
@@ -240,11 +259,11 @@ class DataLoader:
                 missing_positions += 1
 
         # Collect statistical information
-        coverage = sample.coverage
+        coverage = sample.get_coverage()
         avg_coverage = np.mean(coverage) if len(coverage) > 0 else 0
         stats_info = {
             'avg_coverage': avg_coverage,
-            'total_positions': len(sample.positions),
+            'total_positions': len(sample.pos),
             'sample_type': sample.sample_type,
             'missing_positions': missing_positions,
             'dmp_coverage_pct': (len(dmp_positions) - missing_positions) / len(dmp_positions) * 100

@@ -94,12 +94,6 @@ class MethylDetectorResult(NumpyCompatibleModel):
 
     model_config = {
         "arbitrary_types_allowed": True,
-        "json_encoders": {
-            Path: str,
-            np.ndarray: lambda x: x.tolist(),
-            np.integer: int,
-            np.floating: float
-        }
     }
 
 
@@ -161,9 +155,6 @@ class MethylDetectorSummary(BaseModel):
 
     model_config = {
         "arbitrary_types_allowed": True,
-        "json_encoders": {
-            Path: str
-        }
     }
 
 

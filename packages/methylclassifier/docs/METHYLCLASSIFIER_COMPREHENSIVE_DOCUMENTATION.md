@@ -38,6 +38,7 @@
   - Calibrated (Platt scaling)
 - **Temperature Control**: Softmax temperature for confidence calibration
 - **Binary Classification**: Designed for two-class problems (e.g., healthy vs. disease)
+- **Multi-Chromosome Support**: Combine predictions from multiple chromosome classifiers with weighted probabilities based on trimmed-mean effect_size
 
 ### Why Probabilistic Instead of Machine Learning?
 
@@ -316,6 +317,77 @@ Useful when:
 
 ## Usage Guide
 
+### Multi-Chromosome Classification
+
+MethylClassifier supports combining predictions from multiple chromosome-specific classifiers. This approach:
+
+1. **Loads all classifiers** from a directory matching pattern `classifier-{chrom}.pkl`
+2. **Computes chromosome weights** from trimmed-mean effect_size of selected DMPs in each classifier
+3. **Runs predictions** through each chromosome classifier independently
+4. **Combines weighted probabilities** to produce final classification
+
+#### Weighting Method
+
+Chromosome weights are computed using **asymmetric trimmed-mean** of effect_size values from each classifier's `selected_dmps_df`:
+
+```
+For each chromosome:
+  1. Extract effect_size values from selected_dmps_df
+  2. Compute asymmetric trimmed mean:
+     - Remove bottom X% (low effect sizes - less informative DMPs)
+     - Remove only top Y% (outliers - preserving high effect_size DMPs that are critical for classification)
+  3. Use trimmed mean as raw weight
+  4. Normalize all weights to sum to 1.0
+```
+
+**Why Asymmetric Trimming?**
+In disease classification (e.g., cancer vs. healthy), DMPs with **high effect_size are the most important** for distinguishing between groups. Symmetric trimming (removing equal percentages from both ends) would discard these crucial markers. Asymmetric trimming:
+- Removes more low effect_size DMPs (less informative)
+- Preserves most high effect_size DMPs (only extreme outliers removed)
+- Default: Remove bottom 10%, top 1%
+
+Alternatively, you can provide predefined weights via `chromosome_weights` parameter.
+
+#### Example: Multi-Chromosome Classification
+
+```python
+from methyl_classifier import MethylClassifier, ClassifierConfig
+
+# Automatic weight calculation from effect_size with asymmetric trimming
+config = ClassifierConfig(
+    model_dir="/path/to/classifiers/",  # Contains classifier-1.pkl, classifier-2.pkl, ...
+    trimmed_percentile_low=0.10,   # Remove bottom 10% (less informative)
+    trimmed_percentile_high=0.01  # Remove only top 1% (preserve important DMPs)
+)
+
+# Or use predefined weights
+# config = ClassifierConfig(
+#     model_dir="/path/to/classifiers/",
+#     chromosome_weights={'1': 0.4, '2': 0.3, '3': 0.2, '4': 0.1}
+# )
+
+classifier = MethylClassifier(config)
+
+# Classification uses weighted combination of all chromosomes
+probas = classifier.predict_proba(methylation_data)
+predictions = classifier.predict(methylation_data)
+
+print(f"Chromosome weights: {classifier.chromosome_weights}")
+```
+
+#### Mathematical Foundation
+
+For multi-chromosome classification, the final probability is:
+
+```
+P(Class | data) = Σ_{chrom} w_chrom * P_chrom(Class | data_chrom)
+```
+
+Where:
+- `w_chrom` is the normalized weight for chromosome `chrom`
+- `P_chrom` is the probability from that chromosome's classifier
+- Weights are computed from trimmed-mean effect_size or provided explicitly
+
 ### Basic Usage
 
 #### 1. Single Sample Classification
@@ -411,20 +483,26 @@ classifier.load_classifier(model_path)  # Automatically detects format
 ### Command-Line Interface
 
 ```bash
-# Basic usage
+# Basic usage (single chromosome)
 methyl_classifier \
     --model classifier-1-CG.pkl \
     --input sample.h5 \
     --output results.csv
 
-# With options
+# Multi-chromosome mode
 methyl_classifier \
-    --model classifier-1-CG.pkl \
+    --model-dir /path/to/classifiers/ \
     --input samples_directory/ \
     --output results.csv \
     --temperature 2.5 \
-    --enable-platt-calibration \
     --debug
+
+# With predefined chromosome weights
+methyl_classifier \
+    --model-dir /path/to/classifiers/ \
+    --input samples_directory/ \
+    --output results.csv \
+    --trimmed_percentile_low 0.10 --trimmed_percentile_high 0.01
 ```
 
 ---

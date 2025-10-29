@@ -125,9 +125,13 @@ class MethylDetectorConfig(BaseModel):
         default=True,
         description="Enable trimmed-mean context weighting for multi-context analysis"
     )
-    trimmed_percentile: float = Field(
+    trimmed_percentile_low: float = Field(
         default=0.10, ge=0.0, le=0.5,
-        description="Percentile for trimmed mean (e.g., 0.10 = trim bottom 10% and top 10%)"
+        description="Lower percentile for trimmed mean - removes bottom X% (default: 0.10 = remove bottom 10%). Low effect_size DMPs are less informative."
+    )
+    trimmed_percentile_high: float = Field(
+        default=0.01, ge=0.0, le=0.5,
+        description="Upper percentile for trimmed mean - removes top X% (default: 0.01 = remove top 1%). High effect_size DMPs are critical for classification, so only extreme outliers are removed."
     )
     export_all_biological_dmps: bool = Field(
         default=True,
@@ -301,6 +305,20 @@ class MethylDetectorConfig(BaseModel):
         if realism not in ['off', 'basic', 'advanced']:
             raise ValueError("realism_level must be 'off', 'basic', or 'advanced'.")
         return v
+    
+    @field_validator('trimmed_percentile_low', 'trimmed_percentile_high')
+    @classmethod
+    def validate_trimmed_percentile(cls, v):
+        if v < 0.0 or v > 0.5:
+            raise ValueError("Trimmed percentiles must be between 0.0 and 0.5")
+        return v
+    
+    @model_validator(mode='after')
+    def validate_trimmed_percentile_sum(self):
+        # Check that the sum doesn't exceed 1.0 (would trim everything)
+        if self.trimmed_percentile_low + self.trimmed_percentile_high >= 1.0:
+            raise ValueError(f"Sum of trimmed_percentile_low ({self.trimmed_percentile_low}) and trimmed_percentile_high ({self.trimmed_percentile_high}) must be less than 1.0")
+        return self
 
     # ---------------
     # Helper Methods
