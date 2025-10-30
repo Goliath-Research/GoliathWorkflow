@@ -829,7 +829,7 @@ class MethylSample:
         return aligned_sample
     
     @classmethod
-    def load_from_h5(cls, file_path: Union[str, Path]) -> MethylSample:
+    def load_from_h5(cls, file_path: Union[str, Path], positions: Optional[np.ndarray] = None) -> MethylSample:
         """
         Load a methylation sample from an HDF5 file.
         Automatically detects the sample type and loads appropriate fields.
@@ -837,9 +837,11 @@ class MethylSample:
 
         Args:
             file_path: Path to the HDF5 file
+            positions: Optional array of positions to load. If None, loads all positions.
+                      This enables massive performance improvements by loading only DMP positions.
 
         Returns:
-            MethylSample instance with appropriate fields loaded
+            MethylSample instance with appropriate fields loaded (filtered to positions if specified)
 
         Raises:
             ImportError: If HDF5 dependencies are not available
@@ -872,8 +874,32 @@ class MethylSample:
 
             # Try structured array format first (used in some datasets)
             if hasattr(data_group, 'dtype') and hasattr(data_group.dtype, 'names'):
-                # Handle structured array format
+                # Quick check: if we have specific positions to filter, check if any exist first
+                should_load_full = True
+                if positions is not None and len(positions) > 0:
+                    # Load just positions array to check if any DMP positions exist
+                    pos_all = np.asarray(data_group["pos"], dtype=np.uint32)
+                    positions_set = set(positions)
+                    pos_set = set(pos_all)
+                    common_positions = positions_set & pos_set
+
+                    if len(common_positions) == 0:
+                        # No DMP positions in this file, return empty sample
+                        empty_arrays = np.array([], dtype=np.uint32)
+                        empty_tnc = np.array([], dtype=np.uint8)
+                        return cls(
+                            pos=empty_arrays,
+                            mC=empty_arrays,
+                            uC=empty_arrays,
+                            tnc=empty_tnc,
+                            N=None, Sx=None, Sx2=None,
+                            log_x_sum=None, log_1_minus_x_sum=None
+                        )
+
+                # Load all data (HDF5 limitation), then filter to DMP positions immediately
                 structured_data = data_group[:]
+
+                # Extract position data
                 pos = np.asarray(structured_data["pos"], dtype=np.uint32)
                 mC = np.asarray(structured_data["mC"], dtype=np.uint32)
                 uC = np.asarray(structured_data["uC"], dtype=np.uint32)
@@ -928,7 +954,65 @@ class MethylSample:
                     log_x_sum = np.asarray(data_group["log_x_sum"][:], dtype=np.float32)
                 if "log_1_minus_x_sum" in data_group:
                     log_1_minus_x_sum = np.asarray(data_group["log_1_minus_x_sum"][:], dtype=np.float32)
-        
+
+
+        # Apply exact position filtering if requested (massive performance optimization)
+        if positions is not None:
+            original_count = len(pos)
+            # Find indices of positions that exist in the data
+            positions_set = set(positions)
+            mask = np.array([p in positions_set for p in pos], dtype=bool)
+            filtered_count = np.sum(mask)
+
+            print(f"🎯 DMP filtering: {original_count:,} positions loaded → {filtered_count} DMP positions kept")
+
+            if np.any(mask):
+                # Filter all arrays to only include requested positions
+                pos = pos[mask]
+                mC = mC[mask]
+                uC = uC[mask]
+                tnc = tnc[mask]
+                if N is not None:
+                    N = N[mask]
+                if Sx is not None:
+                    Sx = Sx[mask]
+                if Sx2 is not None:
+                    Sx2 = Sx2[mask]
+                if log_x_sum is not None:
+                    log_x_sum = log_x_sum[mask]
+                if log_1_minus_x_sum is not None:
+                    log_1_minus_x_sum = log_1_minus_x_sum[mask]
+
+                # Sort by position for efficient lookups
+                sort_idx = np.argsort(pos)
+                pos = pos[sort_idx]
+                mC = mC[sort_idx]
+                uC = uC[sort_idx]
+                tnc = tnc[sort_idx]
+                if N is not None:
+                    N = N[sort_idx]
+                if Sx is not None:
+                    Sx = Sx[sort_idx]
+                if Sx2 is not None:
+                    Sx2 = Sx2[sort_idx]
+                if log_x_sum is not None:
+                    log_x_sum = log_x_sum[sort_idx]
+                if log_1_minus_x_sum is not None:
+                    log_1_minus_x_sum = log_1_minus_x_sum[sort_idx]
+            else:
+                # No matching positions found, return empty arrays
+                print(f"⚠️ No DMP positions found in loaded data")
+                empty_shape = (0,)
+                pos = np.array([], dtype=np.uint32)
+                mC = np.array([], dtype=np.uint32)
+                uC = np.array([], dtype=np.uint32)
+                tnc = np.array([], dtype=np.uint8)
+                N = np.array([], dtype=np.uint32) if N is not None else None
+                Sx = np.array([], dtype=np.float32) if Sx is not None else None
+                Sx2 = np.array([], dtype=np.float32) if Sx2 is not None else None
+                log_x_sum = np.array([], dtype=np.float32) if log_x_sum is not None else None
+                log_1_minus_x_sum = np.array([], dtype=np.float32) if log_1_minus_x_sum is not None else None
+
         return cls(
             pos=pos,
             mC=mC,
@@ -1420,6 +1504,10 @@ class MethylSample:
         has_centroid_data = False
         
         for sample in context_samples:
+            # Skip empty samples (contexts with no DMP positions)
+            if len(sample.pos) == 0:
+                continue
+
             # Append all data from this context
             all_positions.append(sample.pos)
             all_mC.append(sample.mC)

@@ -32,7 +32,7 @@
       "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/DBCST-071025-111807",
       "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/DBCST-071125-111814"
     ],
-    "output_path": "/home/ubuntu/Work/w/humans/psomagen/pc/classifiers/classification/results-hc.csv",
+    "output_path": "/home/ubuntu/Work/w/humans/psomagen/pc/classifications/results-hc.csv",
     "temperature": 1.0,
     "enable_platt_calibration": true,
     "trimmed_percentile_low": 0.10,

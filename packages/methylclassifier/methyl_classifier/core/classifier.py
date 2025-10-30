@@ -288,6 +288,38 @@ class MethylClassifier:
         
         print(f"\n✅ Multi-chromosome classifier ready: {len(self.classifiers)} chromosomes, {self.n_classes} classes")
 
+        # Collect all unique DMP positions across all classifiers (for massive performance optimization)
+        self._collect_all_dmp_positions()
+
+    def _collect_all_dmp_positions(self) -> None:
+        """
+        Collect all unique DMP positions across all classifiers for massive performance optimization.
+        This allows loading only the positions needed for classification instead of entire chromosomes.
+        """
+        all_positions = set()
+        self.dmp_positions_by_chrom = {}  # Store positions per chromosome
+
+        for chrom, classifier in self.classifiers.items():
+            try:
+                feature_info = classifier.get_feature_info()
+                positions = feature_info.get('positions', [])
+                self.dmp_positions_by_chrom[chrom] = np.array(positions, dtype=np.uint32)
+                all_positions.update(positions)
+            except Exception as e:
+                print(f"⚠️ Warning: Could not get DMP positions for chromosome {chrom}: {e}")
+                self.dmp_positions_by_chrom[chrom] = np.array([], dtype=np.uint32)
+
+        self.all_dmp_positions = np.array(sorted(all_positions), dtype=np.uint32)
+
+        # Calculate per-chromosome DMP statistics
+        for chrom, positions in self.dmp_positions_by_chrom.items():
+            if len(positions) > 0:
+                print(f"💎 {chrom}: {len(positions)} DMPs")
+            else:
+                print(f"⚠️ {chrom}: No DMPs found")
+
+        print(f"🚀 Collected {len(self.all_dmp_positions)} unique DMP positions across all classifiers")
+
     def _compute_chromosome_weights(self, model_packages: Dict[str, Dict[str, Any]]) -> Dict[str, float]:
         """
         Compute chromosome weights from trimmed-mean effect_size of selected DMPs.

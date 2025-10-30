@@ -109,7 +109,10 @@ class DataLoader:
     def load_sample_from_directory(
         sample_dir: Path,
         chromosomes: Optional[List[str]] = None,
-        debug: bool = False
+        debug: bool = False,
+        required_chromosomes: Optional[List[str]] = None,
+        positions: Optional[np.ndarray] = None,
+        dmp_positions_by_chrom: Optional[Dict[str, np.ndarray]] = None
     ) -> Dict[str, Any]:
         """
         Load a sample from a directory, merging CG, CHG, and CHH contexts.
@@ -149,7 +152,11 @@ class DataLoader:
         # Filter chromosomes if specified
         if chromosomes:
             chrom_files = {chrom: files for chrom, files in chrom_files.items() if chrom in chromosomes}
-        
+
+        # Filter to required chromosomes if specified (for performance optimization)
+        if required_chromosomes:
+            chrom_files = {chrom: files for chrom, files in chrom_files.items() if chrom in required_chromosomes}
+
         if not chrom_files:
             raise FileNotFoundError(f"No valid chromosome files found in {sample_dir}")
         
@@ -160,19 +167,24 @@ class DataLoader:
             # Load and merge contexts
             contexts_to_merge = []
             
-            # Load CG (required as base)
+            # Load CG (required as base) - use chromosome-specific positions for optimal performance
             if 'CG' in context_files:
-                cg_sample = MethylSample.load_from_h5(context_files['CG'])
+                # Use chromosome-specific DMP positions if available
+                chrom_positions = None
+                if dmp_positions_by_chrom is not None and chrom in dmp_positions_by_chrom:
+                    chrom_positions = dmp_positions_by_chrom[chrom]
+
+                cg_sample = MethylSample.load_from_h5(context_files['CG'], chrom_positions)
                 contexts_to_merge.append(cg_sample)
             else:
                 print(f"⚠️ Warning: {chrom}-CG.h5 not found in {sample_dir}, skipping chromosome {chrom}")
                 continue
-            
+
             # Load CHG and CHH if available
             for context in ['CHG', 'CHH']:
                 if context in context_files:
                     try:
-                        context_sample = MethylSample.load_from_h5(context_files[context])
+                        context_sample = MethylSample.load_from_h5(context_files[context], chrom_positions)
                         contexts_to_merge.append(context_sample)
                     except Exception as e:
                         print(f"⚠️ Warning: Failed to load {chrom}-{context}.h5: {e}")
@@ -183,8 +195,6 @@ class DataLoader:
             # Merge all contexts using MethylSample.merge_contexts()
             merged_sample = MethylSample.merge_contexts(contexts_to_merge)
             merged_samples[chrom] = merged_sample
-            if debug:
-                print(f"✅ Loaded {chrom}: merged {len(contexts_to_merge)} context(s)")
         
         return merged_samples
     
@@ -192,33 +202,48 @@ class DataLoader:
     def load_samples_from_list(
         sample_paths: List[str],
         chromosomes: Optional[List[str]] = None,
-        debug: bool = False
+        debug: bool = False,
+        required_chromosomes: Optional[List[str]] = None,
+        positions: Optional[np.ndarray] = None,
+        dmp_positions_by_chrom: Optional[Dict[str, np.ndarray]] = None
     ) -> List[Tuple[str, Dict[str, Any]]]:
         """
         Load multiple samples from a list of directory paths.
-        
+
         Each directory should contain {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5 files.
         Contexts are merged per chromosome using MethylSample.merge_contexts().
-        
+
         Args:
             sample_paths: List of sample directory paths
             chromosomes: Optional list of chromosomes to load. If None, auto-detect.
-        
+            debug: Enable debug output
+            required_chromosomes: If provided, only load these specific chromosomes (for performance)
+            positions: If provided, only load data for these positions (ultra-performance)
+            dmp_positions_by_chrom: DMP positions organized by chromosome (chromosome-specific optimization)
+
         Returns:
             List of (sample_name, {chrom: merged_MethylSample}) tuples
         """
         samples = []
-        
-        for sample_path in sample_paths:
+        import time
+
+        for i, sample_path in enumerate(sample_paths, 1):
             sample_dir = Path(sample_path)
             sample_name = sample_dir.name
-            
+
+            if debug:
+                print(f"Loading sample {i}/{len(sample_paths)}: {sample_name}")
+            start_time = time.time()
+
             try:
                 # Load and merge contexts for this sample
-                merged_samples = DataLoader.load_sample_from_directory(sample_dir, chromosomes, debug)
+                merged_samples = DataLoader.load_sample_from_directory(
+                    sample_dir, chromosomes, debug, required_chromosomes, positions, dmp_positions_by_chrom
+                )
+                load_time = time.time() - start_time
                 samples.append((sample_name, merged_samples))
                 if debug:
-                    print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes)")
+                    print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes) in {load_time:.1f}s")
             except Exception as e:
                 print(f"❌ Failed to load sample {sample_name}: {e}")
                 continue

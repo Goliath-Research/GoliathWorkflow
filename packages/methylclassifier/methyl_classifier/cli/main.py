@@ -336,24 +336,33 @@ def classify_samples_from_list(
     classifier: MethylClassifier,
     samples_list: List[str],
     output_file: Optional[Path] = None,
-    debug: bool = False
+    debug: bool = False,
+    required_chromosomes: Optional[List[str]] = None,
+    positions: Optional[np.ndarray] = None,
+    dmp_positions_by_chrom: Optional[Dict[str, np.ndarray]] = None
 ) -> None:
     """
     Classify samples from a list of directories, merging CG, CHG, CHH contexts.
-    
-    Each directory should contain {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5 files.
+
+    Each directory should contain {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHG.h5 files.
     Contexts are merged per chromosome before classification.
-    
+
     Args:
         classifier: MethylClassifier instance (single or multi-chromosome)
         samples_list: List of sample directory paths
         output_file: Optional output CSV file
         debug: Enable debug output
+        required_chromosomes: Only load these chromosomes (performance optimization)
+        positions: Only load these positions (ultra-performance optimization)
+        dmp_positions_by_chrom: DMP positions organized by chromosome (chromosome-specific optimization)
     """
     print(f"\n🔍 Loading {len(samples_list)} samples from directories...")
     
     # Load samples (merged contexts per chromosome)
-    loaded_samples = DataLoader.load_samples_from_list(samples_list, debug=debug)
+    loaded_samples = DataLoader.load_samples_from_list(
+        samples_list, debug=debug, required_chromosomes=required_chromosomes,
+        positions=positions, dmp_positions_by_chrom=dmp_positions_by_chrom
+    )
     
     if not loaded_samples:
         raise ValueError("No samples loaded from provided paths")
@@ -772,11 +781,29 @@ Config fields (in JSON):
     try:
         # Handle samples list (with context merging)
         if config.samples:
-            classify_samples(
+            # For multi-chromosome classifiers, only load required chromosomes and positions for performance
+            required_chromosomes = None
+            positions = None
+            dmp_positions_by_chrom = None
+            if classifier.is_multi_chromosome:
+                required_chromosomes = list(classifier.classifiers.keys())
+                positions = getattr(classifier, 'all_dmp_positions', None)
+                dmp_positions_by_chrom = getattr(classifier, 'dmp_positions_by_chrom', None)
+                print(f"🚀 Performance optimization: only loading {len(required_chromosomes)} required chromosomes per sample")
+                if positions is not None:
+                    print(f"💎 DMP filtering: {len(positions)} positions will be extracted from loaded data")
+            if dmp_positions_by_chrom:
+                total_dmps = sum(len(positions) for positions in dmp_positions_by_chrom.values())
+                print(f"📊 DMP breakdown: {dict((k, len(v)) for k, v in dmp_positions_by_chrom.items() if len(v) > 0)}")
+
+            classify_samples_from_list(
                 classifier=classifier,
                 samples_list=config.samples,
                 output_file=Path(config.output_path) if config.output_path else None,
-                debug=config.debug
+                debug=config.debug,
+                required_chromosomes=required_chromosomes,
+                positions=positions,
+                dmp_positions_by_chrom=dmp_positions_by_chrom
             )
         else:
             # Legacy: single path
