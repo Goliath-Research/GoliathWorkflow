@@ -982,7 +982,9 @@ class MethylDetector:
                 )
 
             best_k = optimized_k
-            logger.info(f"📈 Optimization complete: final k={best_k:,}")
+            # Ensure we meet minimum DMP export requirement
+            best_k = max(best_k, self.config.min_dmps_for_export)
+            logger.info(f"📈 Optimization complete: final k={best_k:,} (ensuring ≥{self.config.min_dmps_for_export:,} DMPs)")
 
             # Update selected DataFrame to optimized subset
             selected_dmps_df = sorted_df.iloc[:best_k].copy()
