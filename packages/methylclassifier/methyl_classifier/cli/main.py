@@ -53,11 +53,11 @@ def classify_samples(classifier: MethylClassifier,
             if h5_path.name != expected_pattern:
                 raise ValueError(f"File {h5_path.name} does not match expected pattern {expected_pattern}")
         # Load single sample
-        sample = DataLoader.load_sample(h5_path)
+        sample = DataLoader.load_sample(h5_path, debug)
         sample_name = h5_path.parent.name
         samples = [(sample_name, sample)]
     elif h5_path.is_dir():
-        samples = DataLoader.load_samples_from_directory(h5_path, chrom, context)
+        samples = DataLoader.load_samples_from_directory(h5_path, chrom, context, debug)
     else:
         raise FileNotFoundError(f"Path not found: {h5_path}")
 

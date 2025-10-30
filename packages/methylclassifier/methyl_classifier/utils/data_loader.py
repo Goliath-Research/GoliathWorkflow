@@ -16,27 +16,29 @@ class DataLoader:
     """
 
     @staticmethod
-    def load_sample(h5_path: Path):
+    def load_sample(h5_path: Path, debug: bool = False):
         """
         Load a single methylation sample from file.
 
         Args:
             h5_path: Path to the sample file
+            debug: Enable debug output
 
         Returns:
             MethylSample instance
         """
         from methyl_utils import MethylSample
-        
+
         if h5_path.suffix.lower() == '.h5':
-            return MethylSample.load_from_h5(h5_path)
+            return MethylSample.load_from_h5(h5_path, debug=debug)
         else:
             raise ValueError(f"Unsupported file format: {h5_path.suffix}")
 
     @staticmethod
     def load_samples_from_directory(h5_dir: Path,
                                  chrom: str = None,
-                                 context: str = None) -> List[Tuple[str, Any]]:
+                                 context: str = None,
+                                 debug: bool = False) -> List[Tuple[str, Any]]:
         """
         Load all methylation samples from a directory.
 
@@ -44,6 +46,7 @@ class DataLoader:
             h5_dir: Directory containing sample files
             chrom: Optional chromosome filter
             context: Optional context filter
+            debug: Enable debug output
 
         Returns:
             List of (sample_name, sample) tuples
@@ -70,7 +73,7 @@ class DataLoader:
 
         for h5_file in sorted(h5_files):
             try:
-                sample = DataLoader.load_sample(h5_file)
+                sample = DataLoader.load_sample(h5_file, debug=debug)
                 sample_name = h5_file.parent.name  # Use parent directory name as sample identifier
 
                 # Collect statistical information for enhanced analysis
@@ -174,7 +177,7 @@ class DataLoader:
                 if dmp_positions_by_chrom is not None and chrom in dmp_positions_by_chrom:
                     chrom_positions = dmp_positions_by_chrom[chrom]
 
-                cg_sample = MethylSample.load_from_h5(context_files['CG'], chrom_positions)
+                cg_sample = MethylSample.load_from_h5(context_files['CG'], chrom_positions, debug)
                 contexts_to_merge.append(cg_sample)
             else:
                 print(f"⚠️ Warning: {chrom}-CG.h5 not found in {sample_dir}, skipping chromosome {chrom}")
@@ -184,7 +187,7 @@ class DataLoader:
             for context in ['CHG', 'CHH']:
                 if context in context_files:
                     try:
-                        context_sample = MethylSample.load_from_h5(context_files[context], chrom_positions)
+                        context_sample = MethylSample.load_from_h5(context_files[context], chrom_positions, debug)
                         contexts_to_merge.append(context_sample)
                     except Exception as e:
                         print(f"⚠️ Warning: Failed to load {chrom}-{context}.h5: {e}")

@@ -829,7 +829,7 @@ class MethylSample:
         return aligned_sample
     
     @classmethod
-    def load_from_h5(cls, file_path: Union[str, Path], positions: Optional[np.ndarray] = None) -> MethylSample:
+    def load_from_h5(cls, file_path: Union[str, Path], positions: Optional[np.ndarray] = None, debug: bool = False) -> MethylSample:
         """
         Load a methylation sample from an HDF5 file.
         Automatically detects the sample type and loads appropriate fields.
@@ -837,8 +837,8 @@ class MethylSample:
 
         Args:
             file_path: Path to the HDF5 file
-            positions: Optional array of positions to load. If None, loads all positions.
-                      This enables massive performance improvements by loading only DMP positions.
+            positions: Optional array of positions to filter to (ultra-performance optimization)
+            debug: Enable debug output
 
         Returns:
             MethylSample instance with appropriate fields loaded (filtered to positions if specified)
@@ -964,7 +964,8 @@ class MethylSample:
             mask = np.array([p in positions_set for p in pos], dtype=bool)
             filtered_count = np.sum(mask)
 
-            print(f"🎯 DMP filtering: {original_count:,} positions loaded → {filtered_count} DMP positions kept")
+            if debug:
+                print(f"🎯 DMP filtering: {original_count:,} positions loaded → {filtered_count} DMP positions kept")
 
             if np.any(mask):
                 # Filter all arrays to only include requested positions
