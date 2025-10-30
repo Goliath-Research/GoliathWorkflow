@@ -43,6 +43,12 @@ class ClassifierConfig(BaseModel):
         description="Enable Platt scaling calibration on validation data"
     )
 
+    # Output configuration
+    chromosome_matrix_path: Optional[str] = Field(
+        default=None,
+        description="Optional output CSV file for chromosome probability matrix (samples × chromosomes)"
+    )
+
     @field_validator('temperature')
     @classmethod
     def validate_temperature(cls, v):

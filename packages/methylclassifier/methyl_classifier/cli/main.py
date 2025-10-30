@@ -370,9 +370,7 @@ def classify_samples_from_list(
     if classifier.is_multi_chromosome:
         # Multi-chromosome mode: extract features per chromosome and combine
         _classify_multi_chromosome_samples(
-            classifier, loaded_samples, output_file,
-            chromosome_matrix_file=Path(classifier.config.chromosome_matrix_path) if classifier.config.chromosome_matrix_path else None,
-            debug=debug
+            classifier, loaded_samples, output_file, debug
         )
     else:
         # Single chromosome mode: use first chromosome from merged samples
@@ -434,7 +432,6 @@ def _classify_multi_chromosome_samples(
     classifier: MethylClassifier,
     loaded_samples: List[Tuple[str, Dict[str, Any]]],
     output_file: Optional[Path] = None,
-    chromosome_matrix_file: Optional[Path] = None,
     debug: bool = False
 ) -> None:
     """
@@ -499,7 +496,9 @@ def _classify_multi_chromosome_samples(
 
     # Initialize chromosome probability matrix if requested
     chrom_proba_matrix = None
-    if chromosome_matrix_file is not None:
+    chromosome_matrix_file = None
+    if classifier.config.chromosome_matrix_path is not None:
+        chromosome_matrix_file = Path(classifier.config.chromosome_matrix_path)
         chrom_proba_matrix = np.zeros((n_samples, len(classifier_chroms)))
 
     for i, chrom in enumerate(classifier_chroms):
@@ -561,7 +560,7 @@ def _classify_multi_chromosome_samples(
     )
 
     # Save chromosome probability matrix if requested
-    if chromosome_matrix_file is not None and chrom_proba_matrix is not None:
+    if chrom_proba_matrix is not None:
         _save_chromosome_probability_matrix(
             sample_names, classifier_chroms, chrom_proba_matrix, chromosome_matrix_file
         )
@@ -814,7 +813,8 @@ Config fields (in JSON):
         enable_platt_calibration=config.enable_platt_calibration,
         trimmed_percentile_low=config.trimmed_percentile_low,
         trimmed_percentile_high=config.trimmed_percentile_high,
-        chromosome_weights=config.chromosome_weights
+        chromosome_weights=config.chromosome_weights,
+        chromosome_matrix_path=config.chromosome_matrix_path
     )
     
     # Create classifier
