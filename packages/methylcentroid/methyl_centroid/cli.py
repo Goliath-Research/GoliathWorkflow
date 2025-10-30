@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Optional, List
 
-from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig
+from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig, OutlierRemovalResults
 from .core import MethylCentroid
 from methyl_utils.logging_utils import setup_logging
 
@@ -214,13 +214,16 @@ def create_processing_config(args: argparse.Namespace) -> ProcessingConfig:
 
 
 def run_single_processing(config: MethylCentroidConfig,
-                         processing_config: ProcessingConfig) -> None:
+                         processing_config: ProcessingConfig) -> OutlierRemovalResults:
     """
     Run single chromosome/context processing.
 
     Args:
         config: MethylCentroid configuration
         processing_config: Processing configuration
+
+    Returns:
+        OutlierRemovalResults containing information about outlier removal
     """
     print(f"🚀 Starting MethylCentroid processing for {config.chrom}-{config.ctx}")
     print(f"📁 Output directory: {config.output_dir}")
@@ -242,6 +245,8 @@ def run_single_processing(config: MethylCentroidConfig,
             print(f"📋 Iterations performed: {len(results.iterations)}")
             for iteration in results.iterations[-3:]:  # Show last 3 iterations
                 print(f"   Iteration {iteration.iteration}: p-value = {iteration.p_value:.6f}")
+
+        return results
 
     except Exception as e:
         print(f"❌ Error during processing: {e}", file=sys.stderr)
@@ -290,11 +295,11 @@ def run_batch_processing(batch_config: BatchProcessingConfig) -> None:
                 # Create default processing config
                 processing_config = ProcessingConfig()
 
-                # Run processing
-                run_single_processing(combination_config, processing_config)
+                # Run processing and get results
+                results = run_single_processing(combination_config, processing_config)
 
-                # Accumulate statistics (this would be improved with actual result tracking)
-                total_outliers += 0  # Placeholder
+                # Accumulate statistics from actual results
+                total_outliers += results.total_samples_removed
 
             except Exception as e:
                 error_msg = f"Failed to process {chrom}-{ctx}: {e}"
