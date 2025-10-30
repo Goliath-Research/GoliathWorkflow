@@ -369,7 +369,11 @@ def classify_samples_from_list(
     
     if classifier.is_multi_chromosome:
         # Multi-chromosome mode: extract features per chromosome and combine
-        _classify_multi_chromosome_samples(classifier, loaded_samples, output_file, debug)
+        _classify_multi_chromosome_samples(
+            classifier, loaded_samples, output_file,
+            chromosome_matrix_file=Path(config.chromosome_matrix_path) if config.chromosome_matrix_path else None,
+            debug=debug
+        )
     else:
         # Single chromosome mode: use first chromosome from merged samples
         # Extract chromosome from classifier
@@ -430,12 +434,14 @@ def _classify_multi_chromosome_samples(
     classifier: MethylClassifier,
     loaded_samples: List[Tuple[str, Dict[str, Any]]],
     output_file: Optional[Path] = None,
+    chromosome_matrix_file: Optional[Path] = None,
     debug: bool = False
 ) -> None:
     """
     Classify samples using multi-chromosome classifier.
-    
+
     Extracts features per chromosome from merged samples and combines predictions.
+    Optionally saves per-chromosome probabilities to a matrix file.
     """
     print(f"\n📊 Extracting features per chromosome for {len(loaded_samples)} samples...")
     
@@ -490,15 +496,20 @@ def _classify_multi_chromosome_samples(
     
     # Initialize weighted probability sum
     weighted_probas = np.zeros((n_samples, n_classes))
-    
-    for chrom in classifier_chroms:
+
+    # Initialize chromosome probability matrix if requested
+    chrom_proba_matrix = None
+    if chromosome_matrix_file is not None:
+        chrom_proba_matrix = np.zeros((n_samples, len(classifier_chroms)))
+
+    for i, chrom in enumerate(classifier_chroms):
         weight = classifier.chromosome_weights.get(chrom, 0.0)
-        
+
         if weight == 0.0:
             continue
-        
+
         chrom_classifier = classifier.classifiers[chrom]
-        
+
         # Get probabilities from this chromosome
         try:
             chrom_probas = chrom_classifier.predict_proba(
@@ -506,10 +517,14 @@ def _classify_multi_chromosome_samples(
                 chrom_masks[chrom],
                 debug=False
             )
-            
+
             # Weight and accumulate
             weighted_probas += weight * chrom_probas
-            
+
+            # Store per-chromosome probabilities for matrix (using class 0 probability)
+            if chrom_proba_matrix is not None:
+                chrom_proba_matrix[:, i] = chrom_probas[:, 0]
+
             if debug:
                 print(f"  Chromosome {chrom} (weight={weight:.4f}): avg probas={np.mean(chrom_probas, axis=0)}")
         except Exception as e:
@@ -544,6 +559,12 @@ def _classify_multi_chromosome_samples(
         combined_mask, dmp_positions, output_file,
         multi_chromosome=True, chromosomes=classifier_chroms
     )
+
+    # Save chromosome probability matrix if requested
+    if chromosome_matrix_file is not None and chrom_proba_matrix is not None:
+        _save_chromosome_probability_matrix(
+            sample_names, classifier_chroms, chrom_proba_matrix, chromosome_matrix_file
+        )
 
 
 def _save_classification_results(
@@ -610,6 +631,43 @@ def _save_classification_results(
         writer.writerows(results_data)
     
     print(f"\n💾 Results saved to: {output_file}")
+
+
+def _save_chromosome_probability_matrix(
+    sample_names: List[str],
+    chromosomes: List[str],
+    probability_matrix: np.ndarray,
+    output_file: Path
+) -> None:
+    """
+    Save chromosome probability matrix to CSV.
+
+    Args:
+        sample_names: List of sample names
+        chromosomes: List of chromosome names
+        probability_matrix: Matrix of shape (n_samples, n_chromosomes) with p1 probabilities
+        output_file: Path to output CSV file
+    """
+    import csv
+
+    # Create header: sample + chromosome names
+    fieldnames = ['sample'] + chromosomes
+
+    # Create data rows
+    results_data = []
+    for i, sample_name in enumerate(sample_names):
+        row = {'sample': sample_name}
+        for j, chrom in enumerate(chromosomes):
+            row[chrom] = probability_matrix[i, j]
+        results_data.append(row)
+
+    # Write CSV
+    with open(output_file, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results_data)
+
+    print(f"🧬 Chromosome probability matrix saved to: {output_file}")
 
 
 def classify_samples_batch(classifier: MethylClassifier,

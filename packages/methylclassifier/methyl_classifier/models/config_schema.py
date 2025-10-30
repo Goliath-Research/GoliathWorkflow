@@ -33,6 +33,10 @@ class ClassificationConfig(BaseModel):
         default=None,
         description="Optional output CSV file for classification results"
     )
+    chromosome_matrix_path: Optional[str] = Field(
+        default=None,
+        description="Optional output CSV file for chromosome probability matrix (samples × chromosomes)"
+    )
 
     debug: bool = Field(
         default=False,
