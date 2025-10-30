@@ -33,10 +33,8 @@
     "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/DBCST-071125-111814"
   ],
   "output_path": "/home/ubuntu/Work/w/humans/psomagen/pc/classifications/hc/results.csv",
-  "prediction_method": "beta",
   "temperature": 1.0,
   "enable_platt_calibration": false,
-  "validation_data_path": null,
   "trimmed_percentile_low": 0.10,
   "trimmed_percentile_high": 0.01,
   "chromosome_weights": null,

@@ -181,7 +181,7 @@ class MethylClassifier:
             raise ValueError(f"Model directory does not exist: {model_dir}")
         
         # Find all classifier files matching pattern classifier-{chrom}.pkl
-        pattern = re.compile(r'^classifier-(\d+)\.pkl$')
+        pattern = re.compile(r'^classifier-(.+)\.pkl$')
         classifier_files = {}
         
         for file_path in model_dir.glob('classifier-*.pkl'):

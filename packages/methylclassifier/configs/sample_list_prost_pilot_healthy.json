@@ -39,7 +39,6 @@
         "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-090225-111626"
   ],
   "output_path": "/home/ubuntu/working_dir/MethylClassifierResults/MethylClassifier_pb_hc1/2-CG/healthy-pilot.csv",
-  "prediction_method": null,
   "debug": false,
   "no_filter": false,
   "log_level": "INFO"

@@ -42,10 +42,6 @@ class ClassifierConfig(BaseModel):
         default=False,
         description="Enable Platt scaling calibration on validation data"
     )
-    validation_data_path: Optional[str] = Field(
-        default=None,
-        description="Path to validation data for Platt calibration (JSON or HDF5 with 'X' and 'y' datasets)"
-    )
 
     @field_validator('temperature')
     @classmethod

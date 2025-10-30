@@ -108,7 +108,8 @@ class DataLoader:
     @staticmethod
     def load_sample_from_directory(
         sample_dir: Path,
-        chromosomes: Optional[List[str]] = None
+        chromosomes: Optional[List[str]] = None,
+        debug: bool = False
     ) -> Dict[str, Any]:
         """
         Load a sample from a directory, merging CG, CHG, and CHH contexts.
@@ -182,14 +183,16 @@ class DataLoader:
             # Merge all contexts using MethylSample.merge_contexts()
             merged_sample = MethylSample.merge_contexts(contexts_to_merge)
             merged_samples[chrom] = merged_sample
-            print(f"✅ Loaded {chrom}: merged {len(contexts_to_merge)} context(s)")
+            if debug:
+                print(f"✅ Loaded {chrom}: merged {len(contexts_to_merge)} context(s)")
         
         return merged_samples
     
     @staticmethod
     def load_samples_from_list(
         sample_paths: List[str],
-        chromosomes: Optional[List[str]] = None
+        chromosomes: Optional[List[str]] = None,
+        debug: bool = False
     ) -> List[Tuple[str, Dict[str, Any]]]:
         """
         Load multiple samples from a list of directory paths.
@@ -212,9 +215,10 @@ class DataLoader:
             
             try:
                 # Load and merge contexts for this sample
-                merged_samples = DataLoader.load_sample_from_directory(sample_dir, chromosomes)
+                merged_samples = DataLoader.load_sample_from_directory(sample_dir, chromosomes, debug)
                 samples.append((sample_name, merged_samples))
-                print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes)")
+                if debug:
+                    print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes)")
             except Exception as e:
                 print(f"❌ Failed to load sample {sample_name}: {e}")
                 continue

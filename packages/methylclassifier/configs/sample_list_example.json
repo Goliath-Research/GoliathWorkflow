@@ -13,7 +13,6 @@
     "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/1401-052125-71538"
   ],
   "output_path": "/home/ubuntu/working_dir/MethylClassifierResults/sample_list_example.csv",
-  "prediction_method": null,
   "debug": false,
   "no_filter": false,
   "log_level": "INFO"

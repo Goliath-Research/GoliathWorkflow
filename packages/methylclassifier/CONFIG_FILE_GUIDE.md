@@ -22,7 +22,6 @@ MethylClassifier now supports JSON configuration files, similar to MethylDetecto
   "model_path": "models/classifier-chr1-CG.pkl",
   "input_path": "samples/prostate_cohort/",
   "output_path": "results/classification_results.csv",
-  "prediction_method": null,
   "debug": false,
   "no_filter": false,
   "log_level": "INFO"
@@ -43,50 +42,9 @@ MethylClassifier now supports JSON configuration files, similar to MethylDetecto
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `output_path` | string/null | null | CSV file for classification results |
-| `prediction_method` | string/null | null | Prediction method: `"sklearn"`, `"beta"`, or `null` (smart default) |
 | `debug` | boolean | false | Enable debug output |
 | `no_filter` | boolean | false | Process all .h5 files without chromosome/context filtering |
 | `log_level` | string | `"INFO"` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-
-## Prediction Method Options
-
-### `null` (Recommended - Smart Default)
-
-```json
-{
-  "prediction_method": null
-}
-```
-
-Automatically chooses:
-- **beta** for ≤10 DMPs (fast enough, exact)
-- **sklearn** for >10 DMPs (much faster, excellent precision)
-
-### `"sklearn"` (Fast)
-
-```json
-{
-  "prediction_method": "sklearn"
-}
-```
-
-Forces sklearn method:
-- 28,000x faster than beta (for 20k DMPs)
-- 0.15% average difference
-- Recommended for production
-
-### `"beta"` (Exact)
-
-```json
-{
-  "prediction_method": "beta"
-}
-```
-
-Forces beta method:
-- Exact Bayesian inference
-- Slower for large DMP sets
-- Use for validation or critical samples
 
 ## Usage
 
@@ -119,7 +77,6 @@ config = ClassificationConfig(
     model_path="models/classifier.pkl",
     input_path="samples/",
     output_path="results.csv",
-    prediction_method=None,  # Smart default
     debug=False,
     log_level="INFO"
 )
@@ -140,7 +97,6 @@ loaded = ClassificationConfig.from_json(Path("my_classification_config.json"))
   "model_path": "models/production_classifier-chr1-CG.pkl",
   "input_path": "samples/batch_001/",
   "output_path": "results/batch_001_results.csv",
-  "prediction_method": "sklearn",
   "debug": false,
   "log_level": "INFO"
 }
@@ -155,7 +111,6 @@ loaded = ClassificationConfig.from_json(Path("my_classification_config.json"))
   "model_path": "models/validation_classifier-chr1-CG.pkl",
   "input_path": "samples/validation_set/",
   "output_path": "results/validation_results.csv",
-  "prediction_method": "beta",
   "debug": true,
   "log_level": "DEBUG"
 }
@@ -170,7 +125,6 @@ loaded = ClassificationConfig.from_json(Path("my_classification_config.json"))
   "model_path": "models/classifier-chr1-CG.pkl",
   "input_path": "samples/",
   "output_path": "results/results.csv",
-  "prediction_method": null,
   "debug": false,
   "log_level": "INFO"
 }
@@ -185,7 +139,6 @@ loaded = ClassificationConfig.from_json(Path("my_classification_config.json"))
   "model_path": "models/test_classifier-chr1-CG.pkl",
   "input_path": "samples/problematic_sample.h5",
   "output_path": null,
-  "prediction_method": null,
   "debug": true,
   "no_filter": false,
   "log_level": "DEBUG"
@@ -207,8 +160,7 @@ cat > classification_config.json << 'EOF'
 {
   "model_path": "output/classifier-chr1-CG.pkl",
   "input_path": "new_samples/",
-  "output_path": "results/classification.csv",
-  "prediction_method": null
+  "output_path": "results/classification.csv"
 }
 EOF
 
@@ -234,8 +186,7 @@ for i, cfg in enumerate(configs, 1):
     config = ClassificationConfig(
         model_path=f"models/{cfg['model']}",
         input_path=f"samples/{cfg['samples']}",
-        output_path=f"results/batch_{i:03d}_results.csv",
-        prediction_method=None
+        output_path=f"results/batch_{i:03d}_results.csv"
     )
     config.to_json(Path(f"configs/classification_config_{i:03d}.json"))
 ```
@@ -254,17 +205,15 @@ Example:
 # Config file has:
 # {
 #   "model_path": "models/classifier.pkl",
-#   "input_path": "samples/",
-#   "prediction_method": "beta"
+#   "input_path": "samples/"
 # }
 
-# Command overrides prediction_method:
-methyl_classifier --config config.json --use-sklearn
+# Command overrides input path:
+methyl_classifier --config config.json --input new_samples/
 
 # Effective configuration:
 # - model_path: "models/classifier.pkl" (from config)
-# - input_path: "samples/" (from config)
-# - prediction_method: "sklearn" (from command-line)
+# - input_path: "new_samples/" (from command-line)
 ```
 
 ## Validation
@@ -309,25 +258,7 @@ Use meaningful names for config files:
 - `test.json`
 - `config1.json`
 
-### 3. Document Prediction Method Choices
-
-Add comments in commit messages explaining why you chose a specific method:
-
-```bash
-git commit -m "Use sklearn method for production (28,000x faster, 0.15% diff acceptable)"
-```
-
-### 4. Use Smart Defaults
-
-Unless you have a specific reason, use `prediction_method: null`:
-
-```json
-{
-  "prediction_method": null  // Smart default: sklearn for >10 DMPs, beta for ≤10
-}
-```
-
-### 5. Separate Configs for Different Stages
+### 3. Separate Configs for Different Stages
 
 ```
 configs/

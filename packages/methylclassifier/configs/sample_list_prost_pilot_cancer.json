@@ -124,7 +124,6 @@
         "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/5929-606156_V00-1_ACD_BC"
   ],
   "output_path": "/home/ubuntu/working_dir/MethylClassifierResults/MethylClassifier_pb_hc1/2-CG/cancer_pilot.csv",
-  "prediction_method": null,
   "debug": false,
   "no_filter": false,
   "log_level": "INFO"

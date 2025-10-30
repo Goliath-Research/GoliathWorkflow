@@ -353,7 +353,7 @@ def classify_samples_from_list(
     print(f"\n🔍 Loading {len(samples_list)} samples from directories...")
     
     # Load samples (merged contexts per chromosome)
-    loaded_samples = DataLoader.load_samples_from_list(samples_list)
+    loaded_samples = DataLoader.load_samples_from_list(samples_list, debug=debug)
     
     if not loaded_samples:
         raise ValueError("No samples loaded from provided paths")
@@ -649,7 +649,6 @@ Config fields (in JSON):
     "output_path": "results.csv",
     "temperature": 1.0,
     "enable_platt_calibration": false,
-    "validation_data_path": null,
     "trimmed_percentile_low": 0.10,
     "trimmed_percentile_high": 0.01,
     "chromosome_weights": null,
@@ -736,7 +735,6 @@ Config fields (in JSON):
         # Defaults for new params
         config.temperature = 1.0
         config.enable_platt_calibration = False
-        config.validation_data_path = None
     
     # Setup logging
     setup_logging(config.log_level)
@@ -747,7 +745,6 @@ Config fields (in JSON):
         model_dir=config.model_dir,
         temperature=config.temperature,
         enable_platt_calibration=config.enable_platt_calibration,
-        validation_data_path=config.validation_data_path,
         trimmed_percentile_low=config.trimmed_percentile_low,
         trimmed_percentile_high=config.trimmed_percentile_high,
         chromosome_weights=config.chromosome_weights

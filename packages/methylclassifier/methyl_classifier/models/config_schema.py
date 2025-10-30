@@ -33,12 +33,7 @@ class ClassificationConfig(BaseModel):
         default=None,
         description="Optional output CSV file for classification results"
     )
-    
-    prediction_method: Optional[str] = Field(
-        default=None,
-        description="Prediction method: 'sklearn' (fast), 'beta' (exact), or None (smart default based on DMPs)"
-    )
-    
+
     debug: bool = Field(
         default=False,
         description="Enable debug output"
@@ -64,10 +59,6 @@ class ClassificationConfig(BaseModel):
     enable_platt_calibration: bool = Field(
         default=False,
         description="Enable Platt scaling calibration on validation data"
-    )
-    validation_data_path: Optional[str] = Field(
-        default=None,
-        description="Path to validation data for Platt calibration (JSON with 'X' and 'y' keys or HDF5 with 'X' and 'y' datasets)"
     )
     
     # Multi-chromosome parameters
@@ -111,7 +102,6 @@ class ClassificationConfig(BaseModel):
                 "model_path": "models/classifier-chr1-CG.pkl",
                 "input_path": "samples/",
                 "output_path": "results/classification_results.csv",
-                "prediction_method": "sklearn",
                 "debug": False,
                 "no_filter": False,
                 "log_level": "INFO"
