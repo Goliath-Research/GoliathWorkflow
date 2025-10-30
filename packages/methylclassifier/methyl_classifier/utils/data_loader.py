@@ -234,8 +234,7 @@ class DataLoader:
             sample_dir = Path(sample_path)
             sample_name = sample_dir.name
 
-            if debug:
-                print(f"Loading sample {i}/{len(sample_paths)}: {sample_name}")
+            print(f"    ✅ Loading sample {i}/{len(sample_paths)}: {sample_name}")
             start_time = time.time()
 
             try:
