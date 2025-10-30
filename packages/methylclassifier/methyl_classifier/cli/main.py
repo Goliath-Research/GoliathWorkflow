@@ -371,7 +371,7 @@ def classify_samples_from_list(
         # Multi-chromosome mode: extract features per chromosome and combine
         _classify_multi_chromosome_samples(
             classifier, loaded_samples, output_file,
-            chromosome_matrix_file=Path(config.chromosome_matrix_path) if config.chromosome_matrix_path else None,
+            chromosome_matrix_file=Path(classifier.config.chromosome_matrix_path) if classifier.config.chromosome_matrix_path else None,
             debug=debug
         )
     else:
