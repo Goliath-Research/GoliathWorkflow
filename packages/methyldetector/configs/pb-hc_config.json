@@ -1,9 +1,10 @@
 {
   "chromosome": "1",
-  "contexts": ["CG"],
+  "contexts": ["CG","CHG","CHH"],
   "centroid1_dir": "/home/ubuntu/Work/w/humans/psomagen/pb/centroids/h",
   "centroid2_dir": "/home/ubuntu/Work/w/humans/psomagen/pb/centroids/c",
   "output_dir": "/home/ubuntu/Work/w/humans/psomagen/pb/detections/hc",
+  "mode": "multiple",
   "alpha": 0.01,
   "min_delta_mean": 0.2,
   "max_bc": 0.5,

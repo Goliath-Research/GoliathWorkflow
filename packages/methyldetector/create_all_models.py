@@ -1,40 +1,46 @@
 #!/usr/bin/env python3
 """
-Test script for methyl_detector that generates configs for all chromosome/context combinations.
+Create MethylDetector models for all chromosomes.
 
-This script takes a single config.json file (created for one chromosome/context combination)
-and generates configs for all 68 combinations of chromosomes (1-22, X) and contexts (CG, CHG, CHH).
-It then executes the md script for each generated config.
+This script takes a single config.json file and generates configs for all chromosomes,
+processing each chromosome with all contexts (CG, CHG, CHH) in a single run.
+Each chromosome gets its own log file (output-{chrom}.log).
 
 Usage:
-    python test_all_combinations.py <config.json>
+    python create_all_models.py <config.json>
 """
 
 import argparse
 import json
+import logging
 import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Optional
+
+try:
+    from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TaskID
+    from rich.console import Console
+    from rich.table import Table
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
+    print("Warning: rich library not available. Falling back to simple progress display.")
 
 
-def get_all_combinations(chromosomes: List[str] = None) -> List[Tuple[str, str]]:
-    """Generate combinations of chromosomes and contexts."""
+def get_all_chromosomes(chromosomes: Optional[List[str]] = None) -> List[str]:
+    """Generate list of chromosomes to process."""
     if chromosomes is None:
         chromosomes = [str(i) for i in range(1, 23)] + ['X', 'Y']  # 1-22, X, Y
-    contexts = ['CG', 'CHG', 'CHH']
-    
-    combinations = []
-    for chrom in chromosomes:
-        for ctx in contexts:
-            combinations.append((chrom, ctx))
-    
-    return combinations
+    return chromosomes
 
 
-def modify_config_for_combination(config: Dict[str, Any], chromosome: str, context: str) -> Dict[str, Any]:
-    """Modify the config to use the specified chromosome and context."""
+def modify_config_for_chromosome(config: Dict[str, Any], chromosome: str, all_contexts: List[str] = None) -> Dict[str, Any]:
+    """Modify the config to use the specified chromosome with all contexts."""
+    if all_contexts is None:
+        all_contexts = ['CG', 'CHG', 'CHH']
+    
     # Create a deep copy of the config
     new_config = config.copy()
     
@@ -42,39 +48,36 @@ def modify_config_for_combination(config: Dict[str, Any], chromosome: str, conte
     if 'chromosome' in new_config and 'contexts' in new_config:
         # Format 1: Uses chromosome and contexts fields
         new_config['chromosome'] = chromosome
-        new_config['contexts'] = [context]
+        new_config['contexts'] = all_contexts  # All contexts in one run
+    elif 'centroid1_dir' in new_config and 'centroid2_dir' in new_config:
+        # Format 2: Uses centroid directories (already supports multi-context)
+        new_config['chromosome'] = chromosome
+        if 'contexts' not in new_config:
+            new_config['contexts'] = all_contexts
     elif 'centroid1_path' in new_config and 'centroid2_path' in new_config:
-        # Format 2: Uses specific centroid paths
-        old_path = Path(new_config['centroid1_path'])
-        # Replace the chromosome-context part in the filename
-        new_filename = old_path.name.replace(old_path.stem.split('-')[0] + '-' + old_path.stem.split('-')[1], 
-                                           f"{chromosome}-{context}")
-        new_config['centroid1_path'] = str(old_path.parent / new_filename)
-        
-        old_path = Path(new_config['centroid2_path'])
-        new_filename = old_path.name.replace(old_path.stem.split('-')[0] + '-' + old_path.stem.split('-')[1], 
-                                           f"{chromosome}-{context}")
-        new_config['centroid2_path'] = str(old_path.parent / new_filename)
+        # Format 3: Old format with specific paths - convert to directory format if possible
+        # This is a fallback, ideally configs should use centroid1_dir/centroid2_dir
+        old_path1 = Path(new_config['centroid1_path'])
+        old_path2 = Path(new_config['centroid2_path'])
+        # Extract base directory
+        new_config['centroid1_dir'] = str(old_path1.parent)
+        new_config['centroid2_dir'] = str(old_path2.parent)
+        new_config['chromosome'] = chromosome
+        new_config['contexts'] = all_contexts
+        # Remove old path fields
+        new_config.pop('centroid1_path', None)
+        new_config.pop('centroid2_path', None)
     
     return new_config
 
 
-def save_config(config: Dict[str, Any], output_path: str) -> None:
-    """Save the config to a JSON file."""
-    with open(output_path, 'w') as f:
-        json.dump(config, f, indent=2)
-
-
-def execute_md_script_with_config(config_dict: Dict[str, Any], md_script_path: str) -> subprocess.CompletedProcess:
-    """Execute the md script with a config dictionary (no temporary file)."""
+def execute_md_script_with_config(config_dict: Dict[str, Any], md_script_path: str, log_file: Optional[Path] = None) -> subprocess.CompletedProcess:
+    """Execute the md script with a config dictionary."""
     import tempfile
-    import json
-    import os
+    import uuid
     import time
     
     # Create temporary config file in current directory (accessible to Docker container)
-    # Use a unique name to avoid conflicts in parallel execution
-    import uuid
     temp_filename = f"temp_config_{uuid.uuid4().hex[:8]}.json"
     temp_config_path = os.path.join(os.getcwd(), temp_filename)
     
@@ -90,7 +93,11 @@ def execute_md_script_with_config(config_dict: Dict[str, Any], md_script_path: s
         # Small delay to ensure file is written
         time.sleep(0.1)
         
-        cmd = [md_script_path, temp_filename]  # Use relative path, not absolute
+        # Build command with log file if specified
+        cmd = [md_script_path, temp_filename]
+        if log_file is not None:
+            cmd.extend(['--log-file', str(log_file)])
+        
         result = subprocess.run(cmd, capture_output=True, text=True)
         return result
     finally:
@@ -104,7 +111,7 @@ def execute_md_script_with_config(config_dict: Dict[str, Any], md_script_path: s
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate configs for all chromosome/context combinations and execute md script"
+        description="Create MethylDetector models for all chromosomes (processing all contexts per chromosome)"
     )
     parser.add_argument(
         "config_file",
@@ -117,7 +124,8 @@ def main():
     )
     parser.add_argument(
         "--output-dir",
-        help="Directory to save generated configs (default: same as input config)"
+        type=Path,
+        help="Directory to save log files (default: same directory as input config)"
     )
     parser.add_argument(
         "--dry-run",
@@ -125,32 +133,26 @@ def main():
         help="Generate configs but don't execute md script"
     )
     parser.add_argument(
-        "--parallel",
-        type=int,
-        default=1,
-        help="Number of parallel executions (default: 1)"
-    )
-    parser.add_argument(
         "--chromosomes",
         nargs="+",
         help="Specific chromosomes to process (e.g., --chromosomes 1 2 3 X). Default: all chromosomes 1-22, X, Y"
     )
     parser.add_argument(
-        "--contexts",
-        nargs="+",
-        help="Specific contexts to process (e.g., --contexts CG CHG). Default: extract from original config"
+        "--verbose", "-v",
+        action="store_true",
+        help="Enable verbose output"
     )
     
     args = parser.parse_args()
     
     # Validate input config file
     if not os.path.exists(args.config_file):
-        print(f"Error: Config file '{args.config_file}' not found.")
+        print(f"Error: Config file '{args.config_file}' not found.", file=sys.stderr)
         sys.exit(1)
     
     # Validate md script
     if not args.dry_run and not os.path.exists(args.md_script):
-        print(f"Error: MD script '{args.md_script}' not found.")
+        print(f"Error: MD script '{args.md_script}' not found.", file=sys.stderr)
         sys.exit(1)
     
     # Load the original config
@@ -158,15 +160,15 @@ def main():
         with open(args.config_file, 'r') as f:
             original_config = json.load(f)
     except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in config file: {e}")
+        print(f"Error: Invalid JSON in config file: {e}", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
-        print(f"Error: Failed to read config file: {e}")
+        print(f"Error: Failed to read config file: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # Determine output directory for configs
+    # Determine output directory for log files
     if args.output_dir:
-        output_dir = Path(args.output_dir)
+        output_dir = args.output_dir
     else:
         output_dir = Path(args.config_file).parent
     
@@ -175,111 +177,141 @@ def main():
     # Determine chromosomes to process
     if args.chromosomes:
         chromosomes = args.chromosomes
-        print(f"Processing specified chromosomes: {chromosomes}")
     else:
         chromosomes = None  # Will use default (1-22, X, Y)
-        print("Processing all chromosomes: 1-22, X, Y")
     
-    # Get all combinations
-    combinations = get_all_combinations(chromosomes)
+    # Get list of chromosomes
+    chromosome_list = get_all_chromosomes(chromosomes)
     
-    # Extract the original chromosome and context from the input config filename
-    input_config_path = Path(args.config_file)
-    input_filename = input_config_path.stem  # Get filename without extension
-    
-    # Try to extract chromosome-context from the original config or filename
-    import re
-    
-    # First try to get from config content
-    if 'chromosome' in original_config and 'contexts' in original_config:
+    # Extract the original chromosome from the input config
+    original_chromosome = None
+    if 'chromosome' in original_config:
         original_chromosome = original_config['chromosome']
-        original_context = original_config['contexts'][0] if original_config['contexts'] else 'CG'
-        print(f"Detected original config for {original_chromosome}-{original_context} from config content")
     else:
-        # Fallback: try to extract from filename
-        match = re.search(r'(\d+|X|Y)-(CG|CHG|CHH)', input_filename)
+        # Try to extract from filename
+        import re
+        input_config_path = Path(args.config_file)
+        input_filename = input_config_path.stem
+        match = re.search(r'(\d+|X|Y)', input_filename)
         if match:
-            original_chromosome, original_context = match.groups()
-            print(f"Detected original config for {original_chromosome}-{original_context} from filename")
-        else:
-            print("Warning: Could not detect chromosome-context from config or filename. Will generate all combinations.")
-            original_chromosome, original_context = "1", "CG"  # Default fallback
+            original_chromosome = match.group(1)
     
-    # Remove the original combination from the list
-    combinations = [(c, ctx) for c, ctx in combinations if not (c == original_chromosome and ctx == original_context)]
+    # Remove the original chromosome from the list if found
+    if original_chromosome and original_chromosome in chromosome_list:
+        chromosome_list.remove(original_chromosome)
     
-    # Filter contexts if specified
-    if args.contexts:
-        print(f"Processing specified contexts: {args.contexts}")
-        combinations = [(c, ctx) for c, ctx in combinations if ctx in args.contexts]
+    print(f"Processing {len(chromosome_list)} chromosomes (all contexts per chromosome)")
+    if args.dry_run:
+        print("Dry run mode: will generate configs but not execute")
     
-    print(f"Generating configs for {len(combinations)} additional chromosome/context combinations...")
-    
-    # Generate configs and collect execution info
-    config_files = []
-    
-    # Add the original config to the execution list
-    config_files.append((original_config, original_chromosome, original_context))
-    
-    for i, (chromosome, context) in enumerate(combinations, 1):
-        print(f"[{i:2d}/{len(combinations)}] Processing {chromosome}-{context}...")
-        
-        # Modify config for this combination
-        modified_config = modify_config_for_combination(original_config, chromosome, context)
-        
-        config_files.append((modified_config, chromosome, context))
-    
-    print(f"\nGenerated {len(config_files)} total configs (including original)")
+    # Generate configs for each chromosome
+    chromosome_configs = []
+    for chrom in chromosome_list:
+        modified_config = modify_config_for_chromosome(original_config, chrom)
+        log_file = output_dir / f"output-{chrom}.log"
+        chromosome_configs.append((chrom, modified_config, log_file))
     
     if args.dry_run:
-        print("Dry run completed. No md scripts executed.")
+        print(f"\nGenerated {len(chromosome_configs)} chromosome configs:")
+        for chrom, config, log_file in chromosome_configs:
+            print(f"  Chromosome {chrom}: contexts={config.get('contexts', ['CG', 'CHG', 'CHH'])}, log={log_file}")
         return
     
-    # Execute md scripts
-    print(f"\nExecuting md scripts...")
-    if args.parallel == 1:
-        # Sequential execution
-        for i, (config_dict, chromosome, context) in enumerate(config_files, 1):
-            print(f"[{i:2d}/{len(config_files)}] Executing {chromosome}-{context}...")
-            result = execute_md_script_with_config(config_dict, args.md_script)
+    # Execute md scripts with progress bar
+    if RICH_AVAILABLE:
+        console = Console()
+        
+        # Create progress display
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+            console=console
+        ) as progress:
+            
+            # Create tasks for each chromosome
+            tasks = {}
+            for chrom, config, log_file in chromosome_configs:
+                task_id = progress.add_task(f"Chromosome {chrom}", total=1)
+                tasks[chrom] = task_id
+            
+            # Process each chromosome
+            results = {}
+            for chrom, config, log_file in chromosome_configs:
+                task_id = tasks[chrom]
+                
+                # Update task to show processing
+                progress.update(task_id, description=f"[yellow]Processing {chrom}...[/yellow]")
+                
+                # Execute md script
+                result = execute_md_script_with_config(config, args.md_script, log_file)
+                
+                # Update task based on result
+                if result.returncode == 0:
+                    progress.update(
+                        task_id,
+                        description=f"[green]✓ Chromosome {chrom} completed[/green]",
+                        completed=1
+                    )
+                    results[chrom] = {'success': True, 'error': None}
+                else:
+                    progress.update(
+                        task_id,
+                        description=f"[red]✗ Chromosome {chrom} failed[/red]",
+                        completed=1
+                    )
+                    error_msg = result.stderr.strip() if result.stderr else f"Exit code: {result.returncode}"
+                    results[chrom] = {'success': False, 'error': error_msg}
+                    # Also print error to console
+                    console.print(f"[red]Error processing chromosome {chrom}:[/red] {error_msg}")
+        
+        # Print summary table
+        console.print("\n" + "="*60)
+        console.print("[bold]Summary[/bold]")
+        console.print("="*60)
+        
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Chromosome", style="cyan")
+        table.add_column("Status", justify="center")
+        table.add_column("Log File")
+        
+        success_count = 0
+        for chrom, config, log_file in chromosome_configs:
+            result = results[chrom]
+            if result['success']:
+                status = "[green]✓ Success[/green]"
+                success_count += 1
+            else:
+                status = "[red]✗ Failed[/red]"
+            table.add_row(chrom, status, str(log_file))
+        
+        console.print(table)
+        console.print(f"\n[bold]Completed: {success_count}/{len(chromosome_configs)} successful[/bold]")
+        
+    else:
+        # Fallback to simple progress display
+        print(f"\nExecuting md scripts for {len(chromosome_configs)} chromosomes...")
+        success_count = 0
+        
+        for i, (chrom, config, log_file) in enumerate(chromosome_configs, 1):
+            print(f"[{i:2d}/{len(chromosome_configs)}] Processing chromosome {chrom}...")
+            print(f"  Log file: {log_file}")
+            
+            result = execute_md_script_with_config(config, args.md_script, log_file)
             
             if result.returncode == 0:
-                print(f"  ✅ {chromosome}-{context} completed successfully")
+                print(f"  ✅ Chromosome {chrom} completed successfully")
+                success_count += 1
             else:
-                print(f"  ❌ {chromosome}-{context} failed with return code {result.returncode}")
+                print(f"  ❌ Chromosome {chrom} failed with return code {result.returncode}")
                 if result.stderr:
                     print(f"  Error: {result.stderr.strip()}")
-    else:
-        # Parallel execution (basic implementation)
-        import concurrent.futures
-        import threading
         
-        def execute_single(config_info):
-            config_dict, chromosome, context = config_info
-            result = execute_md_script_with_config(config_dict, args.md_script)
-            return (chromosome, context, result)
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=args.parallel) as executor:
-            # Submit all tasks
-            future_to_config = {
-                executor.submit(execute_single, config_info): config_info 
-                for config_info in config_files
-            }
-            
-            # Process completed tasks
-            completed = 0
-            for future in concurrent.futures.as_completed(future_to_config):
-                completed += 1
-                chromosome, context, result = future.result()
-                
-                if result.returncode == 0:
-                    print(f"[{completed:2d}/{len(config_files)}] ✅ {chromosome}-{context} completed successfully")
-                else:
-                    print(f"[{completed:2d}/{len(config_files)}] ❌ {chromosome}-{context} failed with return code {result.returncode}")
-                    if result.stderr:
-                        print(f"  Error: {result.stderr.strip()}")
-    
-    print("\nAll executions completed.")
+        print(f"\n{'='*60}")
+        print(f"Summary: {success_count}/{len(chromosome_configs)} chromosomes completed successfully")
+        print(f"{'='*60}")
 
 
 if __name__ == "__main__":

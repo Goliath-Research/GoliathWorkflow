@@ -3,6 +3,7 @@
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
 
 import click
 
@@ -29,15 +30,34 @@ except ImportError:
     default=False,
     help='Enable verbose logging'
 )
+@click.option(
+    '--log-file',
+    type=click.Path(path_type=Path),
+    default=None,
+    help='Path to log file for detailed logging (summary/errors still shown on screen)'
+)
 @click.version_option(version='0.3.0')
-def main(config: Path, verbose: bool) -> None:
+def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
     """
     MethylDetector - Genomics sample classification using enhanced centroid-based approach.
 
     CONFIG is the path to a JSON configuration file compatible with the Pydantic model.
     """
-    setup_logging(verbose)
-    logger = logging.getLogger(__name__)
+    # Configure logging with dual handlers if log_file specified
+    if log_file:
+        # All logs go to file, but errors and info (summary) still appear on console
+        setup_logging(
+            verbose=verbose,
+            log_file=log_file,
+            console_level='INFO',  # Show INFO (summary) and above on console
+            file_level='DEBUG' if verbose else 'INFO'  # All logs to file
+        )
+        logger = logging.getLogger(__name__)
+        logger.info(f"Logging to file: {log_file}")
+    else:
+        # Standard logging to console only
+        setup_logging(verbose=verbose)
+        logger = logging.getLogger(__name__)
     
     try:
         logger.debug(f"Loading configuration from {config}")
@@ -51,32 +71,47 @@ def main(config: Path, verbose: bool) -> None:
         logger.debug(f"Result config_summary type: {type(result.config_summary)}")
         logger.debug(f"Result config_summary: {result.config_summary}")
         
-        click.echo("\n" + "="*60)
-        click.echo("MethylDetector Analysis Results")
-        click.echo("="*60)
-        click.echo("\n📊 Summary:")
-        click.echo(f"  Statistical DMPs: {result.total_statistical_dmps:,}")
-        click.echo(f"  Biological DMPs: {result.total_biological_dmps:,}")
-        click.echo(f"  Retention Rate: {result.biological_retention_rate:.1%}")
-        click.echo(f"  Analysis Time: {result.timestamp}")
-
+        # Summary output - always shown on screen, also logged to file if log_file specified
+        summary_lines = [
+            "\n" + "="*60,
+            "MethylDetector Analysis Results",
+            "="*60,
+            "\n📊 Summary:",
+            f"  Statistical DMPs: {result.total_statistical_dmps:,}",
+            f"  Biological DMPs: {result.total_biological_dmps:,}",
+            f"  Retention Rate: {result.biological_retention_rate:.1%}",
+            f"  Analysis Time: {result.timestamp}"
+        ]
+        
         if result.comparison_stats:
-            click.echo("\n🔬 Comparison Details:")
+            summary_lines.append("\n🔬 Comparison Details:")
             for stats in result.comparison_stats:
-                click.echo(f"  {stats.comparison_name}:")
-                click.echo(f"    Positions: {stats.total_positions:,}")
-                click.echo(f"    Statistical DMPs: {stats.statistical_dmps:,}")
-                click.echo(f"    Biological DMPs: {stats.biological_dmps:,}")
-                click.echo(f"    Processing Time: {stats.processing_time_seconds:.2f}s")
-                click.echo(f"    GPU Used: {'Yes' if stats.gpu_used else 'No'}")
+                summary_lines.extend([
+                    f"  {stats.comparison_name}:",
+                    f"    Positions: {stats.total_positions:,}",
+                    f"    Statistical DMPs: {stats.statistical_dmps:,}",
+                    f"    Biological DMPs: {stats.biological_dmps:,}",
+                    f"    Processing Time: {stats.processing_time_seconds:.2f}s",
+                    f"    GPU Used: {'Yes' if stats.gpu_used else 'No'}"
+                ])
 
         dmp_count = len(result.biologically_significant_dmps_df) if result.biologically_significant_dmps_df is not None else 0
-        click.echo(f"\n✅ Analysis complete! Found {dmp_count} DMPs")
+        summary_lines.append(f"\n✅ Analysis complete! Found {dmp_count} DMPs")
+        
+        # Print summary to screen (and log if log_file specified)
+        for line in summary_lines:
+            logger.info(line)
+            # Also use click.echo to ensure it appears on screen even with file logging
+            if log_file:
+                click.echo(line)
 
     except Exception as e:
-        logger.error(f"Analysis failed: {e}")
+        error_msg = f"Analysis failed: {e}"
+        logger.error(error_msg)
         import traceback
-        logger.error(f"Full traceback:\n{traceback.format_exc()}")
+        traceback_str = traceback.format_exc()
+        logger.error(f"Full traceback:\n{traceback_str}")
+        # Error always appears on screen
         click.echo(f"\n❌ Error: {e}", err=True)
         sys.exit(1)
 

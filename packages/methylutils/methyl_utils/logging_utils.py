@@ -13,7 +13,9 @@ from pathlib import Path
 def setup_logging(
     verbose: bool = False,
     log_file: Optional[Path] = None,
-    log_level: Optional[str] = None
+    log_level: Optional[str] = None,
+    console_level: Optional[str] = None,
+    file_level: Optional[str] = None
 ) -> None:
     """
     Configure logging for the application.
@@ -22,6 +24,8 @@ def setup_logging(
         verbose: If True, use DEBUG level and detailed format
         log_file: Optional file path to write logs to
         log_level: Optional log level override ('DEBUG', 'INFO', 'WARNING', 'ERROR')
+        console_level: Optional console-specific log level (if None, uses log_level)
+        file_level: Optional file-specific log level (if None, uses log_level)
     """
     # Determine log level
     if log_level:
@@ -29,18 +33,23 @@ def setup_logging(
     else:
         level = logging.DEBUG if verbose else logging.INFO
     
+    # Determine console and file levels
+    console_log_level = getattr(logging, console_level.upper(), level) if console_level else level
+    file_log_level = getattr(logging, file_level.upper(), level) if file_level else level
+    
     # Determine format
     if verbose:
         format_str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     else:
         format_str = '%(levelname)s: %(message)s'
     
-    # Create formatter
-    formatter = logging.Formatter(format_str)
+    # Create formatters
+    console_formatter = logging.Formatter(format_str)
+    file_formatter = logging.Formatter(format_str)
     
     # Configure root logger
     root_logger = logging.getLogger()
-    root_logger.setLevel(level)
+    root_logger.setLevel(min(console_log_level, file_log_level))
     
     # Clear existing handlers
     for handler in root_logger.handlers[:]:
@@ -48,22 +57,22 @@ def setup_logging(
     
     # Add console handler
     console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(level)
-    console_handler.setFormatter(formatter)
+    console_handler.setLevel(console_log_level)
+    console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
     
     # Add file handler if specified
     if log_file:
         log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(level)
-        file_handler.setFormatter(formatter)
+        file_handler.setLevel(file_log_level)
+        file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)
     
     # Configure all existing loggers
     for name in logging.root.manager.loggerDict:
         logger = logging.getLogger(name)
-        logger.setLevel(level)
+        logger.setLevel(min(console_log_level, file_log_level))
         # Remove existing handlers to avoid duplicates
         for handler in logger.handlers[:]:
             logger.removeHandler(handler)

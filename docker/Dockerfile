@@ -57,6 +57,7 @@ RUN pip install --no-cache-dir --retries 3 plotly matplotlib seaborn
 RUN pip install --no-cache-dir --retries 3 psutil
 RUN pip install --no-cache-dir --retries 3 click
 RUN pip install --no-cache-dir --retries 3 tqdm
+RUN pip install --no-cache-dir --retries 3 rich
 
 # Install statistical libraries
 RUN pip install --no-cache-dir --retries 3 statsmodels sqlalchemy scikit-learn hdbscan
