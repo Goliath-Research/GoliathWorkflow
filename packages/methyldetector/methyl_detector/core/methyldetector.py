@@ -538,12 +538,17 @@ class MethylDetector:
                     
                     if centroid_path.exists():
                         centroid = MethylSample.load_from_h5(str(centroid_path))
-                        if centroid.metadata and 'sample_paths' in centroid.metadata:
-                            samples = centroid.metadata['sample_paths']
-                            logger.info(f"✅ Loaded {len(samples)} validation samples from {centroid_name} metadata")
-                            return samples
+                        # Use the .samples property which checks both 'sample_paths' and 'samples_used'
+                        # Centroids are typically saved with 'samples_used' in metadata
+                        if centroid.metadata:
+                            samples = centroid.samples  # This property handles both 'sample_paths' and 'samples_used'
+                            if samples:
+                                logger.info(f"✅ Loaded {len(samples)} validation samples from {centroid_name} metadata")
+                                return samples
+                            else:
+                                logger.warning(f"No sample paths found in {centroid_name} metadata (checked 'sample_paths' and 'samples_used')")
                         else:
-                            logger.warning(f"No sample_paths in {centroid_name} metadata")
+                            logger.warning(f"No metadata in {centroid_name} centroid")
                     else:
                         logger.warning(f"Centroid file not found: {centroid_path}")
             except Exception as e:
