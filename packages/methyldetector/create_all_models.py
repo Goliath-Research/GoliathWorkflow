@@ -71,7 +71,7 @@ def modify_config_for_chromosome(config: Dict[str, Any], chromosome: str, all_co
     return new_config
 
 
-def execute_md_script_with_config(config_dict: Dict[str, Any], md_script_path: str, log_file: Optional[Path] = None) -> subprocess.CompletedProcess:
+def execute_md_script_with_config(config_dict: Dict[str, Any], md_script_path: str, log_file: Optional[Path] = None, suppress_output: bool = True) -> subprocess.CompletedProcess:
     """Execute the md script with a config dictionary."""
     import tempfile
     import uuid
@@ -98,7 +98,26 @@ def execute_md_script_with_config(config_dict: Dict[str, Any], md_script_path: s
         if log_file is not None:
             cmd.extend(['--log-file', str(log_file)])
         
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Suppress stdout/stderr to avoid progress bar conflicts with Rich
+        # All output should go to log_file anyway, but we still capture stderr for errors
+        if suppress_output:
+            # Set environment variables to disable Rich output from md script
+            env = os.environ.copy()
+            env['TERM'] = 'dumb'  # Tell programs this isn't a smart terminal
+            env['NO_COLOR'] = '1'  # Disable color output
+            env['FORCE_COLOR'] = '0'  # Disable forced color
+            
+            # Capture stderr for error messages, but suppress stdout
+            # This prevents Rich progress bars from the md script from interfering
+            result = subprocess.run(
+                cmd,
+                text=True,
+                stdout=subprocess.DEVNULL,  # Always suppress stdout to avoid Rich conflicts
+                stderr=subprocess.PIPE,     # Capture stderr for error reporting
+                env=env                     # Use modified environment
+            )
+        else:
+            result = subprocess.run(cmd, capture_output=True, text=True)
         return result
     finally:
         # Clean up temporary file after execution completes
@@ -180,26 +199,11 @@ def main():
     else:
         chromosomes = None  # Will use default (1-22, X, Y)
     
-    # Get list of chromosomes
+    # Get list of chromosomes to process
     chromosome_list = get_all_chromosomes(chromosomes)
     
-    # Extract the original chromosome from the input config
-    original_chromosome = None
-    if 'chromosome' in original_config:
-        original_chromosome = original_config['chromosome']
-    else:
-        # Try to extract from filename
-        import re
-        input_config_path = Path(args.config_file)
-        input_filename = input_config_path.stem
-        match = re.search(r'(\d+|X|Y)', input_filename)
-        if match:
-            original_chromosome = match.group(1)
-    
-    # Remove the original chromosome from the list if found
-    if original_chromosome and original_chromosome in chromosome_list:
-        chromosome_list.remove(original_chromosome)
-    
+    # Process all chromosomes including the one in the config
+    # (The config is used as a template, and each chromosome gets processed)
     print(f"Processing {len(chromosome_list)} chromosomes (all contexts per chromosome)")
     if args.dry_run:
         print("Dry run mode: will generate configs but not execute")
@@ -217,55 +221,60 @@ def main():
             print(f"  Chromosome {chrom}: contexts={config.get('contexts', ['CG', 'CHG', 'CHH'])}, log={log_file}")
         return
     
-    # Execute md scripts with progress bar
+    # Execute md scripts sequentially (one at a time) to avoid progress bar conflicts
     if RICH_AVAILABLE:
-        console = Console()
+        import sys
+        console = Console(file=sys.stderr, force_terminal=True, legacy_windows=False)
         
-        # Create progress display
+        # Create a single progress bar that tracks overall progress
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("({task.completed}/{task.total})"),
             TimeElapsedColumn(),
-            console=console
+            console=console,
+            refresh_per_second=4,
+            redirect_stdout=False,
+            redirect_stderr=False
         ) as progress:
             
-            # Create tasks for each chromosome
-            tasks = {}
-            for chrom, config, log_file in chromosome_configs:
-                task_id = progress.add_task(f"Chromosome {chrom}", total=1)
-                tasks[chrom] = task_id
+            # Create single task for overall progress
+            total_chromosomes = len(chromosome_configs)
+            overall_task = progress.add_task(
+                f"[cyan]Processing chromosomes...[/cyan]",
+                total=total_chromosomes
+            )
             
-            # Process each chromosome
+            # Process each chromosome sequentially (one at a time)
             results = {}
-            for chrom, config, log_file in chromosome_configs:
-                task_id = tasks[chrom]
+            for i, (chrom, config, log_file) in enumerate(chromosome_configs, 1):
+                # Update description to show current chromosome
+                progress.update(
+                    overall_task,
+                    description=f"[yellow]Processing chromosome {chrom} ({i}/{total_chromosomes})...[/yellow]"
+                )
                 
-                # Update task to show processing
-                progress.update(task_id, description=f"[yellow]Processing {chrom}...[/yellow]")
+                # Execute md script (suppress its output to avoid conflicts)
+                result = execute_md_script_with_config(config, args.md_script, log_file, suppress_output=True)
                 
-                # Execute md script
-                result = execute_md_script_with_config(config, args.md_script, log_file)
-                
-                # Update task based on result
+                # Update progress based on result
                 if result.returncode == 0:
-                    progress.update(
-                        task_id,
-                        description=f"[green]✓ Chromosome {chrom} completed[/green]",
-                        completed=1
-                    )
                     results[chrom] = {'success': True, 'error': None}
+                    progress.update(overall_task, advance=1)
                 else:
-                    progress.update(
-                        task_id,
-                        description=f"[red]✗ Chromosome {chrom} failed[/red]",
-                        completed=1
-                    )
                     error_msg = result.stderr.strip() if result.stderr else f"Exit code: {result.returncode}"
                     results[chrom] = {'success': False, 'error': error_msg}
-                    # Also print error to console
-                    console.print(f"[red]Error processing chromosome {chrom}:[/red] {error_msg}")
+                    progress.update(overall_task, advance=1)
+                    console.print(f"[red]✗ Chromosome {chrom} failed:[/red] {error_msg}")
+            
+            # Final update
+            success_count = sum(1 for r in results.values() if r['success'])
+            progress.update(
+                overall_task,
+                description=f"[green]Completed: {success_count}/{total_chromosomes} successful[/green]"
+            )
         
         # Print summary table
         console.print("\n" + "="*60)
