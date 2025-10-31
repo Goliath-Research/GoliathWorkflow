@@ -185,13 +185,17 @@ def main():
         print(f"Error: Failed to read config file: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # Determine output directory for log files
+    # Determine output directory for log files - use the output_dir from config
+    # This ensures log files are written to the same directory as the results
     if args.output_dir:
-        output_dir = args.output_dir
+        log_output_dir = Path(args.output_dir)
+    elif 'output_dir' in original_config and original_config['output_dir']:
+        log_output_dir = Path(original_config['output_dir'])
     else:
-        output_dir = Path(args.config_file).parent
+        # Fallback to config file directory if no output_dir in config
+        log_output_dir = Path(args.config_file).parent
     
-    output_dir.mkdir(parents=True, exist_ok=True)
+    log_output_dir.mkdir(parents=True, exist_ok=True)
     
     # Determine chromosomes to process
     if args.chromosomes:
@@ -212,7 +216,8 @@ def main():
     chromosome_configs = []
     for chrom in chromosome_list:
         modified_config = modify_config_for_chromosome(original_config, chrom)
-        log_file = output_dir / f"output-{chrom}.log"
+        # Write log file to the same output_dir as the results
+        log_file = log_output_dir / f"output-{chrom}.log"
         chromosome_configs.append((chrom, modified_config, log_file))
     
     if args.dry_run:
@@ -259,14 +264,24 @@ def main():
                 # Execute md script (suppress its output to avoid conflicts)
                 result = execute_md_script_with_config(config, args.md_script, log_file, suppress_output=True)
                 
-                # Update progress based on result
+                # Update progress based on result with immediate visual feedback
                 if result.returncode == 0:
                     results[chrom] = {'success': True, 'error': None}
-                    progress.update(overall_task, advance=1)
+                    # Show green success immediately
+                    progress.update(
+                        overall_task,
+                        description=f"[green]✓ Chromosome {chrom} completed ({i}/{total_chromosomes})[/green]",
+                        advance=1
+                    )
                 else:
                     error_msg = result.stderr.strip() if result.stderr else f"Exit code: {result.returncode}"
                     results[chrom] = {'success': False, 'error': error_msg}
-                    progress.update(overall_task, advance=1)
+                    # Show red failure immediately
+                    progress.update(
+                        overall_task,
+                        description=f"[red]✗ Chromosome {chrom} failed ({i}/{total_chromosomes})[/red]",
+                        advance=1
+                    )
                     console.print(f"[red]✗ Chromosome {chrom} failed:[/red] {error_msg}")
             
             # Final update

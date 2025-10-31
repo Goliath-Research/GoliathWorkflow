@@ -3,7 +3,7 @@
   "contexts": ["CG","CHG","CHH"],
   "centroid1_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026368/centroids/pb-healthy-pilot",
   "centroid2_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/centroids/pb-cancer-stage1",
-  "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-healthy-pilot-stage1-CG",
+  "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-hc1-1",
   "alpha": 0.01,
   "min_delta_mean": 0.2,
   "max_bc": 0.5,
