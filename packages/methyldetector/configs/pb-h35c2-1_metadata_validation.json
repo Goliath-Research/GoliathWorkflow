@@ -1,0 +1,26 @@
+{
+  "chromosome": "1",
+  "centroid1_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/h35",
+  "centroid2_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/c2",
+  "output_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/detections/h35c2",
+  
+  "alpha": 0.01,
+  "min_delta_mean": 0.2,
+  "max_bc": 0.5,
+  
+  "export_all_biological_dmps": false,
+  "target_balanced_accuracy": 0.95,
+  "min_dmps_for_export": 5000,
+  
+  "gamma": 1.5,
+  "temperature": 2.5,
+  "enable_platt_calibration": true,
+  "use_gpu": true,
+  "random_state": 42,
+  
+  "validation_mode": "real",
+  "centroid1_validation_samples": "use_metadata",
+  "centroid2_validation_samples": "use_metadata",
+  "optimize_for_validation_accuracy": true
+}
+
