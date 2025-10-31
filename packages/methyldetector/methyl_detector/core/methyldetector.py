@@ -180,21 +180,22 @@ class MethylDetector:
         # Prepare DMPs for validation and optimization
         selected_dmps_df = bio_dmps_df
         pre_optimization_dmps_df = None
-        if not self.config.export_all_biological_dmps:
+               
+        if self.config.optimize_dmps:
             logger.info("🎯 Preparing DMPs for validation and optimization...")
             selected_dmps_df = self._select_dmps_multicontext(bio_dmps_df)
             logger.info(f"✅ Prepared {len(selected_dmps_df):,} DMPs for validation")
 
-            # Store pre-optimization result for export comparison
+            # Store pre-optimization result for export comparison (before advanced optimization)
             pre_optimization_dmps_df = selected_dmps_df.copy()
             
-            # Export Stage 2: Pre-optimization DMPs (before optimization)
-            if self.config.output_dir and not self.config.optimize_dmps:
-                # Only export now if optimization is not enabled (otherwise export after optimization)
+            # Export Stage 2: Pre-optimization DMPs (before advanced optimization)
+            # Only export now if advanced optimization is not enabled (otherwise export after optimization)
+            if self.config.output_dir and self.config.optimization_method not in ["bayesian_optimization", "featurecuts"]:
                 logger.info("💾 Exporting Stage 2: Pre-optimization DMPs...")
                 self._export_unified_csv(pre_optimization_dmps_df, suffix="-2-pre-optimization")
         else:
-            logger.info("📋 Using all biological DMPs (export_all_biological_dmps=True)")
+            logger.info("📋 Using all biological DMPs (optimize_dmps=False)")
         
         # Prepare classifier data
         classifier_data = {
@@ -938,23 +939,27 @@ class MethylDetector:
         # Unpack validation data (now includes calibration split)
         X_calib, y_calib, X_test, y_test, val_positions, val_contexts = validation_data
         
-        # Simple DMP selection (no optimization)
+        # DMP selection: binary search to achieve target balanced accuracy, or use all if no optimization
         if self.config.validation_mode == "real":
-            # Start with a reasonable initial k for optimization, or all DMPs if no optimization
-            if self.config.optimize_dmps:
-                # Start optimization from min_dmps_for_export as initial guess
+            # Start with a reasonable initial k for optimization
+            if self.config.optimization_method in ["bayesian_optimization", "featurecuts"]:
+                # Advanced optimization enabled: start from reasonable initial k
                 best_k = max(self.config.min_dmps_for_export, min(10000, n_dmps // 10))  # Reasonable starting point
+                final_result = None
             else:
+                # Binary search mode: find minimal k achieving target BA
+                logger.info(f"🔍 Running binary search for target BA={target_ba:.3f}...")
+                # Use all DMPs as starting point (binary search will optimize)
                 best_k = n_dmps
-            final_result = None
+                final_result = None
         else:
             # Synthetic mode: use all DMPs (BA=1.0 trivially achievable)
             logger.info("⏭️  Using synthetic validation (BA=1.0 trivially achievable)")
             best_k = n_dmps  # Use all DMPs
             final_result = None
                 
-        # Optional: DMP optimization (if enabled and using real validation)
-        if self.config.optimize_dmps and self.config.validation_mode == "real":
+        # Optional: Advanced DMP optimization (if enabled and using real validation)
+        if self.config.optimization_method in ["bayesian_optimization", "featurecuts"] and self.config.validation_mode == "real":
             logger.info("")
             logger.info(f"🎯 Starting DMP optimization from k={best_k:,} towards optimal balance")
 

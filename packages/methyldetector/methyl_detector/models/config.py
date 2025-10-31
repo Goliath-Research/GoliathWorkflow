@@ -133,10 +133,6 @@ class MethylDetectorConfig(BaseModel):
         default=0.01, ge=0.0, le=0.5,
         description="Upper percentile for trimmed mean - removes top X% (default: 0.01 = remove top 1%). High effect_size DMPs are critical for classification, so only extreme outliers are removed."
     )
-    export_all_biological_dmps: bool = Field(
-        default=True,
-        description="Export all biologically significant DMPs instead of just minimum for target accuracy"
-    )
 
     # ----------------
     # DMP Selection

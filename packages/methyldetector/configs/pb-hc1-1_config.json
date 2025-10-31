@@ -11,7 +11,6 @@
   "trimmed_percentile_low": 0.10,
   "trimmed_percentile_high": 0.01,
   "biological_filters": ["delta_mean", "bhattacharyya"],
-  "export_all_biological_dmps": false,
   "min_N_pct": 0.10,
   "min_sample_coverage": 10,
   "classifier_coverage_weighting": true,

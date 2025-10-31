@@ -11,7 +11,7 @@
   "use_context_weights": true,
   "trimmed_percentile_low": 0.10,
   "trimmed_percentile_high": 0.01,
-  "export_all_biological_dmps": false,
+  "optimize_dmps": true,
   "target_balanced_accuracy": 0.99,
   "n_validation_samples": 100,
   "min_dmps_for_export": 5000,
