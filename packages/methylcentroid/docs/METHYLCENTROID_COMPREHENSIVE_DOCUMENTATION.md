@@ -1208,7 +1208,7 @@ MethylCentroid is a core component of the MethylPipeline ecosystem:
    ├─ Create centroids for Group B
    └─ Remove outliers from both groups
 
-2. MethylDetector
+2. MethylModeler
    ├─ Compare Centroid A vs Centroid B
    ├─ Identify DMPs (Differentially Methylated Positions)
    └─ Train classifier on DMPs
@@ -1223,7 +1223,7 @@ MethylCentroid is a core component of the MethylPipeline ecosystem:
 
 ```python
 from methyl_centroid import MethylCentroid
-from methyl_detector import MethylDetector
+from methyl_modeler import MethylModeler
 from methyl_classifier import MethylClassifier
 
 # Step 1: Create centroids
@@ -1244,7 +1244,7 @@ centroid_cancer = MethylCentroid(
 ).build_centroid()
 
 # Step 2: Detect DMPs
-detector = MethylDetector(
+detector = MethylModeler(
     centroid1_path=centroid_healthy.final_centroid_path,
     centroid2_path=centroid_cancer.final_centroid_path,
     output_dir='dmps'
@@ -1267,11 +1267,11 @@ MethylCentroid Output:
   ├─ metadata (samples, outliers, statistics)
   └─ quality metrics
 
-MethylDetector Input:
+MethylModeler Input:
   ├─ centroid1.h5
   └─ centroid2.h5
 
-MethylDetector Output:
+MethylModeler Output:
   ├─ dmps.csv (Differentially Methylated Positions)
   ├─ classifier.pkl (Trained model)
   └─ validation_report.json

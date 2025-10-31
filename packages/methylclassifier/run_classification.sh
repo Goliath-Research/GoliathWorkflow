@@ -6,11 +6,11 @@ echo "Running MethylClassifier inside epimethyl container..."
 
 docker exec epimethyl bash -c "
 cd /home/ubuntu/MethylClassifier && \
-PYTHONPATH=/home/ubuntu/MethylClassifier:/home/ubuntu/MethylUtils:/home/ubuntu/MethylDetector python3 -c \"
+PYTHONPATH=/home/ubuntu/MethylClassifier:/home/ubuntu/MethylUtils:/home/ubuntu/MethylModeler python3 -c \"
 import sys
 sys.path.insert(0, '/home/ubuntu/MethylClassifier')
 sys.path.insert(0, '/home/ubuntu/MethylUtils')
-sys.path.insert(0, '/home/ubuntu/MethylDetector')
+sys.path.insert(0, '/home/ubuntu/MethylModeler')
 
 import yaml
 import json

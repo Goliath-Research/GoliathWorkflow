@@ -2,7 +2,7 @@
 
 ## Overview
 
-MethylClassifier classifies methylation samples using trained Bayesian models. It loads classifiers trained by MethylTrainer and applies them to new samples.
+MethylClassifier classifies methylation samples using trained Bayesian models. It loads classifiers trained by  and applies them to new samples.
 
 ## Installation
 
@@ -313,7 +313,7 @@ print(f"\nFound {len(outliers)} outliers out of {len(samples)} samples")
 ## Integration
 
 MethylClassifier is part of the MethylPipeline ecosystem:
-- Uses models from **MethylTrainer**
+- Uses models from ****
 - Classifies samples against **MethylCentroid** references
 - Integrates with **MethylUtils** for p-value testing
 

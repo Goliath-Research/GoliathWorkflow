@@ -63,8 +63,8 @@ Multi-method clustering with HDBSCAN, Hierarchical, and Centroid-based approache
 
 📚 [MethylCluster Documentation](packages/methylcluster/README.md) | [Comprehensive Guide](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
 
-#### 4. **MethylDetector** (DMP Detection & Training)
-Detects Differentially Methylated Positions and trains Bayesian classifiers.
+#### 4. **MethylModeler** (DMP Detection & Model Creation)
+Detects Differentially Methylated Positions and creates Bayesian classifier models.
 
 **Key Features**:
 - Statistical testing with Storey's q-value FDR correction
@@ -73,20 +73,9 @@ Detects Differentially Methylated Positions and trains Bayesian classifiers.
 - Balanced Accuracy optimization (robust to class imbalance)
 - Model packaging for MethylClassifier
 
-📚 [MethylDetector Documentation](packages/methyldetector/README.md) | [Comprehensive Guide](packages/methyldetector/docs/METHYLDETECTOR_COMPREHENSIVE_DOCUMENTATION.md)
+📚 [MethylModeler Documentation](packages/methylmodeler/README.md) | [Comprehensive Guide](packages/methylmodeler/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
 
-#### 5. **MethylTrainer** (Advanced Training)
-Alternative to MethylDetector with flexible validation sample selection.
-
-**Key Features**:
-- Direct DMP detection and training
-- Flexible validation: config samples, centroid metadata, or synthetic
-- Balanced Accuracy optimization
-- Lightweight execution
-
-📚 [MethylTrainer Documentation](packages/methyltrainer/README.md) | [Comprehensive Guide](packages/methyltrainer/docs/METHYLTRAINER_COMPREHENSIVE_DOCUMENTATION.md)
-
-#### 6. **MethylClassifier** (Sample Prediction)
+#### 5. **MethylClassifier** (Sample Prediction)
 Classifies methylation samples using trained Bayesian models.
 
 **Key Features**:
@@ -122,7 +111,7 @@ Classifies methylation samples using trained Bayesian models.
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│      4. DMP Detection & Training (MethylDetector/Trainer)   │
+│      4. DMP Detection & Model Creation (MethylModeler)        │
 │  Compare centroids, detect DMPs with FDR correction         │
 │  Binary search for optimal DMP count (Balanced Accuracy)    │
 │  Output: Trained classifier model (.pkl)                    │
@@ -168,8 +157,7 @@ cd MethylPipeline
 pip install ./packages/methylutils
 pip install ./packages/methylcentroid
 pip install ./packages/methylcluster
-pip install ./packages/methyldetector
-pip install ./packages/methyltrainer
+pip install ./packages/methylmodeler
 pip install ./packages/methylclassifier
 ```
 

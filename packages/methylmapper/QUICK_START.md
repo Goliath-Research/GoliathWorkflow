@@ -38,11 +38,11 @@ methyl_mapper --input biological_dmps.csv \
              --sample-id 12345
 ```
 
-### With MethylDetector Output
+### With MethylModeler Output
 
 ```bash
-# After running MethylDetector
-methyl_mapper --input /home/ubuntu/MethylDetector/output/biological_dmps-chr1-CG.csv \
+# After running MethylModeler
+methyl_mapper --input /home/ubuntu/MethylModeler/output/biological_dmps-chr1-CG.csv \
              --config my_config.json \
              --sample-id 12345 \
              --output-csv chr1_CG_genes.csv \
@@ -76,11 +76,11 @@ print(f"Mapped {results['output_genes']} genes")
 
 ```bash
 # Complete workflow
-cd /home/ubuntu/MethylDetector
-python -m methyl_detector config.json
+cd /home/ubuntu/MethylModeler
+python -m methyl_modeler config.json
 
 cd /home/ubuntu/MethylMapper
-methyl_mapper --input ../MethylDetector/output/biological_dmps-*.csv \
+methyl_mapper --input ../MethylModeler/output/biological_dmps-*.csv \
              --config db_config.json \
              --sample-id 12345
 
@@ -97,7 +97,7 @@ methylenricher --input ../MethylMapper/mapped_genes.json \
 - Test with: `sqlcmd -S server.database.windows.net -U username -P password`
 
 **Missing Columns?**
-- Ensure CSV is from MethylDetector with effect_size
+- Ensure CSV is from MethylModeler with effect_size
 - Check column names (case-sensitive)
 
 **No Results?**

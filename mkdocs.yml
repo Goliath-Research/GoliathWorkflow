@@ -16,9 +16,8 @@ nav:
   - Packages:
     - MethylUtils: ../packages/methylutils/README.md
     - MethylCentroid: ../packages/methylcentroid/README.md
-    - MethylDetector: ../packages/methyldetector/README.md
+    - MethylModeler: ../packages/methylmodeler/README.md
     - MethylMapper: ../packages/methylmapper/README.md
-    - MethylTrainer: ../packages/methyltrainer/README.md
     - MethylClassifier: ../packages/methylclassifier/README.md
     - MethylEnricher: ../packages/methylenricher/README.md
     - MethylCluster: ../packages/methylcluster/README.md

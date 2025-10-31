@@ -87,12 +87,12 @@ methyl_enricher --list-libraries
 
 ## Integration with Methylation Workflow
 
-### From MethylDetector DMPs to Enrichment
+### From MethylModeler DMPs to Enrichment
 
 ```bash
-# 1. Run MethylDetector (produces biological_dmps-*.csv)
-cd /home/ubuntu/MethylDetector
-python -m methyl_detector config.json
+# 1. Run MethylModeler (produces biological_dmps-*.csv)
+cd /home/ubuntu/MethylModeler
+python -m methyl_modeler config.json
 
 # 2. Extract gene symbols (if you have gene annotations)
 # Assuming 'gene' column exists in your DMP CSV
@@ -162,12 +162,12 @@ pip install -e ".[dev]"
 For issues or questions:
 - Check the README.md for usage examples
 - Open an issue on GitHub
-- Contact the MethylDetector team
+- Contact the MethylModeler team
 
 ## Related Projects
 
-- **MethylDetector**: `/home/ubuntu/MethylDetector`
-- **MethylTrainer**: `/home/ubuntu/MethylTrainer`
+- **MethylModeler**: `/home/ubuntu/MethylModeler`
+- ****: `/home/ubuntu/`
 - **MethylClassifier**: `/home/ubuntu/MethylClassifier`
 - **MethylUtils**: `/home/ubuntu/MethylUtils`
 

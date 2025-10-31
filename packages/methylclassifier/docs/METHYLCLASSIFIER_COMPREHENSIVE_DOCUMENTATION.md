@@ -757,7 +757,7 @@ To create a classifier, you need:
    - Created using MethylCentroid from individual samples
 
 2. **Differentially methylated positions (DMPs)**
-   - Identified using MethylDetector via statistical comparison of centroids
+   - Identified using MethylModeler via statistical comparison of centroids
    - Selected based on:
      - Statistical significance (q-value ≤ α)
      - Effect size (balanced accuracy ≥ target)
@@ -788,8 +788,8 @@ To create a classifier, you need:
 
 **Usage**:
 ```python
-# During training (in MethylDetector/MethylTrainer)
-config = MethylDetectorConfig(
+# During training (in MethylModeler/)
+config = MethylModelerConfig(
     ...
     enable_platt_calibration=True,
     validation_mode="real",
@@ -1199,7 +1199,7 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/MethylPipeline/packages"
 
 #### 4. Model Loading Fails
 
-**Error:** `ModuleNotFoundError: No module named 'methyl_detector'`
+**Error:** `ModuleNotFoundError: No module named 'methyl_modeler'`
 
 **Cause:** Old model format with different module names
 
@@ -1208,8 +1208,8 @@ The `CustomUnpickler` in MethylClassifier automatically handles this. If it stil
 
 ```python
 import sys
-sys.modules['methyl_detector'] = methyl_utils
-sys.modules['methyl_detector.classifiers'] = methyl_utils
+sys.modules['methyl_modeler'] = methyl_utils
+sys.modules['methyl_modeler.classifiers'] = methyl_utils
 
 # Now load normally
 classifier.load_classifier(model_path)
@@ -1293,8 +1293,8 @@ predictions = np.concatenate(predictions)
 
 ### Related Documentation
 
-- **MethylDetector**: DMP detection and model training
-- **MethylTrainer**: Classifier training pipeline
+- **MethylModeler**: DMP detection and model training
+- ****: Classifier training pipeline
 - **MethylUtils**: Core utilities and Beta distribution operations
 - **MethylCentroid**: Centroid creation from samples
 

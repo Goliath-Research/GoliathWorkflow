@@ -263,7 +263,7 @@ class OutlierRemovalResults:
 
 ## Model Training
 
-Centroids created by MethylCentroid are used by **MethylDetector** for:
+Centroids created by MethylCentroid are used by **MethylModeler** for:
 
 1. **DMP Detection**: Compare two centroids to find differentially methylated positions
 2. **Classifier Training**: Use DMPs to train Bayesian classifiers
@@ -273,14 +273,14 @@ Centroids created by MethylCentroid are used by **MethylDetector** for:
 
 ```python
 from methyl_centroid import MethylCentroid
-from methyl_detector import MethylDetector
+from methyl_modeler import MethylModeler
 
 # Create centroids
 centroid_healthy = MethylCentroid(..., group='Healthy').build_centroid()
 centroid_cancer = MethylCentroid(..., group='Cancer').build_centroid()
 
 # Detect DMPs and train classifier
-detector = MethylDetector(
+detector = MethylModeler(
     centroid1_path=centroid_healthy.final_centroid_path,
     centroid2_path=centroid_cancer.final_centroid_path
 )
@@ -355,7 +355,7 @@ MethylCentroid is a core component of the MethylPipeline workflow:
    ├─ Create centroids for Group B (e.g., Cancer)
    └─ Remove outliers from both groups
 
-2. MethylDetector
+2. MethylModeler
    ├─ Compare Centroid A vs Centroid B
    ├─ Identify DMPs (Differentially Methylated Positions)
    └─ Train Bayesian classifier on DMPs

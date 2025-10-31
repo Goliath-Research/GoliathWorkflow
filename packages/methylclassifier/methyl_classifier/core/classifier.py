@@ -20,10 +20,15 @@ from ..models.config import ClassifierConfig
 # Create a mapping for old module names to new ones
 MODULE_MAPPING = {
     'methyl_detector': 'methyl_utils',
+    'methyl_modeler': 'methyl_utils',
     'methyl_detector.classifiers': 'methyl_utils.probabilistic_beta_classifier',
+    'methyl_modeler.classifiers': 'methyl_utils.probabilistic_beta_classifier',
     'methyl_detector.classifiers.classifier': 'methyl_utils.probabilistic_beta_classifier',
+    'methyl_modeler.classifiers.classifier': 'methyl_utils.probabilistic_beta_classifier',
     'methyl_detector.probabilistic_beta_classifier': 'methyl_utils.probabilistic_beta_classifier',
+    'methyl_modeler.probabilistic_beta_classifier': 'methyl_utils.probabilistic_beta_classifier',
     'methyl_detector.methyl_sample': 'methyl_utils.methyl_sample',
+    'methyl_modeler.methyl_sample': 'methyl_utils.methyl_sample',
     'methyl_utils.classifiers': 'methyl_utils.probabilistic_beta_classifier',
     'methyl_utils.classifiers.probabilistic_beta_classifier': 'methyl_utils.probabilistic_beta_classifier',
     # Handle numpy version compatibility issues

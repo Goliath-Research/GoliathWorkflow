@@ -1,0 +1,12 @@
+{
+    "mode": "single",
+    "centroid1_path": "/home/ubuntu/Work/OEP00000860/centroids/tissue_benign/1-CG.h5",
+    "centroid2_path": "/home/ubuntu/Work/OEP00000860/centroids/tissue_malignant/1-CG.h5",
+    "output_dir": "/home/ubuntu/Work/output_workflows/methyl_modeler/single_test",
+    "alpha": 0.05,
+    "min_N": 10,
+    "apply_fdr_correction": true,
+    "fdr_method": "storey",
+    "global_significance_threshold": 0.05,
+    "use_gpu": true
+}

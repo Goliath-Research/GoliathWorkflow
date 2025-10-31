@@ -11,7 +11,7 @@ A command-line tool for gene enrichment analysis of Differentially Methylated Po
 - Flexible Input: Accept gene lists from DMP analysis or any gene symbol list
 - Comprehensive Output: Per-library results plus merged summaries
 - FDR Filtering: Automatic filtering of significant hits (q-value ≤ 0.05)
-- Easy Integration: Works seamlessly with MethylDetector DMP outputs
+- Easy Integration: Works seamlessly with MethylModeler DMP outputs
 
 ## Installation
 

@@ -305,7 +305,7 @@ ValueError: Missing required columns: ['effect_size']
 ```
 
 **Solutions**:
-1. Ensure input CSV is from MethylDetector v0.2.0+
+1. Ensure input CSV is from MethylModeler v0.2.0+
 2. Check column names match exactly (case-sensitive)
 3. Verify CSV is not corrupted:
    ```bash
@@ -362,9 +362,9 @@ pip uninstall methyl_mapper
 
 ## Next Steps
 
-1. **Run with MethylDetector output**:
+1. **Run with MethylModeler output**:
    ```bash
-   methyl_mapper --input ../MethylDetector/output/biological_dmps-chr1-CG.csv \
+   methyl_mapper --input ../MethylModeler/output/biological_dmps-chr1-CG.csv \
                 --config my_config.json \
                 --sample-id 12345
    ```
@@ -388,7 +388,7 @@ For installation issues:
 - Review error messages carefully
 - Check Azure SQL firewall and permissions
 - Verify ODBC driver installation
-- Contact the MethylDetector team
+- Contact the MethylModeler team
 
 ## Additional Resources
 

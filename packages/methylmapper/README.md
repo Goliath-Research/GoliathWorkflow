@@ -2,7 +2,7 @@
 
 ## Overview
 
-A command-line tool and Python library for mapping Differentially Methylated Positions (DMPs) to genes using Azure SQL Database and STRING-DB. MethylMapper integrates with the MethylDetector pipeline to provide gene-level interpretation of methylation analysis results.
+A command-line tool and Python library for mapping Differentially Methylated Positions (DMPs) to genes using Azure SQL Database and STRING-DB. MethylMapper integrates with the MethylModeler pipeline to provide gene-level interpretation of methylation analysis results.
 
 ## Features
 
@@ -49,7 +49,7 @@ See example_config.json in the original content.
 
 ## Integration
 
-Works with MethylDetector outputs for gene mapping, then feed to MethylEnricher.
+Works with MethylModeler outputs for gene mapping, then feed to MethylEnricher.
 
 ## Troubleshooting
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-MethylClassifier now supports JSON configuration files, similar to MethylDetector and other projects in the pipeline. This improves reproducibility and makes it easier to manage complex classification workflows.
+MethylClassifier now supports JSON configuration files, similar to MethylModeler and other projects in the pipeline. This improves reproducibility and makes it easier to manage complex classification workflows.
 
 ## Basic Configuration
 
@@ -149,10 +149,10 @@ loaded = ClassificationConfig.from_json(Path("my_classification_config.json"))
 
 ## Integration with Other Tools
 
-### MethylDetector Output → MethylClassifier Input
+### MethylModeler Output → MethylClassifier Input
 
 ```bash
-# Step 1: Train classifier with MethylDetector
+# Step 1: Train classifier with MethylModeler
 md --config detector_config.json
 
 # Step 2: Create classification config using the trained model
@@ -280,7 +280,7 @@ configs/
 ## Summary
 
 ✅ **Config files improve reproducibility** - Track exact parameters used
-✅ **Compatible with existing projects** - Similar to MethylDetector
+✅ **Compatible with existing projects** - Similar to MethylModeler
 ✅ **Command-line overrides available** - Flexibility when needed
 ✅ **Smart defaults built-in** - No configuration needed for good performance
 ✅ **Validated schemas** - Clear error messages for invalid configs

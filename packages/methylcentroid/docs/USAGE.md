@@ -205,7 +205,7 @@ You can force a specific method by adjusting sample size or using the detector f
 MethylCentroid is typically the first step in the pipeline:
 
 ```
-MethylCentroid → MethylDetector → MethylClassifier
+MethylCentroid → MethylModeler → MethylClassifier
     (Generate)      (Train Model)     (Predict)
 ```
 
@@ -217,8 +217,8 @@ MethylCentroid → MethylDetector → MethylClassifier
 ### Output
 
 - Cleaned centroids (one per group)
-- Used by MethylDetector for DMP detection
-- Used by MethylTrainer for classifier training
+- Used by MethylModeler for DMP detection
+- Used by  for classifier training
 
 ## Troubleshooting
 
@@ -290,5 +290,5 @@ mc = MethylCentroid(
 
 - [MethylCentroid Comprehensive Documentation](METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
 - [Theoretical Foundation](MethylCentroid_Theoretical_Foundation.md)
-- [MethylPipeline Integration](../methyldetector/docs/METHYLDETECTOR_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylPipeline Integration](../methylmodeler/docs/METHYLDETECTOR_COMPREHENSIVE_DOCUMENTATION.md)
 

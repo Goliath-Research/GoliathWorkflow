@@ -1201,7 +1201,7 @@ MethylUtils serves as the foundation for all MethylPipeline packages:
                            |
         +------------------+------------------+
         |                  |                  |
-  MethylCentroid    MethylDetector     MethylCluster
+  MethylCentroid    MethylModeler     MethylCluster
         |                  |                  |
         +--------+---------+                  |
                  |                            |
@@ -1226,7 +1226,7 @@ from methyl_utils import (
 )
 ```
 
-#### MethylDetector
+#### MethylModeler
 ```python
 from methyl_utils import (
     MethylCentroidPair,     # DMP detection

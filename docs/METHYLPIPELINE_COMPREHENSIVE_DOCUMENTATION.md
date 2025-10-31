@@ -38,8 +38,8 @@ MethylPipeline follows a **modular, composable** architecture:
 1. **MethylUtils**: Foundation library (shared utilities, GPU, statistical functions)
 2. **MethylCentroid**: Centroid generation with outlier detection
 3. **MethylCluster**: Sample clustering (HDBSCAN, Hierarchical, Centroid-based)
-4. **MethylDetector**: DMP detection and classifier training
-5. **MethylTrainer**: Advanced classifier training with validation
+4. **MethylModeler**: DMP detection and classifier training
+5. ****: Advanced classifier training with validation
 6. **MethylClassifier**: Sample classification with Bayesian models
 
 Each package is **self-contained** but **tightly integrated** through MethylUtils.
@@ -76,7 +76,7 @@ Each package is **self-contained** but **tightly integrated** through MethylUtil
         ┌──────────┴──────────┐
         │                     │
  ┌──────┴────────┐   ┌───────┴────────┐
- │ MethylDetector│   │ MethylTrainer  │
+ │ MethylModeler│   │   │
  │ (DMP + Model) │   │ (Advanced DMP) │
  └──────┬────────┘   └───────┬────────┘
         │                    │
@@ -100,7 +100,7 @@ Raw Samples (HDF5)
 └───────────────────┘
     ↓
 ┌───────────────────┐
-│ MethylDetector    │  → DMP tables (.tsv)
+│ MethylModeler    │  → DMP tables (.tsv)
 │ - Compare groups  │  → Model packages (.pkl)
 │ - FDR correction  │  → Visualizations (.html)
 │ - Binary search   │
@@ -159,7 +159,7 @@ All packages leverage MethylUtils for:
    └─ Validate groupings
 
 4. DMP Detection & Training
-   ├─ Run MethylDetector to compare centroids
+   ├─ Run MethylModeler to compare centroids
    ├─ Detect DMPs with FDR control (Storey's q-value)
    ├─ Filter for biological importance
    ├─ Binary search for optimal DMP count (Balanced Accuracy)
@@ -183,7 +183,7 @@ All packages leverage MethylUtils for:
 ```
 1. Cluster samples (MethylCluster)
 2. Create centroid per subtype (MethylCentroid)
-3. Compare subtypes pairwise (MethylDetector)
+3. Compare subtypes pairwise (MethylModeler)
 4. Train multi-class classifier
 ```
 
@@ -191,7 +191,7 @@ All packages leverage MethylUtils for:
 
 ```
 1. Use existing centroids
-2. Train with real validation samples (MethylTrainer)
+2. Train with real validation samples ()
 3. Validate on held-out cohort (MethylClassifier)
 4. Compare with ground truth
 ```
@@ -258,7 +258,7 @@ if is_gpu_available():
 - Visualizations
 
 **Integration Points**:
-- → MethylDetector: Provides centroids for comparison
+- → MethylModeler: Provides centroids for comparison
 - → MethylCluster: Can cluster centroids or use centroids as references
 - ← MethylUtils: Uses PositionAligner, distance metrics
 
@@ -317,7 +317,7 @@ result = MethylCluster(config).run()
 print(f"Found {result['metrics']['n_clusters']} clusters")
 ```
 
-### 4. MethylDetector (DMP Detection & Training)
+### 4. MethylModeler (DMP Detection & Training)
 
 **Purpose**: Detect DMPs, train classifiers with binary search optimization
 
@@ -348,21 +348,21 @@ print(f"Found {result['metrics']['n_clusters']} clusters")
 
 **Example**:
 ```python
-from methyl_detector import MethylDetectorConfig, run_comparison
+from methyl_modeler import MethylModelerConfig, run_comparison
 
-config = MethylDetectorConfig.from_file('/configs/healthy_vs_cancer.json')
+config = MethylModelerConfig.from_file('/configs/healthy_vs_cancer.json')
 result = run_comparison(config)
 
 print(f"Found {result['n_dmps']} DMPs")
 print(f"Model saved: {result['model_path']}")
 ```
 
-### 5. MethylTrainer (Advanced Training)
+### 5.  (Advanced Training)
 
-**Purpose**: Alternative to MethylDetector with advanced validation options
+**Purpose**: Alternative to MethylModeler with advanced validation options
 
 **Key Features**:
-- Direct DMP detection (no MethylDetector wrapper)
+- Direct DMP detection (no MethylModeler wrapper)
 - Flexible validation sample selection
 - Real sample validation from config or centroid metadata
 - Same binary search and Balanced Accuracy optimization
@@ -378,12 +378,12 @@ print(f"Model saved: {result['model_path']}")
 - Validation results
 
 **Integration Points**:
-- Similar to MethylDetector but more flexible
-- Can replace MethylDetector in pipeline
+- Similar to MethylModeler but more flexible
+- Can replace MethylModeler in pipeline
 
 **Example**:
 ```python
-from methyl_trainer import train_model, TrainingConfig
+from  import train_model, TrainingConfig
 
 config = TrainingConfig(
     centroid1_path='/centroids/healthy.h5',
@@ -422,7 +422,7 @@ print(f"Model trained with {len(model.positions)} DMPs")
 - Confidence scores
 
 **Integration Points**:
-- ← MethylDetector/MethylTrainer: Receives trained model
+- ← MethylModeler/: Receives trained model
 - Final step in pipeline
 
 **Example**:
@@ -474,7 +474,7 @@ services:
       - ./data:/data
       - ./output:/output
       - ./configs:/configs
-    command: python -m methyl_detector /configs/analysis.json
+    command: python -m methyl_modeler /configs/analysis.json
 ```
 
 ### Manual Setup
@@ -496,8 +496,8 @@ source venv/bin/activate
 cd packages/methylutils && pip install -e . && cd ../..
 cd packages/methylcentroid && pip install -e . && cd ../..
 cd packages/methylcluster && pip install -e . && cd ../..
-cd packages/methyldetector && pip install -e . && cd ../..
-cd packages/methyltrainer && pip install -e . && cd ../..
+cd packages/methylmodeler && pip install -e . && cd ../..
+cd packages/ && pip install -e . && cd ../..
 cd packages/methylclassifier && pip install -e . && cd ../..
 ```
 
@@ -511,8 +511,8 @@ cd packages/methylclassifier && pip install -e . && cd ../..
 pip install ./packages/methylutils
 pip install ./packages/methylcentroid
 pip install ./packages/methylcluster
-pip install ./packages/methyldetector
-pip install ./packages/methyltrainer
+pip install ./packages/methylmodeler
+pip install ./packages/
 pip install ./packages/methylclassifier
 ```
 
@@ -550,7 +550,7 @@ docker run --gpus all \
   -v s3://mybucket/data:/data \
   -v s3://mybucket/output:/output \
   methylpipeline:latest \
-  python -m methyl_detector /configs/analysis.json
+  python -m methyl_modeler /configs/analysis.json
 ```
 
 #### GCP Compute Engine
@@ -595,7 +595,7 @@ cancer = MethylCentroid(
 "
 
 # Step 2: Detect DMPs and train model
-python -m methyl_detector \
+python -m methyl_modeler \
   --centroid1 /output/healthy_centroid/1-CG.h5 \
   --centroid2 /output/cancer_centroid/1-CG.h5 \
   --output-dir /output/detector \
@@ -620,14 +620,14 @@ for i in range(1, 11):
 """Run pipeline across multiple chromosomes in parallel."""
 
 from multiprocessing import Pool
-from methyl_detector import MethylDetectorConfig, run_comparison
+from methyl_modeler import MethylModelerConfig, run_comparison
 import os
 
 def process_chromosome(chrom):
     """Process single chromosome."""
     os.environ['CUDA_VISIBLE_DEVICES'] = str(int(chrom) % 4)  # Distribute GPUs
     
-    config = MethylDetectorConfig(
+    config = MethylModelerConfig(
         centroid1_path=f'/centroids/healthy/chr{chrom}-CG.h5',
         centroid2_path=f'/centroids/cancer/chr{chrom}-CG.h5',
         chrom=chrom,
@@ -831,7 +831,7 @@ configs/
 |---------|----------------|-------------|
 | MethylCentroid (50 samples) | 2 GB | 4 GB |
 | MethylCluster (100 samples) | 1 GB | 2 GB |
-| MethylDetector | 4 GB | 8 GB |
+| MethylModeler | 4 GB | 8 GB |
 | MethylClassifier | 0.5 GB | 1 GB |
 
 ### Scaling
@@ -906,7 +906,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 ```python
 import logging
-logging.getLogger('methyl_detector').setLevel(logging.DEBUG)
+logging.getLogger('methyl_modeler').setLevel(logging.DEBUG)
 logging.getLogger('methyl_classifier').setLevel(logging.INFO)
 ```
 
@@ -1076,7 +1076,7 @@ For package-specific documentation, see:
 - [MethylUtils Documentation](../packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCentroid Documentation](../packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCluster Documentation](../packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylDetector Documentation](../packages/methyldetector/docs/METHYLDETECTOR_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylTrainer Documentation](../packages/methyltrainer/docs/METHYLTRAINER_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylModeler Documentation](../packages/methylmodeler/docs/METHYLDETECTOR_COMPREHENSIVE_DOCUMENTATION.md)
+- [ Documentation](../packages//docs/METHYLTRAINER_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylClassifier Documentation](../packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
 

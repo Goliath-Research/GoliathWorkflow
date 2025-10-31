@@ -15,14 +15,14 @@ methylutils
 
 ### Analysis Packages
 ```
-methylcentroid         methyldetector         methylmapper
+methylcentroid         methylmodeler         methylmapper
 └── Centroid          └── DMP Detection      └── Gene Mapping
     generation            with effect size       (Azure SQL)
 ```
 
 ### Machine Learning Packages
 ```
-methyltrainer         methylclassifier       methylenricher
+         methylclassifier       methylenricher
 └── Model training    └── Sample             └── Gene enrichment
                          classification            analysis
 ```
@@ -36,9 +36,9 @@ MethylPipeline/
 ├── 📦 packages/              # All Python packages
 │   ├── methylutils/         # Core (GPU, HDF5, logging)
 │   ├── methylcentroid/      # Centroid generation
-│   ├── methyldetector/      # DMP detection
+│   ├── methylmodeler/      # DMP detection
 │   ├── methylmapper/        # Gene mapping
-│   ├── methyltrainer/       # Model training
+│   ├── /       # Model training
 │   ├── methylclassifier/    # Classification
 │   └── methylenricher/      # Enrichment
 │
