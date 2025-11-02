@@ -210,14 +210,27 @@ class MethylClassifier:
                     model_package = CustomUnpickler(f).load()
                 
                 # Extract classifier from package
-                if isinstance(model_package, dict) and 'classifier' in model_package:
-                    classifier = model_package['classifier']
-                    classifier.set_temperature(self.config.temperature)
-                    self.classifiers[chrom] = classifier
-                    model_packages[chrom] = model_package
-                    print(f"✅ Loaded classifier for chromosome {chrom}")
+                if isinstance(model_package, dict):
+                    # Check if classifier exists, otherwise create from dmpDF
+                    if 'classifier' in model_package:
+                        classifier = model_package['classifier']
+                        classifier.set_temperature(self.config.temperature)
+                        self.classifiers[chrom] = classifier
+                        model_packages[chrom] = model_package
+                        print(f"✅ Loaded classifier for chromosome {chrom}")
+                    elif 'dmpDF' in model_package:
+                        # Create BetaClassifier from dmpDF
+                        from methyl_utils import BetaClassifier
+                        dmpDF = model_package['dmpDF']
+                        classifier = BetaClassifier.from_dataframe(dmpDF)
+                        classifier.set_temperature(self.config.temperature)
+                        self.classifiers[chrom] = classifier
+                        model_packages[chrom] = model_package
+                        print(f"✅ Created BetaClassifier from dmpDF for chromosome {chrom}")
+                    else:
+                        raise ValueError(f"No classifier or dmpDF found in model package for chromosome {chrom}")
                 else:
-                    # Legacy format
+                    # Legacy format - assume it's a classifier directly
                     classifier = model_package
                     classifier.set_temperature(self.config.temperature)
                     self.classifiers[chrom] = classifier
@@ -338,25 +351,34 @@ class MethylClassifier:
         raw_weights = {}
         
         for chrom, package in model_packages.items():
-            # Try to get selected_dmps_df from package
+            # Try to get selected_dmps_df or dmpDF from package
             selected_dmps_df = package.get('selected_dmps_df')
+            dmpDF = package.get('dmpDF')
             
+            # Use dmpDF if selected_dmps_df is not available
             if selected_dmps_df is None or not isinstance(selected_dmps_df, pd.DataFrame):
-                print(f"⚠️ Chromosome {chrom}: No selected_dmps_df found, using equal weight")
-                raw_weights[chrom] = 1.0
-                continue
+                if dmpDF is not None and isinstance(dmpDF, pd.DataFrame):
+                    # dmpDF has 'weight' column which can be used
+                    selected_dmps_df = dmpDF
+                else:
+                    print(f"⚠️ Chromosome {chrom}: No selected_dmps_df or dmpDF found, using equal weight")
+                    raw_weights[chrom] = 1.0
+                    continue
             
-            # Check for effect_size column
-            if 'effect_size' not in selected_dmps_df.columns:
-                print(f"⚠️ Chromosome {chrom}: No effect_size column in selected_dmps_df, using equal weight")
+            # Check for effect_size or weight column
+            if 'effect_size' in selected_dmps_df.columns:
+                effect_sizes = selected_dmps_df['effect_size'].dropna().values
+            elif 'weight' in selected_dmps_df.columns:
+                # Use weight column from dmpDF
+                effect_sizes = selected_dmps_df['weight'].dropna().values
+            else:
+                print(f"⚠️ Chromosome {chrom}: No effect_size or weight column found, using equal weight")
                 raw_weights[chrom] = 1.0
                 continue
             
             # Compute trimmed mean
-            effect_sizes = selected_dmps_df['effect_size'].dropna().values
-            
             if len(effect_sizes) == 0:
-                print(f"⚠️ Chromosome {chrom}: No valid effect_size values, using equal weight")
+                print(f"⚠️ Chromosome {chrom}: No valid effect_size/weight values, using equal weight")
                 raw_weights[chrom] = 1.0
                 continue
             

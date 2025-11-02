@@ -30,7 +30,7 @@ from methyl_utils import MethylSample
 from methyl_utils import MethylCentroidPair
 
 # Import Beta-Binomial classifier from MethylUtils
-from methyl_utils import BetaBinomialClassifier
+from methyl_utils import BetaClassifier
 
 # Handle relative imports - try module import first, fall back to direct execution setup
 try:
@@ -683,7 +683,7 @@ class MethylModeler:
         all_contexts: np.ndarray
     ) -> dict:
         """
-        Validate a DMP subset using BetaBinomialClassifier with proper train/test split.
+        Validate a DMP subset using BetaClassifier with proper train/test split.
         
         Args:
             dmps_subset: Subset of DMPs to validate
@@ -735,68 +735,54 @@ class MethylModeler:
             )
             dmps_for_classifier = dmps_subset[matched_mask].reset_index(drop=True)
             
-            temp_classifier = BetaBinomialClassifier.from_dataframe(
-                dmps_for_classifier,
-                self.config.chromosome
+            # Create dmpDF for BetaClassifier
+            weights = dmps_for_classifier.get('effect_size', np.ones(len(dmps_for_classifier)))
+            if isinstance(weights, pd.Series):
+                weights = weights.values
+            
+            dmpDF = pd.DataFrame({
+                'pos': dmps_for_classifier['position'].values.astype(np.int64),
+                'alpha1': dmps_for_classifier['alpha1'].values.astype(np.float64),
+                'beta1': dmps_for_classifier['beta1'].values.astype(np.float64),
+                'alpha2': dmps_for_classifier['alpha2'].values.astype(np.float64),
+                'beta2': dmps_for_classifier['beta2'].values.astype(np.float64),
+                'weight': weights.astype(np.float64)
+            })
+            
+            temp_classifier = BetaClassifier.from_dataframe(
+                dmpDF,
+                min_sample_coverage=self.config.min_sample_coverage,
+                coverage_weighting=self.config.classifier_coverage_weighting
             )
             
-            # PHASE 1: Fit Platt calibration using calibration set
-            depth = 100
-            calib_llrs = []
+            # PHASE 1: Fit Platt calibration using calibration set (if supported)
+            # BetaClassifier uses calibrate_platt method with methylation levels
+            X_calib_subset_clean = X_calib_subset.copy()
+            X_calib_subset_clean = np.nan_to_num(X_calib_subset_clean, nan=0.5)
+            X_calib_subset_clean = np.clip(X_calib_subset_clean, 1e-6, 1-1e-6)
             
-            for i in range(len(X_calib_subset)):
-                methylation_fractions = X_calib_subset[i]
-                valid_mask = ~np.isnan(methylation_fractions)
-                
-                if not np.any(valid_mask):
-                    calib_llrs.append(0.0)
-                    continue
-                
-                meth_valid = methylation_fractions[valid_mask]
-                m_counts = np.round(meth_valid * depth).astype(int)
-                u_counts = depth - m_counts
-                
-                result = temp_classifier.predict_sample(
-                    sample_positions=matched_positions[valid_mask],
-                    sample_contexts=matched_contexts[valid_mask],
-                    sample_m=m_counts,
-                    sample_u=u_counts
-                )
-                calib_llrs.append(result['chromosome_llr'])
+            # Create availability mask
+            calib_availability = ~np.isnan(X_calib_subset)
             
-            calib_llrs = np.array(calib_llrs)
-            
-            # Fit Platt calibration on calibration set
-            temp_classifier.fit_platt_calibration(calib_llrs, y_calib)
+            # Fit Platt calibration if method exists
+            if hasattr(temp_classifier, 'calibrate_platt'):
+                try:
+                    temp_classifier.calibrate_platt(X_calib_subset_clean, y_calib, calib_availability)
+                except Exception as e:
+                    logger.warning(f"Platt calibration failed: {e}, using uncalibrated predictions")
             
             # PHASE 2: Evaluate on held-out test set
-            y_pred = np.zeros(len(X_test_subset), dtype=int)
-            probabilities = []
+            X_test_subset_clean = X_test_subset.copy()
+            X_test_subset_clean = np.nan_to_num(X_test_subset_clean, nan=0.5)
+            X_test_subset_clean = np.clip(X_test_subset_clean, 1e-6, 1-1e-6)
+            test_availability = ~np.isnan(X_test_subset)
             
-            for i in range(len(X_test_subset)):
-                methylation_fractions = X_test_subset[i]
-                valid_mask = ~np.isnan(methylation_fractions)
-                
-                if not np.any(valid_mask):
-                    y_pred[i] = 0
-                    probabilities.append(0.5)
-                    continue
-                
-                meth_valid = methylation_fractions[valid_mask]
-                m_counts = np.round(meth_valid * depth).astype(int)
-                u_counts = depth - m_counts
-                
-                result = temp_classifier.predict_sample(
-                    sample_positions=matched_positions[valid_mask],
-                    sample_contexts=matched_contexts[valid_mask],
-                    sample_m=m_counts,
-                    sample_u=u_counts
-                )
-                
-                prob = result['probability']  # Now calibrated!
-                probabilities.append(prob)
-                
-                y_pred[i] = 1 if prob >= 0.5 else 0
+            # Get probabilities using BetaClassifier.predict_proba
+            test_probas = temp_classifier.predict_proba(X_test_subset_clean, test_availability, debug=False)
+            
+            # Extract probabilities for class 1 (centroid2/cancer)
+            probabilities = test_probas[:, 1].tolist()
+            y_pred = np.argmax(test_probas, axis=1)
             
             # Compute metrics on TEST set only
             probabilities = np.array(probabilities)
@@ -1725,12 +1711,12 @@ class MethylModeler:
         
         return csv_path
     
-    def _save_unified_model(self, classifier: BetaBinomialClassifier, selected_dmps_df: pd.DataFrame):
+    def _save_unified_model(self, classifier, selected_dmps_df: pd.DataFrame):
         """
-        Save unified Beta-Binomial classifier model.
+        Save unified BetaClassifier model with strongly-typed dmpDF.
         
         Args:
-            classifier: BetaBinomialClassifier instance
+            classifier: Classifier instance (ignored, we create BetaClassifier from dmpDF)
             selected_dmps_df: DataFrame with selected DMPs (final DMPs used by classifier)
         """
         output_dir = Path(self.config.output_dir)
@@ -1738,18 +1724,43 @@ class MethylModeler:
         
         model_path = output_dir / f"classifier-{self.config.chromosome}.pkl"
         
+        # Create strongly-typed dmpDF DataFrame
+        # Get weight from effect_size or context_weight, defaulting to 1.0
+        if 'effect_size' in selected_dmps_df.columns:
+            weights = selected_dmps_df['effect_size'].values
+        elif 'context_weight' in selected_dmps_df.columns:
+            weights = selected_dmps_df['context_weight'].values
+        else:
+            weights = np.ones(len(selected_dmps_df), dtype=np.float64)
+        
+        dmpDF = pd.DataFrame({
+            'pos': selected_dmps_df['position'].values.astype(np.int64),
+            'alpha1': selected_dmps_df['alpha1'].values.astype(np.float64),
+            'beta1': selected_dmps_df['beta1'].values.astype(np.float64),
+            'alpha2': selected_dmps_df['alpha2'].values.astype(np.float64),
+            'beta2': selected_dmps_df['beta2'].values.astype(np.float64),
+            'weight': weights.astype(np.float64)
+        })
+        
+        # Create BetaClassifier from dmpDF
+        beta_classifier = BetaClassifier.from_dataframe(
+            dmpDF,
+            min_sample_coverage=self.config.min_sample_coverage,
+            coverage_weighting=self.config.classifier_coverage_weighting
+        )
+        
         # Create model package
         import pickle
         model_package = {
-            'classifier': classifier,
-            'selected_dmps_df': selected_dmps_df,  # Save selected_dmps_df for weight calculation
+            'classifier': beta_classifier,
+            'dmpDF': dmpDF,  # Strongly typed DataFrame
             'context_weights_summary': selected_dmps_df.groupby('context')['context_weight'].first().to_dict() if 'context' in selected_dmps_df.columns else {},
             'chromosome': self.config.chromosome,
             'n_dmps': len(selected_dmps_df),
             'n_dmps_per_context': selected_dmps_df.groupby('context').size().to_dict() if 'context' in selected_dmps_df.columns else {},
             'metadata': {
                 'version': '2.0.0',
-                'classifier_type': 'BetaBinomialClassifier',
+                'classifier_type': 'BetaClassifier',
                 'config': self.config.model_dump(),
                 'trimmed_percentile_low': self.config.trimmed_percentile_low,
                 'trimmed_percentile_high': self.config.trimmed_percentile_high,
@@ -1762,8 +1773,8 @@ class MethylModeler:
         
         logger.info(f"💾 Saved model to {model_path}")
         logger.info(f"📦 Model package includes:")
-        logger.info(f"  - Classifier: {classifier}")
-        logger.info(f"  - Selected DMPs DataFrame: {len(selected_dmps_df)} DMPs")
+        logger.info(f"  - Classifier: {beta_classifier}")
+        logger.info(f"  - dmpDF: {len(dmpDF)} DMPs (strongly typed)")
         logger.info(f"  - Context weights: {model_package['context_weights_summary']}")
         logger.info(f"  - Total DMPs: {model_package['n_dmps']}")
         logger.info(f"  - DMPs per context: {model_package['n_dmps_per_context']}")

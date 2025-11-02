@@ -926,11 +926,48 @@ class MethylSample:
 
             else:
                 # Handle group format (original format)
-                # Load basic fields (always present)
-                pos = np.asarray(data_group["pos"][:], dtype=np.uint32)
-                mC = np.asarray(data_group["mC"][:], dtype=np.uint32)
-                uC = np.asarray(data_group["uC"][:], dtype=np.uint32)
-                tnc = np.asarray(data_group["tnc"][:], dtype=np.uint8)
+                # Use hyperslice if positions are specified (performance optimization)
+                use_hyperslice = False
+                matching_indices = None
+                
+                if positions is not None and len(positions) > 0:
+                    # First, load position array to find indices
+                    pos_full = np.asarray(data_group["pos"], dtype=np.uint32)
+                    
+                    # Create a mapping from position to index
+                    positions_set = set(positions)
+                    # Find indices where positions match
+                    matching_indices = np.where(np.isin(pos_full, positions))[0]
+                    
+                    if len(matching_indices) == 0:
+                        # No matching positions, return empty sample
+                        empty_arrays = np.array([], dtype=np.uint32)
+                        empty_tnc = np.array([], dtype=np.uint8)
+                        return cls(
+                            pos=empty_arrays,
+                            mC=empty_arrays,
+                            uC=empty_arrays,
+                            tnc=empty_tnc,
+                            N=None, Sx=None, Sx2=None,
+                            log_x_sum=None, log_1_minus_x_sum=None,
+                            _metadata=metadata if metadata else None
+                        )
+                    
+                    use_hyperslice = True
+                    # Use hyperslice to load only matching indices
+                    pos = np.asarray(data_group["pos"][matching_indices], dtype=np.uint32)
+                    mC = np.asarray(data_group["mC"][matching_indices], dtype=np.uint32)
+                    uC = np.asarray(data_group["uC"][matching_indices], dtype=np.uint32)
+                    tnc = np.asarray(data_group["tnc"][matching_indices], dtype=np.uint8)
+                    
+                    if debug:
+                        print(f"🎯 Hyperslice: loaded {len(matching_indices)} positions from {len(pos_full):,} total")
+                else:
+                    # Load basic fields (always present) - full load when no positions specified
+                    pos = np.asarray(data_group["pos"][:], dtype=np.uint32)
+                    mC = np.asarray(data_group["mC"][:], dtype=np.uint32)
+                    uC = np.asarray(data_group["uC"][:], dtype=np.uint32)
+                    tnc = np.asarray(data_group["tnc"][:], dtype=np.uint8)
 
                 # Initialize optional fields
                 N: Optional[np.ndarray[np.uint32]] = None
@@ -939,25 +976,42 @@ class MethylSample:
                 log_x_sum: Optional[np.ndarray[np.float32]] = None
                 log_1_minus_x_sum: Optional[np.ndarray[np.float32]] = None
 
-                # Check for centroid fields
+                # Check for centroid fields - use hyperslice if positions were specified
                 if "N" in data_group:
-                    N = np.asarray(data_group["N"][:], dtype=np.uint32)
+                    if use_hyperslice:
+                        N = np.asarray(data_group["N"][matching_indices], dtype=np.uint32)
+                    else:
+                        N = np.asarray(data_group["N"][:], dtype=np.uint32)
 
                 # Check for basic centroid statistics
                 if "Sx" in data_group:
-                    Sx = np.asarray(data_group["Sx"][:], dtype=np.float32)
+                    if use_hyperslice:
+                        Sx = np.asarray(data_group["Sx"][matching_indices], dtype=np.float32)
+                    else:
+                        Sx = np.asarray(data_group["Sx"][:], dtype=np.float32)
                 if "Sx2" in data_group:
-                    Sx2 = np.asarray(data_group["Sx2"][:], dtype=np.float32)
+                    if use_hyperslice:
+                        Sx2 = np.asarray(data_group["Sx2"][matching_indices], dtype=np.float32)
+                    else:
+                        Sx2 = np.asarray(data_group["Sx2"][:], dtype=np.float32)
 
                 # Check for extended centroid statistics
                 if "log_x_sum" in data_group:
-                    log_x_sum = np.asarray(data_group["log_x_sum"][:], dtype=np.float32)
+                    if use_hyperslice:
+                        log_x_sum = np.asarray(data_group["log_x_sum"][matching_indices], dtype=np.float32)
+                    else:
+                        log_x_sum = np.asarray(data_group["log_x_sum"][:], dtype=np.float32)
                 if "log_1_minus_x_sum" in data_group:
-                    log_1_minus_x_sum = np.asarray(data_group["log_1_minus_x_sum"][:], dtype=np.float32)
+                    if use_hyperslice:
+                        log_1_minus_x_sum = np.asarray(data_group["log_1_minus_x_sum"][matching_indices], dtype=np.float32)
+                    else:
+                        log_1_minus_x_sum = np.asarray(data_group["log_1_minus_x_sum"][:], dtype=np.float32)
 
 
-        # Apply exact position filtering if requested (massive performance optimization)
-        if positions is not None:
+        # Apply exact position filtering if requested (only needed for structured array format)
+        # For group format with hyperslice, positions are already filtered
+        if positions is not None and not (hasattr(data_group, 'dtype') and hasattr(data_group.dtype, 'names')):
+            # This is for structured array format - filter after loading
             original_count = len(pos)
             # Find indices of positions that exist in the data
             positions_set = set(positions)

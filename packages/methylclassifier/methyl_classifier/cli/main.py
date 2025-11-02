@@ -358,7 +358,21 @@ def classify_samples_from_list(
     """
     print(f"\n🔍 Loading {len(samples_list)} samples from directories...")
     
-    # Load samples (merged contexts per chromosome)
+    # Build dmp_positions_by_chrom from classifiers if not provided (for hyperslice optimization)
+    if dmp_positions_by_chrom is None:
+        dmp_positions_by_chrom = {}
+        if classifier.is_multi_chromosome:
+            for chrom, chrom_classifier in classifier.classifiers.items():
+                feature_info = chrom_classifier.get_feature_info()
+                dmp_positions_by_chrom[chrom] = feature_info['positions']
+        else:
+            if classifier.classifier is not None:
+                feature_info = classifier.classifier.get_feature_info()
+                # For single chromosome, use classifier's chromosome
+                chrom = classifier.chromosome if classifier.chromosome != 'unknown' else '1'
+                dmp_positions_by_chrom[chrom] = feature_info['positions']
+    
+    # Load samples (merged contexts per chromosome) with hyperslice optimization
     loaded_samples = DataLoader.load_samples_from_list(
         samples_list, debug=debug, required_chromosomes=required_chromosomes,
         positions=positions, dmp_positions_by_chrom=dmp_positions_by_chrom
@@ -449,6 +463,13 @@ def _classify_multi_chromosome_samples(
     chrom_features = {chrom: [] for chrom in classifier_chroms}
     chrom_masks = {chrom: [] for chrom in classifier_chroms}
     sample_names = []
+    
+    # Build dmp_positions_by_chrom from classifiers for efficient loading
+    dmp_positions_by_chrom = {}
+    for chrom in classifier_chroms:
+        chrom_classifier = classifier.classifiers[chrom]
+        feature_info = chrom_classifier.get_feature_info()
+        dmp_positions_by_chrom[chrom] = feature_info['positions']
     
     for sample_name, chrom_samples in loaded_samples:
         sample_names.append(sample_name)

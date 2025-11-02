@@ -1,5 +1,5 @@
 {
-    "model_path": "/home/ubuntu/Work/w/humans/psomagen/pc/detections/hc",
+    "model_path": "/home/ubuntu/Work/w/humans/psomagen/pc/models/pb-hc1-1",
     "samples": [
       "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/HBCST-042525-95676",
       "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/HBCST-042825-39553",

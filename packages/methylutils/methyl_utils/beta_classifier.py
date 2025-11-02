@@ -10,6 +10,7 @@ integrates seamlessly with the MethylUtils ecosystem.
 """
 
 import numpy as np
+import pandas as pd
 from scipy.stats import beta
 from typing import Dict, Any, Optional, Union, Tuple
 from sklearn.linear_model import LogisticRegression
@@ -83,6 +84,52 @@ class BetaClassifier:
         self.temperature = 1.0  # Default temperature for softmax
         self.calibrator = None  # For Platt scaling
 
+    @classmethod
+    def from_dataframe(cls, dmpDF: pd.DataFrame, min_sample_coverage: int = 10, coverage_weighting: bool = True):
+        """
+        Create BetaClassifier from strongly-typed DataFrame.
+        
+        Args:
+            dmpDF: DataFrame with columns: pos (int), alpha1 (float), beta1 (float),
+                   alpha2 (float), beta2 (float), weight (float)
+            min_sample_coverage: Min coverage for valid positions (default 10)
+            coverage_weighting: If True, use precision weighting in LLR (default True)
+        
+        Returns:
+            BetaClassifier instance
+        """
+        # Validate required columns
+        required_cols = ['pos', 'alpha1', 'beta1', 'alpha2', 'beta2', 'weight']
+        missing = [c for c in required_cols if c not in dmpDF.columns]
+        if missing:
+            raise ValueError(f"DataFrame missing required columns: {missing}")
+        
+        # Extract and validate types
+        pos = np.asarray(dmpDF['pos'].values, dtype=np.int64).astype(np.uint32)
+        alpha1 = np.asarray(dmpDF['alpha1'].values, dtype=np.float64)
+        beta1 = np.asarray(dmpDF['beta1'].values, dtype=np.float64)
+        alpha2 = np.asarray(dmpDF['alpha2'].values, dtype=np.float64)
+        beta2 = np.asarray(dmpDF['beta2'].values, dtype=np.float64)
+        weight = np.asarray(dmpDF['weight'].values, dtype=np.float64)
+        
+        # Create data dictionary (add directions based on mean difference)
+        # For BetaClassifier, we need directions - compute from alpha/beta means
+        mean1 = alpha1 / (alpha1 + beta1)
+        mean2 = alpha2 / (alpha2 + beta2)
+        directions = np.sign(mean1 - mean2).astype(np.int8)
+        
+        data = {
+            'positions': pos,
+            'alpha1': alpha1,
+            'beta1': beta1,
+            'alpha2': alpha2,
+            'beta2': beta2,
+            'weights': weight,
+            'directions': directions
+        }
+        
+        return cls(data, min_sample_coverage=min_sample_coverage, coverage_weighting=coverage_weighting)
+    
     def set_temperature(self, temperature: float = 1.0):
         """Set the temperature for softmax to control sharpness of probabilities."""
         self.temperature = max(temperature, 0.1)  # Avoid too low temperatures
