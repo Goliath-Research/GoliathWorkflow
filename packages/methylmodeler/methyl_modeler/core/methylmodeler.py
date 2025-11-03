@@ -1201,11 +1201,22 @@ class MethylModeler:
 
         logger.info(f"  FeatureCuts search range: k ∈ [{min_k:,}, {max_k:,}]")
 
-        evaluation_cache: Dict[int, dict] = {}
+        evaluated_k: List[int] = []
+        ba_values: List[float] = []
+        detailed_results: List[dict] = []
 
-        def evaluate_k(k: int) -> dict:
-            k = int(np.clip(k, min_k, max_k))
-            if k not in evaluation_cache:
+        def evaluate_candidates(k_values: np.ndarray) -> None:
+            if k_values.size == 0:
+                return
+
+            clipped = np.clip(k_values.astype(np.int64), min_k, max_k)
+            unique_k = np.unique(clipped)
+
+            if evaluated_k:
+                already = np.array(evaluated_k, dtype=np.int64)
+                unique_k = np.setdiff1d(unique_k, already, assume_unique=True)
+
+            for k in unique_k:
                 subset = sorted_df.iloc[:k]
                 result = self._validate_classifier_subset(
                     subset,
@@ -1213,79 +1224,96 @@ class MethylModeler:
                     X_test, y_test,
                     val_positions, val_contexts
                 )
-                evaluation_cache[k] = result
+                evaluated_k.append(int(k))
+                ba_values.append(result['balanced_accuracy'])
+                detailed_results.append(result)
                 logger.debug(
                     "    Evaluated k=%s → BA=%.6f",
-                    f"{k:,}",
+                    f"{int(k):,}",
                     result['balanced_accuracy']
                 )
-            return evaluation_cache[k]
 
-        candidate_ks: Set[int] = set()
-        candidate_ks.add(min_k)
-        candidate_ks.add(max_k)
-
+        base_candidates = [np.array([min_k, max_k], dtype=np.int64)]
         if initial_k is not None:
-            candidate_ks.add(int(np.clip(initial_k, min_k, max_k)))
+            base_candidates.append(np.array([np.clip(int(initial_k), min_k, max_k)], dtype=np.int64))
 
         if max_k > min_k:
             num_coarse = min(50, max_k - min_k + 1)
-            coarse = np.linspace(min_k, max_k, num=num_coarse, dtype=int)
-            candidate_ks.update(coarse.tolist())
+            coarse = np.linspace(min_k, max_k, num=num_coarse, dtype=np.int64)
+            base_candidates.append(coarse)
 
-            if max_k - min_k > 10 and min_k >= 1:
-                log_candidates = np.geomspace(min_k, max_k, num=min(20, max_k - min_k + 1)).astype(int)
-                candidate_ks.update(log_candidates.tolist())
+            if max_k - min_k > 10:
+                geom = np.geomspace(max(min_k, 1), max_k, num=min(20, max_k - min_k + 1))
+                base_candidates.append(geom.astype(np.int64))
 
-        for k in sorted(candidate_ks):
-            evaluate_k(k)
+        initial_array = np.unique(np.concatenate(base_candidates))
+        evaluate_candidates(initial_array)
+
+        if evaluated_k:
+            k_array = np.array(evaluated_k, dtype=np.int64)
+            ba_array = np.array(ba_values, dtype=np.float64)
+        else:
+            k_array = np.empty(0, dtype=np.int64)
+            ba_array = np.empty(0, dtype=np.float64)
 
         range_width = max_k - min_k
-        if range_width > 0:
+        if range_width > 0 and k_array.size > 0:
             window = max(3, range_width // 20)
-            neighbour_ks: Set[int] = set()
-            top_candidates = sorted(
-                evaluation_cache.items(),
-                key=lambda item: (-item[1]['balanced_accuracy'], item[0])
-            )[:5]
-            for k, _ in top_candidates:
-                low = max(min_k, k - window)
-                high = min(max_k, k + window)
-                neighbour_ks.update(range(low, high + 1))
+            if window > 0:
+                top_count = min(5, k_array.size)
+                sort_indices = np.lexsort((k_array, -ba_array))
+                top_indices = sort_indices[:top_count]
+                top_k = k_array[top_indices]
 
-            for k in sorted(neighbour_ks):
-                evaluate_k(k)
+                neighbours_low = np.clip(top_k - window, min_k, max_k)
+                neighbours_high = np.clip(top_k + window, min_k, max_k)
 
-        best_ba = max(result['balanced_accuracy'] for result in evaluation_cache.values())
+                neighbour_ranges = [np.arange(low, high + 1, dtype=np.int64)
+                                    for low, high in zip(neighbours_low, neighbours_high)]
+                if neighbour_ranges:
+                    neighbour_candidates = np.unique(np.concatenate(neighbour_ranges))
+                    evaluate_candidates(neighbour_candidates)
 
+        k_array = np.array(evaluated_k, dtype=np.int64)
+        ba_array = np.array(ba_values, dtype=np.float64)
+
+        if k_array.size == 0:
+            logger.warning("FeatureCuts did not evaluate any candidates; returning k=max_k with empty result.")
+            empty_result = self._validate_classifier_subset(
+                sorted_df.iloc[:max_k],
+                X_calib, y_calib,
+                X_test, y_test,
+                val_positions, val_contexts
+            ) if max_k > 0 else self._validate_classifier_subset(
+                sorted_df.iloc[:0],
+                X_calib, y_calib,
+                X_test, y_test,
+                val_positions, val_contexts
+            )
+            return int(max_k), empty_result
+
+        max_ba = ba_array.max()
         tolerance = 1e-6
-        best_k_candidates = [
-            k for k, result in evaluation_cache.items()
-            if np.isclose(result['balanced_accuracy'], best_ba, atol=tolerance)
-        ]
+        best_mask = np.isclose(ba_array, max_ba, atol=tolerance)
+        best_candidates = k_array[best_mask]
+        if best_candidates.size == 0:
+            best_candidates = k_array[ba_array == max_ba]
 
-        if not best_k_candidates:
-            best_k_candidates = [
-                k for k, result in evaluation_cache.items()
-                if result['balanced_accuracy'] == best_ba
-            ]
+        best_k = int(best_candidates.min())
+        best_index = int(np.where(k_array == best_k)[0][0])
+        best_result = detailed_results[best_index]
 
-        best_k = min(best_k_candidates)
-        best_result = evaluation_cache[best_k]
+        logger.info(f"  FeatureCuts evaluated {k_array.size} candidate k values")
+        logger.info(f"  Max balanced accuracy: {max_ba:.6f} at minimal k={best_k:,}")
 
-        logger.info(f"  FeatureCuts evaluated {len(evaluation_cache)} candidate k values")
-        logger.info(f"  Max balanced accuracy: {best_ba:.6f} at minimal k={best_k:,}")
-
-        top_summary = sorted(
-            evaluation_cache.items(),
-            key=lambda item: (-item[1]['balanced_accuracy'], item[0])
-        )[:5]
-        if top_summary:
-            logger.info("  Top FeatureCuts candidates:")
-            for rank, (k_val, res) in enumerate(top_summary, 1):
-                logger.info(
-                    f"    [{rank}] k={k_val:,} → BA={res['balanced_accuracy']:.6f}"
-                )
+        if k_array.size > 0:
+            top_order = np.lexsort((k_array, -ba_array))[:5]
+            if top_order.size > 0:
+                logger.info("  Top FeatureCuts candidates:")
+                for rank, idx in enumerate(top_order, 1):
+                    logger.info(
+                        f"    [{rank}] k={int(k_array[idx]):,} → BA={ba_array[idx]:.6f}"
+                    )
 
         return best_k, best_result
 
