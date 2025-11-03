@@ -29,7 +29,7 @@ from methyl_utils import MethylSample
 # Import MethylCentroidPair from MethylUtils for mathematical operations
 from methyl_utils import MethylCentroidPair
 
-# Import Beta-Binomial classifier from MethylUtils
+# Import BetaClassifier from MethylUtils
 from methyl_utils import BetaClassifier
 
 # Handle relative imports - try module import first, fall back to direct execution setup
@@ -1124,10 +1124,13 @@ class MethylModeler:
                                 sorted_uC = context_sample.uC
                             
                             search_indices = np.searchsorted(sorted_pos, context_groups[ctx]['positions'])
-                            valid_mask = (search_indices < len(sorted_pos)) & (sorted_pos[search_indices] == context_groups[ctx]['positions'])
+                            in_bounds = search_indices < len(sorted_pos)
+                            search_indices_safe = np.clip(search_indices, 0, len(sorted_pos) - 1)
+                            exact_matches = sorted_pos[search_indices_safe] == context_groups[ctx]['positions']
+                            valid_mask = in_bounds & exact_matches
                             
-                            mC_vals = np.where(valid_mask, sorted_mC[search_indices], 0)
-                            uC_vals = np.where(valid_mask, sorted_uC[search_indices], 0)
+                            mC_vals = np.where(valid_mask, sorted_mC[search_indices_safe], 0)
+                            uC_vals = np.where(valid_mask, sorted_uC[search_indices_safe], 0)
                             total_vals = mC_vals + uC_vals
                             
                             with np.errstate(divide='ignore', invalid='ignore'):
@@ -1201,28 +1204,29 @@ class MethylModeler:
 
         logger.info(f"  FeatureCuts search range: k ∈ [{min_k:,}, {max_k:,}]")
 
-        max_evaluations = min(100, max_k - min_k + 1)
+        # Coarse grid: logarithmic sampling (similar to binary search efficiency)
+        # Evaluate ~15-20 candidates total (log2(123k) ≈ 17, so similar efficiency)
+        n_coarse = min(20, max_k - min_k + 1)
         
-        candidate_k = np.array([min_k, max_k], dtype=np.int64)
-        if initial_k is not None:
-            heuristic_k = np.clip(int(initial_k), min_k, max_k)
-            candidate_k = np.append(candidate_k, heuristic_k)
-        
-        if max_k > min_k + 2:
-            n_linear = min(30, max_k - min_k - 1)
-            linear = np.linspace(min_k + 1, max_k - 1, n_linear, dtype=np.int64)
-            candidate_k = np.append(candidate_k, linear)
+        if max_k <= 50:
+            candidate_k = np.arange(min_k, max_k + 1, dtype=np.int64)
+        else:
+            candidate_k = np.array([min_k, max_k], dtype=np.int64)
+            if initial_k is not None:
+                heuristic_k = np.clip(int(initial_k), min_k, max_k)
+                candidate_k = np.append(candidate_k, heuristic_k)
             
-            if max_k > 100:
-                n_log = min(20, max_k - min_k - 1)
-                geom = np.geomspace(max(min_k, 1), max_k, n_log)
+            if max_k > min_k + 2:
+                geom = np.geomspace(max(min_k, 1), max_k, n_coarse - candidate_k.size)
                 candidate_k = np.append(candidate_k, geom.astype(np.int64))
         
-        candidate_k = np.unique(np.clip(candidate_k, min_k, max_k))[:max_evaluations]
-        
+        candidate_k = np.unique(np.clip(candidate_k, min_k, max_k))
         n_candidates = candidate_k.size
+        
         ba_results = np.empty(n_candidates, dtype=np.float64)
         detailed_results = []
+        
+        logger.info(f"  Evaluating {n_candidates} candidate k values...")
         
         for i in range(n_candidates):
             k = int(candidate_k[i])
@@ -1235,8 +1239,7 @@ class MethylModeler:
             )
             ba_results[i] = result['balanced_accuracy']
             detailed_results.append(result)
-            if i == 0 or i == n_candidates - 1 or (i + 1) % 10 == 0:
-                logger.debug(f"    k={k:,} → BA={ba_results[i]:.6f}")
+            logger.debug(f"    k={k:,} → BA={ba_results[i]:.6f}")
         
         max_ba = ba_results.max()
         best_mask = np.isclose(ba_results, max_ba, atol=1e-6) | (ba_results == max_ba)

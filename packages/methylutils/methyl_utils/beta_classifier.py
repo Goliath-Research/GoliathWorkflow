@@ -202,18 +202,19 @@ class BetaClassifier:
             log_p_class1 = np.where(effective_mask, log_p_class1, 0.0)
             valid_counts = np.sum(effective_mask, axis=1)
 
-        # AVERAGE log-likelihoods by number of valid positions (instead of summing)
-        avg_log_like_class0 = np.sum(log_p_class0, axis=1) / np.maximum(valid_counts, 1)
-        avg_log_like_class1 = np.sum(log_p_class1, axis=1) / np.maximum(valid_counts, 1)
+        # SUM log-likelihoods (joint log-likelihood = sum of independent observations)
+        # For independent positions: log P(data|class) = sum(log P(x_i|class))
+        sum_log_like_class0 = np.sum(log_p_class0, axis=1)
+        sum_log_like_class1 = np.sum(log_p_class1, axis=1)
 
-        # Handle no valid positions (set to same neutral value)
+        # Handle no valid positions (set to neutral equal likelihoods)
         mask_no_valid = valid_counts == 0
-        avg_log_like_class0[mask_no_valid] = 0.0
-        avg_log_like_class1[mask_no_valid] = 0.0
+        sum_log_like_class0[mask_no_valid] = 0.0
+        sum_log_like_class1[mask_no_valid] = 0.0
 
         # Assign to classes: Column 0 = class0, Column 1 = class1
-        log_likelihoods[:, 0] = avg_log_like_class0
-        log_likelihoods[:, 1] = avg_log_like_class1
+        log_likelihoods[:, 0] = sum_log_like_class0
+        log_likelihoods[:, 1] = sum_log_like_class1
 
         # Debug first sample if requested
         if debug:
@@ -222,7 +223,7 @@ class BetaClassifier:
             print(f"Debugging sample {i}:")
             print(f"  Available positions: {available_count}/{self.n_dmps}")
             print(f"  Used positions: {available_count}")
-            print(f"  Avg log-likelihoods: Class0={avg_log_like_class0[i]:.2f}, Class1={avg_log_like_class1[i]:.2f}")
+            print(f"  Sum log-likelihoods: Class0={sum_log_like_class0[i]:.2f}, Class1={sum_log_like_class1[i]:.2f}")
 
         # Debug: add stats on invalid params
         if debug:
@@ -267,8 +268,8 @@ class BetaClassifier:
         self.calibrator.fit(logits_scaled.reshape(-1, 1), y_val)
 
     def _compute_averaged_log_likelihoods(self, X: np.ndarray, availability_mask: Optional[np.ndarray] = None):
-        """Helper to compute averaged log-likelihoods (extracted for calibration)."""
-        # Reuse the computation from predict_proba up to averaged log_likes
+        """Helper to compute summed log-likelihoods (extracted for calibration)."""
+        # Reuse the computation from predict_proba up to summed log_likes
         n_samples = X.shape[0]
         methylation_vals = np.clip(X, 1e-6, 1-1e-6)
 
@@ -305,16 +306,17 @@ class BetaClassifier:
             log_p_class1 = np.where(effective_mask, log_p_class1, 0.0)
             valid_counts = np.sum(effective_mask, axis=1)
 
-        avg_log_like_class0 = np.sum(log_p_class0, axis=1) / np.maximum(valid_counts, 1)
-        avg_log_like_class1 = np.sum(log_p_class1, axis=1) / np.maximum(valid_counts, 1)
+        # SUM log-likelihoods (joint log-likelihood = sum of independent observations)
+        sum_log_like_class0 = np.sum(log_p_class0, axis=1)
+        sum_log_like_class1 = np.sum(log_p_class1, axis=1)
 
         mask_no_valid = valid_counts == 0
-        avg_log_like_class0[mask_no_valid] = 0.0
-        avg_log_like_class1[mask_no_valid] = 0.0
+        sum_log_like_class0[mask_no_valid] = 0.0
+        sum_log_like_class1[mask_no_valid] = 0.0
 
         log_likelihoods = np.zeros((n_samples, 2))
-        log_likelihoods[:, 0] = avg_log_like_class0
-        log_likelihoods[:, 1] = avg_log_like_class1
+        log_likelihoods[:, 0] = sum_log_like_class0
+        log_likelihoods[:, 1] = sum_log_like_class1
 
         return log_likelihoods
 

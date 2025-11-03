@@ -1,6 +1,6 @@
 {
   "chromosome": "1",
-  "contexts": ["CG","CHG","CHH"],
+  "contexts": ["CG"],
   "centroid1_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/h",
   "centroid2_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/c",
   "output_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/models/hc1",
