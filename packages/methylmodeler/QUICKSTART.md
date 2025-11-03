@@ -4,191 +4,269 @@ This guide will help you get MethylModeler up and running quickly.
 
 ## Prerequisites
 
-- Docker and Docker Compose
-- NVIDIA GPU with CUDA support
-- NVIDIA Container Toolkit
+- Docker and Docker Compose (if using container)
+- NVIDIA GPU with CUDA support (optional, but recommended)
+- Python 3.8+ (if running directly)
 
-## Quick Start with Docker Container
+## Quick Start
 
-### 1. Container Setup
+### 1. Basic Configuration
 
-```bash
-# Navigate to the project directory
-cd /home/ubuntu/MethylModeler
+Create a JSON configuration file:
 
-# Build and start the Docker container
-make docker-build
-make docker-run
-
-# Access the container shell
-make docker-shell
+```json
+{
+  "chromosome": "1",
+  "contexts": ["CG"],
+  "centroid1_dir": "/path/to/healthy/centroids",
+  "centroid2_dir": "/path/to/cancer/centroids",
+  "output_dir": "/path/to/output",
+  "alpha": 0.01,
+  "min_delta_mean": 0.2,
+  "max_bc": 0.5,
+  "optimize_dmps": true,
+  "optimization_method": "featurecuts",
+  "validation_mode": "real",
+  "validation_split_ratio": 0.2,
+  "use_gpu": true
+}
 ```
 
-### 2. Package Installation
+### 2. Run Analysis
 
 ```bash
-# Install the package in development mode
-poetry install
-
-# Test the installation
-make test
-```
-
-### 3. Run Your First Analysis
-
-```bash
-# Run with JSON configuration
-python -m methyl_modeler examples/config_WT-msh1.json
+# From command line
+./modeler config.json
 
 # With verbose output
-python -m methyl_modeler examples/config_WT-msh1.json --verbose
+./modeler config.json --verbose
+
+# With log file
+./modeler config.json --log-file output.log
 ```
 
-## Container Management
+### 3. Check Results
 
-```bash
-# Build container
-make docker-build
+After completion, check your output directory:
 
-# Start container
-make docker-run
-
-# Access container shell
-make docker-shell
-
-# Stop container
-make docker-stop
+```
+output/
+├── dmps-1.csv              # All biological DMPs
+├── dmps-1-3-optimized.csv  # Final optimized DMPs
+├── classifier-1.pkl        # Trained classifier
+└── results-1.json          # Validation results
 ```
 
-## Using MethylModeler
+## Multi-Chromosome Processing
 
-### Command Line Interface
+Process multiple chromosomes in a single run:
 
-MethylModeler uses JSON configuration files for all parameters:
-
-```bash
-# Single comparison
-python -m methyl_modeler examples/config_single_comparison.json
-
-# Multiple comparisons
-python -m methyl_modeler examples/config_WT-msh1.json
-
-# With verbose output
-python -m methyl_modeler examples/config_WT-msh1.json --verbose
+```json
+{
+  "chromosome": ["1", "2", "3", "X"],
+  "contexts": ["CG"],
+  "centroid1_dir": "/path/to/healthy/centroids",
+  "centroid2_dir": "/path/to/cancer/centroids",
+  "output_dir": "/path/to/output"
+}
 ```
 
-### Python API
+Each chromosome will be processed independently and generate separate output files.
 
-#### Using Pydantic Configuration
+## Multi-Context Analysis
+
+Process multiple methylation contexts (CG, CHG, CHH) together:
+
+```json
+{
+  "chromosome": "1",
+  "contexts": ["CG", "CHG", "CHH"],
+  "centroid1_dir": "/path/to/healthy/centroids",
+  "centroid2_dir": "/path/to/cancer/centroids",
+  "output_dir": "/path/to/output",
+  "use_context_weights": true
+}
+```
+
+Contexts will be automatically weighted based on their biological importance.
+
+## Using Python API
+
 ```python
-from methyl_modeler import MethylModeler
 from methyl_modeler.models.config import MethylModelerConfig
-from pathlib import Path
-
-# Create configuration
-config = MethylModelerConfig(
-    centroid1_path=Path("/path/to/centroid1.h5"),
-    centroid2_path=Path("/path/to/centroid2.h5"),
-    output_dir=Path("./results"),
-    alpha=0.05,
-    min_N_pct=0.1,
-    use_gpu=True
-)
-
-# Run analysis
-detector = MethylModeler(config)
-result = detector.run()
-
-# Access results
-print(f"Total positions: {result.comparisons[0].total_positions}")
-print(f"Significant positions: {result.comparisons[0].significant_count}")
-```
-
-#### Loading Configuration from JSON
-```python
-from methyl_modeler import MethylModeler
+from methyl_modeler.core.methylmodeler import MethylModeler
 from methyl_modeler.utils.file_utils import load_config_from_json
 
-# Load configuration from JSON file
+# Load configuration
 config = load_config_from_json("config.json")
 
-# Initialize detector with config
-detector = MethylModeler(config)
+# Initialize and run
+modeler = MethylModeler(config)
+result = modeler.run()
 
-# Run analysis
-result = detector.run()
+# Handle results (single or multiple chromosomes)
+if isinstance(result, list):
+    print(f"Processed {len(result)} chromosomes")
+    for i, r in enumerate(result):
+        print(f"Chromosome {i+1}: {r.total_biological_dmps:,} DMPs")
+else:
+    print(f"Found {result.total_biological_dmps:,} DMPs")
 ```
+
+## Configuration Examples
+
+### Minimal Configuration
+
+```json
+{
+  "chromosome": "1",
+  "contexts": ["CG"],
+  "centroid1_dir": "/centroids/healthy",
+  "centroid2_dir": "/centroids/cancer",
+  "output_dir": "/output"
+}
+```
+
+### With Optimization
+
+```json
+{
+  "chromosome": "1",
+  "contexts": ["CG"],
+  "centroid1_dir": "/centroids/healthy",
+  "centroid2_dir": "/centroids/cancer",
+  "output_dir": "/output",
+  "optimize_dmps": true,
+  "optimization_method": "featurecuts",
+  "target_balanced_accuracy": 0.95
+}
+```
+
+### With Real Validation Samples
+
+```json
+{
+  "chromosome": "1",
+  "contexts": ["CG"],
+  "centroid1_dir": "/centroids/healthy",
+  "centroid2_dir": "/centroids/cancer",
+  "output_dir": "/output",
+  "validation_mode": "real",
+  "validation_split_ratio": 0.2,
+  "centroid1_validation_samples": [
+    "/samples/healthy1",
+    "/samples/healthy2"
+  ],
+  "centroid2_validation_samples": [
+    "/samples/cancer1",
+    "/samples/cancer2"
+  ],
+  "optimize_dmps": true
+}
+```
+
+### Using Metadata for Validation
+
+```json
+{
+  "chromosome": "1",
+  "contexts": ["CG"],
+  "centroid1_dir": "/centroids/healthy",
+  "centroid2_dir": "/centroids/cancer",
+  "output_dir": "/output",
+  "validation_mode": "real",
+  "centroid1_validation_samples": "use_metadata",
+  "centroid2_validation_samples": "use_metadata"
+}
+```
+
+This will read sample paths from the centroid HDF5 file metadata.
 
 ## Data Format
 
-Your centroid files should be in HDF5 format with the following structure:
-- Extended centroid format with methylation data
-- Required columns: `pos`, `mC`, `uC`, `N`, `Sx`, `Sx2`, `log_x_sum`, `log_1_minus_x_sum`
-- Consistent structure across all files
+### Centroid Files
+
+Centroid files must be in HDF5 format with naming:
+- Format: `{chromosome}-{context}.h5`
+- Example: `1-CG.h5`, `1-CHG.h5`, `X-CG.h5`
+
+Files should be in the directories specified by `centroid1_dir` and `centroid2_dir`.
+
+### Validation Samples
+
+Validation samples can be:
+- Directory paths containing `.h5` files with format `{chromosome}-{context}.h5`
+- Or `"use_metadata"` to read from centroid file metadata
 
 ## Output Files
 
-The analysis generates several output files:
+### Per Chromosome Outputs
 
-### Single Comparison
-- `{prefix}_significant_positions.csv` - Significant positions with p-values and q-values
-- `{prefix}_summary.txt` - Summary statistics
-- `{prefix}_pi0_vs_lambda.html` - FDR analysis plot
-- `{prefix}_significant_regions.csv` - Grouped significant regions
-- `{prefix}_config.json` - Input configuration
-- `{prefix}_results.json` - Complete results in JSON format
+- **`dmps-{chromosome}.csv`**: All biological DMPs with full metadata
+- **`dmps-{chromosome}-1-biological.csv`**: Stage 1 biological DMPs (if optimization enabled)
+- **`dmps-{chromosome}-2-pre-optimization.csv`**: Stage 2 pre-optimization DMPs
+- **`dmps-{chromosome}-3-optimized.csv`**: Stage 3 final optimized DMPs
+- **`classifier-{chromosome}.pkl`**: Trained BetaClassifier model
+- **`results-{chromosome}.json`**: Validation results and summary
 
-### Multiple Comparisons
-- `methyl_modeler_summary_report.txt` - Overall summary
-- `all_comparisons_summary.csv` - Summary table for all comparisons
-- Individual comparison files in subdirectories
+### CSV Columns
 
-## Development
-
-### Running Tests
-```bash
-make test
-```
-
-### Code Formatting
-```bash
-make format
-```
-
-### Linting
-```bash
-make lint
-```
-
-### All Checks
-```bash
-make check
-```
+Each DMP CSV includes:
+- Position information: `chromosome`, `context`, `position`
+- Statistics: `p_value`, `q_value`, `delta_mean`, `delta_sign`
+- Biological metrics: `overlap`, `effect_size`, `context_weight`
+- Beta parameters: `alpha1`, `beta1`, `alpha2`, `beta2`
+- Mean methylation: `mean1`, `mean2`
 
 ## Troubleshooting
 
-### Container Issues
-- Ensure Docker and Docker Compose are installed
-- Check GPU availability: `nvidia-smi`
-- Verify container has GPU access: `docker run --rm --gpus all nvidia/cuda:12.0-base-ubuntu20.04 nvidia-smi`
+### No DMPs Found
 
-### GPU Issues
-- Ensure NVIDIA Container Toolkit is installed
-- Check GPU availability: `nvidia-smi`
-- Verify Docker has GPU access: `docker run --rm --gpus all nvidia/cuda:12.0-base-ubuntu20.04 nvidia-smi`
+If you get 0 biological DMPs, try relaxing filters:
 
-### Memory Issues
-- Reduce batch size or number of samples
-- Use CPU-only mode if GPU memory is insufficient
+```json
+{
+  "alpha": 0.05,          // Increase from 0.01
+  "min_delta_mean": 0.1,  // Decrease from 0.2
+  "max_bc": 0.8          // Increase from 0.5
+}
+```
 
-### File Path Issues
-- Ensure all data files exist and are accessible
-- Use absolute paths if relative paths don't work
-- Check file permissions
+### GPU Out of Memory
 
-## Getting Help
+Disable GPU if you encounter memory errors:
 
-- Check the full documentation in `README.modeler`
-- Run `python -m methyl_modeler --help` for CLI options
-- Examine example files in the `examples/` directory
-- Run tests to verify installation: `make test` 
+```json
+{
+  "use_gpu": false
+}
+```
+
+### Validation Errors
+
+Ensure validation samples exist and are accessible:
+
+```bash
+# Check sample directories exist
+ls /path/to/validation/samples/
+
+# Check H5 files are present
+ls /path/to/validation/samples/*/1-CG.h5
+```
+
+### Configuration Validation Errors
+
+Common issues:
+- `centroid1_dir` and `centroid2_dir` must exist and be directories
+- `chromosome` must be valid (1-22, X, Y, M, MT)
+- `contexts` must be valid (CG, CHG, CHH)
+- File format: `{chromosome}-{context}.h5`
+
+## Next Steps
+
+1. **Explore Results**: Load and analyze the CSV files
+2. **Use Classifier**: Load the `.pkl` file with MethylClassifier
+3. **Multi-Chromosome**: Try processing multiple chromosomes
+4. **Context Selection**: Experiment with different context combinations
+
+See the [main README](README.md) for complete documentation.

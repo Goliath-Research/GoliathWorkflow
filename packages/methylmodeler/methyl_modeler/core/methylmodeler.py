@@ -12,16 +12,9 @@ import pandas as pd
 from methyl_utils import (
     auto_compute_distance,
     compute_beta_llr_moments,
-    compute_bhattacharyya_distance,
-    compute_distribution_overlap,
-    likelihood_ratio_test_beta,
-    BayesianClassifierTrainer,
-    ProbabilisticBetaClassifier
+    compute_bhattacharyya_distance
 )
 from methyl_utils.logging_utils import setup_module_logging
-from scipy.optimize import root_scalar
-from scipy.special import gammaln
-from scipy.stats import chi2, norm
 
 # Import sample handler for proper SRP compliance
 from methyl_utils import MethylSample
