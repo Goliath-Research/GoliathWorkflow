@@ -1201,120 +1201,59 @@ class MethylModeler:
 
         logger.info(f"  FeatureCuts search range: k ∈ [{min_k:,}, {max_k:,}]")
 
-        evaluated_k: List[int] = []
-        ba_values: List[float] = []
-        detailed_results: List[dict] = []
-
-        def evaluate_candidates(k_values: np.ndarray) -> None:
-            if k_values.size == 0:
-                return
-
-            clipped = np.clip(k_values.astype(np.int64), min_k, max_k)
-            unique_k = np.unique(clipped)
-
-            if evaluated_k:
-                already = np.array(evaluated_k, dtype=np.int64)
-                unique_k = np.setdiff1d(unique_k, already, assume_unique=True)
-
-            for k in unique_k:
-                subset = sorted_df.iloc[:k]
-                result = self._validate_classifier_subset(
-                    subset,
-                    X_calib, y_calib,
-                    X_test, y_test,
-                    val_positions, val_contexts
-                )
-                evaluated_k.append(int(k))
-                ba_values.append(result['balanced_accuracy'])
-                detailed_results.append(result)
-                logger.debug(
-                    "    Evaluated k=%s → BA=%.6f",
-                    f"{int(k):,}",
-                    result['balanced_accuracy']
-                )
-
-        base_candidates = [np.array([min_k, max_k], dtype=np.int64)]
+        max_evaluations = min(100, max_k - min_k + 1)
+        
+        candidate_k = np.array([min_k, max_k], dtype=np.int64)
         if initial_k is not None:
-            base_candidates.append(np.array([np.clip(int(initial_k), min_k, max_k)], dtype=np.int64))
-
-        if max_k > min_k:
-            num_coarse = min(50, max_k - min_k + 1)
-            coarse = np.linspace(min_k, max_k, num=num_coarse, dtype=np.int64)
-            base_candidates.append(coarse)
-
-            if max_k - min_k > 10:
-                geom = np.geomspace(max(min_k, 1), max_k, num=min(20, max_k - min_k + 1))
-                base_candidates.append(geom.astype(np.int64))
-
-        initial_array = np.unique(np.concatenate(base_candidates))
-        evaluate_candidates(initial_array)
-
-        if evaluated_k:
-            k_array = np.array(evaluated_k, dtype=np.int64)
-            ba_array = np.array(ba_values, dtype=np.float64)
-        else:
-            k_array = np.empty(0, dtype=np.int64)
-            ba_array = np.empty(0, dtype=np.float64)
-
-        range_width = max_k - min_k
-        if range_width > 0 and k_array.size > 0:
-            window = max(3, range_width // 20)
-            if window > 0:
-                top_count = min(5, k_array.size)
-                sort_indices = np.lexsort((k_array, -ba_array))
-                top_indices = sort_indices[:top_count]
-                top_k = k_array[top_indices]
-
-                neighbours_low = np.clip(top_k - window, min_k, max_k)
-                neighbours_high = np.clip(top_k + window, min_k, max_k)
-
-                neighbour_ranges = [np.arange(low, high + 1, dtype=np.int64)
-                                    for low, high in zip(neighbours_low, neighbours_high)]
-                if neighbour_ranges:
-                    neighbour_candidates = np.unique(np.concatenate(neighbour_ranges))
-                    evaluate_candidates(neighbour_candidates)
-
-        k_array = np.array(evaluated_k, dtype=np.int64)
-        ba_array = np.array(ba_values, dtype=np.float64)
-
-        if k_array.size == 0:
-            logger.warning("FeatureCuts did not evaluate any candidates; returning k=max_k with empty result.")
-            empty_result = self._validate_classifier_subset(
-                sorted_df.iloc[:max_k],
-                X_calib, y_calib,
-                X_test, y_test,
-                val_positions, val_contexts
-            ) if max_k > 0 else self._validate_classifier_subset(
-                sorted_df.iloc[:0],
+            heuristic_k = np.clip(int(initial_k), min_k, max_k)
+            candidate_k = np.append(candidate_k, heuristic_k)
+        
+        if max_k > min_k + 2:
+            n_linear = min(30, max_k - min_k - 1)
+            linear = np.linspace(min_k + 1, max_k - 1, n_linear, dtype=np.int64)
+            candidate_k = np.append(candidate_k, linear)
+            
+            if max_k > 100:
+                n_log = min(20, max_k - min_k - 1)
+                geom = np.geomspace(max(min_k, 1), max_k, n_log)
+                candidate_k = np.append(candidate_k, geom.astype(np.int64))
+        
+        candidate_k = np.unique(np.clip(candidate_k, min_k, max_k))[:max_evaluations]
+        
+        n_candidates = candidate_k.size
+        ba_results = np.empty(n_candidates, dtype=np.float64)
+        detailed_results = []
+        
+        for i in range(n_candidates):
+            k = int(candidate_k[i])
+            subset_df = sorted_df.iloc[:k]
+            result = self._validate_classifier_subset(
+                subset_df,
                 X_calib, y_calib,
                 X_test, y_test,
                 val_positions, val_contexts
             )
-            return int(max_k), empty_result
-
-        max_ba = ba_array.max()
-        tolerance = 1e-6
-        best_mask = np.isclose(ba_array, max_ba, atol=tolerance)
-        best_candidates = k_array[best_mask]
-        if best_candidates.size == 0:
-            best_candidates = k_array[ba_array == max_ba]
-
-        best_k = int(best_candidates.min())
-        best_index = int(np.where(k_array == best_k)[0][0])
-        best_result = detailed_results[best_index]
-
-        logger.info(f"  FeatureCuts evaluated {k_array.size} candidate k values")
-        logger.info(f"  Max balanced accuracy: {max_ba:.6f} at minimal k={best_k:,}")
-
-        if k_array.size > 0:
-            top_order = np.lexsort((k_array, -ba_array))[:5]
-            if top_order.size > 0:
-                logger.info("  Top FeatureCuts candidates:")
-                for rank, idx in enumerate(top_order, 1):
-                    logger.info(
-                        f"    [{rank}] k={int(k_array[idx]):,} → BA={ba_array[idx]:.6f}"
-                    )
-
+            ba_results[i] = result['balanced_accuracy']
+            detailed_results.append(result)
+            if i == 0 or i == n_candidates - 1 or (i + 1) % 10 == 0:
+                logger.debug(f"    k={k:,} → BA={ba_results[i]:.6f}")
+        
+        max_ba = ba_results.max()
+        best_mask = np.isclose(ba_results, max_ba, atol=1e-6) | (ba_results == max_ba)
+        best_indices = np.where(best_mask)[0]
+        best_k_values = candidate_k[best_indices]
+        best_k = int(best_k_values.min())
+        best_result_idx = int(best_indices[best_k_values == best_k][0])
+        best_result = detailed_results[best_result_idx]
+        
+        logger.info(f"  FeatureCuts: {n_candidates} evaluations, max BA={max_ba:.6f} at k={best_k:,}")
+        
+        top5_indices = np.argsort(-ba_results)[:5]
+        if top5_indices.size > 0:
+            logger.info("  Top candidates:")
+            for rank, idx in enumerate(top5_indices, 1):
+                logger.info(f"    [{rank}] k={int(candidate_k[idx]):,} → BA={ba_results[idx]:.6f}")
+        
         return best_k, best_result
 
     def _optimize_dmps_bayesian(
