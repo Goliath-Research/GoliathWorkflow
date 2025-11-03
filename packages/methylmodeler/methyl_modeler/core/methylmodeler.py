@@ -764,10 +764,13 @@ class MethylModeler:
             # Create availability mask
             calib_availability = ~np.isnan(X_calib_subset)
             
-            # Fit Platt calibration if method exists
-            if hasattr(temp_classifier, 'calibrate_platt'):
+            # Fit Platt calibration only if we have a proper train/test split
+            # If validation_split_ratio=0, skip calibration to avoid overfitting
+            use_calibration = False
+            if hasattr(temp_classifier, 'calibrate_platt') and self.config.validation_split_ratio > 0:
                 try:
                     temp_classifier.calibrate_platt(X_calib_subset_clean, y_calib, calib_availability)
+                    use_calibration = True
                 except Exception as e:
                     logger.warning(f"Platt calibration failed: {e}, using uncalibrated predictions")
             
@@ -777,8 +780,23 @@ class MethylModeler:
             X_test_subset_clean = np.clip(X_test_subset_clean, 1e-6, 1-1e-6)
             test_availability = ~np.isnan(X_test_subset)
             
-            # Get probabilities using BetaClassifier.predict_proba
-            test_probas = temp_classifier.predict_proba(X_test_subset_clean, test_availability, debug=False)
+            # Get probabilities: use calibrated only if we calibrated and have proper split
+            if use_calibration and hasattr(temp_classifier, 'predict_proba_calibrated') and temp_classifier.calibrator is not None:
+                test_probas = temp_classifier.predict_proba_calibrated(X_test_subset_clean, test_availability)
+            else:
+                test_probas = temp_classifier.predict_proba(X_test_subset_clean, test_availability, debug=False)
+            
+            # Debug: Log prediction statistics for first few k values
+            if len(dmps_subset) <= 100:
+                mean_prob = test_probas[:, 1].mean()
+                std_prob = test_probas[:, 1].std()
+                prob_range = test_probas[:, 1].max() - test_probas[:, 1].min()
+                logger.debug(f"    k={len(dmps_subset):,}: probs mean={mean_prob:.4f}, std={std_prob:.4f}, range={prob_range:.4f}")
+                
+            # Warn if probabilities are completely degenerate
+            prob_range = test_probas[:, 1].max() - test_probas[:, 1].min()
+            if prob_range < 0.01:
+                logger.warning(f"Degenerate probabilities for k={len(dmps_subset):,}: range={prob_range:.6f}, mean={test_probas[:, 1].mean():.6f}")
             
             # Extract probabilities for class 1 (centroid2/cancer)
             probabilities = test_probas[:, 1].tolist()
