@@ -3,7 +3,7 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Union
 
 import click
 
@@ -64,46 +64,90 @@ def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
         loaded_config = load_config_from_json(config)
 
         modeler = MethylModeler(loaded_config)
-        result = modeler.run()
+        results = modeler.run()
 
-        # Debug: check result structure
-        logger.debug(f"Result type: {type(result)}")
-        logger.debug(f"Result config_summary type: {type(result.config_summary)}")
-        logger.debug(f"Result config_summary: {result.config_summary}")
-        
-        # Summary output - always shown on screen, also logged to file if log_file specified
-        summary_lines = [
-            "\n" + "="*60,
-            "MethylModeler Analysis Results",
-            "="*60,
-            "\n📊 Summary:",
-            f"  Statistical DMPs: {result.total_statistical_dmps:,}",
-            f"  Biological DMPs: {result.total_biological_dmps:,}",
-            f"  Retention Rate: {result.biological_retention_rate:.1%}",
-            f"  Analysis Time: {result.timestamp}"
-        ]
-        
-        if result.comparison_stats:
-            summary_lines.append("\n🔬 Comparison Details:")
-            for stats in result.comparison_stats:
+        # Handle both single result and list of results (multi-chromosome mode)
+        if isinstance(results, list):
+            # Multi-chromosome mode: summarize all results
+            logger.info(f"\n{'='*80}")
+            logger.info(f"MethylModeler Multi-Chromosome Analysis Results")
+            logger.info(f"{'='*80}")
+            logger.info(f"\n📊 Processed {len(results)} chromosomes")
+            
+            total_statistical = sum(r.total_statistical_dmps for r in results)
+            total_biological = sum(r.total_biological_dmps for r in results)
+            
+            summary_lines = [
+                "\n" + "="*80,
+                "MethylModeler Multi-Chromosome Analysis Summary",
+                "="*80,
+                f"\n📊 Overall Summary:",
+                f"  Chromosomes Processed: {len(results)}",
+                f"  Total Statistical DMPs: {total_statistical:,}",
+                f"  Total Biological DMPs: {total_biological:,}",
+                f"  Average Retention Rate: {sum(r.biological_retention_rate for r in results) / len(results):.1%}"
+            ]
+            
+            summary_lines.append("\n🔬 Per-Chromosome Results:")
+            for i, result in enumerate(results, 1):
+                chrom = result.config_summary.get('chromosome', f'Chromosome {i}')
+                dmp_count = len(result.biologically_significant_dmps_df) if result.biologically_significant_dmps_df is not None else 0
                 summary_lines.extend([
-                    f"  {stats.comparison_name}:",
-                    f"    Positions: {stats.total_positions:,}",
-                    f"    Statistical DMPs: {stats.statistical_dmps:,}",
-                    f"    Biological DMPs: {stats.biological_dmps:,}",
-                    f"    Processing Time: {stats.processing_time_seconds:.2f}s",
-                    f"    GPU Used: {'Yes' if stats.gpu_used else 'No'}"
+                    f"  [{i}] {chrom}:",
+                    f"    Statistical DMPs: {result.total_statistical_dmps:,}",
+                    f"    Biological DMPs: {result.total_biological_dmps:,}",
+                    f"    Retention Rate: {result.biological_retention_rate:.1%}",
+                    f"    Final DMPs: {dmp_count:,}"
                 ])
+            
+            summary_lines.append(f"\n✅ Multi-chromosome analysis complete!")
+            
+            # Print summary to screen
+            for line in summary_lines:
+                logger.info(line)
+                if log_file:
+                    click.echo(line)
+        else:
+            # Single chromosome mode: original behavior
+            result = results
+            # Debug: check result structure
+            logger.debug(f"Result type: {type(result)}")
+            logger.debug(f"Result config_summary type: {type(result.config_summary)}")
+            logger.debug(f"Result config_summary: {result.config_summary}")
+            
+            # Summary output - always shown on screen, also logged to file if log_file specified
+            summary_lines = [
+                "\n" + "="*60,
+                "MethylModeler Analysis Results",
+                "="*60,
+                "\n📊 Summary:",
+                f"  Statistical DMPs: {result.total_statistical_dmps:,}",
+                f"  Biological DMPs: {result.total_biological_dmps:,}",
+                f"  Retention Rate: {result.biological_retention_rate:.1%}",
+                f"  Analysis Time: {result.timestamp}"
+            ]
+            
+            if result.comparison_stats:
+                summary_lines.append("\n🔬 Comparison Details:")
+                for stats in result.comparison_stats:
+                    summary_lines.extend([
+                        f"  {stats.comparison_name}:",
+                        f"    Positions: {stats.total_positions:,}",
+                        f"    Statistical DMPs: {stats.statistical_dmps:,}",
+                        f"    Biological DMPs: {stats.biological_dmps:,}",
+                        f"    Processing Time: {stats.processing_time_seconds:.2f}s",
+                        f"    GPU Used: {'Yes' if stats.gpu_used else 'No'}"
+                    ])
 
-        dmp_count = len(result.biologically_significant_dmps_df) if result.biologically_significant_dmps_df is not None else 0
-        summary_lines.append(f"\n✅ Analysis complete! Found {dmp_count} DMPs")
-        
-        # Print summary to screen (and log if log_file specified)
-        for line in summary_lines:
-            logger.info(line)
-            # Also use click.echo to ensure it appears on screen even with file logging
-            if log_file:
-                click.echo(line)
+            dmp_count = len(result.biologically_significant_dmps_df) if result.biologically_significant_dmps_df is not None else 0
+            summary_lines.append(f"\n✅ Analysis complete! Found {dmp_count} DMPs")
+            
+            # Print summary to screen (and log if log_file specified)
+            for line in summary_lines:
+                logger.info(line)
+                # Also use click.echo to ensure it appears on screen even with file logging
+                if log_file:
+                    click.echo(line)
 
     except Exception as e:
         error_msg = f"Analysis failed: {e}"

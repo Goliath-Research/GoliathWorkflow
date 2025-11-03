@@ -5,6 +5,19 @@ from math import ceil
 from pydantic import BaseModel, Field, field_validator, model_validator
 from enum import Enum
 
+# Import utility for extracting chromosome from filenames
+try:
+    from methyl_modeler.utils.file_utils import get_chromosome_context_from_filename
+except ImportError:
+    # Fallback if not available
+    def get_chromosome_context_from_filename(filepath):
+        filename = Path(filepath).stem
+        if '-' in filename:
+            parts = filename.split('-')
+            if len(parts) >= 2:
+                return {'chromosome': parts[0], 'context': parts[1]}
+        return {'chromosome': 'unknown', 'context': 'unknown'}
+
 
 class ClassifierType(Enum):
     BETA = "beta"
@@ -16,8 +29,8 @@ class MethylModelerConfig(BaseModel):
     # ----------------
     # Input/Output
     # ----------------
-    chromosome: str = Field(
-        ..., description="Chromosome to process (e.g., '1', 'X', '22')"
+    chromosome: Union[str, List[str]] = Field(
+        ..., description="Chromosome(s) to process. Can be a single chromosome (e.g., '1', 'X', '22') or a list (e.g., ['1', '2', 'X'])"
     )
     contexts: List[str] = Field(
         default=["CG"],
@@ -232,10 +245,23 @@ class MethylModelerConfig(BaseModel):
     @field_validator('chromosome')
     @classmethod
     def validate_chromosome(cls, v):
+        """Validate chromosome(s) - can be a single chromosome or a list."""
         valid_chroms = [str(i) for i in range(1, 23)] + ['X', 'Y', 'M', 'MT']
-        if v not in valid_chroms:
-            raise ValueError(f"Chromosome must be one of: {valid_chroms}, got: {v}")
-        return v
+        
+        # Normalize to list for internal use
+        if isinstance(v, str):
+            if v not in valid_chroms:
+                raise ValueError(f"Chromosome must be one of: {valid_chroms}, got: {v}")
+            return [v]  # Return as list for consistency
+        elif isinstance(v, list):
+            if not v:
+                raise ValueError("Chromosome list cannot be empty")
+            for chrom in v:
+                if chrom not in valid_chroms:
+                    raise ValueError(f"Chromosome must be one of: {valid_chroms}, got: {chrom}")
+            return v
+        else:
+            raise ValueError(f"Chromosome must be a string or list of strings, got: {type(v)}")
 
     @field_validator('output_dir')
     @classmethod
@@ -314,10 +340,51 @@ class MethylModelerConfig(BaseModel):
         return v
     
     @model_validator(mode='after')
-    def validate_trimmed_percentile_sum(self):
-        # Check that the sum doesn't exceed 1.0 (would trim everything)
+    def _post_root_validate(self):
+        """Post-validation: backward compatibility and additional checks."""
+        # Backward compatibility for old configs using centroid1_path/centroid2_path
+        if self.centroid1_path and self.centroid2_path:
+            if not isinstance(self.chromosome, list) or len(self.chromosome) == 0:
+                # Extract chromosome from filename (e.g., "1-CG.h5" -> "1")
+                try:
+                    chrom_info = get_chromosome_context_from_filename(self.centroid1_path)
+                    extracted_chrom = chrom_info['chromosome']
+                    if extracted_chrom != 'unknown':
+                        self.chromosome = [extracted_chrom]  # Normalize to list
+                except Exception:
+                    if not isinstance(self.chromosome, list) or len(self.chromosome) == 0:
+                        raise ValueError("Cannot infer chromosome from centroid1_path. Please specify 'chromosome' in config.")
+            
+            if not self.centroid1_dir:
+                self.centroid1_dir = Path(self.centroid1_path).parent
+            if not self.centroid2_dir:
+                self.centroid2_dir = Path(self.centroid2_path).parent
+            
+            # Clear old paths to ensure new fields are used
+            self.centroid1_path = None
+            self.centroid2_path = None
+        
+        # Ensure chromosome is set if dirs are set but chrom is not
+        if (not isinstance(self.chromosome, list) or len(self.chromosome) == 0) and self.centroid1_dir and self.contexts:
+            # Try to infer from first centroid file in dir
+            first_centroid_file = next(Path(self.centroid1_dir).glob(f"*-{self.contexts[0]}.h5"), None)
+            if first_centroid_file:
+                try:
+                    chrom_info = get_chromosome_context_from_filename(first_centroid_file)
+                    extracted_chrom = chrom_info['chromosome']
+                    if extracted_chrom != 'unknown':
+                        self.chromosome = [extracted_chrom]  # Normalize to list
+                except Exception:
+                    pass # Will be caught by chromosome validator if still None
+        
+        # Check that the sum of trimmed percentiles doesn't exceed 1.0
         if self.trimmed_percentile_low + self.trimmed_percentile_high >= 1.0:
             raise ValueError(f"Sum of trimmed_percentile_low ({self.trimmed_percentile_low}) and trimmed_percentile_high ({self.trimmed_percentile_high}) must be less than 1.0")
+        
+        # Ensure min_dmps_for_export is not less than 1
+        if self.min_dmps_for_export < 1:
+            self.min_dmps_for_export = 1
+        
         return self
 
     # ---------------

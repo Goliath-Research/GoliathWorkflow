@@ -92,18 +92,75 @@ class MethylModeler:
         self.gpu_config = GPUConfig()  # From MethylUtils for memory management
         self.df = None  # Current working dataframe
         self._exported_csv_path = None  # Path to exported CSV file
+        self._current_chromosome = None  # Current chromosome being processed (for multi-chromosome mode)
         logger.debug("Initialized MethylModeler")
     
-    def run(self) -> MethylModelerResult:
-        """Run the complete DMP detection and filtering pipeline."""
+    @property
+    def chromosome(self) -> str:
+        """Get the current chromosome being processed."""
+        if self._current_chromosome is not None:
+            return self._current_chromosome
+        # Fallback: if config.chromosome is a list, return first; otherwise return as-is
+        if isinstance(self.config.chromosome, list):
+            return self.config.chromosome[0]
+        return self.config.chromosome
+    
+    def run(self) -> Union[MethylModelerResult, List[MethylModelerResult]]:
+        """
+        Run the complete DMP detection and filtering pipeline.
+        
+        Returns:
+            MethylModelerResult if processing a single chromosome,
+            List[MethylModelerResult] if processing multiple chromosomes
+        """
         logger.debug("Starting MethylModeler analysis pipeline...")
         
-        # Single unified implementation for all cases
-        return self._run_multi_context()
+        # Check if we're processing multiple chromosomes
+        chromosomes = self.config.chromosome
+        if isinstance(chromosomes, str):
+            chromosomes = [chromosomes]  # Normalize to list
+        
+        if len(chromosomes) == 1:
+            # Single chromosome: process normally
+            self._current_chromosome = chromosomes[0]
+            return self._run_multi_context()
+        else:
+            # Multiple chromosomes: process each one
+            logger.info(f"🧬 Processing {len(chromosomes)} chromosomes: {', '.join(chromosomes)}")
+            results = []
+            failed_chromosomes = []
+            
+            for i, chrom in enumerate(chromosomes, 1):
+                logger.info(f"\n{'='*80}")
+                logger.info(f"Processing chromosome {chrom} ({i}/{len(chromosomes)})")
+                logger.info(f"{'='*80}")
+                
+                try:
+                    self._current_chromosome = chrom
+                    result = self._run_multi_context()
+                    results.append(result)
+                    logger.info(f"✅ Successfully completed chromosome {chrom}")
+                except Exception as e:
+                    logger.error(f"❌ Failed to process chromosome {chrom}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    failed_chromosomes.append((chrom, str(e)))
+            
+            # Summary
+            logger.info(f"\n{'='*80}")
+            logger.info(f"Multi-chromosome processing complete:")
+            logger.info(f"  ✅ Successful: {len(results)}/{len(chromosomes)}")
+            if failed_chromosomes:
+                logger.warning(f"  ❌ Failed: {len(failed_chromosomes)}")
+                for chrom, error in failed_chromosomes:
+                    logger.warning(f"    - {chrom}: {error}")
+            logger.info(f"{'='*80}\n")
+            
+            return results
     
     def _run_multi_context(self) -> MethylModelerResult:
         """Run multi-context analysis (new unified approach)."""
-        logger.info(f"🧬 Starting multi-context analysis for chromosome {self.config.chromosome}")
+        logger.info(f"🧬 Starting multi-context analysis for chromosome {self.chromosome}")
         logger.info(f"📍 Contexts: {', '.join(self.config.contexts)}")
         
         all_dmps = []  # List to collect DataFrames from each context
@@ -113,8 +170,8 @@ class MethylModeler:
             logger.info(f"🔬 Processing context: {context}")
             
             # Build paths to centroid files
-            c1_path = Path(self.config.centroid1_dir) / f"{self.config.chromosome}-{context}.h5"
-            c2_path = Path(self.config.centroid2_dir) / f"{self.config.chromosome}-{context}.h5"
+            c1_path = Path(self.config.centroid1_dir) / f"{self.chromosome}-{context}.h5"
+            c2_path = Path(self.config.centroid2_dir) / f"{self.chromosome}-{context}.h5"
             
             # Check if files exist
             if not c1_path.exists():
@@ -235,7 +292,7 @@ class MethylModeler:
         
         # Create result (use selected DMPs for result stats)
         result = self._create_multi_context_result(dmps_df, selected_dmps_df)
-        logger.info(f"✅ Multi-context analysis complete for chromosome {self.config.chromosome}!")
+        logger.info(f"✅ Multi-context analysis complete for chromosome {self.chromosome}!")
         
         return result
    
@@ -314,7 +371,7 @@ class MethylModeler:
         dmp_df = self._compute_missing_metrics_df(filtered_results)
         
         # Add chromosome and context columns
-        dmp_df['chromosome'] = self.config.chromosome
+        dmp_df['chromosome'] = self.chromosome
         dmp_df['context'] = context
         
         return dmp_df
@@ -525,7 +582,7 @@ class MethylModeler:
                 # Load first context to get metadata
                 if centroid_dir:
                     first_ctx = self.config.contexts[0] if hasattr(self.config, 'contexts') else 'CG'
-                    centroid_path = Path(centroid_dir) / f"{self.config.chromosome}-{first_ctx}.h5"
+                    centroid_path = Path(centroid_dir) / f"{self.chromosome}-{first_ctx}.h5"
                     
                     if centroid_path.exists():
                         centroid = MethylSample.load_from_h5(str(centroid_path))
@@ -1123,7 +1180,7 @@ class MethylModeler:
                     if sample_dir.suffix == '.h5':
                         h5_file = sample_dir
                     else:
-                        h5_file = sample_dir / f"{self.config.chromosome}-{ctx}.h5"
+                        h5_file = sample_dir / f"{self.chromosome}-{ctx}.h5"
                     
                     if h5_file.exists():
                         try:
@@ -1446,7 +1503,7 @@ class MethylModeler:
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        results_path = output_dir / f"results-{self.config.chromosome}.json"
+        results_path = output_dir / f"results-{self.chromosome}.json"
 
         # Get config dict (Pydantic v2 mode='json' handles Path conversion)
         try:
@@ -1490,7 +1547,7 @@ class MethylModeler:
 
         # Create the main results object
         results = MethylModelerValidationResults(
-            chromosome=self.config.chromosome,
+            chromosome=self.chromosome,
             timestamp=datetime.now().isoformat(),
             config=config_dict,
             optimization_validation=optimization_validation,
@@ -1519,9 +1576,9 @@ class MethylModeler:
         output_dir.mkdir(parents=True, exist_ok=True)
         
         if suffix:
-            csv_path = output_dir / f"dmps-{self.config.chromosome}{suffix}.csv"
+            csv_path = output_dir / f"dmps-{self.chromosome}{suffix}.csv"
         else:
-            csv_path = output_dir / f"dmps-{self.config.chromosome}.csv"
+            csv_path = output_dir / f"dmps-{self.chromosome}.csv"
         
         # Define export columns (include all relevant data)
         export_cols = [
@@ -1568,7 +1625,7 @@ class MethylModeler:
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        model_path = output_dir / f"classifier-{self.config.chromosome}.pkl"
+        model_path = output_dir / f"classifier-{self.chromosome}.pkl"
         
         # Create strongly-typed dmpDF DataFrame
         # Get weight from effect_size or context_weight, defaulting to 1.0
@@ -1601,7 +1658,7 @@ class MethylModeler:
             'classifier': beta_classifier,
             'dmpDF': dmpDF,  # Strongly typed DataFrame
             'context_weights_summary': selected_dmps_df.groupby('context')['context_weight'].first().to_dict() if 'context' in selected_dmps_df.columns else {},
-            'chromosome': self.config.chromosome,
+            'chromosome': self.chromosome,
             'n_dmps': len(selected_dmps_df),
             'n_dmps_per_context': selected_dmps_df.groupby('context').size().to_dict() if 'context' in selected_dmps_df.columns else {},
             'metadata': {
@@ -1650,7 +1707,7 @@ class MethylModeler:
             
             if len(ctx_dmps) > 0:
                 stats = ComparisonStats(
-                    comparison_name=f"{self.config.chromosome}-{context}",
+                    comparison_name=f"{self.chromosome}-{context}",
                     total_positions=len(ctx_dmps),
                     statistical_dmps=len(ctx_dmps),
                     biological_dmps=len(ctx_bio),
