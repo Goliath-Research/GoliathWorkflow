@@ -40,7 +40,10 @@ class BedtoolsMapper:
         p_value_log_transform: bool = True,
         enrich_disease: bool = False,
         disease_term: str = "early-stage prostate cancer",
-        grok_api_key: Optional[str] = None
+        grok_api_key: Optional[str] = None,
+        azure_key_vault_url: Optional[str] = None,
+        azure_secret_name: Optional[str] = None,
+        encrypted_file_path: Optional[Path] = None
     ):
         """
         Initialize BedtoolsMapper.
@@ -55,7 +58,10 @@ class BedtoolsMapper:
             p_value_log_transform: If True, uses -log10(p_value) for weighting
             enrich_disease: Whether to enrich results with disease associations
             disease_term: Disease term for enrichment (e.g., "early-stage prostate cancer")
-            grok_api_key: Grok API key for disease enrichment (or set GROK_API_KEY env var)
+            grok_api_key: Grok API key for disease enrichment (optional, uses secure storage if not provided)
+            azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
+            azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
+            encrypted_file_path: Path to encrypted credential file (optional)
         """
         self.gene_gtf = Path(gene_gtf)
         if not self.gene_gtf.exists():
@@ -74,7 +80,10 @@ class BedtoolsMapper:
         if enrich_disease:
             self.disease_enricher = GeneDiseaseEnricher(
                 grok_api_key=grok_api_key,
-                disease_term=disease_term
+                disease_term=disease_term,
+                azure_key_vault_url=azure_key_vault_url,
+                azure_secret_name=azure_secret_name,
+                encrypted_file_path=encrypted_file_path
             )
         
         # Check bedtools availability

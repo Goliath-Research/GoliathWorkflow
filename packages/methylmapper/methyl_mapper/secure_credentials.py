@@ -1,0 +1,226 @@
+"""
+Secure credential management for API keys.
+
+Supports:
+- Azure Key Vault
+- Encrypted local file storage
+- Environment variables (fallback)
+"""
+
+import logging
+import os
+from pathlib import Path
+from typing import Optional
+import base64
+import json
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+
+logger = logging.getLogger(__name__)
+
+
+class SecureCredentialManager:
+    """
+    Manages secure storage and retrieval of API keys.
+    
+    Priority order:
+    1. Explicitly provided key
+    2. Azure Key Vault (if configured)
+    3. Encrypted local file
+    4. Environment variable
+    """
+    
+    def __init__(
+        self,
+        credential_name: str = "grok_api_key",
+        azure_key_vault_url: Optional[str] = None,
+        azure_secret_name: Optional[str] = None,
+        encrypted_file_path: Optional[Path] = None,
+        env_var_name: Optional[str] = None
+    ):
+        """
+        Initialize SecureCredentialManager.
+        
+        Args:
+            credential_name: Name of the credential (for logging)
+            azure_key_vault_url: Azure Key Vault URL (e.g., "https://{vault-name}.vault.azure.net/")
+            azure_secret_name: Name of the secret in Azure Key Vault
+            encrypted_file_path: Path to encrypted credential file
+            env_var_name: Environment variable name (defaults to credential_name.upper())
+        """
+        self.credential_name = credential_name
+        self.azure_key_vault_url = azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL')
+        self.azure_secret_name = azure_secret_name or os.environ.get('AZURE_SECRET_NAME', credential_name)
+        self.encrypted_file_path = encrypted_file_path or self._get_default_encrypted_path()
+        self.env_var_name = env_var_name or credential_name.upper().replace('-', '_')
+        
+        # Lazy initialization of Azure client
+        self._azure_client = None
+    
+    def _get_default_encrypted_path(self) -> Path:
+        """Get default path for encrypted credential file."""
+        home = Path.home()
+        cred_dir = home / ".methyl_mapper" / "credentials"
+        cred_dir.mkdir(parents=True, exist_ok=True)
+        return cred_dir / f"{self.credential_name}.encrypted"
+    
+    def _get_azure_client(self):
+        """Lazy load Azure Key Vault client."""
+        if self._azure_client is not None:
+            return self._azure_client
+        
+        if not self.azure_key_vault_url:
+            return None
+        
+        try:
+            from azure.identity import DefaultAzureCredential
+            from azure.keyvault.secrets import SecretClient
+            
+            credential = DefaultAzureCredential()
+            self._azure_client = SecretClient(
+                vault_url=self.azure_key_vault_url,
+                credential=credential
+            )
+            logger.info(f"✅ Connected to Azure Key Vault: {self.azure_key_vault_url}")
+            return self._azure_client
+        except ImportError:
+            logger.warning("Azure Key Vault libraries not installed. Install with: pip install azure-identity azure-keyvault-secrets")
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to connect to Azure Key Vault: {e}")
+            return None
+    
+    def _get_encryption_key(self, password: Optional[str] = None) -> bytes:
+        """
+        Generate encryption key from password.
+        
+        Args:
+            password: Password for encryption (defaults to user-specific key)
+        """
+        if password is None:
+            # Use a combination of username and home directory as salt
+            password = os.environ.get('METHYL_MAPPER_CREDENTIAL_PASSWORD', '')
+            if not password:
+                # Fallback: use user home directory as salt
+                salt = str(Path.home()).encode()
+            else:
+                salt = password.encode()
+        else:
+            salt = password.encode()
+        
+        # Use a fixed salt for consistency (in production, consider user-specific salt)
+        kdf = PBKDF2(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt[:16].ljust(16, b'0'),  # Ensure 16-byte salt
+            iterations=100000,
+        )
+        return base64.urlsafe_b64encode(kdf.derive(b'methyl_mapper_secret'))
+    
+    def _encrypt_value(self, value: str, password: Optional[str] = None) -> bytes:
+        """Encrypt a value."""
+        key = self._get_encryption_key(password)
+        f = Fernet(key)
+        return f.encrypt(value.encode())
+    
+    def _decrypt_value(self, encrypted_value: bytes, password: Optional[str] = None) -> str:
+        """Decrypt a value."""
+        key = self._get_encryption_key(password)
+        f = Fernet(key)
+        return f.decrypt(encrypted_value).decode()
+    
+    def get_credential(self, explicit_key: Optional[str] = None) -> Optional[str]:
+        """
+        Get credential following priority order.
+        
+        Args:
+            explicit_key: Explicitly provided key (highest priority)
+            
+        Returns:
+            API key or None if not found
+        """
+        # 1. Explicitly provided key
+        if explicit_key:
+            return explicit_key
+        
+        # 2. Azure Key Vault
+        if self.azure_key_vault_url:
+            try:
+                client = self._get_azure_client()
+                if client:
+                    secret = client.get_secret(self.azure_secret_name)
+                    logger.debug(f"✅ Retrieved {self.credential_name} from Azure Key Vault")
+                    return secret.value
+            except Exception as e:
+                logger.debug(f"Azure Key Vault retrieval failed: {e}")
+        
+        # 3. Encrypted local file
+        if self.encrypted_file_path and self.encrypted_file_path.exists():
+            try:
+                with open(self.encrypted_file_path, 'rb') as f:
+                    encrypted_data = f.read()
+                decrypted = self._decrypt_value(encrypted_data)
+                logger.debug(f"✅ Retrieved {self.credential_name} from encrypted file")
+                return decrypted
+            except Exception as e:
+                logger.warning(f"Failed to decrypt credential file: {e}")
+        
+        # 4. Environment variable
+        env_value = os.environ.get(self.env_var_name)
+        if env_value:
+            logger.debug(f"✅ Retrieved {self.credential_name} from environment variable")
+            return env_value
+        
+        return None
+    
+    def save_credential(
+        self,
+        value: str,
+        use_azure: bool = False,
+        use_encrypted_file: bool = True,
+        password: Optional[str] = None
+    ) -> bool:
+        """
+        Save credential securely.
+        
+        Args:
+            value: The credential value to save
+            use_azure: Whether to save to Azure Key Vault
+            use_encrypted_file: Whether to save to encrypted local file
+            password: Password for encryption (optional, uses env var or default)
+            
+        Returns:
+            True if saved successfully
+        """
+        success = False
+        
+        # Save to Azure Key Vault
+        if use_azure and self.azure_key_vault_url:
+            try:
+                client = self._get_azure_client()
+                if client:
+                    client.set_secret(self.azure_secret_name, value)
+                    logger.info(f"✅ Saved {self.credential_name} to Azure Key Vault")
+                    success = True
+            except Exception as e:
+                logger.error(f"Failed to save to Azure Key Vault: {e}")
+        
+        # Save to encrypted local file
+        if use_encrypted_file:
+            try:
+                encrypted_data = self._encrypt_value(value, password)
+                self.encrypted_file_path.parent.mkdir(parents=True, exist_ok=True)
+                
+                # Set secure permissions (owner read/write only)
+                with open(self.encrypted_file_path, 'wb') as f:
+                    f.write(encrypted_data)
+                os.chmod(self.encrypted_file_path, 0o600)  # rw-------
+                
+                logger.info(f"✅ Saved {self.credential_name} to encrypted file: {self.encrypted_file_path}")
+                success = True
+            except Exception as e:
+                logger.error(f"Failed to save encrypted credential file: {e}")
+        
+        return success
+

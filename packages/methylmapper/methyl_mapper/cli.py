@@ -11,6 +11,7 @@ from pathlib import Path
 from .config import MethylMapperConfig, AzureSQLConfig, StoredProcedureConfig
 from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
+from .secure_credentials import SecureCredentialManager
 
 
 def setup_logging(verbose: bool = False):
@@ -352,7 +353,25 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         '--grok-api-key',
         type=str,
         default=None,
-        help='Grok API key (or set GROK_API_KEY environment variable)'
+        help='Grok API key (optional, uses secure storage if not provided)'
+    )
+    disease_group.add_argument(
+        '--azure-key-vault-url',
+        type=str,
+        default=None,
+        help='Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)'
+    )
+    disease_group.add_argument(
+        '--azure-secret-name',
+        type=str,
+        default=None,
+        help='Azure Key Vault secret name (or set AZURE_SECRET_NAME env var, default: grok_api_key)'
+    )
+    disease_group.add_argument(
+        '--encrypted-file-path',
+        type=str,
+        default=None,
+        help='Path to encrypted credential file (default: ~/.methyl_mapper/credentials/grok_api_key.encrypted)'
     )
     
     # Other options
@@ -414,7 +433,10 @@ def main_bedtools():
             p_value_log_transform=not args.no_log_transform,
             enrich_disease=args.enrich_disease,
             disease_term=args.disease_term,
-            grok_api_key=args.grok_api_key or os.environ.get('GROK_API_KEY')
+            grok_api_key=args.grok_api_key,
+            azure_key_vault_url=args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL'),
+            azure_secret_name=args.azure_secret_name or os.environ.get('AZURE_SECRET_NAME'),
+            encrypted_file_path=Path(args.encrypted_file_path) if args.encrypted_file_path else None
         )
         
         # Determine output directory
@@ -448,3 +470,115 @@ def main_bedtools():
             traceback.print_exc()
         sys.exit(1)
 
+
+
+def parse_credentials_args():
+    """Parse command-line arguments for credential management."""
+    parser = argparse.ArgumentParser(
+        description="MethylMapper Credentials - Manage API keys securely",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Save Grok API key to encrypted local file
+  methyl_mapper_credentials save --api-key "your-api-key-here"
+  
+  # Save to Azure Key Vault
+  methyl_mapper_credentials save --api-key "your-api-key-here" --azure-key-vault-url "https://vault.vault.azure.net/" --use-azure
+  
+  # Save to both Azure Key Vault and encrypted file
+  methyl_mapper_credentials save --api-key "your-api-key-here" \\
+                                 --azure-key-vault-url "https://vault.vault.azure.net/" \\
+                                 --use-azure --use-encrypted-file
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
+    
+    # Save command
+    save_parser = subparsers.add_parser('save', help='Save API key securely')
+    save_parser.add_argument('--api-key', type=str, required=True, help='Grok API key to save')
+    save_parser.add_argument('--azure-key-vault-url', type=str, default=None, help='Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)')
+    save_parser.add_argument('--azure-secret-name', type=str, default=None, help='Azure Key Vault secret name (or set AZURE_SECRET_NAME env var, default: grok_api_key)')
+    save_parser.add_argument('--encrypted-file-path', type=str, default=None, help='Path to encrypted credential file (default: ~/.methyl_mapper/credentials/grok_api_key.encrypted)')
+    save_parser.add_argument('--use-azure', action='store_true', help='Save to Azure Key Vault')
+    save_parser.add_argument('--use-encrypted-file', action='store_true', default=True, help='Save to encrypted local file (default: True)')
+    save_parser.add_argument('--password', type=str, default=None, help='Password for encryption (or set METHYL_MAPPER_CREDENTIAL_PASSWORD env var)')
+    
+    # Test command
+    test_parser = subparsers.add_parser('test', help='Test credential retrieval')
+    test_parser.add_argument('--azure-key-vault-url', type=str, default=None, help='Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)')
+    test_parser.add_argument('--azure-secret-name', type=str, default=None, help='Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)')
+    test_parser.add_argument('--encrypted-file-path', type=str, default=None, help='Path to encrypted credential file')
+    
+    parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
+    return parser.parse_args()
+
+
+def main_credentials():
+    """Main entry point for credential management CLI."""
+    import os
+    
+    args = parse_credentials_args()
+    setup_logging(verbose=args.verbose)
+    logger = logging.getLogger(__name__)
+    
+    if not args.command:
+        logger.error("Please specify a command: 'save' or 'test'")
+        sys.exit(1)
+    
+    try:
+        credential_manager = SecureCredentialManager(
+            credential_name="grok_api_key",
+            azure_key_vault_url=args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL'),
+            azure_secret_name=args.azure_secret_name or os.environ.get('AZURE_SECRET_NAME'),
+            encrypted_file_path=Path(args.encrypted_file_path) if args.encrypted_file_path else None
+        )
+        
+        if args.command == 'save':
+            logger.info("="*70)
+            logger.info("Saving Grok API Key Securely")
+            logger.info("="*70)
+            
+            success = credential_manager.save_credential(
+                value=args.api_key,
+                use_azure=args.use_azure,
+                use_encrypted_file=args.use_encrypted_file,
+                password=args.password or os.environ.get('METHYL_MAPPER_CREDENTIAL_PASSWORD')
+            )
+            
+            if success:
+                logger.info("✅ Credential saved successfully!")
+                logger.info(f"   Encrypted file: {credential_manager.encrypted_file_path}")
+                if args.use_azure:
+                    logger.info(f"   Azure Key Vault: {credential_manager.azure_key_vault_url}")
+            else:
+                logger.error("❌ Failed to save credential")
+                sys.exit(1)
+        
+        elif args.command == 'test':
+            logger.info("="*70)
+            logger.info("Testing Credential Retrieval")
+            logger.info("="*70)
+            
+            api_key = credential_manager.get_credential()
+            
+            if api_key:
+                logger.info("✅ Credential retrieved successfully!")
+                logger.info(f"   Key preview: {api_key[:20]}...{api_key[-10:]}")
+                logger.info(f"   Length: {len(api_key)} characters")
+            else:
+                logger.warning("⚠️  No credential found in any configured location")
+                logger.info("   Try saving a credential first with: methyl_mapper_credentials save --api-key <key>")
+                sys.exit(1)
+        
+        sys.exit(0)
+        
+    except KeyboardInterrupt:
+        logger.warning("\n\n⚠️  Interrupted by user")
+        sys.exit(130)
+    except Exception as e:
+        logger.error(f"\n❌ Error: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)

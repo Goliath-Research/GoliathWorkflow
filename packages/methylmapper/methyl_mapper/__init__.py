@@ -13,6 +13,7 @@ from .models import DMPStaging, GeneMappingResult
 from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
 from .gene_disease_enricher import GeneDiseaseEnricher
+from .secure_credentials import SecureCredentialManager
 
 __version__ = "0.1.0"
 __all__ = [
@@ -29,5 +30,6 @@ __all__ = [
     "DMPMapper",
     "BedtoolsMapper",
     "GeneDiseaseEnricher",
+    "SecureCredentialManager",
 ]
 

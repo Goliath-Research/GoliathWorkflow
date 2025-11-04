@@ -26,11 +26,13 @@ setup(
         "pydantic>=2.0.0",
         "pyodbc>=4.0.0",  # For Azure SQL ODBC connection
         "requests>=2.25.0",  # For API calls (Grok, DisGeNET)
+        "cryptography>=3.4.0",  # For encrypted credential storage
     ],
     entry_points={
         "console_scripts": [
             "methyl_mapper=methyl_mapper.cli:main",
             "methyl_mapper_bedtools=methyl_mapper.cli:main_bedtools",
+            "methyl_mapper_credentials=methyl_mapper.cli:main_credentials",
         ],
     },
     classifiers=[

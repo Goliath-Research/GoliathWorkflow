@@ -14,11 +14,13 @@ numpy = ">=1.20.0,<1.28.0"
 pydantic = "^2.0.0"
 pyodbc = ">=4.0.0"
 requests = ">=2.25.0"
+cryptography = ">=3.4.0"
 methylutils = {path = "../methylutils", develop = true}
 
 [tool.poetry.scripts]
 methyl_mapper = "methyl_mapper.cli:main"
 methyl_mapper_bedtools = "methyl_mapper.cli:main_bedtools"
+methyl_mapper_credentials = "methyl_mapper.cli:main_credentials"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
