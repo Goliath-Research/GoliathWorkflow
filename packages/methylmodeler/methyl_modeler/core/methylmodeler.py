@@ -1397,8 +1397,21 @@ class MethylModeler:
         
         logger.info(f"  Phase 1 (coarse): Evaluating {n_candidates} candidate k values...")
         
+        # Track when BA=1.0 is achieved to optimize search
+        ba_1_0_achieved_at_k = None  # Minimum k where BA=1.0 was achieved
+        
         for i in range(n_candidates):
             k = int(candidate_k[i])
+            
+            # Optimization: Skip candidates >= k where BA=1.0 was already achieved
+            # Since we want minimum k with BA=1.0, testing larger k values is wasteful
+            if ba_1_0_achieved_at_k is not None and k >= ba_1_0_achieved_at_k:
+                logger.info(f"    [{i+1}/{n_candidates}] k={k:,} → SKIPPED (BA=1.0 already achieved at k={ba_1_0_achieved_at_k:,})")
+                # Fill with NaN or skip - we'll handle this later
+                ba_results[i] = np.nan
+                detailed_results.append(None)
+                continue
+            
             subset_df = sorted_df.iloc[:k]
             result = self._validate_classifier_subset(
                 subset_df,
@@ -1408,22 +1421,59 @@ class MethylModeler:
             )
             ba_results[i] = result['balanced_accuracy']
             detailed_results.append(result)
+            
+            # Track first k where BA=1.0 is achieved
+            if ba_1_0_achieved_at_k is None and np.isclose(result['balanced_accuracy'], 1.0, atol=1e-6):
+                ba_1_0_achieved_at_k = k
+                logger.info(f"    [{i+1}/{n_candidates}] k={k:,} → BA={ba_results[i]:.6f} ⭐ BA=1.0 achieved! Will skip larger k values.")
+            
             if i % max(1, n_candidates // 10) == 0 or i == n_candidates - 1:
                 logger.info(f"    [{i+1}/{n_candidates}] k={k:,} → BA={ba_results[i]:.6f}")
 
+        # Filter out skipped (NaN) results before Phase 2
+        valid_mask = ~np.isnan(ba_results)
+        if not np.all(valid_mask):
+            # Remove skipped evaluations
+            candidate_k = candidate_k[valid_mask]
+            ba_results = ba_results[valid_mask]
+            detailed_results = [r for r, valid in zip(detailed_results, valid_mask) if valid]
+            n_candidates = len(candidate_k)
+            logger.info(f"  Phase 1 complete: {n_candidates} valid evaluations (skipped {np.sum(~valid_mask)} redundant candidates)")
+        
         # Phase 2: Refinement around top candidates (only if exhaustive)
         if exhaustive and n_candidates > 5:
             # Find top 5 candidates
             top_indices = np.argsort(-ba_results)[:5]
             top_k_values = candidate_k[top_indices]
+            top_ba_values = ba_results[top_indices]
+            
+            # Optimization: If BA=1.0 was achieved, only refine around candidates with BA=1.0
+            # and only look at values <= the minimum k that achieved BA=1.0
+            if ba_1_0_achieved_at_k is not None:
+                # Find all candidates with BA=1.0
+                ba_1_0_mask = np.isclose(ba_results, 1.0, atol=1e-6)
+                ba_1_0_k_values = candidate_k[ba_1_0_mask]
+                
+                if len(ba_1_0_k_values) > 0:
+                    # Only refine around candidates with BA=1.0, and only below/at the minimum k
+                    min_ba_1_0_k = int(ba_1_0_k_values.min())
+                    logger.info(f"  Refinement: BA=1.0 achieved at k={min_ba_1_0_k:,}, only refining k <= {min_ba_1_0_k:,}")
+                    # Get smallest k values with BA=1.0 (up to 5) for refinement
+                    sorted_ba_1_0_k = np.sort(ba_1_0_k_values)[:5]
+                    top_k_values = sorted_ba_1_0_k
+                    max_refinement_k = min_ba_1_0_k  # Cap refinement range
+                else:
+                    max_refinement_k = max_k
+            else:
+                max_refinement_k = max_k
             
             # Refine around each top candidate
             refinement_candidates = []
             for top_k in top_k_values:
                 # Sample densely in a window around this top candidate
-                window_size = max(10, int((max_k - min_k) * 0.05))
+                window_size = max(10, int((max_refinement_k - min_k) * 0.05))
                 window_min = max(min_k, int(top_k - window_size))
-                window_max = min(max_k, int(top_k + window_size))
+                window_max = min(max_refinement_k, int(top_k + window_size))  # Cap at max_refinement_k
                 
                 # Add 20 points in this window
                 if window_max > window_min:
@@ -1432,7 +1482,7 @@ class MethylModeler:
             
             # Remove duplicates and values already evaluated
             refinement_candidates = np.array(refinement_candidates, dtype=np.int64)
-            refinement_candidates = np.unique(np.clip(refinement_candidates, min_k, max_k))
+            refinement_candidates = np.unique(np.clip(refinement_candidates, min_k, max_refinement_k))  # Use max_refinement_k instead of max_k
             refinement_candidates = refinement_candidates[~np.isin(refinement_candidates, candidate_k)]
             
             if len(refinement_candidates) > 0:
@@ -1443,6 +1493,13 @@ class MethylModeler:
                 refinement_results = []
                 
                 for i, k in enumerate(refinement_candidates):
+                    # Optimization: Skip if BA=1.0 was achieved and k >= minimum k with BA=1.0
+                    if ba_1_0_achieved_at_k is not None and k >= ba_1_0_achieved_at_k:
+                        logger.info(f"    [{i+1}/{len(refinement_candidates)}] k={k:,} → SKIPPED (BA=1.0 already achieved at k={ba_1_0_achieved_at_k:,})")
+                        refinement_ba[i] = np.nan
+                        refinement_results.append(None)
+                        continue
+                    
                     subset_df = sorted_df.iloc[:k]
                     result = self._validate_classifier_subset(
                         subset_df,
@@ -1452,8 +1509,25 @@ class MethylModeler:
                     )
                     refinement_ba[i] = result['balanced_accuracy']
                     refinement_results.append(result)
+                    
+                    # Update minimum k with BA=1.0 if we find a smaller one
+                    if ba_1_0_achieved_at_k is None and np.isclose(result['balanced_accuracy'], 1.0, atol=1e-6):
+                        ba_1_0_achieved_at_k = k
+                        logger.info(f"    [{i+1}/{len(refinement_candidates)}] k={k:,} → BA={refinement_ba[i]:.6f} ⭐ BA=1.0 achieved!")
+                    elif ba_1_0_achieved_at_k is not None and np.isclose(result['balanced_accuracy'], 1.0, atol=1e-6) and k < ba_1_0_achieved_at_k:
+                        ba_1_0_achieved_at_k = k
+                        logger.info(f"    [{i+1}/{len(refinement_candidates)}] k={k:,} → BA={refinement_ba[i]:.6f} ⭐ Found smaller k with BA=1.0!")
+                    
                     if i % max(1, len(refinement_candidates) // 10) == 0 or i == len(refinement_candidates) - 1:
                         logger.info(f"    [{i+1}/{len(refinement_candidates)}] k={k:,} → BA={refinement_ba[i]:.6f}")
+                
+                # Filter out skipped (NaN) refinement results
+                valid_refinement_mask = ~np.isnan(refinement_ba)
+                if not np.all(valid_refinement_mask):
+                    refinement_candidates = refinement_candidates[valid_refinement_mask]
+                    refinement_ba = refinement_ba[valid_refinement_mask]
+                    refinement_results = [r for r, valid in zip(refinement_results, valid_refinement_mask) if valid]
+                    logger.info(f"  Refinement: {len(refinement_candidates)} valid evaluations (skipped {np.sum(~valid_refinement_mask)} redundant candidates)")
                 
                 # Combine results
                 candidate_k = np.concatenate([candidate_k, refinement_candidates])

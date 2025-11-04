@@ -43,7 +43,12 @@ class BedtoolsMapper:
         grok_api_key: Optional[str] = None,
         azure_key_vault_url: Optional[str] = None,
         azure_secret_name: Optional[str] = None,
-        encrypted_file_path: Optional[Path] = None
+        encrypted_file_path: Optional[Path] = None,
+        optimize_dmps: bool = True,
+        min_k: int = 10,
+        max_k: Optional[int] = None,
+        stability_threshold: int = 3,
+        unrelated_growth_threshold: float = 0.10
     ):
         """
         Initialize BedtoolsMapper.
@@ -62,6 +67,11 @@ class BedtoolsMapper:
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
             azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
             encrypted_file_path: Path to encrypted credential file (optional)
+            optimize_dmps: Whether to optimize DMP count for stable gene sets (default: True)
+            min_k: Minimum number of DMPs to test (default: 10)
+            max_k: Maximum number of DMPs to test (default: None, uses all available)
+            stability_threshold: Number of consecutive iterations without new disease genes to consider stable (default: 3)
+            unrelated_growth_threshold: Growth rate threshold for unrelated genes (default: 0.10 = 10%)
         """
         self.gene_gtf = Path(gene_gtf)
         if not self.gene_gtf.exists():
@@ -85,6 +95,13 @@ class BedtoolsMapper:
                 azure_secret_name=azure_secret_name,
                 encrypted_file_path=encrypted_file_path
             )
+        
+        # DMP optimization parameters
+        self.optimize_dmps = optimize_dmps
+        self.min_k = min_k
+        self.max_k = max_k
+        self.stability_threshold = stability_threshold
+        self.unrelated_growth_threshold = unrelated_growth_threshold
         
         # Check bedtools availability
         try:
@@ -429,6 +446,204 @@ class BedtoolsMapper:
         logger.info(f"Aggregated into {len(grouped)} {group_by}s")
         return grouped
     
+    def optimize_dmps_for_stable_genes(
+        self,
+        dmp_df: pd.DataFrame,
+        group_by: str = 'gene_name',
+        min_k: Optional[int] = None,
+        max_k: Optional[int] = None
+    ) -> Tuple[int, pd.DataFrame, Dict]:
+        """
+        Find the minimum number of DMPs (k) that produces a stable set of disease-related genes.
+        
+        Uses sequential search with tracking to find k where:
+        - Disease-related genes stabilize (no new genes for stability_threshold consecutive iterations)
+        - Unrelated genes grow slowly (growth rate ≤ unrelated_growth_threshold)
+        
+        Args:
+            dmp_df: DataFrame with DMPs sorted by biological importance (descending)
+            group_by: Feature to group by ('gene_name' or 'gene_id')
+            min_k: Minimum k to test (defaults to self.min_k)
+            max_k: Maximum k to test (defaults to self.max_k or len(dmp_df))
+            
+        Returns:
+            Tuple of (optimal_k, optimal_gene_df, optimization_log)
+            - optimal_k: The optimal number of DMPs
+            - optimal_gene_df: DataFrame with optimized gene set
+            - optimization_log: Dictionary with optimization statistics
+        """
+        if not self.enrich_disease or not self.disease_enricher:
+            raise ValueError("Disease enrichment must be enabled for DMP optimization")
+        
+        if group_by not in ['gene_name', 'gene_id']:
+            raise ValueError(f"optimize_dmps_for_stable_genes requires group_by='gene_name' or 'gene_id', got '{group_by}'")
+        
+        min_k = min_k or self.min_k
+        max_k = max_k or self.max_k or len(dmp_df)
+        max_k = min(max_k, len(dmp_df))
+        
+        if min_k >= max_k:
+            logger.warning(f"min_k ({min_k}) >= max_k ({max_k}), using all DMPs")
+            optimal_k = max_k
+            return optimal_k, pd.DataFrame(), {'optimal_k': optimal_k}
+        
+        logger.info(f"Starting DMP optimization: k from {min_k} to {max_k}")
+        
+        # Track optimization history
+        optimization_log = {
+            'k_values': [],
+            'disease_related_counts': [],
+            'unrelated_counts': [],
+            'disease_related_genes': [],
+            'unrelated_growth_rates': [],
+            'optimal_k': None
+        }
+        
+        # Track previous disease-related gene set for stability check
+        prev_disease_genes = set()
+        consecutive_stable_iterations = 0
+        optimal_k = None
+        optimal_gene_df = pd.DataFrame()
+        
+        # Track previous unrelated count for growth rate calculation
+        prev_unrelated_count = None
+        
+        # Sequential search: test increasing k values
+        k_test = min_k
+        
+        while k_test <= max_k:
+            logger.info(f"\n{'='*70}")
+            logger.info(f"Testing k={k_test}")
+            logger.info(f"{'='*70}")
+            
+            # Take top k DMPs
+            dmp_subset = dmp_df.head(k_test).copy()
+            
+            # Create temporary BED file
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_csv = Path(temp_dir) / "temp.csv"
+                dmp_subset.to_csv(temp_csv, index=False)
+                bed_file = self.csv_to_bed(temp_csv, Path(temp_dir) / "temp.bed")
+                
+                # Map to genes
+                intersect_df = self.intersect_with_features(bed_file, dmp_subset)
+                
+                if intersect_df.empty:
+                    logger.warning(f"No features found for k={k_test}")
+                    k_test += 10  # Skip by larger increments if no features
+                    continue
+                
+                # Aggregate by feature
+                aggregated = self.aggregate_by_feature(intersect_df, group_by=group_by)
+                
+                # Enrich with disease associations
+                aggregated = self.disease_enricher.enrich_gene_dataframe(
+                    aggregated,
+                    gene_column=group_by
+                )
+                
+                # Count disease-related and unrelated genes
+                if 'disease_associated' in aggregated.columns:
+                    disease_related = aggregated[aggregated['disease_associated'] == True]
+                    unrelated = aggregated[aggregated['disease_associated'] == False]
+                else:
+                    # If enrichment didn't add column, assume all unrelated
+                    disease_related = pd.DataFrame()
+                    unrelated = aggregated
+                
+                disease_count = len(disease_related)
+                unrelated_count = len(unrelated)
+                
+                # Get disease-related gene set
+                if disease_count > 0:
+                    current_disease_genes = set(disease_related[group_by].unique())
+                else:
+                    current_disease_genes = set()
+                
+                # Check if new disease-related genes were added
+                new_genes = current_disease_genes - prev_disease_genes
+                has_new_genes = len(new_genes) > 0
+                
+                # Calculate unrelated genes growth rate
+                if prev_unrelated_count is not None and prev_unrelated_count > 0:
+                    growth_rate = (unrelated_count - prev_unrelated_count) / prev_unrelated_count
+                else:
+                    growth_rate = 0.0
+                
+                # Record in log
+                optimization_log['k_values'].append(k_test)
+                optimization_log['disease_related_counts'].append(disease_count)
+                optimization_log['unrelated_counts'].append(unrelated_count)
+                optimization_log['disease_related_genes'].append(list(current_disease_genes))
+                optimization_log['unrelated_growth_rates'].append(growth_rate)
+                
+                logger.info(f"k={k_test}: {disease_count} disease-related genes ({len(new_genes)} new), {unrelated_count} unrelated genes")
+                if prev_unrelated_count is not None:
+                    logger.info(f"  Unrelated growth rate: {growth_rate:.2%}")
+                
+                # Check stability: no new disease-related genes
+                if not has_new_genes:
+                    consecutive_stable_iterations += 1
+                    logger.info(f"  No new disease genes (stable for {consecutive_stable_iterations} iterations)")
+                else:
+                    consecutive_stable_iterations = 0
+                    logger.info(f"  Added {len(new_genes)} new disease genes")
+                
+                # Check if we have stable solution
+                is_stable = consecutive_stable_iterations >= self.stability_threshold
+                growth_acceptable = growth_rate <= self.unrelated_growth_threshold
+                
+                # Update optimal solution if conditions met
+                if is_stable and growth_acceptable:
+                    optimal_k = k_test - (self.stability_threshold - 1)  # Use k from first stable iteration
+                    optimal_gene_df = aggregated.copy()
+                    logger.info(f"✅ Found stable solution at k={optimal_k}")
+                    break
+                elif is_stable and not growth_acceptable:
+                    logger.info(f"  Stable but growth rate too high ({growth_rate:.2%} > {self.unrelated_growth_threshold:.2%}), continuing...")
+                elif not is_stable:
+                    logger.info(f"  Not yet stable ({consecutive_stable_iterations}/{self.stability_threshold}), continuing...")
+                
+                prev_disease_genes = current_disease_genes
+                prev_unrelated_count = unrelated_count
+                
+                # Increment k for next iteration
+                # Use adaptive step size: larger steps early, smaller when getting close
+                if consecutive_stable_iterations == 0:
+                    # Not stable yet, use larger steps
+                    step = max(1, (max_k - min_k) // 20)
+                else:
+                    # Getting close to stability, use smaller steps
+                    step = max(1, (max_k - min_k) // 50)
+                
+                k_test += step
+        
+        # If no optimal solution found, use the last tested k
+        if optimal_k is None:
+            optimal_k = k_test - 1 if k_test > min_k else max_k
+            logger.warning(f"No stable solution found within constraints, using k={optimal_k}")
+            # Re-run with optimal_k to get final gene set
+            dmp_subset = dmp_df.head(optimal_k).copy()
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_csv = Path(temp_dir) / "temp.csv"
+                dmp_subset.to_csv(temp_csv, index=False)
+                bed_file = self.csv_to_bed(temp_csv, Path(temp_dir) / "temp.bed")
+                intersect_df = self.intersect_with_features(bed_file, dmp_subset)
+                if not intersect_df.empty:
+                    optimal_gene_df = self.aggregate_by_feature(intersect_df, group_by=group_by)
+                    optimal_gene_df = self.disease_enricher.enrich_gene_dataframe(
+                        optimal_gene_df,
+                        gene_column=group_by
+                    )
+        
+        optimization_log['optimal_k'] = optimal_k
+        
+        logger.info(f"\n{'='*70}")
+        logger.info(f"Optimization complete: optimal k={optimal_k}")
+        logger.info(f"{'='*70}")
+        
+        return optimal_k, optimal_gene_df, optimization_log
+    
     def map_csv_files(
         self,
         csv_pattern: str,
@@ -489,34 +704,70 @@ class BedtoolsMapper:
                     # Load DMPs
                     dmp_df = pd.read_csv(csv_file)
                     
-                    # Convert to BED
-                    bed_file = Path(temp_dir) / f"{csv_file.stem}.bed"
-                    self.csv_to_bed(csv_file, bed_file)
-                    
-                    # Intersect with features
-                    intersect_df = self.intersect_with_features(bed_file, dmp_df)
-                    
-                    if intersect_df.empty:
-                        logger.warning(f"No features found for {csv_file.name}")
-                        continue
-                    
-                    # Aggregate by feature
-                    aggregated = self.aggregate_by_feature(intersect_df, group_by=group_by)
-                    
-                    # Enrich with disease associations if enabled
-                    if self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
-                        logger.info(f"Enriching {group_by} with disease associations...")
-                        aggregated = self.disease_enricher.enrich_gene_dataframe(
-                            aggregated,
-                            gene_column=group_by
+                    # Apply DMP optimization if enabled
+                    optimal_k = None
+                    if self.optimize_dmps and self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
+                        logger.info(f"Optimizing DMP count for stable gene sets...")
+                        optimal_k, optimal_gene_df, optimization_log = self.optimize_dmps_for_stable_genes(
+                            dmp_df,
+                            group_by=group_by
                         )
+                        
+                        # Export optimization log
+                        import json
+                        log_file = output_dir / f"{csv_file.stem}-optimization-log.json"
+                        with open(log_file, 'w') as f:
+                            json.dump(optimization_log, f, indent=2)
+                        logger.info(f"   Optimization log saved to: {log_file}")
+                        
+                        # Export optimized DMP subset
+                        optimized_dmp_df = dmp_df.head(optimal_k).copy()
+                        optimized_dmp_csv = output_dir / f"{csv_file.stem}-optimized-k{optimal_k}.csv"
+                        optimized_dmp_df.to_csv(optimized_dmp_csv, index=False)
+                        logger.info(f"   Optimized DMP subset (k={optimal_k}) saved to: {optimized_dmp_csv}")
+                        
+                        # Use optimized gene set
+                        aggregated = optimal_gene_df
+                        
+                        # Convert optimized DMPs to BED for detailed intersections
+                        bed_file = Path(temp_dir) / f"{csv_file.stem}.bed"
+                        self.csv_to_bed(optimized_dmp_csv, bed_file)
+                        intersect_df = self.intersect_with_features(bed_file, optimized_dmp_df)
+                    else:
+                        # Original behavior: use all DMPs
+                        # Convert to BED
+                        bed_file = Path(temp_dir) / f"{csv_file.stem}.bed"
+                        self.csv_to_bed(csv_file, bed_file)
+                        
+                        # Intersect with features
+                        intersect_df = self.intersect_with_features(bed_file, dmp_df)
+                        
+                        if intersect_df.empty:
+                            logger.warning(f"No features found for {csv_file.name}")
+                            continue
+                        
+                        # Aggregate by feature
+                        aggregated = self.aggregate_by_feature(intersect_df, group_by=group_by)
+                        
+                        # Enrich with disease associations if enabled
+                        if self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
+                            logger.info(f"Enriching {group_by} with disease associations...")
+                            aggregated = self.disease_enricher.enrich_gene_dataframe(
+                                aggregated,
+                                gene_column=group_by
+                            )
                     
                     # Save results
                     output_csv = output_dir / f"{csv_file.stem}-features-{group_by}.csv"
+                    if self.optimize_dmps and self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
+                        # Save optimized results with k suffix
+                        output_csv = output_dir / f"{csv_file.stem}-optimized-k{optimal_k}-features-{group_by}.csv"
                     aggregated.to_csv(output_csv, index=False)
                     
                     # Save detailed intersections
                     detail_csv = output_dir / f"{csv_file.stem}-intersections.csv"
+                    if self.optimize_dmps and self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
+                        detail_csv = output_dir / f"{csv_file.stem}-optimized-k{optimal_k}-intersections.csv"
                     intersect_df.to_csv(detail_csv, index=False)
                     
                     results[str(csv_file)] = aggregated

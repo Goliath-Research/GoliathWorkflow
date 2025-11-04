@@ -374,6 +374,38 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         help='Path to encrypted credential file (default: ~/.methyl_mapper/credentials/grok_api_key.encrypted)'
     )
     
+    # DMP optimization options
+    optimization_group = parser.add_argument_group('DMP Optimization Options')
+    optimization_group.add_argument(
+        '--no-optimize-dmps',
+        action='store_true',
+        help='Disable DMP optimization (use all DMPs)'
+    )
+    optimization_group.add_argument(
+        '--min-k',
+        type=int,
+        default=10,
+        help='Minimum number of DMPs to test (default: 10)'
+    )
+    optimization_group.add_argument(
+        '--max-k',
+        type=int,
+        default=None,
+        help='Maximum number of DMPs to test (default: all available)'
+    )
+    optimization_group.add_argument(
+        '--stability-threshold',
+        type=int,
+        default=3,
+        help='Number of consecutive iterations without new disease genes to consider stable (default: 3)'
+    )
+    optimization_group.add_argument(
+        '--unrelated-growth-threshold',
+        type=float,
+        default=0.10,
+        help='Growth rate threshold for unrelated genes (default: 0.10 = 10%%)'
+    )
+    
     # Other options
     parser.add_argument(
         '--verbose', '-v',
@@ -421,6 +453,8 @@ def main_bedtools():
         logger.info(f"Group by: {args.group_by}")
         if args.enrich_disease:
             logger.info(f"Disease enrichment: Enabled ({args.disease_term})")
+        if not args.no_optimize_dmps and args.enrich_disease:
+            logger.info(f"DMP optimization: Enabled (min_k={args.min_k}, stability_threshold={args.stability_threshold})")
         logger.info("="*70)
         
         # Create mapper
@@ -436,7 +470,12 @@ def main_bedtools():
             grok_api_key=args.grok_api_key,
             azure_key_vault_url=args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL'),
             azure_secret_name=args.azure_secret_name or os.environ.get('AZURE_SECRET_NAME'),
-            encrypted_file_path=Path(args.encrypted_file_path) if args.encrypted_file_path else None
+            encrypted_file_path=Path(args.encrypted_file_path) if args.encrypted_file_path else None,
+            optimize_dmps=not args.no_optimize_dmps,
+            min_k=args.min_k,
+            max_k=args.max_k,
+            stability_threshold=args.stability_threshold,
+            unrelated_growth_threshold=args.unrelated_growth_threshold
         )
         
         # Determine output directory
