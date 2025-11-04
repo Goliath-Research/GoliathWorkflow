@@ -15,7 +15,7 @@ import base64
 import json
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,9 @@ class SecureCredentialManager:
         """
         self.credential_name = credential_name
         self.azure_key_vault_url = azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL')
-        self.azure_secret_name = azure_secret_name or os.environ.get('AZURE_SECRET_NAME', credential_name)
+        # Azure Key Vault secret names must use hyphens, not underscores
+        default_secret_name = credential_name.replace('_', '-')
+        self.azure_secret_name = azure_secret_name or os.environ.get('AZURE_SECRET_NAME', default_secret_name)
         self.encrypted_file_path = encrypted_file_path or self._get_default_encrypted_path()
         self.env_var_name = env_var_name or credential_name.upper().replace('-', '_')
         
@@ -110,13 +112,16 @@ class SecureCredentialManager:
             salt = password.encode()
         
         # Use a fixed salt for consistency (in production, consider user-specific salt)
-        kdf = PBKDF2(
+        # PBKDF2HMAC is compatible with older cryptography versions
+        salt_bytes = salt[:16].ljust(16, b'0')  # Ensure 16-byte salt
+        kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
-            salt=salt[:16].ljust(16, b'0'),  # Ensure 16-byte salt
+            salt=salt_bytes,
             iterations=100000,
         )
-        return base64.urlsafe_b64encode(kdf.derive(b'methyl_mapper_secret'))
+        key = kdf.derive(b'methyl_mapper_secret')
+        return base64.urlsafe_b64encode(key)
     
     def _encrypt_value(self, value: str, password: Optional[str] = None) -> bytes:
         """Encrypt a value."""
@@ -144,7 +149,18 @@ class SecureCredentialManager:
         if explicit_key:
             return explicit_key
         
-        # 2. Azure Key Vault
+        # 2. Encrypted local file (fastest, works offline)
+        if self.encrypted_file_path and self.encrypted_file_path.exists():
+            try:
+                with open(self.encrypted_file_path, 'rb') as f:
+                    encrypted_data = f.read()
+                decrypted = self._decrypt_value(encrypted_data)
+                logger.debug(f"✅ Retrieved {self.credential_name} from encrypted file")
+                return decrypted
+            except Exception as e:
+                logger.debug(f"Failed to decrypt credential file: {e}")
+        
+        # 3. Azure Key Vault (fallback if local file not available)
         if self.azure_key_vault_url:
             try:
                 client = self._get_azure_client()
@@ -155,18 +171,7 @@ class SecureCredentialManager:
             except Exception as e:
                 logger.debug(f"Azure Key Vault retrieval failed: {e}")
         
-        # 3. Encrypted local file
-        if self.encrypted_file_path and self.encrypted_file_path.exists():
-            try:
-                with open(self.encrypted_file_path, 'rb') as f:
-                    encrypted_data = f.read()
-                decrypted = self._decrypt_value(encrypted_data)
-                logger.debug(f"✅ Retrieved {self.credential_name} from encrypted file")
-                return decrypted
-            except Exception as e:
-                logger.warning(f"Failed to decrypt credential file: {e}")
-        
-        # 4. Environment variable
+        # 4. Environment variable (last resort)
         env_value = os.environ.get(self.env_var_name)
         if env_value:
             logger.debug(f"✅ Retrieved {self.credential_name} from environment variable")

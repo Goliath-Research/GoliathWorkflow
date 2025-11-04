@@ -5,8 +5,9 @@ Note: These are pure Pydantic models (not database tables).
 For database models, see models.py which uses SQLModel.
 """
 
+import os
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class AzureSQLConfig(BaseModel):
@@ -25,8 +26,8 @@ class AzureSQLConfig(BaseModel):
         description="Database username"
     )
     password: str = Field(
-        default="MonteCarlo001*",
-        description="Database password"
+        default="",
+        description="Database password (set via AZURE_SQL_PASSWORD env var or secure storage)"
     )
     driver: str = Field(
         default="ODBC Driver 18 for SQL Server",
@@ -36,6 +37,28 @@ class AzureSQLConfig(BaseModel):
         default=1433,
         description="Database port"
     )
+    
+    @model_validator(mode='after')
+    def resolve_password(self):
+        """Resolve password from environment variable or secure storage if not provided."""
+        if not self.password:
+            # Try environment variable first
+            self.password = os.environ.get('AZURE_SQL_PASSWORD', '')
+            
+            # If still empty, try secure credential manager
+            if not self.password:
+                try:
+                    from .secure_credentials import SecureCredentialManager
+                    credential_manager = SecureCredentialManager(
+                        credential_name="azure_sql_password",
+                        env_var_name="AZURE_SQL_PASSWORD"
+                    )
+                    self.password = credential_manager.get_credential() or ''
+                except Exception:
+                    # If secure storage fails, leave empty (will fail at connection time)
+                    pass
+        
+        return self
     
     def get_connection_string(self) -> str:
         """Build SQLAlchemy connection string for Azure SQL."""
