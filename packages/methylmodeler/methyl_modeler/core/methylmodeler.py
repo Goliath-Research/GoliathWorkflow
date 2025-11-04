@@ -220,10 +220,13 @@ class MethylModeler:
         # Prepare DMPs for validation and optimization
         selected_dmps_df = bio_dmps_df
         pre_optimization_dmps_df = None
+        sorted_by_importance_df = None  # Store sorted DMPs for minimum export
                
         if self.config.optimize_dmps:
             logger.info("🎯 Preparing DMPs for validation and optimization...")
-            selected_dmps_df = self._select_dmps_multicontext(bio_dmps_df)
+            # Compute importance and sort for optimization
+            sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
+            selected_dmps_df = self._select_dmps_multicontext(bio_dmps_df, sorted_df=sorted_by_importance_df)
             logger.info(f"✅ Prepared {len(selected_dmps_df):,} DMPs for validation")
 
             # Store pre-optimization result for export comparison (before advanced optimization)
@@ -236,6 +239,8 @@ class MethylModeler:
                 self._export_unified_csv(pre_optimization_dmps_df, suffix="-2-pre-optimization")
         else:
             logger.info("📋 Using all biological DMPs (optimize_dmps=False)")
+            # Still compute importance for potential minimum export
+            sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
         
         # Prepare classifier data
         classifier_data = {
@@ -268,12 +273,28 @@ class MethylModeler:
             
             # Export Stage 3: Final DMPs (after optimization if enabled)
             if self.config.optimize_dmps and pre_optimization_dmps_df is not None:
-                logger.info("💾 Exporting Stage 3: Optimized DMPs...")
+                logger.info("💾 Exporting Stage 3: Optimized DMPs (max BA, minimal k)...")
                 self._export_unified_csv(selected_dmps_df, suffix="-3-optimized")
+                
+                # Export Stage 4: Minimum DMPs sorted by biological importance
+                # This ensures we have enough DMPs for gene mapping and downstream analysis
+                if sorted_by_importance_df is not None:
+                    min_dmps = max(len(selected_dmps_df), self.config.min_dmps_for_export)
+                    min_dmps_df = sorted_by_importance_df.iloc[:min_dmps].copy()
+                    logger.info(f"💾 Exporting Stage 4: Minimum DMPs (top {min_dmps:,} by biological importance)...")
+                    self._export_unified_csv(min_dmps_df, suffix="-4-minimum-by-importance")
             else:
                 # Export final CSV with default name
                 logger.info("💾 Exporting final DMPs...")
                 self._export_unified_csv(selected_dmps_df)
+                
+                # Also export minimum set if sorted_df is available
+                if sorted_by_importance_df is not None and len(sorted_by_importance_df) > len(selected_dmps_df):
+                    min_dmps = max(len(selected_dmps_df), self.config.min_dmps_for_export)
+                    if min_dmps > len(selected_dmps_df):
+                        min_dmps_df = sorted_by_importance_df.iloc[:min_dmps].copy()
+                        logger.info(f"💾 Exporting minimum DMPs (top {min_dmps:,} by biological importance)...")
+                        self._export_unified_csv(min_dmps_df, suffix="-minimum-by-importance")
             
             # Save model
             logger.info("💾 Saving classifier model...")
@@ -900,7 +921,7 @@ class MethylModeler:
                 'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0}
             }
     
-    def _select_dmps_multicontext(self, bio_dmps_df: pd.DataFrame) -> pd.DataFrame:
+    def _select_dmps_multicontext(self, bio_dmps_df: pd.DataFrame, sorted_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
         Prepare DMPs for validation and optimization in multi-context mode.
 
@@ -909,6 +930,7 @@ class MethylModeler:
 
         Args:
             bio_dmps_df: DataFrame of biologically filtered DMPs
+            sorted_df: Optional pre-computed sorted DataFrame (to avoid recomputation)
 
         Returns:
             DataFrame with sorted DMPs ready for optimization
@@ -919,9 +941,12 @@ class MethylModeler:
         if n_dmps == 0:
             return bio_dmps_df
         
-        # Compute importance scores and sort
-        logger.debug("Computing biological importance scores...")
-        sorted_df = self._compute_biological_importance(bio_dmps_df)
+        # Compute importance scores and sort if not provided
+        if sorted_df is None:
+            logger.debug("Computing biological importance scores...")
+            sorted_df = self._compute_biological_importance(bio_dmps_df)
+        else:
+            logger.debug("Using provided sorted DMPs (biological importance already computed)")
         
         # Load validation samples if in real mode
         validation_data = None
@@ -1244,9 +1269,11 @@ class MethylModeler:
         """
         Maximize balanced accuracy across candidate top-k cutoffs.
 
-        Evaluates a diverse set of k values, refines around the strongest performers,
-        and returns the minimal k that attains the maximal balanced accuracy along
-        with the cached validation result for that subset.
+        When exhaustive_search=True, performs a comprehensive search:
+        1. Coarse phase: Evaluates diverse k values across the range
+        2. Refinement phase: Densely samples around top performers
+        
+        When exhaustive_search=False, uses fast logarithmic sampling (~20 candidates).
 
         Args:
             sorted_df: DMPs sorted by biological importance.
@@ -1269,32 +1296,106 @@ class MethylModeler:
             return 0, empty_result
 
         min_k = 1 if max_k > 0 else 0
+        exhaustive = getattr(self.config, 'featurecuts_exhaustive_search', True)
+        max_candidates = getattr(self.config, 'featurecuts_max_candidates', None)
 
         logger.info(f"  FeatureCuts search range: k ∈ [{min_k:,}, {max_k:,}]")
+        logger.info(f"  Exhaustive search: {exhaustive}")
 
-        # Coarse grid: logarithmic sampling (similar to binary search efficiency)
-        # Evaluate ~15-20 candidates total (log2(123k) ≈ 17, so similar efficiency)
-        n_coarse = min(20, max_k - min_k + 1)
-        
-        if max_k <= 50:
-            candidate_k = np.arange(min_k, max_k + 1, dtype=np.int64)
+        # Determine search strategy
+        if exhaustive:
+            # Exhaustive search: evaluate more candidates
+            if max_candidates is None:
+                # Auto-determine: use linear sampling for small ranges, capped for large
+                if max_k <= 1000:
+                    # For small ranges, evaluate all or nearly all
+                    max_candidates = min(500, max_k - min_k + 1)
+                else:
+                    # For large ranges, use more aggressive sampling
+                    max_candidates = min(500, int(max_k * 0.1))
+            else:
+                max_candidates = min(max_candidates, max_k - min_k + 1)
+            
+            logger.info(f"  Exhaustive mode: evaluating up to {max_candidates} candidates")
         else:
+            # Fast mode: logarithmic sampling (~20 candidates)
+            max_candidates = min(20, max_k - min_k + 1)
+            logger.info(f"  Fast mode: evaluating {max_candidates} candidates")
+
+        # Phase 1: Coarse search
+        if max_k <= 50:
+            # Small range: evaluate all
+            candidate_k = np.arange(min_k, max_k + 1, dtype=np.int64)
+        elif not exhaustive:
+            # Fast mode: logarithmic sampling
             candidate_k = np.array([min_k, max_k], dtype=np.int64)
             if initial_k is not None:
                 heuristic_k = np.clip(int(initial_k), min_k, max_k)
                 candidate_k = np.append(candidate_k, heuristic_k)
             
             if max_k > min_k + 2:
-                geom = np.geomspace(max(min_k, 1), max_k, n_coarse - candidate_k.size)
+                n_geom = max_candidates - candidate_k.size
+                if n_geom > 0:
+                    geom = np.geomspace(max(min_k, 1), max_k, n_geom)
+                    candidate_k = np.append(candidate_k, geom.astype(np.int64))
+        else:
+            # Exhaustive mode: more comprehensive initial sampling
+            # Start with boundary points and heuristic
+            candidate_k = np.array([min_k, max_k], dtype=np.int64)
+            if initial_k is not None:
+                heuristic_k = np.clip(int(initial_k), min_k, max_k)
+                candidate_k = np.append(candidate_k, heuristic_k)
+            
+            # Add logarithmic sampling for broad coverage
+            n_log = min(50, max_candidates // 4)
+            if max_k > min_k + 2 and n_log > 0:
+                geom = np.geomspace(max(min_k, 1), max_k, n_log)
                 candidate_k = np.append(candidate_k, geom.astype(np.int64))
-        
+            
+            # Add linear sampling in the lower range (often where optimal k is)
+            # Sample more densely in first 30% of range
+            lower_bound = min_k
+            upper_bound = int(min_k + (max_k - min_k) * 0.3)
+            if upper_bound > lower_bound:
+                n_linear = min(100, max_candidates // 2)
+                linear_k = np.linspace(lower_bound, upper_bound, n_linear, dtype=np.int64)
+                candidate_k = np.append(candidate_k, linear_k)
+            
+            # Add some linear sampling in mid-range
+            mid_lower = int(min_k + (max_k - min_k) * 0.3)
+            mid_upper = int(min_k + (max_k - min_k) * 0.7)
+            if mid_upper > mid_lower:
+                n_mid = min(50, max_candidates // 4)
+                mid_k = np.linspace(mid_lower, mid_upper, n_mid, dtype=np.int64)
+                candidate_k = np.append(candidate_k, mid_k)
+
         candidate_k = np.unique(np.clip(candidate_k, min_k, max_k))
+        # Limit to max_candidates if we exceeded it
+        if len(candidate_k) > max_candidates:
+            # Keep boundaries and heuristic, then evenly sample the rest
+            important = np.array([min_k, max_k])
+            if initial_k is not None:
+                important = np.append(important, np.clip(int(initial_k), min_k, max_k))
+            important = np.unique(important)
+            
+            remaining_slots = max_candidates - len(important)
+            if remaining_slots > 0:
+                other_k = np.setdiff1d(candidate_k, important)
+                if len(other_k) > remaining_slots:
+                    # Evenly sample from remaining
+                    indices = np.linspace(0, len(other_k) - 1, remaining_slots, dtype=np.int64)
+                    sampled = other_k[indices]
+                else:
+                    sampled = other_k
+                candidate_k = np.unique(np.concatenate([important, sampled]))
+        
+        candidate_k = np.sort(candidate_k)
         n_candidates = candidate_k.size
         
         ba_results = np.empty(n_candidates, dtype=np.float64)
         detailed_results = []
         
-        logger.info(f"  Evaluating {n_candidates} candidate k values...")
+        logger.info(f"  Phase 1 (coarse): Evaluating {n_candidates} candidate k values...")
         
         for i in range(n_candidates):
             k = int(candidate_k[i])
@@ -1307,8 +1408,68 @@ class MethylModeler:
             )
             ba_results[i] = result['balanced_accuracy']
             detailed_results.append(result)
-            logger.debug(f"    k={k:,} → BA={ba_results[i]:.6f}")
-        
+            if i % max(1, n_candidates // 10) == 0 or i == n_candidates - 1:
+                logger.info(f"    [{i+1}/{n_candidates}] k={k:,} → BA={ba_results[i]:.6f}")
+
+        # Phase 2: Refinement around top candidates (only if exhaustive)
+        if exhaustive and n_candidates > 5:
+            # Find top 5 candidates
+            top_indices = np.argsort(-ba_results)[:5]
+            top_k_values = candidate_k[top_indices]
+            
+            # Refine around each top candidate
+            refinement_candidates = []
+            for top_k in top_k_values:
+                # Sample densely in a window around this top candidate
+                window_size = max(10, int((max_k - min_k) * 0.05))
+                window_min = max(min_k, int(top_k - window_size))
+                window_max = min(max_k, int(top_k + window_size))
+                
+                # Add 20 points in this window
+                if window_max > window_min:
+                    refined = np.linspace(window_min, window_max, 20, dtype=np.int64)
+                    refinement_candidates.extend(refined.tolist())
+            
+            # Remove duplicates and values already evaluated
+            refinement_candidates = np.array(refinement_candidates, dtype=np.int64)
+            refinement_candidates = np.unique(np.clip(refinement_candidates, min_k, max_k))
+            refinement_candidates = refinement_candidates[~np.isin(refinement_candidates, candidate_k)]
+            
+            if len(refinement_candidates) > 0:
+                logger.info(f"  Phase 2 (refinement): Evaluating {len(refinement_candidates)} additional candidates around top performers...")
+                
+                # Evaluate refinement candidates
+                refinement_ba = np.empty(len(refinement_candidates), dtype=np.float64)
+                refinement_results = []
+                
+                for i, k in enumerate(refinement_candidates):
+                    subset_df = sorted_df.iloc[:k]
+                    result = self._validate_classifier_subset(
+                        subset_df,
+                        X_calib, y_calib,
+                        X_test, y_test,
+                        val_positions, val_contexts
+                    )
+                    refinement_ba[i] = result['balanced_accuracy']
+                    refinement_results.append(result)
+                    if i % max(1, len(refinement_candidates) // 10) == 0 or i == len(refinement_candidates) - 1:
+                        logger.info(f"    [{i+1}/{len(refinement_candidates)}] k={k:,} → BA={refinement_ba[i]:.6f}")
+                
+                # Combine results
+                candidate_k = np.concatenate([candidate_k, refinement_candidates])
+                ba_results = np.concatenate([ba_results, refinement_ba])
+                detailed_results.extend(refinement_results)
+                
+                # Re-sort by k for consistency
+                sort_idx = np.argsort(candidate_k)
+                candidate_k = candidate_k[sort_idx]
+                ba_results = ba_results[sort_idx]
+                detailed_results = [detailed_results[i] for i in sort_idx]
+                
+                n_candidates = len(candidate_k)
+                logger.info(f"  Total evaluations: {n_candidates} (coarse + refinement)")
+
+        # Find best k (minimal k achieving maximum BA)
         max_ba = ba_results.max()
         best_mask = np.isclose(ba_results, max_ba, atol=1e-6) | (ba_results == max_ba)
         best_indices = np.where(best_mask)[0]
@@ -1317,11 +1478,11 @@ class MethylModeler:
         best_result_idx = int(best_indices[best_k_values == best_k][0])
         best_result = detailed_results[best_result_idx]
         
-        logger.info(f"  FeatureCuts: {n_candidates} evaluations, max BA={max_ba:.6f} at k={best_k:,}")
+        logger.info(f"  ✅ FeatureCuts complete: {n_candidates} evaluations, max BA={max_ba:.6f} at k={best_k:,}")
         
         top5_indices = np.argsort(-ba_results)[:5]
         if top5_indices.size > 0:
-            logger.info("  Top candidates:")
+            logger.info("  Top 5 candidates:")
             for rank, idx in enumerate(top5_indices, 1):
                 logger.info(f"    [{rank}] k={int(candidate_k[idx]):,} → BA={ba_results[idx]:.6f}")
         

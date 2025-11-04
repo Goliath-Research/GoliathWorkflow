@@ -176,6 +176,14 @@ class MethylModelerConfig(BaseModel):
         default="bayesian_optimization",
         description="Optimization method: 'bayesian_optimization' or 'featurecuts'. Both handle non-monotonic BA(k) functions efficiently."
     )
+    featurecuts_exhaustive_search: bool = Field(
+        default=True,
+        description="Enable exhaustive search in FeatureCuts to find maximum Balanced Accuracy. If True, evaluates more k values and refines around best candidates. If False, uses fast logarithmic sampling (~20 candidates)."
+    )
+    featurecuts_max_candidates: Optional[int] = Field(
+        default=None, ge=10,
+        description="Maximum number of k values to evaluate in FeatureCuts exhaustive search. If None, automatically determines based on max_k (e.g., min(500, max_k) for exhaustive search). Higher values = more thorough search but slower."
+    )
     
     # ----------------
     # Validation Configuration
