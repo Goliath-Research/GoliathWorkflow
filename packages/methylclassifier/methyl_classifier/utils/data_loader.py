@@ -197,6 +197,13 @@ class DataLoader:
             
             # Merge all contexts using MethylSample.merge_contexts()
             merged_sample = MethylSample.merge_contexts(contexts_to_merge)
+            
+            # Skip if merged sample is empty (no positions after merging)
+            if len(merged_sample.pos) == 0:
+                if debug:
+                    print(f"⚠️ Warning: {chrom} merged sample is empty (no DMP positions), skipping")
+                continue
+            
             merged_samples[chrom] = merged_sample
         
         return merged_samples
@@ -242,6 +249,12 @@ class DataLoader:
                 merged_samples = DataLoader.load_sample_from_directory(
                     sample_dir, chromosomes, debug, required_chromosomes, positions, dmp_positions_by_chrom
                 )
+                
+                # Skip sample if no chromosomes were loaded (all were empty or missing)
+                if len(merged_samples) == 0:
+                    print(f"⚠️ Warning: Sample {sample_name} has no valid chromosomes (all empty or missing), skipping")
+                    continue
+                
                 load_time = time.time() - start_time
                 samples.append((sample_name, merged_samples))
                 if debug:

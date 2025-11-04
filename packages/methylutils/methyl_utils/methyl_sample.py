@@ -1582,6 +1582,21 @@ class MethylSample:
             if sample.log_1_minus_x_sum is not None:
                 all_log_1_minus_x_sum.append(sample.log_1_minus_x_sum)
         
+        # Check if all samples were empty (after filtering)
+        if len(all_positions) == 0:
+            # Return an empty MethylSample
+            return cls(
+                pos=np.array([], dtype=np.uint32),
+                mC=np.array([], dtype=np.uint32),
+                uC=np.array([], dtype=np.uint32),
+                tnc=np.array([], dtype=np.uint8),
+                N=None,
+                Sx=None,
+                Sx2=None,
+                log_x_sum=None,
+                log_1_minus_x_sum=None
+            )
+        
         # Concatenate all arrays
         merged_positions = np.concatenate(all_positions).astype(np.uint32)
         merged_mC = np.concatenate(all_mC).astype(np.uint32)
