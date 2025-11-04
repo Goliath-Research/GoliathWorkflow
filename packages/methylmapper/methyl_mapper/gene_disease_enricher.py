@@ -107,14 +107,32 @@ class GeneDiseaseEnricher:
         
         disease_term = disease_term or self.disease_term
         
-        logger.info(f"Querying Grok API for {len(gene_names)} genes associated with '{disease_term}'...")
+        # Separate cached and uncached genes
+        cached_results = {}
+        uncached_genes = []
         
-        results = {}
+        for gene in gene_names:
+            cache_key = f"{gene.upper()}:{disease_term}"
+            if cache_key in self._cache:
+                cached_results[gene.upper()] = self._cache[cache_key]
+            else:
+                uncached_genes.append(gene)
+        
+        if cached_results:
+            logger.debug(f"Found {len(cached_results)} genes in cache")
+        
+        if not uncached_genes:
+            logger.info(f"✅ Retrieved all {len(cached_results)} genes from cache")
+            return cached_results
+        
+        logger.info(f"Querying Grok API for {len(uncached_genes)} genes associated with '{disease_term}'...")
+        
+        results = cached_results.copy()
         
         # Batch genes to avoid overwhelming the API
         batch_size = 10
-        for i in range(0, len(gene_names), batch_size):
-            batch = gene_names[i:i+batch_size]
+        for i in range(0, len(uncached_genes), batch_size):
+            batch = uncached_genes[i:i+batch_size]
             
             # Create prompt for Grok
             prompt = self._create_grok_prompt(batch, disease_term)
@@ -127,10 +145,16 @@ class GeneDiseaseEnricher:
                 
                 # Parse response
                 batch_results = self._parse_grok_response(response, batch)
+                
+                # Cache results
+                for gene_name, association_info in batch_results.items():
+                    cache_key = f"{gene_name}:{disease_term}"
+                    self._cache[cache_key] = association_info
+                
                 results.update(batch_results)
                 
                 # Rate limiting
-                if i + batch_size < len(gene_names):
+                if i + batch_size < len(uncached_genes):
                     time.sleep(self.rate_limit_delay)
                     
             except Exception as e:
@@ -138,7 +162,7 @@ class GeneDiseaseEnricher:
                 # Continue with other batches
                 continue
         
-        logger.info(f"✅ Retrieved disease associations for {len(results)} genes from Grok API")
+        logger.info(f"✅ Retrieved disease associations for {len(results)} genes from Grok API ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
         return results
     
     def _create_grok_prompt(self, gene_names: List[str], disease_term: str) -> str:
@@ -325,7 +349,27 @@ Return ONLY valid JSON array format like:
         if not self.use_disgenet:
             return {}
         
-        logger.info(f"Querying DisGeNET for {len(gene_names)} genes...")
+        disease_term = disease_term or self.disease_term
+        
+        # Separate cached and uncached genes
+        cached_results = {}
+        uncached_genes = []
+        
+        for gene in gene_names:
+            cache_key = f"{gene.upper()}:{disease_term}"
+            if cache_key in self._cache:
+                cached_results[gene.upper()] = self._cache[cache_key]
+            else:
+                uncached_genes.append(gene)
+        
+        if cached_results:
+            logger.debug(f"Found {len(cached_results)} genes in cache")
+        
+        if not uncached_genes:
+            logger.info(f"✅ Retrieved all {len(cached_results)} genes from cache")
+            return cached_results
+        
+        logger.info(f"Querying DisGeNET for {len(uncached_genes)} genes...")
         
         # DisGeNET REST API endpoint
         # Note: This requires DisGeNET API key (free registration at https://www.disgenet.org/api/)
@@ -348,14 +392,14 @@ Return ONLY valid JSON array format like:
         
         if not disgenet_api_key:
             logger.warning("DisGeNET API key not found. Set DISGENET_API_KEY environment variable.")
-            return {}
+            return cached_results
         
-        results = {}
+        results = cached_results.copy()
         
         # DisGeNET API endpoint
         base_url = "https://www.disgenet.org/api/gda/gene/"
         
-        for gene in gene_names:
+        for gene in uncached_genes:
             try:
                 url = f"{base_url}{gene}"
                 headers = {"Authorization": f"Bearer {disgenet_api_key}"}
@@ -379,7 +423,7 @@ Return ONLY valid JSON array format like:
                     if relevant_associations:
                         # Get highest score association
                         best = max(relevant_associations, key=lambda x: x.get('score', 0))
-                        results[gene.upper()] = {
+                        association_info = {
                             'associated': True,
                             'association_type': 'database',
                             'evidence_level': 'high' if best.get('score', 0) > 0.5 else 'medium',
@@ -390,7 +434,7 @@ Return ONLY valid JSON array format like:
                             'score': best.get('score', 0)
                         }
                     else:
-                        results[gene.upper()] = {
+                        association_info = {
                             'associated': False,
                             'association_type': 'none',
                             'evidence_level': 'none',
@@ -399,12 +443,17 @@ Return ONLY valid JSON array format like:
                             'functional_role': None,
                             'source': 'disgenet'
                         }
+                    
+                    # Cache result
+                    cache_key = f"{gene.upper()}:{disease_term}"
+                    self._cache[cache_key] = association_info
+                    results[gene.upper()] = association_info
                 
                 time.sleep(0.1)  # Rate limiting
                 
             except Exception as e:
                 logger.debug(f"DisGeNET query failed for {gene}: {e}")
-                results[gene.upper()] = {
+                association_info = {
                     'associated': False,
                     'association_type': 'none',
                     'evidence_level': 'none',
@@ -413,8 +462,12 @@ Return ONLY valid JSON array format like:
                     'functional_role': None,
                     'source': 'disgenet_error'
                 }
+                # Cache error result too (to avoid retrying failed queries)
+                cache_key = f"{gene.upper()}:{disease_term}"
+                self._cache[cache_key] = association_info
+                results[gene.upper()] = association_info
         
-        logger.info(f"✅ Retrieved associations for {len([r for r in results.values() if r['associated']])} genes from DisGeNET")
+        logger.info(f"✅ Retrieved associations for {len(results)} genes from DisGeNET ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
         return results
     
     def enrich_gene_dataframe(
