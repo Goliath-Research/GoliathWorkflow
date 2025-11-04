@@ -25,10 +25,12 @@ setup(
         "numpy>=1.20.0",
         "pydantic>=2.0.0",
         "pyodbc>=4.0.0",  # For Azure SQL ODBC connection
+        "requests>=2.25.0",  # For API calls (Grok, DisGeNET)
     ],
     entry_points={
         "console_scripts": [
             "methyl_mapper=methyl_mapper.cli:main",
+            "methyl_mapper_bedtools=methyl_mapper.cli:main_bedtools",
         ],
     },
     classifiers=[

@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .config import MethylMapperConfig, AzureSQLConfig, StoredProcedureConfig
 from .mapper import DMPMapper
+from .bedtools_mapper import BedtoolsMapper
 
 
 def setup_logging(verbose: bool = False):
@@ -244,6 +245,206 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
-    main()
+def parse_bedtools_args():
+    """Parse command-line arguments for bedtools-based mapping."""
+    parser = argparse.ArgumentParser(
+        description="MethylMapper Bedtools - Map DMPs to genomic features using bedtools",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Map optimized DMPs from all chromosomes
+  methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf gencode.v44.annotation.gtf
+  
+  # Map with custom output directory
+  methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf gencode.v44.annotation.gtf \\
+                         --output-dir mapped_features
+  
+  # Group by transcript instead of gene
+  methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf gencode.v44.annotation.gtf \\
+                         --group-by transcript_id
+  
+  # Disable weighting by p-value
+  methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf gencode.v44.annotation.gtf \\
+                         --no-p-value-weight
+
+For more information, visit: https://github.com/your-org/methyl_mapper
+        """
+    )
+    
+    # Required arguments
+    required = parser.add_argument_group('Required Arguments')
+    required.add_argument(
+        '--csv-pattern', '-p',
+        type=str,
+        required=True,
+        help='Glob pattern for CSV files (e.g., "dmps-*-3-optimized.csv" or "dmps-1-3-optimized.csv")'
+    )
+    required.add_argument(
+        '--gtf', '-g',
+        type=str,
+        default="/home/ubuntu/Work/w/humans/Homo_sapiens.GRCh38.110.gtf",
+        help='Path to GTF/GFF annotation file'
+    )
+    
+    # Output options
+    output_group = parser.add_argument_group('Output Options')
+    output_group.add_argument(
+        '--output-dir', '-o',
+        type=str,
+        default=None,
+        help='Output directory for results (default: creates "mapped_features" in CSV directory)'
+    )
+    output_group.add_argument(
+        '--group-by',
+        type=str,
+        default='gene_name',
+        choices=['gene_name', 'gene_id', 'transcript_id', 'transcript_name', 'feature_type'],
+        help='Feature to group by for aggregation (default: gene_name)'
+    )
+    
+    # Weighting options
+    weight_group = parser.add_argument_group('Weighting Options')
+    weight_group.add_argument(
+        '--no-p-value-weight',
+        action='store_true',
+        help='Disable weighting by p-value'
+    )
+    weight_group.add_argument(
+        '--no-q-value-weight',
+        action='store_true',
+        help='Disable weighting by q-value'
+    )
+    weight_group.add_argument(
+        '--no-effect-size-weight',
+        action='store_true',
+        help='Disable weighting by effect_size'
+    )
+    weight_group.add_argument(
+        '--no-log-transform',
+        action='store_true',
+        help='Disable log10 transformation for p-values (use 1/p instead)'
+    )
+    
+    # Feature filtering
+    feature_group = parser.add_argument_group('Feature Filtering')
+    feature_group.add_argument(
+        '--feature-types',
+        type=str,
+        nargs='+',
+        default=None,
+        help='Feature types to include (e.g., gene exon intron). If not specified, includes all types.'
+    )
+    
+    # Disease enrichment options
+    disease_group = parser.add_argument_group('Disease Enrichment Options')
+    disease_group.add_argument(
+        '--enrich-disease',
+        action='store_true',
+        help='Enable disease association enrichment using Grok API'
+    )
+    disease_group.add_argument(
+        '--disease-term',
+        type=str,
+        default='early-stage prostate cancer',
+        help='Disease term to search for (default: "early-stage prostate cancer")'
+    )
+    disease_group.add_argument(
+        '--grok-api-key',
+        type=str,
+        default=None,
+        help='Grok API key (or set GROK_API_KEY environment variable)'
+    )
+    
+    # Other options
+    parser.add_argument(
+        '--verbose', '-v',
+        action='store_true',
+        help='Enable verbose logging'
+    )
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='MethylMapper Bedtools 0.1.0'
+    )
+    
+    return parser.parse_args()
+
+
+def main_bedtools():
+    """Main entry point for bedtools-based mapping CLI."""
+    import os
+    
+    args = parse_bedtools_args()
+    
+    # Setup logging
+    setup_logging(verbose=args.verbose)
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get GTF file path
+        gtf_path = args.gtf
+        if gtf_path is None:
+            gtf_path = os.environ.get('GENE_GTF')
+            if gtf_path is None:
+                logger.error("GTF file not specified. Use --gtf or set GENE_GTF environment variable.")
+                sys.exit(1)
+        
+        gtf_path = Path(gtf_path)
+        if not gtf_path.exists():
+            logger.error(f"GTF file not found: {gtf_path}")
+            sys.exit(1)
+        
+        logger.info("="*70)
+        logger.info("MethylMapper Bedtools - DMP to Feature Mapping")
+        logger.info("="*70)
+        logger.info(f"CSV pattern: {args.csv_pattern}")
+        logger.info(f"GTF file: {gtf_path}")
+        logger.info(f"Group by: {args.group_by}")
+        if args.enrich_disease:
+            logger.info(f"Disease enrichment: Enabled ({args.disease_term})")
+        logger.info("="*70)
+        
+        # Create mapper
+        mapper = BedtoolsMapper(
+            gene_gtf=gtf_path,
+            feature_types=args.feature_types,
+            use_p_value_weight=not args.no_p_value_weight,
+            use_q_value_weight=not args.no_q_value_weight,
+            use_effect_size_weight=not args.no_effect_size_weight,
+            p_value_log_transform=not args.no_log_transform,
+            enrich_disease=args.enrich_disease,
+            disease_term=args.disease_term,
+            grok_api_key=args.grok_api_key or os.environ.get('GROK_API_KEY')
+        )
+        
+        # Determine output directory
+        output_dir = Path(args.output_dir) if args.output_dir else None
+        
+        # Map CSV files
+        results = mapper.map_csv_files(
+            csv_pattern=args.csv_pattern,
+            output_dir=output_dir,
+            group_by=args.group_by
+        )
+        
+        logger.info("\n" + "="*70)
+        logger.info("✅ Bedtools mapping complete!")
+        logger.info("="*70)
+        logger.info(f"Processed {len(results)} CSV files")
+        if results:
+            total_genes = sum(len(df) for df in results.values())
+            logger.info(f"Found {total_genes} unique {args.group_by}s across all files")
+        logger.info("="*70)
+        
+        sys.exit(0)
+        
+    except KeyboardInterrupt:
+        logger.warning("\n\n⚠️  Interrupted by user")
+        sys.exit(130)
+    except Exception as e:
+        logger.error(f"\n❌ Error: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)
 
