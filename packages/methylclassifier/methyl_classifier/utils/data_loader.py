@@ -196,7 +196,15 @@ class DataLoader:
                 continue
             
             # Merge all contexts using MethylSample.merge_contexts()
-            merged_sample = MethylSample.merge_contexts(contexts_to_merge)
+            try:
+                merged_sample = MethylSample.merge_contexts(contexts_to_merge)
+            except Exception as e:
+                import traceback
+                print(f"❌ Failed to merge contexts for chromosome {chrom}: {e}")
+                print(f"   Error type: {type(e).__name__}")
+                print("   Traceback:")
+                traceback.print_exc()
+                continue
             
             # Skip if merged sample is empty (no positions after merging)
             if len(merged_sample.pos) == 0:
@@ -260,7 +268,11 @@ class DataLoader:
                 if debug:
                     print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes) in {load_time:.1f}s")
             except Exception as e:
+                import traceback
                 print(f"❌ Failed to load sample {sample_name}: {e}")
+                print(f"   Error type: {type(e).__name__}")
+                print("   Traceback:")
+                traceback.print_exc()
                 continue
         
         return samples

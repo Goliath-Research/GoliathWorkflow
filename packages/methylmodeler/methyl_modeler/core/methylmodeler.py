@@ -296,13 +296,34 @@ class MethylModeler:
                         logger.info(f"💾 Exporting minimum DMPs (top {min_dmps:,} by biological importance)...")
                         self._export_unified_csv(min_dmps_df, suffix="-minimum-by-importance")
             
-            # Save model
+            # Save model - ensure we use at least min_dmps_for_export DMPs
+            # This ensures MethylClassifier has enough DMPs even if some are missing in samples
+            model_dmps_df = selected_dmps_df.copy()
+            if sorted_by_importance_df is not None:
+                min_dmps_required = self.config.min_dmps_for_export
+                available_dmps = len(sorted_by_importance_df)
+                
+                if len(model_dmps_df) < min_dmps_required:
+                    if available_dmps < min_dmps_required:
+                        logger.warning(f"⚠️  Only {available_dmps:,} DMPs available, but min_dmps_for_export={min_dmps_required:,}")
+                        logger.warning(f"   Using all available DMPs ({available_dmps:,}) instead of requested minimum")
+                        model_dmps_df = sorted_by_importance_df.copy()
+                    else:
+                        logger.info(f"⚠️  Optimized model has {len(model_dmps_df):,} DMPs, but min_dmps_for_export={min_dmps_required:,}")
+                        logger.info(f"   Expanding model to {min_dmps_required:,} DMPs using top-ranked by biological importance")
+                        model_dmps_df = sorted_by_importance_df.iloc[:min_dmps_required].copy()
+                else:
+                    logger.info(f"✅ Model has {len(model_dmps_df):,} DMPs (≥ min_dmps_for_export={min_dmps_required:,})")
+            else:
+                logger.warning("sorted_by_importance_df not available, using optimized DMPs as-is")
+            
             logger.info("💾 Saving classifier model...")
-            self._save_unified_model(classifier, selected_dmps_df)
+            self._save_unified_model(classifier, model_dmps_df)
             
             # Save validation results if optimization produced them
+            # Use model_dmps_df count (which respects min_dmps_for_export)
             if hasattr(self, '_final_validation_results') and self._final_validation_results:
-                self._save_validation_results(n_dmps_exported=len(selected_dmps_df))
+                self._save_validation_results(n_dmps_exported=len(model_dmps_df))
         
         # Create result (use selected DMPs for result stats)
         result = self._create_multi_context_result(dmps_df, selected_dmps_df)

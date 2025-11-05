@@ -895,7 +895,10 @@ Config fields (in JSON):
                 debug=config.debug
             )
     except Exception as e:
+        import traceback
         print(f"❌ Classification failed: {e}")
+        print(f"   Error type: {type(e).__name__}")
+        traceback.print_exc()
         sys.exit(1)
 
 
