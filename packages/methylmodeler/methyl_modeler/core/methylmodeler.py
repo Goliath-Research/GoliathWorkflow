@@ -264,6 +264,32 @@ class MethylModeler:
 
         logger.info(f"✅ Classifier created: {classifier}")
         
+        # Perform validation even when optimization is disabled
+        # Validate on biologically filtered DMPs (bio_dmps_df), not optimized selection
+        if not self.config.optimize_dmps:
+            logger.info("")
+            logger.info("🔬 Performing validation on biologically filtered DMPs (optimize_dmps=False)...")
+            validation_result = self._validate_selected_dmps(bio_dmps_df, sorted_by_importance_df)
+            if validation_result is not None:
+                self._final_validation_results = validation_result
+                cm = validation_result['confusion_matrix']
+                logger.info(f"✅ Validation complete: BA={validation_result['balanced_accuracy']:.4f}")
+                logger.info(f"   TP={cm['tp']}, TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}")
+                
+                # If we used synthetic validation, also verify on real samples if available
+                if self.config.validation_mode == "synthetic":
+                    logger.info("")
+                    logger.info("🔬 Verifying model on real samples from centroid metadata...")
+                    real_validation = self._validate_on_real_samples(bio_dmps_df)
+                    if real_validation is not None:
+                        logger.info(f"✅ Real validation: BA={real_validation['balanced_accuracy']:.4f}")
+                        logger.info(f"   TP={real_validation['confusion_matrix']['tp']}, "
+                                  f"TN={real_validation['confusion_matrix']['tn']}, "
+                                  f"FP={real_validation['confusion_matrix']['fp']}, "
+                                  f"FN={real_validation['confusion_matrix']['fn']}")
+                        # Store real validation results alongside synthetic
+                        self._real_validation_results = real_validation
+        
         # Export unified CSVs
         if self.config.output_dir:
             # Export Stage 2: Pre-optimization DMPs (if optimization was enabled, export now)
@@ -320,7 +346,7 @@ class MethylModeler:
             logger.info("💾 Saving classifier model...")
             self._save_unified_model(classifier, model_dmps_df)
             
-            # Save validation results if optimization produced them
+            # Save validation results if available (from optimization or non-optimized validation)
             # Use model_dmps_df count (which respects min_dmps_for_export)
             if hasattr(self, '_final_validation_results') and self._final_validation_results:
                 self._save_validation_results(n_dmps_exported=len(model_dmps_df))
@@ -941,6 +967,97 @@ class MethylModeler:
                 'metrics': {'sensitivity': 0.0, 'specificity': 0.0, 'accuracy': 0.0, 'precision': 0.0},
                 'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0}
             }
+    
+    def _validate_selected_dmps(self, selected_dmps_df: pd.DataFrame, sorted_df: Optional[pd.DataFrame] = None) -> Optional[dict]:
+        """
+        Validate selected DMPs without optimization.
+        
+        This method performs validation even when optimize_dmps=False to report
+        classifier performance on the selected DMP set.
+        
+        Args:
+            selected_dmps_df: DataFrame with selected DMPs to validate
+            sorted_df: Optional sorted DataFrame (for consistency, not used here)
+            
+        Returns:
+            Validation results dict or None if validation fails
+        """
+        try:
+            n_dmps = len(selected_dmps_df)
+            if n_dmps == 0:
+                logger.warning("Cannot validate: no DMPs selected")
+                return None
+            
+            # Load or generate validation samples
+            validation_data = None
+            if self.config.validation_mode == "real":
+                logger.info("📊 Loading validation samples...")
+                validation_data = self._load_validation_samples_multicontext(selected_dmps_df)
+                if validation_data is None:
+                    logger.warning("Failed to load validation samples")
+                    return None
+                    
+                X_val, y_val, val_positions, val_contexts = validation_data
+                logger.info(f"✅ Loaded {len(X_val)} validation samples with {len(val_positions)} positions")
+                
+                # Split validation set based on config
+                if self.config.validation_split_ratio > 0:
+                    n_samples = len(X_val)
+                    test_ratio = self.config.validation_split_ratio
+                    n_test = int(n_samples * test_ratio)
+                    n_calib = n_samples - n_test
+                    
+                    # Stratified split to maintain class balance
+                    idx_class0 = np.where(y_val == 0)[0]
+                    idx_class1 = np.where(y_val == 1)[0]
+                    
+                    n_test_class0 = int(len(idx_class0) * test_ratio)
+                    n_test_class1 = int(len(idx_class1) * test_ratio)
+                    
+                    np.random.seed(self.config.random_state)
+                    test_idx_class0 = np.random.choice(idx_class0, n_test_class0, replace=False)
+                    test_idx_class1 = np.random.choice(idx_class1, n_test_class1, replace=False)
+                    
+                    test_indices = np.concatenate([test_idx_class0, test_idx_class1])
+                    calib_indices = np.array([i for i in range(n_samples) if i not in test_indices])
+                    
+                    X_calib, y_calib = X_val[calib_indices], y_val[calib_indices]
+                    X_test, y_test = X_val[test_indices], y_val[test_indices]
+                    
+                    logger.info(f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test (split_ratio={test_ratio})")
+                else:
+                    # No split: use all samples for both calibration and evaluation
+                    X_calib, y_calib = X_val, y_val
+                    X_test, y_test = X_val, y_val
+                    logger.info(f"   Using all {len(X_val)} samples for validation (no split, validation_split_ratio=0)")
+                
+                validation_data = (X_calib, y_calib, X_test, y_test, val_positions, val_contexts)
+            else:
+                # Synthetic validation mode
+                logger.info("📊 Generating synthetic validation samples from Beta distributions...")
+                validation_data = self._generate_synthetic_validation_samples(selected_dmps_df)
+                if validation_data is None:
+                    logger.warning("Failed to generate synthetic samples")
+                    return None
+            
+            # Unpack validation data
+            X_calib, y_calib, X_test, y_test, val_positions, val_contexts = validation_data
+            
+            # Validate the selected DMPs
+            result = self._validate_classifier_subset(
+                selected_dmps_df,
+                X_calib, y_calib,
+                X_test, y_test,
+                val_positions, val_contexts
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Validation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def _select_dmps_multicontext(self, bio_dmps_df: pd.DataFrame, sorted_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
