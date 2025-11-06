@@ -95,7 +95,7 @@
     "trimmed_percentile_low": 0.10,
     "trimmed_percentile_high": 0.01,
     "chromosome_weights": null,
-    "debug": false,
+    "debug": true,
     "no_filter": false,
     "log_level": "INFO"
   }

@@ -200,8 +200,9 @@ class MethylClassifier:
         
         print(f"\n📂 Loading {len(classifier_files)} chromosome classifier(s) from {model_dir}")
         
-        # Store model packages for weight calculation
+        # Store model packages for weight calculation and DMP position extraction
         model_packages = {}
+        self.model_packages = model_packages  # Store for position extraction
         
         # Load each classifier
         for chrom, file_path in sorted(classifier_files.items()):
@@ -313,30 +314,114 @@ class MethylClassifier:
         """
         Collect all unique DMP positions across all classifiers for massive performance optimization.
         This allows loading only the positions needed for classification instead of entire chromosomes.
+        
+        Uses a binary-optimized DataFrame for memory efficiency with categorical chromosome encoding.
+        Extracts positions directly from dmpDF when available (faster than get_feature_info).
+        
+        Note: If the classifier was trained on merged contexts (CG+CHG+CHH), the dmpDF contains
+        positions from all contexts. We extract ALL positions from the 'pos' column, which will
+        be used to load matching positions from each context file (CG.h5, CHG.h5, CHH.h5) when
+        classifying samples. Positions are already sorted in dmpDF.
         """
-        all_positions = set()
-        self.dmp_positions_by_chrom = {}  # Store positions per chromosome
-
+        # Build DataFrame for efficient storage and binary optimization
+        positions_data = []
+        
         for chrom, classifier in self.classifiers.items():
             try:
-                feature_info = classifier.get_feature_info()
-                positions = feature_info.get('positions', [])
-                self.dmp_positions_by_chrom[chrom] = np.array(positions, dtype=np.uint32)
-                all_positions.update(positions)
+                # First, try to get positions directly from dmpDF (fastest - already sorted)
+                # dmpDF contains all selected DMPs, including all contexts if model was trained on merged contexts
+                positions = None
+                context_info = None
+                if hasattr(self, 'model_packages') and chrom in self.model_packages:
+                    model_package = self.model_packages[chrom]
+                    dmpDF = model_package.get('dmpDF')
+                    if dmpDF is not None and isinstance(dmpDF, pd.DataFrame) and 'pos' in dmpDF.columns:
+                        # Extract positions directly from dmpDF (already sorted!)
+                        # If model includes all contexts, dmpDF['pos'] contains positions from all contexts
+                        positions = dmpDF['pos'].values.astype(np.uint32)
+                        
+                        # Log context distribution if available (for debugging)
+                        if 'context' in dmpDF.columns:
+                            context_counts = dmpDF['context'].value_counts()
+                            context_info = f" (contexts: {dict(context_counts)})"
+                
+                # Fallback: get from classifier feature_info
+                if positions is None or len(positions) == 0:
+                    feature_info = classifier.get_feature_info()
+                    positions = feature_info.get('positions', [])
+                    if len(positions) > 0:
+                        positions = np.array(positions, dtype=np.uint32)
+                
+                if len(positions) > 0:
+                    # Store as list of (chromosome, position) tuples
+                    # Positions are already sorted from dmpDF, so we maintain that order
+                    positions_data.extend([(chrom, int(pos)) for pos in positions])
+                    if context_info:
+                        print(f"📊 Chromosome {chrom}: Extracted {len(positions):,} DMP positions{context_info}")
             except Exception as e:
                 print(f"⚠️ Warning: Could not get DMP positions for chromosome {chrom}: {e}")
-                self.dmp_positions_by_chrom[chrom] = np.array([], dtype=np.uint32)
-
-        self.all_dmp_positions = np.array(sorted(all_positions), dtype=np.uint32)
-
+        
+        # Create optimized DataFrame
+        if positions_data:
+            self.dmp_positions_df = pd.DataFrame(positions_data, columns=['chromosome', 'position'])
+            # Use categorical dtype for chromosome (memory efficient)
+            self.dmp_positions_df['chromosome'] = self.dmp_positions_df['chromosome'].astype('category')
+            # Use uint32 for positions (memory efficient)
+            self.dmp_positions_df['position'] = self.dmp_positions_df['position'].astype(np.uint32)
+            # Sort for efficient lookups (positions from dmpDF are already sorted, but we sort by chromosome too)
+            self.dmp_positions_df = self.dmp_positions_df.sort_values(['chromosome', 'position']).reset_index(drop=True)
+            
+            # Verify positions are sorted per chromosome (critical for hyperslice binary search optimization)
+            for chrom in self.dmp_positions_df['chromosome'].cat.categories:
+                chrom_positions = self.dmp_positions_df[
+                    self.dmp_positions_df['chromosome'] == chrom
+                ]['position'].values
+                if len(chrom_positions) > 1:
+                    assert np.all(np.diff(chrom_positions) >= 0), f"Positions for {chrom} are not sorted!"
+        else:
+            self.dmp_positions_df = pd.DataFrame(columns=['chromosome', 'position'])
+            self.dmp_positions_df['chromosome'] = self.dmp_positions_df['chromosome'].astype('category')
+            self.dmp_positions_df['position'] = self.dmp_positions_df['position'].astype(np.uint32)
+        
+        # Calculate all unique positions (using DataFrame for efficiency)
+        self.all_dmp_positions = np.array(sorted(self.dmp_positions_df['position'].unique()), dtype=np.uint32) if len(self.dmp_positions_df) > 0 else np.array([], dtype=np.uint32)
+        
+        # Build dictionary cache for fast lookups (optimized - only build what's needed)
+        # Use dict comprehension for speed
+        if len(self.dmp_positions_df) > 0:
+            self._dmp_positions_dict_cache = {
+                chrom: self.dmp_positions_df[
+                    self.dmp_positions_df['chromosome'] == chrom
+                ]['position'].values.astype(np.uint32)
+                for chrom in self.dmp_positions_df['chromosome'].cat.categories
+            }
+        else:
+            self._dmp_positions_dict_cache = {}
+        
         # Calculate per-chromosome DMP statistics
-        for chrom, positions in self.dmp_positions_by_chrom.items():
-            if len(positions) > 0:
-                print(f"💎 {chrom}: {len(positions)} DMPs")
+        chrom_counts = self.dmp_positions_df.groupby('chromosome').size()
+        for chrom in sorted(self.classifiers.keys()):
+            if chrom in chrom_counts.index:
+                count = chrom_counts[chrom]
+                print(f"💎 {chrom}: {count} DMPs")
             else:
                 print(f"⚠️ {chrom}: No DMPs found")
 
         print(f"🚀 Collected {len(self.all_dmp_positions)} unique DMP positions across all classifiers")
+    
+    @property
+    def dmp_positions_by_chrom(self) -> Dict[str, np.ndarray]:
+        """
+        Dictionary interface for DMP positions (backward compatibility).
+        Returns chromosome -> positions array mapping.
+        
+        Note: The dictionary is built from the optimized DataFrame on initialization.
+        This provides O(1) lookup performance while using memory-efficient DataFrame storage.
+        """
+        # Return cached dictionary (built during _collect_all_dmp_positions)
+        if not hasattr(self, '_dmp_positions_dict_cache'):
+            self._dmp_positions_dict_cache = {}
+        return self._dmp_positions_dict_cache
 
     def _compute_chromosome_weights(self, model_packages: Dict[str, Dict[str, Any]]) -> Dict[str, float]:
         """

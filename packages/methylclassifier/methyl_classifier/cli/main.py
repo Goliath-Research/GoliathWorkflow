@@ -6,8 +6,9 @@ import argparse
 import csv
 import sys
 from pathlib import Path
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Optional, List, Tuple, Dict, Any, Union
 import numpy as np
+import pandas as pd
 import json # Added for loading config file
 
 from ..core.classifier import MethylClassifier
@@ -339,7 +340,7 @@ def classify_samples_from_list(
     debug: bool = False,
     required_chromosomes: Optional[List[str]] = None,
     positions: Optional[np.ndarray] = None,
-    dmp_positions_by_chrom: Optional[Dict[str, np.ndarray]] = None
+    dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None
 ) -> None:
     """
     Classify samples from a list of directories, merging CG, CHG, CHH contexts.
@@ -358,19 +359,25 @@ def classify_samples_from_list(
     """
     print(f"\n🔍 Loading {len(samples_list)} samples from directories...")
     
-    # Build dmp_positions_by_chrom from classifiers if not provided (for hyperslice optimization)
+    # Use DataFrame directly from classifier if available (faster than building dict)
+    # Otherwise build from classifiers for backward compatibility
     if dmp_positions_by_chrom is None:
-        dmp_positions_by_chrom = {}
-        if classifier.is_multi_chromosome:
-            for chrom, chrom_classifier in classifier.classifiers.items():
-                feature_info = chrom_classifier.get_feature_info()
-                dmp_positions_by_chrom[chrom] = feature_info['positions']
+        if hasattr(classifier, 'dmp_positions_df') and len(classifier.dmp_positions_df) > 0:
+            # Use DataFrame directly (optimized format)
+            dmp_positions_by_chrom = classifier.dmp_positions_df
         else:
-            if classifier.classifier is not None:
-                feature_info = classifier.classifier.get_feature_info()
-                # For single chromosome, use classifier's chromosome
-                chrom = classifier.chromosome if classifier.chromosome != 'unknown' else '1'
-                dmp_positions_by_chrom[chrom] = feature_info['positions']
+            # Fallback: build dictionary (legacy)
+            dmp_positions_by_chrom = {}
+            if classifier.is_multi_chromosome:
+                for chrom, chrom_classifier in classifier.classifiers.items():
+                    feature_info = chrom_classifier.get_feature_info()
+                    dmp_positions_by_chrom[chrom] = feature_info['positions']
+            else:
+                if classifier.classifier is not None:
+                    feature_info = classifier.classifier.get_feature_info()
+                    # For single chromosome, use classifier's chromosome
+                    chrom = classifier.chromosome if classifier.chromosome != 'unknown' else '1'
+                    dmp_positions_by_chrom[chrom] = feature_info['positions']
     
     # Load samples (merged contexts per chromosome) with hyperslice optimization
     loaded_samples = DataLoader.load_samples_from_list(
@@ -464,12 +471,16 @@ def _classify_multi_chromosome_samples(
     chrom_masks = {chrom: [] for chrom in classifier_chroms}
     sample_names = []
     
-    # Build dmp_positions_by_chrom from classifiers for efficient loading
-    dmp_positions_by_chrom = {}
-    for chrom in classifier_chroms:
-        chrom_classifier = classifier.classifiers[chrom]
-        feature_info = chrom_classifier.get_feature_info()
-        dmp_positions_by_chrom[chrom] = feature_info['positions']
+    # Use DataFrame directly from classifier if available (faster)
+    if hasattr(classifier, 'dmp_positions_df') and len(classifier.dmp_positions_df) > 0:
+        dmp_positions_by_chrom = classifier.dmp_positions_df
+    else:
+        # Fallback: build dictionary (legacy)
+        dmp_positions_by_chrom = {}
+        for chrom in classifier_chroms:
+            chrom_classifier = classifier.classifiers[chrom]
+            feature_info = chrom_classifier.get_feature_info()
+            dmp_positions_by_chrom[chrom] = feature_info['positions']
     
     for sample_name, chrom_samples in loaded_samples:
         sample_names.append(sample_name)
@@ -871,9 +882,16 @@ Config fields (in JSON):
                 print(f"🚀 Performance optimization: only loading {len(required_chromosomes)} required chromosomes per sample")
                 if positions is not None:
                     print(f"💎 DMP filtering: {len(positions)} positions will be extracted from loaded data")
-            if dmp_positions_by_chrom:
-                total_dmps = sum(len(positions) for positions in dmp_positions_by_chrom.values())
-                print(f"📊 DMP breakdown: {dict((k, len(v)) for k, v in dmp_positions_by_chrom.items() if len(v) > 0)}")
+            if dmp_positions_by_chrom is not None:
+                if isinstance(dmp_positions_by_chrom, pd.DataFrame):
+                    # DataFrame format - use groupby for efficiency
+                    total_dmps = len(dmp_positions_by_chrom)
+                    chrom_counts = dmp_positions_by_chrom.groupby('chromosome').size().to_dict()
+                    print(f"📊 DMP breakdown: {chrom_counts}")
+                else:
+                    # Dictionary format (legacy)
+                    total_dmps = sum(len(positions) for positions in dmp_positions_by_chrom.values())
+                    print(f"📊 DMP breakdown: {dict((k, len(v)) for k, v in dmp_positions_by_chrom.items() if len(v) > 0)}")
 
             classify_samples_from_list(
                 classifier=classifier,
@@ -903,4 +921,19 @@ Config fields (in JSON):
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    import traceback
+    
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n❌ Interrupted by user (Ctrl+C)")
+        sys.exit(130)
+    except SystemExit:
+        raise  # Let system exits through
+    except Exception as e:
+        print(f"\n❌ Unexpected error: {e}")
+        print(f"   Error type: {type(e).__name__}")
+        print("   Full traceback:")
+        traceback.print_exc()
+        sys.exit(1)

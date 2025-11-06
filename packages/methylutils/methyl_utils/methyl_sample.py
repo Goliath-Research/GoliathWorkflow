@@ -874,17 +874,46 @@ class MethylSample:
 
             # Try structured array format first (used in some datasets)
             if hasattr(data_group, 'dtype') and hasattr(data_group.dtype, 'names'):
-                # Quick check: if we have specific positions to filter, check if any exist first
-                should_load_full = True
+                # For structured arrays, we need to find matching indices first (like group format)
                 if positions is not None and len(positions) > 0:
-                    # Load just positions array to check if any DMP positions exist
-                    pos_all = np.asarray(data_group["pos"], dtype=np.uint32)
-                    positions_set = set(positions)
-                    pos_set = set(pos_all)
-                    common_positions = positions_set & pos_set
-
-                    if len(common_positions) == 0:
-                        # No DMP positions in this file, return empty sample
+                    # HDF5 hyperslice optimization for structured arrays
+                    # Load positions to find matching indices, then use hyperslice on all fields
+                    total_size = data_group.shape[0]
+                    
+                    # Load positions array (temporary - will be freed after finding indices)
+                    if debug:
+                        print(f"      🔍 Loading positions array ({total_size:,} positions) to find DMP matches...", flush=True)
+                    
+                    pos_full = np.asarray(data_group["pos"], dtype=np.uint32)
+                    
+                    if debug:
+                        print(f"      ✅ Positions loaded, finding {len(positions):,} DMP matches using merge JOIN (both arrays sorted)...", flush=True)
+                    
+                    # Both arrays are sorted - use merge JOIN (O(n+m) instead of O(m*log(n)))
+                    positions_sorted = np.sort(positions).astype(np.uint32)
+                    
+                    # Use intersect1d to find common positions (merge-like operation)
+                    # This returns the values that are in both arrays and their indices
+                    common_positions, pos_indices, dmp_indices = np.intersect1d(
+                        pos_full, positions_sorted, 
+                        assume_unique=True, return_indices=True
+                    )
+                    
+                    # pos_indices are the indices in pos_full (HDF5 array) - these are what we need for hyperslice
+                    matching_indices = pos_indices.astype(np.int64)
+                    
+                    if debug:
+                        print(f"      ✅ Found {len(matching_indices):,} matching positions ({len(matching_indices)/len(positions)*100:.1f}% of requested DMPs)", flush=True)
+                    
+                    # Free positions array (no longer needed)
+                    del pos_full
+                    
+                    if debug:
+                        print(f"      ✅ Positions array freed, preparing hyperslice (structured array format)...", flush=True)
+                        print(f"      🔍 Checking if we found any matches ({len(matching_indices):,} indices)...", flush=True)
+                    
+                    if len(matching_indices) == 0:
+                        # No matching positions, return empty sample
                         empty_arrays = np.array([], dtype=np.uint32)
                         empty_tnc = np.array([], dtype=np.uint8)
                         return cls(
@@ -895,9 +924,40 @@ class MethylSample:
                             N=None, Sx=None, Sx2=None,
                             log_x_sum=None, log_1_minus_x_sum=None
                         )
-
-                # Load all data (HDF5 limitation), then filter to DMP positions immediately
-                structured_data = data_group[:]
+                    
+                    if debug:
+                        print(f"      🔄 Sorting indices for efficient hyperslice...", flush=True)
+                    
+                    # Ensure sorted for efficient hyperslice
+                    matching_indices = np.sort(matching_indices)
+                    
+                    if debug:
+                        print(f"      ✅ Indices sorted, using range loading (faster than fancy indexing for structured arrays)...", flush=True)
+                    
+                    # For structured arrays, fancy indexing (data_group[matching_indices]) is VERY slow
+                    # Instead, load the range from min to max index, then filter in memory (much faster!)
+                    min_idx = matching_indices[0]
+                    max_idx = matching_indices[-1]
+                    range_size = max_idx - min_idx + 1
+                    
+                    if debug:
+                        print(f"      📥 Loading range [{min_idx:,} to {max_idx:,}] ({range_size:,} positions)...", flush=True)
+                    
+                    # Load contiguous range (fast!)
+                    range_data = data_group[min_idx:max_idx+1]
+                    
+                    if debug:
+                        print(f"      ✅ Range loaded, filtering to {len(matching_indices):,} matching positions...", flush=True)
+                    
+                    # Filter to matching positions (indices relative to range)
+                    relative_indices = matching_indices - min_idx
+                    structured_data = range_data[relative_indices]
+                    
+                    if debug:
+                        print(f"      ✅ Filtered: loaded {len(matching_indices):,} positions (range loading is {range_size/len(matching_indices):.1f}x more than needed but much faster)", flush=True)
+                else:
+                    # Load all data when no positions specified
+                    structured_data = data_group[:]
 
                 # Extract position data
                 pos = np.asarray(structured_data["pos"], dtype=np.uint32)
@@ -931,13 +991,43 @@ class MethylSample:
                 matching_indices = None
                 
                 if positions is not None and len(positions) > 0:
-                    # First, load position array to find indices
-                    pos_full = np.asarray(data_group["pos"], dtype=np.uint32)
+                    # HDF5 hyperslice optimization: load positions array to find matching indices,
+                    # then use hyperslice on all arrays with those indices
+                    # Loading positions temporarily is acceptable (small memory: ~17MB for 4.2M uint32)
                     
-                    # Create a mapping from position to index
-                    positions_set = set(positions)
-                    # Find indices where positions match
-                    matching_indices = np.where(np.isin(pos_full, positions))[0]
+                    pos_dataset = data_group["pos"]
+                    total_size = pos_dataset.shape[0]
+                    
+                    if debug:
+                        print(f"      🔍 Loading positions array ({total_size:,} positions) to find DMP matches...", flush=True)
+                    
+                    # Load positions array (temporary - will be freed after finding indices)
+                    pos_full = np.asarray(pos_dataset[:], dtype=np.uint32)
+                    
+                    if debug:
+                        print(f"      ✅ Positions loaded, finding {len(positions):,} DMP matches using merge JOIN (both arrays sorted)...", flush=True)
+                    
+                    # Both arrays are sorted - use merge JOIN (O(n+m) instead of O(m*log(n)))
+                    positions_sorted = np.sort(positions).astype(np.uint32)
+                    
+                    # Use intersect1d to find common positions (merge-like operation)
+                    # This returns the values that are in both arrays and their indices
+                    common_positions, pos_indices, dmp_indices = np.intersect1d(
+                        pos_full, positions_sorted, 
+                        assume_unique=True, return_indices=True
+                    )
+                    
+                    # pos_indices are the indices in pos_full (HDF5 array) - these are what we need for hyperslice
+                    matching_indices = pos_indices.astype(np.int64)
+                    
+                    if debug:
+                        print(f"      ✅ Found {len(matching_indices):,} matching positions ({len(matching_indices)/len(positions)*100:.1f}% of requested DMPs)", flush=True)
+                    
+                    # Free positions array (no longer needed)
+                    del pos_full
+                    
+                    if debug:
+                        print(f"      ✅ Positions array freed, preparing hyperslice...", flush=True)
                     
                     if len(matching_indices) == 0:
                         # No matching positions, return empty sample
@@ -953,15 +1043,49 @@ class MethylSample:
                             _metadata=metadata if metadata else None
                         )
                     
-                    use_hyperslice = True
-                    # Use hyperslice to load only matching indices
-                    pos = np.asarray(data_group["pos"][matching_indices], dtype=np.uint32)
-                    mC = np.asarray(data_group["mC"][matching_indices], dtype=np.uint32)
-                    uC = np.asarray(data_group["uC"][matching_indices], dtype=np.uint32)
-                    tnc = np.asarray(data_group["tnc"][matching_indices], dtype=np.uint8)
+                    # Ensure sorted for efficient hyperslice (intersect1d returns sorted indices, but verify)
+                    if debug:
+                        print(f"      🔄 Verifying indices are valid and sorted...", flush=True)
+                        print(f"      Index range: {matching_indices.min()} to {matching_indices.max()} (total_size: {total_size})", flush=True)
+                    
+                    # Verify indices are within bounds
+                    if matching_indices.max() >= total_size:
+                        raise ValueError(f"Invalid index: {matching_indices.max()} >= {total_size}")
+                    
+                    matching_indices = np.sort(matching_indices)  # Ensure sorted (intersect1d should already return sorted)
                     
                     if debug:
-                        print(f"🎯 Hyperslice: loaded {len(matching_indices)} positions from {len(pos_full):,} total")
+                        print(f"      ✅ Indices sorted ({len(matching_indices):,} indices), ready for hyperslice", flush=True)
+                        print(f"      🎯 Using hyperslice to load {len(matching_indices):,} positions from {total_size:,} total...", flush=True)
+                    
+                    use_hyperslice = True
+                    # Use hyperslice to load only matching indices (HDF5 filters BEFORE loading!)
+                    try:
+                        if debug:
+                            print(f"      📥 Loading pos array via hyperslice...", flush=True)
+                        pos = np.asarray(data_group["pos"][matching_indices], dtype=np.uint32)
+                        
+                        if debug:
+                            print(f"      📥 Loading mC array via hyperslice...", flush=True)
+                        mC = np.asarray(data_group["mC"][matching_indices], dtype=np.uint32)
+                        
+                        if debug:
+                            print(f"      📥 Loading uC array via hyperslice...", flush=True)
+                        uC = np.asarray(data_group["uC"][matching_indices], dtype=np.uint32)
+                        
+                        if debug:
+                            print(f"      📥 Loading tnc array via hyperslice...", flush=True)
+                        tnc = np.asarray(data_group["tnc"][matching_indices], dtype=np.uint8)
+                        
+                        if debug:
+                            print(f"      ✅ Hyperslice complete: loaded {len(matching_indices):,} positions from {total_size:,} total", flush=True)
+                    except Exception as e:
+                        if debug:
+                            print(f"      ❌ Error during hyperslice: {e}", flush=True)
+                            print(f"      Error type: {type(e).__name__}", flush=True)
+                            import traceback
+                            traceback.print_exc()
+                        raise
                 else:
                     # Load basic fields (always present) - full load when no positions specified
                     pos = np.asarray(data_group["pos"][:], dtype=np.uint32)

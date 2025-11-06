@@ -3,8 +3,9 @@ Data loading functionality for MethylClassifier
 """
 
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional, Dict, Any, Union
 import numpy as np
+import pandas as pd
 from collections import defaultdict
 
 
@@ -115,7 +116,7 @@ class DataLoader:
         debug: bool = False,
         required_chromosomes: Optional[List[str]] = None,
         positions: Optional[np.ndarray] = None,
-        dmp_positions_by_chrom: Optional[Dict[str, np.ndarray]] = None
+        dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None
     ) -> Dict[str, Any]:
         """
         Load a sample from a directory, merging CG, CHG, and CHH contexts.
@@ -172,13 +173,52 @@ class DataLoader:
             
             # Load CG (required as base) - use chromosome-specific positions for optimal performance
             if 'CG' in context_files:
-                # Use chromosome-specific DMP positions if available
+                # Use chromosome-specific DMP positions if available (for hyperslice optimization)
                 chrom_positions = None
-                if dmp_positions_by_chrom is not None and chrom in dmp_positions_by_chrom:
-                    chrom_positions = dmp_positions_by_chrom[chrom]
+                if dmp_positions_by_chrom is not None:
+                    if isinstance(dmp_positions_by_chrom, dict):
+                        # Dictionary format (legacy)
+                        chrom_positions = dmp_positions_by_chrom.get(chrom)
+                        if chrom_positions is not None:
+                            chrom_positions = np.array(chrom_positions, dtype=np.uint32)
+                            # Ensure sorted (required for hyperslice binary search optimization)
+                            if len(chrom_positions) > 1 and not np.all(np.diff(chrom_positions) >= 0):
+                                chrom_positions = np.sort(chrom_positions)
+                    else:
+                        # DataFrame format - query directly for speed
+                        # Positions are already sorted from dmpDF (extracted from classifier)
+                        chrom_positions = dmp_positions_by_chrom[
+                            dmp_positions_by_chrom['chromosome'] == chrom
+                        ]['position'].values.astype(np.uint32) if len(dmp_positions_by_chrom) > 0 else None
+                    
+                    if chrom_positions is not None and len(chrom_positions) > 0:
+                        # Verify positions are sorted (critical for hyperslice optimization in methyl_utils)
+                        if len(chrom_positions) > 1:
+                            assert np.all(np.diff(chrom_positions) >= 0), \
+                                f"Positions for {chrom} must be sorted for hyperslice binary search!"
+                        if debug:
+                            print(f"      🎯 Chromosome {chrom}: Using {len(chrom_positions):,} sorted DMP positions for hyperslice", flush=True)
+                    else:
+                        if debug:
+                            print(f"      ⚠️ Chromosome {chrom}: No DMP positions found, will load ALL positions", flush=True)
+                            chrom_positions = None
+                else:
+                    if debug:
+                        print(f"      ⚠️ Chromosome {chrom}: No DMP positions provided, will load ALL positions", flush=True)
 
-                cg_sample = MethylSample.load_from_h5(context_files['CG'], chrom_positions, debug)
-                contexts_to_merge.append(cg_sample)
+                try:
+                    cg_sample = MethylSample.load_from_h5(context_files['CG'], chrom_positions, debug)
+                    if debug:
+                        print(f"      ✅ Chromosome {chrom}-CG: Loaded {len(cg_sample.pos):,} positions", flush=True)
+                    contexts_to_merge.append(cg_sample)
+                except Exception as e:
+                    import traceback
+                    print(f"❌ Failed to load {chrom}-CG.h5 (required): {e}")
+                    print(f"   Error type: {type(e).__name__}")
+                    print("   Traceback:")
+                    traceback.print_exc()
+                    # CG is required, so skip this chromosome
+                    continue
             else:
                 print(f"⚠️ Warning: {chrom}-CG.h5 not found in {sample_dir}, skipping chromosome {chrom}")
                 continue
@@ -223,7 +263,7 @@ class DataLoader:
         debug: bool = False,
         required_chromosomes: Optional[List[str]] = None,
         positions: Optional[np.ndarray] = None,
-        dmp_positions_by_chrom: Optional[Dict[str, np.ndarray]] = None
+        dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None
     ) -> List[Tuple[str, Dict[str, Any]]]:
         """
         Load multiple samples from a list of directory paths.
@@ -249,7 +289,7 @@ class DataLoader:
             sample_dir = Path(sample_path)
             sample_name = sample_dir.name
 
-            print(f"    ✅ Loading sample {i}/{len(sample_paths)}: {sample_name}")
+            print(f"✅ Loading sample {i}/{len(sample_paths)}: {sample_name}", flush=True)
             start_time = time.time()
 
             try:
@@ -269,10 +309,12 @@ class DataLoader:
                     print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes) in {load_time:.1f}s")
             except Exception as e:
                 import traceback
-                print(f"❌ Failed to load sample {sample_name}: {e}")
-                print(f"   Error type: {type(e).__name__}")
-                print("   Traceback:")
+                print(f"❌ Failed to load sample {sample_name}: {e}", flush=True)
+                print(f"   Error type: {type(e).__name__}", flush=True)
+                print("   Traceback:", flush=True)
                 traceback.print_exc()
+                import sys
+                sys.stdout.flush()
                 continue
         
         return samples
