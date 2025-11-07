@@ -894,6 +894,136 @@ class MethylSample:
         p_value = self.p_value(sample, use_gpu)
         return z_score, p_value
 
+    def add_sample(self, sample: 'MethylSample', use_gpu: bool = True) -> 'MethylSample':
+        """
+        Create a new centroid by adding a sample to this centroid.
+
+        This is a convenience method that uses PositionAligner internally to
+        combine this centroid with an additional sample, creating a new centroid
+        with updated statistics.
+
+        Args:
+            sample: Sample to add to this centroid
+            use_gpu: Whether to use GPU acceleration if available (default: True)
+
+        Returns:
+            New MethylSample centroid with the added sample
+
+        Raises:
+            ValueError: If this MethylSample is not a centroid
+
+        Example:
+            >>> centroid = MethylSample.load_from_h5("healthy_centroid.h5")
+            >>> new_sample = MethylSample.load_from_h5("patient_sample.h5")
+            >>> updated_centroid = centroid.add_sample(new_sample)
+        """
+        if not self.is_centroid:
+            raise ValueError("Can only add samples to centroid objects (must have N field)")
+
+        try:
+            from .position_aligner import PositionAligner
+        except ImportError:
+            from position_aligner import PositionAligner
+
+        # Create aligner and load this centroid
+        aligner = PositionAligner(use_gpu=use_gpu)
+        success = aligner.load_extended_centroid(self)
+        if not success:
+            raise RuntimeError("Failed to load centroid into aligner")
+
+        # Add the new sample
+        success = aligner.add_sample(sample, sample_index=self.position_count)
+        if not success:
+            raise RuntimeError("Failed to add sample to centroid")
+
+        # Create new centroid
+        return aligner.get_centroid_sample()
+
+    def remove_sample(self, sample: 'MethylSample', use_gpu: bool = True) -> 'MethylSample':
+        """
+        Create a new centroid by removing a sample from this centroid.
+
+        This is a convenience method that uses PositionAligner internally to
+        remove a sample from this centroid, creating a new centroid with updated
+        statistics.
+
+        Args:
+            sample: Sample to remove from this centroid
+            use_gpu: Whether to use GPU acceleration if available (default: True)
+
+        Returns:
+            New MethylSample centroid with the sample removed
+
+        Raises:
+            ValueError: If this MethylSample is not a centroid
+
+        Example:
+            >>> centroid = MethylSample.load_from_h5("centroid_with_outlier.h5")
+            >>> outlier_sample = MethylSample.load_from_h5("outlier.h5")
+            >>> cleaned_centroid = centroid.remove_sample(outlier_sample)
+        """
+        if not self.is_centroid:
+            raise ValueError("Can only remove samples from centroid objects (must have N field)")
+
+        try:
+            from .position_aligner import PositionAligner
+        except ImportError:
+            from position_aligner import PositionAligner
+
+        # Create aligner and load this centroid
+        aligner = PositionAligner(use_gpu=use_gpu)
+        success = aligner.load_extended_centroid(self)
+        if not success:
+            raise RuntimeError("Failed to load centroid into aligner")
+
+        # Remove the sample
+        success = aligner.remove_sample(sample, sample_index=0)  # Use dummy index
+        if not success:
+            raise RuntimeError("Failed to remove sample from centroid")
+
+        # Create new centroid
+        return aligner.get_centroid_sample()
+
+    @classmethod
+    def create_centroid_from_samples(cls, samples: List['MethylSample'], use_gpu: bool = True) -> 'MethylSample':
+        """
+        Create a centroid from a list of individual samples.
+
+        This is a class method that provides a convenient way to build centroids
+        from collections of samples without manually using PositionAligner.
+
+        Args:
+            samples: List of MethylSample objects to combine into a centroid
+            use_gpu: Whether to use GPU acceleration if available (default: True)
+
+        Returns:
+            New MethylSample centroid representing the combined samples
+
+        Raises:
+            ValueError: If samples list is empty
+
+        Example:
+            >>> samples = [MethylSample.load_from_h5(f"sample_{i}.h5") for i in range(10)]
+            >>> centroid = MethylSample.create_centroid_from_samples(samples)
+        """
+        if len(samples) == 0:
+            raise ValueError("At least one sample required to create centroid")
+
+        try:
+            from .position_aligner import PositionAligner
+        except ImportError:
+            from position_aligner import PositionAligner
+
+        # Create aligner and add all samples
+        aligner = PositionAligner(use_gpu=use_gpu)
+        for i, sample in enumerate(samples):
+            success = aligner.add_sample(sample, sample_index=i)
+            if not success:
+                raise RuntimeError(f"Failed to add sample {i} to centroid")
+
+        # Create centroid
+        return aligner.get_centroid_sample()
+
     def create_aligned_sample(self, mask: np.ndarray) -> 'MethylSample':
         """
         Create a new MethylSample with only the positions specified by the mask.

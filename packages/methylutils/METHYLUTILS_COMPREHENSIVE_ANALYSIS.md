@@ -266,6 +266,11 @@ methylutils/
 - `get_beta_parameters()` - Get Beta distribution parameters
 - `create_aligned_sample(mask)` - Filter to specific positions
 
+#### Centroid Modification Methods
+- `add_sample(sample, use_gpu=True)` - Add a sample to this centroid, returning new centroid
+- `remove_sample(sample, use_gpu=True)` - Remove a sample from this centroid, returning new centroid
+- `create_centroid_from_samples(samples, use_gpu=True)` - Class method to create centroid from sample list
+
 #### Properties
 - `sample_type` - Data type classification
 - `is_centroid` - Boolean centroid indicator
@@ -348,6 +353,29 @@ predictions = classifier.predict(methylation_matrix)          # Uses GPU if avai
 # Explicit GPU control
 probabilities = classifier.predict_proba(methylation_matrix, use_gpu=True)   # Force GPU
 probabilities = classifier.predict_proba(methylation_matrix, use_gpu=False)  # Force CPU
+```
+
+### Centroid Modification
+
+```python
+# Create centroid from multiple samples
+samples = [MethylSample.load_from_h5(f"sample_{i}.h5") for i in range(10)]
+centroid = MethylSample.create_centroid_from_samples(samples, use_gpu=True)
+
+# Add individual samples to existing centroid
+new_sample = MethylSample.load_from_h5("additional_sample.h5")
+updated_centroid = centroid.add_sample(new_sample, use_gpu=True)
+
+# Remove outlier sample from centroid
+outlier_sample = MethylSample.load_from_h5("outlier.h5")
+cleaned_centroid = centroid.remove_sample(outlier_sample, use_gpu=True)
+
+# Save modified centroids
+updated_centroid.save_to_h5("expanded_centroid.h5")
+cleaned_centroid.save_to_h5("cleaned_centroid.h5")
+
+# GPU control
+centroid = MethylSample.create_centroid_from_samples(samples, use_gpu=False)  # Force CPU
 ```
 
 ## Conclusion
