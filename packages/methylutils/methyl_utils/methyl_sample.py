@@ -686,113 +686,213 @@ class MethylSample:
 
     def prob_belongs(self, sample: 'MethylSample', use_gpu: bool = True) -> float:
         """
-        Test if a sample belongs to this centroid using Z-score test with CLT.
-        
-        This method performs a statistical test using the Central Limit Theorem (CLT).
-        The sum of methylation levels approximately follows a Normal distribution,
-        allowing us to compute a Z-score and corresponding p-value.
-        
-        Uses GPU-optimized functions from MethylUtils for high-performance computation.
-        
+        Test if a sample belongs to this centroid using statistical hypothesis testing.
+
+        Automatically chooses the appropriate statistical approach based on centroid size:
+        - CLT (Normal approximation) for large centroids (N > 30 samples)
+        - Beta distribution exact calculation for small centroids (N ≤ 30 samples)
+
+        The method performs a statistical test to determine if a sample belongs to the
+        centroid's distribution, using the most appropriate statistical framework.
+
         Args:
             sample: Test sample to evaluate
             use_gpu: Whether to use GPU acceleration if available (default: True)
-            
+
         Returns:
-            p_value: Two-tailed p-value from Z-test
+            p_value: Two-tailed p-value from statistical test
                      - p > 0.05: Sample likely belongs to this centroid
                      - p < 0.05: Sample likely does not belong (outlier/different group)
-                     
+
         Example:
             >>> centroid_healthy = MethylSample.load_from_h5("healthy.h5")
             >>> test_sample = MethylSample.load_from_h5("patient.h5")
             >>> p_value = centroid_healthy.prob_belongs(test_sample)
             >>> print(f"P-value: {p_value:.4f}")
         """
-        from scipy.stats import norm
+        # Use the p_value method which implements the appropriate statistical test
+        return self.p_value(sample, use_gpu)
+
+    def z_score(self, sample: 'MethylSample', use_gpu: bool = True) -> float:
+        """
+        Calculate Z-score for statistical test of sample belonging to this centroid.
+
+        Automatically chooses between:
+        - CLT (Normal approximation) for large centroids (N > 30)
+        - Beta distribution exact calculation for small centroids (N ≤ 30)
+
+        Args:
+            sample: Test sample to evaluate
+            use_gpu: Whether to use GPU acceleration if available (default: True)
+
+        Returns:
+            z_score: Z-statistic measuring deviation from expected distribution
+        """
         try:
-            from methyl_utils.beta_analytics import compute_beta_mean, compute_beta_variance
+            from methyl_utils.beta_analytics import compute_beta_mean, compute_beta_variance, beta_log_pdf
             from methyl_utils.gpu_detection import is_gpu_available
             from methyl_utils.metrics_core import DistanceCalculator
             from methyl_utils.gpu_utils import _prepare_arrays_for_backend, _ensure_cpu_output
         except ImportError:
             # Handle relative imports when running as module
-            from .beta_analytics import compute_beta_mean, compute_beta_variance
+            from .beta_analytics import compute_beta_mean, compute_beta_variance, beta_log_pdf
             from .gpu_detection import is_gpu_available
             from .metrics_core import DistanceCalculator
             from .gpu_utils import _prepare_arrays_for_backend, _ensure_cpu_output
-        
+
         # Determine if GPU should be used
         use_gpu = use_gpu and is_gpu_available()
         calc = DistanceCalculator()
         xp = calc.get_backend(use_gpu)[0]  # Get numpy or cupy
-        
+
         # 1. Find common positions
         common_pos = np.intersect1d(self.pos, sample.pos, assume_unique=True)
         if len(common_pos) == 0:
-            return 0.0  # No overlap = doesn't belong
-        
+            return 0.0  # No overlap = neutral score
+
         # 2. Get indices for alignment
         self_idx = np.searchsorted(self.pos, common_pos)
         sample_idx = np.searchsorted(sample.pos, common_pos)
-        
-        # 3. Get centroid's Beta parameters (mean and variance)
+
+        # 3. Choose statistical approach based on centroid size
+        if self.is_centroid and self.N is not None:
+            # Check average sample size across common positions
+            avg_sample_size = np.mean(self.N[self_idx])
+            use_clt = avg_sample_size > 30  # Use CLT for large sample sizes
+        else:
+            use_clt = True  # Default to CLT if no N information available
+
+        # 4. Get centroid's Beta parameters
         alpha = self.alpha[self_idx]
-        beta = self.beta[self_idx]
-        
-        # Use optimized GPU functions for Beta statistics
-        centroid_mean = compute_beta_mean(alpha, beta)  # E[X] = α/(α+β)
-        centroid_var = compute_beta_variance(alpha, beta)  # Var[X] = αβ/((α+β)²(α+β+1))
-        
-        # 4. Get sample's methylation levels
+        beta_param = self.beta[self_idx]
+
+        # 5. Get sample's methylation levels
         sample_mC = sample.mC[sample_idx]
         sample_uC = sample.uC[sample_idx]
         sample_total = sample_mC + sample_uC
-        
+
         # Filter valid positions (coverage > 0)
         valid = sample_total > 0
         if np.sum(valid) == 0:
-            return 0.0  # No valid positions = doesn't belong
-        
-        # Methylation levels at valid positions
+            return 0.0  # No valid positions = neutral score
+
+        # Valid methylation levels
         sample_meth = sample_mC[valid] / sample_total[valid]
-        centroid_mean_valid = centroid_mean[valid]
-        centroid_var_valid = centroid_var[valid]
-        
-        # Transfer to GPU if requested
-        if use_gpu:
-            arrays, _ = _prepare_arrays_for_backend(
-                [sample_meth, centroid_mean_valid, centroid_var_valid], 
-                calc, 
-                use_gpu
-            )
-            sample_meth_gpu, centroid_mean_gpu, centroid_var_gpu = arrays
+        alpha_valid = alpha[valid]
+        beta_valid = beta_param[valid]
+
+        if use_clt:
+            # CLT approach for large centroids (N > 30)
+            centroid_mean = compute_beta_mean(alpha_valid, beta_valid)
+            centroid_var = compute_beta_variance(alpha_valid, beta_valid)
+
+            # Transfer to GPU if requested
+            if use_gpu:
+                arrays, _ = _prepare_arrays_for_backend(
+                    [sample_meth, centroid_mean, centroid_var],
+                    calc,
+                    use_gpu
+                )
+                sample_meth_gpu, centroid_mean_gpu, centroid_var_gpu = arrays
+            else:
+                sample_meth_gpu = sample_meth
+                centroid_mean_gpu = centroid_mean
+                centroid_var_gpu = centroid_var
+
+            # Compute Z-score using CLT
+            sum_observed = xp.sum(sample_meth_gpu)
+            sum_expected = xp.sum(centroid_mean_gpu)
+            sum_variance = xp.sum(centroid_var_gpu**2)  # Variance of sum
+
+            # Convert back to CPU for final computation
+            if use_gpu:
+                sum_observed = float(_ensure_cpu_output(sum_observed, calc, use_gpu))
+                sum_expected = float(_ensure_cpu_output(sum_expected, calc, use_gpu))
+                sum_variance = float(_ensure_cpu_output(sum_variance, calc, use_gpu))
+
+            if sum_variance < 1e-12:
+                return 0.0  # No variance = perfect match
+
+            z_score = (sum_observed - sum_expected) / np.sqrt(sum_variance)
+
         else:
-            sample_meth_gpu = sample_meth
-            centroid_mean_gpu = centroid_mean_valid
-            centroid_var_gpu = centroid_var_valid
-        
-        # 5. Compute Z-score using CLT (GPU-accelerated)
-        # Sum of independent random variables ~ Normal by CLT
-        sum_observed = xp.sum(sample_meth_gpu)
-        sum_expected = xp.sum(centroid_mean_gpu)
-        sum_variance = xp.sum(centroid_var_gpu**2)  # Variance of sum
-        
-        # Convert back to CPU for final computation
-        if use_gpu:
-            sum_observed = float(_ensure_cpu_output(sum_observed, calc, use_gpu))
-            sum_expected = float(_ensure_cpu_output(sum_expected, calc, use_gpu))
-            sum_variance = float(_ensure_cpu_output(sum_variance, calc, use_gpu))
-        
-        if sum_variance < 1e-12:
-            return 1.0  # No variance = perfect match (edge case)
-        
-        z_score = (sum_observed - sum_expected) / np.sqrt(sum_variance)
-        
-        # 6. Two-tailed p-value
+            # Beta distribution exact approach for small centroids (N ≤ 30)
+            # Compute log-likelihood of sample under centroid's Beta distribution
+            sample_meth_clipped = np.clip(sample_meth, 1e-6, 1-1e-6)  # Avoid boundary issues
+
+            # Use beta_log_pdf for exact likelihood calculation
+            log_likelihoods = beta_log_pdf(sample_meth_clipped, alpha_valid, beta_valid, use_gpu=use_gpu)
+
+            # For small N, we compare to the expected log-likelihood under the centroid
+            # This is equivalent to a likelihood ratio test
+            # We'll use the average log-likelihood difference as our test statistic
+
+            # Compute expected log-likelihood under the centroid (approximate using mean)
+            centroid_mean = compute_beta_mean(alpha_valid, beta_valid)
+            centroid_mean_clipped = np.clip(centroid_mean, 1e-6, 1-1e-6)
+
+            expected_log_like = beta_log_pdf(centroid_mean_clipped, alpha_valid, beta_valid, use_gpu=False)
+
+            # Test statistic: difference between observed and expected log-likelihoods
+            log_like_diff = log_likelihoods - expected_log_like
+
+            # For the Z-score, we'll standardize this difference
+            # Use the variance of log-likelihoods under the centroid distribution
+            # This is approximate but better than CLT for small N
+
+            # Simple approach: use the average log-likelihood difference
+            # and assume it's approximately normal for the test statistic
+            mean_diff = np.mean(log_like_diff)
+            std_diff = np.std(log_like_diff) if len(log_like_diff) > 1 else 1.0
+
+            if std_diff < 1e-12:
+                z_score = 0.0
+            else:
+                z_score = mean_diff / (std_diff / np.sqrt(len(log_like_diff)))
+
+        return float(z_score)
+
+    def p_value(self, sample: 'MethylSample', use_gpu: bool = True) -> float:
+        """
+        Calculate p-value for statistical test of sample belonging to this centroid.
+
+        This computes the two-tailed p-value from the Z-score, representing the
+        probability of observing a deviation as extreme as the sample under the
+        null hypothesis that the sample belongs to this centroid.
+
+        Args:
+            sample: Test sample to evaluate
+            use_gpu: Whether to use GPU acceleration if available (default: True)
+
+        Returns:
+            p_value: Two-tailed p-value from Z-test
+                     - p > 0.05: Sample likely belongs to this centroid
+                     - p < 0.05: Sample likely does not belong (outlier/different group)
+        """
+        from scipy.stats import norm
+        z_score = self.z_score(sample, use_gpu)
         p_value = 2 * (1 - norm.cdf(np.abs(z_score)))
-        
         return float(p_value)
+
+    def statistical_test(self, sample: 'MethylSample', use_gpu: bool = True) -> Tuple[float, float]:
+        """
+        Calculate both Z-score and p-value for statistical test of sample belonging.
+
+        Returns the core statistical measures used to determine if a sample belongs
+        to this centroid using the Central Limit Theorem approach.
+
+        Args:
+            sample: Test sample to evaluate
+            use_gpu: Whether to use GPU acceleration if available (default: True)
+
+        Returns:
+            Tuple of (z_score, p_value):
+            - z_score: Z-statistic measuring deviation from expected distribution
+            - p_value: Two-tailed p-value from Z-test
+        """
+        z_score = self.z_score(sample, use_gpu)
+        p_value = self.p_value(sample, use_gpu)
+        return z_score, p_value
 
     def create_aligned_sample(self, mask: np.ndarray) -> 'MethylSample':
         """

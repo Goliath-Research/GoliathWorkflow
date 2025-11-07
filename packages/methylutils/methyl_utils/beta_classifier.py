@@ -81,7 +81,7 @@ class BetaClassifier:
             raise ValueError(f"Array length mismatch for directions: expected {n_positions}, got {len(self.directions)}")
 
         self.n_dmps = n_positions
-        self.temperature = 1.0  # Default temperature for softmax
+        self.temperature = 2.0  # Default temperature for softmax
         self.calibrator = None  # For Platt scaling
 
     @classmethod
@@ -136,9 +136,12 @@ class BetaClassifier:
 
     def predict_proba(self, X: np.ndarray,
                      availability_mask: Optional[np.ndarray] = None,
-                     debug: bool = False) -> np.ndarray:
+                     debug: bool = False,
+                     use_gpu: bool = True) -> np.ndarray:
         """
         Predict posterior probabilities for samples in X using Beta distributions.
+
+        Uses GPU acceleration when available for high-performance computation.
 
         Args:
             X: Feature matrix of shape (n_samples, n_features) where n_features
@@ -147,6 +150,7 @@ class BetaClassifier:
             availability_mask: Boolean mask of shape (n_samples, n_features)
                              indicating which positions are available.
             debug: If True, print debug information for the first sample.
+            use_gpu: Whether to use GPU acceleration if available (default: True).
 
         Returns:
             Array of shape (n_samples, 2) containing posterior probabilities
@@ -158,6 +162,17 @@ class BetaClassifier:
         if X.shape[1] != self.n_dmps:
             raise ValueError(f"Expected {self.n_dmps} features, got {X.shape[1]}")
 
+        # Import GPU utilities
+        try:
+            from methyl_utils.beta_analytics import beta_log_pdf
+            from methyl_utils.gpu_detection import is_gpu_available
+        except ImportError:
+            from .beta_analytics import beta_log_pdf
+            from .gpu_detection import is_gpu_available
+
+        # Determine if GPU should be used
+        use_gpu = use_gpu and is_gpu_available()
+
         n_samples = X.shape[0]
         log_likelihoods = np.zeros((n_samples, 2))  # [log P(data|centroid1), log P(data|centroid2)]
 
@@ -168,22 +183,22 @@ class BetaClassifier:
         beta1_base = self.data['beta1']
         alpha2_base = self.data['alpha2']
         beta2_base = self.data['beta2']
-        
+
         # Direct assignment: class0=centroid1, class1=centroid2
         alpha_class0 = alpha1_base
         beta_class0 = beta1_base
         alpha_class1 = alpha2_base
         beta_class1 = beta2_base
-        
+
         # Broadcast across samples
         alpha0 = np.repeat(alpha_class0[np.newaxis, :], n_samples, axis=0)
         beta0 = np.repeat(beta_class0[np.newaxis, :], n_samples, axis=0)
         alpha1 = np.repeat(alpha_class1[np.newaxis, :], n_samples, axis=0)
         beta1 = np.repeat(beta_class1[np.newaxis, :], n_samples, axis=0)
 
-        # Compute logpdf under each class
-        log_p_class0 = beta.logpdf(methylation_vals, alpha0, beta0)
-        log_p_class1 = beta.logpdf(methylation_vals, alpha1, beta1)
+        # Compute logpdf under each class using GPU-accelerated function
+        log_p_class0 = beta_log_pdf(methylation_vals, alpha0, beta0, use_gpu=use_gpu)
+        log_p_class1 = beta_log_pdf(methylation_vals, alpha1, beta1, use_gpu=use_gpu)
 
         # Validate parameters: mask invalid positions (alpha/beta <=0 or inf/nan)
         valid0 = (alpha0 > 0) & (beta0 > 0) & np.isfinite(alpha0) & np.isfinite(beta0)
@@ -256,7 +271,7 @@ class BetaClassifier:
             availability_mask: Optional mask for validation data
         """
         # Compute raw logits (difference of averaged log L)
-        log_likelihoods = self._compute_averaged_log_likelihoods(X_val, availability_mask)
+        log_likelihoods = self._compute_averaged_log_likelihoods(X_val, availability_mask, use_gpu=True)
         logits = log_likelihoods[:, 1] - log_likelihoods[:, 0]  # Class1 - Class0
 
         # Fit Platt scaling (logistic regression on logits)
@@ -267,8 +282,19 @@ class BetaClassifier:
         self.calibrator = LogisticRegression(fit_intercept=True, max_iter=1000)
         self.calibrator.fit(logits_scaled.reshape(-1, 1), y_val)
 
-    def _compute_averaged_log_likelihoods(self, X: np.ndarray, availability_mask: Optional[np.ndarray] = None):
+    def _compute_averaged_log_likelihoods(self, X: np.ndarray, availability_mask: Optional[np.ndarray] = None, use_gpu: bool = True):
         """Helper to compute summed log-likelihoods (extracted for calibration)."""
+        # Import GPU utilities
+        try:
+            from methyl_utils.beta_analytics import beta_log_pdf
+            from methyl_utils.gpu_detection import is_gpu_available
+        except ImportError:
+            from .beta_analytics import beta_log_pdf
+            from .gpu_detection import is_gpu_available
+
+        # Determine if GPU should be used
+        use_gpu = use_gpu and is_gpu_available()
+
         # Reuse the computation from predict_proba up to summed log_likes
         n_samples = X.shape[0]
         methylation_vals = np.clip(X, 1e-6, 1-1e-6)
@@ -288,8 +314,9 @@ class BetaClassifier:
         alpha1 = np.repeat(alpha_class1[np.newaxis, :], n_samples, axis=0)
         beta1 = np.repeat(beta_class1[np.newaxis, :], n_samples, axis=0)
 
-        log_p_class0 = beta.logpdf(methylation_vals, alpha0, beta0)
-        log_p_class1 = beta.logpdf(methylation_vals, alpha1, beta1)
+        # Use GPU-accelerated beta_log_pdf
+        log_p_class0 = beta_log_pdf(methylation_vals, alpha0, beta0, use_gpu=use_gpu)
+        log_p_class1 = beta_log_pdf(methylation_vals, alpha1, beta1, use_gpu=use_gpu)
 
         valid0 = (alpha0 > 0) & (beta0 > 0) & np.isfinite(alpha0) & np.isfinite(beta0)
         valid1 = (alpha1 > 0) & (beta1 > 0) & np.isfinite(alpha1) & np.isfinite(beta1)
@@ -320,15 +347,15 @@ class BetaClassifier:
 
         return log_likelihoods
 
-    def predict_proba_calibrated(self, X: np.ndarray, availability_mask: Optional[np.ndarray] = None) -> np.ndarray:
+    def predict_proba_calibrated(self, X: np.ndarray, availability_mask: Optional[np.ndarray] = None, use_gpu: bool = True) -> np.ndarray:
         """
         Predict calibrated probabilities using Platt scaling if fitted.
         """
         if self.calibrator is None:
-            return self.predict_proba(X, availability_mask)
+            return self.predict_proba(X, availability_mask, use_gpu=use_gpu)
 
         # Compute raw averaged log L
-        log_likelihoods = self._compute_averaged_log_likelihoods(X, availability_mask)
+        log_likelihoods = self._compute_averaged_log_likelihoods(X, availability_mask, use_gpu=use_gpu)
         logits = log_likelihoods[:, 1] - log_likelihoods[:, 0]
 
         # Scale logits
@@ -488,7 +515,8 @@ class BetaClassifier:
 
     def predict(self, X: np.ndarray,
                availability_mask: Optional[np.ndarray] = None,
-               debug: bool = False) -> np.ndarray:
+               debug: bool = False,
+               use_gpu: bool = True) -> np.ndarray:
         """
         Predict class labels for samples in X using Beta distributions.
 
@@ -496,16 +524,18 @@ class BetaClassifier:
             X: Feature matrix of shape (n_samples, n_features)
             availability_mask: Boolean mask indicating available positions
             debug: If True, print debug information
+            use_gpu: Whether to use GPU acceleration if available (default: True)
 
         Returns:
             Array of class predictions (0 or 1) of shape (n_samples,)
         """
-        probs = self.predict_proba(X, availability_mask, debug=debug)
+        probs = self.predict_proba(X, availability_mask, debug=debug, use_gpu=use_gpu)
         return np.argmax(probs, axis=1)
 
     def predict_log_proba(self, X: np.ndarray,
                          availability_mask: Optional[np.ndarray] = None,
-                         debug: bool = False) -> np.ndarray:
+                         debug: bool = False,
+                         use_gpu: bool = True) -> np.ndarray:
         """
         Return log posterior probabilities.
 
@@ -513,11 +543,12 @@ class BetaClassifier:
             X: Feature matrix of shape (n_samples, n_features)
             availability_mask: Boolean mask indicating available positions
             debug: If True, print debug information
+            use_gpu: Whether to use GPU acceleration if available (default: True)
 
         Returns:
             Array of log posterior probabilities of shape (n_samples, 2)
         """
-        probs = self.predict_proba(X, availability_mask, debug)
+        probs = self.predict_proba(X, availability_mask, debug, use_gpu)
         return np.log(probs + 1e-15)  # Add small epsilon to avoid log(0)
 
     def get_feature_info(self) -> Dict[str, Any]:
