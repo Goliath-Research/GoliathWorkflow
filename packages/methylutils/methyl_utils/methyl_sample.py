@@ -931,8 +931,10 @@ class MethylSample:
         if not success:
             raise RuntimeError("Failed to load centroid into aligner")
 
-        # Add the new sample
-        success = aligner.add_sample(sample, sample_index=self.position_count)
+        # Add the new sample with the correct sample index
+        # The sample index should be the total number of samples already in the centroid
+        next_sample_index = int(np.max(self.N)) if self.N is not None else 0
+        success = aligner.add_sample(sample, sample_index=next_sample_index)
         if not success:
             raise RuntimeError("Failed to add sample to centroid")
 
