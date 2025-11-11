@@ -157,9 +157,10 @@ else:
 ### DMP Optimization
 
 - **`optimize_dmps`**: Enable DMP count optimization (default: `false`)
-- **`optimization_method`**: `"featurecuts"` or `"bayesian_optimization"` (default: `"featurecuts"`)
-  - FeatureCuts: Fast logarithmic sampling (~18 evaluations)
-  - Bayesian Optimization: More thorough search (~50 evaluations)
+- **`optimization_method`**: `"binary_search"`, `"featurecuts"`, or `"bayesian_optimization"` (default: `"featurecuts"`)
+  - `binary_search`: Fastest (~log N evaluations), assumes monotonic BA increase (use with proper weighting)
+  - `featurecuts`: Fast logarithmic sampling (~18 evaluations), handles non-monotonic functions
+  - `bayesian_optimization`: Most thorough search (~50 evaluations), handles complex optimization landscapes
 - **`target_balanced_accuracy`**: Target BA for optimization (default: `0.95`)
 - **`min_dmps_for_export`**: Minimum DMPs to export (default: `1000`)
 

@@ -178,11 +178,23 @@ class BetaClassifier:
 
         methylation_vals = np.clip(X, 1e-6, 1-1e-6)  # Shape: (n_samples, n_dmps)
 
+        # Debug: Check methylation values
+        if debug:
+            print(f"Methylation values sample 0: {methylation_vals[0][:5]}")  # First 5 positions
+            print(f"Methylation range: [{methylation_vals.min():.3f}, {methylation_vals.max():.3f}]")
+
         # Get base parameters
         alpha1_base = self.data['alpha1']
         beta1_base = self.data['beta1']
         alpha2_base = self.data['alpha2']
         beta2_base = self.data['beta2']
+
+        # Debug: Check alpha/beta parameters
+        if debug:
+            print(f"Alpha1 range: [{alpha1_base.min():.3f}, {alpha1_base.max():.3f}]")
+            print(f"Beta1 range: [{beta1_base.min():.3f}, {beta1_base.max():.3f}]")
+            print(f"Alpha2 range: [{alpha2_base.min():.3f}, {alpha2_base.max():.3f}]")
+            print(f"Beta2 range: [{beta2_base.min():.3f}, {beta2_base.max():.3f}]")
 
         # Direct assignment: class0=centroid1, class1=centroid2
         alpha_class0 = alpha1_base
@@ -200,10 +212,26 @@ class BetaClassifier:
         log_p_class0 = beta_log_pdf(methylation_vals, alpha0, beta0, use_gpu=use_gpu)
         log_p_class1 = beta_log_pdf(methylation_vals, alpha1, beta1, use_gpu=use_gpu)
 
+        # Debug: Check log-likelihood computation
+        if debug:
+            print(f"Log-likelihoods sample 0 (first 5): class0={log_p_class0[0][:5]}, class1={log_p_class1[0][:5]}")
+            print(f"Log-likelihood ranges: class0=[{log_p_class0.min():.2f}, {log_p_class0.max():.2f}], class1=[{log_p_class1.min():.2f}, {log_p_class1.max():.2f}]")
+            print(f"Any NaN/Inf in log-likelihoods: class0={np.any(~np.isfinite(log_p_class0))}, class1={np.any(~np.isfinite(log_p_class1))}")
+
         # Validate parameters: mask invalid positions (alpha/beta <=0 or inf/nan)
         valid0 = (alpha0 > 0) & (beta0 > 0) & np.isfinite(alpha0) & np.isfinite(beta0)
         valid1 = (alpha1 > 0) & (beta1 > 0) & np.isfinite(alpha1) & np.isfinite(beta1)
         valid = valid0 & valid1  # Only use positions valid for both classes
+
+        # Debug: Check validation stats
+        if debug:
+            print(f"Validation stats: valid0_mean={np.mean(valid0):.3f}, valid1_mean={np.mean(valid1):.3f}, valid_mean={np.mean(valid):.3f}")
+            if np.mean(valid) < 0.001:
+                print(f"CRITICAL: Almost no positions are valid! Alpha/beta parameter issue.")
+                print(f"Alpha0 range: [{alpha0.min():.3f}, {alpha0.max():.3f}]")
+                print(f"Beta0 range: [{beta0.min():.3f}, {beta0.max():.3f}]")
+                print(f"Alpha1 range: [{alpha1.min():.3f}, {alpha1.max():.3f}]")
+                print(f"Beta1 range: [{beta1.min():.3f}, {beta1.max():.3f}]")
 
         # Mask unavailable or invalid positions
         if availability_mask is not None:
@@ -217,10 +245,21 @@ class BetaClassifier:
             log_p_class1 = np.where(effective_mask, log_p_class1, 0.0)
             valid_counts = np.sum(effective_mask, axis=1)
 
+        # Debug: Check why positions are not being used
+        if debug:
+            print(f"effective_mask sample 0 (first 5): {effective_mask[0][:5]}")
+            print(f"effective_mask sum for sample 0: {np.sum(effective_mask[0])}")
+            print(f"log_p_class0 after masking sample 0 (first 5): {log_p_class0[0][:5]}")
+            print(f"log_p_class1 after masking sample 0 (first 5): {log_p_class1[0][:5]}")
+
         # SUM log-likelihoods (joint log-likelihood = sum of independent observations)
-        # For independent positions: log P(data|class) = sum(log P(x_i|class))
-        sum_log_like_class0 = np.sum(log_p_class0, axis=1)
-        sum_log_like_class1 = np.sum(log_p_class1, axis=1)
+        # For independent positions: log P(data|class) = sum(weight_i * log P(x_i|class))
+        # Apply weights to each position's contribution
+        weighted_log_p_class0 = self.weights[np.newaxis, :] * log_p_class0
+        weighted_log_p_class1 = self.weights[np.newaxis, :] * log_p_class1
+
+        sum_log_like_class0 = np.sum(weighted_log_p_class0, axis=1)
+        sum_log_like_class1 = np.sum(weighted_log_p_class1, axis=1)
 
         # Handle no valid positions (set to neutral equal likelihoods)
         mask_no_valid = valid_counts == 0
@@ -245,6 +284,13 @@ class BetaClassifier:
             print(f"  Fraction valid for class0: {np.mean(valid0):.3f}")
             print(f"  Fraction valid for class1: {np.mean(valid1):.3f}")
             print(f"  Fraction valid for both: {np.mean(valid):.3f}")
+
+        # Debug: Check log-likelihoods before softmax
+        if debug or np.random.random() < 0.01:  # Debug first sample or 1% of calls
+            print(f"Raw log-likelihoods sample 0: {log_likelihoods[0]}")
+            print(f"Log-likelihood stats: class0_mean={log_likelihoods[:, 0].mean():.2f}, "
+                  f"class1_mean={log_likelihoods[:, 1].mean():.2f}")
+            print(f"Log-likelihood differences: mean={(log_likelihoods[:, 1] - log_likelihoods[:, 0]).mean():.2f}")
 
         # Convert to probabilities using log-sum-exp trick for numerical stability
         # Apply temperature to soften: divide by temperature before softmax
@@ -334,8 +380,13 @@ class BetaClassifier:
             valid_counts = np.sum(effective_mask, axis=1)
 
         # SUM log-likelihoods (joint log-likelihood = sum of independent observations)
-        sum_log_like_class0 = np.sum(log_p_class0, axis=1)
-        sum_log_like_class1 = np.sum(log_p_class1, axis=1)
+        # For independent positions: log P(data|class) = sum(weight_i * log P(x_i|class))
+        # Apply weights to each position's contribution
+        weighted_log_p_class0 = self.weights[np.newaxis, :] * log_p_class0
+        weighted_log_p_class1 = self.weights[np.newaxis, :] * log_p_class1
+
+        sum_log_like_class0 = np.sum(weighted_log_p_class0, axis=1)
+        sum_log_like_class1 = np.sum(weighted_log_p_class1, axis=1)
 
         mask_no_valid = valid_counts == 0
         sum_log_like_class0[mask_no_valid] = 0.0
@@ -447,9 +498,12 @@ class BetaClassifier:
             # Compute log-likelihoods
             logL_C = beta_log_pdf(x_vals, alpha_C[available], beta_C[available], use_gpu=False)
             logL_H = beta_log_pdf(x_vals, alpha_H[available], beta_H[available], use_gpu=False)
-            
-            # Sum LLR
-            sumLLR[i] = np.sum(logL_C - logL_H)
+
+            # Get weights for available positions
+            weights_available = self.weights[available]
+
+            # Sum weighted LLR
+            sumLLR[i] = np.sum(weights_available * (logL_C - logL_H))
             used_counts[i] = len(x_vals)
         
         # Adjust threshold for missing positions if requested
