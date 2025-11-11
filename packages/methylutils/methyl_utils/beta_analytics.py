@@ -292,6 +292,47 @@ def compute_beta_variance(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return (a * b) / ((sum_ab ** 2) * (sum_ab + 1))
 
 
+def log_beta_binomial_pmf(
+    k: np.ndarray,
+    n: np.ndarray,
+    a: np.ndarray,
+    b: np.ndarray,
+    use_gpu: bool = True,
+) -> np.ndarray:
+    """
+    Compute log PMF of the Beta-Binomial distribution in a GPU-aware way.
+
+    log P(K=k | n, a, b) = log C(n, k) + betaln(k+a, n-k+b) - betaln(a, b)
+
+    Identity for log-combinations without gammaln:
+      log C(n, k) = -betaln(k+1, n-k+1) + log(n+1)
+
+    Args:
+        k: successes (ints)
+        n: trials (ints)
+        a, b: Beta prior parameters
+        use_gpu: Whether to use GPU acceleration if available
+
+    Returns:
+        Array of log PMF values
+    """
+    calc = DistanceCalculator()
+    xp, _, _, xbetaln = calc.get_backend(use_gpu)
+
+    # Prepare arrays for backend
+    (k, n, a, b), _ = _prepare_arrays_for_backend([k, n, a, b], calc, use_gpu)
+
+    # Clip/validate ranges
+    k = xp.clip(k, 0, n)
+    a = xp.maximum(a, MIN_BETA_PARAM)
+    b = xp.maximum(b, MIN_BETA_PARAM)
+
+    # log C(n,k) via betaln identity
+    log_comb = -xbetaln(k + 1, (n - k) + 1) + xp.log(n + 1)
+    log_p = log_comb + xbetaln(k + a, (n - k) + b) - xbetaln(a, b)
+    return _ensure_cpu_output(log_p, calc, use_gpu)
+
+
 # Export all public functions
 __all__ = [
     'compute_per_site_llr_stats',
@@ -300,5 +341,6 @@ __all__ = [
     'beta_log_pdf',
     'compute_beta_mean',
     'compute_beta_variance',
+    'log_beta_binomial_pmf',
 ]
 

@@ -40,7 +40,7 @@ RUN pip install cupy-cuda12x
 
 # Install core scientific and utility libraries in one layer
 RUN pip install --no-cache-dir --retries 3 \
-    numpy scipy pandas numba h5py pydantic psutil pyarrow tqdm cupy-cuda12x \
+    numpy scipy pandas numba 'h5py>=3.6.0' pydantic psutil pyarrow tqdm cupy-cuda12x \
     scikit-learn statsmodels sqlalchemy plotly matplotlib seaborn \
     click nvidia-ml-py cudf-cu12 sqlmodel pyodbc pymssql hdf5plugin zarr
 
@@ -48,7 +48,7 @@ RUN pip install --no-cache-dir --retries 3 \
 RUN pip install --no-cache-dir --retries 3 --timeout 300 --no-binary pydantic,pydantic-core pydantic
 
 # Install HDF5 and data libraries
-RUN pip install --no-cache-dir --retries 3 h5py hdf5plugin zarr
+RUN pip install --no-cache-dir --retries 3 'h5py>=3.6.0' hdf5plugin zarr
 
 # Install visualization libraries
 RUN pip install --no-cache-dir --retries 3 plotly matplotlib seaborn
@@ -94,9 +94,12 @@ ENV CUDA_VISIBLE_DEVICES=0 \
     POETRY_CACHE_DIR=/tmp/poetry-cache \
     POETRY_CONFIG_DIR=/tmp/poetry-config 
 
+# Verify HDF5 installation
+RUN python3 -c "import h5py; print(f'HDF5 version: {h5py.version.hdf5_version}'); print(f'h5py version: {h5py.version.version}'); print('HDF5 verification successful')"
+
 # Health check - basic Python/CUDA check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python3 -c "import cupy; print('CUDA container ready')"
+    CMD python3 -c "import cupy, h5py; print('CUDA and HDF5 container ready')"
 
 # Switch to root user and ensure proper home directory
 USER root
