@@ -8,11 +8,7 @@
         "batch": "AN00025834",
         "chrom": "1",
         "ctx": "CG",
-<<<<<<< HEAD
         "output_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/cancer",
-=======
-        "output_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/c",
->>>>>>> 9d8e644 (Removed redundant configs)
         "samples": [],
         "add_samples": [
             "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/DBCST-051425-111148",
