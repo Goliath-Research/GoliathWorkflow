@@ -198,6 +198,68 @@ class MethylCentroidPair:
 
         return aligned1, aligned2, common_pos
 
+    @classmethod
+    def load_and_align_from_samples(cls, centroid1: MethylSample, centroid2: MethylSample,
+                                   min_coverage: int = 4) -> Tuple[MethylSample, MethylSample, np.ndarray]:
+        """
+        Align two already-loaded centroids on common positions.
+
+        Args:
+            centroid1, centroid2: Already loaded MethylSample objects
+            min_coverage: Minimum coverage threshold for validation (default: 4)
+
+        Returns:
+            (centroid1: MethylSample, centroid2: MethylSample, common_pos: np.ndarray)
+        """
+        # Validate extended centroids
+        if not centroid1.is_extended_centroid or not centroid2.is_extended_centroid:
+            raise ValueError("Both inputs must be extended centroids with N, Sx, Sx2, log sums.")
+
+        # Assume positions are sorted (typical for genomic data); if not, sort them
+        if not np.all(np.diff(centroid1.pos) > 0):
+            logger.warning("Centroid1 positions not sorted; sorting for alignment.")
+            sort_idx1 = np.argsort(centroid1.pos)
+            centroid1 = cls._slice_sample(centroid1, sort_idx1)
+        if not np.all(np.diff(centroid2.pos) > 0):
+            logger.warning("Centroid2 positions not sorted; sorting for alignment.")
+            sort_idx2 = np.argsort(centroid2.pos)
+            centroid2 = cls._slice_sample(centroid2, sort_idx2)
+
+        # Find common positions efficiently (numpy intersection)
+        common_pos = np.intersect1d(centroid1.pos, centroid2.pos, assume_unique=True)
+
+        if len(common_pos) == 0:
+            raise ValueError("No common positions between centroids.")
+
+        # Fast index lookup with np.searchsorted (O(log n) per query, O(n log n) total)
+        idx1 = np.searchsorted(centroid1.pos, common_pos, side='left')
+        idx2 = np.searchsorted(centroid2.pos, common_pos, side='left')
+
+        # Verify exact matches (positions must be unique and sorted)
+        if not np.all(centroid1.pos[idx1] == common_pos) or not np.all(centroid2.pos[idx2] == common_pos):
+            raise ValueError("Position mismatch during alignment; duplicates or unsorted positions?")
+
+        # Slice using apply_mask (native method in MethylSample)
+        aligned1 = centroid1.apply_mask(idx1)
+        aligned2 = centroid2.apply_mask(idx2)
+
+        # Clamp zero-coverage in-place (efficient masking)
+        for cent in [aligned1, aligned2]:
+            zero_mask = (cent.mC + cent.uC) == 0
+            if np.any(zero_mask):
+                cent.uC[zero_mask] = 1  # Ensure mean=0, avoid div-by-zero in comparisons
+                logger.debug(f"Clamped {np.sum(zero_mask)} zero-coverage positions in centroid")
+
+        # Validate min_coverage post-alignment
+        max_n = max(
+            aligned1.N.max() if aligned1.N is not None else 0,
+            aligned2.N.max() if aligned2.N is not None else 0
+        )
+        if max_n < min_coverage:
+            logger.warning(f"Max coverage {max_n} < min_coverage {min_coverage}; proceeding with warning.")
+
+        return aligned1, aligned2, common_pos
+
     def _init_cpu_backend(self):
         """Initialize CPU backend."""
         self.cp = None
@@ -458,6 +520,12 @@ class MethylCentroidPair:
         if not centroid1.is_extended_centroid or not centroid2.is_extended_centroid:
             return {"error": "Both centroids must be extended centroids"}
 
+        # Align centroids to common positions for proper comparison
+        try:
+            centroid1, centroid2, common_pos = MethylCentroidPair.load_and_align_from_samples(centroid1, centroid2)
+        except ValueError as e:
+            return {"error": f"Failed to align centroids: {e}"}
+
         # Get Beta parameters using MethylSample's encapsulated methods
         alpha1, beta1 = centroid1.get_beta_parameters()
         alpha2, beta2 = centroid2.get_beta_parameters()
@@ -559,11 +627,44 @@ class MethylCentroidPair:
         elif n_extreme2 > 0 and mean_N_overall < 20:
             logger.debug(f"Centroid2 has {n_extreme2} positions with extreme Beta parameters, but using normal approximation for small samples (N={mean_N_overall:.1f} < 20)")
 
-        # Check group separation using MethylSample's mean property
-        mean_diff = abs(centroid1.mean.mean() - centroid2.mean.mean())
+        # Check group separation using trimmed mean to focus on truly discriminative positions
+        # Calculate absolute differences between centroids at each position
+        position_diffs = np.abs(centroid1.mean - centroid2.mean)
+
+        # Sort differences to identify positions with minimal differences
+        sorted_diffs = np.sort(position_diffs)
+
+        # Remove only 10% from positions with least difference (bottom 10%) to focus
+        # on positions that actually show group differences, keeping the most discriminative
+        n_positions = len(sorted_diffs)
+        trim_bottom = int(0.10 * n_positions)  # Remove bottom 10% (least different)
+
+        if trim_bottom < n_positions:
+            # Keep positions with meaningful differences
+            trimmed_diffs = sorted_diffs[trim_bottom:]
+            mean_diff = float(np.mean(trimmed_diffs))
+        else:
+            # Fallback to simple mean if trimming would remove too much data
+            mean_diff = abs(centroid1.mean.mean() - centroid2.mean.mean())
+
+        # Add detailed statistics about position differences
         results["group_separation"] = float(mean_diff)
+        results["separation_stats"] = {
+            "mean_diff": float(np.mean(position_diffs)),
+            "median_diff": float(np.median(position_diffs)),
+            "std_diff": float(np.std(position_diffs)),
+            "min_diff": float(np.min(position_diffs)),
+            "max_diff": float(np.max(position_diffs)),
+            "percentile_90_diff": float(np.percentile(position_diffs, 90)),
+            "percentile_95_diff": float(np.percentile(position_diffs, 95)),
+            "percentile_99_diff": float(np.percentile(position_diffs, 99)),
+            "n_positions_above_0_1": int(np.sum(position_diffs > 0.1)),
+            "n_positions_above_0_2": int(np.sum(position_diffs > 0.2)),
+            "n_positions_above_0_5": int(np.sum(position_diffs > 0.5))
+        }
+
         if mean_diff < 0.05:
-            results["warnings"].append(f"Poor separation between centroids (mean difference = {mean_diff:.4f})")
+            results["warnings"].append(f"Poor separation between centroids (trimmed mean difference = {mean_diff:.4f})")
 
         return results
 

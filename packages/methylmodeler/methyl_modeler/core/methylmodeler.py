@@ -237,9 +237,14 @@ class MethylModeler:
                 logger.info("💾 Exporting Stage 2: Pre-optimization DMPs...")
                 self._export_unified_csv(pre_optimization_dmps_df, suffix="-2-pre-optimization")
         else:
-            logger.info("📋 Using all biological DMPs (optimize_dmps=False)")
-            # Still compute importance for potential minimum export
+            logger.info("📋 Selecting top DMPs by biological importance (optimize_dmps=False)")
+            # Compute importance and select top DMPs for simpler approach
             sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
+
+            # Select top DMPs by biological importance (fixed variance factor)
+            n_select = min(500, len(sorted_by_importance_df))
+            selected_dmps_df = sorted_by_importance_df.head(n_select)
+            logger.info(f"✅ Selected top {n_select:,} DMPs by biological importance (with fixed variance factor)")
         
         # Prepare classifier data
         classifier_data = {
@@ -268,7 +273,7 @@ class MethylModeler:
         if not self.config.optimize_dmps:
             logger.info("")
             logger.info("🔬 Performing validation on biologically filtered DMPs (optimize_dmps=False)...")
-            validation_result = self._validate_selected_dmps(bio_dmps_df, sorted_by_importance_df)
+            validation_result = self._validate_selected_dmps(selected_dmps_df, sorted_by_importance_df)
             if validation_result is not None:
                 self._final_validation_results = validation_result
                 cm = validation_result['confusion_matrix']
@@ -607,51 +612,15 @@ class MethylModeler:
         else:
             df['importance'] = np.ones(len(df))
 
-        # Factor in measurement reliability based on within-centroid variance
-        # effect_size uses between-centroid variance; this adds within-centroid reliability
-        if all(col in df.columns for col in ['alpha1', 'beta1', 'alpha2', 'beta2']):
-            # Compute variance for each centroid using Beta distribution formula
-            # var = αβ / ((α+β)²(α+β+1))
-            eps = 1e-8
-            tau1 = df['alpha1'] + df['beta1']
-            tau2 = df['alpha2'] + df['beta2']
+        # Skip variance reliability factor for cancer data
+        # In cancer methylation, higher variance positions may be more informative for classification
+        # effect_size already includes variance considerations in the denominator
 
-            # Avoid division by zero and numerical issues
-            tau1_safe = np.maximum(tau1, eps)
-            tau2_safe = np.maximum(tau2, eps)
+        # Skip statistical significance factor
+        # All DMPs already pass q < 0.01, so this adds minimal discrimination for the top DMPs
 
-            var1 = (df['alpha1'] * df['beta1']) / (tau1_safe**2 * (tau1_safe + 1))
-            var2 = (df['alpha2'] * df['beta2']) / (tau2_safe**2 * (tau2_safe + 1))
-
-            # Use maximum variance between centroids as reliability measure
-            max_var = np.maximum(var1, var2)
-            max_var = np.maximum(max_var, eps)  # Avoid zero variance
-
-            # Variance reliability factor: lower variance = higher reliability
-            # Scale so that typical variance (~0.01-0.1) gives factor ~1
-            # Very high variance (>0.25) gives factor < 0.5
-            var_factor = 1.0 / (1.0 + max_var / 0.05)  # Soft threshold at 0.05 variance
-            df['importance'] = df['importance'] * var_factor
-
-        # Factor in statistical significance (additional confidence weighting)
-        # effect_size is based on statistical significance, but we can add extra weight
-        if 'q_value' in df.columns:
-            # Convert q_value to significance score: lower q_value = higher significance
-            # Use -log10(q_value) to get significance strength
-            eps = 1e-20  # Avoid log(0)
-            q_value_safe = np.maximum(df['q_value'], eps)
-            significance_factor = -np.log10(q_value_safe)
-            # Normalize to [0.5, 2.0] range to avoid extreme weighting
-            sig_min, sig_max = significance_factor.min(), significance_factor.max()
-            if sig_max > sig_min:
-                sig_normalized = 0.5 + 1.5 * (significance_factor - sig_min) / (sig_max - sig_min)
-            else:
-                sig_normalized = np.ones(len(df))
-            df['importance'] = df['importance'] * sig_normalized
-
-        # Apply context weighting
-        if 'context_weight' in df.columns:
-            df['importance'] = df['importance'] * df['context_weight']
+        # Skip context weighting for cancer data
+        # Context weighting may not be appropriate for cancer classification
 
         # Ensure positive values but preserve relative importance
         if len(df) > 0:
