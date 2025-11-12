@@ -556,23 +556,38 @@ Examples:
             if len(args.input_directories) == 1 and args.input_directories[0] == "." and not args.output_directory:
                 # Use hardcoded sample list
                 centroid_samples = [
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-042525-95676",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-042825-39553",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-042925-105788",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-051325-25543",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-051425-74294",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-052125-32336",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-052125-87293",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-052225-74758",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-060425-107956",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-060625-104673",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-060925-66247",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-061125-42608",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-061825-52197",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-063025-77476",
-                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-071625-48267"
-                ]
-                centroid_dir = "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/h"
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-042525-95676",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-042825-39553",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-042925-105788",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-051325-25543",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-051425-74294",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-052125-32336",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-052125-87293",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-052225-74758",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-060425-107956",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-060625-104673",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-060925-66247",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-061125-42608",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-061825-52197",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-063025-77476",
+                    # "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-071625-48267"
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-051425-111148",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-060525-111386",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-060525-111387",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-060625-111394",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-061025-111424",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-061025-111427",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-061325-111495",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-062725-111661",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-063025-111652",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-071025-111803",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-071025-111804",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-071025-111805",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-071025-111806",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-071025-111807",
+                    "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/DBCST-071125-111814"
+                ]               
+                centroid_dir = "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/c"
 
                 sample_dirs = [Path(sample) for sample in centroid_samples]
                 output_dir = Path(centroid_dir)
