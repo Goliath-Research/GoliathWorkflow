@@ -27,8 +27,8 @@ MethylUtils serves as the computational engine that powers all other packages in
 
 - **Shared Utilities**: Logging, GPU management, memory optimization
 - **Core Data Structures**: `MethylSample`, position aligners, centroid pairs
-- **Statistical Engine**: 7 distance metrics, FDR correction, Beta distribution operations
-- **Performance Infrastructure**: GPU acceleration, chunked processing, profiling
+- **Statistical Engine**: 7 distance metrics, FDR correction, Beta distribution operations, effect size computation
+- **Advanced Classification**: Hybrid Beta/Normal Bayesian classifiers with robust parameter validation
 
 ### Key Features
 
@@ -322,7 +322,7 @@ Statistical comparison of two methylation centroids:
 3. Estimate Beta parameters (MLE)
 4. Perform likelihood ratio tests
 5. Apply FDR correction (Storey's method)
-6. Compute effect sizes
+6. Compute effect sizes (unnormalized)
 7. Return DMPs with statistics
 ```
 
@@ -350,10 +350,12 @@ $$
 $$
 
 **Advanced Features**:
-- Temperature scaling for calibration
-- Platt scaling for posterior adjustment
-- Missing data handling via availability masks
-- Weighted DMPs for importance
+- **Hybrid Beta/Normal Distributions**: Automatically switches between Beta and Normal approximations based on parameter reliability
+- **Robust Parameter Validation**: Uses multiple criteria (τ ≥ 5, extreme parameter bounds, numerical stability) to ensure reliable Beta estimation
+- **Temperature scaling for calibration**
+- **Platt scaling for posterior adjustment**
+- **Missing data handling via availability masks**
+- **Weighted DMPs for biological importance** (variance reliability, statistical significance, context weighting)
 
 ---
 

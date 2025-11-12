@@ -28,8 +28,8 @@
 MethylModeler compares two centroids (representing different biological conditions) to identify positions where methylation significantly differs:
 
 - **Statistical DMP Detection**: Likelihood ratio tests with FDR correction (Storey's q-value method)
-- **Biological Filtering**: Effect size, distribution overlap, and importance ranking
-- **Classifier Training**: Automatic training of Bayesian classifiers on selected DMPs
+- **Biological Filtering**: Multi-factor importance ranking (effect size, variance reliability, statistical significance, context weighting)
+- **Classifier Training**: Automatic training of hybrid Beta/Normal Bayesian classifiers on selected DMPs
 - **Validation**: Real or synthetic sample validation with Balanced Accuracy
 - **Model Packaging**: Complete model serialization with metadata for deployment
 
@@ -147,6 +147,54 @@ For Beta distributions:
 $$
 \sigma^2 = \frac{\alpha\beta}{(\alpha + \beta)^2(\alpha + \beta + 1)}
 $$
+
+### Biological Importance
+
+**Biological importance** combines multiple factors to prioritize DMPs that are both statistically significant and biologically meaningful:
+
+#### Importance Formula
+
+$$
+\text{Importance} = \text{effect_size} \times \text{variance_reliability} \times \text{significance_factor} \times \text{context_weight}
+$$
+
+#### 1. Effect Size (Foundation)
+
+Effect size includes statistical corrections already:
+- **Between-centroid variance**: $\text{effect_size} = |\Delta\mu| / \sqrt{\text{var}_1 + \text{var}_2}$
+- **Distribution overlap**: $\text{effect_size} = \text{effect_size} \times (1 - BC)^\gamma$
+
+Where $BC$ is the Bhattacharyya coefficient (0=no overlap, 1=complete overlap).
+
+#### 2. Variance Reliability Factor
+
+Within-centroid measurement quality:
+- **Beta distribution variance**: $\text{var} = \frac{\alpha\beta}{(\alpha + \beta)^2(\alpha + \beta + 1)}$
+- **Reliability factor**: $\text{variance_reliability} = \frac{1}{1 + \max(\text{var}_1, \text{var}_2) / 0.05}$
+- **Effect**: Positions with high variance (noisy measurements) get lower importance
+
+#### 3. Statistical Significance Factor
+
+Extra weighting for more significant DMPs:
+- **Significance strength**: $\text{significance_factor} = -\log_{10}(q\text{-value})$
+- **Normalized range**: Scaled to [0.5, 2.0] across all DMPs
+- **Effect**: More significant DMPs get higher importance
+
+#### 4. Context Weight
+
+Cytosine context reliability:
+- **CG contexts**: Weight = 1.0 (most reliable)
+- **CHG contexts**: Weight = 0.7
+- **CHH contexts**: Weight = 0.5 (least reliable)
+
+#### Complete Importance Interpretation
+
+- **High importance**: Large effect size + low measurement noise + high statistical significance + reliable context
+- **Low importance**: Small effect size + noisy measurements + low significance + unreliable context
+
+**Why not double-count corrections?**
+- effect_size already includes variance and overlap corrections
+- importance adds complementary biological factors without redundancy
 
 ### Balanced Accuracy
 
@@ -358,25 +406,57 @@ print(f"After filtering: {len(filtered_dmps)}")
 #### Step 5: Compute Biological Importance
 
 ```python
-def compute_importance(dmps_df):
-    """Compute biological importance score."""
-    # Normalize metrics to [0, 1]
-    delta_norm = dmps_df['delta_mean'].abs() / dmps_df['delta_mean'].abs().max()
-    overlap_norm = 1 - dmps_df['bhattacharyya']  # Higher is better
-    
-    # Compute Jeffreys divergence (if not in df)
-    jeffreys = compute_jeffreys_from_beta_params(
-        dmps_df['alpha1'], dmps_df['beta1'],
-        dmps_df['alpha2'], dmps_df['beta2']
-    )
-    jeffreys_norm = jeffreys / jeffreys.max()
-    
-    # Combined importance (equal weighting)
-    importance = (delta_norm + overlap_norm + jeffreys_norm) / 3
-    
+def compute_biological_importance(dmps_df):
+    """
+    Compute biological importance score.
+
+    Importance = effect_size × variance_reliability × significance_factor × context_weight
+
+    effect_size already includes:
+    - Between-centroid variance correction: |Δμ| / √(var₁ + var₂)
+    - Distribution overlap correction: × (1 - BC)^γ
+
+    importance adds biological factors:
+    - Within-centroid variance reliability: reduces weight for noisy measurements
+    - Statistical significance: higher weight for more significant DMPs (-log10(q_value))
+    - Context reliability: CG > CHG > CHH prioritization
+    """
+
+    # Start with effect_size (already includes statistical corrections)
+    importance = dmps_df['effect_size'].copy()
+
+    # Add within-centroid variance reliability
+    if all(col in dmps_df.columns for col in ['alpha1', 'beta1', 'alpha2', 'beta2']):
+        # Compute variance for each centroid
+        tau1 = dmps_df['alpha1'] + dmps_df['beta1']
+        tau2 = dmps_df['alpha2'] + dmps_df['beta2']
+        var1 = (dmps_df['alpha1'] * dmps_df['beta1']) / (tau1**2 * (tau1 + 1))
+        var2 = (dmps_df['alpha2'] * dmps_df['beta2']) / (tau2**2 * (tau2 + 1))
+
+        # Variance reliability factor
+        max_var = np.maximum(var1, var2)
+        var_factor = 1.0 / (1.0 + max_var / 0.05)
+        importance = importance * var_factor
+
+    # Add statistical significance
+    if 'q_value' in dmps_df.columns:
+        eps = 1e-20
+        q_value_safe = np.maximum(dmps_df['q_value'], eps)
+        significance_factor = -np.log10(q_value_safe)
+        sig_min, sig_max = significance_factor.min(), significance_factor.max()
+        if sig_max > sig_min:
+            sig_normalized = 0.5 + 1.5 * (significance_factor - sig_min) / (sig_max - sig_min)
+        else:
+            sig_normalized = np.ones(len(dmps_df))
+        importance = importance * sig_normalized
+
+    # Apply context weighting
+    if 'context_weight' in dmps_df.columns:
+        importance = importance * dmps_df['context_weight']
+
     return importance
 
-dmps_df['importance'] = compute_importance(dmps_df)
+dmps_df['importance'] = compute_biological_importance(dmps_df)
 dmps_df = dmps_df.sort_values('importance', ascending=False)
 ```
 
