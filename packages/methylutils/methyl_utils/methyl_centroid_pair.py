@@ -352,7 +352,7 @@ class MethylCentroidPair:
         beta1 = centroid1.beta[indices1].astype(np.float32)
         alpha2 = centroid2.alpha[indices2].astype(np.float32)
         beta2 = centroid2.beta[indices2].astype(np.float32)
-        
+
         # Extract other data needed for statistical tests
         N1 = centroid1.N[indices1].astype(np.float32)
         N2 = centroid2.N[indices2].astype(np.float32)
@@ -361,9 +361,10 @@ class MethylCentroidPair:
         log_x_sum2 = centroid2.log_x_sum[indices2].astype(np.float32)
         log_1mx_sum2 = centroid2.log_1_minus_x_sum[indices2].astype(np.float32)
 
-        # Compute means and delta_mean (vectorized)
-        mean1 = alpha1 / (alpha1 + beta1)
-        mean2 = alpha2 / (alpha2 + beta2)
+        # Use MethylSample's encapsulated mean property which includes adaptive estimation
+        # This ensures consistency with edge case handling for small samples vs large samples
+        mean1 = centroid1.mean[indices1].astype(np.float32)
+        mean2 = centroid2.mean[indices2].astype(np.float32)
         delta_mean = np.abs(mean1 - mean2)
 
         # Create temporary centroid objects for LRT (still needed for current API)
@@ -436,6 +437,185 @@ class MethylCentroidPair:
         results_array['q_value'] = q_values.astype(np.float32)
 
         return results_array
+
+    @staticmethod
+    def validate_centroid_parameters(centroid1: MethylSample, centroid2: MethylSample,
+                                   extreme_threshold: float = 1000) -> dict:
+        """
+        Validate centroid parameters by comparing alpha/beta against simple statistics.
+
+        This is a utility method that can be used by higher-level components like
+        MethylModeler to validate the quality of beta parameter estimation.
+
+        Args:
+            centroid1: First centroid to validate
+            centroid2: Second centroid to validate
+            extreme_threshold: Threshold for detecting extreme beta parameters
+
+        Returns:
+            Dictionary with validation results and statistics
+        """
+        if not centroid1.is_extended_centroid or not centroid2.is_extended_centroid:
+            return {"error": "Both centroids must be extended centroids"}
+
+        # Get Beta parameters using MethylSample's encapsulated methods
+        alpha1, beta1 = centroid1.get_beta_parameters()
+        alpha2, beta2 = centroid2.get_beta_parameters()
+
+        # Get sample statistics
+        N1 = centroid1.N
+        Sx1 = centroid1.Sx
+        Sx2_1 = centroid1.Sx2
+
+        N2 = centroid2.N
+        Sx2 = centroid2.Sx
+        Sx2_2 = centroid2.Sx2
+
+        results = {
+            "centroid1": {
+                "n_positions": len(alpha1),
+                "alpha_stats": {"mean": float(alpha1.mean()), "std": float(alpha1.std())},
+                "beta_stats": {"mean": float(beta1.mean()), "std": float(beta1.std())},
+                "sample_stats": {"min_N": int(N1.min()), "max_N": int(N1.max()), "mean_N": float(N1.mean()), "std_N": float(N1.std())}
+            },
+            "centroid2": {
+                "n_positions": len(alpha2),
+                "alpha_stats": {"mean": float(alpha2.mean()), "std": float(alpha2.std())},
+                "beta_stats": {"mean": float(beta2.mean()), "std": float(beta2.std())},
+                "sample_stats": {"min_N": int(N2.min()), "max_N": int(N2.max()), "mean_N": float(N2.mean()), "std_N": float(N2.std())}
+            },
+            "validation": {},
+            "warnings": []
+        }
+
+        # Estimate mean and variance from Sx and Sx2 (assuming Normal) for validation
+        valid_positions1 = N1 >= 5  # At least 5 samples for reliable variance estimate
+        valid_positions2 = N2 >= 5
+
+        if np.any(valid_positions1):
+            N1_valid = N1[valid_positions1]
+            Sx1_valid = Sx1[valid_positions1]
+            Sx2_1_valid = Sx2_1[valid_positions1]
+
+            normal_mean1 = float(np.median(Sx1_valid / N1_valid))
+            normal_var1 = float(np.median((Sx2_1_valid - (Sx1_valid**2)/N1_valid) / (N1_valid - 1)))
+
+            # Use MethylSample's mean and variance properties for Beta comparison
+            beta_mean1 = float(centroid1.mean[valid_positions1].mean())
+            beta_var1 = float(centroid1.variance[valid_positions1].mean())
+
+            results["validation"]["centroid1"] = {
+                "normal_estimate": {"mean": normal_mean1, "var": normal_var1},
+                "beta_estimate": {"mean": beta_mean1, "var": beta_var1},
+                "mean_difference": abs(normal_mean1 - beta_mean1)
+            }
+
+            # Check if estimates are reasonable - only warn for large samples where Beta should be accurate
+            mean_N1 = float(N1_valid.mean())
+            mean_diff = abs(normal_mean1 - beta_mean1)
+            if mean_N1 >= 20 and mean_diff > 0.1:
+                results["warnings"].append(f"Centroid1: Large mean difference ({mean_diff:.4f}) between normal and beta estimates (N={mean_N1:.1f})")
+            elif mean_N1 < 20 and mean_diff > 0.1:
+                logger.debug(f"Centroid1: Expected difference ({mean_diff:.4f}) for small samples (N={mean_N1:.1f} < 20), using normal approximation")
+
+        if np.any(valid_positions2):
+            N2_valid = N2[valid_positions2]
+            Sx2_valid = Sx2[valid_positions2]
+            Sx2_2_valid = Sx2_2[valid_positions2]
+
+            normal_mean2 = float(np.median(Sx2_valid / N2_valid))
+            normal_var2 = float(np.median((Sx2_2_valid - (Sx2_valid**2)/N2_valid) / (N2_valid - 1)))
+
+            # Use MethylSample's mean and variance properties for Beta comparison
+            beta_mean2 = float(centroid2.mean[valid_positions2].mean())
+            beta_var2 = float(centroid2.variance[valid_positions2].mean())
+
+            results["validation"]["centroid2"] = {
+                "normal_estimate": {"mean": normal_mean2, "var": normal_var2},
+                "beta_estimate": {"mean": beta_mean2, "var": beta_var2},
+                "mean_difference": abs(normal_mean2 - beta_mean2)
+            }
+
+            # Check if estimates are reasonable - only warn for large samples where Beta should be accurate
+            mean_N2 = float(N2_valid.mean())
+            mean_diff = abs(normal_mean2 - beta_mean2)
+            if mean_N2 >= 20 and mean_diff > 0.1:
+                results["warnings"].append(f"Centroid2: Large mean difference ({mean_diff:.4f}) between normal and beta estimates (N={mean_N2:.1f})")
+            elif mean_N2 < 20 and mean_diff > 0.1:
+                logger.debug(f"Centroid2: Expected difference ({mean_diff:.4f}) for small samples (N={mean_N2:.1f} < 20), using normal approximation")
+
+        # Check for extreme parameters - only warn for large samples where Beta should be stable
+        n_extreme1 = int(np.sum((alpha1 > extreme_threshold) | (beta1 > extreme_threshold)))
+        n_extreme2 = int(np.sum((alpha2 > extreme_threshold) | (beta2 > extreme_threshold)))
+
+        mean_N_overall = (centroid1.N.mean() + centroid2.N.mean()) / 2.0
+        if n_extreme1 > 0 and mean_N_overall >= 20:
+            results["warnings"].append(f"Centroid1 has {n_extreme1} positions with extreme Beta parameters (> {extreme_threshold})")
+        elif n_extreme1 > 0 and mean_N_overall < 20:
+            logger.debug(f"Centroid1 has {n_extreme1} positions with extreme Beta parameters, but using normal approximation for small samples (N={mean_N_overall:.1f} < 20)")
+
+        if n_extreme2 > 0 and mean_N_overall >= 20:
+            results["warnings"].append(f"Centroid2 has {n_extreme2} positions with extreme Beta parameters (> {extreme_threshold})")
+        elif n_extreme2 > 0 and mean_N_overall < 20:
+            logger.debug(f"Centroid2 has {n_extreme2} positions with extreme Beta parameters, but using normal approximation for small samples (N={mean_N_overall:.1f} < 20)")
+
+        # Check group separation using MethylSample's mean property
+        mean_diff = abs(centroid1.mean.mean() - centroid2.mean.mean())
+        results["group_separation"] = float(mean_diff)
+        if mean_diff < 0.05:
+            results["warnings"].append(f"Poor separation between centroids (mean difference = {mean_diff:.4f})")
+
+        return results
+
+    @staticmethod
+    def compute_effect_sizes(alpha1: np.ndarray, beta1: np.ndarray, alpha2: np.ndarray, beta2: np.ndarray,
+                           delta_mean: np.ndarray, bc_values: np.ndarray, gamma: float = 1.0,
+                           numerical_epsilon: float = 1e-6) -> np.ndarray:
+        """
+        Compute effect sizes using the corrected formula that respects MethylSample's variance handling.
+
+        Effect size = |delta_mu| * (1 - BC)^gamma / sqrt(var1 + var2)
+
+        Args:
+            alpha1, beta1: Beta parameters for centroid 1
+            alpha2, beta2: Beta parameters for centroid 2
+            delta_mean: Absolute difference in means
+            bc_values: Bhattacharyya coefficient values (overlap)
+            gamma: Gamma parameter for overlap penalty
+            numerical_epsilon: Small value to prevent division by zero
+
+        Returns:
+            Array of effect size values scaled to [0.01, 1.0] range
+        """
+        # Use MethylSample's variance formula: var = mean * (1 - mean) / (tau + 1)
+        eps = 1e-12
+        tau1 = alpha1 + beta1
+        tau2 = alpha2 + beta2
+        mean1 = alpha1 / np.maximum(tau1, eps)
+        mean2 = alpha2 / np.maximum(tau2, eps)
+
+        var1 = mean1 * (1 - mean1) / np.maximum(tau1 + 1, eps)
+        var2 = mean2 * (1 - mean2) / np.maximum(tau2 + 1, eps)
+
+        # Combined standard deviation
+        combined_std = np.sqrt(var1 + var2)
+        combined_std = np.maximum(combined_std, numerical_epsilon)
+
+        # Compute effect size: |delta_mu| / sqrt(var1 + var2) * (1 - BC)^gamma
+        overlap_penalty = (1 - bc_values) ** gamma
+        raw_effect_size = np.abs(delta_mean) / combined_std * overlap_penalty
+
+        # Scale to [0.01, 1.0] range to avoid zeros (which break classifiers)
+        if raw_effect_size.max() > raw_effect_size.min():
+            min_val = raw_effect_size.min()
+            max_val = raw_effect_size.max()
+            scaled = (raw_effect_size - min_val) / (max_val - min_val)  # [0, 1]
+            effect_sizes = 0.01 + 0.99 * scaled  # [0.01, 1.0]
+        else:
+            # All values are the same, set to middle of range
+            effect_sizes = np.full_like(raw_effect_size, 0.5)
+
+        return effect_sizes
 
     def _storey_qvalue(self, p_values: np.ndarray, lambda_seq=None) -> np.ndarray:
         """

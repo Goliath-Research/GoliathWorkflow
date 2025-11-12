@@ -361,8 +361,8 @@ class MethylSample:
         Expected methylation level.
 
         Uses adaptive mean estimation based on sample size reliability:
-        - Small samples (N ≤ 10): empirical mean (Sx/N) for statistical reliability
-        - Large samples (N > 10): Beta distribution mean (α/(α+β)) for full distributional information
+        - Small samples (N < 20): empirical mean (Sx/N) for statistical reliability
+        - Large samples (N ≥ 20): Beta distribution mean (α/(α+β)) for full distributional information
 
         This approach ensures optimal accuracy across different sample sizes by choosing
         the most appropriate estimation method for each scenario.
@@ -374,8 +374,8 @@ class MethylSample:
             if self.is_centroid and self.Sx is not None and self.N is not None:
                 empirical_mean = self.Sx / np.maximum(self.N.astype(np.float32), eps)
 
-                # Use empirical mean for small sample sizes (N <= 10) where Beta estimation is unreliable
-                small_sample_mask = self.N <= 10
+                # Use empirical mean for small sample sizes (N < 20) where Beta estimation is unreliable
+                small_sample_mask = self.N < 20
 
                 if np.all(small_sample_mask):
                     # All positions have small samples - use empirical mean directly
@@ -384,7 +384,7 @@ class MethylSample:
                     # Mix of small and large samples
                     final_mean = empirical_mean.copy()  # Start with empirical mean
 
-                    # For larger sample sizes (N > 10), use Beta distribution mean
+                    # For larger sample sizes (N >= 20), use Beta distribution mean
                     large_sample_mask = ~small_sample_mask
                     if np.any(large_sample_mask):
                         alpha = self.alpha
@@ -397,8 +397,8 @@ class MethylSample:
 
                         # NOTE: Validation of Beta mean vs empirical mean is disabled since we fixed
                         # the underlying alpha/beta calculation issues and improved mean estimation:
-                        # - Small samples (N <= 10): use empirical mean (Sx/N)
-                        # - Large samples (N > 10): use Beta distribution mean with proper MLE estimation
+                        # - Small samples (N < 20): use empirical mean (Sx/N)
+                        # - Large samples (N >= 20): use Beta distribution mean with proper MLE estimation
                         # This ensures consistency between different mean calculation approaches.
             else:
                 # For non-centroid data, use Beta distribution mean

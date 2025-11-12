@@ -1026,14 +1026,12 @@ class MethylModeler:
     
     def _validate_centroid_parameters(self) -> None:
         """
-        Validate centroid parameters by comparing alpha/beta against simple statistics.
+        Validate centroid parameters by delegating to MethylUtils.
 
-        Compares Beta distribution parameters (alpha, beta) against estimates derived
-        from Sx (sum of methylation levels) and Sx2 (sum of squared methylation levels)
-        assuming Normal distribution for validation.
+        Uses MethylCentroidPair.validate_centroid_parameters() to compare
+        Beta distribution parameters against estimates derived from Sx and Sx2.
         """
         from pathlib import Path
-        import numpy as np
 
         logger.info("🔍 Validating centroid parameters...")
 
@@ -1049,95 +1047,43 @@ class MethylModeler:
             logger.info(f"Loading centroid2 (cancer): {centroid2_path}")
             centroid2 = MethylSample.load_from_h5(str(centroid2_path))
 
-            # Check if centroids are extended (have statistics)
-            if not centroid1.is_extended_centroid:
-                logger.warning("Centroid1 is not extended - cannot validate parameters")
+            # Delegate validation to MethylUtils
+            validation_results = MethylCentroidPair.validate_centroid_parameters(centroid1, centroid2)
+
+            if "error" in validation_results:
+                logger.warning(f"Centroid validation failed: {validation_results['error']}")
                 return
-            if not centroid2.is_extended_centroid:
-                logger.warning("Centroid2 is not extended - cannot validate parameters")
-                return
 
-            # Get Beta parameters
-            alpha1, beta1 = centroid1.get_beta_parameters()
-            alpha2, beta2 = centroid2.get_beta_parameters()
-
-            # Get sample statistics
-            N1 = centroid1.N
-            Sx1 = centroid1.Sx  # sum of methylation levels
-            Sx2_1 = centroid1.Sx2  # sum of squared methylation levels
-
-            N2 = centroid2.N
-            Sx2 = centroid2.Sx  # sum of methylation levels
-            Sx2_2 = centroid2.Sx2  # sum of squared methylation levels
+            # Log validation results
+            c1_stats = validation_results["centroid1"]
+            c2_stats = validation_results["centroid2"]
 
             logger.info("Centroid1 (healthy) statistics:")
-            logger.info(f"  Samples: {N1}, Beta params: α={alpha1.mean():.2f}±{alpha1.std():.2f}, β={beta1.mean():.2f}±{beta1.std():.2f}")
+            logger.info(f"  Positions: {c1_stats['n_positions']:,}, Samples: {c1_stats['sample_stats']['mean_N']:.1f}±{c1_stats['sample_stats']['std_N']:.1f}")
+            logger.info(f"  Beta params: α={c1_stats['alpha_stats']['mean']:.2f}±{c1_stats['alpha_stats']['std']:.2f}, β={c1_stats['beta_stats']['mean']:.2f}±{c1_stats['beta_stats']['std']:.2f}")
 
             logger.info("Centroid2 (cancer) statistics:")
-            logger.info(f"  Samples: {N2}, Beta params: α={alpha2.mean():.2f}±{alpha2.std():.2f}, β={beta2.mean():.2f}±{beta2.std():.2f}")
+            logger.info(f"  Positions: {c2_stats['n_positions']:,}, Samples: {c2_stats['sample_stats']['mean_N']:.1f}±{c2_stats['sample_stats']['std_N']:.1f}")
+            logger.info(f"  Beta params: α={c2_stats['alpha_stats']['mean']:.2f}±{c2_stats['alpha_stats']['std']:.2f}, β={c2_stats['beta_stats']['mean']:.2f}±{c2_stats['beta_stats']['std']:.2f}")
 
-            # Estimate mean and variance from Sx and Sx2 (assuming Normal)
-            # Use positions with sufficient samples for reliable estimates
-            valid_positions1 = N1 >= 5  # At least 5 samples for reliable variance estimate
-            valid_positions2 = N2 >= 5
+            # Log validation comparisons if available
+            if "centroid1" in validation_results["validation"]:
+                v1 = validation_results["validation"]["centroid1"]
+                logger.info("Centroid1 validation (median of valid positions):")
+                logger.info(f"  Normal estimate: mean={v1['normal_estimate']['mean']:.4f}, var={v1['normal_estimate']['var']:.6f}")
+                logger.info(f"  Beta estimate:   mean={v1['beta_estimate']['mean']:.4f}, var={v1['beta_estimate']['var']:.6f}")
 
-            if np.any(valid_positions1):
-                # Use median estimates for robustness
-                N1_valid = N1[valid_positions1]
-                Sx1_valid = Sx1[valid_positions1]
-                Sx2_1_valid = Sx2_1[valid_positions1]
+            if "centroid2" in validation_results["validation"]:
+                v2 = validation_results["validation"]["centroid2"]
+                logger.info("Centroid2 validation (median of valid positions):")
+                logger.info(f"  Normal estimate: mean={v2['normal_estimate']['mean']:.4f}, var={v2['normal_estimate']['var']:.6f}")
+                logger.info(f"  Beta estimate:   mean={v2['beta_estimate']['mean']:.4f}, var={v2['beta_estimate']['var']:.6f}")
 
-                normal_mean1 = np.median(Sx1_valid / N1_valid)
-                normal_var1 = np.median((Sx2_1_valid - (Sx1_valid**2)/N1_valid) / (N1_valid - 1))
+            logger.info(f"Group separation: mean difference = {validation_results['group_separation']:.4f}")
 
-                beta_mean1 = alpha1 / (alpha1 + beta1)
-                beta_var1 = (alpha1 * beta1) / ((alpha1 + beta1)**2 * (alpha1 + beta1 + 1))
-
-                logger.info("Centroid1 comparison (median of valid positions):")
-                logger.info(f"  Normal estimate: mean={normal_mean1:.4f}, var={normal_var1:.6f}")
-                logger.info(f"  Beta estimate:   mean={beta_mean1.mean():.4f}, var={beta_var1.mean():.6f}")
-
-                # Check if estimates are reasonable
-                mean_diff = abs(normal_mean1 - beta_mean1.mean())
-                if mean_diff > 0.1:
-                    logger.warning(f"  ⚠️  Large mean difference: {mean_diff:.4f}")
-
-            if np.any(valid_positions2):
-                # Use median estimates for robustness
-                N2_valid = N2[valid_positions2]
-                Sx2_valid = Sx2[valid_positions2]
-                Sx2_2_valid = Sx2_2[valid_positions2]
-
-                normal_mean2 = np.median(Sx2_valid / N2_valid)
-                normal_var2 = np.median((Sx2_2_valid - (Sx2_valid**2)/N2_valid) / (N2_valid - 1))
-
-                beta_mean2 = alpha2 / (alpha2 + beta2)
-                beta_var2 = (alpha2 * beta2) / ((alpha2 + beta2)**2 * (alpha2 + beta2 + 1))
-
-                logger.info("Centroid2 comparison (median of valid positions):")
-                logger.info(f"  Normal estimate: mean={normal_mean2:.4f}, var={normal_var2:.6f}")
-                logger.info(f"  Beta estimate:   mean={beta_mean2.mean():.4f}, var={beta_var2.mean():.6f}")
-
-                # Check if estimates are reasonable
-                mean_diff = abs(normal_mean2 - beta_mean2.mean())
-                if mean_diff > 0.1:
-                    logger.warning(f"  ⚠️  Large mean difference: {mean_diff:.4f}")
-
-            # Check for extreme parameters
-            extreme_threshold = 1000
-            n_extreme1 = np.sum((alpha1 > extreme_threshold) | (beta1 > extreme_threshold))
-            n_extreme2 = np.sum((alpha2 > extreme_threshold) | (beta2 > extreme_threshold))
-
-            if n_extreme1 > 0:
-                logger.warning(f"  ⚠️  Centroid1 has {n_extreme1} positions with extreme Beta parameters (> {extreme_threshold})")
-            if n_extreme2 > 0:
-                logger.warning(f"  ⚠️  Centroid2 has {n_extreme2} positions with extreme Beta parameters (> {extreme_threshold})")
-
-            # Check group separation
-            mean_diff = abs(beta_mean1.mean() - beta_mean2.mean())
-            logger.info(f"Group separation: mean difference = {mean_diff:.4f}")
-            if mean_diff < 0.05:
-                logger.warning("  ⚠️  Poor separation between healthy and cancer centroids")
+            # Log any warnings
+            for warning in validation_results["warnings"]:
+                logger.warning(f"  ⚠️  {warning}")
 
         except Exception as e:
             logger.error(f"Centroid parameter validation failed: {e}")
@@ -2585,13 +2531,12 @@ class MethylModeler:
         # MethylUtils provides 'bhattacharyya' column with Distance (BD) values
         # Convert to Coefficient (BC) for biologist-friendly interpretation
         if 'bhattacharyya' not in chunk_df.columns:
-            logger.warning("Bhattacharyya Distance not found in chunk, computing...")
+            logger.warning("Bhattacharyya Distance not found in chunk, computing from beta parameters...")
             alpha1 = chunk_df['alpha1'].values
             beta1 = chunk_df['beta1'].values
             alpha2 = chunk_df['alpha2'].values
             beta2 = chunk_df['beta2'].values
-            delta_mean = chunk_df['delta_mean'].values
-            
+
             try:
                 # Compute Bhattacharyya Distance (BD) from MethylUtils
                 bd_values = []
@@ -2601,11 +2546,12 @@ class MethylModeler:
                         bd_values.append(bd)
                     except Exception as e:
                         logger.warning(f"Bhattacharyya Distance computation failed for position {i}: {e}")
-                        bd_values.append(abs(delta_mean[i]))  # Fallback to delta_mean
+                        # Use delta_mean as fallback, but better would be to use MethylSample's mean property
+                        bd_values.append(abs(chunk_df['delta_mean'].values[i]))
                 bd_array = np.array(bd_values, dtype=np.float32)
             except Exception as e:
-                logger.warning(f"Bhattacharyya Distance computation failed: {e}, using fallback")
-                bd_array = np.abs(delta_mean).astype(np.float32)
+                logger.warning(f"Bhattacharyya Distance computation failed: {e}, using delta_mean fallback")
+                bd_array = np.abs(chunk_df['delta_mean'].values).astype(np.float32)
         else:
             # BD values from MethylUtils
             bd_array = chunk_df['bhattacharyya'].values
@@ -2616,58 +2562,26 @@ class MethylModeler:
         chunk_df['bhattacharyya_coefficient'] = bc_values
         chunk_df['overlap'] = bc_values  # Add 'overlap' column for CSV export (biologist-friendly name)
 
-        # Compute effect_size using a corrected formula:
+        # Compute effect_size by delegating to MethylUtils
+        # Uses MethylCentroidPair.compute_effect_sizes() which implements the corrected formula:
         # effect_size = |delta_mu| * (1 - BC)^gamma / sqrt(var1 + var2)
-        # Note: The original documentation had var1² + var2² which was incorrect
         if not chunk_df.empty and 'effect_size' not in chunk_df.columns:
-            # Compute variances for Beta distributions
-            # Var(Beta(α,β)) = αβ / ((α+β)²(α+β+1))
             alpha1 = chunk_df['alpha1'].values
             beta1 = chunk_df['beta1'].values
             alpha2 = chunk_df['alpha2'].values
             beta2 = chunk_df['beta2'].values
             delta_mean = chunk_df['delta_mean'].values
 
-            # Compute variances
-            var1 = alpha1 * beta1 / ((alpha1 + beta1) ** 2 * (alpha1 + beta1 + 1))
-            var2 = alpha2 * beta2 / ((alpha2 + beta2) ** 2 * (alpha2 + beta2 + 1))
-
-            # Use sqrt(var1 + var2) instead of sqrt(var1² + var2²)
-            # This provides proper variance weighting without being too extreme
-            combined_std = np.sqrt(var1 + var2)
-
-            # Debug: Check variance statistics
-            logger.debug(f"Variance stats: var1_mean={var1.mean():.6f}, var2_mean={var2.mean():.6f}, "
-                        f"combined_std_mean={combined_std.mean():.6f}")
-
-            # Prevent division by zero with epsilon
+            # Delegate effect size computation to MethylUtils
             epsilon = self.config.numerical_epsilon if hasattr(self.config, 'numerical_epsilon') else 1e-6
-            combined_std = np.maximum(combined_std, epsilon)
+            effect_size_values = MethylCentroidPair.compute_effect_sizes(
+                alpha1, beta1, alpha2, beta2, delta_mean, bc_values,
+                gamma=self.config.gamma, numerical_epsilon=epsilon
+            )
 
-            # Compute effect size: |delta_mu| / sqrt(var1 + var2) * (1 - BC)^gamma
-            overlap_penalty = (1 - bc_values) ** self.config.gamma
-            raw_effect_size = np.abs(delta_mean) / combined_std * overlap_penalty
-
-            # Scale effect_size to be in reasonable range [0.01, 1.0] for classifier compatibility
-            # while preserving relative statistical significance ordering
-            # Avoid creating exact zeros which break the classifier
-            if raw_effect_size.max() > raw_effect_size.min():
-                # Min-max scaling to [0.01, 1.0] to avoid zeros
-                min_val = raw_effect_size.min()
-                max_val = raw_effect_size.max()
-                scaled = (raw_effect_size - min_val) / (max_val - min_val)  # [0, 1]
-                effect_size_values = 0.01 + 0.99 * scaled  # [0.01, 1.0]
-            else:
-                # All values are the same, set to neutral weight
-                effect_size_values = np.full_like(raw_effect_size, 0.5)
-
-            # Debug: Check effect_size statistics and validate
+            # Debug: Check effect_size statistics
             if len(effect_size_values) > 0:
-                # Use INFO level temporarily to ensure visibility
-                logger.info(f"Raw effect_size stats: min={raw_effect_size.min():.6f}, "
-                           f"max={raw_effect_size.max():.6f}, "
-                           f"mean={raw_effect_size.mean():.6f}")
-                logger.info(f"Scaled effect_size stats: min={effect_size_values.min():.6f}, "
+                logger.debug(f"Effect_size stats: min={effect_size_values.min():.6f}, "
                            f"max={effect_size_values.max():.6f}, "
                            f"mean={effect_size_values.mean():.6f} (range: [0.01, 1.0])")
 

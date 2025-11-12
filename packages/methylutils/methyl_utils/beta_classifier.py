@@ -15,6 +15,9 @@ from scipy.stats import beta
 from typing import Dict, Any, Optional, Union, Tuple
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BetaClassifier:
@@ -113,10 +116,30 @@ class BetaClassifier:
         weight = np.asarray(dmpDF['weight'].values, dtype=np.float64)
         
         # Create data dictionary (add directions based on mean difference)
-        # For BetaClassifier, we need directions - compute from alpha/beta means
-        mean1 = alpha1 / (alpha1 + beta1)
-        mean2 = alpha2 / (alpha2 + beta2)
-        directions = np.sign(mean1 - mean2).astype(np.int8)
+        # For BetaClassifier, we need directions - compute from alpha/beta means with edge case handling
+        # Use the same logic as MethylSample's mean property for consistency
+        eps = 1e-12
+        tau1 = alpha1 + beta1
+        tau2 = alpha2 + beta2
+        mean1 = alpha1 / np.maximum(tau1, eps)
+        mean2 = alpha2 / np.maximum(tau2, eps)
+
+        # Handle edge cases where alpha/beta might be extreme or invalid
+        # If alpha and beta are both very small (< 1e-6), the mean calculation becomes unstable
+        invalid_mask = (alpha1 < 1e-6) & (beta1 < 1e-6) | (alpha2 < 1e-6) & (beta2 < 1e-6) | \
+                      ~np.isfinite(alpha1) | ~np.isfinite(beta1) | \
+                      ~np.isfinite(alpha2) | ~np.isfinite(beta2)
+
+        if np.any(invalid_mask):
+            logger.warning(f"BetaClassifier: Found {np.sum(invalid_mask)} positions with invalid alpha/beta parameters, using fallback mean calculation")
+            # Fallback: use simple ratio for invalid cases
+            mean1_safe = np.where(invalid_mask, alpha1 / (alpha1 + beta1 + eps), mean1)
+            mean2_safe = np.where(invalid_mask, alpha2 / (alpha2 + beta2 + eps), mean2)
+        else:
+            mean1_safe = mean1
+            mean2_safe = mean2
+
+        directions = np.sign(mean1_safe - mean2_safe).astype(np.int8)
         
         data = {
             'positions': pos,
@@ -189,6 +212,41 @@ class BetaClassifier:
         alpha2_base = self.data['alpha2']
         beta2_base = self.data['beta2']
 
+        # Determine when to use Beta vs Normal based on parameter reliability
+        tau1 = alpha1_base + beta1_base
+        tau2 = alpha2_base + beta2_base
+
+        # Use Beta only when parameters are reliable and distributions are reasonable
+        # Check multiple criteria for Beta distribution reliability:
+        # 1. Effective sample size indicates sufficient data (tau >= 20)
+        # 2. Parameters not at extreme boundaries
+        # 3. Parameters represent reasonable methylation distributions (not too peaked)
+        # 4. Both classes have similar effective sample sizes (avoid unbalanced comparisons)
+
+        min_tau = 20  # Minimum effective sample size for Beta reliability
+        max_param = 500  # Maximum parameter value to avoid numerical issues
+        min_param = 0.1  # Minimum parameter value to avoid boundary issues
+
+        use_beta_mask = (
+            (tau1 >= min_tau) & (tau2 >= min_tau) &  # Sufficient effective sample size
+            (alpha1_base <= max_param) & (beta1_base <= max_param) &  # Not too large
+            (alpha2_base <= max_param) & (beta2_base <= max_param) &
+            (alpha1_base >= min_param) & (beta1_base >= min_param) &  # Not too small
+            (alpha2_base >= min_param) & (beta2_base >= min_param) &
+            np.isfinite(alpha1_base) & np.isfinite(beta1_base) &  # Finite values
+            np.isfinite(alpha2_base) & np.isfinite(beta2_base) &
+            (tau1 <= tau2 * 5) & (tau2 <= tau1 * 5)  # Effective sample sizes not too different
+        )
+        use_normal_mask = ~use_beta_mask
+
+        # Compute means and variances for Normal approximation
+        mean1 = alpha1_base / tau1
+        mean2 = alpha2_base / tau2
+        var1 = mean1 * (1 - mean1) / (tau1 + 1)
+        var2 = mean2 * (1 - mean2) / (tau2 + 1)
+        if debug:
+            print(f"Using Normal approximation for {np.sum(use_normal_mask)}/{len(use_normal_mask)} positions (Beta parameters unreliable)")
+
         # Debug: Check alpha/beta parameters
         if debug:
             print(f"Alpha1 range: [{alpha1_base.min():.3f}, {alpha1_base.max():.3f}]")
@@ -208,9 +266,38 @@ class BetaClassifier:
         alpha1 = np.repeat(alpha_class1[np.newaxis, :], n_samples, axis=0)
         beta1 = np.repeat(beta_class1[np.newaxis, :], n_samples, axis=0)
 
-        # Compute logpdf under each class using GPU-accelerated function
-        log_p_class0 = beta_log_pdf(methylation_vals, alpha0, beta0, use_gpu=use_gpu)
-        log_p_class1 = beta_log_pdf(methylation_vals, alpha1, beta1, use_gpu=use_gpu)
+        # Compute logpdf under each class using GPU-accelerated function or Normal approximation
+        if np.any(use_normal_mask):
+            # Use hybrid approach: Beta for large samples, Normal for small samples
+            log_p_class0 = np.zeros_like(methylation_vals, dtype=np.float64)
+            log_p_class1 = np.zeros_like(methylation_vals, dtype=np.float64)
+
+            # Beta distributions for positions with sufficient sample size
+            beta_mask = ~use_normal_mask
+            if np.any(beta_mask):
+                log_p_class0_beta = beta_log_pdf(methylation_vals[:, beta_mask], alpha0[:, beta_mask], beta0[:, beta_mask], use_gpu=use_gpu)
+                log_p_class1_beta = beta_log_pdf(methylation_vals[:, beta_mask], alpha1[:, beta_mask], beta1[:, beta_mask], use_gpu=use_gpu)
+                log_p_class0[:, beta_mask] = log_p_class0_beta
+                log_p_class1[:, beta_mask] = log_p_class1_beta
+
+            # Normal distributions for positions with small sample size
+            normal_mask = use_normal_mask
+            if np.any(normal_mask):
+                # Normal log-pdf: -0.5 * log(2πσ²) - (x - μ)²/(2σ²)
+                eps = 1e-8  # Avoid log(0)
+                var1_safe = np.maximum(var1[normal_mask], eps)
+                var2_safe = np.maximum(var2[normal_mask], eps)
+
+                # Vectorized normal log-pdf computation
+                diff0 = methylation_vals[:, normal_mask] - mean1[normal_mask]
+                diff1 = methylation_vals[:, normal_mask] - mean2[normal_mask]
+
+                log_p_class0[:, normal_mask] = -0.5 * np.log(2 * np.pi * var1_safe) - diff0**2 / (2 * var1_safe)
+                log_p_class1[:, normal_mask] = -0.5 * np.log(2 * np.pi * var2_safe) - diff1**2 / (2 * var2_safe)
+        else:
+            # All positions use Beta distributions
+            log_p_class0 = beta_log_pdf(methylation_vals, alpha0, beta0, use_gpu=use_gpu)
+            log_p_class1 = beta_log_pdf(methylation_vals, alpha1, beta1, use_gpu=use_gpu)
 
         # Debug: Check log-likelihood computation
         if debug:
@@ -218,9 +305,17 @@ class BetaClassifier:
             print(f"Log-likelihood ranges: class0=[{log_p_class0.min():.2f}, {log_p_class0.max():.2f}], class1=[{log_p_class1.min():.2f}, {log_p_class1.max():.2f}]")
             print(f"Any NaN/Inf in log-likelihoods: class0={np.any(~np.isfinite(log_p_class0))}, class1={np.any(~np.isfinite(log_p_class1))}")
 
-        # Validate parameters: mask invalid positions (alpha/beta <=0 or inf/nan)
-        valid0 = (alpha0 > 0) & (beta0 > 0) & np.isfinite(alpha0) & np.isfinite(beta0)
-        valid1 = (alpha1 > 0) & (beta1 > 0) & np.isfinite(alpha1) & np.isfinite(beta1)
+        # Validate parameters: mask invalid positions
+        # For Beta positions: alpha/beta > 0 and finite
+        # For Normal positions: mean and variance must be finite and reasonable
+        beta_valid0 = (alpha0 > 0) & (beta0 > 0) & np.isfinite(alpha0) & np.isfinite(beta0)
+        beta_valid1 = (alpha1 > 0) & (beta1 > 0) & np.isfinite(alpha1) & np.isfinite(beta1)
+        normal_valid0 = np.isfinite(mean1) & np.isfinite(var1) & (var1 > 0)
+        normal_valid1 = np.isfinite(mean2) & np.isfinite(var2) & (var2 > 0)
+
+        # Combine validation based on which distribution is used
+        valid0 = np.where(use_normal_mask, normal_valid0, beta_valid0)
+        valid1 = np.where(use_normal_mask, normal_valid1, beta_valid1)
         valid = valid0 & valid1  # Only use positions valid for both classes
 
         # Debug: Check validation stats
@@ -350,6 +445,33 @@ class BetaClassifier:
         alpha2_base = self.data['alpha2']
         beta2_base = self.data['beta2']
 
+        # Determine when to use Beta vs Normal based on parameter reliability
+        tau1 = alpha1_base + beta1_base
+        tau2 = alpha2_base + beta2_base
+
+        # Use Beta only when parameters are reliable
+        min_tau = 20
+        max_param = 500
+        min_param = 0.1
+
+        use_beta_mask = (
+            (tau1 >= min_tau) & (tau2 >= min_tau) &
+            (alpha1_base <= max_param) & (beta1_base <= max_param) &
+            (alpha2_base <= max_param) & (beta2_base <= max_param) &
+            (alpha1_base >= min_param) & (beta1_base >= min_param) &
+            (alpha2_base >= min_param) & (beta2_base >= min_param) &
+            np.isfinite(alpha1_base) & np.isfinite(beta1_base) &
+            np.isfinite(alpha2_base) & np.isfinite(beta2_base) &
+            (tau1 <= tau2 * 5) & (tau2 <= tau1 * 5)
+        )
+        use_normal_mask = ~use_beta_mask
+
+        # Compute means and variances for Normal approximation
+        mean1 = alpha1_base / tau1
+        mean2 = alpha2_base / tau2
+        var1 = mean1 * (1 - mean1) / (tau1 + 1)
+        var2 = mean2 * (1 - mean2) / (tau2 + 1)
+
         alpha_class0 = alpha1_base
         beta_class0 = beta1_base
         alpha_class1 = alpha2_base
@@ -360,12 +482,41 @@ class BetaClassifier:
         alpha1 = np.repeat(alpha_class1[np.newaxis, :], n_samples, axis=0)
         beta1 = np.repeat(beta_class1[np.newaxis, :], n_samples, axis=0)
 
-        # Use GPU-accelerated beta_log_pdf
-        log_p_class0 = beta_log_pdf(methylation_vals, alpha0, beta0, use_gpu=use_gpu)
-        log_p_class1 = beta_log_pdf(methylation_vals, alpha1, beta1, use_gpu=use_gpu)
+        # Use hybrid approach: Beta for large samples, Normal for small samples
+        if np.any(use_normal_mask):
+            log_p_class0 = np.zeros_like(methylation_vals, dtype=np.float64)
+            log_p_class1 = np.zeros_like(methylation_vals, dtype=np.float64)
 
-        valid0 = (alpha0 > 0) & (beta0 > 0) & np.isfinite(alpha0) & np.isfinite(beta0)
-        valid1 = (alpha1 > 0) & (beta1 > 0) & np.isfinite(alpha1) & np.isfinite(beta1)
+            beta_mask = ~use_normal_mask
+            if np.any(beta_mask):
+                log_p_class0_beta = beta_log_pdf(methylation_vals[:, beta_mask], alpha0[:, beta_mask], beta0[:, beta_mask], use_gpu=use_gpu)
+                log_p_class1_beta = beta_log_pdf(methylation_vals[:, beta_mask], alpha1[:, beta_mask], beta1[:, beta_mask], use_gpu=use_gpu)
+                log_p_class0[:, beta_mask] = log_p_class0_beta
+                log_p_class1[:, beta_mask] = log_p_class1_beta
+
+            normal_mask = use_normal_mask
+            if np.any(normal_mask):
+                eps = 1e-8
+                var1_safe = np.maximum(var1[normal_mask], eps)
+                var2_safe = np.maximum(var2[normal_mask], eps)
+
+                diff0 = methylation_vals[:, normal_mask] - mean1[normal_mask]
+                diff1 = methylation_vals[:, normal_mask] - mean2[normal_mask]
+
+                log_p_class0[:, normal_mask] = -0.5 * np.log(2 * np.pi * var1_safe) - diff0**2 / (2 * var1_safe)
+                log_p_class1[:, normal_mask] = -0.5 * np.log(2 * np.pi * var2_safe) - diff1**2 / (2 * var2_safe)
+        else:
+            log_p_class0 = beta_log_pdf(methylation_vals, alpha0, beta0, use_gpu=use_gpu)
+            log_p_class1 = beta_log_pdf(methylation_vals, alpha1, beta1, use_gpu=use_gpu)
+
+        # Validate parameters based on distribution type
+        beta_valid0 = (alpha0 > 0) & (beta0 > 0) & np.isfinite(alpha0) & np.isfinite(beta0)
+        beta_valid1 = (alpha1 > 0) & (beta1 > 0) & np.isfinite(alpha1) & np.isfinite(beta1)
+        normal_valid0 = np.isfinite(mean1) & np.isfinite(var1) & (var1 > 0)
+        normal_valid1 = np.isfinite(mean2) & np.isfinite(var2) & (var2 > 0)
+
+        valid0 = np.where(use_normal_mask, normal_valid0, beta_valid0)
+        valid1 = np.where(use_normal_mask, normal_valid1, beta_valid1)
         valid = valid0 & valid1
 
         if availability_mask is not None:
