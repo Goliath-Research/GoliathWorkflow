@@ -585,7 +585,7 @@ class MethylCentroidPair:
             numerical_epsilon: Small value to prevent division by zero
 
         Returns:
-            Array of effect size values scaled to [0.01, 1.0] range
+            Array of effect size values (unnormalized, preserving biological importance)
         """
         # Use MethylSample's variance formula: var = mean * (1 - mean) / (tau + 1)
         eps = 1e-12
@@ -605,15 +605,9 @@ class MethylCentroidPair:
         overlap_penalty = (1 - bc_values) ** gamma
         raw_effect_size = np.abs(delta_mean) / combined_std * overlap_penalty
 
-        # Scale to [0.01, 1.0] range to avoid zeros (which break classifiers)
-        if raw_effect_size.max() > raw_effect_size.min():
-            min_val = raw_effect_size.min()
-            max_val = raw_effect_size.max()
-            scaled = (raw_effect_size - min_val) / (max_val - min_val)  # [0, 1]
-            effect_sizes = 0.01 + 0.99 * scaled  # [0.01, 1.0]
-        else:
-            # All values are the same, set to middle of range
-            effect_sizes = np.full_like(raw_effect_size, 0.5)
+        # Apply soft minimum to avoid zeros but preserve relative differences
+        # Keep raw effect sizes to maintain biological importance for classification
+        effect_sizes = np.maximum(raw_effect_size, 1e-8)  # Very small floor to avoid exact zeros
 
         return effect_sizes
 

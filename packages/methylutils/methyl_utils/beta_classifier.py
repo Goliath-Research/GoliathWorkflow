@@ -216,26 +216,26 @@ class BetaClassifier:
         tau1 = alpha1_base + beta1_base
         tau2 = alpha2_base + beta2_base
 
-        # Use Beta only when parameters are reliable and distributions are reasonable
-        # Check multiple criteria for Beta distribution reliability:
-        # 1. Effective sample size indicates sufficient data (tau >= 20)
-        # 2. Parameters not at extreme boundaries
-        # 3. Parameters represent reasonable methylation distributions (not too peaked)
-        # 4. Both classes have similar effective sample sizes (avoid unbalanced comparisons)
+        # Use Beta when parameters are reasonable, fallback to Normal when Beta fails
+        # More lenient criteria since small samples still benefit from Beta modeling
+        # 1. Minimum effective sample size (tau >= 5)
+        # 2. Parameters not extremely large (avoids numerical issues)
+        # 3. Parameters not at boundary (avoids degenerate distributions)
+        # 4. Finite values
 
-        min_tau = 20  # Minimum effective sample size for Beta reliability
-        max_param = 500  # Maximum parameter value to avoid numerical issues
-        min_param = 0.1  # Minimum parameter value to avoid boundary issues
+        min_tau = 5   # Minimum effective sample size for Beta (relaxed from 20)
+        max_param = 2000  # Maximum parameter value (relaxed from 500)
+        min_param = 1e-6  # Minimum parameter value (allow very small but non-zero)
 
         use_beta_mask = (
-            (tau1 >= min_tau) & (tau2 >= min_tau) &  # Sufficient effective sample size
-            (alpha1_base <= max_param) & (beta1_base <= max_param) &  # Not too large
+            (tau1 >= min_tau) & (tau2 >= min_tau) &  # Basic effective sample size
+            (alpha1_base <= max_param) & (beta1_base <= max_param) &  # Not extremely large
             (alpha2_base <= max_param) & (beta2_base <= max_param) &
             (alpha1_base >= min_param) & (beta1_base >= min_param) &  # Not too small
             (alpha2_base >= min_param) & (beta2_base >= min_param) &
             np.isfinite(alpha1_base) & np.isfinite(beta1_base) &  # Finite values
-            np.isfinite(alpha2_base) & np.isfinite(beta2_base) &
-            (tau1 <= tau2 * 5) & (tau2 <= tau1 * 5)  # Effective sample sizes not too different
+            np.isfinite(alpha2_base) & np.isfinite(beta2_base)
+            # Removed tau ratio constraint - allow some imbalance
         )
         use_normal_mask = ~use_beta_mask
 
@@ -449,10 +449,10 @@ class BetaClassifier:
         tau1 = alpha1_base + beta1_base
         tau2 = alpha2_base + beta2_base
 
-        # Use Beta only when parameters are reliable
-        min_tau = 20
-        max_param = 500
-        min_param = 0.1
+        # Use Beta when parameters are reasonable
+        min_tau = 5
+        max_param = 2000
+        min_param = 1e-6
 
         use_beta_mask = (
             (tau1 >= min_tau) & (tau2 >= min_tau) &
@@ -461,8 +461,7 @@ class BetaClassifier:
             (alpha1_base >= min_param) & (beta1_base >= min_param) &
             (alpha2_base >= min_param) & (beta2_base >= min_param) &
             np.isfinite(alpha1_base) & np.isfinite(beta1_base) &
-            np.isfinite(alpha2_base) & np.isfinite(beta2_base) &
-            (tau1 <= tau2 * 5) & (tau2 <= tau1 * 5)
+            np.isfinite(alpha2_base) & np.isfinite(beta2_base)
         )
         use_normal_mask = ~use_beta_mask
 

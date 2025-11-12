@@ -249,7 +249,7 @@ class MethylModeler:
             'beta1': selected_dmps_df['beta1'].values,
             'alpha2': selected_dmps_df['alpha2'].values,
             'beta2': selected_dmps_df['beta2'].values,
-            'weights': selected_dmps_df.get('effect_size', np.ones(len(selected_dmps_df))).values
+            'weights': selected_dmps_df.get('importance', selected_dmps_df.get('effect_size', np.ones(len(selected_dmps_df)))).values
         }
 
         # Create classifier using factory based on config
@@ -565,13 +565,22 @@ class MethylModeler:
         """
         Compute biological importance score for multi-context DMPs.
 
-        Importance = delta_mean / overlap with variance corrections and edge case handling.
+        Importance = effect_size * variance_reliability * significance_factor * context_weight
 
-        The importance prioritizes DMPs with:
-        - Large methylation differences (delta_mean)
-        - Minimal distribution overlap
-        - Proper variance weighting (via effect_size)
-        - Context-specific weighting
+        effect_size already includes:
+        - Between-centroid variance correction: |Δμ| / √(var₁ + var₂)
+        - Distribution overlap correction: × (1 - BC)^γ
+
+        importance adds biological factors:
+        - Within-centroid variance reliability: reduces weight for noisy measurements
+        - Statistical significance: higher weight for more significant DMPs
+        - Context reliability: CG > CHG > CHH prioritization
+
+        Where:
+        - effect_size includes statistical corrections for variance and overlap
+        - variance_reliability = 1/(1 + max_var/0.05) reduces importance of noisy measurements
+        - significance_factor = normalized(-log10(q_value)) gives higher weight to more significant DMPs
+        - context_weight prioritizes more reliable methylation contexts
 
         Args:
             dmps_df: DataFrame with DMPs
@@ -590,38 +599,66 @@ class MethylModeler:
                 raise ValueError("Neither 'effect_size' nor 'delta_mean' column found in DMPs DataFrame")
 
         # Calculate biological importance using a balanced approach
-        # This combines multiple factors: effect size, overlap, and context weights
+        # effect_size already includes variance and overlap corrections, so we add biological factors
 
-        # Start with effect_size as base (includes variance weighting)
+        # Start with effect_size as base (already includes statistical corrections)
         if 'effect_size' in df.columns:
             df['importance'] = df['effect_size'].copy()
         else:
             df['importance'] = np.ones(len(df))
 
-        # Factor in overlap: higher importance for better separation
-        if 'overlap' in df.columns:
-            # For positions with good separation (low overlap), increase importance
-            # For positions with poor separation (high overlap), decrease importance
-            # Use a smooth function to avoid extremes
-            overlap_factor = 1.0 / (1.0 + df['overlap'])  # Ranges from ~1 (overlap=0) to 0.5 (overlap=1)
-            df['importance'] = df['importance'] * overlap_factor
+        # Factor in measurement reliability based on within-centroid variance
+        # effect_size uses between-centroid variance; this adds within-centroid reliability
+        if all(col in df.columns for col in ['alpha1', 'beta1', 'alpha2', 'beta2']):
+            # Compute variance for each centroid using Beta distribution formula
+            # var = αβ / ((α+β)²(α+β+1))
+            eps = 1e-8
+            tau1 = df['alpha1'] + df['beta1']
+            tau2 = df['alpha2'] + df['beta2']
+
+            # Avoid division by zero and numerical issues
+            tau1_safe = np.maximum(tau1, eps)
+            tau2_safe = np.maximum(tau2, eps)
+
+            var1 = (df['alpha1'] * df['beta1']) / (tau1_safe**2 * (tau1_safe + 1))
+            var2 = (df['alpha2'] * df['beta2']) / (tau2_safe**2 * (tau2_safe + 1))
+
+            # Use maximum variance between centroids as reliability measure
+            max_var = np.maximum(var1, var2)
+            max_var = np.maximum(max_var, eps)  # Avoid zero variance
+
+            # Variance reliability factor: lower variance = higher reliability
+            # Scale so that typical variance (~0.01-0.1) gives factor ~1
+            # Very high variance (>0.25) gives factor < 0.5
+            var_factor = 1.0 / (1.0 + max_var / 0.05)  # Soft threshold at 0.05 variance
+            df['importance'] = df['importance'] * var_factor
+
+        # Factor in statistical significance (additional confidence weighting)
+        # effect_size is based on statistical significance, but we can add extra weight
+        if 'q_value' in df.columns:
+            # Convert q_value to significance score: lower q_value = higher significance
+            # Use -log10(q_value) to get significance strength
+            eps = 1e-20  # Avoid log(0)
+            q_value_safe = np.maximum(df['q_value'], eps)
+            significance_factor = -np.log10(q_value_safe)
+            # Normalize to [0.5, 2.0] range to avoid extreme weighting
+            sig_min, sig_max = significance_factor.min(), significance_factor.max()
+            if sig_max > sig_min:
+                sig_normalized = 0.5 + 1.5 * (significance_factor - sig_min) / (sig_max - sig_min)
+            else:
+                sig_normalized = np.ones(len(df))
+            df['importance'] = df['importance'] * sig_normalized
 
         # Apply context weighting
         if 'context_weight' in df.columns:
             df['importance'] = df['importance'] * df['context_weight']
 
-        # Normalize to reasonable range and ensure positive values
+        # Ensure positive values but preserve relative importance
         if len(df) > 0:
+            # Shift negative values if any (rare case)
             min_imp = df['importance'].min()
             if min_imp < 0:
                 df['importance'] = df['importance'] - min_imp + 1e-6
-
-            # Scale to [0.1, 10] range for reasonable weights
-            imp_range = df['importance'].max() - df['importance'].min()
-            if imp_range > 0:
-                df['importance'] = 0.1 + 9.9 * (df['importance'] - df['importance'].min()) / imp_range
-            else:
-                df['importance'] = np.full(len(df), 1.0)
 
         # Handle edge cases: ensure finite values
         df['importance'] = np.where(np.isfinite(df['importance']), df['importance'], 0.0)
@@ -862,13 +899,13 @@ class MethylModeler:
             dmps_for_classifier = dmps_subset[matched_mask].reset_index(drop=True)
             
             # Create dmpDF for BetaClassifier
-            # Use biological importance as weights (not effect_size)
+            # Use biological importance as weights (preferred over raw effect_size)
             if 'importance' in dmps_for_classifier.columns:
                 weights = dmps_for_classifier['importance'].values
-                logger.debug(f"Using 'importance' column for weights")
+                logger.debug(f"Using 'importance' column for weights (includes overlap and context weighting)")
             elif 'effect_size' in dmps_for_classifier.columns:
                 weights = dmps_for_classifier['effect_size'].values
-                logger.debug(f"Using 'effect_size' column for weights (importance not found)")
+                logger.debug(f"Using 'effect_size' column for weights (importance not available)")
             else:
                 weights = np.ones(len(dmps_for_classifier))
                 logger.warning(f"No weight column found, using ones")
@@ -2028,20 +2065,63 @@ class MethylModeler:
         val_contexts: np.ndarray
     ) -> int:
         """
-        Binary search to find minimal k achieving target balanced accuracy.
+        Logarithmic binary search to find minimal k achieving target balanced accuracy.
+        Uses geometric spacing to efficiently explore the k-space, starting with small k values.
         Assumes monotonic BA increase with k (validated by our weighting fixes).
         """
         if max_k <= 1:
             return max_k
 
-        # Binary search bounds
-        left, right = 1, max_k
-        best_k = max_k  # Start with maximum as fallback
+        # First, do a logarithmic exploration to find a reasonable starting point
+        # Try geometric spacing: 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, etc.
+        logger.info(f"🔍 Logarithmic binary search: exploring k-space up to {max_k:,} DMPs")
 
-        logger.info(f"🔍 Binary search: k ∈ [{left}, {right}], target BA ≥ {target_ba:.3f}")
+        # Find the largest power of 2 that's reasonable to start with
+        max_power = int(np.log2(min(max_k, 8192)))  # Cap at 8192 to avoid too many evaluations
+        geometric_k = [2**i for i in range(max_power + 1) if 2**i <= max_k]
+
+        # Add some intermediate points for better coverage
+        if max_k > 100:
+            geometric_k.extend([int(max_k * 0.1), int(max_k * 0.25), int(max_k * 0.5)])
+        geometric_k = sorted(list(set(geometric_k)))  # Remove duplicates and sort
+
+        logger.info(f"📊 Testing geometric sequence: {geometric_k[:10]}{'...' if len(geometric_k) > 10 else ''}")
+
+        best_k = max_k
+        min_achieved_ba = 0.0
+
+        # Test geometric points to find where BA starts to stabilize
+        for k in geometric_k:
+            subset_df = sorted_df.iloc[:k]
+            result = self._validate_classifier_subset(
+                subset_df, X_calib, y_calib, X_test, y_test, val_positions, val_contexts
+            )
+
+            current_ba = result['balanced_accuracy']
+            logger.info(f"  [geom] k={k:,} → BA={current_ba:.4f}")
+
+            if current_ba >= target_ba:
+                best_k = k
+                break  # Found a k that achieves target - can refine from here
+            elif current_ba > min_achieved_ba:
+                min_achieved_ba = current_ba
+
+        # If we didn't find a k that achieves target_ba, we need more DMPs
+        # Do a focused binary search in the upper range
+        if best_k == max_k:
+            logger.info(f"⚠️  Target BA {target_ba:.3f} not achieved with geometric search, doing full binary search")
+            left, right = geometric_k[-1] if geometric_k else 1, max_k
+        else:
+            # Found a k that works - search for minimal k in the lower range
+            # Find the largest k in geometric_k that didn't achieve target
+            failed_k = [k for k in geometric_k if k < best_k]
+            left = failed_k[-1] if failed_k else 1
+            right = best_k
+
+        logger.info(f"🔍 Focused binary search: k ∈ [{left}, {right}], target BA ≥ {target_ba:.3f}")
 
         iterations = 0
-        max_iterations = int(np.log2(max_k)) + 2  # Should converge quickly
+        max_iterations = 8  # Limit iterations for focused search
 
         while left <= right and iterations < max_iterations:
             iterations += 1
@@ -2064,7 +2144,20 @@ class MethylModeler:
                 # Need more DMPs
                 left = mid + 1
 
-        logger.info(f"🔍 Binary search converged after {iterations} iterations")
+        # Check if we achieved the target with the final best_k
+        if best_k == max_k:
+            # Test the maximum k to see what BA we actually achieve
+            subset_df = sorted_df.iloc[:max_k]
+            final_result = self._validate_classifier_subset(
+                subset_df, X_calib, y_calib, X_test, y_test, val_positions, val_contexts
+            )
+            actual_ba = final_result['balanced_accuracy']
+
+            if actual_ba < target_ba:
+                logger.warning(f"⚠️  Target BA {target_ba:.3f} not achievable (maximum BA = {actual_ba:.4f} with {max_k:,} DMPs)")
+                logger.info(f"💡 Consider lowering target_balanced_accuracy in config for this dataset")
+
+        logger.info(f"🔍 Binary search converged after {iterations + len(geometric_k)} total evaluations")
         return best_k
 
     def _optimize_dmps_bayesian(
@@ -2361,13 +2454,19 @@ class MethylModeler:
         model_path = output_dir / f"classifier-{self.chromosome}.pkl"
         
         # Create strongly-typed dmpDF DataFrame
-        # Get weight from effect_size or context_weight, defaulting to 1.0
-        if 'effect_size' in selected_dmps_df.columns:
+        # Get weight from importance (preferred), then effect_size, then context_weight
+        if 'importance' in selected_dmps_df.columns:
+            weights = selected_dmps_df['importance'].values
+            logger.debug("Using 'importance' for classifier weights (includes overlap and context weighting)")
+        elif 'effect_size' in selected_dmps_df.columns:
             weights = selected_dmps_df['effect_size'].values
+            logger.debug("Using 'effect_size' for classifier weights (importance not available)")
         elif 'context_weight' in selected_dmps_df.columns:
             weights = selected_dmps_df['context_weight'].values
+            logger.debug("Using 'context_weight' for classifier weights")
         else:
             weights = np.ones(len(selected_dmps_df), dtype=np.float64)
+            logger.debug("Using uniform weights (no weight columns available)")
         
         dmpDF = pd.DataFrame({
             'pos': selected_dmps_df['position'].values.astype(np.int64),
@@ -2583,12 +2682,12 @@ class MethylModeler:
             if len(effect_size_values) > 0:
                 logger.debug(f"Effect_size stats: min={effect_size_values.min():.6f}, "
                            f"max={effect_size_values.max():.6f}, "
-                           f"mean={effect_size_values.mean():.6f} (range: [0.01, 1.0])")
+                           f"mean={effect_size_values.mean():.6f} (unnormalized)")
 
                 # Check for potential issues
-                if effect_size_values.min() < 0.009:
-                    logger.warning(f"Some effect_size values too small: min={effect_size_values.min():.6f}")
-                elif effect_size_values.std() < 1e-4:
+                if effect_size_values.min() < 1e-4:
+                    logger.warning(f"Some effect_size values very small: min={effect_size_values.min():.6e}")
+                elif effect_size_values.std() < 1e-6:
                     logger.warning(f"All effect_size values nearly identical (std={effect_size_values.std():.2e}) - limited discriminatory power")
 
                 # Show top 5 values to understand distribution
@@ -2703,8 +2802,11 @@ class MethylModeler:
         else:
             logger.warning("mean1 and/or mean2 columns not found, cannot compute delta_sign")
         
-        # Map effect_size to weight if effect_size exists
-        if 'effect_size' in export_df.columns:
+        # Map importance to weight (preferred), then effect_size
+        if 'importance' in export_df.columns:
+            export_df['weight'] = export_df['importance']
+            logger.debug("Mapped importance to weight column")
+        elif 'effect_size' in export_df.columns:
             export_df['weight'] = export_df['effect_size']
             logger.debug("Mapped effect_size to weight column")
         elif 'weight' not in export_df.columns:
@@ -2866,10 +2968,9 @@ class MethylModeler:
             f"  Target Balanced Accuracy: {self.config.target_balanced_accuracy}",
             "",
             "Biological Importance (Effect Size):",
-            f"  Formula: effect_size = |delta_mu| / sqrt(var1² + var2²) * (1 - BC)^gamma",
-            f"  This is a variance-weighted, overlap-penalized metric combining:",
-            f"    • Standardized mean difference (confidence-weighted)",
-            f"    • Distribution overlap penalty: (1 - BC)^{self.config.gamma}",
+            f"  Formula: importance = effect_size × variance_reliability × significance_factor × context_weight",
+            f"  effect_size already includes: |Δμ| / √(var₁ + var₂) × (1 - BC)^{self.config.gamma}",
+            f"  importance adds: within-centroid reliability, statistical significance, context weighting",
             f"  where BC = Bhattacharyya Coefficient (0=no overlap, 1=complete overlap)",
             f"  Higher values indicate more reliable, biologically significant DMPs",
             "",
