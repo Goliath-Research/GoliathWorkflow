@@ -6,6 +6,7 @@ focused on cancer types like early-stage prostate cancer.
 """
 
 import logging
+import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -17,6 +18,53 @@ from urllib3.util.retry import Retry
 from .secure_credentials import SecureCredentialManager
 
 logger = logging.getLogger(__name__)
+
+
+class ProgressIndicator:
+    """
+    Simple progress indicator for API queries.
+    """
+
+    def __init__(self, total: int, description: str = "Processing", update_interval: int = 10):
+        self.total = total
+        self.current = 0
+        self.description = description
+        self.update_interval = update_interval
+        self.start_time = time.time()
+        self.success_count = 0
+        self.error_count = 0
+        self.last_update = 0
+
+    def update(self, success: bool = True):
+        """Update progress counter."""
+        self.current += 1
+        if success:
+            self.success_count += 1
+        else:
+            self.error_count += 1
+
+        # Only print progress updates at intervals to avoid spam
+        if self.current % self.update_interval == 0 or self.current == self.total:
+            self._print_progress()
+
+    def _print_progress(self):
+        """Print current progress."""
+        elapsed = time.time() - self.start_time
+        rate = self.current / elapsed if elapsed > 0 else 0
+
+        if self.current < self.total:
+            eta = (self.total - self.current) / rate if rate > 0 else 0
+            eta_str = f"{eta:.0f}s" if eta < 60 else f"{eta/60:.1f}m"
+        else:
+            eta_str = "complete"
+
+        percent = (self.current / self.total) * 100
+        status = f"{self.success_count}✓/{self.error_count}✗" if self.error_count > 0 else f"{self.success_count}✓"
+
+        print(f"\r{self.description}: {self.current}/{self.total} ({percent:.1f}%) | {status} | ETA: {eta_str}", end="", flush=True)
+
+        if self.current == self.total:
+            print()  # New line at completion
 
 
 class GeneDiseaseEnricher:
@@ -32,8 +80,10 @@ class GeneDiseaseEnricher:
     def __init__(
         self,
         grok_api_key: Optional[str] = None,
+        disgenet_api_key: Optional[str] = None,
         grok_api_url: str = "https://api.x.ai/v1/chat/completions",
         disease_term: str = "early-stage prostate cancer",
+        use_grok: bool = True,
         use_disgenet: bool = True,
         rate_limit_delay: float = 1.0,
         max_retries: int = 3,
@@ -43,31 +93,43 @@ class GeneDiseaseEnricher:
     ):
         """
         Initialize GeneDiseaseEnricher.
-        
+
         Args:
             grok_api_key: Grok API key (optional, will use secure storage if not provided)
+            disgenet_api_key: DisGeNET API key (optional, will use secure storage if not provided)
             grok_api_url: Grok API endpoint URL
             disease_term: Disease term to search for (e.g., "early-stage prostate cancer")
-            use_disgenet: Whether to use DisGeNET as fallback if Grok API fails
+            use_grok: Whether to use Grok API for enrichment
+            use_disgenet: Whether to use DisGeNET database for enrichment
             rate_limit_delay: Delay between API calls (seconds)
             max_retries: Maximum retry attempts for API calls
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
             azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
             encrypted_file_path: Path to encrypted credential file (optional)
         """
-        # Initialize secure credential manager
-        self.credential_manager = SecureCredentialManager(
+        # Initialize secure credential managers
+        self.grok_credential_manager = SecureCredentialManager(
             credential_name="grok_api_key",
             azure_key_vault_url=azure_key_vault_url,
-            azure_secret_name=azure_secret_name,
+            azure_secret_name=azure_secret_name or "grok_api_key",
             encrypted_file_path=encrypted_file_path,
             env_var_name="GROK_API_KEY"
-        )
-        
-        # Get credential using secure manager
-        self.grok_api_key = self.credential_manager.get_credential(explicit_key=grok_api_key)
+        ) if use_grok else None
+
+        self.disgenet_credential_manager = SecureCredentialManager(
+            credential_name="disgenet_api_key",
+            azure_key_vault_url=azure_key_vault_url,
+            azure_secret_name=azure_secret_name or "disgenet_api_key",
+            encrypted_file_path=encrypted_file_path,
+            env_var_name="DISGENET_API_KEY"
+        ) if use_disgenet else None
+
+        # Get credentials using secure managers
+        self.grok_api_key = self.grok_credential_manager.get_credential(explicit_key=grok_api_key) if self.grok_credential_manager else None
+        self.disgenet_api_key = self.disgenet_credential_manager.get_credential(explicit_key=disgenet_api_key) if self.disgenet_credential_manager else None
         self.grok_api_url = grok_api_url
         self.disease_term = disease_term
+        self.use_grok = use_grok
         self.use_disgenet = use_disgenet
         self.rate_limit_delay = rate_limit_delay
         self.max_retries = max_retries
@@ -126,42 +188,49 @@ class GeneDiseaseEnricher:
             return cached_results
         
         logger.info(f"Querying Grok API for {len(uncached_genes)} genes associated with '{disease_term}'...")
-        
+
         results = cached_results.copy()
-        
+
         # Batch genes to avoid overwhelming the API
         batch_size = 10
+        total_batches = (len(uncached_genes) + batch_size - 1) // batch_size  # Ceiling division
+
+        # Initialize progress indicator
+        progress = ProgressIndicator(total_batches, "Grok API batches", update_interval=1)
+
         for i in range(0, len(uncached_genes), batch_size):
             batch = uncached_genes[i:i+batch_size]
-            
+
             # Create prompt for Grok
             prompt = self._create_grok_prompt(batch, disease_term)
-            
+
             try:
                 # Calculate timeout based on batch size (base 30s + 10s per gene)
                 timeout = max(30, 30 + len(batch) * 10)
                 logger.debug(f"Querying batch {i//batch_size + 1} with {len(batch)} genes (timeout: {timeout}s)")
                 response = self._call_grok_api(prompt, timeout=timeout)
-                
+
                 # Parse response
                 batch_results = self._parse_grok_response(response, batch)
-                
+
                 # Cache results
                 for gene_name, association_info in batch_results.items():
                     cache_key = f"{gene_name}:{disease_term}"
                     self._cache[cache_key] = association_info
-                
+
                 results.update(batch_results)
-                
+                progress.update(success=True)
+
                 # Rate limiting
                 if i + batch_size < len(uncached_genes):
                     time.sleep(self.rate_limit_delay)
-                    
+
             except Exception as e:
                 logger.warning(f"Grok API query failed for batch {i//batch_size + 1}: {e}")
+                progress.update(success=False)
                 # Continue with other batches
                 continue
-        
+
         logger.info(f"✅ Retrieved disease associations for {len(results)} genes from Grok API ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
         return results
     
@@ -346,69 +415,55 @@ Return ONLY valid JSON array format like:
         Returns:
             Dictionary mapping gene_name -> association info
         """
-        if not self.use_disgenet:
+        if not self.use_disgenet or not self.disgenet_api_key:
+            if not self.use_disgenet:
+                logger.debug("DisGeNET queries disabled")
+            else:
+                logger.warning("DisGeNET API key not available")
             return {}
-        
+
         disease_term = disease_term or self.disease_term
-        
+
         # Separate cached and uncached genes
         cached_results = {}
         uncached_genes = []
-        
+
         for gene in gene_names:
             cache_key = f"{gene.upper()}:{disease_term}"
             if cache_key in self._cache:
                 cached_results[gene.upper()] = self._cache[cache_key]
             else:
                 uncached_genes.append(gene)
-        
+
         if cached_results:
             logger.debug(f"Found {len(cached_results)} genes in cache")
-        
+
         if not uncached_genes:
             logger.info(f"✅ Retrieved all {len(cached_results)} genes from cache")
             return cached_results
-        
+
         logger.info(f"Querying DisGeNET for {len(uncached_genes)} genes...")
-        
-        # DisGeNET REST API endpoint
-        # Note: This requires DisGeNET API key (free registration at https://www.disgenet.org/api/)
-        import os
-        # Try secure credential manager first, then environment variable
-        disgenet_api_key = None
-        try:
-            from .secure_credentials import SecureCredentialManager
-            credential_manager = SecureCredentialManager(
-                credential_name="disgenet_api_key",
-                env_var_name="DISGENET_API_KEY"
-            )
-            disgenet_api_key = credential_manager.get_credential()
-        except Exception:
-            pass
-        
-        # Fallback to environment variable
-        if not disgenet_api_key:
-            disgenet_api_key = os.environ.get('DISGENET_API_KEY')
-        
-        if not disgenet_api_key:
-            logger.warning("DisGeNET API key not found. Set DISGENET_API_KEY environment variable.")
-            return cached_results
-        
+
+        disgenet_api_key = self.disgenet_api_key
+
         results = cached_results.copy()
-        
+
         # DisGeNET API endpoint
         base_url = "https://www.disgenet.org/api/gda/gene/"
-        
+
+        # Initialize progress indicator for individual genes
+        progress = ProgressIndicator(len(uncached_genes), "DisGeNET genes", update_interval=50)
+
         for gene in uncached_genes:
             try:
                 url = f"{base_url}{gene}"
                 headers = {"Authorization": f"Bearer {disgenet_api_key}"}
-                
+
                 response = self.session.get(url, headers=headers, timeout=10)
-                
+
                 if response.status_code == 200:
                     data = response.json()
-                    
+
                     # Filter by disease term if provided
                     if disease_term:
                         disease_lower = disease_term.lower()
@@ -419,7 +474,7 @@ Return ONLY valid JSON array format like:
                         ]
                     else:
                         relevant_associations = data
-                    
+
                     if relevant_associations:
                         # Get highest score association
                         best = max(relevant_associations, key=lambda x: x.get('score', 0))
@@ -443,14 +498,19 @@ Return ONLY valid JSON array format like:
                             'functional_role': None,
                             'source': 'disgenet'
                         }
-                    
+
                     # Cache result
                     cache_key = f"{gene.upper()}:{disease_term}"
                     self._cache[cache_key] = association_info
                     results[gene.upper()] = association_info
-                
+                    progress.update(success=True)
+
+                else:
+                    # Handle non-200 responses as errors
+                    progress.update(success=False)
+
                 time.sleep(0.1)  # Rate limiting
-                
+
             except Exception as e:
                 logger.debug(f"DisGeNET query failed for {gene}: {e}")
                 association_info = {
@@ -466,6 +526,7 @@ Return ONLY valid JSON array format like:
                 cache_key = f"{gene.upper()}:{disease_term}"
                 self._cache[cache_key] = association_info
                 results[gene.upper()] = association_info
+                progress.update(success=False)
         
         logger.info(f"✅ Retrieved associations for {len(results)} genes from DisGeNET ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
         return results
@@ -498,19 +559,23 @@ Return ONLY valid JSON array format like:
             return df
         
         logger.info(f"Enriching {len(unique_genes)} unique genes with disease associations...")
-        
-        # Query Grok API
-        grok_results = self.query_grok_api(unique_genes, disease_term)
-        
-        # Query DisGeNET as fallback/complement
+
+        # Query enabled sources
+        grok_results = {}
         disgenet_results = {}
+
+        if self.use_grok:
+            grok_results = self.query_grok_api(unique_genes, disease_term)
+
         if self.use_disgenet:
             disgenet_results = self.query_disgenet(unique_genes, disease_term)
-        
-        # Merge results (Grok takes precedence, DisGeNET fills gaps)
+
+        # Merge results based on enabled sources
         merged_results = {}
         for gene in unique_genes:
             gene_upper = gene.upper()
+
+            # Priority: Associated results first, then any available results
             if gene_upper in grok_results and grok_results[gene_upper]['associated']:
                 merged_results[gene_upper] = grok_results[gene_upper]
             elif gene_upper in disgenet_results and disgenet_results[gene_upper]['associated']:

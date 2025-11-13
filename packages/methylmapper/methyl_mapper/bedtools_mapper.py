@@ -39,8 +39,10 @@ class BedtoolsMapper:
         use_effect_size_weight: bool = True,
         p_value_log_transform: bool = True,
         enrich_disease: bool = False,
+        enrich_source: str = "both",
         disease_term: str = "early-stage prostate cancer",
         grok_api_key: Optional[str] = None,
+        disgenet_api_key: Optional[str] = None,
         azure_key_vault_url: Optional[str] = None,
         azure_secret_name: Optional[str] = None,
         encrypted_file_path: Optional[Path] = None,
@@ -62,8 +64,10 @@ class BedtoolsMapper:
             use_effect_size_weight: Whether to weight by effect_size
             p_value_log_transform: If True, uses -log10(p_value) for weighting
             enrich_disease: Whether to enrich results with disease associations
+            enrich_source: Source(s) for disease enrichment ("grok", "disgenet", or "both") (default: "both")
             disease_term: Disease term for enrichment (e.g., "early-stage prostate cancer")
             grok_api_key: Grok API key for disease enrichment (optional, uses secure storage if not provided)
+            disgenet_api_key: DisGeNET API key for disease enrichment (optional, uses secure storage if not provided)
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
             azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
             encrypted_file_path: Path to encrypted credential file (optional)
@@ -83,14 +87,22 @@ class BedtoolsMapper:
         self.use_q_value_weight = use_q_value_weight
         self.use_effect_size_weight = use_effect_size_weight
         self.p_value_log_transform = p_value_log_transform
-        
+
         # Disease enrichment
         self.enrich_disease = enrich_disease
+        self.enrich_source = enrich_source
         self.disease_enricher = None
         if enrich_disease:
+            # Determine which sources to use
+            use_grok = enrich_source in ['grok', 'both']
+            use_disgenet = enrich_source in ['disgenet', 'both']
+
             self.disease_enricher = GeneDiseaseEnricher(
-                grok_api_key=grok_api_key,
+                grok_api_key=grok_api_key if use_grok else None,
+                disgenet_api_key=disgenet_api_key if use_disgenet else None,
                 disease_term=disease_term,
+                use_grok=use_grok,
+                use_disgenet=use_disgenet,
                 azure_key_vault_url=azure_key_vault_url,
                 azure_secret_name=azure_secret_name,
                 encrypted_file_path=encrypted_file_path

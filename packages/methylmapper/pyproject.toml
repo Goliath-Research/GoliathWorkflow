@@ -22,7 +22,7 @@ methyl_mapper = "methyl_mapper.cli:main"
 methyl_mapper_bedtools = "methyl_mapper.cli:main_bedtools"
 methyl_mapper_credentials = "methyl_mapper.cli:main_credentials"
 
-[tool.poetry.group.dev.dependencies]
+[tool.poetry.dev-dependencies]
 pytest = "^7.0.0"
 pytest-cov = "^4.0.0"
 black = "^23.0.0"

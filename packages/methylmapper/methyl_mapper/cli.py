@@ -341,7 +341,14 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     disease_group.add_argument(
         '--enrich-disease',
         action='store_true',
-        help='Enable disease association enrichment using Grok API'
+        help='Enable disease association enrichment'
+    )
+    disease_group.add_argument(
+        '--enrich-source',
+        type=str,
+        choices=['grok', 'disgenet', 'both'],
+        default='both',
+        help='Source(s) for disease enrichment (default: both). "grok" uses Grok API, "disgenet" uses DisGeNET database, "both" uses both sources'
     )
     disease_group.add_argument(
         '--disease-term',
@@ -356,6 +363,12 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         help='Grok API key (optional, uses secure storage if not provided)'
     )
     disease_group.add_argument(
+        '--disgenet-api-key',
+        type=str,
+        default=None,
+        help='DisGeNET API key (optional, uses secure storage if not provided)'
+    )
+    disease_group.add_argument(
         '--azure-key-vault-url',
         type=str,
         default=None,
@@ -365,13 +378,13 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         '--azure-secret-name',
         type=str,
         default=None,
-        help='Azure Key Vault secret name (or set AZURE_SECRET_NAME env var, default: grok_api_key)'
+        help='Azure Key Vault secret name (or set AZURE_SECRET_NAME env var, default: grok_api_key for Grok, disgenet_api_key for DisGeNET)'
     )
     disease_group.add_argument(
         '--encrypted-file-path',
         type=str,
         default=None,
-        help='Path to encrypted credential file (default: ~/.methyl_mapper/credentials/grok_api_key.encrypted)'
+        help='Path to encrypted credential file (default: ~/.methyl_mapper/credentials/{source}_api_key.encrypted)'
     )
     
     # DMP optimization options
@@ -466,8 +479,10 @@ def main_bedtools():
             use_effect_size_weight=not args.no_effect_size_weight,
             p_value_log_transform=not args.no_log_transform,
             enrich_disease=args.enrich_disease,
+            enrich_source=args.enrich_source,
             disease_term=args.disease_term,
             grok_api_key=args.grok_api_key,
+            disgenet_api_key=args.disgenet_api_key,
             azure_key_vault_url=args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL'),
             azure_secret_name=args.azure_secret_name or os.environ.get('AZURE_SECRET_NAME'),
             encrypted_file_path=Path(args.encrypted_file_path) if args.encrypted_file_path else None,
