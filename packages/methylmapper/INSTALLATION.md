@@ -1,113 +1,146 @@
 # MethylMapper Installation Guide
 
+**Complete setup for both mapping tools**
+
+## Overview
+
+MethylMapper provides two tools with different installation requirements:
+
+- **`methyl_mapper_bedtools`** - Local processing with bedtools (Recommended for research)
+- **`methyl_mapper`** - Azure SQL Database integration (For enterprise environments)
+
 ## Prerequisites
 
-Before installing MethylMapper, ensure you have:
+- **Python 3.8+**
+- **pip** package manager
 
-1. **Python 3.8 or higher**
-2. **pip** (Python package manager)
-3. **ODBC Driver 17 for SQL Server** (or compatible)
-4. **Azure SQL Database** access with credentials
-5. **Network access** to Azure SQL (firewall rules configured)
+## methyl_mapper_bedtools Installation (Recommended)
 
-## Step 1: Install ODBC Driver
-
-### Ubuntu/Debian
+### Install System Dependencies
 
 ```bash
-# Add Microsoft repository
-curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list | \
-    sudo tee /etc/apt/sources.list.d/mssql-release.list
+# Install bedtools (required)
+conda install -c bioconda bedtools
 
-# Update package list
+# Or on Ubuntu/Debian:
 sudo apt-get update
+sudo apt-get install bedtools
 
-# Install ODBC Driver 17
-sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
-
-# Install unixODBC development headers (required for pyodbc)
-sudo apt-get install -y unixodbc-dev
+# Or on macOS:
+brew install bedtools
 
 # Verify installation
-odbcinst -j
+bedtools --version
 ```
 
-### macOS
+### Install Python Package
 
 ```bash
-# Install using Homebrew
+cd /home/ubuntu/MethylPipeline/packages/methylmapper
+pip install -e .
+```
+
+### Download Reference Data
+
+```bash
+# Download GENCODE annotation (recommended for human)
+wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_44/gencode.v44.annotation.gtf.gz
+gunzip gencode.v44.annotation.gtf.gz
+
+# Set as environment variable
+export GENE_GTF="/path/to/gencode.v44.annotation.gtf"
+
+# Or Ensembl annotation
+wget https://ftp.ensembl.org/pub/release-110/gtf/homo_sapiens/Homo_sapiens.GRCh38.110.gtf.gz
+gunzip Homo_sapiens.GRCh38.110.gtf.gz
+```
+
+### Optional: API Keys for Disease Enrichment
+
+```bash
+# Grok API key (recommended)
+export GROK_API_KEY="your-grok-api-key"
+
+# DisGeNET API key (free registration)
+export DISGENET_API_KEY="your-disgenet-api-key"
+```
+
+### Test Installation
+
+```bash
+# Test CLI
+methyl_mapper_bedtools --help
+
+# Test Python import
+python -c "from methyl_mapper import BedtoolsMapper; print('✓ BedtoolsMapper installed')"
+
+# Test credential management
+methyl_mapper_credentials save --credential-type grok --api-key "test-key"
+methyl_mapper_credentials test --credential-type grok
+```
+
+## methyl_mapper Installation (Azure SQL Database)
+
+### Install System Dependencies
+
+```bash
+# Install ODBC drivers
+# Ubuntu/Debian:
+curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+sudo apt-get update
+sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17 unixodbc-dev
+
+# macOS:
 brew tap microsoft/mssql-release https://github.com/Microsoft/homebrew-mssql-release
 brew update
 brew install msodbcsql17
 
-# Verify installation
+# Windows: Download from Microsoft website
+
+# Verify ODBC installation
 odbcinst -j
 ```
 
-### Windows
-
-1. Download ODBC Driver 17 from [Microsoft Download Center](https://docs.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
-2. Run the installer
-3. Follow installation wizard
-
-## Step 2: Install MethylMapper
-
-### From Source (Recommended for Development)
+### Install Python Package
 
 ```bash
-# Clone or navigate to MethylMapper directory
-cd /home/ubuntu/MethylMapper
-
-# Install in editable mode
+cd /home/ubuntu/MethylPipeline/packages/methylmapper
 pip install -e .
 ```
 
-### Install Dependencies Only
+### Test Installation
 
 ```bash
-cd /home/ubuntu/MethylMapper
-pip install -r requirements.txt
-```
+# Test CLI
+methyl_mapper --help
 
-## Step 3: Verify Installation
+# Test Python import
+python -c "from methyl_mapper import DMPMapper, MethylMapperConfig; print('✓ DMPMapper installed')"
 
-### Check MethylMapper Installation
-
-```bash
-# Test CLI is available
-methyl_mapper --version
-
-# Should output: MethylMapper 0.1.0
-```
-
-### Test Python Import
-
-```bash
-python -c "from methyl_mapper import DMPMapper, MethylMapperConfig; print('✓ MethylMapper installed successfully')"
-```
-
-### Test ODBC Driver
-
-```bash
+# Test ODBC driver
 python -c "import pyodbc; print('Available drivers:', pyodbc.drivers())"
 ```
 
-You should see "ODBC Driver 17 for SQL Server" in the list.
+## Configuration
 
-## Step 4: Configure Database Access
+### For methyl_mapper_bedtools
 
-### Create Configuration File
-
-Create a configuration file with your Azure SQL credentials:
-
+**Environment Variables:**
 ```bash
-cd /home/ubuntu/MethylMapper
+export GENE_GTF="/path/to/gencode.v44.annotation.gtf"    # Required
+export GROK_API_KEY="your-key"                          # Optional (for enrichment)
+export DISGENET_API_KEY="your-key"                      # Optional (for enrichment)
+```
+
+### For methyl_mapper (Azure SQL)
+
+**Create Configuration File:**
+```bash
 cp example_config.json my_config.json
 ```
 
-Edit `my_config.json` with your credentials:
-
+**Edit my_config.json:**
 ```json
 {
   "database": {
@@ -132,24 +165,149 @@ Edit `my_config.json` with your credentials:
 }
 ```
 
-### Test Database Connection
+## Testing
+
+### Test methyl_mapper_bedtools
 
 ```bash
+# Create test DMP file
+cat > test_dmps.csv << 'EOF'
+position,chromosome,context,q_value,delta_mean,overlap,effect_size
+12345,chr1,CG,0.001,0.45,0.15,125.3
+12346,chr1,CG,0.002,0.38,0.20,98.7
+12347,chr1,CG,0.003,0.42,0.18,110.5
+EOF
+
+# Test mapping
+methyl_mapper_bedtools --csv-pattern "test_dmps.csv" --gtf $GENE_GTF
+
+# Test with enrichment (if API keys set)
+methyl_mapper_bedtools --csv-pattern "test_dmps.csv" \
+                      --gtf $GENE_GTF \
+                      --enrich-disease \
+                      --disease-term "test disease"
+```
+
+### Test methyl_mapper (Azure SQL)
+
+```bash
+# Test database connection
 python -c "
 from methyl_mapper import MethylMapperConfig, AzureSQLConnection
 config = MethylMapperConfig.parse_file('my_config.json')
 with AzureSQLConnection(config.database) as db:
     print('✓ Database connection successful')
 "
+
+# Test mapping
+methyl_mapper --input test_dmps.csv --config my_config.json --sample-id 99999
 ```
 
-## Step 5: Set Up Database Schema
+## API Key Setup
 
-### Create Staging Table
+### Grok API Key
 
-Connect to your Azure SQL Database and run:
+1. **Sign up**: Visit https://x.ai/ (requires X/Twitter account)
+2. **Generate key**: Navigate to API settings
+3. **Set environment variable**:
+   ```bash
+   export GROK_API_KEY="your-generated-key"
+   ```
+4. **Test key**:
+   ```bash
+   methyl_mapper_credentials save --credential-type grok --api-key "your-key"
+   methyl_mapper_credentials test --credential-type grok
+   ```
 
+### DisGeNET API Key
+
+1. **Register**: Visit https://www.disgenet.org/ (free)
+2. **Get API key**: After registration, access your profile
+3. **Set environment variable**:
+   ```bash
+   export DISGENET_API_KEY="your-api-key"
+   ```
+4. **Test key**:
+   ```bash
+   methyl_mapper_credentials save --credential-type disgenet --api-key "your-key"
+   methyl_mapper_credentials test --credential-type disgenet
+   ```
+
+### Optional: Azure Key Vault Integration
+
+For enterprise environments, you can store API keys securely in Azure Key Vault:
+
+```bash
+# Set Key Vault URL
+export AZURE_KEY_VAULT_URL="https://your-vault.vault.azure.net/"
+
+# Save keys to Key Vault (requires Azure authentication)
+methyl_mapper_credentials save --credential-type grok --api-key "your-key" --use-azure
+methyl_mapper_credentials save --credential-type disgenet --api-key "your-key" --use-azure
+
+# Test retrieval from Key Vault
+methyl_mapper_credentials test --credential-type grok --azure-key-vault-url "https://your-vault.vault.azure.net/"
+```
+
+**Note**: Azure Key Vault integration requires:
+- Azure CLI authentication (`az login`)
+- Appropriate Key Vault permissions
+- Azure Identity package (`pip install azure-identity`)
+
+## Troubleshooting
+
+### Common Issues
+
+#### "bedtools not found"
+```bash
+# Install bedtools
+conda install -c bioconda bedtools
+# Verify: bedtools --version
+```
+
+#### "ODBC Driver not found"
+```bash
+# Check installed drivers
+odbcinst -q -d
+
+# Reinstall ODBC (Ubuntu)
+sudo apt-get purge msodbcsql17
+sudo apt-get install msodbcsql17
+```
+
+#### "Cannot connect to Azure SQL"
+```bash
+# Test connection
+sqlcmd -S your-server.database.windows.net -U username -P password -d database
+
+# Check firewall rules in Azure Portal
+# Add your IP to SQL Server firewall rules
+```
+
+#### "Grok API key invalid"
+```bash
+# Check key format (should be xai-...)
+echo $GROK_API_KEY
+
+# Test API access
+curl -X POST "https://api.x.ai/v1/chat/completions" \
+     -H "Authorization: Bearer $GROK_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"model": "grok-4-latest", "messages": [{"role": "user", "content": "test"}]}'
+```
+
+#### "DisGeNET API key invalid"
+```bash
+# Test API access
+curl -H "Authorization: Bearer $DISGENET_API_KEY" \
+     "https://www.disgenet.org/api/gda/gene/BRCA1"
+```
+
+### Azure SQL Database Setup
+
+#### Create Staging Table
 ```sql
+-- Run in your Azure SQL database
 CREATE TABLE dmp_staging (
     SampleID INT NOT NULL,
     position BIGINT NOT NULL,
@@ -163,237 +321,60 @@ CREATE TABLE dmp_staging (
 );
 ```
 
-### Verify Stored Procedure
-
-Ensure `spMapDMP2Genes` exists in your database:
-
+#### Verify Stored Procedure
 ```sql
+-- Check if spMapDMP2Genes exists
 SELECT OBJECT_ID('dbo.spMapDMP2Genes', 'P');
+
+-- Grant permissions if needed
+GRANT EXECUTE ON dbo.spMapDMP2Genes TO your_username;
 ```
 
-If NULL, the stored procedure doesn't exist and needs to be created.
+### Performance Tips
 
-## Step 6: Test Complete Pipeline
+#### For Large Datasets
+- **Use methyl_mapper_bedtools** for better performance
+- **Set appropriate batch sizes** in Azure SQL
+- **Use environment variables** instead of config files
 
-### Create Test DMP CSV
-
-Create a small test file `test_dmps.csv`:
-
-```csv
-position,chromosome,context,q_value,delta_mean,overlap,effect_size
-12345,chr1,CG,0.001,0.45,0.15,125.3
-12346,chr1,CG,0.002,0.38,0.20,98.7
-12347,chr1,CG,0.003,0.42,0.18,110.5
-```
-
-### Run Test Mapping
-
-```bash
-methyl_mapper --input test_dmps.csv \
-             --config my_config.json \
-             --sample-id 99999 \
-             --verbose
-```
-
-Expected output:
-```
-[INFO] Loading DMPs from test_dmps.csv...
-[INFO] ✅ Loaded 3 DMPs from CSV
-[INFO] Connecting to Azure SQL: your-server.database.windows.net/your_database
-[INFO] ✅ Connected to Azure SQL Server
-[INFO] Uploading 3 DMPs for SampleID=99999...
-[INFO] ✅ Uploaded 3 DMPs to staging table
-[INFO] Executing spMapDMP2Genes for SampleID=99999, chr1-CG...
-[INFO] ✅ Stored procedure returned N gene mappings
-[INFO] ✅ Saved full results to mapped_genes.csv (N rows)
-[INFO] ✅ Saved gene names to mapped_genes.json (N unique genes)
-```
-
-## Troubleshooting
-
-### Issue: "ODBC Driver Not Found"
-
-**Symptoms**:
-```
-pyodbc.Error: ('01000', "[01000] [unixODBC][Driver Manager]Can't open lib 'ODBC Driver 17 for SQL Server'")
-```
-
-**Solutions**:
-1. Verify ODBC driver is installed: `odbcinst -q -d`
-2. Check driver name in config matches installed driver exactly
-3. Reinstall ODBC driver
-4. Try alternative driver name: "ODBC Driver 18 for SQL Server"
-
-### Issue: "Cannot Connect to Azure SQL"
-
-**Symptoms**:
-```
-sqlalchemy.exc.OperationalError: (pyodbc.OperationalError) ('08001', '[08001] ...')
-```
-
-**Solutions**:
-1. Check server name includes `.database.windows.net`
-2. Verify firewall allows your IP address:
-   - Azure Portal → SQL Server → Firewalls and virtual networks
-   - Add your IP address
-3. Test with `sqlcmd`:
-   ```bash
-   sqlcmd -S your-server.database.windows.net -U your_username -P your_password -d your_database
-   ```
-4. Verify credentials are correct
-5. Check network connectivity:
-   ```bash
-   telnet your-server.database.windows.net 1433
-   ```
-
-### Issue: "pyodbc Not Found"
-
-**Symptoms**:
-```
-ModuleNotFoundError: No module named 'pyodbc'
-```
-
-**Solutions**:
-```bash
-pip install pyodbc
-```
-
-If compilation fails, install development headers:
-```bash
-# Ubuntu/Debian
-sudo apt-get install -y unixodbc-dev python3-dev
-
-# macOS
-brew install unixodbc
-```
-
-### Issue: "Permission Denied on Stored Procedure"
-
-**Symptoms**:
-```
-sqlalchemy.exc.ProgrammingError: ... EXECUTE permission was denied on the object 'spMapDMP2Genes'
-```
-
-**Solutions**:
-1. Grant EXECUTE permission:
-   ```sql
-   GRANT EXECUTE ON dbo.spMapDMP2Genes TO your_username;
-   ```
-2. Verify permissions:
-   ```sql
-   SELECT * FROM fn_my_permissions('dbo.spMapDMP2Genes', 'OBJECT');
-   ```
-
-### Issue: "Table dmp_staging Does Not Exist"
-
-**Symptoms**:
-```
-sqlalchemy.exc.ProgrammingError: ... Invalid object name 'dmp_staging'
-```
-
-**Solutions**:
-1. MethylMapper should create table automatically
-2. Manually create table (see Step 5 above)
-3. Verify you're connected to correct database
-4. Check user has CREATE TABLE permission
-
-### Issue: "Missing Required Columns"
-
-**Symptoms**:
-```
-ValueError: Missing required columns: ['effect_size']
-```
-
-**Solutions**:
-1. Ensure input CSV is from MethylModeler v0.2.0+
-2. Check column names match exactly (case-sensitive)
-3. Verify CSV is not corrupted:
-   ```bash
-   head -5 your_dmps.csv
-   ```
-
-## Advanced Configuration
-
-### Using Environment Variables
-
-Instead of storing passwords in JSON:
-
-```bash
-export AZURE_SQL_PASSWORD="your_password"
-```
-
-Then in Python:
-
-```python
-import os
-import json
-
-config_dict = json.load(open('config.json'))
-config_dict['database']['password'] = os.environ['AZURE_SQL_PASSWORD']
-config = MethylMapperConfig(**config_dict)
-```
-
-### Using Azure Key Vault
-
-For production environments:
-
-```python
-from azure.identity import DefaultAzureCredential
-from azure.keyvault.secrets import SecretClient
-
-# Get password from Key Vault
-credential = DefaultAzureCredential()
-client = SecretClient(vault_url="https://your-vault.vault.azure.net/", credential=credential)
-password = client.get_secret("sql-password").value
-
-# Use in config
-config_dict['database']['password'] = password
-```
-
-### Connection String Customization
-
-Modify `config.py` `get_connection_string()` method for custom connection parameters.
-
-## Uninstallation
-
-```bash
-pip uninstall methyl_mapper
-```
+#### Memory Usage
+- **Monitor RAM usage** during large mappings
+- **Use smaller chunks** for very large datasets
+- **Clear cache** between runs if needed
 
 ## Next Steps
 
-1. **Run with MethylModeler output**:
-   ```bash
-   methyl_mapper --input ../MethylModeler/output/biological_dmps-chr1-CG.csv \
-                --config my_config.json \
-                --sample-id 12345
-   ```
+### Complete Pipeline Setup
 
-2. **Use mapped genes for enrichment**:
-   ```bash
-   cd /home/ubuntu/MethylEnricher
-   methylenricher --input ../MethylMapper/mapped_genes.json \
-                  --outdir enrichment_results
-   ```
+```bash
+# 1. Install all components
+cd /home/ubuntu/MethylPipeline
+pip install ./packages/methylutils ./packages/methylcentroid ./packages/methylcluster ./packages/methylmodeler ./packages/methylclassifier ./packages/methylmapper
 
-3. **Automate with scripts**:
-   - Create pipeline scripts
-   - Use with batch processing
-   - Integrate with workflow managers
+# 2. Set environment variables
+export GENE_GTF="/path/to/gencode.v44.annotation.gtf"
+export GROK_API_KEY="your-grok-key"
+
+# 3. Test complete workflow
+# Run MethylModeler → MethylMapper → Results
+```
+
+### Integration Examples
+
+```bash
+# Research workflow (recommended)
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                      --enrich-disease \
+                      --disease-term "early-stage prostate cancer"
+
+# Enterprise workflow
+methyl_mapper --input dmps.csv --config azure_config.json --sample-id 12345
+```
 
 ## Support
 
-For installation issues:
-- Check this guide thoroughly
-- Review error messages carefully
-- Check Azure SQL firewall and permissions
-- Verify ODBC driver installation
-- Contact the MethylModeler team
-
-## Additional Resources
-
-- [Azure SQL Database Documentation](https://docs.microsoft.com/azure/azure-sql/)
-- [ODBC Driver for SQL Server](https://docs.microsoft.com/sql/connect/odbc/microsoft-odbc-driver-for-sql-server)
-- [pyodbc Documentation](https://github.com/mkleehammer/pyodbc/wiki)
-- [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
+- **Documentation**: See README.md, QUICK_START.md, BEDTOOLS_MAPPER_README.md
+- **Issues**: Check error messages, verify configurations
+- **API Keys**: Test with provided credential management commands
+- **Performance**: Use bedtools version for research, Azure SQL for production
 

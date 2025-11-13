@@ -1,60 +1,83 @@
 # MethylMapper
 
+**Comprehensive DMP-to-gene mapping with disease enrichment capabilities**
+
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
 ## Overview
 
-A command-line tool and Python library for mapping Differentially Methylated Positions (DMPs) to genes using Azure SQL Database and STRING-DB. MethylMapper integrates with the MethylModeler pipeline to provide gene-level interpretation of methylation analysis results.
+MethylMapper provides two complementary approaches for mapping Differentially Methylated Positions (DMPs) to genes:
 
-## Features
+1. **Azure SQL Database Integration** (`methyl_mapper`) - Enterprise-scale mapping with stored procedures
+2. **Bedtools-based Local Processing** (`methyl_mapper_bedtools`) - Fast local mapping with disease enrichment
 
-- Azure SQL Integration: Direct connection to Azure SQL Database
-- STRING-DB Mapping: Leverages STRING-DB for DMP-to-gene mapping
-- Flexible Weighting: Customizable weights for different genomic regions (promoter, exon, intron, etc.)
-- Batch Processing: Efficient bulk upload and processing of DMPs
-- Dual Output: CSV for full results, JSON for gene lists
-- CLI and API: Use as command-line tool or Python library
-- Configuration Management: JSON-based configuration for database and parameters
+Both integrate with the MethylModeler pipeline to provide gene-level interpretation of methylation analysis results.
 
-## Installation
+## Quick Start
+
+### For Disease Enrichment (Recommended)
 
 ```bash
-poetry install
+# Install bedtools and MethylMapper
+conda install -c bioconda bedtools
+pip install -e .
+
+# Set environment variables
+export GENE_GTF="/path/to/gencode.v44.annotation.gtf"
+export GROK_API_KEY="your-grok-api-key"
+
+# Basic mapping with disease enrichment
+cd /path/to/methylmodeler/output
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                      --enrich-disease \
+                      --disease-term "early-stage prostate cancer"
+
+# Advanced usage with all options
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                      --enrich-disease \
+                      --enrich-source both \
+                      --grok-api-key "your-grok-key" \
+                      --disgenet-api-key "your-disgenet-key" \
+                      --no-p-value-weight \
+                      --no-q-value-weight \
+                      --feature-types gene exon intron \
+                      --group-by gene_name \
+                      --min-k 20 \
+                      --max-k 1000 \
+                      --stability-threshold 5 \
+                      --output-dir /custom/output/path
 ```
 
-## Usage
-
-### Command Line
+### For Azure SQL Database (Legacy)
 
 ```bash
-methyl_mapper --input biological_dmps.csv --config db_config.json --sample-id 12345
+# Configure Azure SQL connection
+methyl_mapper --input dmps.csv --config db_config.json --sample-id 12345
 ```
 
-### Python API
+## Tools Overview
 
-```python
-from methyl_mapper import DMPMapper, MethylMapperConfig
+### methyl_mapper_bedtools (Primary Tool)
 
-config = MethylMapperConfig.parse_file("db_config.json")
-mapper = DMPMapper(config)
-results = mapper.run(input_csv="biological_dmps.csv", sample_id=12345)
-```
+**Features:**
+- ⚡ **Fast local processing** using bedtools intersect
+- 🧬 **Comprehensive feature mapping** (genes, transcripts, exons, introns, etc.)
+- 📊 **Statistical weighting** by p-value, q-value, and effect size
+- 🏥 **Disease enrichment** via Grok API and DisGeNET database
+- 📈 **Progress indicators** for long-running operations
+- 🔧 **Flexible configuration** via environment variables and CLI options
 
-## Configuration
+**Best for:** Research workflows, disease association studies, interactive analysis
 
-See example_config.json in the original content.
+### methyl_mapper (Azure SQL Database)
 
-## Output
+**Features:**
+- 🏢 **Enterprise-scale** processing with Azure SQL stored procedures
+- 🔄 **Batch processing** with database optimization
+- 📋 **Structured output** with sample tracking
+- ⚙️ **Configurable weighting** for different genomic regions
 
-- mapped_genes.csv: Full gene mapping results
-- mapped_genes.json: Ordered list of unique gene names
-
-## Integration
-
-Works with MethylModeler outputs for gene mapping, then feed to MethylEnricher.
-
-## Troubleshooting
-
-- Connection errors: Verify Azure SQL credentials and firewall
-- Missing columns: Ensure input CSV has required fields
+**Best for:** Production pipelines, large-scale batch processing, enterprise environments
 
 ## License
 

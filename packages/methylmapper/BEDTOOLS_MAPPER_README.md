@@ -105,6 +105,21 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                        --gtf $GENE_GTF \
                        --enrich-disease \
                        --grok-api-key "your-key-here"
+
+# Use DisGeNET only or both sources
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                       --gtf $GENE_GTF \
+                       --enrich-disease \
+                       --enrich-source disgenet \
+                       --disgenet-api-key "your-disgenet-key"
+
+# Use both Grok and DisGeNET
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                       --gtf $GENE_GTF \
+                       --enrich-disease \
+                       --enrich-source both \
+                       --grok-api-key "your-grok-key" \
+                       --disgenet-api-key "your-disgenet-key"
 ```
 
 ### Group By Different Features
@@ -122,9 +137,11 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
 ### Customize Weighting
 
 ```bash
-# Disable p-value weighting
+# Disable individual weighting components
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
-                       --no-p-value-weight
+                       --no-p-value-weight \
+                       --no-q-value-weight \
+                       --no-effect-size-weight
 
 # Use 1/p instead of -log10(p) for p-values
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
@@ -144,6 +161,23 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
 ```bash
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
                        --output-dir /path/to/results
+```
+
+### DMP Optimization Control
+
+```bash
+# Control DMP optimization parameters (only when --enrich-disease is used)
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
+                       --enrich-disease \
+                       --min-k 20 \
+                       --max-k 1000 \
+                       --stability-threshold 5 \
+                       --unrelated-growth-threshold 0.15
+
+# Disable DMP optimization (use all DMPs)
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
+                       --enrich-disease \
+                       --no-optimize-dmps
 ```
 
 ## Example Workflow
@@ -203,16 +237,25 @@ You can also use the mapper programmatically:
 
 ```python
 from pathlib import Path
-from methyl_mapper import BedtoolsMapper, GeneDiseaseEnricher
+from methyl_mapper import BedtoolsMapper
 
 mapper = BedtoolsMapper(
     gene_gtf=Path("/path/to/gencode.v44.annotation.gtf"),
-    use_p_value_weight=True,
-    use_q_value_weight=True,
-    use_effect_size_weight=True,
-    enrich_disease=True,
-    disease_term="early-stage prostate cancer",
-    grok_api_key="your-api-key"
+    feature_types=['gene', 'exon', 'intron'],  # Filter to specific feature types
+    use_p_value_weight=True,                    # Enable p-value weighting
+    use_q_value_weight=True,                    # Enable q-value weighting
+    use_effect_size_weight=True,                # Enable effect size weighting
+    p_value_log_transform=True,                 # Use -log10(p) instead of 1/p
+    enrich_disease=True,                        # Enable disease enrichment
+    enrich_source="both",                       # Use both Grok and DisGeNET
+    disease_term="early-stage prostate cancer", # Disease to search for
+    grok_api_key="your-grok-key",              # Grok API key
+    disgenet_api_key="your-disgenet-key",      # DisGeNET API key
+    optimize_dmps=True,                         # Enable DMP optimization
+    min_k=10,                                  # Minimum DMPs to test
+    max_k=None,                                # Maximum DMPs (None = all)
+    stability_threshold=3,                     # Stability threshold
+    unrelated_growth_threshold=0.10            # Growth rate threshold
 )
 
 results = mapper.map_csv_files(
