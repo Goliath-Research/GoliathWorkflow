@@ -89,6 +89,11 @@ The script creates a `mapped_features/` directory with:
   - Contains: Sum of DMP counts, mean of weighted scores, and aggregated disease enrichment data
   - **Note**: This file is created at the end after all chromosomes are processed and enriched
 
+- **Separate Source Files** (when using `--separate-enrichment-sources` with `--enrich-source both`):
+  - **`all-{group_by}-combined-grok.csv`**: Results enriched only with Grok API
+  - **`all-{group_by}-combined-disgenet.csv`**: Results enriched only with DisGeNET
+  - **`all-{group_by}-combined-merged.csv`**: Results merged from both sources (same as default combined.csv)
+
 ## Advanced Options
 
 ### Disease Enrichment
@@ -118,6 +123,15 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                        --gtf $GENE_GTF \
                        --enrich-disease \
                        --enrich-source both \
+                       --grok-api-key "your-grok-key" \
+                       --disgenet-api-key "your-disgenet-key"
+
+# Export separate files for each source (when using --enrich-source both)
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                       --gtf $GENE_GTF \
+                       --enrich-disease \
+                       --enrich-source both \
+                       --separate-enrichment-sources \
                        --grok-api-key "your-grok-key" \
                        --disgenet-api-key "your-disgenet-key"
 ```
@@ -316,6 +330,11 @@ results = mapper.map_csv_files(
 | **`disease_publications`** | **Number of publications** |
 | **`disease_functional_role`** | **Functional role in disease** |
 | **`disease_source`** | **Source: grok_api, disgenet, none** |
+| **`gene_ncbi_link`** | **Link to NCBI Gene database** |
+| **`gene_ensembl_link`** | **Link to Ensembl genome browser** |
+| **`gene_uniprot_link`** | **Link to UniProt protein database** |
+| **`gene_omim_link`** | **Link to OMIM genetic disorder database** |
+| **`gene_basic_description`** | **Basic description of gene function** |
 
 ## Getting a Grok API Key
 

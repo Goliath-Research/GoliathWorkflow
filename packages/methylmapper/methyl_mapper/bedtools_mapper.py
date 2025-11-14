@@ -40,6 +40,7 @@ class BedtoolsMapper:
         p_value_log_transform: bool = True,
         enrich_disease: bool = False,
         enrich_source: str = "both",
+        separate_enrichment_sources: bool = False,
         disease_term: str = "early-stage prostate cancer",
         grok_api_key: Optional[str] = None,
         disgenet_api_key: Optional[str] = None,
@@ -65,6 +66,7 @@ class BedtoolsMapper:
             p_value_log_transform: If True, uses -log10(p_value) for weighting
             enrich_disease: Whether to enrich results with disease associations
             enrich_source: Source(s) for disease enrichment ("grok", "disgenet", or "both") (default: "both")
+            separate_enrichment_sources: If True, export separate files for each enrichment source
             disease_term: Disease term for enrichment (e.g., "early-stage prostate cancer")
             grok_api_key: Grok API key for disease enrichment (optional, uses secure storage if not provided)
             disgenet_api_key: DisGeNET API key for disease enrichment (optional, uses secure storage if not provided)
@@ -91,6 +93,7 @@ class BedtoolsMapper:
         # Disease enrichment
         self.enrich_disease = enrich_disease
         self.enrich_source = enrich_source
+        self.separate_enrichment_sources = separate_enrichment_sources
         self.disease_enricher = None
         if enrich_disease:
             # Determine which sources to use
@@ -842,10 +845,29 @@ class BedtoolsMapper:
                 logger.info(f"Enriching combined {group_by} results with disease associations...")
                 unique_genes = combined[group_by].nunique()
                 logger.info(f"Found {unique_genes} unique {group_by}s across all chromosomes")
-                combined = self.disease_enricher.enrich_gene_dataframe(
-                    combined,
-                    gene_column=group_by
-                )
+
+                if self.separate_enrichment_sources and self.enrich_source == 'both':
+                    # Export separate files for each source
+                    enriched_results = self.disease_enricher.enrich_gene_dataframe(
+                        combined,
+                        gene_column=group_by,
+                        separate_sources=True
+                    )
+
+                    # Save separate files
+                    for source_name, enriched_df in enriched_results.items():
+                        source_csv = output_dir / f"all-{group_by}-combined-{source_name}.csv"
+                        enriched_df.to_csv(source_csv, index=False)
+                        logger.info(f"   Saved {source_name} results to: {source_csv}")
+
+                    # Use merged results for the main combined file
+                    combined = enriched_results['merged']
+                else:
+                    # Standard enrichment
+                    combined = self.disease_enricher.enrich_gene_dataframe(
+                        combined,
+                        gene_column=group_by
+                    )
             
             combined_csv = output_dir / f"all-{group_by}-combined.csv"
             combined.to_csv(combined_csv, index=False)

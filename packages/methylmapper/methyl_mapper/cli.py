@@ -351,6 +351,11 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         help='Source(s) for disease enrichment (default: both). "grok" uses Grok API, "disgenet" uses DisGeNET database, "both" uses both sources'
     )
     disease_group.add_argument(
+        '--separate-enrichment-sources',
+        action='store_true',
+        help='Export separate CSV files for each enrichment source when using --enrich-source both'
+    )
+    disease_group.add_argument(
         '--disease-term',
         type=str,
         default='early-stage prostate cancer',
@@ -480,6 +485,7 @@ def main_bedtools():
             p_value_log_transform=not args.no_log_transform,
             enrich_disease=args.enrich_disease,
             enrich_source=args.enrich_source,
+            separate_enrichment_sources=args.separate_enrichment_sources,
             disease_term=args.disease_term,
             grok_api_key=args.grok_api_key,
             disgenet_api_key=args.disgenet_api_key,

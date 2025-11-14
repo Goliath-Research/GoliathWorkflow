@@ -9,7 +9,7 @@ import logging
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Union
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
@@ -535,18 +535,20 @@ Return ONLY valid JSON array format like:
         self,
         df: pd.DataFrame,
         gene_column: str = 'gene_name',
-        disease_term: Optional[str] = None
-    ) -> pd.DataFrame:
+        disease_term: Optional[str] = None,
+        separate_sources: bool = False
+    ) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
         """
         Enrich a DataFrame with disease associations.
-        
+
         Args:
             df: DataFrame with gene information
             gene_column: Column name containing gene symbols
             disease_term: Disease term to search for
-            
+            separate_sources: If True and both sources enabled, return dict with separate DataFrames
+
         Returns:
-            DataFrame with added disease association columns
+            DataFrame with added disease association columns, or dict of DataFrames if separate_sources=True
         """
         if gene_column not in df.columns:
             raise ValueError(f"Column '{gene_column}' not found in DataFrame")
@@ -556,8 +558,10 @@ Return ONLY valid JSON array format like:
         
         if not unique_genes:
             logger.warning("No genes found in DataFrame")
+            if separate_sources and self.use_grok and self.use_disgenet:
+                return {'grok': df.copy(), 'disgenet': df.copy(), 'merged': df.copy()}
             return df
-        
+
         logger.info(f"Enriching {len(unique_genes)} unique genes with disease associations...")
 
         # Query enabled sources
@@ -570,7 +574,45 @@ Return ONLY valid JSON array format like:
         if self.use_disgenet:
             disgenet_results = self.query_disgenet(unique_genes, disease_term)
 
-        # Merge results based on enabled sources
+        # Generate hyperlinks for all genes
+        hyperlinks = self._generate_gene_hyperlinks(unique_genes)
+
+        # If separate sources requested and both sources enabled, return separate DataFrames
+        if separate_sources and self.use_grok and self.use_disgenet:
+            logger.info("Returning separate results for each source...")
+
+            # Create Grok-enriched DataFrame
+            grok_df = df.copy()
+            grok_df = self._add_enrichment_columns(grok_df, grok_results, gene_column, 'grok', hyperlinks)
+
+            # Create DisGeNET-enriched DataFrame
+            disgenet_df = df.copy()
+            disgenet_df = self._add_enrichment_columns(disgenet_df, disgenet_results, gene_column, 'disgenet', hyperlinks)
+
+            # Create merged DataFrame (current behavior)
+            merged_results = self._merge_results(grok_results, disgenet_results, unique_genes)
+            merged_df = df.copy()
+            merged_df = self._add_enrichment_columns(merged_df, merged_results, gene_column, 'merged', hyperlinks)
+
+            return {
+                'grok': grok_df,
+                'disgenet': disgenet_df,
+                'merged': merged_df
+            }
+
+        # Default behavior: merge results
+        merged_results = self._merge_results(grok_results, disgenet_results, unique_genes)
+        enriched_df = df.copy()
+        enriched_df = self._add_enrichment_columns(enriched_df, merged_results, gene_column, 'merged', hyperlinks)
+
+        # Log summary
+        n_associated = enriched_df['disease_associated'].sum()
+        logger.info(f"✅ Enriched DataFrame: {n_associated}/{len(enriched_df)} genes associated with '{disease_term or self.disease_term}'")
+
+        return enriched_df
+
+    def _merge_results(self, grok_results: Dict[str, Dict], disgenet_results: Dict[str, Dict], unique_genes: List[str]) -> Dict[str, Dict]:
+        """Merge results from multiple sources with priority logic."""
         merged_results = {}
         for gene in unique_genes:
             gene_upper = gene.upper()
@@ -595,36 +637,67 @@ Return ONLY valid JSON array format like:
                     'functional_role': None,
                     'source': 'none'
                 }
-        
-        # Add columns to DataFrame
-        enriched_df = df.copy()
-        
-        # Map gene names to associations
-        enriched_df['disease_associated'] = enriched_df[gene_column].str.upper().map(
-            lambda x: merged_results.get(x, {}).get('associated', False) if pd.notna(x) else False
+        return merged_results
+
+    def _add_enrichment_columns(self, df: pd.DataFrame, results: Dict[str, Dict], gene_column: str, source_prefix: str, hyperlinks: Dict[str, Dict]) -> pd.DataFrame:
+        """Add enrichment columns to DataFrame with hyperlinks."""
+        # Disease association columns
+        df[f'disease_associated'] = df[gene_column].str.upper().map(
+            lambda x: results.get(x, {}).get('associated', False) if pd.notna(x) else False
         )
-        enriched_df['disease_association_type'] = enriched_df[gene_column].str.upper().map(
-            lambda x: merged_results.get(x, {}).get('association_type', 'none') if pd.notna(x) else 'none'
+        df[f'disease_association_type'] = df[gene_column].str.upper().map(
+            lambda x: results.get(x, {}).get('association_type', 'none') if pd.notna(x) else 'none'
         )
-        enriched_df['disease_evidence_level'] = enriched_df[gene_column].str.upper().map(
-            lambda x: merged_results.get(x, {}).get('evidence_level', 'none') if pd.notna(x) else 'none'
+        df[f'disease_evidence_level'] = df[gene_column].str.upper().map(
+            lambda x: results.get(x, {}).get('evidence_level', 'none') if pd.notna(x) else 'none'
         )
-        enriched_df['disease_description'] = enriched_df[gene_column].str.upper().map(
-            lambda x: merged_results.get(x, {}).get('description') if pd.notna(x) else None
+        df[f'disease_description'] = df[gene_column].str.upper().map(
+            lambda x: results.get(x, {}).get('description') if pd.notna(x) else None
         )
-        enriched_df['disease_publications'] = enriched_df[gene_column].str.upper().map(
-            lambda x: merged_results.get(x, {}).get('publications', 0) if pd.notna(x) else 0
+        df[f'disease_publications'] = df[gene_column].str.upper().map(
+            lambda x: results.get(x, {}).get('publications', 0) if pd.notna(x) else 0
         )
-        enriched_df['disease_functional_role'] = enriched_df[gene_column].str.upper().map(
-            lambda x: merged_results.get(x, {}).get('functional_role') if pd.notna(x) else None
+        df[f'disease_functional_role'] = df[gene_column].str.upper().map(
+            lambda x: results.get(x, {}).get('functional_role') if pd.notna(x) else None
         )
-        enriched_df['disease_source'] = enriched_df[gene_column].str.upper().map(
-            lambda x: merged_results.get(x, {}).get('source', 'none') if pd.notna(x) else 'none'
+        df[f'disease_source'] = df[gene_column].str.upper().map(
+            lambda x: results.get(x, {}).get('source', 'none') if pd.notna(x) else 'none'
         )
-        
-        # Log summary
-        n_associated = enriched_df['disease_associated'].sum()
-        logger.info(f"✅ Enriched DataFrame: {n_associated}/{len(enriched_df)} genes associated with '{disease_term or self.disease_term}'")
-        
-        return enriched_df
+
+        # Add hyperlinks
+        df[f'gene_ncbi_link'] = df[gene_column].str.upper().map(
+            lambda x: hyperlinks.get(x, {}).get('ncbi', '') if pd.notna(x) else ''
+        )
+        df[f'gene_ensembl_link'] = df[gene_column].str.upper().map(
+            lambda x: hyperlinks.get(x, {}).get('ensembl', '') if pd.notna(x) else ''
+        )
+        df[f'gene_uniprot_link'] = df[gene_column].str.upper().map(
+            lambda x: hyperlinks.get(x, {}).get('uniprot', '') if pd.notna(x) else ''
+        )
+        df[f'gene_omim_link'] = df[gene_column].str.upper().map(
+            lambda x: hyperlinks.get(x, {}).get('omim', '') if pd.notna(x) else ''
+        )
+
+        # Add basic gene description for unrelated genes
+        df[f'gene_basic_description'] = df[gene_column].str.upper().map(
+            lambda x: hyperlinks.get(x, {}).get('description', 'Gene function not determined') if pd.notna(x) else ''
+        )
+
+        return df
+
+    def _generate_gene_hyperlinks(self, gene_names: List[str]) -> Dict[str, Dict]:
+        """Generate hyperlinks for gene databases."""
+        hyperlinks = {}
+
+        for gene in gene_names:
+            gene_upper = gene.upper()
+            hyperlinks[gene_upper] = {
+                'ncbi': f'https://www.ncbi.nlm.nih.gov/gene/?term={gene}',
+                'ensembl': f'https://www.ensembl.org/id/{gene}',
+                'uniprot': f'https://www.uniprot.org/uniprotkb?query={gene}',
+                'omim': f'https://www.omim.org/search?search={gene}',
+                'description': f'Protein-coding gene {gene} - function and biological role'
+            }
+
+        return hyperlinks
 
