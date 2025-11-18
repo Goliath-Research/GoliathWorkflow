@@ -423,7 +423,12 @@ class MethylModeler:
         processing_time = time.time() - start_time
         
         logger.info(f"Context {context}: Compared {len(comparison_results):,} positions in {processing_time:.2f}s")
-        
+
+        # Apply EAT transformation if enabled
+        if self.config.enable_eat_transform:
+            logger.info("🧬 Applying EAT transformation to enhance DMP detection...")
+            comparison_results = self._apply_eat_transformation(comparison_results, centroid1, centroid2, context)
+
         # Apply statistical filtering
         total_positions = len(comparison_results)
         filtered_results = comparison_results[comparison_results['q_value'] <= self.config.alpha].copy()
@@ -440,7 +445,94 @@ class MethylModeler:
         dmp_df['context'] = context
         
         return dmp_df
-    
+
+    def _apply_eat_transformation(self, comparison_results: pd.DataFrame,
+                                centroid1: MethylSample, centroid2: MethylSample,
+                                context: str) -> pd.DataFrame:
+        """
+        Apply Entropy-weighted Asymmetry Transformation (EAT) to enhance DMP detection.
+
+        EAT reweights loci based on Beta distribution shape differences to emphasize
+        biologically meaningful methylation differences and de-emphasize loci with
+        high/indistinguishable entropy.
+
+        Args:
+            comparison_results: DataFrame with statistical comparison results
+            centroid1, centroid2: MethylSample centroids
+            context: Methylation context (for logging)
+
+        Returns:
+            Modified comparison_results with EAT-enhanced statistics
+        """
+        try:
+            from methyl_utils import compute_eat_T
+        except ImportError:
+            logger.warning("EAT transformation requested but methyl_utils not available, skipping")
+            return comparison_results
+
+        # Extract Beta parameters from comparison results
+        alpha_H = comparison_results['alpha1'].values  # Healthy centroid
+        beta_H = comparison_results['beta1'].values
+        alpha_C = comparison_results['alpha2'].values  # Cancer centroid
+        beta_C = comparison_results['beta2'].values
+
+        # Compute EAT distortion vector
+        T = compute_eat_T(
+            alpha_H=alpha_H, beta_H=beta_H,
+            alpha_C=alpha_C, beta_C=beta_C,
+            gamma=self.config.eat_gamma,
+            clip_T=self.config.eat_clip_t,
+            eps=1e-12,
+            low_tau_threshold=self.config.eat_low_tau_threshold,
+            use_loggamma=True,
+            use_gpu=self.config.use_gpu
+        )
+
+        # Apply EAT transformation to effect sizes
+        # The EAT T vector represents the biological importance weighting
+        # We multiply delta_mean by T to enhance biologically relevant differences
+        modified_results = comparison_results.copy()
+
+        # Store original delta_mean for reference
+        modified_results['delta_mean_raw'] = modified_results['delta_mean'].copy()
+
+        # Apply EAT weighting to delta_mean (effect size)
+        # T > 1 amplifies differences, T < 1 attenuates them
+        modified_results['delta_mean'] = modified_results['delta_mean'] * T
+
+        # Also apply EAT weighting to p-values (more conservative for high T values)
+        # Higher T values should make p-values more significant (smaller)
+        # We use a dampened effect since p-values are already in log space conceptually
+        eat_p_weight = np.clip(T, 0.1, 10.0)  # Prevent extreme p-value modifications
+        modified_results['p_value'] = modified_results['p_value'] / eat_p_weight
+
+        # Recompute q-values after p-value modification
+        from statsmodels.stats.multitest import multipletests
+        reject, q_values, _, _ = multipletests(
+            modified_results['p_value'].values,
+            alpha=self.config.alpha,
+            method='fdr_bh'
+        )
+        modified_results['q_value'] = q_values
+
+        # Add EAT metadata
+        modified_results['eat_T'] = T
+        modified_results['eat_applied'] = True
+
+        eat_stats = {
+            'mean_T': float(np.mean(T)),
+            'std_T': float(np.std(T)),
+            'min_T': float(np.min(T)),
+            'max_T': float(np.max(T)),
+            'positions_modified': len(T)
+        }
+
+        logger.info(f"🧬 EAT applied to {len(comparison_results)} positions in context {context}")
+        logger.info(f"   T stats: mean={eat_stats['mean_T']:.3f}, std={eat_stats['std_T']:.3f}, "
+                   f"range=[{eat_stats['min_T']:.3f}, {eat_stats['max_T']:.3f}]")
+
+        return modified_results
+
     def _compute_context_weights(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
         Compute trimmed-mean context weights and add to DataFrame.

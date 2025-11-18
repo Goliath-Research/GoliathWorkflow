@@ -67,7 +67,7 @@ echo "🔍 Checking packages..."
 echo ""
 
 # Check packages
-PACKAGES=("methylutils" "methylcentroid" "methyldetector" "methylmapper" "methyltrainer" "methylclassifier" "methylenricher")
+PACKAGES=("methylutils" "methylcentroid" "methylcluster" "methylmodeler" "methylclassifier" "methylmapper" "methylenricher")
 for pkg in "${PACKAGES[@]}"; do
     if [ -d "$PROJECT_ROOT/packages/$pkg" ]; then
         if [ -f "$PROJECT_ROOT/packages/$pkg/setup.py" ]; then

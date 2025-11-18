@@ -324,6 +324,30 @@ class MethylModelerConfig(BaseModel):
         description="Configuration for synthetic data realism"
     )
 
+    # ----------------
+    # EAT Transformation (Entropy-weighted Asymmetry Transformation)
+    # ----------------
+    enable_eat_transform: bool = Field(
+        default=False,
+        description="Enable Entropy-weighted Asymmetry Transformation (EAT) preprocessing before DMP detection. EAT reweights methylation loci based on Beta distribution shape differences between healthy and cancer centroids, improving DMP selection by emphasizing biologically meaningful differences."
+    )
+    eat_gamma: float = Field(
+        default=1.0, ge=0.0,
+        description="EAT entropy damping parameter. Higher values penalize loci with similar/high entropy (indistinguishable distributions). Default 1.0 provides balanced weighting."
+    )
+    eat_clip_t: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Optional clipping threshold for EAT distortion vector T. Values outside [-clip_T, +clip_T] are clipped to prevent extreme reweighting. None = no clipping."
+    )
+    eat_normalization: str = Field(
+        default="l2",
+        description="Normalization method applied after EAT transformation: 'l1' (sum to 1), 'l2' (unit norm), 'minmax' (0-1 range), 'zscore' (mean=0, std=1), None (no normalization)"
+    )
+    eat_low_tau_threshold: float = Field(
+        default=5.0, ge=0.0,
+        description="Threshold for concentration parameter (alpha+beta) below which EAT falls back to Normal approximation. Prevents numerical issues with low-coverage positions."
+    )
+
     @field_validator('classifier_type')
     @classmethod
     def validate_classifier_type(cls, v):
@@ -345,6 +369,14 @@ class MethylModelerConfig(BaseModel):
     def validate_trimmed_percentile(cls, v):
         if v < 0.0 or v > 0.5:
             raise ValueError("Trimmed percentiles must be between 0.0 and 0.5")
+        return v
+
+    @field_validator('eat_normalization')
+    @classmethod
+    def validate_eat_normalization(cls, v):
+        valid_norms = ['l1', 'l2', 'minmax', 'zscore', None]
+        if v not in valid_norms:
+            raise ValueError(f"EAT normalization must be one of: {valid_norms}, got: {v}")
         return v
     
     @model_validator(mode='after')

@@ -13,6 +13,7 @@ nav:
   - Architecture: ../docs/ARCHITECTURE.md
   - Development: ../docs/DEVELOPMENT.md
   - Production: ../docs/PRODUCTION.md
+  - Maintenance: ../docs/MAINTENANCE.md
   - Packages:
     - MethylUtils: ../packages/methylutils/README.md
     - MethylCentroid: ../packages/methylcentroid/README.md

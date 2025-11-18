@@ -82,22 +82,52 @@ methyl_utils/
 **Dependencies**:
 - methylutils
 
-#### 3. MethylDetector
+#### 3. MethylCluster
 
-**Purpose**: Detect differentially methylated positions (DMPs)
+**Purpose**: Perform exploratory clustering and QC on methylation samples
 
 **Key Features**:
-- Statistical testing (t-test, Mann-Whitney U)
-- Effect size calculations (Cohen's d, Hedges' g)
-- Multiple testing correction (FDR, Bonferroni)
-- Batch processing support
-- GPU-accelerated computation
+- HDBSCAN, hierarchical, and centroid-based clustering engines
+- Forced group assignments, soft membership probabilities
+- GPU-accelerated distance matrices via MethylUtils
+- Visualization outputs (heatmaps, dendrograms, cluster trees)
 
 **Dependencies**:
 - methylutils
-- scipy (statistical tests)
+- numpy / pandas / scipy
+- scikit-learn
+- hdbscan
 
-#### 4. MethylMapper
+#### 4. MethylModeler
+
+**Purpose**: Detect differentially methylated positions and package classifiers
+
+**Key Features**:
+- Storey's q-value FDR with biological filters (delta mean, Bhattacharyya)
+- Multi-context weighting and Balanced Accuracy optimization
+- Synthetic or real-sample validation with FeatureCuts/Bayesian optimization
+- Classifier packaging for direct consumption by MethylClassifier
+
+**Dependencies**:
+- methylutils
+- numpy / pandas / cupy
+- h5py
+
+#### 5. MethylClassifier
+
+**Purpose**: Classify samples using packaged probabilistic models
+
+**Key Features**:
+- Batch classification with posterior probabilities
+- Temperature scaling and optional Platt calibration
+- Availability-mask handling for missing CpGs
+- Command-line interface plus Python API
+
+**Dependencies**:
+- methylutils
+- numpy / scipy
+
+#### 6. MethylMapper
 
 **Purpose**: Map DMPs to genes using genomic coordinates
 
@@ -109,37 +139,9 @@ methyl_utils/
 
 **Dependencies**:
 - methylutils
-- pyodbc/pymssql (SQL connectivity)
-
-#### 5. MethylTrainer
-
-**Purpose**: Train machine learning models for classification
-
-**Key Features**:
-- Feature selection
-- Model training (Random Forest, SVM, Neural Networks)
-- Cross-validation
-- Model persistence
-- GPU-accelerated training where possible
-
-**Dependencies**:
-- methylutils
-- scikit-learn
-- torch (for neural networks)
-
-#### 6. MethylClassifier
-
-**Purpose**: Classify samples using trained models
-
-**Key Features**:
-- Batch classification
-- Confidence scoring
-- Model ensemble support
-- Command-line interface
-
-**Dependencies**:
-- methylutils
-- methyltrainer
+- bedtools/pybedtools (local mode)
+- pyodbc/pymssql (Azure SQL mode)
+- External APIs (Grok, DisGeNET) for disease context
 
 #### 7. MethylEnricher
 
@@ -163,14 +165,17 @@ methyl_utils/
 ```
 1. Raw Data (HDF5)
    ↓
-2. MethylDetector (DMP Detection)
+2. MethylCentroid (group representatives)
    ↓
-3. MethylMapper (Gene Mapping)
+3. MethylCluster (QC & clustering, optional)
    ↓
-4. MethylEnricher (Enrichment Analysis)
-   
-Parallel:
-5. MethylCentroid → MethylTrainer → MethylClassifier
+4. MethylModeler (DMP detection + model packaging)
+   ↓
+5. MethylClassifier (sample inference)
+   ↓
+6. MethylMapper (gene mapping + disease enrichment)
+   ↓
+7. MethylEnricher (functional enrichment)
 ```
 
 ### Data Formats

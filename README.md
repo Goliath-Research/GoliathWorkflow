@@ -22,70 +22,54 @@ MethylPipeline is a comprehensive, production-ready pipeline for methylation-bas
 
 ## Architecture
 
-MethylPipeline consists of **6 integrated packages** built on a shared foundation:
+MethylPipeline now ships **7 packages** that share the MethylUtils foundation.
 
-### Core Packages
+### Foundation
 
-#### 1. **MethylUtils** (Foundation)
-Shared library providing core utilities, GPU acceleration, statistical functions, and data structures.
+#### 1. **MethylUtils**
+Core utilities, GPU detection, statistical functions, and data structures used everywhere.
 
 **Key Components**:
-- `MethylSample`: Methylation data representation
-- `PositionAligner`: Genomic coordinate alignment
-- `MethylCentroidPair`: Statistical comparison with FDR
-- `ProbabilisticBetaClassifier`: Bayesian classification core
-- 7 Distance metrics (Jensen-Shannon, Hellinger, Wasserstein, etc.)
-- GPU detection and management
-- Memory management and performance optimization
+- `MethylSample`, `PositionAligner`, `MethylCentroidPair`
+- Probabilistic Beta classifier with Storey's q-value FDR
+- Seven GPU-aware distance metrics (Jensen-Shannon, Hellinger, Wasserstein, etc.)
+- Unified GPU/CPU memory management, logging, and profiling helpers
 
-📚 [MethylUtils Documentation](packages/methylutils/README.md) | [Comprehensive Guide](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
+📚 [MethylUtils README](packages/methylutils/README.md) | [Comprehensive Guide](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
 
-#### 2. **MethylCentroid** (Group Representatives)
-Creates representative centroids for sample groups with multi-metric consensus outlier detection.
+### Analysis & Quality Control
 
-**Key Features**:
-- Extended centroid calculation (Sx, Sx2, N statistics)
-- Multi-metric consensus outlier removal
-- GPU-accelerated distance computations
-- Incremental updates and batch processing
+#### 2. **MethylCentroid** – Group Representatives
+Creates extended centroids (Sx, Sx2, N) with adaptive outlier detection and GPU acceleration.
 
-📚 [MethylCentroid Documentation](packages/methylcentroid/README.md) | [Comprehensive Guide](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
+📚 [MethylCentroid README](packages/methylcentroid/README.md) | [Comprehensive Guide](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
 
-#### 3. **MethylCluster** (Exploratory Analysis)
-Multi-method clustering with HDBSCAN, Hierarchical, and Centroid-based approaches.
+#### 3. **MethylCluster** – Exploratory Analysis
+Multi-method clustering (HDBSCAN, Hierarchical, Centroid-based) with forced groups, soft assignments, and reusable distance matrices.
 
-**Key Features**:
-- Three clustering methods: HDBSCAN, Hierarchical, Centroid-based
-- K-means fallback for ambiguous HDBSCAN results
-- Cluster-level centroids (centroid method)
-- Forced groups for supervised clustering
-- Soft assignments with membership probabilities
+📚 [MethylCluster README](packages/methylcluster/README.md) | [Comprehensive Guide](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
 
-📚 [MethylCluster Documentation](packages/methylcluster/README.md) | [Comprehensive Guide](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
+#### 4. **MethylModeler** – DMP Detection & Model Packaging
+Detects Differentially Methylated Positions, applies biological filters, optimizes Balanced Accuracy, and exports classifier bundles for MethylClassifier.
 
-#### 4. **MethylModeler** (DMP Detection & Model Creation)
-Detects Differentially Methylated Positions and creates Bayesian classifier models.
+📚 [MethylModeler README](packages/methylmodeler/README.md) | [Comprehensive Guide](packages/methylmodeler/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
 
-**Key Features**:
-- Statistical testing with Storey's q-value FDR correction
-- Biological filtering (effect size, overlap, coverage)
-- Binary search for optimal DMP selection
-- Balanced Accuracy optimization (robust to class imbalance)
-- Model packaging for MethylClassifier
+### Interpretation & Reporting
 
-📚 [MethylModeler Documentation](packages/methylmodeler/README.md) | [Comprehensive Guide](packages/methylmodeler/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
+#### 5. **MethylClassifier** – Sample Prediction
+Loads packaged Beta classifiers, applies temperature scaling/Platt calibration, and scores samples with full posterior probabilities.
 
-#### 5. **MethylClassifier** (Sample Prediction)
-Classifies methylation samples using trained Bayesian models.
+📚 [MethylClassifier README](packages/methylclassifier/README.md) | [Comprehensive Guide](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
 
-**Key Features**:
-- Bayesian probabilistic classification
-- True posterior probabilities (not softmax approximations)
-- Temperature scaling and Platt calibration
-- Batch classification
-- Missing data handling
+#### 6. **MethylMapper** – Gene Mapping & Disease Context
+Maps optimized DMPs to genomic features using either the legacy Azure SQL workflow or the preferred bedtools-based mapper with Grok/DisGeNET disease enrichment.
 
-📚 [MethylClassifier Documentation](packages/methylclassifier/README.md) | [Comprehensive Guide](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
+📚 [MethylMapper README](packages/methylmapper/README.md) | [Quick Start](packages/methylmapper/QUICK_START.md)
+
+#### 7. **MethylEnricher** – Functional Enrichment
+Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and WikiPathways with batch processing and automatic q-value filtering.
+
+📚 [MethylEnricher README](packages/methylenricher/README.md) | [Installation Notes](packages/methylenricher/INSTALLATION.md)
 
 ## Complete Workflow
 
@@ -99,29 +83,38 @@ Classifies methylation samples using trained Bayesian models.
 ┌─────────────────────────────────────────────────────────────┐
 │              2. Centroid Generation (MethylCentroid)        │
 │  Create representative centroids, remove outliers           │
-│  Output: Centroid HDF5 files for each group                │
+│  Output: Centroid HDF5 files for each group                 │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│       3. Quality Control (MethylCluster) [Optional]         │
-│  Cluster samples to identify batch effects/outliers        │
-│  Validate expected groupings                                │
+│      3. Quality Control & Clustering (MethylCluster)        │
+│  Detect batch effects/outliers, force expected groupings    │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│      4. DMP Detection & Model Creation (MethylModeler)        │
+│      4. DMP Detection & Model Creation (MethylModeler)      │
 │  Compare centroids, detect DMPs with FDR correction         │
-│  Binary search for optimal DMP count (Balanced Accuracy)    │
-│  Output: Trained classifier model (.pkl)                    │
+│  Optimize Balanced Accuracy and package classifiers         │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │           5. Classification (MethylClassifier)              │
-│  Predict class for new samples                             │
-│  Output: Posterior probabilities, confidence scores         │
+│  Predict class for new samples with posterior probabilities │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│           6. Gene Mapping (MethylMapper)                    │
+│  Map DMPs to genes/features, optional disease enrichment    │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│        7. Functional Enrichment (MethylEnricher)            │
+│  Perform ORA/Enrichr analysis on mapped gene sets           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -182,26 +175,26 @@ cancer_centroid = MethylCentroid(
 ).build_centroid()
 
 # 2. Detect DMPs and train classifier
-from methyl_detector import MethylDetectorConfig, run_comparison
+from methyl_modeler import MethylModeler, MethylModelerConfig
 
-config = MethylDetectorConfig(
-    centroid1_path='/centroids/healthy/1-CG.h5',
-    centroid2_path='/centroids/cancer/1-CG.h5',
-    centroid1_name='Healthy',
-    centroid2_name='Cancer',
-    chrom='1',
-    ctx='CG',
-    output_dir='/output/detector',
+config = MethylModelerConfig(
+    chromosome="1",
+    contexts=["CG"],
+    centroid1_dir='/centroids/healthy',
+    centroid2_dir='/centroids/cancer',
+    output_dir='/output/modeler',
     target_balanced_accuracy=0.95
 )
 
-result = run_comparison(config)
-print(f"Model trained with {result['n_dmps']} DMPs")
+modeler = MethylModeler(config)
+result = modeler.run()
+print(f"Model trained with {result.total_biological_dmps} high-confidence DMPs")
+print(f"Classifier saved to: {result.classifier_model_path}")
 
 # 3. Classify new samples
 from methyl_classifier import MethylClassifier
 
-classifier = MethylClassifier('/output/detector/methyl_detector_classifier.pkl')
+classifier = MethylClassifier('/output/modeler/classifier-1.pkl')
 
 for sample in ['/data/test1', '/data/test2', '/data/test3']:
     result = classifier.predict(sample)
@@ -235,28 +228,26 @@ for sample in ['/data/test1', '/data/test2', '/data/test3']:
 
 ## Documentation
 
-### 📚 Comprehensive Documentation (6,294 lines)
+### 📚 Comprehensive Documentation
 
-Complete guides with mathematical theory, algorithms, API references, and examples:
+Deep dives with algorithms, math, and advanced workflows:
 
-- **[MethylUtils Comprehensive Documentation](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)** (1,443 lines)
-- **[MethylCentroid Comprehensive Documentation](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)** (1,501 lines)
-- **[MethylCluster Comprehensive Documentation](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)** (1,398 lines)
-- **[MethylDetector Comprehensive Documentation](packages/methyldetector/docs/METHYLDETECTOR_COMPREHENSIVE_DOCUMENTATION.md)** (1,358 lines)
-- **[MethylTrainer Comprehensive Documentation](packages/methyltrainer/docs/METHYLTRAINER_COMPREHENSIVE_DOCUMENTATION.md)** (1,013 lines)
-- **[MethylClassifier Comprehensive Documentation](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)** (1,256 lines)
-- **[MethylPipeline Integration Documentation](docs/METHYLPIPELINE_COMPREHENSIVE_DOCUMENTATION.md)** (1,082 lines)
+- [MethylUtils Comprehensive Documentation](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylCentroid Comprehensive Documentation](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylCluster Comprehensive Documentation](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylModeler Comprehensive Documentation](packages/methylmodeler/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylClassifier Comprehensive Documentation](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylPipeline Integration Documentation](docs/METHYLPIPELINE_COMPREHENSIVE_DOCUMENTATION.md)
 
-### 📖 Package READMEs
-
-Quick-start guides for each package:
+### 📖 Package READMEs & Guides
 
 - [MethylUtils README](packages/methylutils/README.md)
 - [MethylCentroid README](packages/methylcentroid/README.md)
 - [MethylCluster README](packages/methylcluster/README.md)
-- [MethylDetector README](packages/methyldetector/README.md)
-- [MethylTrainer README](packages/methyltrainer/README.md)
+- [MethylModeler README](packages/methylmodeler/README.md)
 - [MethylClassifier README](packages/methylclassifier/README.md)
+- [MethylMapper README](packages/methylmapper/README.md) | [Bedtools Quick Start](packages/methylmapper/QUICK_START.md)
+- [MethylEnricher README](packages/methylenricher/README.md)
 
 ### 🏗️ Architecture Documentation
 
@@ -324,13 +315,10 @@ See [MethylPipeline Integration Documentation](docs/METHYLPIPELINE_COMPREHENSIVE
 ### Example 2: Multi-Chromosome Analysis
 
 ```bash
-# Process all chromosomes in parallel
+# Process all chromosomes in parallel (one config per chromosome)
 for chrom in 1 2 3 X; do
     CUDA_VISIBLE_DEVICES=$((chrom % 4)) \
-    python -m methyl_detector \
-        --centroid1 /centroids/healthy/chr${chrom}-CG.h5 \
-        --centroid2 /centroids/cancer/chr${chrom}-CG.h5 \
-        --output-dir /output/chr${chrom} &
+    python -m methyl_modeler.cli configs/chr${chrom}-CG.json &
 done
 wait
 ```
@@ -389,7 +377,7 @@ All analyses use JSON configuration files for reproducibility:
 
 Run with:
 ```bash
-methyl-detector /configs/analysis.json
+./packages/methylmodeler/modeler /configs/analysis.json
 ```
 
 ## Troubleshooting
@@ -433,28 +421,28 @@ See individual package documentation for detailed troubleshooting guides.
 ```
 MethylPipeline/
 ├── packages/                    # Python packages
-│   ├── methylutils/            # Core utilities
+│   ├── methylutils/            # Core utilities + GPU helpers
 │   ├── methylcentroid/         # Centroid generation
-│   ├── methylcluster/          # Sample clustering
-│   ├── methyldetector/         # DMP detection & training
-│   ├── methyltrainer/          # Advanced training
-│   └── methylclassifier/       # Classification
-├── configs/                     # Configuration files
-│   ├── centroids/
-│   ├── detectors/
-│   └── clusters/
-├── docker/                      # Docker configuration
+│   ├── methylcluster/          # Sample clustering/QC
+│   ├── methylmodeler/          # DMP detection + model packaging
+│   ├── methylclassifier/       # Classification CLI/API
+│   ├── methylmapper/           # Gene mapping + enrichment hooks
+│   └── methylenricher/         # Functional enrichment CLI
+├── docker/                      # Container definitions
 │   ├── Dockerfile
 │   └── docker-compose.yml
-├── scripts/                     # Setup and utility scripts
+├── scripts/                     # Setup and automation helpers
 │   ├── setup_dev.sh
 │   ├── setup_prod.sh
-│   └── run_container.sh
+│   ├── run_container.sh
+│   └── install_all.sh
 ├── docs/                        # Pipeline-level documentation
-│   ├── METHYLPIPELINE_COMPREHENSIVE_DOCUMENTATION.md
 │   ├── ARCHITECTURE.md
 │   ├── DEVELOPMENT.md
-│   └── PRODUCTION.md
+│   ├── PRODUCTION.md
+│   └── METHYLPIPELINE_COMPREHENSIVE_DOCUMENTATION.md
+├── mkdocs.yml                   # Documentation site navigation
+├── pyproject.toml               # Repo-level tooling config
 └── README.md                    # This file
 ```
 

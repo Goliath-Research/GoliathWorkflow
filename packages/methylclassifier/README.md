@@ -191,7 +191,7 @@ print(f"Predictions with {100-np.mean(availability)*100:.0f}% missing data: {pre
 
 ## Model Training
 
-Models are trained using **MethylModeler** and ****:
+Models are trained using **MethylModeler**:
 
 1. **Create centroids** from sample groups (healthy/cancer) using MethylCentroid
 2. **Detect DMPs** using MethylModeler (statistical + biological filtering)
@@ -308,7 +308,7 @@ MethylClassifier is part of the MethylPipeline ecosystem:
 
 1. **MethylCentroid** → Create centroids from samples
 2. **MethylModeler** → Detect DMPs and train models
-3. **** → Optimize DMP selection
+3. FeatureCuts/Bayesian optimization → Optimize DMP selection
 4. **MethylClassifier** → Classify new samples (this package)
 5. **MethylMapper** → Map DMPs to genes
 6. **MethylEnricher** → Functional enrichment analysis

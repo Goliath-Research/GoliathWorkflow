@@ -13,18 +13,18 @@ methylutils
     GPU-optimized stats & math
 ```
 
-### Analysis Packages
+### Analysis & QC Packages
 ```
-methylcentroid         methylmodeler         methylmapper
-└── Centroid          └── DMP Detection      └── Gene Mapping
-    generation            with effect size       (Azure SQL)
+methylcentroid         methylcluster         methylmodeler
+└── Centroid          └── QC & clustering   └── DMP detection +
+    generation            (HDBSCAN/EM)         model packaging
 ```
 
-### Machine Learning Packages
+### Interpretation & Reporting
 ```
-         methylclassifier       methylenricher
-└── Model training    └── Sample             └── Gene enrichment
-                         classification            analysis
+methylclassifier       methylmapper          methylenricher
+└── Sample             └── Gene mapping +    └── Functional
+    classification         disease links        enrichment (ORA)
 ```
 
 ## 🏗️ Architecture
@@ -34,13 +34,13 @@ methylcentroid         methylmodeler         methylmapper
 MethylPipeline/
 │
 ├── 📦 packages/              # All Python packages
-│   ├── methylutils/         # Core (GPU, HDF5, logging)
+│   ├── methylutils/         # Core utilities & GPU helpers
 │   ├── methylcentroid/      # Centroid generation
-│   ├── methylmodeler/      # DMP detection
-│   ├── methylmapper/        # Gene mapping
-│   ├── /       # Model training
-│   ├── methylclassifier/    # Classification
-│   └── methylenricher/      # Enrichment
+│   ├── methylcluster/       # QC & clustering
+│   ├── methylmodeler/       # DMP detection + packaging
+│   ├── methylclassifier/    # Classification CLI/API
+│   ├── methylmapper/        # Gene mapping & disease context
+│   └── methylenricher/      # Functional enrichment
 │
 ├── 🐋 docker/               # Container configs
 │   ├── Dockerfile           # Development
@@ -123,19 +123,21 @@ MethylPipeline/
 ## 📊 Data Flow
 
 ```
-Raw Methylation Data (HDF5)
-         ↓
-    MethylUtils (Load & Preprocess)
-         ↓
-    ┌────┴────┐
-    ↓         ↓
-Detector   Centroid
-    ↓         ↓
-  Mapper   Trainer
-    ↓         ↓
-Enricher  Classifier
-    ↓         ↓
-  Results  Predictions
+Raw Samples (HDF5)
+        ↓
+  MethylUtils (I/O, GPU)
+        ↓
+  MethylCentroid (group reps)
+        ↓
+  MethylCluster (QC/outliers)
+        ↓
+  MethylModeler (DMPs + models)
+        ↓
+  MethylClassifier (inference)
+        ↓
+  MethylMapper (gene mapping)
+        ↓
+  MethylEnricher (functional analysis)
 ```
 
 ## 🚀 Quick Start Commands

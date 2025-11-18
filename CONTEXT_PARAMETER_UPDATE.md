@@ -3,7 +3,7 @@
 ## What Changed
 
 ### 1. **Config File Updated** ✅
-**File**: `packages/methyldetector/configs/pb-hc1-1_config.json`
+**File**: `packages/methylmodeler/configs/pb-hc1-1_config.json`
 
 Added the `contexts` parameter to explicitly control which methylation contexts to analyze:
 
@@ -19,7 +19,7 @@ Added the `contexts` parameter to explicitly control which methylation contexts 
 **New behavior**: Explicitly uses `["CG"]` for focused prostate cancer signal
 
 ### 2. **Default Changed** ✅
-**File**: `packages/methyldetector/methyl_detector/models/config.py`
+**File**: `packages/methylmodeler/methyl_modeler/models/config.py`
 
 Changed the default from all contexts to CG only:
 
@@ -60,7 +60,7 @@ def validate_contexts(cls, v):
 
 ### 4. **Documentation Created** ✅
 
-**File**: `packages/methyldetector/CONTEXT_SELECTION_GUIDE.md`
+**File**: `packages/methylmodeler/CONTEXT_SELECTION_GUIDE.md`
 - Comprehensive guide on when to use each context
 - Biological rationale for context selection
 - Performance considerations
@@ -129,8 +129,8 @@ With your updated config using CG only:
 Your config is **already updated** with `"contexts": ["CG"]`. Just run:
 
 ```bash
-python -m methyl_detector.cli.main \
-    packages/methyldetector/configs/pb-hc1-1_config.json
+python -m methyl_modeler.cli.main \
+    packages/methylmodeler/configs/pb-hc1-1_config.json
 ```
 
 ### To Use Different Contexts
@@ -188,8 +188,8 @@ Run three separate analyses:
 cd /home/ubuntu/MethylPipeline
 
 # Run with updated config (CG only)
-python -m methyl_detector.cli.main \
-    packages/methyldetector/configs/pb-hc1-1_config.json
+python -m methyl_modeler.cli.main \
+    packages/methylmodeler/configs/pb-hc1-1_config.json
 ```
 
 ### 2. Compare Results
@@ -237,14 +237,14 @@ A: Yes, likely a more focused set of cancer-relevant genes.
 
 ```
 Modified:
-  ✓ packages/methyldetector/configs/pb-hc1-1_config.json
-  ✓ packages/methyldetector/methyl_detector/models/config.py
+  ✓ packages/methylmodeler/configs/pb-hc1-1_config.json
+  ✓ packages/methylmodeler/methyl_modeler/models/config.py
 
 Created:
-  ✓ packages/methyldetector/CONTEXT_SELECTION_GUIDE.md
-  ✓ packages/methyldetector/configs/TEMPLATE_cancer_biomarker_CG_only.json
-  ✓ packages/methyldetector/configs/TEMPLATE_multi_context_weighted.json
-  ✓ packages/methyldetector/configs/TEMPLATE_simple_CG_only.json
+  ✓ packages/methylmodeler/CONTEXT_SELECTION_GUIDE.md
+  ✓ packages/methylmodeler/configs/TEMPLATE_cancer_biomarker_CG_only.json
+  ✓ packages/methylmodeler/configs/TEMPLATE_multi_context_weighted.json
+  ✓ packages/methylmodeler/configs/TEMPLATE_simple_CG_only.json
   ✓ CONTEXT_PARAMETER_UPDATE.md (this file)
 ```
 
@@ -257,5 +257,5 @@ Created:
 ✅ **Comprehensive documentation provided**  
 ✅ **Template configs available for different scenarios**  
 
-**Ready to use!** Your next MethylDetector run will focus on CG context for maximum prostate cancer signal strength.
+**Ready to use!** Your next MethylModeler run will focus on CG context for maximum prostate cancer signal strength.
 

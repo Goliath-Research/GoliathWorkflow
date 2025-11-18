@@ -1,0 +1,305 @@
+=== PAGE 000 ===
+Python
+# eat_transform.py ¥ = > oO
+# Author: Grok 4 (built by xAT)
+# License: MIT
+Entropy-weighted Asymmetry Transformation (EAT) for methylation profiles.
+Given Beta(a,B) centroids for Healthy (H) and Cancer (C), we compute a per-locus
+distortion T_i that emphasizes loci whose Beta *shape* differs (skew/asymmetry),
+and de-emphasizes loci with high/indistinguishable entropy.
+Core idea:
+
+Ti = Avi * (1 + |AC,i - A_H,il) * exp(-y * |H_C,i - H_H,il)
+where
+
+Ap_i = w_C,i - w_H,i = a_C/(a_C+B_C) - a_H/(a_H+B_H)
+
+A i= (ai - B i)/(a_i+ Bi) (asymmetry index)
+
+H(a,B) is the Beta entropy:
+
+H = In B(a,B) - (a-1)b(a) - (B-1)¥(B) + (at+B-2)p(a+B)
+
+You then reweight each sample vector x_s (f-values per locus) as:
+
+x' Ss = xX_S © T (elementwise)
+and optionally normalize per-sample before classification.
+Improvements:
+- Added shape validation for input arrays.
+- Optional Normal approximation fallback for low-coverage (small a+) cases.
+- GPU compatibility via xp (NumPy or CuPy).
+- Overflow handling for large a/B using log-gamma approximations.
+- Additional normalization options ('11', 'minmax').
+- Vectorized and robust to edge cases.
+from future __ import annotations
+import numpy as np
+from scipy.special import betaln, digamma, gammaln
+from typing import Optional, Union
+# For GPU support (optional)
+try:
+
+import cupy as cp
+
+XP_AVAILABLE = True
+except ImportError:
+
+XP_AVAILABLE = False
+
+rn — AlInnoa
+=== PAGE 001 ===
+-P _ IVNVIIN
+def get_xp(use_gpu: bool = False) -> type:
+"""Get array backend (NumPy or CuPy)."""
+if use _gpu and XP_AVAILABLE:
+return cp
+return np
+# ---------- Validation helper ----------
+def validate _beta_params(alpha: np.ndarray, beta: np.ndarray, label: str) -> None:
+"""Validate Beta parameters."""
+if alpha.shape != beta.shape:
+raise ValueError(f"{label} alpha and beta shapes mismatch: {alpha.shape} vs
+if np.any(alpha <= @) or np.any(beta <= @):
+raise ValueError(f"{label} Beta parameters must be positive")
+# ---------- Basic Beta helpers (vectorized) ----------
+def beta_mean(alpha: np.ndarray, beta: np.ndarray, eps: float = 1e-12, xp=np) -> np.
+Mean of Beta(a,B): a/(a+B)
+Safeguards against division by zero via eps.
+denom = xp.maximum(alpha + beta, eps)
+return alpha / denom
+def beta_entropy(alpha: np.ndarray, beta: np.ndarray, eps: float = 1e-12, use logga
+Entropy of Beta(a,B) on [0,1]:
+H = In B(a,B) - (a-1)p(a) - (B-1)¥(B) + (a+B-2)p(a+B)
+Uses log-gamma for large a/B to avoid overflow.
+a = xp.maximum(alpha, eps)
+b = xp.maximum(beta, eps)
+ab =a+b
+if use _loggamma:
+# Approximate betaln with gammaln for stability: 1n B(a,b) = In F(a) + In [(
+1nB = gammaln(a) + gammaln(b) - gammaln(ab)
+else:
+1InB = betaln(a, b)
+return (
+TnR
+=== PAGE 002 ===
+- (a - 1.0) * digamma(a)
+- (b - 1.0) * digamma(b)
++ (ab - 2.0) * digamma(ab)
+)
+def beta_asymmetry(alpha: np.ndarray, beta: np.ndarray, eps: float = 1e-12, xp=np) -
+Asymmetry index A = (a - B) / (a + 8B).
+Positive > skew toward methylation (right side), negative > toward unmethylatio
+a = xp.maximum(alpha, eps)
+b = xp.maximum(beta, eps)
+denom = xp.maximum(a + b, eps)
+return (a - b) / denom
+def normal_approx_entropy(mean: np.ndarray, var: np.ndarray, eps: float = 1e-12, xp
+"""Normal approximation to entropy: @.5 * In(2me var)."""
+return 0.5 * xp.log(2 * xp.pi * xp.e * xp.maximum(var, eps) )
+def normal_approx_asymmetry(mean: np.ndarray, var: np.ndarray, eps: float = 1e-12,
+"""Approximate asymmetry for Normal: simplified as (mean - @.5) / sqrt(var), no
+return (mean - @.5) / xp.sqrt(xp.maximum(var, eps))
+# ---------- EAT core: T computation and application ----------
+def compute_eat_T(
+alpha_H: np.ndarray,
+beta_H: np.ndarray,
+alpha_C: np.ndarray,
+beta_C: np.ndarray,
+gamma: float = 1.0,
+clip _T: Optional[float] = None,
+eps: float = 1e-12,
+low_tau_threshold: float = 5.0, # Fallback to Normal if tau < threshold
+use_loggamma: bool = True, # Use gammaln for large params
+use_gpu: bool = False,
+) -> np.ndarray:
+Compute per-locus distortion T (shape: [L]), where L = #loci.
+Parameters
+alnha HW heta HW °- arnrave J! 1
+=== PAGE 003 ===
+Healthy centroid Beta parameters.
+alpha_C, beta_C : arrays [L]
+Cancer centroid Beta parameters.
+gamma : float
+Entropy difference damping. Higher gamma penalizes loci with similar/high e
+clip _T : float or None
+If set, clip T into [-clip_T, +clip_T] to avoid extreme reweighting.
+eps : float
+Numerical stability.
+low_tau_threshold : float
+If alpha + beta < threshold for a locus, use Normal approximation.
+use_loggamma : bool
+Use gammaln approximation for betaln to handle large params.
+use_gpu : bool
+Use CuPy if available for GPU acceleration.
+Returns
+T : np.ndarray, shape [L]
+xp = get_xp(use_gpu)
+# Convert to xp arrays if needed
+alpha_H, beta_H = xp.asarray(alpha_H), xp.asarray(beta_H)
+alpha_C, beta_C = xp.asarray(alpha_C), xp.asarray(beta_C)
+# Validate shapes and values
+validate _beta_params(alpha_H, beta_H, "Healthy")
+validate _beta_params(alpha _C, beta_C, "Cancer")
+if alpha_H.shape != alpha _C.shape:
+raise ValueError(f"Healthy and Cancer shapes mismatch: {alpha_H.shape} vs {
+# Compute tau (concentration)
+tau_H = alpha_H + beta_H
+tau_C = alpha_C + beta_C
+# Masks for low-tau (fallback to Normal)
+low_tau_H = tau_H < low_tau_threshold
+low_tau_C = tau_C < low_tau_threshold
+# Means (shared for Beta and Normal)
+miu H = heta mean(alnha H. heta H. ens. xn)
+=== PAGE 004 ===
+mu_C = beta_mean(alpha_C, beta _C, eps, xp)
+delta_mu = mu_C - mu_H
+# Asymmetry
+A_H = beta_asymmetry(alpha_H, beta_H, eps, xp)
+A C = beta_asymmetry(alpha_C, beta_C, eps, xp)
+if xp.any(low_tau_H):
+var_H = mu_H * (1 - mu_H) / xp.maximum(tau_H, eps) # Beta variance approx
+A _H[low_tau_H] = normal_approx_asymmetry(mu_H[low_tau_H], var_H[low_tau_H],
+if xp.any(low_tau_C):
+var_C = mu_C * (1 - mu_C) / xp.maximum(tau_C, eps)
+A C[low_tau_C] = normal_approx_asymmetry(mu_C[low_tau_C], var_C[low_tau_C],
+dA = xp.abs(A_C - AH)
+# Entropy
+H_H = beta_entropy(alpha_H, beta_H, eps, use loggamma, xp)
+H_C = beta_entropy(alpha_C, beta_C, eps, use loggamma, xp)
+if xp.any(low_tau_H):
+H_H[low_tau_H] = normal_approx_entropy(mu_H[low_tau_H], var_H[low_tau_H], e
+if xp.any(low_tau_C):
+H_C[low_tau_C] = normal_approx_entropy(mu_C[low_tau_C], var_C[low_tau_C], e
+dH = xp.abs(H_C - H_H)
+# T = Ay * (1 + |AA|) * exp(-y * [AH])
+T = delta_mu * (1.0 + dA) * xp.exp(-gamma * dH)
+if clip _T is not None:
+T = xp.clip(T, -clip_T, clip_T)
+return xp.asnumpy(T) if use_gpu else T # Return as NumPy
+def apply _eat_transform(
+X: np.ndarray,
+T: np.ndarray,
+norm: Optional[str] = "12",
+eps: float = 1e-12,
+use _gpu: bool = False,
+) -> np.ndarray:
+Apply EAT to a sample matrix X by elementwise multiplying per-locus T.
+Parameters
+=== PAGE 005 ===
+X : np.ndarray, shape [L, N] or [N, L]
+Methylation matrix of samples. Values should be in [@,1].
+Either loci-by-samples or samples-by-loci is accepted.
+T : np.ndarray, shape [L]
+Distortion vector computed from centroids.
+norm : {'1l1', '12', 'minmax', 'zscore', None}
+Optional per-sample normalization AFTER reweighting:
+- ']1" : x' <- x' / sum(|x'|)
+- '12' : x' <- x'/|[x'||_2
+- '"minmax': (x' - min) / (max - min)
+- 'zscore': per-sample (x'-mean)/std across loci (with eps)
+- None : no normalization
+eps : float
+Numerical stability.
+use_gpu : bool
+Use CuPy if available.
+Returns
+X_prime : np.ndarray, same shape as X
+xp = get_xp(use_gpu)
+X = xp.asarray(X)
+T = xp.asarray(T)
+# Determine orientation
+if X.shape[@] == T.shape[0]:
+loci_axis = @ #X is [L, N]
+sample axis = 1
+Xw = X * T[:, None]
+elif X.shape[1] == T.shape[@]:
+loci_axis = 1 # X is [N, L]
+sample axis = @
+Xw = X * T[None, : ]
+else:
+raise ValueError(f"X shape {X.shape} incompatible with T shape {T.shape}")
+if norm is None:
+return xp.asnumpy(Xw) if use _gpu else Xw
+=== PAGE 006 ===
+if norm == "12":
+denom = xp.linalg.norm(Xw, axis=loci_axis, keepdims=True)
+denom = xp.maximum(denom, eps)
+Xw = Xw / denom
+elif norm == "11":
+denom = xp.sum(xp.abs(Xw), axis=loci_axis, keepdims=True)
+denom = xp.maximum(denom, eps)
+Xw = Xw / denom
+elif norm == "zscore":
+mean = xp.mean(Xw, axis=loci_axis, keepdims=True)
+std = xp.std(Xw, axis=loci_axis, ddof=@, keepdims=True)
+std = xp.maximum(std, eps)
+Xw = (Xw - mean) / std
+elif norm == "minmax":
+min_val = xp.min(Xw, axis=loci_axis, keepdims=True)
+max_val = xp.max(Xw, axis=loci_axis, keepdims=True)
+denom = xp.maximum(max_val - min_val, eps)
+Xw = (Xw - min_val) / denom
+else:
+raise ValueError("norm must be one of {'1l1', '12', ‘'minmax', 'zscore', None
+return xp.asnumpy(Xw) if use _gpu else Xw
+def eat_transform_from_betas(
+X: np.ndarray,
+alpha_H: np.ndarray,
+beta_H: np.ndarray,
+alpha_C: np.ndarray,
+beta_C: np.ndarray,
+gamma: float = 1.0,
+norm: Optional[str] = "12",
+clip _T: Optional[float] = None,
+eps: float = 1e-12,
+low_tau_threshold: float = 5.0,
+use_loggamma: bool = True,
+use_gpu: bool = False,
+) -> tuple[np.ndarray, np.ndarray]:
+Convenience wrapper:
+1) compute T from centroid Betas
+2) apply to X
+Returns (X transformed, T)
+=== PAGE 007 ===
+T = compute_eat_T(
+alpha_H, beta_H, alpha_C, beta_C,
+gamma=gamma, clip _T=clip_T, eps=eps,
+low_tau_threshold=low_tau_threshold,
+use_loggamma=use_loggamma, use _gpu=use_gpu
+)
+Xp = apply_eat_transform(X, T, norm=norm, eps=eps, use _gpu=use_ gpu)
+return Xp, T
+# ---------- Minimal self-checks ----------
+if _ name == "_ main _":
+# Shapes
+L, N = 1000, 20 # loci, samples
+rng = np.random.default_rng(123)
+# Fake centroids: Healthy tighter and more symmetric; Cancer slightly shifted/s
+alpha_H = rng.uniform(5.@, 15.0, size=L)
+beta_H = rng.uniform(5.0, 15.0, size=L)
+alpha_C = alpha_H + rng.normal(@.5, @.6, size=L)
+beta_C = beta_H + rng.normal(-@.3, 9.6, size=L)
+alpha_C = np.clip(alpha_C, 9.5, None)
+beta_C = np.clip(beta_C, 9.5, None)
+# Samples as beta means with small noise (you will have real B in [@,1])
+mu_H = beta_mean(alpha_H, beta_H)
+mu_C = beta_mean(alpha_C, beta C)
+X_healthy = np.clip(mu_H[:, None] + rng.normal(@, @.03, size=(L, N//2)), @, 1)
+X_cancer = np.clip(mu_C[:, None] + rng.normal(@, @.05, size=(L, N//2)), @, 1)
+X = np.concatenate([X_healthy, X_cancer], axis=1) # [L, N]
+# Compute transform and apply
+Xp, T = eat_transform_from_betas(
+X, alpha_H, beta_H, alpha_C, beta_C,
+gamma=1.@, norm="12", clip _T=10.0,
+use_gpu=False # Set to True if CuPy available
+)
+# Basic sanity checks
+assert T.shape == (L,)
+assert Xp.shape == X.shape
+assert np.isfinite(T).all()
+assert np.isfinite(Xp).all1()
+# Quick diagnostic: transformed variance should differ from raw
+raw_var = X.var(axis=@).mean()
+new_var = Xp.var(axis=0).mean()
+=== PAGE 008 ===
+| print(f"[EAT] mean per-sample variance: raw={raw_var: .6f} transformed={new_var: |
+

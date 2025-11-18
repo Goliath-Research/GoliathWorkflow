@@ -125,11 +125,11 @@ Packages must be installed in this order due to dependencies:
 
 1. **methylutils** (core, no dependencies)
 2. **methylcentroid** (depends on methylutils)
-3. **methyldetector** (depends on methylutils)
-4. **methylmapper** (depends on methylutils)
-5. **methyltrainer** (depends on methylutils)
-6. **methylclassifier** (depends on methylutils, methyltrainer)
-7. **methylenricher** (depends on methylutils)
+3. **methylcluster** (depends on methylutils)
+4. **methylmodeler** (depends on methylutils)
+5. **methylmapper** (depends on methylutils, MethylModeler outputs)
+6. **methylclassifier** (depends on methylutils, MethylModeler outputs)
+7. **methylenricher** (consumes MethylMapper gene lists)
 
 The `install_all.sh` script handles this automatically.
 

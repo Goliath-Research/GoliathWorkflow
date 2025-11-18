@@ -237,6 +237,14 @@ from .beta_classifier import BetaClassifier
 # Backward compatibility
 from .beta_classifier import ProbabilisticBetaClassifier
 
+# Import EAT (Entropy-weighted Asymmetry Transformation) functions
+from .transformations import (
+    compute_eat_T,
+    apply_eat_transform,
+    eat_transform_from_betas,
+    validate_eat_methylation_data
+)
+
 # Add ClassifierFactory if it exists
 try:
     from .classifier_factory import ClassifierFactory
@@ -375,4 +383,9 @@ __all__ = [
     "PVALUE_AGGREGATION_METHODS",
     'BetaClassifier',
     'ClassifierFactory',  # if added
+    # EAT transformation functions
+    'compute_eat_T',
+    'apply_eat_transform',
+    'eat_transform_from_betas',
+    'validate_eat_methylation_data',
 ]

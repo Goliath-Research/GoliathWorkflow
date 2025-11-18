@@ -449,7 +449,7 @@ Return ONLY valid JSON array format like:
         results = cached_results.copy()
 
         # DisGeNET API endpoint
-        base_url = "https://www.disgenet.org/api/gda/gene/"
+        base_url = "https://api.disgenet.com/api/v1/gda/gene/"
 
         # Initialize progress indicator for individual genes
         progress = ProgressIndicator(len(uncached_genes), "DisGeNET genes", update_interval=50)

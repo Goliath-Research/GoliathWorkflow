@@ -78,9 +78,9 @@ COPY ../packages /tmp/methylpipeline-packages
 # Install all packages in production mode (non-editable)
 RUN cd /tmp/methylpipeline-packages/methylutils && pip install . && \
     cd /tmp/methylpipeline-packages/methylcentroid && pip install . && \
-    cd /tmp/methylpipeline-packages/methyldetector && pip install . && \
+    cd /tmp/methylpipeline-packages/methylcluster && pip install . && \
+    cd /tmp/methylpipeline-packages/methylmodeler && pip install . && \
     cd /tmp/methylpipeline-packages/methylmapper && pip install . && \
-    cd /tmp/methylpipeline-packages/methyltrainer && pip install . && \
     cd /tmp/methylpipeline-packages/methylclassifier && pip install . && \
     cd /tmp/methylpipeline-packages/methylenricher && pip install . && \
     rm -rf /tmp/methylpipeline-packages

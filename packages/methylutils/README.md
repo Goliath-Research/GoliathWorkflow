@@ -210,9 +210,9 @@ MethylUtils is used by **all** MethylPipeline packages:
 
 - **MethylCentroid**: Uses `PositionAligner`, distance metrics, GPU utilities
 - **MethylCluster**: Uses distance metrics, `MethylSample`, GPU acceleration
-- **MethylDetector**: Uses `MethylCentroidPair`, FDR correction, `ProbabilisticBetaClassifier`
-- **MethylTrainer**: Uses `MethylCentroidPair`, `ProbabilisticBetaClassifier`
+- **MethylModeler**: Uses `MethylCentroidPair`, FDR correction, `ProbabilisticBetaClassifier`
 - **MethylClassifier**: Uses `ProbabilisticBetaClassifier` for predictions
+- **MethylMapper`/`MethylEnricher**: Consume Beta parameters, effect sizes, and q-values
 
 ## Performance
 
