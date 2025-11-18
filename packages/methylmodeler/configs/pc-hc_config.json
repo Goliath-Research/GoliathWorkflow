@@ -28,6 +28,10 @@
   "validation_mode": "real",
   "validation_split_ratio": 0.0,
   "optimize_dmps": true,
+  "enable_eat_transform": true,
+  "eat_gamma": 0.5,
+  "eat_clip_t": 5.0,
+  "eat_normalization": "l2",
   "centroid1_validation_samples": [
     "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-042525-95676",
     "/home/ubuntu/Work/samples/humans/psomagen/old.data.AN00025834/HBCST-042825-39553",

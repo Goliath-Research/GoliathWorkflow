@@ -25,6 +25,14 @@ from methyl_utils import MethylCentroidPair
 # Import BetaClassifier from MethylUtils
 from methyl_utils import BetaClassifier
 
+# Import EAT transformation (optional - may not be available in all environments)
+try:
+    from methyl_utils import compute_eat_T
+    EAT_AVAILABLE = True
+except ImportError:
+    EAT_AVAILABLE = False
+    compute_eat_T = None
+
 # Handle relative imports - try module import first, fall back to direct execution setup
 try:
     from ..models.config import MethylModelerConfig
@@ -425,9 +433,24 @@ class MethylModeler:
         logger.info(f"Context {context}: Compared {len(comparison_results):,} positions in {processing_time:.2f}s")
 
         # Apply EAT transformation if enabled
+        logger.debug(f"EAT debug: enable_eat_transform={self.config.enable_eat_transform}, EAT_AVAILABLE={EAT_AVAILABLE}")
         if self.config.enable_eat_transform:
-            logger.info("🧬 Applying EAT transformation to enhance DMP detection...")
-            comparison_results = self._apply_eat_transformation(comparison_results, centroid1, centroid2, context)
+            logger.info("🧬 EAT transformation is ENABLED in config")
+            if not EAT_AVAILABLE:
+                logger.warning("EAT transformation enabled but compute_eat_T not available, skipping")
+                logger.warning(f"EAT_AVAILABLE={EAT_AVAILABLE}, compute_eat_T={compute_eat_T}")
+            else:
+                logger.info("🧬 Applying EAT transformation to enhance DMP detection...")
+                logger.info(f"   EAT parameters: gamma={self.config.eat_gamma}, clip_T={self.config.eat_clip_t}, norm={self.config.eat_normalization}")
+                try:
+                    comparison_results = self._apply_eat_transformation(comparison_results, centroid1, centroid2, context)
+                    logger.info("✅ EAT transformation applied successfully")
+                except Exception as e:
+                    logger.error(f"❌ EAT transformation failed: {e}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    logger.warning("Continuing without EAT transformation")
+                    # Continue with original comparison_results
 
         # Apply statistical filtering
         total_positions = len(comparison_results)
@@ -464,10 +487,8 @@ class MethylModeler:
         Returns:
             Modified comparison_results with EAT-enhanced statistics
         """
-        try:
-            from methyl_utils import compute_eat_T
-        except ImportError:
-            logger.warning("EAT transformation requested but methyl_utils not available, skipping")
+        if not EAT_AVAILABLE or compute_eat_T is None:
+            logger.warning("EAT transformation requested but compute_eat_T not available, skipping")
             return comparison_results
 
         # Extract Beta parameters from comparison results
@@ -488,25 +509,41 @@ class MethylModeler:
             use_gpu=self.config.use_gpu
         )
 
-        # Apply EAT transformation to effect sizes
-        # The EAT T vector represents the biological importance weighting
-        # We multiply delta_mean by T to enhance biologically relevant differences
+        # Apply EAT transformation to enhance biological significance
         modified_results = comparison_results.copy()
 
-        # Store original delta_mean for reference
+        # Store original values for comparison
         modified_results['delta_mean_raw'] = modified_results['delta_mean'].copy()
+        modified_results['p_value_raw'] = modified_results['p_value'].copy()
 
-        # Apply EAT weighting to delta_mean (effect size)
-        # T > 1 amplifies differences, T < 1 attenuates them
+        # EAT Strategy: Focus on biological relevance rather than statistical significance
+        # 1. Amplify delta_mean for biologically important positions (T > 1)
+        # 2. Use T to modulate statistical thresholds rather than p-values directly
+
+        # More aggressive EAT application: scale delta_mean by T directly
         modified_results['delta_mean'] = modified_results['delta_mean'] * T
 
-        # Also apply EAT weighting to p-values (more conservative for high T values)
-        # Higher T values should make p-values more significant (smaller)
-        # We use a dampened effect since p-values are already in log space conceptually
-        eat_p_weight = np.clip(T, 0.1, 10.0)  # Prevent extreme p-value modifications
-        modified_results['p_value'] = modified_results['p_value'] / eat_p_weight
+        # For positions with high EAT score (T > 1.5), make them more statistically significant
+        # by slightly reducing p-values (making them pass statistical filters more easily)
+        high_importance_mask = T > 1.5
+        if np.any(high_importance_mask):
+            # Reduce p-values for high-importance positions (more significant)
+            importance_boost = np.clip(T[high_importance_mask], 1.0, 3.0)
+            modified_results.loc[high_importance_mask, 'p_value'] = (
+                modified_results.loc[high_importance_mask, 'p_value'] / importance_boost
+            )
 
-        # Recompute q-values after p-value modification
+        # For positions with low EAT score (T < 0.7), make them less statistically significant
+        # by slightly increasing p-values (less likely to pass filters)
+        low_importance_mask = T < 0.7
+        if np.any(low_importance_mask):
+            # Increase p-values for low-importance positions (less significant)
+            importance_penalty = np.clip(1.0 / T[low_importance_mask], 1.0, 2.0)
+            modified_results.loc[low_importance_mask, 'p_value'] = (
+                modified_results.loc[low_importance_mask, 'p_value'] * importance_penalty
+            )
+
+        # Recompute q-values after p-value modifications
         from statsmodels.stats.multitest import multipletests
         reject, q_values, _, _ = multipletests(
             modified_results['p_value'].values,
@@ -530,6 +567,31 @@ class MethylModeler:
         logger.info(f"🧬 EAT applied to {len(comparison_results)} positions in context {context}")
         logger.info(f"   T stats: mean={eat_stats['mean_T']:.3f}, std={eat_stats['std_T']:.3f}, "
                    f"range=[{eat_stats['min_T']:.3f}, {eat_stats['max_T']:.3f}]")
+
+        # Check if T values are meaningful
+        t_range = eat_stats['max_T'] - eat_stats['min_T']
+        if t_range < 0.1:
+            logger.warning(f"⚠️  EAT T values have very small range ({t_range:.3f}), transformation may have minimal effect")
+        elif eat_stats['std_T'] < 0.05:
+            logger.warning(f"⚠️  EAT T values have low variance (std={eat_stats['std_T']:.3f}), transformation may have minimal effect")
+
+        # Debug: Check modifications
+        delta_raw = modified_results['delta_mean_raw'].abs()
+        delta_new = modified_results['delta_mean'].abs()
+        delta_change_pct = ((delta_new - delta_raw) / (delta_raw + 1e-12)).mean() * 100
+
+        p_raw = modified_results['p_value_raw']
+        p_new = modified_results['p_value']
+        p_change_pct = ((p_new - p_raw) / (p_raw + 1e-12)).mean() * 100
+
+        # Count positions that changed significance
+        sig_before = (modified_results['p_value_raw'] <= self.config.alpha).sum()
+        sig_after = (modified_results['p_value'] <= self.config.alpha).sum()
+        sig_change = sig_after - sig_before
+
+        logger.info(f"   Delta_mean change: {delta_change_pct:+.1f}% average")
+        logger.info(f"   P-value change: {p_change_pct:+.1f}% average")
+        logger.info(f"   Significance change: {sig_change:+d} positions (before: {sig_before}, after: {sig_after})")
 
         return modified_results
 
