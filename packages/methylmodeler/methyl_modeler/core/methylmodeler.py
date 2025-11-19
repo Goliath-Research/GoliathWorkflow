@@ -520,27 +520,37 @@ class MethylModeler:
         # 1. Amplify delta_mean for biologically important positions (T > 1)
         # 2. Use T to modulate statistical thresholds rather than p-values directly
 
-        # More aggressive EAT application: scale delta_mean by T directly
-        modified_results['delta_mean'] = modified_results['delta_mean'] * T
+        # Conservative EAT application: only amplify positions with high biological importance
+        # Use absolute T as importance score - amplify positions with |T| > 1.0
+        importance_weight = np.abs(T)
+        high_importance_mask = importance_weight > 1.0
 
-        # For positions with high EAT score (T > 1.5), make them more statistically significant
-        # by slightly reducing p-values (making them pass statistical filters more easily)
-        high_importance_mask = T > 1.5
+        # For high importance positions, amplify their delta_mean by the importance weight
         if np.any(high_importance_mask):
-            # Reduce p-values for high-importance positions (more significant)
-            importance_boost = np.clip(T[high_importance_mask], 1.0, 3.0)
-            modified_results.loc[high_importance_mask, 'p_value'] = (
-                modified_results.loc[high_importance_mask, 'p_value'] / importance_boost
+            amplification_factor = np.clip(importance_weight[high_importance_mask], 1.0, 3.0)  # Limit to 3x amplification
+            modified_results.loc[high_importance_mask, 'delta_mean'] = (
+                modified_results.loc[high_importance_mask, 'delta_mean'] * amplification_factor
             )
 
-        # For positions with low EAT score (T < 0.7), make them less statistically significant
+        # For positions with high EAT score (|T| > 1.5), make them more statistically significant
+        # by slightly reducing p-values (making them pass statistical filters more easily)
+        high_importance_mask = np.abs(T) > 1.5
+        if np.any(high_importance_mask):
+            # Reduce p-values for high-importance positions (more significant)
+            boost_factor = 1.3  # 30% decrease in p-values
+            modified_results.loc[high_importance_mask, 'p_value'] = (
+                modified_results.loc[high_importance_mask, 'p_value'] / boost_factor
+            )
+
+        # For positions with low EAT score (|T| < 0.5), make them less statistically significant
         # by slightly increasing p-values (less likely to pass filters)
-        low_importance_mask = T < 0.7
+        low_importance_mask = np.abs(T) < 0.5
         if np.any(low_importance_mask):
             # Increase p-values for low-importance positions (less significant)
-            importance_penalty = np.clip(1.0 / T[low_importance_mask], 1.0, 2.0)
+            # Use a small penalty factor to avoid divide by zero
+            penalty_factor = 1.2  # 20% increase in p-values
             modified_results.loc[low_importance_mask, 'p_value'] = (
-                modified_results.loc[low_importance_mask, 'p_value'] * importance_penalty
+                modified_results.loc[low_importance_mask, 'p_value'] * penalty_factor
             )
 
         # Recompute q-values after p-value modifications
