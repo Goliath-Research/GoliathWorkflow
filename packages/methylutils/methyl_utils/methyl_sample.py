@@ -127,41 +127,26 @@ class TNCBits:
 @dataclass(slots=True)
 class MethylSample:
     """
-    Represents a methylation sample that can be loaded from HDF5 files.
-    Supports three types:
-    1. Sample: Basic sample with pos, mC, uC, tnc
-    2. Basic Centroid: Sample + N (sample count) + Sx, Sx2
-    3. Extended Centroid: Basic Centroid + log_x_sum, log_1_minus_x_sum
+    Represents a methylation sample - individual sample with methylation counts.
+
+    Contains basic methylation data: genomic positions, methylated counts,
+    unmethylated counts, and trinucleotide context information.
     """
     # Core methylation data (always present)
     pos: np.ndarray  # uint32 - genomic positions
     mC: np.ndarray   # uint32 - methylated counts
     uC: np.ndarray   # uint32 - unmethylated counts
     tnc: np.ndarray  # uint8 - trinucleotide context + strand info
-    
-    # Centroid-specific data (optional)
-    N: Optional[np.ndarray] = None           # uint32 - sample counts
-    Sx: Optional[np.ndarray] = None          # float32 - sum of methylation levels
-    Sx2: Optional[np.ndarray] = None         # float32 - sum of squared methylation levels
-    
-    # Extended centroid data (optional)
-    log_x_sum: Optional[np.ndarray] = None           # float32 - sum of log(methylation_level)
-    log_1_minus_x_sum: Optional[np.ndarray] = None   # float32 - sum of log(1 - methylation_level)
-    
-    # Metadata (optional - for centroids saved with metadata)
-    _metadata: Optional[Dict[str, Any]] = None
-    
-    # Cached statistical properties (computed on demand)
-    _cached_alpha: Optional[np.ndarray] = None       # float64 - Beta distribution alpha parameter
-    _cached_beta: Optional[np.ndarray] = None        # float64 - Beta distribution beta parameter
-    _cached_mean: Optional[np.ndarray] = None        # float64 - expected methylation level
-    _cached_variance: Optional[np.ndarray] = None    # float64 - methylation level variance
-    _cached_tau: Optional[np.ndarray] = None         # float64 - total concentration (alpha + beta)
+
+    # Metadata (optional)
+    _metadata: Optional[Dict[str, Any]]
     
     def __post_init__(self):
         """Validate data types after initialization."""
+        if self._metadata is None:
+            self._metadata = {}
         self._validate_data_types()
-    
+
     def _validate_data_types(self):
         """Validate that all arrays have the correct data types."""
         # Core arrays should always be present
@@ -169,57 +154,28 @@ class MethylSample:
         assert self.mC.dtype == np.uint32, f"mC should be uint32, got {self.mC.dtype}"
         assert self.uC.dtype == np.uint32, f"uC should be uint32, got {self.uC.dtype}"
         assert self.tnc.dtype == np.uint8, f"tnc should be uint8, got {self.tnc.dtype}"
-        
-        # Centroid arrays (if present)
-        if self.N is not None:
-            assert self.N.dtype == np.uint32, f"N should be uint32, got {self.N.dtype}"
-        if self.Sx is not None:
-            assert self.Sx.dtype == np.float32, f"Sx should be float32, got {self.Sx.dtype}"
-        if self.Sx2 is not None:
-            assert self.Sx2.dtype == np.float32, f"Sx2 should be float32, got {self.Sx2.dtype}"
-        
-        # Extended centroid arrays (if present)
-        if self.log_x_sum is not None:
-            assert self.log_x_sum.dtype == np.float32, f"log_x_sum should be float32, got {self.log_x_sum.dtype}"
-        if self.log_1_minus_x_sum is not None:
-            assert self.log_1_minus_x_sum.dtype == np.float32, f"log_1_minus_x_sum should be float32, got {self.log_1_minus_x_sum.dtype}"
-        
+
         # All arrays should have the same length
         expected_length = len(self.pos)
         assert len(self.mC) == expected_length, f"mC length {len(self.mC)} != pos length {expected_length}"
         assert len(self.uC) == expected_length, f"uC length {len(self.uC)} != pos length {expected_length}"
         assert len(self.tnc) == expected_length, f"tnc length {len(self.tnc)} != pos length {expected_length}"
-        
-        if self.N is not None:
-            assert len(self.N) == expected_length, f"N length {len(self.N)} != pos length {expected_length}"
-        if self.Sx is not None:
-            assert len(self.Sx) == expected_length, f"Sx length {len(self.Sx)} != pos length {expected_length}"
-        if self.Sx2 is not None:
-            assert len(self.Sx2) == expected_length, f"Sx2 length {len(self.Sx2)} != pos length {expected_length}"
-        if self.log_x_sum is not None:
-            assert len(self.log_x_sum) == expected_length, f"log_x_sum length {len(self.log_x_sum)} != pos length {expected_length}"
-        if self.log_1_minus_x_sum is not None:
-            assert len(self.log_1_minus_x_sum) == expected_length, f"log_1_minus_x_sum length {len(self.log_1_minus_x_sum)} != pos length {expected_length}"
 
+    # Base class properties
     @property
     def sample_type(self) -> str:
-        """Determine the type of sample based on available fields."""
-        if self.log_x_sum is not None and self.log_1_minus_x_sum is not None:
-            return "extended_centroid"
-        elif self.N is not None:
-            return "basic_centroid"
-        else:
-            return "sample"
-    
+        """Determine the type of sample."""
+        return "sample"
+
     @property
     def is_centroid(self) -> bool:
-        """Check if this is a centroid (basic or extended)."""
-        return self.N is not None
-    
+        """Check if this is a centroid."""
+        return False
+
     @property
     def is_extended_centroid(self) -> bool:
         """Check if this is an extended centroid."""
-        return self.sample_type == "extended_centroid"
+        return False
     
     # Metadata properties (read-write for easy manipulation)
     @property
@@ -321,258 +277,6 @@ class MethylSample:
     def metadata(self) -> Optional[Dict[str, Any]]:
         """Full metadata dictionary (read-only)."""
         return self._metadata
-    
-    # Statistical properties - computed on demand
-    @property
-    def alpha(self) -> np.ndarray:
-        """
-        Beta distribution alpha parameter.
-        
-        Computed on-demand using the appropriate method:
-        - Extended centroids: MLE estimation
-        - Basic centroids: Method of Moments
-        - Samples: Basic MoM from methylation levels
-        """
-        if self._cached_alpha is None:
-            alpha, beta = self._compute_beta_parameters()
-            self._cached_alpha = alpha
-            self._cached_beta = beta
-        return self._cached_alpha
-    
-    @property
-    def beta(self) -> np.ndarray:
-        """
-        Beta distribution beta parameter.
-        
-        Computed on-demand using the appropriate method:
-        - Extended centroids: MLE estimation
-        - Basic centroids: Method of Moments
-        - Samples: Basic MoM from methylation levels
-        """
-        if self._cached_beta is None:
-            alpha, beta = self._compute_beta_parameters()
-            self._cached_alpha = alpha
-            self._cached_beta = beta
-        return self._cached_beta
-    
-    @property
-    def mean(self) -> np.ndarray:
-        """
-        Expected methylation level.
-
-        Uses adaptive mean estimation based on sample size reliability:
-        - Small samples (N < 20): empirical mean (Sx/N) for statistical reliability
-        - Large samples (N ≥ 20): Beta distribution mean (α/(α+β)) for full distributional information
-
-        This approach ensures optimal accuracy across different sample sizes by choosing
-        the most appropriate estimation method for each scenario.
-        """
-        if self._cached_mean is None:
-            eps = 1e-12
-
-            # For centroids with sufficient statistics, use adaptive mean estimation
-            if self.is_centroid and self.Sx is not None and self.N is not None:
-                empirical_mean = self.Sx / np.maximum(self.N.astype(np.float32), eps)
-
-                # Use empirical mean for small sample sizes (N < 20) where Beta estimation is unreliable
-                small_sample_mask = self.N < 20
-
-                if np.all(small_sample_mask):
-                    # All positions have small samples - use empirical mean directly
-                    final_mean = empirical_mean
-                else:
-                    # Mix of small and large samples
-                    final_mean = empirical_mean.copy()  # Start with empirical mean
-
-                    # For larger sample sizes (N >= 20), use Beta distribution mean
-                    large_sample_mask = ~small_sample_mask
-                    if np.any(large_sample_mask):
-                        alpha = self.alpha
-                        beta = self.beta
-                        tau = alpha + beta
-                        beta_mean = alpha / np.maximum(tau, eps)
-
-                        # Use Beta mean for large samples
-                        final_mean = np.where(large_sample_mask, beta_mean, final_mean)
-
-                        # NOTE: Validation of Beta mean vs empirical mean is disabled since we fixed
-                        # the underlying alpha/beta calculation issues and improved mean estimation:
-                        # - Small samples (N < 20): use empirical mean (Sx/N)
-                        # - Large samples (N >= 20): use Beta distribution mean with proper MLE estimation
-                        # This ensures consistency between different mean calculation approaches.
-            else:
-                # For non-centroid data, use Beta distribution mean
-                alpha = self.alpha
-                beta = self.beta
-                tau = alpha + beta
-                final_mean = alpha / np.maximum(tau, eps)
-
-            self._cached_mean = final_mean
-        return self._cached_mean
-    
-    @property
-    def variance(self) -> np.ndarray:
-        """
-        Variance of methylation level.
-
-        Calculated as: mean * (1 - mean) / (tau + 1) where tau = alpha + beta
-        This is numerically stable and equivalent to: (alpha * beta) / ((alpha + beta)^2 * (alpha + beta + 1))
-        """
-        if self._cached_variance is None:
-            alpha = self.alpha
-            beta = self.beta
-            tau = alpha + beta
-            eps = 1e-12
-            # Numerically stable variance calculation: var = mean * (1 - mean) / (tau + 1)
-            # This avoids overflow when alpha/beta are very large
-            mean = alpha / np.maximum(tau, eps)
-            self._cached_variance = mean * (1 - mean) / np.maximum(tau + 1, eps)
-        return self._cached_variance
-
-    def _estimate_beta_params_bounded_extended(self, n: np.ndarray, log_x_sum: np.ndarray,
-                                             log_1mx_sum: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Estimate Beta distribution parameters for extended centroids with bounds checking.
-
-        This method applies MLE but with strict bounds to prevent pathological parameter
-        estimates that can occur with extreme methylation values or edge cases.
-
-        Args:
-            n: Sample counts (array)
-            log_x_sum: Log sum of methylation levels
-            log_1mx_sum: Log sum of (1-methylation) levels
-
-        Returns:
-            Tuple of (alpha, beta) arrays with reasonable bounds
-        """
-        # First try MLE
-        from methyl_utils.statistical_tests import beta_mle_estimation
-        alpha_mle, beta_mle = beta_mle_estimation(n, log_x_sum, log_1mx_sum, max_iter=10, tol=1e-8)
-
-        # Apply strict bounds to prevent extreme values
-        max_reasonable_param = 1e5  # Conservative upper bound
-
-        # For extended centroids, parameters should be reasonable
-        # If MLE gives extreme values, fall back to bounded MoM
-        extreme_mask = (alpha_mle > max_reasonable_param) | (beta_mle > max_reasonable_param) | \
-                      (alpha_mle < 1e-6) | (beta_mle < 1e-6) | \
-                      ~np.isfinite(alpha_mle) | ~np.isfinite(beta_mle)
-
-        # For positions with extreme MLE results, use bounded method of moments
-        if np.any(extreme_mask):
-            # Compute empirical mean from log sums (more stable than direct calculation)
-            mean_est = np.exp(log_x_sum / np.maximum(n, 1))
-            mean_est = np.clip(mean_est, 1e-6, 1-1e-6)
-
-            # Conservative MoM estimates
-            alpha_mom = mean_est * 100  # More conservative than the 10 we used before
-            beta_mom = (1 - mean_est) * 100
-
-            # Use MoM for extreme cases, MLE for others
-            alpha_final = np.where(extreme_mask, alpha_mom, alpha_mle)
-            beta_final = np.where(extreme_mask, beta_mom, beta_mle)
-        else:
-            alpha_final = alpha_mle
-            beta_final = beta_mle
-
-        # Final bounds check
-        alpha_final = np.clip(alpha_final, 1e-6, max_reasonable_param)
-        beta_final = np.clip(beta_final, 1e-6, max_reasonable_param)
-
-        # Additional sanity check: ensure computed mean is reasonable
-        computed_mean = alpha_final / (alpha_final + beta_final)
-        empirical_mean = np.exp(log_x_sum / np.maximum(n, 1))
-        empirical_mean = np.clip(empirical_mean, 1e-6, 1-1e-6)
-
-        mean_diff = np.abs(computed_mean - empirical_mean)
-        # If computed mean differs too much from empirical, adjust parameters
-        bad_mean_mask = mean_diff > 0.5
-        if np.any(bad_mean_mask):
-            # Revert to conservative MoM for these positions
-            alpha_final = np.where(bad_mean_mask, empirical_mean * 50, alpha_final)
-            beta_final = np.where(bad_mean_mask, (1 - empirical_mean) * 50, beta_final)
-
-        return alpha_final, beta_final
-    
-    @property
-    def tau(self) -> np.ndarray:
-        """
-        Total concentration: alpha + beta.
-        
-        This represents the "effective sample size" or precision of the Beta distribution.
-        """
-        if self._cached_tau is None:
-            self._cached_tau = self.alpha + self.beta
-        return self._cached_tau
-    
-    @property
-    def precision(self) -> np.ndarray:
-        """
-        Precision weight for importance calculations.
-        
-        This is the same as tau (total concentration) and is used for
-        down-weighting low-precision sites in biological importance calculations.
-        """
-        return self.tau
-    
-    def _compute_beta_parameters(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Compute Beta distribution parameters using the appropriate method.
-        
-        Automatically selects the best method based on available data:
-        - Extended centroids: MLE with log sums
-        - Basic centroids: MoM with Sx, Sx2
-        - Samples: Basic MoM from methylation levels
-        
-        Returns:
-            Tuple of (alpha, beta) arrays
-        """
-        # Import here to avoid circular imports
-        from methyl_utils.statistical_tests import beta_mle_estimation, beta_mom_estimation
-        from methyl_utils.metrics_core import get_sample_beta_mom
-        
-        if self.is_extended_centroid and self.log_x_sum is not None and self.log_1_minus_x_sum is not None:
-            # Use extended centroid statistics for bounded MLE estimation
-            alpha, beta = self._estimate_beta_params_bounded_extended(
-                self.N, self.log_x_sum, self.log_1_minus_x_sum
-            )
-
-            # Validate MLE results - if alpha and beta are both near zero or invalid,
-            # fall back to method of moments using Sx data
-            invalid_mle = ((alpha <= 1e-6) & (beta <= 1e-6)) | ~np.isfinite(alpha) | ~np.isfinite(beta)
-            if np.any(invalid_mle) and self.Sx is not None and self.Sx2 is not None:
-                # Fall back to method of moments for positions where MLE failed
-                fallback_alpha, fallback_beta = beta_mom_estimation(self.N, self.Sx, self.Sx2)
-                alpha = np.where(invalid_mle, fallback_alpha, alpha)
-                beta = np.where(invalid_mle, fallback_beta, beta)
-        elif self.is_centroid and self.Sx is not None and self.Sx2 is not None:
-            # Use basic centroid statistics for MoM
-            alpha, beta = beta_mom_estimation(self.N, self.Sx, self.Sx2)
-        else:
-            # Use basic sample data
-            alpha, beta = get_sample_beta_mom(
-                self.get_methylation_levels(), 
-                self.get_coverage()
-            )
-        
-        return alpha, beta
-    
-    def get_beta_parameters(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Get Beta distribution parameters.
-        
-        Returns:
-            Tuple of (alpha, beta) arrays
-        """
-        return self.alpha, self.beta
-    
-    def clear_statistical_cache(self):
-        """Clear cached statistical properties to free memory."""
-        self._cached_alpha = None
-        self._cached_beta = None
-        self._cached_mean = None
-        self._cached_variance = None
-        self._cached_tau = None
 
     # Utility properties for memory and size calculations
     @property
@@ -987,7 +691,7 @@ class MethylSample:
         return aligner.get_centroid_sample()
 
     @classmethod
-    def create_centroid_from_samples(cls, samples: List['MethylSample'], use_gpu: bool = True) -> 'MethylSample':
+    def create_centroid_from_samples(cls, samples: List['MethylSample'], use_gpu: bool = True) -> 'MethylCentroid':
         """
         Create a centroid from a list of individual samples.
 
@@ -1045,17 +749,7 @@ class MethylSample:
             pos=self.pos[mask].astype(np.uint32),
             mC=self.mC[mask].astype(np.uint32),
             uC=self.uC[mask].astype(np.uint32),
-            tnc=self.tnc[mask].astype(np.uint8),
-            N=self.N[mask].astype(np.uint32) if self.N is not None else None,
-            Sx=self.Sx[mask].astype(np.float32) if self.Sx is not None else None,
-            Sx2=self.Sx2[mask].astype(np.float32) if self.Sx2 is not None else None,
-            log_x_sum=self.log_x_sum[mask].astype(np.float32) if self.log_x_sum is not None else None,
-            log_1_minus_x_sum=self.log_1_minus_x_sum[mask].astype(np.float32) if self.log_1_minus_x_sum is not None else None,
-            _cached_alpha=None,
-            _cached_beta=None,
-            _cached_mean=None,
-            _cached_variance=None,
-            _cached_tau=None
+            tnc=self.tnc[mask].astype(np.uint8)
         )
         
         return aligned_sample
@@ -1587,43 +1281,77 @@ class MethylSample:
         return file_path
     
     @classmethod
-    def from_centroid_data(cls, centroid_data, metadata: Optional[Dict[str, Any]] = None) -> MethylSample:
+    def from_centroid_data(cls, centroid_data, metadata: Optional[Dict[str, Any]] = None):
         """
-        Create MethylSample from centroid data (dictionary or structured array).
-        
+        Create appropriate MethylSample subclass from centroid data.
+
         Args:
-            centroid_data: Dictionary or structured array with centroid data from position aligner
-            metadata: Optional metadata dictionary to attach to the centroid
-            
+            centroid_data: Dictionary or structured array with centroid data
+            metadata: Optional metadata dictionary
+
         Returns:
-            MethylSample instance
+            MethylSample, MethylBasicCentroid, or MethylCentroid instance
         """
+        # Extract data fields
         if isinstance(centroid_data, np.ndarray):
             # Handle structured array format
-            return cls(
-                pos=centroid_data["pos"],
-                mC=centroid_data["mC"],
-                uC=centroid_data["uC"],
-                tnc=centroid_data["tnc"],
-                N=centroid_data["N"] if "N" in centroid_data.dtype.names else None,
-                Sx=centroid_data["Sx"] if "Sx" in centroid_data.dtype.names else None,
-                Sx2=centroid_data["Sx2"] if "Sx2" in centroid_data.dtype.names else None,
-                log_x_sum=centroid_data["log_x_sum"] if "log_x_sum" in centroid_data.dtype.names else None,
-                log_1_minus_x_sum=centroid_data["log_1_minus_x_sum"] if "log_1_minus_x_sum" in centroid_data.dtype.names else None,
+            data = {
+                "pos": centroid_data["pos"],
+                "mC": centroid_data["mC"],
+                "uC": centroid_data["uC"],
+                "tnc": centroid_data["tnc"],
+                "N": centroid_data["N"] if "N" in centroid_data.dtype.names else None,
+                "Sx": centroid_data["Sx"] if "Sx" in centroid_data.dtype.names else None,
+                "Sx2": centroid_data["Sx2"] if "Sx2" in centroid_data.dtype.names else None,
+                "log_x_sum": centroid_data["log_x_sum"] if "log_x_sum" in centroid_data.dtype.names else None,
+                "log_1_minus_x_sum": centroid_data["log_1_minus_x_sum"] if "log_1_minus_x_sum" in centroid_data.dtype.names else None,
+            }
+        else:
+            # Handle dictionary format
+            data = {
+                "pos": centroid_data["pos"],
+                "mC": centroid_data["mC"],
+                "uC": centroid_data["uC"],
+                "tnc": centroid_data["tnc"],
+                "N": centroid_data.get("N"),
+                "Sx": centroid_data.get("Sx"),
+                "Sx2": centroid_data.get("Sx2"),
+                "log_x_sum": centroid_data.get("log_x_sum"),
+                "log_1_minus_x_sum": centroid_data.get("log_1_minus_x_sum"),
+            }
+
+        # Determine appropriate class based on available data
+        if data["log_x_sum"] is not None and data["log_1_minus_x_sum"] is not None:
+            # Extended centroid
+            return MethylCentroid(
+                pos=data["pos"],
+                mC=data["mC"],
+                uC=data["uC"],
+                tnc=data["tnc"],
+                N=data["N"],
+                Sx=data["Sx"],
+                Sx2=data["Sx2"],
+                log_x_sum=data["log_x_sum"],
+                log_1_minus_x_sum=data["log_1_minus_x_sum"],
+                _metadata=metadata
+            )
+        elif data["N"] is not None:
+            # Basic centroid
+            return MethylBasicCentroid(
+                pos=data["pos"],
+                mC=data["mC"],
+                uC=data["uC"],
+                tnc=data["tnc"],
+                N=data["N"],
                 _metadata=metadata
             )
         else:
-            # Handle dictionary format
-            return cls(
-                pos=centroid_data["pos"],
-                mC=centroid_data["mC"],
-                uC=centroid_data["uC"],
-                tnc=centroid_data["tnc"],
-                N=centroid_data.get("N"),
-                Sx=centroid_data.get("Sx"),
-                Sx2=centroid_data.get("Sx2"),
-                log_x_sum=centroid_data.get("log_x_sum"),
-                log_1_minus_x_sum=centroid_data.get("log_1_minus_x_sum"),
+            # Basic sample
+            return MethylSample(
+                pos=data["pos"],
+                mC=data["mC"],
+                uC=data["uC"],
+                tnc=data["tnc"],
                 _metadata=metadata
             )
 
@@ -2048,6 +1776,292 @@ class MethylSample:
             log_x_sum=new_log_x_sum,
             log_1_minus_x_sum=new_log_1_minus_x_sum
         )
+
+
+@dataclass(slots=True)
+class MethylBasicCentroid(MethylSample):
+    """
+    Represents a basic methylation centroid - aggregated from multiple samples.
+
+    Adds sample count (N) and provides centroid aggregation methods.
+    """
+    # Centroid-specific data
+    N: np.ndarray  # uint32 - sample counts per position
+
+    # Metadata (inherited but required for dataclass ordering)
+    _metadata: Optional[Dict[str, Any]]
+
+    def __post_init__(self):
+        """Validate data types after initialization."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._validate_data_types()
+        self._validate_centroid_data_types()
+
+    def _validate_centroid_data_types(self):
+        """Validate centroid-specific data types."""
+        assert self.N.dtype == np.uint32, f"N should be uint32, got {self.N.dtype}"
+        assert len(self.N) == len(self.pos), f"N length {len(self.N)} != pos length {len(self.pos)}"
+
+    @property
+    def sample_type(self) -> str:
+        """Determine the type of sample."""
+        return "basic_centroid"
+
+    @property
+    def is_centroid(self) -> bool:
+        """Check if this is a centroid."""
+        return True
+
+    @property
+    def is_extended_centroid(self) -> bool:
+        """Check if this is an extended centroid."""
+        return False
+
+
+@dataclass(slots=True)
+class MethylCentroid(MethylBasicCentroid):
+    """
+    Represents an extended methylation centroid with statistical accumulators.
+
+    Includes sums and sums-of-squares for methylation levels, plus
+    logarithmic accumulators for Beta distribution parameter estimation.
+    """
+    # Extended centroid data
+    Sx: np.ndarray          # float32 - sum of methylation levels
+    Sx2: np.ndarray         # float32 - sum of squared methylation levels
+    log_x_sum: np.ndarray           # float32 - sum of log(methylation_level)
+    log_1_minus_x_sum: np.ndarray   # float32 - sum of log(1 - methylation_level)
+
+    # Metadata (inherited but required for dataclass ordering)
+    _metadata: Optional[Dict[str, Any]]
+
+    # Cached statistical properties (computed on demand)
+    _cached_alpha: Optional[np.ndarray] = None       # float64 - Beta distribution alpha parameter
+    _cached_beta: Optional[np.ndarray] = None        # float64 - Beta distribution beta parameter
+    _cached_mean: Optional[np.ndarray] = None        # float64 - expected methylation level
+    _cached_variance: Optional[np.ndarray] = None    # float64 - methylation level variance
+    _cached_tau: Optional[np.ndarray] = None         # float64 - total concentration (alpha + beta)
+
+    def __post_init__(self):
+        """Validate data types after initialization."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._validate_data_types()
+        self._validate_centroid_data_types()
+        self._validate_extended_data_types()
+
+    def _validate_extended_data_types(self):
+        """Validate extended centroid-specific data types."""
+        assert self.Sx.dtype == np.float32, f"Sx should be float32, got {self.Sx.dtype}"
+        assert self.Sx2.dtype == np.float32, f"Sx2 should be float32, got {self.Sx2.dtype}"
+        assert self.log_x_sum.dtype == np.float32, f"log_x_sum should be float32, got {self.log_x_sum.dtype}"
+        assert self.log_1_minus_x_sum.dtype == np.float32, f"log_1_minus_x_sum should be float32, got {self.log_1_minus_x_sum.dtype}"
+
+        expected_length = len(self.pos)
+        assert len(self.Sx) == expected_length, f"Sx length {len(self.Sx)} != pos length {expected_length}"
+        assert len(self.Sx2) == expected_length, f"Sx2 length {len(self.Sx2)} != pos length {expected_length}"
+        assert len(self.log_x_sum) == expected_length, f"log_x_sum length {len(self.log_x_sum)} != pos length {expected_length}"
+        assert len(self.log_1_minus_x_sum) == expected_length, f"log_1_minus_x_sum length {len(self.log_1_minus_x_sum)} != pos length {expected_length}"
+
+    @property
+    def sample_type(self) -> str:
+        """Determine the type of sample."""
+        return "extended_centroid"
+
+    @property
+    def is_extended_centroid(self) -> bool:
+        """Check if this is an extended centroid."""
+        return True
+
+    # Statistical properties - computed on demand
+    @property
+    def alpha(self) -> np.ndarray:
+        """
+        Beta distribution alpha parameter.
+
+        Computed using MLE estimation for extended centroids.
+        """
+        if self._cached_alpha is None:
+            alpha, beta = self._compute_beta_parameters()
+            self._cached_alpha = alpha
+            self._cached_beta = beta
+        return self._cached_alpha
+
+    @property
+    def beta(self) -> np.ndarray:
+        """
+        Beta distribution beta parameter.
+
+        Computed using MLE estimation for extended centroids.
+        """
+        if self._cached_beta is None:
+            alpha, beta = self._compute_beta_parameters()
+            self._cached_alpha = alpha
+            self._cached_beta = beta
+        return self._cached_beta
+
+    @property
+    def mean(self) -> np.ndarray:
+        """
+        Expected methylation level.
+
+        Uses adaptive mean estimation based on sample size reliability:
+        - Small samples (N < 20): empirical mean (Sx/N) for statistical reliability
+        - Large samples (N ≥ 20): Beta distribution mean (α/(α+β)) for full distributional information
+        """
+        if self._cached_mean is None:
+            eps = 1e-12
+
+            # For centroids with sufficient statistics, use adaptive mean estimation
+            if self.Sx is not None and self.N is not None:
+                empirical_mean = self.Sx / np.maximum(self.N.astype(np.float32), eps)
+
+                # Use empirical mean for small sample sizes (N < 20) where Beta estimation is unreliable
+                small_sample_mask = self.N < 20
+
+                if np.all(small_sample_mask):
+                    # All positions have small samples - use empirical mean directly
+                    final_mean = empirical_mean
+                else:
+                    # Mix of small and large samples
+                    final_mean = empirical_mean.copy()  # Start with empirical mean
+
+                    # For larger sample sizes (N >= 20), use Beta distribution mean
+                    large_sample_mask = ~small_sample_mask
+                    if np.any(large_sample_mask):
+                        alpha = self.alpha
+                        beta = self.beta
+                        tau = alpha + beta
+                        beta_mean = alpha / np.maximum(tau, eps)
+
+                        # Use Beta mean for large samples
+                        final_mean = np.where(large_sample_mask, beta_mean, final_mean)
+
+            else:
+                # Fallback to Beta distribution mean
+                alpha = self.alpha
+                beta = self.beta
+                tau = alpha + beta
+                final_mean = alpha / np.maximum(tau, eps)
+
+            self._cached_mean = final_mean
+        return self._cached_mean
+
+    @property
+    def variance(self) -> np.ndarray:
+        """
+        Variance of methylation level.
+
+        Calculated as: mean * (1 - mean) / (tau + 1) where tau = alpha + beta
+        This is numerically stable and equivalent to: (alpha * beta) / ((alpha + beta)^2 * (alpha + beta + 1))
+        """
+        if self._cached_variance is None:
+            alpha = self.alpha
+            beta = self.beta
+            tau = alpha + beta
+            eps = 1e-12
+            # Numerically stable variance calculation: var = mean * (1 - mean) / (tau + 1)
+            # This avoids overflow when alpha/beta are very large
+            mean = alpha / np.maximum(tau, eps)
+            self._cached_variance = mean * (1 - mean) / np.maximum(tau + 1, eps)
+        return self._cached_variance
+
+    @property
+    def tau(self) -> np.ndarray:
+        """
+        Total concentration parameter of Beta distribution.
+
+        tau = alpha + beta provides information about the reliability of
+        the distribution estimate. Higher tau values indicate more reliable
+        parameter estimates.
+        """
+        if self._cached_tau is None:
+            alpha = self.alpha
+            beta = self.beta
+            self._cached_tau = alpha + beta
+        return self._cached_tau
+
+    @property
+    def precision(self) -> np.ndarray:
+        """
+        Precision of methylation level estimate.
+
+        Calculated as tau / (tau + 1), where tau = alpha + beta.
+        Higher values indicate more precise estimates.
+        """
+        tau = self.tau
+        return tau / (tau + 1)
+
+    def clear_statistical_cache(self):
+        """Clear cached statistical properties to force recomputation."""
+        self._cached_alpha = None
+        self._cached_beta = None
+        self._cached_mean = None
+        self._cached_variance = None
+        self._cached_tau = None
+
+    def get_beta_parameters(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Get Beta distribution parameters (alpha, beta).
+
+        Returns:
+            Tuple of (alpha, beta) arrays
+        """
+        return self.alpha, self.beta
+
+    def _compute_beta_parameters(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Compute Beta distribution parameters using appropriate method.
+
+        For extended centroids, uses MLE estimation with log sums.
+        """
+        if not self.is_extended_centroid:
+            raise ValueError("Beta parameter computation requires extended centroid data")
+
+        n = self.N.astype(np.float32)
+        log_x_sum = self.log_x_sum
+        log_1mx_sum = self.log_1_minus_x_sum
+
+        return self._estimate_beta_params_bounded_extended(n, log_x_sum, log_1mx_sum)
+
+    def _estimate_beta_params_bounded_extended(self, n: np.ndarray, log_x_sum: np.ndarray,
+                                             log_1mx_sum: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Estimate Beta distribution parameters for extended centroids with bounds checking.
+
+        This method applies MLE but with strict bounds to prevent pathological parameter
+        estimates that can occur with extreme methylation values or edge cases.
+
+        Args:
+            n: Sample counts (array)
+            log_x_sum: Log sum of methylation levels
+            log_1mx_sum: Log sum of (1-methylation) levels
+
+        Returns:
+            Tuple of (alpha, beta) parameter arrays
+        """
+        # Log-space computation to avoid underflow with very small methylation values
+        # alpha = exp( (sum(log(x)) - n * log(n)) / n ) where x is methylation level
+        # beta = exp( (sum(log(1-x)) - n * log(n)) / n ) where x is methylation level
+
+        eps = 1e-12
+        n_safe = np.maximum(n, eps)
+
+        # Compute log-space estimates
+        log_alpha = (log_x_sum - n * np.log(n_safe)) / n_safe
+        log_beta = (log_1mx_sum - n * np.log(n_safe)) / n_safe
+
+        # Convert from log space to linear space with bounds checking
+        # Clip to reasonable ranges to prevent numerical issues
+        alpha = np.clip(np.exp(log_alpha), eps, 1e6)
+        beta = np.clip(np.exp(log_beta), eps, 1e6)
+
+        # Additional validation: ensure parameters are finite and positive
+        alpha = np.where(np.isfinite(alpha) & (alpha > 0), alpha, eps)
+        beta = np.where(np.isfinite(beta) & (beta > 0), beta, eps)
+
+        return alpha, beta
 
 
 @dataclass(slots=True)

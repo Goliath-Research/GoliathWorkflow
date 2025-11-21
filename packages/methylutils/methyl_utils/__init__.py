@@ -93,6 +93,8 @@ from .logging_utils import (
 
 from .methyl_sample import (
     MethylSample,
+    MethylBasicCentroid,
+    MethylCentroid,
     TNCBits,
     METHYL_SAMPLE_DTYPE,
     METHYL_CENTROID_DTYPE,
@@ -281,6 +283,8 @@ __all__ = [
     "PerformanceLogger",
     # Methylation sample functions
     "MethylSample",
+    "MethylBasicCentroid",
+    "MethylCentroid",
     "TNCBits",
     "METHYL_SAMPLE_DTYPE",
     "METHYL_CENTROID_DTYPE",
@@ -290,7 +294,7 @@ __all__ = [
     "MethylExtendedCentroidDtype",
     "get_methyl_dtype",
     "DMPSample",
-    "DMPExporter", 
+    "DMPExporter",
     "DMRExporter",
     # Core metric functions
     "DistanceCalculator",
