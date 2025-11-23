@@ -1640,10 +1640,10 @@ class MethylModeler:
         """
         Implementation of validation sample loading (extracted for reuse).
 
-        Uses PositionAligner to properly align validation samples to centroid positions.
+        Uses MethylCentroidPair to properly align validation samples to centroid positions.
         """
         from pathlib import Path
-        from methyl_utils import PositionAligner, MethylSample
+        from methyl_utils import MethylSample, MethylCentroidPair
 
         if not class1_paths and not class2_paths:
             return None
@@ -1660,160 +1660,46 @@ class MethylModeler:
         X = np.full((n_samples, n_positions), np.nan)  # Initialize with NaN
         y = np.zeros(n_samples, dtype=int)
         
-        # Create reference samples from DMP positions for alignment
-        centroid_aligners = {}
-        logger.info("Creating reference samples from DMP positions for alignment...")
-
-        # Group DMP positions by context
+        # Group DMP positions by context for efficient processing
+        reference_positions = {}
         context_groups = {}
         for ctx in np.unique(dmp_contexts):
             ctx_mask = dmp_contexts == ctx
+            ctx_positions = dmp_positions[ctx_mask]
+            reference_positions[ctx] = ctx_positions.astype(np.uint32)
             context_groups[ctx] = {
                 'indices': np.where(ctx_mask)[0],
-                'positions': dmp_positions[ctx_mask]
+                'positions': ctx_positions
             }
 
-            # Create a synthetic MethylSample from DMP positions for this context
-            try:
-                # Get the positions for this context
-                ctx_positions = context_groups[ctx]['positions']
-                n_ctx_positions = len(ctx_positions)
-
-                # Create synthetic data - we only need positions for alignment
-                # Use dummy values that meet PositionAligner validity criteria
-                # PositionAligner requires total_coverage >= min_coverage (default 4)
-                dummy_mC = np.full(n_ctx_positions, 3, dtype=np.uint32)  # 3 methylated reads
-                dummy_uC = np.full(n_ctx_positions, 2, dtype=np.uint32)  # 2 unmethylated reads
-                                                                             # Total coverage = 5 >= 4
-
-                # Create tnc array (trinucleotide context) - encode context in tnc format
-                # For simplicity, create dummy tnc values
-                dummy_tnc = np.zeros(n_ctx_positions, dtype=np.uint8)
-
-                # Create MethylSample from DMP positions
-                reference_sample = MethylSample(
-                    pos=ctx_positions.astype(np.uint32),
-                    mC=dummy_mC,
-                    uC=dummy_uC,
-                    tnc=dummy_tnc
-                )
-
-                # Add centroid-specific fields
-                reference_sample.N = np.ones(n_ctx_positions, dtype=np.uint32)
-                reference_sample.Sx = np.zeros(n_ctx_positions, dtype=np.float32)
-                reference_sample.Sx2 = np.zeros(n_ctx_positions, dtype=np.float32)
-
-                # Initialize aligner and load reference sample
-                aligner = PositionAligner(use_gpu=True)
-                if aligner.load_extended_centroid(reference_sample):
-                    # Debug: check what positions are considered valid
-                    valid_pos = aligner.get_valid_positions_from_centroid()
-                    logger.debug(f"Created reference aligner for context {ctx} with {len(valid_pos)} valid positions out of {n_ctx_positions}")
-                    if len(valid_pos) != n_ctx_positions:
-                        logger.warning(f"Context {ctx}: Expected {n_ctx_positions} valid positions, got {len(valid_pos)}")
-                        if len(valid_pos) > 0:
-                            logger.debug(f"Valid position range: {valid_pos.min()}-{valid_pos.max()}")
-                        else:
-                            logger.warning(f"No valid positions found for context {ctx}")
-
-                    centroid_aligners[ctx] = aligner
-                else:
-                    logger.warning(f"Failed to create reference aligner for context {ctx}")
-            except Exception as e:
-                logger.warning(f"Failed to create reference sample for context {ctx}: {e}")
-                import traceback
-                logger.debug(f"Traceback: {traceback.format_exc()}")
-
-        # Load each validation sample using PositionAligner
-        successful_samples = 0
-        for i, (sample_path, label) in enumerate(all_sample_paths):
-            try:
-                sample_dir = Path(sample_path)
-                sample_data_loaded = False
-
-                # Process each context
-                for ctx in context_groups.keys():
-                    if ctx not in centroid_aligners:
-                        logger.debug(f"No centroid aligner for context {ctx}, skipping")
-                        continue
-
-                    aligner = centroid_aligners[ctx]
-                    ctx_indices = context_groups[ctx]['indices']
-
-                    # Determine the H5 file for this context
-                    if sample_dir.suffix == '.h5':
-                        # Path is already an H5 file
-                        h5_file = sample_dir
-                    elif sample_dir.is_file():
-                        # Path is a file (maybe without .h5 extension)
-                        h5_file = sample_dir
-                    else:
-                        # Path is a directory, look for context-specific H5 file
-                        h5_file = sample_dir / f"{self.chromosome}-{ctx}.h5"
-
-                    if h5_file.exists():
-                        try:
-                            logger.debug(f"Loading {h5_file} for sample {sample_path}, context {ctx}")
-                            # Load sample for this context
-                            context_sample = MethylSample.load_from_h5(str(h5_file))
-                            logger.debug(f"Loaded sample with {len(context_sample.pos)} positions")
-
-                            # Align sample to centroid positions using PositionAligner
-                            aligned_mC, aligned_uC = aligner.align_sample_to_centroid(context_sample)
-                            logger.info(f"Context {ctx}: PositionAligner found {len(aligned_mC)} common positions out of {len(ctx_positions)} DMP positions")
-
-                            # Debug: Check aligner state
-                            if aligner.is_initialized:
-                                valid_pos = aligner.get_valid_positions_from_centroid()
-                                logger.debug(f"Aligner has {len(valid_pos)} valid positions")
-                                if len(valid_pos) == 0:
-                                    logger.warning(f"No valid positions in aligner for context {ctx}")
-                                    logger.debug(f"DMP positions range: {ctx_positions.min()}-{ctx_positions.max()}")
-                                    logger.debug(f"Sample positions range: {context_sample.pos.min()}-{context_sample.pos.max()}")
-
-                            if len(aligned_mC) > 0:
-                                # Convert to methylation fractions
-                                total_reads = aligned_mC + aligned_uC
-                                with np.errstate(divide='ignore', invalid='ignore'):
-                                    meth_fractions = np.where(total_reads > 0, aligned_mC / total_reads, np.nan)
-
-                                # PositionAligner returns data in the same order as ctx_positions
-                                # We need to map this to the correct indices in the full DMP matrix
-                                n_aligned = len(meth_fractions)
-
-                                # Since PositionAligner aligns to the centroid (which has ctx_positions),
-                                # and ctx_positions correspond to ctx_indices, we can directly assign
-                                if n_aligned <= len(ctx_indices):
-                                    # Only assign the first n_aligned positions
-                                    X[i, ctx_indices[:n_aligned]] = meth_fractions
-                                    sample_data_loaded = True
-                                    logger.debug(f"Successfully loaded {n_aligned} positions for sample {i}, context {ctx}")
-                                else:
-                                    logger.warning(f"Alignment returned more positions than expected: {n_aligned} > {len(ctx_indices)}")
-                                    # Take only the first len(ctx_indices) positions
-                                    X[i, ctx_indices] = meth_fractions[:len(ctx_indices)]
-                                    sample_data_loaded = True
-                                    logger.debug(f"Loaded {len(ctx_indices)} positions (truncated) for sample {i}, context {ctx}")
-                            else:
-                                logger.debug(f"No common positions found for sample {i}, context {ctx}")
-
-                        except Exception as e:
-                            logger.debug(f"Failed to align {h5_file}: {e}")
-                            import traceback
-                            logger.debug(f"Traceback: {traceback.format_exc()}")
-                    else:
-                        logger.debug(f"Sample file not found: {h5_file}")
-
-                if sample_data_loaded:
-                    successful_samples += 1
-                else:
-                    logger.warning(f"No data loaded for sample {sample_path}")
-
-                y[i] = label
-
-            except Exception as e:
-                logger.warning(f"Failed to load sample {sample_path}: {e}")
-                y[i] = label
+        # Use MethylCentroidPair to efficiently extract methylation fractions
+        logger.info("Extracting methylation fractions using MethylCentroidPair...")
+        sample_paths_list = [p for p, _ in all_sample_paths]
+        X_extracted, all_positions_extracted, context_indices_dict = MethylCentroidPair.extract_methylation_fractions(
+            sample_paths=sample_paths_list,
+            reference_positions=reference_positions,
+            chromosome=self.chromosome,
+            min_coverage=4
+        )
+        
+        # Map extracted positions back to original DMP indices
+        # Build position to DMP index mapping
+        dmp_pos_to_idx = {pos: idx for idx, pos in enumerate(dmp_positions)}
+        
+        # Map extracted data to DMP matrix using position lookup
+        for i in range(X_extracted.shape[0]):
+            for j, pos in enumerate(all_positions_extracted):
+                if pos in dmp_pos_to_idx:
+                    dmp_idx = dmp_pos_to_idx[pos]
+                    if not np.isnan(X_extracted[i, j]):
+                        X[i, dmp_idx] = X_extracted[i, j]
+        
+        # Set labels
+        for i, (_, label) in enumerate(all_sample_paths):
+            y[i] = label
+        
+        successful_samples = np.sum(~np.isnan(X).all(axis=1))
+        logger.info(f"Successfully loaded {successful_samples} out of {len(all_sample_paths)} validation samples")
         
         # If no samples loaded successfully, create mock validation data for testing alignment
         if successful_samples == 0:

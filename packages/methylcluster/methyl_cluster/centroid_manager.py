@@ -157,7 +157,7 @@ class ClusterCentroid:
             return np.asarray(arr)
         
         # Always create a copy with CPU arrays to be safe
-        from methyl_utils.methyl_sample import MethylSample
+        from methyl_utils import MethylSample
         
         try:
             return MethylSample(

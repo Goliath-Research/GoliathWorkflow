@@ -27,6 +27,7 @@ import pandas as pd
 from methyl_utils import (
     # MethylSample class
     MethylSample,
+    MethylExtendedCentroid,
     # Statistical functions
     likelihood_ratio_test_beta,
     beta_mle_estimation,
@@ -146,25 +147,30 @@ class MethylCentroidPair:
             (centroid1: MethylSample, centroid2: MethylSample, common_pos: np.ndarray)
         """
         # Load via MethylSample (native HDF5 parsing)
-        centroid1 = MethylSample.load_from_h5(path1)
-        centroid2 = MethylSample.load_from_h5(path2)
+        from methyl_utils.core.io import load_from_h5
+        centroid1 = load_from_h5(path1)
+        centroid2 = load_from_h5(path2)
 
         # Validate extended centroids (assume is_extended_centroid checks N, Sx, etc.)
         if not centroid1.is_extended_centroid or not centroid2.is_extended_centroid:
             raise ValueError("Both inputs must be extended centroids with N, Sx, Sx2, log sums.")
 
         # Assume positions are sorted (typical for genomic data); if not, sort them
-        if not np.all(np.diff(centroid1.pos) > 0):
+        pos1_vals = centroid1.pos.values if hasattr(centroid1.pos, 'values') else np.asarray(centroid1.pos)
+        pos2_vals = centroid2.pos.values if hasattr(centroid2.pos, 'values') else np.asarray(centroid2.pos)
+        if not np.all(np.diff(pos1_vals) > 0):
             logger.warning("Centroid1 positions not sorted; sorting for alignment.")
-            sort_idx1 = np.argsort(centroid1.pos)
-            centroid1 = cls._slice_sample(centroid1, sort_idx1)
-        if not np.all(np.diff(centroid2.pos) > 0):
+            sort_idx1 = np.argsort(pos1_vals)
+            centroid1 = centroid1.apply_mask(sort_idx1)
+            pos1_vals = centroid1.pos.values if hasattr(centroid1.pos, 'values') else np.asarray(centroid1.pos)
+        if not np.all(np.diff(pos2_vals) > 0):
             logger.warning("Centroid2 positions not sorted; sorting for alignment.")
-            sort_idx2 = np.argsort(centroid2.pos)
-            centroid2 = cls._slice_sample(centroid2, sort_idx2)
+            sort_idx2 = np.argsort(pos2_vals)
+            centroid2 = centroid2.apply_mask(sort_idx2)
+            pos2_vals = centroid2.pos.values if hasattr(centroid2.pos, 'values') else np.asarray(centroid2.pos)
 
         # Find common positions efficiently (numpy intersection)
-        common_pos = np.intersect1d(centroid1.pos, centroid2.pos, assume_unique=True)
+        common_pos = np.intersect1d(pos1_vals, pos2_vals, assume_unique=True)
 
         if len(common_pos) == 0:
             raise ValueError("No common positions between centroids.")
@@ -216,17 +222,21 @@ class MethylCentroidPair:
             raise ValueError("Both inputs must be extended centroids with N, Sx, Sx2, log sums.")
 
         # Assume positions are sorted (typical for genomic data); if not, sort them
-        if not np.all(np.diff(centroid1.pos) > 0):
+        pos1_vals = centroid1.pos.values if hasattr(centroid1.pos, 'values') else np.asarray(centroid1.pos)
+        pos2_vals = centroid2.pos.values if hasattr(centroid2.pos, 'values') else np.asarray(centroid2.pos)
+        if not np.all(np.diff(pos1_vals) > 0):
             logger.warning("Centroid1 positions not sorted; sorting for alignment.")
-            sort_idx1 = np.argsort(centroid1.pos)
-            centroid1 = cls._slice_sample(centroid1, sort_idx1)
-        if not np.all(np.diff(centroid2.pos) > 0):
+            sort_idx1 = np.argsort(pos1_vals)
+            centroid1 = centroid1.apply_mask(sort_idx1)
+            pos1_vals = centroid1.pos.values if hasattr(centroid1.pos, 'values') else np.asarray(centroid1.pos)
+        if not np.all(np.diff(pos2_vals) > 0):
             logger.warning("Centroid2 positions not sorted; sorting for alignment.")
-            sort_idx2 = np.argsort(centroid2.pos)
-            centroid2 = cls._slice_sample(centroid2, sort_idx2)
+            sort_idx2 = np.argsort(pos2_vals)
+            centroid2 = centroid2.apply_mask(sort_idx2)
+            pos2_vals = centroid2.pos.values if hasattr(centroid2.pos, 'values') else np.asarray(centroid2.pos)
 
         # Find common positions efficiently (numpy intersection)
-        common_pos = np.intersect1d(centroid1.pos, centroid2.pos, assume_unique=True)
+        common_pos = np.intersect1d(pos1_vals, pos2_vals, assume_unique=True)
 
         if len(common_pos) == 0:
             raise ValueError("No common positions between centroids.")
@@ -259,6 +269,185 @@ class MethylCentroidPair:
             logger.warning(f"Max coverage {max_n} < min_coverage {min_coverage}; proceeding with warning.")
 
         return aligned1, aligned2, common_pos
+
+    @classmethod
+    def create_reference_sample(
+        cls,
+        positions: np.ndarray,
+        context: str = "CG",
+        min_coverage: int = 4
+    ) -> MethylExtendedCentroid:
+        """
+        Create an empty extended centroid for use as a reference/alignment template.
+
+        Args:
+            positions: Genomic positions to include
+            context: Methylation context (CG, CHG, CHH)
+            min_coverage: Minimum coverage threshold
+
+        Returns:
+            MethylExtendedCentroid with zero-filled data
+        """
+        from methyl_utils.core.methyl_frame import MethylExtendedCentroid
+        import pandas as pd
+
+        n_positions = len(positions)
+        # Create dummy tnc values based on context
+        context_map = {"CG": 0, "CHG": 1, "CHH": 2}
+        tnc_base = context_map.get(context, 0)
+        dummy_tnc = np.full(n_positions, tnc_base, dtype=np.uint8)
+
+        df = pd.DataFrame({
+            "pos": positions.astype(np.uint32),
+            "mC": np.zeros(n_positions, dtype=np.uint32),
+            "uC": np.ones(n_positions, dtype=np.uint32) * min_coverage,  # Ensure coverage >= min_coverage
+            "tnc": dummy_tnc,
+            "N": np.ones(n_positions, dtype=np.uint32),
+            "Sx": np.zeros(n_positions, dtype=np.float32),
+            "Sx2": np.zeros(n_positions, dtype=np.float32),
+            "log_x_sum": np.zeros(n_positions, dtype=np.float32),
+            "log_1_minus_x_sum": np.zeros(n_positions, dtype=np.float32),
+        })
+
+        return MethylExtendedCentroid(df, metadata={"context": context})
+
+    @classmethod
+    def align_samples(
+        cls,
+        sample1: MethylSample,
+        sample2: MethylSample
+    ) -> tuple[MethylSample, MethylSample, np.ndarray]:
+        """
+        Align two samples on common positions.
+
+        Args:
+            sample1: First sample
+            sample2: Second sample
+
+        Returns:
+            Tuple of (aligned_sample1, aligned_sample2, common_positions)
+        """
+        return cls.load_and_align_from_samples(sample1, sample2)
+
+    @staticmethod
+    def ensure_cpu(sample: MethylSample) -> MethylSample:
+        """
+        Ensure a sample is on CPU (convert from GPU if needed).
+
+        Args:
+            sample: Sample that may be on GPU
+
+        Returns:
+            CPU version of the sample
+        """
+        return sample.to_cpu()
+
+    @classmethod
+    def extract_methylation_fractions(
+        cls,
+        sample_paths: List[Union[str, Path]],
+        reference_positions: Dict[str, np.ndarray],
+        chromosome: str,
+        min_coverage: int = 4
+    ) -> Tuple[np.ndarray, np.ndarray, Dict[str, np.ndarray]]:
+        """
+        Extract methylation fractions from samples aligned to reference positions.
+        
+        This method efficiently loads samples, aligns them to reference positions by context,
+        and extracts methylation fractions without creating full centroid objects.
+        
+        Args:
+            sample_paths: List of paths to sample HDF5 files or directories
+            reference_positions: Dictionary mapping context (CG, CHG, CHH) to position arrays
+            chromosome: Chromosome identifier
+            min_coverage: Minimum coverage threshold
+            
+        Returns:
+            Tuple of (methylation_fractions_matrix, positions_array, context_indices_dict)
+            - methylation_fractions_matrix: (n_samples, n_positions) array with NaN for missing positions
+            - positions_array: (n_positions,) array of all reference positions in order
+            - context_indices_dict: Dictionary mapping context to index arrays in the full position array
+        """
+        from methyl_utils.core.io import load_from_h5
+        from pathlib import Path
+        import numpy as np
+        
+        # Build ordered position array and position-to-index mapping
+        all_positions = []
+        position_to_index = {}
+        context_indices_dict = {}
+        
+        for ctx in ["CG", "CHG", "CHH"]:
+            if ctx in reference_positions:
+                ctx_positions = reference_positions[ctx].astype(np.uint32)
+                start_idx = len(all_positions)
+                ctx_indices = []
+                for pos in ctx_positions:
+                    if pos not in position_to_index:
+                        position_to_index[pos] = len(all_positions)
+                        all_positions.append(pos)
+                        ctx_indices.append(position_to_index[pos])
+                    else:
+                        ctx_indices.append(position_to_index[pos])
+                context_indices_dict[ctx] = np.array(ctx_indices, dtype=np.int64)
+        
+        all_positions = np.array(all_positions, dtype=np.uint32)
+        n_positions = len(all_positions)
+        n_samples = len(sample_paths)
+        
+        # Initialize result matrix with NaN
+        X = np.full((n_samples, n_positions), np.nan, dtype=np.float32)
+        
+        # Process each sample
+        for i, sample_path in enumerate(sample_paths):
+            sample_path = Path(sample_path)
+            
+            # Process each context
+            for ctx in reference_positions.keys():
+                ctx_positions = reference_positions[ctx].astype(np.uint32)
+                
+                # Determine H5 file path
+                if sample_path.suffix == '.h5':
+                    h5_file = sample_path
+                elif sample_path.is_file():
+                    h5_file = sample_path
+                else:
+                    h5_file = sample_path / f"{chromosome}-{ctx}.h5"
+                
+                if not h5_file.exists():
+                    continue
+                
+                try:
+                    # Load sample
+                    sample = load_from_h5(h5_file)
+                    
+                    # Align to reference positions
+                    aligned = sample.align_to_positions(ctx_positions)
+                    
+                    if len(aligned) == 0:
+                        continue
+                    
+                    # Extract methylation fractions efficiently
+                    mC_vals = aligned.mC.values if hasattr(aligned.mC, 'values') else np.asarray(aligned.mC)
+                    uC_vals = aligned.uC.values if hasattr(aligned.uC, 'values') else np.asarray(aligned.uC)
+                    pos_vals = aligned.pos.values if hasattr(aligned.pos, 'values') else np.asarray(aligned.pos)
+                    
+                    # Calculate methylation fractions
+                    total_reads = mC_vals + uC_vals
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        meth_fractions = np.where(total_reads >= min_coverage, mC_vals / total_reads, np.nan)
+                    
+                    # Map to correct indices in result matrix using position lookup
+                    for j, pos in enumerate(pos_vals):
+                        if pos in position_to_index:
+                            idx = position_to_index[pos]
+                            X[i, idx] = meth_fractions[j]
+                            
+                except Exception as e:
+                    logger.debug(f"Failed to process {h5_file}: {e}")
+                    continue
+        
+        return X, all_positions, context_indices_dict
 
     def _init_cpu_backend(self):
         """Initialize CPU backend."""
@@ -346,24 +535,31 @@ class MethylCentroidPair:
     def _align_centroids(self, centroid1: MethylSample, centroid2: MethylSample) -> np.ndarray:
         """Find common positions between centroids."""
         # Find intersection of positions
-        common_positions = np.intersect1d(centroid1.pos, centroid2.pos)
+        pos1_vals = centroid1.pos.values if hasattr(centroid1.pos, 'values') else np.asarray(centroid1.pos)
+        pos2_vals = centroid2.pos.values if hasattr(centroid2.pos, 'values') else np.asarray(centroid2.pos)
+        common_positions = np.intersect1d(pos1_vals, pos2_vals)
 
         # Filter by minimum coverage if centroids have coverage info
         if hasattr(centroid1, 'mC') and hasattr(centroid1, 'uC') and \
            hasattr(centroid2, 'mC') and hasattr(centroid2, 'uC'):
 
             # Get coverage for common positions
-            c1_mask = np.isin(centroid1.pos, common_positions)
-            c2_mask = np.isin(centroid2.pos, common_positions)
+            c1_mask = np.isin(pos1_vals, common_positions)
+            c2_mask = np.isin(pos2_vals, common_positions)
 
-            c1_coverage = centroid1.mC[c1_mask] + centroid1.uC[c1_mask]
-            c2_coverage = centroid2.mC[c2_mask] + centroid2.uC[c2_mask]
+            mC1_vals = centroid1.mC.values if hasattr(centroid1.mC, 'values') else np.asarray(centroid1.mC)
+            uC1_vals = centroid1.uC.values if hasattr(centroid1.uC, 'values') else np.asarray(centroid1.uC)
+            mC2_vals = centroid2.mC.values if hasattr(centroid2.mC, 'values') else np.asarray(centroid2.mC)
+            uC2_vals = centroid2.uC.values if hasattr(centroid2.uC, 'values') else np.asarray(centroid2.uC)
+
+            c1_coverage = mC1_vals[c1_mask] + uC1_vals[c1_mask]
+            c2_coverage = mC2_vals[c2_mask] + uC2_vals[c2_mask]
 
             # Filter positions by minimum coverage
             coverage_mask = (c1_coverage + c2_coverage) >= self.min_coverage
 
             # Get positions that pass coverage filter
-            c1_positions = centroid1.pos[c1_mask][coverage_mask]
+            c1_positions = pos1_vals[c1_mask][coverage_mask]
             common_positions = c1_positions
 
         return common_positions

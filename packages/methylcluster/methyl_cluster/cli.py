@@ -14,7 +14,7 @@ from pathlib import Path
 
 from .config import MethylClusterConfig
 from .cluster import MethylCluster
-from methyl_utils.methyl_sample import MethylSample
+from methyl_utils import MethylSample
 
 
 def setup_logging(verbose: bool = False) -> None:

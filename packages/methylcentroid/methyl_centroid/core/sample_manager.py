@@ -262,29 +262,11 @@ class SampleManager:
             methyl_sample: MethylSample instance
 
         Returns:
-            MethylSample with NumPy arrays
+            MethylSample with NumPy arrays (on CPU)
         """
-        # Convert arrays from CuPy to NumPy if needed
-        if hasattr(methyl_sample.pos, 'get'):
-            methyl_sample.pos = methyl_sample.pos.get()
-        if hasattr(methyl_sample.mC, 'get'):
-            methyl_sample.mC = methyl_sample.mC.get()
-        if hasattr(methyl_sample.uC, 'get'):
-            methyl_sample.uC = methyl_sample.uC.get()
-        if hasattr(methyl_sample.tnc, 'get'):
-            methyl_sample.tnc = methyl_sample.tnc.get()
-        if methyl_sample.N is not None and hasattr(methyl_sample.N, 'get'):
-            methyl_sample.N = methyl_sample.N.get()
-        if methyl_sample.Sx is not None and hasattr(methyl_sample.Sx, 'get'):
-            methyl_sample.Sx = methyl_sample.Sx.get()
-        if methyl_sample.Sx2 is not None and hasattr(methyl_sample.Sx2, 'get'):
-            methyl_sample.Sx2 = methyl_sample.Sx2.get()
-        if methyl_sample.log_x_sum is not None and hasattr(methyl_sample.log_x_sum, 'get'):
-            methyl_sample.log_x_sum = methyl_sample.log_x_sum.get()
-        if methyl_sample.log_1_minus_x_sum is not None and hasattr(methyl_sample.log_1_minus_x_sum, 'get'):
-            methyl_sample.log_1_minus_x_sum = methyl_sample.log_1_minus_x_sum.get()
-
-        return methyl_sample
+        # Use to_cpu() method to convert GPU arrays to CPU and ensure numpy arrays
+        # This handles both GPU->CPU conversion and Series->numpy array conversion
+        return methyl_sample.to_cpu()
 
     def load_samples_parallel(self, sample_paths: List[Path], max_workers: Optional[int] = None) -> List[MethylSample]:
         """
@@ -456,16 +438,34 @@ class SampleManager:
             self.sample_cache.clear()
         self._aligned_cache.clear()
 
-    def get_aligned_sample(self, sample_path: Path) -> Tuple[np.ndarray, np.ndarray]:
-        if sample_path not in self._aligned_cache:
+    def get_aligned_sample(self, sample_path: Path, centroid_positions: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Get aligned sample data for given positions.
+        
+        Args:
+            sample_path: Path to sample file
+            centroid_positions: Optional positions to align to. If None, returns raw sample data.
+        
+        Returns:
+            Tuple of (mC, uC) arrays
+        """
+        cache_key = (sample_path, tuple(centroid_positions) if centroid_positions is not None else None)
+        if cache_key not in self._aligned_cache:
             if len(self._aligned_cache) >= self.max_cache_size:
                 # Evict least recently used (simple FIFO for now)
                 oldest_key = next(iter(self._aligned_cache))
                 del self._aligned_cache[oldest_key]
             sample_obj = self.load_sample(sample_path)
-            mC, uC = self.position_aligner.align_sample_to_centroid(sample_obj)
-            self._aligned_cache[sample_path] = (mC, uC)
-        return self._aligned_cache[sample_path]
+            # Align sample to centroid positions if provided
+            if centroid_positions is not None:
+                aligned_sample = sample_obj.align_to_positions(centroid_positions)
+                mC = np.asarray(aligned_sample.mC.values, dtype=np.uint32)
+                uC = np.asarray(aligned_sample.uC.values, dtype=np.uint32)
+            else:
+                mC = np.asarray(sample_obj.mC.values, dtype=np.uint32)
+                uC = np.asarray(sample_obj.uC.values, dtype=np.uint32)
+            self._aligned_cache[cache_key] = (mC, uC)
+        return self._aligned_cache[cache_key]
 
     # Call clear_cache() after removing outliers or updating centroid
 

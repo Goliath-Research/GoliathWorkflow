@@ -1,273 +1,848 @@
 # methyl_utils/core/methyl_frame.py
 from __future__ import annotations
 
-import warnings
-from dataclasses import dataclass
+from typing import Optional, Dict, Any, Literal, get_type_hints, Union, List
 from pathlib import Path
-from typing import Optional, Dict, Any, Union, List, Tuple, Literal
 
 import numpy as np
 import pandas as pd
 
-# Lazy GPU support — zero overhead if not available
+# GPU support (transparent)
 try:
-    import cupy as cp
     import cudf
-    from cudf import DataFrame as CuDataFrame
-    from pandas import DataFrame as PdDataFrame
+    import cupy as cp
+
     HAS_GPU = True
-except ImportError:  # pragma: no cover
-    cp = None
+except ImportError:
     cudf = None
-    CuDataFrame = None
+    cp = None
     HAS_GPU = False
 
-DataFrameType = Union[pd.DataFrame, 'cudf.DataFrame']
 
+# Single source of truth — column name → optimal dtype
+COLUMN_DTYPES = {
+    "pos": "uint32",
+    "mC": "uint32",
+    "uC": "uint32",
+    "tnc": "uint8",
+    "N": "uint32",
+    "Sx": "float32",
+    "Sx2": "float32",
+    "log_x_sum": "float32",
+    "log_1_minus_x_sum": "float32",
+}
 
-def _xp() -> Any:
-    """Return numpy or cupy depending on runtime context."""
-    return cp if (HAS_GPU and hasattr(_current_frame(), '_data')) else np
+# Categorical definitions
+ContextDtype = pd.CategoricalDtype(
+    categories=["CG", "CHG", "CHH", "UNKNOWN"], ordered=False
+)
+StrandDtype = pd.CategoricalDtype(categories=["+", "-"], ordered=False)
 
-
-def _current_frame() -> 'MethylFrame':
-    """Internal helper — will be set by MethylFrame instances."""
-    return None  # placeholder
-
-
-@dataclass(frozen=True, slots=True)
-class TNC:
-    tnc: int          # 0–31
-    context: int      # 0=CG, 1=CHG, 2=CHH, 3=UNKNOWN
-    strand: int       # 0=+, 1=-
-
-    @classmethod
-    def from_byte(cls, byte: int) -> "TNC":
-        return cls(
-            tnc=byte & 0b11111,
-            context=(byte >> 5) & 0b11,
-            strand=(byte >> 7) & 0b1,
-        )
-
-    def to_byte(self) -> int:
-        return (self.tnc & 0b11111) | ((self.context & 0b11) << 5) | ((self.strand & 0b1) << 7)
+# Fast lookup tables
+_TNC_CONTEXT_CODES = np.array([0] * 32 + [1] * 32 + [2] * 32 + [3] * 32, dtype=np.uint8)
+_TNC_STRAND_CODES = np.array([0] * 128 + [1] * 128, dtype=np.uint8)
 
 
 class MethylFrame:
-    """
-    Immutable-by-convention container built on pandas (CPU) or cuDF (GPU).
-    All heavy lifting is vectorized — no loops, no None-checking hell.
-    """
+    _required_cols = {"pos", "mC", "uC", "tnc"}
 
     def __init__(
         self,
-        df: DataFrameType,
+        df: pd.DataFrame | "cudf.DataFrame",
         metadata: Optional[Dict[str, Any]] = None,
-        *,
-        use_gpu: bool = False,
     ):
-        if use_gpu and not HAS_GPU:
-            warnings.warn("GPU requested but cuDF not available → falling back to pandas")
-            use_gpu = False
+        missing = self._required_cols - set(df.columns)
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
 
-        if use_gpu and not isinstance(df, cudf.DataFrame):
-            df = cudf.from_pandas(df if isinstance(df, pd.DataFrame) else pd.DataFrame(df))
+        # Apply optimal dtypes from single source
+        dtypes = {
+            col: dtype for col, dtype in COLUMN_DTYPES.items() if col in df.columns
+        }
+        df = df.astype(dtypes)
 
-        if not use_gpu and isinstance(df, cudf.DataFrame):
-            df = df.to_pandas()
+        # Decode context/strand once
+        if "context" not in df.columns:
+            tnc = df["tnc"].values
+            # Clamp tnc values to valid range [0, 127] to handle old files with invalid values
+            # TNC codes are packed into uint8, but lookup tables only cover 0-127
+            if HAS_GPU and hasattr(tnc, "device"):
+                tnc_clamped = cp.clip(tnc, 0, len(_TNC_CONTEXT_CODES) - 1)
+                ctx_codes = cp.asarray(_TNC_CONTEXT_CODES)[tnc_clamped]
+                strand_codes = cp.asarray(_TNC_STRAND_CODES)[tnc_clamped]
+                df["context"] = cudf.Series(ctx_codes, dtype=ContextDtype)
+                df["strand"] = cudf.Series(strand_codes, dtype=StrandDtype)
+            else:
+                tnc_clamped = np.clip(tnc, 0, len(_TNC_CONTEXT_CODES) - 1)
+                df["context"] = pd.Categorical.from_codes(
+                    _TNC_CONTEXT_CODES[tnc_clamped], dtype=ContextDtype
+                )
+                df["strand"] = pd.Categorical.from_codes(
+                    _TNC_STRAND_CODES[tnc_clamped], dtype=StrandDtype
+                )
 
-        required_cols = {"pos", "mC", "uC", "tnc_byte"}
-        if not required_cols.issubset(df.columns):
-            raise ValueError(f"Missing required columns: {required_cols - set(df.columns)}")
+        self._df = df.sort_values("pos").reset_index(drop=True)
+        self._metadata = metadata or {}
 
-        self._df = df.reset_index(drop=True)
-        self._metadata = metadata.copy() if metadata is not None else {}
-        self._use_gpu = use_gpu
-        self._cache: Dict[str, Any] = {}
-
-    # ------------------------------------------------------------------ #
-    # Core properties (always available)
-    # ------------------------------------------------------------------ #
     @property
-    def df(self) -> DataFrameType:
+    def df(self):
         return self._df
 
     @property
     def is_gpu(self) -> bool:
-        return self._use_gpu
+        return HAS_GPU and isinstance(self._df, cudf.DataFrame)
 
     @property
-    def pos(self):       return self._df["pos"]
+    def pos(self):
+        return self._df["pos"]
+
     @property
-    def mC(self):        return self._df["mC"]
+    def mC(self):
+        return self._df["mC"]
+
     @property
-    def uC(self):        return self._df["uC"]
-    @property
-    def tnc_byte(self):  return self._df["tnc_byte"]
+    def uC(self):
+        return self._df["uC"]
 
     @property
     def coverage(self):
-        key = "coverage"
-        if key not in self._df.columns:
-            self._df[key] = self.mC + self.uC
-        return self._df[key]
+        return self.mC + self.uC
 
     @property
-    def empirical_mean(self):
-        key = "empirical_mean"
-        if key not in self._df.columns:
-            eps = 1e-12
-            self._df[key] = self.mC / (self.coverage + eps)
-        return self._df[key]
+    def context(self):
+        return self._df["context"]
 
-    # ------------------------------------------------------------------ #
-    # GPU / CPU conversion
-    # ------------------------------------------------------------------ #
-    def to_gpu(self) -> "MethylFrame":
-        if self._use_gpu:
+    @property
+    def strand(self):
+        return self._df["strand"]
+
+    def to_gpu(self):
+        if not HAS_GPU or self.is_gpu:
             return self
-        if not HAS_GPU:
-            raise RuntimeError("cuDF not available")
-        return MethylFrame(cudf.from_pandas(self._df), self._metadata, use_gpu=True)
+        return type(self)(cudf.from_pandas(self._df.to_pandas()), self._metadata)
 
-    def to_cpu(self) -> "MethylFrame":
-        if not self._use_gpu:
+    def to_cpu(self):
+        if not self.is_gpu:
             return self
-        return MethylFrame(self._df.to_pandas(), self._metadata, use_gpu=False)
+        return type(self)(self._df.to_pandas(), self._metadata)
 
-    # ------------------------------------------------------------------ #
-    # Subclass-specific views (zero-copy)
-    # ------------------------------------------------------------------ #
-    def as_sample(self) -> "MethylSample":
-        return MethylSample(self._df, self._metadata, use_gpu=self._use_gpu)
-
-    def as_basic_centroid(self) -> "MethylBasicCentroid":
-        return MethylBasicCentroid(self._df, self._metadata, use_gpu=self._use_gpu)
-
-    def as_extended_centroid(self) -> "MethylExtendedCentroid":
-        return MethylExtendedCentroid(self._df, self._metadata, use_gpu=self._use_gpu)
-
-    # ------------------------------------------------------------------ #
-    # Utilities
-    # ------------------------------------------------------------------ #
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self._df)
 
-    def __getitem__(self, mask) -> "MethylFrame":
-        new_df = self._df.loc[mask]
-        return MethylFrame(new_df, self._metadata, use_gpu=self._use_gpu)
+    def __getitem__(self, key):
+        return type(self)(self._df.loc[key], self._metadata.copy())
 
-    def copy(self) -> "MethylFrame":
-        return MethylFrame(self._df.copy(), self._metadata, use_gpu=self._use_gpu)
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        """Get metadata dictionary."""
+        return self._metadata
 
-    def save_parquet(self, path: Path | str):
-        path = Path(path)
-        self.to_cpu()._df.to_parquet(path, compression="zstd")
-        # Save metadata as sidecar
-        (path.parent / f"{path.stem}_meta.json").write_text(
-            __import__("json").dumps(self._metadata, indent=2)
-        )
+    @metadata.setter
+    def metadata(self, value: Dict[str, Any]):
+        """Set metadata dictionary."""
+        self._metadata = value or {}
+
+    # Metadata properties (read-write for easy manipulation)
+    @property
+    def laboratory(self) -> Optional[str]:
+        """Get laboratory name from metadata."""
+        return self._metadata.get("laboratory") if self._metadata else None
+
+    @laboratory.setter
+    def laboratory(self, value: str):
+        """Set laboratory name in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["laboratory"] = value
+
+    @property
+    def disease(self) -> Optional[str]:
+        """Get disease from metadata."""
+        return self._metadata.get("disease") if self._metadata else None
+
+    @disease.setter
+    def disease(self, value: str):
+        """Set disease in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["disease"] = value
+
+    @property
+    def group(self) -> Optional[str]:
+        """Get group identifier from metadata."""
+        return self._metadata.get("group") if self._metadata else None
+
+    @group.setter
+    def group(self, value: str):
+        """Set group identifier in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["group"] = value
+
+    @property
+    def batch(self) -> Optional[str]:
+        """Get batch identifier from metadata."""
+        return self._metadata.get("batch") if self._metadata else None
+
+    @batch.setter
+    def batch(self, value: str):
+        """Set batch identifier in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["batch"] = value
+
+    @property
+    def chromosome(self) -> Optional[str]:
+        """Get chromosome from metadata."""
+        return self._metadata.get("chromosome") if self._metadata else None
+
+    @chromosome.setter
+    def chromosome(self, value: str):
+        """Set chromosome in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["chromosome"] = value
+
+    @property
+    def context(self) -> Optional[str]:
+        """Get methylation context from metadata."""
+        return self._metadata.get("context") if self._metadata else None
+
+    @context.setter
+    def context(self, value: str):
+        """Set methylation context in metadata."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata["context"] = value
+
+    @property
+    def samples(self) -> List[str]:
+        """List of sample file paths that form this centroid (from metadata)."""
+        if not self._metadata:
+            return []
+        # Check for 'sample_paths' first, fall back to 'samples_used'
+        return self._metadata.get('sample_paths') or self._metadata.get('samples_used', [])
+
+    @property
+    def group_name(self) -> str:
+        """Group name or label for this centroid (from metadata)."""
+        return self._metadata.get('group_name', 'Unknown') if self._metadata else 'Unknown'
+
+    @property
+    def is_centroid(self) -> bool:
+        """Check if this is a centroid."""
+        return False
+
+    @property
+    def is_extended_centroid(self) -> bool:
+        """Check if this is an extended centroid."""
+        return False
+
+    @property
+    def sample_type(self) -> str:
+        """Get the sample type."""
+        return "sample"
+
+    @property
+    def position_count(self) -> int:
+        """Number of genomic positions."""
+        return len(self._df)
+
+    @property
+    def memory_usage_mb(self) -> float:
+        """Memory usage in megabytes."""
+        if self.is_gpu:
+            return self._df.memory_usage(deep=True).sum() / (1024 * 1024)
+        else:
+            return self._df.memory_usage(deep=True).sum() / (1024 * 1024)
+
+    def apply_mask(self, mask_or_indices: Union[np.ndarray, List[int], bool]) -> "MethylFrame":
+        """
+        Apply a boolean mask or integer indices to filter the data.
+
+        Args:
+            mask_or_indices: Boolean mask array or integer indices
+
+        Returns:
+            New instance with filtered data
+        """
+        if isinstance(mask_or_indices, (list, np.ndarray)) and len(mask_or_indices) > 0:
+            if isinstance(mask_or_indices[0], bool) or mask_or_indices.dtype == bool:
+                # Boolean mask
+                return self[mask_or_indices]
+            else:
+                # Integer indices
+                return self[self._df.index[mask_or_indices]]
+        return self
+
+    def align_to_positions(self, positions: np.ndarray) -> "MethylFrame":
+        """
+        Align to reference positions, keeping only common positions.
+
+        Args:
+            positions: Reference positions to align to
+
+        Returns:
+            New instance aligned to reference positions
+        """
+        pos_values = self.pos.values if hasattr(self.pos, 'values') else np.asarray(self.pos)
+        common_pos, idx1, _ = np.intersect1d(pos_values, positions, assume_unique=True, return_indices=True)
+        return self.apply_mask(idx1)
+
+    def get_methylation_levels(self) -> np.ndarray:
+        """Get methylation levels (mC / (mC + uC))."""
+        cov = self.coverage.values if hasattr(self.coverage, 'values') else np.asarray(self.coverage)
+        mC_vals = self.mC.values if hasattr(self.mC, 'values') else np.asarray(self.mC)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            return np.where(cov > 0, mC_vals / cov, 0.0)
+
+    def get_coverage(self) -> np.ndarray:
+        """Get total coverage (mC + uC)."""
+        return self.coverage.values if hasattr(self.coverage, 'values') else np.asarray(self.coverage)
 
     @classmethod
-    def load_parquet(cls, path: Path | str) -> "MethylFrame":
+    def load_from_h5(cls, path: Union[str, Path], positions: Optional[np.ndarray] = None) -> "MethylFrame":
+        """
+        Load from HDF5 file.
+
+        Args:
+            path: Path to HDF5 file
+            positions: Optional positions to filter to
+
+        Returns:
+            MethylSample, MethylBasicCentroid, or MethylExtendedCentroid instance
+        """
+        from .io import load_from_h5
+        result = load_from_h5(path)
+        if positions is not None:
+            result = result.align_to_positions(positions)
+        return result
+
+    def save_to_h5(self, path: Union[str, Path], compressed: bool = True) -> Path:
+        """
+        Save to HDF5 file.
+
+        Args:
+            path: Path to save to
+            compressed: Whether to use compression
+
+        Returns:
+            Path to saved file
+        """
         path = Path(path)
-        df = pd.read_parquet(path)
-        meta_path = path.parent / f"{path.stem}_meta.json"
-        metadata = {}
-        if meta_path.exists():
-            metadata = __import__("json").loads(meta_path.read_text())
-        return cls(df, metadata)
+        import h5py
+        import hdf5plugin
 
+        with h5py.File(path, "w") as f:
+            # Store metadata as attributes
+            for key, value in self._metadata.items():
+                if isinstance(value, (dict, list)):
+                    import json
+                    f.attrs[key] = json.dumps(value)
+                else:
+                    f.attrs[key] = value
 
-# -------------------------------------------------------------------------- #
-# Type-specific lightweight views (enforce required columns, provide helpers)
-# -------------------------------------------------------------------------- #
+            # Create methylation_data group
+            group = f.create_group("methylation_data")
+
+            # Store core columns
+            for col in ["pos", "mC", "uC", "tnc"]:
+                if col in self._df.columns:
+                    data = self._df[col].values if hasattr(self._df[col], 'values') else np.asarray(self._df[col])
+                    if compressed:
+                        group.create_dataset(col, data=data, **hdf5plugin.Blosc())
+                    else:
+                        group.create_dataset(col, data=data)
+
+            # Store centroid columns if present
+            for col in ["N", "Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
+                if col in self._df.columns:
+                    data = self._df[col].values if hasattr(self._df[col], 'values') else np.asarray(self._df[col])
+                    if compressed:
+                        group.create_dataset(col, data=data, **hdf5plugin.Blosc())
+                    else:
+                        group.create_dataset(col, data=data)
+
+        return path
+
+    @classmethod
+    def from_sample_data(
+        cls,
+        pos: np.ndarray,
+        mC: np.ndarray,
+        uC: np.ndarray,
+        tnc: np.ndarray,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> "MethylSample":
+        """
+        Create MethylSample from arrays.
+
+        Args:
+            pos: Genomic positions
+            mC: Methylated counts
+            uC: Unmethylated counts
+            tnc: Trinucleotide context bytes
+            metadata: Optional metadata
+
+        Returns:
+            MethylSample instance
+        """
+        df = pd.DataFrame({
+            "pos": pos,
+            "mC": mC,
+            "uC": uC,
+            "tnc": tnc,
+        })
+        return MethylSample(df, metadata)
+
 
 class MethylSample(MethylFrame):
-    """Raw individual sample — only pos, mC, uC, tnc_byte required"""
-    pass
+    _required_cols = {"pos", "mC", "uC", "tnc"}
 
 
 class MethylBasicCentroid(MethylFrame):
-    """Averaged counts + sample count N"""
-    def __init__(self, df: DataFrameType, metadata: dict, *, use_gpu: bool):
-        if "N" not in df.columns:
-            raise ValueError("Basic centroid requires column 'N'")
-        super().__init__(df, metadata, use_gpu=use_gpu)
+    _required_cols = {"pos", "mC", "uC", "tnc", "N"}
 
     @property
     def N(self):
         return self._df["N"]
 
+    @property
+    def mean(self):
+        if "mean" not in self._df.columns:
+            self._df["mean"] = (self.mC / self.coverage).astype("float32")
+        return self._df["mean"]
+
+    @property
+    def is_centroid(self) -> bool:
+        """Check if this is a centroid."""
+        return True
+
+    @property
+    def sample_type(self) -> str:
+        """Get the sample type."""
+        return "basic_centroid"
+
+    def get_sample_count(self) -> np.ndarray:
+        """Get sample counts (N array)."""
+        return self.N.values if hasattr(self.N, 'values') else np.asarray(self.N)
+
+    def to_numpy(self, extended: bool = False) -> np.ndarray:
+        """
+        Convert MethylBasicCentroid to structured numpy array format.
+
+        Args:
+            extended: Whether to include extended centroid fields (always False for MethylBasicCentroid)
+
+        Returns:
+            Structured numpy array with centroid data
+        """
+        from methyl_utils import METHYL_CENTROID_DTYPE
+        
+        # Convert to CPU first
+        df_cpu = self.to_cpu()._df
+        
+        # Use basic centroid dtype
+        dtype = METHYL_CENTROID_DTYPE
+        data = np.empty(len(df_cpu), dtype=dtype)
+        data["pos"] = np.asarray(df_cpu["pos"].values, dtype=np.uint32)
+        data["mC"] = np.asarray(df_cpu["mC"].values, dtype=np.uint32)
+        data["uC"] = np.asarray(df_cpu["uC"].values, dtype=np.uint32)
+        data["tnc"] = np.asarray(df_cpu["tnc"].values, dtype=np.uint8)
+        data["N"] = np.asarray(df_cpu["N"].values, dtype=np.uint32)
+
+        return data
+
 
 class MethylExtendedCentroid(MethylBasicCentroid):
-    """
-    Full sufficient statistics → Beta distribution per position.
-    This is what MethylCentroidPair expects.
-    """
+    _required_cols = {
+        "pos",
+        "mC",
+        "uC",
+        "tnc",
+        "N",
+        "Sx",
+        "Sx2",
+        "log_x_sum",
+        "log_1_minus_x_sum",
+    }
     _required_stats = {"Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"}
-
-    def __init__(self, df: DataFrameType, metadata: dict, *, use_gpu: bool):
-        missing = self._required_stats - set(df.columns)
-        if missing:
-            raise ValueError(f"Extended centroid missing columns: {missing}")
-        super().__init__(df, metadata, use_gpu=use_gpu)
-
-    # ------------------------------------------------------------------ #
-    # Lazy Beta parameter estimation (vectorized MLE, GPU-aware)
-    # ------------------------------------------------------------------ #
-    def _compute_beta_params(self) -> Tuple[pd.Series | cudf.Series, pd.Series | cudf.Series]:
-        key = "beta_params"
-        if key in self._cache:
-            return self._cache[key]
-
-        from methyl_utils.statistical_tests import beta_mle_estimation
-
-        alpha, beta = beta_mle_estimation(
-            n=self.N.values,
-            log_x_sum=self._df["log_x_sum"].values,
-            log_1mx_sum=self._df["log_1_minus_x_sum"].values,
-            use_gpu=self.is_gpu,
-        )
-
-        if self.is_gpu:
-            alpha = cudf.Series(alpha)
-            beta = cudf.Series(beta)
-        else:
-            alpha = pd.Series(alpha, index=self._df.index)
-            beta = pd.Series(beta, index=self._df.index)
-
-        self._cache[key] = (alpha, beta)
-        return alpha, beta
 
     @property
     def alpha(self):
-        return self._compute_beta_params()[0]
+        if "alpha" not in self._df.columns:
+            from methyl_utils.statistical_tests import beta_mle_estimation
+
+            alpha, beta = beta_mle_estimation(
+                n=self.N.values,
+                log_x_sum=self._df["log_x_sum"].values,
+                log_1mx_sum=self._df["log_1_minus_x_sum"].values,
+                use_gpu=self.is_gpu,
+            )
+            if self.is_gpu:
+                self._df["alpha"] = cudf.Series(alpha, dtype="float64")
+                self._df["beta"] = cudf.Series(beta, dtype="float64")
+            else:
+                self._df["alpha"] = pd.Series(
+                    alpha, dtype="float64", index=self._df.index
+                )
+                self._df["beta"] = pd.Series(
+                    beta, dtype="float64", index=self._df.index
+                )
+        return self._df["alpha"]
 
     @property
     def beta(self):
-        return self._compute_beta_params()[1]
-
-    @property
-    def beta_mean(self):
-        a, b = self._compute_beta_params()
-        return a / (a + b + 1e-12)
-
-    @property
-    def beta_variance(self):
-        a, b = self._compute_beta_params()
-        tau = a + b
-        mean = a / (tau + 1e-12)
-        return mean * (1 - mean) / (tau + 1)
+        self.alpha  # trigger
+        return self._df["beta"]
 
     @property
     def adaptive_mean(self):
-        """
-        Smart mean: empirical for N<20, Beta mean for N≥20
-        """
-        if "adaptive_mean" not in self._df.columns:
+        col = "adaptive_mean"
+        if col not in self._df.columns:
             small = self.N < 20
-            self._df["adaptive_mean"] = self.empirical_mean
+            self._df[col] = self.mC / self.coverage
             if small.any():
-                self._df.loc[~small, "adaptive_mean"] = self.beta_mean.loc[~small]
-        return self._df["adaptive_mean"]
+                tau = self.alpha + self.beta
+                self._df.loc[~small, col] = self.alpha[~small] / (tau[~small] + 1e-12)
+        return self._df[col]
+
+    # Lightning-fast context filters
+    def cg(self):
+        return self[self.context == "CG"]
+
+    def chg(self):
+        return self[self.context == "CHG"]
+
+    def chh(self):
+        return self[self.context == "CHH"]
+
+    @property
+    def is_extended_centroid(self) -> bool:
+        """Check if this is an extended centroid."""
+        return True
+
+    @property
+    def sample_type(self) -> str:
+        """Get the sample type."""
+        return "extended_centroid"
+
+    @property
+    def Sx(self):
+        """Sum of methylation levels."""
+        return self._df["Sx"]
+
+    @property
+    def Sx2(self):
+        """Sum of squared methylation levels."""
+        return self._df["Sx2"]
+
+    @property
+    def log_x_sum(self):
+        """Sum of log(methylation_level)."""
+        return self._df["log_x_sum"]
+
+    @property
+    def log_1_minus_x_sum(self):
+        """Sum of log(1 - methylation_level)."""
+        return self._df["log_1_minus_x_sum"]
+
+    def to_numpy(self, extended: bool = True) -> np.ndarray:
+        """
+        Convert MethylExtendedCentroid to structured numpy array format.
+
+        Args:
+            extended: Whether to include extended centroid fields (always True for MethylExtendedCentroid)
+
+        Returns:
+            Structured numpy array with centroid data
+        """
+        from methyl_utils import METHYL_EXTENDED_CENTROID_DTYPE, METHYL_CENTROID_DTYPE
+        
+        # Convert to CPU first
+        df_cpu = self.to_cpu()._df
+        
+        if extended:
+            # Use extended centroid dtype
+            dtype = METHYL_EXTENDED_CENTROID_DTYPE
+            data = np.empty(len(df_cpu), dtype=dtype)
+            data["pos"] = np.asarray(df_cpu["pos"].values, dtype=np.uint32)
+            data["mC"] = np.asarray(df_cpu["mC"].values, dtype=np.uint32)
+            data["uC"] = np.asarray(df_cpu["uC"].values, dtype=np.uint32)
+            data["tnc"] = np.asarray(df_cpu["tnc"].values, dtype=np.uint8)
+            data["N"] = np.asarray(df_cpu["N"].values, dtype=np.uint32)
+            data["Sx"] = np.asarray(df_cpu["Sx"].values, dtype=np.float32)
+            data["Sx2"] = np.asarray(df_cpu["Sx2"].values, dtype=np.float32)
+            data["log_x_sum"] = np.asarray(df_cpu["log_x_sum"].values, dtype=np.float32)
+            data["log_1_minus_x_sum"] = np.asarray(df_cpu["log_1_minus_x_sum"].values, dtype=np.float32)
+        else:
+            # Use basic centroid dtype
+            dtype = METHYL_CENTROID_DTYPE
+            data = np.empty(len(df_cpu), dtype=dtype)
+            data["pos"] = np.asarray(df_cpu["pos"].values, dtype=np.uint32)
+            data["mC"] = np.asarray(df_cpu["mC"].values, dtype=np.uint32)
+            data["uC"] = np.asarray(df_cpu["uC"].values, dtype=np.uint32)
+            data["tnc"] = np.asarray(df_cpu["tnc"].values, dtype=np.uint8)
+            data["N"] = np.asarray(df_cpu["N"].values, dtype=np.uint32)
+
+        return data
+
+    def add_sample(self, sample: "MethylSample") -> "MethylExtendedCentroid":
+        """
+        Add a sample to this centroid, returning a new MethylExtendedCentroid.
+        
+        Args:
+            sample: MethylSample to add to the centroid
+            
+        Returns:
+            New MethylExtendedCentroid with the sample added
+        """
+        # Convert to CPU for operations
+        centroid_cpu = self.to_cpu()
+        sample_cpu = sample.to_cpu()
+        
+        # Get numpy arrays
+        centroid_pos = np.asarray(centroid_cpu.pos.values, dtype=np.uint32)
+        centroid_mC_sum = np.asarray(centroid_cpu.mC.values, dtype=np.uint64) * np.asarray(centroid_cpu.N.values, dtype=np.uint64)
+        centroid_uC_sum = np.asarray(centroid_cpu.uC.values, dtype=np.uint64) * np.asarray(centroid_cpu.N.values, dtype=np.uint64)
+        centroid_N = np.asarray(centroid_cpu.N.values, dtype=np.uint32)
+        centroid_Sx = np.asarray(centroid_cpu.Sx.values, dtype=np.float32)
+        centroid_Sx2 = np.asarray(centroid_cpu.Sx2.values, dtype=np.float32)
+        centroid_log_x_sum = np.asarray(centroid_cpu.log_x_sum.values, dtype=np.float32)
+        centroid_log_1mx_sum = np.asarray(centroid_cpu.log_1_minus_x_sum.values, dtype=np.float32)
+        centroid_tnc = np.asarray(centroid_cpu._df["tnc"].values, dtype=np.uint8)
+        
+        sample_pos = np.asarray(sample_cpu.pos.values, dtype=np.uint32)
+        sample_mC = np.asarray(sample_cpu.mC.values, dtype=np.uint32)
+        sample_uC = np.asarray(sample_cpu.uC.values, dtype=np.uint32)
+        sample_tnc = np.asarray(sample_cpu._df["tnc"].values, dtype=np.uint8)
+        
+        # Calculate methylation levels for sample
+        sample_coverage = sample_mC + sample_uC
+        with np.errstate(divide='ignore', invalid='ignore'):
+            sample_mean = np.where(sample_coverage > 0, sample_mC.astype(np.float32) / sample_coverage.astype(np.float32), 0.0)
+        
+        # Clip for log calculations - ensure we never get exactly 0 or 1
+        # Use tighter bounds to avoid log(0) warnings
+        eps = np.finfo(np.float32).eps * 10  # ~1e-6 for float32
+        sample_mean_clipped = np.clip(sample_mean, eps, 1.0 - eps)
+        # Ensure 1 - sample_mean_clipped is also >= eps to avoid log(0)
+        one_minus_mean = np.clip(1.0 - sample_mean_clipped, eps, 1.0 - eps)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            sample_log_x = np.log(sample_mean_clipped)
+            sample_log_1mx = np.log(one_minus_mean)
+        
+        # Find common positions
+        common_mask_centroid = np.isin(centroid_pos, sample_pos)
+        common_mask_sample = np.isin(sample_pos, centroid_pos)
+        
+        # Update common positions
+        if np.any(common_mask_centroid):
+            # Find indices in sample for common positions
+            sample_indices = np.searchsorted(sample_pos, centroid_pos[common_mask_centroid])
+            valid_sample_mask = (sample_indices < len(sample_pos)) & (sample_pos[sample_indices] == centroid_pos[common_mask_centroid])
+            
+            centroid_mC_sum[common_mask_centroid] += np.where(valid_sample_mask, sample_mC[sample_indices].astype(np.uint64), np.uint64(0))
+            centroid_uC_sum[common_mask_centroid] += np.where(valid_sample_mask, sample_uC[sample_indices].astype(np.uint64), np.uint64(0))
+            centroid_N[common_mask_centroid] += np.where(valid_sample_mask, np.uint32(1), np.uint32(0))
+            centroid_Sx[common_mask_centroid] += np.where(valid_sample_mask, sample_mean[sample_indices], 0)
+            centroid_Sx2[common_mask_centroid] += np.where(valid_sample_mask, sample_mean[sample_indices]**2, 0)
+            centroid_log_x_sum[common_mask_centroid] += np.where(valid_sample_mask, sample_log_x[sample_indices], 0)
+            centroid_log_1mx_sum[common_mask_centroid] += np.where(valid_sample_mask, sample_log_1mx[sample_indices], 0)
+        
+        # Add new positions from sample
+        new_pos_mask = ~common_mask_sample
+        if np.any(new_pos_mask):
+            new_pos = sample_pos[new_pos_mask]
+            new_mC = sample_mC[new_pos_mask]
+            new_uC = sample_uC[new_pos_mask]
+            new_tnc = sample_tnc[new_pos_mask]
+            new_mean = sample_mean[new_pos_mask]
+            new_log_x = sample_log_x[new_pos_mask]
+            new_log_1mx = sample_log_1mx[new_pos_mask]
+            
+            # Combine all positions
+            all_pos = np.concatenate([centroid_pos, new_pos])
+            all_mC_sum = np.concatenate([centroid_mC_sum, new_mC.astype(np.uint64)])
+            all_uC_sum = np.concatenate([centroid_uC_sum, new_uC.astype(np.uint64)])
+            all_N = np.concatenate([centroid_N, np.ones(len(new_pos), dtype=np.uint32)])
+            all_Sx = np.concatenate([centroid_Sx, new_mean])
+            all_Sx2 = np.concatenate([centroid_Sx2, new_mean**2])
+            all_log_x_sum = np.concatenate([centroid_log_x_sum, new_log_x])
+            all_log_1mx_sum = np.concatenate([centroid_log_1mx_sum, new_log_1mx])
+            all_tnc = np.concatenate([centroid_tnc, new_tnc])
+            
+            # Sort by position
+            sort_idx = np.argsort(all_pos)
+            all_pos = all_pos[sort_idx]
+            all_mC_sum = all_mC_sum[sort_idx]
+            all_uC_sum = all_uC_sum[sort_idx]
+            all_N = all_N[sort_idx]
+            all_Sx = all_Sx[sort_idx]
+            all_Sx2 = all_Sx2[sort_idx]
+            all_log_x_sum = all_log_x_sum[sort_idx]
+            all_log_1mx_sum = all_log_1mx_sum[sort_idx]
+            all_tnc = all_tnc[sort_idx]
+        else:
+            all_pos = centroid_pos
+            all_mC_sum = centroid_mC_sum
+            all_uC_sum = centroid_uC_sum
+            all_N = centroid_N
+            all_Sx = centroid_Sx
+            all_Sx2 = centroid_Sx2
+            all_log_x_sum = centroid_log_x_sum
+            all_log_1mx_sum = centroid_log_1mx_sum
+            all_tnc = centroid_tnc
+        
+        # Recalculate averaged mC/uC from sums
+        with np.errstate(divide='ignore', invalid='ignore'):
+            avg_mC = np.where(all_N > 0, (all_mC_sum / all_N.astype(np.float64)).astype(np.uint32), 0)
+            avg_uC = np.where(all_N > 0, (all_uC_sum / all_N.astype(np.float64)).astype(np.uint32), 0)
+        
+        # Create new DataFrame
+        new_df = pd.DataFrame({
+            "pos": all_pos,
+            "mC": avg_mC,
+            "uC": avg_uC,
+            "tnc": all_tnc,
+            "N": all_N,
+            "Sx": all_Sx.astype(np.float32),
+            "Sx2": all_Sx2.astype(np.float32),
+            "log_x_sum": all_log_x_sum.astype(np.float32),
+            "log_1_minus_x_sum": all_log_1mx_sum.astype(np.float32),
+        })
+        
+        # Preserve metadata
+        new_metadata = self._metadata.copy() if self._metadata else {}
+        if "n_samples" in new_metadata:
+            new_metadata["n_samples"] = new_metadata.get("n_samples", 0) + 1
+        else:
+            new_metadata["n_samples"] = 1
+        
+        return MethylExtendedCentroid(new_df, metadata=new_metadata)
+
+    def remove_sample(self, sample: "MethylSample") -> "MethylExtendedCentroid":
+        """
+        Remove a sample from this centroid, returning a new MethylExtendedCentroid.
+        
+        Args:
+            sample: MethylSample to remove from the centroid
+            
+        Returns:
+            New MethylExtendedCentroid with the sample removed
+        """
+        # Convert to CPU for operations
+        centroid_cpu = self.to_cpu()
+        sample_cpu = sample.to_cpu()
+        
+        # Get numpy arrays
+        centroid_pos = np.asarray(centroid_cpu.pos.values, dtype=np.uint32)
+        centroid_mC_sum = np.asarray(centroid_cpu.mC.values, dtype=np.uint64) * np.asarray(centroid_cpu.N.values, dtype=np.uint64)
+        centroid_uC_sum = np.asarray(centroid_cpu.uC.values, dtype=np.uint64) * np.asarray(centroid_cpu.N.values, dtype=np.uint64)
+        centroid_N = np.asarray(centroid_cpu.N.values, dtype=np.uint32)
+        centroid_Sx = np.asarray(centroid_cpu.Sx.values, dtype=np.float32)
+        centroid_Sx2 = np.asarray(centroid_cpu.Sx2.values, dtype=np.float32)
+        centroid_log_x_sum = np.asarray(centroid_cpu.log_x_sum.values, dtype=np.float32)
+        centroid_log_1mx_sum = np.asarray(centroid_cpu.log_1_minus_x_sum.values, dtype=np.float32)
+        centroid_tnc = np.asarray(centroid_cpu._df["tnc"].values, dtype=np.uint8)
+        
+        sample_pos = np.asarray(sample_cpu.pos.values, dtype=np.uint32)
+        sample_mC = np.asarray(sample_cpu.mC.values, dtype=np.uint32)
+        sample_uC = np.asarray(sample_cpu.uC.values, dtype=np.uint32)
+        
+        # Calculate methylation levels for sample
+        sample_coverage = sample_mC + sample_uC
+        with np.errstate(divide='ignore', invalid='ignore'):
+            sample_mean = np.where(sample_coverage > 0, sample_mC.astype(np.float32) / sample_coverage.astype(np.float32), 0.0)
+        
+        # Clip for log calculations - ensure we never get exactly 0 or 1
+        # Use tighter bounds to avoid log(0) warnings
+        eps = np.finfo(np.float32).eps * 10  # ~1e-6 for float32
+        sample_mean_clipped = np.clip(sample_mean, eps, 1.0 - eps)
+        # Ensure 1 - sample_mean_clipped is also >= eps to avoid log(0)
+        one_minus_mean = np.clip(1.0 - sample_mean_clipped, eps, 1.0 - eps)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            sample_log_x = np.log(sample_mean_clipped)
+            sample_log_1mx = np.log(one_minus_mean)
+        
+        # Find common positions
+        common_mask_centroid = np.isin(centroid_pos, sample_pos)
+        
+        if np.any(common_mask_centroid):
+            # Find indices in sample for common positions
+            sample_indices = np.searchsorted(sample_pos, centroid_pos[common_mask_centroid])
+            valid_sample_mask = (sample_indices < len(sample_pos)) & (sample_pos[sample_indices] == centroid_pos[common_mask_centroid])
+            
+            # Subtract sample contributions
+            centroid_mC_sum[common_mask_centroid] -= np.where(valid_sample_mask, sample_mC[sample_indices].astype(np.uint64), np.uint64(0))
+            centroid_uC_sum[common_mask_centroid] -= np.where(valid_sample_mask, sample_uC[sample_indices].astype(np.uint64), np.uint64(0))
+            centroid_N[common_mask_centroid] = np.maximum(0, centroid_N[common_mask_centroid] - np.where(valid_sample_mask, np.uint32(1), np.uint32(0)).astype(np.int32)).astype(np.uint32)
+            centroid_Sx[common_mask_centroid] -= np.where(valid_sample_mask, sample_mean[sample_indices], 0)
+            centroid_Sx2[common_mask_centroid] -= np.where(valid_sample_mask, sample_mean[sample_indices]**2, 0)
+            centroid_log_x_sum[common_mask_centroid] -= np.where(valid_sample_mask, sample_log_x[sample_indices], 0)
+            centroid_log_1mx_sum[common_mask_centroid] -= np.where(valid_sample_mask, sample_log_1mx[sample_indices], 0)
+        
+        # Keep only positions with N > 0
+        valid_mask = centroid_N > 0
+        
+        if not np.any(valid_mask):
+            raise ValueError("Cannot remove sample: centroid would have no valid positions")
+        
+        # Recalculate averaged mC/uC from sums
+        with np.errstate(divide='ignore', invalid='ignore'):
+            avg_mC = np.where(centroid_N[valid_mask] > 0, (centroid_mC_sum[valid_mask] / centroid_N[valid_mask].astype(np.float64)).astype(np.uint32), 0)
+            avg_uC = np.where(centroid_N[valid_mask] > 0, (centroid_uC_sum[valid_mask] / centroid_N[valid_mask].astype(np.float64)).astype(np.uint32), 0)
+        
+        # Create new DataFrame
+        new_df = pd.DataFrame({
+            "pos": centroid_pos[valid_mask],
+            "mC": avg_mC,
+            "uC": avg_uC,
+            "tnc": centroid_tnc[valid_mask],
+            "N": centroid_N[valid_mask],
+            "Sx": centroid_Sx[valid_mask].astype(np.float32),
+            "Sx2": centroid_Sx2[valid_mask].astype(np.float32),
+            "log_x_sum": centroid_log_x_sum[valid_mask].astype(np.float32),
+            "log_1_minus_x_sum": centroid_log_1mx_sum[valid_mask].astype(np.float32),
+        })
+        
+        # Preserve metadata
+        new_metadata = self._metadata.copy() if self._metadata else {}
+        if "n_samples" in new_metadata:
+            new_metadata["n_samples"] = max(0, new_metadata.get("n_samples", 1) - 1)
+        
+        return MethylExtendedCentroid(new_df, metadata=new_metadata)
+
+    @classmethod
+    def from_centroid_data(
+        cls,
+        data: Union[Dict[str, np.ndarray], np.ndarray],
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> "MethylExtendedCentroid":
+        """
+        Create MethylExtendedCentroid from data dictionary or structured array.
+
+        Args:
+            data: Dictionary with arrays or structured numpy array
+            metadata: Optional metadata
+
+        Returns:
+            MethylExtendedCentroid instance
+        """
+        if isinstance(data, np.ndarray):
+            # Structured array
+            df = pd.DataFrame({
+                "pos": data["pos"],
+                "mC": data["mC"],
+                "uC": data["uC"],
+                "tnc": data["tnc"],
+                "N": data["N"],
+                "Sx": data["Sx"],
+                "Sx2": data["Sx2"],
+                "log_x_sum": data["log_x_sum"],
+                "log_1_minus_x_sum": data["log_1_minus_x_sum"],
+            })
+        else:
+            # Dictionary
+            df = pd.DataFrame(data)
+        return cls(df, metadata)

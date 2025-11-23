@@ -7,7 +7,7 @@ import numpy as np
 
 # Lazy imports to avoid circular deps at import time
 try:
-	from methyl_utils.methyl_sample import MethylSample
+	from methyl_utils import MethylSample
 except Exception:  # pragma: no cover
 	MethylSample = None  # type: ignore
 

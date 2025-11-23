@@ -12,6 +12,7 @@ import pandas as pd
 try:
     import cupy as cp
     from cupy import ndarray as CuArray
+
     HAS_GPU = True
 except ImportError:
     cp = np
@@ -64,10 +65,20 @@ class MethylCentroidBuilder:
         new_cap = max(min_needed, int(self.capacity * 1.6))
         logger.debug(f"Growing accumulators: {self.capacity:,} → {new_cap:,} positions")
 
-        for attr in ["pos", "mC_sum", "uC_sum", "N", "Sx", "Sx2", "log_x_sum", "log_1x_sum", "tnc_byte"]:
+        for attr in [
+            "pos",
+            "mC_sum",
+            "uC_sum",
+            "N",
+            "Sx",
+            "Sx2",
+            "log_x_sum",
+            "log_1x_sum",
+            "tnc_byte",
+        ]:
             old = getattr(self, attr)
             new = self.xp.zeros(new_cap, dtype=old.dtype)
-            new[:self.size] = old[:self.size]
+            new[: self.size] = old[: self.size]
             setattr(self, attr, new)
 
         self.capacity = new_cap
@@ -76,14 +87,23 @@ class MethylCentroidBuilder:
         """Add one sample from disk — memory-safe streaming"""
         from methyl_utils.core.methyl_frame import MethylSample  # lazy import
 
-        sample = load_from_h5(sample_path).as_sample()
+        # Load sample - load_from_h5 returns the appropriate type directly
+        loaded = load_from_h5(sample_path)
+        # If it's already a MethylSample, use it directly; otherwise convert if needed
+        if isinstance(loaded, MethylSample):
+            sample = loaded
+        else:
+            # If it's a centroid, we can't use it directly - this shouldn't happen
+            raise ValueError(f"Expected MethylSample, got {type(loaded)}")
+        
         if len(sample) == 0:
             return
 
         pos = sample.pos.values.astype(np.uint32)
         mC = sample.mC.values.astype(np.uint64)
         uC = sample.uC.values.astype(np.uint64)
-        tnc = sample.tnc_byte.values.astype(np.uint8)
+        # Access tnc from DataFrame directly
+        tnc = sample._df["tnc"].values.astype(np.uint8)
 
         # Move to GPU if needed
         if self.use_gpu:
@@ -93,7 +113,7 @@ class MethylCentroidBuilder:
             tnc = self.xp.asarray(tnc)
 
         # Find insertion points
-        idx = self.xp.searchsorted(self.pos[:self.size], pos)
+        idx = self.xp.searchsorted(self.pos[: self.size], pos)
 
         # Detect new positions
         is_new = (idx == self.size) | (self.pos[idx] != pos)
@@ -107,30 +127,40 @@ class MethylCentroidBuilder:
             # Insert new positions in order
             new_pos = pos[is_new]
             insert_at = idx[is_new] + self.xp.arange(n_new)
-            self.pos[self.size:self.size + n_new] = new_pos
-            self.tnc_byte[self.size:self.size + n_new] = tnc[is_new]
+            self.pos[self.size : self.size + n_new] = new_pos
+            self.tnc_byte[self.size : self.size + n_new] = tnc[is_new]
             self.size += n_new
 
         # Final indices after insertion
-        final_idx = self.xp.searchsorted(self.pos[:self.size], pos)
+        final_idx = self.xp.searchsorted(self.pos[: self.size], pos)
 
         # Update accumulators
         total_cov = mC + uC
-        mean = self.xp.divide(mC, total_cov.astype(np.float64), where=total_cov > 0).astype(np.float32)
+        mean = self.xp.divide(
+            mC, total_cov.astype(np.float64), where=total_cov > 0
+        ).astype(np.float32)
 
         self.mC_sum[final_idx] += mC
         self.uC_sum[final_idx] += uC
         self.N[final_idx] += 1
         self.Sx[final_idx] += mean
-        self.Sx2[final_idx] += mean ** 2
+        self.Sx2[final_idx] += mean**2
 
-        safe_mean = self.xp.clip(mean, 1e-10, 1 - 1e-10)
-        self.log_x_sum[final_idx] += self.xp.log(safe_mean)
-        self.log_1x_sum[final_idx] += self.xp.log(1 - safe_mean)
+        # Clip for log calculations - ensure we never get exactly 0 or 1
+        # Use tighter bounds to avoid log(0) warnings
+        eps = np.finfo(np.float32).eps * 10  # ~1e-6 for float32
+        safe_mean = self.xp.clip(mean, eps, 1.0 - eps)
+        # Ensure 1 - safe_mean is also >= eps to avoid log(0)
+        one_minus_mean = self.xp.clip(1.0 - safe_mean, eps, 1.0 - eps)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            self.log_x_sum[final_idx] += self.xp.log(safe_mean)
+            self.log_1x_sum[final_idx] += self.xp.log(one_minus_mean)
 
         self.samples_processed += 1
         if self.samples_processed % 50 == 0:
-            logger.info(f"Processed {self.samples_processed} samples → {self.size:,} unique positions")
+            logger.info(
+                f"Processed {self.samples_processed} samples → {self.size:,} unique positions"
+            )
 
     def finalize(self) -> MethylExtendedCentroid:
         """Return final clean MethylExtendedCentroid"""
@@ -140,15 +170,15 @@ class MethylCentroidBuilder:
         # Move to CPU
         to_cpu = cp.asnumpy if self.use_gpu else lambda x: x
 
-        pos = to_cpu(self.pos[:self.size])
-        mC_sum = to_cpu(self.mC_sum[:self.size])
-        uC_sum = to_cpu(self.uC_sum[:self.size])
-        N = to_cpu(self.N[:self.size])
-        Sx = to_cpu(self.Sx[:self.size])
-        Sx2 = to_cpu(self.Sx2[:self.size])
-        log_x = to_cpu(self.log_x_sum[:self.size])
-        log_1x = to_cpu(self.log_1x_sum[:self.size])
-        tnc = to_cpu(self.tnc_byte[:self.size])
+        pos = to_cpu(self.pos[: self.size])
+        mC_sum = to_cpu(self.mC_sum[: self.size])
+        uC_sum = to_cpu(self.uC_sum[: self.size])
+        N = to_cpu(self.N[: self.size])
+        Sx = to_cpu(self.Sx[: self.size])
+        Sx2 = to_cpu(self.Sx2[: self.size])
+        log_x = to_cpu(self.log_x_sum[: self.size])
+        log_1x = to_cpu(self.log_1x_sum[: self.size])
+        tnc = to_cpu(self.tnc_byte[: self.size])
 
         # Apply coverage filter
         coverage = mC_sum + uC_sum
@@ -158,17 +188,19 @@ class MethylCentroidBuilder:
         avg_mC = (mC_sum[mask] / N[mask]).astype(np.uint32)
         avg_uC = (uC_sum[mask] / N[mask]).astype(np.uint32)
 
-        df = pd.DataFrame({
-            "pos": pos[mask].astype(np.uint32),
-            "mC": avg_mC,
-            "uC": avg_uC,
-            "tnc_byte": tnc[mask],
-            "N": N[mask].astype(np.uint32),
-            "Sx": Sx[mask],
-            "Sx2": Sx2[mask],
-            "log_x_sum": log_x[mask],
-            "log_1_minus_x_sum": log_1x[mask],
-        }).reset_index(drop=True)
+        df = pd.DataFrame(
+            {
+                "pos": pos[mask].astype(np.uint32),
+                "mC": avg_mC,
+                "uC": avg_uC,
+                "tnc": tnc[mask],
+                "N": N[mask].astype(np.uint32),
+                "Sx": Sx[mask],
+                "Sx2": Sx2[mask],
+                "log_x_sum": log_x[mask],
+                "log_1_minus_x_sum": log_1x[mask],
+            }
+        ).reset_index(drop=True)
 
         final_metadata = {
             **self.metadata,
@@ -180,7 +212,9 @@ class MethylCentroidBuilder:
             "gpu_acceleration": self.use_gpu,
         }
 
-        logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples")
+        logger.info(
+            f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples"
+        )
         return MethylExtendedCentroid(df, final_metadata)
 
 
@@ -191,7 +225,9 @@ def build_centroid(
     use_gpu: bool = True,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> MethylExtendedCentroid:
-    builder = MethylCentroidBuilder(min_coverage=min_coverage, use_gpu=use_gpu, metadata=metadata)
+    builder = MethylCentroidBuilder(
+        min_coverage=min_coverage, use_gpu=use_gpu, metadata=metadata
+    )
     for path in sample_paths:
         builder.add_sample(path)
     return builder.finalize()

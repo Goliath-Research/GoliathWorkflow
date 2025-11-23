@@ -50,7 +50,7 @@ Performance Targets:
 
 Usage Examples:
     # Basic usage
-    from methyl_utils import auto_compute_distance, PositionAligner
+    from methyl_utils import auto_compute_distance  # PositionAligner deprecated
 
     # Genome-scale processing
     from methyl_utils import ChunkedGenomicProcessor, process_genome_file_chunked
@@ -91,22 +91,46 @@ from .logging_utils import (
     PerformanceLogger
 )
 
-from .methyl_sample import (
+from .core.methyl_frame import (
+    MethylFrame,
     MethylSample,
     MethylBasicCentroid,
-    MethylCentroid,
-    TNCBits,
-    METHYL_SAMPLE_DTYPE,
-    METHYL_CENTROID_DTYPE,
-    METHYL_EXTENDED_CENTROID_DTYPE,
-    MethylSampleDtype,
-    MethylCentroidDtype,
-    MethylExtendedCentroidDtype,
-    get_methyl_dtype,
-    DMPSample,
-    DMPExporter,
-    DMRExporter
+    MethylExtendedCentroid,
 )
+# Compatibility alias
+MethylCentroid = MethylExtendedCentroid
+
+# Import I/O functions
+from .core.io import load_from_h5
+
+# Legacy exports from old methyl_sample.py (for backward compatibility during migration)
+try:
+    from .methyl_sample import (
+        TNCBits,
+        METHYL_SAMPLE_DTYPE,
+        METHYL_CENTROID_DTYPE,
+        METHYL_EXTENDED_CENTROID_DTYPE,
+        MethylSampleDtype,
+        MethylCentroidDtype,
+        MethylExtendedCentroidDtype,
+        get_methyl_dtype,
+        DMPSample,
+        DMPExporter,
+        DMRExporter,
+    )
+except ImportError:
+    # If legacy file is removed, these won't be available
+    TNCBits = None
+    METHYL_SAMPLE_DTYPE = None
+    METHYL_CENTROID_DTYPE = None
+    METHYL_EXTENDED_CENTROID_DTYPE = None
+    MethylSampleDtype = None
+    MethylCentroidDtype = None
+    MethylExtendedCentroidDtype = None
+    get_methyl_dtype = None
+    DMPSample = None
+    DMPExporter = None
+    DMRExporter = None
 # Note: MethylSample utility properties (position_count, memory_usage_mb, bytes_per_position,
 # coverage_stats, methylation_stats) are available as instance properties
 
@@ -201,8 +225,8 @@ from .performance_profiler import (
     profile_performance
 )
 
-# Import GPA (Genomic Position Aligner) components
-from .position_aligner import PositionAligner, align_multiple_samples
+# PositionAligner has been deprecated - use MethylExtendedCentroid.add_sample()/remove_sample() instead
+# from .position_aligner import PositionAligner, align_multiple_samples
 from .models import (
     PositionMethylationStats,
     GroupMethylationStats,
@@ -282,9 +306,12 @@ __all__ = [
     "get_logger",
     "PerformanceLogger",
     # Methylation sample functions
+    "MethylFrame",
     "MethylSample",
     "MethylBasicCentroid",
-    "MethylCentroid",
+    "MethylExtendedCentroid",
+    "MethylCentroid",  # Alias for MethylExtendedCentroid
+    "load_from_h5",
     "TNCBits",
     "METHYL_SAMPLE_DTYPE",
     "METHYL_CENTROID_DTYPE",
@@ -357,9 +384,9 @@ __all__ = [
     "stop_performance_monitoring",
     "get_performance_report",
     "profile_performance",
-    # GPA (Genomic Position Aligner) functions
-    "PositionAligner",
-    "align_multiple_samples",
+    # PositionAligner deprecated - use MethylExtendedCentroid methods instead
+    # "PositionAligner",
+    # "align_multiple_samples",
     "PositionMethylationStats",
     "GroupMethylationStats",
     "AlignmentStats",

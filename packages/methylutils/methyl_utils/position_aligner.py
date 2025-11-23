@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 try:
     from .gpu_detection import is_gpu_available, get_cupy
     from .logging_utils import get_logger
-    from .methyl_sample import MethylSample
+    from .core.methyl_frame import MethylFrame
 except ImportError:
     # Fallback if methyl_utils package is not available
     def is_gpu_available():
@@ -41,7 +41,7 @@ except ImportError:
         return None
     def get_logger(name):
         return logging.getLogger(name)
-    MethylSample = None
+    MethylFrame = None
 
 # Initialize GPU state
 _GPU_AVAILABLE = is_gpu_available()
@@ -590,7 +590,7 @@ class PositionAligner:
         self.valid_pos = None
         return True
 
-    def add_sample(self, sample: MethylSample, sample_index: int) -> bool:
+    def add_sample(self, sample: MethylFrame, sample_index: int) -> bool:
         """
         Add a MethylSample to the accumulators.
         
@@ -601,11 +601,12 @@ class PositionAligner:
         Returns:
             True if successful, False otherwise
         """
-        if MethylSample is None:
-            raise ImportError("MethylSample is not available. Please install methyl_utils package.")
+        if MethylFrame is None:
+            raise ImportError("MethylFrame is not available. Please install methyl_utils package.")
         
-        if not isinstance(sample, MethylSample):
-            raise TypeError(f"Expected MethylSample, got {type(sample)}")
+        # Check if it's a MethylFrame instance (new architecture)
+        if not isinstance(sample, MethylFrame):
+            raise TypeError(f"Expected MethylFrame (MethylSample/MethylBasicCentroid/MethylExtendedCentroid), got {type(sample)}")
         
         if len(sample.pos) == 0:
             return False
@@ -708,7 +709,7 @@ class PositionAligner:
         self.valid_pos = None
         return True
     
-    def remove_sample(self, sample: MethylSample, sample_index: int) -> bool:
+    def remove_sample(self, sample: MethylFrame, sample_index: int) -> bool:
         """
         Remove a MethylSample from the accumulators.
         
@@ -719,11 +720,12 @@ class PositionAligner:
         Returns:
             True if successful, False otherwise
         """
-        if MethylSample is None:
-            raise ImportError("MethylSample is not available. Please install methyl_utils package.")
+        if MethylFrame is None:
+            raise ImportError("MethylFrame is not available. Please install methyl_utils package.")
         
-        if not isinstance(sample, MethylSample):
-            raise TypeError(f"Expected MethylSample, got {type(sample)}")
+        # Check if it's a MethylFrame instance (new architecture)
+        if not isinstance(sample, MethylFrame):
+            raise TypeError(f"Expected MethylFrame (MethylSample/MethylBasicCentroid/MethylExtendedCentroid), got {type(sample)}")
         
         if not self.is_initialized:
             return False
@@ -840,7 +842,7 @@ class PositionAligner:
         self.valid_pos = self._to_cpu(valid_pos)
         return self._to_cpu(valid_pos), self._to_cpu(centroid_mC), self._to_cpu(centroid_uC), self._to_cpu(centroid_N)
 
-    def get_centroid_sample(self) -> MethylSample:
+    def get_centroid_sample(self) -> MethylFrame:
         """
         Get the current centroid as a MethylSample object.
 
@@ -854,8 +856,8 @@ class PositionAligner:
         Raises:
             RuntimeError: If no samples have been added or no valid positions found.
         """
-        if MethylSample is None:
-            raise ImportError("MethylSample is not available. Please install methyl_utils package.")
+        if MethylFrame is None:
+            raise ImportError("MethylFrame is not available. Please install methyl_utils package.")
 
         if self.sample_count == 0:
             raise RuntimeError("No samples available")
@@ -891,20 +893,39 @@ class PositionAligner:
             log_x_sum = self._to_cpu(self.log_methylation_sum)[global_indices]
             log_1_minus_x_sum = self._to_cpu(self.log_one_minus_methylation_sum)[global_indices]
 
-        # Create MethylSample object for the centroid
-        centroid_data = {
+        # Create MethylFrame object for the centroid
+        import pandas as pd
+        from methyl_utils.core.methyl_frame import MethylSample, MethylBasicCentroid, MethylExtendedCentroid
+        
+        # Build DataFrame
+        df_data = {
             'pos': valid_pos,
             'mC': avg_mC,
             'uC': avg_uC,
             'tnc': tnc,
-            'N': centroid_N,
-            'Sx': Sx,
-            'Sx2': Sx2,
-            'log_x_sum': log_x_sum,
-            'log_1_minus_x_sum': log_1_minus_x_sum
         }
-
-        return MethylSample.from_centroid_data(centroid_data)
+        
+        # Determine which class to use based on available data
+        if Sx is not None and Sx2 is not None and log_x_sum is not None and log_1_minus_x_sum is not None:
+            # Extended centroid
+            df_data.update({
+                'N': centroid_N,
+                'Sx': Sx,
+                'Sx2': Sx2,
+                'log_x_sum': log_x_sum,
+                'log_1_minus_x_sum': log_1_minus_x_sum
+            })
+            df = pd.DataFrame(df_data)
+            return MethylExtendedCentroid(df, metadata=None)
+        elif centroid_N is not None:
+            # Basic centroid
+            df_data['N'] = centroid_N
+            df = pd.DataFrame(df_data)
+            return MethylBasicCentroid(df, metadata=None)
+        else:
+            # Basic sample
+            df = pd.DataFrame(df_data)
+            return MethylSample(df, metadata=None)
 
 
     def compute_methylation_statistics(
@@ -1096,11 +1117,13 @@ class PositionAligner:
         Returns:
             Array of positions that meet coverage criteria (>= min_coverage)
         """
-        if MethylSample is None:
-            raise ImportError("MethylSample is not available. Please install methyl_utils package.")
+        if MethylFrame is None:
+            raise ImportError("MethylFrame is not available. Please install methyl_utils package.")
 
-        if not isinstance(sample, MethylSample):
-            raise TypeError(f"Expected MethylSample, got {type(sample)}")
+        # Check if it's a MethylFrame instance (new architecture)
+        from methyl_utils.core.methyl_frame import MethylFrame
+        if not isinstance(sample, MethylFrame):
+            raise TypeError(f"Expected MethylFrame (MethylSample/MethylBasicCentroid/MethylExtendedCentroid), got {type(sample)}")
 
         # Calculate coverage for each position
         total_coverage = sample.mC + sample.uC
@@ -1140,11 +1163,13 @@ class PositionAligner:
         Returns:
             Array of positions that are both valid in centroid and present in sample
         """
-        if MethylSample is None:
-            raise ImportError("MethylSample is not available. Please install methyl_utils package.")
+        if MethylFrame is None:
+            raise ImportError("MethylFrame is not available. Please install methyl_utils package.")
 
-        if not isinstance(sample, MethylSample):
-            raise TypeError(f"Expected MethylSample, got {type(sample)}")
+        # Check if it's a MethylFrame instance (new architecture)
+        from methyl_utils.core.methyl_frame import MethylFrame
+        if not isinstance(sample, MethylFrame):
+            raise TypeError(f"Expected MethylFrame (MethylSample/MethylBasicCentroid/MethylExtendedCentroid), got {type(sample)}")
 
         # Get centroid's valid positions
         valid_pos = self.get_valid_positions_from_centroid()
@@ -1170,11 +1195,13 @@ class PositionAligner:
         Returns:
             Tuple of (sample_mC, sample_uC) for positions common to both sample and centroid
         """
-        if MethylSample is None:
-            raise ImportError("MethylSample is not available. Please install methyl_utils package.")
+        if MethylFrame is None:
+            raise ImportError("MethylFrame is not available. Please install methyl_utils package.")
 
-        if not isinstance(sample, MethylSample):
-            raise TypeError(f"Expected MethylSample, got {type(sample)}")
+        # Check if it's a MethylFrame instance (new architecture)
+        from methyl_utils.core.methyl_frame import MethylFrame
+        if not isinstance(sample, MethylFrame):
+            raise TypeError(f"Expected MethylFrame (MethylSample/MethylBasicCentroid/MethylExtendedCentroid), got {type(sample)}")
 
         common_pos = self.get_common_positions(sample)
 
@@ -1452,11 +1479,11 @@ class PositionAligner:
             >>> if success:
             ...     print("Centroid state loaded successfully")
         """
-        if MethylSample is None:
-            raise ImportError("MethylSample is not available. Please install methyl_utils package.")
+        if MethylFrame is None:
+            raise ImportError("MethylFrame is not available. Please install methyl_utils package.")
         
-        if not isinstance(centroid, MethylSample):
-            raise TypeError(f"Expected MethylSample, got {type(centroid)}")
+        if not isinstance(centroid, MethylFrame):
+            raise TypeError(f"Expected MethylFrame (MethylSample/MethylBasicCentroid/MethylExtendedCentroid), got {type(centroid)}")
         
         if not centroid.is_centroid:
             raise ValueError("Provided MethylSample is not a centroid (missing N field)")
@@ -1653,7 +1680,7 @@ def align_multiple_samples(
     # Precollect all positions
     all_pos = []
     for sample in samples:
-        if isinstance(sample, MethylSample):
+        if isinstance(sample, MethylFrame):
             all_pos.append(sample.pos)
     
     if all_pos:
@@ -1661,7 +1688,7 @@ def align_multiple_samples(
         aligner.expand_global_positions(unique_pos)
 
     for i, sample in enumerate(samples):
-        if isinstance(sample, MethylSample):
+        if isinstance(sample, MethylFrame):
             aligner.add_sample(sample, i)
 
     return aligner

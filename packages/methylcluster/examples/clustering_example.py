@@ -11,8 +11,8 @@ This script shows how to:
 from pathlib import Path
 import numpy as np
 from methyl_cluster import MethylCluster, MethylClusterConfig, ClusterMetric
-from methyl_utils.methyl_sample import MethylSample
-from methyl_utils.position_aligner import PositionAligner
+from methyl_utils import MethylSample
+# PositionAligner removed - functionality now in MethylCentroidPair
 
 
 def main():
@@ -107,7 +107,8 @@ def main():
     
     # Align samples to common positions
     print(f"Aligning {len(samples)} samples to common positions...")
-    aligner = PositionAligner(max_samples=len(samples), use_gpu=False)  # Use CPU for alignment
+    # PositionAligner removed - functionality now in MethylCentroidPair
+    # aligner = PositionAligner(max_samples=len(samples), use_gpu=False)  # Use CPU for alignment
     
     for i, sample in enumerate(samples):
         aligner.add_sample(sample, sample_index=i)
