@@ -7,7 +7,7 @@ import csv
 
 import numpy as np
 
-from methyl_utils.methyl_sample import MethylSample
+from methyl_utils.core.methyl_frame import MethylSample
 from methyl_cluster.methyl_cluster_dp import MethylClusterDP, DPConfig
 
 

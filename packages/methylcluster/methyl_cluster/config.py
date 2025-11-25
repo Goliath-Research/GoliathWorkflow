@@ -58,8 +58,8 @@ class MethylClusterConfig(BaseModel):
     
     # Clustering parameters
     clustering_method: ClusteringMethod = Field(
-        default=ClusteringMethod.HIERARCHICAL,
-        description="Clustering algorithm to use (hierarchical recommended for methylation data)"
+        default=ClusteringMethod.CENTROID,
+        description="Clustering algorithm to use (centroid recommended for methylation data)"
     )
     metric: ClusterMetric = Field(
         default=ClusterMetric.JENSEN_SHANNON,
@@ -146,7 +146,7 @@ class MethylClusterConfig(BaseModel):
 
     # Soft assignment parameters (new)
     soft_assignment: bool = Field(
-        default=False,
+        default=True,
         description="Enable soft cluster assignments with membership probabilities (centroid method only)"
     )
     assignment_temperature: float = Field(

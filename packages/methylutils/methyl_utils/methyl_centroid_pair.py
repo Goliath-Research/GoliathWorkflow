@@ -51,6 +51,7 @@ from methyl_utils import (
     validate_sample_data
 )
 from methyl_utils.logging_utils import setup_module_logging
+from .core.methyl_frame import MethylExtendedCentroid
 
 logger = setup_module_logging(__name__)
 
@@ -100,14 +101,13 @@ class MethylCentroidPair:
     not here. This keeps the separation of concerns clean.
     """
 
-    def __init__(self, min_coverage: int = 4):
-        """
-        Initialize MethylCentroidPair with minimal configuration.
-
-        Args:
-            min_coverage: Minimum coverage threshold for filtering positions (default: 4)
-        """
-        self.min_coverage = min_coverage
+    def __init__(self, centroid1: MethylExtendedCentroid, centroid2: MethylExtendedCentroid):
+        self.centroid1 = centroid1
+        self.centroid2 = centroid2
+        self.common_pos = np.intersect1d(centroid1.pos, centroid2.pos)
+        
+        if len(self.common_pos) == 0:
+            raise ValueError("Centroids have no common positions")
 
         # Initialize GPU backend
         self.gpu_available = is_gpu_available()

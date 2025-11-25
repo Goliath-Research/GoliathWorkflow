@@ -23,13 +23,15 @@ import psutil
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import OrderedDict
-from methyl_utils import (
+from methyl_utils.core.methyl_frame import (
     get_methyl_dtype, 
     #METHYL_CENTROID_DTYPE, 
     #METHYL_EXTENDED_CENTROID_DTYPE, 
     MethylSample,
     MethylExtendedCentroid,
-    # Distance calculation functions
+)
+# Distance calculation functions
+from methyl_utils import (
     auto_compute_distance,
     get_sample_beta_mom,
     # Memory management

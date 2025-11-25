@@ -24,12 +24,12 @@ from .centroid_manager import ClusterCentroid
 
 # Import MethylUtils components
 try:
-    from methyl_utils import MethylSample
+    from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
 except ImportError:
     # Fallback for development
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'methylutils'))
-    from methyl_utils import MethylSample
+    from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,7 @@ class MethylCluster:
             config: MethylClusterConfig instance
         """
         self.config = config
+        self.config.soft_assignment = True  # Enable as per user
         self.samples: List[MethylSample] = []
         self.sample_paths: List[Path] = []
         self.distance_matrix: Optional[np.ndarray] = None
@@ -1169,7 +1170,7 @@ class MethylCluster:
                 'sample_indices': [int(idx) for idx in centroid.get_sample_indices()]
             })
         
-        # If soft_assignment was used, ensure probabilities are included (from best run)
+        # Add probabilities if soft_assignment was used
         if self.config.soft_assignment and hasattr(self, 'best_probabilities') and self.best_probabilities is not None:
             results['probabilities'] = self.best_probabilities.tolist()
         
@@ -1437,7 +1438,7 @@ class MethylCluster:
         results = self.cluster()
         self.save_results(results)
         return results
-
+    
     def _rescue_empty_cluster(self, empty_cluster_id: int, centroids: List[ClusterCentroid], samples: List, assignments: np.ndarray, unassigned: set):
         """
         Rescue an empty cluster by seeding with farthest sample from dominant cluster or unassigned.
@@ -1474,7 +1475,7 @@ class MethylCluster:
             logger.info(f"Rescued cluster {empty_cluster_id} with sample {seed_idx} (farthest from dominant)")
         else:
             logger.warning(f"Failed to rescue cluster {empty_cluster_id} with {seed_idx}")
-
+    
     def _enforce_min_cluster_sizes(self, centroids: List[ClusterCentroid], samples: List, assignments: np.ndarray, unassigned: set):
         """
         Enforce minimum cluster sizes by moving samples from large to small clusters.
@@ -1552,7 +1553,7 @@ class MethylCluster:
                     # Revert
                     centroids[largest_id].add_sample(donor_idx, sample, self.sample_paths[donor_idx])
                     assignments[donor_idx] = largest_id
-
+    
     def _balance_clusters(self, centroids: List[ClusterCentroid], samples: List, assignments: np.ndarray):
         """
         Balance cluster sizes by moving samples from large to small clusters.

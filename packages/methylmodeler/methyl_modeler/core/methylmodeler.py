@@ -17,7 +17,7 @@ from methyl_utils import (
 from methyl_utils.logging_utils import setup_module_logging
 
 # Import sample handler for proper SRP compliance
-from methyl_utils import MethylSample
+from methyl_utils.core.methyl_frame import MethylSample
 
 # Import MethylCentroidPair from MethylUtils for mathematical operations
 from methyl_utils import MethylCentroidPair

@@ -35,6 +35,23 @@ try:
 except ImportError:
     pytest = None
 
+import numpy as np
+import pytest
+from methyl_utils.core.methyl_frame import MethylExtendedCentroid, MethylSample
+
+def test_centroid_creation():
+    # Create samples
+    pos = np.array([1, 2, 3], dtype=np.uint32)
+    sample1 = MethylSample.from_sample_data(pos, np.array([10, 20, 30]), np.array([5, 15, 25]), np.array([0,0,0]))
+    sample2 = MethylSample.from_sample_data(pos, np.array([15, 25, 35]), np.array([10, 20, 30]), np.array([0,0,0]))
+    
+    # Create centroid
+    centroid = sample1.add_sample(sample2)
+    
+    assert centroid.is_extended_centroid
+    assert np.all(centroid.N == 2)
+    assert np.all(centroid.mC == (10+15)//2)  # Average, but actual implementation may vary
+
 
 def create_temp_directory():
     """Create a temporary directory for output files."""

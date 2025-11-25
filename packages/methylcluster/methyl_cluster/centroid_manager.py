@@ -45,7 +45,7 @@ class ClusterCentroid:
             use_gpu: Whether to use GPU acceleration
             max_samples: Maximum number of samples this cluster can hold
         """
-        from methyl_utils import PositionAligner
+        from methyl_utils.core.methyl_frame import MethylExtendedCentroid
         
         self.cluster_id = cluster_id
         self.chrom = chrom
@@ -53,146 +53,89 @@ class ClusterCentroid:
         self.min_coverage = min_coverage
         self.use_gpu = use_gpu
         
-        # Initialize PositionAligner for centroid management
-        # Note: We disable GPU for PositionAligner because samples need to be on CPU
-        # The GPU is used for distance computations, not for centroid management
-        self.position_aligner = PositionAligner(
-            max_samples=max_samples,
-            use_gpu=False  # Force CPU to avoid GPU/CPU conversion issues
-        )
-        
-        # Set minimum coverage threshold
-        self.position_aligner.set_min_coverage(min_coverage)
+        # Initialize empty centroid
+        self.centroid: Optional[MethylExtendedCentroid] = None
         
         # Track samples in this cluster: list of (sample_idx, sample_path)
         self.samples: List[Tuple[int, Path]] = []
         
         logger.debug(f"Initialized ClusterCentroid {cluster_id} for {chrom}-{ctx}")
     
-    def add_sample(self, sample_idx: int, sample, sample_path: Path) -> bool:
+    def add_sample(self, sample_idx: int, sample: MethylExtendedCentroid, sample_path: Path) -> bool:
         """
         Add a sample to this cluster and recalculate centroid.
         
         Args:
             sample_idx: Index of the sample
-            sample: MethylSample instance
+            sample: MethylExtendedCentroid instance
             sample_path: Path to the sample file
             
         Returns:
             True if sample was added successfully
         """
         try:
-            # Ensure sample arrays are on CPU (convert from GPU if needed)
-            sample_cpu = self._ensure_cpu_sample(sample)
-            
-            # Add sample to position aligner (centroid auto-updates)
-            success = self.position_aligner.add_sample(sample_cpu, sample_idx)
-            
-            if success:
-                self.samples.append((sample_idx, sample_path))
-                logger.debug(f"Added sample {sample_idx} to cluster {self.cluster_id} "
-                           f"(now {len(self.samples)} samples)")
-                return True
+            if self.centroid is None:
+                # First sample - set as centroid
+                self.centroid = sample
             else:
-                logger.warning(f"Failed to add sample {sample_idx} to cluster {self.cluster_id}")
-                return False
+                # Add to existing centroid
+                self.centroid = self.centroid.add_sample(sample)
+            
+            self.samples.append((sample_idx, sample_path))
+            logger.debug(f"Added sample {sample_idx} to cluster {self.cluster_id} "
+                       f"(now {len(self.samples)} samples)")
+            return True
                 
         except Exception as e:
             logger.error(f"Error adding sample {sample_idx} to cluster {self.cluster_id}: {e}")
             return False
     
-    def remove_sample(self, sample_idx: int, sample) -> bool:
+    def remove_sample(self, sample_idx: int, sample: MethylExtendedCentroid) -> bool:
         """
         Remove a sample from this cluster and recalculate centroid.
         
         Args:
             sample_idx: Index of the sample to remove
-            sample: MethylSample instance
+            sample: MethylExtendedCentroid instance
             
         Returns:
             True if sample was removed successfully
         """
         try:
-            # Ensure sample arrays are on CPU (convert from GPU if needed)
-            sample_cpu = self._ensure_cpu_sample(sample)
-            
-            # Remove sample from position aligner (centroid auto-updates)
-            success = self.position_aligner.remove_sample(sample_cpu, sample_idx)
-            
-            if success:
-                # Remove from samples list
-                self.samples = [(idx, path) for idx, path in self.samples if idx != sample_idx]
-                logger.debug(f"Removed sample {sample_idx} from cluster {self.cluster_id} "
-                           f"(now {len(self.samples)} samples)")
-                return True
-            else:
-                logger.warning(f"Failed to remove sample {sample_idx} from cluster {self.cluster_id}")
+            if self.centroid is None:
+                logger.warning(f"Cannot remove from empty cluster {self.cluster_id}")
                 return False
+            
+            # Remove from centroid
+            self.centroid = self.centroid.remove_sample(sample)
+            
+            # Remove from samples list
+            self.samples = [(idx, path) for idx, path in self.samples if idx != sample_idx]
+            logger.debug(f"Removed sample {sample_idx} from cluster {self.cluster_id} "
+                       f"(now {len(self.samples)} samples)")
+            return True
                 
         except Exception as e:
             logger.error(f"Error removing sample {sample_idx} from cluster {self.cluster_id}: {e}")
             return False
     
-    def _ensure_cpu_sample(self, sample):
+    def get_centroid(self) -> MethylExtendedCentroid:
         """
-        Ensure sample arrays are on CPU (convert from GPU if needed).
-        
-        Args:
-            sample: MethylSample instance (may have GPU arrays)
-            
-        Returns:
-            MethylSample with CPU arrays
-        """
-        # Convert GPU arrays to CPU if needed
-        def to_cpu(arr):
-            if arr is None:
-                return None
-            # Check for CuPy array
-            if hasattr(arr, 'get'):
-                return arr.get()
-            # Check if it's already numpy
-            if isinstance(arr, np.ndarray):
-                return arr
-            # Try to convert to numpy
-            return np.asarray(arr)
-        
-        # Always create a copy with CPU arrays to be safe
-        from methyl_utils import MethylSample
-        
-        try:
-            return MethylSample(
-                pos=to_cpu(sample.pos),
-                mC=to_cpu(sample.mC),
-                uC=to_cpu(sample.uC),
-                tnc=to_cpu(sample.tnc),
-                N=to_cpu(sample.N) if sample.N is not None else None,
-                Sx=to_cpu(sample.Sx) if sample.Sx is not None else None,
-                Sx2=to_cpu(sample.Sx2) if sample.Sx2 is not None else None,
-                log_x_sum=to_cpu(sample.log_x_sum) if sample.log_x_sum is not None else None,
-                log_1_minus_x_sum=to_cpu(sample.log_1_minus_x_sum) if sample.log_1_minus_x_sum is not None else None
-            )
-        except Exception as e:
-            logger.error(f"Error converting sample to CPU: {e}")
-            logger.error(f"Sample types: pos={type(sample.pos)}, mC={type(sample.mC)}, uC={type(sample.uC)}, tnc={type(sample.tnc)}")
-            raise
-    
-    def get_centroid(self):
-        """
-        Get the current centroid as a MethylSample instance.
+        Get the current centroid as a MethylExtendedCentroid instance.
         
         Returns:
-            MethylSample representing the centroid with extended statistics
+            MethylExtendedCentroid representing the centroid with extended statistics
             
         Raises:
             RuntimeError: If no samples in cluster or no valid positions
         """
-        if len(self.samples) == 0:
+        if len(self.samples) == 0 or self.centroid is None:
             logger.warning(f"Cluster {self.cluster_id} is empty, cannot get centroid")
-            return None  # Allow callers to handle gracefully
+            raise RuntimeError(f"Cluster {self.cluster_id} is empty")
         
-        return self.position_aligner.get_centroid_sample()
+        return self.centroid
     
-    def compute_log_likelihood(self, sample) -> float:
+    def compute_log_likelihood(self, sample: MethylExtendedCentroid) -> float:
         """
         Compute log-likelihood of a sample belonging to this centroid.
         
@@ -200,7 +143,7 @@ class ClusterCentroid:
         log P(sample|centroid) = Σ log Beta(sample_meth | centroid_α, centroid_β)
         
         Args:
-            sample: MethylSample instance to evaluate
+            sample: MethylExtendedCentroid instance to evaluate
             
         Returns:
             Log-likelihood value (higher = better fit)
@@ -209,8 +152,6 @@ class ClusterCentroid:
         try:
             # Get current centroid
             centroid = self.get_centroid()
-            if centroid is None:
-                return -np.inf  # Empty cluster: impossible likelihood
             
             # Find common positions between sample and centroid
             common_pos = np.intersect1d(sample.pos, centroid.pos, assume_unique=True)
@@ -271,13 +212,13 @@ class ClusterCentroid:
             logger.error(f"Error computing log-likelihood for cluster {self.cluster_id}: {e}")
             return -np.inf
     
-    def compute_membership_probabilities(self, sample: 'MethylSample', other_centroids: List['ClusterCentroid'], temperature: float = 1.0) -> float:
+    def compute_membership_probabilities(self, sample: 'MethylExtendedCentroid', other_centroids: List['ClusterCentroid'], temperature: float = 1.0) -> float:
         """
         Compute the posterior probability of the sample belonging to this centroid
         relative to other centroids using softmax of averaged log-likelihoods.
         
         Args:
-            sample: MethylSample to evaluate
+            sample: MethylExtendedCentroid to evaluate
             other_centroids: List of other ClusterCentroid instances for comparison
             temperature: Softmax temperature to control uncertainty (default 1.0)
         

@@ -15,14 +15,14 @@ import logging
 
 # Import MethylUtils components
 try:
+    from methyl_utils.core.methyl_frame import MethylSample
     from methyl_utils.metrics_factory import get_metric_factory
-    from methyl_utils import MethylSample
 except ImportError:
     # Fallback for development
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'methylutils'))
+    from methyl_utils.core.methyl_frame import MethylSample
     from methyl_utils.metrics_factory import get_metric_factory
-    from methyl_utils import MethylSample
 
 logger = logging.getLogger(__name__)
 
