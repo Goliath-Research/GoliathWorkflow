@@ -8,7 +8,7 @@
         "batch": "AN00025834, AN00026368",
         "chrom": "1",
         "ctx": "CG",
-        "output_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/h50",
+        "output_dir": "/home/ubuntu/Work/w/humans/psomagen/pc/centroids/h50_no-outliers",
         "samples": [],
         "add_samples": [
             "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/HBCST-042525-95676",
@@ -70,7 +70,7 @@
         "max_iterations_percentage": 0.1,
         "α": 0.05,
         "min_samples": 3,
-        "distance_metrics": ["jensen_shannon"],
+        "distance_metrics": [],
         "min_metrics_agree": 0
     },
     "parallel_combinations": 1,
