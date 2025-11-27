@@ -7,12 +7,19 @@ This module provides reusable functions for:
 - Generating interactive Plotly HTML visualizations
 """
 
+import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 import json
 import csv
 import numpy as np
 import pandas as pd
+
+# Add parent directory to path to find methyl_utils package
+_script_dir = Path(__file__).resolve().parent
+_packages_dir = _script_dir.parent.parent.parent.parent / "packages" / "methylutils"
+if _packages_dir.exists() and str(_packages_dir) not in sys.path:
+    sys.path.insert(0, str(_packages_dir))
 
 try:
     import plotly.graph_objects as go

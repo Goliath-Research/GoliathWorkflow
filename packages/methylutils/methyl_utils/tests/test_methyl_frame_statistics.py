@@ -17,18 +17,36 @@ from typing import List, Dict, Any, Optional
 import json
 import csv
 
+# Add parent directory to path to find methyl_utils package
+_script_dir = Path(__file__).resolve().parent
+_packages_dir = _script_dir.parent.parent.parent.parent / "packages" / "methylutils"
+if _packages_dir.exists() and str(_packages_dir) not in sys.path:
+    sys.path.insert(0, str(_packages_dir))
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from methyl_utils.core.methyl_frame import MethylSample, MethylBasicCentroid, MethylExtendedCentroid
-from .methyl_frame_stats import (
-    load_samples_from_csv,
-    load_samples_from_config,
-    compute_sample_statistics,
-    generate_all_histograms,
-    create_mock_sample
-)
+
+# Import helper functions - handle both relative and absolute imports
+try:
+    from .methyl_frame_stats import (
+        load_samples_from_csv,
+        load_samples_from_config,
+        compute_sample_statistics,
+        generate_all_histograms,
+        create_mock_sample
+    )
+except ImportError:
+    # Fallback to absolute import when running as script
+    from methyl_utils.tests.methyl_frame_stats import (
+        load_samples_from_csv,
+        load_samples_from_config,
+        compute_sample_statistics,
+        generate_all_histograms,
+        create_mock_sample
+    )
 
 
 # ============================================================================
@@ -396,7 +414,9 @@ Examples:
         print("Generating mock samples...")
         for chrom in (args.chromosomes or ['1', '2']):
             for ctx in args.contexts:
-                sample = create_mock_sample(chrom, ctx, n_positions=1000, seed=hash(f"{chrom}_{ctx}"))
+                # Ensure seed is in valid range [0, 2**32-1]
+                seed = abs(hash(f"{chrom}_{ctx}")) % (2**32)
+                sample = create_mock_sample(chrom, ctx, n_positions=1000, seed=seed)
                 samples.append(sample)
                 sample_names.append(f"mock_{chrom}_{ctx}")
     
