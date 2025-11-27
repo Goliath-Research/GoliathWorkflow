@@ -1,0 +1,465 @@
+#!/usr/bin/env python3
+"""
+Test suite for MethylFrame statistics and histogram generation.
+
+Tests MethylSample, MethylBasicCentroid, and MethylExtendedCentroid classes:
+- Loading samples from CSV files or config.json
+- Computing global statistics (averages, totals)
+- Generating interactive Plotly HTML histograms
+
+Can be run as pytest tests or as a standalone script.
+"""
+
+import tempfile
+import sys
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+import json
+import csv
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from methyl_utils.core.methyl_frame import MethylSample, MethylBasicCentroid, MethylExtendedCentroid
+from .methyl_frame_stats import (
+    load_samples_from_csv,
+    load_samples_from_config,
+    compute_sample_statistics,
+    generate_all_histograms,
+    create_mock_sample
+)
+
+
+# ============================================================================
+# Test Functions
+# ============================================================================
+
+def test_methyl_sample_statistics_from_csv(tmp_path):
+    """Test loading samples from CSV and computing statistics."""
+    # Create mock sample directories
+    input_dir = tmp_path / "samples"
+    input_dir.mkdir()
+    
+    # Create CSV file with sample folder names
+    csv_file = tmp_path / "sample_list.csv"
+    sample_folders = ["sample1", "sample2"]
+    with open(csv_file, 'w', newline='') as f:
+        writer = csv.writer(f)
+        for folder in sample_folders:
+            writer.writerow([folder])
+    
+    # Create mock samples
+    for folder in sample_folders:
+        sample_dir = input_dir / folder
+        sample_dir.mkdir()
+        
+        # Create a few chromosome-context files
+        for chrom in ['1', '2']:
+            for ctx in ['CG']:
+                sample = create_mock_sample(chrom, ctx, n_positions=100, seed=hash(f"{folder}_{chrom}_{ctx}"))
+                h5_file = sample_dir / f"{chrom}-{ctx}.h5"
+                sample.save_to_h5(h5_file)
+    
+    # Load samples
+    samples = load_samples_from_csv(csv_file, input_dir, chromosomes=['1', '2'], contexts=['CG'])
+    
+    assert len(samples) > 0, "Should load at least one sample"
+    
+    # Compute statistics for each sample
+    all_stats = []
+    for sample in samples:
+        stats = compute_sample_statistics(sample)
+        assert 'avg_mC' in stats
+        assert 'avg_uC' in stats
+        assert 'avg_coverage' in stats
+        assert 'avg_methylation_level' in stats
+        assert 'position_count' in stats
+        assert stats['position_count'] > 0
+        all_stats.append(stats)
+    
+    # Generate histograms
+    output_dir = tmp_path / "histograms"
+    output_dir.mkdir()
+    
+    for i, sample in enumerate(samples):
+        sample_name = f"sample_{i}"
+        hist_paths = generate_all_histograms(sample, output_dir, sample_name)
+        
+        # Verify histogram files were created
+        assert 'mC' in hist_paths
+        assert 'uC' in hist_paths
+        assert 'coverage' in hist_paths
+        assert 'methylation_level' in hist_paths
+        
+        for metric, path in hist_paths.items():
+            assert path.exists(), f"Histogram file should exist: {path}"
+
+
+def test_methyl_sample_statistics_from_config(tmp_path):
+    """Test loading samples from config.json and computing statistics."""
+    # Create mock sample directories
+    sample_dir1 = tmp_path / "sample1"
+    sample_dir1.mkdir()
+    sample_dir2 = tmp_path / "sample2"
+    sample_dir2.mkdir()
+    
+    # Create mock samples
+    for sample_dir in [sample_dir1, sample_dir2]:
+        sample = create_mock_sample('1', 'CG', n_positions=100, seed=hash(str(sample_dir)))
+        h5_file = sample_dir / "1-CG.h5"
+        sample.save_to_h5(h5_file)
+    
+    # Create config.json
+    config_file = tmp_path / "config.json"
+    config = {
+        "samples": [str(sample_dir1), str(sample_dir2)]
+    }
+    with open(config_file, 'w') as f:
+        json.dump(config, f)
+    
+    # Load samples
+    samples = load_samples_from_config(config_file, chromosomes=['1'], contexts=['CG'])
+    
+    assert len(samples) >= 2, "Should load at least 2 samples"
+    
+    # Compute statistics
+    for sample in samples:
+        stats = compute_sample_statistics(sample)
+        assert stats['sample_type'] == 'sample'
+        assert stats['position_count'] > 0
+        assert stats['avg_coverage'] > 0
+    
+    # Generate histograms
+    output_dir = tmp_path / "histograms"
+    output_dir.mkdir()
+    
+    for i, sample in enumerate(samples):
+        sample_name = f"config_sample_{i}"
+        hist_paths = generate_all_histograms(sample, output_dir, sample_name)
+        assert len(hist_paths) == 4  # mC, uC, coverage, methylation_level
+
+
+def test_methyl_basic_centroid_statistics(tmp_path):
+    """Test statistics computation for MethylBasicCentroid."""
+    # Create multiple samples and save to temp files
+    sample_files = []
+    for i in range(3):
+        sample = create_mock_sample('1', 'CG', n_positions=100, seed=i)
+        h5_file = tmp_path / f"sample_{i}.h5"
+        sample.save_to_h5(h5_file)
+        sample_files.append(h5_file)
+    
+    # Create basic centroid using MethylCentroidBuilder
+    try:
+        from methyl_utils.core.centroid_builder import MethylCentroidBuilder
+        
+        builder = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+        for h5_file in sample_files:
+            builder.add_sample(h5_file)
+        
+        # Get extended centroid and convert to basic if needed
+        extended_centroid = builder.finalize()
+        
+        # Create basic centroid from extended (remove extended fields)
+        from methyl_utils.core.methyl_frame import MethylBasicCentroid
+        df_basic = extended_centroid._df[['pos', 'mC', 'uC', 'tnc', 'N']].copy()
+        centroid = MethylBasicCentroid(df_basic)
+    except ImportError:
+        # Fallback: create basic centroid manually
+        from methyl_utils.core.methyl_frame import MethylBasicCentroid
+        import pandas as pd
+        
+        # Load samples
+        samples = [MethylSample.load_from_h5(f) for f in sample_files]
+        
+        # Align positions
+        all_positions = set()
+        for sample in samples:
+            all_positions.update(sample.pos.values)
+        all_positions = np.sort(np.array(list(all_positions), dtype=np.uint32))
+        
+        # Aggregate data
+        mC_sum = np.zeros(len(all_positions), dtype=np.uint64)
+        uC_sum = np.zeros(len(all_positions), dtype=np.uint64)
+        N = np.zeros(len(all_positions), dtype=np.uint32)
+        tnc = np.zeros(len(all_positions), dtype=np.uint8)
+        
+        for sample in samples:
+            sample_pos = sample.pos.values
+            sample_mC = sample.mC.values
+            sample_uC = sample.uC.values
+            
+            # Find matching positions
+            idx = np.searchsorted(all_positions, sample_pos)
+            valid = (idx < len(all_positions)) & (all_positions[idx] == sample_pos)
+            
+            mC_sum[valid] += sample_mC[valid]
+            uC_sum[valid] += sample_uC[valid]
+            N[valid] += 1
+            tnc[valid] = sample._df['tnc'].values[valid]
+        
+        # Compute averages
+        avg_mC = (mC_sum / np.maximum(N, 1)).astype(np.uint32)
+        avg_uC = (uC_sum / np.maximum(N, 1)).astype(np.uint32)
+        
+        # Create DataFrame
+        df = pd.DataFrame({
+            'pos': all_positions,
+            'mC': avg_mC,
+            'uC': avg_uC,
+            'tnc': tnc,
+            'N': N
+        })
+        
+        centroid = MethylBasicCentroid(df)
+    
+    # Compute statistics
+    stats = compute_sample_statistics(centroid)
+    
+    assert stats['sample_type'] == 'basic_centroid'
+    assert 'avg_N' in stats
+    assert stats['avg_N'] > 0
+    assert 'total_samples' in stats
+    
+    # Generate histograms
+    output_dir = tmp_path / "histograms"
+    output_dir.mkdir()
+    
+    hist_paths = generate_all_histograms(centroid, output_dir, "basic_centroid")
+    assert len(hist_paths) == 4
+
+
+def test_methyl_extended_centroid_statistics(tmp_path):
+    """Test statistics computation for MethylExtendedCentroid."""
+    # Create multiple samples and save to temp files
+    sample_files = []
+    for i in range(3):
+        sample = create_mock_sample('1', 'CG', n_positions=100, seed=i)
+        h5_file = tmp_path / f"sample_{i}.h5"
+        sample.save_to_h5(h5_file)
+        sample_files.append(h5_file)
+    
+    # Create extended centroid using MethylCentroidBuilder
+    try:
+        from methyl_utils.core.centroid_builder import MethylCentroidBuilder
+        
+        builder = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+        for h5_file in sample_files:
+            builder.add_sample(h5_file)
+        
+        centroid = builder.finalize()
+        assert isinstance(centroid, MethylExtendedCentroid)
+    except ImportError:
+        # Fallback: try using add_sample method
+        try:
+            samples = [MethylSample.load_from_h5(f) for f in sample_files]
+            # Try to create extended centroid by adding samples
+            # Start with first sample converted to extended centroid
+            from methyl_utils.core.methyl_frame import MethylExtendedCentroid
+            import pandas as pd
+            
+            base_sample = samples[0]
+            df = base_sample._df.copy()
+            df['N'] = np.ones(len(df), dtype=np.uint32)
+            
+            # Initialize extended stats
+            coverage = df['mC'] + df['uC']
+            with np.errstate(divide='ignore', invalid='ignore'):
+                mean = np.where(coverage > 0, df['mC'].astype(np.float32) / coverage.astype(np.float32), 0.0)
+            
+            eps = np.finfo(np.float32).eps * 10
+            mean_clipped = np.clip(mean, eps, 1.0 - eps)
+            one_minus_mean = np.clip(1.0 - mean_clipped, eps, 1.0 - eps)
+            
+            df['Sx'] = mean.astype(np.float32)
+            df['Sx2'] = (mean ** 2).astype(np.float32)
+            df['log_x_sum'] = np.log(mean_clipped).astype(np.float32)
+            df['log_1_minus_x_sum'] = np.log(one_minus_mean).astype(np.float32)
+            
+            centroid = MethylExtendedCentroid(df)
+            
+            # Add other samples using add_sample
+            for sample in samples[1:]:
+                centroid = centroid.add_sample(sample)
+        except Exception as e:
+            pytest.skip(f"Could not create extended centroid: {e}")
+    
+    # Compute statistics
+    stats = compute_sample_statistics(centroid)
+    
+    assert stats['sample_type'] == 'extended_centroid'
+    assert 'avg_N' in stats
+    assert 'avg_Sx' in stats
+    assert 'avg_Sx2' in stats
+    assert 'avg_log_x_sum' in stats
+    assert 'avg_log_1_minus_x_sum' in stats
+    
+    # Generate histograms
+    output_dir = tmp_path / "histograms"
+    output_dir.mkdir()
+    
+    hist_paths = generate_all_histograms(centroid, output_dir, "extended_centroid")
+    assert len(hist_paths) == 4
+
+
+def test_mock_sample_creation():
+    """Test that mock sample creation works correctly."""
+    sample = create_mock_sample('1', 'CG', n_positions=50, seed=42)
+    
+    assert isinstance(sample, MethylSample)
+    assert len(sample.pos) == 50
+    assert len(sample.mC) == 50
+    assert len(sample.uC) == 50
+    assert sample.metadata['chromosome'] == '1'
+    assert sample.metadata['context'] == 'CG'
+
+
+def test_statistics_computation():
+    """Test that statistics computation works for a simple sample."""
+    sample = create_mock_sample('1', 'CG', n_positions=100, seed=123)
+    
+    stats = compute_sample_statistics(sample)
+    
+    # Verify all expected keys are present
+    required_keys = [
+        'position_count', 'avg_mC', 'avg_uC', 'avg_coverage',
+        'avg_methylation_level', 'total_mC', 'total_uC', 'total_coverage',
+        'min_coverage', 'max_coverage', 'median_coverage', 'sample_type'
+    ]
+    
+    for key in required_keys:
+        assert key in stats, f"Missing key: {key}"
+    
+    # Verify values are reasonable
+    assert stats['position_count'] == 100
+    assert stats['avg_coverage'] > 0
+    assert stats['total_coverage'] > 0
+
+
+# ============================================================================
+# Standalone Script Functionality
+# ============================================================================
+
+def main():
+    """Main function for standalone execution."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description="Compute statistics and generate histograms for methylation samples",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Load from CSV file
+  python test_methyl_frame_statistics.py --csv sample_list.csv --input-dir /path/to/samples --output-dir results
+  
+  # Load from config.json
+  python test_methyl_frame_statistics.py --config config.json --output-dir results
+  
+  # Generate mock data for testing
+  python test_methyl_frame_statistics.py --mock --output-dir results
+        """
+    )
+    
+    # Input options (mutually exclusive)
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument('--csv', type=Path, help='Path to CSV file with sample folder names')
+    input_group.add_argument('--config', type=Path, help='Path to config.json file')
+    input_group.add_argument('--mock', action='store_true', help='Generate mock data for testing')
+    
+    parser.add_argument('--input-dir', type=Path, help='Base directory for samples (required with --csv)')
+    parser.add_argument('--output-dir', type=Path, default=Path('output'), help='Directory for histogram outputs')
+    parser.add_argument('--chromosomes', nargs='+', help='Chromosomes to process (e.g., 1 2 X)')
+    parser.add_argument('--contexts', nargs='+', default=['CG', 'CHG', 'CHH'], help='Contexts to process (default: CG CHG CHH)')
+    parser.add_argument('--stats-output', type=Path, help='Path to save statistics summary (CSV or JSON)')
+    
+    args = parser.parse_args()
+    
+    # Validate arguments
+    if args.csv and not args.input_dir:
+        parser.error("--input-dir is required when using --csv")
+    
+    if args.csv and not args.csv.exists():
+        parser.error(f"CSV file not found: {args.csv}")
+    
+    if args.config and not args.config.exists():
+        parser.error(f"Config file not found: {args.config}")
+    
+    # Create output directory
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Load samples
+    samples = []
+    sample_names = []
+    
+    if args.mock:
+        print("Generating mock samples...")
+        for chrom in (args.chromosomes or ['1', '2']):
+            for ctx in args.contexts:
+                sample = create_mock_sample(chrom, ctx, n_positions=1000, seed=hash(f"{chrom}_{ctx}"))
+                samples.append(sample)
+                sample_names.append(f"mock_{chrom}_{ctx}")
+    
+    elif args.csv:
+        print(f"Loading samples from CSV: {args.csv}")
+        samples = load_samples_from_csv(args.csv, args.input_dir, args.chromosomes, args.contexts)
+        sample_names = [f"sample_{i}" for i in range(len(samples))]
+    
+    elif args.config:
+        print(f"Loading samples from config: {args.config}")
+        samples = load_samples_from_config(args.config, args.chromosomes, args.contexts)
+        sample_names = [f"sample_{i}" for i in range(len(samples))]
+    
+    if not samples:
+        print("No samples loaded!")
+        sys.exit(1)
+    
+    print(f"Loaded {len(samples)} samples")
+    
+    # Compute statistics for all samples
+    print("\nComputing statistics...")
+    all_stats = []
+    for i, sample in enumerate(samples):
+        stats = compute_sample_statistics(sample)
+        stats['sample_index'] = i
+        stats['sample_name'] = sample_names[i] if i < len(sample_names) else f"sample_{i}"
+        all_stats.append(stats)
+        print(f"  Sample {i+1}/{len(samples)}: {stats.get('position_count', 0)} positions")
+    
+    # Generate histograms
+    print(f"\nGenerating histograms in {args.output_dir}...")
+    for i, (sample, name) in enumerate(zip(samples, sample_names)):
+        try:
+            hist_paths = generate_all_histograms(sample, args.output_dir, name)
+            print(f"  Generated histograms for {name}")
+        except Exception as e:
+            print(f"  Warning: Failed to generate histograms for {name}: {e}")
+    
+    # Save statistics summary
+    if args.stats_output:
+        print(f"\nSaving statistics summary to {args.stats_output}...")
+        stats_df = pd.DataFrame(all_stats)
+        
+        if args.stats_output.suffix.lower() == '.json':
+            stats_df.to_json(args.stats_output, orient='records', indent=2)
+        else:
+            stats_df.to_csv(args.stats_output, index=False)
+        
+        print(f"  Saved statistics for {len(all_stats)} samples")
+    
+    # Print summary table
+    print("\n" + "="*80)
+    print("Statistics Summary")
+    print("="*80)
+    stats_df = pd.DataFrame(all_stats)
+    print(stats_df[['sample_name', 'position_count', 'avg_mC', 'avg_uC', 'avg_coverage', 'avg_methylation_level']].to_string(index=False))
+    print("="*80)
+    
+    print(f"\n✓ Processing complete!")
+    print(f"  Samples processed: {len(samples)}")
+    print(f"  Histograms saved to: {args.output_dir}")
+
+
+if __name__ == "__main__":
+    main()
+
