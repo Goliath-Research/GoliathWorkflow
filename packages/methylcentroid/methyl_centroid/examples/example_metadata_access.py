@@ -17,13 +17,13 @@ def example_metadata_access(centroid_path: Path):
     Args:
         centroid_path: Path to a centroid H5 file
     """
-    from methyl_utils.methyl_sample import MethylSample
+    from methyl_utils.core.methyl_frame import MethylFrame
     
     print(f"Loading centroid from: {centroid_path}")
     print("=" * 60)
     
     # Load the centroid
-    centroid = MethylSample.load_from_h5(centroid_path)
+    centroid = MethylFrame.load_from_h5(centroid_path)
     
     # Check if it's a centroid
     print(f"\nSample type: {centroid.sample_type}")
@@ -75,14 +75,14 @@ def example_metadata_modification():
     """
     Demonstrate how to modify metadata properties.
     """
-    from methyl_utils.methyl_sample import MethylSample
+    from methyl_utils.core.methyl_frame import MethylFrame
     import numpy as np
     
     print("\nExample: Creating and modifying metadata")
     print("=" * 60)
     
     # Create a simple centroid
-    centroid = MethylSample(
+    centroid = MethylFrame(
         pos=np.array([100, 200, 300], dtype=np.uint32),
         mC=np.array([10, 20, 30], dtype=np.uint32),
         uC=np.array([5, 10, 15], dtype=np.uint32),

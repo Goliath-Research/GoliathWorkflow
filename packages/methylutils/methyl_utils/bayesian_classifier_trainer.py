@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass
 
 from .beta_classifier import BetaClassifier
-from .methyl_sample import MethylSample
+from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
 from .logging_utils import setup_module_logging
 
 logger = setup_module_logging(__name__)

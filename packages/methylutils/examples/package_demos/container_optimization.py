@@ -130,7 +130,7 @@ class ContainerOptimizer:
         if positions is None:
             positions = self.chunk_size_millions * 1_000_000
 
-        # Memory per data type (bytes per position) - matches methyl_sample.py
+        # Memory per data type (bytes per position) - matches methyl_frame.py
         memory_per_type = {
             "uint32": 4,   # positions, mC, uC, N
             "uint16": 2,   # compressed mC/uC for centroids (potential optimization)

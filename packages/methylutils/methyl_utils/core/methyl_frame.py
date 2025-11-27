@@ -477,7 +477,6 @@ class MethylExtendedCentroid(MethylBasicCentroid):
                 n=self.N.values,
                 log_x_sum=self._df["log_x_sum"].values,
                 log_1mx_sum=self._df["log_1_minus_x_sum"].values,
-                use_gpu=self.is_gpu,
             )
             if self.is_gpu:
                 self._df["alpha"] = cudf.Series(alpha, dtype="float64")

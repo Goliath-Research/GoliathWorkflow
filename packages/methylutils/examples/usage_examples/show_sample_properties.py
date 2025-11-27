@@ -49,7 +49,7 @@ def display_sample_properties(h5_path: Path):
         h5_path: Path to the HDF5 file
     """
     try:
-        from methyl_utils.methyl_sample import MethylSample
+        from methyl_utils.core.methyl_frame import MethylSample
     except ImportError:
         print("Error: Could not import MethylSample from methyl_utils")
         print("Make sure the methylation pipeline is properly installed.")
