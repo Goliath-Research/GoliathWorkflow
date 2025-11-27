@@ -196,9 +196,15 @@ def compute_sample_statistics(sample: Union[MethylSample, MethylBasicCentroid, M
     uC_vals = np.asarray(sample_cpu.uC.values) if hasattr(sample_cpu.uC, 'values') else np.asarray(sample_cpu.uC)
     coverage_vals = mC_vals + uC_vals
     
-    # Compute methylation levels (handle division by zero)
+    # Compute methylation levels (handle division by zero) and ensure [0, 1] range
     with np.errstate(divide='ignore', invalid='ignore'):
-        methylation_levels = np.where(coverage_vals > 0, mC_vals.astype(np.float64) / coverage_vals.astype(np.float64), 0.0)
+        methylation_levels = np.where(
+            coverage_vals > 0, 
+            mC_vals.astype(np.float64) / coverage_vals.astype(np.float64), 
+            0.0
+        )
+        # Clip to [0, 1] range to handle any numerical errors
+        methylation_levels = np.clip(methylation_levels, 0.0, 1.0)
     
     # Basic statistics
     stats = {
@@ -207,6 +213,8 @@ def compute_sample_statistics(sample: Union[MethylSample, MethylBasicCentroid, M
         'avg_uC': float(np.mean(uC_vals)),
         'avg_coverage': float(np.mean(coverage_vals)),
         'avg_methylation_level': float(np.mean(methylation_levels[methylation_levels > 0])) if np.any(methylation_levels > 0) else 0.0,
+        'min_methylation_level': float(np.min(methylation_levels[methylation_levels > 0])) if np.any(methylation_levels > 0) else 0.0,
+        'max_methylation_level': float(np.max(methylation_levels[methylation_levels > 0])) if np.any(methylation_levels > 0) else 0.0,
         'total_mC': int(np.sum(mC_vals)),
         'total_uC': int(np.sum(uC_vals)),
         'total_coverage': int(np.sum(coverage_vals)),
@@ -250,7 +258,7 @@ def compute_sample_statistics(sample: Union[MethylSample, MethylBasicCentroid, M
 
 
 def create_histogram_html(data: np.ndarray, title: str, xlabel: str, output_path: Path, 
-                          bins: Optional[int] = None) -> None:
+                          bins: Optional[int] = None, normalize: bool = True) -> None:
     """
     Create an interactive histogram using Plotly and save as HTML.
     
@@ -260,12 +268,13 @@ def create_histogram_html(data: np.ndarray, title: str, xlabel: str, output_path
         xlabel: Label for x-axis
         output_path: Path to save HTML file
         bins: Number of bins (auto if None)
+        normalize: If True, normalize histogram to probability density (area = 1) for comparability
     """
     if not HAS_PLOTLY:
         raise ImportError("plotly is required for histogram generation. Install with: pip install plotly")
     
     # Filter out invalid values
-    valid_data = data[np.isfinite(data) & (data >= 0)]
+    valid_data = data[np.isfinite(data)]
     
     if len(valid_data) == 0:
         print(f"Warning: No valid data for histogram {title}")
@@ -274,18 +283,24 @@ def create_histogram_html(data: np.ndarray, title: str, xlabel: str, output_path
     # Create histogram
     fig = go.Figure()
     
+    # Use histnorm='probability density' for normalized histograms (area = 1)
+    # This makes histograms comparable across different sample sizes
+    histnorm = 'probability density' if normalize else None
+    yaxis_title = 'Probability Density' if normalize else 'Frequency'
+    
     fig.add_trace(go.Histogram(
         x=valid_data,
         nbinsx=bins,
         name=title,
         marker_color='steelblue',
-        opacity=0.7
+        opacity=0.7,
+        histnorm=histnorm
     ))
     
     fig.update_layout(
         title=title,
         xaxis_title=xlabel,
-        yaxis_title='Frequency',
+        yaxis_title=yaxis_title,
         template='plotly_white',
         hovermode='x unified'
     )
@@ -320,10 +335,17 @@ def generate_all_histograms(sample: Union[MethylSample, MethylBasicCentroid, Met
     uC_vals = np.asarray(sample_cpu.uC.values) if hasattr(sample_cpu.uC, 'values') else np.asarray(sample_cpu.uC)
     coverage_vals = mC_vals + uC_vals
     
-    # Compute methylation levels
+    # Compute methylation levels and ensure they're in [0, 1] range
     with np.errstate(divide='ignore', invalid='ignore'):
-        methylation_levels = np.where(coverage_vals > 0, mC_vals.astype(np.float64) / coverage_vals.astype(np.float64), 0.0)
-        methylation_levels = methylation_levels[methylation_levels > 0]  # Filter out zeros
+        methylation_levels = np.where(
+            coverage_vals > 0, 
+            mC_vals.astype(np.float64) / coverage_vals.astype(np.float64), 
+            0.0
+        )
+        # Clip to [0, 1] range to handle any numerical errors
+        methylation_levels = np.clip(methylation_levels, 0.0, 1.0)
+        # Filter out zeros for histogram (optional - you may want to keep them)
+        # methylation_levels = methylation_levels[methylation_levels > 0]
     
     output_paths = {}
     
@@ -337,7 +359,8 @@ def generate_all_histograms(sample: Union[MethylSample, MethylBasicCentroid, Met
     
     for data, metric, xlabel, filename_base in histograms:
         output_path = output_dir / f"{sample_name}_{filename_base}.html"
-        create_histogram_html(data, f"{sample_name} - {xlabel}", xlabel, output_path)
+        # Normalize all histograms for comparability
+        create_histogram_html(data, f"{sample_name} - {xlabel}", xlabel, output_path, normalize=True)
         output_paths[metric] = output_path
     
     return output_paths

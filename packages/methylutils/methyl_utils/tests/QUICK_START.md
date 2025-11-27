@@ -5,18 +5,27 @@
 Use the `-w` flag to set the working directory:
 
 ```bash
-# Test with mock data
+# Test with mock data (chromosome 1, CG context only - FAST)
 docker exec -w /workspace/packages/methylutils/methyl_utils/tests \
   methylpipeline python3 test_methyl_frame_statistics.py \
-    --mock --use-gpu --output-dir /tmp/results
+    --mock --chromosomes 1 --contexts CG --use-gpu --output-dir /tmp/results
 
-# Test with real data
+# Test with real data (chromosome 1, CG context only - FAST)
+docker exec -w /workspace/packages/methylutils/methyl_utils/tests \
+  methylpipeline python3 test_methyl_frame_statistics.py \
+    --config example_config.json \
+    --chromosomes 1 \
+    --contexts CG \
+    --use-gpu \
+    --output-dir /tmp/results \
+    --stats-output /tmp/statistics.csv
+
+# Process ALL chromosomes and contexts (SLOW - only if needed)
 docker exec -w /workspace/packages/methylutils/methyl_utils/tests \
   methylpipeline python3 test_methyl_frame_statistics.py \
     --config example_config.json \
     --use-gpu \
-    --output-dir /tmp/results \
-    --stats-output /tmp/statistics.csv
+    --output-dir /tmp/results
 ```
 
 ## Step-by-Step
