@@ -25,7 +25,12 @@ if _packages_dir.exists() and str(_packages_dir) not in sys.path:
 
 import numpy as np
 import pandas as pd
-import pytest
+
+# pytest is optional - only needed when running pytest tests
+try:
+    import pytest
+except ImportError:
+    pytest = None
 
 from methyl_utils.core.methyl_frame import MethylSample, MethylBasicCentroid, MethylExtendedCentroid
 
@@ -172,7 +177,13 @@ def test_methyl_basic_centroid_statistics(tmp_path):
     try:
         from methyl_utils.core.centroid_builder import MethylCentroidBuilder
         
-        builder = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+        # Try GPU if available, fallback to CPU
+        try:
+            from methyl_utils.gpu_detection import is_gpu_available
+            use_gpu_test = is_gpu_available()
+        except ImportError:
+            use_gpu_test = False
+        builder = MethylCentroidBuilder(min_coverage=1, use_gpu=use_gpu_test)
         for h5_file in sample_files:
             builder.add_sample(h5_file)
         
@@ -262,7 +273,13 @@ def test_methyl_extended_centroid_statistics(tmp_path):
     try:
         from methyl_utils.core.centroid_builder import MethylCentroidBuilder
         
-        builder = MethylCentroidBuilder(min_coverage=1, use_gpu=False)
+        # Try GPU if available, fallback to CPU
+        try:
+            from methyl_utils.gpu_detection import is_gpu_available
+            use_gpu_test = is_gpu_available()
+        except ImportError:
+            use_gpu_test = False
+        builder = MethylCentroidBuilder(min_coverage=1, use_gpu=use_gpu_test)
         for h5_file in sample_files:
             builder.add_sample(h5_file)
         
@@ -390,6 +407,8 @@ Examples:
     parser.add_argument('--chromosomes', nargs='+', help='Chromosomes to process (e.g., 1 2 X)')
     parser.add_argument('--contexts', nargs='+', default=['CG', 'CHG', 'CHH'], help='Contexts to process (default: CG CHG CHH)')
     parser.add_argument('--stats-output', type=Path, help='Path to save statistics summary (CSV or JSON)')
+    parser.add_argument('--use-gpu', action='store_true', help='Use GPU acceleration (if available)')
+    parser.add_argument('--no-gpu', action='store_true', help='Force CPU-only processing')
     
     args = parser.parse_args()
     
@@ -405,6 +424,27 @@ Examples:
     
     # Create output directory
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Determine GPU usage
+    use_gpu = args.use_gpu and not args.no_gpu
+    if use_gpu:
+        try:
+            from methyl_utils.gpu_detection import is_gpu_available, get_gpu_memory_gb, get_gpu_device_count
+            gpu_available = is_gpu_available()
+            if gpu_available:
+                gpu_memory = get_gpu_memory_gb()
+                gpu_count = get_gpu_device_count()
+                print(f"\n🚀 GPU Acceleration Enabled")
+                print(f"   GPU Devices: {gpu_count}")
+                print(f"   GPU Memory: {gpu_memory:.1f} GB")
+            else:
+                print("\n⚠️  GPU requested but not available, falling back to CPU")
+                use_gpu = False
+        except ImportError:
+            print("\n⚠️  GPU detection not available, using CPU")
+            use_gpu = False
+    else:
+        print("\n💻 Using CPU processing")
     
     # Load samples
     samples = []

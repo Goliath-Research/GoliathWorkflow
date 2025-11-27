@@ -4,14 +4,22 @@ This test suite provides tools to compute statistics and generate histograms for
 
 ## Quick Start
 
-### Option 1: Run with Mock Data (Easiest - No Input Files Needed)
+### Option 1: Run with Mock Data in Container (Easiest - No Input Files Needed)
 
 ```bash
-cd /home/ubuntu/MethylPipeline/methylutils/methyl_utils/tests
-python test_methyl_frame_statistics.py --mock --output-dir results
+# Use -w flag to set working directory (recommended)
+docker exec -w /workspace/packages/methylutils/methyl_utils/tests \
+  methylpipeline python3 test_methyl_frame_statistics.py --mock --use-gpu --output-dir /tmp/results
 ```
 
-This generates mock samples and creates histograms automatically.
+This generates mock samples and creates histograms automatically with GPU acceleration.
+
+### Option 1b: Run Locally (if not in container)
+
+```bash
+cd /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/tests
+python test_methyl_frame_statistics.py --mock --output-dir results
+```
 
 ### Option 2: Run with Real Data from CSV File
 
@@ -22,12 +30,14 @@ This generates mock samples and creates histograms automatically.
    sample_folder_3
    ```
 
-2. Run the test:
+2. Run the test (in container):
    ```bash
-   python test_methyl_frame_statistics.py \
-     --csv sample_list.csv \
-     --input-dir /path/to/samples/base/directory \
-     --output-dir results
+   docker exec -w /workspace/packages/methylutils/methyl_utils/tests \
+     methylpipeline python3 test_methyl_frame_statistics.py \
+       --csv sample_list.csv \
+       --input-dir /path/to/samples/base/directory \
+       --output-dir /tmp/results \
+       --use-gpu
    ```
 
 ### Option 3: Run with Real Data from config.json
@@ -43,11 +53,13 @@ This generates mock samples and creates histograms automatically.
    }
    ```
 
-2. Run the test:
+2. Run the test (in container):
    ```bash
-   python test_methyl_frame_statistics.py \
-     --config config.json \
-     --output-dir results
+   docker exec -w /workspace/packages/methylutils/methyl_utils/tests \
+     methylpipeline python3 test_methyl_frame_statistics.py \
+       --config config.json \
+       --output-dir /tmp/results \
+       --use-gpu
    ```
 
 ## Input File Formats
@@ -139,11 +151,13 @@ python test_methyl_frame_statistics.py \
 You can also run the tests using pytest:
 
 ```bash
-# Run all tests
-pytest methylutils/methyl_utils/tests/test_methyl_frame_statistics.py -v
+# Run all tests (in container)
+docker exec -w /workspace \
+  methylpipeline pytest packages/methylutils/methyl_utils/tests/test_methyl_frame_statistics.py -v
 
-# Run specific test
-pytest methylutils/methyl_utils/tests/test_methyl_frame_statistics.py::test_methyl_sample_statistics_from_csv -v
+# Run specific test (in container)
+docker exec -w /workspace \
+  methylpipeline pytest packages/methylutils/methyl_utils/tests/test_methyl_frame_statistics.py::test_mock_sample_creation -v
 
 # Run with output
 pytest methylutils/methyl_utils/tests/test_methyl_frame_statistics.py -v -s
