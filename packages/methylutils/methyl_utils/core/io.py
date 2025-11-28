@@ -14,11 +14,9 @@ def load_from_h5(
     """
     Load methylation data from HDF5 file.
     
-    Supports the format written by save_to_h5():
-    - Metadata stored as file attributes (JSON-encoded for dict/list)
-    - Datasets stored in 'methylation_data' group
-    - Core datasets: pos, mC, uC, tnc
-    - Optional centroid datasets: N, Sx, Sx2, log_x_sum, log_1_minus_x_sum
+    Supports both new and old formats:
+    - New format: Datasets stored in 'methylation_data' group
+    - Old format: Datasets stored at root level or 'methylation_data' as structured array
     
     Args:
         path: Path to HDF5 file
@@ -27,52 +25,96 @@ def load_from_h5(
         MethylSample, MethylBasicCentroid, or MethylExtendedCentroid instance
         
     Raises:
-        ValueError: If file doesn't have the expected 'methylation_data' group
+        ValueError: If file doesn't have required datasets in any format
         KeyError: If required datasets are missing
     """
     path = Path(path)
     with h5py.File(path, "r") as f:
-        # Check for 'methylation_data' group (format written by save_to_h5)
-        if "methylation_data" not in f:
+        data = {}
+        datasets = []
+        methyl_data = None
+        
+        # Try new format first: 'methylation_data' as a group
+        if "methylation_data" in f:
+            methyl_data = f["methylation_data"]
+            if isinstance(methyl_data, h5py.Group):
+                datasets = list(methyl_data.keys())
+                # Check for required core datasets
+                required_core = ["pos", "mC", "uC", "tnc"]
+                missing = [d for d in required_core if d not in datasets]
+                if not missing:
+                    # Load core datasets from group
+                    data = {
+                        "pos": np.asarray(methyl_data["pos"][:], dtype=np.uint32),
+                        "mC": np.asarray(methyl_data["mC"][:], dtype=np.uint32),
+                        "uC": np.asarray(methyl_data["uC"][:], dtype=np.uint32),
+                        "tnc": np.asarray(methyl_data["tnc"][:], dtype=np.uint8),
+                    }
+                    # Load optional centroid datasets
+                    if "N" in datasets:
+                        data["N"] = np.asarray(methyl_data["N"][:], dtype=np.uint32)
+                    for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
+                        if col in datasets:
+                            data[col] = np.asarray(methyl_data[col][:], dtype=np.float32)
+        
+        # Fallback to old format: datasets at root level
+        if not data:
+            root_keys = list(f.keys())
+            required_core = ["pos", "mC", "uC", "tnc"]
+            
+            # Check if required datasets exist at root level
+            missing = [d for d in required_core if d not in root_keys]
+            if not missing:
+                datasets = root_keys
+                # Load core datasets from root
+                data = {
+                    "pos": np.asarray(f["pos"][:], dtype=np.uint32),
+                    "mC": np.asarray(f["mC"][:], dtype=np.uint32),
+                    "uC": np.asarray(f["uC"][:], dtype=np.uint32),
+                    "tnc": np.asarray(f["tnc"][:], dtype=np.uint8),
+                }
+                # Load optional centroid datasets
+                if "N" in root_keys:
+                    data["N"] = np.asarray(f["N"][:], dtype=np.uint32)
+                for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
+                    if col in root_keys:
+                        data[col] = np.asarray(f[col][:], dtype=np.float32)
+        
+        # Fallback to old format: 'methylation_data' as structured array
+        if not data and "methylation_data" in f:
+            methyl_data = f["methylation_data"]
+            if isinstance(methyl_data, h5py.Dataset) and methyl_data.dtype.names:
+                # Structured array format
+                struct_data = methyl_data[:]
+                datasets = list(methyl_data.dtype.names)
+                required_core = ["pos", "mC", "uC", "tnc"]
+                missing = [d for d in required_core if d not in datasets]
+                if not missing:
+                    data = {
+                        "pos": np.asarray(struct_data["pos"], dtype=np.uint32),
+                        "mC": np.asarray(struct_data["mC"], dtype=np.uint32),
+                        "uC": np.asarray(struct_data["uC"], dtype=np.uint32),
+                        "tnc": np.asarray(struct_data["tnc"], dtype=np.uint8),
+                    }
+                    # Load optional centroid datasets
+                    if "N" in datasets:
+                        data["N"] = np.asarray(struct_data["N"], dtype=np.uint32)
+                    for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
+                        if col in datasets:
+                            data[col] = np.asarray(struct_data[col], dtype=np.float32)
+        
+        # If still no data, raise error
+        if not data:
+            available_keys = list(f.keys())
             raise ValueError(
-                f"HDF5 file does not contain 'methylation_data' group. "
-                f"This file may be in an old format. Available keys: {list(f.keys())}"
+                f"HDF5 file does not contain required datasets in any recognized format. "
+                f"Required: ['pos', 'mC', 'uC', 'tnc']. Available keys: {available_keys}"
             )
-        
-        methyl_data = f["methylation_data"]
-        if not isinstance(methyl_data, h5py.Group):
-            raise ValueError(
-                f"'methylation_data' exists but is not a group. "
-                f"This file may be in an old format."
-            )
-        
-        datasets = list(methyl_data.keys())
-        
-        # Check for required core datasets
-        required_core = ["pos", "mC", "uC", "tnc"]
-        missing = [d for d in required_core if d not in datasets]
-        if missing:
-            raise ValueError(
-                f"Missing required datasets in 'methylation_data' group: {missing}. "
-                f"Available: {datasets}"
-            )
-        
-        # Load core datasets
-        data = {
-            "pos": np.asarray(methyl_data["pos"][:], dtype=np.uint32),
-            "mC": np.asarray(methyl_data["mC"][:], dtype=np.uint32),
-            "uC": np.asarray(methyl_data["uC"][:], dtype=np.uint32),
-            "tnc": np.asarray(methyl_data["tnc"][:], dtype=np.uint8),
-        }
         
         # Detect type by available datasets
-        if "N" in datasets:
-            data["N"] = np.asarray(methyl_data["N"][:], dtype=np.uint32)
-            
+        if "N" in data:
             # Check if extended centroid fields are present
-            if set(MethylExtendedCentroid._required_stats).issubset(datasets):
-                for col in MethylExtendedCentroid._required_stats:
-                    data[col] = np.asarray(methyl_data[col][:], dtype=np.float32)
+            if set(MethylExtendedCentroid._required_stats).issubset(data.keys()):
                 cls = MethylExtendedCentroid
             else:
                 cls = MethylBasicCentroid

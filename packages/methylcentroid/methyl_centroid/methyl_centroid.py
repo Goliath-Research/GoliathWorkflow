@@ -1235,25 +1235,34 @@ class MethylCentroid:
         # Convert structured array to DataFrame
         if isinstance(centroid_data, np.ndarray) and centroid_data.dtype.names:
             # Structured array - convert field by field
-            df = pd.DataFrame({name: centroid_data[name] for name in centroid_data.dtype.names})
+            if len(centroid_data) > 0:
+                df = pd.DataFrame({name: centroid_data[name] for name in centroid_data.dtype.names})
+            else:
+                # Empty structured array - create empty DataFrame with expected columns
+                df = pd.DataFrame({name: [] for name in centroid_data.dtype.names})
         else:
             # Already a DataFrame or regular array
             df = pd.DataFrame(centroid_data) if not isinstance(centroid_data, pd.DataFrame) else centroid_data
         
         # Apply min_samples filter before saving (safety check)
-        if "N" in df.columns:
+        if len(df) > 0 and hasattr(df, 'columns') and "N" in df.columns:
             # Filter out positions where N < min_samples
             before_filter = len(df)
             df = df[df['N'] >= self.min_samples].copy()
             after_filter = len(df)
             if before_filter > after_filter:
-                self.logger.warning(
-                    f"Filtered out {before_filter - after_filter} positions with N < {self.min_samples} "
-                    f"({before_filter} -> {after_filter} positions)"
-                )
+                if hasattr(self, 'logger') and self.logger is not None:
+                    self.logger.warning(
+                        f"Filtered out {before_filter - after_filter} positions with N < {self.min_samples} "
+                        f"({before_filter} -> {after_filter} positions)"
+                    )
+                else:
+                    print(f"Warning: Filtered out {before_filter - after_filter} positions with N < {self.min_samples}")
             if len(df) == 0:
-                self.logger.error("No positions remain after min_samples filter!")
-                raise ValueError(f"No valid positions after filtering by min_samples={self.min_samples}")
+                error_msg = f"No valid positions after filtering by min_samples={self.min_samples}"
+                if hasattr(self, 'logger') and self.logger is not None:
+                    self.logger.error("No positions remain after min_samples filter!")
+                raise ValueError(error_msg)
         
         # Determine which class to use based on available columns
         if "N" in df.columns:
@@ -1394,12 +1403,20 @@ class MethylCentroid:
         # Add all samples in parallel
         self.add_samples_parallel()
 
+        # Check if any samples were successfully added
+        if len(self.active_samples) == 0:
+            raise RuntimeError("Failed to compute centroid: no samples were successfully added")
+
         # Compute and save centroid
         centroid = self.compute_centroid(extended=extended)
-        if centroid is None:
-            raise RuntimeError("Failed to compute centroid")
+        if centroid is None or len(centroid) == 0:
+            raise RuntimeError("Failed to compute centroid: no samples were successfully added")
 
-        return self.save_centroid(output_dir, centroid, extended=extended)
+        centroid_path = self.save_centroid(output_dir, centroid, extended=extended)
+        if centroid_path is None:
+            raise RuntimeError("Failed to save centroid: no valid data to save")
+        
+        return centroid_path
 
     def compute_centroid_chunked(self, extended: bool = False, chunk_size_positions: int = 2_000_000) -> Optional[np.ndarray]:
         """
@@ -3440,7 +3457,21 @@ class MethylCentroid:
             print("Rebuilding centroid from individual samples")
 
         # Calculate initial extended centroid
-        centroid_path = self.calculate_centroid(str(self.output_dir), extended=True)
+        try:
+            centroid_path = self.calculate_centroid(str(self.output_dir), extended=True)
+            if centroid_path is None:
+                raise RuntimeError("Failed to compute centroid: calculate_centroid returned None")
+        except RuntimeError as e:
+            error_msg = str(e).lower()
+            if "no samples" in error_msg or "failed to compute" in error_msg or "failed to save" in error_msg:
+                # Return empty results if no samples were added
+                results = OutlierRemovalResults(
+                    iterations=[],
+                    final_centroid_path="",
+                    total_samples_removed=0
+                )
+                return results
+            raise
 
         # Cache aligned data for all active samples after initial build
         for sample_id in self.active_samples:
@@ -3455,7 +3486,8 @@ class MethylCentroid:
 
         # Remove outliers using stored parameters
         results = self.remove_outliers()
-        results.final_centroid_path = centroid_path
+        # Convert Path to string for final_centroid_path
+        results.final_centroid_path = str(centroid_path) if centroid_path is not None else ""
 
         # Update config with new samples and outliers after initial outlier removal
         self._update_config_after_outlier_removal(results)
