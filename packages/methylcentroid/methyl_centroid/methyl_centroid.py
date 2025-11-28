@@ -713,6 +713,13 @@ class MethylCentroid:
                 builder = MethylCentroidBuilder(min_coverage=self._min_coverage, use_gpu=False)
                 builder.add_sample(sample_path)
                 self._centroid = builder.finalize()
+                # Apply min_samples filter after builder finalizes
+                if hasattr(self._centroid, 'N') and len(self._centroid) > 0:
+                    N_vals = np.asarray(self._centroid.N.values) if hasattr(self._centroid.N, 'values') else np.asarray(self._centroid.N)
+                    valid_mask = N_vals >= self.min_samples
+                    if not valid_mask.all():
+                        # Filter out positions with N < min_samples
+                        self._centroid = self._centroid[valid_mask]
             else:
                 # Add sample to existing centroid
                 self._centroid = self._centroid.add_sample(methyl_sample)
@@ -905,6 +912,13 @@ class MethylCentroid:
                         builder = MethylCentroidBuilder(min_coverage=self._min_coverage, use_gpu=False)
                         builder.add_sample(sample_path)
                         self._centroid = builder.finalize()
+                        # Apply min_samples filter after builder finalizes
+                        if hasattr(self._centroid, 'N') and len(self._centroid) > 0:
+                            N_vals = np.asarray(self._centroid.N.values) if hasattr(self._centroid.N, 'values') else np.asarray(self._centroid.N)
+                            valid_mask = N_vals >= self.min_samples
+                            if not valid_mask.all():
+                                # Filter out positions with N < min_samples
+                                self._centroid = self._centroid[valid_mask]
                     else:
                         # Load the actual MethylSample and add it
                         methyl_sample = self.load_sample(sample_path)
@@ -1207,6 +1221,7 @@ class MethylCentroid:
             "outliers_removed": outlier_paths,     # NEW: Samples removed as outliers
             "creation_date": datetime.now().isoformat(),  # NEW: Creation timestamp
             "min_coverage": self.min_coverage,
+            "min_samples": self.min_samples,  # NEW: Minimum samples per position filter
             "alpha": self.α,
             "distance_metrics": [str(m.value) for m in self.distance_metrics],
             "max_iterations": self.max_iterations,
@@ -1224,6 +1239,21 @@ class MethylCentroid:
         else:
             # Already a DataFrame or regular array
             df = pd.DataFrame(centroid_data) if not isinstance(centroid_data, pd.DataFrame) else centroid_data
+        
+        # Apply min_samples filter before saving (safety check)
+        if "N" in df.columns:
+            # Filter out positions where N < min_samples
+            before_filter = len(df)
+            df = df[df['N'] >= self.min_samples].copy()
+            after_filter = len(df)
+            if before_filter > after_filter:
+                self.logger.warning(
+                    f"Filtered out {before_filter - after_filter} positions with N < {self.min_samples} "
+                    f"({before_filter} -> {after_filter} positions)"
+                )
+            if len(df) == 0:
+                self.logger.error("No positions remain after min_samples filter!")
+                raise ValueError(f"No valid positions after filtering by min_samples={self.min_samples}")
         
         # Determine which class to use based on available columns
         if "N" in df.columns:
@@ -1461,7 +1491,8 @@ class MethylCentroid:
         pos_accum = []
         mC_accum = np.zeros(len(positions), dtype=np.uint32)
         uC_accum = np.zeros(len(positions), dtype=np.uint32)
-        N_accum = np.zeros(len(positions), dtype=np.uint32) if extended else None
+        # Always track N_accum for min_samples filtering, even for non-extended centroids
+        N_accum = np.zeros(len(positions), dtype=np.uint32)
 
         if extended:
             Sx_accum = np.zeros(len(positions), dtype=np.float32)
@@ -1486,9 +1517,13 @@ class MethylCentroid:
             # Accumulate
             mC_accum += aligned_mC
             uC_accum += aligned_uC
+            
+            # Track per-position sample count (N) for min_samples filtering
+            coverage = aligned_mC + aligned_uC
+            N_accum += (coverage > 0).astype(np.uint32)
+            
             if extended:
                 # Calculate methylation level for this sample
-                coverage = aligned_mC + aligned_uC
                 valid_positions = coverage > 0
                 if valid_positions.any():
                     methylation_level = np.zeros(len(positions), dtype=np.float32)
@@ -1496,12 +1531,13 @@ class MethylCentroid:
 
                     Sx_accum += methylation_level
                     Sx2_accum += methylation_level ** 2
-                    N_accum += (coverage > 0).astype(np.uint32)
 
         # Filter positions with sufficient coverage
-        coverage_threshold = max(1, sample_count // 10)  # At least 10% of samples
         total_coverage = mC_accum + uC_accum
         valid_positions = total_coverage >= self.min_coverage
+
+        # Apply min_samples filter - filter out positions where N < min_samples
+        valid_positions = valid_positions & (N_accum >= self.min_samples)
 
         if not valid_positions.any():
             return None
@@ -1530,7 +1566,8 @@ class MethylCentroid:
             centroid_data['mC'] = mC_accum[valid_positions]
             centroid_data['uC'] = uC_accum[valid_positions]
             centroid_data['tnc'] = np.zeros(np.sum(valid_positions), dtype=np.uint8)  # Default context
-            centroid_data['N'] = np.full(np.sum(valid_positions), sample_count, dtype=np.uint32)
+            # Use actual per-position N (number of samples that contributed to each position)
+            centroid_data['N'] = N_accum[valid_positions]
 
         return centroid_data
 

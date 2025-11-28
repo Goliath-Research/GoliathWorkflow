@@ -492,11 +492,23 @@ class MethylExtendedCentroid(MethylBasicCentroid):
                 )
         return self._df["alpha"]
 
+    # Beautiful name for alpha parameter
+    @property
+    def α(self):
+        return self.alpha
+
+    # Beta distribution beta parameter
     @property
     def beta(self):
         self.alpha  # trigger
         return self._df["beta"]
 
+    # Beautiful name for beta parameter
+    @property
+    def β(self):
+        return self.beta
+
+    # Adaptive mean (uses Beta distribution parameters to estimate mean)
     @property
     def adaptive_mean(self):
         col = "adaptive_mean"
