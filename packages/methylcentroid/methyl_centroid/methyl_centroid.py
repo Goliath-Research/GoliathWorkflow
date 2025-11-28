@@ -24,7 +24,6 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import OrderedDict
 from methyl_utils.core.methyl_frame import (
-    get_methyl_dtype, 
     #METHYL_CENTROID_DTYPE, 
     #METHYL_EXTENDED_CENTROID_DTYPE, 
     MethylSample,
@@ -34,6 +33,7 @@ from methyl_utils.core.methyl_frame import (
 from methyl_utils import (
     auto_compute_distance,
     get_sample_beta_mom,
+    get_methyl_dtype,
     # Memory management
     get_memory_manager,
     # Performance profiling
