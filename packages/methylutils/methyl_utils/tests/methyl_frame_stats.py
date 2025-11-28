@@ -400,7 +400,12 @@ def create_mock_sample(chrom: str, context: str, n_positions: int = 1000,
     uC = coverage - mC
     
     # Generate tnc codes (simplified - just use context codes)
-    context_codes = {'CG': 0, 'CHG': 32, 'CHH': 64}
+    from methyl_utils import CONTEXT_CG, CONTEXT_CHG, CONTEXT_CHH, CONTEXT_SHIFT
+    context_codes = {
+        'CG': CONTEXT_CG << CONTEXT_SHIFT,    # 0 << 5 = 0
+        'CHG': CONTEXT_CHG << CONTEXT_SHIFT,  # 1 << 5 = 32
+        'CHH': CONTEXT_CHH << CONTEXT_SHIFT   # 2 << 5 = 64
+    }
     base_tnc = context_codes.get(context, 0)
     tnc = np.full(n_pos, base_tnc, dtype=np.uint8)
     

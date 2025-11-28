@@ -147,6 +147,27 @@ STRAND_MASK  = 0b1           # 1 bit
 CONTEXT_SHIFT = 5
 STRAND_SHIFT  = 7
 
+# ---------- Context Constants ----------
+CONTEXT_CG = 0
+CONTEXT_CHG = 1
+CONTEXT_CHH = 2
+CONTEXT_UNKNOWN = 3
+
+CONTEXT_NAMES = {
+    CONTEXT_CG: 'CG',
+    CONTEXT_CHG: 'CHG',
+    CONTEXT_CHH: 'CHH',
+    CONTEXT_UNKNOWN: 'UNKNOWN'
+}
+
+STRAND_POSITIVE = 0
+STRAND_NEGATIVE = 1
+
+STRAND_SYMBOLS = {
+    STRAND_POSITIVE: '+',
+    STRAND_NEGATIVE: '-'
+}
+
 # ---------- Methylation Data Types ----------
 # Basic sample dtype (pos, mC, uC, tnc)
 METHYL_SAMPLE_DTYPE = [
@@ -253,17 +274,50 @@ def decode_nucleotide(n: int) -> str:
 @dataclass(slots=True)
 class TNCBits:
     """Holds the 3 bitfields and knows how to pack/unpack to a single byte."""
-    tnc: int       # 0..31
-    context: int   # 0..3
-    strand: int    # 0..1
+    tnc: int       # 0..31 - trinucleotide code
+    context: int   # 0..3 - context (CG=0, CHG=1, CHH=2, UNKNOWN=3)
+    strand: int    # 0..1 - strand (positive=0, negative=1)
 
     def to_byte(self) -> int:
+        """Pack the bitfields into a single byte."""
         return _pack_tnc_byte(self.tnc, self.context, self.strand)
 
     @classmethod
     def from_byte(cls, b: int) -> "TNCBits":
+        """Unpack a byte into TNC bitfields."""
         tnc, context, strand = _unpack_tnc_byte(b)
         return cls(tnc=tnc, context=context, strand=strand)
+
+    # ---------- Properties for easier access ----------
+
+    @property
+    def context_name(self) -> str:
+        """Get the context as a human-readable string ('CG', 'CHG', 'CHH', 'UNKNOWN')."""
+        return CONTEXT_NAMES.get(self.context, 'UNKNOWN')
+
+    @property
+    def strand_symbol(self) -> str:
+        """Get the strand as a symbol ('+' or '-')."""
+        return STRAND_SYMBOLS.get(self.strand, '?')
+
+    @property
+    def trinucleotide(self) -> str:
+        """Get the trinucleotide sequence (e.g., 'CCG', 'CHG', 'CHH')."""
+        return self.decode_trinucleotide()
+
+    @property
+    def nucleotide_2(self) -> str:
+        """Get the second nucleotide in the trinucleotide."""
+        n2 = (self.tnc // 5) % 4  # 0-3
+        return decode_nucleotide(n2)
+
+    @property
+    def nucleotide_3(self) -> str:
+        """Get the third nucleotide in the trinucleotide."""
+        n3 = self.tnc % 5  # 0-4
+        return decode_nucleotide(n3)
+
+    # ---------- Methods ----------
 
     def decode_trinucleotide(self) -> str:
         """
@@ -271,9 +325,7 @@ class TNCBits:
 
         Returns trinucleotides of the form C[N2][N3] where C is the methylated cytosine.
         """
-        n2 = (self.tnc // 5) % 4  # 0-3
-        n3 = self.tnc % 5         # 0-4
-        return f"C{decode_nucleotide(n2)}{decode_nucleotide(n3)}"
+        return f"C{self.nucleotide_2}{self.nucleotide_3}"
 
     def encode_trinucleotide(self, trinuc: str) -> None:
         """
@@ -291,6 +343,10 @@ class TNCBits:
             raise ValueError(f"Invalid second nucleotide: {trinuc[1]}")
 
         self.tnc = n2 * 5 + n3  # tnc = n2 * 5 + n3
+
+    def __str__(self) -> str:
+        """String representation showing all decoded information."""
+        return f"TNCBits(tnc={self.tnc}, context={self.context_name}, strand={self.strand_symbol}, trinuc={self.trinucleotide})"
 
 @dataclass(slots=True)
 class DMPSample:
@@ -653,6 +709,16 @@ __all__ = [
     "TNCBits",
     "encode_nucleotide",
     "decode_nucleotide",
+    # Context constants
+    "CONTEXT_CG",
+    "CONTEXT_CHG",
+    "CONTEXT_CHH",
+    "CONTEXT_UNKNOWN",
+    "CONTEXT_NAMES",
+    # Strand constants
+    "STRAND_POSITIVE",
+    "STRAND_NEGATIVE",
+    "STRAND_SYMBOLS",
     "METHYL_SAMPLE_DTYPE",
     "METHYL_CENTROID_DTYPE",
     "METHYL_EXTENDED_CENTROID_DTYPE",

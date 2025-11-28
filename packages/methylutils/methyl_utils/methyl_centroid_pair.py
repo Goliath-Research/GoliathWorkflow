@@ -293,7 +293,12 @@ class MethylCentroidPair:
 
         n_positions = len(positions)
         # Create dummy tnc values based on context
-        context_map = {"CG": 0, "CHG": 1, "CHH": 2}
+        from methyl_utils import CONTEXT_CG, CONTEXT_CHG, CONTEXT_CHH, CONTEXT_SHIFT
+        context_map = {
+            "CG": CONTEXT_CG << CONTEXT_SHIFT,
+            "CHG": CONTEXT_CHG << CONTEXT_SHIFT,
+            "CHH": CONTEXT_CHH << CONTEXT_SHIFT
+        }
         tnc_base = context_map.get(context, 0)
         dummy_tnc = np.full(n_positions, tnc_base, dtype=np.uint8)
 
