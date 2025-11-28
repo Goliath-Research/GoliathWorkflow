@@ -719,7 +719,19 @@ class MethylCentroid:
                     valid_mask = N_vals >= self.min_samples
                     if not valid_mask.all():
                         # Filter out positions with N < min_samples
-                        self._centroid = self._centroid[valid_mask]
+                        # Use integer indices instead of boolean mask to avoid pandas indexing issues
+                        valid_indices = np.where(valid_mask)[0]
+                        if len(valid_indices) > 0:
+                            self._centroid = self._centroid.apply_mask(valid_indices)
+                        else:
+                            # No valid positions, create empty centroid
+                            from methyl_utils import MethylExtendedCentroid
+                            import pandas as pd
+                            empty_df = pd.DataFrame({
+                                'pos': [], 'mC': [], 'uC': [], 'tnc': [],
+                                'N': [], 'Sx': [], 'Sx2': [], 'log_x_sum': [], 'log_1_minus_x_sum': []
+                            })
+                            self._centroid = MethylExtendedCentroid(empty_df, self._centroid.metadata)
             else:
                 # Add sample to existing centroid
                 self._centroid = self._centroid.add_sample(methyl_sample)
@@ -918,7 +930,19 @@ class MethylCentroid:
                             valid_mask = N_vals >= self.min_samples
                             if not valid_mask.all():
                                 # Filter out positions with N < min_samples
-                                self._centroid = self._centroid[valid_mask]
+                                # Use integer indices instead of boolean mask to avoid pandas indexing issues
+                                valid_indices = np.where(valid_mask)[0]
+                                if len(valid_indices) > 0:
+                                    self._centroid = self._centroid.apply_mask(valid_indices)
+                                else:
+                                    # No valid positions, create empty centroid
+                                    from methyl_utils import MethylExtendedCentroid
+                                    import pandas as pd
+                                    empty_df = pd.DataFrame({
+                                        'pos': [], 'mC': [], 'uC': [], 'tnc': [],
+                                        'N': [], 'Sx': [], 'Sx2': [], 'log_x_sum': [], 'log_1_minus_x_sum': []
+                                    })
+                                    self._centroid = MethylExtendedCentroid(empty_df, self._centroid.metadata)
                     else:
                         # Load the actual MethylSample and add it
                         methyl_sample = self.load_sample(sample_path)
