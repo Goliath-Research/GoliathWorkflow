@@ -503,7 +503,7 @@ class MethylCentroid:
         self.logger.info(f"GPU available: {gpu_available}")
 
         # For large human genomes, prioritize GPU; for smaller datasets like Arabidopsis, use CPU if GPU fails
-        use_gpu = gpu_available
+        self.use_gpu = gpu_available
         if gpu_available:
             self.logger.info("Using GPU acceleration for optimal performance with large genomic datasets")
         else:
@@ -520,11 +520,11 @@ class MethylCentroid:
         self.performance_profiler = get_performance_profiler()
 
         # Initialize chunked processor with dynamic memory-aware parameters
-        chunked_params = self._calculate_chunked_processor_params(use_gpu)
+        chunked_params = self._calculate_chunked_processor_params(self.use_gpu)
         self.chunked_processor = ChunkedGenomicProcessor(
             chunk_size_positions=chunked_params['chunk_size_positions'],
             max_workers=chunked_params['max_workers'],
-            use_gpu=use_gpu,  # Use GPU when available for large datasets
+            use_gpu=self.use_gpu,  # Use GPU when available for large datasets
             memory_limit_gb=chunked_params['memory_limit_gb']
         )
 
@@ -544,7 +544,7 @@ class MethylCentroid:
 
         # GPU usage tracking and fallback management
         self._gpu_available = gpu_available
-        self._using_gpu = use_gpu
+        self._using_gpu = self.use_gpu
         self._gpu_memory_pressure_detected = False
 
         for sample in self.samples + self.add_samples:
@@ -710,7 +710,7 @@ class MethylCentroid:
                 # Create initial centroid from first sample
                 # Use MethylCentroidBuilder for proper initialization
                 from methyl_utils.core.centroid_builder import MethylCentroidBuilder
-                builder = MethylCentroidBuilder(min_coverage=self._min_coverage, use_gpu=False)
+                builder = MethylCentroidBuilder(min_coverage=self._min_coverage, use_gpu=self.use_gpu)
                 builder.add_sample(sample_path)
                 self._centroid = builder.finalize()
                 # Apply min_samples filter after builder finalizes
@@ -921,7 +921,7 @@ class MethylCentroid:
                     # Add sample using new method
                     if self._centroid is None:
                         from methyl_utils.core.centroid_builder import MethylCentroidBuilder
-                        builder = MethylCentroidBuilder(min_coverage=self._min_coverage, use_gpu=False)
+                        builder = MethylCentroidBuilder(min_coverage=self._min_coverage, use_gpu=self.use_gpu)
                         builder.add_sample(sample_path)
                         self._centroid = builder.finalize()
                         # Apply min_samples filter after builder finalizes
@@ -1984,32 +1984,59 @@ class MethylCentroid:
                 centroid_sample_cpu = centroid_sample.to_cpu()
                 coverage = np.asarray(centroid_sample_cpu.coverage.values, dtype=np.uint32)
                 valid_mask = coverage >= self._min_coverage
-                valid_pos = np.asarray(centroid_sample_cpu.pos.values[valid_mask], dtype=np.uint32)
+                
+                # Convert pos.values to numpy array before indexing
+                pos_values = np.asarray(centroid_sample_cpu.pos.values, dtype=np.uint32)
+                valid_pos = pos_values[valid_mask]
 
                 # Find indices of common positions in the centroid sample
-                centroid_pos_values = np.asarray(centroid_sample_cpu.pos.values, dtype=np.uint32)
+                centroid_pos_values = pos_values
                 common_indices = np.searchsorted(centroid_pos_values, common_pos)
-
-                # Extract centroid data only for common positions
-                common_centroid_N = np.asarray(centroid_sample_cpu.N.values[common_indices], dtype=np.uint32)
-                common_Sx = np.asarray(centroid_sample_cpu.Sx.values[common_indices], dtype=np.float32)
+                
+                # Verify indices are valid (positions match exactly and within bounds)
+                valid_idx_mask = (common_indices < len(centroid_pos_values))
+                if np.any(valid_idx_mask):
+                    # Check position matches for valid indices
+                    position_matches = centroid_pos_values[common_indices[valid_idx_mask]] == common_pos[valid_idx_mask]
+                    valid_indices_mask = np.zeros(len(common_indices), dtype=bool)
+                    valid_indices_mask[valid_idx_mask] = position_matches
+                else:
+                    valid_indices_mask = np.zeros(len(common_indices), dtype=bool)
+                
+                if not np.any(valid_indices_mask):
+                    return 0.0  # No valid common positions
+                
+                # Extract centroid data only for common positions with valid indices
+                # Convert to numpy arrays before indexing to avoid pandas indexing issues
+                N_values = np.asarray(centroid_sample_cpu.N.values, dtype=np.uint32)
+                Sx_values = np.asarray(centroid_sample_cpu.Sx.values, dtype=np.float32)
+                
+                # Only use valid indices - ensure they're numpy integers
+                valid_common_indices = np.asarray(common_indices[valid_indices_mask], dtype=np.int64)
+                common_centroid_N = N_values[valid_common_indices]
+                common_Sx = Sx_values[valid_common_indices]
+                
+                # Also filter sample arrays to match
+                sample_mC = sample_mC[valid_indices_mask]
+                sample_uC = sample_uC[valid_indices_mask]
 
                 # Calculate centroid methylation levels for common positions only
-                centroid_methylation = np.divide(
-                    common_Sx, 
-                    common_centroid_N,
-                    out=np.zeros_like(common_Sx), 
-                    where=common_centroid_N > 0
-                )
+                # Use np.where instead of np.divide with where parameter for CuPy compatibility
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    centroid_methylation = np.where(
+                        common_centroid_N > 0,
+                        common_Sx.astype(np.float64) / common_centroid_N.astype(np.float64),
+                        0.0
+                    ).astype(np.float32)
 
                 # Calculate sample methylation levels
                 sample_total = sample_mC + sample_uC
-                sample_methylation = np.divide(
-                    sample_mC.astype(float), 
-                    sample_total.astype(float),
-                    out=np.zeros_like(sample_mC, dtype=float), 
-                    where=sample_total > 0
-                )
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    sample_methylation = np.where(
+                        sample_total > 0,
+                        sample_mC.astype(np.float64) / sample_total.astype(np.float64),
+                        0.0
+                    ).astype(np.float32)
 
                 # Clip both methylation levels to valid range [0, 1]
                 centroid_methylation = np.clip(centroid_methylation, 0.0, 1.0)
@@ -2600,21 +2627,22 @@ class MethylCentroid:
             common_Sx = np.asarray(aligned_centroid.Sx.values, dtype=np.float32)
 
             # Calculate centroid methylation levels
-            centroid_methylation = np.divide(
-                common_Sx,
-                common_centroid_N.astype(float),
-                out=np.zeros_like(common_Sx),
-                where=common_centroid_N > 0
-            )
+            # Use np.where instead of np.divide with where parameter for CuPy compatibility
+            with np.errstate(divide='ignore', invalid='ignore'):
+                centroid_methylation = np.where(
+                    common_centroid_N > 0,
+                    common_Sx.astype(np.float64) / common_centroid_N.astype(np.float64),
+                    0.0
+                ).astype(np.float32)
 
             # Calculate sample methylation levels
             sample_total = sample_mC + sample_uC
-            sample_methylation = np.divide(
-                sample_mC.astype(float),
-                sample_total.astype(float),
-                out=np.zeros_like(sample_mC, dtype=float),
-                where=sample_total > 0
-            )
+            with np.errstate(divide='ignore', invalid='ignore'):
+                sample_methylation = np.where(
+                    sample_total > 0,
+                    sample_mC.astype(np.float64) / sample_total.astype(np.float64),
+                    0.0
+                ).astype(np.float32)
 
             # Clip to valid range [0, 1]
             centroid_methylation = np.clip(centroid_methylation, 0.0, 1.0)
@@ -3576,10 +3604,16 @@ class MethylCentroid:
         centroid_cpu = self._centroid.to_cpu()
         coverage = np.asarray(centroid_cpu.coverage.values, dtype=np.uint32)
         valid_mask = coverage >= self._min_coverage
-        valid_pos = np.asarray(centroid_cpu.pos.values[valid_mask], dtype=np.uint32)
-        centroid_mC = np.asarray(centroid_cpu.mC.values[valid_mask], dtype=np.uint32)
-        centroid_uC = np.asarray(centroid_cpu.uC.values[valid_mask], dtype=np.uint32)
-        centroid_N = np.asarray(centroid_cpu.N.values[valid_mask], dtype=np.uint32)
+        # Convert to numpy arrays before indexing to avoid pandas indexing issues
+        pos_values = np.asarray(centroid_cpu.pos.values, dtype=np.uint32)
+        mC_values = np.asarray(centroid_cpu.mC.values, dtype=np.uint32)
+        uC_values = np.asarray(centroid_cpu.uC.values, dtype=np.uint32)
+        N_values = np.asarray(centroid_cpu.N.values, dtype=np.uint32)
+        
+        valid_pos = pos_values[valid_mask]
+        centroid_mC = mC_values[valid_mask]
+        centroid_uC = uC_values[valid_mask]
+        centroid_N = N_values[valid_mask]
 
         if len(valid_pos) == 0:
             print("No valid positions for validation")
@@ -3627,18 +3661,19 @@ class MethylCentroid:
         # Calculate averages using N per position
         valid_N = direct_N > 0
         if np.any(valid_N):
-            direct_mC[valid_N] = np.divide(
-                direct_mC[valid_N],
-                direct_N[valid_N],
-                out=np.zeros_like(direct_mC[valid_N]),
-                where=direct_N[valid_N] > 0,
-            )
-            direct_uC[valid_N] = np.divide(
-                direct_uC[valid_N],
-                direct_N[valid_N],
-                out=np.zeros_like(direct_uC[valid_N]),
-                where=direct_N[valid_N] > 0,
-            )
+            # Use np.where instead of np.divide with where parameter for CuPy compatibility
+            valid_N_mask = direct_N[valid_N] > 0
+            with np.errstate(divide='ignore', invalid='ignore'):
+                direct_mC[valid_N] = np.where(
+                    valid_N_mask,
+                    direct_mC[valid_N].astype(np.float64) / direct_N[valid_N].astype(np.float64),
+                    0.0
+                ).astype(np.uint32)
+                direct_uC[valid_N] = np.where(
+                    valid_N_mask,
+                    direct_uC[valid_N].astype(np.float64) / direct_N[valid_N].astype(np.float64),
+                    0.0
+                ).astype(np.uint32)
 
             # Compare with centroid calculation
             mC_diff = np.abs(centroid_mC[valid_N] - direct_mC[valid_N])

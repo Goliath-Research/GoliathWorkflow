@@ -267,12 +267,18 @@ class MethylFrame:
             New instance with filtered data
         """
         if isinstance(mask_or_indices, (list, np.ndarray)) and len(mask_or_indices) > 0:
-            if isinstance(mask_or_indices[0], bool) or mask_or_indices.dtype == bool:
-                # Boolean mask
-                return self[mask_or_indices]
+            # Check if it's a boolean mask
+            if isinstance(mask_or_indices, np.ndarray) and mask_or_indices.dtype == bool:
+                # Boolean mask - use .loc with boolean array
+                return type(self)(self._df.loc[mask_or_indices], self._metadata.copy())
+            elif isinstance(mask_or_indices[0], bool):
+                # Boolean mask (list or array with bool elements)
+                mask_array = np.asarray(mask_or_indices, dtype=bool)
+                return type(self)(self._df.loc[mask_array], self._metadata.copy())
             else:
-                # Integer indices
-                return self[self._df.index[mask_or_indices]]
+                # Integer indices - use .iloc for position-based indexing
+                indices_array = np.asarray(mask_or_indices, dtype=np.int64)
+                return type(self)(self._df.iloc[indices_array], self._metadata.copy())
         return self
 
     def align_to_positions(self, positions: np.ndarray) -> "MethylFrame":
@@ -571,13 +577,26 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             Structured numpy array with centroid data
         """
         from methyl_utils import METHYL_EXTENDED_CENTROID_DTYPE, METHYL_CENTROID_DTYPE
-        
+
         # Convert to CPU first
         df_cpu = self.to_cpu()._df
-        
+
         if extended:
             # Use extended centroid dtype
             dtype = METHYL_EXTENDED_CENTROID_DTYPE
+            if dtype is None:
+                # Fallback: define the dtype directly if import failed
+                dtype = np.dtype([
+                    ('pos', 'u4'),      # uint32
+                    ('mC', 'u4'),      # uint32
+                    ('uC', 'u4'),      # uint32
+                    ('tnc', 'u1'),     # uint8
+                    ('N', 'u4'),       # uint32
+                    ('Sx', 'f4'),      # float32
+                    ('Sx2', 'f4'),     # float32
+                    ('log_x_sum', 'f4'),       # float32
+                    ('log_1_minus_x_sum', 'f4') # float32
+                ])
             data = np.empty(len(df_cpu), dtype=dtype)
             data["pos"] = np.asarray(df_cpu["pos"].values, dtype=np.uint32)
             data["mC"] = np.asarray(df_cpu["mC"].values, dtype=np.uint32)
@@ -591,6 +610,15 @@ class MethylExtendedCentroid(MethylBasicCentroid):
         else:
             # Use basic centroid dtype
             dtype = METHYL_CENTROID_DTYPE
+            if dtype is None:
+                # Fallback: define the dtype directly if import failed
+                dtype = np.dtype([
+                    ('pos', 'u4'),      # uint32
+                    ('mC', 'u4'),      # uint32
+                    ('uC', 'u4'),      # uint32
+                    ('tnc', 'u1'),     # uint8
+                    ('N', 'u4')        # uint32
+                ])
             data = np.empty(len(df_cpu), dtype=dtype)
             data["pos"] = np.asarray(df_cpu["pos"].values, dtype=np.uint32)
             data["mC"] = np.asarray(df_cpu["mC"].values, dtype=np.uint32)

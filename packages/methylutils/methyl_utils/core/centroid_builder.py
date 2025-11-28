@@ -136,9 +136,13 @@ class MethylCentroidBuilder:
 
         # Update accumulators
         total_cov = mC + uC
-        mean = self.xp.divide(
-            mC, total_cov.astype(np.float64), where=total_cov > 0
-        ).astype(np.float32)
+        # Use xp.where instead of xp.divide with where parameter for CuPy compatibility
+        # xp is either cp (CuPy) or np (NumPy), both support where()
+        mean = self.xp.where(
+            total_cov > 0,
+            mC.astype(self.xp.float64) / total_cov.astype(self.xp.float64),
+            self.xp.float64(0.0)
+        ).astype(self.xp.float32)
 
         self.mC_sum[final_idx] += mC
         self.uC_sum[final_idx] += uC
