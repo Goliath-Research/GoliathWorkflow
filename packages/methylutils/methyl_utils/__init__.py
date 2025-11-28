@@ -104,33 +104,371 @@ MethylCentroid = MethylExtendedCentroid
 from .core.io import load_from_h5
 
 # Legacy exports from old methyl_sample.py (for backward compatibility during migration)
+# Legacy imports - these are now defined directly below
+# try:
+#     from .methyl_sample import (
+#         TNCBits,
+#         METHYL_SAMPLE_DTYPE,
+#         METHYL_CENTROID_DTYPE,
+#         METHYL_EXTENDED_CENTROID_DTYPE,
+#         MethylSampleDtype,
+#         MethylCentroidDtype,
+#         MethylExtendedCentroidDtype,
+#         get_methyl_dtype,
+#         DMPSample,
+#         DMPExporter,
+#         DMRExporter,
+#     )
+# except ImportError:
+#     # All definitions are now provided directly below
+#     pass
+
+# Define dtypes and classes that were previously in methyl_sample.py
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, Union, Tuple, Dict, Any, List
+import numpy as np
+
+# Import HDF5 dependencies - these should be available in the container
 try:
-    from .methyl_sample import (
-        TNCBits,
-        METHYL_SAMPLE_DTYPE,
-        METHYL_CENTROID_DTYPE,
-        METHYL_EXTENDED_CENTROID_DTYPE,
-        MethylSampleDtype,
-        MethylCentroidDtype,
-        MethylExtendedCentroidDtype,
-        get_methyl_dtype,
-        DMPSample,
-        DMPExporter,
-        DMRExporter,
-    )
+    import hdf5plugin   # noqa: F401 - Must be imported before h5py
+    import h5py
+    HDF5_AVAILABLE = True
 except ImportError:
-    # If legacy file is removed, these won't be available
-    TNCBits = None
-    METHYL_SAMPLE_DTYPE = None
-    METHYL_CENTROID_DTYPE = None
-    METHYL_EXTENDED_CENTROID_DTYPE = None
-    MethylSampleDtype = None
-    MethylCentroidDtype = None
-    MethylExtendedCentroidDtype = None
-    get_methyl_dtype = None
-    DMPSample = None
-    DMPExporter = None
-    DMRExporter = None
+    HDF5_AVAILABLE = False
+    h5py = None
+    hdf5plugin = None
+
+# ---------- Bit layout (LSB-first) ----------
+# Byte layout: bits 0..4 = tnc (5 bits), bits 5..6 = context (2 bits), bit 7 = strand (1 bit)
+TNC_MASK     = 0b1_1111      # 5 bits
+CONTEXT_MASK = 0b11          # 2 bits
+STRAND_MASK  = 0b1           # 1 bit
+CONTEXT_SHIFT = 5
+STRAND_SHIFT  = 7
+
+# ---------- Methylation Data Types ----------
+# Basic sample dtype (pos, mC, uC, tnc)
+METHYL_SAMPLE_DTYPE = [
+    ("pos", np.uint32),
+    ("mC", np.uint32),
+    ("uC", np.uint32),
+    ("tnc", np.uint8),
+]
+
+# Basic centroid dtype (sample + N)
+METHYL_CENTROID_DTYPE = [
+    ("pos", np.uint32),
+    ("mC", np.uint32),
+    ("uC", np.uint32),
+    ("tnc", np.uint8),
+    ("N", np.uint32),  # Number of samples contributing to each position
+]
+
+# Extended centroid dtype (centroid + Sx, Sx2, log_x_sum, log_1_minus_x_sum)
+METHYL_EXTENDED_CENTROID_DTYPE = [
+    ("pos", np.uint32),
+    ("mC", np.uint32),
+    ("uC", np.uint32),
+    ("tnc", np.uint8),
+    ("N", np.uint32),  # Number of samples contributing to each position
+    ("Sx", np.float32),  # Sum of methylation levels
+    ("Sx2", np.float32),  # Sum of squared methylation levels
+    ("log_x_sum", np.float32),  # Sum of log(methylation_level) for Beta distribution
+    ("log_1_minus_x_sum", np.float32),  # Sum of log(1-methylation_level) for Beta distribution
+]
+
+# Type aliases for better type hints (compatible with older Python versions)
+MethylSampleDtype = np.ndarray
+MethylCentroidDtype = np.ndarray
+MethylExtendedCentroidDtype = np.ndarray
+
+def get_methyl_dtype(extended: bool = False) -> list:
+    """
+    Get the appropriate methylation dtype based on the data type.
+
+    Args:
+        extended: If True, return extended centroid dtype with statistics
+
+    Returns:
+        List of (field_name, dtype) tuples for numpy structured array
+    """
+    if extended:
+        return METHYL_EXTENDED_CENTROID_DTYPE
+    else:
+        return METHYL_CENTROID_DTYPE
+
+def _pack_tnc_byte(tnc: int, context: int, strand: int) -> int:
+    # Range checks (raise ValueError on bad inputs)
+    if not (0 <= tnc <= TNC_MASK):
+        raise ValueError(f"tnc out of range [0..31]: {tnc}")
+    if not (0 <= context <= CONTEXT_MASK):
+        raise ValueError(f"context out of range [0..3]: {context}")
+    if not (0 <= strand <= STRAND_MASK):
+        raise ValueError(f"strand out of range [0..1]: {strand}")
+
+    return (tnc & TNC_MASK) | ((context & CONTEXT_MASK) << CONTEXT_SHIFT) | ((strand & STRAND_MASK) << STRAND_SHIFT)
+
+def _unpack_tnc_byte(b: int) -> tuple[int, int, int]:
+    tnc     =  b & TNC_MASK
+    context = (b >> CONTEXT_SHIFT) & CONTEXT_MASK
+    strand  = (b >> STRAND_SHIFT) & STRAND_MASK
+
+    return tnc, context, strand
+
+# TNC nucleotide encoding constants (matching C code)
+TNC_A = 0
+TNC_C = 1
+TNC_G = 2
+TNC_T = 3
+TNC_N = 4
+
+def encode_nucleotide(n: str) -> int:
+    """Encode a nucleotide character to TNC value (matching C code)."""
+    n = n.upper()
+    if n == 'A':
+        return TNC_A
+    elif n == 'C':
+        return TNC_C
+    elif n == 'G':
+        return TNC_G
+    elif n == 'T':
+        return TNC_T
+    else:
+        return TNC_N
+
+def decode_nucleotide(n: int) -> str:
+    """Decode a TNC value to nucleotide character (matching C code)."""
+    if n == TNC_A:
+        return 'A'
+    elif n == TNC_C:
+        return 'C'
+    elif n == TNC_G:
+        return 'G'
+    elif n == TNC_T:
+        return 'T'
+    else:
+        return 'N'
+
+@dataclass(slots=True)
+class TNCBits:
+    """Holds the 3 bitfields and knows how to pack/unpack to a single byte."""
+    tnc: int       # 0..31
+    context: int   # 0..3
+    strand: int    # 0..1
+
+    def to_byte(self) -> int:
+        return _pack_tnc_byte(self.tnc, self.context, self.strand)
+
+    @classmethod
+    def from_byte(cls, b: int) -> "TNCBits":
+        tnc, context, strand = _unpack_tnc_byte(b)
+        return cls(tnc=tnc, context=context, strand=strand)
+
+    def decode_trinucleotide(self) -> str:
+        """
+        Decode the trinucleotide context from the TNC value.
+
+        Returns trinucleotides of the form C[N2][N3] where C is the methylated cytosine.
+        """
+        n2 = (self.tnc // 5) % 4  # 0-3
+        n3 = self.tnc % 5         # 0-4
+        return f"C{decode_nucleotide(n2)}{decode_nucleotide(n3)}"
+
+    def encode_trinucleotide(self, trinuc: str) -> None:
+        """
+        Encode a trinucleotide string to TNC value.
+
+        Expects trinucleotides of the form C[N2][N3].
+        """
+        if len(trinuc) != 3 or trinuc[0].upper() != 'C':
+            raise ValueError(f"Invalid trinucleotide format: {trinuc}. Expected C[N2][N3]")
+
+        n2 = encode_nucleotide(trinuc[1])
+        n3 = encode_nucleotide(trinuc[2])
+
+        if n2 > 3:
+            raise ValueError(f"Invalid second nucleotide: {trinuc[1]}")
+
+        self.tnc = n2 * 5 + n3  # tnc = n2 * 5 + n3
+
+@dataclass(slots=True)
+class DMPSample:
+    """
+    Represents DMP (Differentially Methylated Position) results that can be saved to HDF5 files.
+    This class handles DMP-specific data structures with both group data, statistical results, and metadata.
+    """
+    positions: np.ndarray[np.uint32]
+    mC1: np.ndarray[np.uint32]
+    uC1: np.ndarray[np.uint32]
+    mC2: np.ndarray[np.uint32]
+    uC2: np.ndarray[np.uint32]
+    p_values: np.ndarray[np.float32]
+    q_values: Optional[np.ndarray[np.float32]] = None
+    metadata: Optional[dict] = None
+
+    def save_to_h5(self, file_path: Union[str, Path]) -> Path:
+        """
+        Save DMP results to HDF5 file with both MethylSample-compatible structure and DMP-specific data.
+
+        Args:
+            file_path: Path to save the HDF5 file
+
+        Returns:
+            Path to the saved file
+        """
+        file_path = Path(file_path)
+
+        # Compression settings
+        compression_kwargs = {"compression": hdf5plugin.Zstd(clevel=9)}
+
+        with h5py.File(file_path, "w") as f:
+            # Create MethylSample-compatible methylation_data group (using group 1 data)
+            meth_group = f.create_group("methylation_data")
+
+            # Store as structured array for MethylSample compatibility
+            dtype = np.dtype([
+                ("pos", np.uint32),
+                ("mC", np.uint32),
+                ("uC", np.uint32),
+                ("tnc", np.uint8)
+            ])
+
+            # Use group 1 data for the methylation_data (for compatibility)
+            data = np.zeros(len(self.positions), dtype=dtype)
+            data["pos"] = self.positions
+            data["mC"] = self.mC1
+            data["uC"] = self.uC1
+            data["tnc"] = 0  # Default tnc value
+
+            meth_group.create_dataset(
+                "data",
+                data=data,
+                **compression_kwargs
+            )
+
+            # Create DMP-specific results group
+            dmp_group = f.create_group("dmp_results")
+
+            # Store DMP-specific results
+            dmp_group.create_dataset("positions", data=self.positions, **compression_kwargs)
+            dmp_group.create_dataset("mC_group1", data=self.mC1, **compression_kwargs)
+            dmp_group.create_dataset("uC_group1", data=self.uC1, **compression_kwargs)
+            dmp_group.create_dataset("mC_group2", data=self.mC2, **compression_kwargs)
+            dmp_group.create_dataset("uC_group2", data=self.uC2, **compression_kwargs)
+            dmp_group.create_dataset("p_values", data=self.p_values, **compression_kwargs)
+
+            if self.q_values is not None:
+                dmp_group.create_dataset("q_values", data=self.q_values, **compression_kwargs)
+
+            # Add metadata
+            if self.metadata:
+                for key, value in self.metadata.items():
+                    dmp_group.attrs[key] = value
+
+            # Mark this as a DMP results file
+            f.attrs["file_type"] = "dmp_results"
+            f.attrs["format_version"] = "1.0"
+
+        return file_path
+
+class DMPExporter:
+    """Exporter for DMP (Differentially Methylated Positions) data to HDF5 format."""
+
+    def export_to_h5(self, df, file_path: Union[str, Path], metadata: Optional[dict] = None) -> None:
+        """
+        Export DMP data to HDF5 with Z-standard compression.
+
+        Args:
+            df: DataFrame with DMP data
+            file_path: Path to save the HDF5 file
+            metadata: Optional metadata dictionary
+
+        Raises:
+            ImportError: If HDF5 dependencies are not available
+        """
+        if not HDF5_AVAILABLE:
+            raise ImportError("HDF5 dependencies not available. "
+                            "Please ensure they are installed in your container.")
+
+        file_path = Path(file_path)
+
+        with h5py.File(file_path, "w") as f:
+            # Create group for DMP data
+            dmp_group = f.create_group("dmp_data")
+
+            # Add metadata
+            if metadata:
+                for key, value in metadata.items():
+                    dmp_group.attrs[key] = value
+
+            # Export each column with Z-standard compression
+            for col in df.columns:
+                if df[col].dtype == "object":
+                    # Handle string columns
+                    dt = h5py.special_dtype(vlen=str)
+                    dmp_group.create_dataset(
+                        col,
+                        data=df[col].values,
+                        dtype=dt,
+                        **hdf5plugin.Zstd(clevel=9),
+                    )
+                else:
+                    # Handle numeric columns
+                    dmp_group.create_dataset(
+                        col,
+                        data=df[col].values,
+                        **hdf5plugin.Zstd(clevel=9)
+                    )
+
+class DMRExporter:
+    """Exporter for DMR (Differentially Methylated Regions) data to HDF5 format."""
+
+    def export_to_h5(self, df, file_path: Union[str, Path], metadata: Optional[dict] = None) -> None:
+        """
+        Export DMR data to HDF5 with Z-standard compression.
+
+        Args:
+            df: DataFrame with DMR data
+            file_path: Path to save the HDF5 file
+            metadata: Optional metadata dictionary
+
+        Raises:
+            ImportError: If HDF5 dependencies are not available
+        """
+        if not HDF5_AVAILABLE:
+            raise ImportError("HDF5 dependencies not available. "
+                            "Please ensure they are installed in your container.")
+
+        file_path = Path(file_path)
+
+        with h5py.File(file_path, "w") as f:
+            # Create group for DMR data
+            dmr_group = f.create_group("dmr_data")
+
+            # Add metadata
+            if metadata:
+                for key, value in metadata.items():
+                    dmr_group.attrs[key] = value
+
+            # Export each column with Z-standard compression
+            for col in df.columns:
+                if df[col].dtype == "object":
+                    # Handle string columns
+                    dt = h5py.special_dtype(vlen=str)
+                    dmr_group.create_dataset(
+                        col,
+                        data=df[col].values,
+                        dtype=dt,
+                        **hdf5plugin.Zstd(clevel=9),
+                    )
+                else:
+                    # Handle numeric columns
+                    dmr_group.create_dataset(
+                        col,
+                        data=df[col].values,
+                        **hdf5plugin.Zstd(clevel=9)
+                    )
 # Note: MethylSample utility properties (position_count, memory_usage_mb, bytes_per_position,
 # coverage_stats, methylation_stats) are available as instance properties
 
@@ -313,6 +651,8 @@ __all__ = [
     "MethylCentroid",  # Alias for MethylExtendedCentroid
     "load_from_h5",
     "TNCBits",
+    "encode_nucleotide",
+    "decode_nucleotide",
     "METHYL_SAMPLE_DTYPE",
     "METHYL_CENTROID_DTYPE",
     "METHYL_EXTENDED_CENTROID_DTYPE",
@@ -320,6 +660,9 @@ __all__ = [
     "MethylCentroidDtype",
     "MethylExtendedCentroidDtype",
     "get_methyl_dtype",
+    "DMPSample",
+    "DMPExporter",
+    "DMRExporter",
     "DMPSample",
     "DMPExporter",
     "DMRExporter",

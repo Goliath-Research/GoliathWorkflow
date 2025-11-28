@@ -576,55 +576,28 @@ class MethylExtendedCentroid(MethylBasicCentroid):
         Returns:
             Structured numpy array with centroid data
         """
-        from methyl_utils import METHYL_EXTENDED_CENTROID_DTYPE, METHYL_CENTROID_DTYPE
+        from methyl_utils import get_methyl_dtype
 
         # Convert to CPU first
         df_cpu = self.to_cpu()._df
 
+        # Get the appropriate dtype (returns list of tuples, convert to np.dtype)
+        dtype_list = get_methyl_dtype(extended=extended)
+        dtype = np.dtype(dtype_list)
+        data = np.empty(len(df_cpu), dtype=dtype)
+
+        # Fill the structured array
+        data["pos"] = np.asarray(df_cpu["pos"].values, dtype=np.uint32)
+        data["mC"] = np.asarray(df_cpu["mC"].values, dtype=np.uint32)
+        data["uC"] = np.asarray(df_cpu["uC"].values, dtype=np.uint32)
+        data["tnc"] = np.asarray(df_cpu["tnc"].values, dtype=np.uint8)
+        data["N"] = np.asarray(df_cpu["N"].values, dtype=np.uint32)
+
         if extended:
-            # Use extended centroid dtype
-            dtype = METHYL_EXTENDED_CENTROID_DTYPE
-            if dtype is None:
-                # Fallback: define the dtype directly if import failed
-                dtype = np.dtype([
-                    ('pos', 'u4'),      # uint32
-                    ('mC', 'u4'),      # uint32
-                    ('uC', 'u4'),      # uint32
-                    ('tnc', 'u1'),     # uint8
-                    ('N', 'u4'),       # uint32
-                    ('Sx', 'f4'),      # float32
-                    ('Sx2', 'f4'),     # float32
-                    ('log_x_sum', 'f4'),       # float32
-                    ('log_1_minus_x_sum', 'f4') # float32
-                ])
-            data = np.empty(len(df_cpu), dtype=dtype)
-            data["pos"] = np.asarray(df_cpu["pos"].values, dtype=np.uint32)
-            data["mC"] = np.asarray(df_cpu["mC"].values, dtype=np.uint32)
-            data["uC"] = np.asarray(df_cpu["uC"].values, dtype=np.uint32)
-            data["tnc"] = np.asarray(df_cpu["tnc"].values, dtype=np.uint8)
-            data["N"] = np.asarray(df_cpu["N"].values, dtype=np.uint32)
             data["Sx"] = np.asarray(df_cpu["Sx"].values, dtype=np.float32)
             data["Sx2"] = np.asarray(df_cpu["Sx2"].values, dtype=np.float32)
             data["log_x_sum"] = np.asarray(df_cpu["log_x_sum"].values, dtype=np.float32)
             data["log_1_minus_x_sum"] = np.asarray(df_cpu["log_1_minus_x_sum"].values, dtype=np.float32)
-        else:
-            # Use basic centroid dtype
-            dtype = METHYL_CENTROID_DTYPE
-            if dtype is None:
-                # Fallback: define the dtype directly if import failed
-                dtype = np.dtype([
-                    ('pos', 'u4'),      # uint32
-                    ('mC', 'u4'),      # uint32
-                    ('uC', 'u4'),      # uint32
-                    ('tnc', 'u1'),     # uint8
-                    ('N', 'u4')        # uint32
-                ])
-            data = np.empty(len(df_cpu), dtype=dtype)
-            data["pos"] = np.asarray(df_cpu["pos"].values, dtype=np.uint32)
-            data["mC"] = np.asarray(df_cpu["mC"].values, dtype=np.uint32)
-            data["uC"] = np.asarray(df_cpu["uC"].values, dtype=np.uint32)
-            data["tnc"] = np.asarray(df_cpu["tnc"].values, dtype=np.uint8)
-            data["N"] = np.asarray(df_cpu["N"].values, dtype=np.uint32)
 
         return data
 
