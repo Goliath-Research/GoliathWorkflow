@@ -395,11 +395,11 @@ class MethylFrame:
         })
         return MethylSample(df, metadata)
 
-
+# Single sample class
 class MethylSample(MethylFrame):
     _required_cols = {"pos", "mC", "uC", "tnc"}
 
-
+# Basic centroid class (aggregated from multiple samples to use naive methylation level calculation - deprecated)
 class MethylBasicCentroid(MethylFrame):
     _required_cols = {"pos", "mC", "uC", "tnc", "N"}
 
@@ -453,7 +453,7 @@ class MethylBasicCentroid(MethylFrame):
 
         return data
 
-
+# Extended centroid class (aggregated from multiple samples to use Beta distribution parameter estimation)
 class MethylExtendedCentroid(MethylBasicCentroid):
     _required_cols = {
         "pos",
@@ -466,9 +466,11 @@ class MethylExtendedCentroid(MethylBasicCentroid):
         "log_x_sum",
         "log_1_minus_x_sum",
     }
+    # Sufficient stats to estimate Normal and Beta distribution parameters
     _required_stats = {"Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"}
 
     @property
+    # Beta distribution alpha parameter
     def alpha(self):
         if "alpha" not in self._df.columns:
             from methyl_utils.statistical_tests import beta_mle_estimation
