@@ -55,7 +55,7 @@ class MethylCentroidBuilder:
         self.Sx2: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
         self.log_x_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
         self.log_1x_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
-        self.tnc_byte: CuArray = self.xp.zeros(chunk_size, dtype=np.uint8)
+        self.tnc: CuArray = self.xp.zeros(chunk_size, dtype=np.uint8)
 
         self.size = 0
         self.capacity = chunk_size
@@ -74,7 +74,7 @@ class MethylCentroidBuilder:
             "Sx2",
             "log_x_sum",
             "log_1x_sum",
-            "tnc_byte",
+            "tnc",
         ]:
             old = getattr(self, attr)
             new = self.xp.zeros(new_cap, dtype=old.dtype)
@@ -128,7 +128,7 @@ class MethylCentroidBuilder:
             new_pos = pos[is_new]
             insert_at = idx[is_new] + self.xp.arange(n_new)
             self.pos[self.size : self.size + n_new] = new_pos
-            self.tnc_byte[self.size : self.size + n_new] = tnc[is_new]
+            self.tnc[self.size : self.size + n_new] = tnc[is_new]
             self.size += n_new
 
         # Final indices after insertion
@@ -162,9 +162,7 @@ class MethylCentroidBuilder:
 
         self.samples_processed += 1
         if self.samples_processed % 50 == 0:
-            logger.info(
-                f"Processed {self.samples_processed} samples → {self.size:,} unique positions"
-            )
+            logger.info(f"Processed {self.samples_processed} samples → {self.size:,} unique positions")
 
     def finalize(self) -> MethylExtendedCentroid:
         """Return final clean MethylExtendedCentroid"""
@@ -182,7 +180,7 @@ class MethylCentroidBuilder:
         Sx2 = to_cpu(self.Sx2[: self.size])
         log_x = to_cpu(self.log_x_sum[: self.size])
         log_1x = to_cpu(self.log_1x_sum[: self.size])
-        tnc = to_cpu(self.tnc_byte[: self.size])
+        tnc = to_cpu(self.tnc[: self.size])
 
         # Apply coverage filter
         coverage = mC_sum + uC_sum
@@ -216,9 +214,7 @@ class MethylCentroidBuilder:
             "gpu_acceleration": self.use_gpu,
         }
 
-        logger.info(
-            f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples"
-        )
+        logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples")
         return MethylExtendedCentroid(df, final_metadata)
 
 
@@ -230,7 +226,9 @@ def build_centroid(
     metadata: Optional[Dict[str, Any]] = None,
 ) -> MethylExtendedCentroid:
     builder = MethylCentroidBuilder(
-        min_coverage=min_coverage, use_gpu=use_gpu, metadata=metadata
+        min_coverage=min_coverage, 
+        use_gpu=use_gpu, 
+        metadata=metadata
     )
     for path in sample_paths:
         builder.add_sample(path)
