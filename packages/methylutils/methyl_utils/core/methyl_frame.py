@@ -38,6 +38,13 @@ ContextDtype = pd.CategoricalDtype(
 )
 StrandDtype = pd.CategoricalDtype(categories=["+", "-"], ordered=False)
 
+# TNC byte bit field layout (C-style)
+# Bit 7 (MSB): strand (0 = '+', 1 = '-')
+# Bits 0-6: TNC value (7 bits, 0-127)
+TNC_VALUE_MASK = 0x7F  # Mask for 7-bit TNC value (bits 0-6)
+STRAND_SHIFT = 7       # Bit position of strand (MSB)
+STRAND_MASK = 0x1      # Mask for strand bit
+
 # Fast lookup tables
 _TNC_CONTEXT_CODES = np.array([0] * 32 + [1] * 32 + [2] * 32 + [3] * 32, dtype=np.uint8)
 _TNC_STRAND_CODES = np.array([0] * 128 + [1] * 128, dtype=np.uint8)
@@ -64,21 +71,21 @@ class MethylFrame:
         # Decode context/strand once
         if "context" not in df.columns:
             tnc = df["tnc"].values
-            # Clamp tnc values to valid range [0, 127] to handle old files with invalid values
-            # TNC codes are packed into uint8, but lookup tables only cover 0-127
+            # Extract TNC value (bits 0-6) and strand (bit 7) using bit field masks
             if HAS_GPU and hasattr(tnc, "device"):
-                tnc_clamped = cp.clip(tnc, 0, len(_TNC_CONTEXT_CODES) - 1)
-                ctx_codes = cp.asarray(_TNC_CONTEXT_CODES)[tnc_clamped]
-                strand_codes = cp.asarray(_TNC_STRAND_CODES)[tnc_clamped]
+                tnc_context = tnc & TNC_VALUE_MASK
+                strand_codes = (tnc >> STRAND_SHIFT) & STRAND_MASK
+                ctx_codes = cp.asarray(_TNC_CONTEXT_CODES)[tnc_context]
                 df["context"] = cudf.Series(ctx_codes, dtype=ContextDtype)
                 df["strand"] = cudf.Series(strand_codes, dtype=StrandDtype)
             else:
-                tnc_clamped = np.clip(tnc, 0, len(_TNC_CONTEXT_CODES) - 1)
+                tnc_context = tnc & TNC_VALUE_MASK
+                strand_codes = (tnc >> STRAND_SHIFT) & STRAND_MASK
                 df["context"] = pd.Categorical.from_codes(
-                    _TNC_CONTEXT_CODES[tnc_clamped], dtype=ContextDtype
+                    _TNC_CONTEXT_CODES[tnc_context], dtype=ContextDtype
                 )
                 df["strand"] = pd.Categorical.from_codes(
-                    _TNC_STRAND_CODES[tnc_clamped], dtype=StrandDtype
+                    strand_codes, dtype=StrandDtype
                 )
 
         self._df = df.sort_values("pos").reset_index(drop=True)
