@@ -205,8 +205,9 @@ class MethylCentroidPair:
         return aligned1, aligned2, common_pos
 
     @classmethod
-    def load_and_align_from_samples(cls, centroid1: MethylSample, centroid2: MethylSample,
-                                   min_coverage: int = 4) -> Tuple[MethylSample, MethylSample, np.ndarray]:
+    def load_and_align_from_samples(
+        cls, centroid1, centroid2: MethylSample,
+        min_coverage: int = 4) -> Tuple[MethylSample, MethylSample, np.ndarray]:
         """
         Align two already-loaded centroids on common positions.
 
