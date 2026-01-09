@@ -97,8 +97,9 @@ from .core.methyl_frame import (
     MethylBasicCentroid,
     MethylExtendedCentroid,
 )
-# Compatibility alias
+# Compatibility aliases
 MethylCentroid = MethylExtendedCentroid
+MethylBetaCentroid = MethylExtendedCentroid
 
 # Import I/O functions
 from .core.io import load_from_h5
@@ -705,6 +706,7 @@ __all__ = [
     "MethylBasicCentroid",
     "MethylExtendedCentroid",
     "MethylCentroid",  # Alias for MethylExtendedCentroid
+    "MethylBetaCentroid",  # Alias for MethylExtendedCentroid
     "load_from_h5",
     "TNCBits",
     "encode_nucleotide",
