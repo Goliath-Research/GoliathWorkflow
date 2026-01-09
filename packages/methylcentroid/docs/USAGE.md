@@ -91,8 +91,8 @@ Create a JSON config file for processing multiple chromosome/context combination
   - Lower values = stricter outlier filtering
 - **`min_samples`**: Minimum samples to keep (default: 3)
   - Stops outlier removal if below this threshold
-- **`distance_metrics`**: List of metrics to use for consensus
-  - Available: `jeffreys`, `jensen_shannon`, `weighted_jensen_shannon`, `hellinger`, `wasserstein`
+- **`distance_metrics`**: List of metrics to use for consensus (default: none → outlier detection disabled)
+  - Available when enabled: `jeffreys`, `jensen_shannon`, `weighted_jensen_shannon`, `hellinger`, `wasserstein`
 - **`min_metrics_agree`**: Number of metrics that must agree (default: 1)
   - Higher values = more conservative outlier detection
 

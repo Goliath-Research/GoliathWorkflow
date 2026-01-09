@@ -136,10 +136,10 @@ Examples:
 
     parser.add_argument(
         "--distance-metrics",
-        nargs="+",
+        nargs="*",
         choices=["jeffreys", "jensen_shannon", "weighted_jensen_shannon", "hellinger", "wasserstein"],
-        default=["weighted_jensen_shannon"],
-        help="Distance metrics to use for outlier detection (default: weighted_jensen_shannon)",
+        default=[],
+        help="Distance metrics to use for outlier detection (default: none = no outlier detection)",
     )
 
     parser.add_argument(

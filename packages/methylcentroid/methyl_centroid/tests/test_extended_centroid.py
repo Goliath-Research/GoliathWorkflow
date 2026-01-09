@@ -288,6 +288,62 @@ class TestExtendedCentroid:
                 assert "Sx" in data
                 assert "Sx2" in data
                 assert len(data['pos']) > 0
+
+    def test_default_outlier_detection_disabled(self):
+        """Ensure outlier detection is skipped when no distance metrics are provided."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            # Create sample files
+            sample1_file = temp_path / "sample1" / "1-CG.h5"
+            sample1_file.parent.mkdir(exist_ok=True)
+            create_sample_file(
+                sample1_file,
+                positions=np.array([1000, 2000], dtype=np.uint32),
+                mC=np.array([10, 20], dtype=np.uint32),
+                uC=np.array([5, 15], dtype=np.uint32),
+                tnc=np.array([1, 2], dtype=np.uint8),
+            )
+
+            sample2_file = temp_path / "sample2" / "1-CG.h5"
+            sample2_file.parent.mkdir(exist_ok=True)
+            create_sample_file(
+                sample2_file,
+                positions=np.array([1500, 2000], dtype=np.uint32),
+                mC=np.array([15, 25], dtype=np.uint32),
+                uC=np.array([8, 18], dtype=np.uint32),
+                tnc=np.array([2, 3], dtype=np.uint8),
+            )
+
+            output_dir = temp_path / "output"
+            output_dir.mkdir(exist_ok=True)
+
+            samples = [str(sample1_file.parent), str(sample2_file.parent)]
+
+            methyl_centroid = MethylCentroid(
+                samples=samples,
+                chrom="1",
+                ctx="CG",
+                output_dir=output_dir,
+                min_coverage=1,
+            )
+
+            assert methyl_centroid.distance_metrics == []
+
+            centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
+            assert Path(centroid_path).exists()
+
+            original_active = set(methyl_centroid.active_samples)
+
+            # If outlier detection runs, this will raise; guard ensures it is not called
+            methyl_centroid.find_most_extreme_outlier = lambda: (_ for _ in ()).throw(
+                RuntimeError("outlier detection should be skipped by default")
+            )
+
+            results = methyl_centroid.remove_outliers()
+
+            assert results.total_samples_removed == 0
+            assert set(methyl_centroid.active_samples) == original_active
     
     def test_position_aligner_extended_methods(self):
         """Test the new PositionAligner methods for extended centroids."""

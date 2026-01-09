@@ -279,9 +279,9 @@ class MethylCentroidConfig(BaseModel):
         ge=1, 
         description="Minimum samples required for outlier removal"
     )
-    distance_metrics: List[DistanceMetric] = Field(
-        default=[DistanceMetric.JENSEN_SHANNON, DistanceMetric.WASSERSTEIN],
-        description="List of distance metrics to use for outlier detection"
+    distance_metrics: Optional[List[DistanceMetric]] = Field(
+        default=None,
+        description="List of distance metrics to use for outlier detection (None disables outlier detection)"
     )
     min_metrics_agree: int = Field(
         default=0,
@@ -347,7 +347,7 @@ class MethylCentroid:
         max_iterations_percentage: float = 0.1,
         α: float = 0.05,
         min_samples: int = 3,
-        distance_metrics: List[DistanceMetric] = None,
+        distance_metrics: Optional[List[DistanceMetric]] = None,
         min_metrics_agree: int = 1,
         verbose: bool = True,
         # Metadata fields
@@ -489,11 +489,8 @@ class MethylCentroid:
         self.group = group
         self.batch = batch
         
-        # Initialize distance metrics with defaults if not provided
-        if distance_metrics is None:
-            self.distance_metrics = [DistanceMetric.WEIGHTED_JENSEN_SHANNON]
-        else:
-            self.distance_metrics = distance_metrics
+        # Initialize distance metrics; None/empty disables outlier detection
+        self.distance_metrics = distance_metrics or []
         self.min_metrics_agree = min_metrics_agree
         
         self.centroid: Optional[Path] = None
@@ -3413,6 +3410,14 @@ class MethylCentroid:
 
     def remove_outliers(self) -> OutlierRemovalResults:
         """Remove outliers with comprehensive performance profiling and GPU resource management."""
+        # Short-circuit when outlier detection is disabled
+        if not self.distance_metrics:
+            return OutlierRemovalResults(
+                iterations=[],
+                final_centroid_path=str(self.centroid_path) if self.centroid_path else "",
+                total_samples_removed=0,
+            )
+
         with self.performance_profiler.profile_operation("outlier_removal"):
             # Use MethylUtils GPU cleanup for safe resource management
             memory_manager = get_memory_manager()

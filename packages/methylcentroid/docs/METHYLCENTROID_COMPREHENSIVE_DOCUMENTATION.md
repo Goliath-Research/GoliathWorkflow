@@ -495,7 +495,7 @@ MethylCentroid(
 - **max_iterations_percentage** (float, default=0.1): Alternative iteration limit as percentage of samples
 - **α** (float, default=0.05): Significance level for outlier detection
 - **min_samples** (int, default=3): Minimum samples required for outlier removal
-- **distance_metrics** (List[DistanceMetric], optional): Metrics for outlier detection
+- **distance_metrics** (List[DistanceMetric], optional): Metrics for outlier detection (default: None to disable outlier removal)
 - **min_metrics_agree** (int, default=1): Consensus threshold for multi-metric detection
 - **verbose** (bool, default=True): Enable verbose logging
 - **laboratory** (str, optional): Lab identifier for metadata

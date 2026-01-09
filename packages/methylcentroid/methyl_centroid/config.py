@@ -96,9 +96,9 @@ class MethylCentroidConfig(BaseModel):
         ge=1,
         description="Minimum samples required for outlier removal"
     )
-    distance_metrics: List[DistanceMetric] = Field(
-        default=[DistanceMetric.JENSEN_SHANNON, DistanceMetric.WASSERSTEIN],
-        description="List of distance metrics to use for outlier detection"
+    distance_metrics: Optional[List[DistanceMetric]] = Field(
+        default=None,
+        description="List of distance metrics to use for outlier detection (None disables outlier detection)"
     )
     min_metrics_agree: int = Field(
         default=0,
@@ -151,7 +151,7 @@ class MethylCentroidConfig(BaseModel):
             "creation_date": datetime.now().isoformat(),
             "min_coverage": self.min_coverage,
             "alpha": self.α,
-            "distance_metrics": [str(metric.value) for metric in self.distance_metrics]
+            "distance_metrics": [str(metric.value) for metric in self.distance_metrics] if self.distance_metrics else []
         }
 
     def to_file(self, file_path: Path) -> None:
