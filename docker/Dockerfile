@@ -70,7 +70,7 @@ RUN pip install pyodbc || echo "pyodbc installation failed" && \
     pip install pymssql
 
 # Install RAPIDS for GPU data frames (before numba to avoid conflicts)
-RUN pip install cudf-cu12 --no-cache-dir
+RUN pip install cudf-cu12 --no-cache-dir --extra-index-url https://pypi.nvidia.com
 
 # Install numba after RAPIDS to avoid version conflicts
 RUN pip install numba
