@@ -1,4 +1,4 @@
-"""Command line interface for MethylModeler."""
+"""Command line interface for MethylDetector."""
 
 import logging
 import sys
@@ -9,14 +9,14 @@ import click
 
 # Handle imports for both direct execution and module execution
 try:
-    from ..core.methylmodeler import MethylModeler
+    from ..core.methyldetector import MethylDetector
     from ..utils.core import load_config_from_json, setup_logging
 except ImportError:
     # When running directly, add parent directory to path
     import os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
-    from methyl_modeler.core.methylmodeler import MethylModeler
-    from methyl_modeler.utils.core import load_config_from_json, setup_logging
+    from methyl_detector.core.methyldetector import MethylDetector
+    from methyl_detector.utils.core import load_config_from_json, setup_logging
 
 @click.command()
 @click.argument(
@@ -39,7 +39,7 @@ except ImportError:
 @click.version_option(version='0.3.0')
 def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
     """
-    MethylModeler - Genomics sample classification using enhanced centroid-based approach.
+    MethylDetector - Genomics sample classification using enhanced centroid-based approach.
 
     CONFIG is the path to a JSON configuration file compatible with the Pydantic model.
     """
@@ -63,14 +63,14 @@ def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
         logger.debug(f"Loading configuration from {config}")
         loaded_config = load_config_from_json(config)
 
-        modeler = MethylModeler(loaded_config)
-        results = modeler.run()
+        detector = MethylDetector(loaded_config)
+        results = detector.run()
 
         # Handle both single result and list of results (multi-chromosome mode)
         if isinstance(results, list):
             # Multi-chromosome mode: summarize all results
             logger.info(f"\n{'='*80}")
-            logger.info(f"MethylModeler Multi-Chromosome Analysis Results")
+            logger.info(f"MethylDetector Multi-Chromosome Analysis Results")
             logger.info(f"{'='*80}")
             logger.info(f"\n📊 Processed {len(results)} chromosomes")
             
@@ -79,7 +79,7 @@ def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
             
             summary_lines = [
                 "\n" + "="*80,
-                "MethylModeler Multi-Chromosome Analysis Summary",
+                "MethylDetector Multi-Chromosome Analysis Summary",
                 "="*80,
                 f"\n📊 Overall Summary:",
                 f"  Chromosomes Processed: {len(results)}",
@@ -118,7 +118,7 @@ def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
             # Summary output - always shown on screen, also logged to file if log_file specified
             summary_lines = [
                 "\n" + "="*60,
-                "MethylModeler Analysis Results",
+                "MethylDetector Analysis Results",
                 "="*60,
                 "\n📊 Summary:",
                 f"  Statistical DMPs: {result.total_statistical_dmps:,}",

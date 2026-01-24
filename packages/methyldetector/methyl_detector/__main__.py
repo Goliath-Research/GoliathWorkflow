@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Entry point for methyl_modeler package.
-This allows running the package with: python -m methyl_modeler
+Entry point for methyl_detector package.
+This allows running the package with: python -m methyl_detector
 """
 
 import sys

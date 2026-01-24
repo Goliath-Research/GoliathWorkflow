@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "methyl-modeler"
+name = "methyl-detector"
 version = "0.2.0"
 description = "A genomics DMP detection tool using enhanced centroid-based comparison with FDR correction"
 authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"
-packages = [{include = "methyl_modeler"}]
+packages = [{include = "methyl_detector"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -39,7 +39,7 @@ flake8 = "^7.0.0"
 mypy = "^1.8.0"
 
 [tool.poetry.scripts]
-methyl-modeler = "methyl_modeler.cli.main:main"
+methyl-detector = "methyl_detector.cli.main:main"
 
 [build-system]
 requires = ["poetry-core"]

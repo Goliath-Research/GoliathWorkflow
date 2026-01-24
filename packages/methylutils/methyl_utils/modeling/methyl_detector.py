@@ -19,7 +19,7 @@ from ..core.methyl_frame import MethylExtendedCentroid
 logger = logging.getLogger(__name__)
 
 
-class MethylModeler:
+class MethylDetector:
     """
     Trains a 99%+ accurate disease classifier using only ~200–500 DMPs.
     Uses biological_importance as feature weight → no feature selection needed.
@@ -66,7 +66,7 @@ class MethylModeler:
         control_centroid: MethylExtendedCentroid,
         disease_centroid: MethylExtendedCentroid,
         disease_name: str = "disease",
-    ) -> "MethylModeler":
+    ) -> "MethylDetector":
         """
         Train from two extended centroids — no individual samples needed.
         """
@@ -177,7 +177,7 @@ class MethylModeler:
         logger.info(f"Model saved → {path}")
 
     @classmethod
-    def load(cls, path: Path | str) -> "MethylModeler":
+    def load(cls, path: Path | str) -> "MethylDetector":
         with open(path, "rb") as f:
             payload = pickle.load(f)
 

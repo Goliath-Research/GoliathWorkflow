@@ -3,7 +3,7 @@
 # Example workflow for using the three-stage DMP export feature
 #
 # This script demonstrates:
-# 1. Running MethylModeler to generate three-stage CSVs
+# 1. Running MethylDetector to generate three-stage CSVs
 # 2. Comparing the three stages
 # 3. Converting to BED format for gene annotation
 #
@@ -11,22 +11,22 @@
 set -e  # Exit on error
 
 # Configuration
-CONFIG="/home/ubuntu/MethylPipeline/packages/methylmodeler/configs/pb-hc1-1_config.json"
+CONFIG="/home/ubuntu/MethylPipeline/packages/methyldetector/configs/pb-hc1-1_config.json"
 OUTPUT_DIR="/home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-healthy-pilot-stage1"
 CHROMOSOME="1"
-SCRIPTS_DIR="/home/ubuntu/MethylPipeline/packages/methylmodeler/scripts"
+SCRIPTS_DIR="/home/ubuntu/MethylPipeline/packages/methyldetector/scripts"
 
 echo "=================================================================="
 echo "Three-Stage DMP Export Workflow"
 echo "=================================================================="
 echo ""
 
-# Step 1: Run MethylModeler
-echo "Step 1: Running MethylModeler..."
+# Step 1: Run MethylDetector
+echo "Step 1: Running MethylDetector..."
 echo "------------------------------------------------------------------"
-python -m methyl_modeler.cli.main "$CONFIG"
+python -m methyl_detector.cli.main "$CONFIG"
 echo ""
-echo "✓ MethylModeler complete"
+echo "✓ MethylDetector complete"
 echo ""
 
 # Check that files were generated

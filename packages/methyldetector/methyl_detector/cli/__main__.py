@@ -1,4 +1,4 @@
-"""Allow running methyl_modeler.cli as a module."""
+"""Allow running methyl_detector.cli as a module."""
 
 from .main import main
 

@@ -2,7 +2,7 @@
 name = "methyl_mapper"
 version = "0.1.0"
 description = "DMP-to-gene mapping tool using Azure SQL Database and STRING-DB"
-authors = ["MethylModeler Team"]
+authors = ["MethylDetector Team"]
 readme = "README.md"
 packages = [{include = "methyl_mapper"}]
 

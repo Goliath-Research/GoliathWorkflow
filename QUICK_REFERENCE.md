@@ -63,7 +63,7 @@ pip install -e .
 
 ```bash
 python -c "from methyl_utils import get_logger; print('OK')"
-python -c "from methyl_modeler import MethylModeler; print('OK')"
+python -c "from methyl_detector import MethylDetector; print('OK')"
 python -c "from methyl_classifier import MethylClassifier; print('OK')"
 ```
 
@@ -175,7 +175,7 @@ docker compose -f docker-compose.production.yml down
 
 ```bash
 echo $PYTHONPATH
-# /workspace/packages/methylutils:/workspace/packages/methylcentroid:/workspace/packages/methylcluster:/workspace/packages/methylmodeler:/workspace/packages/methylclassifier:/workspace/packages/methylmapper:/workspace/packages/methylenricher
+# /workspace/packages/methylutils:/workspace/packages/methylcentroid:/workspace/packages/methylcluster:/workspace/packages/methyldetector:/workspace/packages/methylclassifier:/workspace/packages/methylmapper:/workspace/packages/methylenricher
 
 echo $METHYL_UTILS_PATH
 # /workspace/packages/methylutils
@@ -213,7 +213,7 @@ git commit -m "Description"
 
 ```bash
 # Inside container
-python -m methyl_modeler.cli config.json
+python -m methyl_detector.cli config.json
 ```
 
 ### Debugging
@@ -283,10 +283,10 @@ docker exec methylpipeline python -c "import cupy; print(cupy.__version__)"
 methylclassifier --config config.yaml
 ```
 
-### MethylModeler
+### MethylDetector
 
 ```bash
-python -m methyl_modeler.cli --help
+python -m methyl_detector.cli --help
 ```
 
 ### MethylMapper

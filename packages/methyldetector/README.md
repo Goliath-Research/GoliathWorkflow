@@ -1,14 +1,14 @@
-# MethylModeler
+# MethylDetector
 
 **Detect Differentially Methylated Positions and Train Bayesian Classifiers**
 
 ## Overview
 
-MethylModeler is a production-ready package for detecting Differentially Methylated Positions (DMPs) between two methylation centroids and training Bayesian classifiers optimized with Balanced Accuracy. It combines statistical rigor (Storey's q-value FDR correction) with biological filtering to identify meaningful biomarkers.
+MethylDetector is a production-ready package for detecting Differentially Methylated Positions (DMPs) between two methylation centroids and training Bayesian classifiers optimized with Balanced Accuracy. It combines statistical rigor (Storey's q-value FDR correction) with biological filtering to identify meaningful biomarkers.
 
-### What is MethylModeler?
+### What is MethylDetector?
 
-MethylModeler bridges centroid generation and classification:
+MethylDetector bridges centroid generation and classification:
 
 - **DMP Detection**: Statistical comparison of two centroids with FDR control
 - **Biological Filtering**: Effect size and overlap criteria for meaningful DMPs
@@ -33,7 +33,7 @@ MethylModeler bridges centroid generation and classification:
 
 ```bash
 # Install from source
-cd packages/methylmodeler
+cd packages/methyldetector
 pip install -e .
 
 # Or as part of MethylPipeline
@@ -62,7 +62,7 @@ pip install methylpipeline
 ```
 
 ```bash
-./modeler config.json
+./detector config.json
 ```
 
 ### Multi-Chromosome Usage
@@ -91,28 +91,28 @@ Each chromosome will:
 
 ```bash
 # Run with JSON configuration
-./modeler config.json
+./detector config.json
 
 # With verbose output
-./modeler config.json --verbose
+./detector config.json --verbose
 
 # With log file
-./modeler config.json --log-file output.log
+./detector config.json --log-file output.log
 ```
 
 ### Python API
 
 ```python
-from methyl_modeler.models.config import MethylModelerConfig
-from methyl_modeler.core.methylmodeler import MethylModeler
-from methyl_modeler.utils.file_utils import load_config_from_json
+from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.core.methyldetector import MethylDetector
+from methyl_detector.utils.file_utils import load_config_from_json
 
 # Load configuration
 config = load_config_from_json("config.json")
 
 # Initialize and run
-modeler = MethylModeler(config)
-result = modeler.run()
+detector = MethylDetector(config)
+result = detector.run()
 
 # Handle single or multiple results
 if isinstance(result, list):
@@ -250,7 +250,7 @@ else:
 
 ## Multi-Chromosome Processing
 
-MethylModeler supports processing multiple chromosomes in a single run:
+MethylDetector supports processing multiple chromosomes in a single run:
 
 ### Benefits
 
@@ -285,7 +285,7 @@ MethylModeler supports processing multiple chromosomes in a single run:
 
 ## Why Balanced Accuracy?
 
-MethylModeler uses **Balanced Accuracy** instead of AUC because:
+MethylDetector uses **Balanced Accuracy** instead of AUC because:
 
 1. **Robust to Class Imbalance**: Works correctly with unbalanced datasets (e.g., 35 healthy vs 12 cancer)
 2. **Interpretable**: Simple average of Sensitivity and Specificity
@@ -302,7 +302,7 @@ $$
 ### Workflow Position
 
 ```
-MethylCentroid → MethylModeler → MethylClassifier
+MethylCentroid → MethylDetector → MethylClassifier
     (Generate)     (Train Model)    (Predict)
 ```
 

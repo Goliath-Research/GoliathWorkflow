@@ -1,6 +1,6 @@
-# MethylModeler Quick Start Guide
+# MethylDetector Quick Start Guide
 
-This guide will help you get MethylModeler up and running quickly.
+This guide will help you get MethylDetector up and running quickly.
 
 ## Prerequisites
 
@@ -36,13 +36,13 @@ Create a JSON configuration file:
 
 ```bash
 # From command line
-./modeler config.json
+./detector config.json
 
 # With verbose output
-./modeler config.json --verbose
+./detector config.json --verbose
 
 # With log file
-./modeler config.json --log-file output.log
+./detector config.json --log-file output.log
 ```
 
 ### 3. Check Results
@@ -93,16 +93,16 @@ Contexts will be automatically weighted based on their biological importance.
 ## Using Python API
 
 ```python
-from methyl_modeler.models.config import MethylModelerConfig
-from methyl_modeler.core.methylmodeler import MethylModeler
-from methyl_modeler.utils.file_utils import load_config_from_json
+from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.core.methyldetector import MethylDetector
+from methyl_detector.utils.file_utils import load_config_from_json
 
 # Load configuration
 config = load_config_from_json("config.json")
 
 # Initialize and run
-modeler = MethylModeler(config)
-result = modeler.run()
+detector = MethylDetector(config)
+result = detector.run()
 
 # Handle results (single or multiple chromosomes)
 if isinstance(result, list):

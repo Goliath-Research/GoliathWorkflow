@@ -1,4 +1,4 @@
-"""Core MethylModeler pipeline for DMP detection, filtering, and selection."""
+"""Core MethylDetector pipeline for DMP detection, filtering, and selection."""
 
 from dataclasses import dataclass
 from datetime import datetime
@@ -79,8 +79,8 @@ def bhattacharyya_coefficient(bd: np.ndarray) -> np.ndarray:
     return np.exp(-bd)
 
 
-class MethylModeler:
-    """Main class for MethylModeler DMP detection and filtering."""
+class MethylDetector:
+    """Main class for MethylDetector DMP detection and filtering."""
 
     def __init__(self, config: MethylModelerConfig):
         """Initialize with configuration."""
@@ -90,7 +90,7 @@ class MethylModeler:
         self.df = None  # Current working dataframe
         self._exported_csv_path = None  # Path to exported CSV file
         self._current_chromosome = None  # Current chromosome being processed (for multi-chromosome mode)
-        logger.debug("Initialized MethylModeler")
+        logger.debug("Initialized MethylDetector")
     
     @property
     def chromosome(self) -> str:
@@ -110,7 +110,7 @@ class MethylModeler:
             MethylModelerResult if processing a single chromosome,
             List[MethylModelerResult] if processing multiple chromosomes
         """
-        logger.debug("Starting MethylModeler analysis pipeline...")
+        logger.debug("Starting MethylDetector analysis pipeline...")
         
         # Check if we're processing multiple chromosomes
         chromosomes = self.config.chromosome
