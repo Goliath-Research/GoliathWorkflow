@@ -219,152 +219,20 @@ class MethylDetector:
         bio_dmps_df = self._filter_biological_dmps(dmps_df)
         logger.info(f"✅ Biological DMPs: {len(bio_dmps_df):,} (retention: {len(bio_dmps_df)/len(dmps_df)*100:.1f}%)")
         
-        # Export Stage 1: Biological DMPs
+        # Compute biological importance and sort
+        logger.info("📋 Sorting DMPs by biological importance...")
+        sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
+        
+        # Export unified CSV
         if self.config.output_dir:
-            logger.info("💾 Exporting Stage 1: Biological DMPs...")
-            self._export_unified_csv(bio_dmps_df, suffix="-1-biological")
-        
-        # Prepare DMPs for validation and optimization
-        selected_dmps_df = bio_dmps_df
-        pre_optimization_dmps_df = None
-        sorted_by_importance_df = None  # Store sorted DMPs for minimum export
-               
-        if self.config.optimize_dmps:
-            logger.info("🎯 Preparing DMPs for validation and optimization...")
-            # Compute importance and sort for optimization
-            sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
-            selected_dmps_df = self._select_dmps_multicontext(bio_dmps_df, sorted_df=sorted_by_importance_df)
-            logger.info(f"✅ Prepared {len(selected_dmps_df):,} DMPs for validation")
-
-            # Store pre-optimization result for export comparison (before advanced optimization)
-            pre_optimization_dmps_df = selected_dmps_df.copy()
+            logger.info("💾 Exporting final DMPs sorted by importance...")
+            self._export_unified_csv(sorted_by_importance_df, suffix="-biological-sorted")
             
-            # Export Stage 2: Pre-optimization DMPs (before advanced optimization)
-            # Only export now if advanced optimization is not enabled (otherwise export after optimization)
-            if self.config.output_dir and self.config.optimization_method not in ["bayesian_optimization", "featurecuts"]:
-                logger.info("💾 Exporting Stage 2: Pre-optimization DMPs...")
-                self._export_unified_csv(pre_optimization_dmps_df, suffix="-2-pre-optimization")
-        else:
-            logger.info("📋 Selecting top DMPs by biological importance (optimize_dmps=False)")
-            # Compute importance and select top DMPs for simpler approach
-            sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
-
-            # Select top DMPs by biological importance (fixed variance factor)
-            n_select = min(500, len(sorted_by_importance_df))
-            selected_dmps_df = sorted_by_importance_df.head(n_select)
-            logger.info(f"✅ Selected top {n_select:,} DMPs by biological importance (with fixed variance factor)")
-        
-        # Prepare classifier data
-        classifier_data = {
-            'positions': selected_dmps_df['position'].values,
-            'contexts': selected_dmps_df['context'].values,
-            'alpha1': selected_dmps_df['alpha1'].values,
-            'beta1': selected_dmps_df['beta1'].values,
-            'alpha2': selected_dmps_df['alpha2'].values,
-            'beta2': selected_dmps_df['beta2'].values,
-            'weights': selected_dmps_df.get('importance', selected_dmps_df.get('effect_size', np.ones(len(selected_dmps_df)))).values
-        }
-
-        # Create classifier using factory based on config
-        classifier_type_str = self.config.classifier_type
-        classifier = ClassifierFactory.create(
-            classifier_type_str,
-            classifier_data,
-            min_sample_coverage=self.config.min_sample_coverage,
-            coverage_weighting=self.config.classifier_coverage_weighting
-        )
-
-        logger.info(f"✅ Classifier created: {classifier}")
-        
-        # Perform validation even when optimization is disabled
-        # Validate on biologically filtered DMPs (bio_dmps_df), not optimized selection
-        if not self.config.optimize_dmps:
-            logger.info("")
-            logger.info("🔬 Performing validation on biologically filtered DMPs (optimize_dmps=False)...")
-            validation_result = self._validate_selected_dmps(selected_dmps_df, sorted_by_importance_df)
-            if validation_result is not None:
-                self._final_validation_results = validation_result
-                cm = validation_result['confusion_matrix']
-                logger.info(f"✅ Validation complete: BA={validation_result['balanced_accuracy']:.4f}")
-                logger.info(f"   TP={cm['tp']}, TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}")
-                
-                # If we used synthetic validation, also verify on real samples if available
-                if self.config.validation_mode == "synthetic":
-                    logger.info("")
-                    logger.info("🔬 Verifying model on real samples from centroid metadata...")
-                    real_validation = self._validate_on_real_samples(bio_dmps_df)
-                    if real_validation is not None:
-                        logger.info(f"✅ Real validation: BA={real_validation['balanced_accuracy']:.4f}")
-                        logger.info(f"   TP={real_validation['confusion_matrix']['tp']}, "
-                                  f"TN={real_validation['confusion_matrix']['tn']}, "
-                                  f"FP={real_validation['confusion_matrix']['fp']}, "
-                                  f"FN={real_validation['confusion_matrix']['fn']}")
-                        # Store real validation results alongside synthetic
-                        self._real_validation_results = real_validation
-        
-        # Export unified CSVs
-        if self.config.output_dir:
-            # Export Stage 2: Pre-optimization DMPs (if optimization was enabled, export now)
-            if pre_optimization_dmps_df is not None and self.config.optimize_dmps:
-                logger.info("💾 Exporting Stage 2: Pre-optimization DMPs...")
-                self._export_unified_csv(pre_optimization_dmps_df, suffix="-2-pre-optimization")
-            
-            # Export Stage 3: Final DMPs (after optimization if enabled)
-            if self.config.optimize_dmps and pre_optimization_dmps_df is not None:
-                logger.info("💾 Exporting Stage 3: Optimized DMPs (max BA, minimal k)...")
-                self._export_unified_csv(selected_dmps_df, suffix="-3-optimized")
-                
-                # Export Stage 4: Minimum DMPs sorted by biological importance
-                # This ensures we have enough DMPs for gene mapping and downstream analysis
-                if sorted_by_importance_df is not None:
-                    min_dmps = max(len(selected_dmps_df), self.config.min_dmps_for_export)
-                    min_dmps_df = sorted_by_importance_df.iloc[:min_dmps].copy()
-                    logger.info(f"💾 Exporting Stage 4: Minimum DMPs (top {min_dmps:,} by biological importance)...")
-                    self._export_unified_csv(min_dmps_df, suffix="-4-minimum-by-importance")
-            else:
-                # Export final CSV with default name
-                logger.info("💾 Exporting final DMPs...")
-                self._export_unified_csv(selected_dmps_df)
-                
-                # Also export minimum set if sorted_df is available
-                if sorted_by_importance_df is not None and len(sorted_by_importance_df) > len(selected_dmps_df):
-                    min_dmps = max(len(selected_dmps_df), self.config.min_dmps_for_export)
-                    if min_dmps > len(selected_dmps_df):
-                        min_dmps_df = sorted_by_importance_df.iloc[:min_dmps].copy()
-                        logger.info(f"💾 Exporting minimum DMPs (top {min_dmps:,} by biological importance)...")
-                        self._export_unified_csv(min_dmps_df, suffix="-minimum-by-importance")
-            
-            # Save model - ensure we use at least min_dmps_for_export DMPs
-            # This ensures MethylClassifier has enough DMPs even if some are missing in samples
-            model_dmps_df = selected_dmps_df.copy()
-            if sorted_by_importance_df is not None:
-                min_dmps_required = self.config.min_dmps_for_export
-                available_dmps = len(sorted_by_importance_df)
-                
-                if len(model_dmps_df) < min_dmps_required:
-                    if available_dmps < min_dmps_required:
-                        logger.warning(f"⚠️  Only {available_dmps:,} DMPs available, but min_dmps_for_export={min_dmps_required:,}")
-                        logger.warning(f"   Using all available DMPs ({available_dmps:,}) instead of requested minimum")
-                        model_dmps_df = sorted_by_importance_df.copy()
-                    else:
-                        logger.info(f"⚠️  Optimized model has {len(model_dmps_df):,} DMPs, but min_dmps_for_export={min_dmps_required:,}")
-                        logger.info(f"   Expanding model to {min_dmps_required:,} DMPs using top-ranked by biological importance")
-                        model_dmps_df = sorted_by_importance_df.iloc[:min_dmps_required].copy()
-                else:
-                    logger.info(f"✅ Model has {len(model_dmps_df):,} DMPs (≥ min_dmps_for_export={min_dmps_required:,})")
-            else:
-                logger.warning("sorted_by_importance_df not available, using optimized DMPs as-is")
-            
-            logger.info("💾 Saving classifier model...")
-            self._save_unified_model(classifier, model_dmps_df)
-            
-            # Save validation results if available (from optimization or non-optimized validation)
-            # Use model_dmps_df count (which respects min_dmps_for_export)
-            if hasattr(self, '_final_validation_results') and self._final_validation_results:
-                self._save_validation_results(n_dmps_exported=len(model_dmps_df))
+            # Also export with default name for legacy compatibility
+            self._export_unified_csv(sorted_by_importance_df)
         
         # Create result (use selected DMPs for result stats)
-        result = self._create_multi_context_result(dmps_df, selected_dmps_df)
+        result = self._create_multi_context_result(dmps_df, sorted_by_importance_df)
         logger.info(f"✅ Multi-context analysis complete for chromosome {self.chromosome}!")
         
         return result
