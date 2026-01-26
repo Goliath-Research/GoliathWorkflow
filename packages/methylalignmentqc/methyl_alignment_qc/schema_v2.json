@@ -1,0 +1,515 @@
+{
+    "$defs": {
+        "ArtifactSummary": {
+            "properties": {
+                "ARTIFACT_NAME": {
+                    "title": "Artifact Name",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "TOTAL_QSCORE": {
+                    "title": "Total Qscore",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "WORST_CXT": {
+                    "title": "Worst Cxt",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "WORST_CXT_QSCORE": {
+                    "title": "Worst Cxt Qscore",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "required": [
+                "ARTIFACT_NAME",
+                "TOTAL_QSCORE",
+                "WORST_CXT",
+                "WORST_CXT_QSCORE"
+            ],
+            "title": "ArtifactSummary",
+            "type": "object"
+        },
+        "BaseDistributionByCycle": {
+            "properties": {
+                "cycle": {
+                    "title": "Cycle",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "PCT_A": {
+                    "title": "Pct A",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "PCT_C": {
+                    "title": "Pct C",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "PCT_G": {
+                    "title": "Pct G",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "PCT_T": {
+                    "title": "Pct T",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "PCT_N": {
+                    "title": "Pct N",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            },
+            "required": [
+                "cycle",
+                "PCT_A",
+                "PCT_C",
+                "PCT_G",
+                "PCT_T",
+                "PCT_N"
+            ],
+            "title": "BaseDistributionByCycle",
+            "type": "object"
+        },
+        "ErrorSummary": {
+            "properties": {
+                "REF": {
+                    "title": "Ref",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ALT": {
+                    "title": "Alt",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "COUNT": {
+                    "title": "Count",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "RATE": {
+                    "title": "Rate",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "QSCORE": {
+                    "title": "Qscore",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "required": [
+                "REF",
+                "ALT",
+                "COUNT",
+                "RATE",
+                "QSCORE"
+            ],
+            "title": "ErrorSummary",
+            "type": "object"
+        },
+        "GCBiasDetail": {
+            "properties": {
+                "GC": {
+                    "title": "Gc",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "WINDOWS": {
+                    "title": "Windows",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "READ_STARTS": {
+                    "title": "Read Starts",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "MEAN_BASE_QUALITY": {
+                    "title": "Mean Base Quality",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "NORMALIZED_COVERAGE": {
+                    "title": "Normalized Coverage",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "ERROR_BAR": {
+                    "title": "Error Bar",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            },
+            "required": [
+                "GC",
+                "WINDOWS",
+                "READ_STARTS",
+                "MEAN_BASE_QUALITY",
+                "NORMALIZED_COVERAGE",
+                "ERROR_BAR"
+            ],
+            "title": "GCBiasDetail",
+            "type": "object"
+        },
+        "GCBiasSummary": {
+            "properties": {
+                "at_dropout": {
+                    "description": "AT dropout percentage",
+                    "title": "At Dropout",
+                    "type": "number"
+                },
+                "gc_dropout": {
+                    "description": "GC dropout percentage",
+                    "title": "Gc Dropout",
+                    "type": "number"
+                }
+            },
+            "required": [
+                "at_dropout",
+                "gc_dropout"
+            ],
+            "title": "GCBiasSummary",
+            "type": "object"
+        },
+        "InsertSizeHistogram": {
+            "properties": {
+                "insert_size": {
+                    "title": "Insert Size",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "pair_orientation": {
+                    "title": "Pair Orientation",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "All_Reads.fr_count": {
+                    "title": "All Reads.Fr Count",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "required": [
+                "insert_size",
+                "pair_orientation",
+                "All_Reads.fr_count"
+            ],
+            "title": "InsertSizeHistogram",
+            "type": "object"
+        },
+        "InsertSizeMetrics": {
+            "properties": {
+                "median_insert_size": {
+                    "title": "Median Insert Size",
+                    "type": "integer"
+                },
+                "mode_insert_size": {
+                    "title": "Mode Insert Size",
+                    "type": "integer"
+                },
+                "mean_insert_size": {
+                    "title": "Mean Insert Size",
+                    "type": "number"
+                },
+                "standard_deviation": {
+                    "title": "Standard Deviation",
+                    "type": "number"
+                },
+                "read_pairs": {
+                    "title": "Read Pairs",
+                    "type": "integer"
+                },
+                "width_of_10_percent": {
+                    "title": "Width Of 10 Percent",
+                    "type": "integer"
+                },
+                "width_of_20_percent": {
+                    "title": "Width Of 20 Percent",
+                    "type": "integer"
+                },
+                "width_of_30_percent": {
+                    "title": "Width Of 30 Percent",
+                    "type": "integer"
+                },
+                "width_of_40_percent": {
+                    "title": "Width Of 40 Percent",
+                    "type": "integer"
+                },
+                "width_of_50_percent": {
+                    "title": "Width Of 50 Percent",
+                    "type": "integer"
+                },
+                "width_of_60_percent": {
+                    "title": "Width Of 60 Percent",
+                    "type": "integer"
+                },
+                "width_of_70_percent": {
+                    "title": "Width Of 70 Percent",
+                    "type": "integer"
+                },
+                "width_of_80_percent": {
+                    "title": "Width Of 80 Percent",
+                    "type": "integer"
+                },
+                "width_of_90_percent": {
+                    "title": "Width Of 90 Percent",
+                    "type": "integer"
+                },
+                "width_of_95_percent": {
+                    "title": "Width Of 95 Percent",
+                    "type": "integer"
+                },
+                "width_of_99_percent": {
+                    "title": "Width Of 99 Percent",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "median_insert_size",
+                "mode_insert_size",
+                "mean_insert_size",
+                "standard_deviation",
+                "read_pairs",
+                "width_of_10_percent",
+                "width_of_20_percent",
+                "width_of_30_percent",
+                "width_of_40_percent",
+                "width_of_50_percent",
+                "width_of_60_percent",
+                "width_of_70_percent",
+                "width_of_80_percent",
+                "width_of_90_percent",
+                "width_of_95_percent",
+                "width_of_99_percent"
+            ],
+            "title": "InsertSizeMetrics",
+            "type": "object"
+        },
+        "MeanQualityByCycle": {
+            "properties": {
+                "cycle": {
+                    "title": "Cycle",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "mean_quality": {
+                    "title": "Mean Quality",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            },
+            "required": [
+                "cycle",
+                "mean_quality"
+            ],
+            "title": "MeanQualityByCycle",
+            "type": "object"
+        },
+        "QualityScoreDistribution": {
+            "properties": {
+                "Q": {
+                    "title": "Q",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "COUNT_OF_Q": {
+                    "title": "Count Of Q",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "required": [
+                "Q",
+                "COUNT_OF_Q"
+            ],
+            "title": "QualityScoreDistribution",
+            "type": "object"
+        },
+        "QualityYield": {
+            "properties": {
+                "total_reads": {
+                    "description": "Total sequenced reads",
+                    "title": "Total Reads",
+                    "type": "integer"
+                },
+                "pf_reads": {
+                    "description": "Passing Filter reads",
+                    "title": "Pf Reads",
+                    "type": "integer"
+                },
+                "total_bases": {
+                    "description": "Total bases sequenced",
+                    "title": "Total Bases",
+                    "type": "integer"
+                },
+                "pf_bases": {
+                    "description": "Passing Filter bases",
+                    "title": "Pf Bases",
+                    "type": "integer"
+                },
+                "q20_bases": {
+                    "description": "Bases >= Q20",
+                    "title": "Q20 Bases",
+                    "type": "integer"
+                },
+                "pf_q20_bases": {
+                    "description": "PF Bases >= Q20",
+                    "title": "Pf Q20 Bases",
+                    "type": "integer"
+                },
+                "q30_bases": {
+                    "description": "Bases >= Q30",
+                    "title": "Q30 Bases",
+                    "type": "integer"
+                },
+                "pf_q30_bases": {
+                    "description": "PF Bases >= Q30",
+                    "title": "Pf Q30 Bases",
+                    "type": "integer"
+                },
+                "q20_equivalent_yield": {
+                    "description": "Q20 equivalent yield",
+                    "title": "Q20 Equivalent Yield",
+                    "type": "integer"
+                },
+                "pf_q20_equivalent_yield": {
+                    "description": "PF Q20 equivalent yield",
+                    "title": "Pf Q20 Equivalent Yield",
+                    "type": "integer"
+                }
+            },
+            "required": [
+                "total_reads",
+                "pf_reads",
+                "total_bases",
+                "pf_bases",
+                "q20_bases",
+                "pf_q20_bases",
+                "q30_bases",
+                "pf_q30_bases",
+                "q20_equivalent_yield",
+                "pf_q20_equivalent_yield"
+            ],
+            "title": "QualityYield",
+            "type": "object"
+        }
+    },
+    "properties": {
+        "sample_id": {
+            "title": "Sample Id",
+            "type": "string"
+        },
+        "quality_yield": {
+            "$ref": "#/$defs/QualityYield"
+        },
+        "mean_quality_by_cycle": {
+            "$ref": "#/$defs/MeanQualityByCycle"
+        },
+        "quality_score_distribution": {
+            "$ref": "#/$defs/QualityScoreDistribution"
+        },
+        "base_distribution_by_cycle": {
+            "$ref": "#/$defs/BaseDistributionByCycle"
+        },
+        "gc_bias_summary": {
+            "$ref": "#/$defs/GCBiasSummary"
+        },
+        "gc_bias_details": {
+            "$ref": "#/$defs/GCBiasDetail"
+        },
+        "insert_size_metrics": {
+            "$ref": "#/$defs/InsertSizeMetrics"
+        },
+        "insert_size_histogram": {
+            "$ref": "#/$defs/InsertSizeHistogram"
+        },
+        "error_summaries": {
+            "$ref": "#/$defs/ErrorSummary"
+        },
+        "pre_adapter_summaries": {
+            "$ref": "#/$defs/ArtifactSummary"
+        },
+        "bait_bias_summaries": {
+            "$ref": "#/$defs/ArtifactSummary"
+        }
+    },
+    "required": [
+        "sample_id",
+        "quality_yield",
+        "mean_quality_by_cycle",
+        "quality_score_distribution",
+        "base_distribution_by_cycle",
+        "gc_bias_summary",
+        "gc_bias_details",
+        "insert_size_metrics",
+        "insert_size_histogram",
+        "error_summaries",
+        "pre_adapter_summaries",
+        "bait_bias_summaries"
+    ],
+    "title": "AlignmentQC",
+    "type": "object"
+}

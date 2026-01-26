@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "methyl_alignment_qc"
+version = "0.1.0"
+description = "A package to parse Parabricks QC metrics into Columnar JSON."
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "pandas",
+    "pydantic",
+    "numpy"
+]
+
+[project.scripts]
+methyl-qc = "methyl_alignment_qc.parser:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
