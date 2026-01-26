@@ -1,0 +1,29 @@
+Running monitor test...
+[2026-01-26 12:54:04.420296] Starting command: C:\Users\DavidIzadaRodriguez\AppData\Local\Python\pythoncore-3.14-64\python.exe tests/simulate_fq2bam.py
+[CMD] Starting fq2bam simulation...
+[CMD] [PB Info 2026-Jan-26 12:54:04] ------------------------------------------------------------------------------
+[CMD] [PB Info 2026-Jan-26 12:54:04] ||                 Parabricks accelerated Genomics Pipeline                 ||
+[CMD] [PB Info 2026-Jan-26 12:54:04] ||                              Version 4.6.0-1                             ||
+[CMD] [PB Info 2026-Jan-26 12:54:04] ||                      GPU-PBBWA mem, Sorting Phase-I                      ||
+[CMD] [PB Info 2026-Jan-26 12:54:04] ------------------------------------------------------------------------------
+ -> Reporting progress for test_sample_001 [GPU-PBBWA mem, Sorting Phase-I]: 3.1% (9906648/320000000)
+[CMD] [PB Info 2026-Jan-26 12:54:04] # 10  0  1  0  0   0 pool:  1 9906648 bases/GPU/minute: 59439888.0
+ -> Reporting progress for test_sample_001 [GPU-PBBWA mem, Sorting Phase-I]: 52.6% (168396395/320000000)
+[CMD] [PB Info 2026-Jan-26 12:54:05] # 10  0  1  0  0   0 pool:  1 168396395 bases/GPU/minute: 59439888.0
+ -> Reporting progress for test_sample_001 [GPU-PBBWA mem, Sorting Phase-I]: 99.1% (316975713/320000000)
+[CMD] [PB Info 2026-Jan-26 12:54:05] # 10  0  1  0  0   0 pool:  1 316975713 bases/GPU/minute: 59439888.0
+[CMD] [PB Info 2026-Jan-26 12:54:05] ------------------------------------------------------------------------------
+[CMD] [PB Info 2026-Jan-26 12:54:05] ||                 Parabricks accelerated Genomics Pipeline                 ||
+[CMD] [PB Info 2026-Jan-26 12:54:05] ||                              Version 4.6.0-1                             ||
+[CMD] [PB Info 2026-Jan-26 12:54:05] ||                             Sorting Phase-II                             ||
+[CMD] [PB Info 2026-Jan-26 12:54:05] ------------------------------------------------------------------------------
+ -> Reporting progress for test_sample_001 [Sorting Phase-II]: 5.5%
+[CMD] [PB Info 2026-Jan-26 12:54:05] 5.5
+ -> Reporting progress for test_sample_001 [Sorting Phase-II]: 33.3%
+[CMD] [PB Info 2026-Jan-26 12:54:05] 33.3
+ -> Reporting progress for test_sample_001 [Sorting Phase-II]: 89.9%
+[CMD] [PB Info 2026-Jan-26 12:54:06] 89.9
+ -> Reporting progress for test_sample_001 [Sorting Phase-II]: 100.0%
+[CMD] [PB Info 2026-Jan-26 12:54:06] 100.0
+[CMD] [PB Info 2026-Jan-26 12:54:06] Done.
+[2026-01-26 12:54:06.255074] Command finished successfully.

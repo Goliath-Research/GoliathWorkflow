@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Dict, Any
 
 class QualityYield(BaseModel):
     total_reads: int = Field(..., description="Total sequenced reads")
@@ -77,6 +77,30 @@ class ArtifactSummary(BaseModel):
     worst_cxt: List[str] = Field(alias="WORST_CXT")
     worst_cxt_qscore: List[int] = Field(alias="WORST_CXT_QSCORE")
 
+class DuplicationMetrics(BaseModel):
+    library: str = Field(alias="LIBRARY")
+    unpaired_reads_examined: int = Field(alias="UNPAIRED_READS_EXAMINED")
+    read_pairs_examined: int = Field(alias="READ_PAIRS_EXAMINED")
+    secondary_or_supplementary_reads: int = Field(alias="SECONDARY_OR_SUPPLEMENTARY_RDS")
+    unmapped_reads: int = Field(alias="UNMAPPED_READS")
+    unpaired_read_duplicates: int = Field(alias="UNPAIRED_READ_DUPLICATES")
+    read_pair_duplicates: int = Field(alias="READ_PAIR_DUPLICATES")
+    read_pair_optical_duplicates: int = Field(alias="READ_PAIR_OPTICAL_DUPLICATES")
+    percent_duplication: float = Field(alias="PERCENT_DUPLICATION")
+    estimated_library_size: int = Field(alias="ESTIMATED_LIBRARY_SIZE")
+
+class DuplicationHistogram(BaseModel):
+    bin: List[float] = Field(alias="BIN")
+    value: List[float] = Field(alias="VALUE")
+    # Add other columns if needed, but histogram is dynamic
+    
+class BAMConversionLog(BaseModel):
+    program: str
+    version: str
+    start_time: str
+    end_time: str
+    total_time: str
+
 class AlignmentQC(BaseModel):
     sample_id: str
     quality_yield: QualityYield
@@ -90,3 +114,8 @@ class AlignmentQC(BaseModel):
     error_summaries: ErrorSummary
     pre_adapter_summaries: ArtifactSummary
     bait_bias_summaries: ArtifactSummary
+    
+    # Optional fields for new metrics
+    duplication_metrics: List[DuplicationMetrics] = None
+    duplication_histogram: Dict[str, List[Any]] = None
+    conversion_log: BAMConversionLog = None
