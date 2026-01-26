@@ -12,35 +12,14 @@ import json
 from enum import Enum
 
 
-class DistanceMetric(str, Enum):
-    """Enumeration of available distance metrics for outlier detection."""
-    JEFFREYS = "jeffreys"
-    JENSEN_SHANNON = "jensen_shannon"
-    WEIGHTED_JENSEN_SHANNON = "weighted_jensen_shannon"
-    HELLINGER = "hellinger"
-    WASSERSTEIN = "wasserstein"
-
-    def to_factory_name(self) -> str:
-        """Convert DistanceMetric enum to MethylUtils factory metric name."""
-        mapping = {
-            DistanceMetric.JEFFREYS: "jeffreys",
-            DistanceMetric.JENSEN_SHANNON: "jensen_shannon",
-            DistanceMetric.WEIGHTED_JENSEN_SHANNON: "weighted_jensen_shannon",
-            DistanceMetric.HELLINGER: "hellinger",
-            DistanceMetric.WASSERSTEIN: "wasserstein"
-        }
-        return mapping.get(self, "jensen_shannon")
-
 
 class MethylCentroidConfig(BaseModel):
     """
     Pydantic configuration model for MethylCentroid parameters.
 
     Workflows:
-    - Initial centroid creation: provide add_samples, output_dir for saving (samples=[], outliers=[])
-    - After outlier removal: samples contains remaining samples, outliers contains removed samples
-    - Centroid updates: provide samples (current centroid samples), add_samples/remove_samples, outliers
-    - When adding new samples, previous outliers are automatically re-included for fair centroid building
+    - Initial centroid creation: provide add_samples, output_dir for saving
+    - Centroid updates: provide samples (current centroid samples), add_samples/remove_samples
     """
 
     # Metadata fields (saved to H5 file)
@@ -65,49 +44,14 @@ class MethylCentroidConfig(BaseModel):
         default=[],
         description="Optional list of sample paths to remove"
     )
-    outliers: List[str] = Field(
-        default=[],
-        description="List of sample paths that were previously identified as outliers and removed"
-    )
     min_coverage: int = Field(
         default=4,
         ge=1,
         description="Minimum sum of mC and uC for a position"
     )
-    max_iterations: int = Field(
-        default=10,
-        ge=1,
-        description="Maximum outlier removal iterations"
-    )
-    max_iterations_percentage: float = Field(
-        default=0.1,
-        gt=0.0,
-        le=1.0,
-        description="Percentage of samples to use as maximum outlier removal iterations (overrides max_iterations if > 0)"
-    )
-    α: float = Field(
-        default=0.05,
-        gt=0.0,
-        le=1.0,
-        description="Significance level for outlier detection",
-    )
-    min_samples: int = Field(
-        default=3,
-        ge=1,
-        description="Minimum samples required for outlier removal"
-    )
-    distance_metrics: Optional[List[DistanceMetric]] = Field(
-        default=None,
-        description="List of distance metrics to use for outlier detection (None disables outlier detection)"
-    )
-    min_metrics_agree: int = Field(
-        default=0,
-        ge=0,
-        description="Minimum number of distance metrics that must agree for a sample to be considered an outlier. Set to 0 to use General Simes formula."
-    )
     verbose: bool = Field(
         default=True,
-        description="Enable verbose output (CSV files and charts during outlier removal)"
+        description="Enable verbose output"
     )
 
     @field_validator('ctx')
@@ -130,10 +74,6 @@ class MethylCentroidConfig(BaseModel):
         """
         Extract metadata fields to be saved with the centroid H5 file.
         
-        Note: This method provides initial metadata. The actual samples_used
-        and outliers_removed will be determined during centroid creation
-        based on which samples are active after outlier removal.
-        
         Returns:
             Dictionary containing metadata fields
         """
@@ -147,11 +87,8 @@ class MethylCentroidConfig(BaseModel):
             "context": self.ctx,
             "samples": self.samples if self.samples else self.add_samples,  # Initial samples
             "samples_used": [],  # Will be populated during save_centroid
-            "outliers_removed": self.outliers,
             "creation_date": datetime.now().isoformat(),
             "min_coverage": self.min_coverage,
-            "alpha": self.α,
-            "distance_metrics": [str(metric.value) for metric in self.distance_metrics] if self.distance_metrics else []
         }
 
     def to_file(self, file_path: Path) -> None:
@@ -168,24 +105,10 @@ class MethylCentroidConfig(BaseModel):
         return cls.model_validate(data)
 
 
-class OutlierIterationInfo(BaseModel):
-    """Pydantic model for outlier removal iteration information."""
-    iteration: int = Field(..., description="Iteration number")
-    p_value: float = Field(..., description="P-value of the removed outlier")
-    outlier_path: str = Field(..., description="Path to the removed outlier sample")
-
-
-class OutlierRemovalResults(BaseModel):
-    """Pydantic model for outlier removal results."""
-    iterations: List[OutlierIterationInfo] = Field(
-        default_factory=list,
-        description="List of iteration information"
-    )
+class CentroidResults(BaseModel):
+    """Pydantic model for centroid creation results."""
     final_centroid_path: str = Field(..., description="Path to the final centroid file")
-    total_samples_removed: int = Field(
-        ...,
-        description="Total number of samples removed"
-    )
+    total_samples_processed: int = Field(..., description="Total number of samples included")
 
 
 class ProcessingConfig(BaseModel):

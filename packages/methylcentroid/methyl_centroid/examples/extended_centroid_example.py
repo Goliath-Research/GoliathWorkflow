@@ -214,58 +214,7 @@ def demonstrate_incremental_operations():
             print(f"   Final N values: {data['N'][:]}")
 
 
-def demonstrate_build_extended_centroid():
-    """Demonstrate the build_extended_centroid method with outlier removal."""
-    print("\n=== Build Extended Centroid with Outlier Removal ===")
-    
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_path = Path(temp_dir)
-        
-        # Create multiple sample files
-        sample_files = []
-        for i in range(5):
-            sample_file = temp_path / f"sample{i+1}" / "1-CG.h5"
-            sample_file.parent.mkdir(exist_ok=True)
-            
-            # Create similar but slightly different data
-            positions = np.array([1000, 2000, 3000, 4000], dtype=np.uint32)
-            mC = np.array([10 + i, 20 + i, 30 + i, 40 + i], dtype=np.uint32)
-            uC = np.array([5 + i, 15 + i, 25 + i, 35 + i], dtype=np.uint32)
-            tnc = np.array([1, 2, 3, 4], dtype=np.uint8)
-            
-            create_sample_file(sample_file, positions, mC, uC, tnc)
-            sample_files.append(str(sample_file.parent))
-        
-        # Create output directory
-        output_dir = temp_path / "output"
-        output_dir.mkdir(exist_ok=True)
-        
-        # Initialize MethylCentroid
-        methyl_centroid = MethylCentroid(
-            samples=sample_files,
-            chrom="1",
-            ctx="CG",
-            output_dir=output_dir,
-            min_coverage=4,
-            max_iterations=3,
-            α=0.05,
-            min_samples=3
-        )
-        
-        print("Building extended centroid with outlier removal...")
-        results = methyl_centroid.build_extended_centroid()
-        
-        print(f"   Final centroid path: {results.final_centroid_path}")
-        print(f"   Total samples removed: {results.total_samples_removed}")
-        print(f"   Number of iterations: {len(results.iterations)}")
-        
-        # Examine final centroid
-        with h5py.File(results.final_centroid_path, "r") as f:
-            data = f["methylation_data"]
-            print(f"   Final centroid columns: {list(data.keys())}")
-            print(f"   Number of positions: {len(data['pos'])}")
-            print(f"   Positions: {data['pos'][:]}")
-            print(f"   Average N value: {np.mean(data['N'][:]):.1f}")
+
 
 
 def main():
@@ -280,15 +229,14 @@ def main():
         # Demonstrate incremental operations
         demonstrate_incremental_operations()
         
-        # Demonstrate build_extended_centroid method
-        demonstrate_build_extended_centroid()
+
         
         print("\n" + "=" * 60)
         print("Extended centroid demonstration completed successfully!")
         print("Key features demonstrated:")
         print("- Extended centroid files with N, Sx, Sx2 columns")
         print("- Incremental sample addition and removal")
-        print("- Outlier removal with extended data")
+
         print("- Verification of methylation level calculations")
         
     except Exception as e:

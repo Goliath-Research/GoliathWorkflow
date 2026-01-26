@@ -467,7 +467,7 @@ class SampleManager:
             self._aligned_cache[cache_key] = (mC, uC)
         return self._aligned_cache[cache_key]
 
-    # Call clear_cache() after removing outliers or updating centroid
+    # Call clear_cache() after updating centroid
 
     # Logger setup (would be injected via dependency injection in production)
     @property

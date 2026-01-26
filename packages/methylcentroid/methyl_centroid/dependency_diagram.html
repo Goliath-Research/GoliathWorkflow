@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MethylCentroid Dependency Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>MethylCentroid Dependency Diagram</h1>
+        <div class="mermaid">
+            classDiagram
+            %% External Dependencies
+            class MethylUtils {
+            +MethylSample
+            +MethylExtendedCentroid
+            +ChunkedGenomicProcessor
+            +MemoryManager
+            +PerformanceProfiler
+            }
+
+            class NumPy
+            class H5Py
+            class Pydantic
+            %% Internal Modules
+            namespace MethylCentroidPackage {
+            class MethylCentroidCLI {
+            +main()
+            }
+            class MethylCentroid {
+            +build_centroid()
+            +calculate_centroid()
+            -sample_manager: SampleManager
+            -config: MethylCentroidConfig
+            }
+            class SampleManager {
+            +load_sample()
+            +get_aligned_sample()
+            +cache_management()
+            }
+            class Config {
+            +MethylCentroidConfig
+            +ProcessingConfig
+            +BatchProcessingConfig
+            }
+
+            class Core {
+            +MethylCentroid
+            }
+            }
+            %% Relationships
+            MethylCentroidCLI --> MethylCentroid : uses
+            MethylCentroid ..> Config : uses
+            MethylCentroid --> SampleManager : owns
+
+            SampleManager ..> Config : uses
+            SampleManager --> MethylUtils : uses (MethylSample, MemoryManager)
+
+            MethylCentroid --> MethylUtils : uses (MethylSample, ChunkedGenomicProcessor)
+
+            Config --> Pydantic : inherits
+
+            %% Implicit
+            MethylCentroid ..> NumPy : uses
+            SampleManager ..> H5Py : uses
+        </div>
+        <div class="footer">
+            Generated on 2026-01-26
+        </div>
+    </div>
+</body>
+
+</html>

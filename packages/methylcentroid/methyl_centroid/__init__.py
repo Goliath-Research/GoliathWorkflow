@@ -1,27 +1,28 @@
 """
-MethylCentroid - Advanced Methylation Centroid Calculation with Outlier Detection
+MethylCentroid
+==============
 
-A modular, high-performance package for calculating methylation centroids from genomic data,
-following SOLID principles with clean separation of concerns.
+Advanced Methylation Centroid Calculation.
+
+This package provides a modular, SOLID-compliant architecture for calculating
+DNA methylation centroids from multiple samples.
 
 Features:
-- Intelligent sample caching with memory management
-- Multiple outlier detection algorithms (probabilistic, multi-metric, single-metric)
-- Dynamic memory-aware parallel processing
-- Chunked processing for large genomic datasets
-- Comprehensive performance profiling and monitoring
+- Memory-efficient processing (chunked genomic processing)
+- GPU acceleration support (via CuPy)
+- Robust sample management and alignment
+- Comprehensive configuration system
+- Detailed performance profiling and logging
 """
 
-from .config import MethylCentroidConfig, OutlierRemovalResults
+from .config import MethylCentroidConfig, BatchProcessingConfig
 from .core import MethylCentroid
 from .core.sample_manager import SampleManager
-from .outlier_detection.detector_factory import OutlierDetectorFactory
 
 __version__ = "2.0.0"
 __all__ = [
     "MethylCentroid",
     "MethylCentroidConfig",
-    "OutlierRemovalResults",
-    "SampleManager",
-    "OutlierDetectorFactory"
-] 
+    "BatchProcessingConfig",
+    "SampleManager"
+]

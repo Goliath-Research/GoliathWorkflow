@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import Optional, List
 
-from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig, OutlierRemovalResults
+from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig, CentroidResults
 from .core import MethylCentroid
 from methyl_utils.logging_utils import setup_logging
 
@@ -95,18 +95,6 @@ Examples:
         default=4,
         help='Minimum coverage threshold (default: 4)'
     )
-    processing_group.add_argument(
-        '--max-iterations',
-        type=int,
-        default=10,
-        help='Maximum outlier removal iterations (default: 10)'
-    )
-    processing_group.add_argument(
-        '--alpha',
-        type=float,
-        default=0.05,
-        help='Significance level for outlier detection (default: 0.05)'
-    )
 
     # Output options
     output_group = parser.add_argument_group('Output Options')
@@ -188,9 +176,7 @@ def create_config_from_args(args: argparse.Namespace) -> MethylCentroidConfig:
         ctx=args.context,
         output_dir=str(args.output_dir),
         samples=sample_paths,
-        min_coverage=args.min_coverage,
-        max_iterations=args.max_iterations,
-        α=args.alpha
+        min_coverage=args.min_coverage
     )
 
 
@@ -213,17 +199,8 @@ def create_processing_config(args: argparse.Namespace) -> ProcessingConfig:
     )
 
 
-def run_single_processing(config: MethylCentroidConfig,
-                         processing_config: ProcessingConfig) -> OutlierRemovalResults:
-    """
-    Run single chromosome/context processing.
-
-    Args:
-        config: MethylCentroid configuration
-        processing_config: Processing configuration
-
     Returns:
-        OutlierRemovalResults containing information about outlier removal
+        CentroidResults containing information about centroid creation
     """
     print(f"🚀 Starting MethylCentroid processing for {config.chrom}-{config.ctx}")
     print(f"📁 Output directory: {config.output_dir}")
@@ -238,13 +215,7 @@ def run_single_processing(config: MethylCentroidConfig,
 
         # Print results
         print("\n✅ Processing completed successfully!")
-        print(f"📈 Outliers removed: {results.total_samples_removed}")
         print(f"💾 Final centroid: {results.final_centroid_path}")
-
-        if results.iterations:
-            print(f"📋 Iterations performed: {len(results.iterations)}")
-            for iteration in results.iterations[-3:]:  # Show last 3 iterations
-                print(f"   Iteration {iteration.iteration}: p-value = {iteration.p_value:.6f}")
 
         return results
 
@@ -270,7 +241,7 @@ def run_batch_processing(batch_config: BatchProcessingConfig) -> None:
 
     total_combinations = len(batch_config.chromosomes) * len(batch_config.contexts)
     processed_combinations = 0
-    total_outliers = 0
+    total_samples = 0
 
     for chrom in batch_config.chromosomes:
         for ctx in batch_config.contexts:
@@ -297,9 +268,7 @@ def run_batch_processing(batch_config: BatchProcessingConfig) -> None:
 
                 # Run processing and get results
                 results = run_single_processing(combination_config, processing_config)
-
-                # Accumulate statistics from actual results
-                total_outliers += results.total_samples_removed
+                total_samples += results.total_samples_processed
 
             except Exception as e:
                 error_msg = f"Failed to process {chrom}-{ctx}: {e}"
@@ -315,7 +284,7 @@ def run_batch_processing(batch_config: BatchProcessingConfig) -> None:
     print(f"\n{'='*60}")
     print("🎉 Batch processing completed!")
     print(f"📊 Total combinations processed: {processed_combinations}")
-    print(f"📈 Total outliers removed: {total_outliers}")
+    print(f"📈 Total samples processed: {total_samples}")
     print('='*60)
 
 
