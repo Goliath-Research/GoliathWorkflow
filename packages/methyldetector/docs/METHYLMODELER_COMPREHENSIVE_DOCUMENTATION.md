@@ -855,6 +855,8 @@ Outputs when enabled:
 - `bmm_centroids/bmm-centroid-{chromosome}-{context}-centroid2.json` (centroid2)
 - `results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files`
 
+These BMM centroids can be consumed by **MethylClassifier** to compute mixture likelihoods for refined DMPs (with Beta fallback for all others).
+
 ### 3. Gene-Level Feature Importance
 
 Aggregate DMP importance by gene:

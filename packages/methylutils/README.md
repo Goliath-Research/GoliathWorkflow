@@ -8,7 +8,7 @@ MethylUtils is a Python package for methylation data analysis, providing efficie
 - GPU-accelerated distance metrics
 - Statistical tests for Beta distributions
 - Centroid comparison and DMP detection
-- Bayesian classification
+- Bayesian classification (Beta/BMM, multi-class)
 
 ## Installation
 

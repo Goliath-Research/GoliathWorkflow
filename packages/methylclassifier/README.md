@@ -11,6 +11,7 @@ MethylClassifier is a Bayesian probabilistic classifier that assigns DNA methyla
 - **Probabilistic Classification**: Exact Beta distribution likelihoods (no approximations or ML training)
 - **True Posterior Probabilities**: Bayesian framework provides P(class | data)
 - **Missing Data Handling**: Robust to incomplete methylation coverage
+- **Multi-class Support**: Single model can classify multiple disease groups
 - **Multiple Prediction Modes**: Standard Bayesian, threshold-based, calibrated
 - **Temperature Scaling**: Control prediction confidence/sharpness
 - **Platt Calibration**: Optional probability calibration for improved confidence estimates
@@ -214,6 +215,8 @@ will use Beta Mixture likelihoods for those DMPs.
 ```bash
 python build_multiclass_model.py configs/example_multiclass_model.json
 ```
+
+See `configs/example_multiclass_model.json` for the full schema.
 
 The resulting `.pkl` can be used with the same CLI or Python API.
 

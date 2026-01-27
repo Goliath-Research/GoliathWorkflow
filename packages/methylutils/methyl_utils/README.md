@@ -10,6 +10,7 @@ A shared utilities package for methyl-related applications including GPU detecti
 - **Memory Management**: GPU memory monitoring and cleanup utilities
 - **Performance Comparison**: CPU vs GPU implementation comparison tools
 - **Consistent Logging**: Standardized logging across all applications
+- **Probabilistic Classifiers**: Beta and multi-class Beta Mixture likelihoods
 
 ## Installation
 

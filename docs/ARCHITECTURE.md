@@ -121,6 +121,8 @@ methyl_utils/
 - Batch classification with posterior probabilities
 - Temperature scaling and optional Platt calibration
 - Availability-mask handling for missing CpGs
+- Multi-class models (healthy + multiple cancers)
+- Hybrid Beta/BMM likelihoods when BMM centroids are available
 - Command-line interface plus Python API
 
 **Dependencies**:

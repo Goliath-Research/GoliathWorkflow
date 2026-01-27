@@ -15,6 +15,8 @@ MethylClassifier now supports JSON configuration files, similar to MethylModeler
 }
 ```
 
+The `model_path` can point to a multi-class classifier built with `build_multiclass_model.py`.
+
 ### Complete Example
 
 ```json
@@ -52,6 +54,14 @@ MethylClassifier now supports JSON configuration files, similar to MethylModeler
 
 ```bash
 methyl_classifier --config classification_config.json
+```
+
+### Multi-class Model Build
+
+Build a multi-class model (optional BMM centroids) using:
+
+```bash
+python build_multiclass_model.py configs/example_multiclass_model.json
 ```
 
 ### With Command-Line Overrides

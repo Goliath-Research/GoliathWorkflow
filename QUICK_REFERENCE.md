@@ -283,6 +283,13 @@ docker exec methylpipeline python -c "import cupy; print(cupy.__version__)"
 methylclassifier --config config.yaml
 ```
 
+Build multi-class model:
+
+```bash
+python packages/methylclassifier/build_multiclass_model.py \
+  packages/methylclassifier/configs/example_multiclass_model.json
+```
+
 ### MethylDetector
 
 ```bash

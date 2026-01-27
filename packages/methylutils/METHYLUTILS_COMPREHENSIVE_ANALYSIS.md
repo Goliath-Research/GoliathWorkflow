@@ -296,6 +296,9 @@ methylutils/
 - `from_dataframe(dmpDF)` - Create from DMP DataFrame
 - `from_data_dict(data)` - Create from data dictionary
 
+#### Multi-Class Classifier
+- `MultiClassBetaMixtureClassifier` - Multi-class Bayesian classifier with optional Beta Mixture overrides per DMP
+
 ## Recent Improvements
 
 ### 1. Adaptive Statistical Testing

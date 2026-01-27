@@ -37,7 +37,7 @@
   - Threshold-based (log-likelihood ratio)
   - Calibrated (Platt scaling)
 - **Temperature Control**: Softmax temperature for confidence calibration
-- **Binary Classification**: Designed for two-class problems (e.g., healthy vs. disease)
+- **Binary + Multi-class Classification**: Supports two-class and multi-class models (e.g., healthy vs. multiple cancers)
 - **Multi-Chromosome Support**: Combine predictions from multiple chromosome classifiers with weighted probabilities based on trimmed-mean effect_size
 - **Hybrid Beta/BMM Likelihoods**: Optional Beta Mixture override for refined DMPs (when BMM centroids are available)
 
@@ -527,7 +527,7 @@ MethylClassifier(config: ClassifierConfig)
 - `classifier`: ProbabilisticBetaClassifier instance
 - `chromosome`: Chromosome identifier (from metadata)
 - `context`: Methylation context (CG, CHG, CHH)
-- `n_classes`: Number of classes (always 2 for binary)
+- `n_classes`: Number of classes (2 for binary, N for multi-class)
 - `class_names`: List of class names
 - `metadata`: Dict with training metadata
 
@@ -782,6 +782,8 @@ Example:
 ```bash
 python build_multiclass_model.py configs/example_multiclass_model.json
 ```
+
+See `configs/example_multiclass_model.json` for the full schema (centroid dirs, optional BMM centroids).
 
 ---
 

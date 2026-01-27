@@ -35,6 +35,18 @@ methyl-classifier --model-dir /path/to/classifiers/ \
 
 The directory should contain files matching pattern `classifier-{chrom}.pkl` (e.g., `classifier-1.pkl`, `classifier-2.pkl`). Probabilities from each chromosome classifier are weighted by trimmed-mean effect_size and combined.
 
+### Multi-class Classification
+
+Multi-class models behave like binary models but output one probability per class:
+
+```bash
+methyl-classifier --model multiclass-classifier.pkl \
+                 --input samples/ \
+                 --output results.csv
+```
+
+The output CSV includes `prob_class0 ... prob_classN` for all classes.
+
 ### Classification with Configuration File
 
 ```bash

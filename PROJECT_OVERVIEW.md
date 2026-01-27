@@ -25,6 +25,7 @@ methylcentroid         methylcluster         methylmodeler
 methylclassifier       methylmapper          methylenricher
 └── Sample             └── Gene mapping +    └── Functional
     classification         disease context       enrichment (ORA)
+    (Beta/BMM, multi-class)
 ```
 
 ## 🏗️ Architecture
@@ -133,7 +134,7 @@ Raw Samples (HDF5)
         ↓
   MethylModeler (DMPs + models)
         ↓
-  MethylClassifier (inference)
+  MethylClassifier (inference, Beta/BMM multi-class)
         ↓
   MethylMapper (gene mapping + disease enrichment)
         ↓

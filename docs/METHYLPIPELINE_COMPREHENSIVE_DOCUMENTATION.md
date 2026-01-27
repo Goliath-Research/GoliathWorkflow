@@ -184,14 +184,14 @@ All packages leverage MethylUtils for:
 1. Cluster samples (MethylCluster)
 2. Create centroid per subtype (MethylCentroid)
 3. Compare subtypes pairwise (MethylModeler)
-4. Train multi-class classifier
+4. Build multi-class classifier (build_multiclass_model.py, optional BMM centroids)
 ```
 
 #### Workflow 2: Validation Study
 
 ```
 1. Use existing centroids
-2. Train with real validation samples ()
+2. Train with real validation samples (MethylModeler)
 3. Validate on held-out cohort (MethylClassifier)
 4. Compare with ground truth
 ```
@@ -218,6 +218,7 @@ All packages leverage MethylUtils for:
 - `PositionAligner`: Aligns samples to common genomic positions
 - `MethylCentroidPair`: Statistical comparison of two centroids
 - `ProbabilisticBetaClassifier`: Bayesian classification model
+- `MultiClassBetaMixtureClassifier`: Multi-class Beta/BMM likelihoods
 - Distance metrics factory: 7 information-theoretic metrics
 - GPU utilities: Detection, memory management, acceleration
 - Statistical functions: FDR correction, Beta analytics

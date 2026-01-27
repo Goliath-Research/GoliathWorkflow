@@ -14,7 +14,7 @@ MethylPipeline is a comprehensive, production-ready pipeline for methylation-bas
 
 - 🧬 **Centroid Generation**: Representative methylation profiles with outlier detection
 - 📊 **DMP Detection**: Statistical identification of differentially methylated positions
-- 🎯 **Bayesian Classification**: Probabilistic models with true posterior probabilities
+- 🎯 **Bayesian Classification**: Probabilistic models with true posterior probabilities (Beta/BMM)
 - 🔍 **Clustering**: Exploratory analysis, QC, and subtype discovery
 - 🚀 **GPU Acceleration**: 10-50x speedup with NVIDIA GPUs
 - 📦 **Production Ready**: Docker deployment, reproducible configurations
@@ -31,7 +31,7 @@ Core utilities, GPU detection, statistical functions, and data structures used e
 
 **Key Components**:
 - `MethylSample`, `PositionAligner`, `MethylCentroidPair`
-- Probabilistic Beta classifier with Storey's q-value FDR
+- Probabilistic Beta classifier + multi-class Beta Mixture support
 - Seven GPU-aware distance metrics (Jensen-Shannon, Hellinger, Wasserstein, etc.)
 - Unified GPU/CPU memory management, logging, and profiling helpers
 
@@ -57,7 +57,7 @@ Detects Differentially Methylated Positions, applies biological filters, optimiz
 ### Interpretation & Reporting
 
 #### 5. **MethylClassifier** – Sample Prediction
-Loads packaged Beta classifiers, applies temperature scaling/Platt calibration, and scores samples with full posterior probabilities.
+Loads packaged classifiers (single or multi-class), applies temperature scaling/Platt calibration, and scores samples with full posterior probabilities. Supports hybrid Beta/BMM likelihoods when BMM centroids are available.
 
 📚 [MethylClassifier README](packages/methylclassifier/README.md) | [Comprehensive Guide](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
 
