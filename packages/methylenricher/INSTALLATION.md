@@ -64,6 +64,15 @@ MethylEnricher requires the following Python packages:
 methyl_enricher --input genes.txt --outdir results
 ```
 
+### Use MethylMapper Output Directly
+
+```bash
+methyl_enricher --input mapped_features/all-gene_name-combined.csv \
+               --gene-column gene_name \
+               --sort-by total_weight \
+               --top 200
+```
+
 ### Advanced Usage
 
 ```bash
@@ -87,28 +96,19 @@ methyl_enricher --list-libraries
 
 ## Integration with Methylation Workflow
 
-### From MethylModeler DMPs to Enrichment
+### From MethylMapper to Enrichment
 
 ```bash
-# 1. Run MethylModeler (produces biological_dmps-*.csv)
-cd /home/ubuntu/MethylModeler
-python -m methyl_modeler config.json
+# 1. Run MethylMapper (produces mapped_features/all-gene_name-combined.csv)
+cd /path/to/methylmodeler/output
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                      --enrich-disease
 
-# 2. Extract gene symbols (if you have gene annotations)
-# Assuming 'gene' column exists in your DMP CSV
-python -c "
-import pandas as pd
-df = pd.read_csv('output/biological_dmps-chr1-CG.csv')
-if 'gene' in df.columns:
-    genes = df['gene'].dropna().drop_duplicates()
-    genes.to_csv('genes_for_enrichment.txt', index=False, header=False)
-    print(f'Extracted {len(genes)} genes')
-"
-
-# 3. Run enrichment analysis
-cd /home/ubuntu/MethylEnricher
-methyl_enricher --input genes_for_enrichment.txt \
-               --outdir enrichment_results \
+# 2. Run enrichment analysis on MethylMapper output
+methyl_enricher --input mapped_features/all-gene_name-combined.csv \
+               --gene-column gene_name \
+               --disease-only \
+               --sort-by total_weight \
                --top 200
 ```
 

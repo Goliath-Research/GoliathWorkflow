@@ -230,6 +230,10 @@ class MethylModelerConfig(BaseModel):
         default=3, ge=1, le=3,
         description="Maximum mixture components to fit per position"
     )
+    bmm_refine_use_gpu: bool = Field(
+        default=True,
+        description="Use GPU for BMM EM when available"
+    )
     bmm_refine_js_threshold: float = Field(
         default=0.05, ge=0.0,
         description="Minimum Jensen-Shannon divergence to retain a DMP when filtering"

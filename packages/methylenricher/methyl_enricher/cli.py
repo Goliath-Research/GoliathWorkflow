@@ -19,6 +19,13 @@ Examples:
   # Basic enrichment analysis
   methyl_enricher --input genes.txt --outdir results
 
+  # Use MethylMapper output directly
+  methyl_enricher --input mapped_features/all-gene_name-combined.csv --gene-column gene_name
+
+  # Sort by total_weight before selecting top genes
+  methyl_enricher --input mapped_features/all-gene_name-combined.csv \\
+                 --gene-column gene_name --sort-by total_weight --top 200
+
   # Analyze top 100 genes with custom libraries
   methyl_enricher --input genes.txt --outdir results --top 100 \\
                  --libraries KEGG_2021_Human GO_Biological_Process_2023
@@ -36,7 +43,29 @@ For more information, visit: https://github.com/your-org/methyl_enricher
         '--input', '-i',
         type=str,
         required=True,
-        help='Input file with gene symbols (one per line)'
+        help='Input file with gene symbols (one per line or CSV/TSV)'
+    )
+    io_group.add_argument(
+        '--gene-column',
+        type=str,
+        default=None,
+        help='Gene column name when input is CSV/TSV (default: auto-detect)'
+    )
+    io_group.add_argument(
+        '--disease-only',
+        action='store_true',
+        help='When input is CSV, filter to disease_associated == True'
+    )
+    io_group.add_argument(
+        '--sort-by',
+        type=str,
+        default=None,
+        help='Column to sort by when input is CSV/TSV (default: auto total_weight if present)'
+    )
+    io_group.add_argument(
+        '--sort-ascending',
+        action='store_true',
+        help='Sort ascending (default: descending)'
     )
     io_group.add_argument(
         '--outdir', '-o',
@@ -133,6 +162,10 @@ def main():
     print(f"Top genes: {args.top}")
     print(f"Cutoff: q ≤ {args.cutoff}")
     print(f"Organism: {args.organism}")
+    if args.gene_column:
+        print(f"Gene column: {args.gene_column}")
+    if args.sort_by:
+        print(f"Sort by: {args.sort_by} ({'asc' if args.sort_ascending else 'desc'})")
     
     if args.libraries:
         print(f"Libraries: {', '.join(args.libraries)}")
@@ -148,7 +181,11 @@ def main():
             libraries=args.libraries,
             top_n=args.top,
             cutoff=args.cutoff,
-            organism=args.organism
+            organism=args.organism,
+            gene_column=args.gene_column,
+            disease_only=args.disease_only,
+            sort_by=args.sort_by,
+            sort_ascending=args.sort_ascending
         )
         
         if results.empty:

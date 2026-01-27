@@ -62,12 +62,12 @@ Loads packaged Beta classifiers, applies temperature scaling/Platt calibration, 
 📚 [MethylClassifier README](packages/methylclassifier/README.md) | [Comprehensive Guide](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
 
 #### 6. **MethylMapper** – Gene Mapping & Disease Context
-Maps optimized DMPs to genomic features using either the legacy Azure SQL workflow or the preferred bedtools-based mapper with Grok/DisGeNET disease enrichment.
+Maps optimized DMPs to genomic features using either the legacy Azure SQL workflow or the preferred bedtools-based mapper with Grok + Open Targets disease enrichment (optional DisGeNET).
 
 📚 [MethylMapper README](packages/methylmapper/README.md) | [Quick Start](packages/methylmapper/QUICK_START.md)
 
 #### 7. **MethylEnricher** – Functional Enrichment
-Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and WikiPathways with batch processing and automatic q-value filtering.
+Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and WikiPathways from MethylMapper gene lists (TXT/CSV).
 
 📚 [MethylEnricher README](packages/methylenricher/README.md) | [Installation Notes](packages/methylenricher/INSTALLATION.md)
 
@@ -76,7 +76,7 @@ Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and Wik
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    1. Sample Preparation                    │
-│  Collect raw methylation samples, store as HDF5 files      │
+│  Collect raw methylation samples, store as HDF5 files       │
 └────────────────────┬────────────────────────────────────────┘
                      │
                      ▼
@@ -114,7 +114,7 @@ Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and Wik
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
 │        7. Functional Enrichment (MethylEnricher)            │
-│  Perform ORA/Enrichr analysis on mapped gene sets           │
+│  Perform ORA/Enrichr analysis on MethylMapper gene lists    │
 └─────────────────────────────────────────────────────────────┘
 ```
 

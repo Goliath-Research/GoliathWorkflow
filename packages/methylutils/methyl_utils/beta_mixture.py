@@ -13,23 +13,36 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 from scipy.special import betaln
 
+from .gpu_detection import (
+    is_gpu_available,
+    is_cupyx_scipy_special_available,
+    get_cupy,
+    to_cpu_array,
+)
+
 DEFAULT_EPS = 1e-6
 MIN_WEIGHT = 1e-8
 MIN_PARAM = 1e-4
 MAX_PARAM = 1e4
 
 
-def _log_beta_pdf(x: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+def _log_beta_pdf(
+    x: np.ndarray,
+    a: np.ndarray,
+    b: np.ndarray,
+    xp=np,
+    betaln_fn=betaln,
+) -> np.ndarray:
     """Vectorized log Beta PDF with numerical safeguards."""
-    x = np.clip(x, DEFAULT_EPS, 1.0 - DEFAULT_EPS)
-    return (a - 1.0) * np.log(x) + (b - 1.0) * np.log(1.0 - x) - betaln(a, b)
+    x = xp.clip(x, DEFAULT_EPS, 1.0 - DEFAULT_EPS)
+    return (a - 1.0) * xp.log(x) + (b - 1.0) * xp.log(1.0 - x) - betaln_fn(a, b)
 
 
-def _logsumexp(a: np.ndarray, axis: int = -1) -> np.ndarray:
+def _logsumexp(a: np.ndarray, axis: int = -1, xp=np) -> np.ndarray:
     """Stable log-sum-exp."""
-    a_max = np.max(a, axis=axis, keepdims=True)
-    out = a_max + np.log(np.sum(np.exp(a - a_max), axis=axis, keepdims=True))
-    return np.squeeze(out, axis=axis)
+    a_max = xp.max(a, axis=axis, keepdims=True)
+    out = a_max + xp.log(xp.sum(xp.exp(a - a_max), axis=axis, keepdims=True))
+    return xp.squeeze(out, axis=axis)
 
 
 def _moments_to_beta(mean: float, var: float) -> Tuple[float, float]:
@@ -71,6 +84,22 @@ def _initialize_components(
     return pis, alphas, betas
 
 
+def _resolve_backend(use_gpu: bool):
+    if use_gpu and is_gpu_available() and is_cupyx_scipy_special_available():
+        cp = get_cupy()
+        if cp is not None:
+            try:
+                from cupyx.scipy.special import betaln as cupy_betaln
+                return cp, cupy_betaln, True
+            except Exception:
+                pass
+    return np, betaln, False
+
+
+def _to_numpy(arr):
+    return to_cpu_array(arr)
+
+
 def fit_beta_mixture(
     values: np.ndarray,
     weights: Optional[np.ndarray] = None,
@@ -79,6 +108,7 @@ def fit_beta_mixture(
     tol: float = 1e-5,
     min_component_weight: float = 0.02,
     random_state: Optional[int] = None,
+    use_gpu: bool = False,
 ) -> Dict[str, np.ndarray]:
     """
     Fit Beta mixture models (K=1..max_components) using EM and select by BIC.
@@ -91,12 +121,15 @@ def fit_beta_mixture(
         tol: Convergence tolerance on log-likelihood.
         min_component_weight: Minimum mixture weight to keep a component.
         random_state: Optional seed for reproducibility (affects init jitter).
+        use_gpu: If True, attempt GPU acceleration (falls back to CPU if unavailable).
 
     Returns:
         Dict with keys: k, weights, alphas, betas, loglik, bic, converged
     """
     if random_state is not None:
         np.random.seed(random_state)
+
+    xp, betaln_fn, using_gpu = _resolve_backend(use_gpu)
 
     x = np.asarray(values, dtype=float)
     if weights is None:
@@ -105,13 +138,18 @@ def fit_beta_mixture(
         w = np.asarray(weights, dtype=float)
 
     # Remove NaNs
-    mask = np.isfinite(x) & np.isfinite(w)
+    if using_gpu:
+        x = xp.asarray(x)
+        w = xp.asarray(w)
+        mask = xp.isfinite(x) & xp.isfinite(w)
+    else:
+        mask = np.isfinite(x) & np.isfinite(w)
     x = x[mask]
     w = w[mask]
     if len(x) < 5:
         # Fallback to single Beta with method-of-moments
-        mean = np.average(x, weights=w)
-        var = np.average((x - mean) ** 2, weights=w)
+        mean = float(np.average(_to_numpy(x), weights=_to_numpy(w)))
+        var = float(np.average((_to_numpy(x) - mean) ** 2, weights=_to_numpy(w)))
         alpha, beta = _moments_to_beta(mean, var)
         return {
             "k": 1,
@@ -123,39 +161,46 @@ def fit_beta_mixture(
             "converged": False,
         }
 
-    n_eff = float(np.sum(w))
+    n_eff = float(xp.sum(w))
     best = None
 
     for k in range(1, max_components + 1):
-        pis, alphas, betas = _initialize_components(x, k, w)
+        pis, alphas, betas = _initialize_components(_to_numpy(x), k, _to_numpy(w))
+        if using_gpu:
+            pis = xp.asarray(pis)
+            alphas = xp.asarray(alphas)
+            betas = xp.asarray(betas)
         # Small jitter to break symmetry
-        alphas = np.clip(alphas * (1.0 + 0.05 * np.random.randn(k)), MIN_PARAM, MAX_PARAM)
-        betas = np.clip(betas * (1.0 + 0.05 * np.random.randn(k)), MIN_PARAM, MAX_PARAM)
+        alphas = xp.clip(alphas * (1.0 + 0.05 * np.random.randn(k)), MIN_PARAM, MAX_PARAM)
+        betas = xp.clip(betas * (1.0 + 0.05 * np.random.randn(k)), MIN_PARAM, MAX_PARAM)
 
         prev_ll = None
         converged = False
 
         for _ in range(max_iter):
-            log_pdf = np.stack([_log_beta_pdf(x, alphas[j], betas[j]) for j in range(k)], axis=1)
-            log_weighted = log_pdf + np.log(pis + MIN_WEIGHT)
-            log_norm = _logsumexp(log_weighted, axis=1)
-            resp = np.exp(log_weighted - log_norm[:, None])
+            log_pdf = xp.stack(
+                [_log_beta_pdf(x, alphas[j], betas[j], xp=xp, betaln_fn=betaln_fn) for j in range(k)],
+                axis=1
+            )
+            log_weighted = log_pdf + xp.log(pis + MIN_WEIGHT)
+            log_norm = _logsumexp(log_weighted, axis=1, xp=xp)
+            resp = xp.exp(log_weighted - log_norm[:, None])
 
             # Weighted responsibilities
             wr = resp * w[:, None]
-            Nk = np.sum(wr, axis=0)
-            Nk = np.clip(Nk, MIN_WEIGHT, None)
+            Nk = xp.sum(wr, axis=0)
+            Nk = xp.clip(Nk, MIN_WEIGHT, None)
 
-            pis = Nk / np.sum(Nk)
+            pis = Nk / xp.sum(Nk)
 
             # M-step: weighted moments per component
             for j in range(k):
-                mean_j = np.sum(wr[:, j] * x) / Nk[j]
-                var_j = np.sum(wr[:, j] * (x - mean_j) ** 2) / Nk[j]
+                mean_j = float(xp.sum(wr[:, j] * x) / Nk[j])
+                var_j = float(xp.sum(wr[:, j] * (x - mean_j) ** 2) / Nk[j])
                 alphas[j], betas[j] = _moments_to_beta(mean_j, var_j)
 
             # Log-likelihood
-            ll = float(np.sum(w * log_norm))
+            ll = float(xp.sum(w * log_norm))
             if prev_ll is not None and abs(ll - prev_ll) < tol * (1.0 + abs(prev_ll)):
                 converged = True
                 break
@@ -163,12 +208,12 @@ def fit_beta_mixture(
 
         # Remove tiny components
         keep = pis >= min_component_weight
-        if np.sum(keep) == 0:
-            keep = np.ones_like(pis, dtype=bool)
+        if int(xp.sum(keep)) == 0:
+            keep = xp.ones_like(pis, dtype=bool)
         pis = pis[keep]
         alphas = alphas[keep]
         betas = betas[keep]
-        pis = pis / np.sum(pis)
+        pis = pis / xp.sum(pis)
         k_eff = len(pis)
 
         # BIC
@@ -177,9 +222,9 @@ def fit_beta_mixture(
 
         candidate = {
             "k": k_eff,
-            "weights": pis,
-            "alphas": alphas,
-            "betas": betas,
+            "weights": _to_numpy(pis),
+            "alphas": _to_numpy(alphas),
+            "betas": _to_numpy(betas),
             "loglik": prev_ll,
             "bic": bic,
             "converged": converged,
@@ -192,12 +237,20 @@ def fit_beta_mixture(
 
 
 def mixture_logpdf(
-    x: np.ndarray, weights: np.ndarray, alphas: np.ndarray, betas: np.ndarray
+    x: np.ndarray,
+    weights: np.ndarray,
+    alphas: np.ndarray,
+    betas: np.ndarray,
+    xp=np,
+    betaln_fn=betaln,
 ) -> np.ndarray:
     """Log-pdf of a beta mixture at x."""
-    log_pdf = np.stack([_log_beta_pdf(x, alphas[j], betas[j]) for j in range(len(weights))], axis=1)
-    log_weighted = log_pdf + np.log(weights + MIN_WEIGHT)
-    return _logsumexp(log_weighted, axis=1)
+    log_pdf = xp.stack(
+        [_log_beta_pdf(x, alphas[j], betas[j], xp=xp, betaln_fn=betaln_fn) for j in range(len(weights))],
+        axis=1
+    )
+    log_weighted = log_pdf + xp.log(weights + MIN_WEIGHT)
+    return _logsumexp(log_weighted, axis=1, xp=xp)
 
 
 def estimate_js_divergence(
@@ -209,36 +262,57 @@ def estimate_js_divergence(
     betas2: np.ndarray,
     n_samples: int = 200,
     random_state: Optional[int] = None,
+    use_gpu: bool = False,
 ) -> float:
     """
     Estimate Jensen-Shannon divergence between two beta mixtures via Monte Carlo.
+
+    Args:
+        use_gpu: If True, attempt GPU acceleration (falls back to CPU if unavailable).
     """
+    xp, betaln_fn, _ = _resolve_backend(use_gpu)
     if random_state is not None:
-        rng = np.random.default_rng(random_state)
-    else:
-        rng = np.random.default_rng()
+        try:
+            xp.random.seed(random_state)
+        except Exception:
+            pass
+
+    weights1 = xp.asarray(weights1, dtype=float)
+    weights2 = xp.asarray(weights2, dtype=float)
+    alphas1 = xp.asarray(alphas1, dtype=float)
+    alphas2 = xp.asarray(alphas2, dtype=float)
+    betas1 = xp.asarray(betas1, dtype=float)
+    betas2 = xp.asarray(betas2, dtype=float)
+
+    def _normalize(weights):
+        denom = xp.sum(weights)
+        if float(_to_numpy(denom)) <= 0.0:
+            return xp.ones_like(weights) / max(len(weights), 1)
+        return weights / denom
 
     def sample_mixture(weights, alphas, betas, n):
-        comp = rng.choice(len(weights), size=n, p=weights)
-        samples = np.empty(n, dtype=float)
+        weights = _normalize(weights)
+        comp = xp.random.choice(len(weights), size=n, p=weights)
+        samples = xp.empty(n, dtype=float)
         for j in range(len(weights)):
             idx = comp == j
-            if np.any(idx):
-                samples[idx] = rng.beta(alphas[j], betas[j], size=np.sum(idx))
+            if bool(xp.any(idx)):
+                count = int(_to_numpy(xp.sum(idx)))
+                samples[idx] = xp.random.beta(alphas[j], betas[j], size=count)
         return samples
 
     x1 = sample_mixture(weights1, alphas1, betas1, n_samples)
     x2 = sample_mixture(weights2, alphas2, betas2, n_samples)
 
-    log_p1 = mixture_logpdf(x1, weights1, alphas1, betas1)
-    log_p2 = mixture_logpdf(x1, weights2, alphas2, betas2)
-    log_m = np.log(0.5 * np.exp(log_p1) + 0.5 * np.exp(log_p2) + DEFAULT_EPS)
-    kl_p1_m = np.mean(log_p1 - log_m)
+    log_p1 = mixture_logpdf(x1, weights1, alphas1, betas1, xp=xp, betaln_fn=betaln_fn)
+    log_p2 = mixture_logpdf(x1, weights2, alphas2, betas2, xp=xp, betaln_fn=betaln_fn)
+    log_m = xp.log(0.5 * xp.exp(log_p1) + 0.5 * xp.exp(log_p2) + DEFAULT_EPS)
+    kl_p1_m = xp.mean(log_p1 - log_m)
 
-    log_q1 = mixture_logpdf(x2, weights2, alphas2, betas2)
-    log_q2 = mixture_logpdf(x2, weights1, alphas1, betas1)
-    log_m2 = np.log(0.5 * np.exp(log_q1) + 0.5 * np.exp(log_q2) + DEFAULT_EPS)
-    kl_p2_m = np.mean(log_q1 - log_m2)
+    log_q1 = mixture_logpdf(x2, weights2, alphas2, betas2, xp=xp, betaln_fn=betaln_fn)
+    log_q2 = mixture_logpdf(x2, weights1, alphas1, betas1, xp=xp, betaln_fn=betaln_fn)
+    log_m2 = xp.log(0.5 * xp.exp(log_q1) + 0.5 * xp.exp(log_q2) + DEFAULT_EPS)
+    kl_p2_m = xp.mean(log_q1 - log_m2)
 
     js = 0.5 * (kl_p1_m + kl_p2_m)
-    return float(max(js, 0.0))
+    return float(_to_numpy(xp.maximum(js, 0.0)))

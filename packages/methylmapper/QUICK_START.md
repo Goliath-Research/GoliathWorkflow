@@ -91,6 +91,8 @@ mapped_features/
 └── all-gene_name-combined-enriched.csv             # With disease enrichment
 ```
 
+Per-gene outputs include aggregated `gene_p_value`, `gene_q_value`, and `gene_importance` (sum of DMP importance).
+
 ### Python API
 
 ```python

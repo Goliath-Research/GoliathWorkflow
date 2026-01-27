@@ -15,6 +15,8 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 
+from methyl_utils.statistical_tests import storey_qvalues
+
 from .gene_disease_enricher import GeneDiseaseEnricher
 
 logger = logging.getLogger(__name__)
@@ -499,6 +501,9 @@ class BedtoolsMapper:
         
         if 'delta_mean' in intersect_df.columns:
             agg_dict['delta_mean'] = ['mean', 'max']
+
+        if 'importance' in intersect_df.columns:
+            agg_dict['importance'] = ['sum', 'mean', 'max']
         
         # Perform aggregation
         grouped = intersect_df.groupby(group_by).agg(agg_dict).reset_index()
@@ -539,6 +544,15 @@ class BedtoolsMapper:
                         new_cols.append(f"max_{col[0]}")
                     else:
                         new_cols.append(f"{col[0]}_{col[1]}")
+                elif col[0] == 'importance':
+                    if col[1] == 'sum':
+                        new_cols.append('total_importance')
+                    elif col[1] == 'mean':
+                        new_cols.append('mean_importance')
+                    elif col[1] == 'max':
+                        new_cols.append('max_importance')
+                    else:
+                        new_cols.append(f"{col[0]}_{col[1]}")
                 else:
                     new_cols.append(f"{col[0]}_{col[1]}" if col[1] else col[0])
             grouped.columns = new_cols
@@ -546,6 +560,75 @@ class BedtoolsMapper:
             # Already flattened
             grouped.columns = [col[0] if isinstance(col, tuple) and len(col) == 2 else col for col in grouped.columns]
         
+        # Add Stouffer aggregated gene p-values (weighted, signed by delta_mean)
+        if 'p_value' in intersect_df.columns:
+            from scipy.stats import norm
+
+            def _compute_gene_pvalue(group: pd.DataFrame) -> pd.Series:
+                pvals = group['p_value'].astype(float).to_numpy()
+                weights = group['weight'].astype(float).to_numpy() if 'weight' in group.columns else np.ones_like(pvals)
+                signs = np.sign(group['delta_mean'].astype(float).to_numpy()) if 'delta_mean' in group.columns else np.ones_like(pvals)
+
+                valid = np.isfinite(pvals) & np.isfinite(weights)
+                if 'delta_mean' in group.columns:
+                    valid &= np.isfinite(signs)
+
+                pvals = pvals[valid]
+                weights = weights[valid]
+                signs = signs[valid]
+
+                if len(pvals) == 0:
+                    return pd.Series({
+                        "gene_p_value": np.nan,
+                        "gene_z": np.nan,
+                        "gene_direction": np.nan,
+                        "gene_weight_sumsq": np.nan,
+                        "gene_z_numerator": np.nan,
+                    })
+
+                pvals = np.clip(pvals, 1e-300, 1.0 - 1e-16)
+                z_scores = norm.ppf(1 - pvals / 2.0)
+                z_scores = np.clip(z_scores, -8.0, 8.0)
+                signed_z = z_scores * signs
+
+                weight_sumsq = float(np.sum(weights ** 2))
+                if not np.isfinite(weight_sumsq) or weight_sumsq <= 0:
+                    return pd.Series({
+                        "gene_p_value": np.nan,
+                        "gene_z": np.nan,
+                        "gene_direction": np.nan,
+                        "gene_weight_sumsq": np.nan,
+                        "gene_z_numerator": np.nan,
+                    })
+
+                z_numerator = float(np.sum(weights * signed_z))
+                combined_z = float(z_numerator / np.sqrt(weight_sumsq))
+                gene_p = float(2 * (1 - norm.cdf(abs(combined_z))))
+                gene_p = float(np.clip(gene_p, 0.0, 1.0))
+
+                return pd.Series({
+                    "gene_p_value": gene_p,
+                    "gene_z": combined_z,
+                    "gene_direction": float(np.sign(combined_z)),
+                    "gene_weight_sumsq": weight_sumsq,
+                    "gene_z_numerator": z_numerator,
+                })
+
+            gene_stats = intersect_df.groupby(group_by).apply(_compute_gene_pvalue).reset_index()
+            grouped = grouped.merge(gene_stats, on=group_by, how='left')
+
+            gene_pvals = grouped["gene_p_value"].to_numpy(dtype=float)
+            gene_qvals = np.full_like(gene_pvals, np.nan, dtype=float)
+            finite_mask = np.isfinite(gene_pvals)
+            if np.any(finite_mask):
+                gene_qvals[finite_mask] = storey_qvalues(gene_pvals[finite_mask])
+            grouped["gene_q_value"] = gene_qvals
+
+        if 'total_importance' in grouped.columns:
+            grouped['gene_importance'] = grouped['total_importance']
+        elif 'total_weight' in grouped.columns:
+            grouped['gene_importance'] = grouped['total_weight']
+
         # Add feature metadata (take first occurrence)
         metadata_cols = ['feature_type', 'feature_chrom', 'feature_strand', 'gene_id', 'transcript_id']
         available_metadata = [c for c in metadata_cols if c in intersect_df.columns]
@@ -915,10 +998,37 @@ class BedtoolsMapper:
                 'dmp_count': 'sum',
                 'unique_dmps': 'sum',
             }
+
+            # Preserve additive fields across chromosomes
+            sum_cols = [
+                'total_weight',
+                'total_importance',
+                'gene_weight_sumsq',
+                'gene_z_numerator',
+            ]
+            for col in sum_cols:
+                if col in combined.columns:
+                    combined_agg[col] = 'sum'
             
             # Add mean aggregations for numeric columns (excluding grouping and metadata columns)
             numeric_cols = combined.select_dtypes(include=[np.number]).columns.tolist()
-            exclude_cols = [group_by, 'dmp_count', 'unique_dmps', 'feature_type', 'feature_chrom', 'feature_strand', 'gene_id', 'transcript_id']
+            exclude_cols = [
+                group_by,
+                'dmp_count',
+                'unique_dmps',
+                'feature_type',
+                'feature_chrom',
+                'feature_strand',
+                'gene_id',
+                'transcript_id',
+                'gene_p_value',
+                'gene_q_value',
+                'gene_z',
+                'gene_direction',
+                'gene_weight_sumsq',
+                'gene_z_numerator',
+                'gene_importance',
+            ]
             for col in numeric_cols:
                 if col not in exclude_cols:
                     combined_agg[col] = 'mean'
@@ -943,6 +1053,30 @@ class BedtoolsMapper:
             
             # Group and aggregate
             combined = combined.groupby(group_by).agg(combined_agg).reset_index()
+
+            # Recompute combined gene-level p-values if available
+            if 'gene_weight_sumsq' in combined.columns and 'gene_z_numerator' in combined.columns:
+                from scipy.stats import norm
+                z_num = combined['gene_z_numerator'].to_numpy(dtype=float)
+                z_denom = np.sqrt(combined['gene_weight_sumsq'].to_numpy(dtype=float))
+                with np.errstate(invalid='ignore', divide='ignore'):
+                    combined_z = z_num / z_denom
+                combined['gene_z'] = combined_z
+                combined['gene_direction'] = np.sign(combined_z)
+                gene_p = 2 * (1 - norm.cdf(np.abs(combined_z)))
+                combined['gene_p_value'] = np.clip(gene_p, 0.0, 1.0)
+
+                gene_pvals = combined['gene_p_value'].to_numpy(dtype=float)
+                gene_qvals = np.full_like(gene_pvals, np.nan, dtype=float)
+                finite_mask = np.isfinite(gene_pvals)
+                if np.any(finite_mask):
+                    gene_qvals[finite_mask] = storey_qvalues(gene_pvals[finite_mask])
+                combined['gene_q_value'] = gene_qvals
+
+            if 'total_importance' in combined.columns:
+                combined['gene_importance'] = combined['total_importance']
+            elif 'total_weight' in combined.columns:
+                combined['gene_importance'] = combined['total_weight']
             
             # Enrich combined results with disease associations if enabled
             if self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:

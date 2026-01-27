@@ -172,7 +172,7 @@ All packages leverage MethylUtils for:
 
 6. Analysis (Optional)
    ├─ Subtype discovery with MethylCluster
-   ├─ Gene enrichment analysis
+   ├─ Gene enrichment analysis (MethylEnricher on MethylMapper outputs)
    └─ Comparative studies
 ```
 

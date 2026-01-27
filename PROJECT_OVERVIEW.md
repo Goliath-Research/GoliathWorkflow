@@ -24,7 +24,7 @@ methylcentroid         methylcluster         methylmodeler
 ```
 methylclassifier       methylmapper          methylenricher
 └── Sample             └── Gene mapping +    └── Functional
-    classification         disease links        enrichment (ORA)
+    classification         disease context       enrichment (ORA)
 ```
 
 ## 🏗️ Architecture
@@ -135,9 +135,9 @@ Raw Samples (HDF5)
         ↓
   MethylClassifier (inference)
         ↓
-  MethylMapper (gene mapping)
+  MethylMapper (gene mapping + disease enrichment)
         ↓
-  MethylEnricher (functional analysis)
+  MethylEnricher (functional analysis on MethylMapper outputs)
 ```
 
 ## 🚀 Quick Start Commands

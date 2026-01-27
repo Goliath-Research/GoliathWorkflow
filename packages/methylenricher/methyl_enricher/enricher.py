@@ -50,7 +50,12 @@ class EnrichmentAnalyzer:
     def load_gene_list(
         self,
         input_path: Union[str, Path],
-        top_n: Optional[int] = None
+        top_n: Optional[int] = None,
+        gene_column: Optional[str] = None,
+        disease_only: bool = False,
+        disease_column: str = "disease_associated",
+        sort_by: Optional[str] = None,
+        sort_ascending: bool = False
     ) -> List[str]:
         """
         Load gene list from a text file.
@@ -58,6 +63,11 @@ class EnrichmentAnalyzer:
         Args:
             input_path: Path to input file with one gene symbol per line
             top_n: If specified, return only the top N genes
+            gene_column: Gene column to use when input is CSV/TSV
+            disease_only: If True, filter to disease-associated genes (CSV only)
+            disease_column: Column used for disease association filtering
+            sort_by: Column to sort by when input is CSV/TSV
+            sort_ascending: If True, sort ascending (default: descending)
             
         Returns:
             List of gene symbols
@@ -66,10 +76,53 @@ class EnrichmentAnalyzer:
         
         if not input_path.exists():
             raise FileNotFoundError(f"Input file not found: {input_path}")
-        
-        with open(input_path) as f:
-            genes = [line.strip() for line in f if line.strip()]
-        
+
+        suffix = input_path.suffix.lower()
+        if suffix in [".csv", ".tsv"]:
+            sep = "," if suffix == ".csv" else "\t"
+            df = pd.read_csv(input_path, sep=sep)
+
+            if gene_column is None:
+                candidate_cols = ["gene_name", "gene_symbol", "gene", "symbol", "gene_id"]
+                gene_column = next((c for c in candidate_cols if c in df.columns), None)
+
+            if gene_column is None or gene_column not in df.columns:
+                raise ValueError(
+                    "Could not determine gene column. Provide --gene-column. "
+                    f"Columns found: {list(df.columns)}"
+                )
+
+            if disease_only:
+                if disease_column in df.columns:
+                    df = df[df[disease_column].astype(bool)]
+                else:
+                    print(f"[WARN] disease_only requested but '{disease_column}' not found; using all genes")
+
+            if sort_by is None and "total_weight" in df.columns:
+                sort_by = "total_weight"
+                print("[INFO] Sorting genes by total_weight (auto)")
+
+            if sort_by:
+                if sort_by in df.columns:
+                    print(f"[INFO] Sorting genes by {sort_by} ({'asc' if sort_ascending else 'desc'})")
+                    df = df.sort_values(by=sort_by, ascending=sort_ascending)
+                else:
+                    print(f"[WARN] sort_by '{sort_by}' not found; skipping sort")
+
+            genes_raw = df[gene_column].dropna().astype(str).tolist()
+            genes = []
+            seen = set()
+            for gene in genes_raw:
+                gene = gene.strip()
+                if gene and gene not in seen:
+                    genes.append(gene)
+                    seen.add(gene)
+        else:
+            if sort_by:
+                print("[WARN] sort_by is only supported for CSV/TSV inputs; ignoring")
+            with open(input_path) as f:
+                genes = [line.strip() for line in f if line.strip()]
+
         if top_n and len(genes) > top_n:
             genes = genes[:top_n]
         
@@ -210,7 +263,11 @@ def run_enrichment(
     libraries: Optional[List[str]] = None,
     top_n: Optional[int] = 200,
     cutoff: float = 0.05,
-    organism: str = "Human"
+    organism: str = "Human",
+    gene_column: Optional[str] = None,
+    disease_only: bool = False,
+    sort_by: Optional[str] = None,
+    sort_ascending: bool = False
 ) -> pd.DataFrame:
     """
     Convenience function to run enrichment analysis in one call.
@@ -232,7 +289,14 @@ def run_enrichment(
         cutoff=cutoff
     )
     
-    genes = analyzer.load_gene_list(input_file, top_n=top_n)
+    genes = analyzer.load_gene_list(
+        input_file,
+        top_n=top_n,
+        gene_column=gene_column,
+        disease_only=disease_only,
+        sort_by=sort_by,
+        sort_ascending=sort_ascending
+    )
     results = analyzer.run_enrichment(genes, output_dir)
     
     return results

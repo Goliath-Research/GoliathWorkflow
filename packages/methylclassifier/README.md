@@ -310,8 +310,8 @@ MethylClassifier is part of the MethylPipeline ecosystem:
 2. **MethylModeler** → Detect DMPs and train models
 3. FeatureCuts/Bayesian optimization → Optimize DMP selection
 4. **MethylClassifier** → Classify new samples (this package)
-5. **MethylMapper** → Map DMPs to genes
-6. **MethylEnricher** → Functional enrichment analysis
+5. **MethylMapper** → Map DMPs to genes + disease context
+6. **MethylEnricher** → Functional enrichment analysis on MethylMapper outputs
 
 ## Performance
 

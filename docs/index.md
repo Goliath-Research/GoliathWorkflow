@@ -17,6 +17,6 @@ Welcome to the documentation for MethylPipeline, a unified genomics pipeline for
 - [MethylModeler](../packages/methylmodeler/README.md)
 - [MethylMapper](../packages/methylmapper/README.md)
 - [MethylClassifier](../packages/methylclassifier/README.md)
-- [MethylEnricher](../packages/methylenricher/README.md)
+- [MethylEnricher](../packages/methylenricher/README.md) (functional enrichment from MethylMapper CSV/TSV)
 
 For more details, navigate using the menu on the left.

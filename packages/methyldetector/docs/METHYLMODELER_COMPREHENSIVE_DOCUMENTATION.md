@@ -790,6 +790,10 @@ class MethylModelerResult(BaseModel):
   "min_delta_mean": 0.2,
   "max_bc": 0.6,
   
+  "bmm_refine_enabled": true,
+  "bmm_refine_mode": "filter",
+  "bmm_refine_use_gpu": true,
+  
   "target_balanced_accuracy": 0.95,
   "min_dmps": 10,
   "max_dmps": 500,
@@ -821,6 +825,9 @@ class MethylModelerResult(BaseModel):
 | `target_balanced_accuracy` | float | 0.95 | Target Balanced Accuracy for DMP selection |
 | `validation_mode` | str | "real" | Validation mode: "real" or "synthetic" |
 | `use_gpu` | bool | True | Enable GPU acceleration |
+| `bmm_refine_enabled` | bool | False | Enable detector-stage BMM refinement on top DMPs |
+| `bmm_refine_mode` | str | "filter" | "annotate" or "filter" (drop weak mixture separations) |
+| `bmm_refine_use_gpu` | bool | True | Use GPU for BMM EM + JS divergence when available |
 
 ---
 
@@ -838,7 +845,16 @@ dmps = pair.find_dmps()  # GPU-accelerated
 
 **Performance**: 20-50x speedup for statistical testing and distance calculations.
 
-### 2. Gene-Level Feature Importance
+### 2. BMM Refinement (Detector Stage)
+
+Optional beta-mixture refinement for top biological DMPs. Uses binned counts when available, supports GPU acceleration for EM fitting and JS divergence, and saves BMM centroids per chromosome/context for downstream use.
+
+Outputs when enabled:
+
+- `bmm_centroids/bmm-centroid-{chromosome}-{context}.json`
+- `results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files`
+
+### 3. Gene-Level Feature Importance
 
 Aggregate DMP importance by gene:
 

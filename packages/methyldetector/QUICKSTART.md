@@ -32,6 +32,20 @@ Create a JSON configuration file:
 }
 ```
 
+### Optional: BMM Refinement (Detector Stage)
+
+Enable beta mixture refinement for top biological DMPs (GPU-accelerated when available):
+
+```json
+{
+  "bmm_refine_enabled": true,
+  "bmm_refine_mode": "filter",
+  "bmm_refine_use_gpu": true,
+  "bmm_refine_max_dmps": 200000,
+  "bmm_refine_max_fraction": 0.02
+}
+```
+
 ### 2. Run Analysis
 
 ```bash
@@ -54,7 +68,8 @@ output/
 ├── dmps-1.csv              # All biological DMPs
 ├── dmps-1-3-optimized.csv  # Final optimized DMPs
 ├── classifier-1.pkl        # Trained classifier
-└── results-1.json          # Validation results
+├── results-1.json          # Validation results
+└── bmm_centroids/          # BMM centroids (if refinement enabled)
 ```
 
 ## Multi-Chromosome Processing

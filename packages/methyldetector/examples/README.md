@@ -71,6 +71,9 @@ This will run comparisons for:
 - `min_N_pct`: Minimum fraction of samples covering a position (default: 0.10)
 - `min_N_abs`: Absolute minimum sample count (optional, default: None)
 - `use_gpu`: Whether to use GPU acceleration (default: true)
+- `bmm_refine_enabled`: Enable beta mixture refinement on top DMPs (default: false)
+- `bmm_refine_mode`: "annotate" or "filter" (default: "filter")
+- `bmm_refine_use_gpu`: Use GPU for BMM EM + JS divergence when available (default: true)
 
 ### Multiple Comparison Parameters
 - `centroid1_dir`: Directory containing centroid1 files (required)
@@ -88,6 +91,7 @@ For multiple comparisons, the tool expects centroid files to follow this naming 
 ## Tips
 
 1. **GPU Usage**: Set `use_gpu: true` for faster processing (requires CUDA environment)
-2. **Sample Size**: Increase `min_N_pct` for more reliable results but fewer positions analyzed
-3. **Significance Levels**: Adjust `alpha` based on your research needs
-4. **Config Detection**: The tool automatically detects whether to use single or multiple comparison mode based on the presence of `centroid1_path` vs `centroid1_dir` in the config file
+2. **BMM Refinement**: Enable `bmm_refine_enabled: true` to refine top DMPs and save `bmm_centroids/` outputs
+3. **Sample Size**: Increase `min_N_pct` for more reliable results but fewer positions analyzed
+4. **Significance Levels**: Adjust `alpha` based on your research needs
+5. **Config Detection**: The tool automatically detects whether to use single or multiple comparison mode based on the presence of `centroid1_path` vs `centroid1_dir` in the config file

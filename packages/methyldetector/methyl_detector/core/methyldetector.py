@@ -16,7 +16,8 @@ from methyl_utils import (
     fit_beta_mixture,
     estimate_js_divergence,
     MethylBetaMixtureCentroid,
-    storey_qvalues
+    storey_qvalues,
+    cleanup_gpu_memory
 )
 from methyl_utils.logging_utils import setup_module_logging
 
@@ -228,6 +229,13 @@ class MethylDetector:
             logger.info("🧪 Running BMM refinement stage (detector-level)...")
             bio_dmps_df = self._refine_dmps_with_bmm(bio_dmps_df)
             logger.info(f"✅ BMM refinement complete: {len(bio_dmps_df):,} DMPs retained")
+
+            # Save BMM centroid for downstream use (per chromosome/context)
+            if self.config.output_dir:
+                self._save_bmm_centroids(Path(self.config.output_dir))
+            if self.config.bmm_refine_use_gpu and self.gpu_config.GPU_AVAILABLE:
+                cleanup_gpu_memory()
+                logger.debug("Cleaned GPU memory after BMM refinement")
         
         # Compute biological importance and sort
         logger.info("📋 Sorting DMPs by biological importance...")
@@ -795,6 +803,12 @@ class MethylDetector:
         bmm_records = []
         bmm_source = "centroid_bins" if binned_counts is not None else "samples"
         min_samples = int(self.config.bmm_refine_min_samples_per_group)
+        use_gpu = bool(self.config.bmm_refine_use_gpu)
+        if use_gpu and not self.gpu_config.GPU_AVAILABLE:
+            logger.info("BMM GPU requested but not available; using CPU")
+            use_gpu = False
+        if use_gpu:
+            logger.info("BMM GPU acceleration enabled")
 
         for j, row in subset_df.reset_index(drop=False).iterrows():
             pos = int(row["position"])
@@ -891,20 +905,23 @@ class MethylDetector:
                     bin_centers,
                     weights=counts1,
                     max_components=self.config.bmm_refine_max_components,
-                    random_state=self.config.random_state
+                    random_state=self.config.random_state,
+                    use_gpu=use_gpu
                 )
                 fit2 = fit_beta_mixture(
                     bin_centers,
                     weights=counts2,
                     max_components=self.config.bmm_refine_max_components,
-                    random_state=self.config.random_state
+                    random_state=self.config.random_state,
+                    use_gpu=use_gpu
                 )
                 pooled_counts = counts1 + counts2
                 fit0 = fit_beta_mixture(
                     bin_centers,
                     weights=pooled_counts,
                     max_components=self.config.bmm_refine_max_components,
-                    random_state=self.config.random_state
+                    random_state=self.config.random_state,
+                    use_gpu=use_gpu
                 )
             else:
                 if use_binned:
@@ -914,44 +931,51 @@ class MethylDetector:
                         bin_centers,
                         weights=counts1,
                         max_components=self.config.bmm_refine_max_components,
-                        random_state=self.config.random_state
+                        random_state=self.config.random_state,
+                        use_gpu=use_gpu
                     )
                     fit2 = fit_beta_mixture(
                         bin_centers,
                         weights=counts2,
                         max_components=self.config.bmm_refine_max_components,
-                        random_state=self.config.random_state
+                        random_state=self.config.random_state,
+                        use_gpu=use_gpu
                     )
                     pooled_counts = counts1 + counts2
                     fit0 = fit_beta_mixture(
                         bin_centers,
                         weights=pooled_counts,
                         max_components=self.config.bmm_refine_max_components,
-                        random_state=self.config.random_state
+                        random_state=self.config.random_state,
+                        use_gpu=use_gpu
                     )
                 else:
                     fit1 = fit_beta_mixture(
                         vals_healthy,
                         max_components=self.config.bmm_refine_max_components,
-                        random_state=self.config.random_state
+                        random_state=self.config.random_state,
+                        use_gpu=use_gpu
                     )
                     fit2 = fit_beta_mixture(
                         vals_cancer,
                         max_components=self.config.bmm_refine_max_components,
-                        random_state=self.config.random_state
+                        random_state=self.config.random_state,
+                        use_gpu=use_gpu
                     )
                     pooled_vals = np.concatenate([vals_healthy, vals_cancer])
                     fit0 = fit_beta_mixture(
                         pooled_vals,
                         max_components=self.config.bmm_refine_max_components,
-                        random_state=self.config.random_state
+                        random_state=self.config.random_state,
+                        use_gpu=use_gpu
                     )
 
             js = estimate_js_divergence(
                 fit1["weights"], fit1["alphas"], fit1["betas"],
                 fit2["weights"], fit2["alphas"], fit2["betas"],
                 n_samples=self.config.bmm_refine_mc_samples,
-                random_state=self.config.random_state
+                random_state=self.config.random_state,
+                use_gpu=use_gpu
             )
 
             # Approximate mixture-based p-value using pooled LLR (chi-square)
@@ -998,6 +1022,7 @@ class MethylDetector:
             })
 
         # Build mixture centroid container for downstream use
+        mask_df = subset_df[["position", "context"]].copy()
         self._bmm_centroid = MethylBetaMixtureCentroid.from_records(
             [
                 {
@@ -1015,6 +1040,7 @@ class MethylDetector:
                 }
                 for r in bmm_records
             ],
+            mask=mask_df,
             metadata={
                 "chromosome": self.chromosome,
                 "contexts": list(np.unique(subset_df["context"].values)),
@@ -1112,6 +1138,53 @@ class MethylDetector:
         }
 
         return merged
+
+    def _save_bmm_centroids(self, output_dir: Path) -> None:
+        """Save BMM centroids per context for downstream use."""
+        if self._bmm_centroid is None:
+            return
+
+        bmm_df = self._bmm_centroid.df
+        mask_df = self._bmm_centroid.mask
+
+        contexts = set()
+        if bmm_df is not None and not bmm_df.empty and "context" in bmm_df.columns:
+            contexts.update(bmm_df["context"].dropna().unique().tolist())
+        if mask_df is not None and not mask_df.empty and "context" in mask_df.columns:
+            contexts.update(mask_df["context"].dropna().unique().tolist())
+
+        if not contexts:
+            return
+
+        out_dir = output_dir / "bmm_centroids"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        saved_files = []
+
+        for ctx in sorted(contexts):
+            ctx_df = bmm_df[bmm_df["context"] == ctx].copy() if bmm_df is not None else pd.DataFrame()
+            ctx_mask = mask_df[mask_df["context"] == ctx].copy() if mask_df is not None else None
+
+            metadata = dict(self._bmm_centroid.metadata or {})
+            metadata.update({
+                "chromosome": self.chromosome,
+                "context": ctx,
+                "record_count": int(len(ctx_df)),
+                "mask_count": int(len(ctx_mask)) if ctx_mask is not None else 0,
+                "source": metadata.get("source", "detector_bmm_refine"),
+            })
+
+            centroid = MethylBetaMixtureCentroid.from_dataframe(
+                ctx_df,
+                metadata=metadata,
+                mask=ctx_mask,
+            )
+
+            out_path = out_dir / f"bmm-centroid-{self.chromosome}-{ctx}.json"
+            centroid.to_json(out_path)
+            saved_files.append(str(out_path))
+
+        logger.info(f"Saved BMM centroids to {out_dir}")
+        self._bmm_centroid_files = saved_files
     
     def _compute_biological_importance(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -2956,6 +3029,10 @@ class MethylDetector:
         config_summary = self.config.model_dump()
         if hasattr(self, "_bmm_summary") and self._bmm_summary:
             config_summary = {**config_summary, "bmm_summary": self._bmm_summary}
+        if hasattr(self, "_bmm_centroid_files"):
+            config_summary = {**config_summary, "bmm_centroid_files": self._bmm_centroid_files}
+        if hasattr(self, "_bmm_centroid_files"):
+            config_summary = {**config_summary, "bmm_centroid_files": self._bmm_centroid_files}
 
         result = MethylModelerResult(
             biologically_significant_dmps_df=bio_dmps_df,

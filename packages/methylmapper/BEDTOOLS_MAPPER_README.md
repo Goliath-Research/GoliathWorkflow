@@ -69,6 +69,12 @@ The script creates a `mapped_features/` directory with:
 
 - **`dmps-{chromosome}-3-optimized-features-{group_by}.csv`**: Aggregated features per chromosome
   - Columns: `gene_name`, `dmp_count`, `unique_dmps`, `total_weight`, `mean_weight`, `min_p_value`, `mean_effect_size`, etc.
+  - **NEW**:
+    - `gene_p_value`: Gene-level aggregated p-value (weighted Stouffer, signed by `delta_mean`)
+    - `gene_q_value`: Gene-level q-value (Storey's FDR correction)
+    - `gene_importance`: Gene-level importance (sum of DMP `importance`, fallback to `total_weight`)
+    - `total_importance`, `mean_importance`, `max_importance`
+    - `gene_z`, `gene_direction`
   - **NEW**: If `--enrich-disease` is enabled, also includes:
     - `disease_associated`: Boolean indicating if gene is associated with the disease
     - `disease_association_type`: Type of association (direct, indirect, predicted, none)
@@ -237,6 +243,16 @@ DMPs are weighted by:
 - **effect_size**: Direct value (biological importance)
 
 Final weight = p_weight × q_weight × effect_size_weight (normalized)
+
+### Gene-Level P-Value Aggregation
+
+Gene p-values are aggregated from DMP p-values using a **weighted Stouffer's method**:
+
+- Signed by `delta_mean` direction (positive vs negative effect)
+- Two-sided p-values using `norm.ppf(1 - p/2)`
+- Weights use the same `weight` column used for gene scoring
+
+Gene q-values are computed with Storey's FDR correction across genes.
 
 ## Disease Enrichment Details
 

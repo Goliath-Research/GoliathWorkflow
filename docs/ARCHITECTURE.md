@@ -141,7 +141,7 @@ methyl_utils/
 - methylutils
 - bedtools/pybedtools (local mode)
 - pyodbc/pymssql (Azure SQL mode)
-- External APIs (Grok, DisGeNET) for disease context
+- External APIs (Grok, Open Targets, optional DisGeNET) for disease context
 
 #### 7. MethylEnricher
 
@@ -151,12 +151,11 @@ methyl_utils/
 - Pathway enrichment
 - GO term enrichment
 - Statistical significance testing
-- Visualization support
+- Direct consumption of MethylMapper CSV/TSV outputs
 
 **Dependencies**:
-- methylutils
-- scipy
-- matplotlib
+- gseapy (Enrichr API)
+- pandas / numpy
 
 ## Data Flow
 

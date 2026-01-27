@@ -8,15 +8,15 @@ A command-line tool for gene enrichment analysis of Differentially Methylated Po
 
 - Multiple Database Support: Query KEGG, Reactome, GO, MSigDB Hallmark, WikiPathways, and more
 - Batch Processing: Analyze multiple gene lists simultaneously
-- Flexible Input: Accept gene lists from DMP analysis or any gene symbol list
+- Flexible Input: Accept gene lists (TXT) or MethylMapper CSV/TSV outputs
 - Comprehensive Output: Per-library results plus merged summaries
 - FDR Filtering: Automatic filtering of significant hits (q-value ≤ 0.05)
-- Easy Integration: Works seamlessly with MethylModeler DMP outputs
+- Easy Integration: Works seamlessly with MethylMapper outputs
 
 ## Installation
 
 ```bash
-poetry install
+pip install -e .
 ```
 
 ## Usage
@@ -27,12 +27,40 @@ poetry install
 methyl_enricher --input genes.txt --outdir enrichment_results
 ```
 
+### Using MethylMapper Output
+
+```bash
+# Use the combined MethylMapper CSV directly
+methyl_enricher --input mapped_features/all-gene_name-combined.csv \
+               --gene-column gene_name
+
+# Optional: enrich only disease-associated genes (if present)
+methyl_enricher --input mapped_features/all-gene_name-combined.csv \
+               --gene-column gene_name \
+               --disease-only
+
+# Sort by a weight/score column before selecting top genes
+methyl_enricher --input mapped_features/all-gene_name-combined.csv \
+               --gene-column gene_name \
+               --sort-by total_weight \
+               --top 200
+```
+
+**Note:** When input is CSV/TSV, the tool auto-sorts by `total_weight` if present (unless `--sort-by` is provided).
+
 ### Python API
 
 ```python
 from methyl_enricher import run_enrichment
 
-results = run_enrichment(genes=genes, libraries=libraries, outdir='results')
+results = run_enrichment(
+    input_file="mapped_features/all-gene_name-combined.csv",
+    output_dir="enrichment_results",
+    gene_column="gene_name",
+    disease_only=True,
+    sort_by="total_weight",
+    top_n=200
+)
 ```
 
 ## Configuration
@@ -45,7 +73,7 @@ Per-library CSVs, merged CSV, top significant hits CSV.
 
 ## Integration
 
-Use with gene lists from MethylMapper in MethylPipeline.
+Use with gene lists from MethylMapper in MethylPipeline, including CSV/TSV outputs.
 
 ## Troubleshooting
 

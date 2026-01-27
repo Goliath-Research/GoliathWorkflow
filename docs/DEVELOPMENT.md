@@ -129,7 +129,7 @@ Packages must be installed in this order due to dependencies:
 4. **methylmodeler** (depends on methylutils)
 5. **methylmapper** (depends on methylutils, MethylModeler outputs)
 6. **methylclassifier** (depends on methylutils, MethylModeler outputs)
-7. **methylenricher** (consumes MethylMapper gene lists)
+7. **methylenricher** (consumes MethylMapper gene lists/CSV outputs)
 
 The `install_all.sh` script handles this automatically.
 

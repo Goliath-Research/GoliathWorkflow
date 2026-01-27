@@ -65,6 +65,7 @@ methyl_mapper --input dmps.csv --config db_config.json --sample-id 12345
 - ⚡ **Fast local processing** using bedtools intersect
 - 🧬 **Comprehensive feature mapping** (genes, transcripts, exons, introns, etc.)
 - 📊 **Statistical weighting** by p-value, q-value, and effect size
+- 🧪 **Gene-level aggregation** with weighted Stouffer p-values and gene importance
 - 🏥 **Disease enrichment** via Grok API + Open Targets (optional DisGeNET)
 - 🧪 **Enrichment profiles** for strict/balanced/permissive testing
 - 💾 **Disk cache** for faster repeated runs

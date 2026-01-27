@@ -4,6 +4,8 @@
 
 MethylModeler now exports **three separate CSV files** representing the three stages of DMP selection, allowing you to map each stage to genes and compare their biological interpretation.
 
+If BMM refinement is enabled, it runs **before** Stage 1 and can update p-values and filtering outcomes. BMM centroids are saved per chromosome/context for downstream use.
+
 ## The Three Stages
 
 ### Stage 1: Biologically Significant DMPs
@@ -57,6 +59,10 @@ The files are generated based on your configuration settings:
 - **`dmps-{chromosome}.csv`**: 
   - Generated when DE optimization is disabled
   - Contains the final selected DMPs (same as Stage 2 in that case)
+
+### BMM Outputs (Optional):
+- **`bmm_centroids/bmm-centroid-{chromosome}-{context}.json`** when BMM refinement is enabled
+- `results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files`
 
 ## Configuration Example
 

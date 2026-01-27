@@ -26,6 +26,7 @@ MethylDetector bridges centroid generation and classification:
 - 🧬 **Multi-Context Support**: Process CG, CHG, CHH contexts together
 - 🧬 **Multi-Chromosome Support**: Process multiple chromosomes in a single run
 - 🚀 **GPU Acceleration**: 15-20x speedup with NVIDIA GPUs
+- 🧪 **BMM Refinement**: Optional beta mixture model refinement for top DMPs (GPU-accelerated when enabled)
 - 📦 **Model Packaging**: Complete metadata for reproducibility
 - ✅ **Validation Modes**: Real or synthetic sample validation with proper train/test splits
 
@@ -148,6 +149,15 @@ else:
   - Positions must have coverage ≥ 10% of samples
 - **`biological_filters`**: List of filters to apply (default: `["delta_mean", "bhattacharyya"]`)
 
+### BMM Refinement (Detector Stage)
+
+- **`bmm_refine_enabled`**: Enable beta mixture refinement for top biological DMPs (default: `false`)
+- **`bmm_refine_mode`**: `"annotate"` or `"filter"` (default: `"filter"`)
+- **`bmm_refine_use_binned_stats`**: Use binned counts for faster EM (default: `true`)
+- **`bmm_refine_max_dmps`**: Cap on number of DMPs to refine (default: `200000`)
+- **`bmm_refine_max_fraction`**: Optional fraction cap for refinement (default: `0.02`)
+- **`bmm_refine_use_gpu`**: Use GPU for BMM EM + JS divergence when available (default: `true`)
+
 ### Context Weighting
 
 - **`use_context_weights`**: Enable trimmed-mean context weighting (default: `true`)
@@ -194,6 +204,9 @@ else:
 4. **`dmps-{chromosome}-3-optimized.csv`** - Stage 3: Final optimized DMPs (if optimization enabled)
 5. **`classifier-{chromosome}.pkl`** - Trained BetaClassifier model
 6. **`results-{chromosome}.json`** - Validation results and summary
+7. **`bmm_centroids/bmm-centroid-{chromosome}-{context}.json`** - BMM centroid files (when refinement enabled)
+
+`results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files` when BMM refinement runs.
 
 ### CSV Columns
 

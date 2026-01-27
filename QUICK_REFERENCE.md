@@ -289,10 +289,24 @@ methylclassifier --config config.yaml
 python -m methyl_detector.cli --help
 ```
 
-### MethylMapper
+### MethylMapper (Bedtools, Recommended)
+
+```bash
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --enrich-disease
+```
+
+### MethylMapper (Azure SQL)
 
 ```bash
 python -m methylmapper --config config.json
+```
+
+### MethylEnricher
+
+```bash
+methyl_enricher --input mapped_features/all-gene_name-combined.csv \
+               --gene-column gene_name \
+               --top 200
 ```
 
 ## System Requirements
