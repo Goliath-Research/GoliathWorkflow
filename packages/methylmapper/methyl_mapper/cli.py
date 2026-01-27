@@ -346,9 +346,9 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     disease_group.add_argument(
         '--enrich-source',
         type=str,
-        choices=['grok', 'disgenet', 'both'],
-        default='both',
-        help='Source(s) for disease enrichment (default: both). "grok" uses Grok API, "disgenet" uses DisGeNET database, "both" uses both sources'
+        choices=['grok', 'disgenet', 'both', 'opentargets', 'grok+opentargets', 'grok+disgenet', 'all'],
+        default='grok+opentargets',
+        help='Source(s) for disease enrichment (default: grok+opentargets)'
     )
     disease_group.add_argument(
         '--separate-enrichment-sources',
@@ -391,6 +391,55 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         default=None,
         help='Path to encrypted credential file (default: ~/.methyl_mapper/credentials/{source}_api_key.encrypted)'
     )
+    disease_group.add_argument(
+        '--enrich-profile',
+        type=str,
+        choices=['strict', 'balanced', 'permissive'],
+        default='balanced',
+        help='Preset enrichment threshold profile (default: balanced)'
+    )
+    disease_group.add_argument(
+        '--min-evidence-level',
+        type=str,
+        choices=['none', 'low', 'medium', 'high'],
+        default=None,
+        help='Minimum evidence level to count as disease-associated (overrides --enrich-profile)'
+    )
+    disease_group.add_argument(
+        '--min-publications',
+        type=int,
+        default=None,
+        help='Minimum number of publications required (overrides --enrich-profile)'
+    )
+    disease_group.add_argument(
+        '--min-disgenet-score',
+        type=float,
+        default=None,
+        help='Minimum DisGeNET score required (overrides --enrich-profile)'
+    )
+    disease_group.add_argument(
+        '--allow-predicted',
+        action='store_true',
+        default=None,
+        help='Allow predicted associations (overrides --enrich-profile)'
+    )
+    disease_group.add_argument(
+        '--no-cache',
+        action='store_true',
+        help='Disable disk cache for enrichment queries'
+    )
+    disease_group.add_argument(
+        '--cache-dir',
+        type=str,
+        default=None,
+        help='Cache directory for enrichment queries (default: ~/.methyl_mapper/cache)'
+    )
+    disease_group.add_argument(
+        '--cache-ttl-days',
+        type=int,
+        default=7,
+        help='Cache TTL in days (default: 7, 0 disables TTL)'
+    )
     
     # DMP optimization options
     optimization_group = parser.add_argument_group('DMP Optimization Options')
@@ -398,6 +447,13 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         '--no-optimize-dmps',
         action='store_true',
         help='Disable DMP optimization (use all DMPs)'
+    )
+    optimization_group.add_argument(
+        '--dmp-rank-columns',
+        type=str,
+        nargs='+',
+        default=None,
+        help='Columns to rank DMPs by importance (default: importance effect_size delta_mean weight)'
     )
     optimization_group.add_argument(
         '--min-k',
@@ -489,10 +545,19 @@ def main_bedtools():
             disease_term=args.disease_term,
             grok_api_key=args.grok_api_key,
             disgenet_api_key=args.disgenet_api_key,
+            enrichment_profile=args.enrich_profile,
+            min_evidence_level=args.min_evidence_level,
+            min_publications=args.min_publications,
+            min_disgenet_score=args.min_disgenet_score,
+            allow_predicted=args.allow_predicted,
+            cache_enabled=not args.no_cache,
+            cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+            cache_ttl_days=args.cache_ttl_days,
             azure_key_vault_url=args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL'),
             azure_secret_name=args.azure_secret_name or os.environ.get('AZURE_SECRET_NAME'),
             encrypted_file_path=Path(args.encrypted_file_path) if args.encrypted_file_path else None,
             optimize_dmps=not args.no_optimize_dmps,
+            dmp_rank_columns=args.dmp_rank_columns,
             min_k=args.min_k,
             max_k=args.max_k,
             stability_threshold=args.stability_threshold,

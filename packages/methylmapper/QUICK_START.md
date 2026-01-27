@@ -41,15 +41,19 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv"
 ### Advanced Options
 
 ```bash
-# Disease enrichment with multiple sources
+# Disease enrichment with multiple sources (default: Grok + Open Targets)
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                       --enrich-disease \
-                      --enrich-source both \
+                      --enrich-source grok+opentargets \
                       --disease-term "early-stage prostate cancer" \
-                      --grok-api-key "your-grok-key" \
-                      --disgenet-api-key "your-disgenet-key"
+                      --grok-api-key "your-grok-key"
 
-# Use only DisGeNET (no Grok API needed)
+# Use only Open Targets (no API key needed)
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                      --enrich-disease \
+                      --enrich-source opentargets
+
+# Use only DisGeNET (optional)
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                       --enrich-disease \
                       --enrich-source disgenet \
@@ -65,6 +69,8 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
 # DMP optimization control
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                       --enrich-disease \
+                      --enrich-profile strict \
+                      --cache-ttl-days 7 \
                       --min-k 20 \
                       --max-k 1000 \
                       --stability-threshold 5 \
@@ -170,8 +176,9 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
 ### Data Sources
 
 - **Grok API**: Biomedical knowledge queries with evidence levels
-- **DisGeNET**: Curated disease-gene association database
-- **Combined**: Best available evidence from both sources
+- **Open Targets**: Public target-disease association database (no API key)
+- **DisGeNET**: Curated disease-gene association database (optional)
+- **Combined**: Best available evidence from enabled sources
 
 ### Added Columns
 
@@ -183,12 +190,15 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
 | `disease_description` | Association description |
 | `disease_publications` | Number of supporting publications |
 | `disease_functional_role` | Gene's role in disease |
-| `disease_source` | Data source: grok_api, disgenet, both |
+| `disease_source` | Data source: grok_api, open_targets, disgenet, none |
+| `disease_associated_raw` | Unfiltered association flag from source |
+| `disease_score` | Source score (Open Targets / DisGeNET) |
 
 ### Progress Tracking
 
 Real-time progress indicators show:
 - Batch processing for Grok API (10 genes per batch)
+- Individual gene processing for Open Targets
 - Individual gene processing for DisGeNET
 - Success/error counts and ETA
 
@@ -208,7 +218,11 @@ ls dmps-*-3-optimized.csv  # Check file pattern matches
 
 **Disease enrichment fails**
 ```bash
-export GROK_API_KEY="your-key"  # Set API key
+export GROK_API_KEY="your-key"  # Set Grok key
+# Or use Open Targets only (no key)
+methyl_mapper_bedtools --csv-pattern "dmps-*.csv" \
+                      --enrich-disease \
+                      --enrich-source opentargets
 # Or use DisGeNET only
 methyl_mapper_bedtools --csv-pattern "dmps-*.csv" \
                       --enrich-disease \
@@ -241,6 +255,9 @@ sqlcmd -S server.database.windows.net -U username -P password  # Test connection
 2. Free registration
 3. Get API key
 4. Set: `export DISGENET_API_KEY="your-key"`
+
+### Open Targets
+No API key required. Open Targets is enabled by default when `--enrich-disease` is used.
 
 ## 📖 Next Steps
 

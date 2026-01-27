@@ -7,6 +7,7 @@ significance (p-values, q-values) and biological importance (effect_size).
 """
 
 import logging
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -39,15 +40,24 @@ class BedtoolsMapper:
         use_effect_size_weight: bool = True,
         p_value_log_transform: bool = True,
         enrich_disease: bool = False,
-        enrich_source: str = "both",
+        enrich_source: str = "grok+opentargets",
         separate_enrichment_sources: bool = False,
         disease_term: str = "early-stage prostate cancer",
         grok_api_key: Optional[str] = None,
         disgenet_api_key: Optional[str] = None,
+        enrichment_profile: Optional[str] = None,
+        min_evidence_level: Optional[str] = None,
+        min_publications: Optional[int] = None,
+        min_disgenet_score: Optional[float] = None,
+        allow_predicted: Optional[bool] = None,
+        cache_enabled: bool = True,
+        cache_dir: Optional[Path] = None,
+        cache_ttl_days: Optional[int] = 7,
         azure_key_vault_url: Optional[str] = None,
         azure_secret_name: Optional[str] = None,
         encrypted_file_path: Optional[Path] = None,
         optimize_dmps: bool = True,
+        dmp_rank_columns: Optional[List[str]] = None,
         min_k: int = 10,
         max_k: Optional[int] = None,
         stability_threshold: int = 3,
@@ -65,15 +75,25 @@ class BedtoolsMapper:
             use_effect_size_weight: Whether to weight by effect_size
             p_value_log_transform: If True, uses -log10(p_value) for weighting
             enrich_disease: Whether to enrich results with disease associations
-            enrich_source: Source(s) for disease enrichment ("grok", "disgenet", or "both") (default: "both")
+            enrich_source: Source(s) for disease enrichment ("grok", "opentargets", "grok+opentargets",
+                          "disgenet", "both", or "all") (default: "grok+opentargets")
             separate_enrichment_sources: If True, export separate files for each enrichment source
             disease_term: Disease term for enrichment (e.g., "early-stage prostate cancer")
             grok_api_key: Grok API key for disease enrichment (optional, uses secure storage if not provided)
             disgenet_api_key: DisGeNET API key for disease enrichment (optional, uses secure storage if not provided)
+            enrichment_profile: Preset threshold profile (strict, balanced, permissive)
+            min_evidence_level: Minimum evidence level to count as disease-associated
+            min_publications: Minimum number of publications required
+            min_disgenet_score: Minimum DisGeNET score required (0.0-1.0)
+            allow_predicted: Whether to allow "predicted" associations
+            cache_enabled: Whether to persist cache to disk
+            cache_dir: Directory for disk cache (default: ~/.methyl_mapper/cache)
+            cache_ttl_days: Cache TTL in days (default: 7, 0 or None disables TTL)
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
             azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
             encrypted_file_path: Path to encrypted credential file (optional)
             optimize_dmps: Whether to optimize DMP count for stable gene sets (default: True)
+            dmp_rank_columns: Optional list of columns to rank DMPs by importance
             min_k: Minimum number of DMPs to test (default: 10)
             max_k: Maximum number of DMPs to test (default: None, uses all available)
             stability_threshold: Number of consecutive iterations without new disease genes to consider stable (default: 3)
@@ -96,9 +116,7 @@ class BedtoolsMapper:
         self.separate_enrichment_sources = separate_enrichment_sources
         self.disease_enricher = None
         if enrich_disease:
-            # Determine which sources to use
-            use_grok = enrich_source in ['grok', 'both']
-            use_disgenet = enrich_source in ['disgenet', 'both']
+            use_grok, use_open_targets, use_disgenet = self._parse_enrich_source(enrich_source)
 
             self.disease_enricher = GeneDiseaseEnricher(
                 grok_api_key=grok_api_key if use_grok else None,
@@ -106,6 +124,15 @@ class BedtoolsMapper:
                 disease_term=disease_term,
                 use_grok=use_grok,
                 use_disgenet=use_disgenet,
+                use_open_targets=use_open_targets,
+                enrichment_profile=enrichment_profile,
+                min_evidence_level=min_evidence_level,
+                min_publications=min_publications,
+                min_disgenet_score=min_disgenet_score,
+                allow_predicted=allow_predicted,
+                cache_enabled=cache_enabled,
+                cache_dir=cache_dir,
+                cache_ttl_days=cache_ttl_days,
                 azure_key_vault_url=azure_key_vault_url,
                 azure_secret_name=azure_secret_name,
                 encrypted_file_path=encrypted_file_path
@@ -113,6 +140,7 @@ class BedtoolsMapper:
         
         # DMP optimization parameters
         self.optimize_dmps = optimize_dmps
+        self.dmp_rank_columns = dmp_rank_columns
         self.min_k = min_k
         self.max_k = max_k
         self.stability_threshold = stability_threshold
@@ -329,8 +357,14 @@ class BedtoolsMapper:
         intersect_df['position'] = pd.to_numeric(intersect_df['position'], errors='coerce').astype('Int64')
         
         # Merge with original DMP DataFrame
+        dmp_cols = ['chromosome', 'position']
+        optional_cols = [
+            'p_value', 'q_value', 'effect_size', 'delta_mean',
+            'context', 'importance', 'weight', 'overlap'
+        ]
+        existing_cols = [c for c in optional_cols if c in dmp_df.columns]
         merged = intersect_df.merge(
-            dmp_df[['chromosome', 'position', 'p_value', 'q_value', 'effect_size', 'delta_mean', 'context']],
+            dmp_df[dmp_cols + existing_cols],
             on=['chromosome', 'position'],
             how='left'
         )
@@ -349,14 +383,81 @@ class BedtoolsMapper:
             merged['q_weight'] = -np.log10(merged['q_value'].clip(lower=1e-300))
             merged['weight'] *= merged['q_weight']
         
-        if self.use_effect_size_weight and 'effect_size' in merged.columns:
-            merged['eff_weight'] = merged['effect_size'].clip(lower=0)
-            merged['weight'] *= merged['eff_weight']
+        if self.use_effect_size_weight:
+            eff_col = None
+            if 'importance' in merged.columns:
+                eff_col = 'importance'
+            elif 'effect_size' in merged.columns:
+                eff_col = 'effect_size'
+            elif 'delta_mean' in merged.columns and 'overlap' in merged.columns:
+                merged['delta_overlap_weight'] = (
+                    merged['delta_mean'].abs() / merged['overlap'].replace(0, np.nan)
+                )
+                eff_col = 'delta_overlap_weight'
+            elif 'delta_mean' in merged.columns:
+                eff_col = 'delta_mean'
+
+            if eff_col is not None:
+                merged['eff_weight'] = merged[eff_col].abs().fillna(1.0)
+                merged['weight'] *= merged['eff_weight']
         
         # Normalize weights (optional - can be disabled)
         merged['weight'] = merged['weight'] / merged['weight'].max() if merged['weight'].max() > 0 else merged['weight']
         
         return merged
+
+    @staticmethod
+    def _parse_enrich_source(enrich_source: str) -> Tuple[bool, bool, bool]:
+        """Parse enrich_source into flags for grok/open_targets/disgenet."""
+        normalized = (enrich_source or "").lower().strip()
+
+        if normalized == "all":
+            return True, True, True
+        if normalized == "both":
+            # Backward-compatible: grok + disgenet
+            return True, False, True
+
+        tokens = [t for t in re.split(r"[+/,\\s]+", normalized) if t]
+        use_grok = "grok" in tokens
+        use_disgenet = "disgenet" in tokens
+        use_open_targets = any(t in tokens for t in ["opentargets", "open_targets", "open-targets"])
+
+        return use_grok, use_open_targets, use_disgenet
+
+    def _sort_dmps_for_optimization(self, dmp_df: pd.DataFrame) -> pd.DataFrame:
+        """Sort DMPs by importance for optimization."""
+        df = dmp_df.copy()
+        rank_cols = self.dmp_rank_columns or ['importance', 'effect_size', 'delta_mean', 'weight']
+        rank_col = next((c for c in rank_cols if c in df.columns), None)
+
+        if rank_col is None:
+            logger.warning("No ranking column found for DMP optimization; using input order")
+            return df
+
+        sort_keys = []
+        ascending = []
+
+        if rank_col in ['effect_size', 'delta_mean']:
+            df['_rank_key'] = df[rank_col].abs()
+            sort_keys.append('_rank_key')
+            ascending.append(False)
+        else:
+            sort_keys.append(rank_col)
+            ascending.append(False)
+
+        if 'q_value' in df.columns:
+            sort_keys.append('q_value')
+            ascending.append(True)
+        if 'p_value' in df.columns:
+            sort_keys.append('p_value')
+            ascending.append(True)
+
+        df = df.sort_values(sort_keys, ascending=ascending).reset_index(drop=True)
+        if '_rank_key' in df.columns:
+            df = df.drop(columns=['_rank_key'])
+
+        logger.info(f"Sorting DMPs by {rank_col} for optimization")
+        return df
     
     def aggregate_by_feature(
         self,
@@ -497,6 +598,8 @@ class BedtoolsMapper:
         max_k = max_k or self.max_k or len(dmp_df)
         max_k = min(max_k, len(dmp_df))
         
+        dmp_df = self._sort_dmps_for_optimization(dmp_df)
+
         if min_k >= max_k:
             logger.warning(f"min_k ({min_k}) >= max_k ({max_k}), using all DMPs")
             optimal_k = max_k
@@ -718,13 +821,14 @@ class BedtoolsMapper:
                 try:
                     # Load DMPs
                     dmp_df = pd.read_csv(csv_file)
+                    dmp_df_sorted = self._sort_dmps_for_optimization(dmp_df)
                     
                     # Apply DMP optimization if enabled
                     optimal_k = None
                     if self.optimize_dmps and self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
                         logger.info(f"Optimizing DMP count for stable gene sets...")
                         optimal_k, optimal_gene_df, optimization_log = self.optimize_dmps_for_stable_genes(
-                            dmp_df,
+                            dmp_df_sorted,
                             group_by=group_by
                         )
                         
@@ -736,7 +840,7 @@ class BedtoolsMapper:
                         logger.info(f"   Optimization log saved to: {log_file}")
                         
                         # Export optimized DMP subset
-                        optimized_dmp_df = dmp_df.head(optimal_k).copy()
+                        optimized_dmp_df = dmp_df_sorted.head(optimal_k).copy()
                         optimized_dmp_csv = output_dir / f"{csv_file.stem}-optimized-k{optimal_k}.csv"
                         optimized_dmp_df.to_csv(optimized_dmp_csv, index=False)
                         logger.info(f"   Optimized DMP subset (k={optimal_k}) saved to: {optimized_dmp_csv}")

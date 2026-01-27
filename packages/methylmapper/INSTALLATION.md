@@ -61,7 +61,9 @@ gunzip Homo_sapiens.GRCh38.110.gtf.gz
 # Grok API key (recommended)
 export GROK_API_KEY="your-grok-api-key"
 
-# DisGeNET API key (free registration)
+# Open Targets uses a public API (no key required)
+
+# DisGeNET API key (free registration, optional)
 export DISGENET_API_KEY="your-disgenet-api-key"
 ```
 
@@ -129,8 +131,8 @@ python -c "import pyodbc; print('Available drivers:', pyodbc.drivers())"
 **Environment Variables:**
 ```bash
 export GENE_GTF="/path/to/gencode.v44.annotation.gtf"    # Required
-export GROK_API_KEY="your-key"                          # Optional (for enrichment)
-export DISGENET_API_KEY="your-key"                      # Optional (for enrichment)
+export GROK_API_KEY="your-key"                          # Optional (for Grok enrichment)
+export DISGENET_API_KEY="your-key"                      # Optional (for DisGeNET enrichment)
 ```
 
 ### For methyl_mapper (Azure SQL)
@@ -232,6 +234,9 @@ methyl_mapper --input test_dmps.csv --config my_config.json --sample-id 99999
    methyl_mapper_credentials save --credential-type disgenet --api-key "your-key"
    methyl_mapper_credentials test --credential-type disgenet
    ```
+
+### Open Targets
+Open Targets uses a public GraphQL endpoint and does not require an API key.
 
 ### Optional: Azure Key Vault Integration
 

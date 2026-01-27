@@ -15,7 +15,8 @@ from methyl_utils import (
     compute_bhattacharyya_distance,
     fit_beta_mixture,
     estimate_js_divergence,
-    MethylBetaMixtureCentroid
+    MethylBetaMixtureCentroid,
+    storey_qvalues
 )
 from methyl_utils.logging_utils import setup_module_logging
 
@@ -607,6 +608,89 @@ class MethylDetector:
         
         return bio_df
 
+    def _load_binned_counts_from_centroids(
+        self,
+        dmps_df: pd.DataFrame
+    ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """
+        Load per-position bin counts from centroid H5 files for given DMPs.
+
+        Returns:
+            (bin_edges, counts1, counts2) or None if not available.
+        """
+        if dmps_df is None or dmps_df.empty:
+            return None
+        if "context" not in dmps_df.columns:
+            dmps_df = dmps_df.copy()
+            dmps_df["context"] = "CG"
+
+        try:
+            import h5py
+        except Exception:
+            return None
+
+        counts1 = None
+        counts2 = None
+        bin_edges_ref = None
+
+        # Group by context to load matching centroid files
+        for ctx in np.unique(dmps_df["context"].values):
+            ctx_mask = dmps_df["context"].values == ctx
+            ctx_positions = dmps_df.loc[ctx_mask, "position"].values.astype(np.uint32)
+            if len(ctx_positions) == 0:
+                continue
+
+            c1_path = Path(self.config.centroid1_dir) / f"{self.chromosome}-{ctx}.h5"
+            c2_path = Path(self.config.centroid2_dir) / f"{self.chromosome}-{ctx}.h5"
+            if not c1_path.exists() or not c2_path.exists():
+                return None
+
+            try:
+                with h5py.File(c1_path, "r") as f1, h5py.File(c2_path, "r") as f2:
+                    if "binned_stats" not in f1 or "binned_stats" not in f2:
+                        return None
+                    be1 = np.asarray(f1["binned_stats"]["bin_edges"][:], dtype=np.float32)
+                    be2 = np.asarray(f2["binned_stats"]["bin_edges"][:], dtype=np.float32)
+                    if be1.shape != be2.shape or not np.allclose(be1, be2):
+                        logger.warning(f"Binned bin_edges mismatch for context {ctx}; falling back to samples")
+                        return None
+
+                    if bin_edges_ref is None:
+                        bin_edges_ref = be1
+                        n_bins = len(bin_edges_ref) - 1
+                        counts1 = np.zeros((len(dmps_df), n_bins), dtype=np.int32)
+                        counts2 = np.zeros((len(dmps_df), n_bins), dtype=np.int32)
+                    else:
+                        if len(be1) != len(bin_edges_ref):
+                            logger.warning(f"Binned bins mismatch for context {ctx}; falling back to samples")
+                            return None
+
+                    pos1 = np.asarray(f1["methylation_data"]["pos"][:], dtype=np.uint32)
+                    pos2 = np.asarray(f2["methylation_data"]["pos"][:], dtype=np.uint32)
+                    idx1 = np.searchsorted(pos1, ctx_positions)
+                    idx2 = np.searchsorted(pos2, ctx_positions)
+                    valid1 = (idx1 < len(pos1)) & (pos1[idx1] == ctx_positions)
+                    valid2 = (idx2 < len(pos2)) & (pos2[idx2] == ctx_positions)
+                    valid = valid1 & valid2
+                    if not np.any(valid):
+                        continue
+
+                    # Read only needed rows from bin_counts
+                    bc1 = f1["binned_stats"]["bin_counts"][idx1[valid]]
+                    bc2 = f2["binned_stats"]["bin_counts"][idx2[valid]]
+
+                    # Map back to global indices in dmps_df
+                    global_idx = np.where(ctx_mask)[0][valid]
+                    counts1[global_idx] = bc1
+                    counts2[global_idx] = bc2
+
+            except Exception:
+                return None
+
+        if bin_edges_ref is None:
+            return None
+        return bin_edges_ref, counts1, counts2
+
     def _refine_dmps_with_bmm(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
         Refine DMPs using per-position Beta Mixture Models (BMMs).
@@ -635,8 +719,19 @@ class MethylDetector:
             ("effect_size" if "effect_size" in df.columns else "delta_mean")
 
         df_sorted = df.sort_values(rank_col, ascending=False)
-        max_dmps = min(int(self.config.bmm_refine_max_dmps), len(df_sorted))
+        total_candidates = len(df_sorted)
+        max_dmps = min(int(self.config.bmm_refine_max_dmps), total_candidates)
+        if self.config.bmm_refine_max_fraction is not None:
+            frac_cap = int(np.ceil(total_candidates * float(self.config.bmm_refine_max_fraction)))
+            if frac_cap > 0:
+                max_dmps = min(max_dmps, frac_cap)
+        max_dmps = max(1, max_dmps) if total_candidates > 0 else 0
         subset_df = df_sorted.iloc[:max_dmps].copy()
+        logger.info(
+            f"BMM evaluation cap: {max_dmps:,}/{total_candidates:,} "
+            f"(max_dmps={self.config.bmm_refine_max_dmps}, "
+            f"max_fraction={self.config.bmm_refine_max_fraction})"
+        )
 
         # Resolve sample paths
         class1_paths = self.config.centroid1_validation_samples
@@ -649,35 +744,56 @@ class MethylDetector:
         class1_paths = self._get_validation_samples(class1_paths, self.config.centroid1_dir, "centroid1")
         class2_paths = self._get_validation_samples(class2_paths, self.config.centroid2_dir, "centroid2")
 
-        if not class1_paths or not class2_paths:
-            logger.warning("BMM refinement skipped: no validation sample paths available")
-            df["bmm_status"] = "skipped_no_samples"
-            return df
+        use_binned = bool(self.config.bmm_refine_use_binned_stats)
+        bin_count = self.config.bmm_refine_bin_count
+        if bin_count is None:
+            n_total = max(len(class1_paths) + len(class2_paths), 1)
+            bin_count = int(np.clip(round(np.sqrt(n_total) * 6), 50, 100))
+        bin_edges = np.linspace(0.0, 1.0, int(bin_count) + 1, dtype=np.float32)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
 
-        # Subsample for speed
-        if len(class1_paths) > self.config.bmm_refine_max_samples_per_group:
-            class1_paths = class1_paths[: self.config.bmm_refine_max_samples_per_group]
-        if len(class2_paths) > self.config.bmm_refine_max_samples_per_group:
-            class2_paths = class2_paths[: self.config.bmm_refine_max_samples_per_group]
+        # Try centroid-level binned stats first
+        binned_counts = None
+        if use_binned:
+            binned_counts = self._load_binned_counts_from_centroids(subset_df)
+            if binned_counts is not None:
+                bin_edges, counts1_all, counts2_all = binned_counts
+                bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+                bin_count = len(bin_edges) - 1
 
-        # Load methylation values for subset DMPs (no mock data)
-        val_data = self._load_validation_samples_multicontext_impl(
-            subset_df, class1_paths, class2_paths, allow_mock=False
-        )
-        if val_data is None:
-            logger.warning("BMM refinement skipped: unable to load validation samples")
-            df["bmm_status"] = "skipped_load_failed"
-            return df
+        if binned_counts is None:
+            if not class1_paths or not class2_paths:
+                logger.warning("BMM refinement skipped: no validation sample paths available")
+                df["bmm_status"] = "skipped_no_samples"
+                return df
 
-        X, y, val_positions, val_contexts = val_data
+            # Subsample for speed
+            if len(class1_paths) > self.config.bmm_refine_max_samples_per_group:
+                class1_paths = class1_paths[: self.config.bmm_refine_max_samples_per_group]
+            if len(class2_paths) > self.config.bmm_refine_max_samples_per_group:
+                class2_paths = class2_paths[: self.config.bmm_refine_max_samples_per_group]
 
-        # Ensure alignment (X columns should match subset_df order)
-        if X.shape[1] != len(subset_df):
-            logger.warning("BMM refinement skipped: validation matrix does not align with DMP subset")
-            df["bmm_status"] = "skipped_alignment_mismatch"
-            return df
+        # Fallback to sample values if centroid binned stats not available
+        X = y = None
+        if binned_counts is None:
+            val_data = self._load_validation_samples_multicontext_impl(
+                subset_df, class1_paths, class2_paths, allow_mock=False
+            )
+            if val_data is None:
+                logger.warning("BMM refinement skipped: unable to load validation samples")
+                df["bmm_status"] = "skipped_load_failed"
+                return df
+
+            X, y, val_positions, val_contexts = val_data
+
+            # Ensure alignment (X columns should match subset_df order)
+            if X.shape[1] != len(subset_df):
+                logger.warning("BMM refinement skipped: validation matrix does not align with DMP subset")
+                df["bmm_status"] = "skipped_alignment_mismatch"
+                return df
 
         bmm_records = []
+        bmm_source = "centroid_bins" if binned_counts is not None else "samples"
         min_samples = int(self.config.bmm_refine_min_samples_per_group)
 
         for j, row in subset_df.reset_index(drop=False).iterrows():
@@ -685,13 +801,20 @@ class MethylDetector:
             ctx = row.get("context", "CG")
             delta_mean = float(row.get("delta_mean", 0.0))
             overlap = float(row[overlap_col]) if overlap_col and np.isfinite(row.get(overlap_col, np.nan)) else None
+            if binned_counts is not None:
+                counts1 = counts1_all[j]
+                counts2 = counts2_all[j]
+                n1 = int(np.sum(counts1))
+                n2 = int(np.sum(counts2))
+            else:
+                vals_healthy = X[y == 0, j]
+                vals_cancer = X[y == 1, j]
+                vals_healthy = vals_healthy[np.isfinite(vals_healthy)]
+                vals_cancer = vals_cancer[np.isfinite(vals_cancer)]
+                n1 = int(len(vals_healthy))
+                n2 = int(len(vals_cancer))
 
-            vals_healthy = X[y == 0, j]
-            vals_cancer = X[y == 1, j]
-            vals_healthy = vals_healthy[np.isfinite(vals_healthy)]
-            vals_cancer = vals_cancer[np.isfinite(vals_cancer)]
-
-            if len(vals_healthy) < min_samples or len(vals_cancer) < min_samples:
+            if n1 < min_samples or n2 < min_samples:
                 bmm_records.append({
                     "position": pos,
                     "context": ctx,
@@ -703,9 +826,14 @@ class MethylDetector:
                     "weights2": [1.0],
                     "alphas2": [],
                     "betas2": [],
-                    "n1": int(len(vals_healthy)),
-                    "n2": int(len(vals_cancer)),
+                    "n1": n1,
+                    "n2": n2,
                     "bmm_js": np.nan,
+                    "bmm_p_value": np.nan,
+                    "bmm_llr": np.nan,
+                    "bmm_df": np.nan,
+                    "bmm_bin_count": int(bin_count),
+                    "bmm_source": bmm_source,
                     "status": "skipped_insufficient_samples",
                 })
                 continue
@@ -723,9 +851,14 @@ class MethylDetector:
                     "weights2": [1.0],
                     "alphas2": [],
                     "betas2": [],
-                    "n1": int(len(vals_healthy)),
-                    "n2": int(len(vals_cancer)),
+                    "n1": n1,
+                    "n2": n2,
                     "bmm_js": np.nan,
+                    "bmm_p_value": np.nan,
+                    "bmm_llr": np.nan,
+                    "bmm_df": np.nan,
+                    "bmm_bin_count": int(bin_count),
+                    "bmm_source": bmm_source,
                     "status": "skipped_obvious_delta",
                 })
                 continue
@@ -741,23 +874,78 @@ class MethylDetector:
                     "weights2": [1.0],
                     "alphas2": [],
                     "betas2": [],
-                    "n1": int(len(vals_healthy)),
-                    "n2": int(len(vals_cancer)),
+                    "n1": n1,
+                    "n2": n2,
                     "bmm_js": np.nan,
+                    "bmm_p_value": np.nan,
+                    "bmm_llr": np.nan,
+                    "bmm_df": np.nan,
+                    "bmm_bin_count": int(bin_count),
+                    "bmm_source": bmm_source,
                     "status": "skipped_obvious_overlap",
                 })
                 continue
 
-            fit1 = fit_beta_mixture(
-                vals_healthy,
-                max_components=self.config.bmm_refine_max_components,
-                random_state=self.config.random_state
-            )
-            fit2 = fit_beta_mixture(
-                vals_cancer,
-                max_components=self.config.bmm_refine_max_components,
-                random_state=self.config.random_state
-            )
+            if binned_counts is not None:
+                fit1 = fit_beta_mixture(
+                    bin_centers,
+                    weights=counts1,
+                    max_components=self.config.bmm_refine_max_components,
+                    random_state=self.config.random_state
+                )
+                fit2 = fit_beta_mixture(
+                    bin_centers,
+                    weights=counts2,
+                    max_components=self.config.bmm_refine_max_components,
+                    random_state=self.config.random_state
+                )
+                pooled_counts = counts1 + counts2
+                fit0 = fit_beta_mixture(
+                    bin_centers,
+                    weights=pooled_counts,
+                    max_components=self.config.bmm_refine_max_components,
+                    random_state=self.config.random_state
+                )
+            else:
+                if use_binned:
+                    counts1, _ = np.histogram(vals_healthy, bins=bin_edges)
+                    counts2, _ = np.histogram(vals_cancer, bins=bin_edges)
+                    fit1 = fit_beta_mixture(
+                        bin_centers,
+                        weights=counts1,
+                        max_components=self.config.bmm_refine_max_components,
+                        random_state=self.config.random_state
+                    )
+                    fit2 = fit_beta_mixture(
+                        bin_centers,
+                        weights=counts2,
+                        max_components=self.config.bmm_refine_max_components,
+                        random_state=self.config.random_state
+                    )
+                    pooled_counts = counts1 + counts2
+                    fit0 = fit_beta_mixture(
+                        bin_centers,
+                        weights=pooled_counts,
+                        max_components=self.config.bmm_refine_max_components,
+                        random_state=self.config.random_state
+                    )
+                else:
+                    fit1 = fit_beta_mixture(
+                        vals_healthy,
+                        max_components=self.config.bmm_refine_max_components,
+                        random_state=self.config.random_state
+                    )
+                    fit2 = fit_beta_mixture(
+                        vals_cancer,
+                        max_components=self.config.bmm_refine_max_components,
+                        random_state=self.config.random_state
+                    )
+                    pooled_vals = np.concatenate([vals_healthy, vals_cancer])
+                    fit0 = fit_beta_mixture(
+                        pooled_vals,
+                        max_components=self.config.bmm_refine_max_components,
+                        random_state=self.config.random_state
+                    )
 
             js = estimate_js_divergence(
                 fit1["weights"], fit1["alphas"], fit1["betas"],
@@ -765,6 +953,26 @@ class MethylDetector:
                 n_samples=self.config.bmm_refine_mc_samples,
                 random_state=self.config.random_state
             )
+
+            # Approximate mixture-based p-value using pooled LLR (chi-square)
+            def _param_count(k):
+                return (k - 1) + 2 * k
+
+            ll1 = fit1.get("loglik", np.nan)
+            ll2 = fit2.get("loglik", np.nan)
+            ll0 = fit0.get("loglik", np.nan)
+            if np.isfinite(ll1) and np.isfinite(ll2) and np.isfinite(ll0):
+                llr = 2.0 * ((ll1 + ll2) - ll0)
+                df_llr = max(_param_count(int(fit1["k"])) + _param_count(int(fit2["k"])) - _param_count(int(fit0["k"])), 1)
+                try:
+                    from scipy.stats import chi2
+                    bmm_p = float(1.0 - chi2.cdf(llr, df_llr)) if llr >= 0 else 1.0
+                except Exception:
+                    bmm_p = np.nan
+            else:
+                llr = np.nan
+                df_llr = np.nan
+                bmm_p = np.nan
 
             status = "fit"
             bmm_records.append({
@@ -778,9 +986,14 @@ class MethylDetector:
                 "weights2": fit2["weights"].tolist(),
                 "alphas2": fit2["alphas"].tolist(),
                 "betas2": fit2["betas"].tolist(),
-                "n1": int(len(vals_healthy)),
-                "n2": int(len(vals_cancer)),
+                "n1": n1,
+                "n2": n2,
                 "bmm_js": js,
+                "bmm_p_value": bmm_p,
+                "bmm_llr": llr,
+                "bmm_df": df_llr,
+                "bmm_bin_count": int(bin_count),
+                "bmm_source": bmm_source,
                 "status": status,
             })
 
@@ -814,16 +1027,89 @@ class MethylDetector:
         merged["bmm_status"] = merged["status"].fillna("not_evaluated")
         merged = merged.drop(columns=["status"])
 
+        # Replace p_value with BMM p-value if requested
+        replaced_count = 0
+        if self.config.bmm_refine_replace_p_value and "bmm_p_value" in merged.columns:
+            if "p_value_lrt" not in merged.columns:
+                merged["p_value_lrt"] = merged["p_value"]
+            if "q_value_lrt" not in merged.columns and "q_value" in merged.columns:
+                merged["q_value_lrt"] = merged["q_value"]
+
+            fit_mask = (merged["bmm_status"] == "fit") & merged["bmm_p_value"].notna()
+            merged.loc[fit_mask, "p_value"] = merged.loc[fit_mask, "bmm_p_value"]
+            replaced_count = int(np.sum(fit_mask))
+
+            if self.config.bmm_refine_recompute_q and "p_value" in merged.columns:
+                try:
+                    q_vals, _ = storey_qvalues(merged["p_value"].values)
+                    merged["q_value"] = q_vals.astype(np.float32)
+                except Exception as e:
+                    logger.warning(f"Failed to recompute q-values after BMM p-value replace: {e}")
+
         # Optional filtering by JS divergence
+        filtered_out = 0
         if self.config.bmm_refine_mode == "filter":
-            js = merged["bmm_js"]
-            keep = (merged["bmm_status"] != "fit") | (js.isna()) | (js >= self.config.bmm_refine_js_threshold)
-            retained = int(np.sum(keep))
-            logger.info(
-                f"BMM filter retained {retained:,}/{len(merged):,} DMPs "
-                f"(js >= {self.config.bmm_refine_js_threshold})"
-            )
+            if self.config.bmm_refine_filter_metric == "p_value" and "bmm_p_value" in merged.columns:
+                p = merged["bmm_p_value"]
+                keep = (merged["bmm_status"] != "fit") | (p.isna()) | (p <= self.config.bmm_refine_pvalue_threshold)
+                retained = int(np.sum(keep))
+                filtered_out = len(merged) - retained
+                logger.info(
+                    f"BMM filter retained {retained:,}/{len(merged):,} DMPs "
+                    f"(bmm_p_value <= {self.config.bmm_refine_pvalue_threshold})"
+                )
+            else:
+                js = merged["bmm_js"]
+                keep = (merged["bmm_status"] != "fit") | (js.isna()) | (js >= self.config.bmm_refine_js_threshold)
+                retained = int(np.sum(keep))
+                filtered_out = len(merged) - retained
+                logger.info(
+                    f"BMM filter retained {retained:,}/{len(merged):,} DMPs "
+                    f"(js >= {self.config.bmm_refine_js_threshold})"
+                )
             merged = merged[keep].reset_index(drop=True)
+
+        # Summary log
+        status_counts = {}
+        for rec in bmm_records:
+            status = rec.get("status", "unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+        logger.info(
+            "BMM summary: evaluated=%d, source=%s, bins=%d, min_samples=%d, "
+            "fit=%d, skipped_insufficient=%d, skipped_obvious_delta=%d, skipped_obvious_overlap=%d",
+            len(subset_df),
+            bmm_source,
+            int(bin_count),
+            min_samples,
+            status_counts.get("fit", 0),
+            status_counts.get("skipped_insufficient_samples", 0),
+            status_counts.get("skipped_obvious_delta", 0),
+            status_counts.get("skipped_obvious_overlap", 0),
+        )
+        if self.config.bmm_refine_replace_p_value:
+            logger.info("BMM p-value replacement: replaced=%d", replaced_count)
+        if self.config.bmm_refine_mode == "filter":
+            logger.info("BMM filtering: removed=%d", filtered_out)
+
+        # Persist summary for JSON export
+        self._bmm_summary = {
+            "evaluated": int(len(subset_df)),
+            "total_candidates": int(total_candidates),
+            "source": bmm_source,
+            "bin_count": int(bin_count),
+            "min_samples": int(min_samples),
+            "fit": int(status_counts.get("fit", 0)),
+            "skipped_insufficient_samples": int(status_counts.get("skipped_insufficient_samples", 0)),
+            "skipped_obvious_delta": int(status_counts.get("skipped_obvious_delta", 0)),
+            "skipped_obvious_overlap": int(status_counts.get("skipped_obvious_overlap", 0)),
+            "p_value_replaced": int(replaced_count),
+            "filtered_out": int(filtered_out),
+            "filter_metric": self.config.bmm_refine_filter_metric,
+            "filter_pvalue_threshold": float(self.config.bmm_refine_pvalue_threshold),
+            "filter_js_threshold": float(self.config.bmm_refine_js_threshold),
+            "max_dmps": int(self.config.bmm_refine_max_dmps),
+            "max_fraction": self.config.bmm_refine_max_fraction,
+        }
 
         return merged
     
@@ -2529,7 +2815,8 @@ class MethylDetector:
             'p_value', 'q_value', 'delta_mean',
             'overlap', 'effect_size', 'context_weight',
             'alpha1', 'beta1', 'alpha2', 'beta2',
-            'mean1', 'mean2'
+            'mean1', 'mean2',
+            'bmm_p_value', 'bmm_js', 'bmm_status'
         ]
         
         # Filter to only columns that exist
@@ -2666,6 +2953,10 @@ class MethylDetector:
                 comparison_stats.append(stats)
         
         # Create result
+        config_summary = self.config.model_dump()
+        if hasattr(self, "_bmm_summary") and self._bmm_summary:
+            config_summary = {**config_summary, "bmm_summary": self._bmm_summary}
+
         result = MethylModelerResult(
             biologically_significant_dmps_df=bio_dmps_df,
             total_statistical_dmps=len(dmps_df),
@@ -2674,7 +2965,7 @@ class MethylDetector:
             comparison_stats=comparison_stats,
             timestamp=datetime.now().isoformat(),
             version="2.0.0-multi-context",
-            config_summary=self.config.model_dump()
+            config_summary=config_summary
         )
         
         return result
@@ -2999,6 +3290,10 @@ class MethylDetector:
         comparison_stats = [stats]
         total_statistical_dmps = getattr(self, 'statistical_dmps_count', len(dmp_df))
 
+        config_summary = self.config.model_dump()
+        if hasattr(self, "_bmm_summary") and self._bmm_summary:
+            config_summary = {**config_summary, "bmm_summary": self._bmm_summary}
+
         result = MethylModelerResult(
             biologically_significant_dmps_df=biological_dmps_df,
             total_statistical_dmps=total_statistical_dmps,
@@ -3007,7 +3302,7 @@ class MethylDetector:
             comparison_stats=comparison_stats,
             timestamp=datetime.now().isoformat(),
             version="2.0.0",
-            config_summary=self.config.model_dump()
+            config_summary=config_summary
         )
         return result
 

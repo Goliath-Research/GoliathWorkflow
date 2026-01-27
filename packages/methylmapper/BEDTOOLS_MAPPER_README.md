@@ -4,7 +4,7 @@
 
 The `methyl_mapper_bedtools` command provides comprehensive DMP-to-feature mapping using bedtools, without requiring Azure SQL Database. It maps DMPs to all genomic features (genes, transcripts, exons, introns, etc.) with weighting by statistical significance.
 
-**New Feature**: Disease association enrichment using Grok API! Automatically enrich your gene mappings with disease associations (e.g., early-stage prostate cancer).
+**New Feature**: Disease association enrichment using Grok API + Open Targets (default). Automatically enrich your gene mappings with disease associations (e.g., early-stage prostate cancer).
 
 ## Installation
 
@@ -53,7 +53,7 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv"
 ### 4. Enable Disease Enrichment (NEW!)
 
 ```bash
-# Set Grok API key
+# Set Grok API key (Open Targets does not require a key)
 export GROK_API_KEY="your-api-key-here"
 
 # Run with disease enrichment
@@ -76,7 +76,9 @@ The script creates a `mapped_features/` directory with:
     - `disease_description`: Description of the association
     - `disease_publications`: Number of publications
     - `disease_functional_role`: Functional role in the disease
-    - `disease_source`: Source of information (grok_api, disgenet, none)
+    - `disease_source`: Source of information (grok_api, open_targets, disgenet, none)
+    - `disease_associated_raw`: Unfiltered association flag from source
+    - `disease_score`: Source score (Open Targets / DisGeNET)
   
 - **`dmps-{chromosome}-3-optimized-intersections.csv`**: Detailed DMP-feature intersections
   - All DMP-feature pairs with full metadata
@@ -89,10 +91,11 @@ The script creates a `mapped_features/` directory with:
   - Contains: Sum of DMP counts, mean of weighted scores, and aggregated disease enrichment data
   - **Note**: This file is created at the end after all chromosomes are processed and enriched
 
-- **Separate Source Files** (when using `--separate-enrichment-sources` with `--enrich-source both`):
+- **Separate Source Files** (when using `--separate-enrichment-sources` with multi-source enrichment):
   - **`all-{group_by}-combined-grok.csv`**: Results enriched only with Grok API
+  - **`all-{group_by}-combined-open_targets.csv`**: Results enriched only with Open Targets
   - **`all-{group_by}-combined-disgenet.csv`**: Results enriched only with DisGeNET
-  - **`all-{group_by}-combined-merged.csv`**: Results merged from both sources (same as default combined.csv)
+  - **`all-{group_by}-combined-merged.csv`**: Results merged from enabled sources (same as default combined.csv)
 
 ## Advanced Options
 
@@ -111,29 +114,40 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                        --enrich-disease \
                        --grok-api-key "your-key-here"
 
-# Use DisGeNET only or both sources
+# Use Open Targets only (no API key required)
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                       --gtf $GENE_GTF \
+                       --enrich-disease \
+                       --enrich-source opentargets
+
+# Use DisGeNET only or Grok+Open Targets
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                        --gtf $GENE_GTF \
                        --enrich-disease \
                        --enrich-source disgenet \
                        --disgenet-api-key "your-disgenet-key"
 
-# Use both Grok and DisGeNET
+# Use Grok + Open Targets (default)
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                        --gtf $GENE_GTF \
                        --enrich-disease \
-                       --enrich-source both \
-                       --grok-api-key "your-grok-key" \
-                       --disgenet-api-key "your-disgenet-key"
+                       --enrich-source grok+opentargets \
+                       --grok-api-key "your-grok-key"
 
-# Export separate files for each source (when using --enrich-source both)
+# Export separate files for each source (when using multi-source enrichment)
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                        --gtf $GENE_GTF \
                        --enrich-disease \
-                       --enrich-source both \
+                       --enrich-source grok+opentargets \
                        --separate-enrichment-sources \
-                       --grok-api-key "your-grok-key" \
-                       --disgenet-api-key "your-disgenet-key"
+                       --grok-api-key "your-grok-key"
+
+# Apply a strict enrichment profile and cache settings
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
+                       --gtf $GENE_GTF \
+                       --enrich-disease \
+                       --enrich-profile strict \
+                       --cache-ttl-days 7
 ```
 
 ### Group By Different Features
@@ -197,7 +211,7 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
 ## Example Workflow
 
 ```bash
-# 1. Set default GTF and Grok API key
+# 1. Set default GTF and (optional) Grok API key
 export GENE_GTF="/home/ubuntu/data/gencode.v44.annotation.gtf"
 export GROK_API_KEY="your-grok-api-key"
 
@@ -237,9 +251,13 @@ The disease enrichment uses Grok API to query biomedical knowledge about gene-di
 - **Publications**: Number of publications mentioning this association
 - **Functional role**: Gene's role in the disease context
 
-### Fallback to DisGeNET
+### Open Targets Integration
 
-If Grok API is unavailable or fails, the system can fall back to DisGeNET database (requires `DISGENET_API_KEY` environment variable, free registration at https://www.disgenet.org/api/).
+Open Targets provides a public target–disease association score (no API key required). When enabled, the mapper adds a `disease_score` and uses it for thresholding.
+
+### Optional DisGeNET
+
+DisGeNET is optional and requires `DISGENET_API_KEY` (free registration at https://www.disgenet.org/api/).
 
 ### Rate Limiting
 
@@ -261,10 +279,10 @@ mapper = BedtoolsMapper(
     use_effect_size_weight=True,                # Enable effect size weighting
     p_value_log_transform=True,                 # Use -log10(p) instead of 1/p
     enrich_disease=True,                        # Enable disease enrichment
-    enrich_source="both",                       # Use both Grok and DisGeNET
+    enrich_source="grok+opentargets",           # Use Grok + Open Targets
     disease_term="early-stage prostate cancer", # Disease to search for
     grok_api_key="your-grok-key",              # Grok API key
-    disgenet_api_key="your-disgenet-key",      # DisGeNET API key
+    disgenet_api_key="your-disgenet-key",      # DisGeNET API key (optional)
     optimize_dmps=True,                         # Enable DMP optimization
     min_k=10,                                  # Minimum DMPs to test
     max_k=None,                                # Maximum DMPs (None = all)
@@ -298,6 +316,7 @@ results = mapper.map_csv_files(
 
 **Disease enrichment not working**
 - Ensure `GROK_API_KEY` is set or use `--grok-api-key`
+- Or use Open Targets only: `--enrich-source opentargets`
 - Check API key is valid and has sufficient credits
 - API calls are rate-limited; be patient for large gene lists
 
@@ -329,7 +348,9 @@ results = mapper.map_csv_files(
 | **`disease_description`** | **Description of association** |
 | **`disease_publications`** | **Number of publications** |
 | **`disease_functional_role`** | **Functional role in disease** |
-| **`disease_source`** | **Source: grok_api, disgenet, none** |
+| **`disease_source`** | **Source: grok_api, open_targets, disgenet, none** |
+| **`disease_associated_raw`** | **Unfiltered association flag** |
+| **`disease_score`** | **Source score (Open Targets / DisGeNET)** |
 | **`gene_ncbi_link`** | **Link to NCBI Gene database** |
 | **`gene_ensembl_link`** | **Link to Ensembl genome browser** |
 | **`gene_uniprot_link`** | **Link to UniProt protein database** |
@@ -344,4 +365,4 @@ results = mapper.map_csv_files(
 4. Set it as environment variable: `export GROK_API_KEY="your-key"`
 5. Or pass via CLI: `--grok-api-key "your-key"`
 
-**Note**: If you don't have a Grok API key, the enrichment will still work but will only use DisGeNET (if configured) or skip enrichment entirely. The mapping will complete successfully without disease information.
+**Note**: If you don't have a Grok API key, the enrichment will still work using Open Targets (default). DisGeNET remains optional.

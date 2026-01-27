@@ -126,6 +126,14 @@ class MethylModelerConfig(BaseModel):
             raise ValueError(f"Invalid bmm_refine_mode '{v}'. Valid options: {valid}")
         return v
 
+    @field_validator('bmm_refine_filter_metric')
+    @classmethod
+    def validate_bmm_refine_filter_metric(cls, v):
+        valid = {"p_value", "js"}
+        if v not in valid:
+            raise ValueError(f"Invalid bmm_refine_filter_metric '{v}'. Valid options: {valid}")
+        return v
+
     min_effect_size: Optional[float] = Field(
         default=None, ge=0.0,
         description="Minimum effect size threshold for filtering. Effect size = |delta_mu / var_delta_mu| * (1 - BC)^gamma. None = no effect size filtering"
@@ -183,12 +191,32 @@ class MethylModelerConfig(BaseModel):
         description="Enable Beta Mixture Model refinement at detector stage (uses real samples if available)"
     )
     bmm_refine_mode: str = Field(
-        default="annotate",
+        default="filter",
         description="BMM refinement mode: 'annotate' (add BMM stats only) or 'filter' (drop weak mixture separations)"
     )
+    bmm_refine_filter_metric: str = Field(
+        default="p_value",
+        description="Metric used for BMM filtering: 'p_value' or 'js'"
+    )
+    bmm_refine_pvalue_threshold: float = Field(
+        default=0.05, ge=0.0, le=1.0,
+        description="P-value threshold for BMM filtering when metric is 'p_value'"
+    )
+    bmm_refine_replace_p_value: bool = Field(
+        default=True,
+        description="If True, replace p_value with BMM-derived p_value (preserving original in p_value_lrt)"
+    )
+    bmm_refine_recompute_q: bool = Field(
+        default=True,
+        description="If True, recompute q_value after replacing p_value"
+    )
     bmm_refine_max_dmps: int = Field(
-        default=20000, ge=100,
+        default=200000, ge=100,
         description="Maximum number of DMPs to evaluate with BMM (top by effect_size/importance)"
+    )
+    bmm_refine_max_fraction: Optional[float] = Field(
+        default=0.02, ge=0.0, le=1.0,
+        description="Optional fraction cap for BMM evaluation (e.g., 0.02 = top 2% of biological DMPs)"
     )
     bmm_refine_max_samples_per_group: int = Field(
         default=50, ge=5,
@@ -217,6 +245,14 @@ class MethylModelerConfig(BaseModel):
     bmm_refine_mc_samples: int = Field(
         default=200, ge=50,
         description="Monte Carlo samples for mixture JS divergence estimate"
+    )
+    bmm_refine_use_binned_stats: bool = Field(
+        default=True,
+        description="Use binned methylation values (counts per bin) for faster BMM fitting"
+    )
+    bmm_refine_bin_count: Optional[int] = Field(
+        default=100, ge=10,
+        description="Number of bins for binned stats. If None, uses a heuristic based on sample count."
     )
     bmm_refine_use_metadata_samples: bool = Field(
         default=True,

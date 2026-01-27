@@ -90,6 +90,7 @@ class MethylFrame:
 
         self._df = df.sort_values("pos").reset_index(drop=True)
         self._metadata = metadata or {}
+        self._binned_stats = None
 
     @property
     def df(self):
@@ -148,6 +149,18 @@ class MethylFrame:
     def metadata(self, value: Dict[str, Any]):
         """Set metadata dictionary."""
         self._metadata = value or {}
+
+    @property
+    def binned_stats(self) -> Optional[Dict[str, Any]]:
+        """Optional binned stats (bin_edges + bin_counts)."""
+        return self._binned_stats
+
+    def set_binned_stats(self, bin_edges: np.ndarray, bin_counts: np.ndarray) -> None:
+        """Attach binned stats to this object for HDF5 persistence."""
+        self._binned_stats = {
+            "bin_edges": np.asarray(bin_edges, dtype=np.float32),
+            "bin_counts": np.asarray(bin_counts),
+        }
 
     # Metadata properties (read-write for easy manipulation)
     @property
@@ -375,6 +388,18 @@ class MethylFrame:
                         group.create_dataset(col, data=data, **hdf5plugin.Blosc())
                     else:
                         group.create_dataset(col, data=data)
+
+            # Optional binned stats (large arrays) stored in separate group
+            if hasattr(self, "_binned_stats") and self._binned_stats:
+                binned = self._binned_stats
+                if "bin_edges" in binned and "bin_counts" in binned:
+                    bgroup = f.create_group("binned_stats")
+                    if compressed:
+                        bgroup.create_dataset("bin_edges", data=binned["bin_edges"], **hdf5plugin.Blosc())
+                        bgroup.create_dataset("bin_counts", data=binned["bin_counts"], **hdf5plugin.Blosc())
+                    else:
+                        bgroup.create_dataset("bin_edges", data=binned["bin_edges"])
+                        bgroup.create_dataset("bin_counts", data=binned["bin_counts"])
 
         return path
 

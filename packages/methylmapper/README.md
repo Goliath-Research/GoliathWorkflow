@@ -25,6 +25,7 @@ pip install -e .
 # Set environment variables
 export GENE_GTF="/path/to/gencode.v44.annotation.gtf"
 export GROK_API_KEY="your-grok-api-key"
+export DISGENET_API_KEY="your-disgenet-api-key"  # Optional
 
 # Basic mapping with disease enrichment
 cd /path/to/methylmodeler/output
@@ -35,9 +36,10 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
 # Advanced usage with all options
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                       --enrich-disease \
-                      --enrich-source both \
+                      --enrich-source grok+opentargets \
                       --grok-api-key "your-grok-key" \
-                      --disgenet-api-key "your-disgenet-key" \
+                      --enrich-profile strict \
+                      --cache-ttl-days 7 \
                       --no-p-value-weight \
                       --no-q-value-weight \
                       --feature-types gene exon intron \
@@ -63,7 +65,9 @@ methyl_mapper --input dmps.csv --config db_config.json --sample-id 12345
 - ⚡ **Fast local processing** using bedtools intersect
 - 🧬 **Comprehensive feature mapping** (genes, transcripts, exons, introns, etc.)
 - 📊 **Statistical weighting** by p-value, q-value, and effect size
-- 🏥 **Disease enrichment** via Grok API and DisGeNET database
+- 🏥 **Disease enrichment** via Grok API + Open Targets (optional DisGeNET)
+- 🧪 **Enrichment profiles** for strict/balanced/permissive testing
+- 💾 **Disk cache** for faster repeated runs
 - 📈 **Progress indicators** for long-running operations
 - 🔧 **Flexible configuration** via environment variables and CLI options
 

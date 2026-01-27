@@ -255,33 +255,15 @@ class AzureSQLConnection:
             # Build stored procedure call
             sp_call = text("""
                 EXEC spMapDMP2Genes
-                    @SampleID = :sample_id,
+                    @sample_id = :sample_id,
                     @chromosome = :chromosome,
-                    @context = :context,
-                    @upstream_size = :upstream_size,
-                    @downstream_size = :downstream_size,
-                    @min_intron_size = :min_intron_size,
-                    @w_promoter = :w_promoter,
-                    @w_terminator = :w_terminator,
-                    @w_gene_body = :w_gene_body,
-                    @w_exon = :w_exon,
-                    @w_intron = :w_intron,
-                    @w_unknown = :w_unknown
+                    @paramID = :param_id
             """)
             
             params = {
                 'sample_id': sample_id,
                 'chromosome': chromosome,
-                'context': context,
-                'upstream_size': sp_config.upstream_size,
-                'downstream_size': sp_config.downstream_size,
-                'min_intron_size': sp_config.min_intron_size,
-                'w_promoter': sp_config.w_promoter,
-                'w_terminator': sp_config.w_terminator,
-                'w_gene_body': sp_config.w_gene_body,
-                'w_exon': sp_config.w_exon,
-                'w_intron': sp_config.w_intron,
-                'w_unknown': sp_config.w_unknown
+                'param_id': sp_config.param_id
             }
             
             # Execute and fetch results using SQLModel Session

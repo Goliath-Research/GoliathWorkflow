@@ -83,7 +83,10 @@ class MethylCentroid:
         add_samples: List[str] = None,
         remove_samples: List[str] = None,
         min_coverage: int = 4,
+        min_samples: int = 1,
         verbose: bool = True,
+        enable_binned_stats: bool = False,
+        binned_stats_bins: Optional[int] = 100,
         # Metadata fields
         laboratory: str = None,
         disease: str = None,
@@ -164,9 +167,20 @@ class MethylCentroid:
         self._original_remove_samples = [str(s) for s in remove_samples] if remove_samples else []
 
         self.min_coverage = max(1, min_coverage)
+        self.min_samples = max(1, int(min_samples))
         self.chrom = chrom
         self.ctx = ctx
         self.output_dir = (Path(output_dir) if isinstance(output_dir, str) else output_dir)
+
+        # Binned stats configuration (for centroid-level mixture fitting)
+        self.enable_binned_stats = enable_binned_stats
+        total_samples = len(self.samples) + len(self.add_samples)
+        if binned_stats_bins is None:
+            bins = 100
+        else:
+            bins = int(binned_stats_bins)
+        self.binned_stats_bins = bins
+        self._binned_stats = None
 
         # Ensure output directory exists from the start
         try:
@@ -360,7 +374,7 @@ class MethylCentroid:
 
         # Create a unique identifier for tracking active samples
         if sample_path is not None:
-
+            sample_id = ("path", str(sample_path))
         else:
             sample_id = (is_new_sample, sample_index)
 
@@ -385,7 +399,7 @@ class MethylCentroid:
                 # Use MethylCentroidBuilder for proper initialization
                 from methyl_utils.core.centroid_builder import MethylCentroidBuilder
                 builder = MethylCentroidBuilder(min_coverage=self._min_coverage, use_gpu=self.use_gpu)
-                builder.add_sample(sample_path)
+                builder.add_sample(sample)
                 self._centroid = builder.finalize()
                 # Apply min_samples filter after builder finalizes
                 if hasattr(self._centroid, 'N') and len(self._centroid) > 0:
@@ -914,6 +928,9 @@ class MethylCentroid:
             "creation_date": datetime.now().isoformat(),  # NEW: Creation timestamp
             "min_coverage": self.min_coverage,
         }
+        if self.enable_binned_stats and self._binned_stats is not None:
+            metadata["binned_stats_enabled"] = True
+            metadata["binned_stats_bins"] = int(self.binned_stats_bins)
 
         # Create MethylSample from centroid data with metadata
         # centroid_data is a structured numpy array, convert to DataFrame
@@ -943,6 +960,16 @@ class MethylCentroid:
 
         # Set metadata on the sample before saving
         methyl_sample.metadata = metadata
+
+        # Attach binned stats if available
+        if self.enable_binned_stats and self._binned_stats is not None:
+            try:
+                methyl_sample.set_binned_stats(
+                    self._binned_stats["bin_edges"],
+                    self._binned_stats["bin_counts"]
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to attach binned stats to centroid: {e}")
         
         # Save using MethylSample
         output_path = Path(output_dir)
@@ -1076,7 +1103,10 @@ class MethylCentroid:
             raise RuntimeError("Failed to compute centroid: no samples were successfully added")
 
         # Compute and save centroid
-        centroid = self.compute_centroid(extended=extended)
+        if self.enable_binned_stats:
+            centroid = self.compute_centroid_chunked(extended=extended)
+        else:
+            centroid = self.compute_centroid(extended=extended)
         if centroid is None or len(centroid) == 0:
             raise RuntimeError("Failed to compute centroid: no samples were successfully added")
 
@@ -1129,6 +1159,7 @@ class MethylCentroid:
 
             # Process in chunks
             chunk_results = []
+            chunk_bin_counts = []
             total_chunks = (total_positions + chunk_size_positions - 1) // chunk_size_positions
 
             self.logger.info(f"Processing {total_chunks} chunks...")
@@ -1141,7 +1172,13 @@ class MethylCentroid:
                 with self.performance_profiler.profile_operation(f"chunk_{chunk_idx}_processing"):
                     chunk_centroid = self._compute_centroid_for_positions(chunk_positions, extended)
                     if chunk_centroid is not None:
-                        chunk_results.append(chunk_centroid)
+                        if self.enable_binned_stats and isinstance(chunk_centroid, tuple):
+                            centroid_part, bin_counts_part = chunk_centroid
+                            if centroid_part is not None:
+                                chunk_results.append(centroid_part)
+                                chunk_bin_counts.append(bin_counts_part)
+                        else:
+                            chunk_results.append(chunk_centroid)
 
             if not chunk_results:
                 self.logger.error("No chunks produced valid centroid data")
@@ -1149,7 +1186,22 @@ class MethylCentroid:
 
             # Combine chunk results
             self.logger.info(f"Combining {len(chunk_results)} chunk results...")
-            final_centroid = self._combine_chunked_centroids(chunk_results, extended)
+            if self.enable_binned_stats:
+                combined = self._combine_chunked_centroids(
+                    chunk_results, extended, bin_counts=chunk_bin_counts
+                )
+                if isinstance(combined, tuple):
+                    final_centroid, combined_bins = combined
+                    bin_edges = np.linspace(0.0, 1.0, self.binned_stats_bins + 1, dtype=np.float32)
+                    self._binned_stats = {
+                        "bin_edges": bin_edges,
+                        "bin_counts": combined_bins,
+                    }
+                else:
+                    final_centroid = combined
+                    self._binned_stats = None
+            else:
+                final_centroid = self._combine_chunked_centroids(chunk_results, extended)
 
             # Ensure GPU cleanup after chunked processing
             memory_manager.force_gpu_cleanup()
@@ -1183,6 +1235,11 @@ class MethylCentroid:
             Sx_accum = np.zeros(len(positions), dtype=np.float32)
             Sx2_accum = np.zeros(len(positions), dtype=np.float32)
 
+        bin_counts = None
+        if self.enable_binned_stats:
+            bin_dtype = np.uint16 if sample_count < 60000 else np.uint32
+            bin_counts = np.zeros((len(positions), self.binned_stats_bins), dtype=bin_dtype)
+
         # Process each sample for these positions
         for sample_idx in range(sample_count):
             # Load sample directly instead of getting from aligner
@@ -1207,15 +1264,22 @@ class MethylCentroid:
             coverage = aligned_mC + aligned_uC
             N_accum += (coverage > 0).astype(np.uint32)
             
-            if extended:
+            if extended or self.enable_binned_stats:
                 # Calculate methylation level for this sample
                 valid_positions = coverage > 0
                 if valid_positions.any():
                     methylation_level = np.zeros(len(positions), dtype=np.float32)
                     methylation_level[valid_positions] = aligned_mC[valid_positions] / coverage[valid_positions]
 
-                    Sx_accum += methylation_level
-                    Sx2_accum += methylation_level ** 2
+                    if extended:
+                        Sx_accum += methylation_level
+                        Sx2_accum += methylation_level ** 2
+
+                    if self.enable_binned_stats and bin_counts is not None:
+                        bin_idx = np.floor(methylation_level * self.binned_stats_bins).astype(np.int32)
+                        bin_idx = np.clip(bin_idx, 0, self.binned_stats_bins - 1)
+                        idxs = np.where(valid_positions)[0]
+                        np.add.at(bin_counts, (idxs, bin_idx[idxs]), 1)
 
         # Filter positions with sufficient coverage
         total_coverage = mC_accum + uC_accum
@@ -1254,9 +1318,18 @@ class MethylCentroid:
             # Use actual per-position N (number of samples that contributed to each position)
             centroid_data['N'] = N_accum[valid_positions]
 
+        if self.enable_binned_stats and bin_counts is not None:
+            bin_counts = bin_counts[valid_positions]
+            return centroid_data, bin_counts
+
         return centroid_data
 
-    def _combine_chunked_centroids(self, chunk_results: List[np.ndarray], extended: bool = False) -> Optional[np.ndarray]:
+    def _combine_chunked_centroids(
+        self,
+        chunk_results: List[np.ndarray],
+        extended: bool = False,
+        bin_counts: Optional[List[np.ndarray]] = None
+    ) -> Optional[np.ndarray]:
         """
         Combine centroid results from multiple chunks.
 
@@ -1269,16 +1342,22 @@ class MethylCentroid:
         """
         if not chunk_results:
             return None
-
         # Concatenate all chunks
         try:
             combined_centroid = np.concatenate(chunk_results)
+            combined_bins = None
+            if bin_counts is not None and len(bin_counts) == len(chunk_results):
+                combined_bins = np.concatenate(bin_counts)
 
             # Sort by position
             sort_idx = np.argsort(combined_centroid['pos'])
             combined_centroid = combined_centroid[sort_idx]
+            if combined_bins is not None:
+                combined_bins = combined_bins[sort_idx]
 
             self.logger.info(f"Combined centroid: {len(combined_centroid):,} positions")
+            if combined_bins is not None:
+                return combined_centroid, combined_bins
             return combined_centroid
 
         except Exception as e:
@@ -1344,6 +1423,8 @@ class MethylCentroid:
                 np.array([], dtype=np.uint32),
                 np.array([], dtype=np.uint32),
             )
+
+
 
 
     def process_large_sample_chunked(self, sample_path: Path, chunk_size: int = 1_000_000) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -1933,3 +2014,64 @@ if __name__ == "__main__":
             json.dump(batch_stats, f, indent=2)
         print(f"\nSaved batch statistics to {batch_stats_file_path}")
         print(f"Batch summary: {batch_stats['combinations_processed']} combinations processed")
+
+
+def attach_binned_stats_to_centroid(
+    centroid_path: Union[str, Path],
+    bins: int = 100,
+    output_dir: Optional[Union[str, Path]] = None,
+    chunk_size_positions: int = 2_000_000,
+    sample_dirs: Optional[List[str]] = None,
+    verbose: bool = True
+) -> Path:
+    """
+    Attach centroid-level binned stats by reprocessing sample files.
+
+    This reuses the existing centroid positions but recomputes statistics
+    from the original samples to generate bin counts. It overwrites the
+    centroid file unless output_dir is provided.
+    """
+    centroid_path = Path(centroid_path)
+    from methyl_utils import MethylSample
+
+    centroid = MethylSample.load_from_h5(centroid_path)
+    meta = centroid.metadata or {}
+    chrom = meta.get("chromosome")
+    ctx = meta.get("context")
+    if not chrom or not ctx:
+        raise ValueError("Centroid metadata missing chromosome/context; cannot attach binned stats")
+
+    if sample_dirs is None:
+        sample_dirs = meta.get("samples_used", [])
+    if not sample_dirs:
+        raise ValueError("No sample directories available to rebuild binned stats")
+
+    out_dir = Path(output_dir) if output_dir is not None else centroid_path.parent
+
+    worker = MethylCentroid(
+        chrom=chrom,
+        ctx=ctx,
+        output_dir=out_dir,
+        samples=sample_dirs,
+        min_coverage=int(meta.get("min_coverage", 4)),
+        min_samples=int(meta.get("min_samples", 1)),
+        verbose=verbose,
+        enable_binned_stats=True,
+        binned_stats_bins=int(bins),
+        laboratory=meta.get("laboratory"),
+        disease=meta.get("disease"),
+        group=meta.get("group"),
+        batch=meta.get("batch"),
+    )
+
+    # Use existing centroid positions for chunking
+    worker._centroid = centroid
+    worker.active_samples = set((False, i) for i in range(len(worker.samples)))
+
+    centroid_data = worker.compute_centroid_chunked(
+        extended=True, chunk_size_positions=chunk_size_positions
+    )
+    if centroid_data is None or len(centroid_data) == 0:
+        raise RuntimeError("Failed to compute centroid with binned stats")
+
+    return worker.save_centroid(str(out_dir), centroid_data, extended=True)

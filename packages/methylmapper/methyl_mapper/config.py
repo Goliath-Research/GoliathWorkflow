@@ -83,7 +83,11 @@ class AzureSQLConfig(BaseModel):
 
 class StoredProcedureConfig(BaseModel):
     """Configuration for spMapDMP2Genes stored procedure parameters."""
-    
+    param_id: int = Field(
+        default=1,
+        ge=1,
+        description="dbo.params ID used by spMapDMP2Genes"
+    )
     upstream_size: int = Field(
         default=5000,
         ge=0,

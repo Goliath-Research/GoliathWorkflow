@@ -5,6 +5,7 @@ This module enriches gene mapping results with disease associations, particularl
 focused on cancer types like early-stage prostate cancer.
 """
 
+import json
 import logging
 import sys
 import time
@@ -18,6 +19,88 @@ from urllib3.util.retry import Retry
 from .secure_credentials import SecureCredentialManager
 
 logger = logging.getLogger(__name__)
+
+# Evidence level ordering for thresholding
+EVIDENCE_LEVEL_ORDER = {
+    "none": 0,
+    "low": 1,
+    "medium": 2,
+    "high": 3
+}
+
+# Enrichment profiles for quick testing
+ENRICHMENT_PROFILES = {
+    "strict": {
+        "min_evidence_level": "high",
+        "min_publications": 2,
+        "min_disgenet_score": 0.5,
+        "min_open_targets_score": 0.3,
+        "allow_predicted": False
+    },
+    "balanced": {
+        "min_evidence_level": "medium",
+        "min_publications": 0,
+        "min_disgenet_score": 0.3,
+        "min_open_targets_score": 0.1,
+        "allow_predicted": False
+    },
+    "permissive": {
+        "min_evidence_level": "low",
+        "min_publications": 0,
+        "min_disgenet_score": 0.0,
+        "min_open_targets_score": 0.0,
+        "allow_predicted": True
+    }
+}
+
+
+def _apply_enrichment_profile(
+    enrichment_profile: Optional[str],
+    min_evidence_level: Optional[str],
+    min_publications: Optional[int],
+    min_disgenet_score: Optional[float],
+    min_open_targets_score: Optional[float],
+    allow_predicted: Optional[bool]
+) -> Dict[str, Union[str, int, float, bool]]:
+    """Apply profile defaults for enrichment thresholds."""
+    if enrichment_profile:
+        profile_key = enrichment_profile.lower()
+        if profile_key not in ENRICHMENT_PROFILES:
+            raise ValueError(
+                f"Unknown enrichment_profile '{enrichment_profile}'. "
+                f"Valid options: {list(ENRICHMENT_PROFILES.keys())}"
+            )
+        profile = ENRICHMENT_PROFILES[profile_key]
+        if min_evidence_level is None:
+            min_evidence_level = profile["min_evidence_level"]
+        if min_publications is None:
+            min_publications = profile["min_publications"]
+        if min_disgenet_score is None:
+            min_disgenet_score = profile["min_disgenet_score"]
+        if min_open_targets_score is None:
+            min_open_targets_score = profile["min_open_targets_score"]
+        if allow_predicted is None:
+            allow_predicted = profile["allow_predicted"]
+
+    # Fallback defaults
+    if min_evidence_level is None:
+        min_evidence_level = "medium"
+    if min_publications is None:
+        min_publications = 0
+    if min_disgenet_score is None:
+        min_disgenet_score = 0.0
+    if min_open_targets_score is None:
+        min_open_targets_score = 0.0
+    if allow_predicted is None:
+        allow_predicted = False
+
+    return {
+        "min_evidence_level": min_evidence_level,
+        "min_publications": min_publications,
+        "min_disgenet_score": min_disgenet_score,
+        "min_open_targets_score": min_open_targets_score,
+        "allow_predicted": allow_predicted
+    }
 
 
 class ProgressIndicator:
@@ -73,7 +156,8 @@ class GeneDiseaseEnricher:
     
     Supports:
     - Grok API queries for gene-disease associations
-    - DisGeNET database (fallback)
+    - Open Targets database (default)
+    - DisGeNET database (optional)
     - NCBI Gene database (fallback)
     """
     
@@ -82,9 +166,20 @@ class GeneDiseaseEnricher:
         grok_api_key: Optional[str] = None,
         disgenet_api_key: Optional[str] = None,
         grok_api_url: str = "https://api.x.ai/v1/chat/completions",
+        open_targets_api_url: str = "https://api.platform.opentargets.org/api/v4/graphql",
         disease_term: str = "early-stage prostate cancer",
         use_grok: bool = True,
         use_disgenet: bool = True,
+        use_open_targets: bool = True,
+        enrichment_profile: Optional[str] = None,
+        min_evidence_level: Optional[str] = None,
+        min_publications: Optional[int] = None,
+        min_disgenet_score: Optional[float] = None,
+        min_open_targets_score: Optional[float] = None,
+        allow_predicted: Optional[bool] = None,
+        cache_enabled: bool = True,
+        cache_dir: Optional[Path] = None,
+        cache_ttl_days: Optional[int] = 7,
         rate_limit_delay: float = 1.0,
         max_retries: int = 3,
         azure_key_vault_url: Optional[str] = None,
@@ -98,9 +193,21 @@ class GeneDiseaseEnricher:
             grok_api_key: Grok API key (optional, will use secure storage if not provided)
             disgenet_api_key: DisGeNET API key (optional, will use secure storage if not provided)
             grok_api_url: Grok API endpoint URL
+            open_targets_api_url: Open Targets GraphQL endpoint URL
             disease_term: Disease term to search for (e.g., "early-stage prostate cancer")
             use_grok: Whether to use Grok API for enrichment
             use_disgenet: Whether to use DisGeNET database for enrichment
+            use_open_targets: Whether to use Open Targets database for enrichment
+            enrichment_profile: Preset threshold profile (strict, balanced, permissive)
+            min_evidence_level: Minimum evidence level to count as disease-associated
+                                (none, low, medium, high)
+            min_publications: Minimum number of publications required
+            min_disgenet_score: Minimum DisGeNET score required (0.0-1.0)
+            min_open_targets_score: Minimum Open Targets score required (0.0-1.0)
+            allow_predicted: Whether to allow "predicted" associations
+            cache_enabled: Whether to persist cache to disk
+            cache_dir: Directory for disk cache (default: ~/.methyl_mapper/cache)
+            cache_ttl_days: Cache TTL in days (default: 7, 0 or None disables TTL)
             rate_limit_delay: Delay between API calls (seconds)
             max_retries: Maximum retry attempts for API calls
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
@@ -127,12 +234,44 @@ class GeneDiseaseEnricher:
         # Get credentials using secure managers
         self.grok_api_key = self.grok_credential_manager.get_credential(explicit_key=grok_api_key) if self.grok_credential_manager else None
         self.disgenet_api_key = self.disgenet_credential_manager.get_credential(explicit_key=disgenet_api_key) if self.disgenet_credential_manager else None
+        thresholds = _apply_enrichment_profile(
+            enrichment_profile=enrichment_profile,
+            min_evidence_level=min_evidence_level,
+            min_publications=min_publications,
+            min_disgenet_score=min_disgenet_score,
+            min_open_targets_score=min_open_targets_score,
+            allow_predicted=allow_predicted
+        )
+
         self.grok_api_url = grok_api_url
+        self.open_targets_api_url = open_targets_api_url
         self.disease_term = disease_term
         self.use_grok = use_grok
         self.use_disgenet = use_disgenet
+        self.use_open_targets = use_open_targets
+        self.enrichment_profile = enrichment_profile
+        self.min_evidence_level = thresholds["min_evidence_level"].lower()
+        self.min_publications = max(0, int(thresholds["min_publications"]))
+        self.min_disgenet_score = float(thresholds["min_disgenet_score"])
+        self.min_open_targets_score = float(thresholds["min_open_targets_score"])
+        self.allow_predicted = bool(thresholds["allow_predicted"])
         self.rate_limit_delay = rate_limit_delay
         self.max_retries = max_retries
+
+        self.cache_enabled = cache_enabled
+        self.cache_ttl_days = None if cache_ttl_days in (None, 0) else int(cache_ttl_days)
+        self.cache_dir = Path(cache_dir).expanduser() if cache_dir else (Path.home() / ".methyl_mapper" / "cache")
+        self.cache_file = self.cache_dir / "gene_disease_cache.json"
+
+        if self.min_evidence_level not in EVIDENCE_LEVEL_ORDER:
+            raise ValueError(
+                f"min_evidence_level must be one of {list(EVIDENCE_LEVEL_ORDER.keys())}, "
+                f"got '{min_evidence_level}'"
+            )
+        if self.min_disgenet_score < 0.0 or self.min_disgenet_score > 1.0:
+            raise ValueError("min_disgenet_score must be between 0.0 and 1.0")
+        if self.min_open_targets_score < 0.0 or self.min_open_targets_score > 1.0:
+            raise ValueError("min_open_targets_score must be between 0.0 and 1.0")
         
         # Setup requests session with retries
         self.session = requests.Session()
@@ -147,6 +286,9 @@ class GeneDiseaseEnricher:
         
         # Cache for gene-disease associations
         self._cache: Dict[str, Dict] = {}
+        self._disease_id_cache: Dict[str, Dict] = {}
+        self._cache_dirty = False
+        self._load_disk_cache()
     
     def query_grok_api(
         self,
@@ -174,9 +316,10 @@ class GeneDiseaseEnricher:
         uncached_genes = []
         
         for gene in gene_names:
-            cache_key = f"{gene.upper()}:{disease_term}"
-            if cache_key in self._cache:
-                cached_results[gene.upper()] = self._cache[cache_key]
+            cache_key = self._cache_key("grok", gene, disease_term)
+            cached = self._cache_get(cache_key)
+            if cached is not None:
+                cached_results[gene.upper()] = cached
             else:
                 uncached_genes.append(gene)
         
@@ -215,8 +358,8 @@ class GeneDiseaseEnricher:
 
                 # Cache results
                 for gene_name, association_info in batch_results.items():
-                    cache_key = f"{gene_name}:{disease_term}"
-                    self._cache[cache_key] = association_info
+                    cache_key = self._cache_key("grok", gene_name, disease_term)
+                    self._cache_set(cache_key, association_info)
 
                 results.update(batch_results)
                 progress.update(success=True)
@@ -232,6 +375,7 @@ class GeneDiseaseEnricher:
                 continue
 
         logger.info(f"✅ Retrieved disease associations for {len(results)} genes from Grok API ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
+        self._save_disk_cache()
         return results
     
     def _create_grok_prompt(self, gene_names: List[str], disease_term: str) -> str:
@@ -429,9 +573,10 @@ Return ONLY valid JSON array format like:
         uncached_genes = []
 
         for gene in gene_names:
-            cache_key = f"{gene.upper()}:{disease_term}"
-            if cache_key in self._cache:
-                cached_results[gene.upper()] = self._cache[cache_key]
+            cache_key = self._cache_key("disgenet", gene, disease_term)
+            cached = self._cache_get(cache_key)
+            if cached is not None:
+                cached_results[gene.upper()] = cached
             else:
                 uncached_genes.append(gene)
 
@@ -500,8 +645,8 @@ Return ONLY valid JSON array format like:
                         }
 
                     # Cache result
-                    cache_key = f"{gene.upper()}:{disease_term}"
-                    self._cache[cache_key] = association_info
+                    cache_key = self._cache_key("disgenet", gene, disease_term)
+                    self._cache_set(cache_key, association_info)
                     results[gene.upper()] = association_info
                     progress.update(success=True)
 
@@ -523,12 +668,107 @@ Return ONLY valid JSON array format like:
                     'source': 'disgenet_error'
                 }
                 # Cache error result too (to avoid retrying failed queries)
-                cache_key = f"{gene.upper()}:{disease_term}"
-                self._cache[cache_key] = association_info
+                cache_key = self._cache_key("disgenet", gene, disease_term)
+                self._cache_set(cache_key, association_info)
                 results[gene.upper()] = association_info
                 progress.update(success=False)
         
         logger.info(f"✅ Retrieved associations for {len(results)} genes from DisGeNET ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
+        self._save_disk_cache()
+        return results
+
+    def query_open_targets(
+        self,
+        gene_names: List[str],
+        disease_term: Optional[str] = None
+    ) -> Dict[str, Dict]:
+        """
+        Query Open Targets for gene-disease associations.
+        """
+        if not self.use_open_targets:
+            logger.debug("Open Targets queries disabled")
+            return {}
+
+        disease_term = disease_term or self.disease_term
+
+        # Resolve disease ID once per call
+        disease_id = self._resolve_open_targets_disease_id(disease_term)
+        if not disease_id:
+            logger.warning(f"Open Targets: no disease match for '{disease_term}'")
+            return {}
+
+        cached_results = {}
+        uncached_genes = []
+
+        for gene in gene_names:
+            cache_key = self._cache_key("open_targets", gene, disease_term)
+            cached = self._cache_get(cache_key)
+            if cached is not None:
+                cached_results[gene.upper()] = cached
+            else:
+                uncached_genes.append(gene)
+
+        if cached_results:
+            logger.debug(f"Found {len(cached_results)} Open Targets genes in cache")
+
+        if not uncached_genes:
+            logger.info(f"✅ Retrieved all {len(cached_results)} genes from Open Targets cache")
+            return cached_results
+
+        logger.info(f"Querying Open Targets for {len(uncached_genes)} genes...")
+        results = cached_results.copy()
+
+        progress = ProgressIndicator(len(uncached_genes), "Open Targets genes", update_interval=50)
+
+        for gene in uncached_genes:
+            try:
+                target_id = self._resolve_open_targets_target_id(gene)
+                if not target_id:
+                    association_info = {
+                        'associated': False,
+                        'association_type': 'none',
+                        'evidence_level': 'none',
+                        'description': None,
+                        'publications': 0,
+                        'functional_role': None,
+                        'source': 'open_targets'
+                    }
+                else:
+                    assoc = self._fetch_open_targets_association(target_id, disease_id)
+                    association_info = assoc or {
+                        'associated': False,
+                        'association_type': 'none',
+                        'evidence_level': 'none',
+                        'description': None,
+                        'publications': 0,
+                        'functional_role': None,
+                        'source': 'open_targets'
+                    }
+
+                cache_key = self._cache_key("open_targets", gene, disease_term)
+                self._cache_set(cache_key, association_info)
+                results[gene.upper()] = association_info
+                progress.update(success=True)
+            except Exception as e:
+                logger.debug(f"Open Targets query failed for {gene}: {e}")
+                association_info = {
+                    'associated': False,
+                    'association_type': 'none',
+                    'evidence_level': 'none',
+                    'description': None,
+                    'publications': 0,
+                    'functional_role': None,
+                    'source': 'open_targets_error'
+                }
+                cache_key = self._cache_key("open_targets", gene, disease_term)
+                self._cache_set(cache_key, association_info)
+                results[gene.upper()] = association_info
+                progress.update(success=False)
+
+            time.sleep(0.1)
+
+        logger.info(f"✅ Retrieved associations for {len(results)} genes from Open Targets ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
+        self._save_disk_cache()
         return results
     
     def enrich_gene_dataframe(
@@ -558,18 +798,30 @@ Return ONLY valid JSON array format like:
         
         if not unique_genes:
             logger.warning("No genes found in DataFrame")
-            if separate_sources and self.use_grok and self.use_disgenet:
-                return {'grok': df.copy(), 'disgenet': df.copy(), 'merged': df.copy()}
+            if separate_sources and (self.use_grok or self.use_open_targets or self.use_disgenet):
+                result_dfs = {}
+                if self.use_grok:
+                    result_dfs['grok'] = df.copy()
+                if self.use_open_targets:
+                    result_dfs['open_targets'] = df.copy()
+                if self.use_disgenet:
+                    result_dfs['disgenet'] = df.copy()
+                result_dfs['merged'] = df.copy()
+                return result_dfs
             return df
 
         logger.info(f"Enriching {len(unique_genes)} unique genes with disease associations...")
 
         # Query enabled sources
         grok_results = {}
+        open_targets_results = {}
         disgenet_results = {}
 
         if self.use_grok:
             grok_results = self.query_grok_api(unique_genes, disease_term)
+
+        if self.use_open_targets:
+            open_targets_results = self.query_open_targets(unique_genes, disease_term)
 
         if self.use_disgenet:
             disgenet_results = self.query_disgenet(unique_genes, disease_term)
@@ -577,31 +829,45 @@ Return ONLY valid JSON array format like:
         # Generate hyperlinks for all genes
         hyperlinks = self._generate_gene_hyperlinks(unique_genes)
 
-        # If separate sources requested and both sources enabled, return separate DataFrames
-        if separate_sources and self.use_grok and self.use_disgenet:
+        sources_enabled = {
+            'grok': self.use_grok,
+            'open_targets': self.use_open_targets,
+            'disgenet': self.use_disgenet
+        }
+        sources_enabled = {k: v for k, v in sources_enabled.items() if v}
+
+        # If separate sources requested and multiple sources enabled, return separate DataFrames
+        if separate_sources and len(sources_enabled) > 1:
             logger.info("Returning separate results for each source...")
 
             # Create Grok-enriched DataFrame
-            grok_df = df.copy()
-            grok_df = self._add_enrichment_columns(grok_df, grok_results, gene_column, 'grok', hyperlinks)
+            result_dfs = {}
+            if self.use_grok:
+                grok_df = df.copy()
+                grok_df = self._add_enrichment_columns(grok_df, grok_results, gene_column, 'grok', hyperlinks)
+                result_dfs['grok'] = grok_df
+
+            if self.use_open_targets:
+                ot_df = df.copy()
+                ot_df = self._add_enrichment_columns(ot_df, open_targets_results, gene_column, 'open_targets', hyperlinks)
+                result_dfs['open_targets'] = ot_df
 
             # Create DisGeNET-enriched DataFrame
-            disgenet_df = df.copy()
-            disgenet_df = self._add_enrichment_columns(disgenet_df, disgenet_results, gene_column, 'disgenet', hyperlinks)
+            if self.use_disgenet:
+                disgenet_df = df.copy()
+                disgenet_df = self._add_enrichment_columns(disgenet_df, disgenet_results, gene_column, 'disgenet', hyperlinks)
+                result_dfs['disgenet'] = disgenet_df
 
             # Create merged DataFrame (current behavior)
-            merged_results = self._merge_results(grok_results, disgenet_results, unique_genes)
+            merged_results = self._merge_results(grok_results, open_targets_results, disgenet_results, unique_genes)
             merged_df = df.copy()
             merged_df = self._add_enrichment_columns(merged_df, merged_results, gene_column, 'merged', hyperlinks)
 
-            return {
-                'grok': grok_df,
-                'disgenet': disgenet_df,
-                'merged': merged_df
-            }
+            result_dfs['merged'] = merged_df
+            return result_dfs
 
         # Default behavior: merge results
-        merged_results = self._merge_results(grok_results, disgenet_results, unique_genes)
+        merged_results = self._merge_results(grok_results, open_targets_results, disgenet_results, unique_genes)
         enriched_df = df.copy()
         enriched_df = self._add_enrichment_columns(enriched_df, merged_results, gene_column, 'merged', hyperlinks)
 
@@ -611,19 +877,29 @@ Return ONLY valid JSON array format like:
 
         return enriched_df
 
-    def _merge_results(self, grok_results: Dict[str, Dict], disgenet_results: Dict[str, Dict], unique_genes: List[str]) -> Dict[str, Dict]:
+    def _merge_results(
+        self,
+        grok_results: Dict[str, Dict],
+        open_targets_results: Dict[str, Dict],
+        disgenet_results: Dict[str, Dict],
+        unique_genes: List[str]
+    ) -> Dict[str, Dict]:
         """Merge results from multiple sources with priority logic."""
         merged_results = {}
         for gene in unique_genes:
             gene_upper = gene.upper()
 
             # Priority: Associated results first, then any available results
-            if gene_upper in grok_results and grok_results[gene_upper]['associated']:
+            if gene_upper in grok_results and self._association_meets_thresholds(grok_results[gene_upper]):
                 merged_results[gene_upper] = grok_results[gene_upper]
-            elif gene_upper in disgenet_results and disgenet_results[gene_upper]['associated']:
+            elif gene_upper in open_targets_results and self._association_meets_thresholds(open_targets_results[gene_upper]):
+                merged_results[gene_upper] = open_targets_results[gene_upper]
+            elif gene_upper in disgenet_results and self._association_meets_thresholds(disgenet_results[gene_upper]):
                 merged_results[gene_upper] = disgenet_results[gene_upper]
             elif gene_upper in grok_results:
                 merged_results[gene_upper] = grok_results[gene_upper]
+            elif gene_upper in open_targets_results:
+                merged_results[gene_upper] = open_targets_results[gene_upper]
             elif gene_upper in disgenet_results:
                 merged_results[gene_upper] = disgenet_results[gene_upper]
             else:
@@ -639,11 +915,42 @@ Return ONLY valid JSON array format like:
                 }
         return merged_results
 
+    def _association_meets_thresholds(self, assoc: Dict) -> bool:
+        """Determine if association meets evidence thresholds."""
+        if not assoc or not assoc.get('associated', False):
+            return False
+
+        assoc_type = str(assoc.get('association_type', 'none')).lower()
+        if not self.allow_predicted and assoc_type == 'predicted':
+            return False
+
+        evidence_level = str(assoc.get('evidence_level', 'none')).lower()
+        if EVIDENCE_LEVEL_ORDER.get(evidence_level, 0) < EVIDENCE_LEVEL_ORDER[self.min_evidence_level]:
+            return False
+
+        publications = assoc.get('publications', 0) or 0
+        if publications < self.min_publications:
+            return False
+
+        if assoc.get('source') == 'disgenet':
+            score = assoc.get('score', 0.0) or 0.0
+            if score < self.min_disgenet_score:
+                return False
+        if assoc.get('source') == 'open_targets':
+            score = assoc.get('score', 0.0) or 0.0
+            if score < self.min_open_targets_score:
+                return False
+
+        return True
+
     def _add_enrichment_columns(self, df: pd.DataFrame, results: Dict[str, Dict], gene_column: str, source_prefix: str, hyperlinks: Dict[str, Dict]) -> pd.DataFrame:
         """Add enrichment columns to DataFrame with hyperlinks."""
         # Disease association columns
-        df[f'disease_associated'] = df[gene_column].str.upper().map(
+        df[f'disease_associated_raw'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('associated', False) if pd.notna(x) else False
+        )
+        df[f'disease_associated'] = df[gene_column].str.upper().map(
+            lambda x: self._association_meets_thresholds(results.get(x, {})) if pd.notna(x) else False
         )
         df[f'disease_association_type'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('association_type', 'none') if pd.notna(x) else 'none'
@@ -662,6 +969,9 @@ Return ONLY valid JSON array format like:
         )
         df[f'disease_source'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('source', 'none') if pd.notna(x) else 'none'
+        )
+        df[f'disease_score'] = df[gene_column].str.upper().map(
+            lambda x: results.get(x, {}).get('score', 0.0) if pd.notna(x) else 0.0
         )
 
         # Add hyperlinks
@@ -700,4 +1010,222 @@ Return ONLY valid JSON array format like:
             }
 
         return hyperlinks
+
+    def _cache_key(self, source: str, gene_name: str, disease_term: str) -> str:
+        """Build a cache key with source separation."""
+        return f"{source}:{gene_name.upper()}:{disease_term}"
+
+    def _cache_get(self, key: str) -> Optional[Dict]:
+        """Retrieve a cached association, honoring TTL."""
+        if not self.cache_enabled:
+            return None
+        entry = self._cache.get(key)
+        if not entry:
+            return None
+        ts = entry.get("ts")
+        if not self._is_cache_valid(ts):
+            self._cache.pop(key, None)
+            self._cache_dirty = True
+            return None
+        return entry.get("value")
+
+    def _cache_set(self, key: str, value: Dict) -> None:
+        """Store a cached association."""
+        if not self.cache_enabled:
+            return
+        self._cache[key] = {"value": value, "ts": time.time()}
+        self._cache_dirty = True
+
+    def _disease_cache_get(self, key: str) -> Optional[str]:
+        if not self.cache_enabled:
+            return None
+        entry = self._disease_id_cache.get(key)
+        if not entry:
+            return None
+        ts = entry.get("ts")
+        if not self._is_cache_valid(ts):
+            self._disease_id_cache.pop(key, None)
+            self._cache_dirty = True
+            return None
+        return entry.get("value")
+
+    def _disease_cache_set(self, key: str, value: Optional[str]) -> None:
+        if not self.cache_enabled:
+            return
+        self._disease_id_cache[key] = {"value": value, "ts": time.time()}
+        self._cache_dirty = True
+
+    def _is_cache_valid(self, ts: Optional[float]) -> bool:
+        if ts is None:
+            return True
+        if self.cache_ttl_days is None:
+            return True
+        return (time.time() - ts) <= (self.cache_ttl_days * 86400)
+
+    def _load_disk_cache(self) -> None:
+        if not self.cache_enabled:
+            return
+        try:
+            if not self.cache_file.exists():
+                return
+            with open(self.cache_file, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            self._cache = data.get("associations", {}) or {}
+            self._disease_id_cache = data.get("disease_ids", {}) or {}
+            self._normalize_cache_entries()
+            self._cache_dirty = False
+            logger.debug(f"Loaded enrichment cache from {self.cache_file}")
+        except Exception as exc:
+            logger.debug(f"Failed to load cache: {exc}")
+
+    def _save_disk_cache(self) -> None:
+        if not self.cache_enabled or not self._cache_dirty:
+            return
+        try:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "version": 1,
+                "saved_at": time.time(),
+                "associations": self._cache,
+                "disease_ids": self._disease_id_cache
+            }
+            with open(self.cache_file, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle)
+            self._cache_dirty = False
+            logger.debug(f"Saved enrichment cache to {self.cache_file}")
+        except Exception as exc:
+            logger.debug(f"Failed to save cache: {exc}")
+
+    def _normalize_cache_entries(self) -> None:
+        """Normalize cache entries after loading from disk."""
+        now_ts = time.time()
+        normalized = {}
+        for key, entry in self._cache.items():
+            if isinstance(entry, dict) and "value" in entry:
+                value = entry.get("value")
+                ts = entry.get("ts", now_ts)
+            else:
+                value = entry
+                ts = now_ts
+            normalized[key] = {"value": value, "ts": ts}
+        self._cache = normalized
+
+        normalized_disease = {}
+        for key, entry in self._disease_id_cache.items():
+            if isinstance(entry, dict) and "value" in entry:
+                value = entry.get("value")
+                ts = entry.get("ts", now_ts)
+            else:
+                value = entry
+                ts = now_ts
+            normalized_disease[key] = {"value": value, "ts": ts}
+        self._disease_id_cache = normalized_disease
+
+    def _open_targets_request(self, query: str, variables: Dict) -> Dict:
+        """Execute a GraphQL request against Open Targets."""
+        response = self.session.post(
+            self.open_targets_api_url,
+            json={"query": query, "variables": variables},
+            timeout=30
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def _resolve_open_targets_disease_id(self, disease_term: str) -> Optional[str]:
+        """Resolve disease term to Open Targets disease ID."""
+        cached = self._disease_cache_get(disease_term)
+        if cached is not None:
+            return cached
+
+        query = """
+        query DiseaseSearch($queryString: String!) {
+          search(queryString: $queryString, entityNames: ["disease"]) {
+            hits {
+              id
+              name
+              entity
+            }
+          }
+        }
+        """
+        try:
+            result = self._open_targets_request(query, {"queryString": disease_term})
+            hits = result.get("data", {}).get("search", {}).get("hits", [])
+            disease_id = None
+            for hit in hits:
+                if str(hit.get("entity", "")).lower() == "disease":
+                    disease_id = hit.get("id")
+                    break
+            self._disease_cache_set(disease_term, disease_id)
+            return disease_id
+        except Exception as exc:
+            logger.debug(f"Open Targets disease search failed: {exc}")
+            self._disease_cache_set(disease_term, None)
+            return None
+
+    def _resolve_open_targets_target_id(self, gene_name: str) -> Optional[str]:
+        """Resolve gene symbol to Open Targets target ID."""
+        query = """
+        query TargetSearch($queryString: String!) {
+          search(queryString: $queryString, entityNames: ["target"]) {
+            hits {
+              id
+              name
+              entity
+            }
+          }
+        }
+        """
+        result = self._open_targets_request(query, {"queryString": gene_name})
+        hits = result.get("data", {}).get("search", {}).get("hits", [])
+        for hit in hits:
+            if str(hit.get("entity", "")).lower() == "target":
+                return hit.get("id")
+        return None
+
+    def _fetch_open_targets_association(self, target_id: str, disease_id: str) -> Optional[Dict]:
+        """Fetch Open Targets association score for target-disease pair."""
+        query = """
+        query TargetDiseases($targetId: String!) {
+          target(id: $targetId) {
+            associatedDiseases(page: {index: 0, size: 100}) {
+              rows {
+                disease {
+                  id
+                  name
+                }
+                score
+              }
+            }
+          }
+        }
+        """
+        result = self._open_targets_request(query, {"targetId": target_id})
+        rows = (
+            result.get("data", {})
+            .get("target", {})
+            .get("associatedDiseases", {})
+            .get("rows", [])
+        )
+        for row in rows:
+            disease = row.get("disease", {}) or {}
+            if disease.get("id") == disease_id:
+                score = float(row.get("score", 0.0) or 0.0)
+                evidence_level = (
+                    "high" if score >= 0.6 else
+                    "medium" if score >= 0.3 else
+                    "low" if score > 0 else
+                    "none"
+                )
+                return {
+                    'associated': score > 0,
+                    'association_type': 'database',
+                    'evidence_level': evidence_level,
+                    'description': disease.get("name"),
+                    'publications': 0,
+                    'functional_role': None,
+                    'source': 'open_targets',
+                    'score': score
+                }
+        return None
 

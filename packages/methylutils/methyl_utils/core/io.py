@@ -140,4 +140,20 @@ def load_from_h5(
                     metadata[key] = value
 
         df = pd.DataFrame(data)
-        return cls(df, metadata)
+        obj = cls(df, metadata)
+
+        # Load optional binned stats
+        if "binned_stats" in f:
+            try:
+                bgroup = f["binned_stats"]
+                if "bin_edges" in bgroup and "bin_counts" in bgroup:
+                    bin_edges = np.asarray(bgroup["bin_edges"][:], dtype=np.float32)
+                    bin_counts = np.asarray(bgroup["bin_counts"][:])
+                    if hasattr(obj, "set_binned_stats"):
+                        obj.set_binned_stats(bin_edges, bin_counts)
+                    else:
+                        obj._binned_stats = {"bin_edges": bin_edges, "bin_counts": bin_counts}
+            except Exception:
+                pass
+
+        return obj
