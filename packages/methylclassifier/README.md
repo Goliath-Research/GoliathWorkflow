@@ -16,6 +16,7 @@ MethylClassifier is a Bayesian probabilistic classifier that assigns DNA methyla
 - **Platt Calibration**: Optional probability calibration for improved confidence estimates
 - **No Training Required**: Uses pre-computed Beta parameters from centroids
 - **Fast & Efficient**: Batch processing with NumPy/SciPy optimization
+- **Hybrid Beta/BMM Likelihoods**: Optional Beta Mixture override for refined DMPs
 
 ## Quick Start
 
@@ -78,6 +79,12 @@ MethylClassifier implements **Naive Bayes classification** with Beta distributio
    P(Class k | X) ∝ P(Class k) × ∏ Beta_PDF(x_i; α_k,i, β_k,i)
    ```
 4. **Prediction**: Assign to class with highest posterior probability
+
+### Optional Beta Mixture (BMM) Override
+
+When detector-stage BMM refinement is enabled, MethylClassifier can use **Beta Mixture**
+likelihoods for those DMPs (and fall back to Beta for the rest). This preserves the
+Bayesian formulation while better modeling multi-modal methylation distributions.
 
 ### Why Probabilistic Instead of ML?
 
@@ -197,6 +204,18 @@ Models are trained using **MethylModeler**:
 2. **Detect DMPs** using MethylModeler (statistical + biological filtering)
 3. **Select optimal DMPs** via binary search with Balanced Accuracy
 4. **Save classifier** as .pkl file with Beta parameters and metadata
+
+## Multi-class Model (Beta/BMM)
+
+You can build a **multi-class** classifier (e.g., healthy + multiple cancers) using a
+single DMP list and per-class centroids. If BMM centroids are available, the model
+will use Beta Mixture likelihoods for those DMPs.
+
+```bash
+python build_multiclass_model.py configs/example_multiclass_model.json
+```
+
+The resulting `.pkl` can be used with the same CLI or Python API.
 
 See MethylModeler documentation for training pipeline details.
 

@@ -851,7 +851,8 @@ Optional beta-mixture refinement for top biological DMPs. Uses binned counts whe
 
 Outputs when enabled:
 
-- `bmm_centroids/bmm-centroid-{chromosome}-{context}.json`
+- `bmm_centroids/bmm-centroid-{chromosome}-{context}.json` (centroid1)
+- `bmm_centroids/bmm-centroid-{chromosome}-{context}-centroid2.json` (centroid2)
 - `results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files`
 
 ### 3. Gene-Level Feature Importance

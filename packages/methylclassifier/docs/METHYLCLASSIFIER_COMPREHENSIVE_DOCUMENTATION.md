@@ -39,6 +39,7 @@
 - **Temperature Control**: Softmax temperature for confidence calibration
 - **Binary Classification**: Designed for two-class problems (e.g., healthy vs. disease)
 - **Multi-Chromosome Support**: Combine predictions from multiple chromosome classifiers with weighted probabilities based on trimmed-mean effect_size
+- **Hybrid Beta/BMM Likelihoods**: Optional Beta Mixture override for refined DMPs (when BMM centroids are available)
 
 ### Why Probabilistic Instead of Machine Learning?
 
@@ -768,6 +769,20 @@ To create a classifier, you need:
    - Used to assess classifier performance
    - Can be used for Platt calibration
 
+### Multi-class Model Build
+
+You can build a multi-class classifier (e.g., healthy + multiple cancers) from:
+
+- A **global DMP list** (CSV with `chromosome`, `context`, `position`)
+- Per-class centroid directories (`{chrom}-{context}.h5`)
+- Optional BMM centroids per class (for mixture likelihoods)
+
+Example:
+
+```bash
+python build_multiclass_model.py configs/example_multiclass_model.json
+```
+
 ---
 
 ## Advanced Features
@@ -861,6 +876,20 @@ result = minimize_scalar(
 )
 optimal_T = result.x
 ```
+
+### 3. Beta Mixture (BMM) Likelihoods
+
+When detector-stage BMM refinement is enabled, MethylClassifier can use **Beta Mixture**
+likelihoods for those DMPs (and fall back to Beta for the rest). This better models
+multi-modal methylation distributions while preserving the Bayesian framework.
+
+**Inputs**:
+- `bmm_centroids/bmm-centroid-{chromosome}-{context}.json` (centroid1)
+- `bmm_centroids/bmm-centroid-{chromosome}-{context}-centroid2.json` (centroid2)
+
+**Behavior**:
+- Uses mixture log-pdf for positions with valid BMM parameters in both classes
+- Falls back to Beta log-pdf for all other positions
 
 ### 3. Threshold-Based Classification
 

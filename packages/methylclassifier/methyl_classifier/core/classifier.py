@@ -122,17 +122,31 @@ class MethylClassifier:
                 # Extract metadata
                 self.chromosome = self.metadata.get('chromosome', 'unknown')
                 self.context = self.metadata.get('context', 'unknown')
-                self.n_classes = 2  # Binary classifier
-                self.class_names = [
-                    self.metadata.get('centroid1_name', 'centroid1'),
-                    self.metadata.get('centroid2_name', 'centroid2')
-                ]
+
+                # Multi-class aware configuration
+                if hasattr(self.classifier, 'n_classes'):
+                    self.n_classes = int(getattr(self.classifier, 'n_classes'))
+                else:
+                    self.n_classes = int(self.metadata.get('n_classes', 2))
+
+                if hasattr(self.classifier, 'class_names') and self.classifier.class_names:
+                    self.class_names = list(self.classifier.class_names)
+                elif 'class_names' in self.metadata:
+                    self.class_names = list(self.metadata.get('class_names'))
+                else:
+                    self.class_names = [
+                        self.metadata.get('centroid1_name', 'centroid1'),
+                        self.metadata.get('centroid2_name', 'centroid2')
+                    ]
                 
                 # Display metadata
                 print(f"📍 Classifier context: {self.chromosome}-{self.context}")
                 print(f"📊 Training date: {self.metadata.get('training_date', 'unknown')}")
                 print(f"📊 Classifier uses {self.metadata.get('n_dmps', 'unknown')} DMPs")
-                print(f"📊 Class names: {self.class_names[0]} vs {self.class_names[1]}")
+                if self.class_names is not None and len(self.class_names) >= 2:
+                    print(f"📊 Class names: {self.class_names[0]} vs {self.class_names[1]}")
+                else:
+                    print(f"📊 Class names: {self.class_names}")
                 
                 # Display validation results if available
                 if 'validation' in self.metadata:
@@ -299,10 +313,13 @@ class MethylClassifier:
         # Try to get class names from metadata
         if first_chrom in model_packages:
             metadata = model_packages[first_chrom].get('metadata', {})
-            self.class_names = [
-                metadata.get('centroid1_name', 'centroid1'),
-                metadata.get('centroid2_name', 'centroid2')
-            ]
+            if 'class_names' in metadata:
+                self.class_names = list(metadata.get('class_names'))
+            else:
+                self.class_names = [
+                    metadata.get('centroid1_name', 'centroid1'),
+                    metadata.get('centroid2_name', 'centroid2')
+                ]
             self.context = metadata.get('context', 'unknown')
         
         print(f"\n✅ Multi-chromosome classifier ready: {len(self.classifiers)} chromosomes, {self.n_classes} classes")

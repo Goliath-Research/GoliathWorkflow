@@ -664,6 +664,7 @@ from .beta_mixture import (
 
 # Backward compatibility
 from .beta_classifier import ProbabilisticBetaClassifier
+from .multi_class_beta_classifier import MultiClassBetaMixtureClassifier
 
 # Import EAT (Entropy-weighted Asymmetry Transformation) functions
 from .transformations import (
@@ -820,6 +821,7 @@ __all__ = [
     "create_analysis_results",
     # Probabilistic Beta Classifier
     "ProbabilisticBetaClassifier",
+    "MultiClassBetaMixtureClassifier",
     "create_classifier_from_results",
     # Beta-Binomial Classifier (multi-context)
     "BetaBinomialClassifier",

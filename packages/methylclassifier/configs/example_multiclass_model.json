@@ -1,0 +1,21 @@
+{
+  "dmps_csv": "/path/to/dmps-all-biological.csv",
+  "output_model": "/path/to/models/multiclass-classifier.pkl",
+  "weights_column": "importance",
+  "min_sample_coverage": 10,
+  "coverage_weighting": true,
+  "classes": [
+    {
+      "name": "Healthy",
+      "centroid_dir": "/path/to/centroids/healthy",
+      "bmm_centroid_dir": "/path/to/bmm_centroids/healthy",
+      "bmm_group": "centroid1"
+    },
+    {
+      "name": "CancerA",
+      "centroid_dir": "/path/to/centroids/cancerA",
+      "bmm_centroid_dir": "/path/to/bmm_centroids/cancerA",
+      "bmm_group": "centroid2"
+    }
+  ]
+}

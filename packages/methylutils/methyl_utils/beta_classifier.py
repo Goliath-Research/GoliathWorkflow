@@ -73,6 +73,14 @@ class BetaClassifier:
         self.weights = np.asarray(data.get('weights', np.ones(len(self.positions))), dtype=np.float64)
         self.directions = np.asarray(data.get('directions', np.ones(len(self.positions))), dtype=np.int8)
 
+        # Optional Beta Mixture parameters (per position)
+        self.mix_weights1 = self._normalize_mixture_list(data.get('mix_weights1'))
+        self.mix_alphas1 = self._normalize_mixture_list(data.get('mix_alphas1'))
+        self.mix_betas1 = self._normalize_mixture_list(data.get('mix_betas1'))
+        self.mix_weights2 = self._normalize_mixture_list(data.get('mix_weights2'))
+        self.mix_alphas2 = self._normalize_mixture_list(data.get('mix_alphas2'))
+        self.mix_betas2 = self._normalize_mixture_list(data.get('mix_betas2'))
+
         # Validate array lengths
         n_positions = len(self.positions)
         if len(self.alpha1) != n_positions or len(self.beta1) != n_positions or \
@@ -82,10 +90,28 @@ class BetaClassifier:
             raise ValueError(f"Array length mismatch for weights: expected {n_positions}, got {len(self.weights)}")
         if len(self.directions) != n_positions:
             raise ValueError(f"Array length mismatch for directions: expected {n_positions}, got {len(self.directions)}")
+        for name, arr in [
+            ("mix_weights1", self.mix_weights1),
+            ("mix_alphas1", self.mix_alphas1),
+            ("mix_betas1", self.mix_betas1),
+            ("mix_weights2", self.mix_weights2),
+            ("mix_alphas2", self.mix_alphas2),
+            ("mix_betas2", self.mix_betas2),
+        ]:
+            if arr is not None and len(arr) != n_positions:
+                raise ValueError(f"Array length mismatch for {name}: expected {n_positions}, got {len(arr)}")
 
         self.n_dmps = n_positions
         self.temperature = 2.0  # Default temperature for softmax
         self.calibrator = None  # For Platt scaling
+
+    @staticmethod
+    def _normalize_mixture_list(value):
+        if value is None:
+            return None
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        return list(value)
 
     @classmethod
     def from_dataframe(cls, dmpDF: pd.DataFrame, min_sample_coverage: int = 10, coverage_weighting: bool = True):
@@ -299,6 +325,75 @@ class BetaClassifier:
             log_p_class0 = beta_log_pdf(methylation_vals, alpha0, beta0, use_gpu=use_gpu)
             log_p_class1 = beta_log_pdf(methylation_vals, alpha1, beta1, use_gpu=use_gpu)
 
+        # Optional: override with Beta Mixture log-pdf where available
+        mixture_valid_mask = None
+        if self.mix_weights1 is not None and self.mix_weights2 is not None:
+            try:
+                from methyl_utils.beta_mixture import mixture_logpdf, _resolve_backend, _to_numpy
+            except ImportError:
+                from .beta_mixture import mixture_logpdf, _resolve_backend, _to_numpy
+
+            xp, betaln_fn, _ = _resolve_backend(use_gpu)
+            mixture_valid_mask = np.zeros(self.n_dmps, dtype=bool)
+
+            for idx in range(self.n_dmps):
+                w1 = self.mix_weights1[idx]
+                a1m = self.mix_alphas1[idx] if self.mix_alphas1 is not None else None
+                b1m = self.mix_betas1[idx] if self.mix_betas1 is not None else None
+                w2 = self.mix_weights2[idx]
+                a2m = self.mix_alphas2[idx] if self.mix_alphas2 is not None else None
+                b2m = self.mix_betas2[idx] if self.mix_betas2 is not None else None
+
+                if not w1 or not w2 or not a1m or not b1m or not a2m or not b2m:
+                    continue
+
+                w1 = np.asarray(w1, dtype=float)
+                a1m = np.asarray(a1m, dtype=float)
+                b1m = np.asarray(b1m, dtype=float)
+                w2 = np.asarray(w2, dtype=float)
+                a2m = np.asarray(a2m, dtype=float)
+                b2m = np.asarray(b2m, dtype=float)
+
+                if len(w1) == 0 or len(w2) == 0:
+                    continue
+                if len(w1) != len(a1m) or len(w1) != len(b1m):
+                    continue
+                if len(w2) != len(a2m) or len(w2) != len(b2m):
+                    continue
+
+                x = methylation_vals[:, idx]
+                try:
+                    log_m1 = mixture_logpdf(
+                        xp.asarray(x),
+                        xp.asarray(w1),
+                        xp.asarray(a1m),
+                        xp.asarray(b1m),
+                        xp=xp,
+                        betaln_fn=betaln_fn,
+                    )
+                    log_m2 = mixture_logpdf(
+                        xp.asarray(x),
+                        xp.asarray(w2),
+                        xp.asarray(a2m),
+                        xp.asarray(b2m),
+                        xp=xp,
+                        betaln_fn=betaln_fn,
+                    )
+                    log_m1 = _to_numpy(log_m1)
+                    log_m2 = _to_numpy(log_m2)
+                except Exception:
+                    continue
+
+                if np.any(~np.isfinite(log_m1)) or np.any(~np.isfinite(log_m2)):
+                    continue
+
+                log_p_class0[:, idx] = log_m1
+                log_p_class1[:, idx] = log_m2
+                mixture_valid_mask[idx] = True
+
+            if debug and mixture_valid_mask is not None:
+                print(f"Using BMM mixtures for {np.sum(mixture_valid_mask)}/{self.n_dmps} positions")
+
         # Debug: Check log-likelihood computation
         if debug:
             print(f"Log-likelihoods sample 0 (first 5): class0={log_p_class0[0][:5]}, class1={log_p_class1[0][:5]}")
@@ -316,6 +411,9 @@ class BetaClassifier:
         # Combine validation based on which distribution is used
         valid0 = np.where(use_normal_mask, normal_valid0, beta_valid0)
         valid1 = np.where(use_normal_mask, normal_valid1, beta_valid1)
+        if mixture_valid_mask is not None:
+            valid0 = np.where(mixture_valid_mask, True, valid0)
+            valid1 = np.where(mixture_valid_mask, True, valid1)
         valid = valid0 & valid1  # Only use positions valid for both classes
 
         # Debug: Check validation stats

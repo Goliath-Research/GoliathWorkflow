@@ -1021,32 +1021,63 @@ class MethylDetector:
                 "status": status,
             })
 
-        # Build mixture centroid container for downstream use
+        # Build mixture centroid containers for downstream use
         mask_df = subset_df[["position", "context"]].copy()
-        self._bmm_centroid = MethylBetaMixtureCentroid.from_records(
-            [
-                {
-                    "position": r["position"],
-                    "context": r["context"],
-                    "k": r["k1"],
-                    "weights": r["weights1"],
-                    "alphas": r["alphas1"],
-                    "betas": r["betas1"],
-                    "n_samples": r["n1"],
-                    "converged": True,
-                    "bic": np.nan,
-                    "loglik": np.nan,
-                    "status": r["status"],
-                }
-                for r in bmm_records
-            ],
+        self._bmm_records_map = {
+            (int(r["position"]), r.get("context", "CG")): r for r in bmm_records
+        }
+
+        base_metadata = {
+            "chromosome": self.chromosome,
+            "contexts": list(np.unique(subset_df["context"].values)),
+            "source": "detector_bmm_refine",
+        }
+
+        records_c1 = [
+            {
+                "position": r["position"],
+                "context": r["context"],
+                "k": r["k1"],
+                "weights": r["weights1"],
+                "alphas": r["alphas1"],
+                "betas": r["betas1"],
+                "n_samples": r["n1"],
+                "converged": True,
+                "bic": np.nan,
+                "loglik": np.nan,
+                "status": r["status"],
+            }
+            for r in bmm_records
+        ]
+        records_c2 = [
+            {
+                "position": r["position"],
+                "context": r["context"],
+                "k": r["k2"],
+                "weights": r["weights2"],
+                "alphas": r["alphas2"],
+                "betas": r["betas2"],
+                "n_samples": r["n2"],
+                "converged": True,
+                "bic": np.nan,
+                "loglik": np.nan,
+                "status": r["status"],
+            }
+            for r in bmm_records
+        ]
+
+        self._bmm_centroid_c1 = MethylBetaMixtureCentroid.from_records(
+            records_c1,
             mask=mask_df,
-            metadata={
-                "chromosome": self.chromosome,
-                "contexts": list(np.unique(subset_df["context"].values)),
-                "source": "detector_bmm_refine",
-            },
+            metadata={**base_metadata, "group": "centroid1", "class_index": 0},
         )
+        self._bmm_centroid_c2 = MethylBetaMixtureCentroid.from_records(
+            records_c2,
+            mask=mask_df,
+            metadata={**base_metadata, "group": "centroid2", "class_index": 1},
+        )
+        # Backward compatibility: default to centroid1
+        self._bmm_centroid = self._bmm_centroid_c1
 
         bmm_df = pd.DataFrame(bmm_records)
         merged = df.merge(bmm_df, on=["position", "context"], how="left")
@@ -1141,50 +1172,120 @@ class MethylDetector:
 
     def _save_bmm_centroids(self, output_dir: Path) -> None:
         """Save BMM centroids per context for downstream use."""
-        if self._bmm_centroid is None:
-            return
+        centroids = []
+        if getattr(self, "_bmm_centroid_c1", None) is not None:
+            centroids.append(("centroid1", self._bmm_centroid_c1))
+        if getattr(self, "_bmm_centroid_c2", None) is not None:
+            centroids.append(("centroid2", self._bmm_centroid_c2))
+        if not centroids and self._bmm_centroid is not None:
+            centroids.append(("centroid1", self._bmm_centroid))
 
-        bmm_df = self._bmm_centroid.df
-        mask_df = self._bmm_centroid.mask
-
-        contexts = set()
-        if bmm_df is not None and not bmm_df.empty and "context" in bmm_df.columns:
-            contexts.update(bmm_df["context"].dropna().unique().tolist())
-        if mask_df is not None and not mask_df.empty and "context" in mask_df.columns:
-            contexts.update(mask_df["context"].dropna().unique().tolist())
-
-        if not contexts:
+        if not centroids:
             return
 
         out_dir = output_dir / "bmm_centroids"
         out_dir.mkdir(parents=True, exist_ok=True)
         saved_files = []
 
-        for ctx in sorted(contexts):
-            ctx_df = bmm_df[bmm_df["context"] == ctx].copy() if bmm_df is not None else pd.DataFrame()
-            ctx_mask = mask_df[mask_df["context"] == ctx].copy() if mask_df is not None else None
+        for label, centroid_obj in centroids:
+            bmm_df = centroid_obj.df
+            mask_df = centroid_obj.mask
 
-            metadata = dict(self._bmm_centroid.metadata or {})
-            metadata.update({
-                "chromosome": self.chromosome,
-                "context": ctx,
-                "record_count": int(len(ctx_df)),
-                "mask_count": int(len(ctx_mask)) if ctx_mask is not None else 0,
-                "source": metadata.get("source", "detector_bmm_refine"),
-            })
+            contexts = set()
+            if bmm_df is not None and not bmm_df.empty and "context" in bmm_df.columns:
+                contexts.update(bmm_df["context"].dropna().unique().tolist())
+            if mask_df is not None and not mask_df.empty and "context" in mask_df.columns:
+                contexts.update(mask_df["context"].dropna().unique().tolist())
 
-            centroid = MethylBetaMixtureCentroid.from_dataframe(
-                ctx_df,
-                metadata=metadata,
-                mask=ctx_mask,
-            )
+            if not contexts:
+                continue
 
-            out_path = out_dir / f"bmm-centroid-{self.chromosome}-{ctx}.json"
-            centroid.to_json(out_path)
-            saved_files.append(str(out_path))
+            for ctx in sorted(contexts):
+                ctx_df = bmm_df[bmm_df["context"] == ctx].copy() if bmm_df is not None else pd.DataFrame()
+                ctx_mask = mask_df[mask_df["context"] == ctx].copy() if mask_df is not None else None
 
-        logger.info(f"Saved BMM centroids to {out_dir}")
-        self._bmm_centroid_files = saved_files
+                metadata = dict(centroid_obj.metadata or {})
+                metadata.update({
+                    "chromosome": self.chromosome,
+                    "context": ctx,
+                    "record_count": int(len(ctx_df)),
+                    "mask_count": int(len(ctx_mask)) if ctx_mask is not None else 0,
+                    "group": label,
+                    "source": metadata.get("source", "detector_bmm_refine"),
+                })
+
+                centroid = MethylBetaMixtureCentroid.from_dataframe(
+                    ctx_df,
+                    metadata=metadata,
+                    mask=ctx_mask,
+                )
+
+                if label == "centroid1":
+                    out_path = out_dir / f"bmm-centroid-{self.chromosome}-{ctx}.json"
+                else:
+                    out_path = out_dir / f"bmm-centroid-{self.chromosome}-{ctx}-{label}.json"
+                centroid.to_json(out_path)
+                saved_files.append(str(out_path))
+
+        if saved_files:
+            logger.info(f"Saved BMM centroids to {out_dir}")
+            self._bmm_centroid_files = saved_files
+
+    def _build_bmm_mixture_arrays(self, dmps_df: pd.DataFrame) -> Optional[Dict[str, List[Optional[List[float]]]]]:
+        """Build per-position BMM mixture arrays aligned to DMP DataFrame."""
+        record_map = getattr(self, "_bmm_records_map", None)
+        if not record_map:
+            return None
+
+        mix = {
+            "mix_weights1": [],
+            "mix_alphas1": [],
+            "mix_betas1": [],
+            "mix_weights2": [],
+            "mix_alphas2": [],
+            "mix_betas2": [],
+        }
+
+        for _, row in dmps_df.iterrows():
+            pos = int(row["position"])
+            ctx = row.get("context", "CG")
+            key = (pos, ctx)
+            rec = record_map.get(key)
+
+            if rec and rec.get("status") == "fit" and rec.get("weights1") and rec.get("weights2"):
+                mix["mix_weights1"].append(rec.get("weights1"))
+                mix["mix_alphas1"].append(rec.get("alphas1"))
+                mix["mix_betas1"].append(rec.get("betas1"))
+                mix["mix_weights2"].append(rec.get("weights2"))
+                mix["mix_alphas2"].append(rec.get("alphas2"))
+                mix["mix_betas2"].append(rec.get("betas2"))
+            else:
+                mix["mix_weights1"].append(None)
+                mix["mix_alphas1"].append(None)
+                mix["mix_betas1"].append(None)
+                mix["mix_weights2"].append(None)
+                mix["mix_alphas2"].append(None)
+                mix["mix_betas2"].append(None)
+
+        if not any(v is not None for v in mix["mix_weights1"]):
+            return None
+
+        return mix
+
+    def _attach_bmm_mixtures(self, classifier, dmps_df: pd.DataFrame) -> bool:
+        """Attach BMM mixture parameters to a classifier if available."""
+        mix = self._build_bmm_mixture_arrays(dmps_df)
+        if not mix:
+            return False
+
+        for key, value in mix.items():
+            setattr(classifier, key, value)
+            try:
+                classifier.data[key] = value
+            except Exception:
+                pass
+
+        return True
     
     def _compute_biological_importance(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1528,6 +1629,8 @@ class MethylDetector:
                 min_sample_coverage=self.config.min_sample_coverage,
                 coverage_weighting=self.config.classifier_coverage_weighting
             )
+            if self._attach_bmm_mixtures(temp_classifier, dmps_for_classifier):
+                logger.debug("Attached BMM mixtures to validation classifier")
 
             # PHASE 1: Fit Platt calibration using calibration set (if supported)
             # BetaClassifier uses calibrate_platt method with methylation levels
@@ -2960,9 +3063,13 @@ class MethylDetector:
             min_sample_coverage=self.config.min_sample_coverage,
             coverage_weighting=self.config.classifier_coverage_weighting
         )
+        mixture_attached = self._attach_bmm_mixtures(beta_classifier, selected_dmps_df)
+        if mixture_attached:
+            logger.info("Attached BMM mixtures to classifier (hybrid Beta/BMM)")
         
         # Create model package
         import pickle
+        classifier_label = "BetaMixtureClassifier" if mixture_attached else "BetaClassifier"
         model_package = {
             'classifier': beta_classifier,
             'dmpDF': dmpDF,  # Strongly typed DataFrame
@@ -2972,12 +3079,15 @@ class MethylDetector:
             'n_dmps_per_context': selected_dmps_df.groupby('context').size().to_dict() if 'context' in selected_dmps_df.columns else {},
             'metadata': {
                 'version': '2.0.0',
-                'classifier_type': 'BetaClassifier',
+                'classifier_type': classifier_label,
+                'bmm_mixture_attached': mixture_attached,
                 'config': self.config.model_dump(),
                 'trimmed_percentile_low': self.config.trimmed_percentile_low,
                 'trimmed_percentile_high': self.config.trimmed_percentile_high,
             }
         }
+        if mixture_attached and hasattr(self, "_bmm_centroid_files"):
+            model_package["metadata"]["bmm_centroid_files"] = self._bmm_centroid_files
         
         # Save to pickle
         with open(model_path, 'wb') as f:
@@ -3029,8 +3139,6 @@ class MethylDetector:
         config_summary = self.config.model_dump()
         if hasattr(self, "_bmm_summary") and self._bmm_summary:
             config_summary = {**config_summary, "bmm_summary": self._bmm_summary}
-        if hasattr(self, "_bmm_centroid_files"):
-            config_summary = {**config_summary, "bmm_centroid_files": self._bmm_centroid_files}
         if hasattr(self, "_bmm_centroid_files"):
             config_summary = {**config_summary, "bmm_centroid_files": self._bmm_centroid_files}
 

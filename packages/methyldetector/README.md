@@ -204,7 +204,8 @@ else:
 4. **`dmps-{chromosome}-3-optimized.csv`** - Stage 3: Final optimized DMPs (if optimization enabled)
 5. **`classifier-{chromosome}.pkl`** - Trained BetaClassifier model
 6. **`results-{chromosome}.json`** - Validation results and summary
-7. **`bmm_centroids/bmm-centroid-{chromosome}-{context}.json`** - BMM centroid files (when refinement enabled)
+7. **`bmm_centroids/bmm-centroid-{chromosome}-{context}.json`** - BMM centroid for centroid1 (when refinement enabled)
+8. **`bmm_centroids/bmm-centroid-{chromosome}-{context}-centroid2.json`** - BMM centroid for centroid2
 
 `results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files` when BMM refinement runs.
 

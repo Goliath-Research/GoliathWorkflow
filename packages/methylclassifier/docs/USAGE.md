@@ -47,6 +47,14 @@ For multi-chromosome mode, see `configs/example_multi_chromosome_config.json`.
 
 For classifying a list of samples with merged contexts (CG+CHG+CHH), see `configs/example_samples_list_config.json`.
 
+### Multi-class Model Build
+
+Build a multi-class classifier from a global DMP list and per-class centroids:
+
+```bash
+python build_multiclass_model.py configs/example_multiclass_model.json
+```
+
 ### Batch Classification
 
 Classify all samples in a directory (single chromosome):
