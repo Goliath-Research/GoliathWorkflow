@@ -12,7 +12,10 @@ import pandas as pd
 from methyl_utils import (
     auto_compute_distance,
     compute_beta_llr_moments,
-    compute_bhattacharyya_distance
+    compute_bhattacharyya_distance,
+    fit_beta_mixture,
+    estimate_js_divergence,
+    MethylBetaMixtureCentroid
 )
 from methyl_utils.logging_utils import setup_module_logging
 
@@ -218,6 +221,12 @@ class MethylDetector:
         logger.info("🔬 Filtering biologically significant DMPs...")
         bio_dmps_df = self._filter_biological_dmps(dmps_df)
         logger.info(f"✅ Biological DMPs: {len(bio_dmps_df):,} (retention: {len(bio_dmps_df)/len(dmps_df)*100:.1f}%)")
+
+        # Optional: BMM refinement stage (detector-level)
+        if self.config.bmm_refine_enabled:
+            logger.info("🧪 Running BMM refinement stage (detector-level)...")
+            bio_dmps_df = self._refine_dmps_with_bmm(bio_dmps_df)
+            logger.info(f"✅ BMM refinement complete: {len(bio_dmps_df):,} DMPs retained")
         
         # Compute biological importance and sort
         logger.info("📋 Sorting DMPs by biological importance...")
@@ -597,6 +606,226 @@ class MethylDetector:
                        f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
         
         return bio_df
+
+    def _refine_dmps_with_bmm(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Refine DMPs using per-position Beta Mixture Models (BMMs).
+
+        - Skips obvious cases with strong separation to keep compute low.
+        - Fits small BMMs using a limited set of real samples when available.
+        - Adds BMM annotations and optionally filters weak separations.
+        """
+        if dmps_df is None or dmps_df.empty:
+            return dmps_df
+
+        df = dmps_df.copy()
+        if "context" not in df.columns:
+            df["context"] = "CG"
+
+        # Ensure overlap metric is available
+        if "bhattacharyya_coefficient" not in df.columns and "overlap" not in df.columns:
+            if "bhattacharyya" in df.columns:
+                df["bhattacharyya_coefficient"] = np.exp(-np.clip(df["bhattacharyya"].values, 0, 50))
+
+        overlap_col = "bhattacharyya_coefficient" if "bhattacharyya_coefficient" in df.columns else \
+            ("overlap" if "overlap" in df.columns else None)
+
+        # Choose ranking column for BMM subset
+        rank_col = "importance" if "importance" in df.columns else \
+            ("effect_size" if "effect_size" in df.columns else "delta_mean")
+
+        df_sorted = df.sort_values(rank_col, ascending=False)
+        max_dmps = min(int(self.config.bmm_refine_max_dmps), len(df_sorted))
+        subset_df = df_sorted.iloc[:max_dmps].copy()
+
+        # Resolve sample paths
+        class1_paths = self.config.centroid1_validation_samples
+        class2_paths = self.config.centroid2_validation_samples
+        if class1_paths is None and self.config.bmm_refine_use_metadata_samples:
+            class1_paths = "use_metadata"
+        if class2_paths is None and self.config.bmm_refine_use_metadata_samples:
+            class2_paths = "use_metadata"
+
+        class1_paths = self._get_validation_samples(class1_paths, self.config.centroid1_dir, "centroid1")
+        class2_paths = self._get_validation_samples(class2_paths, self.config.centroid2_dir, "centroid2")
+
+        if not class1_paths or not class2_paths:
+            logger.warning("BMM refinement skipped: no validation sample paths available")
+            df["bmm_status"] = "skipped_no_samples"
+            return df
+
+        # Subsample for speed
+        if len(class1_paths) > self.config.bmm_refine_max_samples_per_group:
+            class1_paths = class1_paths[: self.config.bmm_refine_max_samples_per_group]
+        if len(class2_paths) > self.config.bmm_refine_max_samples_per_group:
+            class2_paths = class2_paths[: self.config.bmm_refine_max_samples_per_group]
+
+        # Load methylation values for subset DMPs (no mock data)
+        val_data = self._load_validation_samples_multicontext_impl(
+            subset_df, class1_paths, class2_paths, allow_mock=False
+        )
+        if val_data is None:
+            logger.warning("BMM refinement skipped: unable to load validation samples")
+            df["bmm_status"] = "skipped_load_failed"
+            return df
+
+        X, y, val_positions, val_contexts = val_data
+
+        # Ensure alignment (X columns should match subset_df order)
+        if X.shape[1] != len(subset_df):
+            logger.warning("BMM refinement skipped: validation matrix does not align with DMP subset")
+            df["bmm_status"] = "skipped_alignment_mismatch"
+            return df
+
+        bmm_records = []
+        min_samples = int(self.config.bmm_refine_min_samples_per_group)
+
+        for j, row in subset_df.reset_index(drop=False).iterrows():
+            pos = int(row["position"])
+            ctx = row.get("context", "CG")
+            delta_mean = float(row.get("delta_mean", 0.0))
+            overlap = float(row[overlap_col]) if overlap_col and np.isfinite(row.get(overlap_col, np.nan)) else None
+
+            vals_healthy = X[y == 0, j]
+            vals_cancer = X[y == 1, j]
+            vals_healthy = vals_healthy[np.isfinite(vals_healthy)]
+            vals_cancer = vals_cancer[np.isfinite(vals_cancer)]
+
+            if len(vals_healthy) < min_samples or len(vals_cancer) < min_samples:
+                bmm_records.append({
+                    "position": pos,
+                    "context": ctx,
+                    "k1": 1,
+                    "k2": 1,
+                    "weights1": [1.0],
+                    "alphas1": [],
+                    "betas1": [],
+                    "weights2": [1.0],
+                    "alphas2": [],
+                    "betas2": [],
+                    "n1": int(len(vals_healthy)),
+                    "n2": int(len(vals_cancer)),
+                    "bmm_js": np.nan,
+                    "status": "skipped_insufficient_samples",
+                })
+                continue
+
+            # Skip obvious cases to keep compute low
+            if abs(delta_mean) >= self.config.bmm_refine_skip_delta_mean:
+                bmm_records.append({
+                    "position": pos,
+                    "context": ctx,
+                    "k1": 1,
+                    "k2": 1,
+                    "weights1": [1.0],
+                    "alphas1": [],
+                    "betas1": [],
+                    "weights2": [1.0],
+                    "alphas2": [],
+                    "betas2": [],
+                    "n1": int(len(vals_healthy)),
+                    "n2": int(len(vals_cancer)),
+                    "bmm_js": np.nan,
+                    "status": "skipped_obvious_delta",
+                })
+                continue
+            if overlap is not None and overlap <= self.config.bmm_refine_skip_overlap:
+                bmm_records.append({
+                    "position": pos,
+                    "context": ctx,
+                    "k1": 1,
+                    "k2": 1,
+                    "weights1": [1.0],
+                    "alphas1": [],
+                    "betas1": [],
+                    "weights2": [1.0],
+                    "alphas2": [],
+                    "betas2": [],
+                    "n1": int(len(vals_healthy)),
+                    "n2": int(len(vals_cancer)),
+                    "bmm_js": np.nan,
+                    "status": "skipped_obvious_overlap",
+                })
+                continue
+
+            fit1 = fit_beta_mixture(
+                vals_healthy,
+                max_components=self.config.bmm_refine_max_components,
+                random_state=self.config.random_state
+            )
+            fit2 = fit_beta_mixture(
+                vals_cancer,
+                max_components=self.config.bmm_refine_max_components,
+                random_state=self.config.random_state
+            )
+
+            js = estimate_js_divergence(
+                fit1["weights"], fit1["alphas"], fit1["betas"],
+                fit2["weights"], fit2["alphas"], fit2["betas"],
+                n_samples=self.config.bmm_refine_mc_samples,
+                random_state=self.config.random_state
+            )
+
+            status = "fit"
+            bmm_records.append({
+                "position": pos,
+                "context": ctx,
+                "k1": int(fit1["k"]),
+                "k2": int(fit2["k"]),
+                "weights1": fit1["weights"].tolist(),
+                "alphas1": fit1["alphas"].tolist(),
+                "betas1": fit1["betas"].tolist(),
+                "weights2": fit2["weights"].tolist(),
+                "alphas2": fit2["alphas"].tolist(),
+                "betas2": fit2["betas"].tolist(),
+                "n1": int(len(vals_healthy)),
+                "n2": int(len(vals_cancer)),
+                "bmm_js": js,
+                "status": status,
+            })
+
+        # Build mixture centroid container for downstream use
+        self._bmm_centroid = MethylBetaMixtureCentroid.from_records(
+            [
+                {
+                    "position": r["position"],
+                    "context": r["context"],
+                    "k": r["k1"],
+                    "weights": r["weights1"],
+                    "alphas": r["alphas1"],
+                    "betas": r["betas1"],
+                    "n_samples": r["n1"],
+                    "converged": True,
+                    "bic": np.nan,
+                    "loglik": np.nan,
+                    "status": r["status"],
+                }
+                for r in bmm_records
+            ],
+            metadata={
+                "chromosome": self.chromosome,
+                "contexts": list(np.unique(subset_df["context"].values)),
+                "source": "detector_bmm_refine",
+            },
+        )
+
+        bmm_df = pd.DataFrame(bmm_records)
+        merged = df.merge(bmm_df, on=["position", "context"], how="left")
+        merged["bmm_status"] = merged["status"].fillna("not_evaluated")
+        merged = merged.drop(columns=["status"])
+
+        # Optional filtering by JS divergence
+        if self.config.bmm_refine_mode == "filter":
+            js = merged["bmm_js"]
+            keep = (merged["bmm_status"] != "fit") | (js.isna()) | (js >= self.config.bmm_refine_js_threshold)
+            retained = int(np.sum(keep))
+            logger.info(
+                f"BMM filter retained {retained:,}/{len(merged):,} DMPs "
+                f"(js >= {self.config.bmm_refine_js_threshold})"
+            )
+            merged = merged[keep].reset_index(drop=True)
+
+        return merged
     
     def _compute_biological_importance(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -1503,7 +1732,8 @@ class MethylDetector:
         self,
         dmps_df: pd.DataFrame,
         class1_paths: List[str],
-        class2_paths: List[str]
+        class2_paths: List[str],
+        allow_mock: bool = True
     ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
         """
         Implementation of validation sample loading (extracted for reuse).
@@ -1570,7 +1800,7 @@ class MethylDetector:
         logger.info(f"Successfully loaded {successful_samples} out of {len(all_sample_paths)} validation samples")
         
         # If no samples loaded successfully, create mock validation data for testing alignment
-        if successful_samples == 0:
+        if successful_samples == 0 and allow_mock:
             logger.warning("No validation samples found, creating mock data to test alignment")
             # Create 10 mock samples (5 healthy, 5 cancer) with different methylation distributions
             mock_n_samples = 10

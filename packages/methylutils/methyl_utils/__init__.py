@@ -655,6 +655,13 @@ from .beta_analytics import (
 
 from .beta_classifier import BetaClassifier
 
+# Beta Mixture Model utilities
+from .beta_mixture import (
+    fit_beta_mixture,
+    estimate_js_divergence,
+    mixture_logpdf,
+)
+
 # Backward compatibility
 from .beta_classifier import ProbabilisticBetaClassifier
 
@@ -665,6 +672,9 @@ from .transformations import (
     eat_transform_from_betas,
     validate_eat_methylation_data
 )
+
+# Beta Mixture centroid container
+from .core.methyl_mixture_centroid import MethylBetaMixtureCentroid
 
 # Add ClassifierFactory if it exists
 try:
@@ -705,6 +715,7 @@ __all__ = [
     "MethylSample",
     "MethylBasicCentroid",
     "MethylExtendedCentroid",
+    "MethylBetaMixtureCentroid",
     "MethylCentroid",  # Alias for MethylExtendedCentroid
     "MethylBetaCentroid",  # Alias for MethylExtendedCentroid
     "load_from_h5",
@@ -755,6 +766,10 @@ __all__ = [
     "beta_log_pdf",
     "compute_beta_mean",
     "compute_beta_variance",
+    # Beta mixture utilities
+    "fit_beta_mixture",
+    "estimate_js_divergence",
+    "mixture_logpdf",
     # Factory functions
     "MetricFactory",
     "get_metric_factory",

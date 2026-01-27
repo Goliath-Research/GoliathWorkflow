@@ -118,6 +118,14 @@ class MethylModelerConfig(BaseModel):
             raise ValueError("Temperature must be <= 10.0")
         return v
 
+    @field_validator('bmm_refine_mode')
+    @classmethod
+    def validate_bmm_refine_mode(cls, v):
+        valid = {"annotate", "filter"}
+        if v not in valid:
+            raise ValueError(f"Invalid bmm_refine_mode '{v}'. Valid options: {valid}")
+        return v
+
     min_effect_size: Optional[float] = Field(
         default=None, ge=0.0,
         description="Minimum effect size threshold for filtering. Effect size = |delta_mu / var_delta_mu| * (1 - BC)^gamma. None = no effect size filtering"
@@ -165,6 +173,54 @@ class MethylModelerConfig(BaseModel):
     n_validation_samples: int = Field(
         default=100, ge=10,
         description="Number of synthetic samples per class to generate for classifier validation (from Beta distributions)"
+    )
+
+    # ----------------
+    # BMM Refinement (Detector Stage)
+    # ----------------
+    bmm_refine_enabled: bool = Field(
+        default=False,
+        description="Enable Beta Mixture Model refinement at detector stage (uses real samples if available)"
+    )
+    bmm_refine_mode: str = Field(
+        default="annotate",
+        description="BMM refinement mode: 'annotate' (add BMM stats only) or 'filter' (drop weak mixture separations)"
+    )
+    bmm_refine_max_dmps: int = Field(
+        default=20000, ge=100,
+        description="Maximum number of DMPs to evaluate with BMM (top by effect_size/importance)"
+    )
+    bmm_refine_max_samples_per_group: int = Field(
+        default=50, ge=5,
+        description="Maximum samples per group to use for BMM fitting (subsampled for speed)"
+    )
+    bmm_refine_min_samples_per_group: int = Field(
+        default=10, ge=3,
+        description="Minimum samples per group required to fit BMM for a position"
+    )
+    bmm_refine_max_components: int = Field(
+        default=3, ge=1, le=3,
+        description="Maximum mixture components to fit per position"
+    )
+    bmm_refine_js_threshold: float = Field(
+        default=0.05, ge=0.0,
+        description="Minimum Jensen-Shannon divergence to retain a DMP when filtering"
+    )
+    bmm_refine_skip_delta_mean: float = Field(
+        default=0.4, ge=0.0, le=1.0,
+        description="Skip BMM fitting when |delta_mean| exceeds this threshold (obvious separation)"
+    )
+    bmm_refine_skip_overlap: float = Field(
+        default=0.2, ge=0.0, le=1.0,
+        description="Skip BMM fitting when Bhattacharyya overlap ≤ this threshold (obvious separation)"
+    )
+    bmm_refine_mc_samples: int = Field(
+        default=200, ge=50,
+        description="Monte Carlo samples for mixture JS divergence estimate"
+    )
+    bmm_refine_use_metadata_samples: bool = Field(
+        default=True,
+        description="If validation sample paths are not provided, try centroid metadata ('samples_used')"
     )
     
     # DMP optimization (requires real samples)
