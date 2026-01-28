@@ -29,6 +29,16 @@ from methyl_utils.core.methyl_frame import (
     MethylSample,
     MethylExtendedCentroid,
 )
+try:
+    from .config import MethylCentroidConfig, CentroidResults
+except ImportError:
+    try:
+        from methyl_centroid.config import MethylCentroidConfig, CentroidResults
+    except ImportError:
+        local_pkg_root = Path(__file__).parent
+        if str(local_pkg_root) not in sys.path:
+            sys.path.insert(0, str(local_pkg_root))
+        from config import MethylCentroidConfig, CentroidResults
 # Distance calculation functions
 from methyl_utils import (
     auto_compute_distance,
@@ -1670,8 +1680,6 @@ class MethylCentroid:
         except Exception as e:
             self.logger.debug(f"GPU recovery test failed, staying with CPU: {e}")
             self._using_gpu = False
-
-    from .config import CentroidResults
 
     def build_centroid(self) -> CentroidResults:
         """Build centroid with comprehensive performance profiling."""

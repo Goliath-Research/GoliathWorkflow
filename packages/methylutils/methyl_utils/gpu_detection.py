@@ -2,11 +2,12 @@
 Centralized GPU detection and management module.
 
 This module provides a single source of truth for GPU availability and capabilities
-across the entire application ecosystem. Uses nvidia-ml-py as the primary detection method
-(NVIDIA's official NVML Python bindings).
+across the entire application ecosystem. Uses CuPy for primary detection and optional
+NVML telemetry via nvidia-ml-py when enabled.
 """
 
 import logging
+import os
 import time
 import warnings
 from typing import Any, Dict, Optional, Tuple
@@ -20,9 +21,21 @@ logger = logging.getLogger(__name__)
 _GPU_STATE: Optional[Dict[str, Any]] = None
 _GPU_INITIALIZED: bool = False
 
+def _env_truthy(value: Optional[str]) -> bool:
+    return value is not None and value.strip().lower() in {"1", "true", "yes", "on"}
+
+def _should_use_nvml() -> bool:
+    return _env_truthy(os.getenv("METHYLPIPELINE_ENABLE_NVML")) or _env_truthy(
+        os.getenv("METHYLPIPELINE_USE_NVML")
+    )
+
+def _is_nvml_not_supported(err: Exception) -> bool:
+    return err.__class__.__name__ == "NVMLError_NotSupported" or "not supported" in str(err).lower()
+
 def _initialize_gpu_state() -> Dict[str, Any]:
     """
-    Initialize and test GPU capabilities using nvidia-ml-py as primary method.
+    Initialize and test GPU capabilities using CuPy as the primary method,
+    with optional NVML telemetry when enabled.
 
     Returns:
         Dictionary containing GPU state information
@@ -49,74 +62,43 @@ def _initialize_gpu_state() -> Dict[str, Any]:
         'error_message': None
     }
     
-    # Primary detection pynvml
-    try:
-        import pynvml as nvml
-        nvml.nvmlInit()
-        gpu_state['pynvml_available'] = True
-        gpu_state['available'] = True
-
-        device_count = nvml.nvmlDeviceGetCount()
-        gpu_state['device_count'] = device_count
-
-        if device_count > 0:
-            # Get detailed GPU information
-            handle = nvml.nvmlDeviceGetHandleByIndex(0)
-
-            # GPU name
-            gpu_name_raw = nvml.nvmlDeviceGetName(handle)
-            gpu_state['gpu_name'] = gpu_name_raw.decode('utf-8') if isinstance(gpu_name_raw, bytes) else gpu_name_raw
-
-            # Memory info
-            mem_info = nvml.nvmlDeviceGetMemoryInfo(handle)
-            gpu_state['memory_gb'] = mem_info.total / (1024**3)
-
-            # CUDA version
-            try:
-                driver_version_raw = nvml.nvmlSystemGetDriverVersion()
-                gpu_state['cuda_version'] = driver_version_raw.decode('utf-8') if isinstance(driver_version_raw, bytes) else str(driver_version_raw)
-            except:
-                gpu_state['cuda_version'] = "Unknown"
-
-            # Compute capability
-            try:
-                major, minor = nvml.nvmlDeviceGetCudaComputeCapability(handle)
-                gpu_state['compute_capability'] = f"{major}.{minor}"
-            except:
-                gpu_state['compute_capability'] = "Unknown"
-
-            logger.info(f"GPU detected via nvidia-ml-py: {gpu_state['gpu_name']}")
-            logger.info(f"GPU memory: {gpu_state['memory_gb']:.1f} GB")
-            logger.info(f"CUDA version: {gpu_state['cuda_version']}")
-            logger.info(f"Compute capability: {gpu_state['compute_capability']}")
-
-    except ImportError:
-        logger.debug("nvidia-ml-py not available, falling back to CuPy detection")
-    except Exception as e:
-        logger.warning(f"nvidia-ml-py initialization failed: {e}")
-        gpu_state['error_message'] = f"nvidia-ml-py failed: {e}"
-    
-    # Test CuPy availability and functionality
+    # Primary detection: CuPy (compute availability)
     try:
         import cupy as cp
         gpu_state['cupy_available'] = True
-        
+
         # Test if GPU is actually available and functional
         if cp.is_available():
             gpu_state['available'] = True
-            
-            # If we don't have pynvml info, get basic info from CuPy
-            if not gpu_state['pynvml_available']:
-                try:
-                    gpu_state['device_count'] = cp.cuda.runtime.getDeviceCount()
-                    gpu_state['gpu_name'] = cp.cuda.runtime.getDeviceProperties(0)['name'].decode()
-                    gpu_state['memory_gb'] = cp.cuda.runtime.memGetInfo()[1] / (1024**3)
-                    gpu_state['cuda_version'] = str(cp.cuda.runtime.driverGetVersion())
-                except:
-                    gpu_state['gpu_name'] = "Unknown GPU"
-                    gpu_state['memory_gb'] = 0.0
-                    gpu_state['cuda_version'] = "Unknown"
-            
+
+            # Basic info from CuPy
+            try:
+                gpu_state['device_count'] = cp.cuda.runtime.getDeviceCount()
+            except Exception as e:
+                logger.debug(f"CuPy device count failed: {e}")
+
+            try:
+                props = cp.cuda.runtime.getDeviceProperties(0)
+                name = props.get('name')
+                if name:
+                    gpu_state['gpu_name'] = name.decode('utf-8') if isinstance(name, bytes) else name
+                major = props.get('major')
+                minor = props.get('minor')
+                if major is not None and minor is not None:
+                    gpu_state['compute_capability'] = f"{major}.{minor}"
+            except Exception as e:
+                logger.debug(f"CuPy device properties failed: {e}")
+
+            try:
+                gpu_state['memory_gb'] = cp.cuda.runtime.memGetInfo()[1] / (1024**3)
+            except Exception as e:
+                logger.debug(f"CuPy memory info failed: {e}")
+
+            try:
+                gpu_state['cuda_version'] = str(cp.cuda.runtime.driverGetVersion())
+            except Exception as e:
+                logger.debug(f"CuPy driver version failed: {e}")
+
             # Test basic GPU operations
             try:
                 test_array = cp.array([1.0, 2.0, 3.0])
@@ -131,13 +113,110 @@ def _initialize_gpu_state() -> Dict[str, Any]:
         else:
             gpu_state['error_message'] = "CuPy available but no GPU detected"
             logger.debug("CuPy available but no GPU detected")
-            
+
     except ImportError:
         gpu_state['error_message'] = "CuPy not available"
         logger.debug("CuPy not available")
     except Exception as e:
         gpu_state['error_message'] = f"CuPy import failed: {e}"
         logger.warning(f"CuPy import failed: {e}")
+
+    # Optional NVML telemetry (disabled by default)
+    if _should_use_nvml():
+        try:
+            import pynvml as nvml
+        except ImportError:
+            logger.debug("nvidia-ml-py not available; NVML telemetry disabled")
+        else:
+            try:
+                nvml.nvmlInit()
+            except Exception as e:
+                logger.debug(f"nvidia-ml-py initialization failed: {e}")
+            else:
+                gpu_state['pynvml_available'] = True
+                try:
+                    device_count = nvml.nvmlDeviceGetCount()
+                except Exception as e:
+                    if _is_nvml_not_supported(e):
+                        logger.debug(f"nvidia-ml-py device count not supported: {e}")
+                    else:
+                        logger.debug(f"nvidia-ml-py device count failed: {e}")
+                    device_count = 0
+
+                if device_count and gpu_state['device_count'] == 0:
+                    gpu_state['device_count'] = device_count
+
+                if device_count > 0:
+                    try:
+                        handle = nvml.nvmlDeviceGetHandleByIndex(0)
+                    except Exception as e:
+                        if _is_nvml_not_supported(e):
+                            logger.debug(f"nvidia-ml-py device handle not supported: {e}")
+                        else:
+                            logger.debug(f"nvidia-ml-py device handle failed: {e}")
+                        handle = None
+
+                    if handle is not None:
+                        # GPU name
+                        if not gpu_state['gpu_name']:
+                            try:
+                                gpu_name_raw = nvml.nvmlDeviceGetName(handle)
+                                gpu_state['gpu_name'] = (
+                                    gpu_name_raw.decode('utf-8')
+                                    if isinstance(gpu_name_raw, bytes)
+                                    else gpu_name_raw
+                                )
+                            except Exception as e:
+                                if _is_nvml_not_supported(e):
+                                    logger.debug(f"nvidia-ml-py device name not supported: {e}")
+                                else:
+                                    logger.debug(f"nvidia-ml-py device name failed: {e}")
+
+                        # Memory info
+                        if gpu_state['memory_gb'] <= 0:
+                            try:
+                                mem_info = nvml.nvmlDeviceGetMemoryInfo(handle)
+                                gpu_state['memory_gb'] = mem_info.total / (1024**3)
+                            except Exception as e:
+                                if _is_nvml_not_supported(e):
+                                    logger.debug(f"nvidia-ml-py memory info not supported: {e}")
+                                else:
+                                    logger.debug(f"nvidia-ml-py memory info failed: {e}")
+
+                        # CUDA version
+                        if not gpu_state['cuda_version']:
+                            try:
+                                driver_version_raw = nvml.nvmlSystemGetDriverVersion()
+                                gpu_state['cuda_version'] = (
+                                    driver_version_raw.decode('utf-8')
+                                    if isinstance(driver_version_raw, bytes)
+                                    else str(driver_version_raw)
+                                )
+                            except Exception as e:
+                                if _is_nvml_not_supported(e):
+                                    logger.debug(f"nvidia-ml-py driver version not supported: {e}")
+                                else:
+                                    logger.debug(f"nvidia-ml-py driver version failed: {e}")
+
+                        # Compute capability
+                        if not gpu_state['compute_capability']:
+                            try:
+                                major, minor = nvml.nvmlDeviceGetCudaComputeCapability(handle)
+                                gpu_state['compute_capability'] = f"{major}.{minor}"
+                            except Exception as e:
+                                if _is_nvml_not_supported(e):
+                                    logger.debug(f"nvidia-ml-py compute capability not supported: {e}")
+                                else:
+                                    logger.debug(f"nvidia-ml-py compute capability failed: {e}")
+
+                        if gpu_state['gpu_name']:
+                            logger.info(f"GPU detected via nvidia-ml-py: {gpu_state['gpu_name']}")
+                            if gpu_state['memory_gb'] > 0:
+                                logger.info(f"GPU memory: {gpu_state['memory_gb']:.1f} GB")
+                            if gpu_state['cuda_version']:
+                                logger.info(f"CUDA version: {gpu_state['cuda_version']}")
+                            if gpu_state['compute_capability']:
+                                logger.info(f"Compute capability: {gpu_state['compute_capability']}")
     
     # Test cuDF availability
     if gpu_state['cupy_available']:
@@ -184,8 +263,17 @@ def _initialize_gpu_state() -> Dict[str, Any]:
     
     # Log final state
     if gpu_state['available']:
-        logger.info(f"GPU acceleration available: {gpu_state['device_count']} device(s), "
-                   f"~{gpu_state['memory_gb']:.1f}GB memory")
+        device_note = (
+            f"{gpu_state['device_count']} device(s)"
+            if gpu_state['device_count'] > 0
+            else "device count unknown"
+        )
+        memory_note = (
+            f"~{gpu_state['memory_gb']:.1f}GB memory"
+            if gpu_state['memory_gb'] > 0
+            else "memory unknown"
+        )
+        logger.info(f"GPU acceleration available: {device_note}, {memory_note}")
     else:
         logger.info("GPU acceleration not available - using CPU-only mode")
         if gpu_state['error_message']:
