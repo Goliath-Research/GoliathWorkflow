@@ -23,3 +23,16 @@ See `ENV_SETUP.md` for complete documentation.
 
 - `ENV_SETUP.md` - Environment setup and METHYLPIPELINE variable
 - `METADATA_UPDATES.md` - Recent metadata support additions
+
+## Host Conda (CUDA 13.0)
+
+For CUDA 13.0 systems (DGX Spark), use:
+
+```bash
+./scripts/setup_host_conda.sh
+```
+
+### Poetry + Conda
+
+Use conda for dependencies and install packages with `pip -e ... --no-deps`.
+If you use Poetry, keep its virtualenvs enabled so it does not modify the conda env.

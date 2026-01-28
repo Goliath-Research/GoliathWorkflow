@@ -18,7 +18,7 @@ Production deployment differs from development in several key ways:
 
 - Docker with GPU support
 - NVIDIA Driver 525.60.13+
-- CUDA 12.8+
+- CUDA 13.0+
 - Sufficient disk space for container images
 
 ### Build Production Container

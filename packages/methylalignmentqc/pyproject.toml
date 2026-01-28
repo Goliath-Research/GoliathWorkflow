@@ -7,7 +7,7 @@ name = "methyl_alignment_qc"
 version = "0.1.0"
 description = "A package to parse Parabricks QC metrics into Columnar JSON."
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "pandas",
     "pydantic",

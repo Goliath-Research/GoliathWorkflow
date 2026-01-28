@@ -3,7 +3,7 @@ name = "methylpipeline"
 version = "1.0.0"
 description = "Unified Genomics Pipeline for Methylation Analysis"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.13"
 license = {text = "MIT"}
 authors = [
     {name = "MethylPipeline Team"}
@@ -22,7 +22,7 @@ classifiers = [
 
 [tool.black]
 line-length = 100
-target-version = ['py310']
+target-version = ['py310', 'py311', 'py312']
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -66,7 +66,7 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false

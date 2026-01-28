@@ -29,7 +29,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=0
-      - PYTHONPATH=/opt/methylpipeline/lib/python3.10/site-packages
+      - PYTHONPATH=/opt/conda/envs/rapids-25.10/lib/python3.12/site-packages
       - CUPY_CACHE_DIR=/tmp/.cupy
     shm_size: '16gb'
     restart: unless-stopped

@@ -1,11 +1,8 @@
 # MethylPipeline Production Container
-FROM nvidia/cuda:12.8.0-devel-ubuntu22.04
+FROM nvidia/cuda:13.0.0-devel-ubuntu22.04
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.10 \
-    python3.10-dev \
-    python3.10-venv \
     build-essential \
     git \
     hdf5-tools \
@@ -15,6 +12,8 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     apt-transport-https \
     unixodbc-dev \
+    bzip2 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Microsoft ODBC Driver 18 for SQL Server
@@ -30,59 +29,39 @@ RUN mkdir -p /home/ubuntu && chown -R ubuntu:ubuntu /home/ubuntu
 RUN usermod -aG sudo ubuntu
 RUN echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
-# Create Python virtual environment for production
-RUN python3.10 -m venv /opt/methylpipeline
-ENV PATH="/opt/methylpipeline/bin:$PATH"
+# Install Miniforge (conda) and RAPIDS nightly for CUDA 13.0
+ENV CONDA_DIR=/opt/conda
+RUN curl -fsSL https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -o /tmp/miniforge.sh && \
+    bash /tmp/miniforge.sh -b -p $CONDA_DIR && \
+    rm /tmp/miniforge.sh
+ENV PATH="${CONDA_DIR}/bin:${PATH}"
 
-# Make sure ubuntu user can access the virtual environment
-RUN chown -R ubuntu:ubuntu /opt/methylpipeline
+RUN conda install -y -n base -c conda-forge mamba && \
+    mamba create -y -n rapids-25.10 -c rapidsai-nightly -c conda-forge -c nvidia \
+        rapids=25.10 python=3.12 'cuda-version=13.0' \
+        jupyter hdbscan umap-learn && \
+    mamba install -y -n rapids-25.10 -c conda-forge \
+        h5py hdf5plugin zarr pyarrow psutil plotly matplotlib seaborn \
+        click tqdm statsmodels sqlalchemy scikit-learn pydantic pyodbc pymssql && \
+    conda clean -ay
 
-# Install Python packages with CUDA support
-RUN pip install --upgrade pip setuptools wheel
+ENV CONDA_DEFAULT_ENV=rapids-25.10
+ENV PATH="/opt/conda/envs/rapids-25.10/bin:/opt/conda/bin:${PATH}"
 
-# Install CuPy with CUDA 12.x support
-RUN pip install cupy-cuda12x
-
-# Install scientific computing libraries
-RUN pip install \
-    numpy \
-    scipy \
-    pandas \
-    h5py \
-    hdf5plugin \
-    nvidia-ml-py>=12.535.0 \
-    psutil \
-    plotly \
-    matplotlib \
-    seaborn \
-    pydantic \
-    click \
-    zarr \
-    tqdm \
-    statsmodels \
-    sqlalchemy
-
-# Install SQL drivers (pyodbc for ODBC, pymssql as fallback for ARM64)
-RUN pip install pyodbc || echo "pyodbc installation failed" && \
-    pip install pymssql
-
-# Install RAPIDS for GPU data frames (before numba to avoid conflicts)
-RUN pip install cudf-cu12 --no-cache-dir --extra-index-url https://pypi.nvidia.com
-
-# Install numba after RAPIDS to avoid version conflicts
-RUN pip install numba
+# Install Python utilities not provided by conda
+RUN pip install --no-cache-dir --retries 3 nvidia-ml-py rich sqlmodel
 
 # Copy all packages to container
 COPY ../packages /tmp/methylpipeline-packages
 
 # Install all packages in production mode (non-editable)
-RUN cd /tmp/methylpipeline-packages/methylutils && pip install . && \
-    cd /tmp/methylpipeline-packages/methylcentroid && pip install . && \
-    cd /tmp/methylpipeline-packages/methylcluster && pip install . && \
-    cd /tmp/methylpipeline-packages/methylmodeler && pip install . && \
-    cd /tmp/methylpipeline-packages/methylmapper && pip install . && \
-    cd /tmp/methylpipeline-packages/methylclassifier && pip install . && \
-    cd /tmp/methylpipeline-packages/methylenricher && pip install . && \
+RUN cd /tmp/methylpipeline-packages/methylutils && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methylcentroid && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methylcluster && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methylmodeler && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methylmapper && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methylclassifier && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methylenricher && pip install . --no-deps && \
     rm -rf /tmp/methylpipeline-packages
 
 # Create CuPy cache directory with proper permissions

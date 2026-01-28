@@ -8,7 +8,7 @@ This guide covers the development workflow for MethylPipeline.
 
 - Docker with GPU support (nvidia-docker2)
 - NVIDIA Driver 525.60.13+
-- CUDA 12.8+
+- CUDA 13.0+
 - Git
 
 ### Initial Setup
