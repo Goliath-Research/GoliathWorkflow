@@ -321,7 +321,7 @@ methyl_enricher --input mapped_features/all-gene_name-combined.csv \
 - GPU: NVIDIA GH200 (96GB) or compatible
 - CUDA: 12.8+
 - Docker: with nvidia-docker2
-- Python: 3.10
+- Python: 3.10+ (host setup falls back to system python packages on Ubuntu 24.04+)
 - Storage: NVMe SSD recommended
 
 ## Support

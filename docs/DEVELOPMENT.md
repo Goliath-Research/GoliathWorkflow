@@ -54,6 +54,7 @@ Notes:
 - `requirements-pipeline.txt` contains shared Python deps for most packages.
 - `requirements-gpu.txt` adds CUDA 12.x dependencies (CuPy/RAPIDS).
 - Add `--venv /path/to/venv` to control the virtualenv location.
+- On Ubuntu 24.04+ where `python3.10` packages are unavailable, `setup_host.sh` installs the default `python3` packages and uses the system Python (3.10+).
 
 ## Development Workflow
 

@@ -95,6 +95,8 @@ MethylPipeline/
 └─────────────────────────────────────────────────────────┘
 ```
 
+Note: On Ubuntu 24.04+ where `python3.10` packages are unavailable, `setup_host.sh` installs the default `python3` packages and uses the system Python (3.10+).
+
 ### Development Workflow (Docker, Optional)
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -140,7 +142,7 @@ MethylPipeline/
 - **Hardware**: NVIDIA DGX Spark / GH200 / A100-class GPUs
 
 ### Python Ecosystem
-- **Python**: 3.10
+- **Python**: 3.10+
 - **NumPy/SciPy**: Scientific computing
 - **Pandas**: Data manipulation
 - **h5py**: HDF5 support

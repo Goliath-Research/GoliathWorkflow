@@ -57,6 +57,14 @@ install_system_deps() {
     die "apt-get not found. Install system dependencies manually."
   fi
 
+  local python_packages=()
+  if apt-cache show python3.10-dev >/dev/null 2>&1; then
+    python_packages=(python3.10 python3.10-dev python3.10-venv)
+  else
+    python_packages=(python3 python3-dev python3-venv)
+    warn "python3.10 packages not available; using default python3."
+  fi
+
   local sudo_cmd=""
   if [ "$(id -u)" -ne 0 ]; then
     if command -v sudo >/dev/null 2>&1; then
@@ -69,9 +77,7 @@ install_system_deps() {
   info "Installing system dependencies (Ubuntu/Debian)..."
   $sudo_cmd apt-get update
   $sudo_cmd apt-get install -y \
-    python3.10 \
-    python3.10-dev \
-    python3.10-venv \
+    "${python_packages[@]}" \
     python3-pip \
     build-essential \
     git \
