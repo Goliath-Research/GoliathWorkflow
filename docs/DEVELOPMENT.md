@@ -6,12 +6,18 @@ This guide covers the development workflow for MethylPipeline.
 
 ### Prerequisites
 
+Container path (Docker):
 - Docker with GPU support (nvidia-docker2)
 - NVIDIA Driver 525.60.13+
 - CUDA 12.8+
 - Git
 
-### Initial Setup
+Host path (non-Docker):
+- Ubuntu/Debian host with NVIDIA driver + CUDA 12.x
+- Python 3.10+
+- Git
+
+### Initial Setup (Docker)
 
 1. **Clone the repository:**
    ```bash
@@ -35,6 +41,20 @@ This guide covers the development workflow for MethylPipeline.
    docker exec -it methylpipeline bash
    ```
 
+### Initial Setup (Host / Non-Docker)
+
+Use the host setup script to install pipeline-level dependencies and local packages:
+
+```bash
+# From repo root
+bash scripts/setup_host.sh --system-deps --gpu
+```
+
+Notes:
+- `requirements-pipeline.txt` contains shared Python deps for most packages.
+- `requirements-gpu.txt` adds CUDA 12.x dependencies (CuPy/RAPIDS).
+- Add `--venv /path/to/venv` to control the virtualenv location.
+
 ## Development Workflow
 
 ### Making Changes
@@ -47,7 +67,7 @@ All packages are mounted as volumes and installed in editable mode, so changes t
 
 ### Package Structure
 
-Each package follows this structure:
+Each package follows this structure (preferred layout):
 
 ```
 packages/methylutils/
@@ -58,8 +78,8 @@ packages/methylutils/
 ├── tests/                 # Tests
 │   ├── test_module1.py
 │   └── test_module2.py
-├── setup.py              # Package configuration
-├── requirements.txt      # Dependencies
+├── pyproject.toml         # Package configuration & deps
+├── poetry.lock            # Optional lock file
 └── README.md            # Package documentation
 ```
 
@@ -131,14 +151,16 @@ Packages must be installed in this order due to dependencies:
 6. **methylclassifier** (depends on methylutils, MethylModeler outputs)
 7. **methylenricher** (consumes MethylMapper gene lists/CSV outputs)
 
-The `install_all.sh` script handles this automatically.
+Inside Docker, `scripts/install_all.sh` handles this automatically.
+On host systems, use `scripts/setup_host.sh` or install in this order.
 
 ### Adding New Dependencies
 
-1. Add to package's `requirements.txt`
-2. Add to package's `setup.py` in `install_requires`
-3. If it's a system library, add to `docker/Dockerfile`
-4. Rebuild container: `docker compose -f docker/docker-compose.yml build`
+1. If shared across multiple packages, add to `requirements-pipeline.txt`.
+2. If GPU/CUDA-specific, add to `requirements-gpu.txt`.
+3. If truly package-specific, add to that package's `pyproject.toml`.
+4. If container support is required, keep `docker/Dockerfile*` in sync.
+5. Rebuild container if needed: `docker compose -f docker/docker-compose.yml build`
 
 ## Common Development Tasks
 

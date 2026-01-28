@@ -139,20 +139,22 @@ cd MethylPipeline
 docker exec -it methylpipeline bash
 ```
 
-#### Option 2: Manual Installation
+#### Option 2: Host (Non-Docker)
 
 ```bash
 # Clone repository
 git clone https://github.com/yourusername/MethylPipeline.git
 cd MethylPipeline
 
-# Install all packages
-pip install ./packages/methylutils
-pip install ./packages/methylcentroid
-pip install ./packages/methylcluster
-pip install ./packages/methylmodeler
-pip install ./packages/methylclassifier
+# Install on host (recommended for DGX / non-Docker)
+bash scripts/setup_host.sh --system-deps --gpu
 ```
+
+Notes:
+- Omit `--gpu` for CPU-only installs.
+- `requirements-pipeline.txt` contains shared Python deps.
+- `requirements-gpu.txt` adds CUDA 12.x requirements.
+- Add `--venv /path/to/venv` to control the virtualenv location.
 
 ### Basic Usage Example
 
@@ -433,9 +435,12 @@ MethylPipeline/
 │   └── docker-compose.yml
 ├── scripts/                     # Setup and automation helpers
 │   ├── setup_dev.sh
+│   ├── setup_host.sh
 │   ├── setup_prod.sh
 │   ├── run_container.sh
 │   └── install_all.sh
+├── requirements-pipeline.txt    # Pipeline-level Python deps
+├── requirements-gpu.txt         # GPU/CUDA deps (CUDA 12.x)
 ├── docs/                        # Pipeline-level documentation
 │   ├── ARCHITECTURE.md
 │   ├── DEVELOPMENT.md

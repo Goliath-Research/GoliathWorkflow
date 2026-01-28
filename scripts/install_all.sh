@@ -4,6 +4,35 @@
 
 set -e
 
+usage() {
+    cat <<'EOF'
+Usage: scripts/install_all.sh [options]
+
+Options:
+  --pipeline-reqs   Install pipeline-level Python requirements first
+  --gpu-reqs        Install GPU requirements (CUDA 12.x stack)
+  -h, --help        Show this help
+
+Notes:
+  - requirements-pipeline.txt and requirements-gpu.txt are expected at repo root.
+EOF
+}
+
+PIPELINE_REQS=0
+GPU_REQS=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --pipeline-reqs) PIPELINE_REQS=1; shift ;;
+        --gpu-reqs) GPU_REQS=1; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
+    esac
+done
+
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 echo "============================================="
 echo "Installing MethylPipeline Packages..."
 echo "============================================="
@@ -21,6 +50,32 @@ fi
 
 echo "📦 Installing packages from: $PACKAGES_DIR"
 echo ""
+
+# Optional: install pipeline-level requirements
+if [ "$PIPELINE_REQS" -eq 1 ] || [ "$GPU_REQS" -eq 1 ]; then
+    echo "🔧 Upgrading pip tooling..."
+    python3 -m pip install --upgrade pip setuptools wheel
+fi
+
+if [ "$PIPELINE_REQS" -eq 1 ]; then
+    REQ_BASE="$PROJECT_ROOT/requirements-pipeline.txt"
+    if [ -f "$REQ_BASE" ]; then
+        echo "📦 Installing pipeline requirements..."
+        python3 -m pip install -r "$REQ_BASE"
+    else
+        echo "⚠ requirements-pipeline.txt not found at $REQ_BASE"
+    fi
+fi
+
+if [ "$GPU_REQS" -eq 1 ]; then
+    REQ_GPU="$PROJECT_ROOT/requirements-gpu.txt"
+    if [ -f "$REQ_GPU" ]; then
+        echo "🚀 Installing GPU requirements..."
+        python3 -m pip install -r "$REQ_GPU" --extra-index-url https://pypi.nvidia.com
+    else
+        echo "⚠ requirements-gpu.txt not found at $REQ_GPU"
+    fi
+fi
 
 # Install packages in dependency order
 # MethylUtils must be installed first as it's the core dependency
