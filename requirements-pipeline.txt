@@ -1,0 +1,32 @@
+# Pipeline-level Python requirements (CPU/base).
+# Keep this list in sync with package pyproject.toml files and Dockerfile.
+click
+colorlog
+cryptography
+gseapy
+h5py
+hdbscan
+hdf5plugin
+matplotlib
+numpy
+numba
+nvidia-ml-py
+pandas
+plotly
+psutil
+pyarrow
+pyodbc
+pydantic
+pymssql
+pysam
+pyyaml
+requests
+rich
+scikit-learn
+scipy
+seaborn
+sqlalchemy
+sqlmodel
+statsmodels
+tqdm
+zarr
