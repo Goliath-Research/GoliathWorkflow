@@ -95,17 +95,22 @@ for pkg in "${PACKAGES[@]}"; do
         if [ -f "$PKG_PATH/pyproject.toml" ]; then
             echo "📦 Installing $pkg..."
             cd "$PKG_PATH"
-            # Use poetry install for proper dependency management
-            # Use full path to poetry if not in PATH
-            if command -v poetry &> /dev/null; then
-                poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
-            elif [ -f /root/.local/bin/poetry ]; then
-                /root/.local/bin/poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
-            elif [ -f /usr/local/bin/poetry ]; then
-                /usr/local/bin/poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
+            if [ -n "${CONDA_DEFAULT_ENV:-}" ]; then
+                echo "   • Detected conda env (${CONDA_DEFAULT_ENV}), installing without dependency resolution"
+                python -m pip install -e . --no-deps --no-cache-dir 2>&1 | grep -v "WARNING"
             else
-                echo "   ⚠ Poetry not found, trying pip install as fallback..."
-                python3 -m pip install -e . --no-cache-dir 2>&1 | grep -v "WARNING"
+                # Use poetry install for proper dependency management
+                # Use full path to poetry if not in PATH
+                if command -v poetry &> /dev/null; then
+                    poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
+                elif [ -f /root/.local/bin/poetry ]; then
+                    /root/.local/bin/poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
+                elif [ -f /usr/local/bin/poetry ]; then
+                    /usr/local/bin/poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
+                else
+                    echo "   ⚠ Poetry not found, trying pip install as fallback..."
+                    python3 -m pip install -e . --no-cache-dir 2>&1 | grep -v "WARNING"
+                fi
             fi
             echo "   ✓ $pkg installed"
         else

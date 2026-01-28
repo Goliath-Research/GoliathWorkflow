@@ -185,3 +185,40 @@ When creating new packages within MethylPipeline:
 
 The `METHYLPIPELINE` environment variable creates a **single source of truth** for locating all workspace resources, making the codebase cleaner, more maintainable, and less error-prone.
 
+## Host Conda Setup (CUDA 13.0 + RAPIDS 25.10)
+
+For NVIDIA DGX Spark (CUDA 13.0), use the provided host setup script:
+
+```bash
+./scripts/setup_host_conda.sh
+conda activate rapids-25.10
+```
+
+Then install packages without dependency resolution (use the conda env):
+
+```bash
+pip install -e packages/methylutils --no-deps
+pip install -e packages/methylcentroid --no-deps
+pip install -e packages/methyldetector --no-deps
+pip install -e packages/methylmapper --no-deps
+pip install -e packages/methylclassifier --no-deps
+pip install -e packages/methylenricher --no-deps
+pip install -e packages/methylcluster --no-deps
+```
+
+### Poetry + Conda (Recommended Behavior)
+
+- Keep conda as the source of truth for dependencies.
+- Avoid `poetry install` inside an active conda environment.
+- If you do use Poetry, leave virtualenv creation enabled so it does not touch conda:
+
+```bash
+poetry config virtualenvs.create true
+```
+
+If you want a requirements file without installing, you can export:
+
+```bash
+poetry export -f requirements.txt -o requirements.txt --without-hashes
+```
+

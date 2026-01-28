@@ -3,8 +3,8 @@
 **Unified Genomics Pipeline for Comprehensive Methylation Analysis**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![CUDA 11.8+](https://img.shields.io/badge/CUDA-11.8+-green.svg)](https://developer.nvidia.com/cuda-toolkit)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![CUDA 13.0+](https://img.shields.io/badge/CUDA-13.0+-green.svg)](https://developer.nvidia.com/cuda-toolkit)
 
 ## Overview
 
@@ -285,8 +285,8 @@ Deep dives with algorithms, math, and advanced workflows:
 ### Software Requirements
 
 - **OS**: Linux (Ubuntu 20.04+), macOS (CPU-only)
-- **Python**: 3.8-3.11
-- **CUDA**: 11.8+ (for GPU acceleration)
+- **Python**: 3.10-3.12
+- **CUDA**: 13.0+ (for GPU acceleration)
 - **Docker**: 20.10+ (for containerized deployment)
 
 ## Performance Benchmarks
