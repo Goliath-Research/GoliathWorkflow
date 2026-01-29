@@ -1,6 +1,6 @@
+# ruff: noqa: E402
 # methyl_centroid.py
 import sys
-import os
 from pathlib import Path
 
 # Add methylutils from monorepo to Python path (for development/direct execution)
@@ -13,16 +13,12 @@ if methyl_utils_path.exists() and str(methyl_utils_path) not in sys.path:
 # No separate path addition needed - it's imported via methylutils
 
 import numpy as np
-from pathlib import Path
-from typing import List, Union, Optional, Tuple, Dict, OrderedDict
+from typing import List, Union, Optional, Tuple, Dict
 from datetime import datetime
-from pydantic import BaseModel, Field
-from enum import Enum
 import json
 import psutil
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from collections import OrderedDict
 from methyl_utils.core.methyl_frame import (
     #METHYL_CENTROID_DTYPE, 
     #METHYL_EXTENDED_CENTROID_DTYPE, 
@@ -38,29 +34,31 @@ except ImportError:
         local_pkg_root = Path(__file__).parent
         if str(local_pkg_root) not in sys.path:
             sys.path.insert(0, str(local_pkg_root))
-        from config import MethylCentroidConfig, CentroidResults
+        from config import MethylCentroidConfig, CentroidResults  # type: ignore[reportMissingImports]
+try:
+    from .core.sample_manager import SmartSampleCache
+except ImportError:
+    try:
+        from methyl_centroid.core.sample_manager import SmartSampleCache
+    except ImportError:
+        local_pkg_root = Path(__file__).parent
+        if str(local_pkg_root) not in sys.path:
+            sys.path.insert(0, str(local_pkg_root))
+        from core.sample_manager import SmartSampleCache  # type: ignore[reportMissingImports]
 # Distance calculation functions
 from methyl_utils import (
-    auto_compute_distance,
-    get_sample_beta_mom,
     get_methyl_dtype,
     # Memory management
     get_memory_manager,
     # Performance profiling
     get_performance_profiler,
-    start_performance_monitoring,
     # Chunked processing
     ChunkedGenomicProcessor,
-    process_genome_file_chunked,
     # GPU detection
     is_gpu_available,
     # Logging
     get_logger
 )
-
-# Setup logging using MethylUtils
-import logging
-
 
 class MethylCentroid:
     """
@@ -184,7 +182,6 @@ class MethylCentroid:
 
         # Binned stats configuration (for centroid-level mixture fitting)
         self.enable_binned_stats = enable_binned_stats
-        total_samples = len(self.samples) + len(self.add_samples)
         if binned_stats_bins is None:
             bins = 100
         else:
@@ -367,20 +364,16 @@ class MethylCentroid:
         # Determine which sample list to use and get the actual sample
         if sample_path is not None:
             sample = sample_path
-            index = len(self.samples) + len(self.add_samples) + sample_index
         elif is_new_sample:
             if sample_index >= len(self.add_samples):
                 print(f"Add sample index {sample_index} out of range")
                 return False
             sample = self.add_samples[sample_index]
-            # Adjust index for tnc_data array (add samples come after original samples)
-            index = len(self.samples) + sample_index
         else:
             if sample_index >= len(self.samples):
                 print(f"Sample index {sample_index} out of range")
                 return False
             sample = self.samples[sample_index]
-            index = sample_index
 
         # Create a unique identifier for tracking active samples
         if sample_path is not None:
@@ -1235,7 +1228,6 @@ class MethylCentroid:
             return None
 
         # Initialize arrays for accumulation
-        pos_accum = []
         mC_accum = np.zeros(len(positions), dtype=np.uint32)
         uC_accum = np.zeros(len(positions), dtype=np.uint32)
         # Always track N_accum for min_samples filtering, even for non-extended centroids
