@@ -528,11 +528,40 @@ class MethylCentroid:
                     )
         return active_paths
 
+    def _filter_missing_sample_files(self) -> List[Path]:
+        """
+        Filter out samples whose expected {chrom}-{ctx}.h5 files are missing.
+
+        Returns:
+            List of missing sample file paths.
+        """
+        missing_samples = [p for p in self.samples if not p.is_file()]
+        missing_add_samples = [p for p in self.add_samples if not p.is_file()]
+        missing = missing_samples + missing_add_samples
+
+        if missing:
+            preview = ", ".join(str(p) for p in missing[:5])
+            suffix = " ..." if len(missing) > 5 else ""
+            self.logger.warning(
+                f"Skipping {len(missing)} missing sample files. "
+                f"Examples: {preview}{suffix}"
+            )
+
+        # Keep only existing files
+        self.samples = [p for p in self.samples if p.is_file()]
+        self.add_samples = [p for p in self.add_samples if p.is_file()]
+
+        return missing
+
     def add_samples_parallel(self):
         def load_sample_data(
             sample_path: Path,
-        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
             try:
+                if not sample_path.is_file():
+                    self.logger.warning(f"Sample file missing: {sample_path}")
+                    return None
+
                 from methyl_utils import MethylSample
 
                 methyl_sample = MethylSample.load_from_h5(sample_path)
@@ -598,12 +627,7 @@ class MethylCentroid:
 
                 print(f"Error loading sample {sample_path}: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
-                return (
-                    np.array([], dtype=np.uint32),
-                    np.array([], dtype=np.uint32),
-                    np.array([], dtype=np.uint32),
-                    np.array([], dtype=np.uint8),
-                )
+                return None
 
         all_samples = self.samples + self.add_samples
 
@@ -654,7 +678,12 @@ class MethylCentroid:
             for future in as_completed(future_to_sample):
                 sample_idx, sample_path = future_to_sample[future]
                 try:
-                    pos, mC, uC, tnc = future.result()
+                    result = future.result()
+
+                    if result is None:
+                        continue
+
+                    pos, mC, uC, tnc = result
 
                     # Skip empty samples
                     if len(pos) == 0:
@@ -1243,6 +1272,21 @@ class MethylCentroid:
             raise OSError(f"Cannot create output directory {output_path}: {e}")
 
         # Add all samples in parallel
+        missing_samples = self._filter_missing_sample_files()
+        if not self.samples and not self.add_samples:
+            expected_suffix = f"{self.chrom}-{self.ctx}.h5"
+            if missing_samples:
+                preview = ", ".join(str(p) for p in missing_samples[:5])
+                suffix = " ..." if len(missing_samples) > 5 else ""
+                raise FileNotFoundError(
+                    "No valid sample files found. "
+                    f"Expected files like {expected_suffix}. "
+                    f"Missing examples: {preview}{suffix}"
+                )
+            raise FileNotFoundError(
+                f"No valid sample files found. Expected files like {expected_suffix}."
+            )
+
         self.add_samples_parallel()
 
         # Check if any samples were successfully added

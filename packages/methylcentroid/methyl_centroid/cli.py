@@ -8,7 +8,7 @@ the refactored architecture following SOLID principles.
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional, List
+from typing import List
 
 from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig, CentroidResults
 from .core import MethylCentroid
@@ -198,6 +198,17 @@ def create_processing_config(args: argparse.Namespace) -> ProcessingConfig:
         enable_visualization=not args.disable_visualization
     )
 
+
+def run_single_processing(
+    config: MethylCentroidConfig,
+    processing_config: ProcessingConfig
+) -> CentroidResults:
+    """
+    Run MethylCentroid for a single chromosome/context.
+
+    Args:
+        config: MethylCentroid configuration
+        processing_config: Processing configuration
 
     Returns:
         CentroidResults containing information about centroid creation
