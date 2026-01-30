@@ -1,22 +1,34 @@
 # methyl_utils/core/methyl_frame.py
 from __future__ import annotations
 
-from typing import Optional, Dict, Any, Literal, get_type_hints, Union, List
+from typing import Optional, Dict, Any, Union, List
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 # GPU support (transparent)
+import logging
+
+try:
+    from ..gpu_detection import get_cupy, is_gpu_available
+except ImportError:
+    try:
+        from methyl_utils.gpu_detection import get_cupy, is_gpu_available
+    except ImportError:
+        def get_cupy():  # type: ignore[override]
+            return None
+
+        def is_gpu_available():  # type: ignore[override]
+            return False
+
 try:
     import cudf
-    import cupy as cp
-
-    HAS_GPU = True
 except ImportError:
     cudf = None
-    cp = None
-    HAS_GPU = False
+
+cp = get_cupy()
+HAS_GPU = cp is not None and cudf is not None and is_gpu_available()
 
 
 # Single source of truth — column name → optimal dtype
@@ -70,14 +82,34 @@ class MethylFrame:
 
         # Decode context/strand once
         if "context" not in df.columns:
+            # Ensure we are working with a CPU DataFrame if GPU isn't available
+            if not HAS_GPU and cudf is not None and isinstance(df, cudf.DataFrame):
+                df = df.to_pandas()
+
             tnc = df["tnc"].values
             # Extract TNC value (bits 0-6) and strand (bit 7) using bit field masks
-            if HAS_GPU and hasattr(tnc, "device"):
-                tnc_context = tnc & TNC_VALUE_MASK
-                strand_codes = (tnc >> STRAND_SHIFT) & STRAND_MASK
-                ctx_codes = cp.asarray(_TNC_CONTEXT_CODES)[tnc_context]
-                df["context"] = cudf.Series(ctx_codes, dtype=ContextDtype)
-                df["strand"] = cudf.Series(strand_codes, dtype=StrandDtype)
+            if HAS_GPU and hasattr(tnc, "__cuda_array_interface__"):
+                try:
+                    tnc_context = tnc & TNC_VALUE_MASK
+                    strand_codes = (tnc >> STRAND_SHIFT) & STRAND_MASK
+                    ctx_codes = cp.asarray(_TNC_CONTEXT_CODES)[tnc_context]
+                    df["context"] = cudf.Series(ctx_codes, dtype=ContextDtype)
+                    df["strand"] = cudf.Series(strand_codes, dtype=StrandDtype)
+                except Exception as e:
+                    logging.getLogger(__name__).warning(
+                        f"GPU context decode failed; falling back to CPU: {e}"
+                    )
+                    if cudf is not None and isinstance(df, cudf.DataFrame):
+                        df = df.to_pandas()
+                    tnc = df["tnc"].values
+                    tnc_context = tnc & TNC_VALUE_MASK
+                    strand_codes = (tnc >> STRAND_SHIFT) & STRAND_MASK
+                    df["context"] = pd.Categorical.from_codes(
+                        _TNC_CONTEXT_CODES[tnc_context], dtype=ContextDtype
+                    )
+                    df["strand"] = pd.Categorical.from_codes(
+                        strand_codes, dtype=StrandDtype
+                    )
             else:
                 tnc_context = tnc & TNC_VALUE_MASK
                 strand_codes = (tnc >> STRAND_SHIFT) & STRAND_MASK
@@ -98,7 +130,7 @@ class MethylFrame:
 
     @property
     def is_gpu(self) -> bool:
-        return HAS_GPU and isinstance(self._df, cudf.DataFrame)
+        return HAS_GPU and cudf is not None and isinstance(self._df, cudf.DataFrame)
 
     @property
     def pos(self):

@@ -11,6 +11,7 @@ Usage: scripts/setup_host.sh [options]
 Options:
   --system-deps     Install system packages (Ubuntu/Debian via apt)
   --gpu             Install GPU requirements (CUDA 12.x stack)
+  --no-gpu          Skip GPU requirements (override auto-detect)
   --venv PATH       Create/use a virtualenv at PATH (default: .venv)
   --no-venv         Do not create or activate a virtualenv
   --with-deps       Allow pip to resolve package deps (override --no-deps)
@@ -32,6 +33,7 @@ PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
 SYSTEM_DEPS=0
 GPU_DEPS=0
+NO_GPU=0
 NO_VENV=0
 VENV_DIR=""
 WITH_DEPS=0
@@ -40,6 +42,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --system-deps) SYSTEM_DEPS=1; shift ;;
     --gpu) GPU_DEPS=1; shift ;;
+    --no-gpu) NO_GPU=1; shift ;;
     --venv) VENV_DIR="${2:-}"; shift 2 ;;
     --no-venv) NO_VENV=1; shift ;;
     --with-deps) WITH_DEPS=1; shift ;;
@@ -51,6 +54,16 @@ done
 if [ -f "/.dockerenv" ] || [ -f "/run/.containerenv" ]; then
   die "Detected container environment. Use Docker setup scripts instead."
 fi
+
+detect_gpu() {
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    return 0
+  fi
+  if [ -e /proc/driver/nvidia/version ] || [ -e /dev/nvidiactl ] || [ -e /dev/nvidia0 ]; then
+    return 0
+  fi
+  return 1
+}
 
 install_system_deps() {
   if ! command -v apt-get >/dev/null 2>&1; then
@@ -104,6 +117,14 @@ install_system_deps() {
 
 if [ "$SYSTEM_DEPS" -eq 1 ]; then
   install_system_deps
+fi
+
+# Auto-enable GPU requirements when a GPU is detected (unless explicitly disabled)
+if [ "$GPU_DEPS" -eq 0 ] && [ "$NO_GPU" -eq 0 ]; then
+  if detect_gpu; then
+    info "NVIDIA GPU detected; enabling GPU Python requirements."
+    GPU_DEPS=1
+  fi
 fi
 
 choose_python() {
