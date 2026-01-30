@@ -21,6 +21,8 @@ Notes:
   - This script is intended for host installs (not inside Docker).
   - Most Python dependencies are installed from requirements-pipeline.txt.
   - Use --gpu to install GPU packages from requirements-gpu.txt.
+  - If Python headers/build tools are missing, hdbscan is installed only
+    when a prebuilt wheel is available; otherwise it is skipped with a warning.
 EOF
 }
 
@@ -167,6 +169,38 @@ else
   info "Skipping virtualenv setup."
 fi
 
+python_headers_present() {
+  "$PYTHON_BIN" - <<'PY' >/dev/null 2>&1 || return 1
+import os
+import sys
+import sysconfig
+
+include_dir = sysconfig.get_config_var("INCLUDEPY") or sysconfig.get_path("include") or ""
+sys.exit(0 if include_dir and os.path.isfile(os.path.join(include_dir, "Python.h")) else 1)
+PY
+}
+
+filter_requirements_without_hdbscan() {
+  local src="$1"
+  local dest="$2"
+  "$PYTHON_BIN" - <<'PY' "$src" "$dest"
+import pathlib
+import sys
+
+src, dest = sys.argv[1:]
+lines = []
+for line in pathlib.Path(src).read_text().splitlines():
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        lines.append(line)
+        continue
+    if stripped.split(";", 1)[0].strip().lower().startswith("hdbscan"):
+        continue
+    lines.append(line)
+pathlib.Path(dest).write_text("\n".join(lines) + "\n")
+PY
+}
+
 REQ_BASE="$PROJECT_ROOT/requirements-pipeline.txt"
 REQ_GPU="$PROJECT_ROOT/requirements-gpu.txt"
 
@@ -178,7 +212,45 @@ info "Upgrading pip tooling..."
 "$PYTHON_BIN" -m pip install --upgrade pip setuptools wheel
 
 info "Installing pipeline-level Python requirements..."
-"$PYTHON_BIN" -m pip install -r "$REQ_BASE"
+REQ_INSTALL="$REQ_BASE"
+REQ_TMP=""
+HDBSCAN_CAN_BUILD=1
+
+if ! python_headers_present; then
+  warn "Python headers not found; hdbscan source build disabled."
+  HDBSCAN_CAN_BUILD=0
+fi
+if ! command -v gcc >/dev/null 2>&1; then
+  warn "gcc not found; hdbscan source build disabled."
+  HDBSCAN_CAN_BUILD=0
+fi
+if ! command -v make >/dev/null 2>&1; then
+  warn "make not found; hdbscan source build disabled."
+  HDBSCAN_CAN_BUILD=0
+fi
+
+if [ "$HDBSCAN_CAN_BUILD" -eq 0 ]; then
+  REQ_TMP="$(mktemp)"
+  filter_requirements_without_hdbscan "$REQ_BASE" "$REQ_TMP"
+  REQ_INSTALL="$REQ_TMP"
+fi
+
+"$PYTHON_BIN" -m pip install -r "$REQ_INSTALL"
+
+if [ "$HDBSCAN_CAN_BUILD" -eq 0 ]; then
+  info "Installing hdbscan from wheel (if available)..."
+  if "$PYTHON_BIN" -m pip install --only-binary=:all: --no-deps hdbscan; then
+    info "hdbscan installed from wheel."
+  else
+    warn "hdbscan wheel not available for this platform/Python."
+    warn "To build from source, install Python headers/build tools (run with --system-deps)."
+    warn "Alternatively, use scripts/setup_host_conda.sh."
+  fi
+fi
+
+if [ -n "$REQ_TMP" ]; then
+  rm -f "$REQ_TMP"
+fi
 
 if [ "$GPU_DEPS" -eq 1 ]; then
   if [ ! -f "$REQ_GPU" ]; then
