@@ -20,11 +20,12 @@ import psutil
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from methyl_utils.core.methyl_frame import (
-    #METHYL_CENTROID_DTYPE, 
-    #METHYL_EXTENDED_CENTROID_DTYPE, 
+    # METHYL_CENTROID_DTYPE,
+    # METHYL_EXTENDED_CENTROID_DTYPE,
     MethylSample,
     MethylExtendedCentroid,
 )
+
 try:
     from .config import MethylCentroidConfig, CentroidResults
 except ImportError:
@@ -57,8 +58,9 @@ from methyl_utils import (
     # GPU detection
     is_gpu_available,
     # Logging
-    get_logger
+    get_logger,
 )
+
 
 class MethylCentroid:
     """
@@ -142,7 +144,7 @@ class MethylCentroid:
         # Setup logging using MethylUtils
         self.verbose = verbose
         self.logger = get_logger(__name__, verbose=verbose)
-        
+
         # Convert to Path objects with chromosome-context file
         if samples:
             self.samples = [Path(sample) / f"{chrom}-{ctx}.h5" for sample in samples]
@@ -153,7 +155,9 @@ class MethylCentroid:
             )
             # Store original sample paths as strings for config reconstruction
             self._original_samples = [str(s) for s in samples]
-            self._original_add_samples = [str(s) for s in add_samples] if add_samples else []
+            self._original_add_samples = (
+                [str(s) for s in add_samples] if add_samples else []
+            )
         else:
             # If no samples provided, use add_samples as the main samples
             self.samples = (
@@ -163,7 +167,9 @@ class MethylCentroid:
             )
             self.add_samples = []
             # Store original sample paths as strings for config reconstruction
-            self._original_samples = [str(s) for s in add_samples] if add_samples else []
+            self._original_samples = (
+                [str(s) for s in add_samples] if add_samples else []
+            )
             self._original_add_samples = []
 
         # Handle remove samples for incremental updates
@@ -172,13 +178,17 @@ class MethylCentroid:
             if remove_samples
             else []
         )
-        self._original_remove_samples = [str(s) for s in remove_samples] if remove_samples else []
+        self._original_remove_samples = (
+            [str(s) for s in remove_samples] if remove_samples else []
+        )
 
         self.min_coverage = max(1, min_coverage)
         self.min_samples = max(1, int(min_samples))
         self.chrom = chrom
         self.ctx = ctx
-        self.output_dir = (Path(output_dir) if isinstance(output_dir, str) else output_dir)
+        self.output_dir = (
+            Path(output_dir) if isinstance(output_dir, str) else output_dir
+        )
 
         # Binned stats configuration (for centroid-level mixture fitting)
         self.enable_binned_stats = enable_binned_stats
@@ -200,9 +210,11 @@ class MethylCentroid:
                 raise OSError(f"Failed to create output directory: {self.output_dir}")
             # Note: os.access may not work correctly in container environments
         except PermissionError as e:
-            raise OSError(f"Permission denied creating output directory {self.output_dir}. "
-                         f"Please ensure the parent directory is writable: {self.output_dir.parent}. "
-                         f"Original error: {e}")
+            raise OSError(
+                f"Permission denied creating output directory {self.output_dir}. "
+                f"Please ensure the parent directory is writable: {self.output_dir.parent}. "
+                f"Original error: {e}"
+            )
         except Exception as e:
             raise OSError(f"Cannot create output directory {self.output_dir}: {e}")
 
@@ -214,7 +226,7 @@ class MethylCentroid:
         self.disease = disease
         self.group = group
         self.batch = batch
-        
+
         self.centroid: Optional[Path] = None
 
         # Detect GPU availability and prioritize GPU acceleration for large datasets
@@ -224,7 +236,9 @@ class MethylCentroid:
         # For large human genomes, prioritize GPU; for smaller datasets like Arabidopsis, use CPU if GPU fails
         self.use_gpu = gpu_available
         if gpu_available:
-            self.logger.info("Using GPU acceleration for optimal performance with large genomic datasets")
+            self.logger.info(
+                "Using GPU acceleration for optimal performance with large genomic datasets"
+            )
         else:
             self.logger.warning("GPU not available, falling back to CPU processing")
 
@@ -241,15 +255,14 @@ class MethylCentroid:
         # Initialize chunked processor with dynamic memory-aware parameters
         chunked_params = self._calculate_chunked_processor_params(self.use_gpu)
         self.chunked_processor = ChunkedGenomicProcessor(
-            chunk_size_positions=chunked_params['chunk_size_positions'],
-            max_workers=chunked_params['max_workers'],
+            chunk_size_positions=chunked_params["chunk_size_positions"],
+            max_workers=chunked_params["max_workers"],
             use_gpu=self.use_gpu,  # Use GPU when available for large datasets
-            memory_limit_gb=chunked_params['memory_limit_gb']
+            memory_limit_gb=chunked_params["memory_limit_gb"],
         )
 
         # Track active samples (those currently included in centroid calculation)
         self.active_samples: set = set()
-
 
         self.sample_cache = SmartSampleCache(self.memory_manager)
         self._cache_enabled = True  # Flag to control caching behavior
@@ -264,12 +277,14 @@ class MethylCentroid:
                 print(f"Warning: Sample {sample} does not exist")
 
     @classmethod
-    def from_config(cls, config: MethylCentroidConfig, verbose: bool = None) -> "MethylCentroid":
+    def from_config(
+        cls, config: MethylCentroidConfig, verbose: bool = None
+    ) -> "MethylCentroid":
         # Use config.verbose if verbose parameter is not provided, otherwise use the parameter
         verbose_value = verbose if verbose is not None else config.verbose
 
         return cls(
-            samples=getattr(config, 'samples', None),
+            samples=getattr(config, "samples", None),
             chrom=config.chrom,
             ctx=config.ctx,
             output_dir=config.output_dir,
@@ -285,13 +300,13 @@ class MethylCentroid:
         )
 
     @classmethod
-    def from_json(cls, json_data: str | dict, verbose: bool = False) -> "MethylCentroid":
-
+    def from_json(
+        cls, json_data: str | dict, verbose: bool = False
+    ) -> "MethylCentroid":
         config = MethylCentroidConfig.model_validate(json_data)
         return cls.from_config(config, verbose=verbose)
 
     def get_config(self) -> MethylCentroidConfig:
-
         config_dict = {
             "chrom": self.chrom,
             "ctx": self.ctx,
@@ -310,7 +325,6 @@ class MethylCentroid:
         return MethylCentroidConfig(**config_dict)
 
     def _print_progress(self):
-
         if self.progress_bar is None:
             total = len(self.samples) + len(self.add_samples)
             self.progress_bar = tqdm(total=total, desc="Adding samples", unit="sample")
@@ -324,24 +338,26 @@ class MethylCentroid:
             self.progress_bar = None
 
     def _load_existing_centroid_state(self, centroid_path: Path) -> bool:
-
         if not centroid_path.exists():
             print(f"Centroid file not found: {centroid_path}")
             return False
         try:
             # Load the centroid as MethylExtendedCentroid
             from methyl_utils.core.io import load_from_h5
+
             loaded_centroid = load_from_h5(centroid_path)
-            
+
             # Ensure it's an extended centroid
             if not isinstance(loaded_centroid, MethylExtendedCentroid):
                 # Try to convert if it's a basic centroid or sample
-                if hasattr(loaded_centroid, 'as_extended_centroid'):
+                if hasattr(loaded_centroid, "as_extended_centroid"):
                     loaded_centroid = loaded_centroid.as_extended_centroid()
                 else:
-                    print(f"Loaded centroid is not an extended centroid: {type(loaded_centroid)}")
+                    print(
+                        f"Loaded centroid is not an extended centroid: {type(loaded_centroid)}"
+                    )
                     return False
-            
+
             self._centroid = loaded_centroid
 
             # Mark original samples as active
@@ -356,11 +372,13 @@ class MethylCentroid:
         except Exception as e:
             print(f"Error loading existing centroid state: {e}")
             import traceback
+
             traceback.print_exc()
             return False
 
-    def add_sample(self, sample_index: int, is_new_sample: bool = False, sample_path: Path = None) -> bool:
-
+    def add_sample(
+        self, sample_index: int, is_new_sample: bool = False, sample_path: Path = None
+    ) -> bool:
         # Determine which sample list to use and get the actual sample
         if sample_path is not None:
             sample = sample_path
@@ -391,7 +409,7 @@ class MethylCentroid:
 
         try:
             methyl_sample = self.load_sample(sample)
-            
+
             if len(methyl_sample.pos) == 0:
                 print(f"Sample {sample} has no valid positions")
                 return False
@@ -401,12 +419,19 @@ class MethylCentroid:
                 # Create initial centroid from first sample
                 # Use MethylCentroidBuilder for proper initialization
                 from methyl_utils.core.centroid_builder import MethylCentroidBuilder
-                builder = MethylCentroidBuilder(min_coverage=self._min_coverage, use_gpu=self.use_gpu)
+
+                builder = MethylCentroidBuilder(
+                    min_coverage=self._min_coverage, use_gpu=self.use_gpu
+                )
                 builder.add_sample(sample)
                 self._centroid = builder.finalize()
                 # Apply min_samples filter after builder finalizes
-                if hasattr(self._centroid, 'N') and len(self._centroid) > 0:
-                    N_vals = np.asarray(self._centroid.N.values) if hasattr(self._centroid.N, 'values') else np.asarray(self._centroid.N)
+                if hasattr(self._centroid, "N") and len(self._centroid) > 0:
+                    N_vals = (
+                        np.asarray(self._centroid.N.values)
+                        if hasattr(self._centroid.N, "values")
+                        else np.asarray(self._centroid.N)
+                    )
                     valid_mask = N_vals >= self.min_samples
                     if not valid_mask.all():
                         # Filter out positions with N < min_samples
@@ -418,11 +443,23 @@ class MethylCentroid:
                             # No valid positions, create empty centroid
                             from methyl_utils import MethylExtendedCentroid
                             import pandas as pd
-                            empty_df = pd.DataFrame({
-                                'pos': [], 'mC': [], 'uC': [], 'tnc': [],
-                                'N': [], 'Sx': [], 'Sx2': [], 'log_x_sum': [], 'log_1_minus_x_sum': []
-                            })
-                            self._centroid = MethylExtendedCentroid(empty_df, self._centroid.metadata)
+
+                            empty_df = pd.DataFrame(
+                                {
+                                    "pos": [],
+                                    "mC": [],
+                                    "uC": [],
+                                    "tnc": [],
+                                    "N": [],
+                                    "Sx": [],
+                                    "Sx2": [],
+                                    "log_x_sum": [],
+                                    "log_1_minus_x_sum": [],
+                                }
+                            )
+                            self._centroid = MethylExtendedCentroid(
+                                empty_df, self._centroid.metadata
+                            )
             else:
                 # Add sample to existing centroid
                 self._centroid = self._centroid.add_sample(methyl_sample)
@@ -437,7 +474,6 @@ class MethylCentroid:
         return True
 
     def remove_sample(self, sample_index: int, is_new_sample: bool = False):
-
         index = (is_new_sample, sample_index)
         if index not in self.active_samples:
             return
@@ -453,7 +489,7 @@ class MethylCentroid:
         # Remove sample from centroid
         if self._centroid is None:
             raise RuntimeError("Cannot remove sample: no centroid exists")
-        
+
         try:
             self._centroid = self._centroid.remove_sample(methyl_sample)
         except ValueError as e:
@@ -461,11 +497,10 @@ class MethylCentroid:
 
         self.active_samples.remove(index)
 
-
     def _get_active_sample_paths(self) -> list:
         """
         Get the paths of all samples currently active in the centroid.
-        
+
         Returns:
             List of sample directory paths (as strings)
         """
@@ -476,21 +511,30 @@ class MethylCentroid:
                 if sample_index < len(self.add_samples):
                     sample_path = self.add_samples[sample_index]
                     # Extract directory path (remove the H5 filename)
-                    active_paths.append(str(sample_path.parent) if hasattr(sample_path, 'parent') else str(Path(sample_path).parent))
+                    active_paths.append(
+                        str(sample_path.parent)
+                        if hasattr(sample_path, "parent")
+                        else str(Path(sample_path).parent)
+                    )
             else:
                 # Sample from original samples list
                 if sample_index < len(self.samples):
                     sample_path = self.samples[sample_index]
                     # Extract directory path (remove the H5 filename)
-                    active_paths.append(str(sample_path.parent) if hasattr(sample_path, 'parent') else str(Path(sample_path).parent))
+                    active_paths.append(
+                        str(sample_path.parent)
+                        if hasattr(sample_path, "parent")
+                        else str(Path(sample_path).parent)
+                    )
         return active_paths
 
     def add_samples_parallel(self):
-
-        def load_sample_data(sample_path: Path) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    
+        def load_sample_data(
+            sample_path: Path,
+        ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
             try:
                 from methyl_utils import MethylSample
+
                 methyl_sample = MethylSample.load_from_h5(sample_path)
 
                 # Ensure sample is on CPU (converts GPU arrays if needed)
@@ -503,24 +547,24 @@ class MethylCentroid:
                 uC_series = methyl_sample.uC
                 # Access tnc from DataFrame directly (no property defined)
                 tnc_series = methyl_sample._df["tnc"]
-                
+
                 # Extract numpy arrays from Series
-                if hasattr(pos_series, 'values'):
+                if hasattr(pos_series, "values"):
                     pos = np.asarray(pos_series.values, dtype=np.uint32)
                 else:
                     pos = np.asarray(pos_series, dtype=np.uint32)
-                    
-                if hasattr(mC_series, 'values'):
+
+                if hasattr(mC_series, "values"):
                     mC = np.asarray(mC_series.values, dtype=np.uint32)
                 else:
                     mC = np.asarray(mC_series, dtype=np.uint32)
-                    
-                if hasattr(uC_series, 'values'):
+
+                if hasattr(uC_series, "values"):
                     uC = np.asarray(uC_series.values, dtype=np.uint32)
                 else:
                     uC = np.asarray(uC_series, dtype=np.uint32)
-                    
-                if hasattr(tnc_series, 'values'):
+
+                if hasattr(tnc_series, "values"):
                     tnc = np.asarray(tnc_series.values, dtype=np.uint8)
                 else:
                     tnc = np.asarray(tnc_series, dtype=np.uint8)
@@ -551,6 +595,7 @@ class MethylCentroid:
                     )
             except Exception as e:
                 import traceback
+
                 print(f"Error loading sample {sample_path}: {e}")
                 print(f"Traceback: {traceback.format_exc()}")
                 return (
@@ -564,24 +609,32 @@ class MethylCentroid:
 
         # Dynamic worker calculation based on memory and CPU
         memory_info = self.memory_manager.get_memory_usage()
-        total_memory_gb = memory_info.get('total_gb', 400)
-        available_memory_gb = memory_info.get('available_gb', 350)
+        total_memory_gb = memory_info.get("total_gb", 400)
+        available_memory_gb = memory_info.get("available_gb", 350)
         estimated_memory_per_sample_gb = 0.8  # Conservative estimate: 800MB per sample
 
         # Memory-based limit: reserve 30% of memory for processing
         memory_reserved_gb = total_memory_gb * 0.3
-        max_workers_by_memory = max(1, int((available_memory_gb - memory_reserved_gb) / estimated_memory_per_sample_gb))
+        max_workers_by_memory = max(
+            1,
+            int(
+                (available_memory_gb - memory_reserved_gb)
+                / estimated_memory_per_sample_gb
+            ),
+        )
 
         # CPU-based limit: use 75% of available CPUs
         cpu_count = psutil.cpu_count()
         max_workers_by_cpu = max(1, int(cpu_count * 0.75))
 
         # Context-based adjustment (CHH has more positions, needs more memory)
-        context_multiplier = {'CG': 1.0, 'CHG': 4.0, 'CHH': 16.0}.get(self.ctx, 1.0)
+        context_multiplier = {"CG": 1.0, "CHG": 4.0, "CHH": 16.0}.get(self.ctx, 1.0)
         max_workers_by_memory = max(1, int(max_workers_by_memory / context_multiplier))
 
         # Final worker count
-        actual_batch_size = min(max_workers_by_memory, max_workers_by_cpu, len(all_samples))
+        actual_batch_size = min(
+            max_workers_by_memory, max_workers_by_cpu, len(all_samples)
+        )
 
         self.logger.info(
             f"Using {actual_batch_size} parallel workers "
@@ -611,29 +664,52 @@ class MethylCentroid:
                     # Create MethylSample-like object for position aligner
                     # Add sample using new method
                     if self._centroid is None:
-                        from methyl_utils.core.centroid_builder import MethylCentroidBuilder
-                        builder = MethylCentroidBuilder(min_coverage=self._min_coverage, use_gpu=self.use_gpu)
+                        from methyl_utils.core.centroid_builder import (
+                            MethylCentroidBuilder,
+                        )
+
+                        builder = MethylCentroidBuilder(
+                            min_coverage=self._min_coverage, use_gpu=self.use_gpu
+                        )
                         builder.add_sample(sample_path)
                         self._centroid = builder.finalize()
                         # Apply min_samples filter after builder finalizes
-                        if hasattr(self._centroid, 'N') and len(self._centroid) > 0:
-                            N_vals = np.asarray(self._centroid.N.values) if hasattr(self._centroid.N, 'values') else np.asarray(self._centroid.N)
+                        if hasattr(self._centroid, "N") and len(self._centroid) > 0:
+                            N_vals = (
+                                np.asarray(self._centroid.N.values)
+                                if hasattr(self._centroid.N, "values")
+                                else np.asarray(self._centroid.N)
+                            )
                             valid_mask = N_vals >= self.min_samples
                             if not valid_mask.all():
                                 # Filter out positions with N < min_samples
                                 # Use integer indices instead of boolean mask to avoid pandas indexing issues
                                 valid_indices = np.where(valid_mask)[0]
                                 if len(valid_indices) > 0:
-                                    self._centroid = self._centroid.apply_mask(valid_indices)
+                                    self._centroid = self._centroid.apply_mask(
+                                        valid_indices
+                                    )
                                 else:
                                     # No valid positions, create empty centroid
                                     from methyl_utils import MethylExtendedCentroid
                                     import pandas as pd
-                                    empty_df = pd.DataFrame({
-                                        'pos': [], 'mC': [], 'uC': [], 'tnc': [],
-                                        'N': [], 'Sx': [], 'Sx2': [], 'log_x_sum': [], 'log_1_minus_x_sum': []
-                                    })
-                                    self._centroid = MethylExtendedCentroid(empty_df, self._centroid.metadata)
+
+                                    empty_df = pd.DataFrame(
+                                        {
+                                            "pos": [],
+                                            "mC": [],
+                                            "uC": [],
+                                            "tnc": [],
+                                            "N": [],
+                                            "Sx": [],
+                                            "Sx2": [],
+                                            "log_x_sum": [],
+                                            "log_1_minus_x_sum": [],
+                                        }
+                                    )
+                                    self._centroid = MethylExtendedCentroid(
+                                        empty_df, self._centroid.metadata
+                                    )
                     else:
                         # Load the actual MethylSample and add it
                         methyl_sample = self.load_sample(sample_path)
@@ -643,19 +719,31 @@ class MethylCentroid:
                     if success:
                         # Mark as active sample
                         is_new_sample = sample_idx >= len(self.samples)
-                        actual_sample_idx = sample_idx - len(self.samples) if is_new_sample else sample_idx
+                        actual_sample_idx = (
+                            sample_idx - len(self.samples)
+                            if is_new_sample
+                            else sample_idx
+                        )
                         sample_id = (is_new_sample, actual_sample_idx)
                         self.active_samples.add(sample_id)
                     else:
-                        self.logger.warning(f"Failed to add sample {sample_path.name} to position aligner")
+                        self.logger.warning(
+                            f"Failed to add sample {sample_path.name} to position aligner"
+                        )
 
                 except Exception as e:
-                    self.logger.error(f"Failed to process sample {sample_path.name}: {e}")
+                    self.logger.error(
+                        f"Failed to process sample {sample_path.name}: {e}"
+                    )
                     continue
 
-        self.logger.info(f"Parallel sample addition completed: {len(self.active_samples)} samples added")
+        self.logger.info(
+            f"Parallel sample addition completed: {len(self.active_samples)} samples added"
+        )
 
-    def _calculate_chunked_processor_params(self, use_gpu: bool) -> Dict[str, Union[int, float]]:
+    def _calculate_chunked_processor_params(
+        self, use_gpu: bool
+    ) -> Dict[str, Union[int, float]]:
         """
         Dynamically calculate optimal ChunkedGenomicProcessor parameters based on available resources.
         Uses latest MethylUtils GPU optimizations for maximum performance on GH200.
@@ -673,30 +761,36 @@ class MethylCentroid:
 
         # Extract available memory (accounting for current usage)
         system_memory_total_gb = self.memory_manager.system_memory_limit_gb
-        system_memory_used_gb = memory_info.get('system_memory_mb', 0) / 1024
+        system_memory_used_gb = memory_info.get("system_memory_mb", 0) / 1024
         system_memory_available_gb = system_memory_total_gb - system_memory_used_gb
 
         # GPU memory information
         gpu_available_gb = 0.0
         gpu_free_gb = 0.0
         if use_gpu and is_gpu_available():
-            gpu_available_gb = memory_info.get('gpu_memory_gb', 0)
-            gpu_free_gb = memory_info.get('gpu_free_gb', 0)
+            gpu_available_gb = memory_info.get("gpu_memory_gb", 0)
+            gpu_free_gb = memory_info.get("gpu_free_gb", 0)
 
-        self.logger.debug(f"Memory status - System: {system_memory_available_gb:.1f}GB available "
-                         f"({system_memory_total_gb:.1f}GB total), "
-                         f"GPU: {gpu_free_gb:.1f}GB free ({gpu_available_gb:.1f}GB used)")
+        self.logger.debug(
+            f"Memory status - System: {system_memory_available_gb:.1f}GB available "
+            f"({system_memory_total_gb:.1f}GB total), "
+            f"GPU: {gpu_free_gb:.1f}GB free ({gpu_available_gb:.1f}GB used)"
+        )
 
         # Use latest MethylUtils GPU-optimized chunk sizing for genome-scale processing
         # Target: 95% GPU utilization with 500M position chunks for optimal performance
         if use_gpu and gpu_free_gb >= 80.0:  # GH200 with sufficient GPU memory
             # Maximum GPU utilization: 500M positions per chunk for 6 total chunks on 3B positions
             chunk_size_positions = 500_000_000  # 500M positions
-            memory_limit_gb = min(system_memory_available_gb * 0.8, 350.0)  # Use 80% of available RAM
+            memory_limit_gb = min(
+                system_memory_available_gb * 0.8, 350.0
+            )  # Use 80% of available RAM
             max_workers = 1  # Sequential processing for maximum GPU utilization
 
-            self.logger.info(f"Using genome-scale GPU optimization: {chunk_size_positions:,} positions per chunk "
-                           f"({memory_limit_gb:.1f}GB RAM limit)")
+            self.logger.info(
+                f"Using genome-scale GPU optimization: {chunk_size_positions:,} positions per chunk "
+                f"({memory_limit_gb:.1f}GB RAM limit)"
+            )
 
         elif use_gpu and gpu_free_gb >= 40.0:  # Other GPUs with decent memory
             # High GPU utilization: 100M positions per chunk
@@ -704,46 +798,69 @@ class MethylCentroid:
             memory_limit_gb = min(system_memory_available_gb * 0.7, 200.0)
             max_workers = 1
 
-            self.logger.info(f"Using high GPU optimization: {chunk_size_positions:,} positions per chunk")
+            self.logger.info(
+                f"Using high GPU optimization: {chunk_size_positions:,} positions per chunk"
+            )
 
         else:
             # Fallback to memory-optimized chunking for CPU or limited GPU
             # Dynamic chunk size calculation based on context and available memory
             context_base_chunks = {
-                'CG': 50_000_000,   # 50M positions - leverage MethylUtils memory efficiency
-                'CHG': 25_000_000,  # 25M positions - medium density
-                'CHH': 10_000_000   # 10M positions - high density, moderate chunks
+                "CG": 50_000_000,  # 50M positions - leverage MethylUtils memory efficiency
+                "CHG": 25_000_000,  # 25M positions - medium density
+                "CHH": 10_000_000,  # 10M positions - high density, moderate chunks
             }
 
-            base_chunk_size = context_base_chunks.get(self.ctx, 20_000_000)  # Default 20M
+            base_chunk_size = context_base_chunks.get(
+                self.ctx, 20_000_000
+            )  # Default 20M
 
             # Memory-based chunk size adjustment using MethylUtils memory calculations
-            memory_limit_gb = system_memory_available_gb * 0.6  # Reserve 40% for other operations
+            memory_limit_gb = (
+                system_memory_available_gb * 0.6
+            )  # Reserve 40% for other operations
 
             # Calculate optimal chunk size based on memory per position estimates
             # Use estimated bytes per position from loaded samples if available, otherwise conservative default
-            if hasattr(self, 'sample_cache') and self.sample_cache._estimated_bytes_per_sample is not None:
-                memory_per_position_kb = self.sample_cache._estimated_bytes_per_sample / 1024  # Convert bytes to KB
+            if (
+                hasattr(self, "sample_cache")
+                and self.sample_cache._estimated_bytes_per_sample is not None
+            ):
+                memory_per_position_kb = (
+                    self.sample_cache._estimated_bytes_per_sample / 1024
+                )  # Convert bytes to KB
             else:
-                memory_per_position_kb = 0.15  # Conservative default estimate including overhead
+                memory_per_position_kb = (
+                    0.15  # Conservative default estimate including overhead
+                )
 
-            max_positions_by_memory = int((memory_limit_gb * 1024 * 1024) / memory_per_position_kb)
+            max_positions_by_memory = int(
+                (memory_limit_gb * 1024 * 1024) / memory_per_position_kb
+            )
 
             chunk_size_positions = min(base_chunk_size, max_positions_by_memory)
-            max_workers = max(1, int(system_memory_available_gb / 50))  # 1 worker per 50GB RAM
+            max_workers = max(
+                1, int(system_memory_available_gb / 50)
+            )  # 1 worker per 50GB RAM
 
         # Ensure reasonable minimums and maximums
-        chunk_size_positions = max(1_000_000, min(chunk_size_positions, 500_000_000))  # 1M to 500M
-        memory_limit_gb = max(10.0, min(memory_limit_gb, system_memory_available_gb * 0.9))
+        chunk_size_positions = max(
+            1_000_000, min(chunk_size_positions, 500_000_000)
+        )  # 1M to 500M
+        memory_limit_gb = max(
+            10.0, min(memory_limit_gb, system_memory_available_gb * 0.9)
+        )
         max_workers = max(1, min(max_workers, 8))  # 1-8 workers
 
         return {
-            'chunk_size_positions': chunk_size_positions,
-            'max_workers': max_workers,
-            'memory_limit_gb': memory_limit_gb
+            "chunk_size_positions": chunk_size_positions,
+            "max_workers": max_workers,
+            "memory_limit_gb": memory_limit_gb,
         }
 
-    def _load_sample_for_alignment_memory_aware(self, sample_path: Path, sample_idx: int) -> Optional['MethylSample']:
+    def _load_sample_for_alignment_memory_aware(
+        self, sample_path: Path, sample_idx: int
+    ) -> Optional["MethylSample"]:
         """
         Load a sample for alignment with memory-aware caching.
 
@@ -757,11 +874,13 @@ class MethylCentroid:
         try:
             # Check memory before loading
             memory_info = self.memory_manager.get_memory_usage()
-            available_gb = memory_info.get('available_gb', 350)
+            available_gb = memory_info.get("available_gb", 350)
 
             # If memory is getting low, clear cache to free up space
             if available_gb < 50:  # Less than 50GB available
-                self.logger.debug(f"Low memory detected ({available_gb:.1f}GB), clearing cache")
+                self.logger.debug(
+                    f"Low memory detected ({available_gb:.1f}GB), clearing cache"
+                )
                 self._clear_sample_cache()
 
             # Load sample with memory mapping for large files
@@ -782,12 +901,16 @@ class MethylCentroid:
 
                 # Log sample statistics for first few samples (only in verbose mode to avoid tqdm interference)
                 if sample_idx < 5 and self.verbose:
-                    self.logger.debug(f"Sample {sample_idx}: {len(sample.pos):,} positions, "
-                                    f"coverage: {coverage[valid_mask].mean():.1f}")
+                    self.logger.debug(
+                        f"Sample {sample_idx}: {len(sample.pos):,} positions, "
+                        f"coverage: {coverage[valid_mask].mean():.1f}"
+                    )
 
                 return sample
             else:
-                self.logger.warning(f"Sample {sample_path.name} has no positions with coverage")
+                self.logger.warning(
+                    f"Sample {sample_path.name} has no positions with coverage"
+                )
                 return None
 
         except Exception as e:
@@ -796,12 +919,10 @@ class MethylCentroid:
 
     @property
     def cache_enabled(self) -> bool:
-        
         return self._cache_enabled
-    
+
     @cache_enabled.setter
     def cache_enabled(self, value: bool) -> None:
-
         if not isinstance(value, bool):
             raise TypeError("cache_enabled must be a boolean")
 
@@ -814,7 +935,9 @@ class MethylCentroid:
         else:
             self.logger.info("Sample caching enabled")
 
-    def _load_sample_for_alignment_memory_aware(self, sample_path: Path, sample_idx: int) -> Optional['MethylSample']:
+    def _load_sample_for_alignment_memory_aware(
+        self, sample_path: Path, sample_idx: int
+    ) -> Optional["MethylSample"]:
         """
         Load a sample for alignment with memory-aware caching.
 
@@ -828,11 +951,13 @@ class MethylCentroid:
         try:
             # Check memory before loading
             memory_info = self.memory_manager.get_memory_usage()
-            available_gb = memory_info.get('available_gb', 350)
+            available_gb = memory_info.get("available_gb", 350)
 
             # If memory is getting low, clear cache to free up space
             if available_gb < 50:  # Less than 50GB available
-                self.logger.debug(f"Low memory detected ({available_gb:.1f}GB), clearing cache")
+                self.logger.debug(
+                    f"Low memory detected ({available_gb:.1f}GB), clearing cache"
+                )
                 self._clear_sample_cache()
 
             # Load sample with memory mapping for large files
@@ -853,12 +978,16 @@ class MethylCentroid:
 
                 # Log sample statistics for first few samples (only in verbose mode to avoid tqdm interference)
                 if sample_idx < 5 and self.verbose:
-                    self.logger.debug(f"Sample {sample_idx}: {len(sample.pos):,} positions, "
-                                    f"coverage: {coverage[valid_mask].mean():.1f}")
+                    self.logger.debug(
+                        f"Sample {sample_idx}: {len(sample.pos):,} positions, "
+                        f"coverage: {coverage[valid_mask].mean():.1f}"
+                    )
 
                 return sample
             else:
-                self.logger.warning(f"Sample {sample_path.name} has no positions with coverage")
+                self.logger.warning(
+                    f"Sample {sample_path.name} has no positions with coverage"
+                )
                 return None
 
         except Exception as e:
@@ -868,21 +997,23 @@ class MethylCentroid:
     def _monitor_memory_during_loading(self):
         """Monitor memory usage during sample loading and take corrective actions."""
         memory_info = self.memory_manager.get_memory_usage()
-        used_percent = memory_info.get('percent_used', 0)
+        used_percent = memory_info.get("percent_used", 0)
 
         # If memory usage is too high, clear cache
         if used_percent > 85:
-            self.logger.warning(f"High memory usage detected ({used_percent:.1f}%), clearing cache")
+            self.logger.warning(
+                f"High memory usage detected ({used_percent:.1f}%), clearing cache"
+            )
             self._clear_sample_cache()
 
         # Force garbage collection periodically
         import gc
+
         collected = gc.collect()
         if collected > 0:
             self.logger.debug(f"Garbage collection freed {collected} objects")
 
     def compute_centroid(self, extended: bool = False):
-
         if self._centroid is None or len(self._centroid) == 0:
             print("No samples added")
             return np.array([], dtype=get_methyl_dtype(extended))
@@ -902,12 +1033,9 @@ class MethylCentroid:
             centroid_data = centroid_sample.to_numpy(extended=False)
             return centroid_data
 
-    def save_centroid(self,
-        output_dir: str,
-        centroid_data=None,
-        extended: bool = False
+    def save_centroid(
+        self, output_dir: str, centroid_data=None, extended: bool = False
     ) -> Path:
-
         if centroid_data is None:
             centroid_data = self.compute_centroid(extended=extended)
 
@@ -917,9 +1045,10 @@ class MethylCentroid:
 
         # Get active sample paths (those currently in the centroid)
         active_sample_paths = self._get_active_sample_paths()
-        
+
         # Prepare metadata for H5 file
         from datetime import datetime
+
         metadata = {
             "laboratory": self.laboratory,
             "disease": self.disease,
@@ -938,20 +1067,30 @@ class MethylCentroid:
         # Create MethylSample from centroid data with metadata
         # centroid_data is a structured numpy array, convert to DataFrame
         import pandas as pd
-        from methyl_utils import MethylSample, MethylBasicCentroid, MethylExtendedCentroid
-        
+        from methyl_utils import (
+            MethylSample,
+            MethylBasicCentroid,
+            MethylExtendedCentroid,
+        )
+
         # Convert structured array to DataFrame
         if isinstance(centroid_data, np.ndarray) and centroid_data.dtype.names:
             # Structured array - convert field by field
             if len(centroid_data) > 0:
-                df = pd.DataFrame({name: centroid_data[name] for name in centroid_data.dtype.names})
+                df = pd.DataFrame(
+                    {name: centroid_data[name] for name in centroid_data.dtype.names}
+                )
             else:
                 # Empty structured array - create empty DataFrame with expected columns
                 df = pd.DataFrame({name: [] for name in centroid_data.dtype.names})
         else:
             # Already a DataFrame or regular array
-            df = pd.DataFrame(centroid_data) if not isinstance(centroid_data, pd.DataFrame) else centroid_data
-        
+            df = (
+                pd.DataFrame(centroid_data)
+                if not isinstance(centroid_data, pd.DataFrame)
+                else centroid_data
+            )
+
         # Determine which class to use based on available columns
         if "N" in df.columns:
             if set(MethylExtendedCentroid._required_stats).issubset(df.columns):
@@ -968,12 +1107,11 @@ class MethylCentroid:
         if self.enable_binned_stats and self._binned_stats is not None:
             try:
                 methyl_sample.set_binned_stats(
-                    self._binned_stats["bin_edges"],
-                    self._binned_stats["bin_counts"]
+                    self._binned_stats["bin_edges"], self._binned_stats["bin_counts"]
                 )
             except Exception as e:
                 self.logger.warning(f"Failed to attach binned stats to centroid: {e}")
-        
+
         # Save using MethylSample
         output_path = Path(output_dir)
 
@@ -990,9 +1128,11 @@ class MethylCentroid:
             # so we'll rely on the mkdir success and existence check
         except PermissionError as e:
             # Provide more specific error for permission issues
-            raise OSError(f"Permission denied creating output directory {output_path}. "
-                         f"Please ensure the parent directory is writable: {output_path.parent}. "
-                         f"Original error: {e}")
+            raise OSError(
+                f"Permission denied creating output directory {output_path}. "
+                f"Please ensure the parent directory is writable: {output_path.parent}. "
+                f"Original error: {e}"
+            )
         except Exception as e:
             raise OSError(f"Cannot create output directory {output_path}: {e}")
 
@@ -1007,18 +1147,19 @@ class MethylCentroid:
         self.centroid = centroid_path
 
         return self.centroid
-    
-    
-    def load_centroid(self, centroid_path: Union[str, Path]) -> 'MethylSample':
 
+    def load_centroid(self, centroid_path: Union[str, Path]) -> "MethylSample":
         from methyl_utils import MethylSample
+
         methyl_sample = MethylSample.load_from_h5(centroid_path)
 
         # Ensure arrays are NumPy arrays
         # Use to_cpu() method instead of manual .get() calls
         return methyl_sample.to_cpu()
 
-    def load_sample(self, sample_path: Union[str, Path], memory_map: bool = True) -> 'MethylSample':
+    def load_sample(
+        self, sample_path: Union[str, Path], memory_map: bool = True
+    ) -> "MethylSample":
         """
         Load sample with optimized memory management.
 
@@ -1060,7 +1201,7 @@ class MethylCentroid:
             self.logger.error(f"Failed to load sample {sample_path}: {e}")
             raise
 
-    def _ensure_numpy_arrays(self, methyl_sample: 'MethylSample') -> 'MethylSample':
+    def _ensure_numpy_arrays(self, methyl_sample: "MethylSample") -> "MethylSample":
         """
         Convert MethylSample arrays from CuPy to NumPy if needed.
 
@@ -1077,8 +1218,9 @@ class MethylCentroid:
         return methyl_sample.to_cpu()
 
     def calculate_centroid(self, output_dir: str, extended: bool = False) -> Path:
-
-        print(f"Adding {len(self.samples) + len(self.add_samples)} samples for {self.chrom}-{self.ctx}")
+        print(
+            f"Adding {len(self.samples) + len(self.add_samples)} samples for {self.chrom}-{self.ctx}"
+        )
 
         # Ensure output directory exists before processing
         output_path = Path(output_dir)
@@ -1092,9 +1234,11 @@ class MethylCentroid:
                 raise OSError(f"Failed to create output directory: {output_path}")
             # Note: os.access may not work correctly in container environments
         except PermissionError as e:
-            raise OSError(f"Permission denied creating output directory {output_path}. "
-                         f"Please ensure the parent directory is writable: {output_path.parent}. "
-                         f"Original error: {e}")
+            raise OSError(
+                f"Permission denied creating output directory {output_path}. "
+                f"Please ensure the parent directory is writable: {output_path.parent}. "
+                f"Original error: {e}"
+            )
         except Exception as e:
             raise OSError(f"Cannot create output directory {output_path}: {e}")
 
@@ -1103,7 +1247,9 @@ class MethylCentroid:
 
         # Check if any samples were successfully added
         if len(self.active_samples) == 0:
-            raise RuntimeError("Failed to compute centroid: no samples were successfully added")
+            raise RuntimeError(
+                "Failed to compute centroid: no samples were successfully added"
+            )
 
         # Compute and save centroid
         if self.enable_binned_stats:
@@ -1111,15 +1257,19 @@ class MethylCentroid:
         else:
             centroid = self.compute_centroid(extended=extended)
         if centroid is None or len(centroid) == 0:
-            raise RuntimeError("Failed to compute centroid: no samples were successfully added")
+            raise RuntimeError(
+                "Failed to compute centroid: no samples were successfully added"
+            )
 
         centroid_path = self.save_centroid(output_dir, centroid, extended=extended)
         if centroid_path is None:
             raise RuntimeError("Failed to save centroid: no valid data to save")
-        
+
         return centroid_path
 
-    def compute_centroid_chunked(self, extended: bool = False, chunk_size_positions: int = 2_000_000) -> Optional[np.ndarray]:
+    def compute_centroid_chunked(
+        self, extended: bool = False, chunk_size_positions: int = 2_000_000
+    ) -> Optional[np.ndarray]:
         """
         Compute centroid using chunked processing for memory efficiency.
 
@@ -1134,11 +1284,15 @@ class MethylCentroid:
         Returns:
             Centroid data as numpy array, or None if computation fails
         """
-        with self.performance_profiler.profile_operation("chunked_centroid_computation"):
+        with self.performance_profiler.profile_operation(
+            "chunked_centroid_computation"
+        ):
             # Use MethylUtils GPU cleanup for safe resource management
             memory_manager = get_memory_manager()
 
-            self.logger.info(f"Computing centroid using chunked processing (chunk size: {chunk_size_positions:,} positions)")
+            self.logger.info(
+                f"Computing centroid using chunked processing (chunk size: {chunk_size_positions:,} positions)"
+            )
 
             # Get all unique positions across all samples
             all_positions = set()
@@ -1151,7 +1305,9 @@ class MethylCentroid:
             all_positions = set(centroid_positions)
 
             total_positions = len(all_positions)
-            self.logger.info(f"Found {total_positions:,} unique positions across all samples")
+            self.logger.info(
+                f"Found {total_positions:,} unique positions across all samples"
+            )
 
             if total_positions == 0:
                 self.logger.warning("No positions found in samples")
@@ -1163,7 +1319,9 @@ class MethylCentroid:
             # Process in chunks
             chunk_results = []
             chunk_bin_counts = []
-            total_chunks = (total_positions + chunk_size_positions - 1) // chunk_size_positions
+            total_chunks = (
+                total_positions + chunk_size_positions - 1
+            ) // chunk_size_positions
 
             self.logger.info(f"Processing {total_chunks} chunks...")
 
@@ -1172,10 +1330,16 @@ class MethylCentroid:
                 end_pos = min(start_pos + chunk_size_positions, total_positions)
                 chunk_positions = sorted_positions[start_pos:end_pos]
 
-                with self.performance_profiler.profile_operation(f"chunk_{chunk_idx}_processing"):
-                    chunk_centroid = self._compute_centroid_for_positions(chunk_positions, extended)
+                with self.performance_profiler.profile_operation(
+                    f"chunk_{chunk_idx}_processing"
+                ):
+                    chunk_centroid = self._compute_centroid_for_positions(
+                        chunk_positions, extended
+                    )
                     if chunk_centroid is not None:
-                        if self.enable_binned_stats and isinstance(chunk_centroid, tuple):
+                        if self.enable_binned_stats and isinstance(
+                            chunk_centroid, tuple
+                        ):
                             centroid_part, bin_counts_part = chunk_centroid
                             if centroid_part is not None:
                                 chunk_results.append(centroid_part)
@@ -1195,7 +1359,9 @@ class MethylCentroid:
                 )
                 if isinstance(combined, tuple):
                     final_centroid, combined_bins = combined
-                    bin_edges = np.linspace(0.0, 1.0, self.binned_stats_bins + 1, dtype=np.float32)
+                    bin_edges = np.linspace(
+                        0.0, 1.0, self.binned_stats_bins + 1, dtype=np.float32
+                    )
                     self._binned_stats = {
                         "bin_edges": bin_edges,
                         "bin_counts": combined_bins,
@@ -1204,7 +1370,9 @@ class MethylCentroid:
                     final_centroid = combined
                     self._binned_stats = None
             else:
-                final_centroid = self._combine_chunked_centroids(chunk_results, extended)
+                final_centroid = self._combine_chunked_centroids(
+                    chunk_results, extended
+                )
 
             # Ensure GPU cleanup after chunked processing
             memory_manager.force_gpu_cleanup()
@@ -1212,7 +1380,9 @@ class MethylCentroid:
             self.logger.info("Chunked centroid computation completed")
             return final_centroid
 
-    def _compute_centroid_for_positions(self, positions: np.ndarray, extended: bool = False) -> Optional[np.ndarray]:
+    def _compute_centroid_for_positions(
+        self, positions: np.ndarray, extended: bool = False
+    ) -> Optional[np.ndarray]:
         """
         Compute centroid for a specific set of positions.
 
@@ -1240,19 +1410,25 @@ class MethylCentroid:
         bin_counts = None
         if self.enable_binned_stats:
             bin_dtype = np.uint16 if sample_count < 60000 else np.uint32
-            bin_counts = np.zeros((len(positions), self.binned_stats_bins), dtype=bin_dtype)
+            bin_counts = np.zeros(
+                (len(positions), self.binned_stats_bins), dtype=bin_dtype
+            )
 
         # Process each sample for these positions
         for sample_idx in range(sample_count):
             # Load sample directly instead of getting from aligner
-            sample_path = self.samples[sample_idx] if sample_idx < len(self.samples) else self.add_samples[sample_idx - len(self.samples)]
+            sample_path = (
+                self.samples[sample_idx]
+                if sample_idx < len(self.samples)
+                else self.add_samples[sample_idx - len(self.samples)]
+            )
             sample_data_obj = self.load_sample(sample_path)
-            
+
             # Align sample to target positions
             aligned_sample = sample_data_obj.align_to_positions(positions)
             if len(aligned_sample) == 0:
                 continue
-            
+
             # Convert to CPU first to ensure numpy arrays
             aligned_sample_cpu = aligned_sample.to_cpu()
             aligned_mC = np.asarray(aligned_sample_cpu.mC.values, dtype=np.uint32)
@@ -1261,24 +1437,28 @@ class MethylCentroid:
             # Accumulate
             mC_accum += aligned_mC
             uC_accum += aligned_uC
-            
+
             # Track per-position sample count (N) for min_samples filtering
             coverage = aligned_mC + aligned_uC
             N_accum += (coverage > 0).astype(np.uint32)
-            
+
             if extended or self.enable_binned_stats:
                 # Calculate methylation level for this sample
                 valid_positions = coverage > 0
                 if valid_positions.any():
                     methylation_level = np.zeros(len(positions), dtype=np.float32)
-                    methylation_level[valid_positions] = aligned_mC[valid_positions] / coverage[valid_positions]
+                    methylation_level[valid_positions] = (
+                        aligned_mC[valid_positions] / coverage[valid_positions]
+                    )
 
                     if extended:
                         Sx_accum += methylation_level
-                        Sx2_accum += methylation_level ** 2
+                        Sx2_accum += methylation_level**2
 
                     if self.enable_binned_stats and bin_counts is not None:
-                        bin_idx = np.floor(methylation_level * self.binned_stats_bins).astype(np.int32)
+                        bin_idx = np.floor(
+                            methylation_level * self.binned_stats_bins
+                        ).astype(np.int32)
                         bin_idx = np.clip(bin_idx, 0, self.binned_stats_bins - 1)
                         idxs = np.where(valid_positions)[0]
                         np.add.at(bin_counts, (idxs, bin_idx[idxs]), 1)
@@ -1296,29 +1476,35 @@ class MethylCentroid:
         # Create centroid data
         if extended:
             from methyl_utils import get_methyl_dtype
+
             dtype = get_methyl_dtype(extended=True)
             centroid_data = np.empty(np.sum(valid_positions), dtype=dtype)
 
-            centroid_data['pos'] = positions[valid_positions]
-            centroid_data['mC'] = mC_accum[valid_positions]
-            centroid_data['uC'] = uC_accum[valid_positions]
-            centroid_data['tnc'] = np.zeros(np.sum(valid_positions), dtype=np.uint8)  # Default context
-            centroid_data['N'] = N_accum[valid_positions]
-            centroid_data['Sx'] = Sx_accum[valid_positions]
-            centroid_data['Sx2'] = Sx2_accum[valid_positions]
+            centroid_data["pos"] = positions[valid_positions]
+            centroid_data["mC"] = mC_accum[valid_positions]
+            centroid_data["uC"] = uC_accum[valid_positions]
+            centroid_data["tnc"] = np.zeros(
+                np.sum(valid_positions), dtype=np.uint8
+            )  # Default context
+            centroid_data["N"] = N_accum[valid_positions]
+            centroid_data["Sx"] = Sx_accum[valid_positions]
+            centroid_data["Sx2"] = Sx2_accum[valid_positions]
             # Extended fields would be computed separately if needed
 
         else:
             from methyl_utils import get_methyl_dtype
+
             dtype = get_methyl_dtype(extended=False)
             centroid_data = np.empty(np.sum(valid_positions), dtype=dtype)
 
-            centroid_data['pos'] = positions[valid_positions]
-            centroid_data['mC'] = mC_accum[valid_positions]
-            centroid_data['uC'] = uC_accum[valid_positions]
-            centroid_data['tnc'] = np.zeros(np.sum(valid_positions), dtype=np.uint8)  # Default context
+            centroid_data["pos"] = positions[valid_positions]
+            centroid_data["mC"] = mC_accum[valid_positions]
+            centroid_data["uC"] = uC_accum[valid_positions]
+            centroid_data["tnc"] = np.zeros(
+                np.sum(valid_positions), dtype=np.uint8
+            )  # Default context
             # Use actual per-position N (number of samples that contributed to each position)
-            centroid_data['N'] = N_accum[valid_positions]
+            centroid_data["N"] = N_accum[valid_positions]
 
         if self.enable_binned_stats and bin_counts is not None:
             bin_counts = bin_counts[valid_positions]
@@ -1330,7 +1516,7 @@ class MethylCentroid:
         self,
         chunk_results: List[np.ndarray],
         extended: bool = False,
-        bin_counts: Optional[List[np.ndarray]] = None
+        bin_counts: Optional[List[np.ndarray]] = None,
     ) -> Optional[np.ndarray]:
         """
         Combine centroid results from multiple chunks.
@@ -1352,7 +1538,7 @@ class MethylCentroid:
                 combined_bins = np.concatenate(bin_counts)
 
             # Sort by position
-            sort_idx = np.argsort(combined_centroid['pos'])
+            sort_idx = np.argsort(combined_centroid["pos"])
             combined_centroid = combined_centroid[sort_idx]
             if combined_bins is not None:
                 combined_bins = combined_bins[sort_idx]
@@ -1366,7 +1552,9 @@ class MethylCentroid:
             self.logger.error(f"Failed to combine chunked centroids: {e}")
             return None
 
-    def _load_sample(self, sample_path: Path) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _load_sample(
+        self, sample_path: Path
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Load sample with intelligent caching and memory management.
 
@@ -1379,7 +1567,7 @@ class MethylCentroid:
         # Use intelligent cache if enabled
         if self.cache_enabled:
             # Define loader function for cache
-            def sample_loader(path: Path) -> 'MethylSample':
+            def sample_loader(path: Path) -> "MethylSample":
                 return self.load_sample(path, memory_map=True)
 
             cached_sample = self.sample_cache.get(sample_path, sample_loader)
@@ -1387,27 +1575,47 @@ class MethylCentroid:
                 # Ensure sample is on CPU and get numpy arrays
                 cached_sample = cached_sample.to_cpu()
                 # Extract sorted arrays from cached MethylSample
-                pos_vals = cached_sample.pos.values if hasattr(cached_sample.pos, 'values') else np.asarray(cached_sample.pos)
-                mC_vals = cached_sample.mC.values if hasattr(cached_sample.mC, 'values') else np.asarray(cached_sample.mC)
-                uC_vals = cached_sample.uC.values if hasattr(cached_sample.uC, 'values') else np.asarray(cached_sample.uC)
-                sort_idx = np.argsort(pos_vals)
-                return (
-                    pos_vals[sort_idx],
-                    mC_vals[sort_idx],
-                    uC_vals[sort_idx]
+                pos_vals = (
+                    cached_sample.pos.values
+                    if hasattr(cached_sample.pos, "values")
+                    else np.asarray(cached_sample.pos)
                 )
+                mC_vals = (
+                    cached_sample.mC.values
+                    if hasattr(cached_sample.mC, "values")
+                    else np.asarray(cached_sample.mC)
+                )
+                uC_vals = (
+                    cached_sample.uC.values
+                    if hasattr(cached_sample.uC, "values")
+                    else np.asarray(cached_sample.uC)
+                )
+                sort_idx = np.argsort(pos_vals)
+                return (pos_vals[sort_idx], mC_vals[sort_idx], uC_vals[sort_idx])
 
         # Fallback: load without caching
         try:
             methyl_sample = self.load_sample(sample_path, memory_map=True)
-            
+
             # Ensure sample is on CPU and get numpy arrays
             methyl_sample = methyl_sample.to_cpu()
-            
+
             # Get underlying numpy arrays from Series properties
-            pos_vals = methyl_sample.pos.values if hasattr(methyl_sample.pos, 'values') else np.asarray(methyl_sample.pos)
-            mC_vals = methyl_sample.mC.values if hasattr(methyl_sample.mC, 'values') else np.asarray(methyl_sample.mC)
-            uC_vals = methyl_sample.uC.values if hasattr(methyl_sample.uC, 'values') else np.asarray(methyl_sample.uC)
+            pos_vals = (
+                methyl_sample.pos.values
+                if hasattr(methyl_sample.pos, "values")
+                else np.asarray(methyl_sample.pos)
+            )
+            mC_vals = (
+                methyl_sample.mC.values
+                if hasattr(methyl_sample.mC, "values")
+                else np.asarray(methyl_sample.mC)
+            )
+            uC_vals = (
+                methyl_sample.uC.values
+                if hasattr(methyl_sample.uC, "values")
+                else np.asarray(methyl_sample.uC)
+            )
 
             # Sort by position
             sort_idx = np.argsort(pos_vals)
@@ -1426,36 +1634,33 @@ class MethylCentroid:
                 np.array([], dtype=np.uint32),
             )
 
-
-
-
-    def process_large_sample_chunked(self, sample_path: Path, chunk_size: int = 1_000_000) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
+    def process_large_sample_chunked(
+        self, sample_path: Path, chunk_size: int = 1_000_000
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         self.logger.info(f"Processing large sample {sample_path.name} in chunks")
 
         # Create a processing function for chunks
         def process_sample_chunk(chunk_data, **kwargs):
-    
-            pos = chunk_data.get('pos', np.array([]))
-            mC = chunk_data.get('mC', np.array([]))
-            uC = chunk_data.get('uC', np.array([]))
+            pos = chunk_data.get("pos", np.array([]))
+            mC = chunk_data.get("mC", np.array([]))
+            uC = chunk_data.get("uC", np.array([]))
 
             # Filter for valid positions (some coverage)
             if len(mC) > 0 and len(uC) > 0:
                 coverage = mC + uC
                 valid_mask = coverage >= self.min_coverage
                 return {
-                    'pos': pos[valid_mask],
-                    'mC': mC[valid_mask],
-                    'uC': uC[valid_mask],
-                    'positions_processed': np.sum(valid_mask)
+                    "pos": pos[valid_mask],
+                    "mC": mC[valid_mask],
+                    "uC": uC[valid_mask],
+                    "positions_processed": np.sum(valid_mask),
                 }
             else:
                 return {
-                    'pos': np.array([], dtype=np.uint32),
-                    'mC': np.array([], dtype=np.uint32),
-                    'uC': np.array([], dtype=np.uint32),
-                    'positions_processed': 0
+                    "pos": np.array([], dtype=np.uint32),
+                    "mC": np.array([], dtype=np.uint32),
+                    "uC": np.array([], dtype=np.uint32),
+                    "positions_processed": 0,
                 }
 
         # Configure chunked processor for this sample
@@ -1466,7 +1671,7 @@ class MethylCentroid:
             sample_path,
             process_sample_chunk,
             self.output_dir / "temp_chunks",
-            cleanup_temp=True
+            cleanup_temp=True,
         )
 
         # Aggregate results from all chunks
@@ -1474,36 +1679,33 @@ class MethylCentroid:
         all_mC = []
         all_uC = []
 
-        for result in results.get('chunk_results', []):
-            if result.success and result.data['positions_processed'] > 0:
-                all_pos.append(result.data['pos'])
-                all_mC.append(result.data['mC'])
-                all_uC.append(result.data['uC'])
+        for result in results.get("chunk_results", []):
+            if result.success and result.data["positions_processed"] > 0:
+                all_pos.append(result.data["pos"])
+                all_mC.append(result.data["mC"])
+                all_uC.append(result.data["uC"])
 
         if all_pos:
             # Concatenate all chunks
             return (
                 np.concatenate(all_pos),
                 np.concatenate(all_mC),
-                np.concatenate(all_uC)
+                np.concatenate(all_uC),
             )
         else:
             # Return empty arrays if no valid data
             return (
                 np.array([], dtype=np.uint32),
                 np.array([], dtype=np.uint32),
-                np.array([], dtype=np.uint32)
+                np.array([], dtype=np.uint32),
             )
 
-       
-
-
-
     def _backup_centroid(self, centroid_path: Path) -> Path:
         """Helper for atomic operations - preserved for future use."""
         backup_path = centroid_path.with_suffix(".h5.bak")
         if centroid_path.exists():
             import shutil
+
             shutil.copy2(centroid_path, backup_path)
         return backup_path
 
@@ -1511,6 +1713,7 @@ class MethylCentroid:
         """Helper for atomic operations - preserved for future use."""
         if backup_path.exists():
             import shutil
+
             if centroid_path.exists():
                 centroid_path.unlink()
             shutil.move(backup_path, centroid_path)
@@ -1521,7 +1724,6 @@ class MethylCentroid:
             backup_path.unlink()
 
     def _backup_centroid(self, centroid_path: Path) -> Path:
-
         backup_path = centroid_path.with_suffix(".h5.bak")
         if centroid_path.exists():
             import shutil
@@ -1530,7 +1732,6 @@ class MethylCentroid:
         return backup_path
 
     def _restore_centroid(self, centroid_path: Path, backup_path: Path):
-
         if backup_path.exists():
             import shutil
 
@@ -1539,66 +1740,75 @@ class MethylCentroid:
             shutil.move(backup_path, centroid_path)
 
     def _cleanup_backup(self, backup_path: Path):
-
         if backup_path.exists():
             backup_path.unlink()
-
-
 
     def _clear_sample_cache(self):
         """Clear the intelligent sample cache."""
-        if hasattr(self.sample_cache, 'clear'):
+        if hasattr(self.sample_cache, "clear"):
             cache_stats = self.sample_cache.get_stats()
-            self.logger.info(f"Clearing sample cache: {cache_stats['cached_samples']} samples, "
-                           f"{cache_stats['memory_usage_mb']:.1f}MB memory")
+            self.logger.info(
+                f"Clearing sample cache: {cache_stats['cached_samples']} samples, "
+                f"{cache_stats['memory_usage_mb']:.1f}MB memory"
+            )
             self.sample_cache.clear()
 
             # Force garbage collection
             import gc
+
             gc.collect()
-            
+
             # Report memory after clearing
             memory_after_gb = psutil.virtual_memory().used / (1024**3)
             self.logger.info(f"Memory after cache clear: {memory_after_gb:.1f}GB")
 
     def _get_memory_usage_info(self) -> dict:
-        
         memory_info = self.memory_manager.get_memory_usage()
         return {
             "total_gb": memory_info.get("total_gb", 0),
             "available_gb": memory_info.get("available_gb", 0),
             "used_gb": memory_info.get("used_gb", 0),
             "percent_used": memory_info.get("percent_used", 0),
-            "cache_stats": self.sample_cache.get_stats() if hasattr(self.sample_cache, 'get_stats') else {"cached_samples": 0}
+            "cache_stats": self.sample_cache.get_stats()
+            if hasattr(self.sample_cache, "get_stats")
+            else {"cached_samples": 0},
         }
 
     def _prepare_for_gpu_processing(self):
-
         memory_info = self._get_memory_usage_info()
 
         # If memory usage is high (>80%), clear the sample cache
         if memory_info["percent_used"] > 80:
-            self.logger.info("High memory usage detected, clearing sample cache for processing...")
+            self.logger.info(
+                "High memory usage detected, clearing sample cache for processing..."
+            )
             self._clear_sample_cache()
 
         # GPU memory pressure handling with automatic CPU fallback
         if self._using_gpu:
             try:
                 from scripts.gpu_memory_utils import GPUMemoryUtils
+
                 if GPUMemoryUtils.is_memory_pressure_high(threshold_percent=85.0):
-                    self.logger.warning("GPU memory pressure detected, attempting cleanup...")
+                    self.logger.warning(
+                        "GPU memory pressure detected, attempting cleanup..."
+                    )
                     GPUMemoryUtils.cleanup_gpu_memory(aggressive=True)
 
                     # Check if cleanup helped
                     if GPUMemoryUtils.is_memory_pressure_high(threshold_percent=90.0):
-                        self.logger.warning("GPU memory pressure persists, falling back to CPU processing")
+                        self.logger.warning(
+                            "GPU memory pressure persists, falling back to CPU processing"
+                        )
                         self._fallback_to_cpu_processing()
                         self._gpu_memory_pressure_detected = True
                     else:
                         self.logger.info("GPU memory pressure alleviated after cleanup")
             except ImportError:
                 # GPU memory utilities not available, check for basic GPU memory issues
-                self.logger.debug("GPU memory utilities not available, monitoring basic GPU usage")
+                self.logger.debug(
+                    "GPU memory utilities not available, monitoring basic GPU usage"
+                )
                 self._check_gpu_memory_fallback()
         else:
             self.logger.debug("Using CPU processing mode")
@@ -1607,6 +1817,7 @@ class MethylCentroid:
         """Basic GPU memory monitoring when advanced utilities aren't available"""
         try:
             import cupy as cp
+
             # Check if we can allocate a small test array
             test_array = cp.zeros((1000, 1000), dtype=cp.float32)
             del test_array
@@ -1621,17 +1832,19 @@ class MethylCentroid:
         if not self._using_gpu:
             return  # Already using CPU
 
-        self.logger.info("Switching to CPU processing mode for reliability with large datasets")
+        self.logger.info(
+            "Switching to CPU processing mode for reliability with large datasets"
+        )
         self._using_gpu = False
 
         # Reinitialize chunked processor with dynamic CPU parameters
         try:
             cpu_params = self._calculate_chunked_processor_params(use_gpu=False)
             self.chunked_processor = ChunkedGenomicProcessor(
-                chunk_size_positions=cpu_params['chunk_size_positions'],
-                max_workers=cpu_params['max_workers'],
+                chunk_size_positions=cpu_params["chunk_size_positions"],
+                max_workers=cpu_params["max_workers"],
                 use_gpu=False,
-                memory_limit_gb=cpu_params['memory_limit_gb']
+                memory_limit_gb=cpu_params["memory_limit_gb"],
             )
 
             # Clear any GPU-based caches that might cause issues
@@ -1650,20 +1863,23 @@ class MethylCentroid:
         try:
             # Test if GPU is available again
             import cupy as cp
+
             test_array = cp.zeros((100, 100), dtype=cp.float32)
             del test_array
             cp.cuda.Device(0).synchronize()
 
-            self.logger.info("GPU memory pressure appears resolved, attempting to recover GPU usage")
+            self.logger.info(
+                "GPU memory pressure appears resolved, attempting to recover GPU usage"
+            )
             self._using_gpu = True
 
             # Reinitialize chunked processor with dynamic GPU parameters
             gpu_params = self._calculate_chunked_processor_params(use_gpu=True)
             self.chunked_processor = ChunkedGenomicProcessor(
-                chunk_size_positions=gpu_params['chunk_size_positions'],
-                max_workers=gpu_params['max_workers'],
+                chunk_size_positions=gpu_params["chunk_size_positions"],
+                max_workers=gpu_params["max_workers"],
                 use_gpu=True,
-                memory_limit_gb=gpu_params['memory_limit_gb']
+                memory_limit_gb=gpu_params["memory_limit_gb"],
             )
 
             self._gpu_memory_pressure_detected = False
@@ -1680,32 +1896,39 @@ class MethylCentroid:
             centroid_exists = self.centroid_path.exists()
 
             if centroid_exists:
-                print(f"Centroid file exists at {self.centroid_path}, rebuilding from samples")
+                print(
+                    f"Centroid file exists at {self.centroid_path}, rebuilding from samples"
+                )
 
         # Calculate extended centroid
         try:
-            # Note: extended=True computes stats like standard deviation which are useful 
+            # Note: extended=True computes stats like standard deviation which are useful
 
             centroid_path = self.calculate_centroid(str(self.output_dir), extended=True)
             if centroid_path is None:
-                raise RuntimeError("Failed to compute centroid: calculate_centroid returned None")
+                raise RuntimeError(
+                    "Failed to compute centroid: calculate_centroid returned None"
+                )
         except RuntimeError as e:
             error_msg = str(e).lower()
-            if "no samples" in error_msg or "failed to compute" in error_msg or "failed to save" in error_msg:
+            if (
+                "no samples" in error_msg
+                or "failed to compute" in error_msg
+                or "failed to save" in error_msg
+            ):
                 # Return empty results if no samples were added
                 return CentroidResults(
-                    final_centroid_path="",
-                    total_samples_processed=0
+                    final_centroid_path="", total_samples_processed=0
                 )
             raise
 
         # Update config with final state
         self.save_final_config()
-        
+
         # Return results
         return CentroidResults(
             final_centroid_path=str(centroid_path),
-            total_samples_processed=len(self.active_samples)
+            total_samples_processed=len(self.active_samples),
         )
 
     def save_final_config(self) -> None:
@@ -1730,7 +1953,7 @@ class MethylCentroid:
         # Update the original tracking lists
         self._original_samples = current_samples
         self._original_add_samples = []  # Clear add_samples after processing
-        
+
         # Save updated config
         config = self.get_config()
         config_path = self.output_dir / f"{self.chrom}-{self.ctx}_config.json"
@@ -1741,7 +1964,6 @@ class MethylCentroid:
         print(f"Total samples: {len(current_samples)}")
 
     def validate_centroid_calculation(self) -> bool:
-
         if self._centroid is None or len(self._centroid) == 0:
             print("No centroid data available for validation")
             return False
@@ -1758,7 +1980,7 @@ class MethylCentroid:
         mC_values = np.asarray(centroid_cpu.mC.values, dtype=np.uint32)
         uC_values = np.asarray(centroid_cpu.uC.values, dtype=np.uint32)
         N_values = np.asarray(centroid_cpu.N.values, dtype=np.uint32)
-        
+
         valid_pos = pos_values[valid_mask]
         centroid_mC = mC_values[valid_mask]
         centroid_uC = uC_values[valid_mask]
@@ -1784,12 +2006,15 @@ class MethylCentroid:
             if sample_path.exists():
                 try:
                     from methyl_utils import MethylSample
+
                     methyl_sample = MethylSample.load_from_h5(sample_path)
 
                     # Ensure arrays are NumPy arrays for validation operations
                     # Convert to CPU first to ensure numpy arrays
                     methyl_sample_cpu = methyl_sample.to_cpu()
-                    sample_pos = np.asarray(methyl_sample_cpu.pos.values, dtype=np.uint32)
+                    sample_pos = np.asarray(
+                        methyl_sample_cpu.pos.values, dtype=np.uint32
+                    )
                     sample_mC = np.asarray(methyl_sample_cpu.mC.values, dtype=np.uint32)
                     sample_uC = np.asarray(methyl_sample_cpu.uC.values, dtype=np.uint32)
 
@@ -1812,16 +2037,18 @@ class MethylCentroid:
         if np.any(valid_N):
             # Use np.where instead of np.divide with where parameter for CuPy compatibility
             valid_N_mask = direct_N[valid_N] > 0
-            with np.errstate(divide='ignore', invalid='ignore'):
+            with np.errstate(divide="ignore", invalid="ignore"):
                 direct_mC[valid_N] = np.where(
                     valid_N_mask,
-                    direct_mC[valid_N].astype(np.float64) / direct_N[valid_N].astype(np.float64),
-                    0.0
+                    direct_mC[valid_N].astype(np.float64)
+                    / direct_N[valid_N].astype(np.float64),
+                    0.0,
                 ).astype(np.uint32)
                 direct_uC[valid_N] = np.where(
                     valid_N_mask,
-                    direct_uC[valid_N].astype(np.float64) / direct_N[valid_N].astype(np.float64),
-                    0.0
+                    direct_uC[valid_N].astype(np.float64)
+                    / direct_N[valid_N].astype(np.float64),
+                    0.0,
                 ).astype(np.uint32)
 
             # Compare with centroid calculation
@@ -1849,12 +2076,11 @@ class MethylCentroid:
             print("No valid samples found for validation")
             return False
 
+
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(
-        description="Calculate methylation centroids"
-    )
+    parser = argparse.ArgumentParser(description="Calculate methylation centroids")
     parser.add_argument(
         "--data-dir", type=str, help="Data directory containing sample files"
     )
@@ -1867,7 +2093,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--min-coverage", type=int, default=4, help="Minimum coverage threshold"
     )
-
 
     args = parser.parse_args()
 
@@ -1889,15 +2114,12 @@ if __name__ == "__main__":
             chrom=args.chrom,
             ctx=args.ctx,
             output_dir=out_dir,
-
             min_coverage=args.min_coverage,
         )
 
         # Build extended centroid with methylation statistics
         results = mc.build_centroid()
-        print(
-            f"Completed {args.chrom}-{args.ctx}"
-        )
+        print(f"Completed {args.chrom}-{args.ctx}")
 
         # Save results
         json_file_path = out_dir / f"{args.chrom}-{args.ctx}.json"
@@ -1909,7 +2131,7 @@ if __name__ == "__main__":
     else:
         # Original default mode
         data_dir = Path("/home/ubuntu/Work/output_workflows/arabidopsis")
-        chroms = [str(i) for i in range(1, 6)] # + ["X"]
+        chroms = [str(i) for i in range(1, 6)]  # + ["X"]
         ctxs = ["CG", "CHG", "CHH"]
         csv_file = Path("/home/ubuntu/MethylCentroid/data/msh1drm2.csv")
         out_dir = data_dir / "centroids" / csv_file.stem
@@ -1941,7 +2163,6 @@ if __name__ == "__main__":
                     ctx=ctx,
                     output_dir=out_dir,
                     min_coverage=4,
-
                 )
                 # Build extended centroid with methylation statistics
                 results = mc.build_centroid()
@@ -1952,8 +2173,6 @@ if __name__ == "__main__":
                 with open(out_dir / f"{chrom}-{ctx}_config.json", "w") as f:
                     json.dump(config.model_dump(), f)
 
-
-
                 combination_stats = {
                     "chromosome": chrom,
                     "context": ctx,
@@ -1963,7 +2182,9 @@ if __name__ == "__main__":
 
                 # Add methylation statistics if available
                 # Check if centroid has methylation stats (extended centroid always has them)
-                if mc._centroid is not None and isinstance(mc._centroid, MethylExtendedCentroid):
+                if mc._centroid is not None and isinstance(
+                    mc._centroid, MethylExtendedCentroid
+                ):
                     # Create alignment stats from centroid
                     # Note: These methods may need to be implemented differently
                     # For now, skip stats collection as it's not critical
@@ -1979,8 +2200,6 @@ if __name__ == "__main__":
 
                     # Save individual group-level methylation statistics
                     stats_file_path = out_dir / f"{chrom}-{ctx}_methylation_stats.json"
-
-
 
                     simplified_stats = {
                         "timestamp": datetime.now().isoformat(),
@@ -2007,13 +2226,14 @@ if __name__ == "__main__":
                 batch_stats["individual_results"].append(combination_stats)
                 batch_stats["combinations_processed"] += 1
 
-
         # Save batch statistics
         batch_stats_file_path = out_dir / "batch_methylation_statistics.json"
         with open(batch_stats_file_path, "w") as f:
             json.dump(batch_stats, f, indent=2)
         print(f"\nSaved batch statistics to {batch_stats_file_path}")
-        print(f"Batch summary: {batch_stats['combinations_processed']} combinations processed")
+        print(
+            f"Batch summary: {batch_stats['combinations_processed']} combinations processed"
+        )
 
 
 def attach_binned_stats_to_centroid(
@@ -2022,7 +2242,7 @@ def attach_binned_stats_to_centroid(
     output_dir: Optional[Union[str, Path]] = None,
     chunk_size_positions: int = 2_000_000,
     sample_dirs: Optional[List[str]] = None,
-    verbose: bool = True
+    verbose: bool = True,
 ) -> Path:
     """
     Attach centroid-level binned stats by reprocessing sample files.
@@ -2039,7 +2259,9 @@ def attach_binned_stats_to_centroid(
     chrom = meta.get("chromosome")
     ctx = meta.get("context")
     if not chrom or not ctx:
-        raise ValueError("Centroid metadata missing chromosome/context; cannot attach binned stats")
+        raise ValueError(
+            "Centroid metadata missing chromosome/context; cannot attach binned stats"
+        )
 
     if sample_dirs is None:
         sample_dirs = meta.get("samples_used", [])
