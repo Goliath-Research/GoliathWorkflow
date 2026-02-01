@@ -283,11 +283,20 @@ def run_batch_processing(batch_config: BatchProcessingConfig) -> None:
                 base_data.pop('chrom', None)
                 base_data.pop('ctx', None)
 
-                combination_config = MethylCentroidConfig(
+                context_overrides = batch_config.context_overrides.get(ctx, {})
+                if context_overrides:
+                    context_overrides = dict(context_overrides)
+                    context_overrides.pop('chrom', None)
+                    context_overrides.pop('ctx', None)
+
+                combination_data = {
                     **base_data,
-                    chrom=chrom,
-                    ctx=ctx
-                )
+                    **context_overrides,
+                    "chrom": chrom,
+                    "ctx": ctx,
+                }
+
+                combination_config = MethylCentroidConfig(**combination_data)
 
                 # Create default processing config
                 processing_config = ProcessingConfig()

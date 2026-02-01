@@ -57,6 +57,7 @@ from methyl_utils import (
     ChunkedGenomicProcessor,
     # GPU detection
     is_gpu_available,
+    cleanup_gpu_memory,
     # Logging
     get_logger,
 )
@@ -94,6 +95,7 @@ class MethylCentroid:
         remove_samples: List[str] = None,
         min_coverage: int = 4,
         min_samples: int = 1,
+        max_sample_workers: Optional[int] = None,
         verbose: bool = True,
         enable_binned_stats: bool = False,
         binned_stats_bins: Optional[int] = 32,
@@ -185,6 +187,7 @@ class MethylCentroid:
 
         self.min_coverage = max(1, min_coverage)
         self.min_samples = max(1, int(min_samples))
+        self.max_sample_workers = max_sample_workers
         self.chrom = chrom
         self.ctx = ctx
         self.output_dir = (
@@ -296,6 +299,7 @@ class MethylCentroid:
             add_samples=config.add_samples,
             remove_samples=config.remove_samples,
             min_coverage=config.min_coverage,
+            max_sample_workers=getattr(config, "max_sample_workers", None),
             verbose=verbose_value,
             use_gpu=getattr(config, "use_gpu", None),
             # Metadata fields
@@ -322,6 +326,7 @@ class MethylCentroid:
             "remove_samples": self._original_remove_samples,
             "min_coverage": self.min_coverage,
             "use_gpu": self._gpu_enabled,
+            "max_sample_workers": self.max_sample_workers,
             # Metadata fields
             "laboratory": self.laboratory,
             "disease": self.disease,
@@ -486,6 +491,7 @@ class MethylCentroid:
                     methyl_sample.close()
                 except Exception as e:
                     self.logger.debug(f"Sample cleanup failed: {e}")
+            self._cleanup_gpu_after_sample()
 
         return True
 
@@ -510,6 +516,12 @@ class MethylCentroid:
             self._centroid = self._centroid.remove_sample(methyl_sample)
         except ValueError as e:
             raise RuntimeError(f"Failed to remove sample: {e}")
+        finally:
+            try:
+                methyl_sample.close()
+            except Exception as e:
+                self.logger.debug(f"Sample cleanup failed: {e}")
+            self._cleanup_gpu_after_sample()
 
         self.active_samples.remove(index)
 
@@ -686,10 +698,29 @@ class MethylCentroid:
             max_workers_by_memory, max_workers_by_cpu, len(all_samples)
         )
 
+        uncapped_batch_size = actual_batch_size
+        cap = None
+        cap_reason = None
+        if self.max_sample_workers is not None:
+            cap = self.max_sample_workers
+            cap_reason = "config"
+        elif self.ctx == "CHH":
+            cap = 2
+            cap_reason = "default for CHH"
+
+        if cap is not None:
+            actual_batch_size = min(actual_batch_size, cap)
+
+        cap_note = ""
+        if cap is not None and actual_batch_size < uncapped_batch_size:
+            cap_note = f", capped at {cap}"
+            if cap_reason == "default for CHH":
+                cap_note += " (default for CHH)"
+
         self.logger.info(
             f"Using {actual_batch_size} parallel workers "
             f"(memory: {available_memory_gb:.1f}GB available, "
-            f"context: {self.ctx}, multiplier: {context_multiplier:.1f})"
+            f"context: {self.ctx}, multiplier: {context_multiplier:.1f}{cap_note})"
         )
 
         # Load samples in parallel batches
@@ -703,6 +734,8 @@ class MethylCentroid:
             # Process completed tasks and add samples to position aligner
             for future in as_completed(future_to_sample):
                 sample_idx, sample_path = future_to_sample[future]
+                methyl_sample = None
+                builder = None
                 try:
                     result = future.result()
 
@@ -769,16 +802,8 @@ class MethylCentroid:
                                     )
                     else:
                         # Load the actual MethylSample and add it
-                        methyl_sample = None
-                        try:
-                            methyl_sample = self.load_sample(sample_path)
-                            self._centroid = self._centroid.add_sample(methyl_sample)
-                        finally:
-                            if methyl_sample is not None:
-                                try:
-                                    methyl_sample.close()
-                                except Exception as e:
-                                    self.logger.debug(f"Sample cleanup failed: {e}")
+                        methyl_sample = self.load_sample(sample_path)
+                        self._centroid = self._centroid.add_sample(methyl_sample)
                     success = True
 
                     if success:
@@ -801,6 +826,15 @@ class MethylCentroid:
                         f"Failed to process sample {sample_path.name}: {e}"
                     )
                     continue
+                finally:
+                    if methyl_sample is not None:
+                        try:
+                            methyl_sample.close()
+                        except Exception as e:
+                            self.logger.debug(f"Sample cleanup failed: {e}")
+                    if builder is not None:
+                        del builder
+                    self._cleanup_gpu_after_sample()
 
         self.logger.info(
             f"Parallel sample addition completed: {len(self.active_samples)} samples added"
@@ -1281,6 +1315,10 @@ class MethylCentroid:
         """
         # Use to_cpu() method which handles both GPU->CPU and Series->numpy conversion
         return methyl_sample.to_cpu()
+
+    def _cleanup_gpu_after_sample(self) -> None:
+        if self.use_gpu:
+            cleanup_gpu_memory()
 
     def calculate_centroid(self, output_dir: str, extended: bool = False) -> Path:
         print(

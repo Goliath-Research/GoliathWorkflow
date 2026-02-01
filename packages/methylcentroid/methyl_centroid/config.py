@@ -52,6 +52,11 @@ class MethylCentroidConfig(BaseModel):
         default=True,
         description="Enable GPU acceleration when available"
     )
+    max_sample_workers: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Maximum parallel workers for sample loading"
+    )
     verbose: bool = Field(
         default=True,
         description="Enable verbose output"
@@ -145,6 +150,10 @@ class BatchProcessingConfig(BaseModel):
     chromosomes: List[str] = Field(default_factory=list, description="Chromosomes to process")
     contexts: List[str] = Field(default_factory=lambda: ['CG', 'CHG', 'CHH'], description="Contexts to process")
     base_config: MethylCentroidConfig = Field(..., description="Base configuration template")
+    context_overrides: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Per-context overrides merged into base_config"
+    )
 
     # Batch-specific settings
     parallel_combinations: int = Field(default=1, description="Number of combinations to process in parallel")
