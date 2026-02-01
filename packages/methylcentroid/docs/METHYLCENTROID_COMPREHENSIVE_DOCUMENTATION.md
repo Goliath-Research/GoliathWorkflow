@@ -1,6 +1,570 @@
-# MethylCentroid: Comprehensive Documentation
+# MethylCentroid Comprehensive Documentation
 
-## Table of Contents
+## Contents
+1. Overview
+2. Data Model
+3. Centroid Computation
+4. Sufficient Statistics and Distributions
+5. Configuration
+6. CLI Usage
+7. GPU and Memory Management
+8. Output Files
+9. Examples
+10. Troubleshooting
+
+---
+
+## 1. Overview
+
+MethylCentroid computes representative methylation profiles (centroids) from
+sample cohorts. A centroid stores per-position methylation statistics in a
+compact HDF5 file for downstream analysis (DMP detection, classification, and
+validation).
+
+Key goals:
+- memory-efficient aggregation,
+- optional GPU acceleration,
+- incremental updates (add/remove samples),
+- extended statistics for distribution-aware comparisons.
+
+## 2. Data Model
+
+Each centroid position stores:
+- **pos**: genomic coordinate
+- **mC / uC**: averaged methylated / unmethylated counts
+- **N**: number of contributing samples
+- **Sx, Sx2**: sums of methylation fractions and squares
+- **log_x_sum, log_1_minus_x_sum**: log-sum statistics
+
+Extended centroids may also include:
+- **sum_cov, sum_cov2, sum_mC, sum_uC, sum_mC2, sum_uC2**
+- **Sx3, Sx4**
+- **count_zero, count_one**
+
+These are used for distributional modeling and selection downstream.
+
+## 3. Centroid Computation
+
+For N samples at position i:
+
+```
+Centroid_i = (1/N) × Σ(methylation_level_ij)
+```
+
+MethylCentroid builds the centroid via streaming sample updates, accumulating
+the sufficient statistics listed above. Optional chunked processing is used
+for large genomes (e.g., CHH).
+
+## 4. Sufficient Statistics and Distributions
+
+The centroid stores sufficient statistics for:
+- **Normal** (mean/variance via Sx, Sx2)
+- **Beta** (MLE via log-sums)
+- **Beta-Binomial** (coverage-aware overdispersion)
+- **Beta Mixture** (optional binned stats or masked refinement)
+
+Full derivations and formulas are documented in:
+
+📄 **`docs/METHYLCENTROID_DISTRIBUTIONS.tex`**
+
+## 5. Configuration
+
+### JSON Configuration Format
+
+```json
+{
+  "laboratory": "UCSF",
+  "disease": "Breast Cancer",
+  "group": "Tumor",
+  "batch": "2024-01",
+  "chrom": "1",
+  "ctx": "CG",
+  "output_dir": "./centroids",
+  "add_samples": [
+    "/data/samples/sample1",
+    "/data/samples/sample2"
+  ],
+  "min_coverage": 4,
+  "use_gpu": true,
+  "verbose": true
+}
+```
+
+### Parameters
+
+- **chrom** (str): Chromosome identifier (e.g., '1', 'X', 'MT')
+- **ctx** (str): Methylation context ('CG', 'CHG', 'CHH')
+- **output_dir** (str): Directory to save centroid files
+- **samples** (List[str], optional): Current samples in centroid (for updates)
+- **add_samples** (List[str], optional): New samples to add
+- **remove_samples** (List[str], optional): Samples to remove
+- **min_coverage** (int, default=4): Minimum $mC + uC$ for position inclusion
+- **use_gpu** (bool, default=True): Enable GPU acceleration when available
+- **verbose** (bool, default=True): Enable verbose logging
+- **laboratory/disease/group/batch**: Metadata fields saved with centroid
+
+## 6. CLI Usage
+
+```bash
+# Single config
+python -m methyl_centroid.cli --config config.json
+
+# Batch config
+python -m methyl_centroid.cli --batch-config batch_config.json
+
+# Force CPU
+python -m methyl_centroid.cli --config config.json --no-gpu
+```
+
+## 7. GPU and Memory Management
+
+MethylCentroid uses a memory-aware chunked pipeline for large contexts:
+- CPU mode: minimizes peak RAM via chunked processing.
+- GPU mode: uses CuPy when available; can be disabled via `use_gpu=false`.
+
+For CHH, consider:
+- higher `min_coverage`,
+- CPU mode (`use_gpu=false`) if GPU memory is shared or constrained.
+
+## 8. Output Files
+
+### Primary Outputs
+
+1. **`{chrom}-{ctx}.h5`**: HDF5 centroid with per-position statistics
+2. **`{chrom}-{ctx}_config.json`**: Updated configuration + metadata
+
+### Optional Binned Stats
+
+When `enable_binned_stats=True`, a `binned_stats` group is saved in HDF5 for
+mixture refinement (bin edges + per-position counts).
+
+## 9. Examples
+
+### Basic Centroid
+
+```python
+from methyl_centroid import MethylCentroid
+
+mc = MethylCentroid(
+    chrom='1',
+    ctx='CG',
+    output_dir='./centroids',
+    add_samples=['sample1', 'sample2'],
+    min_coverage=4
+)
+mc.build_centroid()
+```
+
+### Incremental Update
+
+```python
+mc = MethylCentroid(
+    chrom='1',
+    ctx='CG',
+    output_dir='./centroids',
+    samples=['sample1', 'sample2'],
+    add_samples=['sample3']
+)
+mc.build_centroid()
+```
+
+### Binned Stats (optional)
+
+```python
+mc = MethylCentroid(
+    chrom='1',
+    ctx='CG',
+    output_dir='./centroids',
+    add_samples=['sample1', 'sample2'],
+    enable_binned_stats=True,
+    binned_stats_bins=32
+)
+mc.build_centroid()
+```
+
+## 10. Troubleshooting
+
+- **GPU used unexpectedly**: set `use_gpu=false` in config or pass `--no-gpu`.
+- **Large CHH memory use**: increase `min_coverage` or run CPU mode.
+- **Missing sample files**: verify `{chrom}-{ctx}.h5` exists for each sample path.
+# MethylCentroid Comprehensive Documentation
+
+## Contents
+1. Overview
+2. Data Model
+3. Centroid Computation
+4. Sufficient Statistics and Distributions
+5. Configuration
+6. CLI Usage
+7. GPU and Memory Management
+8. Output Files
+9. Examples
+10. Troubleshooting
+
+---
+
+## 1. Overview
+
+MethylCentroid computes representative methylation profiles (centroids) from
+sample cohorts. A centroid stores per-position methylation statistics in a
+compact HDF5 file for downstream analysis (DMP detection, classification, and
+validation).
+
+Key goals:
+- memory-efficient aggregation,
+- optional GPU acceleration,
+- incremental updates (add/remove samples),
+- extended statistics for distribution-aware comparisons.
+
+## 2. Data Model
+
+Each centroid position stores:
+- **pos**: genomic coordinate
+- **mC / uC**: averaged methylated / unmethylated counts
+- **N**: number of contributing samples
+- **Sx, Sx2**: sums of methylation fractions and squares
+- **log_x_sum, log_1_minus_x_sum**: log-sum statistics
+
+Extended centroids may also include:
+- **sum_cov, sum_cov2, sum_mC, sum_uC, sum_mC2, sum_uC2**
+- **Sx3, Sx4**
+- **count_zero, count_one**
+
+These are used for distributional modeling and selection downstream.
+
+## 3. Centroid Computation
+
+For N samples at position i:
+
+```
+Centroid_i = (1/N) × Σ(methylation_level_ij)
+```
+
+MethylCentroid builds the centroid via streaming sample updates, accumulating
+the sufficient statistics listed above. Optional chunked processing is used
+for large genomes (e.g., CHH).
+
+## 4. Sufficient Statistics and Distributions
+
+The centroid stores sufficient statistics for:
+- **Normal** (mean/variance via Sx, Sx2)
+- **Beta** (MLE via log-sums)
+- **Beta-Binomial** (coverage-aware overdispersion)
+- **Beta Mixture** (optional binned stats or masked refinement)
+
+Full derivations and formulas are documented in:
+
+📄 **`docs/METHYLCENTROID_DISTRIBUTIONS.tex`**
+
+## 5. Configuration
+
+### JSON Configuration Format
+
+```json
+{
+  "laboratory": "UCSF",
+  "disease": "Breast Cancer",
+  "group": "Tumor",
+  "batch": "2024-01",
+  "chrom": "1",
+  "ctx": "CG",
+  "output_dir": "./centroids",
+  "add_samples": [
+    "/data/samples/sample1",
+    "/data/samples/sample2"
+  ],
+  "min_coverage": 4,
+  "use_gpu": true,
+  "verbose": true
+}
+```
+
+### Parameters
+
+- **chrom** (str): Chromosome identifier (e.g., '1', 'X', 'MT')
+- **ctx** (str): Methylation context ('CG', 'CHG', 'CHH')
+- **output_dir** (str): Directory to save centroid files
+- **samples** (List[str], optional): Current samples in centroid (for updates)
+- **add_samples** (List[str], optional): New samples to add
+- **remove_samples** (List[str], optional): Samples to remove
+- **min_coverage** (int, default=4): Minimum $mC + uC$ for position inclusion
+- **use_gpu** (bool, default=True): Enable GPU acceleration when available
+- **verbose** (bool, default=True): Enable verbose logging
+- **laboratory/disease/group/batch**: Metadata fields saved with centroid
+
+## 6. CLI Usage
+
+```bash
+# Single config
+python -m methyl_centroid.cli --config config.json
+
+# Batch config
+python -m methyl_centroid.cli --batch-config batch_config.json
+
+# Force CPU
+python -m methyl_centroid.cli --config config.json --no-gpu
+```
+
+## 7. GPU and Memory Management
+
+MethylCentroid uses a memory-aware chunked pipeline for large contexts:
+- CPU mode: minimizes peak RAM via chunked processing.
+- GPU mode: uses CuPy when available; can be disabled via `use_gpu=false`.
+
+For CHH, consider:
+- higher `min_coverage`,
+- CPU mode (`use_gpu=false`) if GPU memory is shared or constrained.
+
+## 8. Output Files
+
+### Primary Outputs
+
+1. **`{chrom}-{ctx}.h5`**: HDF5 centroid with per-position statistics
+2. **`{chrom}-{ctx}_config.json`**: Updated configuration + metadata
+
+### Optional Binned Stats
+
+When `enable_binned_stats=True`, a `binned_stats` group is saved in HDF5 for
+mixture refinement (bin edges + per-position counts).
+
+## 9. Examples
+
+### Basic Centroid
+
+```python
+from methyl_centroid import MethylCentroid
+
+mc = MethylCentroid(
+    chrom='1',
+    ctx='CG',
+    output_dir='./centroids',
+    add_samples=['sample1', 'sample2'],
+    min_coverage=4
+)
+mc.build_centroid()
+```
+
+### Incremental Update
+
+```python
+mc = MethylCentroid(
+    chrom='1',
+    ctx='CG',
+    output_dir='./centroids',
+    samples=['sample1', 'sample2'],
+    add_samples=['sample3']
+)
+mc.build_centroid()
+```
+
+### Binned Stats (optional)
+
+```python
+mc = MethylCentroid(
+    chrom='1',
+    ctx='CG',
+    output_dir='./centroids',
+    add_samples=['sample1', 'sample2'],
+    enable_binned_stats=True,
+    binned_stats_bins=32
+)
+mc.build_centroid()
+```
+
+## 10. Troubleshooting
+
+- **GPU used unexpectedly**: set `use_gpu=false` in config or pass `--no-gpu`.
+- **Large CHH memory use**: increase `min_coverage` or run CPU mode.
+- **Missing sample files**: verify `{chrom}-{ctx}.h5` exists for each sample path.
+
+## Contents
+1. Overview
+2. Data Model
+3. Centroid Computation
+4. Sufficient Statistics and Distributions
+5. Configuration
+6. CLI Usage
+7. GPU and Memory Management
+8. Output Files
+9. Examples
+10. Troubleshooting
+
+---
+
+## 1. Overview
+
+MethylCentroid computes representative methylation profiles (centroids) from
+sample cohorts. A centroid stores per-position methylation statistics in a
+compact HDF5 file for downstream analysis (DMP detection, classification, and
+validation).
+
+Key goals:
+- memory-efficient aggregation,
+- optional GPU acceleration,
+- incremental updates (add/remove samples),
+- extended statistics for distribution-aware comparisons.
+
+## 2. Data Model
+
+Each centroid position stores:
+- **pos**: genomic coordinate
+- **mC / uC**: averaged methylated / unmethylated counts
+- **N**: number of contributing samples
+- **Sx, Sx2**: sums of methylation fractions and squares
+- **log_x_sum, log_1_minus_x_sum**: log-sum statistics
+
+Extended centroids may also include:
+- **sum_cov, sum_cov2, sum_mC, sum_uC, sum_mC2, sum_uC2**
+- **Sx3, Sx4**
+- **count_zero, count_one**
+
+These are used for distributional modeling and selection downstream.
+
+## 3. Centroid Computation
+
+For N samples at position i:
+
+```
+Centroid_i = (1/N) × Σ(methylation_level_ij)
+```
+
+MethylCentroid builds the centroid via streaming sample updates, accumulating
+the sufficient statistics listed above. Optional chunked processing is used
+for large genomes (e.g., CHH).
+
+## 4. Sufficient Statistics and Distributions
+
+The centroid stores sufficient statistics for:
+- **Normal** (mean/variance via Sx, Sx2)
+- **Beta** (MLE via log-sums)
+- **Beta-Binomial** (coverage-aware overdispersion)
+- **Beta Mixture** (optional binned stats or masked refinement)
+
+Full derivations and formulas are documented in:
+
+📄 **`docs/METHYLCENTROID_DISTRIBUTIONS.tex`**
+
+## 5. Configuration
+
+### JSON Configuration Format
+
+```json
+{
+  "laboratory": "UCSF",
+  "disease": "Breast Cancer",
+  "group": "Tumor",
+  "batch": "2024-01",
+  "chrom": "1",
+  "ctx": "CG",
+  "output_dir": "./centroids",
+  "add_samples": [
+    "/data/samples/sample1",
+    "/data/samples/sample2"
+  ],
+  "min_coverage": 4,
+  "use_gpu": true,
+  "verbose": true
+}
+```
+
+### Parameters
+
+- **chrom** (str): Chromosome identifier (e.g., '1', 'X', 'MT')
+- **ctx** (str): Methylation context ('CG', 'CHG', 'CHH')
+- **output_dir** (str): Directory to save centroid files
+- **samples** (List[str], optional): Current samples in centroid (for updates)
+- **add_samples** (List[str], optional): New samples to add
+- **remove_samples** (List[str], optional): Samples to remove
+- **min_coverage** (int, default=4): Minimum $mC + uC$ for position inclusion
+- **use_gpu** (bool, default=True): Enable GPU acceleration when available
+- **verbose** (bool, default=True): Enable verbose logging
+- **laboratory/disease/group/batch**: Metadata fields saved with centroid
+
+## 6. CLI Usage
+
+```bash
+# Single config
+python -m methyl_centroid.cli --config config.json
+
+# Batch config
+python -m methyl_centroid.cli --batch-config batch_config.json
+
+# Force CPU
+python -m methyl_centroid.cli --config config.json --no-gpu
+```
+
+## 7. GPU and Memory Management
+
+MethylCentroid uses a memory-aware chunked pipeline for large contexts:
+- CPU mode: minimizes peak RAM via chunked processing.
+- GPU mode: uses CuPy when available; can be disabled via `use_gpu=false`.
+
+For CHH, consider:
+- higher `min_coverage`,
+- CPU mode (`use_gpu=false`) if GPU memory is shared or constrained.
+
+## 8. Output Files
+
+### Primary Outputs
+
+1. **`{chrom}-{ctx}.h5`**: HDF5 centroid with per-position statistics
+2. **`{chrom}-{ctx}_config.json`**: Updated configuration + metadata
+
+### Optional Binned Stats
+
+When `enable_binned_stats=True`, a `binned_stats` group is saved in HDF5 for
+mixture refinement (bin edges + per-position counts).
+
+## 9. Examples
+
+### Basic Centroid
+
+```python
+from methyl_centroid import MethylCentroid
+
+mc = MethylCentroid(
+    chrom='1',
+    ctx='CG',
+    output_dir='./centroids',
+    add_samples=['sample1', 'sample2'],
+    min_coverage=4
+)
+mc.build_centroid()
+```
+
+### Incremental Update
+
+```python
+mc = MethylCentroid(
+    chrom='1',
+    ctx='CG',
+    output_dir='./centroids',
+    samples=['sample1', 'sample2'],
+    add_samples=['sample3']
+)
+mc.build_centroid()
+```
+
+### Binned Stats (optional)
+
+```python
+mc = MethylCentroid(
+    chrom='1',
+    ctx='CG',
+    output_dir='./centroids',
+    add_samples=['sample1', 'sample2'],
+    enable_binned_stats=True,
+    binned_stats_bins=32
+)
+mc.build_centroid()
+```
+
+## 10. Troubleshooting
+
+- **GPU used unexpectedly**: set `use_gpu=false` in config or pass `--no-gpu`.
+- **Large CHH memory use**: increase `min_coverage` or run CPU mode.
+- **Missing sample files**: verify `{chrom}-{ctx}.h5` exists for each sample path.
+<!-- LEGACY CONTENT REMOVED (outlier detection docs removed)
 
 1. [Overview](#overview)
 2. [Mathematical Theory](#mathematical-theory)
@@ -467,12 +1031,7 @@ MethylCentroid(
     remove_samples: List[str] = None,
     outliers: List[str] = None,
     min_coverage: int = 4,
-    max_iterations: int = 10,
-    max_iterations_percentage: float = 0.1,
-    α: float = 0.05,
     min_samples: int = 3,
-    distance_metrics: List[DistanceMetric] = None,
-    min_metrics_agree: int = 1,
     verbose: bool = True,
     laboratory: str = None,
     disease: str = None,
@@ -491,13 +1050,8 @@ MethylCentroid(
 - **remove_samples** (List[str], optional): Samples to remove
 - **outliers** (List[str], optional): Previously identified outliers
 - **min_coverage** (int, default=4): Minimum $mC + uC$ for position inclusion
+- **min_samples** (int, default=3): Minimum number of samples for position inclusion in centroid
 - **use_gpu** (bool, default=True): Enable GPU acceleration when available
-- **max_iterations** (int, default=10): Maximum outlier removal iterations
-- **max_iterations_percentage** (float, default=0.1): Alternative iteration limit as percentage of samples
-- **α** (float, default=0.05): Significance level for outlier detection
-- **min_samples** (int, default=3): Minimum samples required for outlier removal
-- **distance_metrics** (List[DistanceMetric], optional): Metrics for outlier detection (default: None to disable outlier removal)
-- **min_metrics_agree** (int, default=1): Consensus threshold for multi-metric detection
 - **verbose** (bool, default=True): Enable verbose logging
 - **laboratory** (str, optional): Lab identifier for metadata
 - **disease** (str, optional): Disease/condition for metadata
@@ -1513,4 +2067,6 @@ $$
 
 **Last Updated**: October 2024  
 **Version**: 2.0.0
+
+-->
 
