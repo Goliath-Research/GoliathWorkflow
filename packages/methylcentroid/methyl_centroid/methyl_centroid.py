@@ -407,6 +407,7 @@ class MethylCentroid:
             print(f"Sample {sample} does not exist")
             return False
 
+        methyl_sample = None
         try:
             methyl_sample = self.load_sample(sample)
 
@@ -472,6 +473,12 @@ class MethylCentroid:
         except Exception as e:
             print(f"Error processing {sample}: {e}")
             return False
+        finally:
+            if methyl_sample is not None:
+                try:
+                    methyl_sample.close()
+                except Exception as e:
+                    self.logger.debug(f"Sample cleanup failed: {e}")
 
         return True
 
@@ -567,38 +574,48 @@ class MethylCentroid:
                 from methyl_utils import MethylSample
 
                 methyl_sample = MethylSample.load_from_h5(sample_path)
+                original_sample = methyl_sample
+                sample_cpu = None
+                try:
+                    # Ensure sample is on CPU (converts GPU arrays if needed)
+                    sample_cpu = methyl_sample.to_cpu()
+                    methyl_sample = sample_cpu
 
-                # Ensure sample is on CPU (converts GPU arrays if needed)
-                methyl_sample = methyl_sample.to_cpu()
+                    # Get underlying numpy arrays from Series properties
+                    # Ensure we get actual numpy arrays, not cupy arrays or Series
+                    pos_series = methyl_sample.pos
+                    mC_series = methyl_sample.mC
+                    uC_series = methyl_sample.uC
+                    # Access tnc from DataFrame directly (no property defined)
+                    tnc_series = methyl_sample._df["tnc"]
 
-                # Get underlying numpy arrays from Series properties
-                # Ensure we get actual numpy arrays, not cupy arrays or Series
-                pos_series = methyl_sample.pos
-                mC_series = methyl_sample.mC
-                uC_series = methyl_sample.uC
-                # Access tnc from DataFrame directly (no property defined)
-                tnc_series = methyl_sample._df["tnc"]
+                    # Extract numpy arrays from Series
+                    if hasattr(pos_series, "values"):
+                        pos = np.asarray(pos_series.values, dtype=np.uint32)
+                    else:
+                        pos = np.asarray(pos_series, dtype=np.uint32)
 
-                # Extract numpy arrays from Series
-                if hasattr(pos_series, "values"):
-                    pos = np.asarray(pos_series.values, dtype=np.uint32)
-                else:
-                    pos = np.asarray(pos_series, dtype=np.uint32)
+                    if hasattr(mC_series, "values"):
+                        mC = np.asarray(mC_series.values, dtype=np.uint32)
+                    else:
+                        mC = np.asarray(mC_series, dtype=np.uint32)
 
-                if hasattr(mC_series, "values"):
-                    mC = np.asarray(mC_series.values, dtype=np.uint32)
-                else:
-                    mC = np.asarray(mC_series, dtype=np.uint32)
+                    if hasattr(uC_series, "values"):
+                        uC = np.asarray(uC_series.values, dtype=np.uint32)
+                    else:
+                        uC = np.asarray(uC_series, dtype=np.uint32)
 
-                if hasattr(uC_series, "values"):
-                    uC = np.asarray(uC_series.values, dtype=np.uint32)
-                else:
-                    uC = np.asarray(uC_series, dtype=np.uint32)
-
-                if hasattr(tnc_series, "values"):
-                    tnc = np.asarray(tnc_series.values, dtype=np.uint8)
-                else:
-                    tnc = np.asarray(tnc_series, dtype=np.uint8)
+                    if hasattr(tnc_series, "values"):
+                        tnc = np.asarray(tnc_series.values, dtype=np.uint8)
+                    else:
+                        tnc = np.asarray(tnc_series, dtype=np.uint8)
+                finally:
+                    for sample_obj in (sample_cpu, original_sample):
+                        if sample_obj is not None:
+                            try:
+                                sample_obj.close()
+                            except Exception:
+                                pass
 
                 # Filter out positions with no coverage to reduce memory usage
                 coverage = mC + uC
@@ -745,8 +762,16 @@ class MethylCentroid:
                                     )
                     else:
                         # Load the actual MethylSample and add it
-                        methyl_sample = self.load_sample(sample_path)
-                        self._centroid = self._centroid.add_sample(methyl_sample)
+                        methyl_sample = None
+                        try:
+                            methyl_sample = self.load_sample(sample_path)
+                            self._centroid = self._centroid.add_sample(methyl_sample)
+                        finally:
+                            if methyl_sample is not None:
+                                try:
+                                    methyl_sample.close()
+                                except Exception as e:
+                                    self.logger.debug(f"Sample cleanup failed: {e}")
                     success = True
 
                     if success:

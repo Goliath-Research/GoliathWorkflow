@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Iterator, Optional, Dict, Any, Union, List
+from typing import Optional, Dict, Any, Union, List
 
 import numpy as np
 import pandas as pd
@@ -125,89 +125,95 @@ class MethylCentroidBuilder:
         else:
             # If it's a centroid, we can't use it directly - this shouldn't happen
             raise ValueError(f"Expected MethylSample, got {type(loaded)}")
-        
-        if len(sample) == 0:
-            return
+        try:
+            if len(sample) == 0:
+                return
 
-        pos = sample.pos.values.astype(np.uint32)
-        mC = sample.mC.values.astype(np.uint64)
-        uC = sample.uC.values.astype(np.uint64)
-        # Access tnc from DataFrame directly
-        tnc = sample._df["tnc"].values.astype(np.uint8)
+            pos = sample.pos.values.astype(np.uint32)
+            mC = sample.mC.values.astype(np.uint64)
+            uC = sample.uC.values.astype(np.uint64)
+            # Access tnc from DataFrame directly
+            tnc = sample._df["tnc"].values.astype(np.uint8)
 
-        # Move to GPU if needed
-        if self.use_gpu:
-            pos = self.xp.asarray(pos)
-            mC = self.xp.asarray(mC)
-            uC = self.xp.asarray(uC)
-            tnc = self.xp.asarray(tnc)
+            # Move to GPU if needed
+            if self.use_gpu:
+                pos = self.xp.asarray(pos)
+                mC = self.xp.asarray(mC)
+                uC = self.xp.asarray(uC)
+                tnc = self.xp.asarray(tnc)
 
-        # Find insertion points
-        idx = self.xp.searchsorted(self.pos[: self.size], pos)
+            # Find insertion points
+            idx = self.xp.searchsorted(self.pos[: self.size], pos)
 
-        # Detect new positions
-        is_new = (idx == self.size) | (self.pos[idx] != pos)
-        n_new = int(is_new.sum())
+            # Detect new positions
+            is_new = (idx == self.size) | (self.pos[idx] != pos)
+            n_new = int(is_new.sum())
 
-        if n_new > 0:
-            needed = self.size + n_new
-            if needed > self.capacity:
-                self._grow(needed)
+            if n_new > 0:
+                needed = self.size + n_new
+                if needed > self.capacity:
+                    self._grow(needed)
 
-            # Insert new positions in order
-            new_pos = pos[is_new]
-            insert_at = idx[is_new] + self.xp.arange(n_new)
-            self.pos[self.size : self.size + n_new] = new_pos
-            self.tnc[self.size : self.size + n_new] = tnc[is_new]
-            self.size += n_new
+                # Insert new positions in order
+                new_pos = pos[is_new]
+                self.pos[self.size : self.size + n_new] = new_pos
+                self.tnc[self.size : self.size + n_new] = tnc[is_new]
+                self.size += n_new
 
-        # Final indices after insertion
-        final_idx = self.xp.searchsorted(self.pos[: self.size], pos)
+            # Final indices after insertion
+            final_idx = self.xp.searchsorted(self.pos[: self.size], pos)
 
-        # Update accumulators
-        total_cov = mC + uC
-        # Use xp.where instead of xp.divide with where parameter for CuPy compatibility
-        # xp is either cp (CuPy) or np (NumPy), both support where()
-        mean = self.xp.where(
-            total_cov > 0,
-            mC.astype(self.xp.float64) / total_cov.astype(self.xp.float64),
-            self.xp.float64(0.0)
-        ).astype(self.xp.float32)
+            # Update accumulators
+            total_cov = mC + uC
+            # Use xp.where instead of xp.divide with where parameter for CuPy compatibility
+            # xp is either cp (CuPy) or np (NumPy), both support where()
+            mean = self.xp.where(
+                total_cov > 0,
+                mC.astype(self.xp.float64) / total_cov.astype(self.xp.float64),
+                self.xp.float64(0.0)
+            ).astype(self.xp.float32)
 
-        self.mC_sum[final_idx] += mC
-        self.uC_sum[final_idx] += uC
-        self.N[final_idx] += 1
-        self.Sx[final_idx] += mean
-        self.Sx2[final_idx] += mean**2
+            self.mC_sum[final_idx] += mC
+            self.uC_sum[final_idx] += uC
+            self.N[final_idx] += 1
+            self.Sx[final_idx] += mean
+            self.Sx2[final_idx] += mean**2
 
-        if self.store_extended_stats:
-            cov = total_cov.astype(self.xp.uint64)
-            self.sum_cov[final_idx] += cov
-            self.sum_cov2[final_idx] += cov.astype(self.xp.float64) ** 2
-            self.sum_mC[final_idx] += mC.astype(self.xp.uint64)
-            self.sum_uC[final_idx] += uC.astype(self.xp.uint64)
-            self.sum_mC2[final_idx] += mC.astype(self.xp.float64) ** 2
-            self.sum_uC2[final_idx] += uC.astype(self.xp.float64) ** 2
-            self.Sx3[final_idx] += mean.astype(self.xp.float32) ** 3
-            self.Sx4[final_idx] += mean.astype(self.xp.float32) ** 4
-            zero_mask = (mC == 0) & (total_cov > 0)
-            one_mask = (uC == 0) & (total_cov > 0)
-            self.count_zero[final_idx] += zero_mask.astype(self.xp.uint32)
-            self.count_one[final_idx] += one_mask.astype(self.xp.uint32)
+            if self.store_extended_stats:
+                cov = total_cov.astype(self.xp.uint64)
+                self.sum_cov[final_idx] += cov
+                self.sum_cov2[final_idx] += cov.astype(self.xp.float64) ** 2
+                self.sum_mC[final_idx] += mC.astype(self.xp.uint64)
+                self.sum_uC[final_idx] += uC.astype(self.xp.uint64)
+                self.sum_mC2[final_idx] += mC.astype(self.xp.float64) ** 2
+                self.sum_uC2[final_idx] += uC.astype(self.xp.float64) ** 2
+                self.Sx3[final_idx] += mean.astype(self.xp.float32) ** 3
+                self.Sx4[final_idx] += mean.astype(self.xp.float32) ** 4
+                zero_mask = (mC == 0) & (total_cov > 0)
+                one_mask = (uC == 0) & (total_cov > 0)
+                self.count_zero[final_idx] += zero_mask.astype(self.xp.uint32)
+                self.count_one[final_idx] += one_mask.astype(self.xp.uint32)
 
-        # Clip for log calculations - ensure we never get exactly 0 or 1
-        # Use tighter bounds to avoid log(0) warnings
-        eps = np.finfo(np.float32).eps * 10  # ~1e-6 for float32
-        safe_mean = self.xp.clip(mean, eps, 1.0 - eps)
-        # Ensure 1 - safe_mean is also >= eps to avoid log(0)
-        one_minus_mean = self.xp.clip(1.0 - safe_mean, eps, 1.0 - eps)
-        with np.errstate(divide='ignore', invalid='ignore'):
-            self.log_x_sum[final_idx] += self.xp.log(safe_mean)
-            self.log_1x_sum[final_idx] += self.xp.log(one_minus_mean)
+            # Clip for log calculations - ensure we never get exactly 0 or 1
+            # Use tighter bounds to avoid log(0) warnings
+            eps = np.finfo(np.float32).eps * 10  # ~1e-6 for float32
+            safe_mean = self.xp.clip(mean, eps, 1.0 - eps)
+            # Ensure 1 - safe_mean is also >= eps to avoid log(0)
+            one_minus_mean = self.xp.clip(1.0 - safe_mean, eps, 1.0 - eps)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                self.log_x_sum[final_idx] += self.xp.log(safe_mean)
+                self.log_1x_sum[final_idx] += self.xp.log(one_minus_mean)
 
-        self.samples_processed += 1
-        if self.samples_processed % 50 == 0:
-            logger.info(f"Processed {self.samples_processed} samples → {self.size:,} unique positions")
+            self.samples_processed += 1
+            if self.samples_processed % 50 == 0:
+                logger.info(
+                    f"Processed {self.samples_processed} samples → {self.size:,} unique positions"
+                )
+        finally:
+            try:
+                sample.close()
+            except Exception as e:
+                logger.debug(f"Sample cleanup failed: {e}")
 
     def finalize(self) -> MethylExtendedCentroid:
         """Return final clean MethylExtendedCentroid"""
