@@ -9,17 +9,21 @@ import pandas as pd
 
 # GPU support (transparent)
 import logging
+import gc
 
 try:
-    from ..gpu_detection import get_cupy, is_gpu_available
+    from ..gpu_detection import get_cupy, is_gpu_available, cleanup_gpu_memory
 except ImportError:
     try:
-        from methyl_utils.gpu_detection import get_cupy, is_gpu_available
+        from methyl_utils.gpu_detection import get_cupy, is_gpu_available, cleanup_gpu_memory
     except ImportError:
         def get_cupy():  # type: ignore[override]
             return None
 
         def is_gpu_available():  # type: ignore[override]
+            return False
+
+        def cleanup_gpu_memory() -> bool:  # type: ignore[override]
             return False
 
 try:
@@ -171,6 +175,46 @@ class MethylFrame:
 
     def __getitem__(self, key):
         return type(self)(self._df.loc[key], self._metadata.copy())
+
+    def close(self, free_gpu_pool: bool = False) -> None:
+        """
+        Release references and (optionally) free GPU memory pools.
+
+        Note: freeing the GPU pool is global and may impact performance if called
+        frequently. Use free_gpu_pool=True only when you need to return memory
+        to the system.
+        """
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
+
+        df = getattr(self, "_df", None)
+        self._df = None
+        self._binned_stats = None
+        self._metadata = {}
+
+        try:
+            if free_gpu_pool and df is not None and self.is_gpu:
+                cleanup_gpu_memory()
+        except Exception as e:
+            logging.getLogger(__name__).warning(
+                f"GPU memory cleanup failed during close: {e}"
+            )
+
+        gc.collect()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close(free_gpu_pool=False)
+        return False
+
+    def __del__(self):
+        try:
+            self.close(free_gpu_pool=False)
+        except Exception:
+            pass
 
     @property
     def metadata(self) -> Dict[str, Any]:
