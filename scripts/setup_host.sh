@@ -10,7 +10,7 @@ Usage: scripts/setup_host.sh [options]
 
 Options:
   --system-deps     Install system packages (Ubuntu/Debian via apt)
-  --gpu             Install GPU requirements (CUDA 12.x stack)
+  --gpu             Install GPU requirements (CUDA 13.x stack)
   --no-gpu          Skip GPU requirements (override auto-detect)
   --venv PATH       Create/use a virtualenv at PATH (default: .venv)
   --no-venv         Do not create or activate a virtualenv
@@ -71,15 +71,15 @@ libnvrtc_present() {
   local patterns=()
 
   if [ -n "${VIRTUAL_ENV:-}" ]; then
-    patterns+=("${VIRTUAL_ENV}/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.12")
+    patterns+=("${VIRTUAL_ENV}/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.13")
   fi
   patterns+=(
-    "${PROJECT_ROOT}/.venv/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.12"
-    "/usr/lib/aarch64-linux-gnu/libnvrtc.so.12"
-    "/usr/lib/x86_64-linux-gnu/libnvrtc.so.12"
-    "/usr/local/cuda/lib64/libnvrtc.so.12"
-    "/usr/local/cuda/targets/*/lib/libnvrtc.so.12"
-    "/usr/local/cuda-*/targets/*/lib/libnvrtc.so.12"
+    "${PROJECT_ROOT}/.venv/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.13"
+    "/usr/lib/aarch64-linux-gnu/libnvrtc.so.13"
+    "/usr/lib/x86_64-linux-gnu/libnvrtc.so.13"
+    "/usr/local/cuda/lib64/libnvrtc.so.13"
+    "/usr/local/cuda/targets/*/lib/libnvrtc.so.13"
+    "/usr/local/cuda-*/targets/*/lib/libnvrtc.so.13"
   )
 
   for pattern in "${patterns[@]}"; do
@@ -110,10 +110,10 @@ install_nvrtc_system_deps() {
     fi
   fi
 
-  info "Installing NVRTC runtime libraries (libnvrtc.so.12)..."
+  info "Installing NVRTC runtime libraries (libnvrtc.so.13)..."
   $sudo_cmd apt-get update
-  if ! $sudo_cmd apt-get install -y libnvrtc12 libnvrtc-builtins12; then
-    warn "Failed to install libnvrtc12 packages. Ensure NVIDIA CUDA repo is configured."
+  if ! $sudo_cmd apt-get install -y libnvrtc13 libnvrtc-builtins13; then
+    warn "Failed to install libnvrtc13 packages. Ensure NVIDIA CUDA repo is configured."
     return 1
   fi
 
@@ -315,14 +315,14 @@ if [ "$GPU_DEPS" -eq 1 ]; then
   if [ ! -f "$REQ_GPU" ]; then
     die "Missing $REQ_GPU"
   fi
-  info "Installing GPU requirements (CUDA 12.x)..."
+  info "Installing GPU requirements (CUDA 13.x)..."
   "$PYTHON_BIN" -m pip install -r "$REQ_GPU" --extra-index-url https://pypi.nvidia.com
   if ! install_nvrtc_system_deps; then
-    warn "CUDA NVRTC library (libnvrtc.so.12) not detected."
+    warn "CUDA NVRTC library (libnvrtc.so.13) not detected."
     warn "On ARM64 systems, pip GPU wheels may omit NVRTC."
-    warn "Install with: sudo apt-get install -y libnvrtc12 libnvrtc-builtins12"
+    warn "Install with: sudo apt-get install -y libnvrtc13 libnvrtc-builtins13"
     warn "Or use: scripts/setup_host_conda.sh for a full CUDA toolchain."
-    die "GPU dependencies incomplete (missing libnvrtc.so.12)."
+    die "GPU dependencies incomplete (missing libnvrtc.so.13)."
   fi
 fi
 

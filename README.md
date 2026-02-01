@@ -153,7 +153,7 @@ bash scripts/setup_host.sh --system-deps --gpu
 Notes:
 - Omit `--gpu` for CPU-only installs.
 - `requirements-pipeline.txt` contains shared Python deps.
-- `requirements-gpu.txt` adds CUDA 12.x requirements.
+- `requirements-gpu.txt` adds CUDA 13.x requirements.
 - Add `--venv /path/to/venv` to control the virtualenv location.
 - On Ubuntu 24.04+ where `python3.10` packages are unavailable, `setup_host.sh` installs the default `python3` packages and uses the system Python (3.10+).
 
@@ -441,7 +441,7 @@ MethylPipeline/
 │   ├── run_container.sh
 │   └── install_all.sh
 ├── requirements-pipeline.txt    # Pipeline-level Python deps
-├── requirements-gpu.txt         # GPU/CUDA deps (CUDA 12.x)
+├── requirements-gpu.txt         # GPU/CUDA deps (CUDA 13.x)
 ├── docs/                        # Pipeline-level documentation
 │   ├── ARCHITECTURE.md
 │   ├── DEVELOPMENT.md

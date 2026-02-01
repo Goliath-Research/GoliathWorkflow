@@ -23,7 +23,7 @@ methylutils = {path = "../methylutils", develop = true}
 # RAPIDS dependencies for GPU acceleration (installed in base image)
 # cudf = "^25.6.0"
 # cuml = "^25.6.0"
-# cupy-cuda12x = "^13.4.0"
+# cupy-cuda13x = "^13.6.0"
 
 # HDF5 support for genomics data
 h5py = ">=3.10.0,<4.0.0"

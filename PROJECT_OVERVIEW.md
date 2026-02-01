@@ -65,7 +65,7 @@ MethylPipeline/
 │   └── verify_setup.sh      # Verification
 │
 ├── requirements-pipeline.txt # Pipeline-level Python deps
-├── requirements-gpu.txt      # GPU/CUDA deps (CUDA 12.x)
+├── requirements-gpu.txt      # GPU/CUDA deps (CUDA 13.x)
 │
 └── 📚 docs/                 # Documentation
     ├── DEVELOPMENT.md       # Dev workflow
@@ -136,7 +136,7 @@ Note: On Ubuntu 24.04+ where `python3.10` packages are unavailable, `setup_host.
 ## 💻 Technology Stack
 
 ### GPU Computing
-- **CUDA**: 12.x
+- **CUDA**: 13.x
 - **CuPy**: GPU-accelerated NumPy
 - **RAPIDS cuDF**: GPU DataFrames
 - **Hardware**: NVIDIA DGX Spark / GH200 / A100-class GPUs
@@ -213,7 +213,7 @@ pytest packages/methylutils/tests/
 | RAM | 128GB+ recommended |
 | Storage | NVMe SSD |
 | OS | Ubuntu 22.04+ |
-| CUDA | 12.x (for GPU acceleration) |
+| CUDA | 13.x (for GPU acceleration) |
 | Python | 3.10+ |
 | Docker | Optional (for containerized deployment) |
 

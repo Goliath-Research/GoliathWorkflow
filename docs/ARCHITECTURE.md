@@ -252,14 +252,14 @@ with gpu_memory_context():
 
 ### Development Container
 
-- **Base Image**: nvidia/cuda:12.8.0-devel-ubuntu22.04
+- **Base Image**: nvidia/cuda:13.0.0-devel-ubuntu22.04
 - **Python**: 3.10 in virtual environment
 - **Mount**: Project directory mounted at `/workspace`
 - **Install Mode**: Editable (`pip install -e .`)
 
 ### Production Container
 
-- **Base Image**: nvidia/cuda:12.8.0-devel-ubuntu22.04
+- **Base Image**: nvidia/cuda:13.0.0-devel-ubuntu22.04
 - **Python**: 3.10 in virtual environment
 - **Install Mode**: Regular (`pip install .`)
 - **Packages**: Baked into image

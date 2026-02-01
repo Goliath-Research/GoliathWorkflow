@@ -371,7 +371,7 @@ def create_dockerfile() -> str:
     """Generate optimized Dockerfile for MethylUtils."""
 
     dockerfile = '''# MethylUtils CUDA-Optimized Container
-FROM nvidia/cuda:12.1-devel-ubuntu22.04
+FROM nvidia/cuda:13.0-devel-ubuntu22.04
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \\
@@ -392,8 +392,8 @@ ENV PATH="/opt/methylutils/bin:$PATH"
 # Install Python packages with CUDA support
 RUN pip install --upgrade pip setuptools wheel
 
-# Install CuPy with CUDA 12.1 support
-RUN pip install cupy-cuda12x
+# Install CuPy with CUDA 13.0 support
+RUN pip install cupy-cuda13x
 
 # Install scientific computing libraries
 RUN pip install \\

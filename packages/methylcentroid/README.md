@@ -45,7 +45,7 @@ pip install -e .
 
 ### Optional Dependencies
 
-- **GPU Support**: `pip install cupy-cuda12x` (match your CUDA version)
+- **GPU Support**: `pip install cupy-cuda13x` (match your CUDA version)
 - **Visualization**: `pip install plotly matplotlib`
 
 ## Usage

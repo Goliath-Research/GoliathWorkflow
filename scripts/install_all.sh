@@ -10,7 +10,7 @@ Usage: scripts/install_all.sh [options]
 
 Options:
   --pipeline-reqs   Install pipeline-level Python requirements first
-  --gpu-reqs        Install GPU requirements (CUDA 12.x stack)
+  --gpu-reqs        Install GPU requirements (CUDA 13.x stack)
   -h, --help        Show this help
 
 Notes:

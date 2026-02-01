@@ -103,9 +103,9 @@ def test_chunk_size_calculation(memory_manager):
 ### **Container Architecture**
 ```
 MethylUtils Production Container
-├── Base: NVIDIA CUDA 12.1 + Ubuntu 22.04
+├── Base: NVIDIA CUDA 13.0 + Ubuntu 22.04
 ├── Scientific Stack: NumPy, SciPy, Pandas
-├── GPU Libraries: CuPy, PyTorch, CUDA 12.1
+├── GPU Libraries: CuPy, PyTorch, CUDA 13.0
 ├── Monitoring: Prometheus, health checks
 ├── Development: Jupyter, testing tools
 └── Application: MethylUtils genome analysis toolkit
