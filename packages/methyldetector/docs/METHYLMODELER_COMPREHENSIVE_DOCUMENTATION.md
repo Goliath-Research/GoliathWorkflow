@@ -793,6 +793,7 @@ class MethylModelerResult(BaseModel):
   "bmm_refine_enabled": true,
   "bmm_refine_mode": "filter",
   "bmm_refine_use_gpu": true,
+  "bmm_refine_bin_count": 32,
   
   "target_balanced_accuracy": 0.95,
   "min_dmps": 10,
@@ -828,6 +829,8 @@ class MethylModelerResult(BaseModel):
 | `bmm_refine_enabled` | bool | False | Enable detector-stage BMM refinement on top DMPs |
 | `bmm_refine_mode` | str | "filter" | "annotate" or "filter" (drop weak mixture separations) |
 | `bmm_refine_use_gpu` | bool | True | Use GPU for BMM EM + JS divergence when available |
+| `bmm_refine_use_binned_stats` | bool | True | Use binned counts for faster EM |
+| `bmm_refine_bin_count` | int | 32 | Number of bins for binned stats |
 
 ---
 

@@ -43,6 +43,22 @@ def get_project_path(project_name: str) -> Path:
     return root / "packages" / project_name
 
 
+def _resolve_module_dir(project_path: Path, project_name: str) -> Path:
+    """
+    Resolve the module directory inside a project.
+
+    Tries both the project name and an underscore variant (e.g., methylcentroid -> methyl_centroid).
+    """
+    candidates = [
+        project_path / project_name,
+        project_path / project_name.replace("methyl", "methyl_"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return project_path / project_name
+
+
 def get_config_path(project_name: str, config_name: str) -> Path:
     """
     Get the path to a configuration file.
@@ -55,7 +71,15 @@ def get_config_path(project_name: str, config_name: str) -> Path:
         Path to the configuration file
     """
     project_path = get_project_path(project_name)
-    return project_path / project_name / "configs" / config_name
+    module_dir = _resolve_module_dir(project_path, project_name)
+    candidates = [
+        project_path / "configs",
+        module_dir / "configs",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate / config_name
+    return candidates[0] / config_name
 
 
 def get_examples_path(project_name: str) -> Path:
@@ -69,7 +93,15 @@ def get_examples_path(project_name: str) -> Path:
         Path to the examples directory
     """
     project_path = get_project_path(project_name)
-    return project_path / project_name / "examples"
+    module_dir = _resolve_module_dir(project_path, project_name)
+    candidates = [
+        project_path / "examples",
+        module_dir / "examples",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def get_data_path(relative_path: Optional[str] = None) -> Path:

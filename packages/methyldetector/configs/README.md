@@ -68,6 +68,7 @@ These parameters apply to both single and multiple comparison configs:
 | `bmm_refine_enabled` | bool | Enable beta mixture refinement on top biological DMPs | false |
 | `bmm_refine_mode` | string | "annotate" or "filter" | "filter" |
 | `bmm_refine_use_binned_stats` | bool | Use binned counts for faster EM | true |
+| `bmm_refine_bin_count` | int | Number of bins for binned stats | 32 |
 | `bmm_refine_max_dmps` | int | Cap on number of DMPs to refine | 200000 |
 | `bmm_refine_max_fraction` | float | Optional fraction cap for refinement | 0.02 |
 | `bmm_refine_use_gpu` | bool | Use GPU for BMM EM + JS divergence when available | true |

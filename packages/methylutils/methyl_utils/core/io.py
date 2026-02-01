@@ -56,6 +56,22 @@ def load_from_h5(
                     for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
                         if col in datasets:
                             data[col] = np.asarray(methyl_data[col][:], dtype=np.float32)
+                    # Extended sufficient statistics (optional)
+                    extra_cols = {
+                        "sum_mC": np.uint64,
+                        "sum_uC": np.uint64,
+                        "sum_cov": np.uint64,
+                        "sum_cov2": np.float64,
+                        "sum_mC2": np.float64,
+                        "sum_uC2": np.float64,
+                        "Sx3": np.float32,
+                        "Sx4": np.float32,
+                        "count_zero": np.uint32,
+                        "count_one": np.uint32,
+                    }
+                    for col, dtype_cast in extra_cols.items():
+                        if col in datasets:
+                            data[col] = np.asarray(methyl_data[col][:], dtype=dtype_cast)
         
         # Fallback to old format: datasets at root level
         if not data:
@@ -79,6 +95,22 @@ def load_from_h5(
                 for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
                     if col in root_keys:
                         data[col] = np.asarray(f[col][:], dtype=np.float32)
+                # Extended sufficient statistics (optional)
+                extra_cols = {
+                    "sum_mC": np.uint64,
+                    "sum_uC": np.uint64,
+                    "sum_cov": np.uint64,
+                    "sum_cov2": np.float64,
+                    "sum_mC2": np.float64,
+                    "sum_uC2": np.float64,
+                    "Sx3": np.float32,
+                    "Sx4": np.float32,
+                    "count_zero": np.uint32,
+                    "count_one": np.uint32,
+                }
+                for col, dtype_cast in extra_cols.items():
+                    if col in root_keys:
+                        data[col] = np.asarray(f[col][:], dtype=dtype_cast)
         
         # Fallback to old format: 'methylation_data' as structured array
         if not data and "methylation_data" in f:
@@ -102,6 +134,22 @@ def load_from_h5(
                     for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
                         if col in datasets:
                             data[col] = np.asarray(struct_data[col], dtype=np.float32)
+                    # Extended sufficient statistics (optional)
+                    extra_cols = {
+                        "sum_mC": np.uint64,
+                        "sum_uC": np.uint64,
+                        "sum_cov": np.uint64,
+                        "sum_cov2": np.float64,
+                        "sum_mC2": np.float64,
+                        "sum_uC2": np.float64,
+                        "Sx3": np.float32,
+                        "Sx4": np.float32,
+                        "count_zero": np.uint32,
+                        "count_one": np.uint32,
+                    }
+                    for col, dtype_cast in extra_cols.items():
+                        if col in datasets:
+                            data[col] = np.asarray(struct_data[col], dtype=dtype_cast)
         
         # If still no data, raise error
         if not data:

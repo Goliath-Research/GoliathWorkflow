@@ -41,6 +41,7 @@ Enable beta mixture refinement for top biological DMPs (GPU-accelerated when ava
   "bmm_refine_enabled": true,
   "bmm_refine_mode": "filter",
   "bmm_refine_use_gpu": true,
+  "bmm_refine_bin_count": 32,
   "bmm_refine_max_dmps": 200000,
   "bmm_refine_max_fraction": 0.02
 }

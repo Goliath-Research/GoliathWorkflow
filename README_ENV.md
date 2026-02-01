@@ -9,7 +9,7 @@ Multi-project workspace for methylation analysis tools.
 source setup_env.sh
 
 # Verify setup
-python packages/methylcentroid/methylcentroid/path_utils.py
+python packages/methylcentroid/methyl_centroid/path_utils.py
 ```
 
 See `ENV_SETUP.md` for complete documentation.

@@ -168,10 +168,10 @@ updated_results = mc_updated.build_centroid()
 
 ```bash
 # Using configuration file
-python -m methylcentroid.centroid_cli --config config.json
+python -m methyl_centroid.cli --config config.json
 
 # Direct parameters
-python -m methylcentroid.centroid_cli \
+python -m methyl_centroid.cli \
     --chrom 1 \
     --ctx CG \
     --output-dir ./centroids \

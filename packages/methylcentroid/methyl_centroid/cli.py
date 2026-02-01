@@ -23,13 +23,13 @@ def create_parser() -> argparse.ArgumentParser:
         epilog="""
 Examples:
   # Process single chromosome/context
-  python -m methylcentroid.cli -c 1 -x CG -s samples.csv -o ./output
+  python -m methyl_centroid.cli -c 1 -x CG -s samples.csv -o ./output
 
   # Use configuration file
-  python -m methylcentroid.cli --config config.json
+  python -m methyl_centroid.cli --config config.json
 
   # Batch processing
-  python -m methylcentroid.cli --batch-config batch_config.json
+  python -m methyl_centroid.cli --batch-config batch_config.json
         """
     )
 

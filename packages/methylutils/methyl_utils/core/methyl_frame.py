@@ -413,7 +413,24 @@ class MethylFrame:
                         group.create_dataset(col, data=data)
 
             # Store centroid columns if present
-            for col in ["N", "Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
+            for col in [
+                "N",
+                "Sx",
+                "Sx2",
+                "log_x_sum",
+                "log_1_minus_x_sum",
+                # Extended sufficient statistics (optional)
+                "sum_mC",
+                "sum_uC",
+                "sum_cov",
+                "sum_cov2",
+                "sum_mC2",
+                "sum_uC2",
+                "Sx3",
+                "Sx4",
+                "count_zero",
+                "count_one",
+            ]:
                 if col in self._df.columns:
                     data = self._df[col].values if hasattr(self._df[col], 'values') else np.asarray(self._df[col])
                     if compressed:
@@ -630,6 +647,52 @@ class MethylExtendedCentroid(MethylBasicCentroid):
         """Sum of log(1 - methylation_level)."""
         return self._df["log_1_minus_x_sum"]
 
+    # Optional extended sufficient statistics
+    def _get_optional_column(self, name: str):
+        if name in self._df.columns:
+            return self._df[name]
+        return None
+
+    @property
+    def sum_mC(self):
+        return self._get_optional_column("sum_mC")
+
+    @property
+    def sum_uC(self):
+        return self._get_optional_column("sum_uC")
+
+    @property
+    def sum_cov(self):
+        return self._get_optional_column("sum_cov")
+
+    @property
+    def sum_cov2(self):
+        return self._get_optional_column("sum_cov2")
+
+    @property
+    def sum_mC2(self):
+        return self._get_optional_column("sum_mC2")
+
+    @property
+    def sum_uC2(self):
+        return self._get_optional_column("sum_uC2")
+
+    @property
+    def Sx3(self):
+        return self._get_optional_column("Sx3")
+
+    @property
+    def Sx4(self):
+        return self._get_optional_column("Sx4")
+
+    @property
+    def count_zero(self):
+        return self._get_optional_column("count_zero")
+
+    @property
+    def count_one(self):
+        return self._get_optional_column("count_one")
+
     def to_numpy(self, extended: bool = True) -> np.ndarray:
         """
         Convert MethylExtendedCentroid to structured numpy array format.
@@ -663,6 +726,25 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             data["log_x_sum"] = np.asarray(df_cpu["log_x_sum"].values, dtype=np.float32)
             data["log_1_minus_x_sum"] = np.asarray(df_cpu["log_1_minus_x_sum"].values, dtype=np.float32)
 
+            # Optional extended stats (fill with zeros if missing)
+            optional_cols = {
+                "sum_mC": np.uint64,
+                "sum_uC": np.uint64,
+                "sum_cov": np.uint64,
+                "sum_cov2": np.float64,
+                "sum_mC2": np.float64,
+                "sum_uC2": np.float64,
+                "Sx3": np.float32,
+                "Sx4": np.float32,
+                "count_zero": np.uint32,
+                "count_one": np.uint32,
+            }
+            for col, dtype_cast in optional_cols.items():
+                if col in df_cpu.columns:
+                    data[col] = np.asarray(df_cpu[col].values, dtype=dtype_cast)
+                else:
+                    data[col] = np.zeros(len(df_cpu), dtype=dtype_cast)
+
         return data
 
     def add_sample(self, sample: "MethylSample") -> "MethylExtendedCentroid":
@@ -689,6 +771,162 @@ class MethylExtendedCentroid(MethylBasicCentroid):
         centroid_log_x_sum = np.asarray(centroid_cpu.log_x_sum.values, dtype=np.float32)
         centroid_log_1mx_sum = np.asarray(centroid_cpu.log_1_minus_x_sum.values, dtype=np.float32)
         centroid_tnc = np.asarray(centroid_cpu._df["tnc"].values, dtype=np.uint8)
+
+        # Optional extended statistics (if present)
+        has_sum_cov = "sum_cov" in centroid_cpu._df.columns
+        centroid_sum_cov = (
+            np.asarray(centroid_cpu._df["sum_cov"].values, dtype=np.uint64)
+            if has_sum_cov else None
+        )
+        has_sum_cov2 = "sum_cov2" in centroid_cpu._df.columns
+        centroid_sum_cov2 = (
+            np.asarray(centroid_cpu._df["sum_cov2"].values, dtype=np.float64)
+            if has_sum_cov2 else None
+        )
+        has_sum_mC = "sum_mC" in centroid_cpu._df.columns
+        centroid_sum_mC = (
+            np.asarray(centroid_cpu._df["sum_mC"].values, dtype=np.uint64)
+            if has_sum_mC else None
+        )
+        has_sum_uC = "sum_uC" in centroid_cpu._df.columns
+        centroid_sum_uC = (
+            np.asarray(centroid_cpu._df["sum_uC"].values, dtype=np.uint64)
+            if has_sum_uC else None
+        )
+        has_sum_mC2 = "sum_mC2" in centroid_cpu._df.columns
+        centroid_sum_mC2 = (
+            np.asarray(centroid_cpu._df["sum_mC2"].values, dtype=np.float64)
+            if has_sum_mC2 else None
+        )
+        has_sum_uC2 = "sum_uC2" in centroid_cpu._df.columns
+        centroid_sum_uC2 = (
+            np.asarray(centroid_cpu._df["sum_uC2"].values, dtype=np.float64)
+            if has_sum_uC2 else None
+        )
+        has_Sx3 = "Sx3" in centroid_cpu._df.columns
+        centroid_Sx3 = (
+            np.asarray(centroid_cpu._df["Sx3"].values, dtype=np.float32)
+            if has_Sx3 else None
+        )
+        has_Sx4 = "Sx4" in centroid_cpu._df.columns
+        centroid_Sx4 = (
+            np.asarray(centroid_cpu._df["Sx4"].values, dtype=np.float32)
+            if has_Sx4 else None
+        )
+        has_count_zero = "count_zero" in centroid_cpu._df.columns
+        centroid_count_zero = (
+            np.asarray(centroid_cpu._df["count_zero"].values, dtype=np.uint32)
+            if has_count_zero else None
+        )
+        has_count_one = "count_one" in centroid_cpu._df.columns
+        centroid_count_one = (
+            np.asarray(centroid_cpu._df["count_one"].values, dtype=np.uint32)
+            if has_count_one else None
+        )
+
+        # Optional extended statistics (if present)
+        has_sum_cov = "sum_cov" in centroid_cpu._df.columns
+        centroid_sum_cov = (
+            np.asarray(centroid_cpu._df["sum_cov"].values, dtype=np.uint64)
+            if has_sum_cov else None
+        )
+        has_sum_cov2 = "sum_cov2" in centroid_cpu._df.columns
+        centroid_sum_cov2 = (
+            np.asarray(centroid_cpu._df["sum_cov2"].values, dtype=np.float64)
+            if has_sum_cov2 else None
+        )
+        has_sum_mC = "sum_mC" in centroid_cpu._df.columns
+        centroid_sum_mC = (
+            np.asarray(centroid_cpu._df["sum_mC"].values, dtype=np.uint64)
+            if has_sum_mC else None
+        )
+        has_sum_uC = "sum_uC" in centroid_cpu._df.columns
+        centroid_sum_uC = (
+            np.asarray(centroid_cpu._df["sum_uC"].values, dtype=np.uint64)
+            if has_sum_uC else None
+        )
+        has_sum_mC2 = "sum_mC2" in centroid_cpu._df.columns
+        centroid_sum_mC2 = (
+            np.asarray(centroid_cpu._df["sum_mC2"].values, dtype=np.float64)
+            if has_sum_mC2 else None
+        )
+        has_sum_uC2 = "sum_uC2" in centroid_cpu._df.columns
+        centroid_sum_uC2 = (
+            np.asarray(centroid_cpu._df["sum_uC2"].values, dtype=np.float64)
+            if has_sum_uC2 else None
+        )
+        has_Sx3 = "Sx3" in centroid_cpu._df.columns
+        centroid_Sx3 = (
+            np.asarray(centroid_cpu._df["Sx3"].values, dtype=np.float32)
+            if has_Sx3 else None
+        )
+        has_Sx4 = "Sx4" in centroid_cpu._df.columns
+        centroid_Sx4 = (
+            np.asarray(centroid_cpu._df["Sx4"].values, dtype=np.float32)
+            if has_Sx4 else None
+        )
+        has_count_zero = "count_zero" in centroid_cpu._df.columns
+        centroid_count_zero = (
+            np.asarray(centroid_cpu._df["count_zero"].values, dtype=np.uint32)
+            if has_count_zero else None
+        )
+        has_count_one = "count_one" in centroid_cpu._df.columns
+        centroid_count_one = (
+            np.asarray(centroid_cpu._df["count_one"].values, dtype=np.uint32)
+            if has_count_one else None
+        )
+
+        # Optional extended statistics (if present)
+        has_sum_cov = "sum_cov" in centroid_cpu._df.columns
+        centroid_sum_cov = (
+            np.asarray(centroid_cpu._df["sum_cov"].values, dtype=np.uint64)
+            if has_sum_cov else None
+        )
+        has_sum_cov2 = "sum_cov2" in centroid_cpu._df.columns
+        centroid_sum_cov2 = (
+            np.asarray(centroid_cpu._df["sum_cov2"].values, dtype=np.float64)
+            if has_sum_cov2 else None
+        )
+        has_sum_mC = "sum_mC" in centroid_cpu._df.columns
+        centroid_sum_mC = (
+            np.asarray(centroid_cpu._df["sum_mC"].values, dtype=np.uint64)
+            if has_sum_mC else None
+        )
+        has_sum_uC = "sum_uC" in centroid_cpu._df.columns
+        centroid_sum_uC = (
+            np.asarray(centroid_cpu._df["sum_uC"].values, dtype=np.uint64)
+            if has_sum_uC else None
+        )
+        has_sum_mC2 = "sum_mC2" in centroid_cpu._df.columns
+        centroid_sum_mC2 = (
+            np.asarray(centroid_cpu._df["sum_mC2"].values, dtype=np.float64)
+            if has_sum_mC2 else None
+        )
+        has_sum_uC2 = "sum_uC2" in centroid_cpu._df.columns
+        centroid_sum_uC2 = (
+            np.asarray(centroid_cpu._df["sum_uC2"].values, dtype=np.float64)
+            if has_sum_uC2 else None
+        )
+        has_Sx3 = "Sx3" in centroid_cpu._df.columns
+        centroid_Sx3 = (
+            np.asarray(centroid_cpu._df["Sx3"].values, dtype=np.float32)
+            if has_Sx3 else None
+        )
+        has_Sx4 = "Sx4" in centroid_cpu._df.columns
+        centroid_Sx4 = (
+            np.asarray(centroid_cpu._df["Sx4"].values, dtype=np.float32)
+            if has_Sx4 else None
+        )
+        has_count_zero = "count_zero" in centroid_cpu._df.columns
+        centroid_count_zero = (
+            np.asarray(centroid_cpu._df["count_zero"].values, dtype=np.uint32)
+            if has_count_zero else None
+        )
+        has_count_one = "count_one" in centroid_cpu._df.columns
+        centroid_count_one = (
+            np.asarray(centroid_cpu._df["count_one"].values, dtype=np.uint32)
+            if has_count_one else None
+        )
         
         sample_pos = np.asarray(sample_cpu.pos.values, dtype=np.uint32)
         sample_mC = np.asarray(sample_cpu.mC.values, dtype=np.uint32)
@@ -709,6 +947,36 @@ class MethylExtendedCentroid(MethylBasicCentroid):
         with np.errstate(divide='ignore', invalid='ignore'):
             sample_log_x = np.log(sample_mean_clipped)
             sample_log_1mx = np.log(one_minus_mean)
+
+        # Optional extended stats for this sample
+        sample_cov = sample_coverage.astype(np.uint64)
+        sample_cov2 = sample_cov.astype(np.float64) ** 2
+        sample_mC2 = sample_mC.astype(np.float64) ** 2
+        sample_uC2 = sample_uC.astype(np.float64) ** 2
+        sample_mean3 = sample_mean.astype(np.float32) ** 3
+        sample_mean4 = sample_mean.astype(np.float32) ** 4
+        sample_zero = (sample_mC == 0) & (sample_coverage > 0)
+        sample_one = (sample_uC == 0) & (sample_coverage > 0)
+
+        # Optional extended stats for this sample
+        sample_cov = sample_coverage.astype(np.uint64)
+        sample_cov2 = sample_cov.astype(np.float64) ** 2
+        sample_mC2 = sample_mC.astype(np.float64) ** 2
+        sample_uC2 = sample_uC.astype(np.float64) ** 2
+        sample_mean3 = sample_mean.astype(np.float32) ** 3
+        sample_mean4 = sample_mean.astype(np.float32) ** 4
+        sample_zero = (sample_mC == 0) & (sample_coverage > 0)
+        sample_one = (sample_uC == 0) & (sample_coverage > 0)
+
+        # Optional extended stats for this sample
+        sample_cov = sample_coverage.astype(np.uint64)
+        sample_cov2 = sample_cov.astype(np.float64) ** 2
+        sample_mC2 = sample_mC.astype(np.float64) ** 2
+        sample_uC2 = sample_uC.astype(np.float64) ** 2
+        sample_mean3 = sample_mean.astype(np.float32) ** 3
+        sample_mean4 = sample_mean.astype(np.float32) ** 4
+        sample_zero = (sample_mC == 0) & (sample_coverage > 0)
+        sample_one = (sample_uC == 0) & (sample_coverage > 0)
         
         # Find common positions
         common_mask_centroid = np.isin(centroid_pos, sample_pos)
@@ -727,6 +995,27 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             centroid_Sx2[common_mask_centroid] += np.where(valid_sample_mask, sample_mean[sample_indices]**2, 0)
             centroid_log_x_sum[common_mask_centroid] += np.where(valid_sample_mask, sample_log_x[sample_indices], 0)
             centroid_log_1mx_sum[common_mask_centroid] += np.where(valid_sample_mask, sample_log_1mx[sample_indices], 0)
+
+            if has_sum_cov:
+                centroid_sum_cov[common_mask_centroid] += np.where(valid_sample_mask, sample_cov[sample_indices], 0)
+            if has_sum_cov2:
+                centroid_sum_cov2[common_mask_centroid] += np.where(valid_sample_mask, sample_cov2[sample_indices], 0)
+            if has_sum_mC:
+                centroid_sum_mC[common_mask_centroid] += np.where(valid_sample_mask, sample_mC[sample_indices].astype(np.uint64), np.uint64(0))
+            if has_sum_uC:
+                centroid_sum_uC[common_mask_centroid] += np.where(valid_sample_mask, sample_uC[sample_indices].astype(np.uint64), np.uint64(0))
+            if has_sum_mC2:
+                centroid_sum_mC2[common_mask_centroid] += np.where(valid_sample_mask, sample_mC2[sample_indices], 0)
+            if has_sum_uC2:
+                centroid_sum_uC2[common_mask_centroid] += np.where(valid_sample_mask, sample_uC2[sample_indices], 0)
+            if has_Sx3:
+                centroid_Sx3[common_mask_centroid] += np.where(valid_sample_mask, sample_mean3[sample_indices], 0)
+            if has_Sx4:
+                centroid_Sx4[common_mask_centroid] += np.where(valid_sample_mask, sample_mean4[sample_indices], 0)
+            if has_count_zero:
+                centroid_count_zero[common_mask_centroid] += np.where(valid_sample_mask, sample_zero[sample_indices].astype(np.uint32), 0)
+            if has_count_one:
+                centroid_count_one[common_mask_centroid] += np.where(valid_sample_mask, sample_one[sample_indices].astype(np.uint32), 0)
         
         # Add new positions from sample
         new_pos_mask = ~common_mask_sample
@@ -738,6 +1027,14 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             new_mean = sample_mean[new_pos_mask]
             new_log_x = sample_log_x[new_pos_mask]
             new_log_1mx = sample_log_1mx[new_pos_mask]
+            new_cov = sample_cov[new_pos_mask]
+            new_cov2 = sample_cov2[new_pos_mask]
+            new_mC2 = sample_mC2[new_pos_mask]
+            new_uC2 = sample_uC2[new_pos_mask]
+            new_mean3 = sample_mean3[new_pos_mask]
+            new_mean4 = sample_mean4[new_pos_mask]
+            new_zero = sample_zero[new_pos_mask]
+            new_one = sample_one[new_pos_mask]
             
             # Combine all positions
             all_pos = np.concatenate([centroid_pos, new_pos])
@@ -749,6 +1046,26 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             all_log_x_sum = np.concatenate([centroid_log_x_sum, new_log_x])
             all_log_1mx_sum = np.concatenate([centroid_log_1mx_sum, new_log_1mx])
             all_tnc = np.concatenate([centroid_tnc, new_tnc])
+            if has_sum_cov:
+                all_sum_cov = np.concatenate([centroid_sum_cov, new_cov])
+            if has_sum_cov2:
+                all_sum_cov2 = np.concatenate([centroid_sum_cov2, new_cov2])
+            if has_sum_mC:
+                all_sum_mC = np.concatenate([centroid_sum_mC, new_mC.astype(np.uint64)])
+            if has_sum_uC:
+                all_sum_uC = np.concatenate([centroid_sum_uC, new_uC.astype(np.uint64)])
+            if has_sum_mC2:
+                all_sum_mC2 = np.concatenate([centroid_sum_mC2, new_mC2])
+            if has_sum_uC2:
+                all_sum_uC2 = np.concatenate([centroid_sum_uC2, new_uC2])
+            if has_Sx3:
+                all_Sx3 = np.concatenate([centroid_Sx3, new_mean3])
+            if has_Sx4:
+                all_Sx4 = np.concatenate([centroid_Sx4, new_mean4])
+            if has_count_zero:
+                all_count_zero = np.concatenate([centroid_count_zero, new_zero.astype(np.uint32)])
+            if has_count_one:
+                all_count_one = np.concatenate([centroid_count_one, new_one.astype(np.uint32)])
             
             # Sort by position
             sort_idx = np.argsort(all_pos)
@@ -761,6 +1078,26 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             all_log_x_sum = all_log_x_sum[sort_idx]
             all_log_1mx_sum = all_log_1mx_sum[sort_idx]
             all_tnc = all_tnc[sort_idx]
+            if has_sum_cov:
+                all_sum_cov = all_sum_cov[sort_idx]
+            if has_sum_cov2:
+                all_sum_cov2 = all_sum_cov2[sort_idx]
+            if has_sum_mC:
+                all_sum_mC = all_sum_mC[sort_idx]
+            if has_sum_uC:
+                all_sum_uC = all_sum_uC[sort_idx]
+            if has_sum_mC2:
+                all_sum_mC2 = all_sum_mC2[sort_idx]
+            if has_sum_uC2:
+                all_sum_uC2 = all_sum_uC2[sort_idx]
+            if has_Sx3:
+                all_Sx3 = all_Sx3[sort_idx]
+            if has_Sx4:
+                all_Sx4 = all_Sx4[sort_idx]
+            if has_count_zero:
+                all_count_zero = all_count_zero[sort_idx]
+            if has_count_one:
+                all_count_one = all_count_one[sort_idx]
         else:
             all_pos = centroid_pos
             all_mC_sum = centroid_mC_sum
@@ -771,6 +1108,26 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             all_log_x_sum = centroid_log_x_sum
             all_log_1mx_sum = centroid_log_1mx_sum
             all_tnc = centroid_tnc
+            if has_sum_cov:
+                all_sum_cov = centroid_sum_cov
+            if has_sum_cov2:
+                all_sum_cov2 = centroid_sum_cov2
+            if has_sum_mC:
+                all_sum_mC = centroid_sum_mC
+            if has_sum_uC:
+                all_sum_uC = centroid_sum_uC
+            if has_sum_mC2:
+                all_sum_mC2 = centroid_sum_mC2
+            if has_sum_uC2:
+                all_sum_uC2 = centroid_sum_uC2
+            if has_Sx3:
+                all_Sx3 = centroid_Sx3
+            if has_Sx4:
+                all_Sx4 = centroid_Sx4
+            if has_count_zero:
+                all_count_zero = centroid_count_zero
+            if has_count_one:
+                all_count_one = centroid_count_one
         
         # Recalculate averaged mC/uC from sums
         with np.errstate(divide='ignore', invalid='ignore'):
@@ -789,6 +1146,27 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             "log_x_sum": all_log_x_sum.astype(np.float32),
             "log_1_minus_x_sum": all_log_1mx_sum.astype(np.float32),
         })
+
+        if has_sum_cov:
+            new_df["sum_cov"] = all_sum_cov.astype(np.uint64)
+        if has_sum_cov2:
+            new_df["sum_cov2"] = all_sum_cov2.astype(np.float64)
+        if has_sum_mC:
+            new_df["sum_mC"] = all_sum_mC.astype(np.uint64)
+        if has_sum_uC:
+            new_df["sum_uC"] = all_sum_uC.astype(np.uint64)
+        if has_sum_mC2:
+            new_df["sum_mC2"] = all_sum_mC2.astype(np.float64)
+        if has_sum_uC2:
+            new_df["sum_uC2"] = all_sum_uC2.astype(np.float64)
+        if has_Sx3:
+            new_df["Sx3"] = all_Sx3.astype(np.float32)
+        if has_Sx4:
+            new_df["Sx4"] = all_Sx4.astype(np.float32)
+        if has_count_zero:
+            new_df["count_zero"] = all_count_zero.astype(np.uint32)
+        if has_count_one:
+            new_df["count_one"] = all_count_one.astype(np.uint32)
         
         # Preserve metadata
         new_metadata = self._metadata.copy() if self._metadata else {}
@@ -859,6 +1237,27 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             centroid_Sx2[common_mask_centroid] -= np.where(valid_sample_mask, sample_mean[sample_indices]**2, 0)
             centroid_log_x_sum[common_mask_centroid] -= np.where(valid_sample_mask, sample_log_x[sample_indices], 0)
             centroid_log_1mx_sum[common_mask_centroid] -= np.where(valid_sample_mask, sample_log_1mx[sample_indices], 0)
+
+            if has_sum_cov:
+                centroid_sum_cov[common_mask_centroid] -= np.where(valid_sample_mask, sample_cov[sample_indices], 0)
+            if has_sum_cov2:
+                centroid_sum_cov2[common_mask_centroid] -= np.where(valid_sample_mask, sample_cov2[sample_indices], 0)
+            if has_sum_mC:
+                centroid_sum_mC[common_mask_centroid] -= np.where(valid_sample_mask, sample_mC[sample_indices].astype(np.uint64), np.uint64(0))
+            if has_sum_uC:
+                centroid_sum_uC[common_mask_centroid] -= np.where(valid_sample_mask, sample_uC[sample_indices].astype(np.uint64), np.uint64(0))
+            if has_sum_mC2:
+                centroid_sum_mC2[common_mask_centroid] -= np.where(valid_sample_mask, sample_mC2[sample_indices], 0)
+            if has_sum_uC2:
+                centroid_sum_uC2[common_mask_centroid] -= np.where(valid_sample_mask, sample_uC2[sample_indices], 0)
+            if has_Sx3:
+                centroid_Sx3[common_mask_centroid] -= np.where(valid_sample_mask, sample_mean3[sample_indices], 0)
+            if has_Sx4:
+                centroid_Sx4[common_mask_centroid] -= np.where(valid_sample_mask, sample_mean4[sample_indices], 0)
+            if has_count_zero:
+                centroid_count_zero[common_mask_centroid] -= np.where(valid_sample_mask, sample_zero[sample_indices].astype(np.uint32), 0)
+            if has_count_one:
+                centroid_count_one[common_mask_centroid] -= np.where(valid_sample_mask, sample_one[sample_indices].astype(np.uint32), 0)
         
         # Keep only positions with N > 0
         valid_mask = centroid_N > 0
@@ -883,6 +1282,27 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             "log_x_sum": centroid_log_x_sum[valid_mask].astype(np.float32),
             "log_1_minus_x_sum": centroid_log_1mx_sum[valid_mask].astype(np.float32),
         })
+
+        if has_sum_cov:
+            new_df["sum_cov"] = centroid_sum_cov[valid_mask].astype(np.uint64)
+        if has_sum_cov2:
+            new_df["sum_cov2"] = centroid_sum_cov2[valid_mask].astype(np.float64)
+        if has_sum_mC:
+            new_df["sum_mC"] = centroid_sum_mC[valid_mask].astype(np.uint64)
+        if has_sum_uC:
+            new_df["sum_uC"] = centroid_sum_uC[valid_mask].astype(np.uint64)
+        if has_sum_mC2:
+            new_df["sum_mC2"] = centroid_sum_mC2[valid_mask].astype(np.float64)
+        if has_sum_uC2:
+            new_df["sum_uC2"] = centroid_sum_uC2[valid_mask].astype(np.float64)
+        if has_Sx3:
+            new_df["Sx3"] = centroid_Sx3[valid_mask].astype(np.float32)
+        if has_Sx4:
+            new_df["Sx4"] = centroid_Sx4[valid_mask].astype(np.float32)
+        if has_count_zero:
+            new_df["count_zero"] = centroid_count_zero[valid_mask].astype(np.uint32)
+        if has_count_one:
+            new_df["count_one"] = centroid_count_one[valid_mask].astype(np.uint32)
         
         # Preserve metadata
         new_metadata = self._metadata.copy() if self._metadata else {}

@@ -154,6 +154,7 @@ else:
 - **`bmm_refine_enabled`**: Enable beta mixture refinement for top biological DMPs (default: `false`)
 - **`bmm_refine_mode`**: `"annotate"` or `"filter"` (default: `"filter"`)
 - **`bmm_refine_use_binned_stats`**: Use binned counts for faster EM (default: `true`)
+- **`bmm_refine_bin_count`**: Number of bins for binned stats (default: `32`)
 - **`bmm_refine_max_dmps`**: Cap on number of DMPs to refine (default: `200000`)
 - **`bmm_refine_max_fraction`**: Optional fraction cap for refinement (default: `0.02`)
 - **`bmm_refine_use_gpu`**: Use GPU for BMM EM + JS divergence when available (default: `true`)

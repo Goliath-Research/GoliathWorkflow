@@ -198,6 +198,17 @@ METHYL_EXTENDED_CENTROID_DTYPE = [
     ("Sx2", np.float32),  # Sum of squared methylation levels
     ("log_x_sum", np.float32),  # Sum of log(methylation_level) for Beta distribution
     ("log_1_minus_x_sum", np.float32),  # Sum of log(1-methylation_level) for Beta distribution
+    # Extended sufficient statistics for additional distributions
+    ("sum_mC", np.uint64),  # Sum of methylated counts across samples
+    ("sum_uC", np.uint64),  # Sum of unmethylated counts across samples
+    ("sum_cov", np.uint64),  # Sum of total coverage across samples
+    ("sum_cov2", np.float64),  # Sum of squared coverage across samples
+    ("sum_mC2", np.float64),  # Sum of squared methylated counts
+    ("sum_uC2", np.float64),  # Sum of squared unmethylated counts
+    ("Sx3", np.float32),  # Sum of cubed methylation levels
+    ("Sx4", np.float32),  # Sum of 4th power methylation levels
+    ("count_zero", np.uint32),  # Count of samples with p=0
+    ("count_one", np.uint32),  # Count of samples with p=1
 ]
 
 # Type aliases for better type hints (compatible with older Python versions)
@@ -650,7 +661,8 @@ from .beta_analytics import (
     compute_bhattacharyya_coefficient,
     beta_log_pdf,
     compute_beta_mean,
-    compute_beta_variance
+    compute_beta_variance,
+    log_beta_binomial_pmf,
 )
 
 from .beta_classifier import BetaClassifier
@@ -767,6 +779,7 @@ __all__ = [
     "beta_log_pdf",
     "compute_beta_mean",
     "compute_beta_variance",
+    "log_beta_binomial_pmf",
     # Beta mixture utilities
     "fit_beta_mixture",
     "estimate_js_divergence",

@@ -38,11 +38,13 @@ class MethylCentroidBuilder:
         use_gpu: bool = True,
         chunk_size: int = 100_000_000,  # ~100M positions → covers hg38 + margin
         metadata: Optional[Dict[str, Any]] = None,
+        store_extended_stats: bool = True,
     ):
         self.min_coverage = min_coverage
         self.use_gpu = use_gpu and HAS_GPU
         self.xp = cp if self.use_gpu else np
         self.metadata = metadata or {}
+        self.store_extended_stats = store_extended_stats
 
         logger.info(f"MethylCentroidBuilder initialized → GPU: {self.use_gpu}")
 
@@ -57,6 +59,19 @@ class MethylCentroidBuilder:
         self.log_1x_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
         self.tnc: CuArray = self.xp.zeros(chunk_size, dtype=np.uint8)
 
+        # Extended sufficient stats for additional distributions
+        if self.store_extended_stats:
+            self.sum_cov: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
+            self.sum_cov2: CuArray = self.xp.zeros(chunk_size, dtype=np.float64)
+            self.sum_mC: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
+            self.sum_uC: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
+            self.sum_mC2: CuArray = self.xp.zeros(chunk_size, dtype=np.float64)
+            self.sum_uC2: CuArray = self.xp.zeros(chunk_size, dtype=np.float64)
+            self.Sx3: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
+            self.Sx4: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
+            self.count_zero: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
+            self.count_one: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
+
         self.size = 0
         self.capacity = chunk_size
         self.samples_processed = 0
@@ -65,7 +80,7 @@ class MethylCentroidBuilder:
         new_cap = max(min_needed, int(self.capacity * 1.6))
         logger.debug(f"Growing accumulators: {self.capacity:,} → {new_cap:,} positions")
 
-        for attr in [
+        grow_attrs = [
             "pos",
             "mC_sum",
             "uC_sum",
@@ -75,7 +90,22 @@ class MethylCentroidBuilder:
             "log_x_sum",
             "log_1x_sum",
             "tnc",
-        ]:
+        ]
+        if self.store_extended_stats:
+            grow_attrs.extend([
+                "sum_cov",
+                "sum_cov2",
+                "sum_mC",
+                "sum_uC",
+                "sum_mC2",
+                "sum_uC2",
+                "Sx3",
+                "Sx4",
+                "count_zero",
+                "count_one",
+            ])
+
+        for attr in grow_attrs:
             old = getattr(self, attr)
             new = self.xp.zeros(new_cap, dtype=old.dtype)
             new[: self.size] = old[: self.size]
@@ -150,6 +180,21 @@ class MethylCentroidBuilder:
         self.Sx[final_idx] += mean
         self.Sx2[final_idx] += mean**2
 
+        if self.store_extended_stats:
+            cov = total_cov.astype(self.xp.uint64)
+            self.sum_cov[final_idx] += cov
+            self.sum_cov2[final_idx] += cov.astype(self.xp.float64) ** 2
+            self.sum_mC[final_idx] += mC.astype(self.xp.uint64)
+            self.sum_uC[final_idx] += uC.astype(self.xp.uint64)
+            self.sum_mC2[final_idx] += mC.astype(self.xp.float64) ** 2
+            self.sum_uC2[final_idx] += uC.astype(self.xp.float64) ** 2
+            self.Sx3[final_idx] += mean.astype(self.xp.float32) ** 3
+            self.Sx4[final_idx] += mean.astype(self.xp.float32) ** 4
+            zero_mask = (mC == 0) & (total_cov > 0)
+            one_mask = (uC == 0) & (total_cov > 0)
+            self.count_zero[final_idx] += zero_mask.astype(self.xp.uint32)
+            self.count_one[final_idx] += one_mask.astype(self.xp.uint32)
+
         # Clip for log calculations - ensure we never get exactly 0 or 1
         # Use tighter bounds to avoid log(0) warnings
         eps = np.finfo(np.float32).eps * 10  # ~1e-6 for float32
@@ -181,6 +226,17 @@ class MethylCentroidBuilder:
         log_x = to_cpu(self.log_x_sum[: self.size])
         log_1x = to_cpu(self.log_1x_sum[: self.size])
         tnc = to_cpu(self.tnc[: self.size])
+        if self.store_extended_stats:
+            sum_cov = to_cpu(self.sum_cov[: self.size])
+            sum_cov2 = to_cpu(self.sum_cov2[: self.size])
+            sum_mC = to_cpu(self.sum_mC[: self.size])
+            sum_uC = to_cpu(self.sum_uC[: self.size])
+            sum_mC2 = to_cpu(self.sum_mC2[: self.size])
+            sum_uC2 = to_cpu(self.sum_uC2[: self.size])
+            Sx3 = to_cpu(self.Sx3[: self.size])
+            Sx4 = to_cpu(self.Sx4[: self.size])
+            count_zero = to_cpu(self.count_zero[: self.size])
+            count_one = to_cpu(self.count_one[: self.size])
 
         # Apply coverage filter
         coverage = mC_sum + uC_sum
@@ -204,6 +260,18 @@ class MethylCentroidBuilder:
             }
         ).reset_index(drop=True)
 
+        if self.store_extended_stats:
+            df["sum_cov"] = sum_cov[mask].astype(np.uint64)
+            df["sum_cov2"] = sum_cov2[mask].astype(np.float64)
+            df["sum_mC"] = sum_mC[mask].astype(np.uint64)
+            df["sum_uC"] = sum_uC[mask].astype(np.uint64)
+            df["sum_mC2"] = sum_mC2[mask].astype(np.float64)
+            df["sum_uC2"] = sum_uC2[mask].astype(np.float64)
+            df["Sx3"] = Sx3[mask].astype(np.float32)
+            df["Sx4"] = Sx4[mask].astype(np.float32)
+            df["count_zero"] = count_zero[mask].astype(np.uint32)
+            df["count_one"] = count_one[mask].astype(np.uint32)
+
         final_metadata = {
             **self.metadata,
             "builder": "MethylCentroidBuilder",
@@ -212,6 +280,7 @@ class MethylCentroidBuilder:
             "positions_after_filter": len(df),
             "min_coverage": self.min_coverage,
             "gpu_acceleration": self.use_gpu,
+            "extended_stats": self.store_extended_stats,
         }
 
         logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples")
@@ -224,11 +293,13 @@ def build_centroid(
     min_coverage: int = 4,
     use_gpu: bool = True,
     metadata: Optional[Dict[str, Any]] = None,
+    store_extended_stats: bool = True,
 ) -> MethylExtendedCentroid:
     builder = MethylCentroidBuilder(
         min_coverage=min_coverage, 
         use_gpu=use_gpu, 
-        metadata=metadata
+        metadata=metadata,
+        store_extended_stats=store_extended_stats,
     )
     for path in sample_paths:
         builder.add_sample(path)

@@ -2,7 +2,7 @@
   "tasks": [
     {
       "name": "bc-cancer-chr1-cg",
-      "command": ["python", "-m", "methylcentroid.centroid_cli", "--config", "methylcentroid/configs/bc-cancer_config.json", "--chromosome", "1", "--context", "CG"],
+      "command": ["python", "-m", "methyl_centroid.centroid_cli", "--config", "packages/methylcentroid/configs/bc-cancer_config.json", "--chromosome", "1", "--context", "CG"],
       "requires_gpu": true,
       "priority": 1,
       "estimated_memory_gb": 4,
@@ -10,7 +10,7 @@
     },
     {
       "name": "bc-cancer-chr2-cg", 
-      "command": ["python", "-m", "methylcentroid.centroid_cli", "--config", "methylcentroid/configs/bc-cancer_config.json", "--chromosome", "2", "--context", "CG"],
+      "command": ["python", "-m", "methyl_centroid.centroid_cli", "--config", "packages/methylcentroid/configs/bc-cancer_config.json", "--chromosome", "2", "--context", "CG"],
       "requires_gpu": true,
       "priority": 1,
       "estimated_memory_gb": 4,
@@ -18,7 +18,7 @@
     },
     {
       "name": "bc-cancer-chr3-cg",
-      "command": ["python", "-m", "methylcentroid.centroid_cli", "--config", "methylcentroid/configs/bc-cancer_config.json", "--chromosome", "3", "--context", "CG"],
+      "command": ["python", "-m", "methyl_centroid.centroid_cli", "--config", "packages/methylcentroid/configs/bc-cancer_config.json", "--chromosome", "3", "--context", "CG"],
       "requires_gpu": true,
       "priority": 1,
       "estimated_memory_gb": 4,

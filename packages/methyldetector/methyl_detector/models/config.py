@@ -7,7 +7,7 @@ from enum import Enum
 
 # Import utility for extracting chromosome from filenames
 try:
-    from methyl_modeler.utils.file_utils import get_chromosome_context_from_filename
+    from methyl_detector.utils.file_utils import get_chromosome_context_from_filename  # type: ignore[import-not-found]
 except ImportError:
     # Fallback if not available
     def get_chromosome_context_from_filename(filepath):
@@ -255,51 +255,14 @@ class MethylModelerConfig(BaseModel):
         description="Use binned methylation values (counts per bin) for faster BMM fitting"
     )
     bmm_refine_bin_count: Optional[int] = Field(
-        default=100, ge=10,
+        default=32, ge=10,
         description="Number of bins for binned stats. If None, uses a heuristic based on sample count."
     )
     bmm_refine_use_metadata_samples: bool = Field(
         default=True,
         description="If validation sample paths are not provided, try centroid metadata ('samples_used')"
     )
-    
-    # DMP optimization (requires real samples)
-    optimize_dmps: bool = Field(
-        default=False,
-        description="Enable DMP count optimization using real validation samples (requires validation_mode='real' and validation samples). Uses Bayesian Optimization or FeatureCuts to find optimal DMP count."
-    )
-    optimization_method: str = Field(
-        default="bayesian_optimization",
-        description="Optimization method: 'bayesian_optimization' or 'featurecuts'. Both handle non-monotonic BA(k) functions efficiently."
-    )
-    featurecuts_exhaustive_search: bool = Field(
-        default=True,
-        description="Enable exhaustive search in FeatureCuts to find maximum Balanced Accuracy. If True, evaluates more k values and refines around best candidates. If False, uses fast logarithmic sampling (~20 candidates)."
-    )
-    featurecuts_max_candidates: Optional[int] = Field(
-        default=None, ge=10,
-        description="Maximum number of k values to evaluate in FeatureCuts exhaustive search. If None, automatically determines based on max_k (e.g., min(500, max_k) for exhaustive search). Higher values = more thorough search but slower."
-    )
-    
-    # ----------------
-    # Validation Configuration
-    # ----------------
-    validation_mode: str = Field(
-        default="synthetic",
-        description="Validation mode: 'synthetic' (generate from Beta distributions) or 'real' (use actual samples)"
-    )
-    centroid1_validation_samples: Optional[Union[str, List[str]]] = Field(
-        default=None,
-        description="Validation samples for centroid1. Can be 'use_metadata' to read from centroid metadata, or list of sample directory paths"
-    )
-    centroid2_validation_samples: Optional[Union[str, List[str]]] = Field(
-        default=None,
-        description="Validation samples for centroid2. Can be 'use_metadata' to read from centroid metadata, or list of sample directory paths"
-    )
-    validation_split_ratio: float = Field(
-        default=0.0, ge=0.0, le=0.9,
-        description="Ratio of validation samples to hold out for testing during optimization (0.0-0.9). If 0.0, uses all samples for Platt calibration without splitting. If >0, splits into calibration and test sets to avoid overfitting during binary search/DE. Set to 0.0 if you have a separate independent test set."
-    )
+
     
     # ----------------
     # System Settings

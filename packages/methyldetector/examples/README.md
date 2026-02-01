@@ -74,6 +74,7 @@ This will run comparisons for:
 - `bmm_refine_enabled`: Enable beta mixture refinement on top DMPs (default: false)
 - `bmm_refine_mode`: "annotate" or "filter" (default: "filter")
 - `bmm_refine_use_gpu`: Use GPU for BMM EM + JS divergence when available (default: true)
+- `bmm_refine_bin_count`: Number of bins for binned stats (default: 32)
 
 ### Multiple Comparison Parameters
 - `centroid1_dir`: Directory containing centroid1 files (required)

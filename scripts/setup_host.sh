@@ -67,6 +67,65 @@ detect_gpu() {
   return 1
 }
 
+libnvrtc_present() {
+  local patterns=()
+
+  if [ -n "${VIRTUAL_ENV:-}" ]; then
+    patterns+=("${VIRTUAL_ENV}/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.12")
+  fi
+  patterns+=(
+    "${PROJECT_ROOT}/.venv/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.12"
+    "/usr/lib/aarch64-linux-gnu/libnvrtc.so.12"
+    "/usr/lib/x86_64-linux-gnu/libnvrtc.so.12"
+    "/usr/local/cuda/lib64/libnvrtc.so.12"
+    "/usr/local/cuda/targets/*/lib/libnvrtc.so.12"
+    "/usr/local/cuda-*/targets/*/lib/libnvrtc.so.12"
+  )
+
+  for pattern in "${patterns[@]}"; do
+    if [ -n "$pattern" ] && compgen -G "$pattern" > /dev/null; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+install_nvrtc_system_deps() {
+  if libnvrtc_present; then
+    return 0
+  fi
+
+  if ! command -v apt-get >/dev/null 2>&1; then
+    warn "apt-get not found; cannot install libnvrtc system packages."
+    return 1
+  fi
+
+  local sudo_cmd=""
+  if [ "$(id -u)" -ne 0 ]; then
+    if command -v sudo >/dev/null 2>&1; then
+      sudo_cmd="sudo"
+    else
+      warn "sudo not available; cannot install libnvrtc system packages."
+      return 1
+    fi
+  fi
+
+  info "Installing NVRTC runtime libraries (libnvrtc.so.12)..."
+  $sudo_cmd apt-get update
+  if ! $sudo_cmd apt-get install -y libnvrtc12 libnvrtc-builtins12; then
+    warn "Failed to install libnvrtc12 packages. Ensure NVIDIA CUDA repo is configured."
+    return 1
+  fi
+
+  if libnvrtc_present; then
+    info "NVRTC runtime libraries detected."
+    return 0
+  fi
+
+  warn "libnvrtc.so.12 still not found after installation attempt."
+  return 1
+}
+
 install_system_deps() {
   if ! command -v apt-get >/dev/null 2>&1; then
     die "apt-get not found. Install system dependencies manually."
@@ -258,6 +317,13 @@ if [ "$GPU_DEPS" -eq 1 ]; then
   fi
   info "Installing GPU requirements (CUDA 12.x)..."
   "$PYTHON_BIN" -m pip install -r "$REQ_GPU" --extra-index-url https://pypi.nvidia.com
+  if ! install_nvrtc_system_deps; then
+    warn "CUDA NVRTC library (libnvrtc.so.12) not detected."
+    warn "On ARM64 systems, pip GPU wheels may omit NVRTC."
+    warn "Install with: sudo apt-get install -y libnvrtc12 libnvrtc-builtins12"
+    warn "Or use: scripts/setup_host_conda.sh for a full CUDA toolchain."
+    die "GPU dependencies incomplete (missing libnvrtc.so.12)."
+  fi
 fi
 
 PIP_DEPS_FLAG=("--no-deps")

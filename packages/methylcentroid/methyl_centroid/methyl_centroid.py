@@ -96,7 +96,7 @@ class MethylCentroid:
         min_samples: int = 1,
         verbose: bool = True,
         enable_binned_stats: bool = False,
-        binned_stats_bins: Optional[int] = 100,
+        binned_stats_bins: Optional[int] = 32,
         # Metadata fields
         laboratory: str = None,
         disease: str = None,
@@ -421,7 +421,9 @@ class MethylCentroid:
                 from methyl_utils.core.centroid_builder import MethylCentroidBuilder
 
                 builder = MethylCentroidBuilder(
-                    min_coverage=self._min_coverage, use_gpu=self.use_gpu
+                    min_coverage=self._min_coverage,
+                    use_gpu=self.use_gpu,
+                    store_extended_stats=True,
                 )
                 builder.add_sample(sample)
                 self._centroid = builder.finalize()
@@ -698,7 +700,9 @@ class MethylCentroid:
                         )
 
                         builder = MethylCentroidBuilder(
-                            min_coverage=self._min_coverage, use_gpu=self.use_gpu
+                            min_coverage=self._min_coverage,
+                            use_gpu=self.use_gpu,
+                            store_extended_stats=True,
                         )
                         builder.add_sample(sample_path)
                         self._centroid = builder.finalize()
@@ -2282,7 +2286,7 @@ if __name__ == "__main__":
 
 def attach_binned_stats_to_centroid(
     centroid_path: Union[str, Path],
-    bins: int = 100,
+    bins: int = 32,
     output_dir: Optional[Union[str, Path]] = None,
     chunk_size_positions: int = 2_000_000,
     sample_dirs: Optional[List[str]] = None,

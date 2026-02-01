@@ -16,52 +16,47 @@ Author: MethylDetector Team
 Version: 1.0.0
 """
 
-import logging
-from typing import Optional, Tuple, Dict, Any, List, Union
+from typing import Tuple, Dict, Any, List, Union, Optional, Callable
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-# Import from MethylUtils with comprehensive integration
-from methyl_utils import (
-    # MethylSample class
-    MethylSample,
-    MethylExtendedCentroid,
-    # Statistical functions
-    likelihood_ratio_test_beta,
-    beta_mle_estimation,
-    compute_bhattacharyya_distance,
-    # GPU detection functions
+from .beta_analytics import log_beta_binomial_pmf
+from .beta_mixture import fit_beta_mixture, estimate_js_divergence
+from .core.methyl_frame import MethylSample, MethylExtendedCentroid
+from .gpu_detection import (
     is_gpu_available,
-    get_cupy,
     get_gpu_memory_gb,
     get_gpu_device_count,
-    print_gpu_status,
     cleanup_gpu_memory,
-    # Memory management
-    get_memory_manager,
-    force_gpu_cleanup,
-    # Performance profiling
+)
+from .memory_manager import get_memory_manager, force_gpu_cleanup
+from .metric_validations import validate_methylation_data
+from .metrics_core import compute_bhattacharyya_distance
+from .performance_profiler import (
     get_performance_profiler,
     start_performance_monitoring,
     stop_performance_monitoring,
-    # Validation functions
-    validate_methylation_data,
-    validate_sample_data
 )
+from .statistical_tests import likelihood_ratio_test_beta, storey_qvalues
 from methyl_utils.logging_utils import setup_module_logging
-from .core.methyl_frame import MethylExtendedCentroid
-
+from .core.methyl_mixture_centroid import MethylBetaMixtureCentroid
 logger = setup_module_logging(__name__)
 
 # Type aliases for better type hints
-ArrayLike = Union[np.ndarray, 'cp.ndarray'] if 'cp' in globals() else np.ndarray
+ArrayLike = np.ndarray
 DataFrameType = Union[pd.DataFrame, Any]  # Any for cuDF when available
 
 
 # Constants
 BD_CAP = 20.0  # Cap Bhattacharyya Distance to prevent overflow when converting to BC (exp(-20) ≈ 0)
+
+# Distribution identifiers
+DIST_BETA = 1
+DIST_NORMAL = 2
+DIST_BETA_BINOM = 3
+DIST_BETA_MIXTURE = 4
 
 # Simplified dtype for centroid comparison results
 # Only essential columns - MethylDetector will compute biological importance
@@ -77,6 +72,7 @@ CENTROID_COMPARISON_DTYPE = np.dtype([
     ('mean2', np.float32),
     ('delta_mean', np.float32),
     ('bhattacharyya', np.float32),  # Bhattacharyya Distance (will be converted to BC by MethylDetector)
+    ('dist', np.uint8),  # Distribution selection (see DIST_* constants)
 ])
 
 
@@ -101,13 +97,28 @@ class MethylCentroidPair:
     not here. This keeps the separation of concerns clean.
     """
 
-    def __init__(self, centroid1: MethylExtendedCentroid, centroid2: MethylExtendedCentroid):
+    def __init__(
+        self,
+        centroid1: Optional[MethylExtendedCentroid] = None,
+        centroid2: Optional[MethylExtendedCentroid] = None,
+        min_coverage: int = 4,
+        distribution: str = "auto",
+        min_samples_normal: int = 6,
+        min_samples_beta: int = 10,
+        min_coverage_binom: int = 10,
+        overdispersion_threshold: float = 1.5,
+        enable_mixture: bool = True,
+        bmm_centroid1: Any = None,
+        bmm_centroid2: Any = None,
+    ):
         self.centroid1 = centroid1
         self.centroid2 = centroid2
-        self.common_pos = np.intersect1d(centroid1.pos, centroid2.pos)
-        
-        if len(self.common_pos) == 0:
-            raise ValueError("Centroids have no common positions")
+        self.common_pos = None
+
+        if centroid1 is not None and centroid2 is not None:
+            self.common_pos = np.intersect1d(centroid1.pos, centroid2.pos)
+            if len(self.common_pos) == 0:
+                raise ValueError("Centroids have no common positions")
 
         # Initialize GPU backend
         self.gpu_available = is_gpu_available()
@@ -131,6 +142,23 @@ class MethylCentroidPair:
         # Initialize utilities
         self.memory_manager = get_memory_manager()
         self.performance_profiler = get_performance_profiler()
+
+        self.min_coverage = int(min_coverage)
+
+        # Distribution selection parameters
+        self.distribution = distribution
+        self.min_samples_normal = min_samples_normal
+        self.min_samples_beta = min_samples_beta
+        self.min_coverage_binom = min_coverage_binom
+        self.overdispersion_threshold = overdispersion_threshold
+        self.enable_mixture = enable_mixture
+
+        # Optional Beta Mixture centroids (mask-based)
+        self._bmm_input1 = bmm_centroid1
+        self._bmm_input2 = bmm_centroid2
+        self._bmm_map1: Optional[Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]]] = None
+        self._bmm_map2: Optional[Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]]] = None
+        self._bmm_positions_common: Optional[np.ndarray] = None
 
     @classmethod
     def load_and_align(cls, path1: Union[str, Path], path2: Union[str, Path], min_coverage: int = 4) -> Tuple[MethylSample, MethylSample, np.ndarray]:
@@ -386,7 +414,6 @@ class MethylCentroidPair:
         for ctx in ["CG", "CHG", "CHH"]:
             if ctx in reference_positions:
                 ctx_positions = reference_positions[ctx].astype(np.uint32)
-                start_idx = len(all_positions)
                 ctx_indices = []
                 for pos in ctx_positions:
                     if pos not in position_to_index:
@@ -462,6 +489,92 @@ class MethylCentroidPair:
         self.to_cpu = lambda a: a
         logger.info("CPU backend initialized")
 
+    def _get_centroid_context(self, centroid: MethylSample) -> Optional[str]:
+        meta = getattr(centroid, "metadata", None) or getattr(centroid, "_metadata", None)
+        if isinstance(meta, dict):
+            ctx = meta.get("context")
+            if ctx:
+                return str(ctx)
+        return None
+
+    def _load_bmm_centroid(self, source: Any):
+        if source is None:
+            return None
+        try:
+            from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
+        except Exception:
+            return None
+        if isinstance(source, MethylBetaMixtureCentroid):
+            return source
+        try:
+            path = Path(source)
+            if path.exists():
+                return MethylBetaMixtureCentroid.from_json(path)
+        except Exception:
+            return None
+        return None
+
+    def _build_bmm_map(
+        self,
+        bmm_centroid: Any,
+        context: Optional[str] = None,
+    ) -> Optional[Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]]]:
+        if bmm_centroid is None:
+            return None
+        df = bmm_centroid.df if hasattr(bmm_centroid, "df") else None
+        if df is None or len(df) == 0:
+            return None
+        if context and "context" in df.columns:
+            df = df[df["context"] == context]
+        if hasattr(bmm_centroid, "mask") and bmm_centroid.mask is not None and not bmm_centroid.mask.empty:
+            mask_df = bmm_centroid.mask
+            if context and "context" in mask_df.columns:
+                mask_df = mask_df[mask_df["context"] == context]
+            mask_positions = set(mask_df["position"].astype(np.uint32).tolist())
+            df = df[df["position"].astype(np.uint32).isin(mask_positions)]
+        if df.empty:
+            return None
+
+        bmm_map: Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+        for row in df.itertuples(index=False):
+            pos = int(getattr(row, "position"))
+            weights = getattr(row, "weights", None)
+            alphas = getattr(row, "alphas", None)
+            betas = getattr(row, "betas", None)
+            if not weights or not alphas or not betas:
+                continue
+            try:
+                w = np.asarray(weights, dtype=float)
+                a = np.asarray(alphas, dtype=float)
+                b = np.asarray(betas, dtype=float)
+            except Exception:
+                continue
+            if len(w) == 0 or len(w) != len(a) or len(w) != len(b):
+                continue
+            if not np.all(np.isfinite(w)) or not np.all(np.isfinite(a)) or not np.all(np.isfinite(b)):
+                continue
+            if np.sum(w) <= 0:
+                continue
+            bmm_map[pos] = (w, a, b)
+
+        return bmm_map if bmm_map else None
+
+    def _prepare_bmm_maps(self, centroid1: MethylSample, centroid2: MethylSample) -> None:
+        ctx = self._get_centroid_context(centroid1) or self._get_centroid_context(centroid2)
+        bmm1 = self._load_bmm_centroid(self._bmm_input1)
+        bmm2 = self._load_bmm_centroid(self._bmm_input2)
+        self._bmm_map1 = self._build_bmm_map(bmm1, context=ctx)
+        self._bmm_map2 = self._build_bmm_map(bmm2, context=ctx)
+        if self._bmm_map1 is not None and self._bmm_map2 is not None:
+            keys1 = np.fromiter(self._bmm_map1.keys(), dtype=np.uint32)
+            keys2 = np.fromiter(self._bmm_map2.keys(), dtype=np.uint32)
+            if len(keys1) > 0 and len(keys2) > 0:
+                self._bmm_positions_common = np.intersect1d(keys1, keys2)
+            else:
+                self._bmm_positions_common = None
+        else:
+            self._bmm_positions_common = None
+
     def compare_centroids(
         self, 
         centroid1: MethylSample, 
@@ -497,6 +610,10 @@ class MethylCentroidPair:
         try:
             # Validate inputs
             self._validate_centroids(centroid1, centroid2)
+
+            # Prepare optional BMM maps (mask-based mixtures)
+            if self.enable_mixture:
+                self._prepare_bmm_maps(centroid1, centroid2)
 
             # Align centroids (find common positions)
             common_positions = self._align_centroids(centroid1, centroid2)
@@ -631,6 +748,93 @@ class MethylCentroidPair:
         mean2 = centroid2.mean[indices2].astype(np.float32)
         delta_mean = np.abs(mean1 - mean2)
 
+        # Optional stats for distribution selection
+        Sx1 = centroid1.Sx[indices1].astype(np.float32)
+        Sx2_vals = centroid2.Sx[indices2].astype(np.float32)
+        Sx2_1 = centroid1.Sx2[indices1].astype(np.float32)
+        Sx2_2 = centroid2.Sx2[indices2].astype(np.float32)
+
+        # Coverage statistics for Beta-Binomial selection
+        sum_cov1 = None
+        sum_cov2 = None
+        if getattr(centroid1, "sum_cov", None) is not None and getattr(centroid2, "sum_cov", None) is not None:
+            sum_cov1 = centroid1.sum_cov[indices1].astype(np.float64)
+            sum_cov2 = centroid2.sum_cov[indices2].astype(np.float64)
+        else:
+            # Fallback: approximate using average counts * N
+            sum_cov1 = (centroid1.mC[indices1].astype(np.float64) + centroid1.uC[indices1].astype(np.float64)) * N1
+            sum_cov2 = (centroid2.mC[indices2].astype(np.float64) + centroid2.uC[indices2].astype(np.float64)) * N2
+
+        sum_cov2_1 = None
+        sum_cov2_2 = None
+        if getattr(centroid1, "sum_cov2", None) is not None and getattr(centroid2, "sum_cov2", None) is not None:
+            sum_cov2_1 = centroid1.sum_cov2[indices1].astype(np.float64)
+            sum_cov2_2 = centroid2.sum_cov2[indices2].astype(np.float64)
+
+        # Distribution selection masks
+        dist_mode = (self.distribution or "auto").lower()
+        use_normal_mask = np.zeros(len(positions), dtype=bool)
+        use_beta_binom_mask = np.zeros(len(positions), dtype=bool)
+        use_mixture_mask = np.zeros(len(positions), dtype=bool)
+        force_mixture = dist_mode == "beta_mixture"
+
+        if dist_mode == "normal":
+            use_normal_mask[:] = True
+        elif dist_mode == "beta_binomial":
+            use_beta_binom_mask[:] = True
+        elif dist_mode == "beta":
+            pass
+        else:
+            # Auto selection
+            use_normal_mask = (N1 < self.min_samples_normal) | (N2 < self.min_samples_normal)
+
+            # Coverage-based Beta-Binomial selection (low coverage or overdispersion)
+            mean_cov1 = sum_cov1 / np.maximum(N1, 1.0)
+            mean_cov2 = sum_cov2 / np.maximum(N2, 1.0)
+
+            overdisp1 = np.zeros_like(mean_cov1, dtype=np.float64)
+            overdisp2 = np.zeros_like(mean_cov2, dtype=np.float64)
+            if sum_cov2_1 is not None and sum_cov2_2 is not None:
+                var_cov1 = np.maximum(sum_cov2_1 / np.maximum(N1, 1.0) - mean_cov1**2, 0.0)
+                var_cov2 = np.maximum(sum_cov2_2 / np.maximum(N2, 1.0) - mean_cov2**2, 0.0)
+                overdisp1 = var_cov1 / np.maximum(mean_cov1, 1e-6)
+                overdisp2 = var_cov2 / np.maximum(mean_cov2, 1e-6)
+
+            use_beta_binom_mask = (
+                (mean_cov1 < self.min_coverage_binom)
+                | (mean_cov2 < self.min_coverage_binom)
+                | (overdisp1 > self.overdispersion_threshold)
+                | (overdisp2 > self.overdispersion_threshold)
+            )
+
+            # Mixture selection if mixture params are present
+            if self.enable_mixture:
+                if self._bmm_positions_common is not None:
+                    use_mixture_mask = (
+                        np.isin(positions, self._bmm_positions_common)
+                        & (N1 >= self.min_samples_beta)
+                        & (N2 >= self.min_samples_beta)
+                    )
+                else:
+                    required_mix_cols = {"mix_w1", "mix_w2", "mix_w3", "mix_a1", "mix_a2", "mix_a3", "mix_b1", "mix_b2", "mix_b3"}
+                    if required_mix_cols.issubset(set(centroid1._df.columns)) and required_mix_cols.issubset(set(centroid2._df.columns)):
+                        wsum1 = centroid1._df["mix_w1"].values[indices1] + centroid1._df["mix_w2"].values[indices1] + centroid1._df["mix_w3"].values[indices1]
+                        wsum2 = centroid2._df["mix_w1"].values[indices2] + centroid2._df["mix_w2"].values[indices2] + centroid2._df["mix_w3"].values[indices2]
+                        use_mixture_mask = (wsum1 > 0) & (wsum2 > 0) & (N1 >= self.min_samples_beta) & (N2 >= self.min_samples_beta)
+
+        if force_mixture and self.enable_mixture:
+            if self._bmm_positions_common is not None:
+                use_mixture_mask = np.isin(positions, self._bmm_positions_common)
+            else:
+                # Fallback to mix columns if present
+                required_mix_cols = {"mix_w1", "mix_w2", "mix_w3", "mix_a1", "mix_a2", "mix_a3", "mix_b1", "mix_b2", "mix_b3"}
+                if required_mix_cols.issubset(set(centroid1._df.columns)) and required_mix_cols.issubset(set(centroid2._df.columns)):
+                    wsum1 = centroid1._df["mix_w1"].values[indices1] + centroid1._df["mix_w2"].values[indices1] + centroid1._df["mix_w3"].values[indices1]
+                    wsum2 = centroid2._df["mix_w1"].values[indices2] + centroid2._df["mix_w2"].values[indices2] + centroid2._df["mix_w3"].values[indices2]
+                    use_mixture_mask = (wsum1 > 0) & (wsum2 > 0)
+
+        use_beta_mask = ~(use_normal_mask | use_beta_binom_mask | use_mixture_mask)
+
         # Create temporary centroid objects for LRT (still needed for current API)
         class TempCentroid:
             def __init__(self, N, log_x_sum, log_1_minus_x_sum, mC, uC):
@@ -655,17 +859,176 @@ class MethylCentroidPair:
             mC=centroid2.mC[indices2], uC=centroid2.uC[indices2]
         )
 
-        # Perform likelihood ratio test
+        # Compute Beta p-values for all positions (used as default/fallback)
         lrt_result = likelihood_ratio_test_beta(
             centroid1_batch, centroid2_batch, use_gpu=self.gpu_available
         )
 
         if lrt_result is None:
             logger.warning("LRT returned None, using fallback values")
-            p_values = np.ones(len(positions), dtype=np.float32)
+            p_values_beta = np.ones(len(positions), dtype=np.float32)
         else:
-            _, p_values = lrt_result
-            p_values = p_values.astype(np.float32)
+            _, p_values_beta = lrt_result
+            p_values_beta = p_values_beta.astype(np.float32)
+
+        p_values = np.ones(len(positions), dtype=np.float32)
+        dist_ids = np.full(len(positions), DIST_BETA, dtype=np.uint8)
+
+        # Normal distribution test for small-sample positions
+        if np.any(use_normal_mask):
+            from scipy.stats import norm
+            var1 = np.maximum(Sx2_1 - (Sx1**2 / np.maximum(N1, 1.0)), 1e-12) / np.maximum(N1 - 1, 1)
+            var2 = np.maximum(Sx2_2 - (Sx2_vals**2 / np.maximum(N2, 1.0)), 1e-12) / np.maximum(N2 - 1, 1)
+            se_diff = np.sqrt(var1 / np.maximum(N1, 1.0) + var2 / np.maximum(N2, 1.0))
+            z_stat = (mean1 - mean2) / np.maximum(se_diff, 1e-12)
+            p_norm = 2 * (1 - norm.cdf(np.abs(z_stat)))
+            p_values[use_normal_mask] = p_norm[use_normal_mask].astype(np.float32)
+            dist_ids[use_normal_mask] = DIST_NORMAL
+
+        # Beta-Binomial test using aggregated counts (if selected)
+        if np.any(use_beta_binom_mask):
+            from scipy.stats import chi2
+            from methyl_utils.statistical_tests import _estimate_beta_params_bounded
+            # Use available sum counts or fallback to averages * N
+            if getattr(centroid1, "sum_mC", None) is not None and getattr(centroid2, "sum_mC", None) is not None:
+                k1 = centroid1.sum_mC[indices1].astype(np.float64)
+                k2 = centroid2.sum_mC[indices2].astype(np.float64)
+            else:
+                k1 = centroid1.mC[indices1].astype(np.float64) * N1
+                k2 = centroid2.mC[indices2].astype(np.float64) * N2
+
+            n1 = sum_cov1.astype(np.float64)
+            n2 = sum_cov2.astype(np.float64)
+
+            # Pooled beta params from combined log sums
+            N0 = N1 + N2
+            log_x_sum0 = log_x_sum1 + log_x_sum2
+            log_1mx_sum0 = log_1mx_sum1 + log_1mx_sum2
+            alpha0, beta0 = _estimate_beta_params_bounded(N0, log_x_sum0, log_1mx_sum0)
+
+            ll1 = log_beta_binomial_pmf(k1, n1, alpha1, beta1, use_gpu=self.gpu_available)
+            ll2 = log_beta_binomial_pmf(k2, n2, alpha2, beta2, use_gpu=self.gpu_available)
+            ll0_1 = log_beta_binomial_pmf(k1, n1, alpha0, beta0, use_gpu=self.gpu_available)
+            ll0_2 = log_beta_binomial_pmf(k2, n2, alpha0, beta0, use_gpu=self.gpu_available)
+            llr = 2.0 * ((ll1 + ll2) - (ll0_1 + ll0_2))
+            llr = np.maximum(llr, 0.0)
+            p_bb = chi2.sf(llr, df=2)
+            p_values[use_beta_binom_mask] = p_bb[use_beta_binom_mask].astype(np.float32)
+            dist_ids[use_beta_binom_mask] = DIST_BETA_BINOM
+
+        # Beta mixture handling (optional, if mixture params are stored)
+        if np.any(use_mixture_mask):
+            try:
+                from methyl_utils.beta_mixture import mixture_logpdf, _resolve_backend, _to_numpy
+            except ImportError:
+                from .beta_mixture import mixture_logpdf, _resolve_backend, _to_numpy
+
+            xp, betaln_fn, _ = _resolve_backend(self.gpu_available)
+
+            # Default to beta p-values unless mixture computation succeeds
+            p_values[use_mixture_mask] = p_values_beta[use_mixture_mask]
+            dist_ids[use_mixture_mask] = DIST_BETA_MIXTURE
+
+            mixture_indices = np.where(use_mixture_mask)[0]
+
+            if self._bmm_map1 is not None and self._bmm_map2 is not None:
+                for idx in mixture_indices:
+                    pos = int(positions[idx])
+                    entry1 = self._bmm_map1.get(pos)
+                    entry2 = self._bmm_map2.get(pos)
+                    if entry1 is None or entry2 is None:
+                        continue
+                    w1, a1m, b1m = entry1
+                    w2, a2m, b2m = entry2
+                    if np.sum(w1) <= 0 or np.sum(w2) <= 0:
+                        continue
+                    w1 = w1 / np.sum(w1)
+                    w2 = w2 / np.sum(w2)
+                    try:
+                        log_m1 = mixture_logpdf(
+                            xp.asarray([mean1[idx]]),
+                            xp.asarray(w1),
+                            xp.asarray(a1m),
+                            xp.asarray(b1m),
+                            xp=xp,
+                            betaln_fn=betaln_fn,
+                        )
+                        log_m2 = mixture_logpdf(
+                            xp.asarray([mean1[idx]]),
+                            xp.asarray(w2),
+                            xp.asarray(a2m),
+                            xp.asarray(b2m),
+                            xp=xp,
+                            betaln_fn=betaln_fn,
+                        )
+                        llr = 2.0 * (float(_to_numpy(log_m1)) - float(_to_numpy(log_m2)))
+                        llr = max(llr, 0.0)
+                        from scipy.stats import chi2
+                        p_values[idx] = chi2.sf(llr, df=2)
+                    except Exception:
+                        continue
+            else:
+                mix_w1 = centroid1._df["mix_w1"].values[indices1]
+                mix_w2 = centroid1._df["mix_w2"].values[indices1]
+                mix_w3 = centroid1._df["mix_w3"].values[indices1]
+                mix_a1 = centroid1._df["mix_a1"].values[indices1]
+                mix_a2 = centroid1._df["mix_a2"].values[indices1]
+                mix_a3 = centroid1._df["mix_a3"].values[indices1]
+                mix_b1 = centroid1._df["mix_b1"].values[indices1]
+                mix_b2 = centroid1._df["mix_b2"].values[indices1]
+                mix_b3 = centroid1._df["mix_b3"].values[indices1]
+
+                mix2_w1 = centroid2._df["mix_w1"].values[indices2]
+                mix2_w2 = centroid2._df["mix_w2"].values[indices2]
+                mix2_w3 = centroid2._df["mix_w3"].values[indices2]
+                mix2_a1 = centroid2._df["mix_a1"].values[indices2]
+                mix2_a2 = centroid2._df["mix_a2"].values[indices2]
+                mix2_a3 = centroid2._df["mix_a3"].values[indices2]
+                mix2_b1 = centroid2._df["mix_b1"].values[indices2]
+                mix2_b2 = centroid2._df["mix_b2"].values[indices2]
+                mix2_b3 = centroid2._df["mix_b3"].values[indices2]
+
+                for idx in mixture_indices:
+                    w1 = np.asarray([mix_w1[idx], mix_w2[idx], mix_w3[idx]], dtype=float)
+                    a1m = np.asarray([mix_a1[idx], mix_a2[idx], mix_a3[idx]], dtype=float)
+                    b1m = np.asarray([mix_b1[idx], mix_b2[idx], mix_b3[idx]], dtype=float)
+                    w2 = np.asarray([mix2_w1[idx], mix2_w2[idx], mix2_w3[idx]], dtype=float)
+                    a2m = np.asarray([mix2_a1[idx], mix2_a2[idx], mix2_a3[idx]], dtype=float)
+                    b2m = np.asarray([mix2_b1[idx], mix2_b2[idx], mix2_b3[idx]], dtype=float)
+
+                    if np.sum(w1) <= 0 or np.sum(w2) <= 0:
+                        continue
+                    w1 = w1 / np.sum(w1)
+                    w2 = w2 / np.sum(w2)
+
+                    try:
+                        log_m1 = mixture_logpdf(
+                            xp.asarray([mean1[idx]]),
+                            xp.asarray(w1),
+                            xp.asarray(a1m),
+                            xp.asarray(b1m),
+                            xp=xp,
+                            betaln_fn=betaln_fn,
+                        )
+                        log_m2 = mixture_logpdf(
+                            xp.asarray([mean1[idx]]),
+                            xp.asarray(w2),
+                            xp.asarray(a2m),
+                            xp.asarray(b2m),
+                            xp=xp,
+                            betaln_fn=betaln_fn,
+                        )
+                        llr = 2.0 * (float(_to_numpy(log_m1)) - float(_to_numpy(log_m2)))
+                        llr = max(llr, 0.0)
+                        from scipy.stats import chi2
+                        p_values[idx] = chi2.sf(llr, df=2)
+                    except Exception:
+                        continue
+
+        # Fill beta default for remaining positions
+        if np.any(use_beta_mask):
+            p_values[use_beta_mask] = p_values_beta[use_beta_mask]
+            dist_ids[use_beta_mask] = DIST_BETA
 
         # Fill results array directly (vectorized assignment)
         results_view['position'] = positions.astype(np.uint32)
@@ -679,6 +1042,7 @@ class MethylCentroidPair:
         results_view['mean2'] = mean2.astype(np.float32)
         results_view['delta_mean'] = delta_mean.astype(np.float32)
         results_view['bhattacharyya'] = np.zeros(len(positions), dtype=np.float32)  # Will be computed in _compute_bhattacharyya
+        results_view['dist'] = dist_ids
 
     def _apply_fdr_correction(self, results_array: np.ndarray) -> np.ndarray:
         """Apply FDR correction to p-values using Storey's method."""
@@ -973,6 +1337,602 @@ class MethylCentroidPair:
         q_values = q_values[original_order]
 
         return q_values
+
+    @staticmethod
+    def resolve_validation_samples(
+        config_samples: Optional[Union[str, List[str]]],
+        centroid_dir: Optional[str],
+        chromosome: str,
+        contexts: Optional[List[str]] = None,
+        centroid_name: str = "centroid",
+    ) -> List[str]:
+        """
+        Resolve validation sample paths from config or centroid metadata.
+
+        Args:
+            config_samples: "use_metadata", list of paths, or None
+            centroid_dir: Directory containing centroid H5 files
+            chromosome: Chromosome identifier
+            contexts: List of contexts (uses first if provided)
+            centroid_name: Name for logging
+        """
+        if isinstance(config_samples, list):
+            logger.debug(f"Using {len(config_samples)} validation samples from config for {centroid_name}")
+            return config_samples
+
+        if config_samples != "use_metadata":
+            return []
+
+        if not centroid_dir:
+            logger.warning(f"No centroid_dir provided for {centroid_name}; cannot read metadata samples")
+            return []
+
+        try:
+            ctx = contexts[0] if contexts else "CG"
+            centroid_path = Path(centroid_dir) / f"{chromosome}-{ctx}.h5"
+            if not centroid_path.exists():
+                logger.warning(f"Centroid file not found: {centroid_path}")
+                return []
+
+            centroid = MethylSample.load_from_h5(str(centroid_path))
+            if centroid.metadata:
+                samples = centroid.samples
+                if samples:
+                    logger.info(f"✅ Loaded {len(samples)} validation samples from {centroid_name} metadata")
+                    return samples
+                logger.warning(
+                    f"No sample paths found in {centroid_name} metadata "
+                    "(checked 'sample_paths' and 'samples_used')"
+                )
+            else:
+                logger.warning(f"No metadata in {centroid_name} centroid")
+        except Exception as e:
+            logger.warning(f"Failed to read validation samples from {centroid_name} metadata: {e}")
+
+        return []
+
+    @staticmethod
+    def load_binned_counts_from_centroids(
+        dmps_df: pd.DataFrame,
+        centroid1_dir: str,
+        centroid2_dir: str,
+        chromosome: str,
+    ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]]:
+        """
+        Load per-position bin counts from centroid H5 files for given DMPs.
+
+        Returns:
+            (bin_edges, counts1, counts2) or None if not available.
+        """
+        if dmps_df is None or dmps_df.empty:
+            return None
+        if "context" not in dmps_df.columns:
+            dmps_df = dmps_df.copy()
+            dmps_df["context"] = "CG"
+
+        try:
+            import h5py
+        except Exception:
+            return None
+
+        counts1 = None
+        counts2 = None
+        bin_edges_ref = None
+
+        for ctx in np.unique(dmps_df["context"].values):
+            ctx_mask = dmps_df["context"].values == ctx
+            ctx_positions = dmps_df.loc[ctx_mask, "position"].values.astype(np.uint32)
+            if len(ctx_positions) == 0:
+                continue
+
+            c1_path = Path(centroid1_dir) / f"{chromosome}-{ctx}.h5"
+            c2_path = Path(centroid2_dir) / f"{chromosome}-{ctx}.h5"
+            if not c1_path.exists() or not c2_path.exists():
+                return None
+
+            try:
+                with h5py.File(c1_path, "r") as f1, h5py.File(c2_path, "r") as f2:
+                    if "binned_stats" not in f1 or "binned_stats" not in f2:
+                        return None
+                    be1 = np.asarray(f1["binned_stats"]["bin_edges"][:], dtype=np.float32)
+                    be2 = np.asarray(f2["binned_stats"]["bin_edges"][:], dtype=np.float32)
+                    if be1.shape != be2.shape or not np.allclose(be1, be2):
+                        logger.warning(f"Binned bin_edges mismatch for context {ctx}; falling back to samples")
+                        return None
+
+                    if bin_edges_ref is None:
+                        bin_edges_ref = be1
+                        n_bins = len(bin_edges_ref) - 1
+                        counts1 = np.zeros((len(dmps_df), n_bins), dtype=np.int32)
+                        counts2 = np.zeros((len(dmps_df), n_bins), dtype=np.int32)
+                    else:
+                        if len(be1) != len(bin_edges_ref):
+                            logger.warning(f"Binned bins mismatch for context {ctx}; falling back to samples")
+                            return None
+
+                    pos1 = np.asarray(f1["methylation_data"]["pos"][:], dtype=np.uint32)
+                    pos2 = np.asarray(f2["methylation_data"]["pos"][:], dtype=np.uint32)
+                    idx1 = np.searchsorted(pos1, ctx_positions)
+                    idx2 = np.searchsorted(pos2, ctx_positions)
+                    valid1 = (idx1 < len(pos1)) & (pos1[idx1] == ctx_positions)
+                    valid2 = (idx2 < len(pos2)) & (pos2[idx2] == ctx_positions)
+                    valid = valid1 & valid2
+                    if not np.any(valid):
+                        continue
+
+                    bc1 = f1["binned_stats"]["bin_counts"][idx1[valid]]
+                    bc2 = f2["binned_stats"]["bin_counts"][idx2[valid]]
+                    global_idx = np.where(ctx_mask)[0][valid]
+                    counts1[global_idx] = bc1
+                    counts2[global_idx] = bc2
+            except Exception:
+                return None
+
+        if bin_edges_ref is None:
+            return None
+        return bin_edges_ref, counts1, counts2
+
+    def refine_dmps_with_bmm(
+        self,
+        dmps_df: pd.DataFrame,
+        centroid1_dir: str,
+        centroid2_dir: str,
+        chromosome: str,
+        class1_paths: Optional[List[str]] = None,
+        class2_paths: Optional[List[str]] = None,
+        contexts: Optional[List[str]] = None,
+        bmm_config: Optional[Dict[str, Any]] = None,
+        load_validation_samples_fn: Optional[Callable[..., Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]]] = None,
+    ) -> Tuple[pd.DataFrame, Optional[MethylBetaMixtureCentroid], Optional[MethylBetaMixtureCentroid], Optional[Dict[Tuple[int, str], Dict[str, Any]]], Optional[Dict[str, Any]]]:
+        """
+        Refine DMPs using per-position Beta Mixture Models (BMMs).
+
+        Returns:
+            (merged_df, bmm_centroid_c1, bmm_centroid_c2, bmm_records_map, bmm_summary)
+        """
+        if dmps_df is None or dmps_df.empty:
+            return dmps_df, None, None, None, None
+
+        cfg = bmm_config or {}
+        df = dmps_df.copy()
+        if "context" not in df.columns:
+            df["context"] = "CG"
+
+        if "bhattacharyya_coefficient" not in df.columns and "overlap" not in df.columns:
+            if "bhattacharyya" in df.columns:
+                df["bhattacharyya_coefficient"] = np.exp(-np.clip(df["bhattacharyya"].values, 0, 50))
+
+        overlap_col = "bhattacharyya_coefficient" if "bhattacharyya_coefficient" in df.columns else \
+            ("overlap" if "overlap" in df.columns else None)
+
+        rank_col = "importance" if "importance" in df.columns else \
+            ("effect_size" if "effect_size" in df.columns else "delta_mean")
+
+        df_sorted = df.sort_values(rank_col, ascending=False)
+        total_candidates = len(df_sorted)
+        max_dmps = min(int(cfg.get("bmm_refine_max_dmps", total_candidates)), total_candidates)
+        max_fraction = cfg.get("bmm_refine_max_fraction")
+        if max_fraction is not None:
+            frac_cap = int(np.ceil(total_candidates * float(max_fraction)))
+            if frac_cap > 0:
+                max_dmps = min(max_dmps, frac_cap)
+        max_dmps = max(1, max_dmps) if total_candidates > 0 else 0
+        subset_df = df_sorted.iloc[:max_dmps].copy()
+        logger.info(
+            f"BMM evaluation cap: {max_dmps:,}/{total_candidates:,} "
+            f"(max_dmps={cfg.get('bmm_refine_max_dmps', max_dmps)}, "
+            f"max_fraction={max_fraction})"
+        )
+
+        use_metadata_samples = bool(cfg.get("bmm_refine_use_metadata_samples", True))
+        class1_paths = class1_paths or []
+        class2_paths = class2_paths or []
+        if not class1_paths and use_metadata_samples:
+            class1_paths = self.resolve_validation_samples(
+                "use_metadata",
+                centroid1_dir,
+                chromosome,
+                contexts=contexts,
+                centroid_name="centroid1",
+            )
+        if not class2_paths and use_metadata_samples:
+            class2_paths = self.resolve_validation_samples(
+                "use_metadata",
+                centroid2_dir,
+                chromosome,
+                contexts=contexts,
+                centroid_name="centroid2",
+            )
+
+        use_binned = bool(cfg.get("bmm_refine_use_binned_stats", True))
+        bin_count = cfg.get("bmm_refine_bin_count", 32)
+        if bin_count is None:
+            n_total = max(len(class1_paths) + len(class2_paths), 1)
+            bin_count = int(np.clip(round(np.sqrt(n_total) * 6), 32, 100))
+        bin_edges = np.linspace(0.0, 1.0, int(bin_count) + 1, dtype=np.float32)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+
+        binned_counts = None
+        if use_binned:
+            binned_counts = self.load_binned_counts_from_centroids(
+                subset_df, centroid1_dir, centroid2_dir, chromosome
+            )
+            if binned_counts is not None:
+                bin_edges, counts1_all, counts2_all = binned_counts
+                bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.0
+                bin_count = len(bin_edges) - 1
+
+        if binned_counts is None:
+            if not class1_paths or not class2_paths:
+                logger.warning("BMM refinement skipped: no validation sample paths available")
+                df["bmm_status"] = "skipped_no_samples"
+                return df, None, None, None
+
+            max_samples_per_group = int(cfg.get("bmm_refine_max_samples_per_group", 50))
+            if len(class1_paths) > max_samples_per_group:
+                class1_paths = class1_paths[:max_samples_per_group]
+            if len(class2_paths) > max_samples_per_group:
+                class2_paths = class2_paths[:max_samples_per_group]
+
+        X = y = None
+        if binned_counts is None:
+            if load_validation_samples_fn is None:
+                logger.warning("BMM refinement skipped: no validation sample loader provided")
+                df["bmm_status"] = "skipped_no_loader"
+                return df, None, None, None
+            val_data = load_validation_samples_fn(subset_df, class1_paths, class2_paths, allow_mock=False)
+            if val_data is None:
+                logger.warning("BMM refinement skipped: unable to load validation samples")
+                df["bmm_status"] = "skipped_load_failed"
+                return df, None, None, None
+            X, y, val_positions, val_contexts = val_data
+            if X.shape[1] != len(subset_df):
+                logger.warning("BMM refinement skipped: validation matrix does not align with DMP subset")
+                df["bmm_status"] = "skipped_alignment_mismatch"
+                return df, None, None, None
+
+        bmm_records = []
+        bmm_source = "centroid_bins" if binned_counts is not None else "samples"
+        min_samples = int(cfg.get("bmm_refine_min_samples_per_group", 10))
+        use_gpu = bool(cfg.get("bmm_refine_use_gpu", True))
+        if use_gpu and not self.gpu_available:
+            logger.info("BMM GPU requested but not available; using CPU")
+            use_gpu = False
+        if use_gpu:
+            logger.info("BMM GPU acceleration enabled")
+
+        max_components = int(cfg.get("bmm_refine_max_components", 3))
+        mc_samples = int(cfg.get("bmm_refine_mc_samples", 200))
+        skip_delta = float(cfg.get("bmm_refine_skip_delta_mean", 0.4))
+        skip_overlap = float(cfg.get("bmm_refine_skip_overlap", 0.2))
+        random_state = cfg.get("random_state")
+
+        for j, row in subset_df.reset_index(drop=False).iterrows():
+            pos = int(row["position"])
+            ctx = row.get("context", "CG")
+            delta_mean = float(row.get("delta_mean", 0.0))
+            overlap = float(row[overlap_col]) if overlap_col and np.isfinite(row.get(overlap_col, np.nan)) else None
+            if binned_counts is not None:
+                counts1 = counts1_all[j]
+                counts2 = counts2_all[j]
+                n1 = int(np.sum(counts1))
+                n2 = int(np.sum(counts2))
+            else:
+                vals_healthy = X[y == 0, j]
+                vals_cancer = X[y == 1, j]
+                vals_healthy = vals_healthy[np.isfinite(vals_healthy)]
+                vals_cancer = vals_cancer[np.isfinite(vals_cancer)]
+                n1 = int(len(vals_healthy))
+                n2 = int(len(vals_cancer))
+
+            if n1 < min_samples or n2 < min_samples:
+                bmm_records.append({
+                    "position": pos,
+                    "context": ctx,
+                    "k1": 1,
+                    "k2": 1,
+                    "weights1": [1.0],
+                    "alphas1": [],
+                    "betas1": [],
+                    "weights2": [1.0],
+                    "alphas2": [],
+                    "betas2": [],
+                    "n1": n1,
+                    "n2": n2,
+                    "bmm_js": np.nan,
+                    "bmm_p_value": np.nan,
+                    "bmm_llr": np.nan,
+                    "bmm_df": np.nan,
+                    "bmm_bin_count": int(bin_count),
+                    "bmm_source": bmm_source,
+                    "status": "skipped_insufficient_samples",
+                })
+                continue
+
+            if abs(delta_mean) >= skip_delta:
+                bmm_records.append({
+                    "position": pos,
+                    "context": ctx,
+                    "k1": 1,
+                    "k2": 1,
+                    "weights1": [1.0],
+                    "alphas1": [],
+                    "betas1": [],
+                    "weights2": [1.0],
+                    "alphas2": [],
+                    "betas2": [],
+                    "n1": n1,
+                    "n2": n2,
+                    "bmm_js": np.nan,
+                    "bmm_p_value": np.nan,
+                    "bmm_llr": np.nan,
+                    "bmm_df": np.nan,
+                    "bmm_bin_count": int(bin_count),
+                    "bmm_source": bmm_source,
+                    "status": "skipped_obvious_delta",
+                })
+                continue
+            if overlap is not None and overlap <= skip_overlap:
+                bmm_records.append({
+                    "position": pos,
+                    "context": ctx,
+                    "k1": 1,
+                    "k2": 1,
+                    "weights1": [1.0],
+                    "alphas1": [],
+                    "betas1": [],
+                    "weights2": [1.0],
+                    "alphas2": [],
+                    "betas2": [],
+                    "n1": n1,
+                    "n2": n2,
+                    "bmm_js": np.nan,
+                    "bmm_p_value": np.nan,
+                    "bmm_llr": np.nan,
+                    "bmm_df": np.nan,
+                    "bmm_bin_count": int(bin_count),
+                    "bmm_source": bmm_source,
+                    "status": "skipped_obvious_overlap",
+                })
+                continue
+
+            try:
+                if binned_counts is not None:
+                    fit1 = fit_beta_mixture(
+                        bin_centers,
+                        weights=counts1,
+                        max_components=max_components,
+                        random_state=random_state,
+                        use_gpu=use_gpu
+                    )
+                    fit2 = fit_beta_mixture(
+                        bin_centers,
+                        weights=counts2,
+                        max_components=max_components,
+                        random_state=random_state,
+                        use_gpu=use_gpu
+                    )
+                    pooled_counts = counts1 + counts2
+                    fit0 = fit_beta_mixture(
+                        bin_centers,
+                        weights=pooled_counts,
+                        max_components=max_components,
+                        random_state=random_state,
+                        use_gpu=use_gpu
+                    )
+                else:
+                    fit1 = fit_beta_mixture(
+                        vals_healthy,
+                        max_components=max_components,
+                        random_state=random_state,
+                        use_gpu=use_gpu
+                    )
+                    fit2 = fit_beta_mixture(
+                        vals_cancer,
+                        max_components=max_components,
+                        random_state=random_state,
+                        use_gpu=use_gpu
+                    )
+                    pooled_vals = np.concatenate([vals_healthy, vals_cancer])
+                    fit0 = fit_beta_mixture(
+                        pooled_vals,
+                        max_components=max_components,
+                        random_state=random_state,
+                        use_gpu=use_gpu
+                    )
+            except Exception as e:
+                bmm_records.append({
+                    "position": pos,
+                    "context": ctx,
+                    "k1": 1,
+                    "k2": 1,
+                    "weights1": [],
+                    "alphas1": [],
+                    "betas1": [],
+                    "weights2": [],
+                    "alphas2": [],
+                    "betas2": [],
+                    "n1": n1,
+                    "n2": n2,
+                    "bmm_js": np.nan,
+                    "bmm_p_value": np.nan,
+                    "bmm_llr": np.nan,
+                    "bmm_df": np.nan,
+                    "bmm_bin_count": int(bin_count),
+                    "bmm_source": bmm_source,
+                    "status": f"error_fit: {e}",
+                })
+                continue
+
+            js = estimate_js_divergence(
+                fit1["weights"], fit1["alphas"], fit1["betas"],
+                fit2["weights"], fit2["alphas"], fit2["betas"],
+                n_samples=mc_samples,
+                random_state=random_state,
+                use_gpu=use_gpu
+            )
+
+            def _param_count(k):
+                return (k - 1) + 2 * k
+
+            ll1 = fit1.get("loglik", np.nan)
+            ll2 = fit2.get("loglik", np.nan)
+            ll0 = fit0.get("loglik", np.nan)
+            if np.isfinite(ll1) and np.isfinite(ll2) and np.isfinite(ll0):
+                llr = 2.0 * ((ll1 + ll2) - ll0)
+                df_llr = max(_param_count(int(fit1["k"])) + _param_count(int(fit2["k"])) - _param_count(int(fit0["k"])), 1)
+                try:
+                    from scipy.stats import chi2
+                    bmm_p = float(1.0 - chi2.cdf(llr, df_llr)) if llr >= 0 else 1.0
+                except Exception:
+                    bmm_p = np.nan
+            else:
+                llr = np.nan
+                df_llr = np.nan
+                bmm_p = np.nan
+
+            status = "fit"
+            bmm_records.append({
+                "position": pos,
+                "context": ctx,
+                "k1": int(fit1["k"]),
+                "k2": int(fit2["k"]),
+                "weights1": fit1["weights"].tolist(),
+                "alphas1": fit1["alphas"].tolist(),
+                "betas1": fit1["betas"].tolist(),
+                "weights2": fit2["weights"].tolist(),
+                "alphas2": fit2["alphas"].tolist(),
+                "betas2": fit2["betas"].tolist(),
+                "n1": n1,
+                "n2": n2,
+                "bmm_js": js,
+                "bmm_p_value": bmm_p,
+                "bmm_llr": llr,
+                "bmm_df": df_llr,
+                "bmm_bin_count": int(bin_count),
+                "bmm_source": bmm_source,
+                "status": status,
+            })
+
+        mask_df = subset_df[["position", "context"]].copy()
+        bmm_records_map = {
+            (int(r["position"]), r.get("context", "CG")): r for r in bmm_records
+        }
+
+        base_metadata = {
+            "chromosome": chromosome,
+            "contexts": list(np.unique(subset_df["context"].values)),
+            "source": "centroid_pair_bmm_refine",
+        }
+
+        records_c1 = [
+            {
+                "position": r["position"],
+                "context": r["context"],
+                "k": r["k1"],
+                "weights": r["weights1"],
+                "alphas": r["alphas1"],
+                "betas": r["betas1"],
+                "n_samples": r["n1"],
+                "converged": True,
+                "bic": np.nan,
+                "loglik": np.nan,
+                "status": r["status"],
+            }
+            for r in bmm_records
+        ]
+        records_c2 = [
+            {
+                "position": r["position"],
+                "context": r["context"],
+                "k": r["k2"],
+                "weights": r["weights2"],
+                "alphas": r["alphas2"],
+                "betas": r["betas2"],
+                "n_samples": r["n2"],
+                "converged": True,
+                "bic": np.nan,
+                "loglik": np.nan,
+                "status": r["status"],
+            }
+            for r in bmm_records
+        ]
+
+        bmm_centroid_c1 = MethylBetaMixtureCentroid.from_records(
+            records_c1,
+            mask=mask_df,
+            metadata={**base_metadata, "group": "centroid1", "class_index": 0},
+        )
+        bmm_centroid_c2 = MethylBetaMixtureCentroid.from_records(
+            records_c2,
+            mask=mask_df,
+            metadata={**base_metadata, "group": "centroid2", "class_index": 1},
+        )
+
+        bmm_df = pd.DataFrame(bmm_records)
+        merged = df.merge(bmm_df, on=["position", "context"], how="left")
+        merged["bmm_status"] = merged["status"].fillna("not_evaluated")
+        merged = merged.drop(columns=["status"])
+
+        replace_p = bool(cfg.get("bmm_refine_replace_p_value", False))
+        recompute_q = bool(cfg.get("bmm_refine_recompute_q", True))
+        replaced_count = 0
+        if replace_p and "bmm_p_value" in merged.columns:
+            if "p_value_lrt" not in merged.columns:
+                merged["p_value_lrt"] = merged["p_value"]
+            if "q_value_lrt" not in merged.columns and "q_value" in merged.columns:
+                merged["q_value_lrt"] = merged["q_value"]
+
+            fit_mask = (merged["bmm_status"] == "fit") & merged["bmm_p_value"].notna()
+            merged.loc[fit_mask, "p_value"] = merged.loc[fit_mask, "bmm_p_value"]
+            replaced_count = int(np.sum(fit_mask))
+
+            if recompute_q and "p_value" in merged.columns:
+                try:
+                    q_vals, _ = storey_qvalues(merged["p_value"].values)
+                    merged["q_value"] = q_vals.astype(np.float32)
+                except Exception as e:
+                    logger.warning(f"Failed to recompute q-values after BMM p-value replace: {e}")
+
+        filtered_out = 0
+        if cfg.get("bmm_refine_mode", "annotate") == "filter":
+            filter_metric = cfg.get("bmm_refine_filter_metric", "js")
+            before_len = len(merged)
+            if filter_metric == "p_value" and "bmm_p_value" in merged.columns:
+                p = merged["bmm_p_value"]
+                keep = (merged["bmm_status"] != "fit") | (p.isna()) | (p <= cfg.get("bmm_refine_pvalue_threshold", 0.05))
+                merged = merged[keep].reset_index(drop=True)
+            else:
+                js = merged["bmm_js"]
+                keep = (merged["bmm_status"] != "fit") | (js.isna()) | (js >= cfg.get("bmm_refine_js_threshold", 0.05))
+                merged = merged[keep].reset_index(drop=True)
+            filtered_out = before_len - len(merged)
+
+        status_counts: Dict[str, int] = {}
+        for rec in bmm_records:
+            status = rec.get("status", "unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+        bmm_summary = {
+            "evaluated": int(len(subset_df)),
+            "total_candidates": int(total_candidates),
+            "source": bmm_source,
+            "bin_count": int(bin_count),
+            "min_samples": int(min_samples),
+            "fit": int(status_counts.get("fit", 0)),
+            "skipped_insufficient_samples": int(status_counts.get("skipped_insufficient_samples", 0)),
+            "skipped_obvious_delta": int(status_counts.get("skipped_obvious_delta", 0)),
+            "skipped_obvious_overlap": int(status_counts.get("skipped_obvious_overlap", 0)),
+            "p_value_replaced": int(replaced_count),
+            "filtered_out": int(filtered_out),
+            "filter_metric": cfg.get("bmm_refine_filter_metric", "js"),
+            "filter_pvalue_threshold": float(cfg.get("bmm_refine_pvalue_threshold", 0.05)),
+            "filter_js_threshold": float(cfg.get("bmm_refine_js_threshold", 0.05)),
+            "max_dmps": int(max_dmps),
+            "max_fraction": cfg.get("bmm_refine_max_fraction"),
+        }
+
+        return merged, bmm_centroid_c1, bmm_centroid_c2, bmm_records_map, bmm_summary
 
     def _compute_bhattacharyya(self, results_array: np.ndarray) -> np.ndarray:
         """

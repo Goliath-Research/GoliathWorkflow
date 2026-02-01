@@ -6,6 +6,49 @@
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+append_ld_library_path() {
+    local dir="$1"
+    if [ -z "$dir" ]; then
+        return 0
+    fi
+    case ":${LD_LIBRARY_PATH:-}:" in
+        *":${dir}:"*) return 0 ;;
+        *) export LD_LIBRARY_PATH="${dir}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" ;;
+    esac
+}
+
+add_nvrtc_lib_dir() {
+    local dir="$1"
+    if compgen -G "${dir}/libnvrtc.so*" > /dev/null; then
+        append_ld_library_path "$dir"
+        return 0
+    fi
+    return 1
+}
+
+add_system_nvrtc_libs() {
+    local dir
+    local added=0
+
+    for dir in /usr/lib/aarch64-linux-gnu /usr/lib/x86_64-linux-gnu /usr/lib /usr/local/cuda/lib64; do
+        if [ -d "$dir" ] && add_nvrtc_lib_dir "$dir"; then
+            added=1
+        fi
+    done
+
+    for dir in /usr/local/cuda/targets/*/lib /usr/local/cuda-*/targets/*/lib; do
+        if [ -d "$dir" ] && add_nvrtc_lib_dir "$dir"; then
+            added=1
+        fi
+    done
+
+    if [ "$added" -eq 1 ] && [ -z "${CUDA_PATH:-}" ]; then
+        if [ -d "/usr/local/cuda" ]; then
+            export CUDA_PATH="/usr/local/cuda"
+        fi
+    fi
+}
+
 # Check if we are running inside the Docker container
 if [ -f "/.dockerenv" ] || [ -f "/run/.containerenv" ]; then
     # INSIDE DOCKER (or Container)
@@ -27,12 +70,16 @@ if [ -f "/.dockerenv" ] || [ -f "/run/.containerenv" ]; then
         if [ -n "${SITE_PACKAGES:-}" ]; then
             NVRTC_LIB="${SITE_PACKAGES}/nvidia/cuda_nvrtc/lib"
             CUDART_LIB="${SITE_PACKAGES}/nvidia/cuda_runtime/lib"
-            if [ -d "${NVRTC_LIB}" ]; then
-                export LD_LIBRARY_PATH="${NVRTC_LIB}${CUDART_LIB:+:${CUDART_LIB}}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+            if [ -d "${NVRTC_LIB}" ] && compgen -G "${NVRTC_LIB}/libnvrtc.so*" > /dev/null; then
+                append_ld_library_path "${NVRTC_LIB}"
+                if [ -d "${CUDART_LIB}" ]; then
+                    append_ld_library_path "${CUDART_LIB}"
+                fi
                 export CUDA_PATH="${CUDA_PATH:-${SITE_PACKAGES}/nvidia/cuda_runtime}"
             fi
         fi
     fi
+    add_system_nvrtc_libs
 
     # Display confirmation
     echo "✅ MethylPipeline environment configured (Container Mode):"
@@ -67,12 +114,16 @@ else
         if [ -n "${SITE_PACKAGES:-}" ]; then
             NVRTC_LIB="${SITE_PACKAGES}/nvidia/cuda_nvrtc/lib"
             CUDART_LIB="${SITE_PACKAGES}/nvidia/cuda_runtime/lib"
-            if [ -d "${NVRTC_LIB}" ]; then
-                export LD_LIBRARY_PATH="${NVRTC_LIB}${CUDART_LIB:+:${CUDART_LIB}}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+            if [ -d "${NVRTC_LIB}" ] && compgen -G "${NVRTC_LIB}/libnvrtc.so*" > /dev/null; then
+                append_ld_library_path "${NVRTC_LIB}"
+                if [ -d "${CUDART_LIB}" ]; then
+                    append_ld_library_path "${CUDART_LIB}"
+                fi
                 export CUDA_PATH="${CUDA_PATH:-${SITE_PACKAGES}/nvidia/cuda_runtime}"
             fi
         fi
     fi
+    add_system_nvrtc_libs
     
     echo "✅ Local development environment configured."
     echo ""

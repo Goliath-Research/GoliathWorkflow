@@ -46,7 +46,7 @@ python scripts/gpu_memory_manager.py --action info
 python scripts/gpu_memory_manager.py --action cleanup
 
 # Monitor memory during task execution
-python scripts/gpu_memory_manager.py --action monitor --command python -m methylcentroid.centroid_cli --config methylcentroid/configs/bc-cancer_config.json
+python scripts/gpu_memory_manager.py --action monitor --command python -m methyl_centroid.centroid_cli --config packages/methylcentroid/configs/bc-cancer_config.json
 ```
 
 ### 3. Enhanced Memory Management in Code
@@ -82,7 +82,7 @@ Create a JSON configuration file for your task queue:
   "tasks": [
     {
       "name": "bc-cancer-chr1-cg",
-      "command": ["python", "-m", "methylcentroid.centroid_cli", "--config", "methylcentroid/configs/bc-cancer_config.json", "--chromosome", "1", "--context", "CG"],
+      "command": ["python", "-m", "methyl_centroid.centroid_cli", "--config", "packages/methylcentroid/configs/bc-cancer_config.json", "--chromosome", "1", "--context", "CG"],
       "requires_gpu": true,
       "priority": 1,
       "estimated_memory_gb": 4,
@@ -177,7 +177,7 @@ docker exec epimethyl python scripts/gpu_memory_utils.py --action info
 docker exec epimethyl python scripts/gpu_memory_utils.py --action cleanup --aggressive
 
 # Monitor during task execution
-docker exec epimethyl python scripts/gpu_memory_manager.py --action monitor --command "python -m methylcentroid.centroid_cli --config methylcentroid/configs/bc-cancer_config.json"
+docker exec epimethyl python scripts/gpu_memory_manager.py --action monitor --command "python -m methyl_centroid.centroid_cli --config packages/methylcentroid/configs/bc-cancer_config.json"
 ```
 
 ## Performance Impact
@@ -194,7 +194,7 @@ The memory management utilities are designed to work with your existing MethylCe
 
 ```bash
 # Instead of:
-docker exec -w /home/ubuntu/MethylCentroid epimethyl python -m methylcentroid.centroid_cli --config methylcentroid/configs/bc-cancer_config.json
+docker exec -w /home/ubuntu/MethylCentroid epimethyl python -m methyl_centroid.centroid_cli --config packages/methylcentroid/configs/bc-cancer_config.json
 
 # Use:
 python scripts/gpu_task_runner.py --config scripts/task_queue_example.json

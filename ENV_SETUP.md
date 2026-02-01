@@ -39,13 +39,13 @@ methylutils_path = methylpipeline_root / "packages" / "methylutils"
 methylcentroid_path = methylpipeline_root / "packages" / "methylcentroid"
 
 # Access configs
-config_path = methylpipeline_root / "packages" / "methylcentroid" / "methylcentroid" / "configs" / "my_config.json"
+config_path = methylpipeline_root / "packages" / "methylcentroid" / "configs" / "my_config.json"
 ```
 
 ### Option 2: Using path_utils Helper (Recommended)
 
 ```python
-from methylcentroid.path_utils import (
+from methyl_centroid.path_utils import (
     get_methylpipeline_root,
     get_project_path,
     get_config_path,
@@ -79,7 +79,7 @@ $METHYLPIPELINE/
 │   ├── methylutils/          # MethylUtils package
 │   │   └── methyl_utils/
 │   └── methylcentroid/       # MethylCentroid package
-│       └── methylcentroid/
+│       └── methyl_centroid/
 │           ├── configs/      # Configuration files
 │           ├── examples/     # Example scripts
 │           └── path_utils.py # Path utilities
@@ -98,9 +98,9 @@ All example scripts now use the METHYLPIPELINE environment variable:
 source setup_env.sh
 
 # Run examples
-python packages/methylcentroid/methylcentroid/examples/validate_config.py
-python packages/methylcentroid/methylcentroid/examples/example_metadata_access.py --demo
-python packages/methylcentroid/methylcentroid/examples/test_metadata.py /path/to/centroid.h5
+python packages/methylcentroid/methyl_centroid/examples/validate_config.py
+python packages/methylcentroid/methyl_centroid/examples/example_metadata_access.py --demo
+python packages/methylcentroid/methyl_centroid/examples/test_metadata.py /path/to/centroid.h5
 ```
 
 ### Writing New Scripts
@@ -123,7 +123,7 @@ if 'METHYLPIPELINE' not in os.environ:
     sys.exit(1)
 
 # Use the environment variable
-from methylcentroid.path_utils import get_config_path
+from methyl_centroid.path_utils import get_config_path
 
 config_file = get_config_path("methylcentroid", "my_config.json")
 print(f"Loading config from: {config_file}")
@@ -168,7 +168,7 @@ fi
 echo $METHYLPIPELINE
 
 # Detailed check
-python -c "from methylcentroid.path_utils import print_methylpipeline_info; print_methylpipeline_info()"
+python -c "from methyl_centroid.path_utils import print_methylpipeline_info; print_methylpipeline_info()"
 ```
 
 ## For Developers
