@@ -103,6 +103,8 @@ class MethylCentroidPair:
         centroid2: Optional[MethylExtendedCentroid] = None,
         min_coverage: int = 4,
         distribution: str = "auto",
+        delta_mean_mode: str = "mean",
+        overlap_mode: str = "beta",
         min_samples_normal: int = 6,
         min_samples_beta: int = 10,
         min_coverage_binom: int = 10,
@@ -152,6 +154,18 @@ class MethylCentroidPair:
         self.min_coverage_binom = min_coverage_binom
         self.overdispersion_threshold = overdispersion_threshold
         self.enable_mixture = enable_mixture
+
+        # Metric modes for delta_mean/overlap calculations
+        self.delta_mean_mode = self._normalize_metric_mode(
+            delta_mean_mode, default="mean", allowed={"mean", "beta", "normal", "auto", "legacy"}
+        )
+        if self.delta_mean_mode == "legacy":
+            self.delta_mean_mode = "mean"
+        self.overlap_mode = self._normalize_metric_mode(
+            overlap_mode, default="beta", allowed={"beta", "normal", "auto", "legacy"}
+        )
+        if self.overlap_mode == "legacy":
+            self.overlap_mode = "beta"
 
         # Optional Beta Mixture centroids (mask-based)
         self._bmm_input1 = bmm_centroid1
@@ -489,6 +503,18 @@ class MethylCentroidPair:
         self.to_cpu = lambda a: a
         logger.info("CPU backend initialized")
 
+    @staticmethod
+    def _normalize_metric_mode(value: Optional[str], default: str, allowed: set[str]) -> str:
+        if value is None:
+            return default
+        mode = str(value).strip().lower()
+        if mode not in allowed:
+            logger.warning(
+                f"Unrecognized metric mode '{value}', falling back to '{default}'"
+            )
+            return default
+        return mode
+
     def _get_centroid_context(self, centroid: MethylSample) -> Optional[str]:
         meta = getattr(centroid, "metadata", None) or getattr(centroid, "_metadata", None)
         if isinstance(meta, dict):
@@ -630,8 +656,9 @@ class MethylCentroidPair:
             # Apply FDR correction
             results_array = self._apply_fdr_correction(results_array)
 
-            # Compute Bhattacharyya Distance
-            results_array = self._compute_bhattacharyya(results_array)
+            # Compute Bhattacharyya Distance (beta-mode only; auto/normal handled in batch)
+            if self.overlap_mode == "beta":
+                results_array = self._compute_bhattacharyya(results_array)
 
             logger.info(f"Comparison complete: {len(results_array)} positions analyzed")
 
@@ -746,13 +773,22 @@ class MethylCentroidPair:
         # This ensures consistency with edge case handling for small samples vs large samples
         mean1 = centroid1.mean[indices1].astype(np.float32)
         mean2 = centroid2.mean[indices2].astype(np.float32)
-        delta_mean = np.abs(mean1 - mean2)
 
         # Optional stats for distribution selection
         Sx1 = centroid1.Sx[indices1].astype(np.float32)
         Sx2_vals = centroid2.Sx[indices2].astype(np.float32)
         Sx2_1 = centroid1.Sx2[indices1].astype(np.float32)
         Sx2_2 = centroid2.Sx2[indices2].astype(np.float32)
+
+        # Normal-distribution moments (used for normal-mode metrics)
+        mean_normal1 = Sx1 / np.maximum(N1, 1.0)
+        mean_normal2 = Sx2_vals / np.maximum(N2, 1.0)
+        var_normal1 = np.maximum(
+            Sx2_1 - (Sx1**2 / np.maximum(N1, 1.0)), 1e-12
+        ) / np.maximum(N1 - 1, 1)
+        var_normal2 = np.maximum(
+            Sx2_2 - (Sx2_vals**2 / np.maximum(N2, 1.0)), 1e-12
+        ) / np.maximum(N2 - 1, 1)
 
         # Coverage statistics for Beta-Binomial selection
         sum_cov1 = None
@@ -877,9 +913,10 @@ class MethylCentroidPair:
         # Normal distribution test for small-sample positions
         if np.any(use_normal_mask):
             from scipy.stats import norm
-            var1 = np.maximum(Sx2_1 - (Sx1**2 / np.maximum(N1, 1.0)), 1e-12) / np.maximum(N1 - 1, 1)
-            var2 = np.maximum(Sx2_2 - (Sx2_vals**2 / np.maximum(N2, 1.0)), 1e-12) / np.maximum(N2 - 1, 1)
-            se_diff = np.sqrt(var1 / np.maximum(N1, 1.0) + var2 / np.maximum(N2, 1.0))
+            se_diff = np.sqrt(
+                var_normal1 / np.maximum(N1, 1.0)
+                + var_normal2 / np.maximum(N2, 1.0)
+            )
             z_stat = (mean1 - mean2) / np.maximum(se_diff, 1e-12)
             p_norm = 2 * (1 - norm.cdf(np.abs(z_stat)))
             p_values[use_normal_mask] = p_norm[use_normal_mask].astype(np.float32)
@@ -1030,6 +1067,157 @@ class MethylCentroidPair:
             p_values[use_beta_mask] = p_values_beta[use_beta_mask]
             dist_ids[use_beta_mask] = DIST_BETA
 
+        # Metric calculations for output (delta_mean + overlap)
+        eps = 1e-12
+        tau1 = alpha1 + beta1
+        tau2 = alpha2 + beta2
+        mean_beta1 = alpha1 / np.maximum(tau1, eps)
+        mean_beta2 = alpha2 / np.maximum(tau2, eps)
+
+        def _bhattacharyya_normal(mu1: np.ndarray, var1: np.ndarray,
+                                  mu2: np.ndarray, var2: np.ndarray) -> np.ndarray:
+            var1 = np.maximum(var1, eps)
+            var2 = np.maximum(var2, eps)
+            sigma_sum = var1 + var2
+            denom = 2.0 * np.sqrt(var1 * var2)
+            term1 = 0.5 * np.log(np.maximum(sigma_sum, eps) / np.maximum(denom, eps))
+            term2 = 0.25 * ((mu1 - mu2) ** 2 / np.maximum(sigma_sum, eps))
+            return term1 + term2
+
+        mix_mean1 = mix_mean2 = None
+        mix_var1 = mix_var2 = None
+        mixture_indices = None
+        if np.any(use_mixture_mask) and self.enable_mixture:
+            mixture_indices = np.where(use_mixture_mask)[0]
+            if self._bmm_map1 is not None and self._bmm_map2 is not None:
+                mix_mean1 = np.full(len(mixture_indices), np.nan, dtype=np.float32)
+                mix_mean2 = np.full(len(mixture_indices), np.nan, dtype=np.float32)
+                mix_var1 = np.full(len(mixture_indices), np.nan, dtype=np.float32)
+                mix_var2 = np.full(len(mixture_indices), np.nan, dtype=np.float32)
+                for j, idx in enumerate(mixture_indices):
+                    pos = int(positions[idx])
+                    entry1 = self._bmm_map1.get(pos)
+                    entry2 = self._bmm_map2.get(pos)
+                    if entry1 is None or entry2 is None:
+                        continue
+                    w1, a1m, b1m = entry1
+                    w2, a2m, b2m = entry2
+                    if np.sum(w1) <= 0 or np.sum(w2) <= 0:
+                        continue
+                    w1 = w1 / np.sum(w1)
+                    w2 = w2 / np.sum(w2)
+                    a1m = np.asarray(a1m, dtype=np.float64)
+                    b1m = np.asarray(b1m, dtype=np.float64)
+                    a2m = np.asarray(a2m, dtype=np.float64)
+                    b2m = np.asarray(b2m, dtype=np.float64)
+                    mean1_comp = a1m / np.maximum(a1m + b1m, eps)
+                    mean2_comp = a2m / np.maximum(a2m + b2m, eps)
+                    var1_comp = (a1m * b1m) / np.maximum((a1m + b1m) ** 2 * (a1m + b1m + 1), eps)
+                    var2_comp = (a2m * b2m) / np.maximum((a2m + b2m) ** 2 * (a2m + b2m + 1), eps)
+                    mix_mean1[j] = float(np.sum(w1 * mean1_comp))
+                    mix_mean2[j] = float(np.sum(w2 * mean2_comp))
+                    mix_var1[j] = float(np.sum(w1 * (var1_comp + mean1_comp ** 2)) - mix_mean1[j] ** 2)
+                    mix_var2[j] = float(np.sum(w2 * (var2_comp + mean2_comp ** 2)) - mix_mean2[j] ** 2)
+            else:
+                required_mix_cols = {
+                    "mix_w1", "mix_w2", "mix_w3",
+                    "mix_a1", "mix_a2", "mix_a3",
+                    "mix_b1", "mix_b2", "mix_b3",
+                }
+                if required_mix_cols.issubset(set(centroid1._df.columns)) and required_mix_cols.issubset(set(centroid2._df.columns)):
+                    idx1 = indices1[mixture_indices]
+                    idx2 = indices2[mixture_indices]
+                    w1 = centroid1._df["mix_w1"].values[idx1]
+                    w2 = centroid1._df["mix_w2"].values[idx1]
+                    w3 = centroid1._df["mix_w3"].values[idx1]
+                    a1m = centroid1._df["mix_a1"].values[idx1]
+                    a2m = centroid1._df["mix_a2"].values[idx1]
+                    a3m = centroid1._df["mix_a3"].values[idx1]
+                    b1m = centroid1._df["mix_b1"].values[idx1]
+                    b2m = centroid1._df["mix_b2"].values[idx1]
+                    b3m = centroid1._df["mix_b3"].values[idx1]
+
+                    w1b = centroid2._df["mix_w1"].values[idx2]
+                    w2b = centroid2._df["mix_w2"].values[idx2]
+                    w3b = centroid2._df["mix_w3"].values[idx2]
+                    a1b = centroid2._df["mix_a1"].values[idx2]
+                    a2b = centroid2._df["mix_a2"].values[idx2]
+                    a3b = centroid2._df["mix_a3"].values[idx2]
+                    b1b = centroid2._df["mix_b1"].values[idx2]
+                    b2b = centroid2._df["mix_b2"].values[idx2]
+                    b3b = centroid2._df["mix_b3"].values[idx2]
+
+                    wsum1 = w1 + w2 + w3
+                    wsum2 = w1b + w2b + w3b
+                    mean1_comp1 = a1m / np.maximum(a1m + b1m, eps)
+                    mean1_comp2 = a2m / np.maximum(a2m + b2m, eps)
+                    mean1_comp3 = a3m / np.maximum(a3m + b3m, eps)
+                    mean2_comp1 = a1b / np.maximum(a1b + b1b, eps)
+                    mean2_comp2 = a2b / np.maximum(a2b + b2b, eps)
+                    mean2_comp3 = a3b / np.maximum(a3b + b3b, eps)
+
+                    var1_comp1 = (a1m * b1m) / np.maximum((a1m + b1m) ** 2 * (a1m + b1m + 1), eps)
+                    var1_comp2 = (a2m * b2m) / np.maximum((a2m + b2m) ** 2 * (a2m + b2m + 1), eps)
+                    var1_comp3 = (a3m * b3m) / np.maximum((a3m + b3m) ** 2 * (a3m + b3m + 1), eps)
+                    var2_comp1 = (a1b * b1b) / np.maximum((a1b + b1b) ** 2 * (a1b + b1b + 1), eps)
+                    var2_comp2 = (a2b * b2b) / np.maximum((a2b + b2b) ** 2 * (a2b + b2b + 1), eps)
+                    var2_comp3 = (a3b * b3b) / np.maximum((a3b + b3b) ** 2 * (a3b + b3b + 1), eps)
+
+                    mix_mean1 = (w1 * mean1_comp1 + w2 * mean1_comp2 + w3 * mean1_comp3) / np.maximum(wsum1, eps)
+                    mix_mean2 = (w1b * mean2_comp1 + w2b * mean2_comp2 + w3b * mean2_comp3) / np.maximum(wsum2, eps)
+                    mix_var1 = (w1 * (var1_comp1 + mean1_comp1 ** 2) +
+                                w2 * (var1_comp2 + mean1_comp2 ** 2) +
+                                w3 * (var1_comp3 + mean1_comp3 ** 2)) / np.maximum(wsum1, eps) - mix_mean1 ** 2
+                    mix_var2 = (w1b * (var2_comp1 + mean2_comp1 ** 2) +
+                                w2b * (var2_comp2 + mean2_comp2 ** 2) +
+                                w3b * (var2_comp3 + mean2_comp3 ** 2)) / np.maximum(wsum2, eps) - mix_mean2 ** 2
+
+        delta_mode = (self.delta_mean_mode or "mean").lower()
+        mean1_out = mean1
+        mean2_out = mean2
+        if delta_mode == "beta":
+            mean1_out = mean_beta1
+            mean2_out = mean_beta2
+        elif delta_mode == "normal":
+            mean1_out = mean_normal1
+            mean2_out = mean_normal2
+        elif delta_mode == "auto":
+            mean1_out = mean_beta1.copy()
+            mean2_out = mean_beta2.copy()
+            if np.any(use_normal_mask):
+                mean1_out[use_normal_mask] = mean_normal1[use_normal_mask]
+                mean2_out[use_normal_mask] = mean_normal2[use_normal_mask]
+            if mix_mean1 is not None and mix_mean2 is not None and mixture_indices is not None:
+                mix_valid = np.isfinite(mix_mean1) & np.isfinite(mix_mean2)
+                if np.any(mix_valid):
+                    mix_idx = mixture_indices[mix_valid]
+                    mean1_out[mix_idx] = mix_mean1[mix_valid]
+                    mean2_out[mix_idx] = mix_mean2[mix_valid]
+
+        delta_mean = np.abs(mean1_out - mean2_out)
+
+        bhattacharyya = None
+        overlap_mode = (self.overlap_mode or "beta").lower()
+        if overlap_mode in {"auto", "normal"}:
+            normal_bd = _bhattacharyya_normal(mean_normal1, var_normal1, mean_normal2, var_normal2)
+            if overlap_mode == "normal":
+                bhattacharyya = normal_bd.astype(np.float32)
+            else:
+                beta_bd = compute_bhattacharyya_distance(
+                    alpha1, beta1, alpha2, beta2, use_gpu=self.gpu_available
+                ).astype(np.float32)
+                bhattacharyya = beta_bd
+                if np.any(use_normal_mask):
+                    bhattacharyya[use_normal_mask] = normal_bd[use_normal_mask].astype(np.float32)
+                if mix_var1 is not None and mix_var2 is not None and mixture_indices is not None:
+                    mix_valid = np.isfinite(mix_var1) & np.isfinite(mix_var2) & np.isfinite(mix_mean1) & np.isfinite(mix_mean2)
+                    if np.any(mix_valid):
+                        mix_bd = _bhattacharyya_normal(
+                            mix_mean1[mix_valid], mix_var1[mix_valid],
+                            mix_mean2[mix_valid], mix_var2[mix_valid]
+                        ).astype(np.float32)
+                        bhattacharyya[mixture_indices[mix_valid]] = mix_bd
+
         # Fill results array directly (vectorized assignment)
         results_view['position'] = positions.astype(np.uint32)
         results_view['p_value'] = p_values
@@ -1038,10 +1226,13 @@ class MethylCentroidPair:
         results_view['beta1'] = beta1.astype(np.float64)
         results_view['alpha2'] = alpha2.astype(np.float64)
         results_view['beta2'] = beta2.astype(np.float64)
-        results_view['mean1'] = mean1.astype(np.float32)
-        results_view['mean2'] = mean2.astype(np.float32)
+        results_view['mean1'] = mean1_out.astype(np.float32)
+        results_view['mean2'] = mean2_out.astype(np.float32)
         results_view['delta_mean'] = delta_mean.astype(np.float32)
-        results_view['bhattacharyya'] = np.zeros(len(positions), dtype=np.float32)  # Will be computed in _compute_bhattacharyya
+        if bhattacharyya is not None:
+            results_view['bhattacharyya'] = bhattacharyya.astype(np.float32)
+        else:
+            results_view['bhattacharyya'] = np.zeros(len(positions), dtype=np.float32)  # Will be computed later
         results_view['dist'] = dist_ids
 
     def _apply_fdr_correction(self, results_array: np.ndarray) -> np.ndarray:

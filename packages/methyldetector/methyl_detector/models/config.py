@@ -86,6 +86,14 @@ class MethylModelerConfig(BaseModel):
         default=0.6, ge=0.0, le=1.0,
         description="Maximum Bhattacharyya Coefficient (overlap) allowed. BC ranges 0-1 where 0=no overlap (perfect separation), 1=complete overlap. Lower values = stricter filtering. Example: 0.6 means 'keep only DMPs with ≤60% overlap'"
     )
+    delta_mean_mode: str = Field(
+        default="mean",
+        description="How to compute mean/delta_mean for biological filtering: mean (centroid mean), beta (alpha/beta), normal (Sx/N), auto (per-distribution)"
+    )
+    overlap_mode: str = Field(
+        default="beta",
+        description="How to compute overlap for biological filtering: beta (Bhattacharyya distance between Beta), normal (Normal BD), auto (per-distribution)"
+    )
 
     # New calibration parameters (for trained classifier metadata)
     temperature: float = Field(
@@ -346,6 +354,22 @@ class MethylModelerConfig(BaseModel):
         for f in v:
             if f not in valid_filters:
                 raise ValueError(f"Biological filter must be one of: {valid_filters}, got: {f}")
+        return v
+
+    @field_validator('delta_mean_mode')
+    @classmethod
+    def validate_delta_mean_mode(cls, v):
+        valid = {"mean", "beta", "normal", "auto", "legacy"}
+        if v not in valid:
+            raise ValueError(f"delta_mean_mode must be one of: {sorted(valid)}, got: {v}")
+        return v
+
+    @field_validator('overlap_mode')
+    @classmethod
+    def validate_overlap_mode(cls, v):
+        valid = {"beta", "normal", "auto", "legacy"}
+        if v not in valid:
+            raise ValueError(f"overlap_mode must be one of: {sorted(valid)}, got: {v}")
         return v
     
     @field_validator('validation_mode')

@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 import json
-from enum import Enum
 
 
 
@@ -48,6 +47,10 @@ class MethylCentroidConfig(BaseModel):
         default=4,
         ge=1,
         description="Minimum sum of mC and uC for a position"
+    )
+    use_gpu: bool = Field(
+        default=True,
+        description="Enable GPU acceleration when available"
     )
     verbose: bool = Field(
         default=True,

@@ -823,6 +823,8 @@ class MethylModelerResult(BaseModel):
 | `min_N_pct` | float | 0.10 | Minimum coverage percentage |
 | `min_delta_mean` | float | 0.2 | Minimum effect size (20% methylation difference) |
 | `max_bc` | float | 0.6 | Maximum Bhattacharyya coefficient (overlap threshold) |
+| `delta_mean_mode` | str | "mean" | Mean/delta_mean mode: "mean", "beta", "normal", "auto" |
+| `overlap_mode` | str | "beta" | Overlap mode: "beta", "normal", "auto" |
 | `target_balanced_accuracy` | float | 0.95 | Target Balanced Accuracy for DMP selection |
 | `validation_mode` | str | "real" | Validation mode: "real" or "synthetic" |
 | `use_gpu` | bool | True | Enable GPU acceleration |

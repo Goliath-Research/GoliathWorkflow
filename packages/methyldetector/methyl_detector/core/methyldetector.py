@@ -296,7 +296,11 @@ class MethylDetector:
         effective_min_coverage = self.config.effective_min_N(cohort_size)
         
         # Create centroid pair for comparison
-        centroid_pair = MethylCentroidPair(min_coverage=effective_min_coverage)
+        centroid_pair = MethylCentroidPair(
+            min_coverage=effective_min_coverage,
+            delta_mean_mode=getattr(self.config, "delta_mean_mode", "mean"),
+            overlap_mode=getattr(self.config, "overlap_mode", "beta"),
+        )
         
         # Compare centroids
         import time

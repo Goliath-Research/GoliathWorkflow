@@ -97,6 +97,7 @@ class MethylCentroid:
         verbose: bool = True,
         enable_binned_stats: bool = False,
         binned_stats_bins: Optional[int] = 32,
+        use_gpu: Optional[bool] = None,
         # Metadata fields
         laboratory: str = None,
         disease: str = None,
@@ -229,18 +230,22 @@ class MethylCentroid:
 
         self.centroid: Optional[Path] = None
 
-        # Detect GPU availability and prioritize GPU acceleration for large datasets
+        # Detect GPU availability and respect explicit user choice
         gpu_available = is_gpu_available()
         self.logger.info(f"GPU available: {gpu_available}")
 
-        # For large human genomes, prioritize GPU; for smaller datasets like Arabidopsis, use CPU if GPU fails
-        self.use_gpu = gpu_available
-        if gpu_available:
+        self._gpu_enabled = True if use_gpu is None else bool(use_gpu)
+        if not self._gpu_enabled:
+            self.logger.info("GPU explicitly disabled by configuration; forcing CPU mode")
+
+        # For large human genomes, prioritize GPU unless disabled or unavailable
+        self.use_gpu = gpu_available and self._gpu_enabled
+        if self.use_gpu:
             self.logger.info(
                 "Using GPU acceleration for optimal performance with large genomic datasets"
             )
         else:
-            self.logger.warning("GPU not available, falling back to CPU processing")
+            self.logger.warning("GPU disabled or unavailable; using CPU processing")
 
         # Initialize centroid accumulator (will be created when first sample is added)
         self._centroid: Optional[MethylExtendedCentroid] = None
@@ -292,6 +297,7 @@ class MethylCentroid:
             remove_samples=config.remove_samples,
             min_coverage=config.min_coverage,
             verbose=verbose_value,
+            use_gpu=getattr(config, "use_gpu", None),
             # Metadata fields
             laboratory=config.laboratory,
             disease=config.disease,
@@ -315,6 +321,7 @@ class MethylCentroid:
             "add_samples": self._original_add_samples,
             "remove_samples": self._original_remove_samples,
             "min_coverage": self.min_coverage,
+            "use_gpu": self._gpu_enabled,
             # Metadata fields
             "laboratory": self.laboratory,
             "disease": self.disease,
@@ -1930,7 +1937,7 @@ class MethylCentroid:
 
     def _attempt_gpu_recovery(self):
         """Attempt to recover GPU usage if memory pressure has eased"""
-        if not self._gpu_available or self._using_gpu:
+        if not self._gpu_enabled or not self._gpu_available or self._using_gpu:
             return  # GPU not available or already using GPU
 
         try:

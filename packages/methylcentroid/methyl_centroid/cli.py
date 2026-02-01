@@ -95,6 +95,20 @@ Examples:
         default=4,
         help='Minimum coverage threshold (default: 4)'
     )
+    gpu_group = processing_group.add_mutually_exclusive_group()
+    gpu_group.add_argument(
+        '--use-gpu',
+        dest='use_gpu',
+        action='store_true',
+        help='Enable GPU acceleration (default when available)'
+    )
+    gpu_group.add_argument(
+        '--no-gpu',
+        dest='use_gpu',
+        action='store_false',
+        help='Disable GPU acceleration and force CPU'
+    )
+    parser.set_defaults(use_gpu=None)
 
     # Output options
     output_group = parser.add_argument_group('Output Options')
@@ -176,7 +190,8 @@ def create_config_from_args(args: argparse.Namespace) -> MethylCentroidConfig:
         ctx=args.context,
         output_dir=str(args.output_dir),
         samples=sample_paths,
-        min_coverage=args.min_coverage
+        min_coverage=args.min_coverage,
+        use_gpu=True if args.use_gpu is None else bool(args.use_gpu),
     )
 
 
@@ -314,6 +329,8 @@ def main() -> None:
                 raise FileNotFoundError(f"Batch configuration file not found: {args.batch_config}")
 
             batch_config = BatchProcessingConfig.from_file(args.batch_config)
+            if args.use_gpu is not None:
+                batch_config.base_config.use_gpu = bool(args.use_gpu)
             run_batch_processing(batch_config)
 
         elif args.config:
@@ -322,6 +339,8 @@ def main() -> None:
                 raise FileNotFoundError(f"Configuration file not found: {args.config}")
 
             config = MethylCentroidConfig.from_file(args.config)
+            if args.use_gpu is not None:
+                config.use_gpu = bool(args.use_gpu)
             processing_config = create_processing_config(args)
             run_single_processing(config, processing_config)
 

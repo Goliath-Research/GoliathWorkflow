@@ -1,0 +1,161 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{MethylCentroid Distributions and Sufficient Statistics}
+\author{MethylPipeline}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+MethylCentroid aggregates per-position methylation across a cohort of samples and
+stores \emph{sufficient statistics} that allow parameter estimation for multiple
+distributions without retaining the full sample matrix. This enables:
+\begin{itemize}
+  \item memory-efficient centroid construction and storage,
+  \item incremental updates (add/remove samples),
+  \item GPU-friendly batch computation.
+\end{itemize}
+
+The centroid is implemented as a \texttt{MethylExtendedCentroid} and can be
+compared with \texttt{MethylCentroidPair} under multiple distributional models.
+
+\section{Notation}
+For a genomic position, let the sample index be $i = 1,\ldots,N$.
+Let $mC_i$ and $uC_i$ be methylated and unmethylated counts, respectively.
+Define:
+\begin{align*}
+  n_i &= mC_i + uC_i \quad \text{(coverage)} \\
+  x_i &= \frac{mC_i}{n_i} \quad \text{(methylation fraction)} \\
+\end{align*}
+The centroid stores aggregated statistics across the contributing samples.
+
+\section{Stored Sufficient Statistics}
+For each position, the centroid stores:
+\begin{align*}
+  N &= \sum_i 1 \\
+  S_x &= \sum_i x_i \\
+  S_{x^2} &= \sum_i x_i^2 \\
+  \log X &= \sum_i \log(x_i) \\
+  \log (1-X) &= \sum_i \log(1-x_i) \\
+  \Sigma n &= \sum_i n_i \\
+  \Sigma n^2 &= \sum_i n_i^2 \\
+  \Sigma mC &= \sum_i mC_i \\
+  \Sigma uC &= \sum_i uC_i \\
+  \Sigma mC^2 &= \sum_i mC_i^2 \\
+  \Sigma uC^2 &= \sum_i uC_i^2 \\
+  S_{x^3} &= \sum_i x_i^3 \\
+  S_{x^4} &= \sum_i x_i^4 \\
+  c_0 &= \sum_i \mathbb{1}[x_i = 0] \\
+  c_1 &= \sum_i \mathbb{1}[x_i = 1] \\
+\end{align*}
+The first set (through $\log(1-X)$) is always present in the extended centroid.
+The remaining statistics are optional and are enabled by the extended builder
+for downstream distribution selection and modeling.
+
+\section{Supported Distributions}
+
+\subsection{Normal Distribution (Approximation)}
+For large-sample regimes, methylation fractions can be approximated as:
+\[
+  x_i \sim \mathcal{N}(\mu, \sigma^2)
+.\]
+The centroid provides:
+\begin{align*}
+  \hat{\mu} &= \frac{S_x}{N} \\
+  \hat{\sigma}^2 &= \frac{S_{x^2} - \frac{S_x^2}{N}}{\max(N-1, 1)}
+.\end{align*}
+These estimates are stable and require only $(N, S_x, S_{x^2})$.
+
+\subsection{Beta Distribution}
+Methylation fractions are naturally bounded in $[0,1]$, making the Beta
+distribution a strong default model:
+\[
+  x_i \sim \mathrm{Beta}(\alpha, \beta)
+.\]
+The log-likelihood depends on:
+\[
+  \sum_i \log(x_i) \quad \text{and} \quad \sum_i \log(1-x_i)
+.\]
+Thus, $(N, \log X, \log(1-X))$ are sufficient for maximum-likelihood estimation.
+The centroid computes $\hat{\alpha}, \hat{\beta}$ via a bounded MLE routine and
+provides derived moments:
+\[
+  \mathbb{E}[x] = \frac{\alpha}{\alpha+\beta}, \quad
+  \mathrm{Var}(x) = \frac{\alpha\beta}{(\alpha+\beta)^2(\alpha+\beta+1)}
+.\]
+
+\subsection{Beta-Binomial Distribution}
+Counts are modeled as:
+\[
+  mC_i \mid p_i \sim \mathrm{Binomial}(n_i, p_i), \quad
+  p_i \sim \mathrm{Beta}(\alpha, \beta)
+.\]
+This captures over-dispersion in coverage.
+The centroid stores aggregated count statistics $(\Sigma mC, \Sigma uC, \Sigma n, \Sigma n^2)$
+to approximate coverage mean and variance and to inform model selection.
+In practice, the comparison engine uses aggregated counts for LRT-style tests and
+pooled $(\alpha,\beta)$ from the log-sum statistics.
+
+\subsection{Beta Mixture Model (BMM)}
+A flexible multi-modal model:
+\[
+  x_i \sim \sum_{k=1}^K w_k \, \mathrm{Beta}(\alpha_k, \beta_k)
+.\]
+Fitting mixtures requires sample-level values or a histogram. To avoid massive
+centroid sizes, binned statistics are \emph{optional}:
+\begin{itemize}
+  \item \textbf{Binned stats (optional):} per-position histograms (bin edges + counts)
+  \item \textbf{Masking:} the BMM is typically fitted only on a subset of significant positions
+\end{itemize}
+The resulting mixture parameters are stored in a separate
+\texttt{MethylBetaMixtureCentroid}, with an optional mask to limit positions.
+
+\section{Why Sufficient Statistics}
+Storing sufficient statistics rather than full sample matrices yields:
+\begin{itemize}
+  \item \textbf{Memory savings:} per-position aggregates scale linearly with positions,
+        not with positions $\times$ samples.
+  \item \textbf{Streaming updates:} new samples update sums without reloading old samples.
+  \item \textbf{GPU efficiency:} vectorized aggregates map well to GPU kernels.
+  \item \textbf{Model flexibility:} different distributions can be fit from the same centroid.
+\end{itemize}
+
+\section{Practical Notes}
+\begin{itemize}
+  \item \textbf{Base centroid:} $(N, S_x, S_{x^2}, \log X, \log(1-X))$ are always present.
+  \item \textbf{Extended stats:} $\Sigma n$, $\Sigma n^2$, $\Sigma mC$, $\Sigma uC$, etc. support
+        Beta-Binomial selection and higher-moment diagnostics.
+  \item \textbf{BMM histograms:} only stored when explicitly enabled; otherwise the refinement
+        stage can fall back to sample-based values or masked subsets.
+\end{itemize}
+
+\section{Distribution Choice in Comparisons}
+\texttt{MethylCentroidPair} supports per-position distribution selection
+(\texttt{auto}, \texttt{beta}, \texttt{normal}, \texttt{beta\_binomial}, \texttt{beta\_mixture}).
+The chosen distribution determines:
+\begin{itemize}
+  \item the p-value test,
+  \item how \emph{mean} and \emph{overlap} are computed (configurable),
+  \item which positions are eligible for mixture refinement.
+\end{itemize}
+
+\section{Summary Table}
+\begin{center}
+\begin{tabular}{l l l}
+\hline
+\textbf{Distribution} & \textbf{Parameters} & \textbf{Required Stats} \\
+\hline
+Normal & $\mu, \sigma^2$ & $N, S_x, S_{x^2}$ \\
+Beta & $\alpha, \beta$ & $N, \log X, \log(1-X)$ \\
+Beta-Binomial & $\alpha, \beta$ & $N, \log X, \log(1-X), \Sigma n, \Sigma mC$ \\
+Beta Mixture & $\{w_k,\alpha_k,\beta_k\}$ & Histogram or samples (optional bins) \\
+\hline
+\end{tabular}
+\end{center}
+
+\end{document}

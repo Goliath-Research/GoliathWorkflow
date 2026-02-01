@@ -491,6 +491,7 @@ MethylCentroid(
 - **remove_samples** (List[str], optional): Samples to remove
 - **outliers** (List[str], optional): Previously identified outliers
 - **min_coverage** (int, default=4): Minimum $mC + uC$ for position inclusion
+- **use_gpu** (bool, default=True): Enable GPU acceleration when available
 - **max_iterations** (int, default=10): Maximum outlier removal iterations
 - **max_iterations_percentage** (float, default=0.1): Alternative iteration limit as percentage of samples
 - **α** (float, default=0.05): Significance level for outlier detection
@@ -609,6 +610,7 @@ detector = OutlierDetectorFactory.create_detector(
   "chrom": "1",
   "ctx": "CG",
   "output_dir": "./centroids",
+  "use_gpu": true,
   "add_samples": [
     "/data/samples/sample1",
     "/data/samples/sample2"

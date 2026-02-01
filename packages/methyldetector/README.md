@@ -145,6 +145,8 @@ else:
 - **`min_delta_mean`**: Minimum absolute difference in mean methylation (default: `0.2`)
 - **`max_bc`**: Maximum Bhattacharyya coefficient / overlap (default: `0.6`)
   - Lower values = less overlap = stronger discrimination
+- **`delta_mean_mode`**: How to compute mean/delta_mean (`mean`, `beta`, `normal`, `auto`) (default: `mean`)
+- **`overlap_mode`**: How to compute overlap (`beta`, `normal`, `auto`) (default: `beta`)
 - **`min_N_pct`**: Minimum coverage percentage (default: `0.1`)
   - Positions must have coverage ≥ 10% of samples
 - **`biological_filters`**: List of filters to apply (default: `["delta_mean", "bhattacharyya"]`)
