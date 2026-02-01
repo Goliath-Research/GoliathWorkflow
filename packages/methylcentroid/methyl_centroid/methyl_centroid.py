@@ -669,6 +669,81 @@ class MethylCentroid:
 
         all_samples = self.samples + self.add_samples
 
+        if self.ctx == "CHH":
+            self.logger.info(
+                "Using streaming centroid builder for CHH to reduce memory spikes"
+            )
+            from methyl_utils.core.centroid_builder import MethylCentroidBuilder
+
+            builder = MethylCentroidBuilder(
+                min_coverage=self._min_coverage,
+                use_gpu=self.use_gpu,
+                store_extended_stats=True,
+            )
+
+            for sample_idx, sample_path in enumerate(all_samples):
+                if not sample_path.is_file():
+                    self.logger.warning(f"Sample file missing: {sample_path}")
+                    continue
+                try:
+                    builder.add_sample(sample_path)
+
+                    is_new_sample = sample_idx >= len(self.samples)
+                    actual_sample_idx = (
+                        sample_idx - len(self.samples)
+                        if is_new_sample
+                        else sample_idx
+                    )
+                    sample_id = (is_new_sample, actual_sample_idx)
+                    self.active_samples.add(sample_id)
+                except Exception as e:
+                    self.logger.error(
+                        f"Failed to process sample {sample_path.name}: {e}"
+                    )
+                finally:
+                    self._cleanup_gpu_after_sample()
+
+            if builder.samples_processed == 0:
+                return
+
+            self._centroid = builder.finalize()
+            # Apply min_samples filter after builder finalizes
+            if hasattr(self._centroid, "N") and len(self._centroid) > 0:
+                N_vals = (
+                    np.asarray(self._centroid.N.values)
+                    if hasattr(self._centroid.N, "values")
+                    else np.asarray(self._centroid.N)
+                )
+                valid_mask = N_vals >= self.min_samples
+                if not valid_mask.all():
+                    valid_indices = np.where(valid_mask)[0]
+                    if len(valid_indices) > 0:
+                        self._centroid = self._centroid.apply_mask(valid_indices)
+                    else:
+                        from methyl_utils import MethylExtendedCentroid
+                        import pandas as pd
+
+                        empty_df = pd.DataFrame(
+                            {
+                                "pos": [],
+                                "mC": [],
+                                "uC": [],
+                                "tnc": [],
+                                "N": [],
+                                "Sx": [],
+                                "Sx2": [],
+                                "log_x_sum": [],
+                                "log_1_minus_x_sum": [],
+                            }
+                        )
+                        self._centroid = MethylExtendedCentroid(
+                            empty_df, self._centroid.metadata
+                        )
+            self.logger.info(
+                f"Sample addition completed: {len(self.active_samples)} samples added"
+            )
+            return
+
         # Dynamic worker calculation based on memory and CPU
         memory_info = self.memory_manager.get_memory_usage()
         total_memory_gb = memory_info.get("total_gb", 400)
