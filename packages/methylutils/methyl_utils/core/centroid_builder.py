@@ -154,13 +154,65 @@ class MethylCentroidBuilder:
                 if needed > self.capacity:
                     self._grow(needed)
 
-                # Insert new positions in order
+                # Efficiently merge new positions while maintaining sorted order
                 new_pos = pos[is_new]
-                self.pos[self.size : self.size + n_new] = new_pos
-                self.tnc[self.size : self.size + n_new] = tnc[is_new]
-                self.size += n_new
+                new_tnc = tnc[is_new]
+                new_mC = mC[is_new]
+                new_uC = uC[is_new]
 
-            # Final indices after insertion
+                # Get existing positions
+                existing_pos = self.pos[:self.size]
+                existing_tnc = self.tnc[:self.size]
+                existing_mC_sum = self.mC_sum[:self.size]
+                existing_uC_sum = self.uC_sum[:self.size]
+                existing_N = self.N[:self.size]
+                existing_Sx = self.Sx[:self.size]
+                existing_Sx2 = self.Sx2[:self.size]
+                existing_log_x_sum = self.log_x_sum[:self.size]
+                existing_log_1x_sum = self.log_1x_sum[:self.size]
+
+                if self.store_extended_stats:
+                    existing_sum_cov = self.sum_cov[:self.size]
+                    existing_sum_cov2 = self.sum_cov2[:self.size]
+                    existing_sum_mC = self.sum_mC[:self.size]
+                    existing_sum_uC = self.sum_uC[:self.size]
+                    existing_sum_mC2 = self.sum_mC2[:self.size]
+                    existing_sum_uC2 = self.sum_uC2[:self.size]
+                    existing_Sx3 = self.Sx3[:self.size]
+                    existing_Sx4 = self.Sx4[:self.size]
+                    existing_count_zero = self.count_zero[:self.size]
+                    existing_count_one = self.count_one[:self.size]
+
+                # Merge and sort all positions
+                all_pos = self.xp.concatenate([existing_pos, new_pos])
+                sort_indices = self.xp.argsort(all_pos)
+
+                # Update arrays with merged and sorted data
+                self.pos[:len(all_pos)] = all_pos[sort_indices]
+                self.tnc[:len(all_pos)] = self.xp.concatenate([existing_tnc, new_tnc])[sort_indices]
+                self.mC_sum[:len(all_pos)] = self.xp.concatenate([existing_mC_sum, self.xp.zeros(n_new, dtype=self.mC_sum.dtype)])[sort_indices]
+                self.uC_sum[:len(all_pos)] = self.xp.concatenate([existing_uC_sum, self.xp.zeros(n_new, dtype=self.uC_sum.dtype)])[sort_indices]
+                self.N[:len(all_pos)] = self.xp.concatenate([existing_N, self.xp.zeros(n_new, dtype=self.N.dtype)])[sort_indices]
+                self.Sx[:len(all_pos)] = self.xp.concatenate([existing_Sx, self.xp.zeros(n_new, dtype=self.Sx.dtype)])[sort_indices]
+                self.Sx2[:len(all_pos)] = self.xp.concatenate([existing_Sx2, self.xp.zeros(n_new, dtype=self.Sx2.dtype)])[sort_indices]
+                self.log_x_sum[:len(all_pos)] = self.xp.concatenate([existing_log_x_sum, self.xp.zeros(n_new, dtype=self.log_x_sum.dtype)])[sort_indices]
+                self.log_1x_sum[:len(all_pos)] = self.xp.concatenate([existing_log_1x_sum, self.xp.zeros(n_new, dtype=self.log_1x_sum.dtype)])[sort_indices]
+
+                if self.store_extended_stats:
+                    self.sum_cov[:len(all_pos)] = self.xp.concatenate([existing_sum_cov, self.xp.zeros(n_new, dtype=self.sum_cov.dtype)])[sort_indices]
+                    self.sum_cov2[:len(all_pos)] = self.xp.concatenate([existing_sum_cov2, self.xp.zeros(n_new, dtype=self.sum_cov2.dtype)])[sort_indices]
+                    self.sum_mC[:len(all_pos)] = self.xp.concatenate([existing_sum_mC, self.xp.zeros(n_new, dtype=self.sum_mC.dtype)])[sort_indices]
+                    self.sum_uC[:len(all_pos)] = self.xp.concatenate([existing_sum_uC, self.xp.zeros(n_new, dtype=self.sum_uC.dtype)])[sort_indices]
+                    self.sum_mC2[:len(all_pos)] = self.xp.concatenate([existing_sum_mC2, self.xp.zeros(n_new, dtype=self.sum_mC2.dtype)])[sort_indices]
+                    self.sum_uC2[:len(all_pos)] = self.xp.concatenate([existing_sum_uC2, self.xp.zeros(n_new, dtype=self.sum_uC2.dtype)])[sort_indices]
+                    self.Sx3[:len(all_pos)] = self.xp.concatenate([existing_Sx3, self.xp.zeros(n_new, dtype=self.Sx3.dtype)])[sort_indices]
+                    self.Sx4[:len(all_pos)] = self.xp.concatenate([existing_Sx4, self.xp.zeros(n_new, dtype=self.Sx4.dtype)])[sort_indices]
+                    self.count_zero[:len(all_pos)] = self.xp.concatenate([existing_count_zero, self.xp.zeros(n_new, dtype=self.count_zero.dtype)])[sort_indices]
+                    self.count_one[:len(all_pos)] = self.xp.concatenate([existing_count_one, self.xp.zeros(n_new, dtype=self.count_one.dtype)])[sort_indices]
+
+                self.size = len(all_pos)
+
+            # Final indices after merge - positions are now properly sorted
             final_idx = self.xp.searchsorted(self.pos[: self.size], pos)
 
             # Update accumulators
