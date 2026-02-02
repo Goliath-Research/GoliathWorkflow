@@ -157,8 +157,6 @@ class MethylCentroidBuilder:
                 # Efficiently merge new positions while maintaining sorted order
                 new_pos = pos[is_new]
                 new_tnc = tnc[is_new]
-                new_mC = mC[is_new]
-                new_uC = uC[is_new]
 
                 # Get existing positions
                 existing_pos = self.pos[:self.size]

@@ -26,18 +26,18 @@
         "Y"
     ],
     "contexts": [
-        
-        "CHH"
+        "CG",
+        "CHG"
         
     ],
     "base_config": {
-        "laboratory": "psomagen",
+        "laboratory": "psomagen",  
         "disease": "prostate cancer",
         "group": "all prostate cancer",
-        "batch": " ",
+        "batch": "AN00026418",
         "chrom": "1",
         "ctx": "CG",
-        "output_dir": "/home/dizada/data/centroids/pcancer",
+        "output_dir": "/home/dizada/data/centroids/pc-cancer",
         "samples": [],
         "add_samples": [
             "/home/dizada/data/020520_14_C11_89",
