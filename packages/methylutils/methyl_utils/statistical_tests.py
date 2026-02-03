@@ -117,7 +117,14 @@ def storey_qvalues(
     p_sorted = xp.sort(p_array)
     order = xp.argsort(p_array)
     qvals = pi0 * m * p_sorted / (xp.arange(1, m + 1))
-    qvals = xp.minimum.accumulate(qvals[::-1])[::-1]
+    # minimum.accumulate is not implemented in CuPy; use NumPy for this step
+    if gpu_available:
+        qvals_np = calc.cp.asnumpy(qvals)
+    else:
+        qvals_np = qvals
+    qvals = np.minimum.accumulate(qvals_np[::-1])[::-1]
+    if gpu_available:
+        qvals = calc.cp.asarray(qvals, dtype=calc.cp.float32)
 
     q_final = xp.empty_like(qvals)
     q_final[order] = qvals

@@ -183,16 +183,24 @@ class BedtoolsMapper:
         if missing:
             raise ValueError(f"Missing required columns: {missing}")
         
+        # Normalize chromosome for GTF compatibility (GENCODE/UCSC use chr1, chr2, ... chrX, chrY)
+        def _bed_chrom(c: str) -> str:
+            s = str(c).strip()
+            if not s.startswith('chr'):
+                return f'chr{s}' if s else s
+            return s
+
         # Create BED format: chrom, start (0-based), end, name
-        # Name includes chromosome:position:context for traceability
+        # Name includes chromosome:position:context for traceability (original chrom for join-back)
         bed_data = []
         for _, row in df.iterrows():
             chrom = str(row['chromosome'])
             pos = int(row['position'])
             start = pos - 1  # BED is 0-based
             end = pos
-            
-            # Create name with key info
+            chrom_bed = _bed_chrom(chrom)  # chr-prefix so bedtools matches GTF
+
+            # Create name with key info (use original chrom so join with dmp_df works)
             name_parts = [chrom, str(pos)]
             if 'context' in df.columns:
                 name_parts.append(str(row['context']))
@@ -200,9 +208,9 @@ class BedtoolsMapper:
                 name_parts.append(f"eff={row['effect_size']:.3f}")
             
             name = ":".join(name_parts)
-            
+
             bed_data.append({
-                'chrom': chrom,
+                'chrom': chrom_bed,
                 'start': start,
                 'end': end,
                 'name': name
@@ -614,14 +622,18 @@ class BedtoolsMapper:
                     "gene_z_numerator": z_numerator,
                 })
 
-            gene_stats = intersect_df.groupby(group_by).apply(_compute_gene_pvalue).reset_index()
+            try:
+                gene_stats = intersect_df.groupby(group_by).apply(_compute_gene_pvalue, include_groups=False).reset_index()
+            except TypeError:
+                gene_stats = intersect_df.groupby(group_by).apply(_compute_gene_pvalue).reset_index()
             grouped = grouped.merge(gene_stats, on=group_by, how='left')
 
             gene_pvals = grouped["gene_p_value"].to_numpy(dtype=float)
             gene_qvals = np.full_like(gene_pvals, np.nan, dtype=float)
             finite_mask = np.isfinite(gene_pvals)
             if np.any(finite_mask):
-                gene_qvals[finite_mask] = storey_qvalues(gene_pvals[finite_mask])
+                _qvals, _ = storey_qvalues(gene_pvals[finite_mask])
+            gene_qvals[finite_mask] = _qvals
             grouped["gene_q_value"] = gene_qvals
 
         if 'total_importance' in grouped.columns:
@@ -1070,7 +1082,8 @@ class BedtoolsMapper:
                 gene_qvals = np.full_like(gene_pvals, np.nan, dtype=float)
                 finite_mask = np.isfinite(gene_pvals)
                 if np.any(finite_mask):
-                    gene_qvals[finite_mask] = storey_qvalues(gene_pvals[finite_mask])
+                    _qvals, _ = storey_qvalues(gene_pvals[finite_mask])
+                    gene_qvals[finite_mask] = _qvals
                 combined['gene_q_value'] = gene_qvals
 
             if 'total_importance' in combined.columns:

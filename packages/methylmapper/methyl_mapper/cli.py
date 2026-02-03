@@ -283,8 +283,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     required.add_argument(
         '--gtf', '-g',
         type=str,
-        default="/home/ubuntu/Work/w/humans/Homo_sapiens.GRCh38.110.gtf",
-        help='Path to GTF/GFF annotation file'
+        default=None,
+        help='Path to GTF/GFF annotation file (default: from --config, or GENE_GTF env)'
     )
     
     # Output options
@@ -358,8 +358,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     disease_group.add_argument(
         '--disease-term',
         type=str,
-        default='early-stage prostate cancer',
-        help='Disease term to search for (default: "early-stage prostate cancer")'
+        default=None,
+        help='Disease term for enrichment (e.g. "Prostate Cancer"). Default: METHYL_MAPPER_DISEASE_TERM env, or "early-stage prostate cancer")'
     )
     disease_group.add_argument(
         '--grok-api-key',
@@ -482,6 +482,12 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     
     # Other options
     parser.add_argument(
+        '--config', '-c',
+        type=str,
+        default=None,
+        help='Optional JSON config file. May set disease_term, gtf, output_dir (overridden by CLI args)'
+    )
+    parser.add_argument(
         '--verbose', '-v',
         action='store_true',
         help='Enable verbose logging'
@@ -492,7 +498,22 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         version='MethylMapper Bedtools 0.1.0'
     )
     
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Apply optional config file (CLI args take precedence)
+    if args.config:
+        config_path = Path(args.config)
+        if config_path.exists():
+            with open(config_path) as f:
+                cfg = json.load(f)
+            if cfg.get('disease_term') is not None and args.disease_term is None:
+                args.disease_term = cfg['disease_term']
+            if cfg.get('gtf') is not None and args.gtf is None:
+                args.gtf = cfg['gtf']
+            if cfg.get('output_dir') is not None and args.output_dir is None:
+                args.output_dir = cfg['output_dir']
+
+    return args
 
 
 def main_bedtools():
@@ -522,11 +543,15 @@ def main_bedtools():
         logger.info("="*70)
         logger.info("MethylMapper Bedtools - DMP to Feature Mapping")
         logger.info("="*70)
+        # Resolve disease term: CLI > config > env > literal default
+        disease_term = args.disease_term or os.environ.get('METHYL_MAPPER_DISEASE_TERM') or 'early-stage prostate cancer'
+        args.disease_term = disease_term
+
         logger.info(f"CSV pattern: {args.csv_pattern}")
         logger.info(f"GTF file: {gtf_path}")
         logger.info(f"Group by: {args.group_by}")
         if args.enrich_disease:
-            logger.info(f"Disease enrichment: Enabled ({args.disease_term})")
+            logger.info(f"Disease enrichment: Enabled ({disease_term})")
         if not args.no_optimize_dmps and args.enrich_disease:
             logger.info(f"DMP optimization: Enabled (min_k={args.min_k}, stability_threshold={args.stability_threshold})")
         logger.info("="*70)

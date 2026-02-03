@@ -3,7 +3,7 @@
     "contexts": ["CG", "CHG", "CHH"],
     "centroid1_dir": "/work/data/david-gladys/all-prostate/centroids/healthy_all",
     "centroid2_dir": "/work/data/david-gladys/all-prostate/centroids/pcancer",
-    "output_dir": "/home/dizada/data/detection/PCa_vs_Healthy",
+    "output_dir": "/work/data/david-gladys/all-prostate/detection/PCa_vs_Healthy",
     "alpha": 0.05,
     "min_delta_mean": 0.2,
     "max_bc": 0.7,
