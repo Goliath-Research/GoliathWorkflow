@@ -233,7 +233,8 @@ class MethylCentroidPair:
         for cent in [aligned1, aligned2]:
             zero_mask = (cent.mC + cent.uC) == 0
             if np.any(zero_mask):
-                cent.uC[zero_mask] = 1  # Ensure mean=0, avoid div-by-zero in comparisons
+                # Use .loc to avoid SettingWithCopyWarning when modifying DataFrame
+                cent._df.loc[zero_mask, "uC"] = 1  # Ensure mean=0, avoid div-by-zero in comparisons
                 logger.debug(f"Clamped {np.sum(zero_mask)} zero-coverage positions in centroid")
 
         # Validate min_coverage post-alignment
@@ -300,7 +301,8 @@ class MethylCentroidPair:
         for cent in [aligned1, aligned2]:
             zero_mask = (cent.mC + cent.uC) == 0
             if np.any(zero_mask):
-                cent.uC[zero_mask] = 1  # Ensure mean=0, avoid div-by-zero in comparisons
+                # Use .loc to avoid SettingWithCopyWarning when modifying DataFrame
+                cent._df.loc[zero_mask, "uC"] = 1  # Ensure mean=0, avoid div-by-zero in comparisons
                 logger.debug(f"Clamped {np.sum(zero_mask)} zero-coverage positions in centroid")
 
         # Validate min_coverage post-alignment

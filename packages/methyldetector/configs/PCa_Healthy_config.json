@@ -3,7 +3,7 @@
     "centroid1_dir": "/home/dizada/data/centroids/healthy",
     "centroid2_dir": "/home/dizada/data/centroids/pc-cancer",
     "chromosome": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X"],
-    "contexts": ["CG", "CHG"],
+    "contexts": ["CG", "CHG", "CHH"],
     "output_dir": "/home/dizada/data/detection/PCa_vs_Healthy",
     "use_dataframe_processing": true,
     "generate_histograms": true,
