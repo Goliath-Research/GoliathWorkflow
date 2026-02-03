@@ -233,9 +233,6 @@ class MethylDetector:
         if self.config.output_dir:
             logger.info("💾 Exporting final DMPs sorted by importance...")
             self._export_unified_csv(sorted_by_importance_df, suffix="-biological-sorted")
-            
-            # Also export with default name for legacy compatibility
-            self._export_unified_csv(sorted_by_importance_df)
         
         # Create result (use selected DMPs for result stats)
         result = self._create_multi_context_result(dmps_df, sorted_by_importance_df)

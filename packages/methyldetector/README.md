@@ -157,8 +157,7 @@ else:
 
 ### Per Chromosome
 
-1. **`dmps-{chromosome}.csv`** - All biological DMPs with full metadata
-2. **`dmps-{chromosome}-biological-sorted.csv`** - Biological DMPs sorted by significance
+1. **`dmps-{chromosome}-biological-sorted.csv`** - Biological DMPs sorted by importance
 
 `results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files` when BMM refinement runs.
 
@@ -227,12 +226,8 @@ MethylDetector supports processing multiple chromosomes in a single run:
 **Output structure:**
 ```
 /models/all_chromosomes/
-├── dmps-1.csv
-├── classifier-1.pkl
-├── results-1.json
-├── dmps-2.csv
-├── classifier-2.pkl
-├── results-2.json
+├── dmps-1-biological-sorted.csv
+├── dmps-2-biological-sorted.csv
 └── ...
 ```
 

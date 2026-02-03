@@ -49,11 +49,8 @@ After completion, check your output directory:
 
 ```
 output/
-├── dmps-1.csv              # All biological DMPs
-├── dmps-1-3-optimized.csv  # Final optimized DMPs
-├── classifier-1.pkl        # Trained classifier
-├── results-1.json          # Validation results
-└── bmm_centroids/          # BMM centroids (if refinement enabled)
+├── dmps-1-biological-sorted.csv  # Biological DMPs sorted by importance
+└── [additional chromosomes follow same pattern]
 ```
 
 ## Multi-Chromosome Processing
@@ -201,12 +198,7 @@ Validation samples can be:
 
 ### Per Chromosome Outputs
 
-- **`dmps-{chromosome}.csv`**: All biological DMPs with full metadata
-- **`dmps-{chromosome}-1-biological.csv`**: Stage 1 biological DMPs (if optimization enabled)
-- **`dmps-{chromosome}-2-pre-optimization.csv`**: Stage 2 pre-optimization DMPs
-- **`dmps-{chromosome}-3-optimized.csv`**: Stage 3 final optimized DMPs
-- **`classifier-{chromosome}.pkl`**: Trained BetaClassifier model
-- **`results-{chromosome}.json`**: Validation results and summary
+- **`dmps-{chromosome}-biological-sorted.csv`**: Biological DMPs sorted by importance
 
 ### CSV Columns
 
