@@ -4,31 +4,30 @@
 
 ## Overview
 
-MethylDetector is a production-ready package for detecting Differentially Methylated Positions (DMPs) between two methylation centroids and training Bayesian classifiers optimized with Balanced Accuracy. It combines statistical rigor (Storey's q-value FDR correction) with biological filtering to identify meaningful biomarkers.
+MethylDetector is a production-ready package for detecting Differentially Methylated Positions (DMPs) between two methylation centroids. It combines statistical rigor (Storey's q-value FDR correction) with biological filtering to identify meaningful biomarkers for downstream analysis.
 
 ### What is MethylDetector?
 
-MethylDetector bridges centroid generation and classification:
+MethylDetector provides comprehensive DMP detection and analysis:
 
 - **DMP Detection**: Statistical comparison of two centroids with FDR control
-- **Biological Filtering**: Effect size and overlap criteria for meaningful DMPs
-- **Classifier Training**: Optimized DMP selection using FeatureCuts or Bayesian Optimization
-- **Balanced Accuracy Optimization**: Robust to class imbalance (e.g., 35 healthy vs 12 cancer)
-- **Model Packaging**: Creates `.pkl` files for MethylClassifier
+- **Biological Filtering**: Effect size and distribution overlap criteria for meaningful DMPs
 - **Multi-Chromosome Support**: Process single or multiple chromosomes in one run
+- **Multi-Context Support**: Process CG, CHG, CHH contexts together
+- **GPU Acceleration**: High-performance processing with NVIDIA GPUs
+- **Comprehensive Output**: Detailed DMP tables with statistical metadata
 
 ## Key Features
 
 - 🔬 **Statistical Rigor**: Storey's q-value FDR correction (recommended for genomics)
 - 📊 **Biological Filtering**: Delta mean, Bhattacharyya coefficient, coverage thresholds
-- 🎯 **Balanced Accuracy**: Unbiased metric robust to class imbalance
-- 🔍 **FeatureCuts Optimization**: Efficient non-monotonic optimization for DMP selection
 - 🧬 **Multi-Context Support**: Process CG, CHG, CHH contexts together
 - 🧬 **Multi-Chromosome Support**: Process multiple chromosomes in a single run
-- 🚀 **GPU Acceleration**: 15-20x speedup with NVIDIA GPUs
-- 🧪 **BMM Refinement**: Optional beta mixture model refinement for top DMPs (GPU-accelerated when enabled)
-- 📦 **Model Packaging**: Complete metadata for reproducibility
-- ✅ **Validation Modes**: Real or synthetic sample validation with proper train/test splits
+- 🚀 **GPU Acceleration**: High-performance processing with NVIDIA GPUs
+- 📊 **Comprehensive Output**: Detailed DMP tables with statistical metadata
+- ⚡ **Memory Efficient**: Intelligent chunking for large genomic datasets
+- ✅ **Type Safe**: Full type hints with comprehensive validation
+- 📋 **Clean Configuration**: Simplified parameter management with validation warnings
 
 ## Installation
 
@@ -54,11 +53,8 @@ pip install methylpipeline
   "output_dir": "/path/to/output",
   "alpha": 0.01,
   "min_delta_mean": 0.2,
-  "max_bc": 0.5,
-  "optimize_dmps": true,
-  "optimization_method": "featurecuts",
-  "validation_mode": "real",
-  "validation_split_ratio": 0.2
+  "max_bc": 0.6,
+  "biological_filters": ["bhattacharyya"]
 }
 ```
 
@@ -79,13 +75,14 @@ Process multiple chromosomes in a single run:
   "output_dir": "/path/to/output",
   "alpha": 0.01,
   "min_delta_mean": 0.2,
-  "max_bc": 0.5
+  "max_bc": 0.6,
+  "biological_filters": ["bhattacharyya"]
 }
 ```
 
 Each chromosome will:
 - Process independently with its own centroids
-- Generate separate output files: `dmps-1.csv`, `dmps-2.csv`, `classifier-1.pkl`, etc.
+- Generate separate output files: `dmps-1.csv`, `dmps-2.csv`, etc.
 - Continue processing even if one fails (with error logging)
 
 ### Command Line Interface
@@ -145,52 +142,11 @@ else:
 - **`min_delta_mean`**: Minimum absolute difference in mean methylation (default: `0.2`)
 - **`max_bc`**: Maximum Bhattacharyya coefficient / overlap (default: `0.6`)
   - Lower values = less overlap = stronger discrimination
-- **`delta_mean_mode`**: How to compute mean/delta_mean (`mean`, `beta`, `normal`, `auto`) (default: `mean`)
-- **`overlap_mode`**: How to compute overlap (`beta`, `normal`, `auto`) (default: `beta`)
-- **`min_N_pct`**: Minimum coverage percentage (default: `0.1`)
-  - Positions must have coverage ≥ 10% of samples
 - **`biological_filters`**: List of filters to apply (default: `["delta_mean", "bhattacharyya"]`)
-
-### BMM Refinement (Detector Stage)
-
-- **`bmm_refine_enabled`**: Enable beta mixture refinement for top biological DMPs (default: `false`)
-- **`bmm_refine_mode`**: `"annotate"` or `"filter"` (default: `"filter"`)
-- **`bmm_refine_use_binned_stats`**: Use binned counts for faster EM (default: `true`)
-- **`bmm_refine_bin_count`**: Number of bins for binned stats (default: `32`)
-- **`bmm_refine_max_dmps`**: Cap on number of DMPs to refine (default: `200000`)
-- **`bmm_refine_max_fraction`**: Optional fraction cap for refinement (default: `0.02`)
-- **`bmm_refine_use_gpu`**: Use GPU for BMM EM + JS divergence when available (default: `true`)
 
 ### Context Weighting
 
-- **`use_context_weights`**: Enable trimmed-mean context weighting (default: `true`)
-- **`trimmed_percentile_low`**: Lower percentile to trim (default: `0.10`)
-- **`trimmed_percentile_high`**: Upper percentile to trim (default: `0.01`)
-
-### DMP Optimization
-
-- **`optimize_dmps`**: Enable DMP count optimization (default: `false`)
-- **`optimization_method`**: `"binary_search"`, `"featurecuts"`, or `"bayesian_optimization"` (default: `"featurecuts"`)
-  - `binary_search`: Fastest (~log N evaluations), assumes monotonic BA increase (use with proper weighting)
-  - `featurecuts`: Fast logarithmic sampling (~18 evaluations), handles non-monotonic functions
-  - `bayesian_optimization`: Most thorough search (~50 evaluations), handles complex optimization landscapes
-- **`target_balanced_accuracy`**: Target BA for optimization (default: `0.95`)
-- **`min_dmps_for_export`**: Minimum DMPs to export (default: `1000`)
-
-### Validation
-
-- **`validation_mode`**: `"real"` or `"synthetic"` (default: `"synthetic"`)
-- **`centroid1_validation_samples`**: List of sample directories or `"use_metadata"`
-- **`centroid2_validation_samples`**: List of sample directories or `"use_metadata"`
-- **`validation_split_ratio`**: Train/test split for validation (default: `0.0`)
-  - `0.0`: Use all samples for calibration (no split)
-  - `0.1-0.9`: Split into calibration and test sets (recommended: `0.2`)
-
-### Classifier Settings
-
-- **`classifier_type`**: `"beta"` (recommended) or `"beta_binomial"`
-- **`min_sample_coverage`**: Minimum coverage for positions (default: `10`)
-- **`classifier_coverage_weighting`**: Weight by sample precision (default: `true`)
+- **`use_context_weights`**: Enable context weighting for multi-context analysis (default: `true`)
 
 ### Performance
 
@@ -202,13 +158,7 @@ else:
 ### Per Chromosome
 
 1. **`dmps-{chromosome}.csv`** - All biological DMPs with full metadata
-2. **`dmps-{chromosome}-1-biological.csv`** - Stage 1: Biological DMPs (if optimization enabled)
-3. **`dmps-{chromosome}-2-pre-optimization.csv`** - Stage 2: Pre-optimization DMPs (if optimization enabled)
-4. **`dmps-{chromosome}-3-optimized.csv`** - Stage 3: Final optimized DMPs (if optimization enabled)
-5. **`classifier-{chromosome}.pkl`** - Trained BetaClassifier model
-6. **`results-{chromosome}.json`** - Validation results and summary
-7. **`bmm_centroids/bmm-centroid-{chromosome}-{context}.json`** - BMM centroid for centroid1 (when refinement enabled)
-8. **`bmm_centroids/bmm-centroid-{chromosome}-{context}-centroid2.json`** - BMM centroid for centroid2
+2. **`dmps-{chromosome}-biological-sorted.csv`** - Biological DMPs sorted by significance
 
 `results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files` when BMM refinement runs.
 
@@ -246,22 +196,8 @@ else:
    ├─ Normalize weights to sum=1.0
    └─ Assign weights to each DMP
 
-5. DMP Optimization (optional)
-   ├─ Load validation samples
-   ├─ FeatureCuts or Bayesian Optimization
-   ├─ Evaluate Balanced Accuracy for candidate k values
-   ├─ Find minimum k achieving maximum BA
-   └─ Select optimal DMP subset
-
-6. Create Model Package
-   ├─ Package BetaClassifier
-   ├─ Include DMP positions and Beta parameters
-   ├─ Add metadata (chromosome, contexts, n_dmps)
-   └─ Save as .pkl file
-
-7. Generate Reports
-   ├─ DMP tables (CSV)
-   ├─ Validation results (JSON)
+5. Generate Reports
+   ├─ DMP tables (CSV) with full statistical metadata
    └─ Summary statistics
 ```
 
@@ -300,39 +236,33 @@ MethylDetector supports processing multiple chromosomes in a single run:
 └── ...
 ```
 
-## Why Balanced Accuracy?
+## Statistical Rigor
 
-MethylDetector uses **Balanced Accuracy** instead of AUC because:
+MethylDetector uses **Storey's q-value FDR correction** for multiple testing correction:
 
-1. **Robust to Class Imbalance**: Works correctly with unbalanced datasets (e.g., 35 healthy vs 12 cancer)
-2. **Interpretable**: Simple average of Sensitivity and Specificity
-3. **Unbiased**: Treats both classes equally regardless of sample sizes
-4. **Validated**: Widely used in medical/genomics research
-
-**Formula**:
-$$
-\text{Balanced Accuracy} = \frac{\text{Sensitivity} + \text{Specificity}}{2}
-$$
+- **Adaptive FDR control**: Adjusts for different proportions of true null hypotheses
+- **Recommended for genomics**: Superior to Bonferroni correction for large datasets
+- **q ≤ α threshold**: Controls false discovery rate at specified level
+- **Biological filtering**: Additional effect size and overlap criteria for meaningful DMPs
 
 ## Integration with MethylPipeline
 
 ### Workflow Position
 
 ```
-MethylCentroid → MethylDetector → MethylClassifier
-    (Generate)     (Train Model)    (Predict)
+MethylCentroid → MethylDetector → Downstream Analysis
+    (Generate)     (DMP Detection)   (Gene mapping, enrichment, etc.)
 ```
 
 ### Inputs
 
 - Centroids from **MethylCentroid** (HDF5 files in directory format)
-- Optional: Validation samples
 
 ### Outputs
 
-- Model packages (`.pkl`) for **MethylClassifier**
-- DMP tables for analysis
-- Validation results
+- DMP tables (CSV) for downstream analysis
+- Statistical metadata for each significant position
+- Ready for gene mapping, functional enrichment, and biomarker discovery
 
 ## Performance
 
@@ -365,15 +295,31 @@ MethylCentroid → MethylDetector → MethylClassifier
 }
 ```
 
-### Cannot Reach Target Balanced Accuracy
+### Too Many DMPs Detected
 
-**Problem**: Optimization finds low BA values
+**Problem**: `dmps-{chromosome}.csv` contains too many positions
 
 **Solutions**:
-- Check validation samples are representative
-- Verify centroids have sufficient samples
-- Lower `target_balanced_accuracy` (e.g., `0.90`)
-- Increase `min_dmps_for_export` if too few DMPs
+```json
+{
+  "alpha": 0.001,  // Stricter FDR threshold
+  "min_delta_mean": 0.3,  // Higher effect size threshold
+  "max_bc": 0.4  // Less overlap allowed
+}
+```
+
+### Too Few DMPs Detected
+
+**Problem**: Very few or no DMPs found
+
+**Solutions**:
+```json
+{
+  "alpha": 0.05,  // Relax FDR threshold
+  "min_delta_mean": 0.1,  // Lower effect size threshold
+  "max_bc": 0.8  // Allow more overlap
+}
+```
 
 ### GPU Out of Memory
 

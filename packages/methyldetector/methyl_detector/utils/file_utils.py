@@ -30,7 +30,8 @@ def load_config_from_json(json_path: Union[str, Path]) -> MethylModelerConfig:
     """
     Load MethylModeler configuration from JSON file.
 
-    The configuration file must contain a 'mode' field set to either 'single' or 'multiple'.
+    The configuration file must contain valid MethylModelerConfig parameters.
+    Warns about unused parameters that are not defined in the model.
 
     Args:
         json_path: Path to JSON configuration file
@@ -45,6 +46,19 @@ def load_config_from_json(json_path: Union[str, Path]) -> MethylModelerConfig:
 
     with open(json_path, 'r') as f:
         config_data = json.load(f)
+
+    # Get all valid field names from the Pydantic model
+    valid_fields = set(MethylModelerConfig.model_fields.keys())
+
+    # Check for unused parameters
+    unused_params = []
+    for key in config_data.keys():
+        if key not in valid_fields:
+            unused_params.append(key)
+
+    if unused_params:
+        logger.warning(f"Found {len(unused_params)} unused parameter(s) in config file: {', '.join(unused_params)}")
+        logger.warning("These parameters will be ignored. Consider removing them to simplify the config.")
 
     # The unified config will validate the mode and required fields
     return MethylModelerConfig(**config_data)

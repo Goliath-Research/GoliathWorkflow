@@ -12,7 +12,7 @@ This guide will help you get MethylDetector up and running quickly.
 
 ### 1. Basic Configuration
 
-Create a JSON configuration file:
+Create a JSON configuration file with only the essential parameters:
 
 ```json
 {
@@ -23,29 +23,12 @@ Create a JSON configuration file:
   "output_dir": "/path/to/output",
   "alpha": 0.01,
   "min_delta_mean": 0.2,
-  "max_bc": 0.5,
-  "optimize_dmps": true,
-  "optimization_method": "featurecuts",
-  "validation_mode": "real",
-  "validation_split_ratio": 0.2,
+  "max_bc": 0.6,
+  "biological_filters": ["bhattacharyya"],
   "use_gpu": true
 }
 ```
 
-### Optional: BMM Refinement (Detector Stage)
-
-Enable beta mixture refinement for top biological DMPs (GPU-accelerated when available):
-
-```json
-{
-  "bmm_refine_enabled": true,
-  "bmm_refine_mode": "filter",
-  "bmm_refine_use_gpu": true,
-  "bmm_refine_bin_count": 32,
-  "bmm_refine_max_dmps": 200000,
-  "bmm_refine_max_fraction": 0.02
-}
-```
 
 ### 2. Run Analysis
 

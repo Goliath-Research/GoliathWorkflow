@@ -1,12 +1,12 @@
 {
-    "mode": "single",
-    "centroid1_path": "/home/ubuntu/Work/OEP00000860/centroids/tissue_benign/1-CG.h5",
-    "centroid2_path": "/home/ubuntu/Work/OEP00000860/centroids/tissue_malignant/1-CG.h5",
-    "output_dir": "/home/ubuntu/Work/output_workflows/methyl_modeler/single_test",
-    "alpha": 0.05,
-    "min_N": 10,
-    "apply_fdr_correction": true,
-    "fdr_method": "storey",
-    "global_significance_threshold": 0.05,
+    "chromosome": "1",
+    "contexts": ["CG"],
+    "centroid1_dir": "/path/to/benign/centroids",
+    "centroid2_dir": "/path/to/malignant/centroids",
+    "output_dir": "/path/to/output",
+    "alpha": 0.01,
+    "min_delta_mean": 0.2,
+    "max_bc": 0.6,
+    "biological_filters": ["bhattacharyya"],
     "use_gpu": true
 }

@@ -1,19 +1,12 @@
 {
-    "mode": "multiple",
+    "chromosome": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X"],
+    "contexts": ["CG"],
     "centroid1_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/centroids/pb-cancer/",
     "centroid2_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/centroids/pb-healthy/",
-    "chromosomes": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X"],
-    "contexts": ["CG"],
     "output_dir": "/home/ubuntu/Work/samples/humans/psomagen/AN00025834/data/detection/multiple/pb-ch",
-    "use_dataframe_processing": true,
-    "generate_histograms": true,
-    "min_q_value": 0.01,
+    "alpha": 0.01,
     "min_delta_mean": 0.2,
     "max_bc": 0.6,
     "biological_filters": ["bhattacharyya"],
-    "target_balanced_accuracy": 0.95,
-    "selection_metric": "auc",
-    "selection_algorithm": "biological_significance_threshold",
-    "min_selected_dmps": 100,
-    "weight_mode": "rational"
+    "use_gpu": true
 }
