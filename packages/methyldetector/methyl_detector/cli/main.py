@@ -89,8 +89,12 @@ def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
             ]
             
             summary_lines.append("\n🔬 Per-Chromosome Results:")
+            chromosomes = loaded_config.chromosome if isinstance(loaded_config.chromosome, list) else [loaded_config.chromosome]
+
             for i, result in enumerate(results, 1):
-                chrom = result.config_summary.get('chromosome', f'Chromosome {i}')
+                # Use the chromosome from the config list (results are in same order as config)
+                chrom = chromosomes[i-1] if i <= len(chromosomes) else f'Chromosome {i}'
+
                 dmp_count = len(result.biologically_significant_dmps_df) if result.biologically_significant_dmps_df is not None else 0
                 summary_lines.extend([
                     f"  [{i}] {chrom}:",
@@ -100,7 +104,7 @@ def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
                     f"    Final DMPs: {dmp_count:,}"
                 ])
             
-            summary_lines.append(f"\n✅ Multi-chromosome analysis complete!")
+            summary_lines.append("\n✅ Multi-chromosome analysis complete!")
             
             # Print summary to screen
             for line in summary_lines:
