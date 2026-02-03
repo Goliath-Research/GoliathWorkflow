@@ -1,5 +1,5 @@
-"""Core functionality for MethylModeler."""
+"""Core functionality for MethylDetector."""
 
-from .methylmodeler import MethylModeler
+from .methyldetector import MethylDetector
 
-__all__ = ["MethylModeler"] 
+__all__ = ["MethylDetector"] 

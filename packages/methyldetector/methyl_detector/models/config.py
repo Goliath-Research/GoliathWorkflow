@@ -105,7 +105,7 @@ class MethylModelerConfig(BaseModel):
         description="Enable Platt scaling calibration on validation data during classification"
     )
 
-    @field_validator('contexts')
+    @field_validator('contexts', mode='before')
     @classmethod
     def validate_contexts(cls, v):
         """Validate that contexts are valid methylation contexts."""
@@ -117,7 +117,7 @@ class MethylModelerConfig(BaseModel):
                 raise ValueError(f"Invalid context '{ctx}'. Valid contexts are: {valid_contexts}")
         return v
 
-    @field_validator('temperature')
+    @field_validator('temperature', mode='before')
     @classmethod
     def validate_temperature(cls, v):
         if v < 0.1:
@@ -126,7 +126,7 @@ class MethylModelerConfig(BaseModel):
             raise ValueError("Temperature must be <= 10.0")
         return v
 
-    @field_validator('bmm_refine_mode')
+    @field_validator('bmm_refine_mode', mode='before')
     @classmethod
     def validate_bmm_refine_mode(cls, v):
         valid = {"annotate", "filter"}
@@ -134,7 +134,7 @@ class MethylModelerConfig(BaseModel):
             raise ValueError(f"Invalid bmm_refine_mode '{v}'. Valid options: {valid}")
         return v
 
-    @field_validator('bmm_refine_filter_metric')
+    @field_validator('bmm_refine_filter_metric', mode='before')
     @classmethod
     def validate_bmm_refine_filter_metric(cls, v):
         valid = {"p_value", "js"}
@@ -295,7 +295,7 @@ class MethylModelerConfig(BaseModel):
     # -----------------
     # Validators / Utils
     # -----------------
-    @field_validator('centroid1_dir', 'centroid2_dir')
+    @field_validator('centroid1_dir', 'centroid2_dir', mode='before')
     @classmethod
     def validate_centroid_dirs(cls, v):
         if v is not None:
@@ -306,7 +306,7 @@ class MethylModelerConfig(BaseModel):
                 raise ValueError(f"Centroid path must be a directory: {path}")
         return path
     
-    @field_validator('centroid1_path', 'centroid2_path')
+    @field_validator('centroid1_path', 'centroid2_path', mode='before')
     @classmethod
     def validate_centroid_paths(cls, v):
         if v is not None:
@@ -317,7 +317,7 @@ class MethylModelerConfig(BaseModel):
                 raise ValueError(f"Centroid file must be .h5 format: {path}")
         return path
     
-    @field_validator('chromosome')
+    @field_validator('chromosome', mode='before')
     @classmethod
     def validate_chromosome(cls, v):
         """Validate chromosome(s) - can be a single chromosome or a list."""
@@ -338,7 +338,7 @@ class MethylModelerConfig(BaseModel):
         else:
             raise ValueError(f"Chromosome must be a string or list of strings, got: {type(v)}")
 
-    @field_validator('output_dir')
+    @field_validator('output_dir', mode='before')
     @classmethod
     def validate_output_dir(cls, v):
         if v is not None:
@@ -347,7 +347,7 @@ class MethylModelerConfig(BaseModel):
                 raise ValueError("Output directory cannot be empty")
         return v
 
-    @field_validator('biological_filters')
+    @field_validator('biological_filters', mode='before')
     @classmethod
     def validate_biological_filters(cls, v):
         valid_filters = ['delta_mean', 'bhattacharyya']
@@ -356,7 +356,7 @@ class MethylModelerConfig(BaseModel):
                 raise ValueError(f"Biological filter must be one of: {valid_filters}, got: {f}")
         return v
 
-    @field_validator('delta_mean_mode')
+    @field_validator('delta_mean_mode', mode='before')
     @classmethod
     def validate_delta_mean_mode(cls, v):
         valid = {"mean", "beta", "normal", "auto", "legacy"}
@@ -364,7 +364,7 @@ class MethylModelerConfig(BaseModel):
             raise ValueError(f"delta_mean_mode must be one of: {sorted(valid)}, got: {v}")
         return v
 
-    @field_validator('overlap_mode')
+    @field_validator('overlap_mode', mode='before')
     @classmethod
     def validate_overlap_mode(cls, v):
         valid = {"beta", "normal", "auto", "legacy"}
@@ -372,13 +372,13 @@ class MethylModelerConfig(BaseModel):
             raise ValueError(f"overlap_mode must be one of: {sorted(valid)}, got: {v}")
         return v
     
-    @field_validator('validation_mode')
-    @classmethod
-    def validate_validation_mode(cls, v):
-        valid_modes = ['synthetic', 'real']
-        if v not in valid_modes:
-            raise ValueError(f"Validation mode must be one of: {valid_modes}, got: {v}")
-        return v
+    # @field_validator('validation_mode', mode='before')
+    # @classmethod
+    # def validate_validation_mode(cls, v):
+    #     valid_modes = ['synthetic', 'real']
+    #     if v not in valid_modes:
+    #         raise ValueError(f"Validation mode must be one of: {valid_modes}, got: {v}")
+    #     return v
     
     classifier_type: str = Field(
         default="beta",
@@ -431,7 +431,7 @@ class MethylModelerConfig(BaseModel):
         description="Threshold for concentration parameter (alpha+beta) below which EAT falls back to Normal approximation. Prevents numerical issues with low-coverage positions."
     )
 
-    @field_validator('classifier_type')
+    @field_validator('classifier_type', mode='before')
     @classmethod
     def validate_classifier_type(cls, v):
         valid_types = ["beta", "beta_binomial"]
@@ -439,7 +439,7 @@ class MethylModelerConfig(BaseModel):
             raise ValueError(f"Invalid classifier_type: {v}. Must be one of {valid_types}.")
         return v
 
-    @field_validator('synthetic_config')
+    @field_validator('synthetic_config', mode='before')
     @classmethod
     def validate_synthetic_config(cls, v):
         realism = v.get('realism_level', 'basic')
@@ -447,14 +447,14 @@ class MethylModelerConfig(BaseModel):
             raise ValueError("realism_level must be 'off', 'basic', or 'advanced'.")
         return v
     
-    @field_validator('trimmed_percentile_low', 'trimmed_percentile_high')
+    @field_validator('trimmed_percentile_low', 'trimmed_percentile_high', mode='before')
     @classmethod
     def validate_trimmed_percentile(cls, v):
         if v < 0.0 or v > 0.5:
             raise ValueError("Trimmed percentiles must be between 0.0 and 0.5")
         return v
 
-    @field_validator('eat_normalization')
+    @field_validator('eat_normalization', mode='before')
     @classmethod
     def validate_eat_normalization(cls, v):
         valid_norms = ['l1', 'l2', 'minmax', 'zscore', None]

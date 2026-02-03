@@ -20,7 +20,7 @@ except ImportError:
         stacklevel=2
     )
 
-from .core.methylmodeler import MethylModeler
+from .core.methyldetector import MethylDetector
 from .models.config import MethylModelerConfig
 from .models.results import MethylModelerResult
 
@@ -29,7 +29,7 @@ from methyl_utils import MethylCentroidPair
 
 __version__ = "0.2.0"
 __all__ = [
-    "MethylModeler",
+    "MethylDetector",
     "MethylModelerConfig",
     "MethylModelerResult",
     "MethylCentroidPair"
