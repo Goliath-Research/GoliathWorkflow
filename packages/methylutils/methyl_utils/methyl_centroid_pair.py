@@ -1467,13 +1467,18 @@ class MethylCentroidPair:
         combined_std = np.sqrt(var1 + var2)
         combined_std = np.maximum(combined_std, numerical_epsilon)
 
+        # Clamp BC to [0, 1] and replace NaN to avoid invalid value in power (negative base or NaN)
+        bc_safe = np.clip(np.nan_to_num(bc_values, nan=0.5), 0.0, 1.0)
+
         # Compute effect size: |delta_mu| / sqrt(var1 + var2) * (1 - BC)^gamma
-        overlap_penalty = (1 - bc_values) ** gamma
+        overlap_penalty = (1 - bc_safe) ** gamma
         raw_effect_size = np.abs(delta_mean) / combined_std * overlap_penalty
 
         # Apply soft minimum to avoid zeros but preserve relative differences
         # Keep raw effect sizes to maintain biological importance for classification
         effect_sizes = np.maximum(raw_effect_size, 1e-8)  # Very small floor to avoid exact zeros
+        # Replace any remaining NaN (e.g. from NaN delta_mean) so they don't appear in top effect sizes
+        effect_sizes = np.nan_to_num(effect_sizes, nan=0.0)
 
         return effect_sizes
 

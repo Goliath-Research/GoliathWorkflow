@@ -27,7 +27,9 @@ def run_methyldetector():
     env['PYTHONPATH'] = f"{packages_dir}:{packages_dir}/methylutils:{packages_dir}/methyldetector"
 
     # Run the command with all arguments passed through
-    cmd = [str(venv_python), "-m", "methyl_detector.cli.main"] + sys.argv[1:]
+    # Use methyl_detector.cli (not .cli.main) to avoid runpy warning: cli/__init__.py
+    # imports .main, so executing .cli.main as __main__ would load it twice.
+    cmd = [str(venv_python), "-m", "methyl_detector.cli"] + sys.argv[1:]
 
     try:
         result = subprocess.run(cmd, env=env, cwd=current_dir)
