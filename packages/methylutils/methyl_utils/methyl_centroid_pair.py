@@ -1285,9 +1285,9 @@ class MethylCentroidPair:
         except ValueError as e:
             return {"error": f"Failed to align centroids: {e}"}
 
-        # Get Beta parameters using MethylSample's encapsulated methods
-        alpha1, beta1 = centroid1.get_beta_parameters()
-        alpha2, beta2 = centroid2.get_beta_parameters()
+        # Get Beta parameters using MethylExtendedCentroid properties
+        alpha1, beta1 = centroid1.alpha.values, centroid1.beta.values
+        alpha2, beta2 = centroid2.alpha.values, centroid2.beta.values
 
         # Get sample statistics
         N1 = centroid1.N
@@ -1327,9 +1327,12 @@ class MethylCentroidPair:
             normal_mean1 = float(np.median(Sx1_valid / N1_valid))
             normal_var1 = float(np.median((Sx2_1_valid - (Sx1_valid**2)/N1_valid) / (N1_valid - 1)))
 
-            # Use MethylSample's mean and variance properties for Beta comparison
+            # Use MethylSample's mean and calculate variance from Beta parameters for Beta comparison
             beta_mean1 = float(centroid1.mean[valid_positions1].mean())
-            beta_var1 = float(centroid1.variance[valid_positions1].mean())
+            # Beta distribution variance: αβ/((α+β)²(α+β+1))
+            alpha1_valid = centroid1.alpha.values[valid_positions1]
+            beta1_valid = centroid1.beta.values[valid_positions1]
+            beta_var1 = float(((alpha1_valid * beta1_valid) / ((alpha1_valid + beta1_valid)**2 * (alpha1_valid + beta1_valid + 1))).mean())
 
             results["validation"]["centroid1"] = {
                 "normal_estimate": {"mean": normal_mean1, "var": normal_var1},
@@ -1353,9 +1356,12 @@ class MethylCentroidPair:
             normal_mean2 = float(np.median(Sx2_valid / N2_valid))
             normal_var2 = float(np.median((Sx2_2_valid - (Sx2_valid**2)/N2_valid) / (N2_valid - 1)))
 
-            # Use MethylSample's mean and variance properties for Beta comparison
+            # Use MethylSample's mean and calculate variance from Beta parameters for Beta comparison
             beta_mean2 = float(centroid2.mean[valid_positions2].mean())
-            beta_var2 = float(centroid2.variance[valid_positions2].mean())
+            # Beta distribution variance: αβ/((α+β)²(α+β+1))
+            alpha2_valid = centroid2.alpha.values[valid_positions2]
+            beta2_valid = centroid2.beta.values[valid_positions2]
+            beta_var2 = float(((alpha2_valid * beta2_valid) / ((alpha2_valid + beta2_valid)**2 * (alpha2_valid + beta2_valid + 1))).mean())
 
             results["validation"]["centroid2"] = {
                 "normal_estimate": {"mean": normal_mean2, "var": normal_var2},
