@@ -324,7 +324,7 @@ class GeneDiseaseEnricher:
                 uncached_genes.append(gene)
         
         if cached_results:
-            logger.debug(f"Found {len(cached_results)} genes in cache")
+            logger.info(f"Using cache for {len(cached_results)} genes (querying Grok for {len(uncached_genes)} new)")
         
         if not uncached_genes:
             logger.info(f"✅ Retrieved all {len(cached_results)} genes from cache")
@@ -363,6 +363,11 @@ class GeneDiseaseEnricher:
 
                 results.update(batch_results)
                 progress.update(success=True)
+
+                # Persist cache every 10 batches so interrupted runs keep progress
+                batch_num = i // batch_size + 1
+                if batch_num % 10 == 0:
+                    self._save_disk_cache()
 
                 # Rate limiting
                 if i + batch_size < len(uncached_genes):
@@ -793,22 +798,14 @@ Return ONLY valid JSON array format like:
         if gene_column not in df.columns:
             raise ValueError(f"Column '{gene_column}' not found in DataFrame")
         
-        # Get unique genes
-        unique_genes = df[gene_column].dropna().unique().tolist()
+        # Get unique genes (exclude empty strings)
+        unique_genes = [g for g in df[gene_column].dropna().unique().tolist() if str(g).strip()]
         
         if not unique_genes:
-            logger.warning("No genes found in DataFrame")
-            if separate_sources and (self.use_grok or self.use_open_targets or self.use_disgenet):
-                result_dfs = {}
-                if self.use_grok:
-                    result_dfs['grok'] = df.copy()
-                if self.use_open_targets:
-                    result_dfs['open_targets'] = df.copy()
-                if self.use_disgenet:
-                    result_dfs['disgenet'] = df.copy()
-                result_dfs['merged'] = df.copy()
-                return result_dfs
-            return df
+            logger.warning("No genes found in DataFrame; adding disease columns with empty values.")
+            empty_results = {}
+            hyperlinks = self._generate_gene_hyperlinks([])
+            return self._add_enrichment_columns(df.copy(), empty_results, gene_column, 'merged', hyperlinks)
 
         logger.info(f"Enriching {len(unique_genes)} unique genes with disease associations...")
 
@@ -1067,6 +1064,7 @@ Return ONLY valid JSON array format like:
             return
         try:
             if not self.cache_file.exists():
+                logger.info(f"Enrichment cache: none found (will use {self.cache_file} for new entries)")
                 return
             with open(self.cache_file, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
@@ -1074,9 +1072,10 @@ Return ONLY valid JSON array format like:
             self._disease_id_cache = data.get("disease_ids", {}) or {}
             self._normalize_cache_entries()
             self._cache_dirty = False
-            logger.debug(f"Loaded enrichment cache from {self.cache_file}")
+            n = len(self._cache)
+            logger.info(f"Enrichment cache: loaded {n} gene-disease associations from {self.cache_file}")
         except Exception as exc:
-            logger.debug(f"Failed to load cache: {exc}")
+            logger.warning(f"Failed to load enrichment cache from {self.cache_file}: {exc}")
 
     def _save_disk_cache(self) -> None:
         if not self.cache_enabled or not self._cache_dirty:
@@ -1092,9 +1091,9 @@ Return ONLY valid JSON array format like:
             with open(self.cache_file, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle)
             self._cache_dirty = False
-            logger.debug(f"Saved enrichment cache to {self.cache_file}")
+            logger.info(f"Enrichment cache: saved {len(self._cache)} associations to {self.cache_file}")
         except Exception as exc:
-            logger.debug(f"Failed to save cache: {exc}")
+            logger.warning(f"Failed to save enrichment cache to {self.cache_file}: {exc}")
 
     def _normalize_cache_entries(self) -> None:
         """Normalize cache entries after loading from disk."""

@@ -119,8 +119,8 @@ class BedtoolsMapper:
         self.disease_enricher = None
         if enrich_disease:
             use_grok, use_open_targets, use_disgenet = self._parse_enrich_source(enrich_source)
-
-            self.disease_enricher = GeneDiseaseEnricher(
+            try:
+                self.disease_enricher = GeneDiseaseEnricher(
                 grok_api_key=grok_api_key if use_grok else None,
                 disgenet_api_key=disgenet_api_key if use_disgenet else None,
                 disease_term=disease_term,
@@ -139,7 +139,10 @@ class BedtoolsMapper:
                 azure_secret_name=azure_secret_name,
                 encrypted_file_path=encrypted_file_path
             )
-        
+            except Exception as e:
+                logger.warning(f"Disease enricher initialization failed: {e}. Enrichment columns will not be added.")
+                self.disease_enricher = None
+
         # DMP optimization parameters
         self.optimize_dmps = optimize_dmps
         self.dmp_rank_columns = dmp_rank_columns
@@ -964,12 +967,16 @@ class BedtoolsMapper:
                         aggregated = self.aggregate_by_feature(intersect_df, group_by=group_by)
                         
                         # Enrich with disease associations if enabled
-                        if self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
-                            logger.info(f"Enriching {group_by} with disease associations...")
-                            aggregated = self.disease_enricher.enrich_gene_dataframe(
-                                aggregated,
-                                gene_column=group_by
-                            )
+                        if self.enrich_disease and group_by in ['gene_name', 'gene_id']:
+                            if self.disease_enricher:
+                                logger.info(f"Enriching {group_by} with disease associations...")
+                                aggregated = self.disease_enricher.enrich_gene_dataframe(
+                                    aggregated,
+                                    gene_column=group_by,
+                                    disease_term=self.disease_enricher.disease_term
+                                )
+                            else:
+                                logger.warning("Disease enrichment was requested but enricher is not available (init failed). Output will not include disease columns.")
                     
                     # Save results
                     output_csv = output_dir / f"{csv_file.stem}-features-{group_by}.csv"
@@ -1092,33 +1099,33 @@ class BedtoolsMapper:
                 combined['gene_importance'] = combined['total_weight']
             
             # Enrich combined results with disease associations if enabled
-            if self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
-                logger.info(f"Enriching combined {group_by} results with disease associations...")
-                unique_genes = combined[group_by].nunique()
-                logger.info(f"Found {unique_genes} unique {group_by}s across all chromosomes")
+            if self.enrich_disease and group_by in ['gene_name', 'gene_id']:
+                if self.disease_enricher:
+                    logger.info(f"Enriching combined {group_by} results with disease associations...")
+                    unique_genes = combined[group_by].nunique()
+                    logger.info(f"Found {unique_genes} unique {group_by}s across all chromosomes")
+                    disease_term = getattr(self.disease_enricher, 'disease_term', None)
 
-                if self.separate_enrichment_sources and self.enrich_source == 'both':
-                    # Export separate files for each source
-                    enriched_results = self.disease_enricher.enrich_gene_dataframe(
-                        combined,
-                        gene_column=group_by,
-                        separate_sources=True
-                    )
-
-                    # Save separate files
-                    for source_name, enriched_df in enriched_results.items():
-                        source_csv = output_dir / f"all-{group_by}-combined-{source_name}.csv"
-                        enriched_df.to_csv(source_csv, index=False)
-                        logger.info(f"   Saved {source_name} results to: {source_csv}")
-
-                    # Use merged results for the main combined file
-                    combined = enriched_results['merged']
+                    if self.separate_enrichment_sources and self.enrich_source == 'both':
+                        enriched_results = self.disease_enricher.enrich_gene_dataframe(
+                            combined,
+                            gene_column=group_by,
+                            disease_term=disease_term,
+                            separate_sources=True
+                        )
+                        for source_name, enriched_df in enriched_results.items():
+                            source_csv = output_dir / f"all-{group_by}-combined-{source_name}.csv"
+                            enriched_df.to_csv(source_csv, index=False)
+                            logger.info(f"   Saved {source_name} results to: {source_csv}")
+                        combined = enriched_results['merged']
+                    else:
+                        combined = self.disease_enricher.enrich_gene_dataframe(
+                            combined,
+                            gene_column=group_by,
+                            disease_term=disease_term
+                        )
                 else:
-                    # Standard enrichment
-                    combined = self.disease_enricher.enrich_gene_dataframe(
-                        combined,
-                        gene_column=group_by
-                    )
+                    logger.warning("Disease enrichment was requested but enricher is not available. Combined CSV will not include disease columns.")
             
             combined_csv = output_dir / f"all-{group_by}-combined.csv"
             combined.to_csv(combined_csv, index=False)

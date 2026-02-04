@@ -277,8 +277,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     required.add_argument(
         '--csv-pattern', '-p',
         type=str,
-        required=True,
-        help='Glob pattern for CSV files (e.g., "dmps-*-3-optimized.csv" or "dmps-1-3-optimized.csv")'
+        default=None,
+        help='Glob pattern for CSV files (or set csv_pattern in --config)'
     )
     required.add_argument(
         '--gtf', '-g',
@@ -506,19 +506,25 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         if config_path.exists():
             with open(config_path) as f:
                 cfg = json.load(f)
+            if cfg.get('csv_pattern') is not None and args.csv_pattern is None:
+                args.csv_pattern = cfg['csv_pattern']
             if cfg.get('disease_term') is not None and args.disease_term is None:
                 args.disease_term = cfg['disease_term']
             if cfg.get('gtf') is not None and args.gtf is None:
                 args.gtf = cfg['gtf']
             if cfg.get('output_dir') is not None and args.output_dir is None:
                 args.output_dir = cfg['output_dir']
-            # Enrichment: enable Grok + Open Targets (or other sources) for gene export
             if cfg.get('enrich_disease') is True and not args.enrich_disease:
                 args.enrich_disease = True
             if cfg.get('enrich_source') is not None:
                 args.enrich_source = cfg['enrich_source']
             if cfg.get('enrich_profile') is not None:
                 args.enrich_profile = cfg['enrich_profile']
+            if cfg.get('grok_api_key') is not None and args.grok_api_key is None:
+                args.grok_api_key = cfg['grok_api_key']
+            # optimize_dmps: false in config => no_optimize_dmps
+            if cfg.get('optimize_dmps') is False and not args.no_optimize_dmps:
+                args.no_optimize_dmps = True
 
     return args
 
@@ -532,6 +538,10 @@ def main_bedtools():
     # Setup logging
     setup_logging(verbose=args.verbose)
     logger = logging.getLogger(__name__)
+    
+    if not args.csv_pattern:
+        logger.error("CSV pattern not specified. Use --csv-pattern or set csv_pattern in --config.")
+        sys.exit(1)
     
     try:
         # Get GTF file path (must be a file, not a directory or placeholder)
@@ -559,8 +569,14 @@ def main_bedtools():
         logger.info("MethylMapper Bedtools - DMP to Feature Mapping")
         logger.info("="*70)
         # Resolve disease term: CLI > config > env > literal default
+        had_explicit_disease_term = bool(args.disease_term or os.environ.get('METHYL_MAPPER_DISEASE_TERM'))
         disease_term = args.disease_term or os.environ.get('METHYL_MAPPER_DISEASE_TERM') or 'early-stage prostate cancer'
         args.disease_term = disease_term
+
+        # If user set a disease term but did not pass --enrich-disease, enable enrichment so Grok/Open Targets columns are added
+        if had_explicit_disease_term and not args.enrich_disease:
+            args.enrich_disease = True
+            logger.info("Disease term set; enabling disease enrichment (Grok/Open Targets) to add gene-disease columns.")
 
         logger.info(f"CSV pattern: {args.csv_pattern}")
         logger.info(f"GTF file: {gtf_path}")

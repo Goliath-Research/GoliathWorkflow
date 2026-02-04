@@ -237,39 +237,47 @@ cat /tmp/mapped_features/all-gene_name-combined.csv | \
 
 ## Config file (optional)
 
-You can put common options in a JSON config and pass it with `--config`. This is useful to always export genes with **Grok + Open Targets** enrichment without repeating flags.
+You can put all options in a JSON config and run with a single `--config` argument.
 
-**Example `mapper_config.json`:**
+**Example `mapper_config.json` (run with only `--config`):**
 
 ```json
 {
+  "csv_pattern": "/work/data/.../dmps-*-biological-sorted.csv",
+  "gtf": "/work/genomes/human_genome/gencode.v44.annotation.gtf",
+  "output_dir": "/work/data/.../mapped_features",
   "disease_term": "Prostate Cancer",
-  "gtf": "/path/to/gencode.v44.annotation.gtf",
-  "output_dir": "/path/to/mapped_features",
   "enrich_disease": true,
   "enrich_source": "grok+opentargets",
-  "enrich_profile": "balanced"
+  "enrich_profile": "permissive",
+  "optimize_dmps": false,
+  "grok_api_key": null
 }
 ```
 
-**Config keys (all optional; CLI overrides config):**
+Set `grok_api_key` to your key in the config, or omit it / set to `null` and use `export GROK_API_KEY="..."` so the key is not stored in the file.
+
+**Config keys (CLI overrides config):**
 
 | Key | Description |
 |-----|-------------|
-| `disease_term` | Disease to search for (e.g. `"Prostate Cancer"`) |
+| `csv_pattern` | Glob pattern for DMP CSV files (e.g. `dmps-*-biological-sorted.csv` or full path). If set, you can omit `--csv-pattern`. |
 | `gtf` | Path to GTF annotation file |
 | `output_dir` | Output directory for mapped features |
-| `enrich_disease` | `true` = enable Grok/Open Targets (and optional DisGeNET) enrichment; adds columns like `disease_associated`, `disease_description`, `disease_score` |
-| `enrich_source` | `grok+opentargets` (default), `opentargets`, `grok`, `disgenet`, `grok+disgenet`, `both`, `all` |
-| `enrich_profile` | `strict`, `balanced` (default), `permissive` |
+| `disease_term` | Disease to search for (e.g. `"Prostate Cancer"`) |
+| `enrich_disease` | `true` = enable Grok/Open Targets enrichment |
+| `enrich_source` | `grok+opentargets`, `opentargets`, `grok`, `disgenet`, `grok+disgenet`, `both`, `all` |
+| `enrich_profile` | `strict`, `balanced`, `permissive` |
+| `optimize_dmps` | `false` = use all DMPs (no optimization); `true` = run DMP optimization when enrichment is on |
+| `grok_api_key` | Grok API key (optional; prefer `GROK_API_KEY` env to avoid storing in config) |
 
-**Run with config:**
+**Run with config only:**
 
 ```bash
-methyl_mapper_bedtools --csv-pattern "dmps-*-biological-sorted.csv" --config mapper_config.json
+methyl_mapper_bedtools --config mapper_config.json
 ```
 
-You can still override any option on the command line (e.g. `--disease-term "Other Disease"`).
+Or override specific options on the command line (e.g. `--disease-term "Other Disease"` or `--csv-pattern "other-dmps-*.csv"`).
 
 ## Weighting Scheme
 
