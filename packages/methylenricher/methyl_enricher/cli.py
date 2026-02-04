@@ -3,6 +3,7 @@ Command-line interface for MethylEnricher
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -16,22 +17,22 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Basic enrichment analysis
-  methyl_enricher --input genes.txt --outdir results
+  # MethylMapper combined CSV: focus on disease-associated genes only
+  methyl_enricher --input /path/to/all-gene_name-combined.csv --disease-only --top 200 --outdir results
 
-  # Use MethylMapper output directly
-  methyl_enricher --input mapped_features/all-gene_name-combined.csv --gene-column gene_name
+  # PCa-focused: disease-associated, direct/indirect, minimum evidence and score
+  methyl_enricher --input all-gene_name-combined.csv --gene-column gene_name \\
+    --disease-only --disease-association-type direct indirect \\
+    --min-disease-evidence-level medium --min-disease-score 0.2 \\
+    --min-dmp-count 2 --max-gene-q-value 0.05 --top 150 --outdir enricher_pca
 
   # Sort by total_weight before selecting top genes
-  methyl_enricher --input mapped_features/all-gene_name-combined.csv \\
-                 --gene-column gene_name --sort-by total_weight --top 200
+  methyl_enricher --input all-gene_name-combined.csv --gene-column gene_name \\
+    --sort-by total_weight --top 200 --outdir results
 
-  # Analyze top 100 genes with custom libraries
-  methyl_enricher --input genes.txt --outdir results --top 100 \\
-                 --libraries KEGG_2021_Human GO_Biological_Process_2023
-
-  # Use stricter cutoff
-  methyl_enricher --input genes.txt --outdir results --cutoff 0.01
+  # Use a config file (CLI overrides config)
+  methyl_enricher --config enricher_config.json
+  methyl_enricher --config enricher_config.json --top 100 --outdir other_dir
 
 For more information, visit: https://github.com/your-org/methyl_enricher
         """
@@ -40,10 +41,17 @@ For more information, visit: https://github.com/your-org/methyl_enricher
     # Input/Output arguments
     io_group = parser.add_argument_group('Input/Output')
     io_group.add_argument(
+        '--config', '-C',
+        type=str,
+        default=None,
+        metavar='JSON',
+        help='Load options from JSON config file (CLI overrides config)'
+    )
+    io_group.add_argument(
         '--input', '-i',
         type=str,
-        required=True,
-        help='Input file with gene symbols (one per line or CSV/TSV)'
+        default=None,
+        help='Input file with gene symbols (or set "input" in --config)'
     )
     io_group.add_argument(
         '--gene-column',
@@ -54,7 +62,86 @@ For more information, visit: https://github.com/your-org/methyl_enricher
     io_group.add_argument(
         '--disease-only',
         action='store_true',
-        help='When input is CSV, filter to disease_associated == True'
+        help='When input is MethylMapper CSV, keep only disease_associated == True'
+    )
+    io_group.add_argument(
+        '--disease-association-type',
+        type=str,
+        nargs='+',
+        default=None,
+        metavar='TYPE',
+        help='Keep only these association types (e.g. direct indirect). Default: all'
+    )
+    io_group.add_argument(
+        '--min-disease-evidence-level',
+        type=str,
+        choices=['low', 'medium', 'high'],
+        default=None,
+        help='Minimum disease_evidence_level (high = strictest)'
+    )
+    io_group.add_argument(
+        '--min-disease-publications',
+        type=int,
+        default=None,
+        metavar='N',
+        help='Minimum disease_publications count'
+    )
+    io_group.add_argument(
+        '--min-disease-score',
+        type=float,
+        default=None,
+        metavar='S',
+        help='Minimum disease_score (Open Targets)'
+    )
+    io_group.add_argument(
+        '--min-dmp-count',
+        type=int,
+        default=None,
+        metavar='N',
+        help='Minimum dmp_count per gene'
+    )
+    io_group.add_argument(
+        '--min-unique-dmps',
+        type=int,
+        default=None,
+        metavar='N',
+        help='Minimum unique_dmps per gene'
+    )
+    io_group.add_argument(
+        '--max-gene-q-value',
+        type=float,
+        default=None,
+        metavar='Q',
+        help='Maximum gene_q_value (keep more significant genes)'
+    )
+    io_group.add_argument(
+        '--min-mean-effect-size',
+        type=float,
+        default=None,
+        metavar='E',
+        help='Minimum mean_effect_size (or total_weight if present)'
+    )
+    io_group.add_argument(
+        '--min-gene-z',
+        type=float,
+        default=None,
+        metavar='Z',
+        help='Minimum |gene_z| (effect strength)'
+    )
+    io_group.add_argument(
+        '--min-gene-importance',
+        type=float,
+        default=None,
+        metavar='I',
+        help='Minimum gene_importance (or total_weight)'
+    )
+    io_group.add_argument(
+        '--feature-types',
+        type=str,
+        nargs='+',
+        default=None,
+        metavar='TYPE',
+        help='Keep only these feature_type values (e.g. gene exon)'
     )
     io_group.add_argument(
         '--sort-by',
@@ -112,7 +199,26 @@ For more information, visit: https://github.com/your-org/methyl_enricher
         action='version',
         version='MethylEnricher 0.1.0'
     )
-    
+
+    # Apply config file before parsing so CLI overrides config
+    argv = sys.argv[1:]
+    config_path = None
+    for i, a in enumerate(argv):
+        if a in ("--config", "-C") and i + 1 < len(argv):
+            config_path = Path(argv[i + 1])
+            break
+    if config_path and config_path.exists():
+        with open(config_path, encoding="utf-8") as f:
+            cfg = json.load(f)
+        ns = argparse.Namespace()
+        for action in parser._actions:
+            if getattr(action, "dest", None) and action.dest not in ("help",) and not action.dest.startswith("_"):
+                ns.__setattr__(action.dest, action.default)
+        for key, value in cfg.items():
+            attr = key.replace("-", "_")
+            if hasattr(ns, attr):
+                ns.__setattr__(attr, value)
+        return parser.parse_args(namespace=ns)
     return parser.parse_args()
 
 
@@ -146,7 +252,11 @@ def main():
     if args.list_libraries:
         list_available_libraries()
         sys.exit(0)
-    
+
+    if not args.input:
+        print("[ERROR] Input file not specified. Use --input /path/to/file or set 'input' in --config.")
+        sys.exit(1)
+
     # Validate input file
     input_path = Path(args.input)
     if not input_path.exists():
@@ -166,6 +276,26 @@ def main():
         print(f"Gene column: {args.gene_column}")
     if args.sort_by:
         print(f"Sort by: {args.sort_by} ({'asc' if args.sort_ascending else 'desc'})")
+    if args.disease_only:
+        print("Filter: disease_associated = True")
+    if args.disease_association_type:
+        print(f"Filter: disease_association_type in {args.disease_association_type}")
+    if args.min_disease_evidence_level:
+        print(f"Filter: disease_evidence_level >= {args.min_disease_evidence_level}")
+    if args.min_disease_publications is not None:
+        print(f"Filter: disease_publications >= {args.min_disease_publications}")
+    if args.min_disease_score is not None:
+        print(f"Filter: disease_score >= {args.min_disease_score}")
+    if args.min_dmp_count is not None:
+        print(f"Filter: dmp_count >= {args.min_dmp_count}")
+    if args.max_gene_q_value is not None:
+        print(f"Filter: gene_q_value <= {args.max_gene_q_value}")
+    if args.min_mean_effect_size is not None:
+        print(f"Filter: mean_effect_size >= {args.min_mean_effect_size}")
+    if args.min_gene_importance is not None:
+        print(f"Filter: gene_importance >= {args.min_gene_importance}")
+    if args.feature_types:
+        print(f"Filter: feature_type in {args.feature_types}")
     
     if args.libraries:
         print(f"Libraries: {', '.join(args.libraries)}")
@@ -184,6 +314,17 @@ def main():
             organism=args.organism,
             gene_column=args.gene_column,
             disease_only=args.disease_only,
+            disease_association_types=args.disease_association_type,
+            min_disease_evidence_level=args.min_disease_evidence_level,
+            min_disease_publications=args.min_disease_publications,
+            min_disease_score=args.min_disease_score,
+            min_dmp_count=args.min_dmp_count,
+            min_unique_dmps=args.min_unique_dmps,
+            max_gene_q_value=args.max_gene_q_value,
+            min_mean_effect_size=args.min_mean_effect_size,
+            min_gene_z=args.min_gene_z,
+            min_gene_importance=args.min_gene_importance,
+            feature_types=args.feature_types,
             sort_by=args.sort_by,
             sort_ascending=args.sort_ascending
         )
@@ -192,7 +333,7 @@ def main():
             print("\n[WARN] No enrichment results found. Check your gene list and try again.")
             sys.exit(1)
         
-        print(f"\n[SUCCESS] Enrichment analysis complete!")
+        print("\n[SUCCESS] Enrichment analysis complete!")
         print(f"Results saved to: {args.outdir}")
         sys.exit(0)
         

@@ -1,5 +1,8 @@
 """
-Core enrichment analysis functionality for MethylEnricher
+Core enrichment analysis functionality for MethylEnricher.
+
+Supports MethylMapper combined CSV (all-gene_name-combined.csv) with optional
+filtering by disease columns and DMP/gene metrics to focus on important genes.
 """
 
 import os
@@ -7,6 +10,9 @@ from pathlib import Path
 from typing import List, Optional, Union
 import pandas as pd
 
+
+# Evidence level order (higher index = stricter when used as min)
+EVIDENCE_LEVEL_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3}
 
 # Default Enrichr libraries optimized for methylation studies
 DEFAULT_LIBRARIES = [
@@ -47,6 +53,102 @@ class EnrichmentAnalyzer:
         self.cutoff = cutoff
         self.results = {}
         
+    def _apply_csv_filters(
+        self,
+        df: pd.DataFrame,
+        *,
+        disease_only: bool = False,
+        disease_column: str = "disease_associated",
+        disease_association_types: Optional[List[str]] = None,
+        min_disease_evidence_level: Optional[str] = None,
+        min_disease_publications: Optional[int] = None,
+        min_disease_score: Optional[float] = None,
+        min_dmp_count: Optional[int] = None,
+        min_unique_dmps: Optional[int] = None,
+        max_gene_q_value: Optional[float] = None,
+        min_mean_effect_size: Optional[float] = None,
+        min_gene_z: Optional[float] = None,
+        min_gene_importance: Optional[float] = None,
+        feature_types: Optional[List[str]] = None,
+    ) -> pd.DataFrame:
+        """Apply MethylMapper-style filters to a DataFrame. Only columns that exist are used."""
+        out = df.copy()
+        n_before = len(out)
+
+        if disease_only and disease_column in out.columns:
+            out = out[out[disease_column].astype(str).str.upper().isin(("TRUE", "1", "YES"))]
+            print(f"[INFO] Filter disease_associated=True: {len(out)} genes (was {n_before})")
+            n_before = len(out)
+
+        if disease_association_types and "disease_association_type" in out.columns:
+            allowed = {s.strip().lower() for s in disease_association_types}
+            out = out[out["disease_association_type"].astype(str).str.strip().str.lower().isin(allowed)]
+            print(f"[INFO] Filter disease_association_type in {allowed}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
+
+        if min_disease_evidence_level is not None and "disease_evidence_level" in out.columns:
+            min_level = EVIDENCE_LEVEL_ORDER.get(min_disease_evidence_level.lower(), 0)
+            def _level_ok(val):
+                if pd.isna(val): return False
+                return EVIDENCE_LEVEL_ORDER.get(str(val).lower(), 0) >= min_level
+            out = out[out["disease_evidence_level"].apply(_level_ok)]
+            print(f"[INFO] Filter disease_evidence_level >= {min_disease_evidence_level}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
+
+        if min_disease_publications is not None and "disease_publications" in out.columns:
+            out = out[pd.to_numeric(out["disease_publications"], errors="coerce").fillna(0) >= min_disease_publications]
+            print(f"[INFO] Filter disease_publications >= {min_disease_publications}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
+
+        if min_disease_score is not None and "disease_score" in out.columns:
+            out = out[pd.to_numeric(out["disease_score"], errors="coerce").fillna(0) >= min_disease_score]
+            print(f"[INFO] Filter disease_score >= {min_disease_score}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
+
+        if min_dmp_count is not None and "dmp_count" in out.columns:
+            out = out[pd.to_numeric(out["dmp_count"], errors="coerce").fillna(0) >= min_dmp_count]
+            print(f"[INFO] Filter dmp_count >= {min_dmp_count}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
+
+        if min_unique_dmps is not None and "unique_dmps" in out.columns:
+            out = out[pd.to_numeric(out["unique_dmps"], errors="coerce").fillna(0) >= min_unique_dmps]
+            print(f"[INFO] Filter unique_dmps >= {min_unique_dmps}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
+
+        if max_gene_q_value is not None and "gene_q_value" in out.columns:
+            out = out[pd.to_numeric(out["gene_q_value"], errors="coerce").fillna(1) <= max_gene_q_value]
+            print(f"[INFO] Filter gene_q_value <= {max_gene_q_value}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
+
+        if min_mean_effect_size is not None:
+            for col in ("mean_effect_size", "mean_weight", "total_weight"):
+                if col in out.columns:
+                    out = out[pd.to_numeric(out[col], errors="coerce").fillna(0) >= min_mean_effect_size]
+                    print(f"[INFO] Filter {col} >= {min_mean_effect_size}: {len(out)} genes (was {n_before})")
+                    n_before = len(out)
+                    break
+
+        if min_gene_z is not None and "gene_z" in out.columns:
+            z = pd.to_numeric(out["gene_z"], errors="coerce")
+            out = out[z.abs() >= min_gene_z]
+            print(f"[INFO] Filter |gene_z| >= {min_gene_z}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
+
+        if min_gene_importance is not None:
+            for col in ("gene_importance", "total_importance", "total_weight"):
+                if col in out.columns:
+                    out = out[pd.to_numeric(out[col], errors="coerce").fillna(0) >= min_gene_importance]
+                    print(f"[INFO] Filter {col} >= {min_gene_importance}: {len(out)} genes (was {n_before})")
+                    n_before = len(out)
+                    break
+
+        if feature_types and "feature_type" in out.columns:
+            allowed = {s.strip().lower() for s in feature_types}
+            out = out[out["feature_type"].astype(str).str.strip().str.lower().isin(allowed)]
+            print(f"[INFO] Filter feature_type in {allowed}: {len(out)} genes (was {n_before})")
+
+        return out
+
     def load_gene_list(
         self,
         input_path: Union[str, Path],
@@ -54,23 +156,27 @@ class EnrichmentAnalyzer:
         gene_column: Optional[str] = None,
         disease_only: bool = False,
         disease_column: str = "disease_associated",
+        disease_association_types: Optional[List[str]] = None,
+        min_disease_evidence_level: Optional[str] = None,
+        min_disease_publications: Optional[int] = None,
+        min_disease_score: Optional[float] = None,
+        min_dmp_count: Optional[int] = None,
+        min_unique_dmps: Optional[int] = None,
+        max_gene_q_value: Optional[float] = None,
+        min_mean_effect_size: Optional[float] = None,
+        min_gene_z: Optional[float] = None,
+        min_gene_importance: Optional[float] = None,
+        feature_types: Optional[List[str]] = None,
         sort_by: Optional[str] = None,
         sort_ascending: bool = False
     ) -> List[str]:
         """
-        Load gene list from a text file.
+        Load gene list from a text file or MethylMapper combined CSV.
         
-        Args:
-            input_path: Path to input file with one gene symbol per line
-            top_n: If specified, return only the top N genes
-            gene_column: Gene column to use when input is CSV/TSV
-            disease_only: If True, filter to disease-associated genes (CSV only)
-            disease_column: Column used for disease association filtering
-            sort_by: Column to sort by when input is CSV/TSV
-            sort_ascending: If True, sort ascending (default: descending)
-            
-        Returns:
-            List of gene symbols
+        For CSV/TSV, optional filters (from MethylMapper output) can be applied:
+        disease_associated, disease_association_type, disease_evidence_level,
+        disease_publications, disease_score, dmp_count, unique_dmps, gene_q_value,
+        mean_effect_size, gene_z, gene_importance, feature_type.
         """
         input_path = Path(input_path)
         
@@ -92,15 +198,29 @@ class EnrichmentAnalyzer:
                     f"Columns found: {list(df.columns)}"
                 )
 
-            if disease_only:
-                if disease_column in df.columns:
-                    df = df[df[disease_column].astype(bool)]
-                else:
-                    print(f"[WARN] disease_only requested but '{disease_column}' not found; using all genes")
+            df = self._apply_csv_filters(
+                df,
+                disease_only=disease_only,
+                disease_column=disease_column,
+                disease_association_types=disease_association_types,
+                min_disease_evidence_level=min_disease_evidence_level,
+                min_disease_publications=min_disease_publications,
+                min_disease_score=min_disease_score,
+                min_dmp_count=min_dmp_count,
+                min_unique_dmps=min_unique_dmps,
+                max_gene_q_value=max_gene_q_value,
+                min_mean_effect_size=min_mean_effect_size,
+                min_gene_z=min_gene_z,
+                min_gene_importance=min_gene_importance,
+                feature_types=feature_types,
+            )
 
             if sort_by is None and "total_weight" in df.columns:
                 sort_by = "total_weight"
                 print("[INFO] Sorting genes by total_weight (auto)")
+            if sort_by is None and "gene_importance" in df.columns:
+                sort_by = "gene_importance"
+                print("[INFO] Sorting genes by gene_importance (auto)")
 
             if sort_by:
                 if sort_by in df.columns:
@@ -266,22 +386,23 @@ def run_enrichment(
     organism: str = "Human",
     gene_column: Optional[str] = None,
     disease_only: bool = False,
+    disease_association_types: Optional[List[str]] = None,
+    min_disease_evidence_level: Optional[str] = None,
+    min_disease_publications: Optional[int] = None,
+    min_disease_score: Optional[float] = None,
+    min_dmp_count: Optional[int] = None,
+    min_unique_dmps: Optional[int] = None,
+    max_gene_q_value: Optional[float] = None,
+    min_mean_effect_size: Optional[float] = None,
+    min_gene_z: Optional[float] = None,
+    min_gene_importance: Optional[float] = None,
+    feature_types: Optional[List[str]] = None,
     sort_by: Optional[str] = None,
     sort_ascending: bool = False
 ) -> pd.DataFrame:
     """
     Convenience function to run enrichment analysis in one call.
-    
-    Args:
-        input_file: Path to gene list file
-        output_dir: Directory to save results
-        libraries: Enrichr libraries to query
-        top_n: Use only top N genes from list
-        cutoff: Adjusted p-value cutoff
-        organism: Organism for Enrichr
-        
-    Returns:
-        DataFrame with merged enrichment results
+    Accepts MethylMapper combined CSV and optional filters to focus on important genes.
     """
     analyzer = EnrichmentAnalyzer(
         libraries=libraries,
@@ -294,6 +415,17 @@ def run_enrichment(
         top_n=top_n,
         gene_column=gene_column,
         disease_only=disease_only,
+        disease_association_types=disease_association_types,
+        min_disease_evidence_level=min_disease_evidence_level,
+        min_disease_publications=min_disease_publications,
+        min_disease_score=min_disease_score,
+        min_dmp_count=min_dmp_count,
+        min_unique_dmps=min_unique_dmps,
+        max_gene_q_value=max_gene_q_value,
+        min_mean_effect_size=min_mean_effect_size,
+        min_gene_z=min_gene_z,
+        min_gene_importance=min_gene_importance,
+        feature_types=feature_types,
         sort_by=sort_by,
         sort_ascending=sort_ascending
     )
