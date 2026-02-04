@@ -335,6 +335,45 @@ MethylClassifier is part of the MethylPipeline ecosystem:
 5. **MethylMapper** → Map DMPs to genes + disease context
 6. **MethylEnricher** → Functional enrichment analysis on MethylMapper outputs
 
+### Running MethylClassifier with MethylDetector output
+
+You can run MethylClassifier as soon as MethylDetector has finished. You do **not** need to wait for MethylMapper or MethylEnricher.
+
+1. **Model directory**: Use MethylDetector’s `output_dir` as MethylClassifier’s `model_dir`. That directory contains the per-chromosome classifier files (`classifier-1.pkl`, `classifier-2.pkl`, …, `classifier-X.pkl`, `classifier-Y.pkl`) produced by MethylDetector.
+
+2. **Input**: Point `input_path` to your sample data:
+   - A **directory** of sample folders (each with per-chromosome `.h5` files such as `1-CG.h5`, `1-CHG.h5`, …), or
+   - A **single** sample directory or `.h5` path, depending on what the classifier expects.
+
+3. **Example config** (e.g. `configs/detector_output_classify_config.json`):
+
+```json
+{
+  "model_dir": "/path/to/methyldetector/output_dir",
+  "model_path": null,
+  "input_path": "/path/to/samples/",
+  "output_path": "/path/to/classification_results/results.csv",
+  "temperature": 1.0,
+  "enable_platt_calibration": false,
+  "log_level": "INFO"
+}
+```
+
+4. **Run**:
+
+```bash
+methyl_classifier --config configs/detector_output_classify_config.json
+```
+
+Or override paths from the command line:
+
+```bash
+methyl_classifier --config configs/detector_output_classify_config.json \
+  --model-dir /path/to/methyldetector/output_dir \
+  --input /path/to/samples/ \
+  --output results.csv
+```
+
 ## Performance
 
 - **Speed**: ~1-10 ms per sample (5000 DMPs)

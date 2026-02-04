@@ -1,0 +1,15 @@
+{
+  "model_dir": "/path/to/methyldetector/output_dir",
+  "model_path": null,
+  "input_path": "/path/to/samples/",
+  "output_path": "/path/to/classification_results/results.csv",
+  "temperature": 1.0,
+  "enable_platt_calibration": false,
+  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_high": 0.01,
+  "chromosome_weights": null,
+  "debug": false,
+  "no_filter": false,
+  "log_level": "INFO"
+}
+  
