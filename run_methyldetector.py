@@ -26,6 +26,14 @@ def run_methyldetector():
     env = os.environ.copy()
     env['PYTHONPATH'] = f"{packages_dir}:{packages_dir}/methylutils:{packages_dir}/methyldetector"
 
+    # Ensure CUDA headers are found for CuPy JIT compilation (cuda_fp16.h, etc.)
+    cuda_paths = ["/usr/local/cuda-13.0", "/usr/local/cuda-13", "/usr/local/cuda"]
+    for cuda_path in cuda_paths:
+        if (Path(cuda_path) / "include" / "cuda_fp16.h").exists():
+            env.setdefault("CUDA_HOME", cuda_path)
+            env.setdefault("CUDA_PATH", cuda_path)
+            break
+
     # Run the command with all arguments passed through
     # Use methyl_detector.cli (not .cli.main) to avoid runpy warning: cli/__init__.py
     # imports .main, so executing .cli.main as __main__ would load it twice.
