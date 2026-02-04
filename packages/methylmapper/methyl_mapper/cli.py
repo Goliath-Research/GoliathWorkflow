@@ -485,7 +485,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         '--config', '-c',
         type=str,
         default=None,
-        help='Optional JSON config file. May set disease_term, gtf, output_dir (overridden by CLI args)'
+        help='Optional JSON config file. May set disease_term, gtf, output_dir, enrich_disease, enrich_source, enrich_profile (overridden by CLI args)'
     )
     parser.add_argument(
         '--verbose', '-v',
@@ -512,6 +512,13 @@ For more information, visit: https://github.com/your-org/methyl_mapper
                 args.gtf = cfg['gtf']
             if cfg.get('output_dir') is not None and args.output_dir is None:
                 args.output_dir = cfg['output_dir']
+            # Enrichment: enable Grok + Open Targets (or other sources) for gene export
+            if cfg.get('enrich_disease') is True and not args.enrich_disease:
+                args.enrich_disease = True
+            if cfg.get('enrich_source') is not None:
+                args.enrich_source = cfg['enrich_source']
+            if cfg.get('enrich_profile') is not None:
+                args.enrich_profile = cfg['enrich_profile']
 
     return args
 
@@ -527,17 +534,25 @@ def main_bedtools():
     logger = logging.getLogger(__name__)
     
     try:
-        # Get GTF file path
+        # Get GTF file path (must be a file, not a directory or placeholder)
         gtf_path = args.gtf
+        if not gtf_path or str(gtf_path).strip() in ('', '.'):
+            gtf_path = None
         if gtf_path is None:
             gtf_path = os.environ.get('GENE_GTF')
-            if gtf_path is None:
-                logger.error("GTF file not specified. Use --gtf or set GENE_GTF environment variable.")
-                sys.exit(1)
-        
+            if gtf_path:
+                gtf_path = str(gtf_path).strip()
+                if gtf_path in ('', '.'):
+                    gtf_path = None
+        if gtf_path is None:
+            logger.error("GTF file not specified. Use --gtf /path/to/file.gtf or set GENE_GTF to the GTF file path.")
+            sys.exit(1)
         gtf_path = Path(gtf_path)
         if not gtf_path.exists():
             logger.error(f"GTF file not found: {gtf_path}")
+            sys.exit(1)
+        if gtf_path.is_dir():
+            logger.error(f"GTF path is a directory, not a file: {gtf_path}. Point --gtf or GENE_GTF to a .gtf file.")
             sys.exit(1)
         
         logger.info("="*70)

@@ -235,6 +235,42 @@ cat /tmp/mapped_features/all-gene_name-combined.csv | \
   awk -F',' 'NR==1 || $18=="true"' | head -20
 ```
 
+## Config file (optional)
+
+You can put common options in a JSON config and pass it with `--config`. This is useful to always export genes with **Grok + Open Targets** enrichment without repeating flags.
+
+**Example `mapper_config.json`:**
+
+```json
+{
+  "disease_term": "Prostate Cancer",
+  "gtf": "/path/to/gencode.v44.annotation.gtf",
+  "output_dir": "/path/to/mapped_features",
+  "enrich_disease": true,
+  "enrich_source": "grok+opentargets",
+  "enrich_profile": "balanced"
+}
+```
+
+**Config keys (all optional; CLI overrides config):**
+
+| Key | Description |
+|-----|-------------|
+| `disease_term` | Disease to search for (e.g. `"Prostate Cancer"`) |
+| `gtf` | Path to GTF annotation file |
+| `output_dir` | Output directory for mapped features |
+| `enrich_disease` | `true` = enable Grok/Open Targets (and optional DisGeNET) enrichment; adds columns like `disease_associated`, `disease_description`, `disease_score` |
+| `enrich_source` | `grok+opentargets` (default), `opentargets`, `grok`, `disgenet`, `grok+disgenet`, `both`, `all` |
+| `enrich_profile` | `strict`, `balanced` (default), `permissive` |
+
+**Run with config:**
+
+```bash
+methyl_mapper_bedtools --csv-pattern "dmps-*-biological-sorted.csv" --config mapper_config.json
+```
+
+You can still override any option on the command line (e.g. `--disease-term "Other Disease"`).
+
 ## Weighting Scheme
 
 DMPs are weighted by:
