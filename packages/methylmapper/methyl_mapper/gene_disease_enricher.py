@@ -341,43 +341,59 @@ class GeneDiseaseEnricher:
         # Initialize progress indicator
         progress = ProgressIndicator(total_batches, "Grok API batches", update_interval=1)
 
+        # Retry failed batches up to this many times (exponential backoff)
+        max_retries = 3
+        base_timeout = 60
+        per_gene_timeout = 20
+
         for i in range(0, len(uncached_genes), batch_size):
             batch = uncached_genes[i:i+batch_size]
+            batch_num = i // batch_size + 1
 
             # Create prompt for Grok
             prompt = self._create_grok_prompt(batch, disease_term)
 
-            try:
-                # Calculate timeout based on batch size (base 30s + 10s per gene)
-                timeout = max(30, 30 + len(batch) * 10)
-                logger.debug(f"Querying batch {i//batch_size + 1} with {len(batch)} genes (timeout: {timeout}s)")
-                response = self._call_grok_api(prompt, timeout=timeout)
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    # Timeout: base + per-gene (increased from previous 30+10 to reduce read timeouts)
+                    timeout = max(base_timeout, base_timeout + len(batch) * per_gene_timeout)
+                    # On retry, allow more time
+                    if attempt > 0:
+                        timeout = int(timeout * (1.5 ** attempt))
+                    logger.debug(f"Querying batch {batch_num} with {len(batch)} genes (timeout: {timeout}s, attempt {attempt + 1}/{max_retries})")
+                    response = self._call_grok_api(prompt, timeout=timeout)
 
-                # Parse response
-                batch_results = self._parse_grok_response(response, batch)
+                    # Parse response
+                    batch_results = self._parse_grok_response(response, batch)
 
-                # Cache results
-                for gene_name, association_info in batch_results.items():
-                    cache_key = self._cache_key("grok", gene_name, disease_term)
-                    self._cache_set(cache_key, association_info)
+                    # Cache results
+                    for gene_name, association_info in batch_results.items():
+                        cache_key = self._cache_key("grok", gene_name, disease_term)
+                        self._cache_set(cache_key, association_info)
 
-                results.update(batch_results)
-                progress.update(success=True)
+                    results.update(batch_results)
+                    progress.update(success=True)
 
-                # Persist cache every 10 batches so interrupted runs keep progress
-                batch_num = i // batch_size + 1
-                if batch_num % 10 == 0:
-                    self._save_disk_cache()
+                    # Persist cache every 10 batches so interrupted runs keep progress
+                    if batch_num % 10 == 0:
+                        self._save_disk_cache()
 
-                # Rate limiting
-                if i + batch_size < len(uncached_genes):
-                    time.sleep(self.rate_limit_delay)
+                    break
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        delay = (2 ** attempt) * 5  # 5s, 10s, 20s
+                        logger.warning(f"Grok API query failed for batch {batch_num} (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {delay}s...")
+                        time.sleep(delay)
+                    else:
+                        logger.warning(f"Grok API query failed for batch {batch_num} after {max_retries} attempts: {last_error}")
+                        progress.update(success=False)
+                        break
 
-            except Exception as e:
-                logger.warning(f"Grok API query failed for batch {i//batch_size + 1}: {e}")
-                progress.update(success=False)
-                # Continue with other batches
-                continue
+            # Rate limiting between batches
+            if i + batch_size < len(uncached_genes):
+                time.sleep(self.rate_limit_delay)
 
         logger.info(f"✅ Retrieved disease associations for {len(results)} genes from Grok API ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
         self._save_disk_cache()
