@@ -22,6 +22,64 @@ from .gene_disease_enricher import GeneDiseaseEnricher
 logger = logging.getLogger(__name__)
 
 
+def calculate_biological_importance(delta_mean, overlap, min_delta_mean=0.1, max_overlap=0.6):
+    """Calculate bounded biological importance in [0,1].
+
+    Biological importance is calculated as abs(delta_mean) / overlap, then transformed
+    to [0,1] using a bounded ratio. Zero overlap (complete separation) gives maximum
+    importance (1.0).
+
+    Args:
+        delta_mean: Methylation difference (scalar or array)
+        overlap: Distribution overlap (scalar or array, can be 0)
+        min_delta_mean: Minimum delta_mean threshold used for filtering (default: 0.1)
+        max_overlap: Maximum overlap threshold used for filtering (default: 0.6)
+
+    Returns:
+        importance: float or array in [0,1] where 1 = highest biological importance
+    """
+    # Convert inputs to numpy arrays for consistent handling
+    delta_mean = np.asarray(delta_mean)
+    overlap = np.asarray(overlap)
+
+    # Handle scalar case
+    is_scalar = delta_mean.ndim == 0
+
+    if is_scalar:
+        # Scalar case
+        if overlap == 0:
+            return 1.0
+        else:
+            r = abs(delta_mean) / overlap
+            c = abs(min_delta_mean) / max_overlap
+            importance = r / (r + c)
+            return float(importance)
+
+    # Array case
+    # Handle edge case: zero overlap = maximum importance
+    zero_overlap_mask = overlap == 0
+
+    # For non-zero overlaps, calculate the ratio
+    # Avoid division by zero by using a mask
+    r = np.full_like(delta_mean, np.nan, dtype=float)
+    nonzero_mask = overlap != 0
+    r[nonzero_mask] = np.abs(delta_mean[nonzero_mask]) / overlap[nonzero_mask]
+
+    # Scaling constant: minimum ratio maps to ~0.5 importance
+    c = abs(min_delta_mean) / max_overlap
+
+    # Bounded ratio transformation: r / (r + c)
+    importance = r / (r + c)
+
+    # Set zero overlap to maximum importance (1.0)
+    importance[zero_overlap_mask] = 1.0
+
+    # Handle any remaining NaN values (shouldn't happen with proper filtering)
+    importance = np.nan_to_num(importance, nan=0.0)
+
+    return importance
+
+
 class BedtoolsMapper:
     """
     Map DMPs to genomic features using bedtools intersect.
@@ -403,10 +461,13 @@ class BedtoolsMapper:
             elif 'effect_size' in merged.columns:
                 eff_col = 'effect_size'
             elif 'delta_mean' in merged.columns and 'overlap' in merged.columns:
-                merged['delta_overlap_weight'] = (
-                    merged['delta_mean'].abs() / merged['overlap'].replace(0, np.nan)
+                # Calculate bounded biological importance in [0,1]
+                # Zero overlap = maximum importance (1.0), high delta_mean/low overlap = high importance
+                merged['biological_importance'] = calculate_biological_importance(
+                    merged['delta_mean'], merged['overlap'],
+                    min_delta_mean=0.1, max_overlap=0.6  # Reasonable defaults for filtered DMPs
                 )
-                eff_col = 'delta_overlap_weight'
+                eff_col = 'biological_importance'
             elif 'delta_mean' in merged.columns:
                 eff_col = 'delta_mean'
 
