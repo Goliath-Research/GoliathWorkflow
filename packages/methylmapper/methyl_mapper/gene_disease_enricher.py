@@ -7,10 +7,9 @@ focused on cancer types like early-stage prostate cancer.
 
 import json
 import logging
-import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, Optional, Union
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
@@ -505,7 +504,7 @@ Return ONLY valid JSON array format like:
                                 'associated': True,
                                 'association_type': 'predicted',
                                 'evidence_level': 'low',
-                                'description': f"Mentioned in context of disease",
+                                'description': "Mentioned in context of disease",
                                 'publications': 0,
                                 'functional_role': None
                             })
@@ -959,50 +958,50 @@ Return ONLY valid JSON array format like:
     def _add_enrichment_columns(self, df: pd.DataFrame, results: Dict[str, Dict], gene_column: str, source_prefix: str, hyperlinks: Dict[str, Dict]) -> pd.DataFrame:
         """Add enrichment columns to DataFrame with hyperlinks."""
         # Disease association columns
-        df[f'disease_associated_raw'] = df[gene_column].str.upper().map(
+        df['disease_associated_raw'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('associated', False) if pd.notna(x) else False
         )
-        df[f'disease_associated'] = df[gene_column].str.upper().map(
+        df['disease_associated'] = df[gene_column].str.upper().map(
             lambda x: self._association_meets_thresholds(results.get(x, {})) if pd.notna(x) else False
         )
-        df[f'disease_association_type'] = df[gene_column].str.upper().map(
+        df['disease_association_type'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('association_type', 'none') if pd.notna(x) else 'none'
         )
-        df[f'disease_evidence_level'] = df[gene_column].str.upper().map(
+        df['disease_evidence_level'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('evidence_level', 'none') if pd.notna(x) else 'none'
         )
-        df[f'disease_description'] = df[gene_column].str.upper().map(
+        df['disease_description'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('description') if pd.notna(x) else None
         )
-        df[f'disease_publications'] = df[gene_column].str.upper().map(
+        df['disease_publications'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('publications', 0) if pd.notna(x) else 0
         )
-        df[f'disease_functional_role'] = df[gene_column].str.upper().map(
+        df['disease_functional_role'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('functional_role') if pd.notna(x) else None
         )
-        df[f'disease_source'] = df[gene_column].str.upper().map(
+        df['disease_source'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('source', 'none') if pd.notna(x) else 'none'
         )
-        df[f'disease_score'] = df[gene_column].str.upper().map(
+        df['disease_score'] = df[gene_column].str.upper().map(
             lambda x: results.get(x, {}).get('score', 0.0) if pd.notna(x) else 0.0
         )
 
         # Add hyperlinks
-        df[f'gene_ncbi_link'] = df[gene_column].str.upper().map(
+        df['gene_ncbi_link'] = df[gene_column].str.upper().map(
             lambda x: hyperlinks.get(x, {}).get('ncbi', '') if pd.notna(x) else ''
         )
-        df[f'gene_ensembl_link'] = df[gene_column].str.upper().map(
+        df['gene_ensembl_link'] = df[gene_column].str.upper().map(
             lambda x: hyperlinks.get(x, {}).get('ensembl', '') if pd.notna(x) else ''
         )
-        df[f'gene_uniprot_link'] = df[gene_column].str.upper().map(
+        df['gene_uniprot_link'] = df[gene_column].str.upper().map(
             lambda x: hyperlinks.get(x, {}).get('uniprot', '') if pd.notna(x) else ''
         )
-        df[f'gene_omim_link'] = df[gene_column].str.upper().map(
+        df['gene_omim_link'] = df[gene_column].str.upper().map(
             lambda x: hyperlinks.get(x, {}).get('omim', '') if pd.notna(x) else ''
         )
 
         # Add basic gene description for unrelated genes
-        df[f'gene_basic_description'] = df[gene_column].str.upper().map(
+        df['gene_basic_description'] = df[gene_column].str.upper().map(
             lambda x: hyperlinks.get(x, {}).get('description', 'Gene function not determined') if pd.notna(x) else ''
         )
 
