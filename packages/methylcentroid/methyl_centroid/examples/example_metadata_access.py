@@ -100,7 +100,7 @@ def example_metadata_modification():
     centroid.group = "cancer"
     centroid.batch = "AN00025834"
     centroid.chromosome = "1"
-    centroid.context = "CG"
+    centroid.context_metadata = "CG"
     
     print(f"  Laboratory: {centroid.laboratory}")
     print(f"  Disease: {centroid.disease}")

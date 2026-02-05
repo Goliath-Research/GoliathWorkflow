@@ -4,6 +4,20 @@
 
 The MethylUtils library provides a hierarchical class structure for representing different types of methylation data. The hierarchy separates individual samples from aggregated centroids, with increasing levels of statistical sophistication.
 
+## Important Notes
+
+### Context Property Changes
+
+Due to a property name collision in MethylFrame, the metadata context property has been renamed from `context` to `context_metadata`. This affects:
+
+- **DataFrame context column**: `sample.context` returns a pandas Series with decoded context values ('CG', 'CHG', 'CHH') for filtering
+- **Metadata context**: `sample.context_metadata` provides access to the context stored in metadata
+
+**Migration Guide**:
+- Replace `sample.context = "CG"` with `sample.context_metadata = "CG"`
+- Replace `ctx = sample.context` (metadata access) with `ctx = sample.context_metadata`
+- DataFrame filtering like `sample[sample.context == "CG"]` continues to work unchanged
+
 ## Class Hierarchy
 
 ```
@@ -49,7 +63,8 @@ MethylCentroid (inherits from MethylBasicCentroid)
 | `group` | `Optional[str]` | Group identifier from metadata (read/write) |
 | `batch` | `Optional[str]` | Batch identifier from metadata (read/write) |
 | `chromosome` | `Optional[str]` | Chromosome from metadata (read/write) |
-| `context` | `Optional[str]` | Methylation context from metadata (read/write) |
+| `context` | `pd.Series` | DataFrame column with decoded context ('CG', 'CHG', 'CHH') (read-only) |
+| `context_metadata` | `Optional[str]` | Methylation context from metadata (read/write) |
 | `metadata` | `Optional[Dict[str, Any]]` | Full metadata dictionary (read/write) |
 | `samples` | `List[str]` | List of sample identifiers (inherited) |
 | `group_name` | `str` | Combined group identifier |

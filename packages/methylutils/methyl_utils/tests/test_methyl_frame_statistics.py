@@ -350,6 +350,60 @@ def test_mock_sample_creation():
     assert sample.metadata['context'] == 'CG'
 
 
+def test_context_property_collision_fix():
+    """Test that context property collision is resolved.
+
+    Ensures that:
+    1. frame.context returns DataFrame column (Series) for filtering
+    2. frame.context_metadata returns/sets metadata context (str)
+    3. cg/chg/chh methods work correctly on MethylExtendedCentroid
+    """
+    # Create test data with CG context (tnc=1)
+    test_data = pd.DataFrame({
+        'pos': [100, 200, 300],
+        'mC': [10, 20, 30],
+        'uC': [5, 15, 25],
+        'tnc': [1, 1, 1],  # CG context
+        'N': [1, 1, 1],
+        'Sx': [10.0, 20.0, 30.0],
+        'Sx2': [100.0, 400.0, 900.0],
+        'log_x_sum': [2.3, 3.0, 3.4],
+        'log_1_minus_x_sum': [1.6, 2.7, 3.2],
+    })
+
+    # Test MethylFrame (base class)
+    frame = MethylSample(test_data, metadata={'context': 'CG'})
+
+    # Test 1: DataFrame context column access works for filtering
+    context_series = frame.context
+    assert isinstance(context_series, pd.Series), "frame.context should return pandas Series"
+    assert context_series.tolist() == ['CG', 'CG', 'CG'], "Context values should be decoded correctly"
+
+    # Test filtering by context column (this was broken before fix)
+    cg_filtered = frame[frame.context == "CG"]
+    assert len(cg_filtered) == 3, "Should find all CG positions"
+
+    # Test 2: Metadata context access works
+    metadata_context = frame.context_metadata
+    assert metadata_context == 'CG', "Should return metadata context"
+
+    # Test setting metadata context
+    frame.context_metadata = "CHG"
+    assert frame.context_metadata == "CHG", "Should be able to set metadata context"
+
+    # Test 3: Extended centroid context methods work
+    extended_centroid = MethylExtendedCentroid(test_data, metadata={'context': 'CG'})
+
+    cg_result = extended_centroid.cg()
+    assert len(cg_result) == 3, "cg() should return all positions"
+
+    chg_result = extended_centroid.chg()
+    assert len(chg_result) == 0, "chg() should return no positions (all are CG)"
+
+    chh_result = extended_centroid.chh()
+    assert len(chh_result) == 0, "chh() should return no positions (all are CG)"
+
+
 def test_statistics_computation():
     """Test that statistics computation works for a simple sample."""
     sample = create_mock_sample('1', 'CG', n_positions=100, seed=123)

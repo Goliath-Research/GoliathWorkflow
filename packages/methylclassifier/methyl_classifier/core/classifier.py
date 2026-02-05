@@ -73,7 +73,7 @@ class MethylClassifier:
         self.chromosome_weights = {}  # Dict of {chromosome: weight} for multi-chromosome weighting
         self.is_multi_chromosome = False
         self.chromosome = None
-        self.context = None
+        self.context_metadata = None
         self.n_classes = None
         self.class_names = None
         self.metadata = {}
@@ -121,7 +121,7 @@ class MethylClassifier:
                 
                 # Extract metadata
                 self.chromosome = self.metadata.get('chromosome', 'unknown')
-                self.context = self.metadata.get('context', 'unknown')
+                self.context_metadata = self.metadata.get('context', 'unknown')
 
                 # Multi-class aware configuration
                 if hasattr(self.classifier, 'n_classes'):
@@ -169,7 +169,7 @@ class MethylClassifier:
                 
                 # Try to extract chromosome and context from filename
                 try:
-                    self.chromosome, self.context = extract_chrom_context_from_classifier(model_path)
+                    self.chromosome, self.context_metadata = extract_chrom_context_from_classifier(model_path)
                     print(f"📋 Classifier trained on chromosome {self.chromosome}, context {self.context}")
                 except ValueError as e:
                     print(f"⚠️ Could not extract chromosome/context: {e}")
@@ -320,7 +320,7 @@ class MethylClassifier:
                     metadata.get('centroid1_name', 'centroid1'),
                     metadata.get('centroid2_name', 'centroid2')
                 ]
-            self.context = metadata.get('context', 'unknown')
+            self.context_metadata = metadata.get('context', 'unknown')
         
         print(f"\n✅ Multi-chromosome classifier ready: {len(self.classifiers)} chromosomes, {self.n_classes} classes")
 
