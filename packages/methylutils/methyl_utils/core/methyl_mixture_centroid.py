@@ -7,11 +7,13 @@ conversion helpers to/from DataFrame for export and reuse.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 import json
 
 import numpy as np
 import pandas as pd
+
+MIN_BETA_PARAM = 1e-6
 
 
 class MethylBetaMixtureCentroid:
@@ -138,3 +140,28 @@ class MethylBetaMixtureCentroid:
         mask = data.get("mask")
         df = pd.DataFrame(records)
         return cls.from_dataframe(df, metadata=metadata, mask=mask)
+
+    @property
+    def mean(self) -> np.ndarray:
+        """Virtual mean: per-position weighted sum of component means (alpha_j/(alpha_j+beta_j)), 0/1 safe."""
+        means = []
+        for _, row in self._df.iterrows():
+            w = np.asarray(self._to_list(row["weights"]), dtype=np.float64)
+            a = np.maximum(np.asarray(self._to_list(row["alphas"]), dtype=np.float64), MIN_BETA_PARAM)
+            b = np.maximum(np.asarray(self._to_list(row["betas"]), dtype=np.float64), MIN_BETA_PARAM)
+            comp_mean = a / (a + b)
+            means.append(float(np.sum(w * comp_mean)))
+        return np.array(means, dtype=np.float64)
+
+    def overlap(
+        self,
+        other: Union["MethylBetaMixtureCentroid", Any],
+    ) -> np.ndarray:
+        """Overlap with another BMM or Beta: 1 - |mean_self - mean_other| clipped to [0,1], or Bhattacharyya when applicable."""
+        m_self = np.asarray(self.mean, dtype=np.float64)
+        if isinstance(other, MethylBetaMixtureCentroid):
+            m_other = np.asarray(other.mean, dtype=np.float64)
+        else:
+            m_other = np.asarray(getattr(other, "mean", other), dtype=np.float64)
+        n = min(len(m_self), len(m_other))
+        return np.clip(1 - np.abs(m_self[:n] - m_other[:n]), 0.0, 1.0)

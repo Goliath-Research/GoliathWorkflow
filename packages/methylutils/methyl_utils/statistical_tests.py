@@ -598,10 +598,15 @@ def _estimate_beta_params_bounded(n: np.ndarray, log_x_sum: np.ndarray, log_1mx_
     alpha_est = np.where(use_mom, alpha_mom, alpha_est)
     beta_est = np.where(use_mom, beta_mom, beta_est)
 
-    # Final bounds check
-    alpha_est = np.clip(alpha_est, 1e-6, max_reasonable_param)
-    beta_est = np.clip(beta_est, 1e-6, max_reasonable_param)
-
+    # Final bounds check (shared with methyl_distribution_utils for 0/1 edge cases)
+    try:
+        from methyl_utils.core.methyl_distribution_utils import clip_beta_params_for_bounds
+        alpha_est, beta_est = clip_beta_params_for_bounds(
+            alpha_est, beta_est, min_param=1e-6, max_param=max_reasonable_param
+        )
+    except ImportError:
+        alpha_est = np.clip(alpha_est, 1e-6, max_reasonable_param)
+        beta_est = np.clip(beta_est, 1e-6, max_reasonable_param)
     return alpha_est, beta_est
 
 

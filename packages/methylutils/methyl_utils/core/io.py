@@ -5,12 +5,12 @@ import hdf5plugin  # noqa: F401 - Must be imported before h5py
 import h5py
 import numpy as np
 import pandas as pd
-from .methyl_frame import MethylExtendedCentroid, MethylBasicCentroid, MethylSample
+from .methyl_frame import MethylExtendedCentroid, MethylBasicCentroid, MethylSample, MethylBetaBinomialCentroid
 
 
 def load_from_h5(
     path: Union[str, Path],
-) -> MethylExtendedCentroid | MethylBasicCentroid | MethylSample:
+) -> MethylExtendedCentroid | MethylBasicCentroid | MethylSample | MethylBetaBinomialCentroid:
     """
     Load methylation data from HDF5 file.
     
@@ -163,7 +163,11 @@ def load_from_h5(
         if "N" in data:
             # Check if extended centroid fields are present
             if set(MethylExtendedCentroid._required_stats).issubset(data.keys()):
-                cls = MethylExtendedCentroid
+                # If count columns present, use MethylBetaBinomialCentroid
+                if MethylBetaBinomialCentroid._required_cols.issubset(data.keys()):
+                    cls = MethylBetaBinomialCentroid
+                else:
+                    cls = MethylExtendedCentroid
             else:
                 cls = MethylBasicCentroid
         else:

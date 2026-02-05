@@ -19,7 +19,7 @@ except ImportError:
     CuArray = np.ndarray
     HAS_GPU = False
 
-from .methyl_frame import MethylExtendedCentroid
+from .methyl_frame import MethylExtendedCentroid, MethylBetaBinomialCentroid
 from .io import load_from_h5  # or your preferred loader
 
 logger = logging.getLogger(__name__)
@@ -265,8 +265,8 @@ class MethylCentroidBuilder:
             except Exception as e:
                 logger.debug(f"Sample cleanup failed: {e}")
 
-    def finalize(self) -> MethylExtendedCentroid:
-        """Return final clean MethylExtendedCentroid"""
+    def finalize(self) -> MethylExtendedCentroid | MethylBetaBinomialCentroid:
+        """Return MethylBetaBinomialCentroid when store_extended_stats=True, else MethylExtendedCentroid."""
         if self.size == 0:
             raise ValueError("No data accumulated")
 
@@ -316,18 +316,6 @@ class MethylCentroidBuilder:
             }
         ).reset_index(drop=True)
 
-        if self.store_extended_stats:
-            df["sum_cov"] = sum_cov[mask].astype(np.uint64)
-            df["sum_cov2"] = sum_cov2[mask].astype(np.float64)
-            df["sum_mC"] = sum_mC[mask].astype(np.uint64)
-            df["sum_uC"] = sum_uC[mask].astype(np.uint64)
-            df["sum_mC2"] = sum_mC2[mask].astype(np.float64)
-            df["sum_uC2"] = sum_uC2[mask].astype(np.float64)
-            df["Sx3"] = Sx3[mask].astype(np.float32)
-            df["Sx4"] = Sx4[mask].astype(np.float32)
-            df["count_zero"] = count_zero[mask].astype(np.uint32)
-            df["count_one"] = count_one[mask].astype(np.uint32)
-
         final_metadata = {
             **self.metadata,
             "builder": "MethylCentroidBuilder",
@@ -339,6 +327,19 @@ class MethylCentroidBuilder:
             "extended_stats": self.store_extended_stats,
         }
 
+        if self.store_extended_stats:
+            df["sum_cov"] = sum_cov[mask].astype(np.uint64)
+            df["sum_cov2"] = sum_cov2[mask].astype(np.float64)
+            df["sum_mC"] = sum_mC[mask].astype(np.uint64)
+            df["sum_uC"] = sum_uC[mask].astype(np.uint64)
+            df["sum_mC2"] = sum_mC2[mask].astype(np.float64)
+            df["sum_uC2"] = sum_uC2[mask].astype(np.float64)
+            df["Sx3"] = Sx3[mask].astype(np.float32)
+            df["Sx4"] = Sx4[mask].astype(np.float32)
+            df["count_zero"] = count_zero[mask].astype(np.uint32)
+            df["count_one"] = count_one[mask].astype(np.uint32)
+            logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples (Beta-Binomial)")
+            return MethylBetaBinomialCentroid(df, final_metadata)
         logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples")
         return MethylExtendedCentroid(df, final_metadata)
 
@@ -350,7 +351,7 @@ def build_centroid(
     use_gpu: bool = True,
     metadata: Optional[Dict[str, Any]] = None,
     store_extended_stats: bool = True,
-) -> MethylExtendedCentroid:
+) -> MethylExtendedCentroid | MethylBetaBinomialCentroid:
     builder = MethylCentroidBuilder(
         min_coverage=min_coverage, 
         use_gpu=use_gpu, 

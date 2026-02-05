@@ -96,6 +96,7 @@ from .core.methyl_frame import (
     MethylSample,
     MethylBasicCentroid,
     MethylExtendedCentroid,
+    MethylBetaBinomialCentroid,
 )
 # Compatibility aliases
 MethylCentroid = MethylExtendedCentroid
@@ -187,28 +188,31 @@ METHYL_CENTROID_DTYPE = [
     ("N", np.uint32),  # Number of samples contributing to each position
 ]
 
-# Extended centroid dtype (centroid + Sx, Sx2, log_x_sum, log_1_minus_x_sum)
-METHYL_EXTENDED_CENTROID_DTYPE = [
+# Extended centroid dtype (Beta/Normal only: no count columns)
+METHYL_EXTENDED_ONLY_DTYPE = [
     ("pos", np.uint32),
     ("mC", np.uint32),
     ("uC", np.uint32),
     ("tnc", np.uint8),
-    ("N", np.uint32),  # Number of samples contributing to each position
-    ("Sx", np.float32),  # Sum of methylation levels
-    ("Sx2", np.float32),  # Sum of squared methylation levels
-    ("log_x_sum", np.float32),  # Sum of log(methylation_level) for Beta distribution
-    ("log_1_minus_x_sum", np.float32),  # Sum of log(1-methylation_level) for Beta distribution
-    # Extended sufficient statistics for additional distributions
-    ("sum_mC", np.uint64),  # Sum of methylated counts across samples
-    ("sum_uC", np.uint64),  # Sum of unmethylated counts across samples
-    ("sum_cov", np.uint64),  # Sum of total coverage across samples
-    ("sum_cov2", np.float64),  # Sum of squared coverage across samples
-    ("sum_mC2", np.float64),  # Sum of squared methylated counts
-    ("sum_uC2", np.float64),  # Sum of squared unmethylated counts
-    ("Sx3", np.float32),  # Sum of cubed methylation levels
-    ("Sx4", np.float32),  # Sum of 4th power methylation levels
-    ("count_zero", np.uint32),  # Count of samples with p=0
-    ("count_one", np.uint32),  # Count of samples with p=1
+    ("N", np.uint32),
+    ("Sx", np.float32),
+    ("Sx2", np.float32),
+    ("log_x_sum", np.float32),
+    ("log_1_minus_x_sum", np.float32),
+]
+
+# Full extended centroid dtype (includes count stats for Beta-Binomial; used by MethylBetaBinomialCentroid)
+METHYL_EXTENDED_CENTROID_DTYPE = METHYL_EXTENDED_ONLY_DTYPE + [
+    ("sum_mC", np.uint64),
+    ("sum_uC", np.uint64),
+    ("sum_cov", np.uint64),
+    ("sum_cov2", np.float64),
+    ("sum_mC2", np.float64),
+    ("sum_uC2", np.float64),
+    ("Sx3", np.float32),
+    ("Sx4", np.float32),
+    ("count_zero", np.uint32),
+    ("count_one", np.uint32),
 ]
 
 # Type aliases for better type hints (compatible with older Python versions)
@@ -689,6 +693,19 @@ from .transformations import (
 # Beta Mixture centroid container
 from .core.methyl_mixture_centroid import MethylBetaMixtureCentroid
 
+# Distribution views and probability helpers
+from .core.distribution_views import (
+    get_distribution_view,
+    log_probability_sample_given_centroid,
+    overlap_between_centroids,
+    CountsView,
+    NormalView,
+    BetaView,
+    BetaBinomialView,
+    BMMView,
+)
+from .core.methyl_distribution_utils import clip_beta_params_for_bounds
+
 # Add ClassifierFactory if it exists
 try:
     from .classifier_factory import ClassifierFactory
@@ -728,7 +745,17 @@ __all__ = [
     "MethylSample",
     "MethylBasicCentroid",
     "MethylExtendedCentroid",
+    "MethylBetaBinomialCentroid",
     "MethylBetaMixtureCentroid",
+    "get_distribution_view",
+    "log_probability_sample_given_centroid",
+    "overlap_between_centroids",
+    "CountsView",
+    "NormalView",
+    "BetaView",
+    "BetaBinomialView",
+    "BMMView",
+    "clip_beta_params_for_bounds",
     "MethylCentroid",  # Alias for MethylExtendedCentroid
     "MethylBetaCentroid",  # Alias for MethylExtendedCentroid
     "load_from_h5",
@@ -747,6 +774,7 @@ __all__ = [
     "STRAND_SYMBOLS",
     "METHYL_SAMPLE_DTYPE",
     "METHYL_CENTROID_DTYPE",
+    "METHYL_EXTENDED_ONLY_DTYPE",
     "METHYL_EXTENDED_CENTROID_DTYPE",
     "MethylSampleDtype",
     "MethylCentroidDtype",
