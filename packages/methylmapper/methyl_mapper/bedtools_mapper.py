@@ -129,7 +129,7 @@ class BedtoolsMapper:
         Args:
             gene_gtf: Path to GTF/GFF annotation file
             feature_types: List of feature types to extract (e.g., ['gene', 'exon', 'intron']).
-                          If None, extracts all features.
+                          If None, defaults to ['gene'].
             use_p_value_weight: Whether to weight by p-value
             use_q_value_weight: Whether to weight by q-value
             use_effect_size_weight: Whether to weight by effect_size
@@ -163,8 +163,7 @@ class BedtoolsMapper:
         if not self.gene_gtf.exists():
             raise FileNotFoundError(f"GTF file not found: {self.gene_gtf}")
         
-        self.feature_types = feature_types or ['gene', 'transcript', 'exon', 'intron', 
-                                                 'CDS', 'UTR', 'five_prime_utr', 'three_prime_utr']
+        self.feature_types = feature_types or ['gene']
         self.use_p_value_weight = use_p_value_weight
         self.use_q_value_weight = use_q_value_weight
         self.use_effect_size_weight = use_effect_size_weight
