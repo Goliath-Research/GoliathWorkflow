@@ -63,19 +63,36 @@ class MethylModelerConfig(BaseModel):
         description="Significance level for statistical tests (q-value threshold)"
     )
 
+    optimize_dmps: bool = Field(
+        default=True,
+        description="Enable DMP subset optimization via validation BA"
+    )
+
     validation_mode: str = Field(
         default="real",
-        description="Validation mode: 'real' (use centroid metadata samples), 'synthetic'"
+        description="Validation mode: 'real' (prefer real samples from config or centroid metadata samples_used; fall back to synthetic if none available), 'synthetic' (skip real, use synthetic only)."
     )
+
 
     n_validation_samples: Optional[int] = Field(
         default=None,
         description="Number of validation samples per class. If None, auto = total centroid samples."
     )
 
-    optimize_dmps: bool = Field(
-        default=True,
-        description="Enable DMP subset optimization via validation BA"
+    validation_split_ratio: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Fraction of validation data held out for test (rest used for calibration). 0 = no split."
+    )
+
+    centroid1_validation_samples: Optional[Union[str, List[str]]] = Field(
+        default=None,
+        description="Validation sample paths for centroid1: list of paths, 'use_metadata', or None. If None and validation_mode is 'real', centroid metadata (samples_used) is used by default; if no real data is available, synthetic samples are used."
+    )
+    centroid2_validation_samples: Optional[Union[str, List[str]]] = Field(
+        default=None,
+        description="Validation sample paths for centroid2: list of paths, 'use_metadata', or None. If None and validation_mode is 'real', centroid metadata (samples_used) is used by default; if no real data is available, synthetic samples are used."
     )
 
     target_balanced_accuracy: float = Field(
@@ -86,7 +103,7 @@ class MethylModelerConfig(BaseModel):
 
     optimization_method: str = Field(
         default="featurecuts",
-        description="'featurecuts', 'bayesian_optimization', 'binary_search'"
+        description="DMP subset optimization: 'featurecuts' (coarse+refinement), 'bayesian_optimization', or 'binary_search'. Try binary_search or bayesian_optimization if featurecuts gives BA≈0.5."
     )
 
     random_state: int = Field(

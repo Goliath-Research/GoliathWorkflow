@@ -157,7 +157,8 @@ class BetaClassifier:
                       ~np.isfinite(alpha2) | ~np.isfinite(beta2)
 
         if np.any(invalid_mask):
-            logger.warning(f"BetaClassifier: Found {np.sum(invalid_mask)} positions with invalid alpha/beta parameters, using fallback mean calculation")
+            n_invalid = int(np.sum(invalid_mask))
+            logger.debug(f"BetaClassifier: {n_invalid} positions with invalid alpha/beta (using fallback mean)")
             # Fallback: use simple ratio for invalid cases
             mean1_safe = np.where(invalid_mask, alpha1 / (alpha1 + beta1 + eps), mean1)
             mean2_safe = np.where(invalid_mask, alpha2 / (alpha2 + beta2 + eps), mean2)
@@ -478,8 +479,7 @@ class BetaClassifier:
             print(f"  Fraction valid for class1: {np.mean(valid1):.3f}")
             print(f"  Fraction valid for both: {np.mean(valid):.3f}")
 
-        # Debug: Check log-likelihoods before softmax
-        if debug or np.random.random() < 0.01:  # Debug first sample or 1% of calls
+        if debug:
             print(f"Raw log-likelihoods sample 0: {log_likelihoods[0]}")
             print(f"Log-likelihood stats: class0_mean={log_likelihoods[:, 0].mean():.2f}, "
                   f"class1_mean={log_likelihoods[:, 1].mean():.2f}")

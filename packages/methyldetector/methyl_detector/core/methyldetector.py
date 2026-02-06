@@ -20,8 +20,8 @@ from methyl_utils.core.methyl_frame import MethylSample
 # Import MethylCentroidPair from MethylUtils for mathematical operations
 from methyl_utils import MethylCentroidPair
 
-# Import BetaClassifier from MethylUtils
-from methyl_utils import BetaClassifier
+# Import BetaClassifier and BetaBinomialClassifier from MethylUtils
+from methyl_utils import BetaClassifier, BetaBinomialClassifier
 
 # Import EAT transformation (optional - may not be available in all environments)
 try:
@@ -229,13 +229,23 @@ class MethylDetector:
         logger.info("📋 Sorting DMPs by biological importance...")
         sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
         
-        # Export unified CSV
+        # Export pre-optimization DMPs (biological-sorted)
         if self.config.output_dir:
-            logger.info("💾 Exporting final DMPs sorted by importance...")
+            logger.info("💾 Exporting DMPs sorted by importance (pre-optimization)...")
             self._export_unified_csv(sorted_by_importance_df, suffix="-biological-sorted")
         
+        # DMP selection with validation and optional optimization (featurecuts / bayesian / binary_search)
+        selected_dmps_df = self._select_dmps_multicontext(bio_dmps_df, sorted_df=sorted_by_importance_df)
+        
+        # Export final selected DMPs and save classifier when output_dir is set
+        if self.config.output_dir:
+            logger.info("💾 Exporting final selected DMPs...")
+            self._export_unified_csv(selected_dmps_df, suffix="")
+            self._save_unified_model(None, selected_dmps_df)
+            self._save_validation_results(n_dmps_exported=len(selected_dmps_df))
+        
         # Create result (use selected DMPs for result stats)
-        result = self._create_multi_context_result(dmps_df, sorted_by_importance_df)
+        result = self._create_multi_context_result(dmps_df, selected_dmps_df)
         logger.info(f"✅ Multi-context analysis complete for chromosome {self.chromosome}!")
         
         return result
@@ -982,6 +992,10 @@ class MethylDetector:
         """
         Load validation samples for multi-context optimization.
         
+        Requires samples from BOTH centroid1 and centroid2 so that Balanced Accuracy
+        (classifying between the two groups) can be computed. If only one group has
+        samples, returns None and the caller falls back to synthetic validation.
+        
         Returns:
             Tuple of (X, y, positions, contexts) or None if loading fails
             - X: methylation matrix (n_samples x n_positions)
@@ -990,20 +1004,41 @@ class MethylDetector:
             - contexts: methylation contexts
         """
         try:
-            # Get validation sample paths from config or centroid metadata
+            # Resolve validation sample paths: explicit config, else centroid metadata (samples_used), else none
+            # When validation_mode is "real" (default), use centroid metadata if config does not specify paths.
+            use_metadata_by_default = (getattr(self.config, 'validation_mode', 'real') != 'synthetic')
+            class1_config = self.config.centroid1_validation_samples
+            if class1_config is None and use_metadata_by_default:
+                class1_config = "use_metadata"
+            class2_config = self.config.centroid2_validation_samples
+            if class2_config is None and use_metadata_by_default:
+                class2_config = "use_metadata"
+
             class1_paths = self._get_validation_samples(
-                self.config.centroid1_validation_samples,
+                class1_config,
                 self.config.centroid1_dir,
                 "centroid1"
             )
             class2_paths = self._get_validation_samples(
-                self.config.centroid2_validation_samples,
+                class2_config,
                 self.config.centroid2_dir,
                 "centroid2"
             )
             
             if not class1_paths and not class2_paths:
-                logger.warning("No validation samples specified")
+                logger.warning(
+                    "No real validation samples (config and centroid metadata). "
+                    "Falling back to synthetic validation samples."
+                )
+                return None
+
+            # Balanced Accuracy requires both groups; we cannot classify between groups with only one.
+            if not class1_paths or not class2_paths:
+                logger.warning(
+                    "Validation requires samples from BOTH centroid1 and centroid2 to compute Balanced Accuracy. "
+                    "Got centroid1=%s, centroid2=%s. Falling back to synthetic validation samples."
+                    % (len(class1_paths), len(class2_paths))
+                )
                 return None
             
             logger.info(f"Loading {len(class1_paths)} healthy + {len(class2_paths)} cancer validation samples...")
@@ -1099,14 +1134,19 @@ class MethylDetector:
                               f"has_nan={np.any(np.isnan(weights))}, has_inf={np.any(np.isinf(weights))}")
                 weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
 
-            # Debug: Check weights being passed to classifier
-            logger.info(f"Classifier weights stats for k={len(dmps_for_classifier)}: "
-                       f"min={weights.min():.6f}, max={weights.max():.6f}, "
-                       f"mean={weights.mean():.6f}, std={weights.std():.6f}")
+            # If one weight is huge (e.g. effect_size overflow), normalize so it doesn't dominate LLR and force one class
+            w_max = float(np.max(weights))
+            if w_max > 1000.0:
+                weights = weights / w_max
+                logger.debug("Classifier weights normalized by max=%.2g to avoid single-DMP dominance", w_max)
+
             if weights.std() < 1e-6:
                 logger.error(f"CRITICAL: All weights nearly identical for k={len(dmps_for_classifier)}!")
             if np.all(weights == 0):
                 logger.error(f"CRITICAL: All weights are zero for k={len(dmps_for_classifier)}!")
+            logger.debug(
+                f"Classifier weights for k={len(dmps_for_classifier)}: min={weights.min():.6f}, max={weights.max():.6f}"
+            )
 
             dmpDF = pd.DataFrame({
                 'pos': dmps_for_classifier['position'].values.astype(np.int64),
@@ -1150,24 +1190,33 @@ class MethylDetector:
             X_test_subset_clean = np.clip(X_test_subset_clean, 1e-6, 1-1e-6)
             test_availability = ~np.isnan(X_test_subset)
 
-            # Debug: Check classifier setup
-            logger.info(f"Testing classifier with {len(dmps_for_classifier)} DMPs on {X_test_subset_clean.shape[0]} samples")
-            logger.info(f"Classifier has {X_test_subset_clean.shape[1]} features")
-            
-            # Get probabilities: use calibrated only if we calibrated and have proper split
+            # Detect no per-sample variation (causes degenerate probabilities and BA=0.5)
+            n_test, n_feat = X_test_subset.shape
+            frac_valid = np.sum(~np.isnan(X_test_subset)) / max(1, X_test_subset.size)
+            # Rows identical after NaN->0.5 fill => classifier gets same input => same probability for all
+            row_var_clean = np.var(X_test_subset_clean, axis=1)
+            all_rows_same = n_feat > 0 and n_test > 1 and np.all(row_var_clean < 1e-9)
+            if frac_valid < 0.05:
+                logger.warning(
+                    "Validation data has very low overlap with DMP positions: %.1f%% non-NaN. "
+                    "Samples may not share positions with the DMP list (wrong chromosome/assay?). "
+                    "Filled NaNs with 0.5 -> no discrimination -> BA≈0.5.",
+                    frac_valid * 100
+                )
+            if all_rows_same and n_test > 1:
+                logger.warning(
+                    "Validation test matrix has no per-sample variation (all rows nearly identical). "
+                    "Classifier will output the same probability for every sample -> BA≈0.5. "
+                    "Check that validation sample files contain the DMP positions for this chromosome/context."
+                )
+
+            logger.debug(
+                f"Testing classifier with {len(dmps_for_classifier)} DMPs on {X_test_subset_clean.shape[0]} samples"
+            )
             if use_calibration and hasattr(temp_classifier, 'predict_proba_calibrated') and temp_classifier.calibrator is not None:
-                logger.info("Using calibrated predictions")
                 test_probas = temp_classifier.predict_proba_calibrated(X_test_subset_clean, test_availability)
             else:
-                logger.info("Using uncalibrated predictions")
-                test_probas = temp_classifier.predict_proba(X_test_subset_clean, test_availability, debug=True)
-
-            # Debug: Check what predict_proba returned
-            logger.info(f"predict_proba returned shape: {test_probas.shape}, dtype: {test_probas.dtype}")
-            logger.info(f"Probability stats: class0_min={test_probas[:, 0].min():.6f}, "
-                       f"class0_max={test_probas[:, 0].max():.6f}, "
-                       f"class1_min={test_probas[:, 1].min():.6f}, "
-                       f"class1_max={test_probas[:, 1].max():.6f}")
+                test_probas = temp_classifier.predict_proba(X_test_subset_clean, test_availability, debug=False)
 
             # Check if all probabilities are exactly 0.5
             all_class0_05 = np.allclose(test_probas[:, 0], 0.5, atol=1e-10)
@@ -1215,6 +1264,23 @@ class MethylDetector:
             specificity = tn / n_neg if n_neg > 0 else 0.0
             
             balanced_accuracy = (sensitivity + specificity) / 2.0
+
+            # Diagnose BA≈0.5 (coin toss): usually means classifier predicts one class only
+            n_pred_0 = int(np.sum(y_pred == 0))
+            n_pred_1 = int(np.sum(y_pred == 1))
+            if 0.48 <= balanced_accuracy <= 0.52 and (n_pos > 0 and n_neg > 0):
+                if not getattr(self, '_ba_05_warned_once', False):
+                    self._ba_05_warned_once = True
+                    logger.warning(
+                        "BA≈0.5 (coin toss): classifier is predicting only one class. "
+                        "Predicted: %s class0, %s class1 | True: %s class0, %s class1. "
+                        "Possible causes: (1) validation data has no overlap with DMP positions (all NaN -> 0.5), "
+                        "(2) validation columns vs DMP order mismatch, "
+                        "(3) one dominant weight or invalid alpha/beta. See earlier 'no per-sample variation' / 'low overlap' warnings.",
+                        n_pred_0, n_pred_1, n_neg, n_pos
+                    )
+                else:
+                    logger.debug("BA≈0.5 again: pred %s/%s, true %s/%s", n_pred_0, n_pred_1, n_neg, n_pos)
             
             # Return both balanced accuracy and confusion matrix details
             return {
@@ -1416,6 +1482,7 @@ class MethylDetector:
             DataFrame with sorted DMPs ready for optimization
         """
         n_dmps = len(bio_dmps_df)
+        self._ba_05_warned_once = False  # so we only log BA≈0.5 once per run
         logger.info(f"🔍 Preparing DMPs for validation: {n_dmps:,} candidates")
         
         if n_dmps == 0:
@@ -1461,28 +1528,39 @@ class MethylDetector:
 
             # Split validation set based on config
             if self.config.validation_split_ratio > 0:
-                # Split for proper evaluation during optimization
                 n_samples = len(X_val)
                 test_ratio = self.config.validation_split_ratio
-
-                # Stratified split to maintain class balance
                 idx_class0 = np.where(y_val == 0)[0]
                 idx_class1 = np.where(y_val == 1)[0]
+                n0, n1 = len(idx_class0), len(idx_class1)
 
-                n_test_class0 = int(len(idx_class0) * test_ratio)
-                n_test_class1 = int(len(idx_class1) * test_ratio)
-
-                np.random.seed(self.config.random_state)
-                test_idx_class0 = np.random.choice(idx_class0, n_test_class0, replace=False)
-                test_idx_class1 = np.random.choice(idx_class1, n_test_class1, replace=False)
-
-                test_indices = np.concatenate([test_idx_class0, test_idx_class1])
-                calib_indices = np.array([i for i in range(n_samples) if i not in test_indices])
-
-                X_calib, y_calib = X_val[calib_indices], y_val[calib_indices]
-                X_test, y_test = X_val[test_indices], y_val[test_indices]
-
-                logger.info(f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test (split_ratio={test_ratio})")
+                # BA requires both classes in BOTH calib and test; ensure at least 1 per class in test and in calib
+                if n0 < 2 or n1 < 2:
+                    logger.warning(
+                        "Stratified split skipped: need at least 2 samples per class (got %s and %s). Using all samples for both calibration and evaluation.",
+                        n0, n1
+                    )
+                    X_calib, y_calib = X_val, y_val
+                    X_test, y_test = X_val, y_val
+                else:
+                    # Use ~test_ratio of total samples for test, with test set class-balanced
+                    # (both classes represented in equal measure in the holdout)
+                    target_test_size = max(2, int(round((n0 + n1) * test_ratio)))
+                    half = target_test_size // 2
+                    n_test_class0 = min(max(1, half), n0 - 1)
+                    n_test_class1 = min(max(1, target_test_size - n_test_class0), n1 - 1)
+                    np.random.seed(self.config.random_state)
+                    test_idx_class0 = np.random.choice(idx_class0, n_test_class0, replace=False)
+                    test_idx_class1 = np.random.choice(idx_class1, n_test_class1, replace=False)
+                    test_indices = np.concatenate([test_idx_class0, test_idx_class1])
+                    calib_indices = np.array([i for i in range(n_samples) if i not in test_indices])
+                    X_calib, y_calib = X_val[calib_indices], y_val[calib_indices]
+                    X_test, y_test = X_val[test_indices], y_val[test_indices]
+                    logger.info(
+                        f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test "
+                        f"(~{100*(1-test_ratio):.0f}% / ~{100*test_ratio:.0f}%), test set balanced "
+                        f"(class0: {n_test_class0}, class1: {n_test_class1})"
+                    )
             else:
                 # No split: use all samples for both calibration and evaluation
                 # User has separate independent test set
@@ -1502,7 +1580,7 @@ class MethylDetector:
         selected_dmps_df = sorted_df
         final_result = None
 
-        if self.config.validation_mode == "real" and self.config.optimize_dmps:
+        if self.config.optimize_dmps:
             logger.info("")
             logger.info(f"🎯 Starting DMP optimization with method={self.config.optimization_method}")
 
@@ -1629,23 +1707,28 @@ class MethylDetector:
             Validation results dict or None if real samples not available
         """
         try:
-            # Get real samples from config (they should be specified there)
-            real_class1_paths = self._get_validation_samples(
-                self.config.centroid1_validation_samples,
-                self.config.centroid1_dir,
-                "centroid1"
-            )
-            real_class2_paths = self._get_validation_samples(
-                self.config.centroid2_validation_samples,
-                self.config.centroid2_dir,
-                "centroid2"
-            )
+            # Resolve real sample paths: config, else centroid metadata (samples_used)
+            use_metadata_by_default = (getattr(self.config, 'validation_mode', 'real') != 'synthetic')
+            c1 = self.config.centroid1_validation_samples
+            if c1 is None and use_metadata_by_default:
+                c1 = "use_metadata"
+            c2 = self.config.centroid2_validation_samples
+            if c2 is None and use_metadata_by_default:
+                c2 = "use_metadata"
+            real_class1_paths = self._get_validation_samples(c1, self.config.centroid1_dir, "centroid1")
+            real_class2_paths = self._get_validation_samples(c2, self.config.centroid2_dir, "centroid2")
             
             if not real_class1_paths and not real_class2_paths:
-                logger.warning("No real samples specified in config for verification")
+                logger.warning("No real samples available (config or centroid metadata) for verification")
+                return None
+            if not real_class1_paths or not real_class2_paths:
+                logger.warning(
+                    "Verification requires samples from both groups (got %s healthy, %s cancer). Skipping real verification.",
+                    len(real_class1_paths), len(real_class2_paths)
+                )
                 return None
             
-            logger.info(f"   Loading {len(real_class1_paths)} healthy + {len(real_class2_paths)} cancer samples from metadata...")
+            logger.info(f"   Loading {len(real_class1_paths)} healthy + {len(real_class2_paths)} cancer samples for verification...")
             
             # Load real samples
             real_val_data = self._load_validation_samples_multicontext_impl(
@@ -1694,6 +1777,14 @@ class MethylDetector:
         from methyl_utils import MethylCentroidPair
 
         if not class1_paths and not class2_paths:
+            return None
+
+        # Balanced Accuracy requires both groups; reject single-class validation
+        if not class1_paths or not class2_paths:
+            logger.warning(
+                "Validation data must include samples from both centroid1 and centroid2 (got %s and %s). Skipping.",
+                len(class1_paths), len(class2_paths)
+            )
             return None
 
         # Extract positions and contexts from DMPs
@@ -1984,7 +2075,7 @@ class MethylDetector:
                 ba_1_0_achieved_at_k = k
                 logger.info(f"    [{i+1}/{n_candidates}] k={k:,} → BA={ba_results[i]:.6f} ⭐ BA=1.0 achieved! Will skip larger k values.")
             
-            if i % max(1, n_candidates // 10) == 0 or i == n_candidates - 1:
+            if i % max(1, n_candidates // 5) == 0 or i == n_candidates - 1 or np.isclose(ba_results[i], 1.0, atol=1e-6):
                 logger.info(f"    [{i+1}/{n_candidates}] k={k:,} → BA={ba_results[i]:.6f}")
 
         # Filter out skipped (NaN) results before Phase 2
@@ -2074,7 +2165,7 @@ class MethylDetector:
                         ba_1_0_achieved_at_k = k
                         logger.info(f"    [{i+1}/{len(refinement_candidates)}] k={k:,} → BA={refinement_ba[i]:.6f} ⭐ Found smaller k with BA=1.0!")
                     
-                    if i % max(1, len(refinement_candidates) // 10) == 0 or i == len(refinement_candidates) - 1:
+                    if i % max(1, len(refinement_candidates) // 5) == 0 or i == len(refinement_candidates) - 1 or np.isclose(refinement_ba[i], 1.0, atol=1e-6):
                         logger.info(f"    [{i+1}/{len(refinement_candidates)}] k={k:,} → BA={refinement_ba[i]:.6f}")
                 
                 # Filter out skipped (NaN) refinement results
@@ -2108,14 +2199,15 @@ class MethylDetector:
         best_result_idx = int(best_indices[best_k_values == best_k][0])
         best_result = detailed_results[best_result_idx]
         
-        logger.info(f"  ✅ FeatureCuts complete: {n_candidates} evaluations, max BA={max_ba:.6f} at k={best_k:,}")
-        
+        logger.info(f"  ✅ FeatureCuts complete: {len(candidate_k)} evaluations, max BA={max_ba:.6f} at k={best_k:,}")
+        if np.isclose(max_ba, 0.5, atol=1e-4):
+            logger.warning(
+                "Optimization achieved BA≈0.5 (coin toss). Check that validation data has both classes in test set "
+                "and that DMP alpha/beta parameters are valid; consider trying optimization_method='binary_search' or 'bayesian_optimization'."
+            )
         top5_indices = np.argsort(-ba_results)[:5]
         if top5_indices.size > 0:
-            logger.info("  Top 5 candidates:")
-            for rank, idx in enumerate(top5_indices, 1):
-                logger.info(f"    [{rank}] k={int(candidate_k[idx]):,} → BA={ba_results[idx]:.6f}")
-        
+            logger.debug("  Top 5 k candidates: " + ", ".join(f"k={int(candidate_k[i]):,}(BA={ba_results[i]:.3f})" for i in top5_indices))
         return best_k, best_result
 
     def _optimize_dmps_binary_search(
@@ -2542,20 +2634,34 @@ class MethylDetector:
             'beta2': selected_dmps_df['beta2'].values.astype(np.float64),
             'weight': weights.astype(np.float64)
         })
-        
-        # Create BetaClassifier from dmpDF
-        beta_classifier = BetaClassifier.from_dataframe(
-            dmpDF,
-            min_sample_coverage=self.config.min_sample_coverage,
-            coverage_weighting=self.config.classifier_coverage_weighting
-        )
-        mixture_attached = self._attach_bmm_mixtures(beta_classifier, selected_dmps_df)
-        if mixture_attached:
-            logger.info("Attached BMM mixtures to classifier (hybrid Beta/BMM)")
-        
+
+        classifier_type = getattr(self.config, 'classifier_type', 'beta')
+        if classifier_type == 'beta_binomial':
+            # Beta-Binomial classifier: expects position, context, alpha1, beta1, alpha2, beta2, context_weight
+            if 'context' not in selected_dmps_df.columns:
+                ctx = (self.config.contexts[0] if getattr(self.config, 'contexts', None) else 'CG')
+                df_bb = selected_dmps_df[['position', 'alpha1', 'beta1', 'alpha2', 'beta2']].copy()
+                df_bb['context'] = ctx
+            else:
+                df_bb = selected_dmps_df[['position', 'context', 'alpha1', 'beta1', 'alpha2', 'beta2']].copy()
+            df_bb['context_weight'] = weights.astype(np.float64)
+            beta_classifier = BetaBinomialClassifier.from_dataframe(df_bb, chromosome=self.chromosome)
+            mixture_attached = False
+            classifier_label = "BetaBinomialClassifier"
+            logger.info("Saved classifier type: Beta-Binomial (count-based comparisons)")
+        else:
+            beta_classifier = BetaClassifier.from_dataframe(
+                dmpDF,
+                min_sample_coverage=self.config.min_sample_coverage,
+                coverage_weighting=self.config.classifier_coverage_weighting
+            )
+            mixture_attached = self._attach_bmm_mixtures(beta_classifier, selected_dmps_df)
+            if mixture_attached:
+                logger.info("Attached BMM mixtures to classifier (hybrid Beta/BMM)")
+            classifier_label = "BetaMixtureClassifier" if mixture_attached else "BetaClassifier"
+
         # Create model package
         import pickle
-        classifier_label = "BetaMixtureClassifier" if mixture_attached else "BetaClassifier"
         model_package = {
             'classifier': beta_classifier,
             'dmpDF': dmpDF,  # Strongly typed DataFrame

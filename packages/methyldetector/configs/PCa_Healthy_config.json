@@ -15,7 +15,6 @@
   "validation_mode": "real",
   "n_validation_samples": 200,
   "target_balanced_accuracy": 0.99,
-  "optimization_method": "featurecuts",
-  "trimmed_percentile_low": 0.10,
-  "trimmed_percentile_high": 0.01
+  "optimization_method": "binary_search",
+  "validation_split_ratio": 0.2
 }

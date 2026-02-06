@@ -40,8 +40,7 @@
         "output_dir": "/home/dizada/data/centroids/pc-cancer",
         "samples": [],
         "add_samples": [
-            "/home/dizada/data/020520_14_C11_89",
-            
+            "/home/dizada/data/020520_14_C11_89",           
             "/home/dizada/data/013361_10C26_34",
             "/home/dizada/data/010608_9N27_56",
             "/home/dizada/data/006655_9A_27_12",
