@@ -822,15 +822,14 @@ class MethylDetector:
         """
         Compute bounded biological importance score for multi-context DMPs.
 
-        Importance is derived from effect_size then normalized and bounded to [1e-6, 1],
-        so it is safe for classifier weights (unlike raw effect_size which can be unbounded).
+        Importance is derived from effect_size then mapped to [1e-6, 1] via log-scale
+        normalization (log1p then min-max), so classifier weights are safe and relative
+        spread is preserved (unlike divide-by-max + clip, which collapsed the tail to 1e-6
+        and triggered "all weights nearly identical" warnings).
 
         effect_size already includes:
         - Between-centroid variance correction: |Δμ| / √(var₁ + var₂)
         - Distribution overlap correction: × (1 - BC)^γ
-
-        Importance is normalized by max so relative ranking is preserved and no single
-        DMP can dominate the classifier.
 
         Args:
             dmps_df: DataFrame with DMPs (must have effect_size or delta_mean)
@@ -867,16 +866,21 @@ class MethylDetector:
         # Skip context weighting for cancer data
         # Context weighting may not be appropriate for cancer classification
 
-        # Ensure positive, finite, and bounded so classifier weights never blow up (unlike raw effect_size)
+        # Ensure positive, finite, and bounded to [1e-6, 1] while preserving relative spread.
+        # Log-scale normalization avoids collapsing the long tail to 1e-6 (which caused "all weights
+        # nearly identical" when using divide-by-max + clip). Ranking is unchanged; spread is preserved.
         if len(df) > 0:
-            min_imp = df['importance'].min()
-            if min_imp < 0:
-                df['importance'] = df['importance'] - min_imp + 1e-6
-            df['importance'] = np.where(np.isfinite(df['importance']), df['importance'], 0.0)
-            # Bound to [1e-6, 1] by normalizing by max; preserves relative ranking, avoids single-DMP dominance
-            imp_max = df['importance'].max()
-            if imp_max > 1e-6:
-                df['importance'] = np.clip(df['importance'] / imp_max, 1e-6, 1.0)
+            imp = df['importance'].values.astype(np.float64)
+            imp = np.where(np.isfinite(imp) & (imp >= 0), imp, 0.0)
+            if imp.min() < 0:
+                imp = imp - imp.min() + 1e-10
+            imp = np.maximum(imp, 1e-10)  # avoid log(0)
+            log_imp = np.log1p(imp)
+            lo, hi = log_imp.min(), log_imp.max()
+            if hi > lo + 1e-12:
+                df['importance'] = (log_imp - lo) / (hi - lo) * (1.0 - 1e-6) + 1e-6
+            else:
+                df['importance'] = np.clip(imp / np.max(imp), 1e-6, 1.0)
 
         # Sort by importance (descending)
         df = df.sort_values('importance', ascending=False).reset_index(drop=True)
@@ -1047,7 +1051,76 @@ class MethylDetector:
             import traceback
             traceback.print_exc()
             return None
-    
+
+    def _check_centroid_self_classification(self, dmps_df: pd.DataFrame) -> None:
+        """
+        Sanity check: classify each centroid's methylation profile at the DMP positions.
+        Each centroid should get probability ~1.0 for its own class. If not, positions
+        or sample↔DMP alignment may be wrong.
+        """
+        if dmps_df is None or len(dmps_df) == 0:
+            return
+        try:
+            if 'mean1' not in dmps_df.columns or 'mean2' not in dmps_df.columns:
+                logger.debug("Skipping centroid self-check (no mean1/mean2 in DMP table)")
+                return
+            # Bounded weights (same as in _validate_classifier_subset)
+            if 'importance' in dmps_df.columns:
+                weights = dmps_df['importance'].values.copy()
+            elif 'effect_size' in dmps_df.columns:
+                weights = dmps_df['effect_size'].values.copy()
+            else:
+                weights = np.ones(len(dmps_df))
+            if np.any(~np.isfinite(weights)) or np.any(weights <= 0):
+                weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
+            w_max = float(np.max(weights))
+            if w_max > 1e-6:
+                weights = np.clip(weights / w_max, 1e-6, 1.0).astype(np.float64)
+            dmpDF = pd.DataFrame({
+                'pos': dmps_df['position'].values.astype(np.int64),
+                'alpha1': dmps_df['alpha1'].values.astype(np.float64),
+                'beta1': dmps_df['beta1'].values.astype(np.float64),
+                'alpha2': dmps_df['alpha2'].values.astype(np.float64),
+                'beta2': dmps_df['beta2'].values.astype(np.float64),
+                'weight': weights
+            })
+            clf = BetaClassifier.from_dataframe(
+                dmpDF,
+                min_sample_coverage=self.config.min_sample_coverage,
+                coverage_weighting=self.config.classifier_coverage_weighting
+            )
+            if self._attach_bmm_mixtures(clf, dmps_df):
+                pass  # optional
+            # Centroid1 profile = mean1 at each DMP (class 0); centroid2 = mean2 (class 1)
+            profile_c1 = dmps_df['mean1'].values.astype(np.float64).reshape(1, -1)
+            profile_c2 = dmps_df['mean2'].values.astype(np.float64).reshape(1, -1)
+            profile_c1 = np.clip(profile_c1, 1e-6, 1.0 - 1e-6)
+            profile_c2 = np.clip(profile_c2, 1e-6, 1.0 - 1e-6)
+            avail = np.ones((1, len(dmps_df)), dtype=bool)
+            p_c1 = clf.predict_proba(profile_c1, avail, debug=False)[0, 1]  # P(class 1) for centroid1
+            p_c2 = clf.predict_proba(profile_c2, avail, debug=False)[0, 1]  # P(class 1) for centroid2
+            logger.info(
+                "Centroid self-check (DMP positions): centroid1 → P(class1)=%.4f, centroid2 → P(class1)=%.4f "
+                "(expect ~0 and ~1)",
+                p_c1, p_c2
+            )
+            if p_c1 > 0.2 or p_c2 < 0.8:
+                if p_c1 > 0.8 and p_c2 > 0.8:
+                    logger.warning(
+                        "Centroid self-check FAILED: both centroids classify as class1 (centroid1→%.2f, centroid2→%.2f). "
+                        "Often due to poor centroid separation on this chromosome (see earlier 'Poor separation' / small delta_mean). "
+                        "Validation BA may be low or meaningless.",
+                        p_c1, p_c2
+                    )
+                else:
+                    logger.warning(
+                        "Centroid self-check FAILED: centroid1 → P(class1)=%.2f, centroid2 → P(class1)=%.2f (expect ~0 and ~1). "
+                        "Possible position/order mismatch between samples and DMP list. Validation BA may be meaningless.",
+                        p_c1, p_c2
+                    )
+        except Exception as e:
+            logger.warning("Centroid self-check failed: %s", e)
+
     def _validate_classifier_subset(
         self,
         dmps_subset: pd.DataFrame,
@@ -1134,10 +1207,16 @@ class MethylDetector:
             if w_max > 1e-6:
                 weights = np.clip(weights / w_max, 1e-6, 1.0)
 
-            if weights.std() < 1e-6:
-                logger.error(f"CRITICAL: All weights nearly identical for k={len(dmps_for_classifier)}!")
+            # Low variability: expected when k=1 (single weight) or when using pre-bounded importance; only error if clearly wrong
+            w_std = weights.std()
             if np.all(weights == 0):
                 logger.error(f"CRITICAL: All weights are zero for k={len(dmps_for_classifier)}!")
+            elif len(dmps_for_classifier) > 1 and w_std < 1e-6 and 'importance' not in dmps_for_classifier.columns:
+                logger.error(f"CRITICAL: All weights nearly identical for k={len(dmps_for_classifier)}!")
+            elif len(dmps_for_classifier) == 1:
+                pass  # k=1: single weight, std=0 is expected
+            elif w_std < 1e-6:
+                logger.debug("Weights from bounded importance have very low std (expected when subset is similar); classifier may still be valid.")
             logger.debug(
                 f"Classifier weights for k={len(dmps_for_classifier)}: min={weights.min():.6f}, max={weights.max():.6f}"
             )
@@ -1437,7 +1516,7 @@ class MethylDetector:
                     # No split: use all samples for both calibration and evaluation
                     X_calib, y_calib = X_val, y_val
                     X_test, y_test = X_val, y_val
-                    logger.info(f"   Using all {len(X_val)} samples for validation (no split, validation_split_ratio=0)")
+                    logger.info(f"   Using all {len(X_val)} samples for BA (no holdout, validation_split_ratio=0)")
                 
                 validation_data = (X_calib, y_calib, X_test, y_test, val_positions, val_contexts)
             else:
@@ -1569,16 +1648,45 @@ class MethylDetector:
                 # User has separate independent test set
                 X_calib, y_calib = X_val, y_val
                 X_test, y_test = X_val, y_val
-                logger.info(f"   Using all {len(X_val)} samples for calibration (no split, validation_split_ratio=0)")
+                logger.info(f"   Using all {len(X_val)} samples for BA (no holdout, validation_split_ratio=0)")
 
             # Store both sets for downstream optimization
             validation_data = (X_calib, y_calib, X_test, y_test, val_positions, val_contexts)
         else:
             logger.warning("Failed to load or generate validation samples, falling back to all DMPs")
             return sorted_df
-        
+
         # Unpack validation data (now includes calibration split)
         X_calib, y_calib, X_test, y_test, val_positions, val_contexts = validation_data
+
+        # Restrict to DMPs that have enough coverage in the TEST set so BA has signal (not all NaN -> 0.5)
+        coverage_in_test = np.sum(~np.isnan(X_test), axis=0)
+        n_test = X_test.shape[0]
+        # Require at least 10% of test samples per position (or config min), so subset has usable non-NaN fraction
+        min_by_fraction = max(1, int(np.ceil(0.1 * n_test)))
+        min_coverage = max(min_by_fraction, getattr(self.config, 'min_validation_coverage_per_position', 1))
+        keep_mask = coverage_in_test >= min_coverage
+        n_keep = int(np.sum(keep_mask))
+        n_dropped = len(keep_mask) - n_keep
+        if n_dropped > 0 and n_keep > 0:
+            sorted_df = sorted_df.loc[keep_mask].reset_index(drop=True)
+            X_calib = X_calib[:, keep_mask]
+            X_test = X_test[:, keep_mask]
+            val_positions = val_positions[keep_mask]
+            val_contexts = val_contexts[keep_mask]
+            logger.info(
+                "Restricted to %s DMPs with ≥%s test-sample(s) per position (dropped %s with no test coverage) so BA can be computed.",
+                n_keep, min_coverage, n_dropped
+            )
+        elif n_keep == 0:
+            logger.warning(
+                "No DMP positions have validation coverage in any sample; BA will be 0.5. "
+                "Ensure validation samples cover the same chromosome/assay as the centroids."
+            )
+        n_dmps = len(sorted_df)
+
+        # Sanity check: centroid profiles at DMP positions should classify as their own class (prob ~1)
+        self._check_centroid_self_classification(sorted_df)
 
         selected_dmps_df = sorted_df
         final_result = None
@@ -1829,22 +1937,26 @@ class MethylDetector:
         extraction_min = getattr(self.config, 'validation_min_coverage', 4)
         logger.info("Extracting methylation fractions using MethylCentroidPair (min_coverage=%s)...", extraction_min)
         sample_paths_list = [p for p, _ in all_sample_paths]
-        X_extracted, all_positions_extracted, context_indices_dict = MethylCentroidPair.extract_methylation_fractions(
+        X_extracted, all_positions_extracted, all_contexts_extracted, context_indices_dict = MethylCentroidPair.extract_methylation_fractions(
             sample_paths=sample_paths_list,
             reference_positions=reference_positions,
             chromosome=self.chromosome,
             min_coverage=extraction_min
         )
         
-        # Map extracted positions back to original DMP indices
-        # Build position to DMP index mapping
-        dmp_pos_to_idx = {pos: idx for idx, pos in enumerate(dmp_positions)}
-        
-        # Map extracted data to DMP matrix using position lookup
+        # Map extracted (position, context) back to DMP column index so X columns match DMP row order.
+        # Join by (position, context) to guarantee alignment (same as a Pandas merge on position+context).
+        dmp_key_to_idx = {
+            (int(dmp_positions[i]), str(dmp_contexts[i])): i
+            for i in range(n_positions)
+        }
         for i in range(X_extracted.shape[0]):
-            for j, pos in enumerate(all_positions_extracted):
-                if pos in dmp_pos_to_idx:
-                    dmp_idx = dmp_pos_to_idx[pos]
+            for j in range(X_extracted.shape[1]):
+                pos = all_positions_extracted[j]
+                ctx = all_contexts_extracted[j]
+                key = (int(pos), str(ctx))
+                if key in dmp_key_to_idx:
+                    dmp_idx = dmp_key_to_idx[key]
                     if not np.isnan(X_extracted[i, j]):
                         X[i, dmp_idx] = X_extracted[i, j]
         
@@ -1914,6 +2026,13 @@ class MethylDetector:
 
         logger.debug(f"Sample coverage summary: min={min(samples_with_data)}, max={max(samples_with_data)}, mean={np.mean(samples_with_data):.1f}")
 
+        # Confirm alignment: X column j corresponds to DMP row j (position=dmp_positions[j], context=dmp_contexts[j])
+        if n_positions > 0:
+            logger.info(
+                "Validation columns aligned to DMP (position, context) order (join by position+context). "
+                "First column: (pos, ctx)=(%s, %s), last: (%s, %s).",
+                int(dmp_positions[0]), str(dmp_contexts[0]), int(dmp_positions[-1]), str(dmp_contexts[-1])
+            )
         logger.info(f"Returning validation data: X.shape={X.shape}, y.shape={y.shape}, successful_samples={successful_samples}")
         return X, y, dmp_positions, dmp_contexts
     

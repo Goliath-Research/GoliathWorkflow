@@ -178,6 +178,36 @@ else:
 
 This will read sample paths from the centroid HDF5 file metadata.
 
+### How to provide methylation samples for real validation
+
+To validate Balanced Accuracy with **real data for both groups**:
+
+1. **Set `validation_mode` to `"real"`** (default).
+
+2. **Provide samples in one of two ways:**
+
+   - **Explicit paths (recommended when you have a dedicated validation set):**  
+     Set `centroid1_validation_samples` and `centroid2_validation_samples` to **arrays of paths**.  
+     Each path is either:
+     - A **directory** containing per-chromosome, per-context H5 files: **`{chromosome}-{context}.h5`** (e.g. for chromosome 1 and context CG the file must be **`1-CG.h5`** inside that directory).  
+       Example: `/data/healthy/sample_01` with `1-CG.h5`, `2-CG.h5`, … inside.  
+       If extraction loads 0 samples, check the log for “Example expected path” and ensure that exact file exists (same naming as MethylCentroid output).
+     - Or a **single `.h5` file** path.
+     You must have **at least one sample for each group**; more samples give a more reliable BA and split (e.g. ~20% test).
+
+   - **Use centroid metadata:**  
+     Set both to `"use_metadata"`.  
+     The pipeline reads sample paths from the centroid H5 metadata (`samples_used` or `sample_paths`).  
+     Use this when the same samples used to build the centroids are acceptable for validation (no separate holdout).
+
+3. **Optional:**  
+   - `validation_split_ratio`: fraction held out for test. Default `0` = no split (use all real validation samples for BA). Set e.g. `0.2` for a holdout when you want train/test separation.  
+   - `validation_min_coverage`: min coverage when extracting methylation from these samples (default `4`; use lower than centroid `min_coverage` if needed).
+
+When using real samples, **`n_validation_samples` is not used** (it only applies to synthetic validation).
+
+If no real samples are found (or only one group has samples), the pipeline falls back to **synthetic** validation and logs a warning.
+
 ## Data Format
 
 ### Centroid Files

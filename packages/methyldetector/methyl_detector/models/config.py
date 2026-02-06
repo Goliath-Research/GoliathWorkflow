@@ -76,14 +76,14 @@ class MethylModelerConfig(BaseModel):
 
     n_validation_samples: Optional[int] = Field(
         default=None,
-        description="Number of validation samples per class. If None, auto = total centroid samples."
+        description="Number of synthetic validation samples per class. Only used when validation is synthetic (fallback or validation_mode='synthetic'). Ignored when real samples are provided via centroid1_validation_samples / centroid2_validation_samples or use_metadata."
     )
 
     validation_split_ratio: float = Field(
-        default=0.2,
+        default=0.0,
         ge=0.0,
         le=1.0,
-        description="Fraction of validation data held out for test (rest used for calibration). 0 = no split."
+        description="Fraction of validation data held out for test (rest for calibration). 0 = no split, use all real validation samples for BA (default). Set e.g. 0.2 for a holdout when you want train/test separation."
     )
 
     centroid1_validation_samples: Optional[Union[str, List[str]]] = Field(

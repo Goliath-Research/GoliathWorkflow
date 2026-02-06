@@ -413,18 +413,21 @@ class MethylCentroidPair:
             min_coverage: Minimum coverage threshold
             
         Returns:
-            Tuple of (methylation_fractions_matrix, positions_array, context_indices_dict)
+            Tuple of (methylation_fractions_matrix, positions_array, contexts_array, context_indices_dict)
             - methylation_fractions_matrix: (n_samples, n_positions) array with NaN for missing positions
-            - positions_array: (n_positions,) array of all reference positions in order
+            - positions_array: (n_positions,) array of positions in column order
+            - contexts_array: (n_positions,) array of context (e.g. 'CG') per column; column j is (positions_array[j], contexts_array[j])
             - context_indices_dict: Dictionary mapping context to index arrays in the full position array
         """
         from methyl_utils.core.io import load_from_h5
         from pathlib import Path
         import numpy as np
         
-        # Build ordered position array and position-to-index mapping
+        # Build ordered position array and (position, context) -> column index mapping.
+        # Key by (pos, ctx) so the same position in different contexts gets distinct columns.
         all_positions = []
-        position_to_index = {}
+        all_contexts = []
+        position_to_index = {}  # (pos, ctx) -> column index
         context_indices_dict = {}
         
         for ctx in ["CG", "CHG", "CHH"]:
@@ -432,38 +435,48 @@ class MethylCentroidPair:
                 ctx_positions = reference_positions[ctx].astype(np.uint32)
                 ctx_indices = []
                 for pos in ctx_positions:
-                    if pos not in position_to_index:
-                        position_to_index[pos] = len(all_positions)
+                    key = (int(pos), ctx)
+                    if key not in position_to_index:
+                        position_to_index[key] = len(all_positions)
                         all_positions.append(pos)
-                        ctx_indices.append(position_to_index[pos])
-                    else:
-                        ctx_indices.append(position_to_index[pos])
+                        all_contexts.append(ctx)
+                    ctx_indices.append(position_to_index[key])
                 context_indices_dict[ctx] = np.array(ctx_indices, dtype=np.int64)
         
         all_positions = np.array(all_positions, dtype=np.uint32)
+        all_contexts = np.array(all_contexts, dtype=object)
         n_positions = len(all_positions)
         n_samples = len(sample_paths)
-        
+        chrom_str = chromosome[0] if isinstance(chromosome, (list, tuple)) else str(chromosome)
+
         # Initialize result matrix with NaN
         X = np.full((n_samples, n_positions), np.nan, dtype=np.float32)
-        
+        n_missing_file = 0
+        n_empty_align = 0
+        n_error = 0
+        first_missing_path = None
+        first_ctx = next(iter(reference_positions.keys()), "CG")
+
         # Process each sample
         for i, sample_path in enumerate(sample_paths):
             sample_path = Path(sample_path)
-            
+
             # Process each context
             for ctx in reference_positions.keys():
                 ctx_positions = reference_positions[ctx].astype(np.uint32)
-                
+
                 # Determine H5 file path
                 if sample_path.suffix == '.h5':
                     h5_file = sample_path
                 elif sample_path.is_file():
                     h5_file = sample_path
                 else:
-                    h5_file = sample_path / f"{chromosome}-{ctx}.h5"
-                
+                    h5_file = sample_path / f"{chrom_str}-{ctx}.h5"
+
                 if not h5_file.exists():
+                    if first_missing_path is None:
+                        first_missing_path = h5_file
+                    n_missing_file += 1
                     continue
                 
                 try:
@@ -474,8 +487,9 @@ class MethylCentroidPair:
                     aligned = sample.align_to_positions(ctx_positions)
                     
                     if len(aligned) == 0:
+                        n_empty_align += 1
                         continue
-                    
+
                     # Extract methylation fractions efficiently
                     mC_vals = aligned.mC.values if hasattr(aligned.mC, 'values') else np.asarray(aligned.mC)
                     uC_vals = aligned.uC.values if hasattr(aligned.uC, 'values') else np.asarray(aligned.uC)
@@ -486,17 +500,37 @@ class MethylCentroidPair:
                     with np.errstate(divide='ignore', invalid='ignore'):
                         meth_fractions = np.where(total_reads >= min_coverage, mC_vals / total_reads, np.nan)
                     
-                    # Map to correct indices in result matrix using position lookup
+                    # Map to correct indices in result matrix using (position, context) lookup
                     for j, pos in enumerate(pos_vals):
-                        if pos in position_to_index:
-                            idx = position_to_index[pos]
+                        key = (int(pos), ctx)
+                        if key in position_to_index:
+                            idx = position_to_index[key]
                             X[i, idx] = meth_fractions[j]
                             
                 except Exception as e:
                     logger.debug(f"Failed to process {h5_file}: {e}")
+                    n_error += 1
                     continue
-        
-        return X, all_positions, context_indices_dict
+
+        n_with_data = int(np.sum(~np.isnan(X).all(axis=1)))
+        if n_with_data == 0 and sample_paths:
+            logger.warning(
+                "Validation extraction: 0 samples had data. Each path must be a directory containing "
+                "%s-%s.h5 (or a path to that .h5 file). Example expected path: %s",
+                chrom_str, first_ctx, first_missing_path
+            )
+            if n_missing_file > 0:
+                logger.warning(
+                    "  %s path(s) had no such file. Check that validation sample directories contain "
+                    "%s-%s.h5 for this chromosome/context.",
+                    n_missing_file, chrom_str, first_ctx
+                )
+            if n_empty_align > 0:
+                logger.warning("  %s H5 file(s) existed but had no overlapping positions with the DMP list.", n_empty_align)
+            if n_error > 0:
+                logger.warning("  %s H5 file(s) raised an error on load/align (see debug log).", n_error)
+
+        return X, all_positions, all_contexts, context_indices_dict
 
     def _init_cpu_backend(self):
         """Initialize CPU backend."""
