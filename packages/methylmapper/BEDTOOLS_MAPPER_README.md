@@ -184,11 +184,26 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
 
 ### Filter Feature Types
 
+By default, only **gene features** are mapped (recommended for most analyses). You can include additional feature types:
+
 ```bash
-# Only map to genes and exons
+# Default behavior (gene features only)
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF
+
+# Include genes and exons
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
                        --feature-types gene exon
+
+# Include all available feature types
+methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
+                       --feature-types gene transcript exon intron CDS UTR five_prime_utr three_prime_utr
 ```
+
+**Why gene-only is the default:**
+- Gene-level analysis is most biologically interpretable
+- Reduces computational overhead
+- Cleaner gene-disease associations
+- Most DMP studies focus on gene-level effects
 
 ### Custom Output Directory
 
@@ -246,6 +261,7 @@ You can put all options in a JSON config and run with a single `--config` argume
   "csv_pattern": "/work/data/.../dmps-*-biological-sorted.csv",
   "gtf": "/work/genomes/human_genome/gencode.v44.annotation.gtf",
   "output_dir": "/work/data/.../mapped_features",
+  "feature_types": ["gene"],
   "disease_term": "Prostate Cancer",
   "enrich_disease": true,
   "enrich_source": "grok+opentargets",
@@ -257,6 +273,8 @@ You can put all options in a JSON config and run with a single `--config` argume
 
 Set `grok_api_key` to your key in the config, or omit it / set to `null` and use `export GROK_API_KEY="..."` so the key is not stored in the file.
 
+**Note:** `feature_types` is optional. If omitted, the mapper defaults to `["gene"]` only (recommended for most analyses).
+
 **Config keys (CLI overrides config):**
 
 | Key | Description |
@@ -264,6 +282,7 @@ Set `grok_api_key` to your key in the config, or omit it / set to `null` and use
 | `csv_pattern` | Glob pattern for DMP CSV files (e.g. `dmps-*-biological-sorted.csv` or full path). If set, you can omit `--csv-pattern`. |
 | `gtf` | Path to GTF annotation file |
 | `output_dir` | Output directory for mapped features |
+| `feature_types` | Array of feature types to include (e.g. `["gene", "exon", "intron"]`). If not specified, defaults to `["gene"]`. |
 | `disease_term` | Disease to search for (e.g. `"Prostate Cancer"`) |
 | `enrich_disease` | `true` = enable Grok/Open Targets enrichment |
 | `enrich_source` | `grok+opentargets`, `opentargets`, `grok`, `disgenet`, `grok+disgenet`, `both`, `all` |
@@ -333,7 +352,7 @@ from methyl_mapper import BedtoolsMapper
 
 mapper = BedtoolsMapper(
     gene_gtf=Path("/path/to/gencode.v44.annotation.gtf"),
-    feature_types=['gene', 'exon', 'intron'],  # Filter to specific feature types
+    feature_types=['gene'],  # Default: only gene features
     use_p_value_weight=True,                    # Enable p-value weighting
     use_q_value_weight=True,                    # Enable q-value weighting
     use_effect_size_weight=True,                # Enable effect size weighting

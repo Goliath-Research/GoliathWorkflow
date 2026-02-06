@@ -15,17 +15,65 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 
-from methyl_utils.statistical_tests import storey_qvalues
+# from methyl_utils.statistical_tests import storey_qvalues  # unused
 
 from .gene_disease_enricher import GeneDiseaseEnricher
 
 logger = logging.getLogger(__name__)
 
 
+def calculate_biological_importance(delta_mean, std, overlap, min_delta_mean=0.1, max_overlap=0.6):
+    """Calculate bounded biological importance in [0,1].
+
+    Hybrid: abs(delta_mean) / (overlap * std), penalized for noisy positions.
+    Zero overlap = 1.0 max.
+
+    Args:
+        delta_mean: Methylation difference
+        std: Combined standard deviation (variance penalty)
+        overlap: Distribution overlap (can be 0)
+        min_delta_mean: Min threshold (default: 0.1)
+        max_overlap: Max threshold (default: 0.6)
+
+    Returns:
+        importance: [0,1] bounded
+    """
+    # Convert to numpy
+    delta_mean = np.asarray(delta_mean)
+    std = np.asarray(std)
+    overlap = np.asarray(overlap)
+
+    is_scalar = delta_mean.ndim == 0
+
+    if is_scalar:
+        if overlap == 0:
+            return 1.0
+        r = abs(delta_mean) / (overlap * std)
+        c = abs(min_delta_mean) / max_overlap
+        importance = r / (r + c)
+        return float(importance)
+
+    # Array case
+    zero_overlap_mask = overlap == 0
+
+    # Avoid div0 and low variance
+    eps = 1e-8
+    denom = np.maximum(overlap * std, eps)
+    r = np.abs(delta_mean) / denom
+
+    c = abs(min_delta_mean) / max_overlap
+    importance = r / (r + c)
+
+    importance[zero_overlap_mask] = 1.0
+    importance = np.nan_to_num(importance, nan=0.0)
+
+    return importance
+
+
 class BedtoolsMapper:
     """
     Map DMPs to genomic features using bedtools intersect.
-    
+
     Features:
     - Maps to all GTF features (genes, transcripts, exons, introns, etc.)
     - Weighting by p-value, q-value, and effect_size
@@ -67,11 +115,11 @@ class BedtoolsMapper:
     ):
         """
         Initialize BedtoolsMapper.
-        
+
         Args:
             gene_gtf: Path to GTF/GFF annotation file
             feature_types: List of feature types to extract (e.g., ['gene', 'exon', 'intron']).
-                          If None, extracts all features.
+                          If None, defaults to ['gene'].
             use_p_value_weight: Whether to weight by p-value
             use_q_value_weight: Whether to weight by q-value
             use_effect_size_weight: Whether to weight by effect_size
@@ -105,8 +153,7 @@ class BedtoolsMapper:
         if not self.gene_gtf.exists():
             raise FileNotFoundError(f"GTF file not found: {self.gene_gtf}")
         
-        self.feature_types = feature_types or ['gene', 'transcript', 'exon', 'intron', 
-                                                 'CDS', 'UTR', 'five_prime_utr', 'three_prime_utr']
+        self.feature_types = feature_types or ['gene']
         self.use_p_value_weight = use_p_value_weight
         self.use_q_value_weight = use_q_value_weight
         self.use_effect_size_weight = use_effect_size_weight
@@ -403,10 +450,24 @@ class BedtoolsMapper:
             elif 'effect_size' in merged.columns:
                 eff_col = 'effect_size'
             elif 'delta_mean' in merged.columns and 'overlap' in merged.columns:
-                merged['delta_overlap_weight'] = (
-                    merged['delta_mean'].abs() / merged['overlap'].replace(0, np.nan)
+                # Compute combined_std from Beta params if available, else approximate
+                if all(col in merged.columns for col in ['alpha1', 'beta1', 'alpha2', 'beta2']):
+                    # Beta variance formula
+                    tau1 = merged['alpha1'] + merged['beta1']
+                    var1 = merged['alpha1'] * merged['beta1'] / (tau1**2 * (tau1 + 1))
+                    tau2 = merged['alpha2'] + merged['beta2']
+                    var2 = merged['alpha2'] * merged['beta2'] / (tau2**2 * (tau2 + 1))
+                    combined_std = np.sqrt(var1 + var2)
+                else:
+                    # Approximate std for methylation (common value)
+                    combined_std = 0.1  # Reasonable default for filtered DMPs
+
+                # Calculate hybrid biological importance: |delta| / (overlap * std)
+                merged['biological_importance'] = calculate_biological_importance(
+                    merged['delta_mean'], combined_std, merged['overlap'],
+                    min_delta_mean=0.1, max_overlap=0.6
                 )
-                eff_col = 'delta_overlap_weight'
+                eff_col = 'biological_importance'
             elif 'delta_mean' in merged.columns:
                 eff_col = 'delta_mean'
 
@@ -1136,4 +1197,3 @@ class BedtoolsMapper:
             logger.info(f"{'='*70}")
         
         return results
-

@@ -333,7 +333,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         type=str,
         nargs='+',
         default=None,
-        help='Feature types to include (e.g., gene exon intron). If not specified, includes all types.'
+        help='Feature types to include (e.g., gene exon intron). If not specified, defaults to gene only.'
     )
     
     # Disease enrichment options
@@ -485,7 +485,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         '--config', '-c',
         type=str,
         default=None,
-        help='Optional JSON config file. May set disease_term, gtf, output_dir, enrich_disease, enrich_source, enrich_profile (overridden by CLI args)'
+        help='Optional JSON config file. May set csv_pattern, gtf, output_dir, feature_types, disease_term, enrich_disease, enrich_source, enrich_profile (overridden by CLI args)'
     )
     parser.add_argument(
         '--verbose', '-v',
@@ -525,6 +525,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
             # optimize_dmps: false in config => no_optimize_dmps
             if cfg.get('optimize_dmps') is False and not args.no_optimize_dmps:
                 args.no_optimize_dmps = True
+            if cfg.get('feature_types') is not None and args.feature_types is None:
+                args.feature_types = cfg['feature_types']
 
     return args
 
