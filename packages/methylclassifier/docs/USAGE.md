@@ -332,8 +332,20 @@ print(f"\nFound {len(outliers)} outliers out of {len(samples)} samples")
 
 ## Integration
 
+### Aggregating MethylDetector outputs (multi-chromosome)
+
+After **MethylDetector** has been run for all chromosomes, it writes one classifier per chromosome in its output directory (e.g. `classifier-1.pkl`, `classifier-2.pkl`, ...). **MethylClassifier** can load that directory and aggregate all chromosome classifiers:
+
+1. Set **MethylDetector** `output_dir` (e.g. `/path/to/PCa_vs_Healthy_optimized`) so it contains `classifier-{chrom}.pkl` for each chromosome.
+2. Point **MethylClassifier** at that directory with **multi-chromosome mode**:
+   - Config: `"model_dir": "/path/to/PCa_vs_Healthy_optimized"` (and `"model_path": null`).
+   - CLI: `methyl-classifier --model-dir /path/to/PCa_vs_Healthy_optimized --input /path/to/samples/ --output results.csv`
+3. MethylClassifier will load all `classifier-*.pkl` files, compute chromosome weights from the saved DMP weights (trimmed-mean), and combine predictions with a weighted average of per-chromosome probabilities.
+
+Sample directories for classification should contain `{chrom}-CG.h5` (and optionally `{chrom}-CHG.h5`, `{chrom}-CHH.h5`) per chromosome, as expected by the data loader.
+
 MethylClassifier is part of the MethylPipeline ecosystem:
-- Uses models from ****
+- Uses models from **MethylDetector** (per-chromosome classifiers) or single trained models
 - Classifies samples against **MethylCentroid** references
 - Integrates with **MethylUtils** for p-value testing
 

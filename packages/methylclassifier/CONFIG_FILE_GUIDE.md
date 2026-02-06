@@ -36,8 +36,8 @@ The `model_path` can point to a multi-class classifier built with `build_multicl
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `model_path` | string | Path to trained classifier model (.pkl file) |
-| `input_path` | string | Path to input .h5 file or directory containing .h5 files |
+| `model_path` or `model_dir` | string | Path to classifier (.pkl file) or **directory** containing `classifier-{chrom}.pkl` (e.g. MethylDetector output_dir) |
+| `input_path` or `samples` | string / list | Path to .h5 file/dir or list of sample directories (each with `{chrom}-CG.h5`, etc.) |
 
 ### Optional Fields
 
@@ -141,6 +141,26 @@ loaded = ClassificationConfig.from_json(Path("my_classification_config.json"))
 ```
 
 **Use case**: General-purpose classification with automatic method selection
+
+### Multi-chromosome (MethylDetector output)
+
+After running MethylDetector for all chromosomes, aggregate classifiers with MethylClassifier:
+
+```json
+{
+  "model_dir": "/path/to/methyldetector/output_dir",
+  "model_path": null,
+  "samples": ["/path/to/sample1/", "/path/to/sample2/"],
+  "output_path": "results/multi_chromosome_results.csv",
+  "temperature": 1,
+  "trimmed_percentile_low": 0.1,
+  "trimmed_percentile_high": 0.01,
+  "chromosome_weights": null,
+  "debug": false
+}
+```
+
+**Use case**: Load all `classifier-1.pkl`, `classifier-2.pkl`, ... from MethylDetector's output directory; chromosome weights are computed from trimmed-mean of DMP weights (or set `chromosome_weights` to use fixed weights).
 
 ### Configuration 4: Debug Analysis
 
