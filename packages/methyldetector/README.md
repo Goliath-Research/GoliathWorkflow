@@ -32,13 +32,14 @@ MethylDetector provides comprehensive DMP detection and analysis:
 ## Installation
 
 ```bash
-# Install from source
 cd packages/methyldetector
 pip install -e .
 
-# Or as part of MethylPipeline
-pip install methylpipeline
+# GPU verification
+python -c "import cupy as cp; print(f'GPU count: {cp.cuda.runtime.getDeviceCount()}')"
 ```
+
+**Note:** Requires MethylUtils (RAPIDS/CUDA) for GPU acceleration.
 
 ## Quick Start
 
@@ -59,9 +60,9 @@ pip install methylpipeline
 ```
 
 ```bash
-./detector config.json
+methyl-detector config.json
 ```
-
+<parameter name="replace_all">true
 ### Multi-Chromosome Usage
 
 Process multiple chromosomes in a single run:
@@ -95,7 +96,7 @@ Each chromosome will:
 ./detector config.json --verbose
 
 # With log file
-./detector config.json --log-file output.log
+methyl-detector config.json --log-file output.log
 ```
 
 ### Python API
@@ -245,19 +246,43 @@ MethylDetector uses **Storey's q-value FDR correction** for multiple testing cor
 ### Workflow Position
 
 ```
-MethylCentroid → MethylDetector → Downstream Analysis
-    (Generate)     (DMP Detection)   (Gene mapping, enrichment, etc.)
+MethylCentroid → MethylDetector → MethylClassifier / MethylMapper / MethylEnricher
+   (Centroids)      (DMPs + Models)     (Classification / Mapping / Enrichment)
 ```
 
 ### Inputs
 
-- Centroids from **MethylCentroid** (HDF5 files in directory format)
+- Centroids from **MethylCentroid** (HDF5 files: `{chrom}-{context}.h5`)
 
 ### Outputs
 
-- DMP tables (CSV) for downstream analysis
-- Statistical metadata for each significant position
-- Ready for gene mapping, functional enrichment, and biomarker discovery
+**Per chromosome:**
+- `dmps-{chrom}-biological-sorted.csv`: Ranked biological DMPs
+- `classifier-{chrom}.pkl`: Bayesian classifier model (for MethylClassifier)
+- `results-{chrom}.json`: Summary statistics
+
+### Running MethylClassifier with MethylDetector Output
+
+**No need to wait for MethylMapper or MethylEnricher!**
+
+1. Set `model_dir` = this `output_dir`
+2. `input_path` = directory of sample `.h5` files
+
+**Example config** (`configs/PCa_Healthy_classify_config.json`):
+```json
+{
+  "model_dir": "/path/to/PCa_vs_Healthy",  // MethylDetector output_dir
+  "input_path": "/path/to/samples/",
+  "output_path": "classification_results.csv"
+}
+```
+
+```bash
+methyl-classifier --config configs/PCa_Healthy_classify_config.json
+```
+
+See [MethylClassifier README](../methylclassifier/README.md#running-methylclassifier-with-methyldetector-output) for details.
+
 
 ## Performance
 
@@ -337,10 +362,13 @@ Or process chromosomes sequentially instead of in parallel.
 
 ## Examples
 
-See `configs/` directory for example configuration files:
-- `pc-hc1-1-CG_config.json` - Single chromosome with real validation
-- `pb-c1c2-1-CG_config.json` - Multi-context example
-- `multi-context-example.json` - Multi-context configuration
+**Examples** (`configs/`):
+- `PCa_Healthy_config.json`: Prostate Cancer vs Healthy (all chrom, all contexts)
+- `pc-hc1-1-CG_config.json`: Single chrom CG with validation
+- `TEMPLATE_simple_CG_only.json`: Basic CG-only template
+
+Copy and customize for your data!
+
 
 ## Documentation
 
