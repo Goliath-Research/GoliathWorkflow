@@ -1197,4 +1197,3 @@ class BedtoolsMapper:
             logger.info(f"{'='*70}")
         
         return results
-
