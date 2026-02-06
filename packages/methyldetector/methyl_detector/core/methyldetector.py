@@ -677,7 +677,8 @@ class MethylDetector:
             "random_state": getattr(self.config, "random_state", None),
         }
 
-        pair = MethylCentroidPair(min_coverage=4)
+        extraction_min = getattr(self.config, 'validation_min_coverage', 4)
+        pair = MethylCentroidPair(min_coverage=extraction_min)
         contexts = self.config.contexts if hasattr(self.config, "contexts") else None
         merged, bmm_c1, bmm_c2, records_map, bmm_summary = pair.refine_dmps_with_bmm(
             dmps_df=dmps_df,
@@ -819,30 +820,23 @@ class MethylDetector:
     
     def _compute_biological_importance(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Compute biological importance score for multi-context DMPs.
+        Compute bounded biological importance score for multi-context DMPs.
 
-        Importance = effect_size * variance_reliability * significance_factor * context_weight
+        Importance is derived from effect_size then normalized and bounded to [1e-6, 1],
+        so it is safe for classifier weights (unlike raw effect_size which can be unbounded).
 
         effect_size already includes:
         - Between-centroid variance correction: |Δμ| / √(var₁ + var₂)
         - Distribution overlap correction: × (1 - BC)^γ
 
-        importance adds biological factors:
-        - Within-centroid variance reliability: reduces weight for noisy measurements
-        - Statistical significance: higher weight for more significant DMPs
-        - Context reliability: CG > CHG > CHH prioritization
-
-        Where:
-        - effect_size includes statistical corrections for variance and overlap
-        - variance_reliability = 1/(1 + max_var/0.05) reduces importance of noisy measurements
-        - significance_factor = normalized(-log10(q_value)) gives higher weight to more significant DMPs
-        - context_weight prioritizes more reliable methylation contexts
+        Importance is normalized by max so relative ranking is preserved and no single
+        DMP can dominate the classifier.
 
         Args:
-            dmps_df: DataFrame with DMPs
+            dmps_df: DataFrame with DMPs (must have effect_size or delta_mean)
 
         Returns:
-            DataFrame with added 'importance' column, sorted by importance (descending)
+            DataFrame with added bounded 'importance' column in [1e-6, 1], sorted by importance (descending)
         """
         df = dmps_df.copy()
 
@@ -873,15 +867,16 @@ class MethylDetector:
         # Skip context weighting for cancer data
         # Context weighting may not be appropriate for cancer classification
 
-        # Ensure positive values but preserve relative importance
+        # Ensure positive, finite, and bounded so classifier weights never blow up (unlike raw effect_size)
         if len(df) > 0:
-            # Shift negative values if any (rare case)
             min_imp = df['importance'].min()
             if min_imp < 0:
                 df['importance'] = df['importance'] - min_imp + 1e-6
-
-        # Handle edge cases: ensure finite values
-        df['importance'] = np.where(np.isfinite(df['importance']), df['importance'], 0.0)
+            df['importance'] = np.where(np.isfinite(df['importance']), df['importance'], 0.0)
+            # Bound to [1e-6, 1] by normalizing by max; preserves relative ranking, avoids single-DMP dominance
+            imp_max = df['importance'].max()
+            if imp_max > 1e-6:
+                df['importance'] = np.clip(df['importance'] / imp_max, 1e-6, 1.0)
 
         # Sort by importance (descending)
         df = df.sort_values('importance', ascending=False).reset_index(drop=True)
@@ -1117,13 +1112,13 @@ class MethylDetector:
             dmps_for_classifier = dmps_subset[matched_mask].reset_index(drop=True)
             
             # Create dmpDF for BetaClassifier
-            # Use biological importance as weights (preferred over raw effect_size)
+            # Use bounded biological importance for weights (never raw effect_size, which can be unbounded)
             if 'importance' in dmps_for_classifier.columns:
-                weights = dmps_for_classifier['importance'].values
-                logger.debug("Using 'importance' column for weights (includes overlap and context weighting)")
+                weights = dmps_for_classifier['importance'].values.copy()
+                logger.debug("Using bounded 'importance' for classifier weights")
             elif 'effect_size' in dmps_for_classifier.columns:
-                weights = dmps_for_classifier['effect_size'].values
-                logger.debug("Using 'effect_size' column for weights (importance not available)")
+                weights = dmps_for_classifier['effect_size'].values.copy()
+                logger.debug("Using 'effect_size' for weights (importance not available); will bound to [1e-6, 1]")
             else:
                 weights = np.ones(len(dmps_for_classifier))
                 logger.warning("No weight column found, using ones")
@@ -1134,11 +1129,10 @@ class MethylDetector:
                               f"has_nan={np.any(np.isnan(weights))}, has_inf={np.any(np.isinf(weights))}")
                 weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
 
-            # If one weight is huge (e.g. effect_size overflow), normalize so it doesn't dominate LLR and force one class
+            # Always bound weights to [1e-6, 1] so no single DMP dominates (importance is pre-bounded; effect_size fallback is not)
             w_max = float(np.max(weights))
-            if w_max > 1000.0:
-                weights = weights / w_max
-                logger.debug("Classifier weights normalized by max=%.2g to avoid single-DMP dominance", w_max)
+            if w_max > 1e-6:
+                weights = np.clip(weights / w_max, 1e-6, 1.0)
 
             if weights.std() < 1e-6:
                 logger.error(f"CRITICAL: All weights nearly identical for k={len(dmps_for_classifier)}!")
@@ -1196,14 +1190,16 @@ class MethylDetector:
             # Rows identical after NaN->0.5 fill => classifier gets same input => same probability for all
             row_var_clean = np.var(X_test_subset_clean, axis=1)
             all_rows_same = n_feat > 0 and n_test > 1 and np.all(row_var_clean < 1e-9)
-            if frac_valid < 0.05:
+            if frac_valid < 0.05 and not getattr(self, '_low_overlap_warned_once', False):
+                self._low_overlap_warned_once = True
                 logger.warning(
                     "Validation data has very low overlap with DMP positions: %.1f%% non-NaN. "
                     "Samples may not share positions with the DMP list (wrong chromosome/assay?). "
                     "Filled NaNs with 0.5 -> no discrimination -> BA≈0.5.",
                     frac_valid * 100
                 )
-            if all_rows_same and n_test > 1:
+            if all_rows_same and n_test > 1 and not getattr(self, '_no_variation_warned_once', False):
+                self._no_variation_warned_once = True
                 logger.warning(
                     "Validation test matrix has no per-sample variation (all rows nearly identical). "
                     "Classifier will output the same probability for every sample -> BA≈0.5. "
@@ -1238,10 +1234,14 @@ class MethylDetector:
                 prob_range = test_probas[:, 1].max() - test_probas[:, 1].min()
                 logger.debug(f"    k={len(dmps_subset):,}: probs mean={mean_prob:.4f}, std={std_prob:.4f}, range={prob_range:.4f}")
                 
-            # Warn if probabilities are completely degenerate
+            # Warn if probabilities are completely degenerate (once per run)
             prob_range = test_probas[:, 1].max() - test_probas[:, 1].min()
-            if prob_range < 0.01:
-                logger.warning(f"Degenerate probabilities for k={len(dmps_subset):,}: range={prob_range:.6f}, mean={test_probas[:, 1].mean():.6f}")
+            if prob_range < 0.01 and not getattr(self, '_degenerate_probs_warned_once', False):
+                self._degenerate_probs_warned_once = True
+                logger.warning(
+                    "Degenerate probabilities (range=%.6f, mean=%.6f) -> BA≈0.5. See 'low overlap' / 'no per-sample variation' above.",
+                    prob_range, test_probas[:, 1].mean()
+                )
             
             # Extract probabilities for class 1 (centroid2/cancer)
             probabilities = test_probas[:, 1].tolist()
@@ -1482,7 +1482,10 @@ class MethylDetector:
             DataFrame with sorted DMPs ready for optimization
         """
         n_dmps = len(bio_dmps_df)
-        self._ba_05_warned_once = False  # so we only log BA≈0.5 once per run
+        self._ba_05_warned_once = False
+        self._low_overlap_warned_once = False
+        self._no_variation_warned_once = False
+        self._degenerate_probs_warned_once = False
         logger.info(f"🔍 Preparing DMPs for validation: {n_dmps:,} candidates")
         
         if n_dmps == 0:
@@ -1679,6 +1682,16 @@ class MethylDetector:
                     f"Unknown optimization_method '{self.config.optimization_method}', skipping optimization step."
                 )
 
+            # When target BA is not achieved, export all DMPs to improve matching with future samples
+            if final_result is not None:
+                target_ba = getattr(self.config, 'target_balanced_accuracy', None)
+                if target_ba is not None and final_result.get('balanced_accuracy', 0) < target_ba:
+                    selected_dmps_df = sorted_df.copy()
+                    logger.info(
+                        "Target BA %.3f not achieved; exporting all %s DMPs to improve matching with future samples.",
+                        target_ba, len(sorted_df)
+                    )
+
         # If we used synthetic validation, verify on real samples from centroid metadata
         if self.config.validation_mode == "synthetic":
             logger.info("")
@@ -1812,13 +1825,15 @@ class MethylDetector:
             }
 
         # Use MethylCentroidPair to efficiently extract methylation fractions
-        logger.info("Extracting methylation fractions using MethylCentroidPair...")
+        # Use validation_min_coverage (e.g. 4) so we get values at more positions when centroids were built with higher min_coverage (e.g. 10)
+        extraction_min = getattr(self.config, 'validation_min_coverage', 4)
+        logger.info("Extracting methylation fractions using MethylCentroidPair (min_coverage=%s)...", extraction_min)
         sample_paths_list = [p for p, _ in all_sample_paths]
         X_extracted, all_positions_extracted, context_indices_dict = MethylCentroidPair.extract_methylation_fractions(
             sample_paths=sample_paths_list,
             reference_positions=reference_positions,
             chromosome=self.chromosome,
-            min_coverage=4
+            min_coverage=extraction_min
         )
         
         # Map extracted positions back to original DMP indices
@@ -2612,19 +2627,21 @@ class MethylDetector:
         model_path = output_dir / f"classifier-{self.chromosome}.pkl"
         
         # Create strongly-typed dmpDF DataFrame
-        # Get weight from importance (preferred), then effect_size, then context_weight
+        # Use bounded biological importance for weights; fallback to effect_size/context_weight then bound to [1e-6, 1]
         if 'importance' in selected_dmps_df.columns:
-            weights = selected_dmps_df['importance'].values
-            logger.debug("Using 'importance' for classifier weights (includes overlap and context weighting)")
+            weights = selected_dmps_df['importance'].values.astype(np.float64)
+            logger.debug("Using bounded 'importance' for saved classifier weights")
         elif 'effect_size' in selected_dmps_df.columns:
-            weights = selected_dmps_df['effect_size'].values
-            logger.debug("Using 'effect_size' for classifier weights (importance not available)")
+            weights = selected_dmps_df['effect_size'].values.astype(np.float64)
+            logger.debug("Using 'effect_size' for weights (importance not available); will bound")
         elif 'context_weight' in selected_dmps_df.columns:
-            weights = selected_dmps_df['context_weight'].values
-            logger.debug("Using 'context_weight' for classifier weights")
+            weights = selected_dmps_df['context_weight'].values.astype(np.float64)
         else:
             weights = np.ones(len(selected_dmps_df), dtype=np.float64)
-            logger.debug("Using uniform weights (no weight columns available)")
+        weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1e-6)
+        w_max = float(np.max(weights))
+        if w_max > 1e-6:
+            weights = np.clip(weights / w_max, 1e-6, 1.0)
         
         dmpDF = pd.DataFrame({
             'pos': selected_dmps_df['position'].values.astype(np.int64),

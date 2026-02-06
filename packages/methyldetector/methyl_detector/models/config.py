@@ -442,7 +442,12 @@ class MethylModelerConfig(BaseModel):
     
     min_sample_coverage: int = Field(
         default=10, ge=1, le=100,
-        description="Min coverage (mC + uC) for positions in new samples. Below this, positions are ignored in classification."
+        description="Min coverage (mC + uC) for positions in new samples. Below this, positions are ignored in classification. Use a lower value (e.g. 4) when centroids were built with high min_coverage (e.g. 10) but patient samples have lower coverage."
+    )
+    
+    validation_min_coverage: int = Field(
+        default=4, ge=1, le=100,
+        description="Min coverage when extracting methylation from validation/centroid samples. Use a value lower than the centroid's min_coverage (e.g. 4 if centroid used 10) so validation samples contribute values at more positions and better match lower-coverage patient data."
     )
     
     classifier_coverage_weighting: bool = Field(

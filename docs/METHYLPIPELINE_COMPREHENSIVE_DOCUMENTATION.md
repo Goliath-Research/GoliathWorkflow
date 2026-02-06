@@ -802,6 +802,14 @@ configs/
 4. **Documentation**: Add comments (use JSONC if needed)
 5. **Validation**: Use Pydantic models to validate before running
 
+**Coverage: centroids vs validation and inference**  
+Centroids are often built with a high minimum coverage (e.g. `min_coverage: 10`) for confident positions. Patient or validation samples may have lower coverage (e.g. 4–9) at some positions. To maximize information and matching:
+
+- **MethylDetector**  
+  - `validation_min_coverage` (default 4): minimum coverage when extracting methylation from centroid/validation samples. Use a value *lower* than the centroid’s `min_coverage` (e.g. 4 if centroid used 10) so validation samples contribute values at more positions.
+  - `min_sample_coverage`: minimum coverage for positions in *new* (e.g. patient) samples at classification time. Set lower (e.g. 4) when you expect lower-coverage patient data so those positions are still used.
+- This way, centroid cohort samples and future patient samples both get values at positions with coverage ≥ 4, improving overlap and classification.
+
 ---
 
 ## Performance
