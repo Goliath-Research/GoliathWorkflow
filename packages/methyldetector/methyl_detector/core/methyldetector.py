@@ -1207,15 +1207,13 @@ class MethylDetector:
             if w_max > 1e-6:
                 weights = np.clip(weights / w_max, 1e-6, 1.0)
 
-            # Low variability: expected when k=1 (single weight) or when using pre-bounded importance; only error if clearly wrong
+            # Low variability: skip for k=1 (single weight has no variance by definition). Otherwise error only if clearly wrong.
             w_std = weights.std()
             if np.all(weights == 0):
                 logger.error(f"CRITICAL: All weights are zero for k={len(dmps_for_classifier)}!")
-            elif len(dmps_for_classifier) > 1 and w_std < 1e-6 and 'importance' not in dmps_for_classifier.columns:
+            elif len(dmps_for_classifier) >= 2 and w_std < 1e-6 and 'importance' not in dmps_for_classifier.columns:
                 logger.error(f"CRITICAL: All weights nearly identical for k={len(dmps_for_classifier)}!")
-            elif len(dmps_for_classifier) == 1:
-                pass  # k=1: single weight, std=0 is expected
-            elif w_std < 1e-6:
+            elif len(dmps_for_classifier) >= 2 and w_std < 1e-6:
                 logger.debug("Weights from bounded importance have very low std (expected when subset is similar); classifier may still be valid.")
             logger.debug(
                 f"Classifier weights for k={len(dmps_for_classifier)}: min={weights.min():.6f}, max={weights.max():.6f}"
