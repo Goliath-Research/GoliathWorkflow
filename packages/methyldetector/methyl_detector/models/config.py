@@ -63,6 +63,38 @@ class MethylModelerConfig(BaseModel):
         description="Significance level for statistical tests (q-value threshold)"
     )
 
+    validation_mode: str = Field(
+        default="real",
+        description="Validation mode: 'real' (use centroid metadata samples), 'synthetic'"
+    )
+
+    n_validation_samples: Optional[int] = Field(
+        default=None,
+        description="Number of validation samples per class. If None, auto = total centroid samples."
+    )
+
+    optimize_dmps: bool = Field(
+        default=True,
+        description="Enable DMP subset optimization via validation BA"
+    )
+
+    target_balanced_accuracy: float = Field(
+        default=0.99,
+        ge=0.5, le=1.0,
+        description="Target/max BA for optimization (finds peak BA)"
+    )
+
+    optimization_method: str = Field(
+        default="featurecuts",
+        description="'featurecuts', 'bayesian_optimization', 'binary_search'"
+    )
+
+    random_state: int = Field(
+        default=42,
+        ge=0,
+        description="Random seed for reproducibility"
+    )
+
     # ----------------
     # Coverage Filter
     # ----------------
@@ -104,6 +136,12 @@ class MethylModelerConfig(BaseModel):
         default=False,
         description="Enable Platt scaling calibration on validation data during classification"
     )
+
+    @field_validator('n_validation_samples')
+    def validate_n_validation(cls, v):
+        if v is not None and v < 10:
+            raise ValueError("n_validation_samples must be >=10 or None")
+        return v
 
     @field_validator('contexts', mode='before')
     @classmethod
