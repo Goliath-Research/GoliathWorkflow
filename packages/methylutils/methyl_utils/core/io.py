@@ -1,6 +1,6 @@
 # methyl_utils/core/io.py
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
 import hdf5plugin  # noqa: F401 - Must be imported before h5py
 import h5py
 import numpy as np
@@ -8,22 +8,34 @@ import pandas as pd
 from .methyl_frame import MethylExtendedCentroid, MethylBasicCentroid, MethylSample, MethylBetaBinomialCentroid
 
 
+def _indices_for_positions(pos_arr: np.ndarray, positions: np.ndarray):
+    """Return row indices where pos_arr is in positions (same as align_to_positions subset)."""
+    want = np.asarray(positions, dtype=np.uint32)
+    mask = np.isin(pos_arr, want)
+    return np.flatnonzero(mask)
+
+
 def load_from_h5(
     path: Union[str, Path],
+    positions: Optional[np.ndarray] = None,
 ) -> MethylExtendedCentroid | MethylBasicCentroid | MethylSample | MethylBetaBinomialCentroid:
     """
     Load methylation data from HDF5 file.
-    
+
+    When positions is provided, only those rows are read from disk (hyperslice),
+    so only classifier DMP positions are loaded—same approach as MethylDetector validation.
+
     Supports both new and old formats:
     - New format: Datasets stored in 'methylation_data' group
     - Old format: Datasets stored at root level or 'methylation_data' as structured array
-    
+
     Args:
         path: Path to HDF5 file
-        
+        positions: Optional array of positions to load; if set, only these rows are read (saves memory).
+
     Returns:
         MethylSample, MethylBasicCentroid, or MethylExtendedCentroid instance
-        
+
     Raises:
         ValueError: If file doesn't have required datasets in any format
         KeyError: If required datasets are missing
@@ -33,7 +45,7 @@ def load_from_h5(
         data = {}
         datasets = []
         methyl_data = None
-        
+
         # Try new format first: 'methylation_data' as a group
         if "methylation_data" in f:
             methyl_data = f["methylation_data"]
@@ -43,19 +55,34 @@ def load_from_h5(
                 required_core = ["pos", "mC", "uC", "tnc"]
                 missing = [d for d in required_core if d not in datasets]
                 if not missing:
-                    # Load core datasets from group
-                    data = {
-                        "pos": np.asarray(methyl_data["pos"][:], dtype=np.uint32),
-                        "mC": np.asarray(methyl_data["mC"][:], dtype=np.uint32),
-                        "uC": np.asarray(methyl_data["uC"][:], dtype=np.uint32),
-                        "tnc": np.asarray(methyl_data["tnc"][:], dtype=np.uint8),
-                    }
+                    if positions is not None:
+                        pos_arr = np.asarray(methyl_data["pos"][:], dtype=np.uint32)
+                        idx = _indices_for_positions(pos_arr, positions)
+                        data = {
+                            "pos": np.asarray(methyl_data["pos"][idx], dtype=np.uint32),
+                            "mC": np.asarray(methyl_data["mC"][idx], dtype=np.uint32),
+                            "uC": np.asarray(methyl_data["uC"][idx], dtype=np.uint32),
+                            "tnc": np.asarray(methyl_data["tnc"][idx], dtype=np.uint8),
+                        }
+                    else:
+                        data = {
+                            "pos": np.asarray(methyl_data["pos"][:], dtype=np.uint32),
+                            "mC": np.asarray(methyl_data["mC"][:], dtype=np.uint32),
+                            "uC": np.asarray(methyl_data["uC"][:], dtype=np.uint32),
+                            "tnc": np.asarray(methyl_data["tnc"][:], dtype=np.uint8),
+                        }
                     # Load optional centroid datasets
                     if "N" in datasets:
-                        data["N"] = np.asarray(methyl_data["N"][:], dtype=np.uint32)
+                        if positions is not None:
+                            data["N"] = np.asarray(methyl_data["N"][idx], dtype=np.uint32)
+                        else:
+                            data["N"] = np.asarray(methyl_data["N"][:], dtype=np.uint32)
                     for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
                         if col in datasets:
-                            data[col] = np.asarray(methyl_data[col][:], dtype=np.float32)
+                            if positions is not None:
+                                data[col] = np.asarray(methyl_data[col][idx], dtype=np.float32)
+                            else:
+                                data[col] = np.asarray(methyl_data[col][:], dtype=np.float32)
                     # Extended sufficient statistics (optional)
                     extra_cols = {
                         "sum_mC": np.uint64,
@@ -71,30 +98,48 @@ def load_from_h5(
                     }
                     for col, dtype_cast in extra_cols.items():
                         if col in datasets:
-                            data[col] = np.asarray(methyl_data[col][:], dtype=dtype_cast)
-        
+                            if positions is not None:
+                                data[col] = np.asarray(methyl_data[col][idx], dtype=dtype_cast)
+                            else:
+                                data[col] = np.asarray(methyl_data[col][:], dtype=dtype_cast)
+
         # Fallback to old format: datasets at root level
         if not data:
             root_keys = list(f.keys())
             required_core = ["pos", "mC", "uC", "tnc"]
-            
+
             # Check if required datasets exist at root level
             missing = [d for d in required_core if d not in root_keys]
             if not missing:
                 datasets = root_keys
-                # Load core datasets from root
-                data = {
-                    "pos": np.asarray(f["pos"][:], dtype=np.uint32),
-                    "mC": np.asarray(f["mC"][:], dtype=np.uint32),
-                    "uC": np.asarray(f["uC"][:], dtype=np.uint32),
-                    "tnc": np.asarray(f["tnc"][:], dtype=np.uint8),
-                }
+                if positions is not None:
+                    pos_arr = np.asarray(f["pos"][:], dtype=np.uint32)
+                    idx = _indices_for_positions(pos_arr, positions)
+                    data = {
+                        "pos": np.asarray(f["pos"][idx], dtype=np.uint32),
+                        "mC": np.asarray(f["mC"][idx], dtype=np.uint32),
+                        "uC": np.asarray(f["uC"][idx], dtype=np.uint32),
+                        "tnc": np.asarray(f["tnc"][idx], dtype=np.uint8),
+                    }
+                else:
+                    data = {
+                        "pos": np.asarray(f["pos"][:], dtype=np.uint32),
+                        "mC": np.asarray(f["mC"][:], dtype=np.uint32),
+                        "uC": np.asarray(f["uC"][:], dtype=np.uint32),
+                        "tnc": np.asarray(f["tnc"][:], dtype=np.uint8),
+                    }
                 # Load optional centroid datasets
                 if "N" in root_keys:
-                    data["N"] = np.asarray(f["N"][:], dtype=np.uint32)
+                    if positions is not None:
+                        data["N"] = np.asarray(f["N"][idx], dtype=np.uint32)
+                    else:
+                        data["N"] = np.asarray(f["N"][:], dtype=np.uint32)
                 for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
                     if col in root_keys:
-                        data[col] = np.asarray(f[col][:], dtype=np.float32)
+                        if positions is not None:
+                            data[col] = np.asarray(f[col][idx], dtype=np.float32)
+                        else:
+                            data[col] = np.asarray(f[col][:], dtype=np.float32)
                 # Extended sufficient statistics (optional)
                 extra_cols = {
                     "sum_mC": np.uint64,
@@ -110,30 +155,43 @@ def load_from_h5(
                 }
                 for col, dtype_cast in extra_cols.items():
                     if col in root_keys:
-                        data[col] = np.asarray(f[col][:], dtype=dtype_cast)
+                        if positions is not None:
+                            data[col] = np.asarray(f[col][idx], dtype=dtype_cast)
+                        else:
+                            data[col] = np.asarray(f[col][:], dtype=dtype_cast)
         
         # Fallback to old format: 'methylation_data' as structured array
         if not data and "methylation_data" in f:
             methyl_data = f["methylation_data"]
             if isinstance(methyl_data, h5py.Dataset) and methyl_data.dtype.names:
-                # Structured array format
+                # Structured array format (single dataset; must load then filter if positions set)
                 struct_data = methyl_data[:]
                 datasets = list(methyl_data.dtype.names)
                 required_core = ["pos", "mC", "uC", "tnc"]
                 missing = [d for d in required_core if d not in datasets]
                 if not missing:
-                    data = {
-                        "pos": np.asarray(struct_data["pos"], dtype=np.uint32),
-                        "mC": np.asarray(struct_data["mC"], dtype=np.uint32),
-                        "uC": np.asarray(struct_data["uC"], dtype=np.uint32),
-                        "tnc": np.asarray(struct_data["tnc"], dtype=np.uint8),
-                    }
+                    pos_arr = np.asarray(struct_data["pos"], dtype=np.uint32)
+                    if positions is not None:
+                        idx = _indices_for_positions(pos_arr, positions)
+                        data = {
+                            "pos": np.asarray(struct_data["pos"][idx], dtype=np.uint32),
+                            "mC": np.asarray(struct_data["mC"][idx], dtype=np.uint32),
+                            "uC": np.asarray(struct_data["uC"][idx], dtype=np.uint32),
+                            "tnc": np.asarray(struct_data["tnc"][idx], dtype=np.uint8),
+                        }
+                    else:
+                        data = {
+                            "pos": np.asarray(struct_data["pos"], dtype=np.uint32),
+                            "mC": np.asarray(struct_data["mC"], dtype=np.uint32),
+                            "uC": np.asarray(struct_data["uC"], dtype=np.uint32),
+                            "tnc": np.asarray(struct_data["tnc"], dtype=np.uint8),
+                        }
                     # Load optional centroid datasets
                     if "N" in datasets:
-                        data["N"] = np.asarray(struct_data["N"], dtype=np.uint32)
+                        data["N"] = np.asarray(struct_data["N"], dtype=np.uint32) if positions is None else np.asarray(struct_data["N"][idx], dtype=np.uint32)
                     for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
                         if col in datasets:
-                            data[col] = np.asarray(struct_data[col], dtype=np.float32)
+                            data[col] = np.asarray(struct_data[col], dtype=np.float32) if positions is None else np.asarray(struct_data[col][idx], dtype=np.float32)
                     # Extended sufficient statistics (optional)
                     extra_cols = {
                         "sum_mC": np.uint64,
@@ -149,7 +207,7 @@ def load_from_h5(
                     }
                     for col, dtype_cast in extra_cols.items():
                         if col in datasets:
-                            data[col] = np.asarray(struct_data[col], dtype=dtype_cast)
+                            data[col] = np.asarray(struct_data[col], dtype=dtype_cast) if positions is None else np.asarray(struct_data[col][idx], dtype=dtype_cast)
         
         # If still no data, raise error
         if not data:

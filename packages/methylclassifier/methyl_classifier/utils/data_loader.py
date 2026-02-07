@@ -31,7 +31,7 @@ class DataLoader:
         from methyl_utils import MethylSample
 
         if h5_path.suffix.lower() == '.h5':
-            return MethylSample.load_from_h5(h5_path, debug=debug)
+            return MethylSample.load_from_h5(h5_path)
         else:
             raise ValueError(f"Unsupported file format: {h5_path.suffix}")
 
@@ -52,8 +52,6 @@ class DataLoader:
         Returns:
             List of (sample_name, sample) tuples
         """
-        from methyl_utils import MethylSample
-        
         samples = []
         all_h5_files = list(h5_dir.rglob("*.h5"))
 
@@ -110,6 +108,36 @@ class DataLoader:
         return filtered_files
 
     @staticmethod
+    def _merge_context_samples(samples: List[Any]) -> Any:
+        """
+        Merge multiple MethylSample instances (e.g. CG, CHG, CHH) into one.
+        Union of positions; for duplicates, the first sample's value is used (CG first).
+        """
+        from methyl_utils import MethylSample
+
+        if len(samples) == 1:
+            return samples[0]
+
+        # Build position -> (mC, uC, tnc), first occurrence wins (CG then CHG then CHH)
+        pos_to_data: Dict[int, Tuple[Any, Any, Any]] = {}
+        for s in samples:
+            pos_arr = np.asarray(s.pos.values if hasattr(s.pos, 'values') else s.pos)
+            mC_arr = np.asarray(s.mC.values if hasattr(s.mC, 'values') else s.mC)
+            uC_arr = np.asarray(s.uC.values if hasattr(s.uC, 'values') else s.uC)
+            tnc_col = s.df["tnc"]
+            tnc_arr = np.asarray(tnc_col.values if hasattr(tnc_col, 'values') else tnc_col, dtype=np.uint8)
+            for i in range(len(pos_arr)):
+                p = int(pos_arr[i])
+                if p not in pos_to_data:
+                    pos_to_data[p] = (mC_arr[i], uC_arr[i], tnc_arr[i])
+
+        positions = np.array(sorted(pos_to_data.keys()), dtype=np.uint32)
+        mC = np.array([pos_to_data[p][0] for p in positions], dtype=np.uint32)
+        uC = np.array([pos_to_data[p][1] for p in positions], dtype=np.uint32)
+        tnc = np.array([pos_to_data[p][2] for p in positions], dtype=np.uint8)
+        return MethylSample.from_sample_data(positions, mC, uC, tnc, metadata=None)
+
+    @staticmethod
     def load_sample_from_directory(
         sample_dir: Path,
         chromosomes: Optional[List[str]] = None,
@@ -120,14 +148,18 @@ class DataLoader:
     ) -> Dict[str, Any]:
         """
         Load a sample from a directory, merging CG, CHG, and CHH contexts.
-        
+
+        Only classifier DMP positions are loaded when dmp_positions_by_chrom is provided
+        (same hyperslice approach as MethylDetector: load only those positions from H5).
+
         Each sample directory should contain files named {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5
-        for each chromosome. The contexts are merged per chromosome using MethylSample.merge_contexts().
-        
+        for each chromosome. Contexts are merged per chromosome (union of positions, CG preferred).
+
         Args:
             sample_dir: Directory containing {chrom}-{context}.h5 files
             chromosomes: Optional list of chromosomes to load. If None, auto-detect from files.
-        
+            dmp_positions_by_chrom: When set, only these positions are read per chromosome (required for classification).
+
         Returns:
             Dictionary mapping chromosome to merged MethylSample (all contexts combined)
         """
@@ -207,7 +239,7 @@ class DataLoader:
                         print(f"      ⚠️ Chromosome {chrom}: No DMP positions provided, will load ALL positions", flush=True)
 
                 try:
-                    cg_sample = MethylSample.load_from_h5(context_files['CG'], chrom_positions, debug)
+                    cg_sample = MethylSample.load_from_h5(context_files['CG'], chrom_positions)
                     if debug:
                         print(f"      ✅ Chromosome {chrom}-CG: Loaded {len(cg_sample.pos):,} positions", flush=True)
                     contexts_to_merge.append(cg_sample)
@@ -227,17 +259,17 @@ class DataLoader:
             for context in ['CHG', 'CHH']:
                 if context in context_files:
                     try:
-                        context_sample = MethylSample.load_from_h5(context_files[context], chrom_positions, debug)
+                        context_sample = MethylSample.load_from_h5(context_files[context], chrom_positions)
                         contexts_to_merge.append(context_sample)
                     except Exception as e:
                         print(f"⚠️ Warning: Failed to load {chrom}-{context}.h5: {e}")
             
             if len(contexts_to_merge) == 0:
                 continue
-            
-            # Merge all contexts using MethylSample.merge_contexts()
+
+            # Merge contexts: single context → use as-is; multiple → union of positions (CG preferred)
             try:
-                merged_sample = MethylSample.merge_contexts(contexts_to_merge)
+                merged_sample = DataLoader._merge_context_samples(contexts_to_merge)
             except Exception as e:
                 import traceback
                 print(f"❌ Failed to merge contexts for chromosome {chrom}: {e}")
@@ -269,7 +301,7 @@ class DataLoader:
         Load multiple samples from a list of directory paths.
 
         Each directory should contain {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5 files.
-        Contexts are merged per chromosome using MethylSample.merge_contexts().
+        Contexts are merged per chromosome (union of positions, CG preferred).
 
         Args:
             sample_paths: List of sample directory paths
@@ -377,7 +409,7 @@ class DataLoader:
                     'avg_tau': np.mean(sample.tau),
                     'avg_variance': np.mean(sample.variance)
                 })
-            except Exception as e:
+            except Exception:
                 # If statistical properties can't be computed, continue without them
                 pass
 

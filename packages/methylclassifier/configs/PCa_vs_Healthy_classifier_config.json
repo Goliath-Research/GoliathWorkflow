@@ -4,7 +4,7 @@
   "input_path": "/work/data/david-gladys/all-prostate",
   "output_path": "/work/data/david-gladys/all-prostate/classification/PCa_vs_Healthy.csv",
   "temperature": 1.0,
-  "enable_platt_calibration": false,
+  "enable_platt_calibration": true,
   "trimmed_percentile_low": 0.10,
   "trimmed_percentile_high": 0.01,
   "chromosome_weights": null,

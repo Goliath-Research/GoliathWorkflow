@@ -483,27 +483,39 @@ classifier.load_classifier(model_path)  # Automatically detects format
 
 ### Command-Line Interface
 
+**Using a config file (recommended):**
+
 ```bash
-# Basic usage (single chromosome)
-methyl_classifier \
-    --model classifier-1-CG.pkl \
-    --input sample.h5 \
-    --output results.csv
+methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json
+```
 
-# Multi-chromosome mode
-methyl_classifier \
-    --model-dir /path/to/classifiers/ \
-    --input samples_directory/ \
-    --output results.csv \
-    --temperature 2.5 \
-    --debug
+Example config for multi-chromosome mode with Platt calibration:
 
-# With predefined chromosome weights
-methyl_classifier \
-    --model-dir /path/to/classifiers/ \
-    --input samples_directory/ \
-    --output results.csv \
-    --trimmed_percentile_low 0.10 --trimmed_percentile_high 0.01
+```json
+{
+  "model_dir": "/path/to/detection/PCa_vs_Healthy_optimized",
+  "model_path": null,
+  "input_path": "/path/to/samples",
+  "output_path": "/path/to/classification/PCa_vs_Healthy.csv",
+  "temperature": 1.0,
+  "enable_platt_calibration": true,
+  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_high": 0.01,
+  "chromosome_weights": null,
+  "debug": false,
+  "no_filter": false,
+  "log_level": "INFO"
+}
+```
+
+**CLI without config:**
+
+```bash
+# Single chromosome
+methyl_classifier --model classifier-1-CG.pkl --input sample.h5 --output results.csv
+
+# Multi-chromosome
+methyl_classifier --model-dir /path/to/classifiers/ --input samples_directory/ --output results.csv
 ```
 
 ---

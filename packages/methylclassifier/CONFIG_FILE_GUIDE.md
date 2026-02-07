@@ -2,51 +2,81 @@
 
 ## Overview
 
-MethylClassifier now supports JSON configuration files, similar to MethylModeler and other projects in the pipeline. This improves reproducibility and makes it easier to manage complex classification workflows.
+MethylClassifier supports JSON configuration files for reproducible classification runs. Use a config file with `--config` (recommended) or pass paths and options via the command line.
 
-## Basic Configuration
+## Recommended: Multi-chromosome classification (MethylDetector output)
 
-### Minimal Example
+Typical workflow after running MethylDetector: classify samples using all chromosome classifiers with optional Platt calibration.
 
-```json
-{
-  "model_path": "models/classifier.pkl",
-  "input_path": "samples/"
-}
-```
-
-The `model_path` can point to a multi-class classifier built with `build_multiclass_model.py`.
-
-### Complete Example
+**Example:** `configs/PCa_vs_Healthy_classifier_config.json`
 
 ```json
 {
-  "model_path": "models/classifier-chr1-CG.pkl",
-  "input_path": "samples/prostate_cohort/",
-  "output_path": "results/classification_results.csv",
+  "model_dir": "/work/data/david-gladys/all-prostate/detection/PCa_vs_Healthy_optimized",
+  "model_path": null,
+  "input_path": "/work/data/david-gladys/all-prostate",
+  "output_path": "/work/data/david-gladys/all-prostate/classification/PCa_vs_Healthy.csv",
+  "temperature": 1.0,
+  "enable_platt_calibration": true,
+  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_high": 0.01,
+  "chromosome_weights": null,
   "debug": false,
   "no_filter": false,
   "log_level": "INFO"
 }
 ```
 
-## Configuration Fields
+Run (from `packages/methylclassifier` or use the path relative to your cwd):
 
-### Required Fields
+```bash
+methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json
+```
+
+From the **MethylPipeline repo root** use:
+
+```bash
+methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_classifier_config.json
+```
+
+- **model_dir**: MethylDetector output directory containing `classifier-1.pkl`, `classifier-2.pkl`, etc. Set **model_path** to `null` when using **model_dir**.
+- **input_path**: Directory of sample folders (each with `{chrom}-CG.h5`, etc.) or path to a single .h5 file/directory.
+- **enable_platt_calibration**: Set to `true` if MethylDetector was run with `enable_platt_calibration` so that saved Platt calibrators are used.
+- **chromosome_weights**: `null` = compute weights from trimmed-mean effect_size; or e.g. `{"1": 0.4, "2": 0.3}` for fixed weights.
+
+## Basic configuration
+
+### Minimal (single-chromosome)
+
+```json
+{
+  "model_path": "models/classifier-1-CG.pkl",
+  "input_path": "samples/"
+}
+```
+
+## Configuration fields
+
+### Required
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `model_path` or `model_dir` | string | Path to classifier (.pkl file) or **directory** containing `classifier-{chrom}.pkl` (e.g. MethylDetector output_dir) |
-| `input_path` or `samples` | string / list | Path to .h5 file/dir or list of sample directories (each with `{chrom}-CG.h5`, etc.) |
+| `model_path` or `model_dir` | string or null | Single classifier .pkl path, or **directory** with `classifier-{chrom}.pkl` (e.g. MethylDetector `output_dir`). Use `model_dir` + `model_path: null` for multi-chromosome. |
+| `input_path` or `samples` | string or array | Path to .h5 file or directory of sample folders; or list of sample directory paths (each with `{chrom}-CG.h5`, etc.) |
 
-### Optional Fields
+### Optional
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `output_path` | string/null | null | CSV file for classification results |
+| `output_path` | string or null | null | CSV file for classification results |
+| `temperature` | number | 1.0 | Softmax temperature for probabilities |
+| `enable_platt_calibration` | boolean | false | Use pre-fitted Platt calibrator from model if present |
+| `trimmed_percentile_low` | number | 0.10 | Lower percentile for chromosome weight (effect_size) |
+| `trimmed_percentile_high` | number | 0.01 | Upper percentile for chromosome weight |
+| `chromosome_weights` | object or null | null | Fixed weights per chromosome, e.g. `{"1": 0.4, "2": 0.3}`; overrides trimmed-mean when set |
 | `debug` | boolean | false | Enable debug output |
-| `no_filter` | boolean | false | Process all .h5 files without chromosome/context filtering |
-| `log_level` | string | `"INFO"` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `no_filter` | boolean | false | Process all .h5 without chromosome/context filtering |
+| `log_level` | string | `"INFO"` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 
 ## Usage
 
@@ -64,16 +94,16 @@ Build a multi-class model (optional BMM centroids) using:
 python build_multiclass_model.py configs/example_multiclass_model.json
 ```
 
-### With Command-Line Overrides
+### With command-line overrides
 
 Command-line arguments override config file values:
 
 ```bash
-# Override prediction method
-methyl_classifier --config config.json --use-sklearn
-
-# Override multiple settings
-methyl_classifier --config config.json --use-sklearn --debug --output custom_results.csv
+methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json \
+  --model-dir /path/to/detection \
+  --input /path/to/samples \
+  --output custom_results.csv \
+  --debug
 ```
 
 ### Creating Configs Programmatically
@@ -95,7 +125,7 @@ config = ClassificationConfig(
 config.to_json(Path("my_classification_config.json"))
 
 # Load from file
-loaded = ClassificationConfig.from_json(Path("my_classification_config.json"))
+loaded = ClassificationConfig.from_json(Path("configs/PCa_vs_Healthy_classifier_config.json"))
 ```
 
 ## Example Configurations
@@ -142,25 +172,26 @@ loaded = ClassificationConfig.from_json(Path("my_classification_config.json"))
 
 **Use case**: General-purpose classification with automatic method selection
 
-### Multi-chromosome (MethylDetector output)
+### Multi-chromosome with samples list
 
-After running MethylDetector for all chromosomes, aggregate classifiers with MethylClassifier:
+Use **samples** instead of **input_path** when you have a list of sample directories:
 
 ```json
 {
-  "model_dir": "/path/to/methyldetector/output_dir",
+  "model_dir": "/path/to/detection/output",
   "model_path": null,
   "samples": ["/path/to/sample1/", "/path/to/sample2/"],
   "output_path": "results/multi_chromosome_results.csv",
-  "temperature": 1,
-  "trimmed_percentile_low": 0.1,
+  "temperature": 1.0,
+  "enable_platt_calibration": true,
+  "trimmed_percentile_low": 0.10,
   "trimmed_percentile_high": 0.01,
   "chromosome_weights": null,
-  "debug": false
+  "debug": false,
+  "no_filter": false,
+  "log_level": "INFO"
 }
 ```
-
-**Use case**: Load all `classifier-1.pkl`, `classifier-2.pkl`, ... from MethylDetector's output directory; chromosome weights are computed from trimmed-mean of DMP weights (or set `chromosome_weights` to use fixed weights).
 
 ### Configuration 4: Debug Analysis
 

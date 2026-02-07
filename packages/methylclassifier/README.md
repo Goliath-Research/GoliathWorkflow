@@ -345,32 +345,39 @@ You can run MethylClassifier as soon as MethylDetector has finished. You do **no
    - A **directory** of sample folders (each with per-chromosome `.h5` files such as `1-CG.h5`, `1-CHG.h5`, …), or
    - A **single** sample directory or `.h5` path, depending on what the classifier expects.
 
-3. **Example config** (e.g. `configs/detector_output_classify_config.json`):
+3. **Example config** (e.g. `configs/PCa_vs_Healthy_classifier_config.json`):
 
 ```json
 {
-  "model_dir": "/path/to/methyldetector/output_dir",
+  "model_dir": "/work/data/david-gladys/all-prostate/detection/PCa_vs_Healthy_optimized",
   "model_path": null,
-  "input_path": "/path/to/samples/",
-  "output_path": "/path/to/classification_results/results.csv",
+  "input_path": "/work/data/david-gladys/all-prostate",
+  "output_path": "/work/data/david-gladys/all-prostate/classification/PCa_vs_Healthy.csv",
   "temperature": 1.0,
-  "enable_platt_calibration": false,
+  "enable_platt_calibration": true,
+  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_high": 0.01,
+  "chromosome_weights": null,
+  "debug": false,
+  "no_filter": false,
   "log_level": "INFO"
 }
 ```
 
+Set **enable_platt_calibration** to `true` when MethylDetector was run with Platt calibration. Leave **chromosome_weights** as `null` to compute weights from trimmed-mean effect_size.
+
 4. **Run**:
 
 ```bash
-methyl_classifier --config configs/detector_output_classify_config.json
+methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json
 ```
 
-Or override paths from the command line:
+Override paths from the command line if needed:
 
 ```bash
-methyl_classifier --config configs/detector_output_classify_config.json \
-  --model-dir /path/to/methyldetector/output_dir \
-  --input /path/to/samples/ \
+methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json \
+  --model-dir /path/to/detection/output \
+  --input /path/to/samples \
   --output results.csv
 ```
 

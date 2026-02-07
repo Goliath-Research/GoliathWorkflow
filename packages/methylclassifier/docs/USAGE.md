@@ -2,7 +2,7 @@
 
 ## Overview
 
-MethylClassifier classifies methylation samples using trained Bayesian models. It loads classifiers trained by  and applies them to new samples.
+MethylClassifier classifies methylation samples using trained Bayesian models. It loads classifiers produced by **MethylDetector** (per-chromosome) or single trained models and applies them to new samples. Classification can use a JSON config file or command-line arguments.
 
 ## Installation
 
@@ -13,79 +13,75 @@ poetry install
 
 ## Command-Line Usage
 
-### Basic Classification
+### Classification with configuration file (recommended)
 
-Classify samples using a trained model (single chromosome):
+Use a JSON config file for reproducible runs. Example for **multi-chromosome** mode (MethylDetector output) with Platt calibration:
 
 ```bash
-methyl-classifier --model classifier-1-CG.pkl \
-                  --samples patient_001.h5 patient_002.h5 \
-                  --output results.csv
+# From the methylclassifier package directory:
+methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json
+
+# From the MethylPipeline repo root:
+methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_classifier_config.json
 ```
 
-### Multi-Chromosome Classification
+Example config (`configs/PCa_vs_Healthy_classifier_config.json`):
 
-Classify samples using all chromosome classifiers from a directory:
+```json
+{
+  "model_dir": "/work/data/david-gladys/all-prostate/detection/PCa_vs_Healthy_optimized",
+  "model_path": null,
+  "input_path": "/work/data/david-gladys/all-prostate",
+  "output_path": "/work/data/david-gladys/all-prostate/classification/PCa_vs_Healthy.csv",
+  "temperature": 1.0,
+  "enable_platt_calibration": true,
+  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_high": 0.01,
+  "chromosome_weights": null,
+  "debug": false,
+  "no_filter": false,
+  "log_level": "INFO"
+}
+```
+
+- **model_dir**: Directory containing `classifier-{chrom}.pkl` files (e.g. MethylDetector `output_dir`). Use this for multi-chromosome mode; set **model_path** to `null`.
+- **input_path**: Path to a directory of sample folders (each with `{chrom}-CG.h5`, etc.) or to a single .h5 file/directory.
+- **output_path**: CSV file for classification results.
+- **enable_platt_calibration**: Use pre-fitted Platt calibrator from the model if available (set to `true` when MethylDetector was run with `enable_platt_calibration`).
+- **trimmed_percentile_low** / **trimmed_percentile_high**: Used to compute chromosome weights from effect sizes when **chromosome_weights** is `null`.
+
+Override paths from the command line if needed:
 
 ```bash
-methyl-classifier --model-dir /path/to/classifiers/ \
+methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json \
+  --model-dir /path/to/detection/output \
+  --input /path/to/samples \
+  --output /path/to/classification/results.csv
+```
+
+### Single-chromosome classification
+
+Classify using one trained model (single chromosome/context):
+
+```bash
+methyl_classifier --model classifier-1-CG.pkl \
                   --input samples/ \
                   --output results.csv
 ```
 
-The directory should contain files matching pattern `classifier-{chrom}.pkl` (e.g., `classifier-1.pkl`, `classifier-2.pkl`). Probabilities from each chromosome classifier are weighted by trimmed-mean effect_size and combined.
-
-### Multi-class Classification
-
-Multi-class models behave like binary models but output one probability per class:
+### Multi-chromosome classification (CLI only)
 
 ```bash
-methyl-classifier --model multiclass-classifier.pkl \
-                 --input samples/ \
-                 --output results.csv
-```
-
-The output CSV includes `prob_class0 ... prob_classN` for all classes.
-
-### Classification with Configuration File
-
-```bash
-methyl-classifier --config example_classification_config.json
-```
-
-See `configs/example_classification_config.json` for a complete example. 
-
-For multi-chromosome mode, see `configs/example_multi_chromosome_config.json`.
-
-For classifying a list of samples with merged contexts (CG+CHG+CHH), see `configs/example_samples_list_config.json`.
-
-### Multi-class Model Build
-
-Build a multi-class classifier from a global DMP list and per-class centroids:
-
-```bash
-python build_multiclass_model.py configs/example_multiclass_model.json
-```
-
-### Batch Classification
-
-Classify all samples in a directory (single chromosome):
-
-```bash
-methyl-classifier --model classifier-1-CG.pkl \
-                  --input-dir /path/to/samples/ \
-                  --output-dir /path/to/results/
-```
-
-### Multi-Chromosome Batch Classification
-
-Classify all samples using multiple chromosome classifiers:
-
-```bash
-methyl-classifier --model-dir /path/to/classifiers/ \
+methyl_classifier --model-dir /path/to/classifiers/ \
                   --input /path/to/samples/ \
                   --output results.csv
 ```
+
+The directory must contain files matching `classifier-{chrom}.pkl` (e.g. `classifier-1.pkl`, `classifier-2.pkl`). Probabilities from each chromosome are combined using weights from trimmed-mean effect_size (or predefined **chromosome_weights** if set in config).
+
+### Alternative: samples list in config
+
+Instead of **input_path**, you can pass a list of sample directories in the config (**samples**). Each directory should contain `{chrom}-CG.h5` (and optionally CHG/CHH) per chromosome. See `CONFIG_FILE_GUIDE.md` for the full schema.
 
 ## Python API
 
@@ -143,20 +139,19 @@ print(f"Weighted probabilities: {probabilities}")
 print(f"Chromosome weights: {classifier.chromosome_weights}")
 ```
 
-### Classifying Multiple Samples with Merged Contexts
+### Classifying multiple samples with merged contexts
 
 ```python
 from methyl_classifier import MethylClassifier, ClassifierConfig
+from methyl_classifier.cli import classify_samples
 
-# Load multi-chromosome classifier
 config = ClassifierConfig(
     model_dir="/path/to/classifiers/",
-    trimmed_percentile=0.10
+    trimmed_percentile_low=0.10,
+    trimmed_percentile_high=0.01,
+    enable_platt_calibration=True,
 )
 classifier = MethylClassifier(config)
-
-# Load and classify multiple samples (each with merged CG+CHG+CHH contexts)
-from methyl_classifier.cli import classify_samples
 
 sample_dirs = [
     "/path/to/sample1/",  # Contains 1-CG.h5, 1-CHG.h5, 1-CHH.h5, etc.
@@ -172,16 +167,21 @@ classify_samples(
 )
 ```
 
-Or using a config file:
+Or use a config file with **samples** instead of **input_path**:
 ```json
 {
   "model_dir": "/path/to/classifiers/",
-  "samples": [
-    "/path/to/sample1/",
-    "/path/to/sample2/",
-    "/path/to/sample3/"
-  ],
-  "output_path": "results.csv"
+  "model_path": null,
+  "samples": ["/path/to/sample1/", "/path/to/sample2/"],
+  "output_path": "results.csv",
+  "temperature": 1.0,
+  "enable_platt_calibration": true,
+  "trimmed_percentile_low": 0.10,
+  "trimmed_percentile_high": 0.01,
+  "chromosome_weights": null,
+  "debug": false,
+  "no_filter": false,
+  "log_level": "INFO"
 }
 ```
 
@@ -215,30 +215,34 @@ else:
     print("Outlier: Doesn't fit either centroid")
 ```
 
-## Configuration Parameters
+## Configuration parameters (config JSON)
+
+When using `--config`, the JSON file can include:
 
 ### Model
-- `model_path`: Path to trained classifier PKL file (single chromosome) or directory (multi-chromosome mode)
-- `model_dir`: Path to directory containing `classifier-{chrom}.pkl` files (alternative to `model_path`)
-- `temperature`: Temperature for probability calibration (default: 1.0)
-- `enable_platt_calibration`: Use Platt scaling if available (default: false)
-- `trimmed_percentile_low`: Lower percentile for trimmed-mean effect_size calculation - removes bottom X% (default: 0.10, range: 0.0-0.5)
-- `trimmed_percentile_high`: Upper percentile for trimmed-mean effect_size calculation - removes top X% (default: 0.01, range: 0.0-0.5). High effect_size DMPs are critical for disease classification, so only extreme outliers are removed.
-- `chromosome_weights`: Optional predefined chromosome weights dict (e.g., `{'1': 0.4, '2': 0.3, '3': 0.3}`) - bypasses trimmed-mean calculation if provided
+| Field | Type | Description |
+|-------|------|-------------|
+| `model_dir` | string or null | Directory with `classifier-{chrom}.pkl` (multi-chromosome; e.g. MethylDetector output_dir) |
+| `model_path` | string or null | Single classifier .pkl (single-chromosome). Use `null` when using `model_dir` |
+| `temperature` | number | Softmax temperature (default: 1.0) |
+| `enable_platt_calibration` | boolean | Use pre-fitted Platt calibrator from model if present (default: false) |
+| `trimmed_percentile_low` | number | Lower percentile for chromosome weight from effect_size (default: 0.10) |
+| `trimmed_percentile_high` | number | Upper percentile for chromosome weight (default: 0.01) |
+| `chromosome_weights` | object or null | Optional `{"1": 0.4, "2": 0.3, ...}`; if set, overrides trimmed-mean weights |
 
-### Input
-- `input_path`: Path to single .h5 file or directory containing .h5 files (legacy)
-- `samples`: List of sample directory paths. Each directory should contain `{chrom}-CG.h5`, `{chrom}-CHG.h5`, `{chrom}-CHH.h5` files for each chromosome. Contexts are automatically merged per chromosome before classification.
+### Input / output
+| Field | Type | Description |
+|-------|------|-------------|
+| `input_path` | string | Path to .h5 file or directory of sample folders (required unless `samples` is set) |
+| `samples` | array of strings | Alternative: list of sample directory paths (each with `{chrom}-CG.h5`, etc.) |
+| `output_path` | string or null | Output CSV path for classification results |
 
-### Output
-- `output_dir`: Directory for results
-- `output_format`: Format for results ("csv", "json", or "both")
-- `include_probabilities`: Include class probabilities (default: true)
-- `include_metadata`: Include sample metadata (default: true)
-
-### Classification
-- `confidence_threshold`: Minimum probability for confident classification (default: 0.5)
-- `verbose`: Enable verbose logging (default: true)
+### Run options
+| Field | Type | Description |
+|-------|------|-------------|
+| `debug` | boolean | Extra debug output (default: false) |
+| `no_filter` | boolean | Process all .h5 without chromosome/context filter (default: false) |
+| `log_level` | string | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (default: `"INFO"`) |
 
 ## Output Format
 

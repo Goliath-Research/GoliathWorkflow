@@ -62,6 +62,9 @@ def classify_samples(classifier: MethylClassifier,
     else:
         raise FileNotFoundError(f"Path not found: {h5_path}")
 
+    if not samples:
+        raise ValueError("No samples loaded. Check that input path contains .h5 files and that paths are correct.")
+
     print(f"\n📊 Extracting features for {len(samples)} samples...")
 
     # Get classifier feature information
@@ -869,6 +872,15 @@ Config fields (in JSON):
 
     # Classify samples using Beta method
     try:
+        # Multi-chromosome + directory input: treat directory as containing sample subdirs (one per sample)
+        if classifier.is_multi_chromosome and config.input_path and not config.samples:
+            input_path = Path(config.input_path)
+            if input_path.is_dir():
+                sample_dirs = sorted([d for d in input_path.iterdir() if d.is_dir() and list(d.glob("*-CG.h5"))])
+                if sample_dirs:
+                    config.samples = [str(d) for d in sample_dirs]
+                    print(f"📂 Using {len(sample_dirs)} sample directories under {config.input_path} (one row per sample)")
+
         # Handle samples list (with context merging)
         if config.samples:
             # For multi-chromosome classifiers, only load required chromosomes and positions for performance
@@ -886,7 +898,7 @@ Config fields (in JSON):
                 if isinstance(dmp_positions_by_chrom, pd.DataFrame):
                     # DataFrame format - use groupby for efficiency
                     total_dmps = len(dmp_positions_by_chrom)
-                    chrom_counts = dmp_positions_by_chrom.groupby('chromosome').size().to_dict()
+                    chrom_counts = dmp_positions_by_chrom.groupby('chromosome', observed=True).size().to_dict()
                     print(f"📊 DMP breakdown: {chrom_counts}")
                 else:
                     # Dictionary format (legacy)

@@ -419,17 +419,18 @@ class MethylFrame:
     @classmethod
     def load_from_h5(cls, path: Union[str, Path], positions: Optional[np.ndarray] = None) -> "MethylFrame":
         """
-        Load from HDF5 file.
+        Load from HDF5 file. When positions is given, only those rows are read from disk
+        (same hyperslice approach as MethylDetector validation).
 
         Args:
             path: Path to HDF5 file
-            positions: Optional positions to filter to
+            positions: Optional positions to load; only these rows are read (saves memory).
 
         Returns:
             MethylSample, MethylBasicCentroid, or MethylExtendedCentroid instance
         """
         from .io import load_from_h5
-        result = load_from_h5(path)
+        result = load_from_h5(path, positions=positions)
         if positions is not None:
             result = result.align_to_positions(positions)
         return result

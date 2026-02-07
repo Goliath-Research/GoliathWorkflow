@@ -437,7 +437,7 @@ class MethylClassifier:
             self._dmp_positions_dict_cache = {}
         
         # Calculate per-chromosome DMP statistics
-        chrom_counts = self.dmp_positions_df.groupby('chromosome').size()
+        chrom_counts = self.dmp_positions_df.groupby('chromosome', observed=True).size()
         for chrom in sorted(self.classifiers.keys()):
             if chrom in chrom_counts.index:
                 count = chrom_counts[chrom]
@@ -649,6 +649,9 @@ class MethylClassifier:
         """
         n_samples = methylation_data.shape[0]
         n_classes = self.n_classes
+
+        if n_samples == 0 or methylation_data.ndim < 2:
+            return np.zeros((n_samples, n_classes), dtype=np.float64)
         
         # Initialize weighted probability sum
         weighted_probas = np.zeros((n_samples, n_classes))

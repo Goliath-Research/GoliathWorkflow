@@ -480,10 +480,10 @@ class MethylCentroidPair:
                     continue
                 
                 try:
-                    # Load sample
+                    # Load sample (full then align). Once load_from_h5(path, positions=...) is
+                    # confirmed in MethylClassifier, switch to load_from_h5(h5_file, ctx_positions)
+                    # to avoid loading full file and duplicate logic.
                     sample = load_from_h5(h5_file)
-                    
-                    # Align to reference positions
                     aligned = sample.align_to_positions(ctx_positions)
                     
                     if len(aligned) == 0:
