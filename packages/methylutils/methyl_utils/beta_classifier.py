@@ -649,6 +649,8 @@ class BetaClassifier:
     def predict_proba_calibrated(self, X: np.ndarray, availability_mask: Optional[np.ndarray] = None, use_gpu: bool = True) -> np.ndarray:
         """
         Predict calibrated probabilities using Platt scaling if fitted.
+        Falls back to uncalibrated when test logits have no variance to avoid
+        collapsing all samples to a single probability (which would flatten BA).
         """
         if self.calibrator is None:
             return self.predict_proba(X, availability_mask, use_gpu=use_gpu)
@@ -656,6 +658,12 @@ class BetaClassifier:
         # Compute raw averaged log L
         log_likelihoods = self._compute_averaged_log_likelihoods(X, availability_mask, use_gpu=use_gpu)
         logits = log_likelihoods[:, 1] - log_likelihoods[:, 0]
+
+        # When test logits have no variance, scaling maps them all to one value and
+        # the logistic outputs a constant -> flat BA. Use uncalibrated in that case.
+        logits_std = np.std(logits)
+        if logits_std < 1e-9 and len(logits) > 1:
+            return self.predict_proba(X, availability_mask, use_gpu=use_gpu)
 
         # Scale logits
         if hasattr(self, 'calibrator_scaler'):

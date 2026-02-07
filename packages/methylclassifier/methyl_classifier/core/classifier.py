@@ -153,10 +153,12 @@ class MethylClassifier:
                     val = self.metadata['validation']
                     print(f"✅ Validation accuracy: {val.get('overall_accuracy', 0):.1%}")
                     
-                # Load pre-fitted calibrator if available
+                # Load pre-fitted calibrator if available (from MethylDetector when enable_platt_calibration was used)
                 if 'platt_calibrator' in self.metadata and self.config.enable_platt_calibration:
                     import pickle
                     self.classifier.calibrator = pickle.loads(self.metadata['platt_calibrator'])
+                    if 'platt_calibrator_scaler' in self.metadata:
+                        self.classifier.calibrator_scaler = pickle.loads(self.metadata['platt_calibrator_scaler'])
                     self._calibrated = True
                     print("Loaded pre-fitted Platt calibrator from model metadata")
                 else:
@@ -217,7 +219,8 @@ class MethylClassifier:
         # Store model packages for weight calculation and DMP position extraction
         model_packages = {}
         self.model_packages = model_packages  # Store for position extraction
-        
+        any_platt_loaded = False
+
         # Load each classifier
         for chrom, file_path in sorted(classifier_files.items()):
             try:
@@ -230,6 +233,13 @@ class MethylClassifier:
                     if 'classifier' in model_package:
                         classifier = model_package['classifier']
                         classifier.set_temperature(self.config.temperature)
+                        metadata = model_package.get('metadata', {})
+                        if 'platt_calibrator' in metadata and self.config.enable_platt_calibration:
+                            import pickle
+                            classifier.calibrator = pickle.loads(metadata['platt_calibrator'])
+                            if 'platt_calibrator_scaler' in metadata:
+                                classifier.calibrator_scaler = pickle.loads(metadata['platt_calibrator_scaler'])
+                            any_platt_loaded = True
                         self.classifiers[chrom] = classifier
                         model_packages[chrom] = model_package
                         print(f"✅ Loaded classifier for chromosome {chrom}")
@@ -239,6 +249,13 @@ class MethylClassifier:
                         dmpDF = model_package['dmpDF']
                         classifier = BetaClassifier.from_dataframe(dmpDF)
                         classifier.set_temperature(self.config.temperature)
+                        metadata = model_package.get('metadata', {})
+                        if 'platt_calibrator' in metadata and self.config.enable_platt_calibration:
+                            import pickle
+                            classifier.calibrator = pickle.loads(metadata['platt_calibrator'])
+                            if 'platt_calibrator_scaler' in metadata:
+                                classifier.calibrator_scaler = pickle.loads(metadata['platt_calibrator_scaler'])
+                            any_platt_loaded = True
                         self.classifiers[chrom] = classifier
                         model_packages[chrom] = model_package
                         print(f"✅ Created BetaClassifier from dmpDF for chromosome {chrom}")
@@ -283,6 +300,10 @@ class MethylClassifier:
         print(f"\n📊 Chromosome weights:")
         for chrom in sorted(self.chromosome_weights.keys()):
             print(f"  Chromosome {chrom}: {self.chromosome_weights[chrom]:.4f}")
+
+        self._calibrated = any_platt_loaded
+        if any_platt_loaded:
+            print("Loaded pre-fitted Platt calibrator(s) from model metadata (multi-chromosome)")
         
         # Validate all classifiers have same number of classes
         n_classes_list = []

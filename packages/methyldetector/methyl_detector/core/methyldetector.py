@@ -1360,7 +1360,7 @@ class MethylDetector:
                     logger.debug("BA≈0.5 again: pred %s/%s, true %s/%s", n_pred_0, n_pred_1, n_neg, n_pos)
             
             # Return both balanced accuracy and confusion matrix details
-            return {
+            result = {
                 'balanced_accuracy': balanced_accuracy,
                 'confusion_matrix': {
                     'tp': int(tp), 'tn': int(tn), 'fp': int(fp), 'fn': int(fn)
@@ -1377,6 +1377,13 @@ class MethylDetector:
                     'n_total': int(n_pos + n_neg)
                 }
             }
+            # Include fitted Platt calibrator for export when enabled (so MethylClassifier can use it)
+            if use_calibration and getattr(self.config, 'enable_platt_calibration', False) and temp_classifier.calibrator is not None:
+                import pickle
+                result['platt_calibrator'] = pickle.dumps(temp_classifier.calibrator)
+                if getattr(temp_classifier, 'calibrator_scaler', None) is not None:
+                    result['platt_calibrator_scaler'] = pickle.dumps(temp_classifier.calibrator_scaler)
+            return result
             
         except Exception as e:
             logger.error(f"❌ Validation failed: {e}")
@@ -1563,6 +1570,8 @@ class MethylDetector:
         self._low_overlap_warned_once = False
         self._no_variation_warned_once = False
         self._degenerate_probs_warned_once = False
+        self._platt_calibrator_bytes = None
+        self._platt_calibrator_scaler_bytes = None
         logger.info(f"🔍 Preparing DMPs for validation: {n_dmps:,} candidates")
         
         if n_dmps == 0:
@@ -1797,6 +1806,13 @@ class MethylDetector:
                         "Target BA %.3f not achieved; exporting all %s DMPs to improve matching with future samples.",
                         target_ba, len(sorted_df)
                     )
+                # Store Platt calibrator from validation for inclusion in saved model (when enable_platt_calibration)
+                if 'platt_calibrator' in final_result:
+                    self._platt_calibrator_bytes = final_result['platt_calibrator']
+                    self._platt_calibrator_scaler_bytes = final_result.get('platt_calibrator_scaler')
+                else:
+                    self._platt_calibrator_bytes = None
+                    self._platt_calibrator_scaler_bytes = None
 
         # If we used synthetic validation, verify on real samples from centroid metadata
         if self.config.validation_mode == "synthetic":
@@ -2814,6 +2830,13 @@ class MethylDetector:
         }
         if mixture_attached and hasattr(self, "_bmm_centroid_files"):
             model_package["metadata"]["bmm_centroid_files"] = self._bmm_centroid_files
+
+        # Include fitted Platt calibrator when enabled (MethylClassifier can use it for better-calibrated probabilities)
+        if getattr(self.config, 'enable_platt_calibration', False) and getattr(self, '_platt_calibrator_bytes', None) is not None:
+            model_package["metadata"]["platt_calibrator"] = self._platt_calibrator_bytes
+            if getattr(self, '_platt_calibrator_scaler_bytes', None) is not None:
+                model_package["metadata"]["platt_calibrator_scaler"] = self._platt_calibrator_scaler_bytes
+            logger.info("  - Platt calibrator included (enable_platt_calibration=True)")
         
         # Save to pickle
         with open(model_path, 'wb') as f:

@@ -139,7 +139,7 @@
         ],
         "remove_samples": [],
         "outliers": [],
-        "min_coverage": 10
+        "min_coverage": 4
     },
     "parallel_combinations": 1,
     "continue_on_error": true,

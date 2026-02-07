@@ -1,8 +1,8 @@
 {
-  "model_dir": "/path/to/methyldetector/output_dir",
+  "model_dir": "/work/data/david-gladys/all-prostate/detection/PCa_vs_Healthy_optimized",
   "model_path": null,
-  "input_path": "/path/to/samples/",
-  "output_path": "/path/to/classification_results/results.csv",
+  "input_path": "/work/data/david-gladys/all-prostate",
+  "output_path": "/work/data/david-gladys/all-prostate/classification/PCa_vs_Healthy.csv",
   "temperature": 1.0,
   "enable_platt_calibration": false,
   "trimmed_percentile_low": 0.10,
