@@ -345,8 +345,48 @@ class MethylClassifier:
         
         print(f"\n✅ Multi-chromosome classifier ready: {len(self.classifiers)} chromosomes, {self.n_classes} classes")
 
+        # Centroid self-check: each chromosome's classifier should give P(class1)≈0 for centroid1, ≈1 for centroid2
+        self._run_centroid_self_check(model_packages)
+
         # Collect all unique DMP positions across all classifiers (for massive performance optimization)
         self._collect_all_dmp_positions()
+
+    def _run_centroid_self_check(self, model_packages: Dict[str, Dict[str, Any]]) -> None:
+        """
+        Run centroid self-check: classify centroid1 and centroid2 profiles at DMP positions.
+        Expect centroid1 → P(class1) ≈ 0, centroid2 → P(class1) ≈ 1. If not, the model
+        may have poor separation or inverted labels (helps diagnose all-samples-one-class).
+        """
+        required = {'alpha1', 'beta1', 'alpha2', 'beta2'}
+        bad = []
+        for chrom in sorted(self.classifiers.keys()):
+            package = model_packages.get(chrom, {})
+            dmpDF = package.get('dmpDF')
+            if dmpDF is None or not isinstance(dmpDF, pd.DataFrame) or not required.issubset(dmpDF.columns):
+                continue
+            clf = self.classifiers[chrom]
+            a1, b1 = dmpDF['alpha1'].values.astype(np.float64), dmpDF['beta1'].values.astype(np.float64)
+            a2, b2 = dmpDF['alpha2'].values.astype(np.float64), dmpDF['beta2'].values.astype(np.float64)
+            mean1 = np.clip(a1 / (a1 + b1), 1e-6, 1.0 - 1e-6)
+            mean2 = np.clip(a2 / (a2 + b2), 1e-6, 1.0 - 1e-6)
+            profile_c1 = mean1.reshape(1, -1)
+            profile_c2 = mean2.reshape(1, -1)
+            avail = np.ones((1, len(mean1)), dtype=bool)
+            try:
+                p_c1 = clf.predict_proba(profile_c1, avail, debug=False)[0, 1]
+                p_c2 = clf.predict_proba(profile_c2, avail, debug=False)[0, 1]
+            except Exception:
+                continue
+            if p_c1 > 0.5 or p_c2 < 0.5:
+                bad.append((chrom, p_c1, p_c2))
+        if not bad:
+            print("🔬 Centroid self-check: OK (centroid1→class0, centroid2→class1 on all chromosomes)")
+            return
+        print("🔬 Centroid self-check: some chromosomes show poor or inverted separation:")
+        for chrom, p_c1, p_c2 in bad[:10]:
+            print(f"   Chromosome {chrom}: centroid1→P(class1)={p_c1:.3f}, centroid2→P(class1)={p_c2:.3f} (expect ~0 and ~1)")
+        if len(bad) > 10:
+            print(f"   ... and {len(bad) - 10} more. Try enable_platt_calibration: false or re-train detector with better separation.")
 
     def _collect_all_dmp_positions(self) -> None:
         """
@@ -447,6 +487,22 @@ class MethylClassifier:
 
         print(f"🚀 Collected {len(self.all_dmp_positions)} unique DMP positions across all classifiers")
     
+    @property
+    def model_contexts(self) -> Optional[List[str]]:
+        """
+        Return the list of contexts the model was trained on (e.g. ['CG'] or ['CG','CHG','CHH']).
+        Used to load only those contexts when classifying (e.g. CG-only to match MethylDetector).
+        """
+        if not hasattr(self, 'model_packages') or not self.model_packages:
+            return None
+        for _chrom, pkg in sorted(self.model_packages.items()):
+            meta = pkg.get('metadata') or {}
+            config = meta.get('config') or {}
+            ctx = config.get('contexts')
+            if ctx is not None and isinstance(ctx, (list, tuple)) and len(ctx) > 0:
+                return list(ctx)
+        return None
+
     @property
     def dmp_positions_by_chrom(self) -> Dict[str, np.ndarray]:
         """

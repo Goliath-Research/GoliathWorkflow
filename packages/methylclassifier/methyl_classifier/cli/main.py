@@ -4,18 +4,73 @@ Command-line interface for MethylClassifier
 
 import argparse
 import csv
+import json
 import sys
 from pathlib import Path
 from typing import Optional, List, Tuple, Dict, Any, Union
 import numpy as np
 import pandas as pd
-import json # Added for loading config file
 
 from ..core.classifier import MethylClassifier
 from ..utils.data_loader import DataLoader
 from ..utils.utils import extract_chrom_context_from_classifier, setup_logging
 from ..models.config_schema import ClassificationConfig
 from ..models.config import ClassifierConfig
+
+
+def _remap_centroid_path(path: str, path_remap: Optional[Dict[str, str]], sample_root: Optional[Path]) -> str:
+    """Apply path_remap (prefix replacement) or sample_root/basename. path_remap takes precedence."""
+    if path_remap:
+        # Longest matching prefix so /a/b/c matches /a/b before /a
+        best_old: Optional[str] = None
+        for old_prefix in path_remap:
+            if path.startswith(old_prefix) and (best_old is None or len(old_prefix) > len(best_old)):
+                best_old = old_prefix
+        if best_old is not None:
+            new_prefix = path_remap[best_old]
+            rest = path[len(best_old):].lstrip("/")
+            return f"{new_prefix.rstrip('/')}/{rest}" if rest else new_prefix.rstrip("/")
+    if sample_root is not None:
+        return str(sample_root / Path(path).name)
+    return path
+
+
+def _read_samples_used_from_centroid_dir(
+    centroid_dir: Path,
+    sample_root: Optional[Union[str, Path]] = None,
+    path_remap: Optional[Dict[str, str]] = None
+) -> List[str]:
+    """
+    Read union of 'samples_used' from all H5 files in a centroid output directory.
+    Each centroid file (e.g. per chromosome/context) may list a subset; we return
+    the deduplicated union so all samples that contributed to any centroid are included.
+    Remapping (when data moved to NAS): if path_remap is set, replace longest matching
+    old_prefix with new_prefix; else if sample_root is set, use sample_root / basename(path).
+    """
+    import h5py
+    seen = set()
+    result = []
+    root = Path(sample_root) if sample_root else None
+    for h5_path in sorted(centroid_dir.glob("*.h5")):
+        try:
+            with h5py.File(h5_path, "r") as f:
+                raw = f.attrs.get("samples_used")
+                if raw is None:
+                    continue
+                if isinstance(raw, (bytes, str)):
+                    raw = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+                    raw = json.loads(raw)
+                for p in raw:
+                    path = p if isinstance(p, str) else str(p)
+                    if not path:
+                        continue
+                    path = _remap_centroid_path(path, path_remap, root)
+                    if path not in seen:
+                        seen.add(path)
+                        result.append(path)
+        except Exception:
+            continue
+    return result
 
 
 def classify_samples(classifier: MethylClassifier,
@@ -343,7 +398,8 @@ def classify_samples_from_list(
     debug: bool = False,
     required_chromosomes: Optional[List[str]] = None,
     positions: Optional[np.ndarray] = None,
-    dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None
+    dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None,
+    expected_classes: Optional[List[int]] = None
 ) -> None:
     """
     Classify samples from a list of directories, merging CG, CHG, CHH contexts.
@@ -359,6 +415,7 @@ def classify_samples_from_list(
         required_chromosomes: Only load these chromosomes (performance optimization)
         positions: Only load these positions (ultra-performance optimization)
         dmp_positions_by_chrom: DMP positions organized by chromosome (chromosome-specific optimization)
+        expected_classes: Optional list of expected class (0/1) per sample; when set, CSV gets expected_class column and a summary is printed (centroid validation).
     """
     print(f"\n🔍 Loading {len(samples_list)} samples from directories...")
     
@@ -382,10 +439,16 @@ def classify_samples_from_list(
                     chrom = classifier.chromosome if classifier.chromosome != 'unknown' else '1'
                     dmp_positions_by_chrom[chrom] = feature_info['positions']
     
-    # Load samples (merged contexts per chromosome) with hyperslice optimization
+    # When model is CG-only (e.g. MethylDetector with contexts: ["CG"]), load only CG to match training
+    contexts_to_load = getattr(classifier, 'model_contexts', None)
+    if contexts_to_load == ['CG']:
+        print("📌 Model is CG-only: loading only CG context from samples (no CHG/CHH merge)", flush=True)
+
+    # Load samples (merged contexts per chromosome, or single context when model is CG-only)
     loaded_samples = DataLoader.load_samples_from_list(
         samples_list, debug=debug, required_chromosomes=required_chromosomes,
-        positions=positions, dmp_positions_by_chrom=dmp_positions_by_chrom
+        positions=positions, dmp_positions_by_chrom=dmp_positions_by_chrom,
+        contexts_to_load=contexts_to_load
     )
     
     if not loaded_samples:
@@ -394,7 +457,8 @@ def classify_samples_from_list(
     if classifier.is_multi_chromosome:
         # Multi-chromosome mode: extract features per chromosome and combine
         _classify_multi_chromosome_samples(
-            classifier, loaded_samples, output_file, debug
+            classifier, loaded_samples, output_file, debug,
+            expected_classes=expected_classes
         )
     else:
         # Single chromosome mode: use first chromosome from merged samples
@@ -456,13 +520,15 @@ def _classify_multi_chromosome_samples(
     classifier: MethylClassifier,
     loaded_samples: List[Tuple[str, Dict[str, Any]]],
     output_file: Optional[Path] = None,
-    debug: bool = False
+    debug: bool = False,
+    expected_classes: Optional[List[int]] = None
 ) -> None:
     """
     Classify samples using multi-chromosome classifier.
 
     Extracts features per chromosome from merged samples and combines predictions.
     Optionally saves per-chromosome probabilities to a matrix file.
+    When expected_classes is provided (centroid validation), adds expected_class column and prints summary.
     """
     print(f"\n📊 Extracting features per chromosome for {len(loaded_samples)} samples...")
     
@@ -573,7 +639,18 @@ def _classify_multi_chromosome_samples(
     
     # Get predictions
     predictions = np.argmax(probabilities, axis=1)
-    
+
+    # Diagnostic summary (helps spot collapse to one class)
+    prob_c0 = probabilities[:, 0]
+    prob_c1 = probabilities[:, 1]
+    n_uncertain = np.sum((prob_c1 > 0.05) & (prob_c1 < 0.95))
+    print(f"\n📈 Probability summary: P(class0) mean={prob_c0.mean():.3f} min={prob_c0.min():.3f} max={prob_c0.max():.3f} | "
+          f"P(class1) mean={prob_c1.mean():.3f} min={prob_c1.min():.3f} max={prob_c1.max():.3f} | "
+          f"Samples with 0.05<P(class1)<0.95: {n_uncertain}/{n_samples}")
+    if n_uncertain < 0.05 * n_samples and n_samples > 10:
+        print("   ⚠️ Most predictions are near 0 or 1. If unexpected, check: DMP coverage (dmps_used in CSV), "
+              "temperature in config, or run with --debug.")
+
     # Get combined feature info for output
     first_chrom = classifier_chroms[0]
     feature_info = classifier.classifiers[first_chrom].get_feature_info()
@@ -591,8 +668,53 @@ def _classify_multi_chromosome_samples(
     _save_classification_results(
         classifier, sample_names, predictions, probabilities,
         combined_mask, dmp_positions, output_file,
-        multi_chromosome=True, chromosomes=classifier_chroms
+        multi_chromosome=True, chromosomes=classifier_chroms,
+        expected_classes=expected_classes
     )
+
+    # Centroid validation summary: report how well expected class matches prediction
+    if expected_classes is not None and len(expected_classes) == n_samples:
+        expected_classes_arr = np.array(expected_classes)
+        prob_c1 = probabilities[:, 1]
+        for exp in (0, 1):
+            mask = expected_classes_arr == exp
+            n_exp = np.sum(mask)
+            if n_exp == 0:
+                continue
+            pred_correct = np.sum((expected_classes_arr == exp) & (predictions == exp))
+            mean_p1 = np.mean(prob_c1[mask])
+            label = "centroid1 (class 0)" if exp == 0 else "centroid2 (class 1)"
+            print(f"\n📊 {label}: {n_exp} samples | mean P(class1)={mean_p1:.3f} | predicted correctly: {pred_correct}/{n_exp} ({100*pred_correct/n_exp:.1f}%)")
+        # Warn when validation fails (all predictions one class)
+        n_correct_0 = np.sum((expected_classes_arr == 0) & (predictions == 0))
+        n_correct_1 = np.sum((expected_classes_arr == 1) & (predictions == 1))
+        n_exp_0 = np.sum(expected_classes_arr == 0)
+        n_exp_1 = np.sum(expected_classes_arr == 1)
+        if (n_exp_0 > 0 and n_correct_0 == 0) or (n_exp_1 > 0 and n_correct_1 == 0):
+            print("\n⚠️ Centroid validation failed: at least one expected class has 0% correct predictions.")
+            print("   Possible causes: (1) DMP/context mismatch (detector used CG-only; classifier now loads CG-only when model is CG).")
+            print("   (2) Very low DMP coverage (check dmps_used in CSV). (3) Try --debug to inspect per-chromosome log-likelihoods.")
+            print("   (4) Temperature or calibration: try temperature > 1 for softer probabilities.")
+            # Diagnostic: mean methylation of first expected-0 vs first expected-1 sample vs centroid means (one chrom)
+            if debug and hasattr(classifier, 'model_packages') and classifier_chroms:
+                first_chrom = classifier_chroms[0]
+                pkg = classifier.model_packages.get(first_chrom, {})
+                dmpDF = pkg.get('dmpDF')
+                if dmpDF is not None and isinstance(dmpDF, pd.DataFrame) and 'alpha1' in dmpDF.columns:
+                    a1, b1 = dmpDF['alpha1'].values, dmpDF['beta1'].values
+                    a2, b2 = dmpDF['alpha2'].values, dmpDF['beta2'].values
+                    cent_mean0 = np.mean(np.clip(a1 / (a1 + b1), 0, 1))
+                    cent_mean1 = np.mean(np.clip(a2 / (a2 + b2), 0, 1))
+                    idx0 = next((i for i in range(n_samples) if expected_classes_arr[i] == 0), None)
+                    idx1 = next((i for i in range(n_samples) if expected_classes_arr[i] == 1), None)
+                    for idx, label in [(idx0, "expected class 0"), (idx1, "expected class 1")]:
+                        if idx is not None and first_chrom in chrom_features and first_chrom in chrom_masks:
+                            feats = chrom_features[first_chrom][idx]
+                            mask = chrom_masks[first_chrom][idx]
+                            if np.any(mask):
+                                sample_mean = np.mean(feats[mask])
+                                print(f"   Diagnostic ({first_chrom}): first {label} sample mean methylation = {sample_mean:.3f}")
+                    print(f"   Diagnostic ({first_chrom}): centroid1 (class0) mean = {cent_mean0:.3f}, centroid2 (class1) mean = {cent_mean1:.3f}")
 
     # Save chromosome probability matrix if requested
     if chrom_proba_matrix is not None:
@@ -610,60 +732,67 @@ def _save_classification_results(
     dmp_positions: np.ndarray,
     output_file: Optional[Path],
     multi_chromosome: bool = False,
-    chromosomes: Optional[List[str]] = None
+    chromosomes: Optional[List[str]] = None,
+    expected_classes: Optional[List[int]] = None
 ) -> None:
     """Helper to save classification results to CSV."""
     if output_file is None:
         return
-    
+
     import csv
-    
+
     output_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Prepare results data
     results_data = []
-    
     for i, (name, pred, prob) in enumerate(zip(sample_names, predictions, probabilities)):
         if classifier.class_names is not None and pred < len(classifier.class_names):
             predicted_label = str(classifier.class_names[pred])
         else:
             predicted_label = f"Class_{pred}"
-        
+
         dmps_used = np.sum(availability_mask[i]) if i < len(availability_mask) else 0
-        
+
         result_entry = {
             'sample': name,
             'prediction': int(pred),
             'predicted_class': predicted_label,
         }
-        
+
         # Add probabilities for all classes
         for j in range(classifier.n_classes):
             result_entry[f'prob_class{j}'] = float(prob[j])
-        
+
         result_entry.update({
             'dmps_used': int(dmps_used),
             'dmps_total': len(dmp_positions)
         })
-        
+
         if multi_chromosome and chromosomes:
             result_entry['chromosomes'] = ','.join(chromosomes)
-        
+
+        if expected_classes is not None and i < len(expected_classes):
+            exp = expected_classes[i]
+            result_entry['expected_class'] = int(exp)
+            result_entry['agrees'] = bool(pred == exp)
+
         results_data.append(result_entry)
-    
+
     # Write CSV
     fieldnames = ['sample', 'prediction', 'predicted_class'] + \
                  [f'prob_class{i}' for i in range(classifier.n_classes)] + \
                  ['dmps_used', 'dmps_total']
-    
+
     if multi_chromosome and chromosomes:
         fieldnames.append('chromosomes')
-    
+    if expected_classes is not None:
+        fieldnames.extend(['expected_class', 'agrees'])
+
     with open(output_file, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(results_data)
-    
+
     print(f"\n💾 Results saved to: {output_file}")
 
 
@@ -872,8 +1001,31 @@ Config fields (in JSON):
 
     # Classify samples using Beta method
     try:
+        expected_classes = None
+        # Centroid validation: run on samples used to build centroid1 and centroid2
+        c1_paths = getattr(config, 'centroid1_sample_paths', None)
+        c2_paths = getattr(config, 'centroid2_sample_paths', None)
+        c1_dir = getattr(config, 'centroid1_dir', None)
+        c2_dir = getattr(config, 'centroid2_dir', None)
+        if (c1_paths and c2_paths) and (len(c1_paths) > 0 and len(c2_paths) > 0):
+            config.samples = list(c1_paths) + list(c2_paths)
+            expected_classes = [0] * len(c1_paths) + [1] * len(c2_paths)
+            print(f"📂 Centroid validation: {len(c1_paths)} centroid1 (expected class 0) + {len(c2_paths)} centroid2 (expected class 1) samples")
+        elif c1_dir and c2_dir:
+            path_remap = getattr(config, 'centroid_path_remap', None)
+            sample_root = getattr(config, 'centroid_sample_root', None) if not path_remap else None
+            c1_resolved = _read_samples_used_from_centroid_dir(Path(c1_dir), sample_root=sample_root, path_remap=path_remap)
+            c2_resolved = _read_samples_used_from_centroid_dir(Path(c2_dir), sample_root=sample_root, path_remap=path_remap)
+            if not c1_resolved or not c2_resolved:
+                raise ValueError(
+                    f"Centroid dirs yielded no samples_used: centroid1_dir={c1_dir} -> {len(c1_resolved)} paths, "
+                    f"centroid2_dir={c2_dir} -> {len(c2_resolved)} paths. Ensure H5 files in those dirs have 'samples_used' in metadata."
+                )
+            config.samples = c1_resolved + c2_resolved
+            expected_classes = [0] * len(c1_resolved) + [1] * len(c2_resolved)
+            print(f"📂 Centroid validation (from metadata): {len(c1_resolved)} centroid1 (expected class 0) + {len(c2_resolved)} centroid2 (expected class 1) samples from centroid dirs")
         # Multi-chromosome + directory input: treat directory as containing sample subdirs (one per sample)
-        if classifier.is_multi_chromosome and config.input_path and not config.samples:
+        elif classifier.is_multi_chromosome and config.input_path and not config.samples:
             input_path = Path(config.input_path)
             if input_path.is_dir():
                 sample_dirs = sorted([d for d in input_path.iterdir() if d.is_dir() and list(d.glob("*-CG.h5"))])
@@ -912,7 +1064,8 @@ Config fields (in JSON):
                 debug=config.debug,
                 required_chromosomes=required_chromosomes,
                 positions=positions,
-                dmp_positions_by_chrom=dmp_positions_by_chrom
+                dmp_positions_by_chrom=dmp_positions_by_chrom,
+                expected_classes=expected_classes
             )
         else:
             # Legacy: single path

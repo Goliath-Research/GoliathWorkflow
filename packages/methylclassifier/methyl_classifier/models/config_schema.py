@@ -27,7 +27,32 @@ class ClassificationConfig(BaseModel):
         default=None,
         description="List of sample directory paths. Each directory should contain {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5 files. Contexts will be merged. (alternative to input_path)"
     )
-    
+    # Centroid validation: run classifier on samples used to build centroids (expect centroid1→class0, centroid2→class1)
+    centroid1_dir: Optional[str] = Field(
+        default=None,
+        description="Path to centroid1 output directory (H5 files). Sample list is read from each file's 'samples_used' metadata (union across files). Use with centroid2_dir."
+    )
+    centroid2_dir: Optional[str] = Field(
+        default=None,
+        description="Path to centroid2 output directory (H5 files). Sample list is read from each file's 'samples_used' metadata (union across files). Use with centroid1_dir."
+    )
+    centroid_sample_root: Optional[str] = Field(
+        default=None,
+        description="When reading samples_used from centroid H5 metadata, remap each path to <centroid_sample_root>/<basename(path)>. Use when data moved to NAS so metadata still has old paths. Ignored if centroid_path_remap is set."
+    )
+    centroid_path_remap: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Prefix replacement for paths from centroid metadata: {\"old_prefix\": \"new_prefix\", ...}. Longest matching key is replaced so relative paths are preserved. Use when samples live under a different base (e.g. NAS). Overrides centroid_sample_root."
+    )
+    centroid1_sample_paths: Optional[List[str]] = Field(
+        default=None,
+        description="Explicit list of sample directories for centroid1 (class 0). Overrides centroid1_dir if set. Use with centroid2_sample_paths."
+    )
+    centroid2_sample_paths: Optional[List[str]] = Field(
+        default=None,
+        description="Explicit list of sample directories for centroid2 (class 1). Overrides centroid2_dir if set. Use with centroid1_sample_paths."
+    )
+
     # Optional
     output_path: Optional[str] = Field(
         default=None,
@@ -95,8 +120,16 @@ class ClassificationConfig(BaseModel):
     
     def model_post_init(self, __context):
         """Validate that at least one input source is provided."""
-        if not self.input_path and not self.samples:
-            raise ValueError("Either 'input_path' or 'samples' must be provided")
+        has_centroid_dirs = bool(self.centroid1_dir and self.centroid2_dir)
+        has_centroid_lists = (
+            self.centroid1_sample_paths and self.centroid2_sample_paths
+            and len(self.centroid1_sample_paths) > 0 and len(self.centroid2_sample_paths) > 0
+        )
+        if not self.input_path and not self.samples and not has_centroid_dirs and not has_centroid_lists:
+            raise ValueError(
+                "Provide one of: 'input_path', 'samples', "
+                "both 'centroid1_dir' and 'centroid2_dir', or both 'centroid1_sample_paths' and 'centroid2_sample_paths'"
+            )
     
     class Config:
         """Pydantic config."""

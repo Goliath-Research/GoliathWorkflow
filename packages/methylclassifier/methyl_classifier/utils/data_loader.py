@@ -144,24 +144,23 @@ class DataLoader:
         debug: bool = False,
         required_chromosomes: Optional[List[str]] = None,
         positions: Optional[np.ndarray] = None,
-        dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None
+        dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None,
+        contexts_to_load: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        Load a sample from a directory, merging CG, CHG, and CHH contexts.
+        Load a sample from a directory, merging contexts (or single context when contexts_to_load has one).
 
-        Only classifier DMP positions are loaded when dmp_positions_by_chrom is provided
-        (same hyperslice approach as MethylDetector: load only those positions from H5).
-
-        Each sample directory should contain files named {chrom}-CG.h5, {chrom}-CHG.h5, {chrom}-CHH.h5
-        for each chromosome. Contexts are merged per chromosome (union of positions, CG preferred).
+        Only classifier DMP positions are loaded when dmp_positions_by_chrom is provided.
+        When contexts_to_load is ['CG'] (model trained CG-only), only CG files are loaded—no merge.
 
         Args:
             sample_dir: Directory containing {chrom}-{context}.h5 files
             chromosomes: Optional list of chromosomes to load. If None, auto-detect from files.
             dmp_positions_by_chrom: When set, only these positions are read per chromosome (required for classification).
+            contexts_to_load: When set to e.g. ['CG'], only those context files are loaded (ensures match to detector).
 
         Returns:
-            Dictionary mapping chromosome to merged MethylSample (all contexts combined)
+            Dictionary mapping chromosome to merged MethylSample (or single-context when contexts_to_load has one)
         """
         from methyl_utils import MethylSample
         
@@ -255,15 +254,18 @@ class DataLoader:
                 print(f"⚠️ Warning: {chrom}-CG.h5 not found in {sample_dir}, skipping chromosome {chrom}")
                 continue
 
-            # Load CHG and CHH if available
-            for context in ['CHG', 'CHH']:
-                if context in context_files:
-                    try:
-                        context_sample = MethylSample.load_from_h5(context_files[context], chrom_positions)
-                        contexts_to_merge.append(context_sample)
-                    except Exception as e:
-                        print(f"⚠️ Warning: Failed to load {chrom}-{context}.h5: {e}")
-            
+            # Load CHG and CHH only when not using single-context (e.g. CG-only model)
+            if contexts_to_load is None or len(contexts_to_load) > 1:
+                for context in ['CHG', 'CHH']:
+                    if context in context_files:
+                        try:
+                            context_sample = MethylSample.load_from_h5(context_files[context], chrom_positions)
+                            contexts_to_merge.append(context_sample)
+                        except Exception as e:
+                            print(f"⚠️ Warning: Failed to load {chrom}-{context}.h5: {e}")
+            elif debug and contexts_to_load == ['CG']:
+                print(f"      📌 Chromosome {chrom}: CG-only (model context), skipping CHG/CHH", flush=True)
+
             if len(contexts_to_merge) == 0:
                 continue
 
@@ -295,7 +297,8 @@ class DataLoader:
         debug: bool = False,
         required_chromosomes: Optional[List[str]] = None,
         positions: Optional[np.ndarray] = None,
-        dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None
+        dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None,
+        contexts_to_load: Optional[List[str]] = None
     ) -> List[Tuple[str, Dict[str, Any]]]:
         """
         Load multiple samples from a list of directory paths.
@@ -327,7 +330,8 @@ class DataLoader:
             try:
                 # Load and merge contexts for this sample
                 merged_samples = DataLoader.load_sample_from_directory(
-                    sample_dir, chromosomes, debug, required_chromosomes, positions, dmp_positions_by_chrom
+                    sample_dir, chromosomes, debug, required_chromosomes, positions, dmp_positions_by_chrom,
+                    contexts_to_load=contexts_to_load
                 )
                 
                 # Skip sample if no chromosomes were loaded (all were empty or missing)
@@ -369,16 +373,20 @@ class DataLoader:
         # Handle NaN values and ensure proper range
         methylation_levels = np.nan_to_num(methylation_levels, nan=0.5)
         methylation_levels = np.clip(methylation_levels, 0.0, 1.0)
-        
-        pos_to_methylation = dict(zip(sample.pos, methylation_levels))
+
+        # Use int keys so lookup works regardless of dmp_positions dtype (numpy vs int)
+        pos_vals = np.asarray(sample.pos)
+        meth_vals = np.asarray(methylation_levels)
+        pos_to_methylation = {int(pos_vals[i]): meth_vals[i] for i in range(len(pos_vals))}
 
         feature_vector = []
         availability_mask = []
         missing_positions = 0
 
         for dmp_pos in dmp_positions:
-            if dmp_pos in pos_to_methylation:
-                methylation = pos_to_methylation[dmp_pos]
+            key = int(dmp_pos) if hasattr(dmp_pos, "__int__") else dmp_pos
+            if key in pos_to_methylation:
+                methylation = pos_to_methylation[key]
                 methylation = np.clip(methylation, 0.0, 1.0)
                 feature_vector.append(methylation)
                 availability_mask.append(True)

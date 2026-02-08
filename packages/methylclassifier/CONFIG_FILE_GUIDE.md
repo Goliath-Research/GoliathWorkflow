@@ -62,7 +62,7 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | Field | Type | Description |
 |-------|------|-------------|
 | `model_path` or `model_dir` | string or null | Single classifier .pkl path, or **directory** with `classifier-{chrom}.pkl` (e.g. MethylDetector `output_dir`). Use `model_dir` + `model_path: null` for multi-chromosome. |
-| `input_path` or `samples` | string or array | Path to .h5 file or directory of sample folders; or list of sample directory paths (each with `{chrom}-CG.h5`, etc.) |
+| `input_path` or `samples` or (`centroid1_dir` + `centroid2_dir`) or (`centroid1_sample_paths` + `centroid2_sample_paths`) | string or array | Path to .h5 / directory of sample folders; or list of sample dirs; or **centroid validation**: two centroid output dirs (read **samples_used** from metadata) or two explicit sample lists |
 
 ### Optional
 
@@ -74,9 +74,63 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `trimmed_percentile_low` | number | 0.10 | Lower percentile for chromosome weight (effect_size) |
 | `trimmed_percentile_high` | number | 0.01 | Upper percentile for chromosome weight |
 | `chromosome_weights` | object or null | null | Fixed weights per chromosome, e.g. `{"1": 0.4, "2": 0.3}`; overrides trimmed-mean when set |
+| `centroid1_dir` | string or null | null | Path to centroid1 output directory (H5 files). Sample list is read from each file’s **samples_used** metadata (union across files). Use with `centroid2_dir`. |
+| `centroid2_dir` | string or null | null | Path to centroid2 output directory (H5 files). Sample list is read from each file’s **samples_used** metadata (union across files). Use with `centroid1_dir`. |
+| `centroid_sample_root` | string or null | null | When set, paths from centroid **samples_used** are remapped to `<centroid_sample_root>/<basename(path)>`. Ignored if `centroid_path_remap` is set. |
+| `centroid_path_remap` | object or null | null | Prefix replacement: `{"old_prefix": "new_prefix", ...}`. Longest matching key is replaced so relative paths are preserved. Use when metadata has multiple old bases (e.g. healthy vs cancer). Overrides `centroid_sample_root`. |
+| `centroid1_sample_paths` | array or null | null | Explicit list of sample dirs for centroid1 (class 0). Overrides `centroid1_dir` if set. Use with `centroid2_sample_paths`. |
+| `centroid2_sample_paths` | array or null | null | Explicit list of sample dirs for centroid2 (class 1). Overrides `centroid2_dir` if set. Use with `centroid1_sample_paths`. |
 | `debug` | boolean | false | Enable debug output |
 | `no_filter` | boolean | false | Process all .h5 without chromosome/context filtering |
 | `log_level` | string | `"INFO"` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+
+### Centroid validation (sanity check)
+
+Run the classifier on the **same samples** used to build the centroids. You should see centroid1 samples mostly with low P(class1) and centroid2 samples mostly with high P(class1), and predictions that agree with the expected class.
+
+**Option A – from centroid directories (recommended)**  
+The centroid H5 files store a **samples_used** list in metadata (each file may list a subset; the classifier uses the **union** across all H5 in that dir). Specify the two centroid output dirs and omit `input_path`. If the data was moved (e.g. to NAS) and metadata still has old paths, use either:
+
+- **`centroid_sample_root`**: remaps every path to `<centroid_sample_root>/<basename(path)>` (all samples under one root).
+- **`centroid_path_remap`**: prefix replacement so multiple old bases (e.g. healthy from `/work/david-gladys/...`, cancer from `/home/user/data`) all map to the same new base; relative paths are preserved.
+
+Example with `centroid_path_remap` (use the base path where your sample dirs actually live):
+
+```json
+{
+  "model_dir": "/path/to/detection/PCa_vs_Healthy_optimized",
+  "centroid1_dir": "/path/to/centroids/healthy_all",
+  "centroid2_dir": "/path/to/centroids/pcancer",
+  "centroid_path_remap": {
+    "/work/david-gladys/all-prostate": "/work/data/david-gladys/all-prostate",
+    "/home/dizada/data": "/work/data/david-gladys/all-prostate"
+  },
+  "output_path": "/path/to/centroid_validation_results.csv"
+}
+```
+
+If sample dirs are not under `/work/data/david-gladys/all-prostate`, change the **values** in `centroid_path_remap` to the actual base path (e.g. `/work/david-gladys/all-prostate` or wherever the .h5 sample dirs live).
+
+**Option B – explicit sample lists**  
+If you prefer to pass the sample paths yourself (e.g. from your MethylCentroid config):
+
+```json
+{
+  "model_dir": "/path/to/detection/PCa_vs_Healthy_optimized",
+  "centroid1_sample_paths": ["/path/to/healthy/sample1", "/path/to/healthy/sample2"],
+  "centroid2_sample_paths": ["/path/to/cancer/sample1", "/path/to/cancer/sample2"],
+  "output_path": "/path/to/centroid_validation_results.csv"
+}
+```
+
+The CSV will include `expected_class` (0 or 1) and `agrees` (true/false). A summary is printed: mean P(class1) and fraction predicted correctly per expected class.
+
+**If centroid validation fails** (e.g. all predictions are class 1, so expected class 0 samples all have `agrees=False`):
+
+- **DMP/context alignment**: The detector is typically run with CG-only; the classifier expects methylation at those same DMP positions. Merged-context loading uses CG first per position, so this is usually correct. If you used a different context for centroids, ensure the classifier model was built from that same setup.
+- **DMP coverage**: Check `dmps_used` in the CSV. If it is very low for most samples, many positions are missing and the likelihood can be unstable.
+- **Debug**: Run with `"debug": true` in the config (or `--debug`) to inspect per-chromosome log-likelihoods and available positions.
+- **Temperature**: Try `temperature` > 1 (e.g. 1.5 or 2) for softer probabilities; it will not fix a systematic bias but can help diagnose overconfident outputs.
 
 ## Usage
 

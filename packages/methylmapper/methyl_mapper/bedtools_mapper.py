@@ -15,7 +15,10 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 import numpy as np
 
-# from methyl_utils.statistical_tests import storey_qvalues  # unused
+try:
+    from methyl_utils import storey_qvalues
+except ImportError:
+    from methyl_utils.statistical_tests import storey_qvalues
 
 from .gene_disease_enricher import GeneDiseaseEnricher
 
