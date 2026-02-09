@@ -305,8 +305,9 @@ class MethylDetector:
         # Create centroid pair for comparison
         centroid_pair = MethylCentroidPair(
             min_coverage=effective_min_coverage,
-            delta_mean_mode=getattr(self.config, "delta_mean_mode", "mean"),
-            overlap_mode=getattr(self.config, "overlap_mode", "beta"),
+            delta_mean_mode=self.config.delta_mean_mode,
+            overlap_mode=self.config.overlap_mode,
+            distribution=self.config.distribution,
         )
         
         # Compare centroids
@@ -674,12 +675,12 @@ class MethylDetector:
             "bmm_refine_mode": self.config.bmm_refine_mode,
             "bmm_refine_filter_metric": self.config.bmm_refine_filter_metric,
             "bmm_refine_pvalue_threshold": self.config.bmm_refine_pvalue_threshold,
-            "random_state": getattr(self.config, "random_state", None),
+            "random_state": self.config.random_state,
         }
 
-        extraction_min = getattr(self.config, 'validation_min_coverage', 4)
+        extraction_min = self.config.validation_min_coverage
         pair = MethylCentroidPair(min_coverage=extraction_min)
-        contexts = self.config.contexts if hasattr(self.config, "contexts") else None
+        contexts = self.config.contexts
         merged, bmm_c1, bmm_c2, records_map, bmm_summary = pair.refine_dmps_with_bmm(
             dmps_df=dmps_df,
             centroid1_dir=self.config.centroid1_dir,
@@ -1005,7 +1006,7 @@ class MethylDetector:
         try:
             # Resolve validation sample paths: explicit config, else centroid metadata (samples_used), else none
             # When validation_mode is "real" (default), use centroid metadata if config does not specify paths.
-            use_metadata_by_default = (getattr(self.config, 'validation_mode', 'real') != 'synthetic')
+            use_metadata_by_default = (self.config.validation_mode != 'synthetic')
             class1_config = self.config.centroid1_validation_samples
             if class1_config is None and use_metadata_by_default:
                 class1_config = "use_metadata"
@@ -1378,7 +1379,7 @@ class MethylDetector:
                 }
             }
             # Include fitted Platt calibrator for export when enabled (so MethylClassifier can use it)
-            if use_calibration and getattr(self.config, 'enable_platt_calibration', False) and temp_classifier.calibrator is not None:
+            if use_calibration and self.config.enable_platt_calibration and temp_classifier.calibrator is not None:
                 import pickle
                 result['platt_calibrator'] = pickle.dumps(temp_classifier.calibrator)
                 if getattr(temp_classifier, 'calibrator_scaler', None) is not None:
@@ -1671,7 +1672,7 @@ class MethylDetector:
         n_test = X_test.shape[0]
         # Require at least 10% of test samples per position (or config min), so subset has usable non-NaN fraction
         min_by_fraction = max(1, int(np.ceil(0.1 * n_test)))
-        min_coverage = max(min_by_fraction, getattr(self.config, 'min_validation_coverage_per_position', 1))
+        min_coverage = max(min_by_fraction, self.config.min_validation_coverage_per_position)
         keep_mask = coverage_in_test >= min_coverage
         n_keep = int(np.sum(keep_mask))
         n_dropped = len(keep_mask) - n_keep
@@ -1763,7 +1764,7 @@ class MethylDetector:
             elif self.config.optimization_method == "binary_search":
                 logger.info("🔍 Binary Search: finding minimal k achieving target BA (monotonic assumption)")
 
-                target_ba = getattr(self.config, 'target_balanced_accuracy', 0.95)
+                target_ba = self.config.target_balanced_accuracy
                 logger.info(f"Target BA: {target_ba:.3f}")
 
                 optimized_k = self._optimize_dmps_binary_search(
@@ -1799,7 +1800,7 @@ class MethylDetector:
 
             # When target BA is not achieved, export all DMPs to improve matching with future samples
             if final_result is not None:
-                target_ba = getattr(self.config, 'target_balanced_accuracy', None)
+                target_ba = self.config.target_balanced_accuracy
                 if target_ba is not None and final_result.get('balanced_accuracy', 0) < target_ba:
                     selected_dmps_df = sorted_df.copy()
                     logger.info(
@@ -1843,7 +1844,7 @@ class MethylDetector:
         """
         try:
             # Resolve real sample paths: config, else centroid metadata (samples_used)
-            use_metadata_by_default = (getattr(self.config, 'validation_mode', 'real') != 'synthetic')
+            use_metadata_by_default = (self.config.validation_mode != 'synthetic')
             c1 = self.config.centroid1_validation_samples
             if c1 is None and use_metadata_by_default:
                 c1 = "use_metadata"
@@ -1948,7 +1949,7 @@ class MethylDetector:
 
         # Use MethylCentroidPair to efficiently extract methylation fractions
         # Use validation_min_coverage (e.g. 4) so we get values at more positions when centroids were built with higher min_coverage (e.g. 10)
-        extraction_min = getattr(self.config, 'validation_min_coverage', 4)
+        extraction_min = self.config.validation_min_coverage
         logger.info("Extracting methylation fractions using MethylCentroidPair (min_coverage=%s)...", extraction_min)
         sample_paths_list = [p for p, _ in all_sample_paths]
         X_extracted, all_positions_extracted, all_contexts_extracted, context_indices_dict = MethylCentroidPair.extract_methylation_fractions(
@@ -2092,8 +2093,8 @@ class MethylDetector:
             return 0, empty_result
 
         min_k = 1 if max_k > 0 else 0
-        exhaustive = getattr(self.config, 'featurecuts_exhaustive_search', True)
-        max_candidates = getattr(self.config, 'featurecuts_max_candidates', None)
+        exhaustive = self.config.featurecuts_exhaustive_search
+        max_candidates = self.config.featurecuts_max_candidates
 
         logger.info(f"  FeatureCuts search range: k ∈ [{min_k:,}, {max_k:,}]")
         logger.info(f"  Exhaustive search: {exhaustive}")
@@ -2712,12 +2713,14 @@ class MethylDetector:
             csv_path = output_dir / f"dmps-{self.chromosome}.csv"
         
         # Define export columns (include all relevant data)
+        # dist: 1=Beta, 2=Normal, 3=Beta-Binomial, 4=Beta-Mixture (see methyl_utils.methyl_centroid_pair.DIST_*)
         export_cols = [
             'chromosome', 'context', 'position',
             'p_value', 'q_value', 'delta_mean',
             'overlap', 'effect_size', 'context_weight',
             'alpha1', 'beta1', 'alpha2', 'beta2',
             'mean1', 'mean2',
+            'dist',
             'bmm_p_value', 'bmm_js', 'bmm_status'
         ]
         
@@ -2785,11 +2788,11 @@ class MethylDetector:
             'weight': weights.astype(np.float64)
         })
 
-        classifier_type = getattr(self.config, 'classifier_type', 'beta')
+        classifier_type = self.config.classifier_type
         if classifier_type == 'beta_binomial':
             # Beta-Binomial classifier: expects position, context, alpha1, beta1, alpha2, beta2, context_weight
             if 'context' not in selected_dmps_df.columns:
-                ctx = (self.config.contexts[0] if getattr(self.config, 'contexts', None) else 'CG')
+                ctx = self.config.contexts[0]
                 df_bb = selected_dmps_df[['position', 'alpha1', 'beta1', 'alpha2', 'beta2']].copy()
                 df_bb['context'] = ctx
             else:
@@ -2832,7 +2835,7 @@ class MethylDetector:
             model_package["metadata"]["bmm_centroid_files"] = self._bmm_centroid_files
 
         # Include fitted Platt calibrator when enabled (MethylClassifier can use it for better-calibrated probabilities)
-        if getattr(self.config, 'enable_platt_calibration', False) and getattr(self, '_platt_calibrator_bytes', None) is not None:
+        if self.config.enable_platt_calibration and getattr(self, '_platt_calibrator_bytes', None) is not None:
             model_package["metadata"]["platt_calibrator"] = self._platt_calibrator_bytes
             if getattr(self, '_platt_calibrator_scaler_bytes', None) is not None:
                 model_package["metadata"]["platt_calibrator_scaler"] = self._platt_calibrator_scaler_bytes

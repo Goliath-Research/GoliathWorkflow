@@ -143,6 +143,10 @@ class MethylModelerConfig(BaseModel):
         default="beta",
         description="How to compute overlap for biological filtering: beta (Bhattacharyya distance between Beta), normal (Normal BD), auto (per-distribution)"
     )
+    distribution: str = Field(
+        default="auto",
+        description="Per-position distribution for DMP testing: auto (choose by coverage/overdispersion), beta, normal, beta_binomial, beta_mixture. Auto uses Beta-Binomial for low/ variable coverage, Beta otherwise."
+    )
 
     # New calibration parameters (for trained classifier metadata)
     temperature: float = Field(
@@ -426,7 +430,18 @@ class MethylModelerConfig(BaseModel):
         if v not in valid:
             raise ValueError(f"overlap_mode must be one of: {sorted(valid)}, got: {v}")
         return v
-    
+
+    @field_validator('distribution', mode='before')
+    @classmethod
+    def validate_distribution(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return "auto"
+        valid = {"auto", "beta", "normal", "beta_binomial", "beta_mixture"}
+        vnorm = str(v).strip().lower()
+        if vnorm not in valid:
+            raise ValueError(f"distribution must be one of: {sorted(valid)}, got: {v}")
+        return vnorm
+
     # @field_validator('validation_mode', mode='before')
     # @classmethod
     # def validate_validation_mode(cls, v):
@@ -448,6 +463,20 @@ class MethylModelerConfig(BaseModel):
     validation_min_coverage: int = Field(
         default=4, ge=1, le=100,
         description="Min coverage when extracting methylation from validation/centroid samples. Use a value lower than the centroid's min_coverage (e.g. 4 if centroid used 10) so validation samples contribute values at more positions and better match lower-coverage patient data."
+    )
+
+    min_validation_coverage_per_position: int = Field(
+        default=1, ge=1, le=100,
+        description="Minimum number of validation samples that must cover a position for it to be kept in calibration/test. Used to drop positions with too few non-NaN values so BA has signal."
+    )
+
+    featurecuts_exhaustive_search: bool = Field(
+        default=True,
+        description="When optimization_method is 'featurecuts', use exhaustive search over k. If False, use a coarser search."
+    )
+    featurecuts_max_candidates: Optional[int] = Field(
+        default=None, ge=1,
+        description="When optimization_method is 'featurecuts', maximum number of k candidates to evaluate. None = no limit."
     )
     
     classifier_coverage_weighting: bool = Field(

@@ -174,6 +174,20 @@ class MethylCentroid:
                 [str(s) for s in add_samples] if add_samples else []
             )
             self._original_add_samples = []
+            # Deduplicate initial list by sample directory basename (keep first occurrence)
+            if self.samples:
+                _seen = set()
+                _new_s, _new_o = [], []
+                for p, orig in zip(self.samples, self._original_samples):
+                    name = p.parent.name
+                    if name in _seen:
+                        continue
+                    _seen.add(name)
+                    _new_s.append(p)
+                    _new_o.append(orig)
+                if len(_new_s) < len(self.samples):
+                    self.samples = _new_s
+                    self._original_samples = _new_o
 
         # Handle remove samples for incremental updates
         self.remove_samples = (
@@ -184,6 +198,10 @@ class MethylCentroid:
         self._original_remove_samples = (
             [str(s) for s in remove_samples] if remove_samples else []
         )
+
+        # Ensure no sample in add_samples is already in the centroid (samples / samples_used).
+        # Match by directory basename so the same sample under different paths is not added twice.
+        self._deduplicate_add_samples()
 
         self.min_coverage = max(1, min_coverage)
         self.min_samples = max(1, int(min_samples))
@@ -283,6 +301,48 @@ class MethylCentroid:
         for sample in self.samples + self.add_samples:
             if not sample.exists():
                 print(f"Warning: Sample {sample} does not exist")
+
+    def _deduplicate_add_samples(self) -> None:
+        """
+        Remove from add_samples any sample already in the centroid (samples / samples_used).
+        Match by directory basename so the same sample under different paths is not added twice.
+        Also deduplicate within add_samples (keep first occurrence per basename).
+        """
+        if not self.add_samples:
+            return
+        # Existing sample IDs (directory basename) already in the centroid
+        existing_basenames = {p.parent.name for p in self.samples}
+        # Filter add_samples: drop if already in centroid, and drop duplicates within add_samples
+        seen_basename = set(existing_basenames)
+        new_add_paths = []
+        new_original = []
+        skipped_in_centroid = []
+        skipped_duplicate = []
+        for i, p in enumerate(self.add_samples):
+            name = p.parent.name
+            if name in existing_basenames:
+                skipped_in_centroid.append(name)
+                continue
+            if name in seen_basename:
+                skipped_duplicate.append(name)
+                continue
+            seen_basename.add(name)
+            new_add_paths.append(p)
+            new_original.append(self._original_add_samples[i])
+        n_removed_centroid = len(skipped_in_centroid)
+        n_removed_dup = len(skipped_duplicate)
+        if n_removed_centroid or n_removed_dup:
+            self.logger.info(
+                "Deduplicated add_samples: %s already in centroid (skipped), %s duplicate in add list (skipped), %s to add",
+                n_removed_centroid,
+                n_removed_dup,
+                len(new_add_paths),
+            )
+            if n_removed_centroid and self.verbose:
+                preview = list(dict.fromkeys(skipped_in_centroid))[:5]
+                self.logger.info("  Already in centroid (sample ID): %s%s", preview, " ..." if n_removed_centroid > 5 else "")
+        self.add_samples = new_add_paths
+        self._original_add_samples = new_original
 
     @classmethod
     def from_config(

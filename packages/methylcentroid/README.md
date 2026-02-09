@@ -135,6 +135,19 @@ python -m methyl_centroid.cli --config config.json --no-gpu
 - **use_gpu**: Enable GPU acceleration when available (default: true)
 - **samples / add_samples / remove_samples**: Cohort update inputs
 
+### Paired cohorts (healthy vs disease)
+
+When building two centroids for DMP detection (e.g. healthy vs cancer), **ensure no sample appears in both configs**. A healthy centroid built from a mix of healthy and cancer samples is invalid and leads to failed classifier validation (e.g. 0% correct for the healthy class).
+
+Before building, check for overlapping sample IDs:
+
+```bash
+python3 scripts/check_cohort_overlap.py --label-a healthy --label-b cancer \
+  configs/PCa_Healthy_centroid_batch_config.json configs/PCa_Cancer_centroid_batch_config.json
+```
+
+If overlap is reported, remove the shared samples from one cohort config and rebuild.
+
 ## Output
 
 ### Centroid HDF5 Structure (core datasets)
