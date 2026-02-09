@@ -133,11 +133,15 @@ Config keys use underscores (e.g. `disease_association_type`, `min_disease_score
 
 ## Output
 
-Per-library CSVs, merged CSV, top significant hits CSV.
+- **Per-library**: `enrich_<LibraryName>.csv` — full Enrichr results per database.
+- **Merged**: `enrichment_merged.csv` — all libraries combined, with a `library` column.
+- **Top hits**: `enrichment_top_q0.05.csv` (or your `--cutoff`) — significant terms only (q ≤ cutoff), up to 200.
+
+See **[docs/MethylEnricher_after_MethylMapper.md](docs/MethylEnricher_after_MethylMapper.md)** for full functionality, expected input (MethylMapper combined CSV), filter/sort options, and output file descriptions.
 
 ## Integration
 
-Use with gene lists from MethylMapper in MethylPipeline, including CSV/TSV outputs.
+Use with gene lists from MethylMapper in MethylPipeline, including CSV/TSV outputs (e.g. `mapped_features/all-gene_name-combined.csv`). For a full description of MethylEnricher’s role after MethylMapper and expected outputs, see [docs/MethylEnricher_after_MethylMapper.md](docs/MethylEnricher_after_MethylMapper.md).
 
 ## Troubleshooting
 
