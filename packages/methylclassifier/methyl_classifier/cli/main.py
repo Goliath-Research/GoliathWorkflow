@@ -16,6 +16,7 @@ from ..utils.data_loader import DataLoader
 from ..utils.utils import extract_chrom_context_from_classifier, setup_logging
 from ..models.config_schema import ClassificationConfig
 from ..models.config import ClassifierConfig
+from ..project_resolver import resolve_classifier_config
 
 
 def _remap_centroid_path(path: str, path_remap: Optional[Dict[str, str]], sample_root: Optional[Path]) -> str:
@@ -895,6 +896,18 @@ Config fields (in JSON):
         type=Path,
         help='Path to configuration JSON file (includes all params like temperature/calibration)'
     )
+    parser.add_argument(
+        '--project', '-p',
+        type=Path,
+        metavar='JSON',
+        help='Path to pipeline project config; builds config from detection/centroid/classifier dirs'
+    )
+    parser.add_argument(
+        '--step-override',
+        type=Path,
+        metavar='JSON',
+        help='Optional JSON overrides for classifier step when using --project'
+    )
     
     parser.add_argument(
         '--model', '-m',
@@ -937,13 +950,14 @@ Config fields (in JSON):
     # No new args for temperature/calibration - handled in config
     
     args = parser.parse_args()
-    
-    # Load config if provided
-    if args.config:
-        with open(args.config, 'r') as f:
-            config_data = json.load(f)
-        config = ClassificationConfig(**config_data)
-        # Override with CLI args (model, model_dir, input, output, etc.)
+
+    # Exactly one of --config or --project or (model + input) for config source
+    if args.project is not None:
+        if args.config is not None:
+            raise ValueError("Use either --config or --project, not both.")
+        if not args.project.exists():
+            raise FileNotFoundError(f"Project config not found: {args.project}")
+        config = resolve_classifier_config(args.project, args.step_override)
         if args.model:
             config.model_path = str(args.model)
         if args.model_dir:
@@ -952,7 +966,18 @@ Config fields (in JSON):
             config.input_path = str(args.input)
         if args.output:
             config.output_path = str(args.output)
-        # No overrides for temperature/calibration - use config values
+    elif args.config:
+        with open(args.config, 'r') as f:
+            config_data = json.load(f)
+        config = ClassificationConfig(**config_data)
+        if args.model:
+            config.model_path = str(args.model)
+        if args.model_dir:
+            config.model_dir = str(args.model_dir)
+        if args.input:
+            config.input_path = str(args.input)
+        if args.output:
+            config.output_path = str(args.output)
     else:
         # Construct config from CLI args (existing logic)
         config = ClassificationConfig(
@@ -962,7 +987,6 @@ Config fields (in JSON):
             debug=args.debug,
             log_level=args.log_level
         )
-        # Defaults for new params
         config.temperature = 1.0
         config.enable_platt_calibration = False
     

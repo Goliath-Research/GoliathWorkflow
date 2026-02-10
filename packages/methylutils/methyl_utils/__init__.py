@@ -705,6 +705,12 @@ from .core.distribution_views import (
     BMMView,
 )
 from .core.methyl_distribution_utils import clip_beta_params_for_bounds
+from .pipeline_config import (
+    ProjectConfig,
+    GroupConfig,
+    DerivedPaths,
+    load_project,
+)
 
 # Add ClassifierFactory if it exists
 try:
@@ -888,4 +894,9 @@ __all__ = [
     'apply_eat_transform',
     'eat_transform_from_betas',
     'validate_eat_methylation_data',
+    # Pipeline project config (chained workflows)
+    "ProjectConfig",
+    "GroupConfig",
+    "DerivedPaths",
+    "load_project",
 ]

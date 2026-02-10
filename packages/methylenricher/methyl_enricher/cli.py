@@ -160,6 +160,20 @@ For more information, visit: https://github.com/your-org/methyl_enricher
         default='results',
         help='Output directory for results (default: results)'
     )
+    io_group.add_argument(
+        '--project', '-p',
+        type=str,
+        default=None,
+        metavar='JSON',
+        help='Path to pipeline project config; sets input to mapper combined CSV and output to enricher dir'
+    )
+    io_group.add_argument(
+        '--step-override',
+        type=str,
+        default=None,
+        metavar='JSON',
+        help='Optional JSON overrides for enricher step when using --project (e.g. input, output_dir)'
+    )
     
     # Enrichment parameters
     enrich_group = parser.add_argument_group('Enrichment Parameters')
@@ -247,6 +261,21 @@ def list_available_libraries():
 def main():
     """Main entry point for MethylEnricher CLI."""
     args = parse_args()
+
+    # Resolve paths from --project if set
+    if args.project:
+        from pathlib import Path
+        from .project_resolver import resolve_enricher_paths
+        project_path = Path(args.project)
+        if not project_path.exists():
+            print(f"[ERROR] Project config not found: {project_path}")
+            sys.exit(1)
+        step_override = Path(args.step_override) if args.step_override else None
+        paths = resolve_enricher_paths(project_path, step_override)
+        if not args.input:
+            args.input = paths.input_file
+        if args.outdir == 'results':  # default only
+            args.outdir = paths.output_dir
     
     # Handle --list-libraries
     if args.list_libraries:

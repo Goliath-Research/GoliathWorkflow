@@ -12,6 +12,7 @@ from typing import List
 
 from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig, CentroidResults
 from .core import MethylCentroid
+from .project_resolver import resolve_centroid_batch_config
 from methyl_utils.logging_utils import setup_logging
 
 
@@ -44,6 +45,23 @@ Examples:
         '--batch-config',
         type=Path,
         help='Path to batch processing configuration file'
+    )
+    config_group.add_argument(
+        '--project', '-p',
+        type=Path,
+        metavar='JSON',
+        help='Path to pipeline project config; use with --group to build centroid for one cohort'
+    )
+    config_group.add_argument(
+        '--group',
+        choices=['group1', 'group2'],
+        help='Which cohort to build (group1 or group2); requires --project'
+    )
+    config_group.add_argument(
+        '--step-override',
+        type=Path,
+        metavar='JSON',
+        help='Optional JSON overrides for centroid step (when using --project)'
     )
 
     # Individual parameters (when not using config file)
@@ -332,7 +350,19 @@ def main() -> None:
     setup_logging(verbose=args.verbose)
 
     try:
-        if args.batch_config:
+        if args.project is not None:
+            if args.group is None:
+                raise ValueError("--project requires --group (group1 or group2)")
+            if not args.project.exists():
+                raise FileNotFoundError(f"Project config not found: {args.project}")
+            batch_config = resolve_centroid_batch_config(
+                args.project, args.group, args.step_override
+            )
+            if args.use_gpu is not None:
+                batch_config.base_config.use_gpu = bool(args.use_gpu)
+            run_batch_processing(batch_config)
+
+        elif args.batch_config:
             # Batch processing mode
             if not args.batch_config.exists():
                 raise FileNotFoundError(f"Batch configuration file not found: {args.batch_config}")

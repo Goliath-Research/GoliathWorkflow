@@ -11,18 +11,33 @@ import click
 try:
     from ..core.methyldetector import MethylDetector
     from ..utils.core import load_config_from_json, setup_logging
+    from ..utils.project_resolver import resolve_detector_config
 except ImportError:
     # When running directly, add parent directory to path
     import os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
     from methyl_detector.core.methyldetector import MethylDetector
     from methyl_detector.utils.core import load_config_from_json, setup_logging
+    from methyl_detector.utils.project_resolver import resolve_detector_config
 
 @click.command()
 @click.argument(
     'config',
+    type=click.Path(path_type=Path),
+    required=False,
+    default=None,
+)
+@click.option(
+    '--project', '-p',
     type=click.Path(exists=True, path_type=Path),
-    required=True
+    default=None,
+    help='Path to pipeline project config JSON; derived paths and groups used for detector config',
+)
+@click.option(
+    '--step-override',
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help='Optional JSON with detector overrides (merged over project-derived config)',
 )
 @click.option(
     '--verbose', '-v',
@@ -37,12 +52,28 @@ except ImportError:
     help='Path to log file for detailed logging (summary/errors still shown on screen)'
 )
 @click.version_option(version='0.3.0')
-def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
+def main(
+    config: Optional[Path],
+    project: Optional[Path],
+    step_override: Optional[Path],
+    verbose: bool,
+    log_file: Optional[Path],
+) -> None:
     """
     MethylDetector - Genomics sample classification using enhanced centroid-based approach.
 
-    CONFIG is the path to a JSON configuration file compatible with the Pydantic model.
+    Use either CONFIG (path to detector JSON) or --project (pipeline project config).
+    With --project, paths follow {output_base}/centroids, {output_base}/detection, etc.
     """
+    if (config is None) == (project is None):
+        raise click.UsageError("Provide either CONFIG or --project (not both, not neither).")
+    if project is not None:
+        loaded_config = resolve_detector_config(project, step_override)
+    else:
+        if not config.exists():
+            raise click.BadParameter(f"Config file not found: {config}", param_hint="CONFIG")
+        loaded_config = load_config_from_json(config)
+
     # Configure logging with dual handlers if log_file specified
     if log_file:
         # All logs go to file, but errors and info (summary) still appear on console
@@ -60,9 +91,7 @@ def main(config: Path, verbose: bool, log_file: Optional[Path]) -> None:
         logger = logging.getLogger(__name__)
     
     try:
-        logger.debug(f"Loading configuration from {config}")
-        loaded_config = load_config_from_json(config)
-
+        logger.debug("Using loaded configuration (from CONFIG or --project)")
         detector = MethylDetector(loaded_config)
         results = detector.run()
 

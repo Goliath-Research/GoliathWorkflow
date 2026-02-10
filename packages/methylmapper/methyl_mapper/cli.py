@@ -11,6 +11,7 @@ from pathlib import Path
 from .config import MethylMapperConfig, AzureSQLConfig, StoredProcedureConfig
 from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
+from .project_resolver import resolve_mapper_paths
 from .secure_credentials import SecureCredentialManager
 
 
@@ -480,6 +481,22 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         help='Growth rate threshold for unrelated genes (default: 0.10 = 10%%)'
     )
     
+    # Pipeline project (sets default csv_pattern and output_dir from project)
+    parser.add_argument(
+        '--project', '-P',
+        type=str,
+        default=None,
+        metavar='JSON',
+        help='Path to pipeline project config; sets input CSVs from detection dir and output to mapper dir'
+    )
+    parser.add_argument(
+        '--step-override',
+        type=str,
+        default=None,
+        metavar='JSON',
+        help='Optional JSON overrides for mapper step when using --project (e.g. csv_pattern, output_dir)'
+    )
+
     # Other options
     parser.add_argument(
         '--config', '-c',
@@ -499,6 +516,18 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     )
     
     args = parser.parse_args()
+
+    # Apply --project first (sets default csv_pattern and output_dir)
+    if args.project:
+        project_path = Path(args.project)
+        if not project_path.exists():
+            raise FileNotFoundError(f"Project config not found: {project_path}")
+        step_override = Path(args.step_override) if args.step_override else None
+        mapper_paths = resolve_mapper_paths(project_path, step_override)
+        if args.csv_pattern is None:
+            args.csv_pattern = mapper_paths.csv_pattern
+        if args.output_dir is None:
+            args.output_dir = mapper_paths.output_dir
 
     # Apply optional config file (CLI args take precedence)
     if args.config:

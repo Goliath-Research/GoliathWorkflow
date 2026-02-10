@@ -179,6 +179,37 @@ methyl_utils/
 7. MethylEnricher (functional enrichment)
 ```
 
+### Pipeline configuration (project config)
+
+A single **project config** (JSON) defines the two cohorts, the project root, and optional shared parameters. All step configs are derived from it using **Pydantic** models (no raw dict configs). Paths follow a fixed convention so each project has one folder and step outputs live in fixed subdirs.
+
+**Path convention**: `{output_base}/{centroids|detection|mapper|enricher|classifier}`
+
+- **centroids**: `{output_base}/centroids/{group1.label}` and `{output_base}/centroids/{group2.label}`
+- **detection**: `{output_base}/detection`
+- **mapper**: `{output_base}/mapper`
+- **enricher**: `{output_base}/enricher`
+- **classifier**: `{output_base}/classifier`
+
+**Project config fields** (see `methyl_utils.pipeline_config.ProjectConfig`):
+
+- `project_name`: identifier (e.g. `"PCa_vs_Healthy"`)
+- `output_base`: project root directory
+- `group1` / `group2`: each has `label` and `sample_paths` (list of sample dirs or paths to list files)
+- Optional: `chromosomes`, `contexts`, `path_remap` (prefix replacement when samples move, e.g. to NAS)
+
+**Using `--project`**: Each tool can be run with `--project project.json` (and optional `--step-override step.json`). A resolver builds that step’s Pydantic config from the project and overrides. Standalone step configs (no `--project`) still work.
+
+| Tool | Project usage |
+|------|----------------|
+| **MethylCentroid** | `--project project.json --group group1` (or `group2`); optional `--step-override`. Output goes to `{output_base}/centroids/{group1|group2.label}`. |
+| **MethylDetector** | `--project project.json`; optional `--step-override`. Reads centroids from derived paths, writes to `{output_base}/detection`. |
+| **MethylMapper** (bedtools) | `--project project.json`; optional `--step-override`. Input CSVs from `detection_dir`, output to `mapper_dir`. Still requires `--gtf`. |
+| **MethylEnricher** | `--project project.json`; optional `--step-override`. Input = mapper combined CSV (`mapper_dir/all-gene_name-combined.csv`), output to `enricher_dir`. |
+| **MethylClassifier** | `--project project.json`; optional `--step-override`. Model from `detection_dir`, centroid dirs and `path_remap` from project, output to `classifier_dir`. |
+
+Shared types and loader live in **MethylUtils**: `ProjectConfig`, `GroupConfig`, `DerivedPaths`, `load_project()`.
+
 ### Data Formats
 
 #### HDF5 Structure
