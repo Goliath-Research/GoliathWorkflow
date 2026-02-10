@@ -1,0 +1,30 @@
+{
+  "project_name": "PCa_vs_Healthy",
+  "output_base": "/work/data/david-gladys/all-prostate",
+  "group1": {
+    "label": "healthy_all",
+    "sample_paths": [
+      "/work/david-gladys/all-prostate/039377_21M_25_99",
+      "/work/david-gladys/all-prostate/039380_21N_11_83",
+      "/work/david-gladys/all-prostate/039400_21Q_6_12",
+      "/work/david-gladys/all-prostate/5929_601068_V00_EDTA_BC3",
+      "/work/david-gladys/all-prostate/1401-042825-50082",
+      "/work/david-gladys/all-prostate/HBCST-071625-48267"
+    ]
+  },
+  "group2": {
+    "label": "pcancer",
+    "sample_paths": [
+      "/home/dizada/data/027074_15Q_01_11",
+      "/home/dizada/data/015403_10G_15_56",
+      "/home/dizada/data/033234_17P_21_71",
+      "/home/dizada/data/DBCST-071125-111814",
+      "/home/dizada/data/2401-081425-112031"
+    ]
+  },
+  "chromosomes": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
+  "contexts": ["CG"],
+  "path_remap": {
+    "/home/dizada/data": "/work/david-gladys/all-prostate/samples"
+  }
+}
