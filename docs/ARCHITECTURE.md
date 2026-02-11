@@ -183,19 +183,20 @@ methyl_utils/
 
 A single **project config** (JSON) defines the two cohorts, the project root, and optional shared parameters. All step configs are derived from it using **Pydantic** models (no raw dict configs). Paths follow a fixed convention so each project has one folder and step outputs live in fixed subdirs.
 
-**Path convention**: `{output_base}/{centroids|detection|mapper|enricher|classifier|alignment_qc}`
+**Path convention**: `output_base` is a global output folder; each project has a subfolder `{output_base}/{project_name}`. All step outputs live under that project folder:
 
-- **centroids**: `{output_base}/centroids/{group1.label}` and `{output_base}/centroids/{group2.label}`
-- **detection**: `{output_base}/detection`
-- **mapper**: `{output_base}/mapper`
-- **enricher**: `{output_base}/enricher`
-- **classifier**: `{output_base}/classifier`
-- **alignment_qc**: `{output_base}/alignment_qc` (one JSON per sample for MethylAlignmentQC)
+- **project root**: `{output_base}/{project_name}`
+- **centroids**: `{project_root}/centroids/{group1.label}` and `{project_root}/centroids/{group2.label}`
+- **detection**: `{project_root}/detection`
+- **mapper**: `{project_root}/mapper`
+- **enricher**: `{project_root}/enricher`
+- **classifier**: `{project_root}/classifier`
+- **alignment_qc**: `{project_root}/alignment_qc` (one JSON per sample for MethylAlignmentQC)
 
 **Project config fields** (see `methyl_utils.pipeline_config.ProjectConfig`):
 
-- `project_name`: identifier (e.g. `"PCa_vs_Healthy"`)
-- `output_base`: project root directory
+- `project_name`: identifier and subfolder name (e.g. `"PCa_vs_Healthy"`)
+- `output_base`: global output directory; step outputs go under `{output_base}/{project_name}`
 - `group1` / `group2`: each has `label` and `sample_paths` (list of sample dirs or paths to list files)
 - Optional: `chromosomes`, `contexts`, `path_remap` (prefix replacement when samples move, e.g. to NAS)
 
@@ -203,12 +204,12 @@ A single **project config** (JSON) defines the two cohorts, the project root, an
 
 | Tool | Project usage |
 |------|----------------|
-| **MethylCentroid** | `--project project.json --group group1` (or `group2`); optional `--step-override`. Output goes to `{output_base}/centroids/{group1|group2.label}`. |
-| **MethylDetector** | `--project project.json`; optional `--step-override`. Reads centroids from derived paths, writes to `{output_base}/detection`. |
+| **MethylCentroid** | `--project project.json --group group1` (or `group2`); optional `--step-override`. Output goes to `{output_base}/{project_name}/centroids/{group1|group2.label}`. |
+| **MethylDetector** | `--project project.json`; optional `--step-override`. Writes to `{output_base}/{project_name}/detection`. |
 | **MethylMapper** (bedtools) | `--project project.json`; optional `--step-override`. Input CSVs from `detection_dir`, output to `mapper_dir`. Still requires `--gtf`. |
-| **MethylEnricher** | `--project project.json`; optional `--step-override`. Input = mapper combined CSV (`mapper_dir/all-gene_name-combined.csv`), output to `enricher_dir`. |
-| **MethylClassifier** | `--project project.json`; optional `--step-override`. Model from `detection_dir`, centroid dirs and `path_remap` from project, output to `classifier_dir`. |
-| **MethylAlignmentQC** | `--project project.json`; optional `--step-override`. Sample paths from group1/group2, output to `{output_base}/alignment_qc` (one JSON per sample). |
+| **MethylEnricher** | `--project project.json`; optional `--step-override`. Input = mapper combined CSV, output to `enricher_dir`. |
+| **MethylClassifier** | `--project project.json`; optional `--step-override`. Output to `classifier_dir`. |
+| **MethylAlignmentQC** | `--project project.json`; optional `--step-override`. Output to `{output_base}/{project_name}/alignment_qc` (one JSON per sample). |
 
 Shared types and loader live in **MethylUtils**: `ProjectConfig`, `GroupConfig`, `DerivedPaths`, `load_project()`.
 

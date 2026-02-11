@@ -1,8 +1,8 @@
 """
 Shared pipeline project configuration for MethylPipeline workflows.
 
-Defines Pydantic models for a single project config (two groups, output_base)
-and derived paths under {output_base}/centroids|detection|mapper|enricher|classifier|alignment_qc.
+Defines Pydantic models for a single project config (two groups, output_base, project_name)
+and derived paths under {output_base}/{project_name}/centroids|detection|mapper|enricher|classifier|alignment_qc.
 Used by MethylCentroid, MethylDetector, MethylMapper, MethylEnricher, MethylClassifier, MethylAlignmentQC
 to avoid repeating sample paths and output layout across configs.
 """
@@ -33,10 +33,11 @@ class GroupConfig(BaseModel):
 class DerivedPaths(BaseModel):
     """
     Derived paths from a ProjectConfig.
-    Convention: {output_base}/{centroids|detection|mapper|enricher|classifier|alignment_qc}.
+    Convention: project root = {output_base}/{project_name}; step dirs under that:
+    {project_root}/centroids|detection|mapper|enricher|classifier|alignment_qc.
     """
 
-    output_base: str = Field(..., description="Project root directory")
+    output_base: str = Field(..., description="Project root directory (output_base/project_name)")
     centroid1_dir: str = Field(..., description="Centroid directory for group1")
     centroid2_dir: str = Field(..., description="Centroid directory for group2")
     detection_dir: str = Field(..., description="MethylDetector output directory")
@@ -63,7 +64,7 @@ class ProjectConfig(BaseModel):
     )
     output_base: str = Field(
         ...,
-        description="Project root; under it: centroids, detection, mapper, enricher, classifier",
+        description="Global output folder; each project uses a subfolder {output_base}/{project_name} for all step outputs",
     )
     group1: GroupConfig = Field(..., description="First cohort (e.g. control/healthy)")
     group2: GroupConfig = Field(..., description="Second cohort (e.g. disease/cancer)")
@@ -91,17 +92,18 @@ class ProjectConfig(BaseModel):
         return v.rstrip("/") if v else v
 
     def get_derived_paths(self) -> DerivedPaths:
-        """Compute derived paths from this project config."""
-        base = self.output_base.rstrip("/")
+        """Compute derived paths from this project config. Project root is {output_base}/{project_name}."""
+        global_base = self.output_base.rstrip("/")
+        project_root = f"{global_base}/{self.project_name}"
         return DerivedPaths(
-            output_base=base,
-            centroid1_dir=f"{base}/centroids/{self.group1.label}",
-            centroid2_dir=f"{base}/centroids/{self.group2.label}",
-            detection_dir=f"{base}/detection",
-            mapper_dir=f"{base}/mapper",
-            enricher_dir=f"{base}/enricher",
-            classifier_dir=f"{base}/classifier",
-            alignment_qc_dir=f"{base}/alignment_qc",
+            output_base=project_root,
+            centroid1_dir=f"{project_root}/centroids/{self.group1.label}",
+            centroid2_dir=f"{project_root}/centroids/{self.group2.label}",
+            detection_dir=f"{project_root}/detection",
+            mapper_dir=f"{project_root}/mapper",
+            enricher_dir=f"{project_root}/enricher",
+            classifier_dir=f"{project_root}/classifier",
+            alignment_qc_dir=f"{project_root}/alignment_qc",
         )
 
     def get_group1_sample_paths(self) -> List[str]:
