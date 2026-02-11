@@ -78,9 +78,8 @@
       "max_bc": 0.6
     },
     "mapper": {
-      "csv_pattern": "/work/data/david-gladys/all-prostate/detection/dmps-*-biological-sorted.csv",
+      "csv_filename_pattern": "dmps-*-biological-sorted.csv",
       "gtf": "/work/genomes/human_genome/gencode.v44.annotation.gtf",
-      "output_dir": "/work/data/david-gladys/all-prostate/mapper",
       "disease_term": "Prostate Cancer",
       "enrich_disease": true,
       "enrich_source": "grok+opentargets",

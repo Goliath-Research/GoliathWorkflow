@@ -40,10 +40,13 @@ def resolve_mapper_paths(
     csv_pattern = str(Path(paths.detection_dir) / csv_filename_pattern)
     output_dir = paths.mapper_dir
 
-    # Apply project-level step config (mapper) if present
+    # Apply project-level step config (mapper) if present.
+    # Prefer csv_filename_pattern (mask under detection_dir) over full csv_pattern path.
     step_cfg = project.get_step_config("mapper")
     if step_cfg:
-        if step_cfg.get("csv_pattern") is not None:
+        if step_cfg.get("csv_filename_pattern") is not None:
+            csv_pattern = str(Path(paths.detection_dir) / step_cfg["csv_filename_pattern"])
+        elif step_cfg.get("csv_pattern") is not None:
             csv_pattern = step_cfg["csv_pattern"]
         if step_cfg.get("output_dir") is not None:
             output_dir = step_cfg["output_dir"]
@@ -54,7 +57,9 @@ def resolve_mapper_paths(
         with open(step_override_path) as f:
             overrides = json.load(f)
 
-    if overrides.get("csv_pattern") is not None:
+    if overrides.get("csv_filename_pattern") is not None:
+        csv_pattern = str(Path(paths.detection_dir) / overrides["csv_filename_pattern"])
+    elif overrides.get("csv_pattern") is not None:
         csv_pattern = overrides["csv_pattern"]
     if overrides.get("output_dir") is not None:
         output_dir = overrides["output_dir"]
