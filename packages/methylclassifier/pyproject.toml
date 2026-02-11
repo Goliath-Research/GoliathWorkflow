@@ -17,6 +17,7 @@ seaborn = ">=0.13.0,<0.14.0"
 methylutils = {path = "../methylutils", develop = true}
 
 [tool.poetry.scripts]
+methyl-classifier = "methyl_classifier.cli:main"
 methyl_classifier = "methyl_classifier.cli:main"
 
 [tool.poetry.dev-dependencies]

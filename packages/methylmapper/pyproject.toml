@@ -18,6 +18,7 @@ cryptography = ">=3.4.0"
 methylutils = {path = "../methylutils", develop = true}
 
 [tool.poetry.scripts]
+methyl-mapper = "methyl_mapper.cli:main"
 methyl_mapper = "methyl_mapper.cli:main"
 methyl_mapper_bedtools = "methyl_mapper.cli:main_bedtools"
 methyl_mapper_credentials = "methyl_mapper.cli:main_credentials"

@@ -182,7 +182,9 @@ For more information, visit: https://github.com/your-org/methyl_mapper
 
 
 def main():
-    """Main entry point for MethylMapper CLI."""
+    """Main entry point for MethylMapper CLI. With --project, runs bedtools flow (same as methyl_mapper_bedtools)."""
+    if '--project' in sys.argv or '-P' in sys.argv:
+        return main_bedtools()
     args = parse_args()
     
     # Setup logging

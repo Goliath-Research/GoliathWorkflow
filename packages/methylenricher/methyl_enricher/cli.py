@@ -268,6 +268,12 @@ def main():
         from methyl_utils import load_project
         from .project_resolver import resolve_enricher_paths
         project_path = Path(args.project)
+        if not project_path.exists() and not project_path.is_absolute():
+            # When run from a package dir (e.g. packages/methylenricher), try repo root
+            _repo_root = Path(__file__).resolve().parent.parent.parent.parent
+            _alt = (_repo_root / args.project).resolve()
+            if _alt.exists():
+                project_path = _alt
         if not project_path.exists():
             print(f"[ERROR] Project config not found: {project_path}")
             sys.exit(1)

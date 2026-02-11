@@ -14,6 +14,7 @@ numpy = ">=1.26.0,<3.0.0"
 methylutils = {path = "../methylutils", develop = true}
 
 [tool.poetry.scripts]
+methyl-enricher = "methyl_enricher.cli:main"
 methyl_enricher = "methyl_enricher.cli:main"
 
 [tool.poetry.dev-dependencies]

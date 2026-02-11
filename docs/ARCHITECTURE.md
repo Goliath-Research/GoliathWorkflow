@@ -211,6 +211,8 @@ A single **project config** (JSON) defines the two cohorts, the project root, an
 | **MethylClassifier** | `--project project.json`; optional `--step-override`. Output to `classifier_dir`. |
 | **MethylAlignmentQC** | `--project project.json`; optional `--step-override`. Output to `{output_base}/{project_name}/alignment_qc` (one JSON per sample). |
 
+CLI commands: `methyl-centroid`, `methyl-detector`, `methyl-mapper`, `methyl-enricher`, `methyl-classifier`, `methyl-qc`.
+
 Shared types and loader live in **MethylUtils**: `ProjectConfig`, `GroupConfig`, `DerivedPaths`, `load_project()`.
 
 ### Data Formats
