@@ -52,13 +52,14 @@ def resolve_centroid_batch_config(
         contexts=project.contexts or ["CG"],
         base_config=base_config,
     )
-    # Apply project-level step config (centroid) if present
+    # Apply project-level step config (centroid) if present (never override output_dir)
     step_cfg = project.get_step_config("centroid")
     if step_cfg:
         if "base_config" in step_cfg:
             base_data = batch.base_config.model_dump()
             for k, v in step_cfg["base_config"].items():
-                base_data[k] = v
+                if k != "output_dir":  # keep canonical path from get_derived_paths()
+                    base_data[k] = v
             batch = batch.model_copy(update={"base_config": MethylCentroidConfig(**base_data)})
         for key in ("chromosomes", "contexts", "parallel_combinations", "continue_on_error", "save_batch_summary"):
             if key in step_cfg:
@@ -69,9 +70,15 @@ def resolve_centroid_batch_config(
         if "base_config" in overrides:
             base_data = batch.base_config.model_dump()
             for k, v in overrides["base_config"].items():
-                base_data[k] = v
+                if k != "output_dir":
+                    base_data[k] = v
             batch = batch.model_copy(update={"base_config": MethylCentroidConfig(**base_data)})
         for key in ("chromosomes", "contexts", "parallel_combinations", "continue_on_error", "save_batch_summary"):
             if key in overrides:
                 batch = batch.model_copy(update={key: overrides[key]})
+    # Ensure output_dir is always the derived path (output_base/project_name/centroids/...)
+    canonical_output = paths.centroid1_dir if group == "group1" else paths.centroid2_dir
+    batch = batch.model_copy(
+        update={"base_config": batch.base_config.model_copy(update={"output_dir": canonical_output})}
+    )
     return batch
