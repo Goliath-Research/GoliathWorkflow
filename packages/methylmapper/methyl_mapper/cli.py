@@ -440,8 +440,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     disease_group.add_argument(
         '--cache-ttl-days',
         type=int,
-        default=7,
-        help='Cache TTL in days (default: 7, 0 disables TTL)'
+        default=0,
+        help='Cache TTL in days (default: 0 = never use cache for fresh Grok results; set e.g. 7 to reuse)'
     )
     
     # DMP optimization options

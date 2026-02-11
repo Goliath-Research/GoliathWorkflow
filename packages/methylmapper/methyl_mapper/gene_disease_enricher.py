@@ -178,7 +178,7 @@ class GeneDiseaseEnricher:
         allow_predicted: Optional[bool] = None,
         cache_enabled: bool = True,
         cache_dir: Optional[Path] = None,
-        cache_ttl_days: Optional[int] = 7,
+        cache_ttl_days: Optional[int] = 0,
         rate_limit_delay: float = 1.0,
         max_retries: int = 3,
         azure_key_vault_url: Optional[str] = None,
@@ -206,7 +206,7 @@ class GeneDiseaseEnricher:
             allow_predicted: Whether to allow "predicted" associations
             cache_enabled: Whether to persist cache to disk
             cache_dir: Directory for disk cache (default: ~/.methyl_mapper/cache)
-            cache_ttl_days: Cache TTL in days (default: 7, 0 or None disables TTL)
+            cache_ttl_days: Cache TTL in days (default: 0 = never use cache for fresh Grok results; set e.g. 7 to reuse cache)
             rate_limit_delay: Delay between API calls (seconds)
             max_retries: Maximum retry attempts for API calls
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
@@ -258,7 +258,8 @@ class GeneDiseaseEnricher:
         self.max_retries = max_retries
 
         self.cache_enabled = cache_enabled
-        self.cache_ttl_days = None if cache_ttl_days in (None, 0) else int(cache_ttl_days)
+        # 0 = never use cache (always re-query); None = no TTL (cache never expires); positive = max age in days
+        self.cache_ttl_days = None if cache_ttl_days is None else int(cache_ttl_days)
         self.cache_dir = Path(cache_dir).expanduser() if cache_dir else (Path.home() / ".methyl_mapper" / "cache")
         self.cache_file = self.cache_dir / "gene_disease_cache.json"
 
@@ -404,16 +405,18 @@ class GeneDiseaseEnricher:
         
         prompt = f"""You are a biomedical expert. For each of the following genes: {genes_str}
 
-Please provide information about their association with "{disease_term}" in JSON format. For each gene, provide:
+Provide their association with "{disease_term}" in JSON format. Use a PERMISSIVE interpretation: mark a gene as associated (associated: true) if there is ANY reported or suspected link in the literature—including direct, indirect, predicted, or emerging evidence. Do not mark genes as unrelated (associated: false) when they have known or plausible roles in {disease_term}; when in doubt, prefer associated: true with an appropriate evidence_level.
+
+For each gene provide:
 1. "gene_name": The gene symbol
-2. "associated": true/false indicating if the gene is associated with {disease_term}
+2. "associated": true/false (true if any reported/suspected association; prefer true when evidence exists)
 3. "association_type": One of ["direct", "indirect", "predicted", "none"]
 4. "evidence_level": One of ["high", "medium", "low", "none"]
 5. "description": A brief description of the association (or null if none)
 6. "publications": Number of publications mentioning this association (or 0)
 7. "functional_role": Brief description of the gene's role in {disease_term} (or null)
 
-Return ONLY valid JSON array format like:
+Return ONLY a valid JSON array, e.g.:
 [
   {{"gene_name": "GENE1", "associated": true, "association_type": "direct", "evidence_level": "high", "description": "...", "publications": 15, "functional_role": "..."}},
   {{"gene_name": "GENE2", "associated": false, "association_type": "none", "evidence_level": "none", "description": null, "publications": 0, "functional_role": null}}
@@ -1070,6 +1073,8 @@ Return ONLY valid JSON array format like:
     def _is_cache_valid(self, ts: Optional[float]) -> bool:
         if ts is None:
             return True
+        if self.cache_ttl_days == 0:
+            return False  # 0 = never use cache; Grok/literature updates make cached results stale
         if self.cache_ttl_days is None:
             return True
         return (time.time() - ts) <= (self.cache_ttl_days * 86400)

@@ -105,7 +105,7 @@ class BedtoolsMapper:
         allow_predicted: Optional[bool] = None,
         cache_enabled: bool = True,
         cache_dir: Optional[Path] = None,
-        cache_ttl_days: Optional[int] = 7,
+        cache_ttl_days: Optional[int] = 0,
         azure_key_vault_url: Optional[str] = None,
         azure_secret_name: Optional[str] = None,
         encrypted_file_path: Optional[Path] = None,
@@ -141,7 +141,7 @@ class BedtoolsMapper:
             allow_predicted: Whether to allow "predicted" associations
             cache_enabled: Whether to persist cache to disk
             cache_dir: Directory for disk cache (default: ~/.methyl_mapper/cache)
-            cache_ttl_days: Cache TTL in days (default: 7, 0 or None disables TTL)
+            cache_ttl_days: Cache TTL in days (default: 0 = never use cache; set e.g. 7 to reuse)
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
             azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
             encrypted_file_path: Path to encrypted credential file (optional)
