@@ -103,7 +103,7 @@
     ]
   },
   "group2": {
-    "label": "pcancer",
+    "label": "PCa7+",
     "sample_paths": [
         "/work/david-gladys/all-prostate/030057_16L_10_26",
         "/work/david-gladys/all-prostate/016429_10I_11_45",
@@ -246,9 +246,8 @@
       "max_bc": 0.6
     },
     "mapper": {
-      "csv_pattern": "/work/david-gladys/all-prostate/detection/dmps-*.csv",
+      "csv_pattern": "dmps-*.csv",
       "gtf": "/work/genomes/human_genome/gencode.v44.annotation.gtf",
-      "output_dir": "/work/david-gladys/all-prostate/mapper",
       "disease_term": "Prostate Cancer",
       "enrich_disease": true,
       "enrich_source": "grok+opentargets",
