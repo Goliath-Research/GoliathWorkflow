@@ -52,6 +52,17 @@ def resolve_centroid_batch_config(
         contexts=project.contexts or ["CG"],
         base_config=base_config,
     )
+    # Apply project-level step config (centroid) if present
+    step_cfg = project.get_step_config("centroid")
+    if step_cfg:
+        if "base_config" in step_cfg:
+            base_data = batch.base_config.model_dump()
+            for k, v in step_cfg["base_config"].items():
+                base_data[k] = v
+            batch = batch.model_copy(update={"base_config": MethylCentroidConfig(**base_data)})
+        for key in ("chromosomes", "contexts", "parallel_combinations", "continue_on_error", "save_batch_summary"):
+            if key in step_cfg:
+                batch = batch.model_copy(update={key: step_cfg[key]})
     if step_override_path is not None:
         with open(step_override_path) as f:
             overrides = json.load(f)

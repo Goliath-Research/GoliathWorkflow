@@ -40,6 +40,14 @@ def resolve_mapper_paths(
     csv_pattern = str(Path(paths.detection_dir) / csv_filename_pattern)
     output_dir = paths.mapper_dir
 
+    # Apply project-level step config (mapper) if present
+    step_cfg = project.get_step_config("mapper")
+    if step_cfg:
+        if step_cfg.get("csv_pattern") is not None:
+            csv_pattern = step_cfg["csv_pattern"]
+        if step_cfg.get("output_dir") is not None:
+            output_dir = step_cfg["output_dir"]
+
     overrides: dict = {}
     if step_override_path and step_override_path.exists():
         import json

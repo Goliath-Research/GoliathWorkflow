@@ -35,6 +35,12 @@ def resolve_classifier_config(
     if project.path_remap:
         base["centroid_path_remap"] = project.path_remap
 
+    # Apply project-level step config (classifier) if present
+    step_cfg = project.get_step_config("classifier")
+    if step_cfg:
+        for k, v in step_cfg.items():
+            base[k] = v
+
     if step_override_path is not None:
         override_path = Path(step_override_path)
         if override_path.exists():

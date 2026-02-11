@@ -8,7 +8,7 @@ to avoid repeating sample paths and output layout across configs.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -78,6 +78,11 @@ class ProjectConfig(BaseModel):
         default=None,
         description="Prefix replacement when sample paths moved (e.g. NAS); longest match applied",
     )
+    step_config: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier. "
+        "Values are merged into that step's config (override file / CLI still override these).",
+    )
 
     @field_validator("output_base")
     @classmethod
@@ -104,6 +109,15 @@ class ProjectConfig(BaseModel):
     def get_group2_sample_paths(self) -> List[str]:
         """Return resolved sample paths for group2."""
         return _resolve_sample_paths(self.group2.sample_paths)
+
+    def get_step_config(self, step_name: str) -> Dict[str, Any]:
+        """
+        Return the config dict for a step, or empty dict if not defined.
+        Step names: centroid, detection, mapper, enricher, classifier.
+        """
+        if not self.step_config:
+            return {}
+        return dict(self.step_config.get(step_name) or {})
 
 
 def _resolve_sample_paths(sample_paths: List[str]) -> List[str]:

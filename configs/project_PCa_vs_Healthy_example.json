@@ -24,7 +24,35 @@
   },
   "chromosomes": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
   "contexts": ["CG"],
-  "path_remap": {
-    "/home/dizada/data": "/work/david-gladys/all-prostate/samples"
+  "path_remap": { "/home/dizada/data": "/work/david-gladys/all-prostate/samples" },
+  "step_config": {
+    "centroid": {
+      "base_config": {
+        "min_coverage": 4,
+        "use_gpu": true,
+        "max_sample_workers": null,
+        "verbose": true
+      },
+      "parallel_combinations": 1,
+      "continue_on_error": true,
+      "save_batch_summary": true
+    },
+    "detection": {
+      "alpha": 0.05,
+      "optimize_dmps": true,
+      "validation_mode": "real",
+      "target_balanced_accuracy": 0.99,
+      "optimization_method": "featurecuts",
+      "random_state": 42,
+      "min_N_pct": 0.1,
+      "min_delta_mean": 0.2,
+      "max_bc": 0.6
+    },
+    "mapper": {},
+    "enricher": {},
+    "classifier": {
+      "debug": false,
+      "log_level": "INFO"
+    }
   }
 }

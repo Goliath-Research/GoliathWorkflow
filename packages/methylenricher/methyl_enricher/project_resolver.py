@@ -40,6 +40,18 @@ def resolve_enricher_paths(
     input_file = paths.mapper_combined_csv
     output_dir = paths.enricher_dir
 
+    # Apply project-level step config (enricher) if present
+    step_cfg = project.get_step_config("enricher")
+    if step_cfg:
+        if step_cfg.get("input_file") is not None:
+            input_file = step_cfg["input_file"]
+        if step_cfg.get("input") is not None:
+            input_file = step_cfg["input"]
+        if step_cfg.get("output_dir") is not None:
+            output_dir = step_cfg["output_dir"]
+        if step_cfg.get("outdir") is not None:
+            output_dir = step_cfg["outdir"]
+
     overrides: dict = {}
     if step_override_path and step_override_path.exists():
         import json

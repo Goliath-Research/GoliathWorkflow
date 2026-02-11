@@ -36,6 +36,12 @@ def resolve_detector_config(
     if project.get_group2_sample_paths():
         base["centroid2_validation_samples"] = project.get_group2_sample_paths()
 
+    # Apply project-level step config (detection) if present
+    step_cfg = project.get_step_config("detection")
+    if step_cfg:
+        for k, v in step_cfg.items():
+            base[k] = v
+
     if step_override_path is not None:
         with open(step_override_path) as f:
             overrides = json.load(f)

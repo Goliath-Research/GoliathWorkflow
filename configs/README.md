@@ -27,6 +27,26 @@ Based on the latest PCa vs Healthy runs. Fields:
 | `chromosomes` | Optional; shared chromosome list for centroid/detector batches. |
 | `contexts` | Optional; shared contexts (e.g. `["CG"]`). |
 | `path_remap` | Optional; prefix replacement when sample paths move (e.g. NAS); longest match applied. |
+| `step_config` | Optional; per-step defaults. Keys: `centroid`, `detection`, `mapper`, `enricher`, `classifier`. Each value is a JSON object merged into that step’s config. Override file (`--step-override`) and CLI args still override these. |
+
+### Per-step configuration (`step_config`)
+
+You can define defaults for each pipeline step in the project JSON under `step_config`:
+
+```json
+"step_config": {
+  "centroid": {
+    "base_config": { "min_coverage": 5, "use_gpu": true },
+    "parallel_combinations": 4
+  },
+  "detection": { "min_pvalue": 0.01 },
+  "mapper": { "csv_pattern": "/path/to/detection/dmps-*-3-optimized.csv" },
+  "enricher": { "output_dir": "/custom/enricher" },
+  "classifier": { "output_path": "/custom/classifier/results.csv" }
+}
+```
+
+Resolution order: **project shared + derived paths → `step_config[step]` → `--step-override` file / CLI**. So you can set defaults in the project and still override per run.
 
 ### Usage
 
