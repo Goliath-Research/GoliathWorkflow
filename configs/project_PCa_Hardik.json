@@ -74,7 +74,7 @@
       "random_state": 42,
       "min_N_pct": 0.1,
       "min_delta_mean": 0.2,
-      "max_bc": 0.6
+      "max_bc": 0.7
     },
     "mapper": {
       "csv_filename_pattern": "dmps-*.csv",
