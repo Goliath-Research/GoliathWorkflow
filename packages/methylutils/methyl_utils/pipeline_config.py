@@ -2,8 +2,8 @@
 Shared pipeline project configuration for MethylPipeline workflows.
 
 Defines Pydantic models for a single project config (two groups, output_base)
-and derived paths under {output_base}/centroids|detection|mapper|enricher|classifier.
-Used by MethylCentroid, MethylDetector, MethylMapper, MethylEnricher, MethylClassifier
+and derived paths under {output_base}/centroids|detection|mapper|enricher|classifier|alignment_qc.
+Used by MethylCentroid, MethylDetector, MethylMapper, MethylEnricher, MethylClassifier, MethylAlignmentQC
 to avoid repeating sample paths and output layout across configs.
 """
 
@@ -33,7 +33,7 @@ class GroupConfig(BaseModel):
 class DerivedPaths(BaseModel):
     """
     Derived paths from a ProjectConfig.
-    Convention: {output_base}/{centroids|detection|mapper|enricher|classifier}.
+    Convention: {output_base}/{centroids|detection|mapper|enricher|classifier|alignment_qc}.
     """
 
     output_base: str = Field(..., description="Project root directory")
@@ -43,6 +43,7 @@ class DerivedPaths(BaseModel):
     mapper_dir: str = Field(..., description="MethylMapper output directory")
     enricher_dir: str = Field(..., description="MethylEnricher output directory")
     classifier_dir: str = Field(..., description="MethylClassifier output directory")
+    alignment_qc_dir: str = Field(..., description="MethylAlignmentQC output directory (one JSON per sample)")
 
     @property
     def mapper_combined_csv(self) -> str:
@@ -80,7 +81,7 @@ class ProjectConfig(BaseModel):
     )
     step_config: Optional[Dict[str, Dict[str, Any]]] = Field(
         default=None,
-        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier. "
+        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, alignment_qc. "
         "Values are merged into that step's config (override file / CLI still override these).",
     )
 
@@ -100,6 +101,7 @@ class ProjectConfig(BaseModel):
             mapper_dir=f"{base}/mapper",
             enricher_dir=f"{base}/enricher",
             classifier_dir=f"{base}/classifier",
+            alignment_qc_dir=f"{base}/alignment_qc",
         )
 
     def get_group1_sample_paths(self) -> List[str]:
@@ -113,7 +115,7 @@ class ProjectConfig(BaseModel):
     def get_step_config(self, step_name: str) -> Dict[str, Any]:
         """
         Return the config dict for a step, or empty dict if not defined.
-        Step names: centroid, detection, mapper, enricher, classifier.
+        Step names: centroid, detection, mapper, enricher, classifier, alignment_qc.
         """
         if not self.step_config:
             return {}

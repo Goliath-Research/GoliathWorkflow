@@ -1,1 +1,1 @@
-include src/methyl_alignment_qc/schema_v2.json
+# Schema is defined in utils/schema_validator.py; no separate schema file.

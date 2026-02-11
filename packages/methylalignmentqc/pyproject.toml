@@ -5,17 +5,23 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "methyl_alignment_qc"
 version = "0.1.0"
-description = "A package to parse Parabricks QC metrics into Columnar JSON."
+description = "Parse Parabricks alignment QC metrics into per-sample JSON for database storage."
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
-    "pandas",
     "pydantic",
-    "numpy"
+    "methylutils",  # Monorepo: pip install -e ../methylutils first, or use from repo root
+]
+
+[project.optional-dependencies]
+dev = [
+    "pandas",
+    "numpy",
 ]
 
 [project.scripts]
-methyl-qc = "methyl_alignment_qc.parser:main"
+methyl-qc = "methyl_alignment_qc.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["methyl_alignment_qc*"]

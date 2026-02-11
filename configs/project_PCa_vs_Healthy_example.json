@@ -112,6 +112,9 @@
     "classifier": {
       "debug": false,
       "log_level": "INFO"
+    },
+    "alignment_qc": {
+      "validate_schema": true
     }
   }
 }

@@ -5,7 +5,7 @@ from pathlib import Path
 package_root = Path(__file__).parent.parent
 sys.path.append(str(package_root))
 
-from methyl_alignment_qc.monitor import run_with_logging
+from methyl_alignment_qc import run_with_logging
 
 def main():
     
