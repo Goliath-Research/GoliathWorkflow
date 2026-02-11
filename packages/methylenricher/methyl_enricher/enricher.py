@@ -188,11 +188,22 @@ class EnrichmentAnalyzer:
             sep = "," if suffix == ".csv" else "\t"
             df = pd.read_csv(input_path, sep=sep)
 
+            _gene_candidates = ["gene_name", "gene_id", "gene_symbol", "gene", "symbol"]
             if gene_column is None:
-                candidate_cols = ["gene_name", "gene_symbol", "gene", "symbol", "gene_id"]
-                gene_column = next((c for c in candidate_cols if c in df.columns), None)
+                gene_column = next((c for c in _gene_candidates if c in df.columns), None)
+            elif gene_column not in df.columns:
+                # Config/CLI asked for a column that is missing (e.g. CSV is gene_id from mapper)
+                _fallback = next((c for c in _gene_candidates if c in df.columns), None)
+                if _fallback:
+                    print(f"[WARN] Column '{gene_column}' not in CSV; using '{_fallback}'. Columns: {list(df.columns)}")
+                    gene_column = _fallback
+                else:
+                    raise ValueError(
+                        f"Gene column '{gene_column}' not found. "
+                        f"Columns found: {list(df.columns)}"
+                    )
 
-            if gene_column is None or gene_column not in df.columns:
+            if gene_column is None:
                 raise ValueError(
                     "Could not determine gene column. Provide --gene-column. "
                     f"Columns found: {list(df.columns)}"
@@ -228,6 +239,13 @@ class EnrichmentAnalyzer:
                     df = df.sort_values(by=sort_by, ascending=sort_ascending)
                 else:
                     print(f"[WARN] sort_by '{sort_by}' not found; skipping sort")
+
+            if len(df) == 0:
+                raise ValueError(
+                    "No genes left after filters. Try relaxing or removing filters "
+                    "(e.g. omit --disease-only, or loosen disease_association_type / min_disease_score / etc.). "
+                    "Or use --input with a plain gene list and no CSV filters."
+                )
 
             genes_raw = df[gene_column].dropna().astype(str).tolist()
             genes = []
