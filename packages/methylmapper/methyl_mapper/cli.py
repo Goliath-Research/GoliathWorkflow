@@ -517,7 +517,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     
     args = parser.parse_args()
 
-    # Apply --project first (sets default csv_pattern and output_dir)
+    # Apply --project first (sets default csv_pattern and output_dir, then step_config defaults)
     if args.project:
         project_path = Path(args.project)
         if not project_path.exists():
@@ -528,6 +528,31 @@ For more information, visit: https://github.com/your-org/methyl_mapper
             args.csv_pattern = mapper_paths.csv_pattern
         if args.output_dir is None:
             args.output_dir = mapper_paths.output_dir
+        # Apply project step_config.mapper defaults (same keys as --config)
+        from methyl_utils import load_project
+        project = load_project(project_path)
+        step_cfg = project.get_step_config("mapper")
+        if step_cfg:
+            if step_cfg.get("csv_pattern") is not None and args.csv_pattern is None:
+                args.csv_pattern = step_cfg["csv_pattern"]
+            if step_cfg.get("disease_term") is not None and args.disease_term is None:
+                args.disease_term = step_cfg["disease_term"]
+            if step_cfg.get("gtf") is not None and args.gtf is None:
+                args.gtf = step_cfg["gtf"]
+            if step_cfg.get("output_dir") is not None and args.output_dir is None:
+                args.output_dir = step_cfg["output_dir"]
+            if step_cfg.get("enrich_disease") is True and not args.enrich_disease:
+                args.enrich_disease = True
+            if step_cfg.get("enrich_source") is not None:
+                args.enrich_source = step_cfg["enrich_source"]
+            if step_cfg.get("enrich_profile") is not None:
+                args.enrich_profile = step_cfg["enrich_profile"]
+            if step_cfg.get("grok_api_key") is not None and args.grok_api_key is None:
+                args.grok_api_key = step_cfg["grok_api_key"]
+            if step_cfg.get("optimize_dmps") is False and not args.no_optimize_dmps:
+                args.no_optimize_dmps = True
+            if step_cfg.get("feature_types") is not None and args.feature_types is None:
+                args.feature_types = step_cfg["feature_types"]
 
     # Apply optional config file (CLI args take precedence)
     if args.config:

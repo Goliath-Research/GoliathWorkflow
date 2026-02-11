@@ -48,6 +48,8 @@ You can define defaults for each pipeline step in the project JSON under `step_c
 
 Resolution order: **project shared + derived paths → `step_config[step]` → `--step-override` file / CLI**. So you can set defaults in the project and still override per run.
 
+**Mapper** and **enricher** defaults come from the same keys as their standalone configs: see `packages/methylmapper/configs/PCa_vs_Healthy_mapper_config.json` and `packages/methylenricher/configs/PCa_vs_Healthy_enricher_config.json`. When you run with `--project`, those step_config entries are applied automatically (e.g. `gtf`, `disease_term`, `enrich_*` for mapper; `gene_column`, `libraries`, `disease_only`, etc. for enricher). For mapper, set `grok_api_key` via environment or `--step-override` rather than in the project file.
+
 ### Usage
 
 ```bash

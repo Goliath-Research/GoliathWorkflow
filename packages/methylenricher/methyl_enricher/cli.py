@@ -262,19 +262,27 @@ def main():
     """Main entry point for MethylEnricher CLI."""
     args = parse_args()
 
-    # Resolve paths from --project if set
+    # Resolve paths and apply step_config from --project if set
     if args.project:
         from pathlib import Path
+        from methyl_utils import load_project
         from .project_resolver import resolve_enricher_paths
         project_path = Path(args.project)
         if not project_path.exists():
             print(f"[ERROR] Project config not found: {project_path}")
             sys.exit(1)
+        project = load_project(project_path)
+        step_cfg = project.get_step_config("enricher")
+        if step_cfg:
+            for k, v in step_cfg.items():
+                attr = k.replace("-", "_")
+                if hasattr(args, attr):
+                    setattr(args, attr, v)
         step_override = Path(args.step_override) if args.step_override else None
         paths = resolve_enricher_paths(project_path, step_override)
         if not args.input:
             args.input = paths.input_file
-        if args.outdir == 'results':  # default only
+        if args.outdir == "results":  # default only
             args.outdir = paths.output_dir
     
     # Handle --list-libraries
