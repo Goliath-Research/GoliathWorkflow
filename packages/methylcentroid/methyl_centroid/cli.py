@@ -97,8 +97,9 @@ Examples:
         help='Disease or condition being studied'
     )
     metadata_group.add_argument(
-        '--group',
-        help='Sample group identifier (e.g., "cancer", "control")'
+        '--group-label',
+        dest='group',
+        help='Sample group identifier (e.g., "cancer", "control") when not using --project'
     )
     metadata_group.add_argument(
         '--batch',
