@@ -2720,15 +2720,20 @@ class MethylDetector:
             'overlap', 'effect_size', 'context_weight',
             'alpha1', 'beta1', 'alpha2', 'beta2',
             'mean1', 'mean2',
-            'dist',
+            'dist', 'dist_name',
             'bmm_p_value', 'bmm_js', 'bmm_status'
         ]
-        
+        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture'}
+
         # Filter to only columns that exist
         available_cols = [c for c in export_cols if c in bio_dmps_df.columns]
-        
+
         # Add delta_sign if possible - make explicit copy to avoid SettingWithCopyWarning
         export_df = bio_dmps_df.copy()
+        if 'dist' in export_df.columns:
+            export_df['dist_name'] = export_df['dist'].map(DIST_NAMES).fillna('Unknown').astype(str)
+            if 'dist_name' not in available_cols:
+                available_cols.insert(available_cols.index('dist') + 1, 'dist_name')
         if 'mean1' in export_df.columns and 'mean2' in export_df.columns:
             if 'delta_sign' not in export_df.columns:
                 export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2'])

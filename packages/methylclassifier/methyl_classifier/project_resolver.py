@@ -8,7 +8,7 @@ from typing import Optional, Union
 
 from methyl_utils import load_project
 
-from ..models.config_schema import ClassificationConfig
+from .models.config_schema import ClassificationConfig
 
 
 def resolve_classifier_config(
