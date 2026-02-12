@@ -60,11 +60,10 @@ def main():
         global_significance_threshold=0.05,
         use_gpu=True,
 
-        # DMP filtering parameters
+        # DMP filtering parameters (effect_size = 1 - BC in [0, 1]; min_effect_size = minimum separation)
         apply_dmp_filtering=True,
         dmp_filter_method="combined",
-        min_overlap=0.6,
-        min_delta_mean=0.2,
+        min_effect_size=0.5,
         min_jeffreys_divergence=0.5,
         min_cohen_d=0.8,
         min_auc=0.7,

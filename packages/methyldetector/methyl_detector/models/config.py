@@ -125,16 +125,8 @@ class MethylModelerConfig(BaseModel):
     )
 
     # ----------------
-    # Biological Filters
+    # Biological Filter (effect_size = 1 - BC in [0, 1])
     # ----------------
-    min_delta_mean: float = Field(
-        default=0.2, ge=0.0, le=1.0,
-        description="Minimum |delta_mean| for biological filter (proportion on [0,1]). Many biologists use 20–25%% difference: set 0.2–0.25 here"
-    )
-    max_bc: Optional[float] = Field(
-        default=0.7, ge=0.0, le=1.0,
-        description="Maximum overlap (max_overlap): keep DMPs with overlap < max_bc. Overlap = BC in [0,1]. No universal convention; 0.5–0.6 = stricter, 0.7 = permissive default. Set null to disable overlap filter"
-    )
     delta_mean_mode: str = Field(
         default="mean",
         description="How to compute mean/delta_mean for biological filtering: mean (centroid mean), beta (alpha/beta), normal (Sx/N), auto (per-distribution)"
@@ -202,18 +194,13 @@ class MethylModelerConfig(BaseModel):
         return v
 
     min_effect_size: Optional[float] = Field(
-        default=None, ge=0.0,
-        description="Minimum effect size threshold for filtering. Effect size = |delta_mu / var_delta_mu| * (1 - BC)^gamma. None = no effect size filtering"
+        default=None, ge=0.0, le=1.0,
+        description="Minimum effect_size (separation = 1 - BC, in [0, 1]) for biological filter. Keep DMPs with effect_size >= min_effect_size. Set null to disable."
     )
     gamma: float = Field(
         default=1.5, ge=1.0, le=2.0,
-        description="Exponent for overlap penalty in effect_size calculation. Higher values = stronger penalty for overlapping distributions"
+        description="Unused when effect_size=BD; kept for config compatibility."
     )
-    biological_filters: List[str] = Field(
-        default=["delta_mean", "bhattacharyya"],
-        description="List of biological filters to apply: 'delta_mean' filters by effect size, 'bhattacharyya' filters by distribution separation (Bhattacharyya Distance)"
-    )
-    
     # ----------------
     # Context Weighting
     # ----------------
@@ -404,15 +391,6 @@ class MethylModelerConfig(BaseModel):
             path = Path(v)
             if not str(path):
                 raise ValueError("Output directory cannot be empty")
-        return v
-
-    @field_validator('biological_filters', mode='before')
-    @classmethod
-    def validate_biological_filters(cls, v):
-        valid_filters = ['delta_mean', 'bhattacharyya']
-        for f in v:
-            if f not in valid_filters:
-                raise ValueError(f"Biological filter must be one of: {valid_filters}, got: {f}")
         return v
 
     @field_validator('delta_mean_mode', mode='before')

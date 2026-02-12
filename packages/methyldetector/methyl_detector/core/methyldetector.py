@@ -60,11 +60,10 @@ def bhattacharyya_coefficient(bd: np.ndarray) -> np.ndarray:
     Convert Bhattacharyya Distance (BD) to Bhattacharyya Coefficient (BC).
     This is the overlap measure used in biological filters and exported as 'overlap' in dmps-*.csv.
 
-    Relationship:  overlap = BC = exp(-BD)
-    - BD (Bhattacharyya Distance): computed in MethylUtils between the two Beta (or Normal) distributions;
-      BD = -ln(BC), so higher BD = less overlap.
-    - BC (Bhattacharyya Coefficient): in [0, 1]; 0 = no overlap (good separation), 1 = identical (no separation).
-    Biological filter: keep DMPs with abs(delta_mean) >= min_delta_mean and overlap < max_overlap.
+    Relationship:  overlap = BC = exp(-BD); BD = -ln(BC) (unbounded above).
+    - BC (Bhattacharyya Coefficient): in [0, 1]; 0 = no overlap, 1 = identical.
+    - Distance in [0, 1]: separation = 1 - BC. We set effect_size = separation so effect_size is bounded in [0, 1].
+    Biological filter: keep DMPs with effect_size (1 - BC) >= min_effect_size; min_effect_size in [0, 1].
 
     Args:
         bd: Bhattacharyya Distance values (0 to ∞, typically capped at 20)
@@ -578,41 +577,17 @@ class MethylDetector:
     
     def _filter_biological_dmps(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Filter DMPs by biological significance criteria.
-        Primary filters: abs(delta_mean) >= min_delta_mean and overlap < max_overlap.
-        Overlap = BC = exp(-BD), where BD is Bhattacharyya distance between the two distributions.
-
-        Applies filters based on config:
-        - min_delta_mean: minimum |mean1 - mean2| (default 0.2)
-        - max_bc (max_overlap): maximum overlap allowed, overlap < max_bc (default 0.7)
-        - min_effect_size: optional minimum effect size
+        Filter DMPs by biological significance: keep DMPs with effect_size >= min_effect_size when set.
         """
         bio_df = dmps_df.copy()
         initial_count = len(bio_df)
 
-        # Biological filter: |delta_mean| >= min_delta_mean
-        if 'delta_mean' in self.config.biological_filters and self.config.min_delta_mean > 0:
-            bio_df = bio_df[np.abs(bio_df['delta_mean']) >= self.config.min_delta_mean]
-            logger.info(f"After delta_mean filter (≥{self.config.min_delta_mean}): "
-                       f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
-
-        # Biological filter: overlap < max_overlap (overlap = BC = exp(-BD))
-        if 'bhattacharyya' in self.config.biological_filters and self.config.max_bc is not None:
-            if 'bhattacharyya_coefficient' in bio_df.columns:
-                bio_df = bio_df[bio_df['bhattacharyya_coefficient'] < self.config.max_bc]
-                logger.info(f"After overlap filter (<{self.config.max_bc}): "
-                           f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
-            elif 'overlap' in bio_df.columns:
-                bio_df = bio_df[bio_df['overlap'] < self.config.max_bc]
-                logger.info(f"After overlap filter (<{self.config.max_bc}): "
-                           f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
-        
-        # Filter by effect size if configured
+        # Biological filter: effect_size >= min_effect_size
         if self.config.min_effect_size is not None and 'effect_size' in bio_df.columns:
             bio_df = bio_df[bio_df['effect_size'] >= self.config.min_effect_size]
-            logger.info(f"After effect_size filter (≥{self.config.min_effect_size}): "
+            logger.info(f"After min_effect_size filter (≥{self.config.min_effect_size}): "
                        f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
-        
+
         return bio_df
 
     def _load_binned_counts_from_centroids(
@@ -822,14 +797,9 @@ class MethylDetector:
         """
         Compute bounded biological importance score for multi-context DMPs.
 
-        Importance is derived from effect_size then mapped to [1e-6, 1] via log-scale
-        normalization (log1p then min-max), so classifier weights are safe and relative
-        spread is preserved (unlike divide-by-max + clip, which collapsed the tail to 1e-6
-        and triggered "all weights nearly identical" warnings).
-
-        effect_size already includes:
-        - Between-centroid variance correction: |Δμ| / √(var₁ + var₂)
-        - Distribution overlap correction: × (1 - BC)^γ
+        Importance is derived from effect_size (BD = Bhattacharyya distance) then mapped
+        to [1e-6, 1] via log-scale normalization (log1p then min-max) for classifier weights.
+        effect_size = BD: higher = better separation between the two distributions.
 
         Args:
             dmps_df: DataFrame with DMPs (must have effect_size or delta_mean)
@@ -839,26 +809,20 @@ class MethylDetector:
         """
         df = dmps_df.copy()
 
-        # Use effect_size for importance calculation (includes variance weighting)
-        # effect_size = |delta_mu| / sqrt(var1 + var2) * (1 - BC)^gamma
+        # effect_size = 1 - BC (separation, in [0,1]); fallback to |delta_mean| if missing
         if 'effect_size' not in df.columns:
             if 'delta_mean' in df.columns:
                 df['effect_size'] = np.abs(df['delta_mean'])
             else:
                 raise ValueError("Neither 'effect_size' nor 'delta_mean' column found in DMPs DataFrame")
 
-        # Calculate biological importance using a balanced approach
-        # effect_size already includes variance and overlap corrections, so we add biological factors
-
-        # Start with effect_size as base (already includes statistical corrections)
+        # Start with effect_size (BD) as base for importance
         if 'effect_size' in df.columns:
             df['importance'] = df['effect_size'].copy()
         else:
             df['importance'] = np.ones(len(df))
 
-        # Skip variance reliability factor for cancer data
-        # In cancer methylation, higher variance positions may be more informative for classification
-        # effect_size already includes variance considerations in the denominator
+        # Skip variance reliability factor; effect_size = BD (separation measure)
 
         # Skip statistical significance factor
         # All DMPs already pass q < 0.01, so this adds minimal discrimination for the top DMPs
@@ -3008,41 +2972,11 @@ class MethylDetector:
         chunk_df['bhattacharyya_coefficient'] = bc_values
         chunk_df['overlap'] = bc_values  # Add 'overlap' column for CSV export (biologist-friendly name)
 
-        # Compute effect_size by delegating to MethylUtils
-        # Uses MethylCentroidPair.compute_effect_sizes() which implements the corrected formula:
-        # effect_size = |delta_mu| * (1 - BC)^gamma / sqrt(var1 + var2)
+        # effect_size = 1 - BC (separation), bounded in [0, 1]
         if not chunk_df.empty and 'effect_size' not in chunk_df.columns:
-            alpha1 = chunk_df['alpha1'].values
-            beta1 = chunk_df['beta1'].values
-            alpha2 = chunk_df['alpha2'].values
-            beta2 = chunk_df['beta2'].values
-            delta_mean = chunk_df['delta_mean'].values
-
-            # Delegate effect size computation to MethylUtils
-            epsilon = self.config.numerical_epsilon if hasattr(self.config, 'numerical_epsilon') else 1e-6
-            effect_size_values = MethylCentroidPair.compute_effect_sizes(
-                alpha1, beta1, alpha2, beta2, delta_mean, bc_values,
-                gamma=self.config.gamma, numerical_epsilon=epsilon
-            )
-
-            # Debug: Check effect_size statistics
-            if len(effect_size_values) > 0:
-                logger.debug(f"Effect_size stats: min={effect_size_values.min():.6f}, "
-                           f"max={effect_size_values.max():.6f}, "
-                           f"mean={effect_size_values.mean():.6f} (unnormalized)")
-
-                # Check for potential issues
-                if effect_size_values.min() < 1e-4:
-                    logger.warning(f"Some effect_size values very small: min={effect_size_values.min():.6e}")
-                elif effect_size_values.std() < 1e-6:
-                    logger.warning(f"All effect_size values nearly identical (std={effect_size_values.std():.2e}) - limited discriminatory power")
-
-                # Show top 5 values to understand distribution
-                sorted_indices = np.argsort(effect_size_values)[::-1]
-                logger.info(f"Top 5 effect_size values: {effect_size_values[sorted_indices[:5]]}")
-                logger.info(f"Bottom 5 effect_size values: {effect_size_values[sorted_indices[-5:]]}")
-
-            chunk_df['effect_size'] = effect_size_values.astype(np.float32)
+            chunk_df['effect_size'] = bd_array.astype(np.float32)
+            if len(bd_array) > 0:
+                logger.debug(f"Effect_size (BD) stats: min={bd_array.min():.4f}, max={bd_array.max():.4f}, mean={bd_array.mean():.4f}")
 
         # Remove the BD column - we only keep BC for outputs
         if 'bhattacharyya' in chunk_df.columns:
@@ -3090,7 +3024,7 @@ class MethylDetector:
         stats_text = f"""
         Total DMPs: {len(df):,}
         Statistically significant (q ≤ {self.config.alpha}): {len(df[df['q_value'] <= self.config.alpha]):,}
-        Large effect size (|Δμ| ≥ {self.config.min_delta_mean}): {len(df[df['delta_mean'].abs() >= self.config.min_delta_mean]):,}
+        DMPs with effect_size (BD) column: {len(df) if 'effect_size' in df.columns else 0:,}
         """
         fig.add_annotation(
             text=stats_text,
@@ -3262,11 +3196,9 @@ class MethylDetector:
         # Extract key parameters (only relevant ones)
         key_params = {
             "alpha": self.config.alpha,
-            "min_delta_mean": self.config.min_delta_mean,
-            "max_bc": self.config.max_bc,
+            "min_effect_size": self.config.min_effect_size,
             "target_balanced_accuracy": self.config.target_balanced_accuracy,
             "min_selected_dmps": self.config.min_selected_dmps,
-            "biological_filters": self.config.biological_filters,
             "eps": self.config.eps,
         }
         # Input files
@@ -3314,16 +3246,10 @@ class MethylDetector:
             "",
             "Configuration:",
             f"  Alpha (q-value threshold): {self.config.alpha}",
-            f"  Min Delta Mean: {self.config.min_delta_mean}",
-            f"  Max Overlap (Bhattacharyya Coefficient): {self.config.max_bc} ({self.config.max_bc*100:.0f}%)",
+            f"  Min effect_size: {self.config.min_effect_size}",
             f"  Target Balanced Accuracy: {self.config.target_balanced_accuracy}",
             "",
-            "Biological Importance (Effect Size):",
-            "  Formula: importance = effect_size × variance_reliability × significance_factor × context_weight",
-            f"  effect_size already includes: |Δμ| / √(var₁ + var₂) × (1 - BC)^{self.config.gamma}",
-            "  importance adds: within-centroid reliability, statistical significance, context weighting",
-            "  where BC = Bhattacharyya Coefficient (0=no overlap, 1=complete overlap)",
-            "  Higher values indicate more reliable, biologically significant DMPs",
+            "Biological filter: effect_size = 1 - BC (separation in [0, 1]); keep DMPs with effect_size >= min_effect_size",
             "",
             "Results:",
             f"  Statistical DMPs (q≤{self.config.alpha}): {result.total_statistical_dmps:,}",

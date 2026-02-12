@@ -72,9 +72,7 @@
       "target_balanced_accuracy": 0.99,
       "optimization_method": "featurecuts",
       "random_state": 42,
-      "min_N_pct": 0.1,
-      "min_delta_mean": 0.2,
-      "max_bc": 0.7
+      "min_N_pct": 0.1
     },
     "mapper": {
       "csv_filename_pattern": "dmps-*.csv",
