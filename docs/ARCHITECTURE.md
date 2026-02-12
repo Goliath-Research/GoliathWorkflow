@@ -103,10 +103,24 @@ methyl_utils/
 **Purpose**: Detect differentially methylated positions and package classifiers
 
 **Key Features**:
-- Storey's q-value FDR with biological filters (delta mean, Bhattacharyya)
+- Storey's q-value FDR with biological filters (delta mean, overlap)
+- **Biological filters**: Keep DMPs with `|delta_mean| >= min_delta_mean` and `overlap < max_overlap`. **Scale**: methylation is a proportion in [0,1]; many biologists report “20–25%” difference, which is **min_delta_mean = 0.2–0.25**.
+- **max_overlap**: no universal convention; **0.5–0.6** = stricter (keep only well-separated DMPs), **0.7** = permissive default when unspecified.
 - Multi-context weighting and Balanced Accuracy optimization
 - Synthetic or real-sample validation with FeatureCuts/Bayesian optimization
 - Classifier packaging for direct consumption by MethylClassifier
+
+**Why Bhattacharyya for “overlap”? (biologist’s view)**  
+A good DMP has (1) **large |delta_mean|** (means of the two groups far apart) and (2) **small overlap** (little “confusion range” where both distributions have mass). We need a number for “overlap” that is 0 when the distributions don’t overlap and 1 when they are identical. The **Bhattacharyya coefficient** does exactly that:
+
+- **BC = ∫ √(p(x) q(x)) dx** over the methylation axis. For two Beta (or Normal) distributions this has a closed form. BC ∈ [0, 1]: **BC = 0** ⇒ no overlap (perfect separation), **BC = 1** ⇒ identical distributions (total confusion). So we **define overlap = BC**.
+- **BD = −ln(BC)** is the Bhattacharyya distance. It’s a one-to-one transform: small overlap (BC → 0) ⇒ BD large; large overlap (BC → 1) ⇒ BD → 0. We often store BD (numerically stable when BC is tiny) and convert back with **BC = exp(−BD)** for filters and export.
+
+**Why not “delta_mean / overlap”?**  
+If we used a quotient like |delta_mean| / overlap, then when overlap → 0 we’d divide by zero (or by a very small number and blow up). So we **avoid division by overlap** and instead use a **product with separation**:
+
+- **Effect size ∝ |delta_mean| × (1 − BC)^γ / √(var₁ + var₂)**. Here **(1 − BC)** is “separation”: it is 1 when BC = 0 (no overlap) and 0 when BC = 1 (full overlap). So we **reward** large delta_mean and small overlap (low BC) without ever dividing by zero. The exponent γ (e.g. 1.5) controls how strongly we penalize overlap.
+- **Biological filter**: keep positions with **|delta_mean| ≥ min_delta_mean** and **overlap < max_overlap** (overlap = BC = exp(−BD)).
 
 **Dependencies**:
 - methylutils

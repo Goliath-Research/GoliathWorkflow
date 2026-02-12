@@ -58,16 +58,19 @@ logger = setup_module_logging(__name__)
 def bhattacharyya_coefficient(bd: np.ndarray) -> np.ndarray:
     """
     Convert Bhattacharyya Distance (BD) to Bhattacharyya Coefficient (BC).
-    
+    This is the overlap measure used in biological filters and exported as 'overlap' in dmps-*.csv.
+
+    Relationship:  overlap = BC = exp(-BD)
+    - BD (Bhattacharyya Distance): computed in MethylUtils between the two Beta (or Normal) distributions;
+      BD = -ln(BC), so higher BD = less overlap.
+    - BC (Bhattacharyya Coefficient): in [0, 1]; 0 = no overlap (good separation), 1 = identical (no separation).
+    Biological filter: keep DMPs with abs(delta_mean) >= min_delta_mean and overlap < max_overlap.
+
     Args:
         bd: Bhattacharyya Distance values (0 to ∞, typically capped at 20)
-        
+
     Returns:
-        Bhattacharyya Coefficient values (0 to 1)
-        - 0 = no overlap (perfect separation)
-        - 1 = complete overlap (identical distributions)
-    
-    Mathematical relationship: BC = exp(-BD)
+        Bhattacharyya Coefficient (overlap) values in [0, 1].
     """
     return np.exp(-bd)
 
@@ -576,36 +579,32 @@ class MethylDetector:
     def _filter_biological_dmps(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
         Filter DMPs by biological significance criteria.
-        
-        Applies filters based on config settings:
-        - min_delta_mean: minimum absolute methylation difference
-        - max_bc: maximum Bhattacharyya coefficient (overlap)
-        - min_effect_size: minimum effect size threshold
-        
-        Args:
-            dmps_df: DataFrame with all DMPs
-            
-        Returns:
-            DataFrame with only biologically significant DMPs
+        Primary filters: abs(delta_mean) >= min_delta_mean and overlap < max_overlap.
+        Overlap = BC = exp(-BD), where BD is Bhattacharyya distance between the two distributions.
+
+        Applies filters based on config:
+        - min_delta_mean: minimum |mean1 - mean2| (default 0.2)
+        - max_bc (max_overlap): maximum overlap allowed, overlap < max_bc (default 0.7)
+        - min_effect_size: optional minimum effect size
         """
         bio_df = dmps_df.copy()
         initial_count = len(bio_df)
-        
-        # Filter by delta_mean if configured
+
+        # Biological filter: |delta_mean| >= min_delta_mean
         if 'delta_mean' in self.config.biological_filters and self.config.min_delta_mean > 0:
             bio_df = bio_df[np.abs(bio_df['delta_mean']) >= self.config.min_delta_mean]
             logger.info(f"After delta_mean filter (≥{self.config.min_delta_mean}): "
                        f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
-        
-        # Filter by Bhattacharyya coefficient if configured
+
+        # Biological filter: overlap < max_overlap (overlap = BC = exp(-BD))
         if 'bhattacharyya' in self.config.biological_filters and self.config.max_bc is not None:
             if 'bhattacharyya_coefficient' in bio_df.columns:
-                bio_df = bio_df[bio_df['bhattacharyya_coefficient'] <= self.config.max_bc]
-                logger.info(f"After BC filter (≤{self.config.max_bc}): "
+                bio_df = bio_df[bio_df['bhattacharyya_coefficient'] < self.config.max_bc]
+                logger.info(f"After overlap filter (<{self.config.max_bc}): "
                            f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
             elif 'overlap' in bio_df.columns:
-                bio_df = bio_df[bio_df['overlap'] <= self.config.max_bc]
-                logger.info(f"After overlap filter (≤{self.config.max_bc}): "
+                bio_df = bio_df[bio_df['overlap'] < self.config.max_bc]
+                logger.info(f"After overlap filter (<{self.config.max_bc}): "
                            f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
         
         # Filter by effect size if configured

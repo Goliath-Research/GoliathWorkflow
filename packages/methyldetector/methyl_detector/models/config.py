@@ -129,11 +129,11 @@ class MethylModelerConfig(BaseModel):
     # ----------------
     min_delta_mean: float = Field(
         default=0.2, ge=0.0, le=1.0,
-        description="Minimum absolute delta mean (|mean1 - mean2|) for biological significance"
+        description="Minimum |delta_mean| for biological filter (proportion on [0,1]). Many biologists use 20–25%% difference: set 0.2–0.25 here"
     )
     max_bc: Optional[float] = Field(
-        default=0.6, ge=0.0, le=1.0,
-        description="Maximum Bhattacharyya Coefficient (overlap) allowed. BC ranges 0-1 where 0=no overlap (perfect separation), 1=complete overlap. Lower values = stricter filtering. Example: 0.6 means 'keep only DMPs with ≤60% overlap'"
+        default=0.7, ge=0.0, le=1.0,
+        description="Maximum overlap (max_overlap): keep DMPs with overlap < max_bc. Overlap = BC in [0,1]. No universal convention; 0.5–0.6 = stricter, 0.7 = permissive default. Set null to disable overlap filter"
     )
     delta_mean_mode: str = Field(
         default="mean",
