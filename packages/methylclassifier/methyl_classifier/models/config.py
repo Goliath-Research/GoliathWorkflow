@@ -1,7 +1,10 @@
 from pydantic import Field, field_validator, model_validator
-from typing import Optional, Dict
+from typing import Optional, Dict, Literal
 from pathlib import Path
 from pydantic import BaseModel
+
+WeightMethod = Literal["config", "effect_size", "linear_fitted", "logistic_fitted", "elasticnet_fitted"]
+WeightFitRegularization = Literal["none", "ridge", "lasso", "l1", "l2"]
 
 
 class ClassifierConfig(BaseModel):
@@ -31,6 +34,25 @@ class ClassifierConfig(BaseModel):
         default=None,
         description="Predefined chromosome weights (bypasses trimmed-mean calculation). Dict format: {'1': 0.5, '2': 0.3, ...}"
     )
+    weight_method: Optional[WeightMethod] = Field(
+        default=None,
+        description="How to obtain chromosome weights: 'config', 'effect_size', 'linear_fitted', 'logistic_fitted', or 'elasticnet_fitted'. If None, inferred: config when chromosome_weights set, else effect_size."
+    )
+    weight_fit_regularization: Optional[WeightFitRegularization] = Field(
+        default="none",
+        description="For linear_fitted: 'none', 'ridge', 'lasso'. For logistic_fitted: 'none', 'l1', 'l2'. For elasticnet_fitted: ignored (uses l1_ratio)."
+    )
+    weight_fit_alpha: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Regularization strength for fitted weights (inverse of C for logistic)."
+    )
+    weight_fit_l1_ratio: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="For weight_method='elasticnet_fitted': balance L1/L2 (0=ridge-like, 1=lasso-like)."
+    )
     # Prediction parameters
     temperature: float = Field(
         default=1.0,
@@ -47,6 +69,18 @@ class ClassifierConfig(BaseModel):
     chromosome_matrix_path: Optional[str] = Field(
         default=None,
         description="Optional output CSV file for chromosome probability matrix (samples × chromosomes)"
+    )
+    project_name: Optional[str] = Field(
+        default=None,
+        description="Project name for saving the classifier as <project_name>-classifier.pkl and sample list as <project_name>-samples.txt (or .csv). Used when save_classifier_path or samples_list_export_path are not set."
+    )
+    save_classifier_path: Optional[str] = Field(
+        default=None,
+        description="Path to save the final classifier as .pkl after classification. If null and project_name is set, saves to <output_dir>/<project_name>-classifier.pkl."
+    )
+    samples_list_export_path: Optional[str] = Field(
+        default=None,
+        description="Path to export the list of sample folders (.txt or .csv). If null and project_name is set, exports to <output_dir>/<project_name>-samples.txt."
     )
 
     @field_validator('temperature')
@@ -65,6 +99,20 @@ class ClassifierConfig(BaseModel):
             raise ValueError("Trimmed percentiles must be between 0.0 and 0.5")
         return v
     
+    @field_validator('weight_method')
+    @classmethod
+    def validate_weight_method(cls, v):
+        if v is not None and v not in ("config", "effect_size", "linear_fitted", "logistic_fitted", "elasticnet_fitted"):
+            raise ValueError("weight_method must be one of: config, effect_size, linear_fitted, logistic_fitted, elasticnet_fitted")
+        return v
+
+    @field_validator('weight_fit_regularization')
+    @classmethod
+    def validate_weight_fit_regularization(cls, v):
+        if v is not None and v not in ("none", "ridge", "lasso", "l1", "l2"):
+            raise ValueError("weight_fit_regularization must be one of: none, ridge, lasso, l1, l2")
+        return v
+
     @model_validator(mode='after')
     def validate_trimmed_percentile_sum(self):
         # Check that the sum doesn't exceed 1.0 (would trim everything)

@@ -583,6 +583,37 @@ def _classify_multi_chromosome_samples(
         chrom_features[chrom] = np.array(chrom_features[chrom])
         chrom_masks[chrom] = np.array(chrom_masks[chrom])
     
+    # If weight_method is a fitted method and we have validation labels, fit weights from per-chromosome probas
+    weight_method = getattr(classifier.config, "weight_method", None)
+    fitted_methods = ("linear_fitted", "logistic_fitted", "elasticnet_fitted")
+    if (
+        weight_method in fitted_methods
+        and expected_classes is not None
+        and len(expected_classes) == len(loaded_samples)
+        and len(loaded_samples) >= 2
+    ):
+        n_samples = len(loaded_samples)
+        chrom_proba_matrix = np.zeros((n_samples, len(classifier_chroms)), dtype=np.float64)
+        for i, chrom in enumerate(classifier_chroms):
+            chrom_classifier = classifier.classifiers[chrom]
+            chrom_probas = chrom_classifier.predict_proba(
+                chrom_features[chrom], chrom_masks[chrom], debug=False
+            )
+            # P(class1) for binary; column index 1
+            chrom_proba_matrix[:, i] = chrom_probas[:, 1] if chrom_probas.shape[1] > 1 else chrom_probas[:, 0]
+        reg = getattr(classifier.config, "weight_fit_regularization", None) or "none"
+        alpha = getattr(classifier.config, "weight_fit_alpha", 1.0)
+        l1_ratio = getattr(classifier.config, "weight_fit_l1_ratio", 0.5)
+        method = "linear" if weight_method == "linear_fitted" else ("logistic" if weight_method == "logistic_fitted" else "elasticnet")
+        classifier.fit_chromosome_weights(
+            chrom_proba_matrix,
+            np.array(expected_classes, dtype=np.float64),
+            method=method,
+            regularization=reg,
+            alpha=alpha,
+            l1_ratio=l1_ratio,
+        )
+    
     # Get combined predictions from multi-chromosome classifier
     # We need to concatenate all chromosome features for the classifier
     # But the current implementation expects concatenated data, which is complex
@@ -797,6 +828,56 @@ def _save_classification_results(
     print(f"\n💾 Results saved to: {output_file}")
 
 
+def _save_classifier_and_sample_list(
+    classifier: MethylClassifier,
+    classifier_config: ClassifierConfig,
+    samples_list: Optional[List[str]],
+    output_dir: Optional[Path] = None,
+) -> None:
+    """
+    After classification, save the classifier to <project_name>-classifier.pkl and/or
+    export the list of sample folders to .txt or .csv when project_name or explicit paths are set.
+
+    output_dir: Used when deriving paths from project_name (e.g. same dir as classification output).
+    """
+    project_name = getattr(classifier_config, "project_name", None)
+    save_classifier_path = getattr(classifier_config, "save_classifier_path", None)
+    samples_list_export_path = getattr(classifier_config, "samples_list_export_path", None)
+    if output_dir is None:
+        output_dir = Path.cwd()
+
+    do_save_classifier = bool(save_classifier_path or project_name)
+    do_export_samples = bool(samples_list_export_path or project_name) and samples_list and len(samples_list) > 0
+
+    if do_save_classifier:
+        if save_classifier_path:
+            pkl_path = Path(save_classifier_path)
+        else:
+            pkl_path = output_dir / f"{project_name}-classifier.pkl"
+        pkl_path.parent.mkdir(parents=True, exist_ok=True)
+        classifier.save(pkl_path)
+        print(f"\n💾 Classifier saved to: {pkl_path}")
+
+    if do_export_samples:
+        if samples_list_export_path:
+            export_path = Path(samples_list_export_path)
+        else:
+            export_path = output_dir / f"{project_name}-samples.txt"
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        suffix = export_path.suffix.lower()
+        if suffix == ".csv":
+            with open(export_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["sample_path"])
+                for p in samples_list:
+                    writer.writerow([p])
+        else:
+            with open(export_path, "w") as f:
+                for p in samples_list:
+                    f.write(p + "\n")
+        print(f"\n💾 Sample list exported to: {export_path}")
+
+
 def _save_chromosome_probability_matrix(
     sample_names: List[str],
     chromosomes: List[str],
@@ -1002,7 +1083,14 @@ Config fields (in JSON):
         trimmed_percentile_low=config.trimmed_percentile_low,
         trimmed_percentile_high=config.trimmed_percentile_high,
         chromosome_weights=config.chromosome_weights,
-        chromosome_matrix_path=config.chromosome_matrix_path
+        chromosome_matrix_path=config.chromosome_matrix_path,
+        weight_method=getattr(config, "weight_method", None),
+        weight_fit_regularization=getattr(config, "weight_fit_regularization", "none"),
+        weight_fit_alpha=getattr(config, "weight_fit_alpha", 1.0),
+        weight_fit_l1_ratio=getattr(config, "weight_fit_l1_ratio", 0.5),
+        project_name=getattr(config, "project_name", None),
+        save_classifier_path=getattr(config, "save_classifier_path", None),
+        samples_list_export_path=getattr(config, "samples_list_export_path", None),
     )
     
     # Create classifier
@@ -1101,6 +1189,11 @@ Config fields (in JSON):
                 output_file=Path(config.output_path) if config.output_path else None,
                 debug=config.debug
             )
+        # Save classifier as <project_name>-classifier.pkl and/or export sample list when requested
+        output_dir = Path(config.output_path).parent if config.output_path else Path.cwd()
+        _save_classifier_and_sample_list(
+            classifier, classifier_config, getattr(config, "samples", None), output_dir=output_dir
+        )
     except Exception as e:
         import traceback
         print(f"❌ Classification failed: {e}")

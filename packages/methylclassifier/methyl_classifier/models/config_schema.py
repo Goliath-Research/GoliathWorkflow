@@ -62,6 +62,18 @@ class ClassificationConfig(BaseModel):
         default=None,
         description="Optional output CSV file for chromosome probability matrix (samples × chromosomes)"
     )
+    project_name: Optional[str] = Field(
+        default=None,
+        description="Project name for saving classifier as <project_name>-classifier.pkl and sample list. Used when save_classifier_path or samples_list_export_path are not set."
+    )
+    save_classifier_path: Optional[str] = Field(
+        default=None,
+        description="Path to save the final classifier .pkl after classification. If null and project_name set, uses <output_dir>/<project_name>-classifier.pkl."
+    )
+    samples_list_export_path: Optional[str] = Field(
+        default=None,
+        description="Path to export the list of sample folders (.txt or .csv). If null and project_name set, uses <output_dir>/<project_name>-samples.txt."
+    )
 
     debug: bool = Field(
         default=False,
@@ -107,6 +119,25 @@ class ClassificationConfig(BaseModel):
         default=None,
         description="Predefined chromosome weights (bypasses trimmed-mean calculation). Dict format: {'1': 0.5, '2': 0.3, ...}"
     )
+    weight_method: Optional[str] = Field(
+        default=None,
+        description="How to obtain chromosome weights: 'config', 'effect_size', or 'linear_fitted'. If None, inferred from chromosome_weights."
+    )
+    weight_fit_regularization: Optional[str] = Field(
+        default="none",
+        description="For weight_method='linear_fitted': 'none', 'ridge', or 'lasso'."
+    )
+    weight_fit_alpha: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Regularization strength for fitted weights (inverse of C for logistic)."
+    )
+    weight_fit_l1_ratio: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="For weight_method='elasticnet_fitted': balance L1/L2 (0=ridge-like, 1=lasso-like)."
+    )
 
     @field_validator('temperature')
     @classmethod
@@ -116,6 +147,20 @@ class ClassificationConfig(BaseModel):
             raise ValueError("Temperature must be >= 0.1")
         if v > 10.0:
             raise ValueError("Temperature must be <= 10.0")
+        return v
+
+    @field_validator('weight_method')
+    @classmethod
+    def validate_weight_method(cls, v):
+        if v is not None and v not in ("config", "effect_size", "linear_fitted", "logistic_fitted", "elasticnet_fitted"):
+            raise ValueError("weight_method must be one of: config, effect_size, linear_fitted, logistic_fitted, elasticnet_fitted")
+        return v
+
+    @field_validator('weight_fit_regularization')
+    @classmethod
+    def validate_weight_fit_regularization(cls, v):
+        if v is not None and v not in ("none", "ridge", "lasso", "l1", "l2"):
+            raise ValueError("weight_fit_regularization must be one of: none, ridge, lasso, l1, l2")
         return v
     
     def model_post_init(self, __context):

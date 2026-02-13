@@ -48,7 +48,13 @@ Example config (`configs/PCa_vs_Healthy_classifier_config.json`):
 - **input_path**: Path to a directory of sample folders (each with `{chrom}-CG.h5`, etc.) or to a single .h5 file/directory.
 - **output_path**: CSV file for classification results.
 - **enable_platt_calibration**: Use pre-fitted Platt calibrator from the model if available (set to `true` when MethylDetector was run with `enable_platt_calibration`).
-- **trimmed_percentile_low** / **trimmed_percentile_high**: Used to compute chromosome weights from effect sizes when **chromosome_weights** is `null`.
+- **trimmed_percentile_low** / **trimmed_percentile_high**: Used to compute chromosome weights from effect sizes when **chromosome_weights** is `null` and **weight_method** is not `linear_fitted`.
+- **weight_method**: How to obtain chromosome weights: `config`, `effect_size`, `linear_fitted`, `logistic_fitted`, or `elasticnet_fitted`. If omitted, inferred: `config` when **chromosome_weights** is set, else `effect_size`.
+- **Fitted methods** (`linear_fitted`, `logistic_fitted`, `elasticnet_fitted`) require labeled validation data (e.g. centroid validation). Weights are fitted from per-chromosome P(class1) and class labels, then projected to non-negative and sum-to-one. **linear_fitted**: linear regression (or Ridge/Lasso). **logistic_fitted**: LogisticRegression (L1/L2 or unpenalized). **elasticnet_fitted**: ElasticNet regression (L1/L2 mix via **weight_fit_l1_ratio**).
+- **weight_fit_regularization**: For `linear_fitted`: `none`, `ridge`, or `lasso`. For `logistic_fitted`: `none`, `l1`, or `l2`. For `elasticnet_fitted`: ignored. Default `none`.
+- **weight_fit_alpha**: Regularization strength (inverse of C for logistic). Default `1.0`.
+- **weight_fit_l1_ratio**: For `elasticnet_fitted` only: balance L1/L2 (0=ridge-like, 1=lasso-like). Default `0.5`.
+- **project_name**: When set, after classification the classifier is saved as `<project_name>-classifier.pkl` and the list of sample folders as `<project_name>-samples.txt` (or .csv) in the same directory as the classification output. You can override paths with **save_classifier_path** and **samples_list_export_path**.
 
 Override paths from the command line if needed:
 
@@ -77,7 +83,7 @@ methyl_classifier --model-dir /path/to/classifiers/ \
                   --output results.csv
 ```
 
-The directory must contain files matching `classifier-{chrom}.pkl` (e.g. `classifier-1.pkl`, `classifier-2.pkl`). Probabilities from each chromosome are combined using weights from trimmed-mean effect_size (or predefined **chromosome_weights** if set in config).
+The directory must contain files matching `classifier-{chrom}.pkl` (e.g. `classifier-1.pkl`, `classifier-2.pkl`). Probabilities from each chromosome are combined using weights from **weight_method**: trimmed-mean effect_size (default), predefined **chromosome_weights** (`config`), or **linear_fitted** (fit from validation data when centroid validation is used).
 
 ### Alternative: samples list in config
 
@@ -122,11 +128,15 @@ config = ClassifierConfig(
     trimmed_percentile_high=0.01   # Remove only top 1% of effect sizes (outliers, preserving important DMPs)
 )
 
-# Or use predefined weights:
+# Or use predefined weights (weight_method="config"):
 # config = ClassifierConfig(
 #     model_dir="/path/to/classifiers/",
 #     chromosome_weights={'1': 0.4, '2': 0.3, '3': 0.3}
 # )
+# Or fit weights from validation data (weight_method="linear_fitted"):
+# config = ClassifierConfig(model_dir="/path/to/classifiers/", weight_method="linear_fitted")
+# Then call classifier.fit_chromosome_weights(chrom_proba_matrix, labels, method="linear", regularization="ridge", alpha=1.0)
+# with (n_samples x n_chroms) chrom_proba_matrix and binary labels.
 
 classifier = MethylClassifier(config)
 

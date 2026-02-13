@@ -276,10 +276,15 @@ class MethylClassifier:
         if not self.classifiers:
             raise ValueError(f"No valid classifiers loaded from {model_dir}")
         
+        # Resolve weight method: explicit or inferred
+        weight_method = getattr(self.config, "weight_method", None)
+        if weight_method is None:
+            weight_method = "config" if self.config.chromosome_weights else "effect_size"
+        
         # Compute or use predefined weights
-        if self.config.chromosome_weights:
+        if weight_method == "config" and self.config.chromosome_weights:
             # Use predefined weights
-            print(f"\n⚖️ Using predefined chromosome weights")
+            print(f"\n⚖️ Using predefined chromosome weights (weight_method=config)")
             self.chromosome_weights = self.config.chromosome_weights.copy()
             
             # Normalize to sum to 1
@@ -290,8 +295,13 @@ class MethylClassifier:
                 # Fallback to equal weights
                 n_chrom = len(self.classifiers)
                 self.chromosome_weights = {chrom: 1.0 / n_chrom for chrom in self.classifiers.keys()}
+        elif weight_method in ("linear_fitted", "logistic_fitted", "elasticnet_fitted"):
+            # Initial weights from effect_size until fit_chromosome_weights is called
+            print(f"\n⚖️ Chromosome weights will be fitted from validation data (weight_method={weight_method}); using effect_size as initial")
+            print(f"   (removing bottom {self.config.trimmed_percentile_low*100:.0f}% and top {self.config.trimmed_percentile_high*100:.0f}%)")
+            self.chromosome_weights = self._compute_chromosome_weights(model_packages)
         else:
-            # Compute weights from trimmed-mean effect_size
+            # effect_size (default when chromosome_weights not set)
             print(f"\n⚖️ Computing chromosome weights from asymmetric trimmed-mean effect_size")
             print(f"   (removing bottom {self.config.trimmed_percentile_low*100:.0f}% and top {self.config.trimmed_percentile_high*100:.0f}%)")
             self.chromosome_weights = self._compute_chromosome_weights(model_packages)
@@ -592,6 +602,100 @@ class MethylClassifier:
         
         return normalized_weights
 
+    def fit_chromosome_weights(
+        self,
+        chrom_proba_matrix: np.ndarray,
+        labels: np.ndarray,
+        method: str = "linear",
+        regularization: str = "none",
+        alpha: float = 1.0,
+        l1_ratio: float = 0.5,
+        **kwargs: Any,
+    ) -> Dict[str, float]:
+        """
+        Fit chromosome weights from per-chromosome probability matrix and labels.
+        Weights are constrained to be non-negative and sum to 1 (simplex).
+
+        Args:
+            chrom_proba_matrix: Shape (n_samples, n_chromosomes), e.g. P(class1) per chromosome.
+                Columns must match sorted(self.classifiers.keys()).
+            labels: Shape (n_samples,), binary 0/1.
+            method: "linear", "logistic", or "elasticnet". Linear/ElasticNet fit regression of
+                labels on chrom probas; logistic fits LogisticRegression (classification).
+            regularization: For linear: "none", "ridge", "lasso". For logistic: "none", "l1", "l2".
+                For elasticnet: ignored (uses alpha and l1_ratio).
+            alpha: Regularization strength (inverse of C for logistic).
+            l1_ratio: For method="elasticnet": balance L1/L2 (0=ridge, 1=lasso). Default 0.5.
+            **kwargs: Passed to the underlying estimator (e.g. fit_intercept=False).
+
+        Returns:
+            Dict of {chromosome: weight} with weights summing to 1.0. Also sets self.chromosome_weights.
+        """
+        if not self.is_multi_chromosome:
+            raise RuntimeError("fit_chromosome_weights is only for multi-chromosome classifiers")
+        chroms = sorted(self.classifiers.keys())
+        n_chroms = len(chroms)
+        if chrom_proba_matrix.shape[1] != n_chroms:
+            raise ValueError(
+                f"chrom_proba_matrix has {chrom_proba_matrix.shape[1]} columns, expected {n_chroms} (one per chromosome)"
+            )
+        X = np.asarray(chrom_proba_matrix, dtype=np.float64)
+        y = np.asarray(labels, dtype=np.float64).ravel()
+        if len(y) != X.shape[0]:
+            raise ValueError(f"labels length {len(y)} does not match matrix rows {X.shape[0]}")
+
+        fit_intercept = kwargs.pop("fit_intercept", False)
+
+        if method == "linear":
+            from sklearn.linear_model import LinearRegression, Ridge, Lasso
+            if regularization == "none":
+                reg = LinearRegression(fit_intercept=fit_intercept, **kwargs)
+            elif regularization == "ridge":
+                reg = Ridge(alpha=alpha, fit_intercept=fit_intercept, **kwargs)
+            elif regularization == "lasso":
+                reg = Lasso(alpha=alpha, fit_intercept=fit_intercept, **kwargs)
+            else:
+                raise ValueError(f"regularization must be 'none', 'ridge', or 'lasso', got {regularization!r}")
+            reg.fit(X, y)
+            coef = np.asarray(reg.coef_.ravel(), dtype=np.float64)
+        elif method == "logistic":
+            from sklearn.linear_model import LogisticRegression
+            # C = 1/alpha (larger C = less regularization)
+            C = 1.0 / alpha if alpha > 0 else 1e6
+            penalty_map = {"ridge": "l2", "lasso": "l1"}
+            penalty = "none" if regularization == "none" else penalty_map.get(regularization, regularization)
+            if penalty == "none":
+                reg = LogisticRegression(C=C, fit_intercept=fit_intercept, solver="lbfgs", max_iter=1000, **kwargs)
+            else:
+                reg = LogisticRegression(
+                    penalty=penalty, C=C, fit_intercept=fit_intercept, solver="saga", max_iter=1000, **kwargs
+                )
+            reg.fit(X, y.astype(np.intp))
+            coef = np.asarray(reg.coef_.ravel(), dtype=np.float64)
+        elif method == "elasticnet":
+            from sklearn.linear_model import ElasticNet
+            reg = ElasticNet(
+                alpha=alpha, l1_ratio=l1_ratio, fit_intercept=fit_intercept, max_iter=10000, **kwargs
+            )
+            reg.fit(X, y)
+            coef = np.asarray(reg.coef_.ravel(), dtype=np.float64)
+        else:
+            raise ValueError(f"method must be 'linear', 'logistic', or 'elasticnet', got {method!r}")
+
+        # Project to simplex: non-negative and sum to 1
+        coef = np.maximum(coef, 0.0)
+        total = coef.sum()
+        if total <= 0:
+            coef = np.ones(n_chroms, dtype=np.float64) / n_chroms
+        else:
+            coef = coef / total
+        weights_dict = {chrom: float(coef[i]) for i, chrom in enumerate(chroms)}
+        self.chromosome_weights = weights_dict
+        print(f"\n⚖️ Fitted chromosome weights (method={method}, regularization={regularization}):")
+        for chrom in chroms:
+            print(f"  Chromosome {chrom}: {weights_dict[chrom]:.4f}")
+        return weights_dict
+
     def _extract_classifier_metadata(self) -> None:
         """Extract metadata about the classifier (number of classes, etc.)."""
         try:
@@ -631,6 +735,19 @@ class MethylClassifier:
             if self.classifier is None:
                 raise RuntimeError("No classifier loaded")
             return self.classifier.get_feature_info()
+
+    def save(self, path: Path) -> None:
+        """
+        Save the classifier to a .pkl file for later use (e.g. to classify a list of samples).
+        The saved bundle includes config, per-chromosome classifiers, chromosome weights, and metadata.
+
+        Args:
+            path: Output path for the pickle file (e.g. <project_name>-classifier.pkl).
+        """
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
     
     def predict(self, methylation_data: np.ndarray,
                 availability_mask: Optional[np.ndarray] = None,

@@ -42,7 +42,10 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 - **model_dir**: MethylDetector output directory containing `classifier-1.pkl`, `classifier-2.pkl`, etc. Set **model_path** to `null` when using **model_dir**.
 - **input_path**: Directory of sample folders (each with `{chrom}-CG.h5`, etc.) or path to a single .h5 file/directory.
 - **enable_platt_calibration**: Set to `true` if MethylDetector was run with `enable_platt_calibration` so that saved Platt calibrators are used.
-- **chromosome_weights**: `null` = compute weights from trimmed-mean effect_size; or e.g. `{"1": 0.4, "2": 0.3}` for fixed weights.
+- **chromosome_weights**: `null` = compute weights from trimmed-mean effect_size (or fit when **weight_method** is `linear_fitted`); or e.g. `{"1": 0.4, "2": 0.3}` for fixed weights.
+- **weight_method**: `config` | `effect_size` | `linear_fitted`. If not set: use `config` when **chromosome_weights** is set, else `effect_size`. Use `linear_fitted` to fit weights from validation data (requires centroid validation or labeled samples).
+- **weight_fit_regularization**: For `linear_fitted`: `none`, `ridge`, or `lasso`. Default `none`.
+- **weight_fit_alpha**: For `linear_fitted` with ridge/lasso: regularization strength. Default `1.0`.
 
 ## Basic configuration
 
@@ -73,7 +76,14 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `enable_platt_calibration` | boolean | false | Use pre-fitted Platt calibrator from model if present |
 | `trimmed_percentile_low` | number | 0.10 | Lower percentile for chromosome weight (effect_size) |
 | `trimmed_percentile_high` | number | 0.01 | Upper percentile for chromosome weight |
-| `chromosome_weights` | object or null | null | Fixed weights per chromosome, e.g. `{"1": 0.4, "2": 0.3}`; overrides trimmed-mean when set |
+| `chromosome_weights` | object or null | null | Fixed weights per chromosome, e.g. `{"1": 0.4, "2": 0.3}`; used when **weight_method** is `config` |
+| `weight_method` | string or null | inferred | `config`, `effect_size`, `linear_fitted`, `logistic_fitted`, or `elasticnet_fitted`. Fitted methods require labeled validation samples. |
+| `weight_fit_regularization` | string | `"none"` | For linear_fitted: `none`, `ridge`, `lasso`. For logistic_fitted: `none`, `l1`, `l2`. Ignored for elasticnet_fitted. |
+| `weight_fit_alpha` | number | 1.0 | Regularization strength (inverse of C for logistic). |
+| `weight_fit_l1_ratio` | number | 0.5 | For `elasticnet_fitted`: L1/L2 balance (0=ridge-like, 1=lasso-like). |
+| `project_name` | string or null | null | After classification, save classifier as `<project_name>-classifier.pkl` and sample list as `<project_name>-samples.txt` in the output directory. |
+| `save_classifier_path` | string or null | null | Explicit path for the classifier .pkl. If null and `project_name` set, uses `<output_dir>/<project_name>-classifier.pkl`. |
+| `samples_list_export_path` | string or null | null | Path to export sample folders (.txt or .csv). If null and `project_name` set, uses `<output_dir>/<project_name>-samples.txt`. |
 | `centroid1_dir` | string or null | null | Path to centroid1 output directory (H5 files). Sample list is read from each file’s **samples_used** metadata (union across files). Use with `centroid2_dir`. |
 | `centroid2_dir` | string or null | null | Path to centroid2 output directory (H5 files). Sample list is read from each file’s **samples_used** metadata (union across files). Use with `centroid1_dir`. |
 | `centroid_sample_root` | string or null | null | When set, paths from centroid **samples_used** are remapped to `<centroid_sample_root>/<basename(path)>`. Ignored if `centroid_path_remap` is set. |
