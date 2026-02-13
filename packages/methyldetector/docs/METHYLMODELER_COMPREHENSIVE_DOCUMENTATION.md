@@ -150,9 +150,23 @@ $$
 
 ### Biological Importance
 
-**Biological importance** combines multiple factors to prioritize DMPs that are both statistically significant and biologically meaningful:
+**Biological importance** combines multiple factors to prioritize DMPs that are both statistically significant and biologically meaningful. MethylDetector supports two formulas (config **importance_formula**):
 
-#### Importance Formula
+#### 1. Hybrid formula (default: `importance_formula="hybrid"`)
+
+Biologist-oriented: reward large |delta_mean| and minimal overlap, penalize high variance.
+
+- **Raw score**: $r = |\Delta\mu| / (\text{overlap} \times \sigma_{\text{combined}} + \epsilon)$, where overlap = BC (Bhattacharyya coefficient) and $\sigma_{\text{combined}} = \sqrt{\text{var}_1 + \text{var}_2}$ from Beta parameters.
+- **Bounded**: $\text{importance} = r / (r + c)$ with $c$ a scale constant (e.g. min_delta_mean / max_overlap), so importance ∈ (0, 1]. Near-zero overlap → importance = 1.
+- **Variance reliability**: multiply by $1 / (1 + \max(\text{var}_1, \text{var}_2) / 0.05)$ so high-variance (noisy) positions get lower importance.
+
+So: large delta_mean and low overlap increase importance; high variance decreases it. All from the probability distributions (Beta) at each position.
+
+#### 2. Effect-size formula (legacy: `importance_formula="effect_size"`)
+
+Importance is derived from effect_size (Bhattacharyya distance) then log-scale normalized to [1e-6, 1]. No explicit delta_mean or variance term.
+
+#### Importance Formula (conceptual, hybrid)
 
 $$
 \text{Importance} = \text{effect_size} \times \text{variance_reliability} \times \text{significance_factor} \times \text{context_weight}

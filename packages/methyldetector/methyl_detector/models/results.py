@@ -61,10 +61,14 @@ class MethylModelerResult(NumpyCompatibleModel):
     total_biological_dmps: int = Field(..., description="Total biologically significant DMPs")
     biological_retention_rate: float = Field(..., description="Fraction of statistical DMPs that are biologically significant")
 
-    # Model performance (if classifier was trained)
+    # Model performance (if classifier was trained / validated)
     training_accuracy: Optional[float] = Field(
         default=None,
         description="Accuracy of trained classifier on training data"
+    )
+    balanced_accuracy: Optional[float] = Field(
+        default=None,
+        description="Balanced accuracy from validation (optimization or real) when available"
     )
 
     # Comparison details

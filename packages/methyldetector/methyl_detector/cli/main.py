@@ -105,7 +105,9 @@ def main(
             
             total_statistical = sum(r.total_statistical_dmps for r in results)
             total_biological = sum(r.total_biological_dmps for r in results)
-            
+            ba_values = [r.balanced_accuracy for r in results if getattr(r, 'balanced_accuracy', None) is not None]
+            avg_ba = (sum(ba_values) / len(ba_values)) if ba_values else None
+
             summary_lines = [
                 "\n" + "="*80,
                 "MethylDetector Multi-Chromosome Analysis Summary",
@@ -116,6 +118,8 @@ def main(
                 f"  Total Biological DMPs: {total_biological:,}",
                 f"  Average Retention Rate: {sum(r.biological_retention_rate for r in results) / len(results):.1%}"
             ]
+            if avg_ba is not None:
+                summary_lines.append(f"  Average Balanced Accuracy: {avg_ba:.4f}")
             
             summary_lines.append("\n🔬 Per-Chromosome Results:")
             chromosomes = loaded_config.chromosome if isinstance(loaded_config.chromosome, list) else [loaded_config.chromosome]
@@ -125,13 +129,16 @@ def main(
                 chrom = chromosomes[i-1] if i <= len(chromosomes) else f'Chromosome {i}'
 
                 dmp_count = len(result.biologically_significant_dmps_df) if result.biologically_significant_dmps_df is not None else 0
-                summary_lines.extend([
+                lines = [
                     f"  [{i}] {chrom}:",
                     f"    Statistical DMPs: {result.total_statistical_dmps:,}",
                     f"    Biological DMPs: {result.total_biological_dmps:,}",
                     f"    Retention Rate: {result.biological_retention_rate:.1%}",
                     f"    Final DMPs: {dmp_count:,}"
-                ])
+                ]
+                if getattr(result, 'balanced_accuracy', None) is not None:
+                    lines.append(f"    Balanced Accuracy: {result.balanced_accuracy:.4f}")
+                summary_lines.extend(lines)
             
             summary_lines.append("\n✅ Multi-chromosome analysis complete!")
             

@@ -797,58 +797,110 @@ class MethylDetector:
         """
         Compute bounded biological importance score for multi-context DMPs.
 
-        Importance is derived from effect_size (BD = Bhattacharyya distance) then mapped
-        to [1e-6, 1] via log-scale normalization (log1p then min-max) for classifier weights.
-        effect_size = BD: higher = better separation between the two distributions.
+        Two formulas (config importance_formula):
+        - "hybrid": Biologist-oriented. Rewards large |delta_mean| and minimal overlap,
+          penalizes high variance. Raw score r = |delta_mean| / (overlap * combined_std);
+          importance = r / (r + c) in [0,1], with optional variance reliability factor.
+          Uses probability distributions (Beta) to get overlap (BC) and variances.
+        - "effect_size": Legacy. Importance = effect_size (BD) then log-normalized to [1e-6, 1].
 
         Args:
-            dmps_df: DataFrame with DMPs (must have effect_size or delta_mean)
+            dmps_df: DataFrame with DMPs (delta_mean, overlap or effect_size; alpha1, beta1, alpha2, beta2 for hybrid)
 
         Returns:
             DataFrame with added bounded 'importance' column in [1e-6, 1], sorted by importance (descending)
         """
         df = dmps_df.copy()
+        formula = getattr(self.config, "importance_formula", "hybrid")
 
-        # effect_size = 1 - BC (separation, in [0,1]); fallback to |delta_mean| if missing
-        if 'effect_size' not in df.columns:
-            if 'delta_mean' in df.columns:
-                df['effect_size'] = np.abs(df['delta_mean'])
+        if formula == "hybrid":
+            df = self._compute_biological_importance_hybrid(df)
+        else:
+            df = self._compute_biological_importance_effect_size(df)
+
+        # Sort by importance (descending)
+        df = df.sort_values("importance", ascending=False).reset_index(drop=True)
+        return df
+
+    def _compute_biological_importance_hybrid(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Hybrid importance: reward large |delta_mean| and low overlap, penalize high variance.
+        importance = r / (r + c) with r = |delta_mean| / (overlap * combined_std + eps), bounded in [0, 1].
+        Zero overlap -> importance 1. Optional variance reliability factor.
+        """
+        if "delta_mean" not in df.columns:
+            raise ValueError("DMPs DataFrame must have 'delta_mean' for hybrid importance")
+        delta_mean = np.asarray(df["delta_mean"].values, dtype=np.float64)
+
+        # Overlap: use 'overlap' (BC) if present, else derive from effect_size (BD) as BC = exp(-BD)
+        if "overlap" in df.columns:
+            overlap = np.asarray(df["overlap"].values, dtype=np.float64)
+        elif "effect_size" in df.columns:
+            bd = np.asarray(df["effect_size"].values, dtype=np.float64)
+            overlap = np.exp(-np.clip(bd, 0, 20))
+        else:
+            overlap = np.ones(len(df)) * 0.5  # neutral if missing
+
+        overlap = np.clip(np.nan_to_num(overlap, nan=0.5), 1e-10, 1.0)
+
+        # Combined std from Beta variances
+        if all(c in df.columns for c in ["alpha1", "beta1", "alpha2", "beta2"]):
+            a1, b1 = df["alpha1"].values.astype(np.float64), df["beta1"].values.astype(np.float64)
+            a2, b2 = df["alpha2"].values.astype(np.float64), df["beta2"].values.astype(np.float64)
+            tau1 = a1 + b1
+            tau2 = a2 + b2
+            var1 = (a1 * b1) / (tau1 ** 2 * (tau1 + 1))
+            var2 = (a2 * b2) / (tau2 ** 2 * (tau2 + 1))
+            combined_std = np.sqrt(var1 + var2)
+            max_var = np.maximum(var1, var2)
+        else:
+            combined_std = np.ones(len(df)) * 0.1
+            max_var = np.ones(len(df)) * 0.01
+
+        combined_std = np.maximum(combined_std, 1e-10)
+        eps = 1e-8
+        denom = np.maximum(overlap * combined_std, eps)
+        r = np.abs(delta_mean) / denom
+
+        # Bounded: importance = r / (r + c). c = min_delta_mean / max_overlap (scale constant)
+        min_delta_mean = 0.1
+        max_overlap = 0.6
+        c = min_delta_mean / max_overlap
+        importance = r / (r + c)
+
+        # Near-zero overlap -> full importance (minimal overlap = well separated)
+        importance = np.where(overlap < 1e-6, 1.0, importance)
+
+        # Variance reliability: penalize high variance (noisy positions)
+        var_reliability = 1.0 / (1.0 + max_var / 0.05)
+        importance = importance * var_reliability
+
+        importance = np.nan_to_num(importance, nan=0.0)
+        importance = np.clip(importance, 1e-6, 1.0)
+        df["importance"] = importance
+        return df
+
+    def _compute_biological_importance_effect_size(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Legacy: importance from effect_size (BD) then log-normalized to [1e-6, 1]."""
+        if "effect_size" not in df.columns:
+            if "delta_mean" in df.columns:
+                df["effect_size"] = np.abs(df["delta_mean"])
             else:
                 raise ValueError("Neither 'effect_size' nor 'delta_mean' column found in DMPs DataFrame")
+        df["importance"] = df["effect_size"].copy() if "effect_size" in df.columns else np.ones(len(df))
 
-        # Start with effect_size (BD) as base for importance
-        if 'effect_size' in df.columns:
-            df['importance'] = df['effect_size'].copy()
-        else:
-            df['importance'] = np.ones(len(df))
-
-        # Skip variance reliability factor; effect_size = BD (separation measure)
-
-        # Skip statistical significance factor
-        # All DMPs already pass q < 0.01, so this adds minimal discrimination for the top DMPs
-
-        # Skip context weighting for cancer data
-        # Context weighting may not be appropriate for cancer classification
-
-        # Ensure positive, finite, and bounded to [1e-6, 1] while preserving relative spread.
-        # Log-scale normalization avoids collapsing the long tail to 1e-6 (which caused "all weights
-        # nearly identical" when using divide-by-max + clip). Ranking is unchanged; spread is preserved.
         if len(df) > 0:
-            imp = df['importance'].values.astype(np.float64)
+            imp = df["importance"].values.astype(np.float64)
             imp = np.where(np.isfinite(imp) & (imp >= 0), imp, 0.0)
             if imp.min() < 0:
                 imp = imp - imp.min() + 1e-10
-            imp = np.maximum(imp, 1e-10)  # avoid log(0)
+            imp = np.maximum(imp, 1e-10)
             log_imp = np.log1p(imp)
             lo, hi = log_imp.min(), log_imp.max()
             if hi > lo + 1e-12:
-                df['importance'] = (log_imp - lo) / (hi - lo) * (1.0 - 1e-6) + 1e-6
+                df["importance"] = (log_imp - lo) / (hi - lo) * (1.0 - 1e-6) + 1e-6
             else:
-                df['importance'] = np.clip(imp / np.max(imp), 1e-6, 1.0)
-
-        # Sort by importance (descending)
-        df = df.sort_values('importance', ascending=False).reset_index(drop=True)
-
+                df["importance"] = np.clip(imp / np.max(imp), 1e-6, 1.0)
         return df
     
     def _get_validation_samples(
@@ -2862,6 +2914,10 @@ class MethylDetector:
         if hasattr(self, "_bmm_centroid_files"):
             config_summary = {**config_summary, "bmm_centroid_files": self._bmm_centroid_files}
 
+        balanced_accuracy = None
+        if hasattr(self, '_final_validation_results') and self._final_validation_results:
+            balanced_accuracy = self._final_validation_results.get('balanced_accuracy')
+
         result = MethylModelerResult(
             biologically_significant_dmps_df=bio_dmps_df,
             total_statistical_dmps=len(dmps_df),
@@ -2870,7 +2926,8 @@ class MethylDetector:
             comparison_stats=comparison_stats,
             timestamp=datetime.now().isoformat(),
             version="2.0.0-multi-context",
-            config_summary=config_summary
+            config_summary=config_summary,
+            balanced_accuracy=balanced_accuracy
         )
         
         return result

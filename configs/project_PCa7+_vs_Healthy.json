@@ -241,7 +241,7 @@
       "target_balanced_accuracy": 0.99,
       "optimization_method": "featurecuts",
       "random_state": 42,
-      "min_effect_size": 0.8,
+      "min_effect_size": 0,
       "min_N_pct": 0.1
     },
     "mapper": {
@@ -276,6 +276,17 @@
       ]
     },
     "classifier": {
+      "weight_method": "linear_fitted",  
+      "weight_fit_regularization": "lasso",
+      "weight_fit_alpha": 1.0,
+      "weight_fit_l1_ratio": 0.5,
+      "temperature": 1.0,
+      "enable_platt_calibration": false,
+      "trimmed_percentile_low": 0.10,
+      "trimmed_percentile_high": 0.01,
+      "chromosome_weights": null,
+      "project_name": "PCa7+_vs_Healthy",
+      "save_classifier_path": "models/PCa7+_vs_Healthy-classifier.pkl",
       "debug": false,
       "log_level": "INFO"
     }
