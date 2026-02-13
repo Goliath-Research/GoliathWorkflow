@@ -244,7 +244,11 @@ class MethylDetector:
             logger.info("💾 Exporting final selected DMPs...")
             self._export_unified_csv(selected_dmps_df, suffix="")
             self._save_unified_model(None, selected_dmps_df)
-            self._save_validation_results(n_dmps_exported=len(selected_dmps_df))
+            self._save_validation_results(
+                n_dmps_exported=len(selected_dmps_df),
+                total_statistical_dmps=len(dmps_df),
+                total_biological_dmps=len(bio_dmps_df),
+            )
         
         # Create result (use selected DMPs for result stats)
         result = self._create_multi_context_result(dmps_df, selected_dmps_df)
@@ -2635,7 +2639,12 @@ class MethylDetector:
         return optimal_k
 
     
-    def _save_validation_results(self, n_dmps_exported: Optional[int] = None):
+    def _save_validation_results(
+        self,
+        n_dmps_exported: Optional[int] = None,
+        total_statistical_dmps: Optional[int] = None,
+        total_biological_dmps: Optional[int] = None,
+    ):
         """Save validation results to JSON file using Pydantic model."""
         from datetime import datetime
 
@@ -2699,7 +2708,9 @@ class MethylDetector:
             config=config_dict,
             optimization_validation=optimization_validation,
             real_validation=real_validation,
-            n_dmps_exported=n_dmps_exported
+            n_dmps_exported=n_dmps_exported,
+            total_statistical_dmps=total_statistical_dmps,
+            total_biological_dmps=total_biological_dmps,
         )
 
         # Save to JSON using Pydantic's model_dump_json for proper serialization

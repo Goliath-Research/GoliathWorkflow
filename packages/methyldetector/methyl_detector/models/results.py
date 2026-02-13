@@ -217,7 +217,15 @@ class MethylModelerValidationResults(NumpyCompatibleModel):
     # Export summary
     n_dmps_exported: Optional[int] = Field(
         default=None,
-        description="Number of DMPs exported to final CSV"
+        description="Number of DMPs exported to final CSV (optimized to meet target balanced accuracy)"
+    )
+    total_statistical_dmps: Optional[int] = Field(
+        default=None,
+        description="Total statistically significant DMPs (passing q-value filter)"
+    )
+    total_biological_dmps: Optional[int] = Field(
+        default=None,
+        description="Total biologically significant DMPs (after biological filter, before optimization)"
     )
 
     model_config = {
