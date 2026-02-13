@@ -18,17 +18,26 @@ class GroupConfig(BaseModel):
     One cohort or one level within a cohort.
     If level_labels_path is set, this group is expanded into one logical group per level
     (sample_paths are split by the level column); centroid dirs are created per level.
+    When samples_base_path is set (project or group), sample_paths may be paths to CSV/text files
+    containing only sample folder names (one per line or one column); each name is resolved to
+    samples_base_path / name.
     """
 
     label: str = Field(..., description="Group label; used for centroid subdir name (e.g. healthy, pcancer)")
     sample_paths: List[str] = Field(
         default_factory=list,
-        description="List of sample directory paths, or paths to files containing one path per line / JSON array",
+        description="List of sample directory paths, or paths to files containing one path per line, "
+        "JSON array, or (when samples_base_path is set) one sample name per line / single column CSV.",
     )
     level_labels_path: Optional[str] = Field(
         default=None,
-        description="Optional path to CSV with columns mapping sample_path to level (path, level). "
+        description="Optional path to CSV with columns mapping sample_path or sample name to level (path, level). "
         "When set, this group is expanded into one centroid dir per level; dir name is {label}_{level}.",
+    )
+    samples_base_path: Optional[str] = Field(
+        default=None,
+        description="Base directory to resolve sample names from file (overrides project-level samples_base_path). "
+        "When set, entries in sample_paths files are treated as folder names and resolved to this path.",
     )
 
     @field_validator("label")
@@ -95,6 +104,11 @@ class ProjectConfig(BaseModel):
         default=None,
         description="Optional N groups (overrides group1/group2 when set). Each group can have level_labels_path for stratification.",
     )
+    samples_base_path: Optional[str] = Field(
+        default=None,
+        description="Base directory to resolve sample names. When set, group sample_paths that point to files "
+        "can list only sample folder names (one per line or single-column CSV); each is resolved to this path.",
+    )
     chromosomes: Optional[List[str]] = Field(
         default=None,
         description="Shared chromosome list (e.g. ['1','2',...,'X','Y'])",
@@ -129,16 +143,25 @@ class ProjectConfig(BaseModel):
         """
         Return list of (label, sample_paths) for each centroid group.
         When groups is set, expands by level_labels_path per group; otherwise uses group1/group2.
+        Uses samples_base_path (group or project) when resolving sample names from files.
         """
+
+        def base_for(g: Any) -> Optional[str]:
+            return getattr(g, "samples_base_path", None) or getattr(self, "samples_base_path", None)
+
         if self.groups:
             out: List[Tuple[str, List[str]]] = []
             for g in self.groups:
-                paths = _resolve_sample_paths(g.sample_paths)
+                paths = _resolve_sample_paths(g.sample_paths, base_path=base_for(g))
                 if g.level_labels_path:
                     path_to_level = _load_level_labels(g.level_labels_path)
                     by_level: Dict[str, List[str]] = {}
                     for p in paths:
-                        level = path_to_level.get(p) or path_to_level.get(str(Path(p).resolve()))
+                        level = (
+                            path_to_level.get(p)
+                            or path_to_level.get(str(Path(p).resolve()))
+                            or path_to_level.get(Path(p).name)
+                        )
                         if level is None:
                             level = "default"
                         by_level.setdefault(level, []).append(p)
@@ -150,8 +173,8 @@ class ProjectConfig(BaseModel):
         if self.group1 is None or self.group2 is None:
             raise ValueError("group1 and group2 are required when groups is not set")
         return [
-            (self.group1.label, _resolve_sample_paths(self.group1.sample_paths)),
-            (self.group2.label, _resolve_sample_paths(self.group2.sample_paths)),
+            (self.group1.label, _resolve_sample_paths(self.group1.sample_paths, base_path=base_for(self.group1))),
+            (self.group2.label, _resolve_sample_paths(self.group2.sample_paths, base_path=base_for(self.group2))),
         ]
 
     def get_derived_paths(self) -> DerivedPaths:
@@ -250,10 +273,28 @@ def _load_level_labels(csv_path: str) -> Dict[str, str]:
     return out
 
 
-def _resolve_sample_paths(sample_paths: List[str]) -> List[str]:
-    """Expand any path that points to a file (one path per line or JSON array) into a list of paths."""
+def _resolve_sample_paths(
+    sample_paths: List[str],
+    base_path: Optional[str] = None,
+) -> List[str]:
+    """
+    Expand any path that points to a file (one path per line, JSON array, or single-column CSV of names)
+    into a list of full paths. When base_path is set and the file contains sample names (no slashes),
+    each name is resolved to base_path / name.
+    """
+    import csv
     import json
     out: List[str] = []
+    base = Path(base_path).resolve() if base_path else None
+
+    def resolve_entry(entry: str) -> str:
+        entry = entry.strip()
+        if not entry:
+            return ""
+        if base is not None and not _looks_like_absolute_path(entry):
+            return str(base / entry)
+        return entry
+
     for p in sample_paths:
         p = p.strip()
         if not p:
@@ -263,15 +304,65 @@ def _resolve_sample_paths(sample_paths: List[str]) -> List[str]:
             content = path.read_text().strip()
             if content.startswith("["):
                 data = json.loads(content)
-                out.extend([str(x).strip() for x in data if str(x).strip()])
+                for x in data:
+                    r = resolve_entry(str(x))
+                    if r:
+                        out.append(r)
+            elif path.suffix.lower() == ".csv":
+                with open(path, newline="", encoding="utf-8") as f:
+                    reader = csv.reader(f)
+                    first_row = next(reader, None)
+                    if first_row is None:
+                        pass
+                    elif first_row and first_row[0].strip().lower() in ("sample", "path", "sample_path", "name", "id"):
+                        for row in reader:
+                            if len(row) > 0:
+                                r = resolve_entry(row[0])
+                                if r:
+                                    out.append(r)
+                    else:
+                        if len(first_row) > 0:
+                            r = resolve_entry(first_row[0])
+                            if r:
+                                out.append(r)
+                        for row in reader:
+                            if len(row) > 0:
+                                r = resolve_entry(row[0])
+                                if r:
+                                    out.append(r)
             else:
                 for line in content.splitlines():
-                    line = line.strip()
-                    if line and not line.startswith("#"):
-                        out.append(line)
+                    if line.strip().startswith("#"):
+                        continue
+                    r = resolve_entry(line)
+                    if r:
+                        out.append(r)
         else:
-            out.append(p)
+            if base is not None and (_looks_like_file_path(p) or "/" in p or "\\" in p):
+                raise FileNotFoundError(
+                    f"Sample list file not found: {path}. "
+                    "Create the file (e.g. CSV with a 'sample' column of folder names) or run from the directory where it exists."
+                )
+            out.append(resolve_entry(p) if base else p)
     return out
+
+
+def _looks_like_file_path(entry: str) -> bool:
+    """True if entry looks like a path to a list file (.csv, .txt, etc.)."""
+    e = entry.strip().lower()
+    return e.endswith(".csv") or e.endswith(".txt") or e.endswith(".json")
+
+
+def _looks_like_absolute_path(entry: str) -> bool:
+    if not entry:
+        return False
+    if entry.startswith("/"):
+        return True
+    if len(entry) >= 2 and entry[1] == ":":
+        return True
+    if "/" in entry or "\\" in entry:
+        return True
+    return False
 
 
 def load_project(path: Union[str, Path]) -> ProjectConfig:
