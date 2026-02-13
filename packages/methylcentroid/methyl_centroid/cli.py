@@ -12,7 +12,7 @@ from typing import List
 
 from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig, CentroidResults
 from .core import MethylCentroid
-from .project_resolver import resolve_centroid_batch_config
+from .project_resolver import resolve_centroid_batch_config, run_centroids_for_all_groups
 from methyl_utils.logging_utils import setup_logging
 
 
@@ -54,8 +54,7 @@ Examples:
     )
     config_group.add_argument(
         '--group',
-        choices=['group1', 'group2'],
-        help='Which cohort to build (group1 or group2); requires --project'
+        help='Which cohort to build: group1, group2, all (all N groups), or 0-based index (e.g. 0); requires --project'
     )
     config_group.add_argument(
         '--step-override',
@@ -353,15 +352,21 @@ def main() -> None:
     try:
         if args.project is not None:
             if args.group is None:
-                raise ValueError("--project requires --group (group1 or group2)")
+                raise ValueError("--project requires --group (group1, group2, all, or 0-based index)")
             if not args.project.exists():
                 raise FileNotFoundError(f"Project config not found: {args.project}")
-            batch_config = resolve_centroid_batch_config(
-                args.project, args.group, args.step_override
-            )
-            if args.use_gpu is not None:
-                batch_config.base_config.use_gpu = bool(args.use_gpu)
-            run_batch_processing(batch_config)
+            if args.group.strip().lower() == "all":
+                run_centroids_for_all_groups(args.project, args.step_override)
+            else:
+                group_arg = args.group.strip()
+                if group_arg.isdigit():
+                    group_arg = int(group_arg)
+                batch_config = resolve_centroid_batch_config(
+                    args.project, group_arg, args.step_override
+                )
+                if args.use_gpu is not None:
+                    batch_config.base_config.use_gpu = bool(args.use_gpu)
+                run_batch_processing(batch_config)
 
         elif args.batch_config:
             # Batch processing mode

@@ -52,6 +52,15 @@ class ClassificationConfig(BaseModel):
         default=None,
         description="Explicit list of sample directories for centroid2 (class 1). Overrides centroid2_dir if set. Use with centroid1_sample_paths."
     )
+    # N-group / multiclass: when set, use multiclass builder with these classes instead of binary centroid1/centroid2
+    centroid_dirs: Optional[List[str]] = Field(
+        default=None,
+        description="List of centroid directories for N-class (one per class). When len > 2, use with multiclass_class_names and a DMP CSV to build a multiclass model."
+    )
+    multiclass_class_names: Optional[List[str]] = Field(
+        default=None,
+        description="Class names for multiclass (same order as centroid_dirs). Used when centroid_dirs has more than 2 entries."
+    )
 
     # Optional
     output_path: Optional[str] = Field(
@@ -170,10 +179,15 @@ class ClassificationConfig(BaseModel):
             self.centroid1_sample_paths and self.centroid2_sample_paths
             and len(self.centroid1_sample_paths) > 0 and len(self.centroid2_sample_paths) > 0
         )
-        if not self.input_path and not self.samples and not has_centroid_dirs and not has_centroid_lists:
+        has_multiclass = bool(
+            self.centroid_dirs and len(self.centroid_dirs) >= 2
+            and self.multiclass_class_names and len(self.multiclass_class_names) == len(self.centroid_dirs)
+        )
+        if not self.input_path and not self.samples and not has_centroid_dirs and not has_centroid_lists and not has_multiclass:
             raise ValueError(
                 "Provide one of: 'input_path', 'samples', "
-                "both 'centroid1_dir' and 'centroid2_dir', or both 'centroid1_sample_paths' and 'centroid2_sample_paths'"
+                "both 'centroid1_dir' and 'centroid2_dir', both 'centroid1_sample_paths' and 'centroid2_sample_paths', "
+                "or 'centroid_dirs' with 'multiclass_class_names' (same length)"
             )
     
     class Config:

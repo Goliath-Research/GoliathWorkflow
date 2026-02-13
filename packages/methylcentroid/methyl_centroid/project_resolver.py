@@ -1,5 +1,8 @@
 """
 Resolve MethylCentroid batch config from a pipeline project config (Pydantic).
+Supports two-group (group1/group2) and N-group projects.
+When a group has level_labels_path (CSV mapping sample_path -> level), that group
+is expanded into one centroid dir per level (disease levels or health levels).
 """
 
 import json
@@ -11,33 +14,60 @@ from methyl_utils import load_project
 from .config import BatchProcessingConfig, MethylCentroidConfig
 
 
+def run_centroids_for_all_groups(
+    project_path: Union[str, Path],
+    step_override_path: Optional[Union[str, Path]] = None,
+) -> None:
+    """
+    Run MethylCentroid batch for every resolved group (e.g. healthy_level1, healthy_level2,
+    pca_early, pca_medium, pca_late). Use for N-group projects or when groups use level_labels_path.
+    """
+    from .cli import run_batch_processing
+    project = load_project(project_path)
+    resolved = project.get_resolved_groups()
+    for i in range(len(resolved)):
+        batch = resolve_centroid_batch_config(project_path, i, step_override_path)
+        run_batch_processing(batch)
+
+
 def resolve_centroid_batch_config(
     project_path: Union[str, Path],
-    group: str,
+    group: Union[str, int],
     step_override_path: Optional[Union[str, Path]] = None,
 ) -> BatchProcessingConfig:
     """
     Build BatchProcessingConfig for one group from a project config.
-    group must be "group1" or "group2".
+    group may be "group1", "group2", or an integer index 0, 1, ... for N-group projects.
     Returns Pydantic BatchProcessingConfig.
     """
-    if group not in ("group1", "group2"):
-        raise ValueError("group must be 'group1' or 'group2'")
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    if group == "group1":
-        g = project.group1
+    resolved = project.get_resolved_groups()
+
+    if isinstance(group, int):
+        if group < 0 or group >= len(resolved):
+            raise ValueError(f"group index {group} out of range (have {len(resolved)} groups)")
+        label = resolved[group][0]
+        sample_paths = list(resolved[group][1])
+        centroid_dirs = paths.centroid_dirs or [paths.centroid1_dir, paths.centroid2_dir]
+        output_dir = centroid_dirs[group] if group < len(centroid_dirs) else f"{paths.output_base}/centroids/{label}"
+    elif group == "group1":
+        label = resolved[0][0]
+        sample_paths = list(resolved[0][1])
         output_dir = paths.centroid1_dir
-        sample_paths = project.get_group1_sample_paths()
-    else:
-        g = project.group2
+    elif group == "group2":
+        if len(resolved) < 2:
+            raise ValueError("project has only one group; use group1 or index 0")
+        label = resolved[1][0]
+        sample_paths = list(resolved[1][1])
         output_dir = paths.centroid2_dir
-        sample_paths = project.get_group2_sample_paths()
+    else:
+        raise ValueError("group must be 'group1', 'group2', or an integer index")
 
     base_config = MethylCentroidConfig(
         laboratory=project.project_name,
         disease="",
-        group=g.label,
+        group=label,
         batch=project.project_name,
         chrom=project.chromosomes[0] if project.chromosomes else "1",
         ctx=project.contexts[0] if project.contexts else "CG",
@@ -77,7 +107,10 @@ def resolve_centroid_batch_config(
             if key in overrides:
                 batch = batch.model_copy(update={key: overrides[key]})
     # Ensure output_dir is always the derived path (output_base/project_name/centroids/...)
-    canonical_output = paths.centroid1_dir if group == "group1" else paths.centroid2_dir
+    if isinstance(group, int):
+        canonical_output = paths.centroid_dirs[group] if (paths.centroid_dirs and group < len(paths.centroid_dirs)) else output_dir
+    else:
+        canonical_output = paths.centroid1_dir if group == "group1" else paths.centroid2_dir
     batch = batch.model_copy(
         update={"base_config": batch.base_config.model_copy(update={"output_dir": canonical_output})}
     )

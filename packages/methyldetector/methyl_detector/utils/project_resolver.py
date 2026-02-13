@@ -1,5 +1,8 @@
 """
 Resolve MethylDetector config from a pipeline project config (Pydantic).
+Uses centroid1_dir and centroid2_dir (first two groups). For N-group multi-class,
+run detection one-vs-rest or pairwise and merge DMPs; then use the merged DMP CSV
+with the classifier multiclass builder (see build_multiclass_config_from_project).
 """
 
 import json
