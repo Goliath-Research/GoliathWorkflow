@@ -32,10 +32,13 @@ def build_multiclass_config_from_project(
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    resolved = project.get_resolved_groups()
+    get_resolved = getattr(project, "get_resolved_groups", None)
+    if get_resolved is None:
+        raise ValueError("multiclass from project requires methyl_utils with get_resolved_groups (upgrade methylutils)")
+    resolved = get_resolved()
     if len(resolved) < 2:
         raise ValueError("Project must have at least 2 groups for multiclass")
-    centroid_dirs = paths.centroid_dirs or [paths.centroid1_dir, paths.centroid2_dir]
+    centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
     if len(centroid_dirs) != len(resolved):
         centroid_dirs = [f"{paths.output_base}/centroids/{label}" for label, _ in resolved]
 
@@ -85,7 +88,9 @@ def resolve_classifier_config(
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    resolved = project.get_resolved_groups()
+    get_resolved = getattr(project, "get_resolved_groups", None)
+    resolved = get_resolved() if get_resolved is not None else None
+    centroid_dirs = getattr(paths, "centroid_dirs", None)
 
     base = {
         "model_dir": paths.detection_dir,
@@ -93,8 +98,8 @@ def resolve_classifier_config(
         "centroid2_dir": paths.centroid2_dir,
         "output_path": str(Path(paths.classifier_dir) / output_filename),
     }
-    if paths.centroid_dirs and len(paths.centroid_dirs) > 2:
-        base["centroid_dirs"] = list(paths.centroid_dirs)
+    if resolved is not None and centroid_dirs and len(centroid_dirs) > 2:
+        base["centroid_dirs"] = list(centroid_dirs)
         base["multiclass_class_names"] = [resolved[i][0] for i in range(len(resolved))]
     if project.path_remap:
         base["centroid_path_remap"] = project.path_remap
