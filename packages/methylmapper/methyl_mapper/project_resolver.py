@@ -1,6 +1,9 @@
 """
 Resolve MethylMapper (bedtools) paths from a pipeline project config.
-Uses Pydantic only; no raw dict configs.
+Uses the same detection layout as MethylDetector/MethylClassifier: when the project
+has multiple groups, detection outputs live under detection/{disease_subdir}/{label}
+(e.g. detection/cancer/pca1, detection/cancer/pca2). The resolver builds a pattern
+like detection/cancer/*/dmps-*.csv so the mapper finds CSVs in all group dirs.
 """
 
 from pathlib import Path
@@ -10,13 +13,15 @@ from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
 
+DISEASE_SUBDIR_DEFAULT = "cancer"
+
 
 class MapperStepPaths(BaseModel):
     """Paths for the mapper step derived from a project (and optional overrides)."""
 
     csv_pattern: str = Field(
         ...,
-        description="Glob pattern for DMP CSVs (e.g. detection_dir/dmps-*-3-optimized.csv)",
+        description="Glob pattern for DMP CSVs (e.g. detection_dir/cancer/*/dmps-*.csv)",
     )
     output_dir: str = Field(
         ...,
@@ -32,29 +37,42 @@ def resolve_mapper_paths(
     """
     Build mapper step paths from a project config.
 
-    Input CSVs are read from project's detection_dir; output goes to mapper_dir.
+    Input CSVs are read from the project's detection layout:
+    - When the project has multiple groups (e.g. healthy, pca1, pca2, ...), detection
+      is assumed to run per-cancer-group and outputs live in detection/{disease_subdir}/{label}.
+      The CSV pattern is set to detection/{disease_subdir}/*/{filename_pattern} so all
+      group dirs are searched (same layout as methyl-classifier / methyl-detector).
+    - Otherwise the pattern is detection_dir/{filename_pattern}.
+
     Optional step_override_path JSON can override csv_pattern and/or output_dir.
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    csv_pattern = str(Path(paths.detection_dir) / csv_filename_pattern)
+    detection_dir = Path(paths.detection_dir)
     output_dir = paths.mapper_dir
+    disease_subdir = DISEASE_SUBDIR_DEFAULT
 
-    def _resolve_csv_pattern(pattern: str) -> str:
-        """If pattern is relative, resolve under detection_dir so CSVs are found in detection folder."""
+    resolved_groups = getattr(project, "get_resolved_groups", lambda: [])()
+    use_per_group_layout = len(resolved_groups) >= 2
+
+    def _resolve_csv_pattern(pattern: str, use_per_group: bool) -> str:
+        """Resolve pattern: absolute unchanged; relative under detection_dir, optionally under detection/disease_subdir/*/."""
         p = Path(pattern)
         if p.is_absolute():
             return pattern
-        return str(Path(paths.detection_dir) / pattern)
+        if use_per_group:
+            return str(detection_dir / disease_subdir / "*" / pattern)
+        return str(detection_dir / pattern)
 
-    # Apply project-level step config (mapper) if present.
-    # Prefer csv_filename_pattern (mask under detection_dir) over full csv_pattern path.
+    csv_pattern = _resolve_csv_pattern(csv_filename_pattern, use_per_group_layout)
+
     step_cfg = project.get_step_config("mapper")
     if step_cfg:
+        disease_subdir = step_cfg.get("disease_subdir") or disease_subdir
         if step_cfg.get("csv_filename_pattern") is not None:
-            csv_pattern = str(Path(paths.detection_dir) / step_cfg["csv_filename_pattern"])
+            csv_pattern = _resolve_csv_pattern(step_cfg["csv_filename_pattern"], use_per_group_layout)
         elif step_cfg.get("csv_pattern") is not None:
-            csv_pattern = _resolve_csv_pattern(step_cfg["csv_pattern"])
+            csv_pattern = _resolve_csv_pattern(step_cfg["csv_pattern"], use_per_group_layout)
         if step_cfg.get("output_dir") is not None:
             output_dir = step_cfg["output_dir"]
 
@@ -64,10 +82,12 @@ def resolve_mapper_paths(
         with open(step_override_path) as f:
             overrides = json.load(f)
 
+    if overrides.get("disease_subdir") is not None:
+        disease_subdir = overrides["disease_subdir"]
     if overrides.get("csv_filename_pattern") is not None:
-        csv_pattern = str(Path(paths.detection_dir) / overrides["csv_filename_pattern"])
+        csv_pattern = _resolve_csv_pattern(overrides["csv_filename_pattern"], use_per_group_layout)
     elif overrides.get("csv_pattern") is not None:
-        csv_pattern = _resolve_csv_pattern(overrides["csv_pattern"])
+        csv_pattern = _resolve_csv_pattern(overrides["csv_pattern"], use_per_group_layout)
     if overrides.get("output_dir") is not None:
         output_dir = overrides["output_dir"]
 

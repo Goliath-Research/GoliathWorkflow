@@ -944,18 +944,20 @@ class BedtoolsMapper:
         """
         csv_path = Path(csv_pattern)
         
-        # Determine search directory
-        if csv_path.is_absolute():
-            # Absolute path: use parent directory
+        # Support path-level wildcard (e.g. /path/to/detection/cancer/*/dmps-*.csv) for per-group detection dirs
+        path_wildcard = "/*/"
+        if path_wildcard in csv_pattern:
+            base_str, _, rest = csv_pattern.partition(path_wildcard)
+            search_dir = Path(base_str)
+            pattern = "*/" + rest  # e.g. "*/dmps-*.csv" so search_dir.glob finds all group subdirs
+        elif csv_path.is_absolute():
             search_dir = csv_path.parent
             pattern = csv_path.name
         else:
-            # Relative path: check if it's a directory or pattern
             if csv_path.exists() and csv_path.is_dir():
                 search_dir = csv_path
                 pattern = "*.csv"
             else:
-                # Assume pattern in current directory
                 search_dir = Path.cwd()
                 pattern = csv_pattern
         
