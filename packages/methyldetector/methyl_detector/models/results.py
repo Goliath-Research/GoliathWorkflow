@@ -227,6 +227,10 @@ class MethylModelerValidationResults(NumpyCompatibleModel):
         default=None,
         description="Total biologically significant DMPs (after biological filter, before optimization)"
     )
+    biological_filter: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Biological filter thresholds used and value ranges (min/max) of delta_mean, overlap, effect_size in retained DMPs"
+    )
 
     model_config = {
         "arbitrary_types_allowed": True,

@@ -98,7 +98,10 @@
       "alpha": 0.05,
       "optimize_dmps": true,
       "validation_mode": "real",
-      "target_balanced_accuracy": 0.99,
+      "target_balanced_accuracy": 0.95,
+      "min_delta_mean": 0.2,
+      "max_overlap": 0.5,
+      "min_effect_size": 0.7,
       "optimization_method": "featurecuts",
       "random_state": 42,
       "min_N_pct": 0.1

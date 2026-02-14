@@ -617,6 +617,29 @@ class MethylDetector:
             logger.info(
                 f"Biological filter total: {len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}% of initial)"
             )
+
+        # Log and store value ranges of delta_mean, overlap, effect_size for retained DMPs
+        thresholds_used = {}
+        if self.config.min_delta_mean is not None:
+            thresholds_used["min_delta_mean"] = self.config.min_delta_mean
+        if self.config.max_overlap is not None:
+            thresholds_used["max_overlap"] = self.config.max_overlap
+        if self.config.min_effect_size is not None:
+            thresholds_used["min_effect_size"] = self.config.min_effect_size
+
+        value_ranges = {}
+        for col, label in [("delta_mean", "delta_mean"), ("overlap", "overlap"), ("effect_size", "effect_size")]:
+            if col in bio_df.columns and len(bio_df) > 0:
+                ser = bio_df[col].astype(float)
+                value_ranges[label] = {"min": float(ser.min()), "max": float(ser.max())}
+                logger.info(
+                    f"  Retained DMPs {label}: min = {value_ranges[label]['min']:.4f}, max = {value_ranges[label]['max']:.4f}"
+                )
+
+        self._biological_filter_summary = {
+            "thresholds": thresholds_used,
+            "value_ranges": value_ranges,
+        }
         return bio_df
 
     def _load_binned_counts_from_centroids(
@@ -2726,6 +2749,8 @@ class MethylDetector:
                 sample_counts=SampleCounts(**result['counts'])
             )
 
+        biological_filter = getattr(self, "_biological_filter_summary", None)
+
         # Create the main results object
         results = MethylModelerValidationResults(
             chromosome=self.chromosome,
@@ -2736,6 +2761,7 @@ class MethylDetector:
             n_dmps_exported=n_dmps_exported,
             total_statistical_dmps=total_statistical_dmps,
             total_biological_dmps=total_biological_dmps,
+            biological_filter=biological_filter,
         )
 
         # Save to JSON using Pydantic's model_dump_json for proper serialization
