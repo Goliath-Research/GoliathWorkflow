@@ -641,6 +641,16 @@ def main_bedtools():
         logger.info(f"Group by: {args.group_by}")
         if args.enrich_disease:
             logger.info(f"Disease enrichment: Enabled ({disease_term})")
+            use_grok = "grok" in (args.enrich_source or "").lower()
+            if use_grok:
+                grok_key_set = bool(args.grok_api_key or os.environ.get("GROK_API_KEY"))
+                if grok_key_set:
+                    logger.info(f"Grok API: will query gene–{disease_term} associations (key configured)")
+                else:
+                    logger.warning(
+                        "Grok API: no key found (set GROK_API_KEY or --grok-api-key). "
+                        "Grok queries will be skipped; only other enrichment sources will run."
+                    )
         if not args.no_optimize_dmps and args.enrich_disease:
             logger.info(f"DMP optimization: Enabled (min_k={args.min_k}, stability_threshold={args.stability_threshold})")
         logger.info("="*70)
