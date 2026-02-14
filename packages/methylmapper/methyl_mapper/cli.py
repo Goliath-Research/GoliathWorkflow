@@ -368,7 +368,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         '--grok-api-key',
         type=str,
         default=None,
-        help='Grok API key (optional, uses secure storage if not provided)'
+        help='Grok API key. Optional: can also use config (grok_api_key), env (GROK_API_KEY), encrypted file, or Azure Key Vault (see methyl_mapper_credentials save)'
     )
     disease_group.add_argument(
         '--disgenet-api-key',
@@ -551,6 +551,10 @@ For more information, visit: https://github.com/your-org/methyl_mapper
                 args.enrich_profile = step_cfg["enrich_profile"]
             if step_cfg.get("grok_api_key") is not None and args.grok_api_key is None:
                 args.grok_api_key = step_cfg["grok_api_key"]
+            if step_cfg.get("azure_key_vault_url") is not None and args.azure_key_vault_url is None:
+                args.azure_key_vault_url = step_cfg["azure_key_vault_url"]
+            if step_cfg.get("encrypted_file_path") is not None and args.encrypted_file_path is None:
+                args.encrypted_file_path = step_cfg["encrypted_file_path"]
             if step_cfg.get("optimize_dmps") is False and not args.no_optimize_dmps:
                 args.no_optimize_dmps = True
             if step_cfg.get("feature_types") is not None and args.feature_types is None:
@@ -578,6 +582,10 @@ For more information, visit: https://github.com/your-org/methyl_mapper
                 args.enrich_profile = cfg['enrich_profile']
             if cfg.get('grok_api_key') is not None and args.grok_api_key is None:
                 args.grok_api_key = cfg['grok_api_key']
+            if cfg.get('azure_key_vault_url') is not None and args.azure_key_vault_url is None:
+                args.azure_key_vault_url = cfg['azure_key_vault_url']
+            if cfg.get('encrypted_file_path') is not None and args.encrypted_file_path is None:
+                args.encrypted_file_path = cfg['encrypted_file_path']
             # optimize_dmps: false in config => no_optimize_dmps
             if cfg.get('optimize_dmps') is False and not args.no_optimize_dmps:
                 args.no_optimize_dmps = True
@@ -728,19 +736,23 @@ def parse_credentials_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Save Grok API key to encrypted local file
+  # Save Grok API key to local encrypted file and Azure (default: --save-to both)
+  methyl_mapper_credentials save --credential-type grok --api-key "your-grok-api-key"
+  # With Azure configured, also saves to Key Vault:
+  export AZURE_KEY_VAULT_URL="https://your-vault.vault.azure.net/"
   methyl_mapper_credentials save --credential-type grok --api-key "your-grok-api-key"
   
-  # Save DisGeNET API key
-  methyl_mapper_credentials save --credential-type disgenet --api-key "your-disgenet-api-key"
+  # Save only to local encrypted file
+  methyl_mapper_credentials save --credential-type grok --api-key "your-key" --save-to local
   
-  # Save Azure SQL password
-  methyl_mapper_credentials save --credential-type azure_sql --api-key "your-db-password"
+  # Save only to Azure Key Vault
+  methyl_mapper_credentials save --credential-type grok --api-key "your-key" --save-to azure --azure-key-vault-url "https://vault.vault.azure.net/"
   
-  # Save Grok API key to Azure Key Vault
-  methyl_mapper_credentials save --credential-type grok --api-key "your-key" \\
-                                  --azure-key-vault-url "https://vault.vault.azure.net/" \\
-                                  --use-azure
+  # Grok API key resolution when running mapper (first match wins):
+  # 1. Config/CLI (grok_api_key in project or --config, or --grok-api-key)
+  # 2. Encrypted local file (~/.methyl_mapper/credentials/grok_api_key.encrypted)
+  # 3. Azure Key Vault (if AZURE_KEY_VAULT_URL set)
+  # 4. Environment variable GROK_API_KEY
   
   # Test credential retrieval
   methyl_mapper_credentials test --credential-type grok
@@ -762,8 +774,15 @@ Examples:
     save_parser.add_argument('--azure-key-vault-url', type=str, default=None, help='Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)')
     save_parser.add_argument('--azure-secret-name', type=str, default=None, help='Azure Key Vault secret name (overrides default based on credential type)')
     save_parser.add_argument('--encrypted-file-path', type=str, default=None, help='Path to encrypted credential file (overrides default based on credential type)')
-    save_parser.add_argument('--use-azure', action='store_true', help='Save to Azure Key Vault')
-    save_parser.add_argument('--use-encrypted-file', action='store_true', default=True, help='Save to encrypted local file (default: True)')
+    save_parser.add_argument(
+        '--save-to',
+        type=str,
+        choices=['local', 'azure', 'both'],
+        default='both',
+        help='Where to save: local (encrypted file only), azure (Key Vault only), or both (default; saves to local and Azure when Azure URL is set)'
+    )
+    save_parser.add_argument('--use-azure', action='store_true', help='Save to Azure Key Vault (deprecated: use --save-to azure or --save-to both)')
+    save_parser.add_argument('--use-encrypted-file', action='store_true', default=None, help='Save to encrypted local file (deprecated: use --save-to local or --save-to both)')
     save_parser.add_argument('--password', type=str, default=None, help='Password for encryption (or set METHYL_MAPPER_CREDENTIAL_PASSWORD env var)')
     
     # Test command
@@ -842,19 +861,44 @@ def main_credentials():
             logger.info(f"Saving {config['display_name']} Securely")
             logger.info("="*70)
             
+            # Resolve where to save: --save-to (local|azure|both) or legacy --use-azure / --use-encrypted-file
+            azure_url = args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL')
+            if args.use_encrypted_file is not None or args.use_azure:
+                use_encrypted_file = args.use_encrypted_file if args.use_encrypted_file is not None else False
+                use_azure = args.use_azure
+                if args.use_encrypted_file is None and not args.use_azure:
+                    use_encrypted_file = True  # legacy: default was True
+            else:
+                if args.save_to == 'both':
+                    use_encrypted_file = True
+                    use_azure = bool(azure_url)
+                    if not azure_url:
+                        logger.info("   (Azure Key Vault URL not set; saving to local only. Set AZURE_KEY_VAULT_URL to save to both.)")
+                elif args.save_to == 'local':
+                    use_encrypted_file = True
+                    use_azure = False
+                else:  # azure
+                    use_encrypted_file = False
+                    use_azure = True
+                    if not azure_url:
+                        logger.error("Azure Key Vault URL required for --save-to azure. Set --azure-key-vault-url or AZURE_KEY_VAULT_URL.")
+                        sys.exit(1)
+            
             success = credential_manager.save_credential(
                 value=args.api_key,
-                use_azure=args.use_azure,
-                use_encrypted_file=args.use_encrypted_file,
+                use_azure=use_azure,
+                use_encrypted_file=use_encrypted_file,
                 password=args.password or os.environ.get('METHYL_MAPPER_CREDENTIAL_PASSWORD')
             )
             
             if success:
                 logger.info(f"✅ {config['display_name']} saved successfully!")
-                logger.info(f"   Encrypted file: {credential_manager.encrypted_file_path}")
-                if args.use_azure:
+                if use_encrypted_file:
+                    logger.info(f"   Local (encrypted file): {credential_manager.encrypted_file_path}")
+                if use_azure and credential_manager.azure_key_vault_url:
                     logger.info(f"   Azure Key Vault: {credential_manager.azure_key_vault_url}")
                     logger.info(f"   Secret name: {azure_secret_name}")
+                logger.info("   Resolution order when running mapper: config/CLI → encrypted file → Azure → env var")
             else:
                 logger.error(f"❌ Failed to save {config['display_name']}")
                 sys.exit(1)
@@ -870,7 +914,13 @@ def main_credentials():
                 logger.info(f"✅ {config['display_name']} retrieved successfully!")
                 logger.info(f"   Key preview: {api_key[:20]}...{api_key[-10:]}")
                 logger.info(f"   Length: {len(api_key)} characters")
-                source_info = "Encrypted file" if (credential_manager.encrypted_file_path and credential_manager.encrypted_file_path.exists()) else "Environment variable or Azure Key Vault"
+                # Note: get_credential order is explicit → encrypted file → Azure → env; we didn't pass explicit, so show likely source
+                if credential_manager.encrypted_file_path and credential_manager.encrypted_file_path.exists():
+                    source_info = "Encrypted local file"
+                elif credential_manager.azure_key_vault_url:
+                    source_info = "Azure Key Vault or env (check debug log for actual source)"
+                else:
+                    source_info = "Environment variable"
                 logger.info(f"   Source: {source_info}")
             else:
                 logger.warning(f"⚠️  No {config['display_name']} found in any configured location")

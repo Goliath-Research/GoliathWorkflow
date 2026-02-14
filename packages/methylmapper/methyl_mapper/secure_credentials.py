@@ -22,13 +22,16 @@ logger = logging.getLogger(__name__)
 
 class SecureCredentialManager:
     """
-    Manages secure storage and retrieval of API keys.
+    Manages secure storage and retrieval of API keys (e.g. Grok API key).
     
-    Priority order:
-    1. Explicitly provided key
-    2. Azure Key Vault (if configured)
-    3. Encrypted local file
-    4. Environment variable
+    Resolution order when get_credential() is called:
+    1. Explicitly provided key (e.g. from config file or --grok-api-key)
+    2. Encrypted local file (~/.methyl_mapper/credentials/{name}.encrypted)
+    3. Azure Key Vault (if configured)
+    4. Environment variable (e.g. GROK_API_KEY)
+    
+    Use save_credential() to store the key locally and/or in Azure so it is
+    always available without putting it in config.
     """
     
     def __init__(

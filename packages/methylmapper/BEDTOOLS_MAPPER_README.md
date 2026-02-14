@@ -271,7 +271,21 @@ You can put all options in a JSON config and run with a single `--config` argume
 }
 ```
 
-Set `grok_api_key` to your key in the config, or omit it / set to `null` and use `export GROK_API_KEY="..."` so the key is not stored in the file.
+**Grok API key** can be provided in any of these ways (first match wins when running the mapper):
+
+1. **Config / project** – `grok_api_key` in this JSON or in the project's `step_config.mapper`
+2. **Encrypted local file** – save once with `methyl_mapper_credentials save --credential-type grok --api-key "your-key"` (writes to `~/.methyl_mapper/credentials/grok_api_key.encrypted`)
+3. **Azure Key Vault** – save with `--save-to azure` or `--save-to both` when `AZURE_KEY_VAULT_URL` is set; mapper reads from Vault when no explicit key and no local file
+4. **Environment** – `export GROK_API_KEY="your-key"`
+
+To make the key always available without putting it in config, save to both local and Azure:
+
+```bash
+export AZURE_KEY_VAULT_URL="https://your-vault.vault.azure.net/"   # optional
+methyl_mapper_credentials save --credential-type grok --api-key "your-grok-api-key"
+# Default --save-to both: writes to encrypted file and (if Azure URL set) to Key Vault
+methyl_mapper_credentials test --credential-type grok
+```
 
 **Note:** `feature_types` is optional. If omitted, the mapper defaults to `["gene"]` only (recommended for most analyses).
 
@@ -288,7 +302,9 @@ Set `grok_api_key` to your key in the config, or omit it / set to `null` and use
 | `enrich_source` | `grok+opentargets`, `opentargets`, `grok`, `disgenet`, `grok+disgenet`, `both`, `all` |
 | `enrich_profile` | `strict`, `balanced`, `permissive` |
 | `optimize_dmps` | `false` = use all DMPs (no optimization); `true` = run DMP optimization when enrichment is on |
-| `grok_api_key` | Grok API key (optional; prefer `GROK_API_KEY` env to avoid storing in config) |
+| `grok_api_key` | Grok API key (optional; or use encrypted file, Azure Key Vault, or `GROK_API_KEY` env) |
+| `azure_key_vault_url` | Azure Key Vault URL for reading Grok/DisGeNET keys (or `AZURE_KEY_VAULT_URL` env) |
+| `encrypted_file_path` | Path to encrypted credential file (default: `~/.methyl_mapper/credentials/grok_api_key.encrypted`) |
 
 **Run with config only:**
 
