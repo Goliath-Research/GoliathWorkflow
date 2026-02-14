@@ -78,3 +78,39 @@ methyl-qc --project configs/project_PCa_vs_Healthy_example.json
 ```
 
 Optional **step overrides** (e.g. `--step-override step.json`) can override specific fields per run without changing the project file.
+
+### N-group projects (one healthy + multiple cancer groups)
+
+When the project has **more than two groups** (e.g. one healthy and four PCa levels: pca1, pca2, pca3, pca4), you can either run **separate binary models per cancer group** or build a **single multi-class classifier**.
+
+#### Option 1: Separate models per cancer group
+
+Run detection once per disease group; each run compares **control (first group, e.g. healthy)** vs one cancer group and writes to `detection/cancer/{label}`:
+
+```bash
+methyl-detector --project configs/project_PCa7_4levels_vs_Healthy_3clusters.json --per-cancer-group
+```
+
+This produces:
+
+- `{project_root}/detection/cancer/pca1/` (healthy vs pca1: DMPs, classifier PKL, etc.)
+- `{project_root}/detection/cancer/pca2/`
+- `{project_root}/detection/cancer/pca3/`
+- `{project_root}/detection/cancer/pca4/`
+
+Use each subdir for downstream mapper/classifier for that cancer group, or keep separate binary classifiers per group.
+
+#### Option 2: Multi-class classifier (healthy vs all cancer groups)
+
+Use **`--multi-class-model`** so the detector merges DMPs from all per-cancer detection dirs and builds one multiclass model (requires **methylclassifier** installed).
+
+- **With `--per-cancer-group`**: run detection for each cancer group, then merge DMPs and build the multiclass model in one go:
+  ```bash
+  methyl-detector --project configs/project_PCa7_4levels_vs_Healthy_3clusters.json --per-cancer-group --multi-class-model
+  ```
+- **Without `--per-cancer-group`**: do **not** run detection; only check that `detection/cancer/{label}` exists for every disease group (with at least one `dmps-*.csv`), then merge and build. Use this when you have already run `--per-cancer-group` earlier:
+  ```bash
+  methyl-detector --project configs/project_PCa7_4levels_vs_Healthy_3clusters.json --multi-class-model
+  ```
+
+If any class is missing detection results, the program exits with a message listing the missing classes. Merged DMPs are written to `{project_root}/detection/dmps-merged-multiclass.csv` and the multiclass classifier to `{project_root}/classifier/multiclass-classifier.pkl`.

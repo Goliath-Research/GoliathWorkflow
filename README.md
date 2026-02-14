@@ -124,8 +124,8 @@ Parses Parabricks/bwa-mem2 alignment QC metrics into per-sample JSON for databas
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│        8. Alignment QC (MethylAlignmentQC, optional)          │
-│  Parse alignment QC metrics to per-sample JSON               │
+│        8. Alignment QC (MethylAlignmentQC, optional)        │
+│        Parse alignment QC metrics to per-sample JSON        │
 └─────────────────────────────────────────────────────────────┘
 ```
 

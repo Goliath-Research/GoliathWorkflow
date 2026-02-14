@@ -11,14 +11,14 @@ import click
 try:
     from ..core.methyldetector import MethylDetector
     from ..utils.core import load_config_from_json, setup_logging
-    from ..utils.project_resolver import resolve_detector_config
+    from ..utils.project_resolver import resolve_detector_config, resolve_detector_config_per_cancer_group
 except ImportError:
     # When running directly, add parent directory to path
     import os
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
     from methyl_detector.core.methyldetector import MethylDetector
     from methyl_detector.utils.core import load_config_from_json, setup_logging
-    from methyl_detector.utils.project_resolver import resolve_detector_config
+    from methyl_detector.utils.project_resolver import resolve_detector_config, resolve_detector_config_per_cancer_group
 
 @click.command()
 @click.argument(
@@ -51,6 +51,22 @@ except ImportError:
     default=None,
     help='Path to log file for detailed logging (summary/errors still shown on screen)'
 )
+@click.option(
+    '--per-cancer-group',
+    is_flag=True,
+    default=False,
+    help='With --project: run one detection per non-control group (control=group0). '
+         'Outputs to detection/cancer/{label} for each group (e.g. pca1, pca2). '
+         'Use when project has one healthy and multiple cancer groups to get separate models.'
+)
+@click.option(
+    '--multi-class-model',
+    is_flag=True,
+    default=False,
+    help='With --project: merge DMPs from per-cancer detection dirs and build a multiclass classifier. '
+         'If --per-cancer-group is also set, run detection first then merge and build. '
+         'If only --multi-class-model: require detection/cancer/{label} to exist for all groups, then merge and build.'
+)
 @click.version_option(version='0.3.0')
 def main(
     config: Optional[Path],
@@ -58,15 +74,98 @@ def main(
     step_override: Optional[Path],
     verbose: bool,
     log_file: Optional[Path],
+    per_cancer_group: bool,
+    multi_class_model: bool,
 ) -> None:
     """
     MethylDetector - Genomics sample classification using enhanced centroid-based approach.
 
     Use either CONFIG (path to detector JSON) or --project (pipeline project config).
     With --project, paths follow {output_base}/centroids, {output_base}/detection, etc.
+    Use --per-cancer-group with --project to run detection for each cancer group vs control,
+    writing to detection/cancer/pca1, detection/cancer/pca2, etc.
+    Use --multi-class-model to merge those DMPs and build a single multiclass model (with or without --per-cancer-group).
     """
     if (config is None) == (project is None):
         raise click.UsageError("Provide either CONFIG or --project (not both, not neither).")
+    if project is not None and (per_cancer_group or multi_class_model):
+        from methyl_utils import load_project
+        from ..utils.multiclass_merge import (
+            check_detection_dirs_have_dmps,
+            merge_dmp_csvs_from_detection_dirs,
+        )
+
+        configs_and_labels = resolve_detector_config_per_cancer_group(project, step_override)
+        if not configs_and_labels:
+            raise click.UsageError(
+                "Project has fewer than 2 groups; --per-cancer-group/--multi-class-model require at least one control and one disease group."
+            )
+        # Configure logging once
+        if log_file:
+            setup_logging(
+                verbose=verbose,
+                log_file=log_file,
+                console_level='INFO',
+                file_level='DEBUG' if verbose else 'INFO',
+            )
+        else:
+            setup_logging(verbose=verbose)
+        logger = logging.getLogger(__name__)
+
+        if per_cancer_group:
+            logger.info(f"Running detection for {len(configs_and_labels)} disease group(s) (control vs each)")
+            for loaded_config, label in configs_and_labels:
+                logger.info(f"Detection: control vs {label} -> {loaded_config.output_dir}")
+                detector = MethylDetector(loaded_config)
+                detector.run()
+            logger.info(f"\n{'='*80}\nPer-cancer-group detection complete: {len(configs_and_labels)} group(s)")
+            for loaded_config, label in configs_and_labels:
+                logger.info(f"  {label}: {loaded_config.output_dir}")
+
+        if multi_class_model:
+            missing = check_detection_dirs_have_dmps(configs_and_labels)
+            if missing:
+                click.echo(
+                    "Missing detection results for one or more classes. Run with --per-cancer-group first, or ensure each detection dir contains dmps-*.csv:",
+                    err=True,
+                )
+                for out_dir, label in missing:
+                    click.echo(f"  {label}: {out_dir}", err=True)
+                sys.exit(1)
+            proj = load_project(project)
+            paths = proj.get_derived_paths()
+            detection_dir = Path(paths.detection_dir)
+            merged_path = detection_dir / "dmps-merged-multiclass.csv"
+            logger.info(f"Merging DMPs from {len(configs_and_labels)} detection dirs -> {merged_path}")
+            merge_dmp_csvs_from_detection_dirs(
+                [Path(c.output_dir) for c, _ in configs_and_labels],
+                merged_path,
+                weights_column="importance",
+            )
+            try:
+                from methyl_classifier.project_resolver import build_multiclass_config_from_project
+                from methyl_classifier.utils.multiclass_builder import build_multiclass_model
+            except ImportError as e:
+                click.echo(
+                    "Building the multiclass model requires methylclassifier. Install it and run:\n"
+                    f"  python -c \"from methyl_classifier.project_resolver import build_multiclass_config_from_project; "
+                    f"from methyl_classifier.utils.multiclass_builder import build_multiclass_model; "
+                    f"import json; cfg = build_multiclass_config_from_project('{project}', dmps_csv='{merged_path}'); "
+                    f"build_multiclass_model(cfg)\"",
+                    err=True,
+                )
+                sys.exit(1)
+            cfg = build_multiclass_config_from_project(
+                str(project),
+                dmps_csv=str(merged_path),
+                output_model=str(Path(paths.classifier_dir) / "multiclass-classifier.pkl"),
+                weights_column="importance",
+            )
+            out_pkl = build_multiclass_model(cfg)
+            logger.info(f"Multiclass model saved to {out_pkl}")
+            click.echo(f"Multiclass model saved to {out_pkl}")
+
+        return
     if project is not None:
         loaded_config = resolve_detector_config(project, step_override)
     else:
