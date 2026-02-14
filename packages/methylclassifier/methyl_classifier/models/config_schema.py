@@ -61,6 +61,10 @@ class ClassificationConfig(BaseModel):
         default=None,
         description="Class names for multiclass (same order as centroid_dirs). Used when centroid_dirs has more than 2 entries."
     )
+    expected_classes: Optional[List[int]] = Field(
+        default=None,
+        description="Optional list of expected class index per sample (for validation report). Set when samples are built from centroid_dirs."
+    )
 
     # Optional
     output_path: Optional[str] = Field(

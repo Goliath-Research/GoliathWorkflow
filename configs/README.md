@@ -100,6 +100,14 @@ This produces:
 
 Use each subdir for downstream mapper/classifier for that cancer group, or keep separate binary classifiers per group.
 
+To run **classification** once per cancer group (one results CSV per binary classifier), use the classifier with `--per-cancer-group`:
+
+```bash
+methyl-classifier --project configs/project_PCa7_4levels_vs_Healthy_3clusters.json --per-cancer-group
+```
+
+This reads the model from each `detection/cancer/{label}/` and writes results to `{project_root}/classifier/cancer/{label}/classification_results.csv`. Ensure detection was run with `--per-cancer-group` first.
+
 #### Option 2: Multi-class classifier (healthy vs all cancer groups)
 
 Use **`--multi-class-model`** so the detector merges DMPs from all per-cancer detection dirs and builds one multiclass model (requires **methylclassifier** installed).

@@ -5,11 +5,70 @@ Supports binary (centroid1/centroid2) and N-group multiclass (centroid_dirs + mu
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from methyl_utils import load_project
 
 from .models.config_schema import ClassificationConfig
+
+CLASSIFIER_CANCER_SUBDIR = "cancer"
+CLASSIFIER_OUTPUT_FILENAME = "classification_results.csv"
+
+
+def resolve_classifier_config_per_cancer_group(
+    project_path: Union[str, Path],
+    step_override_path: Optional[Union[str, Path]] = None,
+    control_index: int = 0,
+    disease_subdir: str = CLASSIFIER_CANCER_SUBDIR,
+) -> List[Tuple[ClassificationConfig, str]]:
+    """
+    Build one ClassificationConfig per non-control group (e.g. per cancer group).
+    Each config uses model_dir = {detection_dir}/cancer/{label} (where MethylDetector
+    wrote the binary classifier for control vs that group) and output_path =
+    {classifier_dir}/cancer/{label}/classification_results.csv.
+
+    Returns:
+        List of (config, group_label) for each disease/cancer group.
+    """
+    project = load_project(project_path)
+    paths = project.get_derived_paths()
+    resolved = project.get_resolved_groups()
+    if len(resolved) < 2:
+        return []
+    centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
+    if len(centroid_dirs) != len(resolved):
+        centroid_dirs = [f"{paths.output_base}/centroids/{label}" for label, _ in resolved]
+    c1_dir = centroid_dirs[control_index]
+    step_cfg = project.get_step_config("classifier") or {}
+    if step_override_path is not None:
+        override_path = Path(step_override_path)
+        if override_path.exists():
+            with open(override_path) as f:
+                overrides = json.load(f)
+            step_cfg = {**step_cfg, **overrides}
+
+    out: List[Tuple[ClassificationConfig, str]] = []
+    classifier_dir = Path(paths.classifier_dir)
+    detection_dir = Path(paths.detection_dir)
+    for i in range(len(resolved)):
+        if i == control_index:
+            continue
+        label = resolved[i][0]
+        model_dir = str(detection_dir / disease_subdir / label)
+        output_path = str(classifier_dir / disease_subdir / label / CLASSIFIER_OUTPUT_FILENAME)
+        base: Dict[str, Any] = {
+            "model_dir": model_dir,
+            "model_path": None,
+            "centroid1_dir": c1_dir,
+            "centroid2_dir": centroid_dirs[i],
+            "output_path": output_path,
+        }
+        if project.path_remap:
+            base["centroid_path_remap"] = project.path_remap
+        for k, v in step_cfg.items():
+            base[k] = v
+        out.append((ClassificationConfig(**base), label))
+    return out
 
 
 def build_multiclass_config_from_project(
