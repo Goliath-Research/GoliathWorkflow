@@ -22,7 +22,7 @@ MethylPipeline is a comprehensive, production-ready pipeline for methylation-bas
 
 ## Architecture
 
-MethylPipeline now ships **7 packages** that share the MethylUtils foundation.
+MethylPipeline now ships **8 packages** that share the MethylUtils foundation.
 
 ### Foundation
 
@@ -49,10 +49,10 @@ Multi-method clustering (HDBSCAN, Hierarchical, Centroid-based) with forced grou
 
 📚 [MethylCluster README](packages/methylcluster/README.md) | [Comprehensive Guide](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
 
-#### 4. **MethylModeler** – DMP Detection & Model Packaging
-Detects Differentially Methylated Positions, applies biological filters, optimizes Balanced Accuracy, and exports classifier bundles for MethylClassifier.
+#### 4. **MethylModeler (MethylDetector)** – DMP Detection & Model Packaging
+Detects Differentially Methylated Positions, applies biological filters, optimizes Balanced Accuracy, and exports classifier bundles for MethylClassifier. Implemented by the **methyldetector** package.
 
-📚 [MethylModeler README](packages/methylmodeler/README.md) | [Comprehensive Guide](packages/methylmodeler/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
+📚 [MethylDetector README](packages/methyldetector/README.md) | [Comprehensive Guide](packages/methyldetector/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
 
 ### Interpretation & Reporting
 
@@ -70,6 +70,11 @@ Maps optimized DMPs to genomic features using either the legacy Azure SQL workfl
 Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and WikiPathways from MethylMapper gene lists (TXT/CSV).
 
 📚 [MethylEnricher README](packages/methylenricher/README.md) | [Installation Notes](packages/methylenricher/INSTALLATION.md)
+
+#### 8. **MethylAlignmentQC** – Alignment QC
+Parses Parabricks/bwa-mem2 alignment QC metrics into per-sample JSON for database storage. Optional step in the pipeline.
+
+📚 [MethylAlignmentQC README](packages/methylalignmentqc/README.md)
 
 ## Complete Workflow
 
@@ -94,7 +99,7 @@ Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and Wik
                      │
                      ▼
 ┌─────────────────────────────────────────────────────────────┐
-│      4. DMP Detection & Model Creation (MethylModeler)      │
+│      4. DMP Detection & Model Creation (MethylDetector)     │
 │  Compare centroids, detect DMPs with FDR correction         │
 │  Optimize Balanced Accuracy and package classifiers         │
 └────────────────────┬────────────────────────────────────────┘
@@ -115,6 +120,12 @@ Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and Wik
 ┌─────────────────────────────────────────────────────────────┐
 │        7. Functional Enrichment (MethylEnricher)            │
 │  Perform ORA/Enrichr analysis on MethylMapper gene lists    │
+└────────────────────┬────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────┐
+│        8. Alignment QC (MethylAlignmentQC, optional)          │
+│  Parse alignment QC metrics to per-sample JSON               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -235,10 +246,12 @@ for sample in ['/data/test1', '/data/test2', '/data/test3']:
 
 Deep dives with algorithms, math, and advanced workflows:
 
+- [Theory and packages](docs/THEORY_AND_PACKAGES.md) – Project and all 8 packages with theoretical foundations (LaTeX formulas)
+- [Operations manual](docs/OPERATIONS_MANUAL.md) – User and developer workflows, CLI reference, troubleshooting
 - [MethylUtils Comprehensive Documentation](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCentroid Comprehensive Documentation](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCluster Comprehensive Documentation](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylModeler Comprehensive Documentation](packages/methylmodeler/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylModeler Comprehensive Documentation](packages/methyldetector/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylClassifier Comprehensive Documentation](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylPipeline Integration Documentation](docs/METHYLPIPELINE_COMPREHENSIVE_DOCUMENTATION.md)
 
@@ -247,10 +260,11 @@ Deep dives with algorithms, math, and advanced workflows:
 - [MethylUtils README](packages/methylutils/README.md)
 - [MethylCentroid README](packages/methylcentroid/README.md)
 - [MethylCluster README](packages/methylcluster/README.md)
-- [MethylModeler README](packages/methylmodeler/README.md)
+- [MethylDetector README](packages/methyldetector/README.md)
 - [MethylClassifier README](packages/methylclassifier/README.md)
 - [MethylMapper README](packages/methylmapper/README.md) | [Bedtools Quick Start](packages/methylmapper/QUICK_START.md)
 - [MethylEnricher README](packages/methylenricher/README.md)
+- [MethylAlignmentQC README](packages/methylalignmentqc/README.md)
 
 ### 🏗️ Architecture Documentation
 
@@ -380,7 +394,8 @@ All analyses use JSON configuration files for reproducibility:
 
 Run with:
 ```bash
-./packages/methylmodeler/modeler /configs/analysis.json
+methyl-detector --project configs/your_project.json
+# Or with a detector config file: methyl-detector /configs/analysis.json
 ```
 
 ## Troubleshooting
@@ -427,10 +442,11 @@ MethylPipeline/
 │   ├── methylutils/            # Core utilities + GPU helpers
 │   ├── methylcentroid/         # Centroid generation
 │   ├── methylcluster/          # Sample clustering/QC
-│   ├── methylmodeler/          # DMP detection + model packaging
+│   ├── methyldetector/         # DMP detection + model packaging (MethylModeler)
 │   ├── methylclassifier/       # Classification CLI/API
 │   ├── methylmapper/           # Gene mapping + enrichment hooks
-│   └── methylenricher/         # Functional enrichment CLI
+│   ├── methylenricher/         # Functional enrichment CLI
+│   └── methylalignmentqc/     # Alignment QC (optional)
 ├── docker/                      # Container definitions
 │   ├── Dockerfile
 │   └── docker-compose.yml

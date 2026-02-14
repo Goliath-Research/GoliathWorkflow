@@ -91,30 +91,30 @@ MethylClassifier implements **Naive Bayes classification** using Beta distributi
 
 Each **centroid** (e.g., healthy, cancer) is represented by Beta distribution parameters at each DMP position:
 
-```
-Centroid k at position i:  Methylation ~ Beta(α_k,i, β_k,i)
-```
+$$
+\text{Centroid } k \text{ at position } i:\quad \text{Methylation} \sim \mathrm{Beta}(\alpha_{k,i}, \beta_{k,i})
+$$
 
 Where:
-- **α** (alpha): Shape parameter related to methylated counts
-- **β** (beta): Shape parameter related to unmethylated counts
-- Mean methylation = α / (α + β)
+- $\alpha$ (alpha): Shape parameter related to methylated counts
+- $\beta$ (beta): Shape parameter related to unmethylated counts
+- Mean methylation = $\alpha / (\alpha + \beta)$
 
 #### 2. Likelihood Function
 
-For a sample with methylation value **x** at position **i**, the likelihood under class **k** is:
+For a sample with methylation value $x$ at position $i$, the likelihood under class $k$ is:
 
-```
-P(x_i | Class k) = Beta_PDF(x_i; α_k,i, β_k,i)
-```
+$$
+P(x_i \mid \text{Class } k) = \mathrm{BetaPDF}(x_i; \alpha_{k,i}, \beta_{k,i})
+$$
 
 The Beta probability density function:
 
-```
-Beta_PDF(x; α, β) = [x^(α-1) × (1-x)^(β-1)] / B(α, β)
-```
+$$
+\mathrm{BetaPDF}(x; \alpha, \beta) = \frac{x^{\alpha-1}(1-x)^{\beta-1}}{B(\alpha, \beta)}
+$$
 
-Where B(α, β) is the Beta function (normalization constant).
+Where $B(\alpha, \beta)$ is the Beta function (normalization constant).
 
 #### 3. Naive Bayes Assumption
 
@@ -122,41 +122,38 @@ Where B(α, β) is the Beta function (normalization constant).
 
 This allows us to multiply likelihoods:
 
-```
-P(x_1, x_2, ..., x_n | Class k) = ∏ P(x_i | Class k)
-                                   i=1
-```
+$$
+P(x_1, x_2, \ldots, x_n \mid \text{Class } k) = \prod_{i=1}^{n} P(x_i \mid \text{Class } k)
+$$
 
 #### 4. Posterior Probability (Bayes' Theorem)
 
-Given a sample's methylation pattern **X** = (x₁, x₂, ..., xₙ), we compute posterior probabilities:
+Given a sample's methylation pattern $\mathbf{X} = (x_1, x_2, \ldots, x_n)$, we compute posterior probabilities:
 
-```
-P(Class k | X) = P(X | Class k) × P(Class k) / P(X)
-```
+$$
+P(\text{Class } k \mid \mathbf{X}) = \frac{P(\mathbf{X} \mid \text{Class } k) \cdot P(\text{Class } k)}{P(\mathbf{X})}
+$$
 
 Where:
-- **P(X | Class k)**: Likelihood (from Beta distributions)
-- **P(Class k)**: Prior probability (default: 0.5 for binary classification)
-- **P(X)**: Evidence (normalizing constant)
+- $P(\mathbf{X} \mid \text{Class } k)$: Likelihood (from Beta distributions)
+- $P(\text{Class } k)$: Prior probability (default: 0.5 for binary classification)
+- $P(\mathbf{X})$: Evidence (normalizing constant)
 
 #### 5. Log-Space Computation
 
 For numerical stability, we work in log space:
 
-```
-log P(Class k | X) ∝ log P(Class k) + Σ log Beta_PDF(x_i; α_k,i, β_k,i)
-                                       i=1
-```
+$$
+\log P(\text{Class } k \mid \mathbf{X}) \propto \log P(\text{Class } k) + \sum_{i=1}^{n} \log \mathrm{BetaPDF}(x_i; \alpha_{k,i}, \beta_{k,i})
+$$
 
 #### 6. Posterior Probabilities
 
 Final posteriors are computed using the **softmax** (log-sum-exp trick):
 
-```
-P(Class k | X) = exp(log P(Class k | X)) / Σ exp(log P(Class j | X))
-                                            j
-```
+$$
+P(\text{Class } k \mid \mathbf{X}) = \frac{\exp(\log P(\text{Class } k \mid \mathbf{X}))}{\sum_j \exp(\log P(\text{Class } j \mid \mathbf{X}))}
+$$
 
 ### Why This Works for Methylation Data
 
@@ -380,13 +377,13 @@ print(f"Chromosome weights: {classifier.chromosome_weights}")
 
 For multi-chromosome classification, the final probability is:
 
-```
-P(Class | data) = Σ_{chrom} w_chrom * P_chrom(Class | data_chrom)
-```
+$$
+P(\text{Class} \mid \text{data}) = \sum_{\mathrm{chrom}} w_{\mathrm{chrom}} \cdot P_{\mathrm{chrom}}(\text{Class} \mid \text{data}_{\mathrm{chrom}})
+$$
 
 Where:
-- `w_chrom` is the normalized weight for chromosome `chrom`
-- `P_chrom` is the probability from that chromosome's classifier
+- $w_{\mathrm{chrom}}$ is the normalized weight for chromosome $\mathrm{chrom}$
+- $P_{\mathrm{chrom}}$ is the probability from that chromosome's classifier
 - Weights are computed from trimmed-mean effect_size or provided explicitly
 
 ### Basic Usage
@@ -847,9 +844,9 @@ calibrated_proba = classifier.predict_proba(X)
 - **T > 1**: Softer predictions (more conservative probabilities)
 
 **Mathematical effect**:
-```
-P(Class k | X) ∝ exp(log_likelihood_k / T)
-```
+$$
+P(\text{Class } k \mid \mathbf{X}) \propto \exp(\mathrm{log\_likelihood}_k / T)
+$$
 
 **Usage**:
 ```python
