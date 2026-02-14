@@ -581,17 +581,42 @@ class MethylDetector:
     
     def _filter_biological_dmps(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Filter DMPs by biological significance: keep DMPs with effect_size >= min_effect_size when set.
+        Filter DMPs by biological significance. All set filters are applied (AND):
+        - min_delta_mean: keep |delta_mean| >= value (easy: e.g. 0.1 = 10% methylation change)
+        - max_overlap: keep overlap <= value (easy: low overlap = good separation)
+        - min_effect_size: keep effect_size >= value (effect_size = 1 - BC, requires interpretation)
         """
         bio_df = dmps_df.copy()
         initial_count = len(bio_df)
 
-        # Biological filter: effect_size >= min_effect_size
-        if self.config.min_effect_size is not None and 'effect_size' in bio_df.columns:
-            bio_df = bio_df[bio_df['effect_size'] >= self.config.min_effect_size]
-            logger.info(f"After min_effect_size filter (≥{self.config.min_effect_size}): "
-                       f"{len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}%)")
+        if self.config.min_delta_mean is not None and "delta_mean" in bio_df.columns:
+            before = len(bio_df)
+            bio_df = bio_df[np.abs(bio_df["delta_mean"].astype(float)) >= self.config.min_delta_mean]
+            logger.info(
+                f"After min_delta_mean filter (|delta_mean| ≥ {self.config.min_delta_mean}): "
+                f"{len(bio_df):,} DMPs ({len(bio_df)/before*100:.1f}% retained)"
+            )
 
+        if self.config.max_overlap is not None and "overlap" in bio_df.columns:
+            before = len(bio_df)
+            bio_df = bio_df[bio_df["overlap"].astype(float) <= self.config.max_overlap]
+            logger.info(
+                f"After max_overlap filter (overlap ≤ {self.config.max_overlap}): "
+                f"{len(bio_df):,} DMPs ({len(bio_df)/before*100:.1f}% retained)"
+            )
+
+        if self.config.min_effect_size is not None and "effect_size" in bio_df.columns:
+            before = len(bio_df)
+            bio_df = bio_df[bio_df["effect_size"].astype(float) >= self.config.min_effect_size]
+            logger.info(
+                f"After min_effect_size filter (effect_size ≥ {self.config.min_effect_size}): "
+                f"{len(bio_df):,} DMPs ({len(bio_df)/before*100:.1f}% retained)"
+            )
+
+        if initial_count != len(bio_df):
+            logger.info(
+                f"Biological filter total: {len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}% of initial)"
+            )
         return bio_df
 
     def _load_binned_counts_from_centroids(
@@ -3264,6 +3289,8 @@ class MethylDetector:
         # Extract key parameters (only relevant ones)
         key_params = {
             "alpha": self.config.alpha,
+            "min_delta_mean": self.config.min_delta_mean,
+            "max_overlap": self.config.max_overlap,
             "min_effect_size": self.config.min_effect_size,
             "target_balanced_accuracy": self.config.target_balanced_accuracy,
             "min_selected_dmps": self.config.min_selected_dmps,
@@ -3314,10 +3341,12 @@ class MethylDetector:
             "",
             "Configuration:",
             f"  Alpha (q-value threshold): {self.config.alpha}",
-            f"  Min effect_size: {self.config.min_effect_size}",
+            f"  Min delta_mean (|Δβ|): {self.config.min_delta_mean}",
+            f"  Max overlap: {self.config.max_overlap}",
+            f"  Min effect_size (1-BC): {self.config.min_effect_size}",
             f"  Target Balanced Accuracy: {self.config.target_balanced_accuracy}",
             "",
-            "Biological filter: effect_size = 1 - BC (separation in [0, 1]); keep DMPs with effect_size >= min_effect_size",
+            "Biological filter: any set of min_delta_mean (|Δβ|≥), max_overlap (overlap≤), min_effect_size (≥) applied (AND). effect_size = 1 - BC.",
             "",
             "Results:",
             f"  Statistical DMPs (q≤{self.config.alpha}): {result.total_statistical_dmps:,}",

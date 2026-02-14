@@ -203,7 +203,15 @@ class MethylModelerConfig(BaseModel):
 
     min_effect_size: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
-        description="Minimum effect_size (separation = 1 - BC, in [0, 1]) for biological filter. Keep DMPs with effect_size >= min_effect_size. Set null to disable."
+        description="Minimum effect_size (separation = 1 - BC, in [0, 1]) for biological filter. Keep DMPs with effect_size >= min_effect_size. Set null to disable. Less intuitive than min_delta_mean / max_overlap."
+    )
+    min_delta_mean: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Minimum absolute methylation difference for biological filter. Keep DMPs with |delta_mean| >= min_delta_mean (e.g. 0.1 = 10%% change). Set null to disable. Easy to interpret for biologists."
+    )
+    max_overlap: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Maximum overlap (Bhattacharyya coefficient, 0–1) for biological filter. Keep DMPs with overlap <= max_overlap (low overlap = good separation). Set null to disable. Easy to interpret for biologists."
     )
     importance_formula: str = Field(
         default="hybrid",
