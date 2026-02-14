@@ -53,6 +53,7 @@
       "enrich_disease": true,
       "enrich_source": "grok+opentargets",
       "enrich_profile": "permissive",
+      "grok_api_key": "xai-v4I437Ldt3tmrjZ3avp315XnwsDRdO550ZNuhMvHUVNZpyJWU8qLwsYRHMetQQ64A6WVfJzwGpAcDPkJ",
       "optimize_dmps": false
     },
     "enricher": {
