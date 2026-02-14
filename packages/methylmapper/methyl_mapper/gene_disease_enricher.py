@@ -402,21 +402,29 @@ class GeneDiseaseEnricher:
     def _create_grok_prompt(self, gene_names: List[str], disease_term: str) -> str:
         """Create a prompt for Grok API."""
         genes_str = ", ".join(gene_names)
+        disease_lower = disease_term.lower()
+        cancer_instruction = ""
+        if "cancer" in disease_lower or "carcinoma" in disease_lower or "tumor" in disease_lower:
+            cancer_instruction = (
+                " For cancer (e.g. prostate cancer): mark associated: true for genes that are biomarkers, "
+                "in relevant pathways (e.g. androgen signaling, cell cycle, DNA repair), therapeutic targets, "
+                "or that appear in cancer literature—most cancer-related gene sets will have many associations."
+            )
         
         prompt = f"""You are a biomedical expert. For each of the following genes: {genes_str}
 
-Provide their association with "{disease_term}" in JSON format. Use a PERMISSIVE interpretation: mark a gene as associated (associated: true) if there is ANY reported or suspected link in the literature—including direct, indirect, predicted, or emerging evidence. Do not mark genes as unrelated (associated: false) when they have known or plausible roles in {disease_term}; when in doubt, prefer associated: true with an appropriate evidence_level.
+Provide their association with "{disease_term}" in JSON format. Use a PERMISSIVE interpretation: mark a gene as associated (associated: true) if there is ANY reported or suspected link in the literature—including direct, indirect, predicted, or emerging evidence. Do not mark genes as unrelated (associated: false) when they have known or plausible roles in {disease_term}; when in doubt, prefer associated: true with an appropriate evidence_level.{cancer_instruction}
 
 For each gene provide:
-1. "gene_name": The gene symbol
-2. "associated": true/false (true if any reported/suspected association; prefer true when evidence exists)
+1. "gene_name": The gene symbol (exactly as in the list above)
+2. "associated": true or false (boolean). Use true if any reported/suspected association exists; prefer true when evidence exists.
 3. "association_type": One of ["direct", "indirect", "predicted", "none"]
 4. "evidence_level": One of ["high", "medium", "low", "none"]
 5. "description": A brief description of the association (or null if none)
 6. "publications": Number of publications mentioning this association (or 0)
 7. "functional_role": Brief description of the gene's role in {disease_term} (or null)
 
-Return ONLY a valid JSON array, e.g.:
+Return ONLY a valid JSON array—no other text. Example:
 [
   {{"gene_name": "GENE1", "associated": true, "association_type": "direct", "evidence_level": "high", "description": "...", "publications": 15, "functional_role": "..."}},
   {{"gene_name": "GENE2", "associated": false, "association_type": "none", "evidence_level": "none", "description": null, "publications": 0, "functional_role": null}}
@@ -461,9 +469,81 @@ Return ONLY a valid JSON array, e.g.:
         
         return response.json()
     
+    def _normalize_associated(self, value: Union[bool, str, int, None]) -> bool:
+        """Normalize Grok's 'associated' field to bool (handles string 'true'/'yes'/'1' etc.)."""
+        if value is None:
+            return False
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return value != 0
+        s = str(value).strip().lower()
+        if s in ("true", "yes", "1", "y"):
+            return True
+        if s in ("false", "no", "0", "n", "none", ""):
+            return False
+        # Any other non-empty string that suggests association
+        return len(s) > 0 and s not in ("no association", "not associated", "unrelated")
+
+    def _extract_json_array_from_content(self, content: str) -> List[Dict]:
+        """Extract a JSON array from API response (handles markdown, object wrapper, raw array)."""
+        import re
+        # Strip markdown code blocks (```json ... ``` or ``` ... ```)
+        stripped = content.strip()
+        if stripped.startswith("```json"):
+            stripped = stripped[7:].lstrip()
+        elif stripped.startswith("```"):
+            stripped = stripped[3:].lstrip()
+        if stripped.endswith("```"):
+            stripped = stripped[:-3].strip()
+        stripped = stripped.strip()
+        # Try parse full content as JSON
+        try:
+            parsed = json.loads(stripped)
+            if isinstance(parsed, list):
+                return parsed
+            if isinstance(parsed, dict):
+                for key in ("genes", "associations", "results", "data", "items"):
+                    if key in parsed and isinstance(parsed[key], list):
+                        return parsed[key]
+                # Any first list value
+                for v in parsed.values():
+                    if isinstance(v, list):
+                        return v
+        except json.JSONDecodeError:
+            pass
+        # Find first top-level JSON array by bracket matching
+        start = stripped.find("[")
+        if start == -1:
+            raise ValueError("No JSON array found in response")
+        depth = 0
+        in_string = None
+        escape = False
+        for i, c in enumerate(stripped[start:], start=start):
+            if escape:
+                escape = False
+                continue
+            if c == "\\" and in_string:
+                escape = True
+                continue
+            if in_string:
+                if c == in_string:
+                    in_string = None
+                continue
+            if c in ('"', "'"):
+                in_string = c
+                continue
+            if c == "[":
+                depth += 1
+            elif c == "]":
+                depth -= 1
+                if depth == 0:
+                    json_str = stripped[start : i + 1]
+                    return json.loads(json_str)
+        raise ValueError("Unclosed JSON array in response")
+
     def _parse_grok_response(self, response: Dict, gene_names: List[str]) -> Dict[str, Dict]:
         """Parse Grok API response into gene-disease associations."""
-        import json
         import re
         
         results = {}
@@ -483,58 +563,56 @@ Return ONLY a valid JSON array, e.g.:
             if not content:
                 raise ValueError("Empty response from Grok API")
             
-            # Try to extract JSON from the response
-            # Handle cases where response might be wrapped in markdown code blocks
-            json_match = re.search(r'\[.*\]', content, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(0)
-                associations = json.loads(json_str)
-            else:
-                # Try parsing entire content as JSON
-                try:
-                    associations = json.loads(content)
-                except json.JSONDecodeError:
-                    # If not JSON, try to extract structured data from text
-                    logger.warning("Could not parse JSON from Grok response, attempting text parsing...")
-                    # Fallback: create associations from text description
-                    associations = []
-                    for gene in gene_names:
-                        # Simple heuristic: check if gene appears in content
-                        gene_upper = gene.upper()
-                        if gene_upper in content.upper():
-                            associations.append({
-                                'gene_name': gene_upper,
-                                'associated': True,
-                                'association_type': 'predicted',
-                                'evidence_level': 'low',
-                                'description': "Mentioned in context of disease",
-                                'publications': 0,
-                                'functional_role': None
-                            })
-                        else:
-                            associations.append({
-                                'gene_name': gene_upper,
-                                'associated': False,
-                                'association_type': 'none',
-                                'evidence_level': 'none',
-                                'description': None,
-                                'publications': 0,
-                                'functional_role': None
-                            })
+            try:
+                associations = self._extract_json_array_from_content(content)
+            except (ValueError, json.JSONDecodeError) as e:
+                logger.warning(f"Could not extract JSON array from Grok response: {e}")
+                # Fallback: infer from text
+                associations = []
+                content_upper = content.upper()
+                for gene in gene_names:
+                    gene_upper = gene.upper()
+                    if gene_upper in content_upper:
+                        associations.append({
+                            'gene_name': gene_upper,
+                            'associated': True,
+                            'association_type': 'predicted',
+                            'evidence_level': 'low',
+                            'description': "Mentioned in context of disease",
+                            'publications': 0,
+                            'functional_role': None
+                        })
+                    else:
+                        associations.append({
+                            'gene_name': gene_upper,
+                            'associated': False,
+                            'association_type': 'none',
+                            'evidence_level': 'none',
+                            'description': None,
+                            'publications': 0,
+                            'functional_role': None
+                        })
             
-            # Convert to dictionary keyed by gene_name
+            if not isinstance(associations, list):
+                associations = []
+            
+            # Convert to dictionary keyed by gene_name; normalize 'associated' (Grok may return string)
             for assoc in associations:
-                gene_name = str(assoc.get('gene_name', '')).upper()
-                if gene_name:
-                    results[gene_name] = {
-                        'associated': assoc.get('associated', False),
-                        'association_type': assoc.get('association_type', 'none'),
-                        'evidence_level': assoc.get('evidence_level', 'none'),
-                        'description': assoc.get('description'),
-                        'publications': assoc.get('publications', 0),
-                        'functional_role': assoc.get('functional_role'),
-                        'source': 'grok_api'
-                    }
+                if not isinstance(assoc, dict):
+                    continue
+                gene_name = str(assoc.get('gene_name', assoc.get('gene', ''))).strip().upper()
+                if not gene_name:
+                    continue
+                raw_associated = assoc.get('associated', assoc.get('is_associated', assoc.get('has_association', False)))
+                results[gene_name] = {
+                    'associated': self._normalize_associated(raw_associated),
+                    'association_type': str(assoc.get('association_type', 'none')).lower() or 'none',
+                    'evidence_level': str(assoc.get('evidence_level', 'none')).lower() or 'none',
+                    'description': assoc.get('description'),
+                    'publications': int(assoc.get('publications', 0)) if assoc.get('publications') is not None else 0,
+                    'functional_role': assoc.get('functional_role'),
+                    'source': 'grok_api'
+                }
             
             # Fill in missing genes as "not associated"
             for gene in gene_names:
@@ -549,11 +627,14 @@ Return ONLY a valid JSON array, e.g.:
                         'functional_role': None,
                         'source': 'grok_api'
                     }
+            
+            n_associated = sum(1 for r in results.values() if r.get('associated'))
+            logger.info(f"Grok API parse: {n_associated}/{len(results)} genes marked associated with disease")
                     
-        except (json.JSONDecodeError, KeyError, IndexError, ValueError) as e:
+        except (KeyError, IndexError, TypeError, ValueError) as e:
             logger.warning(f"Failed to parse Grok API response: {e}")
-            logger.debug(f"Response content: {content[:500] if 'content' in locals() else 'N/A'}")
-            # Return empty associations for all genes
+            if 'content' in locals():
+                logger.debug(f"Response content (first 500 chars): {content[:500]}")
             for gene in gene_names:
                 results[gene.upper()] = {
                     'associated': False,
