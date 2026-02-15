@@ -73,6 +73,10 @@ CENTROID_COMPARISON_DTYPE = np.dtype([
     ('delta_mean', np.float32),
     ('bhattacharyya', np.float32),  # Bhattacharyya Distance (will be converted to BC by MethylDetector)
     ('dist', np.uint8),  # Distribution selection (see DIST_* constants)
+    ('n1', np.uint32),
+    ('n2', np.uint32),
+    ('variance1', np.float32),
+    ('variance2', np.float32),
 ])
 
 
@@ -1232,6 +1236,23 @@ class MethylCentroidPair:
 
         delta_mean = np.abs(mean1_out - mean2_out)
 
+        # Per-position variance for the chosen distribution (for export and power)
+        eps = 1e-12
+        tau1 = alpha1.astype(np.float64) + beta1.astype(np.float64)
+        tau2 = alpha2.astype(np.float64) + beta2.astype(np.float64)
+        var_beta1 = (alpha1.astype(np.float64) * beta1.astype(np.float64)) / np.maximum(tau1 ** 2 * (tau1 + 1), eps)
+        var_beta2 = (alpha2.astype(np.float64) * beta2.astype(np.float64)) / np.maximum(tau2 ** 2 * (tau2 + 1), eps)
+        variance1_out = var_beta1.astype(np.float32)
+        variance2_out = var_beta2.astype(np.float32)
+        if delta_mode == "normal" or (delta_mode == "auto" and np.any(use_normal_mask)):
+            variance1_out[use_normal_mask] = var_normal1[use_normal_mask]
+            variance2_out[use_normal_mask] = var_normal2[use_normal_mask]
+        if mix_var1 is not None and mix_var2 is not None and mixture_indices is not None:
+            mix_valid = np.isfinite(mix_var1) & np.isfinite(mix_var2)
+            if np.any(mix_valid):
+                variance1_out[mixture_indices[mix_valid]] = np.asarray(mix_var1[mix_valid], dtype=np.float32)
+                variance2_out[mixture_indices[mix_valid]] = np.asarray(mix_var2[mix_valid], dtype=np.float32)
+
         bhattacharyya = None
         overlap_mode = (self.overlap_mode or "beta").lower()
         if overlap_mode in {"auto", "normal"}:
@@ -1270,6 +1291,10 @@ class MethylCentroidPair:
         else:
             results_view['bhattacharyya'] = np.zeros(len(positions), dtype=np.float32)  # Will be computed later
         results_view['dist'] = dist_ids
+        results_view['n1'] = N1.astype(np.uint32)
+        results_view['n2'] = N2.astype(np.uint32)
+        results_view['variance1'] = variance1_out
+        results_view['variance2'] = variance2_out
 
     def _apply_fdr_correction(self, results_array: np.ndarray) -> np.ndarray:
         """Apply FDR correction to p-values using Storey's method."""

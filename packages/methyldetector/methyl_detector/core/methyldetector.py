@@ -516,10 +516,10 @@ class MethylDetector:
         if 'effect_size' in dmps_df.columns:
             score_col = 'effect_size'
         elif 'delta_mean' in dmps_df.columns:
-            # Fallback to delta_mean if effect_size computation failed
-            logger.warning("effect_size column missing, falling back to delta_mean for context weighting")
+            # Fallback to delta_mean if effect_size computation failed; bound to [0, 1]
+            logger.warning("effect_size column missing, falling back to |delta_mean| (clipped to [0,1]) for context weighting")
             score_col = 'delta_mean'
-            dmps_df['effect_size'] = np.abs(dmps_df['delta_mean'])  # Fallback
+            dmps_df['effect_size'] = np.clip(np.abs(dmps_df['delta_mean'].values), 0.0, 1.0)
         else:
             raise ValueError("DataFrame must have 'effect_size' or 'delta_mean' column")
         
@@ -933,10 +933,10 @@ class MethylDetector:
         return df
 
     def _compute_biological_importance_effect_size(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Legacy: importance from effect_size (BD) then log-normalized to [1e-6, 1]."""
+        """Legacy: importance from effect_size then log-normalized to [1e-6, 1]. effect_size must be in [0, 1]."""
         if "effect_size" not in df.columns:
             if "delta_mean" in df.columns:
-                df["effect_size"] = np.abs(df["delta_mean"])
+                df["effect_size"] = np.clip(np.abs(df["delta_mean"].values), 0.0, 1.0)
             else:
                 raise ValueError("Neither 'effect_size' nor 'delta_mean' column found in DMPs DataFrame")
         df["importance"] = df["effect_size"].copy() if "effect_size" in df.columns else np.ones(len(df))
@@ -2769,6 +2769,39 @@ class MethylDetector:
             f.write(results.model_dump_json(indent=2))
 
         logger.info(f"💾 Saved results to {results_path}")
+
+    def _compute_sample_size_estimate(self, df: pd.DataFrame):
+        """Compute n per group to achieve target_power (two-sample t-test, Cohen's d). Returns Series, NaN where not computable."""
+        need = ['mean1', 'mean2']
+        if not all(c in df.columns for c in need):
+            return pd.Series(index=df.index, dtype=np.float64)
+        if 'combined_variance' in df.columns:
+            combined_var = df['combined_variance'].values.astype(np.float64)
+        elif 'variance1' in df.columns and 'variance2' in df.columns:
+            combined_var = df['variance1'].values.astype(np.float64) + df['variance2'].values.astype(np.float64)
+        else:
+            return pd.Series(index=df.index, dtype=np.float64)
+        delta = np.abs(df['mean1'].values.astype(np.float64) - df['mean2'].values.astype(np.float64))
+        eps = 1e-12
+        pooled_std = np.sqrt(np.maximum(combined_var, eps))
+        cohens_d = np.where(pooled_std > 0, delta / pooled_std, np.nan)
+        alpha = getattr(self.config, 'alpha', 0.05)
+        power = getattr(self.config, 'target_power', 0.8)
+        try:
+            from statsmodels.stats.power import TTestIndPower
+            tt = TTestIndPower()
+            n_est = np.full(len(df), np.nan, dtype=np.float64)
+            for i in range(len(df)):
+                d = cohens_d[i]
+                if np.isfinite(d) and d > 0:
+                    try:
+                        n_est[i] = tt.solve_power(effect_size=d, alpha=alpha, power=power, nobs1=None, ratio=1.0)
+                    except Exception:
+                        pass
+            return pd.Series(n_est, index=df.index)
+        except ImportError:
+            logger.warning("statsmodels not available; skipping n_estimated_per_group. Install with: pip install statsmodels")
+            return pd.Series(index=df.index, dtype=np.float64)
     
     def _export_unified_csv(self, bio_dmps_df: pd.DataFrame, suffix: str = "") -> Path:
         """
@@ -2789,33 +2822,33 @@ class MethylDetector:
         else:
             csv_path = output_dir / f"dmps-{self.chromosome}.csv"
         
-        # Define export columns (include all relevant data)
+        # Standard column order for biologists: identity, sample counts, means/variances, overlap, effect, stats, distribution
         # dist: 1=Beta, 2=Normal, 3=Beta-Binomial, 4=Beta-Mixture (see methyl_utils.methyl_centroid_pair.DIST_*)
-        export_cols = [
+        STANDARD_EXPORT_COLS = [
             'chromosome', 'context', 'position',
-            'p_value', 'q_value', 'delta_mean',
-            'overlap', 'effect_size', 'context_weight',
-            'alpha1', 'beta1', 'alpha2', 'beta2',
-            'mean1', 'mean2',
-            'dist', 'dist_name',
-            'bmm_p_value', 'bmm_js', 'bmm_status'
+            'n1', 'n2', 'mean1', 'mean2', 'variance1', 'variance2',
+            'overlap', 'delta_mean', 'delta_sign', 'effect_size',
+            'p_value', 'q_value', 'dist', 'dist_name',
         ]
         DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture'}
+        # Optional / distribution-specific columns
+        EXTRA_EXPORT_COLS = [
+            'context_weight', 'alpha1', 'beta1', 'alpha2', 'beta2',
+            'combined_variance', 'bmm_p_value', 'bmm_js', 'bmm_status',
+            'n_estimated_per_group',
+        ]
+        export_cols = STANDARD_EXPORT_COLS + [c for c in EXTRA_EXPORT_COLS if c not in STANDARD_EXPORT_COLS]
 
-        # Filter to only columns that exist
-        available_cols = [c for c in export_cols if c in bio_dmps_df.columns]
-
-        # Add delta_sign if possible - make explicit copy to avoid SettingWithCopyWarning
         export_df = bio_dmps_df.copy()
         if 'dist' in export_df.columns:
             export_df['dist_name'] = export_df['dist'].map(DIST_NAMES).fillna('Unknown').astype(str)
-            if 'dist_name' not in available_cols:
-                available_cols.insert(available_cols.index('dist') + 1, 'dist_name')
         if 'mean1' in export_df.columns and 'mean2' in export_df.columns:
-            if 'delta_sign' not in export_df.columns:
-                export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2'])
-            if 'delta_sign' not in available_cols:
-                available_cols.insert(available_cols.index('delta_mean') + 1, 'delta_sign')
+            export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2'])
+            # Signed delta_mean for CSV (mean1 - mean2)
+            export_df['delta_mean'] = (export_df['mean1'] - export_df['mean2']).astype(np.float32)
+        if getattr(self.config, 'export_sample_size_estimate', False):
+            export_df['n_estimated_per_group'] = self._compute_sample_size_estimate(export_df)
+        available_cols = [c for c in export_cols if c in export_df.columns]
         
         # Export to CSV
         export_df[available_cols].to_csv(csv_path, index=False)
@@ -3002,7 +3035,7 @@ class MethylDetector:
         if 'position' not in df.columns:
             logger.warning("Structured array missing 'position' field; adding dummy positions")
             df['position'] = np.arange(len(df), dtype=np.uint32)
-        # Ensure dtypes
+        # Ensure dtypes (include n1, n2, variance1, variance2 from centroid comparison)
         dtype_map = {
             "position": "uint32",
             "chromosome": "str",
@@ -3019,6 +3052,10 @@ class MethylDetector:
             "mean1": "float32",
             "mean2": "float32",
             "selected": "bool",
+            "n1": "uint32",
+            "n2": "uint32",
+            "variance1": "float32",
+            "variance2": "float32",
         }
         for col, dtype in dtype_map.items():
             if col in df:
@@ -3091,11 +3128,16 @@ class MethylDetector:
         chunk_df['bhattacharyya_coefficient'] = bc_values
         chunk_df['overlap'] = bc_values  # Add 'overlap' column for CSV export (biologist-friendly name)
 
-        # effect_size = 1 - BC (separation), bounded in [0, 1]
+        # effect_size = 1 - BC (separation), bounded in [0, 1]; no division, safe when overlap=0
         if not chunk_df.empty and 'effect_size' not in chunk_df.columns:
-            chunk_df['effect_size'] = bd_array.astype(np.float32)
+            overlap_clipped = np.clip(chunk_df['overlap'].values.astype(np.float64), 0.0, 1.0)
+            chunk_df['effect_size'] = (1.0 - overlap_clipped).astype(np.float32)
             if len(bd_array) > 0:
-                logger.debug(f"Effect_size (BD) stats: min={bd_array.min():.4f}, max={bd_array.max():.4f}, mean={bd_array.mean():.4f}")
+                logger.debug(f"Effect_size (1-BC) stats: min={chunk_df['effect_size'].min():.4f}, max={chunk_df['effect_size'].max():.4f}")
+
+        # combined_variance for downstream (e.g. power/sample-size)
+        if 'variance1' in chunk_df.columns and 'variance2' in chunk_df.columns:
+            chunk_df['combined_variance'] = (chunk_df['variance1'].values.astype(np.float64) + chunk_df['variance2'].values.astype(np.float64)).astype(np.float32)
 
         # Remove the BD column - we only keep BC for outputs
         if 'bhattacharyya' in chunk_df.columns:
@@ -3187,46 +3229,34 @@ class MethylDetector:
         logger.info(f"📊 Chromosome/context breakdown saved: {chrom_html}")
 
     def _export_selected_dmps_csv(self, biological_dmps_df: pd.DataFrame) -> None:
-        """Export selected DMPs to CSV with required columns."""
+        """Export selected DMPs to CSV with standard columns (n1, n2, variances, overlap, effect_size, distribution)."""
         if biological_dmps_df.empty:
             logger.warning("No biological DMPs to export")
             return
 
-        # Create a copy to avoid modifying the original DataFrame
         export_df = biological_dmps_df.copy()
-        
-        # Add sign of delta_mean (sign of mean1 - mean2)
+        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture'}
+        if 'dist' in export_df.columns:
+            export_df['dist_name'] = export_df['dist'].map(DIST_NAMES).fillna('Unknown').astype(str)
         if 'mean1' in export_df.columns and 'mean2' in export_df.columns:
             export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2'])
-            logger.debug("Added delta_sign column (sign of mean1 - mean2)")
-        else:
-            logger.warning("mean1 and/or mean2 columns not found, cannot compute delta_sign")
-        
-        # Map importance to weight (preferred), then effect_size
-        if 'importance' in export_df.columns:
-            export_df['weight'] = export_df['importance']
-            logger.debug("Mapped importance to weight column")
-        elif 'effect_size' in export_df.columns:
-            export_df['weight'] = export_df['effect_size']
-            logger.debug("Mapped effect_size to weight column")
-        elif 'weight' not in export_df.columns:
-            logger.warning("Neither effect_size nor weight column found")
-        
-        # Map overlap from bhattacharyya_coefficient if needed
+            export_df['delta_mean'] = (export_df['mean1'] - export_df['mean2']).astype(np.float32)
         if 'overlap' not in export_df.columns and 'bhattacharyya_coefficient' in export_df.columns:
             export_df['overlap'] = export_df['bhattacharyya_coefficient']
-            logger.debug("Mapped bhattacharyya_coefficient to overlap column")
-        
-        # Define required columns (with weight instead of effect_size)
-        required_cols = [
-            'chromosome', 'context', 'position', 'p_value', 'q_value', 'delta_mean', 'delta_sign',
-            'overlap', 'weight'
+        if 'importance' in export_df.columns:
+            export_df['weight'] = export_df['importance']
+        elif 'effect_size' in export_df.columns:
+            export_df['weight'] = export_df['effect_size']
+
+        standard_cols = [
+            'chromosome', 'context', 'position', 'n1', 'n2', 'mean1', 'mean2', 'variance1', 'variance2',
+            'overlap', 'delta_mean', 'delta_sign', 'effect_size', 'p_value', 'q_value', 'dist', 'dist_name', 'weight'
         ]
-        
-        # Select only available required columns
-        export_cols = [c for c in required_cols if c in export_df.columns]
-        missing_cols = [c for c in required_cols if c not in export_df.columns]
-        
+        if getattr(self.config, 'export_sample_size_estimate', False):
+            export_df['n_estimated_per_group'] = self._compute_sample_size_estimate(export_df)
+            standard_cols.append('n_estimated_per_group')
+        export_cols = [c for c in standard_cols if c in export_df.columns]
+        missing_cols = [c for c in standard_cols if c not in export_df.columns]
         if missing_cols:
             logger.warning(f"Missing columns in selected DMPs: {missing_cols}")
         

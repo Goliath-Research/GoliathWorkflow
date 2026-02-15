@@ -357,6 +357,14 @@ class MethylModelerConfig(BaseModel):
     # ----------------
     # Output Options
     # ----------------
+    export_sample_size_estimate: bool = Field(
+        default=False,
+        description="If True, add n_estimated_per_group column to DMP CSV: sample size per group needed for target_power (two-sample t-test, Cohen's d from delta_mean and combined variance)."
+    )
+    target_power: float = Field(
+        default=0.8, ge=0.5, le=0.999,
+        description="Target power (1 - type II error) for sample size estimation when export_sample_size_estimate is True (e.g. 0.8 = 80%% power)."
+    )
 
     # -----------------
     # Validators / Utils
