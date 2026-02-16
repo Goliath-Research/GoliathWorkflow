@@ -39,6 +39,7 @@
       "max_overlap": 0.5,
       "min_effect_size": 0.7,
       "optimization_method": "featurecuts",
+      "export_sample_size_estimate": true,
       "random_state": 42,
       "min_N_pct": 0.1
     },

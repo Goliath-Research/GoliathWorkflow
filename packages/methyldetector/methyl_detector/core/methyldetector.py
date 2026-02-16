@@ -2772,6 +2772,7 @@ class MethylDetector:
 
     def _compute_sample_size_estimate(self, df: pd.DataFrame):
         """Compute n per group to achieve target_power (two-sample t-test, Cohen's d). Returns Series, NaN where not computable."""
+        import warnings
         need = ['mean1', 'mean2']
         if not all(c in df.columns for c in need):
             return pd.Series(index=df.index, dtype=np.float64)
@@ -2785,19 +2786,24 @@ class MethylDetector:
         eps = 1e-12
         pooled_std = np.sqrt(np.maximum(combined_var, eps))
         cohens_d = np.where(pooled_std > 0, delta / pooled_std, np.nan)
+        # Clip to range where statsmodels solve_power typically converges (avoids ConvergenceWarning)
+        cohens_d = np.clip(cohens_d, 0.02, 10.0)
         alpha = getattr(self.config, 'alpha', 0.05)
         power = getattr(self.config, 'target_power', 0.8)
         try:
             from statsmodels.stats.power import TTestIndPower
+            from statsmodels.tools.sm_exceptions import ConvergenceWarning as StatsmodelsConvergenceWarning
             tt = TTestIndPower()
             n_est = np.full(len(df), np.nan, dtype=np.float64)
-            for i in range(len(df)):
-                d = cohens_d[i]
-                if np.isfinite(d) and d > 0:
-                    try:
-                        n_est[i] = tt.solve_power(effect_size=d, alpha=alpha, power=power, nobs1=None, ratio=1.0)
-                    except Exception:
-                        pass
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=StatsmodelsConvergenceWarning, module="statsmodels")
+                for i in range(len(df)):
+                    d = cohens_d[i]
+                    if np.isfinite(d) and d >= 0.02:
+                        try:
+                            n_est[i] = tt.solve_power(effect_size=d, alpha=alpha, power=power, nobs1=None, ratio=1.0)
+                        except Exception:
+                            pass
             return pd.Series(n_est, index=df.index)
         except ImportError:
             logger.warning("statsmodels not available; skipping n_estimated_per_group. Install with: pip install statsmodels")
