@@ -36,30 +36,40 @@ def resolve_enricher_paths_per_cancer_group(
     combined_csv_name: str = "all-gene_name-combined.csv",
 ) -> List[Tuple[EnricherStepPaths, str]]:
     """
-    Build one EnricherStepPaths per non-control (cancer) group, matching MethylMapper layout.
-
-    Input for each group: mapper/{disease_subdir}/{label}/{combined_csv_name}.
-    Output for each group: enricher/{disease_subdir}/{label}.
+    Build one EnricherStepPaths per comparison.
+    When project uses control/disease + comparisons: one entry per get_comparisons().
+    Otherwise: one per non-control group (flat groups).
 
     Returns:
-        List of (EnricherStepPaths, group_label) for each disease/cancer group.
+        List of (EnricherStepPaths, comparison_label) for each comparison.
     """
     project = load_project(project_path)
-    paths = project.get_derived_paths()
-    resolved = getattr(project, "get_resolved_groups", lambda: [])()
-    if len(resolved) < 2:
-        return []
-    mapper_dir = Path(paths.mapper_dir)
-    enricher_dir = Path(paths.enricher_dir)
     step_cfg = project.get_step_config("enricher") or {}
     if step_override_path and step_override_path.exists():
         import json
         with open(step_override_path) as f:
             overrides = json.load(f)
         step_cfg = {**step_cfg, **overrides}
-    disease_subdir = step_cfg.get("disease_subdir") or disease_subdir
     csv_name = step_cfg.get("combined_csv_name") or combined_csv_name
-    out: List[Tuple[EnricherStepPaths, str]] = []
+
+    if getattr(project, "uses_control_disease", lambda: False)():
+        out: List[Tuple[EnricherStepPaths, str]] = []
+        for spec in project.get_comparisons():
+            comp_label = spec.comparison_label or spec.disease_group
+            map_dir = project.get_mapper_output_dir(comp_label)
+            enr_dir = project.get_enricher_output_dir(comp_label)
+            input_file = str(Path(map_dir) / csv_name)
+            out.append((EnricherStepPaths(input_file=input_file, output_dir=enr_dir), comp_label))
+        return out
+
+    paths = project.get_derived_paths()
+    resolved = getattr(project, "get_resolved_groups", lambda: [])()
+    if len(resolved) < 2:
+        return []
+    mapper_dir = Path(paths.mapper_dir)
+    enricher_dir = Path(paths.enricher_dir)
+    disease_subdir = step_cfg.get("disease_subdir") or disease_subdir
+    out = []
     for i in range(len(resolved)):
         if i == control_index:
             continue

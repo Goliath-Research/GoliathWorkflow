@@ -708,6 +708,8 @@ from .core.methyl_distribution_utils import clip_beta_params_for_bounds
 from .pipeline_config import (
     ProjectConfig,
     GroupConfig,
+    ControlDiseaseSide,
+    ComparisonSpec,
     DerivedPaths,
     load_project,
 )
@@ -897,6 +899,8 @@ __all__ = [
     # Pipeline project config (chained workflows)
     "ProjectConfig",
     "GroupConfig",
+    "ControlDiseaseSide",
+    "ComparisonSpec",
     "DerivedPaths",
     "load_project",
 ]

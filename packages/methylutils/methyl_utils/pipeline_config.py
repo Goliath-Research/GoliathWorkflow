@@ -8,9 +8,30 @@ to avoid repeating sample paths and output layout across configs.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+
+
+class ControlDiseaseSide(BaseModel):
+    """One side (control or disease) with a display label and one or more sub-groups."""
+
+    label: str = Field(..., description="Display name for this side (e.g. caucasians, prostate cancer)")
+    groups: List["GroupConfig"] = Field(
+        default_factory=list,
+        description="Sub-groups, each with label and sample_paths (and optional level_labels_path, samples_base_path)",
+    )
+
+
+class ComparisonSpec(BaseModel):
+    """One comparison: a pair of control group vs disease group to run through detection, mapper, enricher, classifier."""
+
+    control_group: str = Field(..., description="Label of the control sub-group (must exist in control.groups)")
+    disease_group: str = Field(..., description="Label of the disease sub-group (must exist in disease.groups)")
+    comparison_label: Optional[str] = Field(
+        default=None,
+        description="Output folder name for this comparison (default: disease_group)",
+    )
 
 
 class GroupConfig(BaseModel):
@@ -46,6 +67,10 @@ class GroupConfig(BaseModel):
         if not (v and v.strip()):
             raise ValueError("label must be non-empty")
         return v.strip()
+
+
+# Resolve forward reference in ControlDiseaseSide.groups
+ControlDiseaseSide.model_rebuild()
 
 
 class DerivedPaths(BaseModel):
@@ -105,6 +130,19 @@ class ProjectConfig(BaseModel):
         default=None,
         description="Optional N groups (overrides group1/group2 when set). Each group can have level_labels_path for stratification.",
     )
+    control: Optional[ControlDiseaseSide] = Field(
+        default=None,
+        description="When set with disease: control side (label + groups). Centroids go to centroids/control/{group.label}.",
+    )
+    disease: Optional[ControlDiseaseSide] = Field(
+        default=None,
+        description="When set with control: disease side (label + groups). Centroids go to centroids/disease/{group.label}.",
+    )
+    comparisons: Optional[Union[List[ComparisonSpec], str]] = Field(
+        default=None,
+        description="When control+disease: list of {control_group, disease_group, comparison_label?} or shorthand: "
+        '"control_vs_each_disease" (first control vs each disease), "all_pairs" (all control x disease).',
+    )
     samples_base_path: Optional[str] = Field(
         default=None,
         description="Base directory to resolve sample names. When set, group sample_paths that point to files "
@@ -134,43 +172,91 @@ class ProjectConfig(BaseModel):
         return v.rstrip("/") if v else v
 
     @model_validator(mode="after")
-    def require_group1_group2_when_no_groups(self):
-        """When groups is not set, group1 and group2 are required."""
-        if not self.groups and (self.group1 is None or self.group2 is None):
-            raise ValueError("group1 and group2 are required when groups is not set")
+    def require_group_def(self):
+        """Require either (group1+group2), or groups, or (control+disease+comparisons)."""
+        has_flat = self.groups is not None or (self.group1 is not None and self.group2 is not None)
+        has_control_disease = self.control is not None and self.disease is not None
+        if has_control_disease:
+            if not self.control.groups:
+                raise ValueError("control.groups must be non-empty when control is set")
+            if not self.disease.groups:
+                raise ValueError("disease.groups must be non-empty when disease is set")
+            if self.comparisons is None:
+                raise ValueError("comparisons is required when control and disease are set")
+        if not has_flat and not has_control_disease:
+            raise ValueError("Set either group1+group2, or groups, or control+disease+comparisons")
+        if has_flat and has_control_disease:
+            raise ValueError("Do not set both flat groups (or group1/group2) and control/disease")
         return self
+
+    def _base_for(self, g: Any) -> Optional[str]:
+        return getattr(g, "samples_base_path", None) or getattr(self, "samples_base_path", None)
+
+    def _expand_side_groups(
+        self, side_groups: List[GroupConfig], base_for_fn: Any, resolve_paths: bool = True
+    ) -> List[Tuple[str, List[str]]]:
+        """Expand a list of GroupConfig (with optional level_labels_path) to (label, paths) list.
+        When resolve_paths=False, returns [(g.label, []) for each g] (no file I/O; for label validation).
+        """
+        if not resolve_paths:
+            return [(g.label, []) for g in side_groups]
+        out: List[Tuple[str, List[str]]] = []
+        for g in side_groups:
+            paths = _resolve_sample_paths(g.sample_paths, base_path=base_for_fn(g))
+            if g.level_labels_path:
+                path_to_level = _load_level_labels(g.level_labels_path)
+                by_level: Dict[str, List[str]] = {}
+                for p in paths:
+                    level = (
+                        path_to_level.get(p)
+                        or path_to_level.get(str(Path(p).resolve()))
+                        or path_to_level.get(Path(p).name)
+                    )
+                    if level is None:
+                        level = "default"
+                    by_level.setdefault(level, []).append(p)
+                for level, level_paths in sorted(by_level.items()):
+                    out.append((f"{g.label}_{level}", level_paths))
+            else:
+                out.append((g.label, paths))
+        return out
+
+    def _get_resolved_groups_with_side(
+        self,
+    ) -> List[Tuple[str, List[str], Literal["control", "disease"]]]:
+        """
+        Return list of (label, sample_paths, side) for each centroid group.
+        When control/disease: control groups first (side=control), then disease (side=disease).
+        When flat groups: first group = control, rest = disease.
+        """
+        base_for = self._base_for
+        if self.control is not None and self.disease is not None:
+            out: List[Tuple[str, List[str], Literal["control", "disease"]]] = []
+            for label, paths in self._expand_side_groups(self.control.groups, base_for):
+                out.append((label, paths, "control"))
+            for label, paths in self._expand_side_groups(self.disease.groups, base_for):
+                out.append((label, paths, "disease"))
+            return out
+        # Flat groups or group1/group2
+        resolved = self._get_resolved_groups()
+        return [
+            (label, paths, "control" if i == 0 else "disease")
+            for i, (label, paths) in enumerate(resolved)
+        ]
 
     def _get_resolved_groups(self) -> List[Tuple[str, List[str]]]:
         """
         Return list of (label, sample_paths) for each centroid group.
-        When groups is set, expands by level_labels_path per group; otherwise uses group1/group2.
-        Uses samples_base_path (group or project) when resolving sample names from files.
+        When control/disease: control groups first, then disease. When groups set, expands by level_labels_path.
         """
-
-        def base_for(g: Any) -> Optional[str]:
-            return getattr(g, "samples_base_path", None) or getattr(self, "samples_base_path", None)
-
-        if self.groups:
+        base_for = self._base_for
+        if self.control is not None and self.disease is not None:
             out: List[Tuple[str, List[str]]] = []
-            for g in self.groups:
-                paths = _resolve_sample_paths(g.sample_paths, base_path=base_for(g))
-                if g.level_labels_path:
-                    path_to_level = _load_level_labels(g.level_labels_path)
-                    by_level: Dict[str, List[str]] = {}
-                    for p in paths:
-                        level = (
-                            path_to_level.get(p)
-                            or path_to_level.get(str(Path(p).resolve()))
-                            or path_to_level.get(Path(p).name)
-                        )
-                        if level is None:
-                            level = "default"
-                        by_level.setdefault(level, []).append(p)
-                    for level, level_paths in sorted(by_level.items()):
-                        out.append((f"{g.label}_{level}", level_paths))
-                else:
-                    out.append((g.label, paths))
+            out.extend(self._expand_side_groups(self.control.groups, base_for))
+            out.extend(self._expand_side_groups(self.disease.groups, base_for))
             return out
+        if self.groups:
+            return self._expand_side_groups(self.groups, base_for)
         if self.group1 is None or self.group2 is None:
             raise ValueError("group1 and group2 are required when groups is not set")
         return [
@@ -178,20 +264,74 @@ class ProjectConfig(BaseModel):
             (self.group2.label, _resolve_sample_paths(self.group2.sample_paths, base_path=base_for(self.group2))),
         ]
 
-    CENTROID_DISEASE_SUBDIR = "cancer"
+    CENTROID_DISEASE_SUBDIR: ClassVar[str] = "cancer"
+    CENTROID_CONTROL_SUBDIR: ClassVar[str] = "control"
+    CENTROID_DISEASE_FOLDER: ClassVar[str] = "disease"
+
+    def get_centroid_dir(self, side: Literal["control", "disease"], group_label: str) -> str:
+        """Return centroid output dir for a group. When control/disease: centroids/control/{label} or centroids/disease/{label}."""
+        global_base = self.output_base.rstrip("/")
+        project_root = f"{global_base}/{self.project_name}"
+        if self.control is not None and self.disease is not None:
+            return f"{project_root}/centroids/{side}/{group_label}"
+        # Flat: control = centroids/{label}, disease = centroids/cancer/{label}
+        if side == "control":
+            return f"{project_root}/centroids/{group_label}"
+        return f"{project_root}/centroids/{self.CENTROID_DISEASE_SUBDIR}/{group_label}"
+
+    def get_comparisons(self) -> List[ComparisonSpec]:
+        """
+        Return list of ComparisonSpec. When control/disease: resolve shorthand or validate explicit list.
+        When flat groups: not supported (caller should use get_resolved_groups and treat first as control).
+        """
+        if self.control is None or self.disease is None:
+            return []
+        # Use label-only expansion (no file I/O) for validation and shorthand
+        control_resolved = self._expand_side_groups(self.control.groups, self._base_for, resolve_paths=False)
+        disease_resolved = self._expand_side_groups(self.disease.groups, self._base_for, resolve_paths=False)
+        control_labels_resolved = {label for label, _ in control_resolved}
+        disease_labels_resolved = {label for label, _ in disease_resolved}
+
+        raw = self.comparisons
+        if isinstance(raw, str):
+            if raw == "control_vs_each_disease":
+                first_control = control_resolved[0][0] if control_resolved else ""
+                return [
+                    ComparisonSpec(control_group=first_control, disease_group=d)
+                    for d, _ in disease_resolved
+                ]
+            if raw == "all_pairs":
+                return [
+                    ComparisonSpec(control_group=c, disease_group=d)
+                    for c, _ in control_resolved
+                    for d, _ in disease_resolved
+                ]
+            raise ValueError(f"comparisons shorthand must be 'control_vs_each_disease' or 'all_pairs', got: {raw!r}")
+        out: List[ComparisonSpec] = []
+        for spec in raw:
+            if isinstance(spec, dict):
+                spec = ComparisonSpec.model_validate(spec)
+            if spec.control_group not in control_labels_resolved:
+                raise ValueError(
+                    f"comparisons: control_group {spec.control_group!r} not in control.groups (resolved: {sorted(control_labels_resolved)})"
+                )
+            if spec.disease_group not in disease_labels_resolved:
+                raise ValueError(
+                    f"comparisons: disease_group {spec.disease_group!r} not in disease.groups (resolved: {sorted(disease_labels_resolved)})"
+                )
+            out.append(ComparisonSpec(
+                control_group=spec.control_group,
+                disease_group=spec.disease_group,
+                comparison_label=spec.comparison_label if spec.comparison_label is not None else spec.disease_group,
+            ))
+        return out
 
     def get_derived_paths(self) -> DerivedPaths:
         """Compute derived paths from this project config. Project root is {output_base}/{project_name}."""
         global_base = self.output_base.rstrip("/")
         project_root = f"{global_base}/{self.project_name}"
-        resolved = self._get_resolved_groups()
-        # Control (index 0): centroids/{label}; non-control: centroids/cancer/{label} (same as detection/mapper/enricher)
-        centroid_dirs_list = []
-        for i, (label, _) in enumerate(resolved):
-            if i == 0:
-                centroid_dirs_list.append(f"{project_root}/centroids/{label}")
-            else:
-                centroid_dirs_list.append(f"{project_root}/centroids/{self.CENTROID_DISEASE_SUBDIR}/{label}")
+        with_side = self._get_resolved_groups_with_side()
+        centroid_dirs_list = [self.get_centroid_dir(side, label) for label, _, side in with_side]
         c1 = centroid_dirs_list[0] if len(centroid_dirs_list) >= 1 else ""
         c2 = centroid_dirs_list[1] if len(centroid_dirs_list) >= 2 else c1
         return DerivedPaths(
@@ -230,6 +370,14 @@ class ProjectConfig(BaseModel):
             raise IndexError(f"group index {index} out of range (have {len(resolved)} groups)")
         return resolved[index][0]
 
+    def get_group_sample_paths_by_label(self, label: str) -> List[str]:
+        """Return sample paths for the group with the given label (from control or disease)."""
+        resolved = self._get_resolved_groups()
+        for l, paths in resolved:
+            if l == label:
+                return list(paths)
+        raise ValueError(f"group label {label!r} not found in resolved groups")
+
     def get_resolved_groups(self) -> List[tuple]:
         """Public alias for _get_resolved_groups(); returns list of (label, sample_paths)."""
         return self._get_resolved_groups()
@@ -242,6 +390,30 @@ class ProjectConfig(BaseModel):
         if not self.step_config:
             return {}
         return dict(self.step_config.get(step_name) or {})
+
+    def get_project_root(self) -> str:
+        """Project root directory: {output_base}/{project_name}."""
+        return f"{self.output_base.rstrip('/')}/{self.project_name}"
+
+    def get_detection_output_dir(self, comparison_label: str) -> str:
+        """Output dir for detection for one comparison: detection/cancer/{comparison_label}."""
+        return f"{self.get_project_root()}/detection/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+
+    def get_mapper_output_dir(self, comparison_label: str) -> str:
+        """Output dir for mapper for one comparison: mapper/cancer/{comparison_label}."""
+        return f"{self.get_project_root()}/mapper/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+
+    def get_enricher_output_dir(self, comparison_label: str) -> str:
+        """Output dir for enricher for one comparison: enricher/cancer/{comparison_label}."""
+        return f"{self.get_project_root()}/enricher/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+
+    def get_classifier_output_dir(self, comparison_label: str) -> str:
+        """Output dir for classifier for one comparison: classifier/cancer/{comparison_label}."""
+        return f"{self.get_project_root()}/classifier/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+
+    def uses_control_disease(self) -> bool:
+        """True if this project uses control/disease + comparisons (not flat groups)."""
+        return self.control is not None and self.disease is not None
 
 
 def _load_level_labels(csv_path: str) -> Dict[str, str]:

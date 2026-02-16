@@ -22,29 +22,14 @@ def resolve_classifier_config_per_cancer_group(
     disease_subdir: str = CLASSIFIER_CANCER_SUBDIR,
 ) -> List[Tuple[ClassificationConfig, str]]:
     """
-    Build one ClassificationConfig per non-control group (e.g. per cancer group).
-    Each config uses model_dir = {detection_dir}/cancer/{label} (where MethylDetector
-    wrote the binary classifier for control vs that group) and output_path =
-    {classifier_dir}/cancer/{label}/classification_results.csv.
+    Build one ClassificationConfig per comparison.
+    When project uses control/disease + comparisons: one entry per get_comparisons().
+    Otherwise: one per non-control group (flat groups).
 
     Returns:
-        List of (config, group_label) for each disease/cancer group.
+        List of (config, comparison_label) for each comparison.
     """
     project = load_project(project_path)
-    paths = project.get_derived_paths()
-    resolved = project.get_resolved_groups()
-    if len(resolved) < 2:
-        return []
-    centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
-    if len(centroid_dirs) != len(resolved):
-        # Same convention as get_derived_paths: control -> centroids/{label}, non-control -> centroids/cancer/{label}
-        centroid_dirs = []
-        for i, (label, _) in enumerate(resolved):
-            if i == 0:
-                centroid_dirs.append(f"{paths.output_base}/centroids/{label}")
-            else:
-                centroid_dirs.append(f"{paths.output_base}/centroids/{disease_subdir}/{label}")
-    c1_dir = centroid_dirs[control_index]
     step_cfg = project.get_step_config("classifier") or {}
     if step_override_path is not None:
         override_path = Path(step_override_path)
@@ -53,16 +38,49 @@ def resolve_classifier_config_per_cancer_group(
                 overrides = json.load(f)
             step_cfg = {**step_cfg, **overrides}
 
-    out: List[Tuple[ClassificationConfig, str]] = []
+    if getattr(project, "uses_control_disease", lambda: False)():
+        out: List[Tuple[ClassificationConfig, str]] = []
+        for spec in project.get_comparisons():
+            comp_label = spec.comparison_label or spec.disease_group
+            model_dir = project.get_detection_output_dir(comp_label)
+            output_path = str(Path(project.get_classifier_output_dir(comp_label)) / CLASSIFIER_OUTPUT_FILENAME)
+            base: Dict[str, Any] = {
+                "model_dir": model_dir,
+                "model_path": None,
+                "centroid1_dir": project.get_centroid_dir("control", spec.control_group),
+                "centroid2_dir": project.get_centroid_dir("disease", spec.disease_group),
+                "output_path": output_path,
+            }
+            if project.path_remap:
+                base["centroid_path_remap"] = project.path_remap
+            for k, v in step_cfg.items():
+                base[k] = v
+            out.append((ClassificationConfig(**base), comp_label))
+        return out
+
+    paths = project.get_derived_paths()
+    resolved = project.get_resolved_groups()
+    if len(resolved) < 2:
+        return []
+    centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
+    if len(centroid_dirs) != len(resolved):
+        centroid_dirs = []
+        for i, (label, _) in enumerate(resolved):
+            if i == 0:
+                centroid_dirs.append(f"{paths.output_base}/centroids/{label}")
+            else:
+                centroid_dirs.append(f"{paths.output_base}/centroids/{disease_subdir}/{label}")
+    c1_dir = centroid_dirs[control_index]
     classifier_dir = Path(paths.classifier_dir)
     detection_dir = Path(paths.detection_dir)
+    out = []
     for i in range(len(resolved)):
         if i == control_index:
             continue
         label = resolved[i][0]
         model_dir = str(detection_dir / disease_subdir / label)
         output_path = str(classifier_dir / disease_subdir / label / CLASSIFIER_OUTPUT_FILENAME)
-        base: Dict[str, Any] = {
+        base = {
             "model_dir": model_dir,
             "model_path": None,
             "centroid1_dir": c1_dir,

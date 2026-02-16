@@ -21,21 +21,54 @@ def resolve_detector_config_per_cancer_group(
     disease_subdir: str = "cancer",
 ) -> List[Tuple[MethylModelerConfig, str]]:
     """
-    Build one MethylModelerConfig per non-control group (e.g. per cancer group).
-    Control group (default index 0, e.g. healthy) is centroid1; each other group
-    is centroid2 with output_dir = {detection_dir}/{disease_subdir}/{group_label}.
+    Build one MethylModelerConfig per comparison (control vs disease pair).
+    When project uses control/disease + comparisons: one config per comparison from get_comparisons().
+    When project uses flat groups: one config per non-control group (control index 0 vs each other).
 
     Returns:
-        List of (config, group_label) for each disease/cancer group.
+        List of (config, comparison_label) for each comparison.
     """
     project = load_project(project_path)
+    step_cfg = project.get_step_config("detection") or {}
+    if step_override_path is not None:
+        with open(step_override_path) as f:
+            overrides = json.load(f)
+        step_cfg = {**step_cfg, **overrides}
+
+    if getattr(project, "uses_control_disease", lambda: False)():
+        comparisons = project.get_comparisons()
+        out: List[Tuple[MethylModelerConfig, str]] = []
+        for spec in comparisons:
+            ctrl_label = spec.control_group
+            dis_label = spec.disease_group
+            comp_label = spec.comparison_label or spec.disease_group
+            base: Dict[str, Any] = {
+                "chromosome": project.chromosomes or ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+                    "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
+                "contexts": project.contexts or ["CG"],
+                "centroid1_dir": project.get_centroid_dir("control", ctrl_label),
+                "centroid2_dir": project.get_centroid_dir("disease", dis_label),
+                "output_dir": project.get_detection_output_dir(comp_label),
+            }
+            try:
+                base["centroid1_validation_samples"] = project.get_group_sample_paths_by_label(ctrl_label)
+            except ValueError:
+                pass
+            try:
+                base["centroid2_validation_samples"] = project.get_group_sample_paths_by_label(dis_label)
+            except ValueError:
+                pass
+            for k, v in step_cfg.items():
+                base[k] = v
+            out.append((MethylModelerConfig.model_validate(base), comp_label))
+        return out
+
     paths = project.get_derived_paths()
     resolved = project.get_resolved_groups()
     if len(resolved) < 2:
         return []
     centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
     if len(centroid_dirs) != len(resolved):
-        # Same convention as get_derived_paths: control -> centroids/{label}, non-control -> centroids/cancer/{label}
         centroid_dirs = []
         for i, (label, _) in enumerate(resolved):
             if i == 0:
@@ -43,18 +76,12 @@ def resolve_detector_config_per_cancer_group(
             else:
                 centroid_dirs.append(f"{paths.output_base}/centroids/{disease_subdir}/{label}")
     c1_dir = centroid_dirs[control_index]
-    step_cfg = project.get_step_config("detection") or {}
-    if step_override_path is not None:
-        with open(step_override_path) as f:
-            overrides = json.load(f)
-        step_cfg = {**step_cfg, **overrides}
-
-    out: List[Tuple[MethylModelerConfig, str]] = []
+    out = []
     for i in range(len(resolved)):
         if i == control_index:
             continue
         label = resolved[i][0]
-        base: Dict[str, Any] = {
+        base = {
             "chromosome": project.chromosomes or ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
                 "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
             "contexts": project.contexts or ["CG"],

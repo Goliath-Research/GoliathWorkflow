@@ -4,15 +4,23 @@ Repo-level configuration examples for the MethylPipeline unified project config.
 
 ## Unified project config
 
-Use a **single project JSON** with `--project` so each tool derives its paths and (where applicable) sample lists from one place. `output_base` is a global folder; each project uses a subfolder `{output_base}/{project_name}`. Paths follow:
+Use a **single project JSON** with `--project` so each tool derives its paths and (where applicable) sample lists from one place. `output_base` is a global folder; each project uses a subfolder `{output_base}/{project_name}`.
+
+**Path convention (two groups):**
 
 - **Project root**: `{output_base}/{project_name}`
-- **Centroids**: `{project_root}/centroids/{group1.label}` and `{project_root}/centroids/{group2.label}`
-- **Detection**: `{project_root}/detection`
-- **Mapper**: `{project_root}/mapper`
-- **Enricher**: `{project_root}/enricher`
-- **Classifier**: `{project_root}/classifier`
+- **Centroids**: control (group 0) → `{project_root}/centroids/{label}`; disease groups → `{project_root}/centroids/cancer/{label}`
+- **Detection**: `{project_root}/detection` (single run) or `{project_root}/detection/cancer/{label}` per group with `--per-cancer-group`
+- **Mapper**: `{project_root}/mapper` or `{project_root}/mapper/cancer/{label}` per group when using `--project` with N groups
+- **Enricher**: `{project_root}/enricher` or `{project_root}/enricher/cancer/{label}` per group when using `--project` with N groups
+- **Classifier**: `{project_root}/classifier` or `{project_root}/classifier/cancer/{label}` per group with `--per-cancer-group`
 - **Alignment QC**: `{project_root}/alignment_qc`
+
+**Full hierarchical layout** for a project with one healthy group and several disease groups (directory tree, workflow order, and CLI commands) is described in **[docs/UNIFIED_PROJECT_CONFIG.md](../docs/UNIFIED_PROJECT_CONFIG.md)**.
+
+**Proposed alternative: control/disease with configurable labels** — Instead of a flat `groups` list, you can declare a **control** and **disease** block, each with a top-level `label` and a list of sub-groups (`groups`) with their own `label` and `sample_paths`. See **[PROPOSAL_CONTROL_DISEASE_FORMAT.md](PROPOSAL_CONTROL_DISEASE_FORMAT.md)** and example **project_PCa1_3levels_vs_Healthy_Hardik_control_disease.json**.
+
+**Proposed: explicit comparisons (pairs)** — When using control/disease, a **comparisons** array lists which centroid pairs to run through detection, mapper, enricher, and classifier (e.g. healthy–pca1-1, healthy–pca1-2, …). MethylCentroid builds centroids for **all** groups under `centroids/control/` and `centroids/disease/`; downstream steps run once per comparison. See **[PROPOSAL_COMPARISONS_AND_IMPLICATIONS.md](PROPOSAL_COMPARISONS_AND_IMPLICATIONS.md)** and example **project_PCa1_4levels_vs_Healthy_with_comparisons.json**. Pipeline support is proposed; current tools expect the flat `groups` format.
 
 ### Example: `project_PCa_vs_Healthy_example.json`
 

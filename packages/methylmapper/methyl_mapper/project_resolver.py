@@ -38,32 +38,42 @@ def resolve_mapper_paths_per_cancer_group(
     csv_filename_pattern: str = "dmps-*.csv",
 ) -> List[Tuple[MapperStepPaths, str]]:
     """
-    Build one MapperStepPaths per non-control (cancer) group, matching MethylDetector layout.
-
-    Input CSVs for each group: detection/{disease_subdir}/{label}/{csv_filename_pattern}.
-    Output for each group: mapper/{disease_subdir}/{label}.
+    Build one MapperStepPaths per comparison (control vs disease).
+    When project uses control/disease + comparisons: one entry per get_comparisons().
+    Otherwise: one per non-control group (flat groups).
 
     Returns:
-        List of (MapperStepPaths, group_label) for each disease/cancer group.
+        List of (MapperStepPaths, comparison_label) for each comparison.
     """
     project = load_project(project_path)
-    paths = project.get_derived_paths()
-    resolved = getattr(project, "get_resolved_groups", lambda: [])()
-    if len(resolved) < 2:
-        return []
-    detection_dir = Path(paths.detection_dir)
-    mapper_dir = Path(paths.mapper_dir)
     step_cfg = project.get_step_config("mapper") or {}
     if step_override_path and step_override_path.exists():
         import json
         with open(step_override_path) as f:
             overrides = json.load(f)
         step_cfg = {**step_cfg, **overrides}
-    disease_subdir = step_cfg.get("disease_subdir") or disease_subdir
     pattern = step_cfg.get("csv_filename_pattern") or step_cfg.get("csv_pattern") or csv_filename_pattern
     if "/" in pattern or "\\" in pattern:
         pattern = Path(pattern).name
-    out: List[Tuple[MapperStepPaths, str]] = []
+
+    if getattr(project, "uses_control_disease", lambda: False)():
+        out: List[Tuple[MapperStepPaths, str]] = []
+        for spec in project.get_comparisons():
+            comp_label = spec.comparison_label or spec.disease_group
+            det_dir = project.get_detection_output_dir(comp_label)
+            map_dir = project.get_mapper_output_dir(comp_label)
+            group_csv = str(Path(det_dir) / pattern)
+            out.append((MapperStepPaths(csv_pattern=group_csv, output_dir=map_dir), comp_label))
+        return out
+
+    paths = project.get_derived_paths()
+    resolved = getattr(project, "get_resolved_groups", lambda: [])()
+    if len(resolved) < 2:
+        return []
+    detection_dir = Path(paths.detection_dir)
+    mapper_dir = Path(paths.mapper_dir)
+    disease_subdir = step_cfg.get("disease_subdir") or disease_subdir
+    out = []
     for i in range(len(resolved)):
         if i == control_index:
             continue

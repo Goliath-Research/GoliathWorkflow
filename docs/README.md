@@ -10,6 +10,9 @@ Project and all 8 packages with theoretical foundations (LaTeX formulas): Methyl
 ### [OPERATIONS_MANUAL.md](OPERATIONS_MANUAL.md)
 Operations manual for users and developers: installation, project config, workflow order, CLI reference, config fields, inputs/outputs, troubleshooting, rendering/printing docs; plus developer guide (repo layout, adding steps, config schema, testing, logging, doc conventions).
 
+### [UNIFIED_PROJECT_CONFIG.md](UNIFIED_PROJECT_CONFIG.md)
+Unified project config for **one healthy group + several disease groups**: project JSON layout, **hierarchical result structure** (centroids, detection, mapper, enricher, classifier under `cancer/{label}`), workflow order, and CLI commands per step.
+
 ### [DEVELOPMENT.md](DEVELOPMENT.md)
 Complete guide for developers working on the MethylPipeline codebase:
 - Setting up development environment
@@ -48,6 +51,7 @@ System architecture and design documentation:
 ### For Everyone
 - [Theory and packages](THEORY_AND_PACKAGES.md) – Project and package theory (math)
 - [Operations manual](OPERATIONS_MANUAL.md) – How to run and extend the pipeline
+- [Unified project config](UNIFIED_PROJECT_CONFIG.md) – One healthy + N disease groups: directory tree and CLI
 
 ### For Developers
 - [Getting Started](DEVELOPMENT.md#setting-up-development-environment)
