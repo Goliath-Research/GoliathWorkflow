@@ -53,8 +53,9 @@ class DerivedPaths(BaseModel):
     Derived paths from a ProjectConfig.
     Convention: project root = {output_base}/{project_name}; step dirs under that:
     {project_root}/centroids|detection|mapper|enricher|classifier|alignment_qc.
-    When using N groups, centroid_dirs has one entry per group; centroid1_dir and centroid2_dir
-    are the first two for backward compatibility (or only two if exactly two groups).
+    When using N groups, centroid_dirs has one entry per group; control (index 0) is
+    centroids/{label}, non-control groups use centroids/cancer/{label} (same as detection/mapper/enricher).
+    centroid1_dir and centroid2_dir are the first two for backward compatibility.
     """
 
     output_base: str = Field(..., description="Project root directory (output_base/project_name)")
@@ -177,12 +178,20 @@ class ProjectConfig(BaseModel):
             (self.group2.label, _resolve_sample_paths(self.group2.sample_paths, base_path=base_for(self.group2))),
         ]
 
+    CENTROID_DISEASE_SUBDIR = "cancer"
+
     def get_derived_paths(self) -> DerivedPaths:
         """Compute derived paths from this project config. Project root is {output_base}/{project_name}."""
         global_base = self.output_base.rstrip("/")
         project_root = f"{global_base}/{self.project_name}"
         resolved = self._get_resolved_groups()
-        centroid_dirs_list = [f"{project_root}/centroids/{label}" for label, _ in resolved]
+        # Control (index 0): centroids/{label}; non-control: centroids/cancer/{label} (same as detection/mapper/enricher)
+        centroid_dirs_list = []
+        for i, (label, _) in enumerate(resolved):
+            if i == 0:
+                centroid_dirs_list.append(f"{project_root}/centroids/{label}")
+            else:
+                centroid_dirs_list.append(f"{project_root}/centroids/{self.CENTROID_DISEASE_SUBDIR}/{label}")
         c1 = centroid_dirs_list[0] if len(centroid_dirs_list) >= 1 else ""
         c2 = centroid_dirs_list[1] if len(centroid_dirs_list) >= 2 else c1
         return DerivedPaths(

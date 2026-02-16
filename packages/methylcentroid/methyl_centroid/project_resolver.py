@@ -1,6 +1,8 @@
 """
 Resolve MethylCentroid batch config from a pipeline project config (Pydantic).
 Supports two-group (group1/group2) and N-group projects.
+Uses the same layout as MethylDetector/MethylMapper/MethylEnricher: control (index 0)
+-> centroids/{label}; non-control -> centroids/cancer/{label}.
 When a group has level_labels_path (CSV mapping sample_path -> level), that group
 is expanded into one centroid dir per level (disease levels or health levels).
 """
@@ -12,6 +14,8 @@ from typing import Optional, Union
 from methyl_utils import load_project
 
 from .config import BatchProcessingConfig, MethylCentroidConfig
+
+DISEASE_SUBDIR_DEFAULT = "cancer"
 
 
 def run_centroids_for_all_groups(
@@ -50,7 +54,14 @@ def resolve_centroid_batch_config(
         label = resolved[group][0]
         sample_paths = list(resolved[group][1])
         centroid_dirs = paths.centroid_dirs or [paths.centroid1_dir, paths.centroid2_dir]
-        output_dir = centroid_dirs[group] if group < len(centroid_dirs) else f"{paths.output_base}/centroids/{label}"
+        if group < len(centroid_dirs):
+            output_dir = centroid_dirs[group]
+        else:
+            # Same convention as get_derived_paths: control -> centroids/{label}, non-control -> centroids/cancer/{label}
+            if group == 0:
+                output_dir = f"{paths.output_base}/centroids/{label}"
+            else:
+                output_dir = f"{paths.output_base}/centroids/{DISEASE_SUBDIR_DEFAULT}/{label}"
     elif group == "group1":
         label = resolved[0][0]
         sample_paths = list(resolved[0][1])
