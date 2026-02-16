@@ -1,14 +1,18 @@
 """
 Resolve MethylEnricher paths from a pipeline project config.
-Uses Pydantic only; no raw dict configs.
+Uses the same layout as MethylDetector/MethylMapper: when the project has multiple
+groups, mapper outputs live under mapper/cancer/<label> and enricher should write
+to enricher/cancer/<label> per group.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
+
+DISEASE_SUBDIR_DEFAULT = "cancer"
 
 
 class EnricherStepPaths(BaseModel):
@@ -22,6 +26,48 @@ class EnricherStepPaths(BaseModel):
         ...,
         description="Output directory for enrichment results (enricher_dir)",
     )
+
+
+def resolve_enricher_paths_per_cancer_group(
+    project_path: Path,
+    step_override_path: Optional[Path] = None,
+    control_index: int = 0,
+    disease_subdir: str = DISEASE_SUBDIR_DEFAULT,
+    combined_csv_name: str = "all-gene_name-combined.csv",
+) -> List[Tuple[EnricherStepPaths, str]]:
+    """
+    Build one EnricherStepPaths per non-control (cancer) group, matching MethylMapper layout.
+
+    Input for each group: mapper/{disease_subdir}/{label}/{combined_csv_name}.
+    Output for each group: enricher/{disease_subdir}/{label}.
+
+    Returns:
+        List of (EnricherStepPaths, group_label) for each disease/cancer group.
+    """
+    project = load_project(project_path)
+    paths = project.get_derived_paths()
+    resolved = getattr(project, "get_resolved_groups", lambda: [])()
+    if len(resolved) < 2:
+        return []
+    mapper_dir = Path(paths.mapper_dir)
+    enricher_dir = Path(paths.enricher_dir)
+    step_cfg = project.get_step_config("enricher") or {}
+    if step_override_path and step_override_path.exists():
+        import json
+        with open(step_override_path) as f:
+            overrides = json.load(f)
+        step_cfg = {**step_cfg, **overrides}
+    disease_subdir = step_cfg.get("disease_subdir") or disease_subdir
+    csv_name = step_cfg.get("combined_csv_name") or combined_csv_name
+    out: List[Tuple[EnricherStepPaths, str]] = []
+    for i in range(len(resolved)):
+        if i == control_index:
+            continue
+        label = resolved[i][0]
+        input_file = str(mapper_dir / disease_subdir / label / csv_name)
+        output_dir = str(enricher_dir / disease_subdir / label)
+        out.append((EnricherStepPaths(input_file=input_file, output_dir=output_dir), label))
+    return out
 
 
 def resolve_enricher_paths(

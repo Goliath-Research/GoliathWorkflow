@@ -2,12 +2,13 @@
 Resolve MethylMapper (bedtools) paths from a pipeline project config.
 Uses the same detection layout as MethylDetector/MethylClassifier: when the project
 has multiple groups, detection outputs live under detection/{disease_subdir}/{label}
-(e.g. detection/cancer/pca1, detection/cancer/pca2). The resolver builds a pattern
-like detection/cancer/*/dmps-*.csv so the mapper finds CSVs in all group dirs.
+(e.g. detection/cancer/pca1, detection/cancer/pca2). The resolver can return either
+a single pattern over all groups (detection/cancer/*/dmps-*.csv) or per-group
+paths so each group's mapping is written to mapper/cancer/<label>.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +28,50 @@ class MapperStepPaths(BaseModel):
         ...,
         description="Output directory for mapped results (mapper_dir)",
     )
+
+
+def resolve_mapper_paths_per_cancer_group(
+    project_path: Path,
+    step_override_path: Optional[Path] = None,
+    control_index: int = 0,
+    disease_subdir: str = DISEASE_SUBDIR_DEFAULT,
+    csv_filename_pattern: str = "dmps-*.csv",
+) -> List[Tuple[MapperStepPaths, str]]:
+    """
+    Build one MapperStepPaths per non-control (cancer) group, matching MethylDetector layout.
+
+    Input CSVs for each group: detection/{disease_subdir}/{label}/{csv_filename_pattern}.
+    Output for each group: mapper/{disease_subdir}/{label}.
+
+    Returns:
+        List of (MapperStepPaths, group_label) for each disease/cancer group.
+    """
+    project = load_project(project_path)
+    paths = project.get_derived_paths()
+    resolved = getattr(project, "get_resolved_groups", lambda: [])()
+    if len(resolved) < 2:
+        return []
+    detection_dir = Path(paths.detection_dir)
+    mapper_dir = Path(paths.mapper_dir)
+    step_cfg = project.get_step_config("mapper") or {}
+    if step_override_path and step_override_path.exists():
+        import json
+        with open(step_override_path) as f:
+            overrides = json.load(f)
+        step_cfg = {**step_cfg, **overrides}
+    disease_subdir = step_cfg.get("disease_subdir") or disease_subdir
+    pattern = step_cfg.get("csv_filename_pattern") or step_cfg.get("csv_pattern") or csv_filename_pattern
+    if "/" in pattern or "\\" in pattern:
+        pattern = Path(pattern).name
+    out: List[Tuple[MapperStepPaths, str]] = []
+    for i in range(len(resolved)):
+        if i == control_index:
+            continue
+        label = resolved[i][0]
+        group_csv = str(detection_dir / disease_subdir / label / pattern)
+        group_out = str(mapper_dir / disease_subdir / label)
+        out.append((MapperStepPaths(csv_pattern=group_csv, output_dir=group_out), label))
+    return out
 
 
 def resolve_mapper_paths(

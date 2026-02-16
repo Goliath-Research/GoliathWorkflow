@@ -266,7 +266,7 @@ def main():
     if args.project:
         from pathlib import Path
         from methyl_utils import load_project
-        from .project_resolver import resolve_enricher_paths
+        from .project_resolver import resolve_enricher_paths, resolve_enricher_paths_per_cancer_group
         project_path = Path(args.project)
         if not project_path.exists() and not project_path.is_absolute():
             # When run from a package dir (e.g. packages/methylenricher), try repo root
@@ -285,33 +285,52 @@ def main():
                 if hasattr(args, attr):
                     setattr(args, attr, v)
         step_override = Path(args.step_override) if args.step_override else None
-        paths = resolve_enricher_paths(project_path, step_override)
-        if not args.input:
-            args.input = paths.input_file
-        if args.outdir == "results":  # default only
-            args.outdir = paths.output_dir
+        # Use per-cancer-group layout (enricher/cancer/<label> per group) when project has multiple groups
+        per_group = resolve_enricher_paths_per_cancer_group(project_path, step_override)
+        if per_group and args.input is None and (args.outdir == "results" or args.outdir is None):
+            args.enricher_per_group = per_group
+            args.input = None
+            args.outdir = None
+        elif per_group and (args.input is not None or (args.outdir != "results" and args.outdir is not None)):
+            # Explicit --input or --outdir: single run, clear per-group
+            args.enricher_per_group = None
+            paths = resolve_enricher_paths(project_path, step_override)
+            if not args.input:
+                args.input = paths.input_file
+            if args.outdir == "results" or args.outdir is None:
+                args.outdir = paths.output_dir
+        else:
+            args.enricher_per_group = None
+            paths = resolve_enricher_paths(project_path, step_override)
+            if not args.input:
+                args.input = paths.input_file
+            if args.outdir == "results":  # default only
+                args.outdir = paths.output_dir
     
     # Handle --list-libraries
     if args.list_libraries:
         list_available_libraries()
         sys.exit(0)
 
-    if not args.input:
+    per_group = getattr(args, "enricher_per_group", None)
+    if not per_group and not args.input:
         print("[ERROR] Input file not specified. Use --input /path/to/file or set 'input' in --config.")
         sys.exit(1)
 
-    # Validate input file
-    input_path = Path(args.input)
-    if not input_path.exists():
-        print(f"[ERROR] Input file not found: {input_path}")
-        sys.exit(1)
-    
     # Display parameters
     print("=" * 70)
     print("MethylEnricher - Gene Enrichment Analysis")
     print("=" * 70)
-    print(f"Input file: {input_path}")
-    print(f"Output directory: {args.outdir}")
+    if per_group:
+        print(f"Per-cancer-group: {len(per_group)} group(s) -> enricher/cancer/<group>")
+        input_path = None
+    else:
+        input_path = Path(args.input)
+        if not input_path.exists():
+            print(f"[ERROR] Input file not found: {input_path}")
+            sys.exit(1)
+        print(f"Input file: {input_path}")
+        print(f"Output directory: {args.outdir}")
     print(f"Top genes: {args.top}")
     print(f"Cutoff: q ≤ {args.cutoff}")
     print(f"Organism: {args.organism}")
@@ -346,11 +365,10 @@ def main():
         print(f"Libraries: {len(DEFAULT_LIBRARIES)} default libraries")
     print("=" * 70)
     
-    try:
-        # Run enrichment analysis
-        results = run_enrichment(
-            input_file=input_path,
-            output_dir=args.outdir,
+    def _run_one(in_file: Path, out_dir: str):
+        return run_enrichment(
+            input_file=in_file,
+            output_dir=out_dir,
             libraries=args.libraries,
             top_n=args.top,
             cutoff=args.cutoff,
@@ -371,15 +389,32 @@ def main():
             sort_by=args.sort_by,
             sort_ascending=args.sort_ascending
         )
-        
-        if results.empty:
-            print("\n[WARN] No enrichment results found. Check your gene list and try again.")
-            sys.exit(1)
-        
-        print("\n[SUCCESS] Enrichment analysis complete!")
-        print(f"Results saved to: {args.outdir}")
-        sys.exit(0)
-        
+
+    try:
+        if per_group:
+            # Run enrichment once per cancer group (input from mapper/cancer/<label>, output to enricher/cancer/<label>)
+            for paths, label in per_group:
+                inp = Path(paths.input_file)
+                if not inp.exists():
+                    print(f"[WARN] Skipping group {label}: input not found: {inp}")
+                    continue
+                print(f"\n--- Enrichment for group: {label} -> {paths.output_dir} ---")
+                results = _run_one(inp, paths.output_dir)
+                if results.empty:
+                    print(f"[WARN] No enrichment results for {label}.")
+                else:
+                    print(f"[OK] {label}: results saved to {paths.output_dir}")
+            print("\n[SUCCESS] Per-cancer-group enrichment complete!")
+            sys.exit(0)
+        else:
+            results = _run_one(input_path, args.outdir)
+            if results.empty:
+                print("\n[WARN] No enrichment results found. Check your gene list and try again.")
+                sys.exit(1)
+            print("\n[SUCCESS] Enrichment analysis complete!")
+            print(f"Results saved to: {args.outdir}")
+            sys.exit(0)
+
     except KeyboardInterrupt:
         print("\n\n[WARN] Analysis interrupted by user")
         sys.exit(130)

@@ -11,7 +11,7 @@ from pathlib import Path
 from .config import MethylMapperConfig, AzureSQLConfig, StoredProcedureConfig
 from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
-from .project_resolver import resolve_mapper_paths
+from .project_resolver import resolve_mapper_paths, resolve_mapper_paths_per_cancer_group
 from .secure_credentials import SecureCredentialManager
 
 
@@ -519,17 +519,34 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     
     args = parser.parse_args()
 
-    # Apply --project first (sets default csv_pattern and output_dir, then step_config defaults)
+    # Apply --project first (sets default csv_pattern and output_dir, or per-cancer-group list)
     if args.project:
         project_path = Path(args.project)
         if not project_path.exists():
             raise FileNotFoundError(f"Project config not found: {project_path}")
         step_override = Path(args.step_override) if args.step_override else None
-        mapper_paths = resolve_mapper_paths(project_path, step_override)
-        if args.csv_pattern is None:
-            args.csv_pattern = mapper_paths.csv_pattern
-        if args.output_dir is None:
-            args.output_dir = mapper_paths.output_dir
+        # Use per-cancer-group layout (mapper/cancer/<label> per group) when project has multiple groups
+        per_group = resolve_mapper_paths_per_cancer_group(project_path, step_override)
+        if per_group:
+            args.mapper_per_group = per_group
+            if args.csv_pattern is None and args.output_dir is None:
+                args.csv_pattern = None
+                args.output_dir = None
+            elif args.csv_pattern is not None or args.output_dir is not None:
+                # User passed explicit pattern or output: run single combined run, clear per-group
+                args.mapper_per_group = None
+                mapper_paths = resolve_mapper_paths(project_path, step_override)
+                if args.csv_pattern is None:
+                    args.csv_pattern = mapper_paths.csv_pattern
+                if args.output_dir is None:
+                    args.output_dir = mapper_paths.output_dir
+        else:
+            args.mapper_per_group = None
+            mapper_paths = resolve_mapper_paths(project_path, step_override)
+            if args.csv_pattern is None:
+                args.csv_pattern = mapper_paths.csv_pattern
+            if args.output_dir is None:
+                args.output_dir = mapper_paths.output_dir
         # Apply project step_config.mapper defaults (same keys as --config)
         from methyl_utils import load_project
         project = load_project(project_path)
@@ -605,7 +622,8 @@ def main_bedtools():
     setup_logging(verbose=args.verbose)
     logger = logging.getLogger(__name__)
     
-    if not args.csv_pattern:
+    per_group = getattr(args, "mapper_per_group", None)
+    if not per_group and not args.csv_pattern:
         logger.error("CSV pattern not specified. Use --csv-pattern or set csv_pattern in --config.")
         sys.exit(1)
     
@@ -696,24 +714,44 @@ def main_bedtools():
             unrelated_growth_threshold=args.unrelated_growth_threshold
         )
         
-        # Determine output directory
-        output_dir = Path(args.output_dir) if args.output_dir else None
-        
-        # Map CSV files
-        results = mapper.map_csv_files(
-            csv_pattern=args.csv_pattern,
-            output_dir=output_dir,
-            group_by=args.group_by
-        )
-        
-        logger.info("\n" + "="*70)
-        logger.info("✅ Bedtools mapping complete!")
-        logger.info("="*70)
-        logger.info(f"Processed {len(results)} CSV files")
-        if results:
-            total_genes = sum(len(df) for df in results.values())
-            logger.info(f"Found {total_genes} unique {args.group_by}s across all files")
-        logger.info("="*70)
+        # Run per cancer group (mapper/cancer/<label>) or single run
+        if per_group:
+            logger.info(f"Running mapper for {len(per_group)} cancer group(s) -> mapper/cancer/<group>")
+            all_results = {}
+            for paths, label in per_group:
+                logger.info(f"\n{'='*70}")
+                logger.info(f"Mapping group: {label} -> {paths.output_dir}")
+                logger.info(f"{'='*70}")
+                group_results = mapper.map_csv_files(
+                    csv_pattern=paths.csv_pattern,
+                    output_dir=Path(paths.output_dir),
+                    group_by=args.group_by
+                )
+                all_results[label] = group_results
+            results = {k: v for sub in all_results.values() for k, v in sub.items()}
+            logger.info("\n" + "="*70)
+            logger.info("✅ Bedtools mapping complete (per-cancer-group)!")
+            logger.info("="*70)
+            for label, group_results in all_results.items():
+                n_files = len(group_results)
+                n_genes = sum(len(df) for df in group_results.values())
+                logger.info(f"  {label}: {n_files} CSV(s), {n_genes} unique {args.group_by}s")
+            logger.info("="*70)
+        else:
+            output_dir = Path(args.output_dir) if args.output_dir else None
+            results = mapper.map_csv_files(
+                csv_pattern=args.csv_pattern,
+                output_dir=output_dir,
+                group_by=args.group_by
+            )
+            logger.info("\n" + "="*70)
+            logger.info("✅ Bedtools mapping complete!")
+            logger.info("="*70)
+            logger.info(f"Processed {len(results)} CSV files")
+            if results:
+                total_genes = sum(len(df) for df in results.values())
+                logger.info(f"Found {total_genes} unique {args.group_by}s across all files")
+            logger.info("="*70)
         
         sys.exit(0)
         
