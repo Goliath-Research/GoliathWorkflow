@@ -72,14 +72,13 @@ def resolve_mapper_paths_per_cancer_group(
         return []
     detection_dir = Path(paths.detection_dir)
     mapper_dir = Path(paths.mapper_dir)
-    disease_subdir = step_cfg.get("disease_subdir") or disease_subdir
     out = []
     for i in range(len(resolved)):
         if i == control_index:
             continue
         label = resolved[i][0]
-        group_csv = str(detection_dir / disease_subdir / label / pattern)
-        group_out = str(mapper_dir / disease_subdir / label)
+        group_csv = str(detection_dir / label / pattern)
+        group_out = str(mapper_dir / label)
         out.append((MapperStepPaths(csv_pattern=group_csv, output_dir=group_out), label))
     return out
 

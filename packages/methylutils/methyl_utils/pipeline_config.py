@@ -153,6 +153,8 @@ class ProjectConfig(BaseModel):
     Defines groups, output layout, and optional shared parameters.
     Use group1/group2 for backward compatibility; when groups is set, N groups are used
     (each with optional level stratification via level_labels_path).
+    Unified config: you may use "controls" and "diseases" (plural) with multiple groups
+    per side; these are normalized to "control" and "disease" at load time for all pipeline components.
     """
 
     project_name: str = Field(
@@ -215,6 +217,26 @@ class ProjectConfig(BaseModel):
     @classmethod
     def output_base_stripped(cls, v: str) -> str:
         return v.rstrip("/") if v else v
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_control_disease_keys(cls, data: Any) -> Any:
+        """Unified config: accept 'controls'/'diseases' (plural) for multiple groups; default comparisons to control_vs_each_disease.
+        MethylCentroid, MethylDetector, MethylMapper, MethylEnricher, MethylClassifier all load via load_project() and get this normalization."""
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        if "controls" in data and "control" not in data:
+            data["control"] = data.pop("controls")
+        if "diseases" in data and "disease" not in data:
+            data["disease"] = data.pop("diseases")
+        if (
+            data.get("control") is not None
+            and data.get("disease") is not None
+            and data.get("comparisons") is None
+        ):
+            data["comparisons"] = "control_vs_each_disease"
+        return data
 
     @model_validator(mode="after")
     def require_group_def(self):
