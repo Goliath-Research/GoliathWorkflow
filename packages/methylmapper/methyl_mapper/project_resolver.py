@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
 
-DISEASE_SUBDIR_DEFAULT = "cancer"
+DISEASE_SUBDIR_DEFAULT = "disease"
 
 
 class MapperStepPaths(BaseModel):
@@ -34,7 +34,7 @@ def resolve_mapper_paths_per_cancer_group(
     project_path: Path,
     step_override_path: Optional[Path] = None,
     control_index: int = 0,
-    disease_subdir: str = DISEASE_SUBDIR_DEFAULT,
+    disease_subdir: str = DISEASE_SUBDIR_DEFAULT,  # "disease" for mapper/disease/{subtype}
     csv_filename_pattern: str = "dmps-*.csv",
 ) -> List[Tuple[MapperStepPaths, str]]:
     """
