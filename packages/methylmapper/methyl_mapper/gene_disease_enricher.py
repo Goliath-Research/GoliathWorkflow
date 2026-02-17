@@ -178,7 +178,7 @@ class GeneDiseaseEnricher:
         allow_predicted: Optional[bool] = None,
         cache_enabled: bool = True,
         cache_dir: Optional[Path] = None,
-        cache_ttl_days: Optional[int] = 0,
+        cache_ttl_days: Optional[int] = 7,
         rate_limit_delay: float = 1.0,
         max_retries: int = 3,
         azure_key_vault_url: Optional[str] = None,

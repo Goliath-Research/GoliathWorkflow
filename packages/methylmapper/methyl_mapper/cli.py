@@ -435,7 +435,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         '--cache-dir',
         type=str,
         default=None,
-        help='Cache directory for enrichment queries (default: ~/.methyl_mapper/cache)'
+        help='Cache directory for enrichment queries (default: project_root/enrich_cache or output_dir/enrich_cache or ./enrich_cache)'
     )
     disease_group.add_argument(
         '--cache-ttl-days',
