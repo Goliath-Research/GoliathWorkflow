@@ -511,6 +511,14 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         action='store_true',
         help='Enable verbose logging'
     )
+        # Project Group Options
+    group_group = parser.add_argument_group('Project Group Options')
+    group_group.add_argument(
+        '--group',
+        type=str,
+        help='Single subtype/group to process with --project (e.g. "pca2" → detection/cancer/pca2/dmps-*.csv → mapper/cancer/pca2)'
+    )
+
     parser.add_argument(
         '--version',
         action='version',
