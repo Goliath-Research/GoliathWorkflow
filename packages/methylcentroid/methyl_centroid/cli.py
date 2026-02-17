@@ -12,7 +12,11 @@ from typing import List
 
 from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig, CentroidResults
 from .core import MethylCentroid
-from .project_resolver import resolve_centroid_batch_config, run_centroids_for_all_groups
+from .project_resolver import (
+    resolve_centroid_batch_config,
+    run_centroids_for_all_groups,
+    run_centroid_for_one_group,
+)
 from methyl_utils.logging_utils import setup_logging
 
 
@@ -361,12 +365,9 @@ def main() -> None:
                 group_arg = args.group.strip()
                 if group_arg.isdigit():
                     group_arg = int(group_arg)
-                batch_config = resolve_centroid_batch_config(
+                run_centroid_for_one_group(
                     args.project, group_arg, args.step_override
                 )
-                if args.use_gpu is not None:
-                    batch_config.base_config.use_gpu = bool(args.use_gpu)
-                run_batch_processing(batch_config)
 
         elif args.batch_config:
             # Batch processing mode

@@ -2,19 +2,22 @@
 Command-line interface for MethylCluster.
 
 This module provides a CLI for clustering methylation samples using
-configuration files, similar to other MethylPipeline tools.
+configuration files or a pipeline project (--project + --group).
 """
 
 import argparse
 import sys
 import json
 import logging
-import numpy as np
 from pathlib import Path
 
 from .config import MethylClusterConfig
 from .cluster import MethylCluster
-from methyl_utils import MethylSample
+from .project_resolver import (
+    resolve_cluster_config_for_group,
+    write_clustering_manifest,
+    get_groups_with_subcluster,
+)
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -41,6 +44,9 @@ def main() -> None:
 Examples:
   # Run clustering with configuration file
   python -m methyl_cluster.cli --config config.json
+
+  # Run from pipeline project for a group with subcluster (writes manifest.json)
+  python -m methyl_cluster.cli --project path/to/project.json --group healthy
 
   # Run with verbose output
   python -m methyl_cluster.cli --config config.json --verbose
@@ -70,14 +76,26 @@ For more information, see the README.md file.
         """
     )
     
-    # Required arguments
+    # Config source: either --config or (--project + --group)
     parser.add_argument(
         "--config",
         type=Path,
-        required=True,
-        help="Path to JSON configuration file"
+        default=None,
+        help="Path to JSON configuration file (use this or --project + --group)"
     )
-    
+    parser.add_argument(
+        "--project", "-p",
+        type=Path,
+        default=None,
+        help="Path to pipeline project config (requires --group)"
+    )
+    parser.add_argument(
+        "--group", "-g",
+        type=str,
+        default=None,
+        help="Group label for project mode (e.g. healthy); requires --project"
+    )
+
     # Optional arguments
     parser.add_argument(
         "--verbose", "-v",
@@ -101,23 +119,38 @@ For more information, see the README.md file.
     
     args = parser.parse_args()
     
+    # Validate mutually exclusive config sources
+    if args.config is not None and (args.project is not None or args.group is not None):
+        parser.error("Use either --config or (--project and --group), not both")
+    if args.config is None and (args.project is None or args.group is None):
+        parser.error("Provide either --config or both --project and --group")
+    if args.project is not None and not args.project.exists():
+        logger_early = logging.getLogger(__name__)
+        logger_early.error("Project config not found: %s", args.project)
+        sys.exit(1)
+    
     # Setup logging
     setup_logging(verbose=args.verbose)
     logger = logging.getLogger(__name__)
     
     try:
-        # Validate configuration file exists
-        if not args.config.exists():
-            logger.error(f"Configuration file not found: {args.config}")
-            sys.exit(1)
-        
-        # Load configuration
-        logger.info(f"Loading configuration from {args.config}")
-        with open(args.config, 'r') as f:
-            config_data = json.load(f)
-        
-        # Create and validate config
-        config = MethylClusterConfig(**config_data)
+        if args.project is not None:
+            # Project mode: resolve config from project + group
+            logger.info("Resolving config from project %s, group %s", args.project, args.group)
+            config, side = resolve_cluster_config_for_group(args.project, args.group)
+            group_label_for_manifest = args.group
+            from_project = True
+        else:
+            # Standalone config file
+            if not args.config.exists():
+                logger.error("Configuration file not found: %s", args.config)
+                sys.exit(1)
+            logger.info("Loading configuration from %s", args.config)
+            with open(args.config, 'r') as f:
+                config_data = json.load(f)
+            config = MethylClusterConfig(**config_data)
+            group_label_for_manifest = None
+            from_project = False
         
         # Apply CLI overrides after loading
         if args.soft:
@@ -126,7 +159,7 @@ For more information, see the README.md file.
         
         if args.temperature != 1.0:
             config.assignment_temperature = args.temperature
-            logger.info(f"CLI override: assignment_temperature = {args.temperature}")
+            logger.info("CLI override: assignment_temperature = %s", args.temperature)
         
         # Re-validate after overrides (Pydantic ensures bounds)
         config = MethylClusterConfig.model_validate(config.model_dump())
@@ -135,41 +168,47 @@ For more information, see the README.md file.
         logger.info("="*60)
         logger.info("MethylCluster Configuration")
         logger.info("="*60)
-        logger.info(f"Samples: {len(config.samples)}")
-        logger.info(f"Chromosome: {config.chrom}")
-        logger.info(f"Context: {config.ctx}")
-        logger.info(f"Metric: {config.metric.value}")
-        logger.info(f"Min cluster size: {config.min_cluster_size}")
-        logger.info(f"Output directory: {config.output_dir}")
-        logger.info(f"GPU acceleration: {config.use_gpu}")
-        logger.info(f"Cache distance matrix: {config.cache_distance_matrix}")
-        logger.info(f"Soft assignment: {config.soft_assignment}")
-        logger.info(f"Assignment temperature: {config.assignment_temperature}")
+        logger.info("Samples: %s", len(config.samples))
+        logger.info("Chromosome: %s", config.chrom)
+        logger.info("Context: %s", config.ctx)
+        logger.info("Metric: %s", config.metric.value)
+        logger.info("Min cluster size: %s", config.min_cluster_size)
+        logger.info("Output directory: %s", config.output_dir)
+        logger.info("GPU acceleration: %s", config.use_gpu)
+        logger.info("Cache distance matrix: %s", config.cache_distance_matrix)
+        logger.info("Soft assignment: %s", config.soft_assignment)
+        logger.info("Assignment temperature: %s", config.assignment_temperature)
         logger.info("="*60)
         
         # Normalize output directory path
         config.output_dir = str(Path(config.output_dir).resolve())
-        logger.info(f"Normalized output directory: {config.output_dir}")
+        logger.info("Normalized output directory: %s", config.output_dir)
         
         # Create and run clustering pipeline
-        # Samples will be loaded without global alignment
-        # Distance computation will align each sample pair individually
         logger.info("Starting clustering pipeline...")
         cluster = MethylCluster(config)
         results = cluster.run()
+        
+        # When run from project, write manifest and assignments for downstream centroid step
+        if from_project and group_label_for_manifest:
+            write_clustering_manifest(
+                config.output_dir,
+                group_label_for_manifest,
+                results,
+                side,
+            )
         
         # Display results
         logger.info("="*60)
         logger.info("Clustering Results")
         logger.info("="*60)
-        logger.info(f"Number of clusters: {results['n_clusters']}")
-        logger.info(f"Noise samples: {results['n_noise']}")
-        logger.info("")
+        logger.info("Number of clusters: %s", results['n_clusters'])
+        logger.info("Noise samples: %s", results['n_noise'])
         logger.info("Cluster sizes:")
         for cluster_name, size in results['cluster_sizes'].items():
-            logger.info(f"  {cluster_name}: {size} samples")
+            logger.info("  %s: %s samples", cluster_name, size)
         logger.info("="*60)
-        logger.info(f"Results saved to: {config.output_dir}")
+        logger.info("Results saved to: %s", config.output_dir)
         logger.info("="*60)
         
         logger.info("Clustering complete!")

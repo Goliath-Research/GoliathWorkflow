@@ -710,6 +710,7 @@ from .pipeline_config import (
     GroupConfig,
     ControlDiseaseSide,
     ComparisonSpec,
+    SubclusterRequest,
     DerivedPaths,
     load_project,
 )
@@ -901,6 +902,7 @@ __all__ = [
     "GroupConfig",
     "ControlDiseaseSide",
     "ComparisonSpec",
+    "SubclusterRequest",
     "DerivedPaths",
     "load_project",
 ]

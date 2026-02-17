@@ -7,6 +7,7 @@ Used by MethylCentroid, MethylDetector, MethylMapper, MethylEnricher, MethylClas
 to avoid repeating sample paths and output layout across configs.
 """
 
+import json
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union
 
@@ -34,14 +35,54 @@ class ComparisonSpec(BaseModel):
     )
 
 
+class SubclusterRequest(BaseModel):
+    """
+    Request to run MethylCluster on this group's samples before building centroids.
+    When enabled and persist_centroids is True, the group is expanded into one sub-group per
+    discovered cluster (e.g. healthy_c0, healthy_c1); centroids are built per cluster via MethylCentroid.
+    When persist_centroids is False, MethylCluster runs and writes assignments only; the group
+    remains a single centroid (all samples) as usual.
+    """
+
+    enabled: bool = Field(default=True, description="Enable sub-clustering for this group")
+    method: Literal["centroid", "hdbscan", "hierarchical"] = Field(
+        default="centroid",
+        description="MethylCluster clustering method (centroid recommended for methylation data)",
+    )
+    metric: str = Field(
+        default="jensen_shannon",
+        description="Distance metric for clustering (e.g. jensen_shannon, hellinger)",
+    )
+    min_cluster_size: Optional[int] = Field(
+        default=None,
+        ge=2,
+        description="Minimum samples per cluster (HDBSCAN); defaults to MethylCluster default if unset",
+    )
+    force_k: Optional[int] = Field(
+        default=None,
+        ge=2,
+        description="Force K clusters (centroid/hierarchical); bypasses automatic K selection",
+    )
+    output_subdir: Optional[str] = Field(
+        default=None,
+        description="Subdir under project clustering output (default: side/group_label, e.g. control/healthy)",
+    )
+    persist_centroids: bool = Field(
+        default=True,
+        description="If True, run MethylCentroid per cluster and expand group to healthy_c0, healthy_c1, ...",
+    )
+
+
 class GroupConfig(BaseModel):
     """
     One cohort or one level within a cohort.
     If level_labels_path is set, this group is expanded into one logical group per level
     (sample_paths are split by the level column); centroid dirs are created per level.
-    When samples_base_path is set (project or group), sample_paths may be paths to CSV/text files
-    containing only sample folder names (one per line or one column); each name is resolved to
-    samples_base_path / name.
+    When subcluster is set and persist_centroids is True, MethylCluster runs first and the group
+    is expanded into one sub-group per cluster (e.g. healthy_c0, healthy_c1); no single centroid
+    for the parent label is built. When samples_base_path is set (project or group), sample_paths
+    may be paths to CSV/text files containing only sample folder names (one per line or one column);
+    each name is resolved to samples_base_path / name.
     """
 
     label: str = Field(..., description="Group label; used for centroid subdir name (e.g. healthy, pcancer)")
@@ -59,6 +100,10 @@ class GroupConfig(BaseModel):
         default=None,
         description="Base directory to resolve sample names from file (overrides project-level samples_base_path). "
         "When set, entries in sample_paths files are treated as folder names and resolved to this path.",
+    )
+    subcluster: Optional[SubclusterRequest] = Field(
+        default=None,
+        description="When set, run MethylCluster on this group's samples; if persist_centroids, expand to one centroid per cluster.",
     )
 
     @field_validator("label")
@@ -221,34 +266,74 @@ class ProjectConfig(BaseModel):
                 out.append((g.label, paths))
         return out
 
+    def _expand_one_with_manifest(
+        self,
+        label: str,
+        paths: List[str],
+        side: Literal["control", "disease"],
+    ) -> List[Tuple[str, List[str], Literal["control", "disease"]]]:
+        """
+        If this group has subcluster+persist_centroids and a clustering manifest exists,
+        return [(derived_label, derived_paths, side), ...]; otherwise return [(label, paths, side)].
+        """
+        subcluster_groups = {(s, l) for s, l, g in self.get_groups_with_subcluster() if g.subcluster.persist_centroids}
+        if (side, label) not in subcluster_groups:
+            return [(label, paths, side)]
+        manifest_path = Path(self.get_clustering_output_dir(side, label)) / "manifest.json"
+        if not manifest_path.exists():
+            return [(label, paths, side)]
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return [(label, paths, side)]
+        derived = manifest.get("derived_labels", [])
+        groups_map = manifest.get("groups", {})
+        if not derived or not groups_map:
+            return [(label, paths, side)]
+        return [(dl, groups_map.get(dl, []), side) for dl in derived]
+
     def _get_resolved_groups_with_side(
         self,
+        expand_subclusters: bool = False,
     ) -> List[Tuple[str, List[str], Literal["control", "disease"]]]:
         """
         Return list of (label, sample_paths, side) for each centroid group.
         When control/disease: control groups first (side=control), then disease (side=disease).
         When flat groups: first group = control, rest = disease.
+        If expand_subclusters is True and a clustering manifest exists for a group with
+        subcluster+persist_centroids, that group is expanded into (derived_label, paths, side) per cluster.
         """
         base_for = self._base_for
         if self.control is not None and self.disease is not None:
             out: List[Tuple[str, List[str], Literal["control", "disease"]]] = []
             for label, paths in self._expand_side_groups(self.control.groups, base_for):
-                out.append((label, paths, "control"))
+                if expand_subclusters:
+                    out.extend(self._expand_one_with_manifest(label, paths, "control"))
+                else:
+                    out.append((label, paths, "control"))
             for label, paths in self._expand_side_groups(self.disease.groups, base_for):
-                out.append((label, paths, "disease"))
+                if expand_subclusters:
+                    out.extend(self._expand_one_with_manifest(label, paths, "disease"))
+                else:
+                    out.append((label, paths, "disease"))
             return out
-        # Flat groups or group1/group2
+        # Flat groups or group1/group2: no subcluster expansion
         resolved = self._get_resolved_groups()
         return [
             (label, paths, "control" if i == 0 else "disease")
             for i, (label, paths) in enumerate(resolved)
         ]
 
-    def _get_resolved_groups(self) -> List[Tuple[str, List[str]]]:
+    def _get_resolved_groups(self, expand_subclusters: bool = False) -> List[Tuple[str, List[str]]]:
         """
         Return list of (label, sample_paths) for each centroid group.
         When control/disease: control groups first, then disease. When groups set, expands by level_labels_path.
+        If expand_subclusters is True, groups with subcluster+persist_centroids are expanded from clustering manifests.
         """
+        if expand_subclusters and self.control is not None and self.disease is not None:
+            with_side = self._get_resolved_groups_with_side(expand_subclusters=True)
+            return [(label, paths) for label, paths, _ in with_side]
         base_for = self._base_for
         if self.control is not None and self.disease is not None:
             out: List[Tuple[str, List[str]]] = []
@@ -279,18 +364,42 @@ class ProjectConfig(BaseModel):
             return f"{project_root}/centroids/{group_label}"
         return f"{project_root}/centroids/{self.CENTROID_DISEASE_SUBDIR}/{group_label}"
 
-    def get_comparisons(self) -> List[ComparisonSpec]:
+    def get_clustering_output_dir(self, side: Literal["control", "disease"], group_label: str) -> str:
+        """Output dir for MethylCluster for a group (assignments, manifest). {project_root}/clustering/{side}/{group_label}."""
+        return f"{self.get_project_root()}/clustering/{side}/{group_label}"
+
+    def get_groups_with_subcluster(self) -> List[Tuple[Literal["control", "disease"], str, "GroupConfig"]]:
+        """Return (side, label, group_config) for each group that has subcluster enabled. Only for control/disease projects."""
+        if self.control is None or self.disease is None:
+            return []
+        out: List[Tuple[Literal["control", "disease"], str, GroupConfig]] = []
+        for g in self.control.groups:
+            if g.subcluster and g.subcluster.enabled:
+                out.append(("control", g.label, g))
+        for g in self.disease.groups:
+            if g.subcluster and g.subcluster.enabled:
+                out.append(("disease", g.label, g))
+        return out
+
+    def get_comparisons(self, expand_subclusters: bool = False) -> List[ComparisonSpec]:
         """
         Return list of ComparisonSpec. When control/disease: resolve shorthand or validate explicit list.
         When flat groups: not supported (caller should use get_resolved_groups and treat first as control).
+        If expand_subclusters is True, control/disease labels include derived labels from clustering manifests.
         """
         if self.control is None or self.disease is None:
             return []
-        # Use label-only expansion (no file I/O) for validation and shorthand
-        control_resolved = self._expand_side_groups(self.control.groups, self._base_for, resolve_paths=False)
-        disease_resolved = self._expand_side_groups(self.disease.groups, self._base_for, resolve_paths=False)
-        control_labels_resolved = {label for label, _ in control_resolved}
-        disease_labels_resolved = {label for label, _ in disease_resolved}
+        if expand_subclusters:
+            with_side = self._get_resolved_groups_with_side(expand_subclusters=True)
+            control_labels_resolved = {label for label, _, s in with_side if s == "control"}
+            disease_labels_resolved = {label for label, _, s in with_side if s == "disease"}
+            control_resolved = [(l, []) for l, _, s in with_side if s == "control"]
+            disease_resolved = [(l, []) for l, _, s in with_side if s == "disease"]
+        else:
+            control_resolved = self._expand_side_groups(self.control.groups, self._base_for, resolve_paths=False)
+            disease_resolved = self._expand_side_groups(self.disease.groups, self._base_for, resolve_paths=False)
+            control_labels_resolved = {label for label, _ in control_resolved}
+            disease_labels_resolved = {label for label, _ in disease_resolved}
 
         raw = self.comparisons
         if isinstance(raw, str):
@@ -326,11 +435,11 @@ class ProjectConfig(BaseModel):
             ))
         return out
 
-    def get_derived_paths(self) -> DerivedPaths:
-        """Compute derived paths from this project config. Project root is {output_base}/{project_name}."""
+    def get_derived_paths(self, expand_subclusters: bool = False) -> DerivedPaths:
+        """Compute derived paths from this project config. Project root is {output_base}/{project_name}. When expand_subclusters is True, centroid_dirs include derived groups from clustering manifests."""
         global_base = self.output_base.rstrip("/")
         project_root = f"{global_base}/{self.project_name}"
-        with_side = self._get_resolved_groups_with_side()
+        with_side = self._get_resolved_groups_with_side(expand_subclusters=expand_subclusters)
         centroid_dirs_list = [self.get_centroid_dir(side, label) for label, _, side in with_side]
         c1 = centroid_dirs_list[0] if len(centroid_dirs_list) >= 1 else ""
         c2 = centroid_dirs_list[1] if len(centroid_dirs_list) >= 2 else c1
@@ -370,17 +479,17 @@ class ProjectConfig(BaseModel):
             raise IndexError(f"group index {index} out of range (have {len(resolved)} groups)")
         return resolved[index][0]
 
-    def get_group_sample_paths_by_label(self, label: str) -> List[str]:
-        """Return sample paths for the group with the given label (from control or disease)."""
-        resolved = self._get_resolved_groups()
+    def get_group_sample_paths_by_label(self, label: str, expand_subclusters: bool = False) -> List[str]:
+        """Return sample paths for the group with the given label (from control or disease). When expand_subclusters is True, derived labels (e.g. healthy_c0) are resolved from manifests."""
+        resolved = self._get_resolved_groups(expand_subclusters=expand_subclusters)
         for l, paths in resolved:
             if l == label:
                 return list(paths)
         raise ValueError(f"group label {label!r} not found in resolved groups")
 
-    def get_resolved_groups(self) -> List[tuple]:
-        """Public alias for _get_resolved_groups(); returns list of (label, sample_paths)."""
-        return self._get_resolved_groups()
+    def get_resolved_groups(self, expand_subclusters: bool = False) -> List[tuple]:
+        """Return list of (label, sample_paths). When expand_subclusters is True, groups with subcluster+persist_centroids are expanded from clustering manifests."""
+        return self._get_resolved_groups(expand_subclusters=expand_subclusters)
 
     def get_step_config(self, step_name: str) -> Dict[str, Any]:
         """
