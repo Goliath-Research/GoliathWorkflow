@@ -148,67 +148,23 @@ $$
 \sigma^2 = \frac{\alpha\beta}{(\alpha + \beta)^2(\alpha + \beta + 1)}
 $$
 
-### Biological Importance
+### Effect Size (Single Biological Importance Measure)
 
-**Biological importance** combines multiple factors to prioritize DMPs that are both statistically significant and biologically meaningful. MethylDetector supports two formulas (config **importance_formula**):
+**effect_size** is the only biological importance measure in the pipeline. It is computed by **MethylCentroidPair** when comparing two centroids; MethylDetector uses it as provided and does not recompute it. MethylClassifier, MethylMapper, and MethylEnricher all use **effect_size** for weighting and ranking.
 
-#### 1. Hybrid formula (default: `importance_formula="hybrid"`)
-
-Biologist-oriented: reward large |delta_mean| and minimal overlap, penalize high variance.
-
-- **Raw score**: $r = |\Delta\mu| / (\text{overlap} \times \sigma_{\text{combined}} + \epsilon)$, where overlap = BC (Bhattacharyya coefficient) and $\sigma_{\text{combined}} = \sqrt{\text{var}_1 + \text{var}_2}$ from Beta parameters.
-- **Bounded**: $\text{importance} = r / (r + c)$ with $c$ a scale constant (e.g. min_delta_mean / max_overlap), so importance ∈ (0, 1]. Near-zero overlap → importance = 1.
-- **Variance reliability**: multiply by $1 / (1 + \max(\text{var}_1, \text{var}_2) / 0.05)$ so high-variance (noisy) positions get lower importance.
-
-So: large delta_mean and low overlap increase importance; high variance decreases it. All from the probability distributions (Beta) at each position.
-
-#### 2. Effect-size formula (legacy: `importance_formula="effect_size"`)
-
-Importance is derived from effect_size (Bhattacharyya distance) then log-scale normalized to [1e-6, 1]. No explicit delta_mean or variance term.
-
-#### Importance Formula (conceptual, hybrid)
+**Formula (in MethylCentroidPair):**
 
 $$
-\text{Importance} = \text{effect_size} \times \text{variance_reliability} \times \text{significance_factor} \times \text{context_weight}
+\text{effect\_size} = \frac{|\Delta\mu|}{\max(\text{overlap}, \epsilon) \times \sigma_{\text{combined}}}
+\times \text{variance\_reliability}
 $$
 
-#### 1. Effect Size (Foundation)
+- **overlap**: Bhattacharyya coefficient (BC) from the comparison; $\text{BC} = e^{-\text{BD}}$.
+- **min_overlap_floor** $\epsilon$ (e.g. 0.01): prevents unbounded values when overlap → 0; in practice overlap is rarely zero.
+- **combined_std**: $\sigma_{\text{combined}} = \sqrt{\text{var}_1 + \text{var}_2}$ from Beta parameters (MethylSample-style variance).
+- **variance_reliability**: $1 / (1 + \max(\text{var}_1, \text{var}_2) / 0.05)$ to down-weight high-variance (noisy) positions.
 
-Effect size includes statistical corrections already:
-- **Between-centroid variance**: $\text{effect_size} = |\Delta\mu| / \sqrt{\text{var}_1 + \text{var}_2}$
-- **Distribution overlap**: $\text{effect_size} = \text{effect_size} \times (1 - BC)^\gamma$
-
-Where $BC$ is the Bhattacharyya coefficient (0=no overlap, 1=complete overlap).
-
-#### 2. Variance Reliability Factor
-
-Within-centroid measurement quality:
-- **Beta distribution variance**: $\text{var} = \frac{\alpha\beta}{(\alpha + \beta)^2(\alpha + \beta + 1)}$
-- **Reliability factor**: $\text{variance_reliability} = \frac{1}{1 + \max(\text{var}_1, \text{var}_2) / 0.05}$
-- **Effect**: Positions with high variance (noisy measurements) get lower importance
-
-#### 3. Statistical Significance Factor
-
-Extra weighting for more significant DMPs:
-- **Significance strength**: $\text{significance_factor} = -\log_{10}(q\text{-value})$
-- **Normalized range**: Scaled to [0.5, 2.0] across all DMPs
-- **Effect**: More significant DMPs get higher importance
-
-#### 4. Context Weight
-
-Cytosine context reliability:
-- **CG contexts**: Weight = 1.0 (most reliable)
-- **CHG contexts**: Weight = 0.7
-- **CHH contexts**: Weight = 0.5 (least reliable)
-
-#### Complete Importance Interpretation
-
-- **High importance**: Large effect size + low measurement noise + high statistical significance + reliable context
-- **Low importance**: Small effect size + noisy measurements + low significance + unreliable context
-
-**Why not double-count corrections?**
-- effect_size already includes variance and overlap corrections
-- importance adds complementary biological factors without redundancy
+Larger |delta_mean| and smaller overlap increase effect_size; higher variance decreases it. Downstream steps (e.g. classifier) may normalize weights to [1e-6, 1] for stability; the relative ordering of effect_size is preserved for chromosome/context weighting.
 
 ### Balanced Accuracy
 

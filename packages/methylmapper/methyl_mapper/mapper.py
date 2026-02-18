@@ -189,7 +189,7 @@ class DMPMapper:
             # Extract gene names for JSON (ordered by importance if available)
             if gene_column in self.genes_df.columns:
                 # Sort by importance/score if available
-                importance_cols = ['importance', 'score', 'weight', 'effect_size']
+                importance_cols = ['effect_size', 'importance', 'score', 'weight']
                 sort_col = None
                 for col in importance_cols:
                     if col in self.genes_df.columns:

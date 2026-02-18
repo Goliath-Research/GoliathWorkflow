@@ -89,6 +89,9 @@
       "save_classifier_path": "models/PCa1_3levels_vs_Healthy_Hardik-classifier.pkl",
       "debug": false,
       "log_level": "INFO"
+    },
+    "validator": {
+      "debug": false
     }
   }
 }

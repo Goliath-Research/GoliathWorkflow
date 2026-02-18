@@ -125,7 +125,7 @@ class MethylModelerConfig(BaseModel):
     )
 
     # ----------------
-    # Biological Filter (effect_size = 1 - BC in [0, 1])
+    # Biological Filter (effect_size from MethylCentroidPair: |delta_mean|/(overlap*combined_std))
     # ----------------
     delta_mean_mode: str = Field(
         default="mean",
@@ -193,17 +193,9 @@ class MethylModelerConfig(BaseModel):
             raise ValueError(f"Invalid bmm_refine_filter_metric '{v}'. Valid options: {valid}")
         return v
 
-    @field_validator('importance_formula', mode='before')
-    @classmethod
-    def validate_importance_formula(cls, v):
-        valid = {"hybrid", "effect_size"}
-        if v not in valid:
-            raise ValueError(f"importance_formula must be one of: {valid}, got: {v}")
-        return v
-
     min_effect_size: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0,
-        description="Minimum effect_size (separation = 1 - BC, in [0, 1]) for biological filter. Keep DMPs with effect_size >= min_effect_size. Set null to disable. Less intuitive than min_delta_mean / max_overlap."
+        default=None, ge=0.0,
+        description="Minimum effect_size for biological filter. Keep DMPs with effect_size >= min_effect_size. Set null to disable. effect_size is computed by MethylCentroidPair (|delta_mean|/(overlap*combined_std))."
     )
     min_delta_mean: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
@@ -212,14 +204,6 @@ class MethylModelerConfig(BaseModel):
     max_overlap: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
         description="Maximum overlap (Bhattacharyya coefficient, 0–1) for biological filter. Keep DMPs with overlap <= max_overlap (low overlap = good separation). Set null to disable. Easy to interpret for biologists."
-    )
-    importance_formula: str = Field(
-        default="hybrid",
-        description="How to compute bounded biological importance [0,1]: 'hybrid' = reward large |delta_mean| and low overlap, penalize high variance (|delta|/(overlap*std) then bounded); 'effect_size' = legacy (effect_size/BD then log-normalized)."
-    )
-    gamma: float = Field(
-        default=1.5, ge=1.0, le=2.0,
-        description="Unused when effect_size=BD; kept for config compatibility."
     )
     # ----------------
     # Context Weighting

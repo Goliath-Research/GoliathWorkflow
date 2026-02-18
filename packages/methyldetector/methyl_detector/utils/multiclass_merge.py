@@ -11,7 +11,7 @@ import pandas as pd
 
 DMP_GLOB = "dmps-*.csv"
 REQUIRED_COLS = {"chromosome", "context", "position"}
-WEIGHT_COLS = ["importance", "effect_size", "weight"]
+WEIGHT_COLS = ["effect_size", "importance", "weight"]
 
 
 def _find_dmp_csvs(detection_dir: Path) -> List[Path]:
@@ -41,12 +41,12 @@ def check_detection_dirs_have_dmps(
 def merge_dmp_csvs_from_detection_dirs(
     detection_dirs: List[Path],
     merged_path: Path,
-    weights_column: Optional[str] = "importance",
+    weights_column: Optional[str] = "effect_size",
 ) -> Path:
     """
     Read all dmps-*.csv from each detection dir, union by (chromosome, context, position),
     and write one merged CSV. For duplicate positions, keep the row with highest weight
-    (importance/effect_size/weight) if present.
+    (effect_size/importance/weight) if present.
     """
     frames = []
     for ddir in detection_dirs:
@@ -74,8 +74,8 @@ def merge_dmp_csvs_from_detection_dirs(
                 weight_col = c
                 break
     if weight_col is None:
-        combined["importance"] = 1.0
-        weight_col = "importance"
+        combined["effect_size"] = 1.0
+        weight_col = "effect_size"
 
     # Deduplicate by (chromosome, context, position), keeping row with max weight
     combined = combined.sort_values(weight_col, ascending=False)

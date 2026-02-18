@@ -62,8 +62,8 @@ def bhattacharyya_coefficient(bd: np.ndarray) -> np.ndarray:
 
     Relationship:  overlap = BC = exp(-BD); BD = -ln(BC) (unbounded above).
     - BC (Bhattacharyya Coefficient): in [0, 1]; 0 = no overlap, 1 = identical.
-    - Distance in [0, 1]: separation = 1 - BC. We set effect_size = separation so effect_size is bounded in [0, 1].
-    Biological filter: keep DMPs with effect_size (1 - BC) >= min_effect_size; min_effect_size in [0, 1].
+    - effect_size is computed by MethylCentroidPair (|delta_mean|/(overlap*combined_std)) and is not bounded to [0,1].
+    Biological filter: keep DMPs with effect_size >= min_effect_size when min_effect_size is set.
 
     Args:
         bd: Bhattacharyya Distance values (0 to ∞, typically capped at 20)
@@ -584,7 +584,7 @@ class MethylDetector:
         Filter DMPs by biological significance. All set filters are applied (AND):
         - min_delta_mean: keep |delta_mean| >= value (easy: e.g. 0.1 = 10% methylation change)
         - max_overlap: keep overlap <= value (easy: low overlap = good separation)
-        - min_effect_size: keep effect_size >= value (effect_size = 1 - BC, requires interpretation)
+        - min_effect_size: keep effect_size >= value (effect_size from MethylCentroidPair)
         """
         bio_df = dmps_df.copy()
         initial_count = len(bio_df)
@@ -847,114 +847,15 @@ class MethylDetector:
     
     def _compute_biological_importance(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Compute bounded biological importance score for multi-context DMPs.
-
-        Two formulas (config importance_formula):
-        - "hybrid": Biologist-oriented. Rewards large |delta_mean| and minimal overlap,
-          penalizes high variance. Raw score r = |delta_mean| / (overlap * combined_std);
-          importance = r / (r + c) in [0,1], with optional variance reliability factor.
-          Uses probability distributions (Beta) to get overlap (BC) and variances.
-        - "effect_size": Legacy. Importance = effect_size (BD) then log-normalized to [1e-6, 1].
-
-        Args:
-            dmps_df: DataFrame with DMPs (delta_mean, overlap or effect_size; alpha1, beta1, alpha2, beta2 for hybrid)
-
-        Returns:
-            DataFrame with added bounded 'importance' column in [1e-6, 1], sorted by importance (descending)
+        Sort DMPs by effect_size (single biological importance measure from MethylCentroidPair).
+        No separate importance column; effect_size is used everywhere downstream.
         """
         df = dmps_df.copy()
-        formula = getattr(self.config, "importance_formula", "hybrid")
-
-        if formula == "hybrid":
-            df = self._compute_biological_importance_hybrid(df)
-        else:
-            df = self._compute_biological_importance_effect_size(df)
-
-        # Sort by importance (descending)
-        df = df.sort_values("importance", ascending=False).reset_index(drop=True)
-        return df
-
-    def _compute_biological_importance_hybrid(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Hybrid importance: reward large |delta_mean| and low overlap, penalize high variance.
-        importance = r / (r + c) with r = |delta_mean| / (overlap * combined_std + eps), bounded in [0, 1].
-        Zero overlap -> importance 1. Optional variance reliability factor.
-        """
-        if "delta_mean" not in df.columns:
-            raise ValueError("DMPs DataFrame must have 'delta_mean' for hybrid importance")
-        delta_mean = np.asarray(df["delta_mean"].values, dtype=np.float64)
-
-        # Overlap: use 'overlap' (BC) if present, else derive from effect_size (BD) as BC = exp(-BD)
-        if "overlap" in df.columns:
-            overlap = np.asarray(df["overlap"].values, dtype=np.float64)
-        elif "effect_size" in df.columns:
-            bd = np.asarray(df["effect_size"].values, dtype=np.float64)
-            overlap = np.exp(-np.clip(bd, 0, 20))
-        else:
-            overlap = np.ones(len(df)) * 0.5  # neutral if missing
-
-        overlap = np.clip(np.nan_to_num(overlap, nan=0.5), 1e-10, 1.0)
-
-        # Combined std from Beta variances
-        if all(c in df.columns for c in ["alpha1", "beta1", "alpha2", "beta2"]):
-            a1, b1 = df["alpha1"].values.astype(np.float64), df["beta1"].values.astype(np.float64)
-            a2, b2 = df["alpha2"].values.astype(np.float64), df["beta2"].values.astype(np.float64)
-            tau1 = a1 + b1
-            tau2 = a2 + b2
-            var1 = (a1 * b1) / (tau1 ** 2 * (tau1 + 1))
-            var2 = (a2 * b2) / (tau2 ** 2 * (tau2 + 1))
-            combined_std = np.sqrt(var1 + var2)
-            max_var = np.maximum(var1, var2)
-        else:
-            combined_std = np.ones(len(df)) * 0.1
-            max_var = np.ones(len(df)) * 0.01
-
-        combined_std = np.maximum(combined_std, 1e-10)
-        eps = 1e-8
-        denom = np.maximum(overlap * combined_std, eps)
-        r = np.abs(delta_mean) / denom
-
-        # Bounded: importance = r / (r + c). c = min_delta_mean / max_overlap (scale constant)
-        min_delta_mean = 0.1
-        max_overlap = 0.6
-        c = min_delta_mean / max_overlap
-        importance = r / (r + c)
-
-        # Near-zero overlap -> full importance (minimal overlap = well separated)
-        importance = np.where(overlap < 1e-6, 1.0, importance)
-
-        # Variance reliability: penalize high variance (noisy positions)
-        var_reliability = 1.0 / (1.0 + max_var / 0.05)
-        importance = importance * var_reliability
-
-        importance = np.nan_to_num(importance, nan=0.0)
-        importance = np.clip(importance, 1e-6, 1.0)
-        df["importance"] = importance
-        return df
-
-    def _compute_biological_importance_effect_size(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Legacy: importance from effect_size then log-normalized to [1e-6, 1]. effect_size must be in [0, 1]."""
         if "effect_size" not in df.columns:
-            if "delta_mean" in df.columns:
-                df["effect_size"] = np.clip(np.abs(df["delta_mean"].values), 0.0, 1.0)
-            else:
-                raise ValueError("Neither 'effect_size' nor 'delta_mean' column found in DMPs DataFrame")
-        df["importance"] = df["effect_size"].copy() if "effect_size" in df.columns else np.ones(len(df))
-
-        if len(df) > 0:
-            imp = df["importance"].values.astype(np.float64)
-            imp = np.where(np.isfinite(imp) & (imp >= 0), imp, 0.0)
-            if imp.min() < 0:
-                imp = imp - imp.min() + 1e-10
-            imp = np.maximum(imp, 1e-10)
-            log_imp = np.log1p(imp)
-            lo, hi = log_imp.min(), log_imp.max()
-            if hi > lo + 1e-12:
-                df["importance"] = (log_imp - lo) / (hi - lo) * (1.0 - 1e-6) + 1e-6
-            else:
-                df["importance"] = np.clip(imp / np.max(imp), 1e-6, 1.0)
+            raise ValueError("DMPs DataFrame must have 'effect_size' (computed by MethylCentroidPair)")
+        df = df.sort_values("effect_size", ascending=False).reset_index(drop=True)
         return df
-    
+
     def _get_validation_samples(
         self,
         config_samples: Optional[Union[str, List[str]]],
@@ -1133,10 +1034,10 @@ class MethylDetector:
                 logger.debug("Skipping centroid self-check (no mean1/mean2 in DMP table)")
                 return
             # Bounded weights (same as in _validate_classifier_subset)
-            if 'importance' in dmps_df.columns:
-                weights = dmps_df['importance'].values.copy()
-            elif 'effect_size' in dmps_df.columns:
+            if 'effect_size' in dmps_df.columns:
                 weights = dmps_df['effect_size'].values.copy()
+            elif 'importance' in dmps_df.columns:
+                weights = dmps_df['importance'].values.copy()
             else:
                 weights = np.ones(len(dmps_df))
             if np.any(~np.isfinite(weights)) or np.any(weights <= 0):
@@ -1253,13 +1154,13 @@ class MethylDetector:
             dmps_for_classifier = dmps_subset[matched_mask].reset_index(drop=True)
             
             # Create dmpDF for BetaClassifier
-            # Use bounded biological importance for weights (never raw effect_size, which can be unbounded)
-            if 'importance' in dmps_for_classifier.columns:
-                weights = dmps_for_classifier['importance'].values.copy()
-                logger.debug("Using bounded 'importance' for classifier weights")
-            elif 'effect_size' in dmps_for_classifier.columns:
+            # Use effect_size (single biological importance measure from MethylCentroidPair)
+            if 'effect_size' in dmps_for_classifier.columns:
                 weights = dmps_for_classifier['effect_size'].values.copy()
-                logger.debug("Using 'effect_size' for weights (importance not available); will bound to [1e-6, 1]")
+                logger.debug("Using 'effect_size' for classifier weights")
+            elif 'importance' in dmps_for_classifier.columns:
+                weights = dmps_for_classifier['importance'].values.copy()
+                logger.debug("Using 'importance' for weights (fallback); will bound to [1e-6, 1]")
             else:
                 weights = np.ones(len(dmps_for_classifier))
                 logger.warning("No weight column found, using ones")
@@ -1270,7 +1171,7 @@ class MethylDetector:
                               f"has_nan={np.any(np.isnan(weights))}, has_inf={np.any(np.isinf(weights))}")
                 weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
 
-            # Always bound weights to [1e-6, 1] so no single DMP dominates (importance is pre-bounded; effect_size fallback is not)
+            # Always bound weights to [1e-6, 1] so no single DMP dominates
             w_max = float(np.max(weights))
             if w_max > 1e-6:
                 weights = np.clip(weights / w_max, 1e-6, 1.0)
@@ -1279,10 +1180,10 @@ class MethylDetector:
             w_std = weights.std()
             if np.all(weights == 0):
                 logger.error(f"CRITICAL: All weights are zero for k={len(dmps_for_classifier)}!")
-            elif len(dmps_for_classifier) >= 2 and w_std < 1e-6 and 'importance' not in dmps_for_classifier.columns:
+            elif len(dmps_for_classifier) >= 2 and w_std < 1e-6 and 'effect_size' not in dmps_for_classifier.columns:
                 logger.error(f"CRITICAL: All weights nearly identical for k={len(dmps_for_classifier)}!")
             elif len(dmps_for_classifier) >= 2 and w_std < 1e-6:
-                logger.debug("Weights from bounded importance have very low std (expected when subset is similar); classifier may still be valid.")
+                logger.debug("Weights from effect_size have very low std (expected when subset is similar); classifier may still be valid.")
             logger.debug(
                 f"Classifier weights for k={len(dmps_for_classifier)}: min={weights.min():.6f}, max={weights.max():.6f}"
             )
@@ -2884,13 +2785,13 @@ class MethylDetector:
         model_path = output_dir / f"classifier-{self.chromosome}.pkl"
         
         # Create strongly-typed dmpDF DataFrame
-        # Use bounded biological importance for weights; fallback to effect_size/context_weight then bound to [1e-6, 1]
-        if 'importance' in selected_dmps_df.columns:
-            weights = selected_dmps_df['importance'].values.astype(np.float64)
-            logger.debug("Using bounded 'importance' for saved classifier weights")
-        elif 'effect_size' in selected_dmps_df.columns:
+        # Use effect_size (single biological importance measure)
+        if 'effect_size' in selected_dmps_df.columns:
             weights = selected_dmps_df['effect_size'].values.astype(np.float64)
-            logger.debug("Using 'effect_size' for weights (importance not available); will bound")
+            logger.debug("Using 'effect_size' for saved classifier weights")
+        elif 'importance' in selected_dmps_df.columns:
+            weights = selected_dmps_df['importance'].values.astype(np.float64)
+            logger.debug("Using 'importance' for weights (fallback); will bound")
         elif 'context_weight' in selected_dmps_df.columns:
             weights = selected_dmps_df['context_weight'].values.astype(np.float64)
         else:
@@ -3134,12 +3035,18 @@ class MethylDetector:
         chunk_df['bhattacharyya_coefficient'] = bc_values
         chunk_df['overlap'] = bc_values  # Add 'overlap' column for CSV export (biologist-friendly name)
 
-        # effect_size = 1 - BC (separation), bounded in [0, 1]; no division, safe when overlap=0
+        # effect_size: computed by MethylCentroidPair; do not overwrite. If missing (edge case), delegate to same formula.
         if not chunk_df.empty and 'effect_size' not in chunk_df.columns:
-            overlap_clipped = np.clip(chunk_df['overlap'].values.astype(np.float64), 0.0, 1.0)
-            chunk_df['effect_size'] = (1.0 - overlap_clipped).astype(np.float32)
-            if len(bd_array) > 0:
-                logger.debug(f"Effect_size (1-BC) stats: min={chunk_df['effect_size'].min():.4f}, max={chunk_df['effect_size'].max():.4f}")
+            from methyl_utils.methyl_centroid_pair import MethylCentroidPair
+            a1 = chunk_df['alpha1'].values.astype(np.float64)
+            b1 = chunk_df['beta1'].values.astype(np.float64)
+            a2 = chunk_df['alpha2'].values.astype(np.float64)
+            b2 = chunk_df['beta2'].values.astype(np.float64)
+            dm = chunk_df['delta_mean'].values.astype(np.float64)
+            chunk_df['effect_size'] = MethylCentroidPair.compute_effect_sizes(
+                a1, b1, a2, b2, dm, bc_values.astype(np.float64),
+                min_overlap_floor=0.01, variance_reliability=True,
+            )
 
         # combined_variance for downstream (e.g. power/sample-size)
         if 'variance1' in chunk_df.columns and 'variance2' in chunk_df.columns:
@@ -3249,10 +3156,10 @@ class MethylDetector:
             export_df['delta_mean'] = (export_df['mean1'] - export_df['mean2']).astype(np.float32)
         if 'overlap' not in export_df.columns and 'bhattacharyya_coefficient' in export_df.columns:
             export_df['overlap'] = export_df['bhattacharyya_coefficient']
-        if 'importance' in export_df.columns:
-            export_df['weight'] = export_df['importance']
-        elif 'effect_size' in export_df.columns:
+        if 'effect_size' in export_df.columns:
             export_df['weight'] = export_df['effect_size']
+        elif 'importance' in export_df.columns:
+            export_df['weight'] = export_df['importance']
 
         standard_cols = [
             'chromosome', 'context', 'position', 'n1', 'n2', 'mean1', 'mean2', 'variance1', 'variance2',
@@ -3405,10 +3312,10 @@ class MethylDetector:
             f"  Alpha (q-value threshold): {self.config.alpha}",
             f"  Min delta_mean (|Δβ|): {self.config.min_delta_mean}",
             f"  Max overlap: {self.config.max_overlap}",
-            f"  Min effect_size (1-BC): {self.config.min_effect_size}",
+            f"  Min effect_size: {self.config.min_effect_size}",
             f"  Target Balanced Accuracy: {self.config.target_balanced_accuracy}",
             "",
-            "Biological filter: any set of min_delta_mean (|Δβ|≥), max_overlap (overlap≤), min_effect_size (≥) applied (AND). effect_size = 1 - BC.",
+            "Biological filter: any set of min_delta_mean (|Δβ|≥), max_overlap (overlap≤), min_effect_size (≥) applied (AND). effect_size from MethylCentroidPair.",
             "",
             "Results:",
             f"  Statistical DMPs (q≤{self.config.alpha}): {result.total_statistical_dmps:,}",

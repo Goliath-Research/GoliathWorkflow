@@ -456,7 +456,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         type=str,
         nargs='+',
         default=None,
-        help='Columns to rank DMPs by importance (default: importance effect_size delta_mean weight)'
+        help='Columns to rank DMPs by importance (default: effect_size importance delta_mean weight)'
     )
     optimization_group.add_argument(
         '--min-k',

@@ -59,7 +59,7 @@ DIST_BETA_BINOM = 3
 DIST_BETA_MIXTURE = 4
 
 # Simplified dtype for centroid comparison results
-# Only essential columns - MethylDetector will compute biological importance
+# effect_size is the single biological importance measure (computed here; MethylDetector uses as-is)
 CENTROID_COMPARISON_DTYPE = np.dtype([
     ('position', np.uint32),
     ('p_value', np.float32),
@@ -71,12 +71,13 @@ CENTROID_COMPARISON_DTYPE = np.dtype([
     ('mean1', np.float32),
     ('mean2', np.float32),
     ('delta_mean', np.float32),
-    ('bhattacharyya', np.float32),  # Bhattacharyya Distance (will be converted to BC by MethylDetector)
+    ('bhattacharyya', np.float32),  # Bhattacharyya Distance (BC = exp(-bhattacharyya))
     ('dist', np.uint8),  # Distribution selection (see DIST_* constants)
     ('n1', np.uint32),
     ('n2', np.uint32),
     ('variance1', np.float32),
     ('variance2', np.float32),
+    ('effect_size', np.float32),  # Biological importance: |delta_mean| / (max(overlap, min_floor) * combined_std)
 ])
 
 
@@ -1296,6 +1297,20 @@ class MethylCentroidPair:
         results_view['variance1'] = variance1_out
         results_view['variance2'] = variance2_out
 
+        # effect_size: single biological importance measure (MethylDetector uses as-is)
+        if bhattacharyya is not None:
+            bc_values = np.exp(-np.clip(bhattacharyya.astype(np.float64), 0.0, BD_CAP))
+        else:
+            bc_values = np.ones(len(positions), dtype=np.float64) * 0.5
+        effect_sizes = self.compute_effect_sizes(
+            alpha1, beta1, alpha2, beta2,
+            delta_mean.astype(np.float64),
+            bc_values,
+            min_overlap_floor=0.01,
+            variance_reliability=True,
+        )
+        results_view['effect_size'] = effect_sizes
+
     def _apply_fdr_correction(self, results_array: np.ndarray) -> np.ndarray:
         """Apply FDR correction to p-values using Storey's method."""
         if len(results_array) == 0:
@@ -1493,26 +1508,35 @@ class MethylCentroidPair:
         return results
 
     @staticmethod
-    def compute_effect_sizes(alpha1: np.ndarray, beta1: np.ndarray, alpha2: np.ndarray, beta2: np.ndarray,
-                           delta_mean: np.ndarray, bc_values: np.ndarray, gamma: float = 1.0,
-                           numerical_epsilon: float = 1e-6) -> np.ndarray:
+    def compute_effect_sizes(
+        alpha1: np.ndarray,
+        beta1: np.ndarray,
+        alpha2: np.ndarray,
+        beta2: np.ndarray,
+        delta_mean: np.ndarray,
+        bc_values: np.ndarray,
+        min_overlap_floor: float = 0.01,
+        numerical_epsilon: float = 1e-6,
+        variance_reliability: bool = True,
+    ) -> np.ndarray:
         """
-        Compute effect sizes using the corrected formula that respects MethylSample's variance handling.
+        Compute effect size (single biological importance measure).
 
-        Effect size = |delta_mu| * (1 - BC)^gamma / sqrt(var1 + var2)
+        effect_size = |delta_mean| / (max(overlap, min_overlap_floor) * combined_std)
+        Optionally multiplied by variance reliability 1 / (1 + max_var / 0.05).
 
         Args:
             alpha1, beta1: Beta parameters for centroid 1
             alpha2, beta2: Beta parameters for centroid 2
-            delta_mean: Absolute difference in means
-            bc_values: Bhattacharyya coefficient values (overlap)
-            gamma: Gamma parameter for overlap penalty
+            delta_mean: Difference in means (can be signed; absolute value is used)
+            bc_values: Bhattacharyya coefficient (overlap), 0 = no overlap, 1 = complete overlap
+            min_overlap_floor: Minimum overlap in denominator to avoid unbounded values
             numerical_epsilon: Small value to prevent division by zero
+            variance_reliability: If True, penalize high variance (noisy positions)
 
         Returns:
-            Array of effect size values (unnormalized, preserving biological importance)
+            Array of effect size values (unnormalized, for downstream weighting)
         """
-        # Use MethylSample's variance formula: var = mean * (1 - mean) / (tau + 1)
         eps = 1e-12
         tau1 = alpha1 + beta1
         tau2 = alpha2 + beta2
@@ -1522,24 +1546,22 @@ class MethylCentroidPair:
         var1 = mean1 * (1 - mean1) / np.maximum(tau1 + 1, eps)
         var2 = mean2 * (1 - mean2) / np.maximum(tau2 + 1, eps)
 
-        # Combined standard deviation
         combined_std = np.sqrt(var1 + var2)
         combined_std = np.maximum(combined_std, numerical_epsilon)
 
-        # Clamp BC to [0, 1] and replace NaN to avoid invalid value in power (negative base or NaN)
         bc_safe = np.clip(np.nan_to_num(bc_values, nan=0.5), 0.0, 1.0)
+        overlap_safe = np.maximum(bc_safe, min_overlap_floor)
+        denom = overlap_safe * combined_std + numerical_epsilon
+        raw_effect_size = np.abs(delta_mean) / denom
 
-        # Compute effect size: |delta_mu| / sqrt(var1 + var2) * (1 - BC)^gamma
-        overlap_penalty = (1 - bc_safe) ** gamma
-        raw_effect_size = np.abs(delta_mean) / combined_std * overlap_penalty
+        if variance_reliability:
+            max_var = np.maximum(var1, var2)
+            var_factor = 1.0 / (1.0 + max_var / 0.05)
+            raw_effect_size = raw_effect_size * var_factor
 
-        # Apply soft minimum to avoid zeros but preserve relative differences
-        # Keep raw effect sizes to maintain biological importance for classification
-        effect_sizes = np.maximum(raw_effect_size, 1e-8)  # Very small floor to avoid exact zeros
-        # Replace any remaining NaN (e.g. from NaN delta_mean) so they don't appear in top effect sizes
+        effect_sizes = np.maximum(raw_effect_size, 1e-8)
         effect_sizes = np.nan_to_num(effect_sizes, nan=0.0)
-
-        return effect_sizes
+        return effect_sizes.astype(np.float32)
 
     def _storey_qvalue(self, p_values: np.ndarray, lambda_seq=None) -> np.ndarray:
         """

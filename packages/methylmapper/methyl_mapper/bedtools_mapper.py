@@ -460,10 +460,10 @@ class BedtoolsMapper:
         
         if self.use_effect_size_weight:
             eff_col = None
-            if 'importance' in merged.columns:
-                eff_col = 'importance'
-            elif 'effect_size' in merged.columns:
+            if 'effect_size' in merged.columns:
                 eff_col = 'effect_size'
+            elif 'importance' in merged.columns:
+                eff_col = 'importance'
             elif 'delta_mean' in merged.columns and 'overlap' in merged.columns:
                 # Compute combined_std from Beta params if available, else approximate
                 if all(col in merged.columns for col in ['alpha1', 'beta1', 'alpha2', 'beta2']):
@@ -516,7 +516,7 @@ class BedtoolsMapper:
     def _sort_dmps_for_optimization(self, dmp_df: pd.DataFrame) -> pd.DataFrame:
         """Sort DMPs by importance for optimization."""
         df = dmp_df.copy()
-        rank_cols = self.dmp_rank_columns or ['importance', 'effect_size', 'delta_mean', 'weight']
+        rank_cols = self.dmp_rank_columns or ['effect_size', 'importance', 'delta_mean', 'weight']
         rank_col = next((c for c in rank_cols if c in df.columns), None)
 
         if rank_col is None:

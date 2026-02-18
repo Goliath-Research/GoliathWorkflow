@@ -140,7 +140,7 @@ def main(
             merge_dmp_csvs_from_detection_dirs(
                 [Path(c.output_dir) for c, _ in configs_and_labels],
                 merged_path,
-                weights_column="importance",
+                weights_column="effect_size",
             )
             try:
                 from methyl_classifier.project_resolver import build_multiclass_config_from_project
@@ -159,7 +159,7 @@ def main(
                 str(project),
                 dmps_csv=str(merged_path),
                 output_model=str(Path(paths.classifier_dir) / "multiclass-classifier.pkl"),
-                weights_column="importance",
+                weights_column="effect_size",
             )
             out_pkl = build_multiclass_model(cfg)
             logger.info(f"Multiclass model saved to {out_pkl}")

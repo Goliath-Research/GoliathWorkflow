@@ -60,7 +60,7 @@ def main():
         global_significance_threshold=0.05,
         use_gpu=True,
 
-        # DMP filtering parameters (effect_size = 1 - BC in [0, 1]; min_effect_size = minimum separation)
+        # DMP filtering parameters (effect_size from MethylCentroidPair; min_effect_size = minimum effect_size threshold)
         apply_dmp_filtering=True,
         dmp_filter_method="combined",
         min_effect_size=0.5,
