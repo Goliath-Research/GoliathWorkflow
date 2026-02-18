@@ -482,7 +482,12 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         default=0.10,
         help='Growth rate threshold for unrelated genes (default: 0.10 = 10%%)'
     )
-    
+    optimization_group.add_argument(
+        '--no-extend-after-stable',
+        action='store_true',
+        help='Disable Phase 3 extension loop (do not add more DMPs after stabilization when last gene is strongly disease-associated)'
+    )
+
     # Pipeline project (sets default csv_pattern and output_dir from project)
     parser.add_argument(
         '--project', '-P',
@@ -582,6 +587,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
                 args.encrypted_file_path = step_cfg["encrypted_file_path"]
             if step_cfg.get("optimize_dmps") is False and not args.no_optimize_dmps:
                 args.no_optimize_dmps = True
+            if step_cfg.get("extend_after_stable") is False and not getattr(args, 'no_extend_after_stable', False):
+                args.no_extend_after_stable = True
             if step_cfg.get("feature_types") is not None and args.feature_types is None:
                 args.feature_types = step_cfg["feature_types"]
 
@@ -614,6 +621,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
             # optimize_dmps: false in config => no_optimize_dmps
             if cfg.get('optimize_dmps') is False and not args.no_optimize_dmps:
                 args.no_optimize_dmps = True
+            if cfg.get('extend_after_stable') is False:
+                args.no_extend_after_stable = True
             if cfg.get('feature_types') is not None and args.feature_types is None:
                 args.feature_types = cfg['feature_types']
 
@@ -719,7 +728,8 @@ def main_bedtools():
             min_k=args.min_k,
             max_k=args.max_k,
             stability_threshold=args.stability_threshold,
-            unrelated_growth_threshold=args.unrelated_growth_threshold
+            unrelated_growth_threshold=args.unrelated_growth_threshold,
+            extend_after_stable=not getattr(args, 'no_extend_after_stable', False),
         )
         
         # Run per cancer group (mapper/cancer/<label>) or single run

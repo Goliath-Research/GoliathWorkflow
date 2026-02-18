@@ -114,7 +114,8 @@ class BedtoolsMapper:
         min_k: int = 10,
         max_k: Optional[int] = None,
         stability_threshold: int = 3,
-        unrelated_growth_threshold: float = 0.10
+        unrelated_growth_threshold: float = 0.10,
+        extend_after_stable: bool = True,
     ):
         """
         Initialize BedtoolsMapper.
@@ -149,8 +150,9 @@ class BedtoolsMapper:
             dmp_rank_columns: Optional list of columns to rank DMPs by importance
             min_k: Minimum number of DMPs to test (default: 10)
             max_k: Maximum number of DMPs to test (default: None, uses all available)
-            stability_threshold: Number of consecutive iterations without new disease genes to consider stable (default: 3)
-            unrelated_growth_threshold: Growth rate threshold for unrelated genes (default: 0.10 = 10%)
+            stability_threshold: Number of consecutive iterations without new genes to consider stable (default: 3)
+            unrelated_growth_threshold: Growth rate threshold for unrelated genes (legacy; not used in Phase 1)
+            extend_after_stable: If True, after stabilization run optional extension loop when last gene is strongly disease-associated (default: True)
         """
         self.gene_gtf = Path(gene_gtf)
         if not self.gene_gtf.exists():
@@ -200,7 +202,17 @@ class BedtoolsMapper:
         self.max_k = max_k
         self.stability_threshold = stability_threshold
         self.unrelated_growth_threshold = unrelated_growth_threshold
-        
+        self.extend_after_stable = extend_after_stable
+
+        # When optimize_dmps + enrich_disease: recommend both Grok and Open Targets for gene identification
+        if optimize_dmps and enrich_disease:
+            use_grok, use_ot, _ = self._parse_enrich_source(enrich_source)
+            if not (use_grok and use_ot):
+                logger.warning(
+                    "DMP optimization with enrichment works best with both Grok and Open Targets (enrich_source grok+opentargets). "
+                    "Using configured sources only."
+                )
+
         # Check bedtools availability
         try:
             subprocess.run(['bedtools', '--version'], capture_output=True, check=True)
@@ -723,7 +735,88 @@ class BedtoolsMapper:
         
         logger.info(f"Aggregated into {len(grouped)} {group_by}s")
         return grouped
-    
+
+    def _find_stable_k_by_gene_count(
+        self,
+        dmp_df: pd.DataFrame,
+        group_by: str,
+        min_k: int,
+        max_k: int,
+    ) -> Tuple[int, pd.DataFrame, Dict]:
+        """
+        Phase 1: Find k where the total number of unique genes stabilizes (no API calls).
+        Stability = no new genes for stability_threshold consecutive k values.
+        Returns (k_stable, aggregated_gene_df_at_k_stable, phase1_log).
+        """
+        optimization_log: Dict = {
+            'phase1_k_values': [],
+            'phase1_gene_counts': [],
+            'k_stable': None,
+        }
+        prev_genes: set = set()
+        consecutive_stable = 0
+        k_test = min_k
+        aggregated_stable = pd.DataFrame()
+        k_stable = max_k
+
+        while k_test <= max_k:
+            logger.info(f"Phase 1 (stabilize): testing k={k_test}")
+            dmp_subset = dmp_df.head(k_test).copy()
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_csv = Path(temp_dir) / "temp.csv"
+                dmp_subset.to_csv(temp_csv, index=False)
+                bed_file = self.csv_to_bed(temp_csv, Path(temp_dir) / "temp.bed")
+                intersect_df = self.intersect_with_features(bed_file, dmp_subset)
+            if intersect_df.empty:
+                logger.warning(f"No features found for k={k_test}")
+                k_test += max(1, (max_k - min_k) // 20)
+                continue
+            aggregated = self.aggregate_by_feature(intersect_df, group_by=group_by)
+            current_genes = set(aggregated[group_by].dropna().astype(str).unique())
+            new_genes = current_genes - prev_genes
+            optimization_log['phase1_k_values'].append(k_test)
+            optimization_log['phase1_gene_counts'].append(len(current_genes))
+            if len(new_genes) == 0:
+                consecutive_stable += 1
+                logger.info(f"  No new genes (stable for {consecutive_stable}/{self.stability_threshold})")
+            else:
+                consecutive_stable = 0
+                logger.info(f"  {len(current_genes)} genes ({len(new_genes)} new)")
+            if consecutive_stable >= self.stability_threshold:
+                k_stable = k_test - (self.stability_threshold - 1)
+                k_stable = max(min_k, k_stable)
+                dmp_subset_stable = dmp_df.head(k_stable).copy()
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_csv = Path(temp_dir) / "temp.csv"
+                    dmp_subset_stable.to_csv(temp_csv, index=False)
+                    bed_file = self.csv_to_bed(temp_csv, Path(temp_dir) / "temp.bed")
+                    intersect_df = self.intersect_with_features(bed_file, dmp_subset_stable)
+                if not intersect_df.empty:
+                    aggregated_stable = self.aggregate_by_feature(intersect_df, group_by=group_by)
+                else:
+                    aggregated_stable = aggregated.copy()
+                optimization_log['k_stable'] = k_stable
+                logger.info(f"Phase 1 complete: k_stable={k_stable}, {len(aggregated_stable)} genes")
+                return k_stable, aggregated_stable, optimization_log
+            prev_genes = current_genes
+            step = max(1, (max_k - min_k) // 20) if consecutive_stable == 0 else max(1, (max_k - min_k) // 50)
+            k_test += step
+
+        k_stable = min(k_test - 1, max_k) if k_test > min_k else max_k
+        optimization_log['k_stable'] = k_stable
+        dmp_subset = dmp_df.head(k_stable).copy()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_csv = Path(temp_dir) / "temp.csv"
+            dmp_subset.to_csv(temp_csv, index=False)
+            bed_file = self.csv_to_bed(temp_csv, Path(temp_dir) / "temp.bed")
+            intersect_df = self.intersect_with_features(bed_file, dmp_subset)
+        if not intersect_df.empty:
+            aggregated_stable = self.aggregate_by_feature(intersect_df, group_by=group_by)
+        else:
+            aggregated_stable = pd.DataFrame()
+        logger.warning(f"Phase 1: no stable k found, using k={k_stable}")
+        return k_stable, aggregated_stable, optimization_log
+
     def optimize_dmps_for_stable_genes(
         self,
         dmp_df: pd.DataFrame,
@@ -732,197 +825,118 @@ class BedtoolsMapper:
         max_k: Optional[int] = None
     ) -> Tuple[int, pd.DataFrame, Dict]:
         """
-        Find the minimum number of DMPs (k) that produces a stable set of disease-related genes.
-        
-        Uses sequential search with tracking to find k where:
-        - Disease-related genes stabilize (no new genes for stability_threshold consecutive iterations)
-        - Unrelated genes grow slowly (growth rate ≤ unrelated_growth_threshold)
-        
-        Args:
-            dmp_df: DataFrame with DMPs sorted by biological importance (descending)
-            group_by: Feature to group by ('gene_name' or 'gene_id')
-            min_k: Minimum k to test (defaults to self.min_k)
-            max_k: Maximum k to test (defaults to self.max_k or len(dmp_df))
-            
-        Returns:
-            Tuple of (optimal_k, optimal_gene_df, optimization_log)
-            - optimal_k: The optimal number of DMPs
-            - optimal_gene_df: DataFrame with optimized gene set
-            - optimization_log: Dictionary with optimization statistics
+        Three-phase DMP optimization: (1) stabilize on gene count (no API), (2) enrich once (Grok+Open Targets),
+        (3) optional extension loop adding DMPs and enriching only new genes until no new disease gene.
         """
-        if not self.enrich_disease or not self.disease_enricher:
-            raise ValueError("Disease enrichment must be enabled for DMP optimization")
-        
         if group_by not in ['gene_name', 'gene_id']:
             raise ValueError(f"optimize_dmps_for_stable_genes requires group_by='gene_name' or 'gene_id', got '{group_by}'")
-        
         min_k = min_k or self.min_k
         max_k = max_k or self.max_k or len(dmp_df)
         max_k = min(max_k, len(dmp_df))
-        
         dmp_df = self._sort_dmps_for_optimization(dmp_df)
-
         if min_k >= max_k:
             logger.warning(f"min_k ({min_k}) >= max_k ({max_k}), using all DMPs")
-            optimal_k = max_k
-            return optimal_k, pd.DataFrame(), {'optimal_k': optimal_k}
-        
-        logger.info(f"Starting DMP optimization: k from {min_k} to {max_k}")
-        
-        # Track optimization history
-        optimization_log = {
-            'k_values': [],
-            'disease_related_counts': [],
-            'unrelated_counts': [],
-            'disease_related_genes': [],
-            'unrelated_growth_rates': [],
-            'optimal_k': None
-        }
-        
-        # Track previous disease-related gene set for stability check
-        prev_disease_genes = set()
-        consecutive_stable_iterations = 0
-        optimal_k = None
-        optimal_gene_df = pd.DataFrame()
-        
-        # Track previous unrelated count for growth rate calculation
-        prev_unrelated_count = None
-        
-        # Sequential search: test increasing k values
-        k_test = min_k
-        
-        while k_test <= max_k:
-            logger.info(f"\n{'='*70}")
-            logger.info(f"Testing k={k_test}")
-            logger.info(f"{'='*70}")
-            
-            # Take top k DMPs
-            dmp_subset = dmp_df.head(k_test).copy()
-            
-            # Create temporary BED file
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_csv = Path(temp_dir) / "temp.csv"
-                dmp_subset.to_csv(temp_csv, index=False)
-                bed_file = self.csv_to_bed(temp_csv, Path(temp_dir) / "temp.bed")
-                
-                # Map to genes
-                intersect_df = self.intersect_with_features(bed_file, dmp_subset)
-                
+            return max_k, pd.DataFrame(), {'optimal_k': max_k}
+
+        # Phase 1: stabilize by gene count (no enricher)
+        k_stable, aggregated_stable, phase1_log = self._find_stable_k_by_gene_count(dmp_df, group_by, min_k, max_k)
+        optimization_log = dict(phase1_log)
+        optimization_log['optimal_k'] = k_stable
+        optimization_log['phase2_enriched'] = False
+        optimization_log['phase3_extended'] = False
+        optimization_log['phase3_steps'] = []
+        if aggregated_stable.empty:
+            return k_stable, aggregated_stable, optimization_log
+
+        # If enrichment disabled, return stabilized set without disease columns
+        if not self.enrich_disease or not self.disease_enricher:
+            logger.info("Enrichment disabled; returning Phase 1 gene set without disease columns.")
+            return k_stable, aggregated_stable, optimization_log
+
+        # Phase 2: enrich once (both Grok and Open Targets via enrich_gene_dataframe)
+        logger.info("Phase 2: Enriching stabilized gene set once (Grok + Open Targets)...")
+        optimal_gene_df = self.disease_enricher.enrich_gene_dataframe(
+            aggregated_stable.copy(),
+            gene_column=group_by
+        )
+        optimization_log['phase2_enriched'] = True
+        genes_at_k_stable = set(optimal_gene_df[group_by].dropna().astype(str).unique())
+
+        # Phase 3: optional extension when last gene is strongly disease-associated
+        def _last_gene_strongly_associated(df: pd.DataFrame) -> bool:
+            if df.empty or 'disease_associated' not in df.columns:
+                return False
+            sort_col = 'gene_importance' if 'gene_importance' in df.columns else 'total_weight'
+            if sort_col not in df.columns:
+                return bool(df['disease_associated'].iloc[-1])
+            last_row = df.sort_values(sort_col, ascending=True).iloc[0]
+            if not last_row.get('disease_associated', False):
+                return False
+            ev = str(last_row.get('disease_evidence_level', '')).lower()
+            return ev in ('high', 'medium', 'low')
+
+        if self.extend_after_stable and _last_gene_strongly_associated(optimal_gene_df):
+            logger.info("Phase 3: Last gene strongly disease-associated; running extension loop...")
+            k_ext = k_stable
+            while k_ext < len(dmp_df):
+                k_ext += 1
+                dmp_subset = dmp_df.head(k_ext).copy()
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_csv = Path(temp_dir) / "temp.csv"
+                    dmp_subset.to_csv(temp_csv, index=False)
+                    bed_file = self.csv_to_bed(temp_csv, Path(temp_dir) / "temp.bed")
+                    intersect_df = self.intersect_with_features(bed_file, dmp_subset)
                 if intersect_df.empty:
-                    logger.warning(f"No features found for k={k_test}")
-                    k_test += 10  # Skip by larger increments if no features
                     continue
-                
-                # Aggregate by feature
-                aggregated = self.aggregate_by_feature(intersect_df, group_by=group_by)
-                
-                # Enrich with disease associations
-                aggregated = self.disease_enricher.enrich_gene_dataframe(
-                    aggregated,
-                    gene_column=group_by
-                )
-                
-                # Count disease-related and unrelated genes
-                if 'disease_associated' in aggregated.columns:
-                    disease_related = aggregated[aggregated['disease_associated'] == True]
-                    unrelated = aggregated[aggregated['disease_associated'] == False]
-                else:
-                    # If enrichment didn't add column, assume all unrelated
-                    disease_related = pd.DataFrame()
-                    unrelated = aggregated
-                
-                disease_count = len(disease_related)
-                unrelated_count = len(unrelated)
-                
-                # Get disease-related gene set
-                if disease_count > 0:
-                    current_disease_genes = set(disease_related[group_by].unique())
-                else:
-                    current_disease_genes = set()
-                
-                # Check if new disease-related genes were added
-                new_genes = current_disease_genes - prev_disease_genes
-                has_new_genes = len(new_genes) > 0
-                
-                # Calculate unrelated genes growth rate
-                if prev_unrelated_count is not None and prev_unrelated_count > 0:
-                    growth_rate = (unrelated_count - prev_unrelated_count) / prev_unrelated_count
-                else:
-                    growth_rate = 0.0
-                
-                # Record in log
-                optimization_log['k_values'].append(k_test)
-                optimization_log['disease_related_counts'].append(disease_count)
-                optimization_log['unrelated_counts'].append(unrelated_count)
-                optimization_log['disease_related_genes'].append(list(current_disease_genes))
-                optimization_log['unrelated_growth_rates'].append(growth_rate)
-                
-                logger.info(f"k={k_test}: {disease_count} disease-related genes ({len(new_genes)} new), {unrelated_count} unrelated genes")
-                if prev_unrelated_count is not None:
-                    logger.info(f"  Unrelated growth rate: {growth_rate:.2%}")
-                
-                # Check stability: no new disease-related genes
-                if not has_new_genes:
-                    consecutive_stable_iterations += 1
-                    logger.info(f"  No new disease genes (stable for {consecutive_stable_iterations} iterations)")
-                else:
-                    consecutive_stable_iterations = 0
-                    logger.info(f"  Added {len(new_genes)} new disease genes")
-                
-                # Check if we have stable solution
-                is_stable = consecutive_stable_iterations >= self.stability_threshold
-                growth_acceptable = growth_rate <= self.unrelated_growth_threshold
-                
-                # Update optimal solution if conditions met
-                if is_stable and growth_acceptable:
-                    optimal_k = k_test - (self.stability_threshold - 1)  # Use k from first stable iteration
-                    optimal_gene_df = aggregated.copy()
-                    logger.info(f"✅ Found stable solution at k={optimal_k}")
-                    break
-                elif is_stable and not growth_acceptable:
-                    logger.info(f"  Stable but growth rate too high ({growth_rate:.2%} > {self.unrelated_growth_threshold:.2%}), continuing...")
-                elif not is_stable:
-                    logger.info(f"  Not yet stable ({consecutive_stable_iterations}/{self.stability_threshold}), continuing...")
-                
-                prev_disease_genes = current_disease_genes
-                prev_unrelated_count = unrelated_count
-                
-                # Increment k for next iteration
-                # Use adaptive step size: larger steps early, smaller when getting close
-                if consecutive_stable_iterations == 0:
-                    # Not stable yet, use larger steps
-                    step = max(1, (max_k - min_k) // 20)
-                else:
-                    # Getting close to stability, use smaller steps
-                    step = max(1, (max_k - min_k) // 50)
-                
-                k_test += step
-        
-        # If no optimal solution found, use the last tested k
-        if optimal_k is None:
-            optimal_k = k_test - 1 if k_test > min_k else max_k
-            logger.warning(f"No stable solution found within constraints, using k={optimal_k}")
-            # Re-run with optimal_k to get final gene set
-            dmp_subset = dmp_df.head(optimal_k).copy()
-            with tempfile.TemporaryDirectory() as temp_dir:
-                temp_csv = Path(temp_dir) / "temp.csv"
-                dmp_subset.to_csv(temp_csv, index=False)
-                bed_file = self.csv_to_bed(temp_csv, Path(temp_dir) / "temp.bed")
-                intersect_df = self.intersect_with_features(bed_file, dmp_subset)
-                if not intersect_df.empty:
-                    optimal_gene_df = self.aggregate_by_feature(intersect_df, group_by=group_by)
-                    optimal_gene_df = self.disease_enricher.enrich_gene_dataframe(
-                        optimal_gene_df,
-                        gene_column=group_by
+                agg_k = self.aggregate_by_feature(intersect_df, group_by=group_by)
+                genes_at_k = set(agg_k[group_by].dropna().astype(str).unique())
+                new_genes = genes_at_k - genes_at_k_stable
+                if not new_genes:
+                    continue
+                new_df = pd.DataFrame({group_by: list(new_genes)})
+                enriched_new = self.disease_enricher.enrich_gene_dataframe(new_df, gene_column=group_by)
+                disease_new = set()
+                if 'disease_associated' in enriched_new.columns:
+                    disease_new = set(
+                        enriched_new.loc[enriched_new['disease_associated'] == True, group_by]
+                        .dropna().astype(str).unique()
                     )
-        
-        optimization_log['optimal_k'] = optimal_k
-        
-        logger.info(f"\n{'='*70}")
-        logger.info(f"Optimization complete: optimal k={optimal_k}")
-        logger.info(f"{'='*70}")
-        
-        return optimal_k, optimal_gene_df, optimization_log
+                optimization_log['phase3_steps'].append({
+                    'k': k_ext,
+                    'new_genes': len(new_genes),
+                    'new_disease_genes': len(disease_new),
+                })
+                if not disease_new:
+                    logger.info(f"Phase 3: k={k_ext}, no new disease-associated genes; stopping.")
+                    break
+                stats_new = agg_k[agg_k[group_by].astype(str).isin(disease_new)]
+                enricher_cols = [c for c in enriched_new.columns if c != group_by]
+                merged_new = stats_new.merge(
+                    enriched_new[[group_by] + enricher_cols],
+                    on=group_by,
+                    how='left'
+                )
+                optimal_gene_df = pd.concat([optimal_gene_df, merged_new], ignore_index=True)
+                genes_at_k_stable = genes_at_k
+                k_stable = k_ext
+                logger.info(f"Phase 3: k={k_ext}, added {len(disease_new)} disease genes; continuing.")
+            optimization_log['phase3_extended'] = True
+            optimization_log['optimal_k'] = k_stable
+        else:
+            if not self.extend_after_stable:
+                logger.info("Phase 3: disabled (extend_after_stable=False).")
+            else:
+                logger.info("Phase 3: skipped (last gene not strongly disease-associated).")
+
+        optimization_log['optimal_k'] = k_stable
+        # Backward compatibility: old log shape had k_values, disease_related_counts, etc.
+        optimization_log.setdefault('k_values', optimization_log.get('phase1_k_values', []))
+        optimization_log.setdefault('disease_related_counts', [])
+        optimization_log.setdefault('unrelated_counts', [])
+        optimization_log.setdefault('disease_related_genes', [])
+        optimization_log.setdefault('unrelated_growth_rates', [])
+        logger.info(f"Optimization complete: optimal k={k_stable}")
+        return k_stable, optimal_gene_df, optimization_log
     
     def map_csv_files(
         self,

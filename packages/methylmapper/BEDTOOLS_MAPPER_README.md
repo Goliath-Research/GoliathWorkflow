@@ -301,7 +301,8 @@ methyl_mapper_credentials test --credential-type grok
 | `enrich_disease` | `true` = enable Grok/Open Targets enrichment |
 | `enrich_source` | `grok+opentargets`, `opentargets`, `grok`, `disgenet`, `grok+disgenet`, `both`, `all` |
 | `enrich_profile` | `strict`, `balanced`, `permissive` |
-| `optimize_dmps` | `false` = use all DMPs (no optimization); `true` = run DMP optimization when enrichment is on |
+| `optimize_dmps` | `false` = use all DMPs (no optimization); `true` = run three-phase DMP optimization when enrichment is on |
+| `extend_after_stable` | `false` = skip Phase 3 extension loop; `true` (default) = when last gene is strongly disease-associated, add more DMPs and enrich only new genes until no new disease gene |
 | `grok_api_key` | Grok API key (optional; or use encrypted file, Azure Key Vault, or `GROK_API_KEY` env) |
 | `azure_key_vault_url` | Azure Key Vault URL for reading Grok/DisGeNET keys (or `AZURE_KEY_VAULT_URL` env) |
 | `encrypted_file_path` | Path to encrypted credential file (default: `~/.methyl_mapper/credentials/grok_api_key.encrypted`) |
@@ -332,6 +333,16 @@ Gene p-values are aggregated from DMP p-values using a **weighted Stouffer's met
 - Weights use the same `weight` column used for gene scoring
 
 Gene q-values are computed with Storey's FDR correction across genes.
+
+## DMP optimization (three phases)
+
+When `optimize_dmps` is true and disease enrichment is enabled, the mapper uses a three-phase strategy to avoid repeated API calls:
+
+1. **Phase 1 – Stabilization (no API calls):** The mapper finds the smallest number of DMPs (k) such that the **total number of unique genes** stops growing (no new genes for `stability_threshold` consecutive k steps). Only DMP → BED → intersect → aggregate is run; no Grok or Open Targets calls.
+2. **Phase 2 – Enrich once:** The stabilized gene set is enriched **once** with both **Grok API and Open Targets** via `enrich_gene_dataframe`, so disease association is determined from both sources.
+3. **Phase 3 – Optional extension:** If the “last” gene in the stabilized set (lowest gene importance) is strongly disease-associated, the mapper runs a simple loop: increment k, map to genes, take only **new** genes not already in the set, and call the enricher only for those new genes. It stops when no new disease-associated gene is found or DMPs are exhausted. Use `--no-extend-after-stable` (CLI) or `"extend_after_stable": false` in config to disable Phase 3.
+
+Gene identification for disease association **always uses both Grok and Open Targets** when enrichment is on (set `enrich_source` to `grok+opentargets`).
 
 ## Disease Enrichment Details
 
@@ -378,11 +389,12 @@ mapper = BedtoolsMapper(
     disease_term="early-stage prostate cancer", # Disease to search for
     grok_api_key="your-grok-key",              # Grok API key
     disgenet_api_key="your-disgenet-key",      # DisGeNET API key (optional)
-    optimize_dmps=True,                         # Enable DMP optimization
+    optimize_dmps=True,                         # Enable three-phase DMP optimization
     min_k=10,                                  # Minimum DMPs to test
     max_k=None,                                # Maximum DMPs (None = all)
-    stability_threshold=3,                     # Stability threshold
-    unrelated_growth_threshold=0.10            # Growth rate threshold
+    stability_threshold=3,                     # Consecutive k with no new genes to consider stable
+    unrelated_growth_threshold=0.10,           # Legacy; not used in Phase 1
+    extend_after_stable=True,                  # Phase 3: extend when last gene strongly disease-associated
 )
 
 results = mapper.map_csv_files(
