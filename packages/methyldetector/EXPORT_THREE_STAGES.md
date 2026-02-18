@@ -6,6 +6,15 @@ MethylModeler now exports **three separate CSV files** representing the three st
 
 If BMM refinement is enabled, it runs **before** Stage 1 and can update p-values and filtering outcomes. BMM centroids are saved per chromosome/context for downstream use.
 
+### Current multi-context export (actual filenames)
+
+The multi-context pipeline currently writes:
+
+- **`dmps-{chromosome}-biological-sorted.csv`** — All DMPs passing the **biological filter** (q-value ≤ alpha, |delta_mean| ≥ min_delta_mean, overlap ≤ max_overlap, effect_size ≥ min_effect_size), sorted by importance. This is the full biologically significant set (Stage 1 equivalent).
+- **`dmps-{chromosome}.csv`** — Final selected DMPs after optimization (smaller subset used by the classifier).
+
+**MethylMapper** defaults to the pattern `dmps-*-biological-sorted.csv` so that gene mapping uses only these biologically filtered DMPs, not every CSV in the detection directory. Override via the mapper step config if you want to map the optimized subset or all CSVs.
+
 ## The Three Stages
 
 ### Stage 1: Biologically Significant DMPs

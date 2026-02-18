@@ -6,10 +6,12 @@ This document describes how MethylMapper consumes MethylDetector DMP CSVs to ide
 
 ## 1. MethylDetector output MethylMapper expects
 
-MethylDetector writes per-chromosome DMP CSVs to its `output_dir`, for example:
+MethylDetector writes per-chromosome DMP CSVs to its `output_dir`:
 
-- `dmps-1.csv`, `dmps-2.csv`, … (final selected DMPs), or  
-- `dmps-1-biological-sorted.csv`, … (pre-optimization, sorted by importance)
+- **`dmps-{chr}-biological-sorted.csv`** — **All DMPs that pass the biological filter** (q-value ≤ alpha, |delta_mean| ≥ min_delta_mean, overlap ≤ max_overlap, effect_size ≥ min_effect_size), sorted by importance. No optimization subset; this is the full biologically significant set.
+- **`dmps-{chr}.csv`** — Final selected DMPs (subset after binary search / optimization), used by the classifier.
+
+**MethylMapper defaults to the biological-only files** so that gene mapping uses all biologically significant DMPs, not the smaller optimized set. The default CSV pattern is `dmps-*-biological-sorted.csv`. To map the optimized subset (or all CSVs) instead, set the mapper step config `csv_filename_pattern` or `csv_pattern` (e.g. `dmps-*.csv`).
 
 **Relevant columns** (from `_export_unified_csv` in MethylDetector):
 

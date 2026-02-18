@@ -19,6 +19,11 @@ from .secure_credentials import SecureCredentialManager
 
 logger = logging.getLogger(__name__)
 
+# Cache format version (2 = DataFrame-backed; 1 = legacy dict)
+CACHE_VERSION = 2
+CACHE_COLUMNS = ["source", "gene", "disease_term", "ts", "value_json"]
+DISEASE_CACHE_COLUMNS = ["disease_term", "ts", "disease_id"]
+
 # Evidence level ordering for thresholding
 EVIDENCE_LEVEL_ORDER = {
     "none": 0,
@@ -284,9 +289,9 @@ class GeneDiseaseEnricher:
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
         
-        # Cache for gene-disease associations
-        self._cache: Dict[str, Dict] = {}
-        self._disease_id_cache: Dict[str, Dict] = {}
+        # Cache for gene-disease associations (DataFrame for fast batch lookups)
+        self._cache_df: pd.DataFrame = pd.DataFrame(columns=CACHE_COLUMNS)
+        self._disease_id_df: pd.DataFrame = pd.DataFrame(columns=DISEASE_CACHE_COLUMNS)
         self._cache_dirty = False
         self._load_disk_cache()
     
@@ -311,17 +316,9 @@ class GeneDiseaseEnricher:
         
         disease_term = disease_term or self.disease_term
         
-        # Separate cached and uncached genes
-        cached_results = {}
-        uncached_genes = []
-        
-        for gene in gene_names:
-            cache_key = self._cache_key("grok", gene, disease_term)
-            cached = self._cache_get(cache_key)
-            if cached is not None:
-                cached_results[gene.upper()] = cached
-            else:
-                uncached_genes.append(gene)
+        # Batch cache lookup (one DataFrame query instead of N dict lookups)
+        cached_results = self._cache_get_batch("grok", gene_names, disease_term)
+        uncached_genes = [g for g in gene_names if g.upper() not in cached_results]
         
         if cached_results:
             logger.info(f"Using cache for {len(cached_results)} genes (querying Grok for {len(uncached_genes)} new)")
@@ -672,17 +669,9 @@ Return ONLY a valid JSON array—no other text. Example:
 
         disease_term = disease_term or self.disease_term
 
-        # Separate cached and uncached genes
-        cached_results = {}
-        uncached_genes = []
-
-        for gene in gene_names:
-            cache_key = self._cache_key("disgenet", gene, disease_term)
-            cached = self._cache_get(cache_key)
-            if cached is not None:
-                cached_results[gene.upper()] = cached
-            else:
-                uncached_genes.append(gene)
+        # Batch cache lookup
+        cached_results = self._cache_get_batch("disgenet", gene_names, disease_term)
+        uncached_genes = [g for g in gene_names if g.upper() not in cached_results]
 
         if cached_results:
             logger.debug(f"Found {len(cached_results)} genes in cache")
@@ -801,16 +790,9 @@ Return ONLY a valid JSON array—no other text. Example:
             logger.warning(f"Open Targets: no disease match for '{disease_term}'")
             return {}
 
-        cached_results = {}
-        uncached_genes = []
-
-        for gene in gene_names:
-            cache_key = self._cache_key("open_targets", gene, disease_term)
-            cached = self._cache_get(cache_key)
-            if cached is not None:
-                cached_results[gene.upper()] = cached
-            else:
-                uncached_genes.append(gene)
+        # Batch cache lookup
+        cached_results = self._cache_get_batch("open_targets", gene_names, disease_term)
+        uncached_genes = [g for g in gene_names if g.upper() not in cached_results]
 
         if cached_results:
             logger.debug(f"Found {len(cached_results)} Open Targets genes in cache")
@@ -1111,44 +1093,139 @@ Return ONLY a valid JSON array—no other text. Example:
         """Build a cache key with source separation."""
         return f"{source}:{gene_name.upper()}:{disease_term}"
 
+    def _cache_parse_key(self, key: str) -> tuple:
+        """Parse cache key into (source, gene, disease_term)."""
+        parts = key.split(":", 2)
+        if len(parts) != 3:
+            return ("", "", "")
+        return (parts[0], parts[1].upper(), parts[2])
+
     def _cache_get(self, key: str) -> Optional[Dict]:
         """Retrieve a cached association, honoring TTL."""
         if not self.cache_enabled:
             return None
-        entry = self._cache.get(key)
-        if not entry:
+        source, gene, disease_term = self._cache_parse_key(key)
+        if not source:
             return None
-        ts = entry.get("ts")
+        df = self._cache_df
+        if df.empty:
+            return None
+        mask = (
+            (df["source"] == source)
+            & (df["gene"] == gene)
+            & (df["disease_term"] == disease_term)
+        )
+        rows = df.loc[mask]
+        if rows.empty:
+            return None
+        row = rows.iloc[0]
+        ts = row.get("ts")
+        if ts is not None and hasattr(ts, "item"):
+            ts = float(ts)
         if not self._is_cache_valid(ts):
-            self._cache.pop(key, None)
+            self._cache_df = df[~mask].copy()
             self._cache_dirty = True
             return None
-        return entry.get("value")
+        try:
+            return json.loads(row["value_json"])
+        except (TypeError, ValueError):
+            return None
+
+    def _cache_get_batch(
+        self, source: str, gene_names: List[str], disease_term: str
+    ) -> Dict[str, Dict]:
+        """Batch lookup: one DataFrame query for all genes. Returns dict gene_upper -> value."""
+        if not self.cache_enabled or not gene_names:
+            return {}
+        genes_upper = [g.upper() for g in gene_names]
+        df = self._cache_df
+        if df.empty:
+            return {}
+        mask = (
+            (df["source"] == source)
+            & (df["disease_term"] == disease_term)
+            & (df["gene"].str.upper().isin(genes_upper))
+        )
+        rows = df.loc[mask]
+        if rows.empty:
+            return {}
+        valid_mask = rows.apply(
+            lambda r: self._is_cache_valid(float(r["ts"]) if r.get("ts") is not None else None),
+            axis=1
+        )
+        rows = rows.loc[valid_mask]
+        result = {}
+        for _, row in rows.iterrows():
+            gene_upper = str(row["gene"]).upper()
+            if gene_upper in result:
+                continue
+            try:
+                result[gene_upper] = json.loads(row["value_json"])
+            except (TypeError, ValueError):
+                pass
+        return result
 
     def _cache_set(self, key: str, value: Dict) -> None:
         """Store a cached association."""
         if not self.cache_enabled:
             return
-        self._cache[key] = {"value": value, "ts": time.time()}
+        source, gene, disease_term = self._cache_parse_key(key)
+        if not source:
+            return
+        gene = gene.upper()
+        ts = time.time()
+        value_json = json.dumps(value)
+        # Drop existing row for this key
+        df = self._cache_df
+        if not df.empty:
+            mask = (
+                (df["source"] == source)
+                & (df["gene"] == gene)
+                & (df["disease_term"] == disease_term)
+            )
+            df = df[~mask]
+        new_row = pd.DataFrame([{
+            "source": source,
+            "gene": gene,
+            "disease_term": disease_term,
+            "ts": ts,
+            "value_json": value_json,
+        }])
+        self._cache_df = pd.concat([df, new_row], ignore_index=True)
         self._cache_dirty = True
 
     def _disease_cache_get(self, key: str) -> Optional[str]:
         if not self.cache_enabled:
             return None
-        entry = self._disease_id_cache.get(key)
-        if not entry:
+        df = self._disease_id_df
+        if df.empty:
             return None
-        ts = entry.get("ts")
+        rows = df[df["disease_term"] == key]
+        if rows.empty:
+            return None
+        row = rows.iloc[0]
+        ts = row.get("ts")
+        if ts is not None and hasattr(ts, "item"):
+            ts = float(ts)
         if not self._is_cache_valid(ts):
-            self._disease_id_cache.pop(key, None)
+            self._disease_id_df = df[df["disease_term"] != key].copy()
             self._cache_dirty = True
             return None
-        return entry.get("value")
+        val = row.get("disease_id")
+        return str(val) if val is not None and pd.notna(val) else None
 
     def _disease_cache_set(self, key: str, value: Optional[str]) -> None:
         if not self.cache_enabled:
             return
-        self._disease_id_cache[key] = {"value": value, "ts": time.time()}
+        df = self._disease_id_df
+        if not df.empty:
+            df = df[df["disease_term"] != key]
+        new_row = pd.DataFrame([{
+            "disease_term": key,
+            "ts": time.time(),
+            "disease_id": value,
+        }])
+        self._disease_id_df = pd.concat([df, new_row], ignore_index=True)
         self._cache_dirty = True
 
     def _is_cache_valid(self, ts: Optional[float]) -> bool:
@@ -1169,11 +1246,64 @@ Return ONLY a valid JSON array—no other text. Example:
                 return
             with open(self.cache_file, "r", encoding="utf-8") as handle:
                 data = json.load(handle)
-            self._cache = data.get("associations", {}) or {}
-            self._disease_id_cache = data.get("disease_ids", {}) or {}
-            self._normalize_cache_entries()
+            version = data.get("version", 1)
+            associations = data.get("associations") or {}
+            disease_ids = data.get("disease_ids") or {}
+
+            if version == 2 and isinstance(associations, list):
+                self._cache_df = pd.DataFrame(associations)
+                if self._cache_df.empty and CACHE_COLUMNS:
+                    self._cache_df = pd.DataFrame(columns=CACHE_COLUMNS)
+            else:
+                # Legacy v1 dict: key -> {value, ts}
+                rows = []
+                for key, entry in (associations or {}).items():
+                    if isinstance(entry, dict) and "value" in entry:
+                        val, ts = entry.get("value"), entry.get("ts", time.time())
+                    else:
+                        val, ts = entry, time.time()
+                    source, gene, disease_term = self._cache_parse_key(key)
+                    if not source:
+                        continue
+                    rows.append({
+                        "source": source,
+                        "gene": gene,
+                        "disease_term": disease_term,
+                        "ts": ts,
+                        "value_json": json.dumps(val) if isinstance(val, dict) else "{}",
+                    })
+                self._cache_df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=CACHE_COLUMNS)
+
+            if isinstance(disease_ids, list):
+                self._disease_id_df = pd.DataFrame(disease_ids)
+                if self._disease_id_df.empty and DISEASE_CACHE_COLUMNS:
+                    self._disease_id_df = pd.DataFrame(columns=DISEASE_CACHE_COLUMNS)
+            else:
+                rows = []
+                for term, entry in (disease_ids or {}).items():
+                    if isinstance(entry, dict) and "value" in entry:
+                        val, ts = entry.get("value"), entry.get("ts", time.time())
+                    else:
+                        val, ts = entry, time.time()
+                    rows.append({"disease_term": term, "ts": ts, "disease_id": val})
+                self._disease_id_df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=DISEASE_CACHE_COLUMNS)
+
+            # Drop expired rows
+            if not self._cache_df.empty and "ts" in self._cache_df.columns:
+                valid = self._cache_df.apply(
+                    lambda r: self._is_cache_valid(float(r["ts"]) if r.get("ts") is not None else None),
+                    axis=1
+                )
+                self._cache_df = self._cache_df[valid]
+            if not self._disease_id_df.empty and "ts" in self._disease_id_df.columns:
+                valid = self._disease_id_df.apply(
+                    lambda r: self._is_cache_valid(float(r["ts"]) if r.get("ts") is not None else None),
+                    axis=1
+                )
+                self._disease_id_df = self._disease_id_df[valid]
+
             self._cache_dirty = False
-            n = len(self._cache)
+            n = len(self._cache_df)
             logger.info(f"Enrichment cache: loaded {n} gene-disease associations from {self.cache_file}")
         except Exception as exc:
             logger.warning(f"Failed to load enrichment cache from {self.cache_file}: {exc}")
@@ -1183,43 +1313,20 @@ Return ONLY a valid JSON array—no other text. Example:
             return
         try:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
+            associations = self._cache_df.to_dict("records") if not self._cache_df.empty else []
+            disease_ids = self._disease_id_df.to_dict("records") if not self._disease_id_df.empty else []
             payload = {
-                "version": 1,
+                "version": CACHE_VERSION,
                 "saved_at": time.time(),
-                "associations": self._cache,
-                "disease_ids": self._disease_id_cache
+                "associations": associations,
+                "disease_ids": disease_ids,
             }
             with open(self.cache_file, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle)
             self._cache_dirty = False
-            logger.info(f"Enrichment cache: saved {len(self._cache)} associations to {self.cache_file}")
+            logger.info(f"Enrichment cache: saved {len(self._cache_df)} associations to {self.cache_file}")
         except Exception as exc:
             logger.warning(f"Failed to save enrichment cache to {self.cache_file}: {exc}")
-
-    def _normalize_cache_entries(self) -> None:
-        """Normalize cache entries after loading from disk."""
-        now_ts = time.time()
-        normalized = {}
-        for key, entry in self._cache.items():
-            if isinstance(entry, dict) and "value" in entry:
-                value = entry.get("value")
-                ts = entry.get("ts", now_ts)
-            else:
-                value = entry
-                ts = now_ts
-            normalized[key] = {"value": value, "ts": ts}
-        self._cache = normalized
-
-        normalized_disease = {}
-        for key, entry in self._disease_id_cache.items():
-            if isinstance(entry, dict) and "value" in entry:
-                value = entry.get("value")
-                ts = entry.get("ts", now_ts)
-            else:
-                value = entry
-                ts = now_ts
-            normalized_disease[key] = {"value": value, "ts": ts}
-        self._disease_id_cache = normalized_disease
 
     def _open_targets_request(self, query: str, variables: Dict) -> Dict:
         """Execute a GraphQL request against Open Targets."""

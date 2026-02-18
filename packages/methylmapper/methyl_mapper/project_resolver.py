@@ -5,6 +5,12 @@ has multiple groups, detection outputs live under detection/{disease_subdir}/{la
 (e.g. detection/cancer/pca1, detection/cancer/pca2). The resolver can return either
 a single pattern over all groups (detection/cancer/*/dmps-*.csv) or per-group
 paths so each group's mapping is written to mapper/cancer/<label>.
+
+By default, the mapper uses MethylDetector's **biological-only** DMP CSVs
+(dmps-*-biological-sorted.csv), i.e. DMPs that pass the biological filters
+(q-value, min_delta_mean, max_overlap, min_effect_size) and are not the smaller
+optimized subset (dmps-{chr}.csv). Override via step config csv_filename_pattern
+or csv_pattern to map other exports (e.g. dmps-*.csv for all exports).
 """
 
 from pathlib import Path
@@ -15,6 +21,9 @@ from pydantic import BaseModel, Field
 from methyl_utils import load_project
 
 DISEASE_SUBDIR_DEFAULT = "disease"
+# MethylDetector exports: dmps-{chr}-biological-sorted.csv (biological filter only) and dmps-{chr}.csv (optimized subset).
+# Default to biological-only so mapper maps all biologically significant DMPs, not every CSV in the detection dir.
+DMP_CSV_PATTERN_BIOLOGICAL = "dmps-*-biological-sorted.csv"
 
 
 class MapperStepPaths(BaseModel):
@@ -35,7 +44,7 @@ def resolve_mapper_paths_per_cancer_group(
     step_override_path: Optional[Path] = None,
     control_index: int = 0,
     disease_subdir: str = DISEASE_SUBDIR_DEFAULT,  # "disease" for mapper/disease/{subtype}
-    csv_filename_pattern: str = "dmps-*.csv",
+    csv_filename_pattern: str = DMP_CSV_PATTERN_BIOLOGICAL,
 ) -> List[Tuple[MapperStepPaths, str]]:
     """
     Build one MapperStepPaths per comparison (control vs disease).
@@ -86,7 +95,7 @@ def resolve_mapper_paths_per_cancer_group(
 def resolve_mapper_paths(
     project_path: Path,
     step_override_path: Optional[Path] = None,
-    csv_filename_pattern: str = "*.csv",
+    csv_filename_pattern: str = DMP_CSV_PATTERN_BIOLOGICAL,
 ) -> MapperStepPaths:
     """
     Build mapper step paths from a project config.
