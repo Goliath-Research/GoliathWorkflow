@@ -66,10 +66,8 @@ def resolve_classifier_config_per_cancer_group(
     if len(centroid_dirs) != len(resolved):
         centroid_dirs = []
         for i, (label, _) in enumerate(resolved):
-            if i == 0:
-                centroid_dirs.append(f"{paths.output_base}/centroids/{label}")
-            else:
-                centroid_dirs.append(f"{paths.output_base}/centroids/{disease_subdir}/{label}")
+            side = "control" if i == control_index else "disease"
+            centroid_dirs.append(project.get_centroid_dir(side, label))
     c1_dir = centroid_dirs[control_index]
     classifier_dir = Path(paths.classifier_dir)
     detection_dir = Path(paths.detection_dir)
@@ -123,14 +121,10 @@ def build_multiclass_config_from_project(
         raise ValueError("Project must have at least 2 groups for multiclass")
     centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
     if len(centroid_dirs) != len(resolved):
-        # Same convention as get_derived_paths: control -> centroids/{label}, non-control -> centroids/cancer/{label}
-        disease_subdir = "cancer"
         centroid_dirs = []
         for i, (label, _) in enumerate(resolved):
-            if i == 0:
-                centroid_dirs.append(f"{paths.output_base}/centroids/{label}")
-            else:
-                centroid_dirs.append(f"{paths.output_base}/centroids/{disease_subdir}/{label}")
+            side = "control" if i == 0 else "disease"
+            centroid_dirs.append(project.get_centroid_dir(side, label))
 
     if dmps_csv is None:
         det_dir = Path(paths.detection_dir)

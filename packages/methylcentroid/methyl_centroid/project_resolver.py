@@ -16,7 +16,6 @@ from .config import BatchProcessingConfig, MethylCentroidConfig
 
 logger = logging.getLogger(__name__)
 
-DISEASE_SUBDIR_DEFAULT = "cancer"
 CLUSTER_MANIFEST_FILENAME = "manifest.json"
 
 
@@ -205,11 +204,8 @@ def resolve_centroid_batch_config(
         if group < len(centroid_dirs):
             output_dir = centroid_dirs[group]
         else:
-            # Same convention as get_derived_paths: control -> centroids/{label}, non-control -> centroids/cancer/{label}
-            if group == 0:
-                output_dir = f"{paths.output_base}/centroids/{label}"
-            else:
-                output_dir = f"{paths.output_base}/centroids/{DISEASE_SUBDIR_DEFAULT}/{label}"
+            side = "control" if group == 0 else "disease"
+            output_dir = project.get_centroid_dir(side, label)
     elif group == "group1":
         label = resolved[0][0]
         sample_paths = list(resolved[0][1])

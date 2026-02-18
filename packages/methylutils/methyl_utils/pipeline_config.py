@@ -124,7 +124,7 @@ class DerivedPaths(BaseModel):
     Convention: project root = {output_base}/{project_name}; step dirs under that:
     {project_root}/centroids|detection|mapper|enricher|classifier|validator|alignment_qc.
     When using N groups, centroid_dirs has one entry per group; control (index 0) is
-    centroids/{label}, non-control groups use centroids/cancer/{label} (same as detection/mapper/enricher).
+    centroids/controls/{label}, non-control groups use centroids/diseases/cancer/{label} (same as detection/mapper/enricher).
     centroid1_dir and centroid2_dir are the first two for backward compatibility.
     """
 
@@ -180,11 +180,11 @@ class ProjectConfig(BaseModel):
     )
     control: Optional[ControlDiseaseSide] = Field(
         default=None,
-        description="When set with disease: control side (label + groups). Centroids go to centroids/control/{group.label}.",
+        description="When set with disease: control side (label + groups). Centroids go to centroids/controls/{group.label}.",
     )
     disease: Optional[ControlDiseaseSide] = Field(
         default=None,
-        description="When set with control: disease side (label + groups). Centroids go to centroids/disease/{group.label}.",
+        description="When set with control: disease side (label + groups). Centroids go to centroids/diseases/{disease_subdir}/{group.label}.",
     )
     comparisons: Optional[Union[List[ComparisonSpec], str]] = Field(
         default=None,
@@ -373,23 +373,29 @@ class ProjectConfig(BaseModel):
         ]
 
     CENTROID_DISEASE_SUBDIR: ClassVar[str] = "cancer"
-    CENTROID_CONTROL_SUBDIR: ClassVar[str] = "control"
-    CENTROID_DISEASE_FOLDER: ClassVar[str] = "disease"
+    CENTROID_CONTROL_SUBDIR: ClassVar[str] = "controls"
+    CENTROID_DISEASE_FOLDER: ClassVar[str] = "diseases"
 
     def get_centroid_dir(self, side: Literal["control", "disease"], group_label: str) -> str:
-        """Return centroid output dir for a group. When control/disease: centroids/control/{label} or centroids/disease/{label}."""
+        """Return centroid output dir for a group. control → centroids/controls/{side_label}/{label}; disease → centroids/diseases/{disease_subdir}/{label}."""
         global_base = self.output_base.rstrip("/")
         project_root = f"{global_base}/{self.project_name}"
         if self.control is not None and self.disease is not None:
-            return f"{project_root}/centroids/{side}/{group_label}"
-        # Flat: control = centroids/{label}, disease = centroids/cancer/{label}
+            if side == "control":
+                return f"{project_root}/centroids/{self.CENTROID_CONTROL_SUBDIR}/{self.control.label}/{group_label}"
+            return f"{project_root}/centroids/{self.CENTROID_DISEASE_FOLDER}/{self.CENTROID_DISEASE_SUBDIR}/{group_label}"
+        # Flat: control = centroids/controls/{label}, disease = centroids/diseases/cancer/{label}
         if side == "control":
-            return f"{project_root}/centroids/{group_label}"
-        return f"{project_root}/centroids/{self.CENTROID_DISEASE_SUBDIR}/{group_label}"
+            return f"{project_root}/centroids/{self.CENTROID_CONTROL_SUBDIR}/{group_label}"
+        return f"{project_root}/centroids/{self.CENTROID_DISEASE_FOLDER}/{self.CENTROID_DISEASE_SUBDIR}/{group_label}"
 
     def get_clustering_output_dir(self, side: Literal["control", "disease"], group_label: str) -> str:
-        """Output dir for MethylCluster for a group (assignments, manifest). {project_root}/clustering/{side}/{group_label}."""
-        return f"{self.get_project_root()}/clustering/{side}/{group_label}"
+        """Output dir for MethylCluster for a group (assignments, manifest). control → clustering/controls/{side_label}/{label}; disease → clustering/diseases/{disease_subdir}/{label}."""
+        if self.control is not None and self.disease is not None and side == "control":
+            return f"{self.get_project_root()}/clustering/{self.CENTROID_CONTROL_SUBDIR}/{self.control.label}/{group_label}"
+        if side == "control":
+            return f"{self.get_project_root()}/clustering/{self.CENTROID_CONTROL_SUBDIR}/{group_label}"
+        return f"{self.get_project_root()}/clustering/{self.CENTROID_DISEASE_FOLDER}/{self.CENTROID_DISEASE_SUBDIR}/{group_label}"
 
     def get_groups_with_subcluster(self) -> List[Tuple[Literal["control", "disease"], str, "GroupConfig"]]:
         """Return (side, label, group_config) for each group that has subcluster enabled. Only for control/disease projects."""

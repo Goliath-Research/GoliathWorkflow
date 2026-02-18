@@ -71,10 +71,8 @@ def resolve_detector_config_per_cancer_group(
     if len(centroid_dirs) != len(resolved):
         centroid_dirs = []
         for i, (label, _) in enumerate(resolved):
-            if i == 0:
-                centroid_dirs.append(f"{paths.output_base}/centroids/{label}")
-            else:
-                centroid_dirs.append(f"{paths.output_base}/centroids/{disease_subdir}/{label}")
+            side = "control" if i == control_index else "disease"
+            centroid_dirs.append(project.get_centroid_dir(side, label))
     c1_dir = centroid_dirs[control_index]
     out = []
     for i in range(len(resolved)):
