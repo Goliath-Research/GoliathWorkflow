@@ -122,7 +122,7 @@ class DerivedPaths(BaseModel):
     """
     Derived paths from a ProjectConfig.
     Convention: project root = {output_base}/{project_name}; step dirs under that:
-    {project_root}/centroids|detection|mapper|enricher|classifier|alignment_qc.
+    {project_root}/centroids|detection|mapper|enricher|classifier|validator|alignment_qc.
     When using N groups, centroid_dirs has one entry per group; control (index 0) is
     centroids/{label}, non-control groups use centroids/cancer/{label} (same as detection/mapper/enricher).
     centroid1_dir and centroid2_dir are the first two for backward compatibility.
@@ -139,6 +139,7 @@ class DerivedPaths(BaseModel):
     mapper_dir: str = Field(..., description="MethylMapper output directory")
     enricher_dir: str = Field(..., description="MethylEnricher output directory")
     classifier_dir: str = Field(..., description="MethylClassifier output directory")
+    validator_dir: str = Field(..., description="MethylValidator output directory")
     alignment_qc_dir: str = Field(..., description="MethylAlignmentQC output directory (one JSON per sample)")
 
     @property
@@ -474,6 +475,7 @@ class ProjectConfig(BaseModel):
             mapper_dir=f"{project_root}/mapper",
             enricher_dir=f"{project_root}/enricher",
             classifier_dir=f"{project_root}/classifier",
+            validator_dir=f"{project_root}/validator",
             alignment_qc_dir=f"{project_root}/alignment_qc",
         )
 
@@ -516,7 +518,7 @@ class ProjectConfig(BaseModel):
     def get_step_config(self, step_name: str) -> Dict[str, Any]:
         """
         Return the config dict for a step, or empty dict if not defined.
-        Step names: centroid, detection, mapper, enricher, classifier, alignment_qc.
+        Step names: centroid, detection, mapper, enricher, classifier, validator, alignment_qc.
         """
         if not self.step_config:
             return {}
@@ -541,6 +543,10 @@ class ProjectConfig(BaseModel):
     def get_classifier_output_dir(self, comparison_label: str) -> str:
         """Output dir for classifier for one comparison: classifier/cancer/{comparison_label}."""
         return f"{self.get_project_root()}/classifier/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+
+    def get_validator_output_dir(self, comparison_label: str) -> str:
+        """Output dir for validator for one comparison: validator/cancer/{comparison_label}."""
+        return f"{self.get_project_root()}/validator/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
 
     def uses_control_disease(self) -> bool:
         """True if this project uses control/disease + comparisons (not flat groups)."""
