@@ -15,6 +15,11 @@ from .project_resolver import (
     resolve_validator_config_per_comparison,
 )
 
+try:
+    from methyl_utils import load_project
+except ImportError:
+    load_project = None
+
 
 def _read_paths_from_csv(csv_path: Path) -> List[str]:
     """Read sample directory paths from a CSV (one column or column named 'path'/'sample')."""
@@ -130,7 +135,7 @@ Examples:
     parser.add_argument(
         "--per-comparison",
         action="store_true",
-        help="When using --project with control/disease: run one validation per comparison (default: same).",
+        help="With --project: run one validation per comparison. Auto-enabled when project uses controls/diseases so models use all chromosomes (detection/cancer/<group>).",
     )
     parser.add_argument(
         "--debug",
@@ -172,7 +177,14 @@ def main() -> None:
         test_disease = _parse_test_paths_arg(args.test_disease)
         output_dir = str(args.output_dir) if args.output_dir is not None else None
 
-        if args.per_comparison:
+        # Use per-comparison when project has control/disease so we use detection/cancer/<group> (multi-chromosome), matching MethylClassifier
+        use_per_comparison = getattr(args, "per_comparison", False)
+        if load_project is not None:
+            project = load_project(args.project)
+            if getattr(project, "uses_control_disease", lambda: False)():
+                use_per_comparison = True
+
+        if use_per_comparison:
             configs = resolve_validator_config_per_comparison(
                 args.project,
                 step_override_path=args.step_override,

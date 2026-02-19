@@ -115,8 +115,24 @@ def resolve_validator_config_per_comparison(
     result: List[Tuple[ValidatorConfig, str]] = []
     for spec in project.get_comparisons():
         comp_label = spec.comparison_label or spec.disease_group
-        model_dir = project.get_detection_output_dir(comp_label)
-        model_path = step_cfg.get("model_path") or classifier_step.get("save_classifier_path")
+        # Full classifier (all chromosomes) is built by the classifier step and saved under classifier/cancer/<group>/
+        classifier_output_dir = project.get_classifier_output_dir(comp_label)
+        project_name = getattr(project, "project_name", "classifier")
+        full_classifier_pkl = f"{classifier_output_dir}/{project_name}-classifier.pkl"
+        detection_dir = project.get_detection_output_dir(comp_label)
+        # Prefer full classifier pkl in classifier output dir; if missing, use detection dir (per-chrom classifier-*.pkl)
+        if step_cfg.get("model_path") is not None:
+            model_path = step_cfg.get("model_path")
+            model_dir = None
+        elif step_cfg.get("model_dir") is not None:
+            model_path = None
+            model_dir = step_cfg.get("model_dir")
+        elif Path(full_classifier_pkl).is_file():
+            model_path = full_classifier_pkl
+            model_dir = None
+        else:
+            model_path = None
+            model_dir = detection_dir
         out_dir = project.get_validator_output_dir(comp_label)
 
         control_paths = list(project.get_group_sample_paths_by_label(spec.control_group))
@@ -127,7 +143,7 @@ def resolve_validator_config_per_comparison(
 
         base: Dict[str, Any] = {
             "model_path": model_path,
-            "model_dir": step_cfg.get("model_dir") or model_dir,
+            "model_dir": model_dir,
             "output_dir": out_dir,
             "test_control_paths": control_paths,
             "test_disease_paths": disease_paths,
