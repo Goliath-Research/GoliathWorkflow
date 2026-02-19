@@ -468,10 +468,10 @@ def classify_samples_from_list(
         )
     else:
         # Single chromosome mode: use first chromosome from merged samples
-        # Extract chromosome from classifier
+        # Extract chromosome from classifier (may be None for legacy saved wrappers)
         classifier_chrom = classifier.chromosome
         
-        if classifier_chrom == 'unknown':
+        if classifier_chrom is None or classifier_chrom == 'unknown':
             # Try to infer from available chromosomes
             available_chroms = set()
             for _, chrom_samples in loaded_samples:
