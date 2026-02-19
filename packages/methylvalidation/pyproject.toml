@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "methyl-validation"
+version = "0.1.0"
+description = "Monte Carlo validation runner for MethylPipeline: stratified train/val splits, pipeline runs, and empirical metric distributions"
+authors = ["MethylPipeline Development Team"]
+readme = "README.md"
+packages = [{include = "methyl_validation"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+pydantic = ">=2.6.0,<3.0.0"
+numpy = ">=1.26.0,<3.0.0"
+pandas = ">=2.1.0,<3.0.0"
+
+[tool.poetry.scripts]
+methyl-validation = "methyl_validation.cli:main"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.0.0"
+black = "^23.0.0"
+flake8 = "^6.0.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

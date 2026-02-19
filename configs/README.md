@@ -2,6 +2,8 @@
 
 Repo-level configuration examples for the MethylPipeline unified project config.
 
+**Full reference:** **[docs/UNIFIED_PROJECT_CONFIG_GUIDE.md](../docs/UNIFIED_PROJECT_CONFIG_GUIDE.md)** — complete explanation of the unified project config, path convention (`<step>/<disease_label>/<disease_group>`), controls/diseases/comparisons, `step_config`, and how each package uses it. The latest example **project_PCa1_3levels_vs_Healthy_Hardik.json** is used throughout.
+
 ## Unified project config
 
 Use a **single project JSON** with `--project` so each tool derives its paths and (where applicable) sample lists from one place. `output_base` is a global folder; each project uses a subfolder `{output_base}/{project_name}`.

@@ -89,10 +89,11 @@ def _print_metrics(metrics: Dict[str, Any]) -> None:
         print("     " + " ".join(f"{x:>4}" for x in row))
 
 
-def run_validation(config: ValidatorConfig) -> None:
+def run_validation(config: ValidatorConfig) -> Dict[str, Any]:
     """
     Load MethylClassifier, run prediction on test_control_paths + test_disease_paths,
     compute metrics, print summary, write validation_metrics.json and predictions CSV.
+    Returns the metrics dictionary (e.g. for programmatic use or Monte Carlo aggregation).
     """
     from methyl_classifier.core.classifier import MethylClassifier
     from methyl_classifier.models.config import ClassifierConfig
@@ -178,3 +179,4 @@ def run_validation(config: ValidatorConfig) -> None:
         json.dump(metrics, f, indent=2)
     print(f"\n💾 Metrics saved to {metrics_path}")
     print(f"💾 Predictions CSV: {predictions_csv}")
+    return metrics
