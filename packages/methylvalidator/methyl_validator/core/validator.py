@@ -121,9 +121,10 @@ def run_validation(config: ValidatorConfig) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     predictions_csv = output_dir / "predictions.csv"
 
-    # Run classification (reuses classifier's loading and prediction)
-    required_chromosomes = None
-    dmp_positions_by_chrom = None
+    # Run classification with same DMP-based loading as MethylClassifier (required_chromosomes +
+    # dmp_positions_by_chrom so only classifier chromosomes and DMP positions are read from H5).
+    required_chromosomes: Optional[List[str]] = None
+    dmp_positions_by_chrom: Optional[Any] = None
     if classifier.is_multi_chromosome:
         required_chromosomes = list(classifier.classifiers.keys())
         dmp_positions_by_chrom = getattr(classifier, "dmp_positions_df", None)
@@ -132,6 +133,15 @@ def run_validation(config: ValidatorConfig) -> None:
             for chrom, clf in classifier.classifiers.items():
                 fi = clf.get_feature_info()
                 dmp_positions_by_chrom[chrom] = fi["positions"]
+    else:
+        # Single-chromosome: pass one chromosome and its DMP positions so we don't load all chroms in full
+        if getattr(classifier, "classifier", None) is not None:
+            feature_info = classifier.get_feature_info()
+            chrom = getattr(classifier, "chromosome", None) or "unknown"
+            if chrom == "unknown":
+                chrom = "1"
+            required_chromosomes = [chrom]
+            dmp_positions_by_chrom = {chrom: feature_info["positions"]}
 
     classify_samples_from_list(
         classifier=classifier,
