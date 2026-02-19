@@ -183,9 +183,13 @@ class MethylClassifier:
             print(f"❌ Failed to load classifier from {model_path}: {e}")
             sys.exit(1)
         
-        # Set temperature if classifier is loaded
+        # Set temperature on the actual classifier (handle both raw ProbabilisticBetaClassifier and saved MethylClassifier wrapper)
         if self.classifier is not None:
-            self.classifier.set_temperature(self.config.temperature)
+            _target = self.classifier
+            if hasattr(_target, "classifier") and hasattr(getattr(_target, "classifier", None), "set_temperature"):
+                _target = _target.classifier
+            if hasattr(_target, "set_temperature"):
+                _target.set_temperature(self.config.temperature)
 
     def load_classifiers_from_directory(self, model_dir: Path) -> None:
         """
@@ -262,9 +266,15 @@ class MethylClassifier:
                     else:
                         raise ValueError(f"No classifier or dmpDF found in model package for chromosome {chrom}")
                 else:
-                    # Legacy format - assume it's a classifier directly
+                    # Legacy format - classifier or saved MethylClassifier wrapper
                     classifier = model_package
-                    classifier.set_temperature(self.config.temperature)
+                    _t = (
+                        classifier.classifier
+                        if (hasattr(classifier, "classifier") and hasattr(getattr(classifier, "classifier", None), "set_temperature"))
+                        else classifier
+                    )
+                    if hasattr(_t, "set_temperature"):
+                        _t.set_temperature(self.config.temperature)
                     self.classifiers[chrom] = classifier
                     model_packages[chrom] = {'classifier': classifier}
                     print(f"✅ Loaded classifier for chromosome {chrom} (legacy format)")

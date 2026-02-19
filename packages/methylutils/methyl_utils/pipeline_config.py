@@ -376,26 +376,32 @@ class ProjectConfig(BaseModel):
     CENTROID_CONTROL_SUBDIR: ClassVar[str] = "controls"
     CENTROID_DISEASE_FOLDER: ClassVar[str] = "diseases"
 
+    def _get_disease_subdir(self) -> str:
+        """Middle path segment for disease step dirs: <step>/<disease_label>/<disease_group>. Uses disease.label from config when control/disease."""
+        return self.disease.label if self.disease is not None else self.CENTROID_DISEASE_SUBDIR
+
     def get_centroid_dir(self, side: Literal["control", "disease"], group_label: str) -> str:
-        """Return centroid output dir for a group. control → centroids/controls/{side_label}/{label}; disease → centroids/diseases/{disease_subdir}/{label}."""
+        """Return centroid output dir for a group. control → centroids/controls/{side_label}/{label}; disease → centroids/diseases/{disease_label}/{label}."""
         global_base = self.output_base.rstrip("/")
         project_root = f"{global_base}/{self.project_name}"
+        disease_sub = self._get_disease_subdir()
         if self.control is not None and self.disease is not None:
             if side == "control":
                 return f"{project_root}/centroids/{self.CENTROID_CONTROL_SUBDIR}/{self.control.label}/{group_label}"
-            return f"{project_root}/centroids/{self.CENTROID_DISEASE_FOLDER}/{self.CENTROID_DISEASE_SUBDIR}/{group_label}"
-        # Flat: control = centroids/controls/{label}, disease = centroids/diseases/cancer/{label}
+            return f"{project_root}/centroids/{self.CENTROID_DISEASE_FOLDER}/{disease_sub}/{group_label}"
+        # Flat: control = centroids/controls/{label}, disease = centroids/diseases/{disease_sub}/{label}
         if side == "control":
             return f"{project_root}/centroids/{self.CENTROID_CONTROL_SUBDIR}/{group_label}"
-        return f"{project_root}/centroids/{self.CENTROID_DISEASE_FOLDER}/{self.CENTROID_DISEASE_SUBDIR}/{group_label}"
+        return f"{project_root}/centroids/{self.CENTROID_DISEASE_FOLDER}/{disease_sub}/{group_label}"
 
     def get_clustering_output_dir(self, side: Literal["control", "disease"], group_label: str) -> str:
-        """Output dir for MethylCluster for a group (assignments, manifest). control → clustering/controls/{side_label}/{label}; disease → clustering/diseases/{disease_subdir}/{label}."""
+        """Output dir for MethylCluster for a group (assignments, manifest). control → clustering/controls/{side_label}/{label}; disease → clustering/diseases/{disease_label}/{label}."""
+        disease_sub = self._get_disease_subdir()
         if self.control is not None and self.disease is not None and side == "control":
             return f"{self.get_project_root()}/clustering/{self.CENTROID_CONTROL_SUBDIR}/{self.control.label}/{group_label}"
         if side == "control":
             return f"{self.get_project_root()}/clustering/{self.CENTROID_CONTROL_SUBDIR}/{group_label}"
-        return f"{self.get_project_root()}/clustering/{self.CENTROID_DISEASE_FOLDER}/{self.CENTROID_DISEASE_SUBDIR}/{group_label}"
+        return f"{self.get_project_root()}/clustering/{self.CENTROID_DISEASE_FOLDER}/{disease_sub}/{group_label}"
 
     def get_groups_with_subcluster(self) -> List[Tuple[Literal["control", "disease"], str, "GroupConfig"]]:
         """Return (side, label, group_config) for each group that has subcluster enabled. Only for control/disease projects."""
@@ -535,24 +541,24 @@ class ProjectConfig(BaseModel):
         return f"{self.output_base.rstrip('/')}/{self.project_name}"
 
     def get_detection_output_dir(self, comparison_label: str) -> str:
-        """Output dir for detection for one comparison: detection/cancer/{comparison_label}."""
-        return f"{self.get_project_root()}/detection/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+        """Output dir for detection for one comparison: detection/<disease_label>/<disease_group>."""
+        return f"{self.get_project_root()}/detection/{self._get_disease_subdir()}/{comparison_label}"
 
     def get_mapper_output_dir(self, comparison_label: str) -> str:
-        """Output dir for mapper for one comparison: mapper/cancer/{comparison_label}."""
-        return f"{self.get_project_root()}/mapper/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+        """Output dir for mapper for one comparison: mapper/<disease_label>/<disease_group>."""
+        return f"{self.get_project_root()}/mapper/{self._get_disease_subdir()}/{comparison_label}"
 
     def get_enricher_output_dir(self, comparison_label: str) -> str:
-        """Output dir for enricher for one comparison: enricher/cancer/{comparison_label}."""
-        return f"{self.get_project_root()}/enricher/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+        """Output dir for enricher for one comparison: enricher/<disease_label>/<disease_group>."""
+        return f"{self.get_project_root()}/enricher/{self._get_disease_subdir()}/{comparison_label}"
 
     def get_classifier_output_dir(self, comparison_label: str) -> str:
-        """Output dir for classifier for one comparison: classifier/cancer/{comparison_label}."""
-        return f"{self.get_project_root()}/classifier/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+        """Output dir for classifier for one comparison: classifier/<disease_label>/<disease_group>."""
+        return f"{self.get_project_root()}/classifier/{self._get_disease_subdir()}/{comparison_label}"
 
     def get_validator_output_dir(self, comparison_label: str) -> str:
-        """Output dir for validator for one comparison: validator/cancer/{comparison_label}."""
-        return f"{self.get_project_root()}/validator/{self.CENTROID_DISEASE_SUBDIR}/{comparison_label}"
+        """Output dir for validator for one comparison: validator/<disease_label>/<disease_group>."""
+        return f"{self.get_project_root()}/validator/{self._get_disease_subdir()}/{comparison_label}"
 
     def uses_control_disease(self) -> bool:
         """True if this project uses control/disease + comparisons (not flat groups)."""

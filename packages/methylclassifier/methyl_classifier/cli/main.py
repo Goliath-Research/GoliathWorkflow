@@ -18,6 +18,11 @@ from ..models.config_schema import ClassificationConfig
 from ..models.config import ClassifierConfig
 from ..project_resolver import resolve_classifier_config, resolve_classifier_config_per_cancer_group
 
+try:
+    from methyl_utils import load_project
+except ImportError:
+    load_project = None  # type: ignore[misc, assignment]
+
 
 def _remap_centroid_path(path: str, path_remap: Optional[Dict[str, str]], sample_root: Optional[Path]) -> str:
     """Apply path_remap (prefix replacement) or sample_root/basename. path_remap takes precedence."""
@@ -1153,9 +1158,9 @@ Config fields (in JSON):
     parser.add_argument(
         '--per-cancer-group',
         action='store_true',
-        help='With --project: run one classifier per non-control group (control=group0). '
-             'Uses model from detection/cancer/{label} and writes to classifier/cancer/{label}/classification_results.csv. '
-             'Use when detection was run with --per-cancer-group.'
+        help='With --project: run one classifier per disease group. '
+             'Uses model from detection/<disease_label>/<group> and writes to classifier/<disease_label>/<group>/classification_results.csv '
+             '(e.g. detection/cancer/pca1-1, classifier/cancer/pca1-1). Auto-enabled when project uses controls/diseases + comparisons.'
     )
     
     parser.add_argument(
@@ -1206,11 +1211,18 @@ Config fields (in JSON):
             raise ValueError("Use either --config or --project, not both.")
         if not args.project.exists():
             raise FileNotFoundError(f"Project config not found: {args.project}")
-        if getattr(args, 'per_cancer_group', False):
+        # Use per-comparison folder pattern (detection/cancer/{label}, classifier/cancer/{label}) when
+        # project uses control/disease, so classifier follows same layout as MethylDetector/MethylMapper.
+        use_per_comparison = getattr(args, 'per_cancer_group', False)
+        if load_project is not None:
+            project = load_project(args.project)
+            if getattr(project, "uses_control_disease", lambda: False)():
+                use_per_comparison = True
+        if use_per_comparison:
             configs_and_labels = resolve_classifier_config_per_cancer_group(args.project, args.step_override)
             if not configs_and_labels:
                 raise ValueError(
-                    "Project has fewer than 2 groups; --per-cancer-group requires at least one control and one disease group."
+                    "Project has fewer than 2 groups; per-comparison mode requires at least one control and one disease group."
                 )
             setup_logging("INFO")
             for config, label in configs_and_labels:
@@ -1222,7 +1234,7 @@ Config fields (in JSON):
                     print(f"❌ Classification failed for {label}: {e}")
                     traceback.print_exc()
                     sys.exit(1)
-            print(f"\nPer-cancer-group classification complete: {len(configs_and_labels)} group(s)")
+            print(f"\nPer-comparison classification complete: {len(configs_and_labels)} group(s)")
             for config, label in configs_and_labels:
                 print(f"  {label}: {config.output_path}")
             return

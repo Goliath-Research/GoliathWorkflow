@@ -11,15 +11,19 @@ from methyl_utils import load_project
 
 from .models.config_schema import ClassificationConfig
 
-CLASSIFIER_CANCER_SUBDIR = "cancer"
 CLASSIFIER_OUTPUT_FILENAME = "classification_results.csv"
+
+
+def _disease_subdir(project: Any) -> str:
+    """Middle path segment for step dirs: <step>/<disease_label>/<disease_group>. Uses project.disease.label when set."""
+    return project.disease.label if getattr(project, "disease", None) is not None else "cancer"
 
 
 def resolve_classifier_config_per_cancer_group(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
     control_index: int = 0,
-    disease_subdir: str = CLASSIFIER_CANCER_SUBDIR,
+    disease_subdir: Optional[str] = None,
 ) -> List[Tuple[ClassificationConfig, str]]:
     """
     Build one ClassificationConfig per comparison.
@@ -37,6 +41,8 @@ def resolve_classifier_config_per_cancer_group(
             with open(override_path) as f:
                 overrides = json.load(f)
             step_cfg = {**step_cfg, **overrides}
+
+    disease_label = disease_subdir if disease_subdir is not None else _disease_subdir(project)
 
     if getattr(project, "uses_control_disease", lambda: False)():
         out: List[Tuple[ClassificationConfig, str]] = []
@@ -76,8 +82,8 @@ def resolve_classifier_config_per_cancer_group(
         if i == control_index:
             continue
         label = resolved[i][0]
-        model_dir = str(detection_dir / disease_subdir / label)
-        output_path = str(classifier_dir / disease_subdir / label / CLASSIFIER_OUTPUT_FILENAME)
+        model_dir = str(detection_dir / disease_label / label)
+        output_path = str(classifier_dir / disease_label / label / CLASSIFIER_OUTPUT_FILENAME)
         base = {
             "model_dir": model_dir,
             "model_path": None,
