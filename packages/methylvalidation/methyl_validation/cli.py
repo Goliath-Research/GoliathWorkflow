@@ -103,34 +103,6 @@ def main() -> None:
         run_dir = output_base / run_id
         seed_i = (config.seed + i) if config.seed is not None else None
 
-        try:
-            train_control, train_disease, val_control, val_disease = stratified_split(
-                control_paths,
-                disease_paths,
-                config.train_fraction,
-                seed=seed_i,
-            )
-        except ValueError as e:
-            print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
-            pbar_iter.update(1)
-            continue
-
-        project_path, _, _, val_control_csv, val_disease_csv = generate_run_project(
-            base_project,
-            run_dir,
-            run_id,
-            config.output_base,
-            train_control,
-            train_disease,
-            val_control,
-            val_disease,
-            config.samples_base_path,
-        )
-        validator_output_dir = run_dir / "validator"
-        logs_dir = run_dir / "logs"
-        n_train_samples = len(train_control) + len(train_disease)
-        n_val_samples = len(val_control) + len(val_disease)
-
         if use_tqdm:
             step_bar = tqdm(
                 total=4,
@@ -162,6 +134,36 @@ def main() -> None:
         else:
             progress_callback = None
 
+        try:
+            train_control, train_disease, val_control, val_disease = stratified_split(
+                control_paths,
+                disease_paths,
+                config.train_fraction,
+                seed=seed_i,
+            )
+        except ValueError as e:
+            print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
+            if use_tqdm:
+                step_bar.close()
+            pbar_iter.update(1)
+            continue
+
+        project_path, _, _, val_control_csv, val_disease_csv = generate_run_project(
+            base_project,
+            run_dir,
+            run_id,
+            config.output_base,
+            train_control,
+            train_disease,
+            val_control,
+            val_disease,
+            config.samples_base_path,
+        )
+        validator_output_dir = run_dir / "validator"
+        logs_dir = run_dir / "logs"
+        n_train_samples = len(train_control) + len(train_disease)
+        n_val_samples = len(val_control) + len(val_disease)
+
         success, errors, step_timings = run_pipeline_for_iteration(
             project_path,
             val_control_csv,
@@ -184,6 +186,8 @@ def main() -> None:
         if not success:
             for msg in errors:
                 print(f"Error [{run_id}]: {msg}", file=sys.stderr)
+            if use_tqdm:
+                step_bar.close()
             if config.abort_on_step_failure:
                 print("Aborting (abort_on_step_failure=true).", file=sys.stderr)
                 sys.exit(1)
@@ -193,6 +197,8 @@ def main() -> None:
         metrics_path = validator_output_dir / "validation_metrics.json"
         if not metrics_path.exists():
             print(f"Warning: {metrics_path} not found after validator run; skipping metrics for {run_id}.", file=sys.stderr)
+            if use_tqdm:
+                step_bar.close()
             pbar_iter.update(1)
             continue
         metrics = load_metrics_from_json(metrics_path)

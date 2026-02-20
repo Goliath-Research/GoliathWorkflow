@@ -45,11 +45,20 @@ def resolve_classifier_config_per_cancer_group(
     disease_label = disease_subdir if disease_subdir is not None else _disease_subdir(project)
 
     if getattr(project, "uses_control_disease", lambda: False)():
+        comparisons = project.get_comparisons()
+        paths = project.get_derived_paths()
+        # Single comparison: detector writes to detection/<disease_label> (e.g. detection/cancer);
+        # classifier loads from the same dir and writes to classifier/<disease_label>/.
+        use_single_comparison_dirs = len(comparisons) == 1
         out: List[Tuple[ClassificationConfig, str]] = []
-        for spec in project.get_comparisons():
+        for spec in comparisons:
             comp_label = spec.comparison_label or spec.disease_group
-            model_dir = project.get_detection_output_dir(comp_label)
-            output_path = str(Path(project.get_classifier_output_dir(comp_label)) / CLASSIFIER_OUTPUT_FILENAME)
+            if use_single_comparison_dirs:
+                model_dir = str(Path(paths.detection_dir) / disease_label)
+                output_path = str(Path(paths.classifier_dir) / disease_label / CLASSIFIER_OUTPUT_FILENAME)
+            else:
+                model_dir = project.get_detection_output_dir(comp_label)
+                output_path = str(Path(project.get_classifier_output_dir(comp_label)) / CLASSIFIER_OUTPUT_FILENAME)
             base: Dict[str, Any] = {
                 "model_dir": model_dir,
                 "model_path": None,

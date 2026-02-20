@@ -104,9 +104,16 @@ def resolve_detector_config(
     """
     Build MethylModelerConfig from a project config and optional step overrides.
     Uses Pydantic throughout; returns MethylModelerConfig (not dict).
+    When project uses control/disease with a single comparison, output_dir is
+    detection/<disease_label> (e.g. detection/cancer); otherwise detection/.
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
+
+    if getattr(project, "uses_control_disease", lambda: False)() and len(project.get_comparisons()) == 1:
+        output_dir = f"{project.get_project_root()}/detection/{project._get_disease_subdir()}"
+    else:
+        output_dir = paths.detection_dir
 
     base: Dict[str, Any] = {
         "chromosome": project.chromosomes or ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
@@ -114,7 +121,7 @@ def resolve_detector_config(
         "contexts": project.contexts or ["CG"],
         "centroid1_dir": paths.centroid1_dir,
         "centroid2_dir": paths.centroid2_dir,
-        "output_dir": paths.detection_dir,
+        "output_dir": output_dir,
     }
     # Optional: use project group sample paths as validation samples (detector can use "use_metadata" instead)
     if project.get_group1_sample_paths():
