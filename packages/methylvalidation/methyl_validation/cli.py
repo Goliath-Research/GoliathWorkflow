@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
+from tqdm import tqdm
+
 from .config import MonteCarloConfig
 from .pipeline_runner import run_pipeline_for_iteration
 from .project_gen import generate_run_project
@@ -84,6 +86,16 @@ def main() -> None:
     # Optional: base project has multiple disease groups -> use --per-cancer-group (we generate single comparison, so no)
     per_cancer_group = False
 
+    use_tqdm = sys.stderr.isatty()
+    pbar_iter = tqdm(
+        total=config.n_iterations,
+        desc="Iterations",
+        position=0,
+        leave=True,
+        file=sys.stderr,
+        disable=not use_tqdm,
+    )
+
     rows: List[Dict[str, Any]] = []
     all_timings: List[Dict[str, Any]] = []
     for i in range(config.n_iterations):
@@ -100,6 +112,7 @@ def main() -> None:
             )
         except ValueError as e:
             print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
+            pbar_iter.update(1)
             continue
 
         project_path, _, _, val_control_csv, val_disease_csv = generate_run_project(
@@ -118,6 +131,37 @@ def main() -> None:
         n_train_samples = len(train_control) + len(train_disease)
         n_val_samples = len(val_control) + len(val_disease)
 
+        if use_tqdm:
+            step_bar = tqdm(
+                total=4,
+                desc="Steps",
+                position=1,
+                leave=False,
+                file=sys.stderr,
+            )
+            step_bar_current: List[Any] = [None]
+
+            def progress_cb(step_index: int, step_name: str, event: str) -> None:
+                if event == "start":
+                    step_bar.set_description(f"Steps ({step_name})")
+                    step_bar_current[0] = tqdm(
+                        total=None,
+                        desc=f"Running {step_name}...",
+                        position=2,
+                        leave=False,
+                        file=sys.stderr,
+                        bar_format="{desc}",
+                    )
+                else:
+                    step_bar.update(1)
+                    if step_bar_current[0] is not None:
+                        step_bar_current[0].close()
+                        step_bar_current[0] = None
+
+            progress_callback = progress_cb
+        else:
+            progress_callback = None
+
         success, errors, step_timings = run_pipeline_for_iteration(
             project_path,
             val_control_csv,
@@ -125,7 +169,10 @@ def main() -> None:
             validator_output_dir,
             per_cancer_group=per_cancer_group,
             logs_dir=logs_dir,
+            progress_callback=progress_callback,
         )
+        if use_tqdm:
+            step_bar.close()
         for t in step_timings:
             all_timings.append({
                 **t,
@@ -140,17 +187,21 @@ def main() -> None:
             if config.abort_on_step_failure:
                 print("Aborting (abort_on_step_failure=true).", file=sys.stderr)
                 sys.exit(1)
+            pbar_iter.update(1)
             continue
 
         metrics_path = validator_output_dir / "validation_metrics.json"
         if not metrics_path.exists():
             print(f"Warning: {metrics_path} not found after validator run; skipping metrics for {run_id}.", file=sys.stderr)
+            pbar_iter.update(1)
             continue
         metrics = load_metrics_from_json(metrics_path)
         scalar = _scalar_metrics_from_dict(metrics)
         row = {"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), **scalar}
         rows.append(row)
-        print(f"Completed iteration {i + 1}/{config.n_iterations} ({run_id})")
+        if not use_tqdm:
+            print(f"Completed iteration {i + 1}/{config.n_iterations} ({run_id})", file=sys.stderr)
+        pbar_iter.update(1)
 
     if not rows:
         print("No successful iterations; nothing to aggregate.", file=sys.stderr)

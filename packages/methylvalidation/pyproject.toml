@@ -11,6 +11,7 @@ python = ">=3.10,<3.13"
 pydantic = ">=2.6.0,<3.0.0"
 numpy = ">=1.26.0,<3.0.0"
 pandas = ">=2.1.0,<3.0.0"
+tqdm = ">=4.66.0,<5.0.0"
 
 [tool.poetry.scripts]
 methyl-validation = "methyl_validation.cli:main"

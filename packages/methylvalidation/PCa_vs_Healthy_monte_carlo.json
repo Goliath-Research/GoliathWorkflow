@@ -5,7 +5,7 @@
   "train_fraction": 0.8,
   "n_iterations": 10,
   "seed": 42,
-  "base_project": "configs/project_PCa1_3levels_vs_Healthy_Hardik.json",
+  "base_project": "configs/project_PCa_vs_Healthy.json",
   "output_base": "/work/david-gladys/all-prostate/monte_carlo_runs",
   "abort_on_step_failure": false
 }

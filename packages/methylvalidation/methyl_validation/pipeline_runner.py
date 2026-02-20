@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 
 def _find_cmd(name: str) -> Optional[str]:
@@ -97,11 +97,14 @@ def run_pipeline_for_iteration(
     validator_output_dir: Path,
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
+    progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Run centroid -> detector -> classifier -> validator in order.
     If logs_dir is set, create it and write each step's stdout+stderr to logs_dir/<step_name>.log,
     and write step_timings.csv to logs_dir.parent (run_dir).
+    If progress_callback is set, call it with (step_index, step_name, "start") before each step
+    and (step_index, step_name, "end") after each step.
     Returns (success, list of error messages, list of step timing dicts with step_name, duration_seconds, return_code).
     """
     from .validator_metrics import write_step_timings_csv
@@ -122,10 +125,14 @@ def run_pipeline_for_iteration(
             ),
         ),
     ]
-    for step_name, run_fn in steps:
+    for step_index, (step_name, run_fn) in enumerate(steps):
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "start")
         t0 = time.perf_counter()
         rc, out, err = run_fn()
         duration_seconds = time.perf_counter() - t0
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "end")
         step_timings.append({
             "step_name": step_name,
             "duration_seconds": round(duration_seconds, 6),
