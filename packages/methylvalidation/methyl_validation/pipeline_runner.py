@@ -4,8 +4,9 @@ Run pipeline steps (methyl-centroid, methyl-detector, methyl-classifier, methyl-
 
 import shutil
 import subprocess
+import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 
 def _find_cmd(name: str) -> Optional[str]:
@@ -75,18 +76,38 @@ def run_validator(
     return run_cmd(cmd)
 
 
+def _write_step_log(log_path: Path, stdout: str, stderr: str) -> None:
+    """Write combined stdout and stderr to a single log file with delimiters."""
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "w", encoding="utf-8") as f:
+        f.write("=== stdout ===\n")
+        f.write(stdout)
+        if stdout and not stdout.endswith("\n"):
+            f.write("\n")
+        f.write("\n=== stderr ===\n")
+        f.write(stderr)
+        if stderr and not stderr.endswith("\n"):
+            f.write("\n")
+
+
 def run_pipeline_for_iteration(
     project_json: Path,
     val_control_csv: Path,
     val_disease_csv: Path,
     validator_output_dir: Path,
     per_cancer_group: bool = False,
-) -> tuple[bool, List[str]]:
+    logs_dir: Optional[Path] = None,
+) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Run centroid -> detector -> classifier -> validator in order.
-    Returns (success, list of error messages).
+    If logs_dir is set, create it and write each step's stdout+stderr to logs_dir/<step_name>.log,
+    and write step_timings.csv to logs_dir.parent (run_dir).
+    Returns (success, list of error messages, list of step timing dicts with step_name, duration_seconds, return_code).
     """
+    from .validator_metrics import write_step_timings_csv
+
     errors: List[str] = []
+    step_timings: List[Dict[str, Any]] = []
     steps = [
         ("methyl-centroid", lambda: run_centroid(project_json)),
         ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=per_cancer_group)),
@@ -102,9 +123,23 @@ def run_pipeline_for_iteration(
         ),
     ]
     for step_name, run_fn in steps:
+        t0 = time.perf_counter()
         rc, out, err = run_fn()
+        duration_seconds = time.perf_counter() - t0
+        step_timings.append({
+            "step_name": step_name,
+            "duration_seconds": round(duration_seconds, 6),
+            "return_code": rc,
+        })
+        if logs_dir is not None:
+            log_path = logs_dir / f"{step_name}.log"
+            _write_step_log(log_path, out, err)
         if rc != 0:
             msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
             errors.append(msg)
-            return False, errors
-    return True, []
+            if logs_dir is not None:
+                write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+            return False, errors, step_timings
+    if logs_dir is not None:
+        write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+    return True, [], step_timings

@@ -55,6 +55,22 @@ def write_all_metrics_csv(df: pd.DataFrame, path: str | Path) -> None:
     df.to_csv(path, index=False)
 
 
+def build_step_timings_table(rows: List[Dict[str, Any]]) -> pd.DataFrame:
+    """Build a DataFrame from step timing rows (step_name, duration_seconds, return_code, optional run_id, run_dir, n_train_samples, n_val_samples)."""
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows)
+
+
+def write_step_timings_csv(df_or_rows: pd.DataFrame | List[Dict[str, Any]], path: str | Path) -> None:
+    """Write step timings to CSV. Accepts a DataFrame or a list of row dicts."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(df_or_rows, pd.DataFrame):
+        df_or_rows.to_csv(path, index=False)
+    else:
+        pd.DataFrame(df_or_rows).to_csv(path, index=False)
+
+
 def compute_summary(df: pd.DataFrame) -> Dict[str, Any]:
     """
     Compute per-metric empirical distribution: mean, std, min, max, and percentiles (5, 25, 50, 75, 95).

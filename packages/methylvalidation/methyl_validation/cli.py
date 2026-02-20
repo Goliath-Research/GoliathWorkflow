@@ -17,6 +17,7 @@ from .validator_metrics import (
     compute_summary,
     load_metrics_from_json,
     write_all_metrics_csv,
+    write_step_timings_csv,
     write_summary_json,
 )
 
@@ -84,6 +85,7 @@ def main() -> None:
     per_cancer_group = False
 
     rows: List[Dict[str, Any]] = []
+    all_timings: List[Dict[str, Any]] = []
     for i in range(config.n_iterations):
         run_id = f"run_{i + 1:04d}"
         run_dir = output_base / run_id
@@ -112,14 +114,26 @@ def main() -> None:
             config.samples_base_path,
         )
         validator_output_dir = run_dir / "validator"
+        logs_dir = run_dir / "logs"
+        n_train_samples = len(train_control) + len(train_disease)
+        n_val_samples = len(val_control) + len(val_disease)
 
-        success, errors = run_pipeline_for_iteration(
+        success, errors, step_timings = run_pipeline_for_iteration(
             project_path,
             val_control_csv,
             val_disease_csv,
             validator_output_dir,
             per_cancer_group=per_cancer_group,
+            logs_dir=logs_dir,
         )
+        for t in step_timings:
+            all_timings.append({
+                **t,
+                "run_id": run_id,
+                "run_dir": str(run_dir),
+                "n_train_samples": n_train_samples,
+                "n_val_samples": n_val_samples,
+            })
         if not success:
             for msg in errors:
                 print(f"Error [{run_id}]: {msg}", file=sys.stderr)
@@ -151,6 +165,12 @@ def main() -> None:
     summary_path = output_base / "metrics_summary.json"
     write_summary_json(summary, summary_path)
     print(f"Wrote {summary_path}")
+
+    if all_timings:
+        step_timings_path = output_base / "step_timings.csv"
+        write_step_timings_csv(all_timings, step_timings_path)
+        print(f"Wrote {step_timings_path}")
+
     print("Done.")
 
 
