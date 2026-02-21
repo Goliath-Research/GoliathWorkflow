@@ -60,6 +60,10 @@ def resolve_detector_config_per_cancer_group(
                 pass
             for k, v in step_cfg.items():
                 base[k] = v
+            # Always use comparison-based structure: detections/<control_group>/<disease_group>
+            base["output_dir"] = project.get_detection_output_dir(ctrl_label, dis_label)
+            base["centroid1_dir"] = project.get_centroid_dir("control", ctrl_label)
+            base["centroid2_dir"] = project.get_centroid_dir("disease", dis_label)
             out.append((MethylModelerConfig.model_validate(base), comp_label))
         return out
 
@@ -104,8 +108,7 @@ def resolve_detector_config(
     """
     Build MethylModelerConfig from a project config and optional step overrides.
     Uses Pydantic throughout; returns MethylModelerConfig (not dict).
-    When project uses control/disease with a single comparison, output_dir is
-    detection/<disease_label> (e.g. detection/cancer); otherwise detection/.
+    Output dir follows detections/<control_group>/<disease_group> (e.g. detections/healthy/cancer).
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
@@ -135,11 +138,19 @@ def resolve_detector_config(
     if step_cfg:
         for k, v in step_cfg.items():
             base[k] = v
+        # Restore comparison-based structure so step_config cannot override it
+        if getattr(project, "uses_control_disease", lambda: False)() and len(project.get_comparisons()) == 1:
+            spec = project.get_comparisons()[0]
+            base["output_dir"] = project.get_detection_output_dir(spec.control_group, spec.disease_group)
 
     if step_override_path is not None:
         with open(step_override_path) as f:
             overrides = json.load(f)
         for k, v in overrides.items():
             base[k] = v
+        # Keep comparison-based structure: detections/<control_group>/<disease_group>
+        if getattr(project, "uses_control_disease", lambda: False)() and len(project.get_comparisons()) == 1:
+            spec = project.get_comparisons()[0]
+            base["output_dir"] = project.get_detection_output_dir(spec.control_group, spec.disease_group)
 
     return MethylModelerConfig.model_validate(base)
