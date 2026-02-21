@@ -87,7 +87,7 @@ PACKAGES=(
     "methylclassifier"
     "methylenricher"
     "methylcluster"
-    "methylvalidator"
+    "methylpredictor"
 )
 
 for pkg in "${PACKAGES[@]}"; do
@@ -135,7 +135,7 @@ echo "   • methylmapper    - DMP-to-gene mapping (methyl-mapper)"
 echo "   • methylclassifier - Sample classification (methyl-classifier)"
 echo "   • methylenricher  - Gene enrichment analysis (methyl-enricher)"
 echo "   • methylcluster   - HDBSCAN sample clustering (methyl_cluster)"
-echo "   • methylvalidator - Classifier validation and metrics (methyl-validator)"
+echo "   • methylpredictor - Prediction and validation metrics (methyl-predictor)"
 echo ""
 echo "🧪 Test the installation:"
 echo "   python -c \"from methyl_utils import get_logger; print('✓ MethylUtils OK')\""

@@ -23,7 +23,7 @@ Tools that support `--project`:
 - **methyl-mapper** — maps DMPs to genes (per comparison)
 - **methyl-enricher** — enrichment (per comparison)
 - **methyl-classifier** — classification (per comparison)
-- **methyl-validator** — validation metrics (per comparison)
+- **methyl-predictor** — prediction and validation metrics (per comparison)
 - **methyl-qc** — alignment QC (optional)
 
 Optional **step overrides**: `--step-override path/to/overrides.json` merges over the project’s `step_config` for that run.
@@ -227,8 +227,8 @@ methyl-enricher --project configs/project_PCa1_3levels_vs_Healthy_Hardik.json
 # 5) Classifier: one run per comparison (reads from detection/cancer/<group>, writes to classifier/cancer/<group>)
 methyl-classifier --project configs/project_PCa1_3levels_vs_Healthy_Hardik.json
 
-# 6) Validator: one run per comparison (reads full classifier from classifier/... or detection/...)
-methyl-validator --project configs/project_PCa1_3levels_vs_Healthy_Hardik.json
+# 6) Predictor: one run per comparison (reads full classifier from classifier/... or detection/...)
+methyl-predictor --project configs/project_PCa1_3levels_vs_Healthy_Hardik.json
 ```
 
 ### 6.2 Overriding without editing the project file

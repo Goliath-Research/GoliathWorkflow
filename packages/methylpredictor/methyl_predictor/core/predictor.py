@@ -1,5 +1,5 @@
 """
-Core validation: load MethylClassifier, run prediction on test sets, compute metrics, write JSON + CSV.
+Core prediction: load MethylClassifier, run prediction on test sets, compute metrics, write JSON + CSV.
 """
 
 import json
@@ -15,7 +15,7 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
 )
 
-from ..models.config import ValidatorConfig
+from ..models.config import PredictorConfig
 
 
 def _compute_metrics(
@@ -89,7 +89,7 @@ def _print_metrics(metrics: Dict[str, Any]) -> None:
         print("     " + " ".join(f"{x:>4}" for x in row))
 
 
-def run_validation(config: ValidatorConfig) -> Dict[str, Any]:
+def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     """
     Load MethylClassifier, run prediction on test_control_paths + test_disease_paths,
     compute metrics, print summary, write validation_metrics.json and predictions CSV.

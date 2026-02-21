@@ -1,5 +1,5 @@
 """
-Resolve MethylValidator config from a pipeline project config.
+Resolve MethylPredictor config from a pipeline project config.
 Supports control/disease (per-comparison) and flat groups (single run).
 """
 
@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from methyl_utils import load_project
 
-from .models.config import ValidatorConfig
+from .models.config import PredictorConfig
 
 
 def _apply_path_remap(paths: List[str], path_remap: Optional[Dict[str, str]]) -> List[str]:
@@ -30,20 +30,20 @@ def _apply_path_remap(paths: List[str], path_remap: Optional[Dict[str, str]]) ->
     return out
 
 
-def resolve_validator_config(
+def resolve_predictor_config(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
     output_dir: Optional[Union[str, Path]] = None,
     test_control_paths: Optional[List[str]] = None,
     test_disease_paths: Optional[List[str]] = None,
-) -> ValidatorConfig:
+) -> PredictorConfig:
     """
-    Build a single ValidatorConfig from project (flat groups: group0 = control, group1 = disease).
+    Build a single PredictorConfig from project (flat groups: group0 = control, group1 = disease).
     When project uses control/disease + comparisons, consider using
-    resolve_validator_config_per_comparison for one run per comparison.
+    resolve_predictor_config_per_comparison for one run per comparison.
     """
     project = load_project(project_path)
-    step_cfg = (project.get_step_config("validator") or {}).copy()
+    step_cfg = (project.get_step_config("validator") or project.get_step_config("predictor") or {}).copy()
     classifier_step = project.get_step_config("classifier") or {}
     if step_override_path is not None:
         override_path = Path(step_override_path)
@@ -86,24 +86,24 @@ def resolve_validator_config(
         "samples_base_path": project.samples_base_path,
         "debug": step_cfg.get("debug", False),
     }
-    return ValidatorConfig(**base)
+    return PredictorConfig(**base)
 
 
-def resolve_validator_config_per_comparison(
+def resolve_predictor_config_per_comparison(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
-) -> List[Tuple[ValidatorConfig, str]]:
+) -> List[Tuple[PredictorConfig, str]]:
     """
-    Build one ValidatorConfig per comparison (control/disease projects).
-    Returns list of (ValidatorConfig, comparison_label).
+    Build one PredictorConfig per comparison (control/disease projects).
+    Returns list of (PredictorConfig, comparison_label).
     """
     project = load_project(project_path)
     if not getattr(project, "uses_control_disease", lambda: False)():
         # Flat groups: single config
-        config = resolve_validator_config(project_path, step_override_path=step_override_path)
+        config = resolve_predictor_config(project_path, step_override_path=step_override_path)
         return [(config, "validation")]
 
-    step_cfg = (project.get_step_config("validator") or {}).copy()
+    step_cfg = (project.get_step_config("validator") or project.get_step_config("predictor") or {}).copy()
     classifier_step = project.get_step_config("classifier") or {}
     if step_override_path is not None:
         override_path = Path(step_override_path)
@@ -115,7 +115,7 @@ def resolve_validator_config_per_comparison(
     comparisons = project.get_comparisons()
     paths = project.get_derived_paths()
 
-    result: List[Tuple[ValidatorConfig, str]] = []
+    result: List[Tuple[PredictorConfig, str]] = []
     for spec in comparisons:
         comp_label = spec.comparison_label or spec.disease_group
         ctrl_label = spec.control_group
@@ -155,5 +155,5 @@ def resolve_validator_config_per_comparison(
             "samples_base_path": project.samples_base_path,
             "debug": step_cfg.get("debug", False),
         }
-        result.append((ValidatorConfig(**base), comp_label))
+        result.append((PredictorConfig(**base), comp_label))
     return result

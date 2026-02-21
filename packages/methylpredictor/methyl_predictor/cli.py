@@ -1,5 +1,5 @@
 """
-Command-line interface for MethylValidator.
+Command-line interface for MethylPredictor.
 """
 
 import argparse
@@ -8,11 +8,11 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from .core.validator import run_validation
-from .models.config import ValidatorConfig
+from .core.predictor import run_prediction
+from .models.config import PredictorConfig
 from .project_resolver import (
-    resolve_validator_config,
-    resolve_validator_config_per_comparison,
+    resolve_predictor_config,
+    resolve_predictor_config_per_comparison,
 )
 
 try:
@@ -65,21 +65,21 @@ def _parse_test_paths_arg(arg: Optional[str]) -> Optional[List[str]]:
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="MethylValidator - Validate MethylClassifier on test sample sets and compute metrics",
+        description="MethylPredictor - Run MethylClassifier on test sample sets and compute metrics",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # From project (single run for flat groups, or one run per comparison for control/disease)
-  methyl-validator --project project.json
+  methyl-predictor --project project.json
 
   # Override output and step config
-  methyl-validator --project project.json --output-dir ./validation_out --step-override overrides.json
+  methyl-predictor --project project.json --output-dir ./out --step-override overrides.json
 
   # Explicit test sets (CSV with one column of sample dirs, or comma-separated paths)
-  methyl-validator --project project.json --test-control control.csv --test-disease disease.csv
+  methyl-predictor --project project.json --test-control control.csv --test-disease disease.csv
 
   # Standalone (no project): model dir + output + test sets
-  methyl-validator --model-dir /path/to/detection/cancer/pca1-1 --output-dir ./val \\
+  methyl-predictor --model-dir /path/to/classifiers/healthy/cancer --output-dir ./out \\
     --test-control control.csv --test-disease disease.csv
         """,
     )
@@ -95,7 +95,7 @@ Examples:
         "-c",
         type=Path,
         metavar="JSON",
-        help="Path to validator config JSON (alternative to --project; must include model_path/model_dir, output_dir, test_control_paths, test_disease_paths).",
+        help="Path to predictor config JSON (alternative to --project; must include model_path/model_dir, output_dir, test_control_paths, test_disease_paths).",
     )
     parser.add_argument(
         "--model",
@@ -120,7 +120,7 @@ Examples:
         "--step-override",
         type=Path,
         metavar="JSON",
-        help="Optional JSON overrides for validator/classifier step (when using --project).",
+        help="Optional JSON overrides for predictor/classifier step (when using --project).",
     )
     parser.add_argument(
         "--test-control",
@@ -135,7 +135,7 @@ Examples:
     parser.add_argument(
         "--per-comparison",
         action="store_true",
-        help="With --project: run one validation per comparison. Auto-enabled when project uses controls/diseases so models use all chromosomes (detection/cancer/<group>).",
+        help="With --project: run one run per comparison. Auto-enabled when project uses controls/diseases.",
     )
     parser.add_argument(
         "--debug",
@@ -167,8 +167,8 @@ def main() -> None:
         if args.test_disease is not None:
             data["test_disease_paths"] = _parse_test_paths_arg(args.test_disease) or []
         data["debug"] = data.get("debug", False) or args.debug
-        config = ValidatorConfig(**data)
-        run_validation(config)
+        config = PredictorConfig(**data)
+        run_prediction(config)
         return
 
     # Project mode
@@ -177,7 +177,6 @@ def main() -> None:
         test_disease = _parse_test_paths_arg(args.test_disease)
         output_dir = str(args.output_dir) if args.output_dir is not None else None
 
-        # Use per-comparison when project has control/disease so we use detection/cancer/<group> (multi-chromosome), matching MethylClassifier
         use_per_comparison = getattr(args, "per_comparison", False)
         if load_project is not None:
             project = load_project(args.project)
@@ -185,7 +184,7 @@ def main() -> None:
                 use_per_comparison = True
 
         if use_per_comparison:
-            configs = resolve_validator_config_per_comparison(
+            configs = resolve_predictor_config_per_comparison(
                 args.project,
                 step_override_path=args.step_override,
             )
@@ -200,11 +199,11 @@ def main() -> None:
                     cfg.model_dir = str(args.model_dir)
                     cfg.model_path = None
                 cfg.debug = cfg.debug or args.debug
-                print(f"\n🔬 Validation run: {label}")
-                run_validation(cfg)
+                print(f"\n🔬 Prediction run: {label}")
+                run_prediction(cfg)
             return
 
-        config = resolve_validator_config(
+        config = resolve_predictor_config(
             args.project,
             step_override_path=args.step_override,
             output_dir=output_dir,
@@ -218,7 +217,7 @@ def main() -> None:
             config.model_dir = str(args.model_dir)
             config.model_path = None
         config.debug = config.debug or args.debug
-        run_validation(config)
+        run_prediction(config)
         return
 
     # Standalone: require model (or model_dir), output-dir, test-control, test-disease
@@ -235,7 +234,7 @@ def main() -> None:
         print("Error: --test-control and --test-disease must yield at least one path each.", file=sys.stderr)
         sys.exit(1)
 
-    config = ValidatorConfig(
+    config = PredictorConfig(
         model_path=str(args.model) if args.model is not None else None,
         model_dir=str(args.model_dir) if args.model_dir is not None else None,
         output_dir=str(args.output_dir),
@@ -243,7 +242,7 @@ def main() -> None:
         test_disease_paths=disease_paths,
         debug=args.debug,
     )
-    run_validation(config)
+    run_prediction(config)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "methyl-validator"
+name = "methyl-predictor"
 version = "0.1.0"
-description = "Validate MethylClassifier on test sample sets and compute classification metrics"
+description = "Run MethylClassifier on test sample sets and compute classification metrics (MethylPredictor)"
 authors = ["MethylPipeline Development Team"]
 readme = "README.md"
-packages = [{include = "methyl_validator"}]
+packages = [{include = "methyl_predictor"}]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.13"
@@ -18,8 +18,7 @@ methylutils = {path = "../methylutils", develop = true}
 methyl_classifier = {path = "../methylclassifier", develop = true}
 
 [tool.poetry.scripts]
-methyl-validator = "methyl_validator.cli:main"
-methyl-predictor = "methyl_validator.cli:main"
+methyl-predictor = "methyl_predictor.cli:main"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.0.0"

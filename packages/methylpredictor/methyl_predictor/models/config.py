@@ -1,4 +1,4 @@
-"""Pydantic config for MethylValidator."""
+"""Pydantic config for MethylPredictor."""
 
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -6,8 +6,8 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
-class ValidatorConfig(BaseModel):
-    """Configuration for running MethylValidator on test sample sets."""
+class PredictorConfig(BaseModel):
+    """Configuration for running MethylPredictor on test sample sets."""
 
     model_path: Optional[str] = Field(
         default=None,

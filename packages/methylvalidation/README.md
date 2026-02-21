@@ -36,4 +36,4 @@ methyl-validation --config monte_carlo_config.json --iterations 20 --seed 42 --o
 
 ## Dependencies
 
-Requires the MethylPipeline CLI tools to be installed and on `PATH`: `methyl-centroid`, `methyl-detector`, `methyl-classifier`, `methyl-validator`.
+Requires the MethylPipeline CLI tools to be installed and on `PATH`: `methyl-centroid`, `methyl-detector`, `methyl-classifier`, `methyl-predictor`.
