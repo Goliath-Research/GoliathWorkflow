@@ -52,6 +52,25 @@ except ImportError:
     help='Path to log file for detailed logging (summary/errors still shown on screen)'
 )
 @click.option(
+    '--output-base',
+    type=click.Path(path_type=Path),
+    default=None,
+    help='Override project output_base so all paths (centroids, detection, etc.) are under this directory. '
+         'Use when the project JSON has a different machine path; no need for --centroid1-dir/--centroid2-dir.',
+)
+@click.option(
+    '--centroid1-dir',
+    type=click.Path(path_type=Path, exists=True, file_okay=False),
+    default=None,
+    help='Override centroid1 directory (optional; usually unnecessary if --output-base is set). Requires --project.',
+)
+@click.option(
+    '--centroid2-dir',
+    type=click.Path(path_type=Path, exists=True, file_okay=False),
+    default=None,
+    help='Override centroid2 directory (optional; usually unnecessary if --output-base is set). Requires --project.',
+)
+@click.option(
     '--per-cancer-group',
     is_flag=True,
     default=False,
@@ -74,6 +93,9 @@ def main(
     step_override: Optional[Path],
     verbose: bool,
     log_file: Optional[Path],
+    output_base: Optional[Path],
+    centroid1_dir: Optional[Path],
+    centroid2_dir: Optional[Path],
     per_cancer_group: bool,
     multi_class_model: bool,
 ) -> None:
@@ -95,7 +117,9 @@ def main(
             merge_dmp_csvs_from_detection_dirs,
         )
 
-        configs_and_labels = resolve_detector_config_per_cancer_group(project, step_override)
+        configs_and_labels = resolve_detector_config_per_cancer_group(
+            project, step_override, output_base_override=output_base
+        )
         if not configs_and_labels:
             raise click.UsageError(
                 "Project has fewer than 2 groups; --per-cancer-group/--multi-class-model require at least one control and one disease group."
@@ -167,7 +191,13 @@ def main(
 
         return
     if project is not None:
-        loaded_config = resolve_detector_config(project, step_override)
+        loaded_config = resolve_detector_config(
+            project,
+            step_override,
+            output_base_override=output_base,
+            centroid1_dir_override=centroid1_dir,
+            centroid2_dir_override=centroid2_dir,
+        )
     else:
         if not config.exists():
             raise click.BadParameter(f"Config file not found: {config}", param_hint="CONFIG")

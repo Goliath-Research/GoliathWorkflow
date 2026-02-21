@@ -713,12 +713,27 @@ def _looks_like_absolute_path(entry: str) -> bool:
     return False
 
 
-def load_project(path: Union[str, Path]) -> ProjectConfig:
-    """Load and validate a project config from a JSON file."""
+def load_project(
+    path: Union[str, Path],
+    output_base_override: Optional[str] = None,
+) -> ProjectConfig:
+    """
+    Load and validate a project config from a JSON file.
+    This is the single place pipeline steps use to resolve input/output paths
+    (via the returned project's get_derived_paths(), get_centroid_dir(), etc.).
+
+    If output_base_override is set, the project's output_base is replaced before
+    any path resolution, so all derived paths (centroids, detections, classifiers, etc.)
+    are computed under that base. Use when running on a different machine or directory
+    than the one in the project JSON.
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Project config not found: {path}")
     import json
     with open(path) as f:
         data = json.load(f)
-    return ProjectConfig.model_validate(data)
+    project = ProjectConfig.model_validate(data)
+    if output_base_override is not None:
+        project = project.model_copy(update={"output_base": output_base_override.rstrip("/")})
+    return project

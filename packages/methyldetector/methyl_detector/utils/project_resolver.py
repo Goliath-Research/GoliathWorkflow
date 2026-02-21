@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from methyl_utils import load_project, ProjectConfig
+from methyl_utils import load_project
 
 from ..models.config import MethylModelerConfig
 
@@ -17,6 +17,7 @@ from ..models.config import MethylModelerConfig
 def resolve_detector_config_per_cancer_group(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
+    output_base_override: Optional[Union[str, Path]] = None,
     control_index: int = 0,
     disease_subdir: str = "cancer",
 ) -> List[Tuple[MethylModelerConfig, str]]:
@@ -24,11 +25,13 @@ def resolve_detector_config_per_cancer_group(
     Build one MethylModelerConfig per comparison (control vs disease pair).
     When project uses control/disease + comparisons: one config per comparison from get_comparisons().
     When project uses flat groups: one config per non-control group (control index 0 vs each other).
-
-    Returns:
-        List of (config, comparison_label) for each comparison.
+    If output_base_override is set, all paths (centroid dirs, output_dir) are derived from that base
+    instead of the project's output_base (e.g. for running on a different machine).
     """
-    project = load_project(project_path)
+    project = load_project(
+        project_path,
+        output_base_override=str(output_base_override) if output_base_override is not None else None,
+    )
     step_cfg = project.get_step_config("detection") or {}
     if step_override_path is not None:
         with open(step_override_path) as f:
@@ -104,13 +107,21 @@ def resolve_detector_config_per_cancer_group(
 def resolve_detector_config(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
+    output_base_override: Optional[Union[str, Path]] = None,
+    centroid1_dir_override: Optional[Union[str, Path]] = None,
+    centroid2_dir_override: Optional[Union[str, Path]] = None,
 ) -> MethylModelerConfig:
     """
     Build MethylModelerConfig from a project config and optional step overrides.
     Uses Pydantic throughout; returns MethylModelerConfig (not dict).
     Output dir follows detections/<control_group>/<disease_group> (e.g. detections/healthy/cancer).
+    If output_base_override is set, centroid and output paths are derived from that base instead
+    of the project's output_base (so one project JSON works across machines). Optional
+    centroid1_dir_override / centroid2_dir_override still override those specific paths when needed.
     """
     project = load_project(project_path)
+    if output_base_override is not None:
+        project = project.model_copy(update={"output_base": str(output_base_override)})
     paths = project.get_derived_paths()
 
     if getattr(project, "uses_control_disease", lambda: False)() and len(project.get_comparisons()) == 1:
@@ -123,8 +134,8 @@ def resolve_detector_config(
         "chromosome": project.chromosomes or ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
             "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
         "contexts": project.contexts or ["CG"],
-        "centroid1_dir": paths.centroid1_dir,
-        "centroid2_dir": paths.centroid2_dir,
+        "centroid1_dir": str(centroid1_dir_override) if centroid1_dir_override is not None else paths.centroid1_dir,
+        "centroid2_dir": str(centroid2_dir_override) if centroid2_dir_override is not None else paths.centroid2_dir,
         "output_dir": output_dir,
     }
     # Optional: use project group sample paths as validation samples (detector can use "use_metadata" instead)
@@ -152,5 +163,11 @@ def resolve_detector_config(
         if getattr(project, "uses_control_disease", lambda: False)() and len(project.get_comparisons()) == 1:
             spec = project.get_comparisons()[0]
             base["output_dir"] = project.get_detection_output_dir(spec.control_group, spec.disease_group)
+
+    # CLI overrides for centroid dirs (apply after step_override so they take precedence)
+    if centroid1_dir_override is not None:
+        base["centroid1_dir"] = str(centroid1_dir_override)
+    if centroid2_dir_override is not None:
+        base["centroid2_dir"] = str(centroid2_dir_override)
 
     return MethylModelerConfig.model_validate(base)

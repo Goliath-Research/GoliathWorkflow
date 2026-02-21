@@ -82,6 +82,12 @@ def main() -> None:
     output_base = Path(config.output_base)
     output_base.mkdir(parents=True, exist_ok=True)
 
+    # Resolve project_name from base project so runs go under output_base/project_name/monte_carlo_runs/run_id
+    base_project_config = load_project(config.base_project)
+    project_name = base_project_config.project_name
+    monte_carlo_runs_root = output_base / project_name / "monte_carlo_runs"
+    monte_carlo_runs_root.mkdir(parents=True, exist_ok=True)
+
     # Load and resolve sample paths once
     control_paths = load_and_resolve_sample_paths(config.healthy_csv, config.samples_base_path)
     disease_paths = load_and_resolve_sample_paths(config.disease_csv, config.samples_base_path)
@@ -124,7 +130,7 @@ def main() -> None:
 
         for i in range(config.n_iterations):
             run_id = f"run_{i + 1:04d}"
-            run_dir = output_base / run_id
+            run_dir = monte_carlo_runs_root / run_id
             seed_i = (config.seed + i) if config.seed is not None else None
 
             if progress is not None:
@@ -165,7 +171,7 @@ def main() -> None:
                 base_project,
                 run_dir,
                 run_id,
-                config.output_base,
+                str(monte_carlo_runs_root),
                 train_control,
                 train_disease,
                 val_control,
@@ -234,17 +240,17 @@ def main() -> None:
         sys.exit(1)
 
     df = build_metrics_table(rows)
-    all_metrics_csv = output_base / "all_metrics.csv"
+    all_metrics_csv = monte_carlo_runs_root / "all_metrics.csv"
     write_all_metrics_csv(df, all_metrics_csv)
     print(f"Wrote {all_metrics_csv}")
 
     summary = compute_summary(df)
-    summary_path = output_base / "metrics_summary.json"
+    summary_path = monte_carlo_runs_root / "metrics_summary.json"
     write_summary_json(summary, summary_path)
     print(f"Wrote {summary_path}")
 
     if all_timings:
-        step_timings_path = output_base / "step_timings.csv"
+        step_timings_path = monte_carlo_runs_root / "step_timings.csv"
         write_step_timings_csv(all_timings, step_timings_path)
         print(f"Wrote {step_timings_path}")
 

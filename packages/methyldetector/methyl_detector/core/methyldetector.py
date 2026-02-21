@@ -510,22 +510,13 @@ class MethylDetector:
         Returns:
             DataFrame with added 'context_weight' column
         """
+        if 'effect_size' not in dmps_df.columns:
+            raise ValueError("DataFrame must have 'effect_size' column (from MethylCentroidPair) for context weighting")
         weight_map = {}
-        
-        # Use effect_size (should be properly computed with variance weighting)
-        if 'effect_size' in dmps_df.columns:
-            score_col = 'effect_size'
-        elif 'delta_mean' in dmps_df.columns:
-            # Fallback to delta_mean if effect_size computation failed; bound to [0, 1]
-            logger.warning("effect_size column missing, falling back to |delta_mean| (clipped to [0,1]) for context weighting")
-            score_col = 'delta_mean'
-            dmps_df['effect_size'] = np.clip(np.abs(dmps_df['delta_mean'].values), 0.0, 1.0)
-        else:
-            raise ValueError("DataFrame must have 'effect_size' or 'delta_mean' column")
-        
-        # Compute trimmed mean per context
+
+        # Compute trimmed mean per context using effect_size
         for context, group in dmps_df.groupby('context'):
-            S = group[score_col].values
+            S = group['effect_size'].values
             
             # Calculate asymmetric trimmed percentiles
             # Remove more from bottom (low effect sizes) and less from top (high effect sizes are important)
@@ -568,9 +559,9 @@ class MethylDetector:
             n_dmps = len(dmps_df[dmps_df['context'] == ctx])
             logger.info(f"{ctx:<10} {n_dmps:>10,} {raw_weights[ctx]:>16.4f} {weight_map[ctx]:>10.4f}")
         logger.info("-" * 50)
-        logger.info("Note: Weights based on average effect size (|delta_mean|) after")
-        logger.info("      trimming top/bottom 10%. Higher weight = stronger methylation")
-        logger.info("      differences on average, NOT necessarily more biological importance.")
+        logger.info("Note: Weights based on average effect_size after trimming (effect_size from")
+        logger.info("      MethylCentroidPair: |delta_mean|/(overlap*combined_std), not raw delta_mean).")
+        logger.info("      Trimmed: bottom %.0f%%, top %.0f%%. Higher weight = stronger separation.", self.config.trimmed_percentile_low * 100, self.config.trimmed_percentile_high * 100)
         logger.info("="*60)
         logger.info("")
         

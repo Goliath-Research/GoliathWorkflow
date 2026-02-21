@@ -44,7 +44,10 @@ class MonteCarloConfig(BaseModel):
     )
     output_base: str = Field(
         ...,
-        description="Root directory for all runs (e.g. ./monte_carlo_runs). Each iteration uses a subdir run_0001, run_0002, ...",
+        description="Global output base (same as pipeline/base project output_base, e.g. /work/.../all-prostate). "
+        "Runs are created under output_base / project_name / monte_carlo_runs / run_0001, run_0002, ... "
+        "so the layout matches the pipeline: output_base/project_name/centroids|detections|... for a single run, "
+        "and output_base/project_name/monte_carlo_runs/run_id/centroids|detections|... for Monte Carlo.",
     )
     path_remap: Optional[Dict[str, str]] = Field(
         default=None,

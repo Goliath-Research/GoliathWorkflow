@@ -75,7 +75,7 @@
       "weight_fit_alpha": 1,
       "weight_fit_l1_ratio": 0.5,
       "temperature": 1,
-      "enable_platt_calibration": false,
+      "enable_platt_calibration": true,
       "trimmed_percentile_low": 0.1,
       "trimmed_percentile_high": 0.01,
       "chromosome_weights": null,

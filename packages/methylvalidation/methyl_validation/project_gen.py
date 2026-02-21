@@ -71,6 +71,8 @@ def generate_run_project(
     """
     Load base project JSON, write train/val CSVs, and write the run's project.json.
     Overrides output_base, project_name, controls and diseases to single groups with train samples only.
+    Called by methyl-validation with output_base = monte_carlo_runs_root (output_base/project_name/monte_carlo_runs)
+    so the run's paths are monte_carlo_runs_root/run_id/centroids|detections|...
 
     Returns:
         (project_json_path, train_control_csv, train_disease_csv, val_control_csv, val_disease_csv)

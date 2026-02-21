@@ -359,7 +359,11 @@ class MethylModelerConfig(BaseModel):
         if v is not None:
             path = Path(v)
             if not path.exists():
-                raise ValueError(f"Centroid directory does not exist: {path}")
+                raise ValueError(
+                    f"Centroid directory does not exist: {path}. "
+                    "If using a project JSON from another machine or path, run with "
+                    "--output-base /path/to/local/output so centroid and detection paths are resolved under that directory."
+                )
             if not path.is_dir():
                 raise ValueError(f"Centroid path must be a directory: {path}")
         return path

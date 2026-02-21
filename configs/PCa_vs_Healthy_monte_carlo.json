@@ -6,6 +6,6 @@
   "n_iterations": 1,
   "seed": 42,
   "base_project": "configs/project_PCa_vs_Healthy.json",
-  "output_base": "/work/david-gladys/all-prostate/monte_carlo_runs",
+  "output_base": "/work/david-gladys/all-prostate",
   "abort_on_step_failure": false
 }
