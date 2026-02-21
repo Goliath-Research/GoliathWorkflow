@@ -69,14 +69,14 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # From project (single run for flat groups, or one run per comparison for control/disease)
+  # From project; uses default test set from step_config.predictor if defined
   methyl-predictor --project project.json
+
+  # Override test set on the command line
+  methyl-predictor --project project.json --test-control control.csv --test-disease disease.csv
 
   # Override output and step config
   methyl-predictor --project project.json --output-dir ./out --step-override overrides.json
-
-  # Explicit test sets (CSV with one column of sample dirs, or comma-separated paths)
-  methyl-predictor --project project.json --test-control control.csv --test-disease disease.csv
 
   # Standalone (no project): model dir + output + test sets
   methyl-predictor --model-dir /path/to/classifiers/healthy/cancer --output-dir ./out \\
@@ -88,7 +88,8 @@ Examples:
         "-p",
         type=Path,
         metavar="JSON",
-        help="Path to pipeline project config; test samples and model are resolved from project.",
+        help="Path to pipeline project config. Default test set is taken from step_config.predictor "
+        "(test_control_paths, test_disease_paths) unless overridden by --test-control/--test-disease.",
     )
     parser.add_argument(
         "--config",
@@ -125,12 +126,12 @@ Examples:
     parser.add_argument(
         "--test-control",
         metavar="CSV_OR_PATHS",
-        help="Override control test set: path to CSV (one column of sample dirs) or comma-separated paths.",
+        help="Override control test set (overrides step_config.predictor): CSV path or comma-separated paths.",
     )
     parser.add_argument(
         "--test-disease",
         metavar="CSV_OR_PATHS",
-        help="Override disease test set: path to CSV or comma-separated paths.",
+        help="Override disease test set (overrides step_config.predictor): CSV path or comma-separated paths.",
     )
     parser.add_argument(
         "--per-comparison",

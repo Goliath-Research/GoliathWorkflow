@@ -14,7 +14,7 @@ This document is the **single reference** for the **unified project config** (pr
   - Control and disease groups and their sample lists
   - Which comparisons to run (e.g. healthy vs pca1-1, healthy vs pca1-2, …)
   - Shared options (chromosomes, contexts, path remapping)
-  - Per-step defaults (centroid, detection, mapper, enricher, classifier, validator)
+  - Per-step defaults (centroid, detection, mapper, enricher, classifier, predictor)
 
 Tools that support `--project`:
 
@@ -42,7 +42,7 @@ The **recommended format** uses three top-level blocks: **controls**, **diseases
 | `output_base` | Yes | Global output directory. All step outputs live under `{output_base}/{project_name}`. |
 | `controls` | Yes* | Control side: `label` (e.g. `"healthy"`) and `groups` (list of `{ label, sample_paths }`). |
 | `diseases` | Yes* | Disease side: `label` (e.g. `"cancer"`) and `groups` (list of `{ label, sample_paths }`). |
-| `comparisons` | Yes* | List of pairs: `{ "control_group": "...", "disease_group": "..." }`. Defines which control/disease pairs to run through detection, mapper, enricher, classifier, validator. |
+| `comparisons` | Yes* | List of pairs: `{ "control_group": "...", "disease_group": "..." }`. Defines which control/disease pairs to run through detection, mapper, enricher, classifier, predictor. |
 | `samples_base_path` | No | Base directory to resolve relative sample paths or names in CSVs. |
 | `chromosomes` | No | Shared chromosome list (e.g. `["1","2",...,"22","X","Y"]`). |
 | `contexts` | No | Methylation contexts (e.g. `["CG"]`). |
@@ -89,13 +89,13 @@ The **recommended format** uses three top-level blocks: **controls**, **diseases
     "mapper": { ... },
     "enricher": { ... },
     "classifier": { ... },
-    "validator": { ... }
+    "predictor": { "test_control_paths": [...], "test_disease_paths": [...], "debug": false }
   }
 }
 ```
 
 - **controls.label** / **diseases.label** are used in paths as the “side” name (e.g. disease side → `cancer`).
-- **comparisons** define one run per pair: e.g. healthy vs pca1-1, healthy vs pca1-2, healthy vs pca1-3. Each comparison gets its own detection, mapper, enricher, classifier, and validator outputs.
+- **comparisons** define one run per pair: e.g. healthy vs pca1-1, healthy vs pca1-2, healthy vs pca1-3. Each comparison gets its own detection, mapper, enricher, classifier, and predictor outputs.
 
 ---
 
@@ -108,9 +108,9 @@ The **recommended format** uses three top-level blocks: **controls**, **diseases
   - **Control (centroids only):** `centroids/controls/<controls.label>/<group.label>`  
     Example: `centroids/controls/healthy/healthy`
   - **Disease / comparisons:** `<step>/<diseases.label>/<disease_group.label>`  
-    Example: `detection/cancer/pca1-1`, `mapper/cancer/pca1-2`, `classifier/cancer/pca1-3`, `validator/cancer/pca1-1`
+    Example: `detection/cancer/pca1-1`, `mapper/cancer/pca1-2`, `classifier/cancer/pca1-3`, `predictors/healthy/pca1-1`
 
-So the pattern is **`<pipeline_step>/<disease_label>/<disease_group>`** for detection, mapper, enricher, classifier, and validator. The **disease_label** comes from `diseases.label` (e.g. `"cancer"`); the **disease_group** is the comparison’s disease group (e.g. `pca1-1`).
+So the pattern is **`<pipeline_step>/<disease_label>/<disease_group>`** for detection, mapper, enricher, classifier; predictor uses **`predictors/<control_group>/<disease_group>`**. The **disease_label** comes from `diseases.label` (e.g. `"cancer"`); the **disease_group** is the comparison’s disease group (e.g. `pca1-1`).
 
 ### 3.1 Full directory tree (example project)
 
@@ -152,8 +152,8 @@ With `output_base = /work/david-gladys/all-prostate` and `project_name = PCa1_3l
 │       ├── pca1-2/
 │       └── pca1-3/
 │
-├── validator/
-│   └── cancer/
+├── predictors/
+│   └── healthy/
 │       ├── pca1-1/                   ← validation_metrics.json, predictions.csv
 │       ├── pca1-2/
 │       └── pca1-3/
@@ -170,7 +170,7 @@ With `output_base = /work/david-gladys/all-prostate` and `project_name = PCa1_3l
 | **Mapper** | `detection/<disease.label>/<group>` (DMP CSVs) | `mapper/<disease.label>/<group>` |
 | **Enricher** | `mapper/<disease.label>/<group>/all-gene_name-combined.csv` | `enricher/<disease.label>/<group>` |
 | **Classifier** | `detection/<disease.label>/<group>` (classifier-*.pkl) or full pkl under `classifier/...` | `classifier/<disease.label>/<group>/classification_results.csv` (and optional saved pkl) |
-| **Validator** | Full classifier pkl in `classifier/<disease.label>/<group>/` or fallback `detection/<disease.label>/<group>/` | `validator/<disease.label>/<group>/` |
+| **Predictor** | Full classifier pkl in `classifiers/<control_group>/<disease_group>/` or fallback detection dir | `predictors/<control_group>/<disease_group>/` |
 
 ---
 
@@ -188,7 +188,7 @@ Example: `sample_paths`: `["configs/healthy-hardik.csv"]` with `samples_base_pat
 
 ## 5. Per-step configuration: `step_config`
 
-The project can define **defaults per pipeline step** under `step_config`. Keys are step names: `centroid`, `detection`, `mapper`, `enricher`, `classifier`, `validator`, `alignment_qc`. Each value is a JSON object merged into that step’s config when running with `--project`.
+The project can define **defaults per pipeline step** under `step_config`. Keys are step names: `centroid`, `detection`, `mapper`, `enricher`, `classifier`, `predictor`, `alignment_qc`. (The key `validator` is deprecated and normalized to `predictor` when loading.) Each value is a JSON object merged into that step’s config when running with `--project`.
 
 **Resolution order:** project-derived paths + `step_config[step]` → `--step-override` file → CLI arguments (later overrides earlier).
 
@@ -199,7 +199,7 @@ The project can define **defaults per pipeline step** under `step_config`. Keys 
 - **mapper:** `csv_pattern`, `gtf`, `disease_term`, `enrich_disease`, `enrich_source`, `enrich_profile`, `optimize_dmps`, and optionally API keys (or via env / step-override).
 - **enricher:** `gene_column`, `disease_only`, `disease_association_type`, `min_disease_evidence_level`, `min_disease_score`, `min_dmp_count`, `max_gene_q_value`, `sort_by`, `top`, `cutoff`, `organism`, `libraries`.
 - **classifier:** `weight_method`, `weight_fit_*`, `temperature`, `enable_platt_calibration`, `trimmed_percentile_*`, `chromosome_weights`, `project_name`, `save_classifier_path`, `debug`, `log_level`.
-- **validator:** e.g. `debug`.
+- **predictor:** optional **`test_control_paths`** and **`test_disease_paths`** (lists of paths to sample dirs or to CSV files listing sample dirs). When set, `methyl-predictor --project` uses these as the default test set and reports validation metrics (balanced accuracy, sensitivity, specificity, etc.). Override from the command line with `--test-control` and `--test-disease`. Other options: e.g. `debug`.
 
 Step-specific options (e.g. mapper’s `gtf`, classifier’s `save_classifier_path`) are documented in each package. When using `--project`, these come from `step_config` unless overridden by `--step-override` or CLI.
 
@@ -207,7 +207,7 @@ Step-specific options (e.g. mapper’s `gtf`, classifier’s `save_classifier_pa
 
 ## 6. Running the pipeline with the unified config
 
-All commands use the **same project file**. With control/disease + comparisons, detection, mapper, enricher, classifier, and validator run **once per comparison** (no need to pass `--per-cancer-group` for classifier/validator; it is implied).
+All commands use the **same project file**. With control/disease + comparisons, detection, mapper, enricher, classifier, and predictor run **once per comparison** (no need to pass `--per-cancer-group` for classifier/predictor; it is implied).
 
 ### 6.1 Typical workflow
 
@@ -227,7 +227,7 @@ methyl-enricher --project configs/project_PCa1_3levels_vs_Healthy_Hardik.json
 # 5) Classifier: one run per comparison (reads from detection/cancer/<group>, writes to classifier/cancer/<group>)
 methyl-classifier --project configs/project_PCa1_3levels_vs_Healthy_Hardik.json
 
-# 6) Predictor: one run per comparison (reads full classifier from classifier/... or detection/...)
+# 6) Predictor: one run per comparison; uses step_config.predictor test set by default (or --test-control/--test-disease)
 methyl-predictor --project configs/project_PCa1_3levels_vs_Healthy_Hardik.json
 ```
 
@@ -255,7 +255,7 @@ Example with three disease groups and one control group:
 ]
 ```
 
-Outputs are then under `detection/cancer/pca1-1`, `detection/cancer/pca1-2`, `detection/cancer/pca1-3`, and similarly for mapper, enricher, classifier, and validator.
+Outputs are then under `detections/healthy/pca1-1`, etc., and similarly for mapper, enricher, classifiers, and predictors.
 
 ---
 

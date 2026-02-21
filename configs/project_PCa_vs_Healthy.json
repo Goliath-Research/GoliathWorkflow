@@ -84,7 +84,9 @@
       "debug": false,
       "log_level": "INFO"
     },
-    "validator": {
+    "predictor": {
+      "test_control_paths": ["configs/test_healthy.csv"],
+      "test_disease_paths": ["configs/test_cancer.csv"],
       "debug": false
     }
   }

@@ -3,6 +3,7 @@ Resolve MethylPredictor config from a pipeline project config.
 Supports control/disease (per-comparison) and flat groups (single run).
 """
 
+import csv
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -10,6 +11,57 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from methyl_utils import load_project
 
 from .models.config import PredictorConfig
+
+
+def _resolve_one_path(entry: str, base_path: Optional[str]) -> str:
+    """Resolve a single path; if base_path set and entry is not absolute, return base_path / entry."""
+    entry = entry.strip()
+    if not entry:
+        return ""
+    if base_path and not Path(entry).is_absolute():
+        return str(Path(base_path).resolve() / entry)
+    return entry
+
+
+def _read_paths_from_csv_file(csv_path: Path, base_path: Optional[str]) -> List[str]:
+    """Read sample paths from a CSV (one column or column named path/sample); resolve relative to base_path."""
+    out: List[str] = []
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        key = None
+        if reader.fieldnames:
+            for name in ("path", "sample", "sample_path"):
+                if name in (reader.fieldnames or []):
+                    key = name
+                    break
+            if key is None:
+                key = reader.fieldnames[0]
+        for row in reader:
+            p = row.get(key, "").strip() if key else ""
+            if p:
+                out.append(_resolve_one_path(p, base_path))
+    return out
+
+
+def _expand_test_paths(entries: List[str], base_path: Optional[str]) -> List[str]:
+    """
+    Expand a list of entries into full sample paths. Each entry is either a path to a .csv file
+    (expanded to the list of paths read from the CSV) or a single sample path. Relative paths
+    are resolved against base_path.
+    """
+    result: List[str] = []
+    base = Path(base_path).resolve() if base_path else None
+    for entry in (e.strip() for e in entries if e and str(e).strip()):
+        if not entry:
+            continue
+        p = Path(entry)
+        if base and not p.is_absolute():
+            p = base / p
+        if p.is_file() and p.suffix.lower() == ".csv":
+            result.extend(_read_paths_from_csv_file(p, str(base) if base else None))
+        else:
+            result.append(_resolve_one_path(entry, base_path))
+    return result
 
 
 def _apply_path_remap(paths: List[str], path_remap: Optional[Dict[str, str]]) -> List[str]:
@@ -43,7 +95,7 @@ def resolve_predictor_config(
     resolve_predictor_config_per_comparison for one run per comparison.
     """
     project = load_project(project_path)
-    step_cfg = (project.get_step_config("validator") or project.get_step_config("predictor") or {}).copy()
+    step_cfg = (project.get_step_config("predictor") or project.get_step_config("validator") or {}).copy()
     classifier_step = project.get_step_config("classifier") or {}
     if step_override_path is not None:
         override_path = Path(step_override_path)
@@ -53,7 +105,6 @@ def resolve_predictor_config(
             step_cfg = {**step_cfg, **overrides}
 
     paths = project.get_derived_paths()
-    # Model: prefer step_config.validator then step_config.classifier then detection_dir
     model_path = step_cfg.get("model_path") or classifier_step.get("save_classifier_path")
     model_dir = step_cfg.get("model_dir")
     if model_path is None and model_dir is None:
@@ -65,10 +116,17 @@ def resolve_predictor_config(
     if test_control_paths is not None and test_disease_paths is not None:
         control_paths = list(test_control_paths)
         disease_paths = list(test_disease_paths)
+    elif step_cfg.get("test_control_paths") is not None and step_cfg.get("test_disease_paths") is not None:
+        base_path = getattr(project, "samples_base_path", None)
+        control_paths = _expand_test_paths(step_cfg["test_control_paths"], base_path)
+        disease_paths = _expand_test_paths(step_cfg["test_disease_paths"], base_path)
     else:
         resolved = project.get_resolved_groups()
         if len(resolved) < 2:
-            raise ValueError("Project has fewer than 2 groups; provide test_control_paths and test_disease_paths or use a project with at least 2 groups.")
+            raise ValueError(
+                "Project has fewer than 2 groups; provide test_control_paths and test_disease_paths "
+                "in step_config.predictor or via CLI, or use a project with at least 2 groups."
+            )
         control_paths = list(resolved[0][1])
         disease_paths = list(resolved[1][1])
 
@@ -103,7 +161,7 @@ def resolve_predictor_config_per_comparison(
         config = resolve_predictor_config(project_path, step_override_path=step_override_path)
         return [(config, "validation")]
 
-    step_cfg = (project.get_step_config("validator") or project.get_step_config("predictor") or {}).copy()
+    step_cfg = (project.get_step_config("predictor") or project.get_step_config("validator") or {}).copy()
     classifier_step = project.get_step_config("classifier") or {}
     if step_override_path is not None:
         override_path = Path(step_override_path)
@@ -114,6 +172,10 @@ def resolve_predictor_config_per_comparison(
 
     comparisons = project.get_comparisons()
     paths = project.get_derived_paths()
+    base_path = getattr(project, "samples_base_path", None)
+    step_has_test_lists = (
+        step_cfg.get("test_control_paths") is not None and step_cfg.get("test_disease_paths") is not None
+    )
 
     result: List[Tuple[PredictorConfig, str]] = []
     for spec in comparisons:
@@ -124,7 +186,6 @@ def resolve_predictor_config_per_comparison(
         detection_dir = project.get_detection_output_dir(ctrl_label, dis_label)
         project_name = getattr(project, "project_name", "classifier")
         full_classifier_pkl = f"{classifier_output_dir}/{project_name}-classifier.pkl"
-        # Prefer full classifier pkl in classifier output dir; if missing, use detection dir (per-chrom classifier-*.pkl)
         if step_cfg.get("model_path") is not None:
             model_path = step_cfg.get("model_path")
             model_dir = None
@@ -139,8 +200,12 @@ def resolve_predictor_config_per_comparison(
             model_dir = detection_dir
         out_dir = project.get_validator_output_dir(ctrl_label, dis_label)
 
-        control_paths = list(project.get_group_sample_paths_by_label(spec.control_group))
-        disease_paths = list(project.get_group_sample_paths_by_label(spec.disease_group))
+        if step_has_test_lists:
+            control_paths = _expand_test_paths(step_cfg["test_control_paths"], base_path)
+            disease_paths = _expand_test_paths(step_cfg["test_disease_paths"], base_path)
+        else:
+            control_paths = list(project.get_group_sample_paths_by_label(spec.control_group))
+            disease_paths = list(project.get_group_sample_paths_by_label(spec.disease_group))
         if project.path_remap:
             control_paths = _apply_path_remap(control_paths, project.path_remap)
             disease_paths = _apply_path_remap(disease_paths, project.path_remap)

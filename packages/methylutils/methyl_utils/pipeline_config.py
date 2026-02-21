@@ -122,7 +122,7 @@ class DerivedPaths(BaseModel):
     """
     Derived paths from a ProjectConfig.
     Convention: project root = {output_base}/{project_name}; step dirs under that:
-    {project_root}/centroids|detection|mapper|enricher|classifier|validator|alignment_qc.
+    {project_root}/centroids|detections|classifiers|predictors|mapper|enricher|alignment_qc.
     When using N groups, centroid_dirs has one entry per group; control (index 0) is
     centroids/controls/{label}, non-control groups use centroids/diseases/cancer/{label} (same as detection/mapper/enricher).
     centroid1_dir and centroid2_dir are the first two for backward compatibility.
@@ -210,7 +210,8 @@ class ProjectConfig(BaseModel):
     )
     step_config: Optional[Dict[str, Dict[str, Any]]] = Field(
         default=None,
-        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, alignment_qc. "
+        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc. "
+        "Use 'predictor' (not 'validator') for prediction/validation; validator is deprecated. "
         "Values are merged into that step's config (override file / CLI still override these).",
     )
 
@@ -237,6 +238,22 @@ class ProjectConfig(BaseModel):
             and data.get("comparisons") is None
         ):
             data["comparisons"] = "control_vs_each_disease"
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_predictor_step_key(cls, data: Any) -> Any:
+        """Copy step_config.validator to step_config.predictor when predictor is missing (backward compatibility)."""
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        sc = data.get("step_config")
+        if not isinstance(sc, dict):
+            return data
+        sc = dict(sc)
+        if "predictor" not in sc and "validator" in sc:
+            sc["predictor"] = sc["validator"]
+        data["step_config"] = sc
         return data
 
     @model_validator(mode="after")
@@ -530,7 +547,8 @@ class ProjectConfig(BaseModel):
     def get_step_config(self, step_name: str) -> Dict[str, Any]:
         """
         Return the config dict for a step, or empty dict if not defined.
-        Step names: centroid, detection, mapper, enricher, classifier, validator, alignment_qc.
+        Step names: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc.
+        Use 'predictor' (canonical); 'validator' is deprecated but still accepted for backward compatibility.
         """
         if not self.step_config:
             return {}
