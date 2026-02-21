@@ -34,7 +34,7 @@
     },
     "detection": {
       "alpha": 0.05,
-      "optimize_dmps": false,
+      "optimize_dmps": true,
       "validation_mode": "real",
       "target_balanced_accuracy": 0.99,
       "min_delta_mean": 0.2,
