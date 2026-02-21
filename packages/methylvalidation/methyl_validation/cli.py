@@ -4,10 +4,19 @@ CLI for Monte Carlo validation runner.
 
 import argparse
 import sys
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Dict, List
 
-from tqdm import tqdm
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
 
 from .config import MonteCarloConfig
 from .pipeline_runner import run_pipeline_for_iteration
@@ -86,128 +95,130 @@ def main() -> None:
     # Optional: base project has multiple disease groups -> use --per-cancer-group (we generate single comparison, so no)
     per_cancer_group = False
 
-    use_tqdm = sys.stderr.isatty()
-    pbar_iter = tqdm(
-        total=config.n_iterations,
-        desc="Iterations",
-        position=0,
-        leave=True,
-        file=sys.stderr,
-        disable=not use_tqdm,
-    )
+    use_rich = sys.stderr.isatty()
+    console = Console(file=sys.stderr) if use_rich else None
 
     rows: List[Dict[str, Any]] = []
     all_timings: List[Dict[str, Any]] = []
-    for i in range(config.n_iterations):
-        run_id = f"run_{i + 1:04d}"
-        run_dir = output_base / run_id
-        seed_i = (config.seed + i) if config.seed is not None else None
 
-        if use_tqdm:
-            step_bar = tqdm(
-                total=4,
-                desc="Steps",
-                position=1,
-                leave=False,
-                file=sys.stderr,
-            )
-            step_bar_current: List[Any] = [None]
+    if use_rich and console is not None:
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=40),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+            console=console,
+            expand=False,
+        )
+    else:
+        progress = None
 
-            def progress_cb(step_index: int, step_name: str, event: str) -> None:
-                if event == "start":
-                    step_bar.set_description(f"Steps ({step_name})")
-                    step_bar_current[0] = tqdm(
-                        total=None,
-                        desc=f"Running {step_name}...",
-                        position=2,
-                        leave=False,
-                        file=sys.stderr,
-                        bar_format="{desc}",
-                    )
-                else:
-                    step_bar.update(1)
-                    if step_bar_current[0] is not None:
-                        step_bar_current[0].close()
-                        step_bar_current[0] = None
-
-            progress_callback = progress_cb
+    with (progress if progress is not None else nullcontext()):
+        if progress is not None:
+            task_iter = progress.add_task("Iterations", total=config.n_iterations)
         else:
-            progress_callback = None
+            task_iter = None
 
-        try:
-            train_control, train_disease, val_control, val_disease = stratified_split(
-                control_paths,
-                disease_paths,
-                config.train_fraction,
-                seed=seed_i,
+        for i in range(config.n_iterations):
+            run_id = f"run_{i + 1:04d}"
+            run_dir = output_base / run_id
+            seed_i = (config.seed + i) if config.seed is not None else None
+
+            if progress is not None:
+                task_steps = progress.add_task("Steps", total=4, completed=0)
+                task_current = progress.add_task("Running…", total=None, visible=False)
+
+                def make_progress_cb(prog: Progress, t_steps: Any, t_cur: Any):
+                    def progress_cb(step_index: int, step_name: str, event: str) -> None:
+                        if event == "start":
+                            prog.update(t_steps, description=f"Steps ({step_name})")
+                            prog.update(t_cur, description=f"Running {step_name}…", visible=True)
+                        else:
+                            prog.advance(t_steps, 1)
+                            prog.update(t_cur, visible=False)
+                    return progress_cb
+
+                progress_callback = make_progress_cb(progress, task_steps, task_current)
+            else:
+                task_steps = task_current = None
+                progress_callback = None
+
+            try:
+                train_control, train_disease, val_control, val_disease = stratified_split(
+                    control_paths,
+                    disease_paths,
+                    config.train_fraction,
+                    seed=seed_i,
+                )
+            except ValueError as e:
+                print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
+                if progress is not None:
+                    progress.remove_task(task_steps)
+                    progress.remove_task(task_current)
+                    progress.advance(task_iter, 1)
+                continue
+
+            project_path, _, _, val_control_csv, val_disease_csv = generate_run_project(
+                base_project,
+                run_dir,
+                run_id,
+                config.output_base,
+                train_control,
+                train_disease,
+                val_control,
+                val_disease,
+                config.samples_base_path,
             )
-        except ValueError as e:
-            print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
-            if use_tqdm:
-                step_bar.close()
-            pbar_iter.update(1)
-            continue
+            validator_output_dir = run_dir / "validator"
+            logs_dir = run_dir / "logs"
+            n_train_samples = len(train_control) + len(train_disease)
+            n_val_samples = len(val_control) + len(val_disease)
 
-        project_path, _, _, val_control_csv, val_disease_csv = generate_run_project(
-            base_project,
-            run_dir,
-            run_id,
-            config.output_base,
-            train_control,
-            train_disease,
-            val_control,
-            val_disease,
-            config.samples_base_path,
-        )
-        validator_output_dir = run_dir / "validator"
-        logs_dir = run_dir / "logs"
-        n_train_samples = len(train_control) + len(train_disease)
-        n_val_samples = len(val_control) + len(val_disease)
+            success, errors, step_timings = run_pipeline_for_iteration(
+                project_path,
+                val_control_csv,
+                val_disease_csv,
+                validator_output_dir,
+                per_cancer_group=per_cancer_group,
+                logs_dir=logs_dir,
+                progress_callback=progress_callback,
+            )
+            if progress is not None:
+                progress.remove_task(task_steps)
+                progress.remove_task(task_current)
+            for t in step_timings:
+                all_timings.append({
+                    **t,
+                    "run_id": run_id,
+                    "run_dir": str(run_dir),
+                    "n_train_samples": n_train_samples,
+                    "n_val_samples": n_val_samples,
+                })
+            if not success:
+                for msg in errors:
+                    print(f"Error [{run_id}]: {msg}", file=sys.stderr)
+                if config.abort_on_step_failure:
+                    print("Aborting (abort_on_step_failure=true).", file=sys.stderr)
+                    sys.exit(1)
+                if progress is not None:
+                    progress.advance(task_iter, 1)
+                continue
 
-        success, errors, step_timings = run_pipeline_for_iteration(
-            project_path,
-            val_control_csv,
-            val_disease_csv,
-            validator_output_dir,
-            per_cancer_group=per_cancer_group,
-            logs_dir=logs_dir,
-            progress_callback=progress_callback,
-        )
-        if use_tqdm:
-            step_bar.close()
-        for t in step_timings:
-            all_timings.append({
-                **t,
-                "run_id": run_id,
-                "run_dir": str(run_dir),
-                "n_train_samples": n_train_samples,
-                "n_val_samples": n_val_samples,
-            })
-        if not success:
-            for msg in errors:
-                print(f"Error [{run_id}]: {msg}", file=sys.stderr)
-            if use_tqdm:
-                step_bar.close()
-            if config.abort_on_step_failure:
-                print("Aborting (abort_on_step_failure=true).", file=sys.stderr)
-                sys.exit(1)
-            pbar_iter.update(1)
-            continue
-
-        metrics_path = validator_output_dir / "validation_metrics.json"
-        if not metrics_path.exists():
-            print(f"Warning: {metrics_path} not found after validator run; skipping metrics for {run_id}.", file=sys.stderr)
-            if use_tqdm:
-                step_bar.close()
-            pbar_iter.update(1)
-            continue
-        metrics = load_metrics_from_json(metrics_path)
-        scalar = _scalar_metrics_from_dict(metrics)
-        row = {"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), **scalar}
-        rows.append(row)
-        if not use_tqdm:
-            print(f"Completed iteration {i + 1}/{config.n_iterations} ({run_id})", file=sys.stderr)
-        pbar_iter.update(1)
+            metrics_path = validator_output_dir / "validation_metrics.json"
+            if not metrics_path.exists():
+                print(f"Warning: {metrics_path} not found after validator run; skipping metrics for {run_id}.", file=sys.stderr)
+                if progress is not None:
+                    progress.advance(task_iter, 1)
+                continue
+            metrics = load_metrics_from_json(metrics_path)
+            scalar = _scalar_metrics_from_dict(metrics)
+            row = {"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), **scalar}
+            rows.append(row)
+            if progress is None:
+                print(f"Completed iteration {i + 1}/{config.n_iterations} ({run_id})", file=sys.stderr)
+            else:
+                progress.advance(task_iter, 1)
 
     if not rows:
         print("No successful iterations; nothing to aggregate.", file=sys.stderr)
