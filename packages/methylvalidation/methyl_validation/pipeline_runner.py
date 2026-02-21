@@ -1,5 +1,5 @@
 """
-Run pipeline steps (methyl-centroid, methyl-detector, methyl-classifier, methyl-validator) via subprocess.
+Run pipeline steps (methyl-centroid, methyl-detector, methyl-classifier, methyl-predictor) via subprocess.
 """
 
 import shutil
@@ -59,15 +59,15 @@ def run_classifier(project_json: str | Path, per_cancer_group: bool = False) -> 
     return run_cmd(cmd)
 
 
-def run_validator(
+def run_predictor(
     project_json: str | Path,
     test_control_csv: str | Path,
     test_disease_csv: str | Path,
     output_dir: str | Path,
 ) -> tuple[int, str, str]:
-    """Run methyl-validator with project and override test sets and output dir."""
+    """Run methyl-predictor with project and override test sets and output dir."""
     cmd = [
-        "methyl-validator",
+        "methyl-predictor",
         "--project", str(project_json),
         "--test-control", str(test_control_csv),
         "--test-disease", str(test_disease_csv),
@@ -94,13 +94,13 @@ def run_pipeline_for_iteration(
     project_json: Path,
     val_control_csv: Path,
     val_disease_csv: Path,
-    validator_output_dir: Path,
+    predictor_output_dir: Path,
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
-    Run centroid -> detector -> classifier -> validator in order.
+    Run centroid -> detector -> classifier -> predictor in order.
     If logs_dir is set, create it and write each step's stdout+stderr to logs_dir/<step_name>.log,
     and write step_timings.csv to logs_dir.parent (run_dir).
     If progress_callback is set, call it with (step_index, step_name, "start") before each step
@@ -116,12 +116,12 @@ def run_pipeline_for_iteration(
         ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=per_cancer_group)),
         ("methyl-classifier", lambda: run_classifier(project_json, per_cancer_group=per_cancer_group)),
         (
-            "methyl-validator",
-            lambda: run_validator(
+            "methyl-predictor",
+            lambda: run_predictor(
                 project_json,
                 val_control_csv,
                 val_disease_csv,
-                validator_output_dir,
+                predictor_output_dir,
             ),
         ),
     ]

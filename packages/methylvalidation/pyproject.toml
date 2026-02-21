@@ -12,6 +12,7 @@ pydantic = ">=2.6.0,<3.0.0"
 numpy = ">=1.26.0,<3.0.0"
 pandas = ">=2.1.0,<3.0.0"
 rich = ">=13.0.0"
+methylutils = {path = "../methylutils", develop = true}
 
 [tool.poetry.scripts]
 methyl-validation = "methyl_validation.cli:main"

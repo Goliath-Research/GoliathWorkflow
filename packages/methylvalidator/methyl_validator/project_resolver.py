@@ -114,19 +114,14 @@ def resolve_validator_config_per_comparison(
 
     comparisons = project.get_comparisons()
     paths = project.get_derived_paths()
-    disease_label = project._get_disease_subdir()
-    use_single_comparison_dirs = len(comparisons) == 1
 
     result: List[Tuple[ValidatorConfig, str]] = []
     for spec in comparisons:
         comp_label = spec.comparison_label or spec.disease_group
-        # Full classifier (all chromosomes) is built by the classifier step and saved under classifier/<disease_label>/ or classifier/<disease_label>/<group>/
-        if use_single_comparison_dirs:
-            classifier_output_dir = str(Path(paths.classifier_dir) / disease_label)
-            detection_dir = str(Path(paths.detection_dir) / disease_label)
-        else:
-            classifier_output_dir = project.get_classifier_output_dir(comp_label)
-            detection_dir = project.get_detection_output_dir(comp_label)
+        ctrl_label = spec.control_group
+        dis_label = spec.disease_group
+        classifier_output_dir = project.get_classifier_output_dir(ctrl_label, dis_label)
+        detection_dir = project.get_detection_output_dir(ctrl_label, dis_label)
         project_name = getattr(project, "project_name", "classifier")
         full_classifier_pkl = f"{classifier_output_dir}/{project_name}-classifier.pkl"
         # Prefer full classifier pkl in classifier output dir; if missing, use detection dir (per-chrom classifier-*.pkl)
@@ -142,10 +137,7 @@ def resolve_validator_config_per_comparison(
         else:
             model_path = None
             model_dir = detection_dir
-        if use_single_comparison_dirs:
-            out_dir = paths.validator_dir
-        else:
-            out_dir = project.get_validator_output_dir(comp_label)
+        out_dir = project.get_validator_output_dir(ctrl_label, dis_label)
 
         control_paths = list(project.get_group_sample_paths_by_label(spec.control_group))
         disease_paths = list(project.get_group_sample_paths_by_label(spec.disease_group))

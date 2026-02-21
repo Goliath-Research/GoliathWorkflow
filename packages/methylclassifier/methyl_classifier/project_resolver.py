@@ -47,23 +47,18 @@ def resolve_classifier_config_per_cancer_group(
     if getattr(project, "uses_control_disease", lambda: False)():
         comparisons = project.get_comparisons()
         paths = project.get_derived_paths()
-        # Single comparison: detector writes to detection/<disease_label> (e.g. detection/cancer);
-        # classifier loads from the same dir and writes to classifier/<disease_label>/.
-        use_single_comparison_dirs = len(comparisons) == 1
         out: List[Tuple[ClassificationConfig, str]] = []
         for spec in comparisons:
             comp_label = spec.comparison_label or spec.disease_group
-            if use_single_comparison_dirs:
-                model_dir = str(Path(paths.detection_dir) / disease_label)
-                output_path = str(Path(paths.classifier_dir) / disease_label / CLASSIFIER_OUTPUT_FILENAME)
-            else:
-                model_dir = project.get_detection_output_dir(comp_label)
-                output_path = str(Path(project.get_classifier_output_dir(comp_label)) / CLASSIFIER_OUTPUT_FILENAME)
+            ctrl_label = spec.control_group
+            dis_label = spec.disease_group
+            model_dir = project.get_detection_output_dir(ctrl_label, dis_label)
+            output_path = str(Path(project.get_classifier_output_dir(ctrl_label, dis_label)) / CLASSIFIER_OUTPUT_FILENAME)
             base: Dict[str, Any] = {
                 "model_dir": model_dir,
                 "model_path": None,
-                "centroid1_dir": project.get_centroid_dir("control", spec.control_group),
-                "centroid2_dir": project.get_centroid_dir("disease", spec.disease_group),
+                "centroid1_dir": project.get_centroid_dir("control", ctrl_label),
+                "centroid2_dir": project.get_centroid_dir("disease", dis_label),
                 "output_path": output_path,
             }
             if project.path_remap:
@@ -71,13 +66,9 @@ def resolve_classifier_config_per_cancer_group(
             for k, v in step_cfg.items():
                 base[k] = v
             # Save the combined classifier (with fitted chromosome weights) into the run's classifier
-            # output dir so MethylValidator finds it; otherwise validator loads only per-chrom from
-            # detection dir and uses effect_size weights, giving much worse or random results.
+            # output dir so MethylValidator/MethylPredictor finds it.
             project_name = getattr(project, "project_name", "classifier")
-            if use_single_comparison_dirs:
-                classifier_out_dir = Path(paths.classifier_dir) / disease_label
-            else:
-                classifier_out_dir = Path(project.get_classifier_output_dir(comp_label))
+            classifier_out_dir = Path(project.get_classifier_output_dir(ctrl_label, dis_label))
             base["save_classifier_path"] = str(classifier_out_dir / f"{project_name}-classifier.pkl")
             out.append((ClassificationConfig(**base), comp_label))
         return out
@@ -93,15 +84,14 @@ def resolve_classifier_config_per_cancer_group(
             side = "control" if i == control_index else "disease"
             centroid_dirs.append(project.get_centroid_dir(side, label))
     c1_dir = centroid_dirs[control_index]
-    classifier_dir = Path(paths.classifier_dir)
-    detection_dir = Path(paths.detection_dir)
     out = []
     for i in range(len(resolved)):
         if i == control_index:
             continue
         label = resolved[i][0]
-        model_dir = str(detection_dir / disease_label / label)
-        output_path = str(classifier_dir / disease_label / label / CLASSIFIER_OUTPUT_FILENAME)
+        control_label = resolved[control_index][0]
+        model_dir = project.get_detection_output_dir(control_label, label)
+        output_path = str(Path(project.get_classifier_output_dir(control_label, label)) / CLASSIFIER_OUTPUT_FILENAME)
         base = {
             "model_dir": model_dir,
             "model_path": None,

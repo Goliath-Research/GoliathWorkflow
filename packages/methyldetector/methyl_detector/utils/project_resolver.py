@@ -48,7 +48,7 @@ def resolve_detector_config_per_cancer_group(
                 "contexts": project.contexts or ["CG"],
                 "centroid1_dir": project.get_centroid_dir("control", ctrl_label),
                 "centroid2_dir": project.get_centroid_dir("disease", dis_label),
-                "output_dir": project.get_detection_output_dir(comp_label),
+                "output_dir": project.get_detection_output_dir(ctrl_label, dis_label),
             }
             try:
                 base["centroid1_validation_samples"] = project.get_group_sample_paths_by_label(ctrl_label)
@@ -85,7 +85,7 @@ def resolve_detector_config_per_cancer_group(
             "contexts": project.contexts or ["CG"],
             "centroid1_dir": c1_dir,
             "centroid2_dir": centroid_dirs[i],
-            "output_dir": str(Path(paths.detection_dir) / disease_subdir / label),
+            "output_dir": project.get_detection_output_dir(resolved[control_index][0], label),
         }
         if project.get_group_sample_paths(control_index):
             base["centroid1_validation_samples"] = project.get_group_sample_paths(control_index)
@@ -111,7 +111,8 @@ def resolve_detector_config(
     paths = project.get_derived_paths()
 
     if getattr(project, "uses_control_disease", lambda: False)() and len(project.get_comparisons()) == 1:
-        output_dir = f"{project.get_project_root()}/detection/{project._get_disease_subdir()}"
+        spec = project.get_comparisons()[0]
+        output_dir = project.get_detection_output_dir(spec.control_group, spec.disease_group)
     else:
         output_dir = paths.detection_dir
 

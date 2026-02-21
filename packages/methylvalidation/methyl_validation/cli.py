@@ -18,6 +18,8 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
+from methyl_utils import load_project
+
 from .config import MonteCarloConfig
 from .pipeline_runner import run_pipeline_for_iteration
 from .project_gen import generate_run_project
@@ -170,7 +172,14 @@ def main() -> None:
                 val_disease,
                 config.samples_base_path,
             )
-            validator_output_dir = run_dir / "validator"
+            # Predictor output follows structure predictors/<control_group>/<disease_group>
+            run_project = load_project(project_path)
+            comparisons = run_project.get_comparisons() if getattr(run_project, "get_comparisons", None) else []
+            if comparisons:
+                spec = comparisons[0]
+                predictor_output_dir = run_dir / "predictors" / spec.control_group / spec.disease_group
+            else:
+                predictor_output_dir = run_dir / "predictors"
             logs_dir = run_dir / "logs"
             n_train_samples = len(train_control) + len(train_disease)
             n_val_samples = len(val_control) + len(val_disease)
@@ -179,7 +188,7 @@ def main() -> None:
                 project_path,
                 val_control_csv,
                 val_disease_csv,
-                validator_output_dir,
+                predictor_output_dir,
                 per_cancer_group=per_cancer_group,
                 logs_dir=logs_dir,
                 progress_callback=progress_callback,
@@ -205,9 +214,9 @@ def main() -> None:
                     progress.advance(task_iter, 1)
                 continue
 
-            metrics_path = validator_output_dir / "validation_metrics.json"
+            metrics_path = predictor_output_dir / "validation_metrics.json"
             if not metrics_path.exists():
-                print(f"Warning: {metrics_path} not found after validator run; skipping metrics for {run_id}.", file=sys.stderr)
+                print(f"Warning: {metrics_path} not found after predictor run; skipping metrics for {run_id}.", file=sys.stderr)
                 if progress is not None:
                     progress.advance(task_iter, 1)
                 continue

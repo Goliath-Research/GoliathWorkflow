@@ -135,11 +135,11 @@ class DerivedPaths(BaseModel):
         default_factory=list,
         description="List of centroid directories, one per group (when N groups); same as [centroid1_dir, centroid2_dir] when N=2.",
     )
-    detection_dir: str = Field(..., description="MethylDetector output directory")
+    detection_dir: str = Field(..., description="MethylDetector output directory (detections/)")
     mapper_dir: str = Field(..., description="MethylMapper output directory")
     enricher_dir: str = Field(..., description="MethylEnricher output directory")
-    classifier_dir: str = Field(..., description="MethylClassifier output directory")
-    validator_dir: str = Field(..., description="MethylValidator output directory")
+    classifier_dir: str = Field(..., description="MethylClassifier output directory (classifiers/)")
+    validator_dir: str = Field(..., description="MethylValidator/MethylPredictor output directory (predictors/)")
     alignment_qc_dir: str = Field(..., description="MethylAlignmentQC output directory (one JSON per sample)")
 
     @property
@@ -483,11 +483,11 @@ class ProjectConfig(BaseModel):
             centroid1_dir=c1,
             centroid2_dir=c2,
             centroid_dirs=centroid_dirs_list,
-            detection_dir=f"{project_root}/detection",
+            detection_dir=f"{project_root}/detections",
             mapper_dir=f"{project_root}/mapper",
             enricher_dir=f"{project_root}/enricher",
-            classifier_dir=f"{project_root}/classifier",
-            validator_dir=f"{project_root}/validator",
+            classifier_dir=f"{project_root}/classifiers",
+            validator_dir=f"{project_root}/predictors",
             alignment_qc_dir=f"{project_root}/alignment_qc",
         )
 
@@ -540,25 +540,25 @@ class ProjectConfig(BaseModel):
         """Project root directory: {output_base}/{project_name}."""
         return f"{self.output_base.rstrip('/')}/{self.project_name}"
 
-    def get_detection_output_dir(self, comparison_label: str) -> str:
-        """Output dir for detection for one comparison: detection/<disease_label>/<disease_group>."""
-        return f"{self.get_project_root()}/detection/{self._get_disease_subdir()}/{comparison_label}"
+    def get_detection_output_dir(self, control_group: str, disease_group: str) -> str:
+        """Output dir for detection for one comparison: detections/<control_group>/<disease_group>."""
+        return f"{self.get_project_root()}/detections/{control_group}/{disease_group}"
 
-    def get_mapper_output_dir(self, comparison_label: str) -> str:
-        """Output dir for mapper for one comparison: mapper/<disease_label>/<disease_group>."""
-        return f"{self.get_project_root()}/mapper/{self._get_disease_subdir()}/{comparison_label}"
+    def get_mapper_output_dir(self, control_group: str, disease_group: str) -> str:
+        """Output dir for mapper for one comparison: mapper/<control_group>/<disease_group>."""
+        return f"{self.get_project_root()}/mapper/{control_group}/{disease_group}"
 
-    def get_enricher_output_dir(self, comparison_label: str) -> str:
-        """Output dir for enricher for one comparison: enricher/<disease_label>/<disease_group>."""
-        return f"{self.get_project_root()}/enricher/{self._get_disease_subdir()}/{comparison_label}"
+    def get_enricher_output_dir(self, control_group: str, disease_group: str) -> str:
+        """Output dir for enricher for one comparison: enricher/<control_group>/<disease_group>."""
+        return f"{self.get_project_root()}/enricher/{control_group}/{disease_group}"
 
-    def get_classifier_output_dir(self, comparison_label: str) -> str:
-        """Output dir for classifier for one comparison: classifier/<disease_label>/<disease_group>."""
-        return f"{self.get_project_root()}/classifier/{self._get_disease_subdir()}/{comparison_label}"
+    def get_classifier_output_dir(self, control_group: str, disease_group: str) -> str:
+        """Output dir for classifier for one comparison: classifiers/<control_group>/<disease_group>."""
+        return f"{self.get_project_root()}/classifiers/{control_group}/{disease_group}"
 
-    def get_validator_output_dir(self, comparison_label: str) -> str:
-        """Output dir for validator for one comparison: validator/<disease_label>/<disease_group>."""
-        return f"{self.get_project_root()}/validator/{self._get_disease_subdir()}/{comparison_label}"
+    def get_validator_output_dir(self, control_group: str, disease_group: str) -> str:
+        """Output dir for validator/predictor for one comparison: predictors/<control_group>/<disease_group>."""
+        return f"{self.get_project_root()}/predictors/{control_group}/{disease_group}"
 
     def uses_control_disease(self) -> bool:
         """True if this project uses control/disease + comparisons (not flat groups)."""
