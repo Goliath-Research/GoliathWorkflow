@@ -10,11 +10,7 @@ from typing import List, Tuple, Optional, Dict, Any
 import numpy as np
 import pandas as pd
 
-# Module mapping for pickle compatibility
-import importlib
-
 # Import from parent package
-from methyl_utils import ProbabilisticBetaClassifier
 from ..models.config import ClassifierConfig
 
 # Create a mapping for old module names to new ones
@@ -165,19 +161,36 @@ class MethylClassifier:
                     self._calibrated = False
 
             else:
-                # Old format: raw ProbabilisticBetaClassifier
-                print(f"✅ Loaded classifier (legacy format)")
-                self.classifier = model_package
-                
-                # Try to extract chromosome and context from filename
-                try:
-                    self.chromosome, self.context_metadata = extract_chrom_context_from_classifier(model_path)
-                    print(f"📋 Classifier trained on chromosome {self.chromosome}, context {self.context}")
-                except ValueError as e:
-                    print(f"⚠️ Could not extract chromosome/context: {e}")
-
-                # Extract classifier metadata
-                self._extract_classifier_metadata()
+                # Check if this is a saved full MethylClassifier (multi-chromosome bundle from .save())
+                if isinstance(model_package, MethylClassifier) and getattr(model_package, "classifiers", None):
+                    # Adopt the saved bundle so we use all chromosomes and correct context
+                    print(f"✅ Loaded multi-chromosome classifier bundle ({len(model_package.classifiers)} chromosomes)")
+                    self.is_multi_chromosome = True
+                    self.classifiers = model_package.classifiers
+                    self.chromosome_weights = getattr(model_package, "chromosome_weights", {}) or {
+                        c: 1.0 / len(model_package.classifiers) for c in model_package.classifiers
+                    }
+                    self.model_packages = getattr(model_package, "model_packages", None)
+                    if not self.model_packages:
+                        self.model_packages = {c: {"classifier": clf} for c, clf in model_package.classifiers.items()}
+                    self.n_classes = getattr(model_package, "n_classes", 2)
+                    self.class_names = getattr(model_package, "class_names", None)
+                    self.context_metadata = getattr(model_package, "context_metadata", None)
+                    self.chromosome = sorted(self.classifiers.keys())[0] if self.classifiers else None
+                    self._calibrated = getattr(model_package, "_calibrated", False)
+                    self._run_centroid_self_check(self.model_packages)
+                    self._collect_all_dmp_positions()
+                    print(f"📋 Context: {self.context_metadata or 'from model'}; chromosomes: {list(sorted(self.classifiers.keys()))}")
+                else:
+                    # Old format: raw ProbabilisticBetaClassifier (single chromosome)
+                    print("✅ Loaded classifier (legacy format)")
+                    self.classifier = model_package
+                    try:
+                        self.chromosome, self.context_metadata = extract_chrom_context_from_classifier(model_path)
+                        print(f"📋 Classifier trained on chromosome {self.chromosome}, context {self.context}")
+                    except ValueError as e:
+                        print(f"⚠️ Could not extract chromosome/context: {e}")
+                    self._extract_classifier_metadata()
 
         except Exception as e:
             print(f"❌ Failed to load classifier from {model_path}: {e}")
@@ -294,7 +307,7 @@ class MethylClassifier:
         # Compute or use predefined weights
         if weight_method == "config" and self.config.chromosome_weights:
             # Use predefined weights
-            print(f"\n⚖️ Using predefined chromosome weights (weight_method=config)")
+            print("\n⚖️ Using predefined chromosome weights (weight_method=config)")
             self.chromosome_weights = self.config.chromosome_weights.copy()
             
             # Normalize to sum to 1
@@ -307,17 +320,17 @@ class MethylClassifier:
                 self.chromosome_weights = {chrom: 1.0 / n_chrom for chrom in self.classifiers.keys()}
         elif weight_method in ("linear_fitted", "logistic_fitted", "elasticnet_fitted"):
             # Initial weights from effect_size until fit_chromosome_weights is called
-            print(f"\n⚖️ Chromosome weights will be fitted from validation data (weight_method={weight_method}); using effect_size as initial")
+            print("\n⚖️ Chromosome weights will be fitted from validation data (weight_method={weight_method}); using effect_size as initial")
             print(f"   (removing bottom {self.config.trimmed_percentile_low*100:.0f}% and top {self.config.trimmed_percentile_high*100:.0f}%)")
             self.chromosome_weights = self._compute_chromosome_weights(model_packages)
         else:
             # effect_size (default when chromosome_weights not set)
-            print(f"\n⚖️ Computing chromosome weights from asymmetric trimmed-mean effect_size")
+            print("\n⚖️ Computing chromosome weights from asymmetric trimmed-mean effect_size")
             print(f"   (removing bottom {self.config.trimmed_percentile_low*100:.0f}% and top {self.config.trimmed_percentile_high*100:.0f}%)")
             self.chromosome_weights = self._compute_chromosome_weights(model_packages)
         
         # Display weights
-        print(f"\n📊 Chromosome weights:")
+        print("\n📊 Chromosome weights:")
         for chrom in sorted(self.chromosome_weights.keys()):
             print(f"  Chromosome {chrom}: {self.chromosome_weights[chrom]:.4f}")
 
@@ -327,7 +340,6 @@ class MethylClassifier:
         
         # Validate all classifiers have same number of classes
         n_classes_list = []
-        class_names_list = []
         
         for chrom, classifier in self.classifiers.items():
             # Try to get n_classes from classifier or metadata
@@ -340,7 +352,7 @@ class MethylClassifier:
                     dummy_data = np.zeros((1, feature_info['n_features']))
                     probas = classifier.predict_proba(dummy_data)
                     n_classes_list.append(probas.shape[1])
-                except:
+                except Exception as e:
                     n_classes_list.append(2)  # Default
         
         if len(set(n_classes_list)) > 1:
@@ -608,7 +620,7 @@ class MethylClassifier:
             # Fallback to equal weights if all are zero
             n_chrom = len(raw_weights)
             normalized_weights = {chrom: 1.0 / n_chrom for chrom in raw_weights.keys()}
-            print(f"⚠️ All weights were zero, using equal weights")
+            print("⚠️ All weights were zero, using equal weights")
         
         return normalized_weights
 
@@ -721,7 +733,7 @@ class MethylClassifier:
                     dummy_data = np.zeros((1, self.get_feature_info()['n_features']))
                     probas = self.classifier.predict_proba(dummy_data)
                     self.n_classes = probas.shape[1]
-                except:
+                except Exception as e:
                     self.n_classes = 2  # Default assumption
 
             print(f"📊 Classifier supports {self.n_classes} classes")

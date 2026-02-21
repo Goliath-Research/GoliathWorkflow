@@ -1552,7 +1552,13 @@ class MethylDetector:
             sorted_df = self._compute_biological_importance(bio_dmps_df)
         else:
             logger.debug("Using provided sorted DMPs (biological importance already computed)")
-        
+
+        # When optimization is disabled, return all biological DMPs (no coverage filter)
+        if not self.config.optimize_dmps:
+            logger.info("📋 optimize_dmps=False: using all %s biological DMPs (no validation coverage filter)", len(sorted_df))
+            self._check_centroid_self_classification(sorted_df)
+            return sorted_df
+
         # Load validation samples - try real first, then synthetic
         validation_data = None
 
