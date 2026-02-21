@@ -70,6 +70,15 @@ def resolve_classifier_config_per_cancer_group(
                 base["centroid_path_remap"] = project.path_remap
             for k, v in step_cfg.items():
                 base[k] = v
+            # Save the combined classifier (with fitted chromosome weights) into the run's classifier
+            # output dir so MethylValidator finds it; otherwise validator loads only per-chrom from
+            # detection dir and uses effect_size weights, giving much worse or random results.
+            project_name = getattr(project, "project_name", "classifier")
+            if use_single_comparison_dirs:
+                classifier_out_dir = Path(paths.classifier_dir) / disease_label
+            else:
+                classifier_out_dir = Path(project.get_classifier_output_dir(comp_label))
+            base["save_classifier_path"] = str(classifier_out_dir / f"{project_name}-classifier.pkl")
             out.append((ClassificationConfig(**base), comp_label))
         return out
 
