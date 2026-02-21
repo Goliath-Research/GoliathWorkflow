@@ -80,7 +80,6 @@
       "trimmed_percentile_high": 0.01,
       "chromosome_weights": null,
       "project_name": "PCa_vs_Healthy",
-      "save_classifier_path": "models/PCa_vs_Healthy-classifier.pkl",
       "debug": false,
       "log_level": "INFO"
     },
