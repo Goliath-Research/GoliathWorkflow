@@ -10,7 +10,7 @@ Usage: scripts/setup_host.sh [options]
 
 Options:
   --system-deps     Install system packages (Ubuntu/Debian via apt)
-  --gpu             Install GPU requirements (CUDA 13.x stack)
+  --gpu             Install GPU requirements (CUDA 12.x or 13.x, auto-detected)
   --no-gpu          Skip GPU requirements (override auto-detect)
   --venv PATH       Create/use a virtualenv at PATH (default: .venv)
   --no-venv         Do not create or activate a virtualenv
@@ -67,19 +67,44 @@ detect_gpu() {
   return 1
 }
 
+# Detect CUDA major version (12 or 13) from nvidia-smi or nvcc. Echoes version and returns 0, or echoes 12 and returns 1 if unclear.
+detect_cuda_version() {
+  local ver=""
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    ver="$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: *\([0-9][0-9]*\.[0-9]*\).*/\1/p' | head -1)"
+  fi
+  if [ -z "$ver" ] && command -v nvcc >/dev/null 2>&1; then
+    ver="$(nvcc --version 2>/dev/null | sed -n 's/.*release \([0-9][0-9]*\.[0-9]*\).*/\1/p' | head -1)"
+  fi
+  if [ -z "$ver" ] && [ -f /usr/local/cuda/version.txt ]; then
+    ver="$(sed -n 's/^CUDA Version \([0-9][0-9]*\.[0-9]*\).*/\1/p' /usr/local/cuda/version.txt | head -1)"
+  fi
+  if [ -n "$ver" ]; then
+    local major="${ver%%.*}"
+    if [ "$major" = "13" ] || [ "$major" = "12" ]; then
+      echo "$major"
+      return 0
+    fi
+  fi
+  echo "12"
+  return 1
+}
+
+# Check for libnvrtc.so.$cuda_major (e.g. .12 or .13). $1 = CUDA major.
 libnvrtc_present() {
+  local cuda_major="${1:-12}"
   local patterns=()
 
   if [ -n "${VIRTUAL_ENV:-}" ]; then
-    patterns+=("${VIRTUAL_ENV}/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.13")
+    patterns+=("${VIRTUAL_ENV}/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.${cuda_major}")
   fi
   patterns+=(
-    "${PROJECT_ROOT}/.venv/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.13"
-    "/usr/lib/aarch64-linux-gnu/libnvrtc.so.13"
-    "/usr/lib/x86_64-linux-gnu/libnvrtc.so.13"
-    "/usr/local/cuda/lib64/libnvrtc.so.13"
-    "/usr/local/cuda/targets/*/lib/libnvrtc.so.13"
-    "/usr/local/cuda-*/targets/*/lib/libnvrtc.so.13"
+    "${PROJECT_ROOT}/.venv/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.${cuda_major}"
+    "/usr/lib/aarch64-linux-gnu/libnvrtc.so.${cuda_major}"
+    "/usr/lib/x86_64-linux-gnu/libnvrtc.so.${cuda_major}"
+    "/usr/local/cuda/lib64/libnvrtc.so.${cuda_major}"
+    "/usr/local/cuda/targets/*/lib/libnvrtc.so.${cuda_major}"
+    "/usr/local/cuda-*/targets/*/lib/libnvrtc.so.${cuda_major}"
   )
 
   for pattern in "${patterns[@]}"; do
@@ -90,8 +115,10 @@ libnvrtc_present() {
   return 1
 }
 
+# Install system NVRTC packages for CUDA major version. $1 = CUDA major (12 or 13).
 install_nvrtc_system_deps() {
-  if libnvrtc_present; then
+  local cuda_major="${1:-12}"
+  if libnvrtc_present "$cuda_major"; then
     return 0
   fi
 
@@ -110,19 +137,19 @@ install_nvrtc_system_deps() {
     fi
   fi
 
-  info "Installing NVRTC runtime libraries (libnvrtc.so.13)..."
+  info "Installing NVRTC runtime libraries (libnvrtc.so.${cuda_major})..."
   $sudo_cmd apt-get update
-  if ! $sudo_cmd apt-get install -y libnvrtc13 libnvrtc-builtins13; then
-    warn "Failed to install libnvrtc13 packages. Ensure NVIDIA CUDA repo is configured."
+  if ! $sudo_cmd apt-get install -y "libnvrtc${cuda_major}" "libnvrtc-builtins${cuda_major}"; then
+    warn "Failed to install libnvrtc${cuda_major} packages. Ensure NVIDIA CUDA repo is configured."
     return 1
   fi
 
-  if libnvrtc_present; then
+  if libnvrtc_present "$cuda_major"; then
     info "NVRTC runtime libraries detected."
     return 0
   fi
 
-  warn "libnvrtc.so.12 still not found after installation attempt."
+  warn "libnvrtc.so.${cuda_major} still not found after installation attempt."
   return 1
 }
 
@@ -181,11 +208,21 @@ if [ "$SYSTEM_DEPS" -eq 1 ]; then
 fi
 
 # Auto-enable GPU requirements when a GPU is detected (unless explicitly disabled)
+CUDA_MAJOR=""
 if [ "$GPU_DEPS" -eq 0 ] && [ "$NO_GPU" -eq 0 ]; then
   if detect_gpu; then
     info "NVIDIA GPU detected; enabling GPU Python requirements."
     GPU_DEPS=1
+    CUDA_MAJOR="$(detect_cuda_version)" || true
+    if [ -z "$CUDA_MAJOR" ]; then CUDA_MAJOR="12"; fi
+    info "Detected CUDA ${CUDA_MAJOR}.x."
   fi
+fi
+# When --gpu is passed explicitly, detect CUDA version for NVRTC/requirements
+if [ "$GPU_DEPS" -eq 1 ] && [ -z "$CUDA_MAJOR" ]; then
+  CUDA_MAJOR="$(detect_cuda_version)" || true
+  if [ -z "$CUDA_MAJOR" ]; then CUDA_MAJOR="12"; fi
+  info "Using CUDA ${CUDA_MAJOR}.x for GPU requirements."
 fi
 
 choose_python() {
@@ -261,7 +298,16 @@ PY
 }
 
 REQ_BASE="$PROJECT_ROOT/requirements-pipeline.txt"
-REQ_GPU="$PROJECT_ROOT/requirements-gpu.txt"
+# GPU requirements file depends on detected CUDA major (12 vs 13)
+if [ "$GPU_DEPS" -eq 1 ]; then
+  if [ "${CUDA_MAJOR:-12}" = "12" ]; then
+    REQ_GPU="$PROJECT_ROOT/requirements-gpu-cuda12.txt"
+  else
+    REQ_GPU="$PROJECT_ROOT/requirements-gpu.txt"
+  fi
+else
+  REQ_GPU="$PROJECT_ROOT/requirements-gpu.txt"
+fi
 
 if [ ! -f "$REQ_BASE" ]; then
   die "Missing $REQ_BASE"
@@ -315,14 +361,15 @@ if [ "$GPU_DEPS" -eq 1 ]; then
   if [ ! -f "$REQ_GPU" ]; then
     die "Missing $REQ_GPU"
   fi
-  info "Installing GPU requirements (CUDA 13.x)..."
+  CUDA_MAJOR="${CUDA_MAJOR:-12}"
+  info "Installing GPU requirements (CUDA ${CUDA_MAJOR}.x)..."
   "$PYTHON_BIN" -m pip install -r "$REQ_GPU" --extra-index-url https://pypi.nvidia.com
-  if ! install_nvrtc_system_deps; then
-    warn "CUDA NVRTC library (libnvrtc.so.13) not detected."
+  if ! install_nvrtc_system_deps "$CUDA_MAJOR"; then
+    warn "CUDA NVRTC library (libnvrtc.so.${CUDA_MAJOR}) not detected."
     warn "On ARM64 systems, pip GPU wheels may omit NVRTC."
-    warn "Install with: sudo apt-get install -y libnvrtc13 libnvrtc-builtins13"
+    warn "Install with: sudo apt-get install -y libnvrtc${CUDA_MAJOR} libnvrtc-builtins${CUDA_MAJOR}"
     warn "Or use: scripts/setup_host_conda.sh for a full CUDA toolchain."
-    die "GPU dependencies incomplete (missing libnvrtc.so.13)."
+    die "GPU dependencies incomplete (missing libnvrtc.so.${CUDA_MAJOR})."
   fi
 fi
 
@@ -340,6 +387,8 @@ PACKAGES=(
   "methylenricher"
   "methylcluster"
   "methylalignmentqc"
+  "methylpredictor"
+  "methylvalidation"
 )
 
 info "Installing local packages (editable mode)..."

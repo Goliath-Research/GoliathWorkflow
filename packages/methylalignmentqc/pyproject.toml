@@ -20,6 +20,7 @@ dev = [
 ]
 
 [project.scripts]
+methyl-alignment-qc = "methyl_alignment_qc.cli.main:main"
 methyl-qc = "methyl_alignment_qc.cli.main:main"
 
 [tool.setuptools.packages.find]

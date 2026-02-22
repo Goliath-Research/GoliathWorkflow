@@ -40,6 +40,7 @@ flake8 = ">=4.0.0"
 mypy = ">=0.950"
 
 [tool.poetry.scripts]
+methyl-cluster = "methyl_cluster.cli:main"
 methyl_cluster = "methyl_cluster.cli:main"
 
 [tool.black]

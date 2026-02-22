@@ -1,0 +1,5 @@
+# GPU/accelerated requirements (CUDA 12.x).
+# Requires Python 3.10+. Install with:
+#   pip install -r requirements-gpu-cuda12.txt --extra-index-url https://pypi.nvidia.com
+cupy-cuda12x
+cudf-cu12

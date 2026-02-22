@@ -13,7 +13,7 @@ numpy = ">=1.26.0,<3.0.0"
 pandas = ">=2.1.0,<3.0.0"
 rich = ">=13.0.0"
 methylutils = {path = "../methylutils", develop = true}
-methylpredictor = {path = "../methylpredictor", develop = true}
+methyl-predictor = {path = "../methylpredictor", develop = true}
 
 [tool.poetry.scripts]
 methyl-validation = "methyl_validation.cli:main"
