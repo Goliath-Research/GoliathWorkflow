@@ -2779,7 +2779,8 @@ class MethylDetector:
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        model_path = output_dir / f"classifier-{self.chromosome}.pkl"
+        ctx = self.config.contexts[0] if self.config.contexts else "unknown"
+        model_path = output_dir / f"classifier-{self.chromosome}-{ctx}.pkl"
         
         # Create strongly-typed dmpDF DataFrame
         # Use effect_size (single biological importance measure)
