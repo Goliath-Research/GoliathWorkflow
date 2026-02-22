@@ -35,7 +35,7 @@
     "detection": {
       "alpha": 0.05,
       "optimize_dmps": false,
-      "validation_mode": "real",
+      "validation_mode": "synthetic",
       "target_balanced_accuracy": 0.99,
       "min_delta_mean": 0.2,
       "max_overlap": 0.4,
