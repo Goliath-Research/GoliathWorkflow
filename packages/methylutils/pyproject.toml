@@ -75,7 +75,9 @@ sphinx = ">=7.0.0,<8.0.0"
 sphinx-rtd-theme = ">=2.0.0,<3.0.0"
 
 [tool.poetry.scripts]
+methyl-utils = "methyl_utils.cli:main"
 methylutils = "methyl_utils.cli:main"
+methyl-utils-deploy = "methyl_utils.deployment:main"
 methylutils-deploy = "methyl_utils.deployment:main"
 
 [build-system]
