@@ -97,9 +97,11 @@ libnvrtc_present() {
 
   if [ -n "${VIRTUAL_ENV:-}" ]; then
     patterns+=("${VIRTUAL_ENV}/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.${cuda_major}")
+    patterns+=("${VIRTUAL_ENV}/lib/python*/site-packages/nvidia/cu${cuda_major}/lib/libnvrtc.so.${cuda_major}")
   fi
   patterns+=(
     "${PROJECT_ROOT}/.venv/lib/python*/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so.${cuda_major}"
+    "${PROJECT_ROOT}/.venv/lib/python*/site-packages/nvidia/cu${cuda_major}/lib/libnvrtc.so.${cuda_major}"
     "/usr/lib/aarch64-linux-gnu/libnvrtc.so.${cuda_major}"
     "/usr/lib/x86_64-linux-gnu/libnvrtc.so.${cuda_major}"
     "/usr/local/cuda/lib64/libnvrtc.so.${cuda_major}"
