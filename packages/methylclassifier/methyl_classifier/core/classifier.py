@@ -218,32 +218,40 @@ class MethylClassifier:
         if not model_dir.is_dir():
             raise ValueError(f"Model directory does not exist: {model_dir}")
         
-        # Find all classifier files matching pattern classifier-{chrom}.pkl
-        pattern = re.compile(r'^classifier-(.+)\.pkl$')
-        classifier_files = {}
+        from collections import defaultdict
+        
+        # Group files by chromosome, load newest per chrom (prefers multi-context if newer)
+        chrom_files: Dict[str, List[Path]] = defaultdict(list)
+        pattern = re.compile(r'^classifier-(\d+)(?:-[^.]+)?\.pkl$')
         
         for file_path in model_dir.glob('classifier-*.pkl'):
             match = pattern.match(file_path.name)
             if match:
                 chrom = match.group(1)
-                classifier_files[chrom] = file_path
+                chrom_files[chrom].append(file_path)
         
-        if not classifier_files:
-            raise ValueError(f"No classifier files found in {model_dir} matching pattern 'classifier-{{chrom}}.pkl'")
+        if not chrom_files:
+            raise ValueError(f"No classifier files found in {model_dir} matching pattern 'classifier-{{chrom}}*.pkl'")
         
-        print(f"\n📂 Loading {len(classifier_files)} chromosome classifier(s) from {model_dir}")
+        print(f"\n📂 Loading {len(chrom_files)} chromosome classifier(s) from {model_dir}")
         
         # Store model packages for weight calculation and DMP position extraction
         model_packages = {}
         self.model_packages = model_packages  # Store for position extraction
         any_platt_loaded = False
-
-        # Load each classifier
-        for chrom, file_path in sorted(classifier_files.items()):
+        
+        # Load newest classifier per chromosome
+        for chrom, files in sorted(chrom_files.items()):
+            # Sort by mtime desc (newest first)
+            files_sorted = sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
+            newest = files_sorted[0]
+            
+            print(f"  Chromosome {chrom}: Loaded {newest.name} (skipped {len(files_sorted)-1} older)")
+            
             try:
-                with open(file_path, 'rb') as f:
+                with open(newest, 'rb') as f:
                     model_package = CustomUnpickler(f).load()
-                
+                                    
                 # Extract classifier from package
                 if isinstance(model_package, dict):
                     # Check if classifier exists, otherwise create from dmpDF

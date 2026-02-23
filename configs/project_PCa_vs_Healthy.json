@@ -24,7 +24,7 @@
     { "control_group": "healthy", "disease_group": "cancer" }
   ],
   "chromosomes": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
-  "contexts": ["CG"],
+  "contexts": ["CG","CHG","CHH"],
   "step_config": {
     "centroid": {
       "base_config": { "min_coverage": 4, "use_gpu": true, "max_sample_workers": null, "verbose": true },
@@ -39,7 +39,7 @@
       "target_balanced_accuracy": 0.99,
       "min_delta_mean": 0.2,
       "max_overlap": 0.4,
-      "min_effect_size": 0.5,
+      "min_effect_size": 0.4,
       "min_validation_coverage_per_position": 5,
       "optimization_method": "featurecuts",
       "export_sample_size_estimate": true,
