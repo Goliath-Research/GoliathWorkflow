@@ -742,7 +742,12 @@ class MethylCentroid:
                 store_extended_stats=True,
             )
 
-            for sample_idx, sample_path in enumerate(all_samples):
+            for sample_idx, sample_path in tqdm(
+                enumerate(all_samples),
+                total=len(all_samples),
+                desc="Adding samples",
+                unit="sample",
+            ):
                 if not sample_path.is_file():
                     self.logger.warning(f"Sample file missing: {sample_path}")
                     continue
@@ -917,7 +922,10 @@ class MethylCentroid:
                                     store_extended_stats=True,
                                 )
                                 builder.add_sample(sample_path)
-                                self._centroid = builder.finalize()
+                                self._centroid = builder.finalize(log_finalize=False)
+                                self.logger.info(
+                                    "Initial centroid built from first sample; merging remaining samples"
+                                )
                                 break
                             except (RuntimeError, MemoryError) as e:
                                 last_error = e

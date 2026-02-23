@@ -265,8 +265,12 @@ class MethylCentroidBuilder:
             except Exception as e:
                 logger.debug(f"Sample cleanup failed: {e}")
 
-    def finalize(self) -> MethylExtendedCentroid | MethylBetaBinomialCentroid:
-        """Return MethylBetaBinomialCentroid when store_extended_stats=True, else MethylExtendedCentroid."""
+    def finalize(
+        self, log_finalize: bool = True
+    ) -> MethylExtendedCentroid | MethylBetaBinomialCentroid:
+        """Return MethylBetaBinomialCentroid when store_extended_stats=True, else MethylExtendedCentroid.
+        Set log_finalize=False to suppress the 'Centroid finalized' log (e.g. when bootstrapping from one sample).
+        """
         if self.size == 0:
             raise ValueError("No data accumulated")
 
@@ -338,9 +342,11 @@ class MethylCentroidBuilder:
             df["Sx4"] = Sx4[mask].astype(np.float32)
             df["count_zero"] = count_zero[mask].astype(np.uint32)
             df["count_one"] = count_one[mask].astype(np.uint32)
-            logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples (Beta-Binomial)")
+            if log_finalize:
+                logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples (Beta-Binomial)")
             return MethylBetaBinomialCentroid(df, final_metadata)
-        logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples")
+        if log_finalize:
+            logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples")
         return MethylExtendedCentroid(df, final_metadata)
 
 
