@@ -18,6 +18,7 @@ from datetime import datetime
 import json
 import psutil
 from tqdm import tqdm
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from methyl_utils.core.methyl_frame import (
     # METHYL_CENTROID_DTYPE,
@@ -864,8 +865,14 @@ class MethylCentroid:
             f"context: {self.ctx}, multiplier: {context_multiplier:.1f}{cap_note})"
         )
 
+        total_samples = len(all_samples)
+        progress_lock = threading.Lock()
         # Load samples in parallel batches
-        with ThreadPoolExecutor(max_workers=actual_batch_size) as executor:
+        with tqdm(
+            total=total_samples,
+            desc="Adding samples",
+            unit="sample",
+        ) as progress_bar, ThreadPoolExecutor(max_workers=actual_batch_size) as executor:
             # Submit all sample loading tasks
             future_to_sample = {}
             for i, sample_path in enumerate(all_samples):
@@ -997,6 +1004,9 @@ class MethylCentroid:
                         )
                         sample_id = (is_new_sample, actual_sample_idx)
                         self.active_samples.add(sample_id)
+                        with progress_lock:
+                            progress_bar.update(1)
+                            progress_bar.set_postfix_str(sample_path.name, refresh=True)
                     else:
                         self.logger.warning(
                             f"Failed to add sample {sample_path.name} to position aligner"
