@@ -897,13 +897,53 @@ class MethylCentroid:
                             MethylCentroidBuilder,
                         )
 
-                        builder = MethylCentroidBuilder(
-                            min_coverage=self._min_coverage,
-                            use_gpu=self.use_gpu,
-                            store_extended_stats=True,
-                        )
-                        builder.add_sample(sample_path)
-                        self._centroid = builder.finalize()
+                        # Smaller initial chunk on GPU to avoid OOM (builder will grow as needed)
+                        initial_chunk = 10_000_000 if self.use_gpu else 50_000_000
+                        use_gpu_builder = self.use_gpu
+                        last_error = None
+                        for attempt in range(2):
+                            try:
+                                builder = MethylCentroidBuilder(
+                                    min_coverage=self._min_coverage,
+                                    use_gpu=use_gpu_builder,
+                                    chunk_size=initial_chunk,
+                                    store_extended_stats=True,
+                                )
+                                builder.add_sample(sample_path)
+                                self._centroid = builder.finalize()
+                                break
+                            except (RuntimeError, MemoryError) as e:
+                                last_error = e
+                                err_msg = str(e).lower()
+                                if (
+                                    attempt == 0
+                                    and use_gpu_builder
+                                    and (
+                                        "out of memory" in err_msg
+                                        or "out_of_memory" in err_msg
+                                        or "memoryallocation" in err_msg
+                                        or "cuda error" in err_msg
+                                        or "bad_alloc" in err_msg
+                                    )
+                                ):
+                                    self.logger.warning(
+                                        "GPU allocation failed (%s), retrying with CPU for this centroid: %s",
+                                        type(e).__name__,
+                                        str(e)[:200],
+                                    )
+                                    use_gpu_builder = False
+                                    initial_chunk = 50_000_000
+                                    if builder is not None:
+                                        try:
+                                            del builder
+                                        except Exception:
+                                            pass
+                                        builder = None
+                                else:
+                                    raise
+                        else:
+                            if last_error is not None:
+                                raise last_error
                         # Apply min_samples filter after builder finalizes
                         if hasattr(self._centroid, "N") and len(self._centroid) > 0:
                             N_vals = (
