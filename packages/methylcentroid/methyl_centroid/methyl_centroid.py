@@ -839,6 +839,10 @@ class MethylCentroid:
         if self.max_sample_workers is not None:
             cap = self.max_sample_workers
             cap_reason = "config"
+        elif self.use_gpu:
+            # GPU: only one builder at a time to avoid OOM (each builder allocates large GPU buffers)
+            cap = 1
+            cap_reason = "GPU (single worker to avoid CUDA OOM)"
         elif self.ctx == "CHH":
             cap = 2
             cap_reason = "default for CHH"
@@ -851,6 +855,8 @@ class MethylCentroid:
             cap_note = f", capped at {cap}"
             if cap_reason == "default for CHH":
                 cap_note += " (default for CHH)"
+            elif cap_reason and "GPU" in cap_reason:
+                cap_note += " (GPU)"
 
         self.logger.info(
             f"Using {actual_batch_size} parallel workers "
