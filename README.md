@@ -129,6 +129,40 @@ Parses Parabricks/bwa-mem2 alignment QC metrics into per-sample JSON for databas
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Pipeline command sequence (CLI)
+
+Run the pipeline as a sequence of command-line scripts in this order:
+
+| Step | Command | Description |
+|------|---------|-------------|
+| 1 | **methyl-alignmentqc** | Parse Parabricks/alignment QC metrics into per-sample JSON (optional). |
+| 2 | **methyl-centroid** | Build group centroids from samples. |
+| 3 | **methyl-detector** | Detect DMPs and package classifiers. |
+| 4 | **methyl-mapper** | Map DMPs to genes and genomic features. |
+| 5 | **methyl-enricher** | Functional enrichment from MethylMapper gene lists. |
+| 6 | **methyl-classifier** | Load packaged classifiers and score samples. |
+| 7 | **methyl-predictor** | Run MethylClassifier on test sets and compute classification metrics. |
+
+The final module runs under its own config and executes most of the steps above as part of a validation workflow:
+
+| Step | Command | Description |
+|------|---------|-------------|
+| 8 | **methyl-validation** | Uses an additional validation config (e.g. Monte Carlo runs, stratified splits). Runs centroid, detector, classifier, predictor (and related steps) for each run. |
+
+Example:
+
+```bash
+methyl-alignmentqc --input /path/to/qc ...
+methyl-centroid --project configs/project.json
+methyl-detector --project configs/project.json
+methyl-mapper --project configs/project.json
+methyl-enricher ...
+methyl-classifier ...
+methyl-predictor ...
+# Or run the full validation workflow (most steps above are executed internally):
+methyl-validation --config configs/monte_carlo.json --project configs/project.json
+```
+
 ## Quick Start
 
 ### Installation
