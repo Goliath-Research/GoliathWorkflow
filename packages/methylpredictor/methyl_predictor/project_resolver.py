@@ -14,13 +14,15 @@ from .models.config import PredictorConfig
 
 
 def _resolve_one_path(entry: str, base_path: Optional[str]) -> str:
-    """Resolve a single path; if base_path set and entry is not absolute, return base_path / entry."""
+    """Resolve a single path to absolute; relative paths are resolved against base_path or cwd."""
     entry = entry.strip()
     if not entry:
         return ""
-    if base_path and not Path(entry).is_absolute():
-        return str(Path(base_path).resolve() / entry)
-    return entry
+    p = Path(entry)
+    if not p.is_absolute():
+        base = Path(base_path).resolve() if base_path else Path.cwd()
+        p = base / p
+    return str(p.resolve())
 
 
 def _read_paths_from_csv_file(csv_path: Path, base_path: Optional[str]) -> List[str]:
@@ -116,14 +118,16 @@ def resolve_predictor_config(
     out_dir = output_dir if output_dir is not None else paths.validator_dir
     out_dir = str(Path(out_dir).resolve())
 
+    base_path = getattr(project, "samples_base_path", None)
     # Precedence: (1) CLI/caller test paths, (2) valid config test paths, (3) training data
     if test_control_paths is not None and test_disease_paths is not None:
-        control_paths = list(test_control_paths)
-        disease_paths = list(test_disease_paths)
+        control_paths = [_resolve_one_path(p, base_path) for p in test_control_paths if p and str(p).strip()]
+        disease_paths = [_resolve_one_path(p, base_path) for p in test_disease_paths if p and str(p).strip()]
     else:
         base_path = getattr(project, "samples_base_path", None)
-        step_control = step_cfg.get("test_control_paths")
-        step_disease = step_cfg.get("test_disease_paths")
+        # Canonical keys; accept legacy aliases (healthy_paths/cancer_paths)
+        step_control = step_cfg.get("test_control_paths") or step_cfg.get("healthy_paths")
+        step_disease = step_cfg.get("test_disease_paths") or step_cfg.get("cancer_paths")
         if step_control is not None and step_disease is not None:
             control_paths = _expand_test_paths(step_control, base_path)
             disease_paths = _expand_test_paths(step_disease, base_path)
@@ -145,6 +149,10 @@ def resolve_predictor_config(
                 )
             control_paths = list(resolved[0][1])
             disease_paths = list(resolved[1][1])
+
+    # Ensure all paths are absolute before path_remap
+    control_paths = [_resolve_one_path(p, base_path) for p in control_paths if p]
+    disease_paths = [_resolve_one_path(p, base_path) for p in disease_paths if p]
 
     if project.path_remap:
         control_paths = _apply_path_remap(control_paths, project.path_remap)
@@ -203,8 +211,12 @@ def resolve_predictor_config_per_comparison(
     use_caller_test_paths = (
         test_control_paths is not None and test_disease_paths is not None
     )
-    step_control = step_cfg.get("test_control_paths") if not use_caller_test_paths else None
-    step_disease = step_cfg.get("test_disease_paths") if not use_caller_test_paths else None
+    if not use_caller_test_paths:
+        step_control = step_cfg.get("test_control_paths") or step_cfg.get("healthy_paths")
+        step_disease = step_cfg.get("test_disease_paths") or step_cfg.get("cancer_paths")
+    else:
+        step_control = None
+        step_disease = None
     config_test_control: Optional[List[str]] = None
     config_test_disease: Optional[List[str]] = None
     if step_control is not None and step_disease is not None:
@@ -238,14 +250,17 @@ def resolve_predictor_config_per_comparison(
         out_dir = project.get_validator_output_dir(ctrl_label, dis_label)
 
         if use_caller_test_paths:
-            control_paths = list(test_control_paths)
-            disease_paths = list(test_disease_paths)
+            control_paths = [_resolve_one_path(p, base_path) for p in test_control_paths if p and str(p).strip()]
+            disease_paths = [_resolve_one_path(p, base_path) for p in test_disease_paths if p and str(p).strip()]
         elif config_test_control is not None and config_test_disease is not None:
             control_paths = list(config_test_control)
             disease_paths = list(config_test_disease)
         else:
             control_paths = list(project.get_group_sample_paths_by_label(spec.control_group))
             disease_paths = list(project.get_group_sample_paths_by_label(spec.disease_group))
+        # Ensure all paths are absolute before path_remap
+        control_paths = [_resolve_one_path(p, base_path) for p in control_paths if p]
+        disease_paths = [_resolve_one_path(p, base_path) for p in disease_paths if p]
         if project.path_remap:
             control_paths = _apply_path_remap(control_paths, project.path_remap)
             disease_paths = _apply_path_remap(disease_paths, project.path_remap)

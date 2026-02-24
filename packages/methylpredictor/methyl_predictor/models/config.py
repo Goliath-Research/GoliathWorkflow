@@ -3,7 +3,21 @@
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+
+def _to_absolute_paths(paths: List[str], base_path: Optional[str]) -> List[str]:
+    """Resolve each path to absolute; relative paths are resolved against base_path or cwd."""
+    base = Path(base_path).resolve() if base_path else Path.cwd()
+    result: List[str] = []
+    for p in paths:
+        if not p or not str(p).strip():
+            continue
+        path = Path(p.strip())
+        if not path.is_absolute():
+            path = base / path
+        result.append(str(path.resolve()))
+    return result
 
 
 class PredictorConfig(BaseModel):
@@ -41,6 +55,17 @@ class PredictorConfig(BaseModel):
         default=False,
         description="Enable debug output.",
     )
+
+    @model_validator(mode="after")
+    def ensure_absolute_test_paths(self) -> "PredictorConfig":
+        """Normalize test_control_paths and test_disease_paths to absolute paths."""
+        self.test_control_paths = _to_absolute_paths(
+            self.test_control_paths, self.samples_base_path
+        )
+        self.test_disease_paths = _to_absolute_paths(
+            self.test_disease_paths, self.samples_base_path
+        )
+        return self
 
     class Config:
         """Pydantic config."""

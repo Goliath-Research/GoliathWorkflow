@@ -165,8 +165,10 @@ def main() -> None:
             data["output_dir"] = str(args.output_dir)
         if args.test_control is not None:
             data["test_control_paths"] = _parse_test_paths_arg(args.test_control) or []
+            print(f"Test control paths: {data['test_control_paths']}")
         if args.test_disease is not None:
             data["test_disease_paths"] = _parse_test_paths_arg(args.test_disease) or []
+            print(f"Test disease paths: {data['test_disease_paths']}")
         data["debug"] = data.get("debug", False) or args.debug
         config = PredictorConfig(**data)
         run_prediction(config)
