@@ -89,11 +89,47 @@ def _print_metrics(metrics: Dict[str, Any]) -> None:
         print("     " + " ".join(f"{x:>4}" for x in row))
 
 
+def _build_samples_and_expected(
+    config: PredictorConfig,
+    n_classes: int,
+) -> tuple[List[str], Optional[List[int]]]:
+    """
+    Build samples_list and expected_classes from config.
+    Returns (samples_list, expected_classes). expected_classes is None for inference-only (no labels).
+    """
+    n_classes = n_classes or 2
+    is_multiclass = n_classes > 2
+
+    # Multi-class with labeled groups
+    if is_multiclass and config.test_group_paths:
+        samples_list: List[str] = []
+        expected_classes: List[int] = []
+        for i, entry in enumerate(config.test_group_paths):
+            paths = entry.get("paths") or []
+            paths = [p for p in paths if p and str(p).strip()]
+            samples_list.extend(paths)
+            expected_classes.extend([i] * len(paths))
+        return samples_list, expected_classes if samples_list else None
+
+    # Multi-class inference-only: use binary-style paths as single unlabeled list
+    if is_multiclass:
+        flat = list(config.test_control_paths) + list(config.test_disease_paths)
+        flat = [p for p in flat if p and str(p).strip()]
+        return flat, None if flat else None
+
+    # Binary
+    samples_list = list(config.test_control_paths) + list(config.test_disease_paths)
+    n_control = len(config.test_control_paths)
+    n_disease = len(config.test_disease_paths)
+    expected_classes = [0] * n_control + [1] * n_disease
+    return samples_list, expected_classes
+
+
 def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     """
-    Load MethylClassifier, run prediction on test_control_paths + test_disease_paths,
-    compute metrics, print summary, write validation_metrics.json and predictions CSV.
-    Returns the metrics dictionary (e.g. for programmatic use or Monte Carlo aggregation).
+    Load MethylClassifier, run prediction on test samples (binary or multi-class),
+    optionally compute metrics when labels are provided, write validation_metrics.json and predictions CSV.
+    Returns the metrics dictionary (or empty/minimal dict for inference-only).
     """
     from methyl_classifier.core.classifier import MethylClassifier
     from methyl_classifier.models.config import ClassifierConfig
@@ -110,13 +146,20 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     )
     classifier = MethylClassifier(classifier_config)
 
-    samples_list = list(config.test_control_paths) + list(config.test_disease_paths)
-    n_control = len(config.test_control_paths)
-    n_disease = len(config.test_disease_paths)
-    expected_classes = [0] * n_control + [1] * n_disease
+    n_classes = getattr(classifier, "n_classes", None) or 2
+    class_names = getattr(classifier, "class_names", None) or [
+        f"Class_{i}" for i in range(n_classes)
+    ]
+    is_multiclass = n_classes > 2
+    if is_multiclass:
+        print(f"Multi-class classifier ({n_classes} classes: {class_names})")
 
+    samples_list, expected_classes = _build_samples_and_expected(config, n_classes)
     if not samples_list:
-        raise ValueError("No test samples: test_control_paths and test_disease_paths are empty.")
+        raise ValueError(
+            "No test samples: provide test_control_paths + test_disease_paths (binary) "
+            "or test_group_paths (multi-class)."
+        )
 
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -135,14 +178,21 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
                 fi = clf.get_feature_info()
                 dmp_positions_by_chrom[chrom] = fi["positions"]
     else:
-        # Single-chromosome: pass one chromosome and its DMP positions so we don't load all chroms in full
-        if getattr(classifier, "classifier", None) is not None:
+        # Single-file (single-chromosome or multiclass): prefer dmp_positions_df when present (multiclass with dmp_df)
+        dmp_df = getattr(classifier, "dmp_positions_df", None)
+        if dmp_df is not None and len(dmp_df) > 0 and hasattr(dmp_df, "columns") and "chromosome" in dmp_df.columns:
+            required_chromosomes = sorted(dmp_df["chromosome"].astype(str).unique().tolist())
+            dmp_positions_by_chrom = dmp_df
+        elif getattr(classifier, "classifier", None) is not None:
             feature_info = classifier.get_feature_info()
-            chrom = getattr(classifier, "chromosome", None) or "unknown"
+            chrom = getattr(classifier, "chromosome", None) or feature_info.get("chromosome") or "unknown"
             if chrom == "unknown":
                 chrom = "1"
             required_chromosomes = [chrom]
             dmp_positions_by_chrom = {chrom: feature_info["positions"]}
+        else:
+            required_chromosomes = None
+            dmp_positions_by_chrom = None
 
     classify_samples_from_list(
         classifier=classifier,
@@ -155,28 +205,25 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
         expected_classes=expected_classes,
     )
 
-    # Read predictions CSV and compute metrics
     if not predictions_csv.exists():
         raise RuntimeError(f"Expected output CSV not found: {predictions_csv}")
 
     df = pd.read_csv(predictions_csv)
-    if "expected_class" not in df.columns or "prediction" not in df.columns:
-        raise RuntimeError(
-            "predictions CSV must contain expected_class and prediction columns"
-        )
-    y_true = df["expected_class"].values.astype(int)
-    y_pred = df["prediction"].values.astype(int)
-    n_classes = classifier.n_classes
-    class_names = getattr(classifier, "class_names", None) or [
-        f"Class_{i}" for i in range(n_classes)
-    ]
+    if "prediction" not in df.columns:
+        raise RuntimeError("predictions CSV must contain prediction column")
 
-    metrics = _compute_metrics(y_true, y_pred, n_classes, class_names)
-    _print_metrics(metrics)
-
-    metrics_path = output_dir / "validation_metrics.json"
-    with open(metrics_path, "w") as f:
-        json.dump(metrics, f, indent=2)
-    print(f"\n💾 Metrics saved to {metrics_path}")
-    print(f"💾 Predictions CSV: {predictions_csv}")
-    return metrics
+    # Metrics only when we have labels
+    if expected_classes is not None and "expected_class" in df.columns:
+        y_true = df["expected_class"].values.astype(int)
+        y_pred = df["prediction"].values.astype(int)
+        metrics = _compute_metrics(y_true, y_pred, n_classes, class_names)
+        _print_metrics(metrics)
+        metrics_path = output_dir / "validation_metrics.json"
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f, indent=2)
+        print(f"\n💾 Metrics saved to {metrics_path}")
+        print(f"💾 Predictions CSV: {predictions_csv}")
+        return metrics
+    # Inference-only: no validation_metrics.json
+    print(f"\n💾 Predictions CSV: {predictions_csv} (no labels; metrics skipped)")
+    return {"n_samples": len(df), "n_classes": n_classes, "class_names": class_names}

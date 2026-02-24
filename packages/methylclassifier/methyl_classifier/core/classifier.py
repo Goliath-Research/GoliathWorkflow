@@ -160,6 +160,16 @@ class MethylClassifier:
                 else:
                     self._calibrated = False
 
+                # Multi-class single-file: set dmp_positions_df so loader can use per-chromosome positions
+                if "dmp_df" in model_package:
+                    dmp_df = model_package["dmp_df"]
+                    if hasattr(dmp_df, "columns") and "chromosome" in dmp_df.columns and "position" in dmp_df.columns:
+                        self.dmp_positions_df = dmp_df[["chromosome", "position"]].copy()
+                        self.dmp_positions_df["chromosome"] = self.dmp_positions_df["chromosome"].astype("category")
+                        self.dmp_positions_df["position"] = self.dmp_positions_df["position"].astype(np.uint32)
+                    else:
+                        self.dmp_positions_df = pd.DataFrame(columns=["chromosome", "position"])
+
             else:
                 # Check if this is a saved full MethylClassifier (multi-chromosome bundle from .save())
                 if isinstance(model_package, MethylClassifier) and getattr(model_package, "classifiers", None):

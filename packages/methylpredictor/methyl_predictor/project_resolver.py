@@ -84,6 +84,24 @@ def _apply_path_remap(paths: List[str], path_remap: Optional[Dict[str, str]]) ->
     return out
 
 
+MULTICLASS_CLASSIFIER_FILENAME = "multiclass-classifier.pkl"
+
+
+def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: Any) -> Optional[Path]:
+    """Return path to multiclass classifier pkl if it exists, else None."""
+    explicit = step_cfg.get("multiclass_model_path") or step_cfg.get("model_path")
+    if explicit:
+        p = Path(explicit)
+        if p.is_file():
+            return p
+    classifier_dir = getattr(paths, "classifier_dir", None)
+    if classifier_dir:
+        candidate = Path(classifier_dir) / MULTICLASS_CLASSIFIER_FILENAME
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def resolve_predictor_config(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
@@ -178,11 +196,12 @@ def resolve_predictor_config_per_comparison(
     test_disease_paths: Optional[List[str]] = None,
 ) -> List[Tuple[PredictorConfig, str]]:
     """
-    Build one PredictorConfig per comparison (control/disease projects).
-    Test sample precedence: (1) Caller test_control_paths/test_disease_paths (e.g. CLI) supersede all.
-    (2) If step_config.predictor has valid test_control_paths and test_disease_paths (non-empty after expansion), use them.
+    Build one PredictorConfig per comparison (control/disease projects), or a single
+    multi-class config if multiclass-classifier.pkl exists.
+    Test sample precedence: (1) Caller test paths (e.g. CLI) supersede all.
+    (2) If step_config.predictor has valid test paths (non-empty after expansion), use them.
     (3) Otherwise use training data (project group sample paths).
-    Returns list of (PredictorConfig, comparison_label).
+    Returns list of (PredictorConfig, comparison_label) or [(config, "multiclass")] when multiclass model is used.
     """
     project = load_project(project_path)
     if not getattr(project, "uses_control_disease", lambda: False)():
@@ -204,9 +223,51 @@ def resolve_predictor_config_per_comparison(
                 overrides = json.load(f)
             step_cfg = {**step_cfg, **overrides}
 
-    comparisons = project.get_comparisons()
     paths = project.get_derived_paths()
     base_path = getattr(project, "samples_base_path", None)
+
+    # Prefer multiclass model when present: one config with test_group_paths
+    multiclass_path = _get_multiclass_model_path(project, step_cfg, paths)
+    if multiclass_path is not None:
+        out_dir = str(Path(paths.validator_dir).resolve())
+        step_test_groups = step_cfg.get("test_group_paths")
+        if step_test_groups and isinstance(step_test_groups, list):
+            test_group_paths: List[Dict[str, Any]] = []
+            for entry in step_test_groups:
+                if not isinstance(entry, dict):
+                    continue
+                label = entry.get("label") or entry.get("class_name") or str(len(test_group_paths))
+                paths_raw = entry.get("paths") or []
+                if isinstance(paths_raw, str):
+                    paths_raw = [paths_raw]
+                expanded = _expand_test_paths(paths_raw, base_path)
+                expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
+                if project.path_remap:
+                    expanded = _apply_path_remap(expanded, project.path_remap)
+                test_group_paths.append({"label": label, "paths": expanded})
+        else:
+            resolved = project.get_resolved_groups()
+            test_group_paths = []
+            for label, group_paths in resolved:
+                paths_list = list(group_paths)
+                paths_list = [_resolve_one_path(p, base_path) for p in paths_list if p]
+                if project.path_remap:
+                    paths_list = _apply_path_remap(paths_list, project.path_remap)
+                test_group_paths.append({"label": label, "paths": paths_list})
+        base_dict: Dict[str, Any] = {
+            "model_path": str(multiclass_path),
+            "model_dir": None,
+            "output_dir": out_dir,
+            "test_control_paths": [],
+            "test_disease_paths": [],
+            "test_group_paths": test_group_paths,
+            "path_remap": project.path_remap,
+            "samples_base_path": project.samples_base_path,
+            "debug": step_cfg.get("debug", False),
+        }
+        return [(PredictorConfig(**base_dict), "multiclass")]
+
+    comparisons = project.get_comparisons()
     # Precedence: (1) CLI/caller test paths, (2) valid config test paths, (3) training data
     use_caller_test_paths = (
         test_control_paths is not None and test_disease_paths is not None
