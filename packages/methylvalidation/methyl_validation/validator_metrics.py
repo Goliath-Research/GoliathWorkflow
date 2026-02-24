@@ -102,3 +102,81 @@ def write_summary_json(summary: Dict[str, Any], path: str | Path) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
+
+
+def compute_resource_summary(timings: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Compute resource summary from step timings: mean/std duration per step, mean total
+    duration per iteration, and min/max/mean of n_train_samples and n_val_samples.
+    """
+    if not timings:
+        return {}
+    # Per-step duration
+    by_step: Dict[str, List[float]] = {}
+    for row in timings:
+        step = row.get("step_name")
+        dur = row.get("duration_seconds")
+        if step is not None and isinstance(dur, (int, float)):
+            by_step.setdefault(step, []).append(float(dur))
+    steps_summary: Dict[str, Any] = {}
+    for step, durs in by_step.items():
+        arr = np.array(durs)
+        steps_summary[step] = {
+            "mean_seconds": float(np.mean(arr)),
+            "std_seconds": float(np.std(arr)) if len(arr) > 1 else 0.0,
+            "count": int(len(arr)),
+        }
+    # Total duration per iteration (sum of four steps per run_id)
+    by_run: Dict[str, float] = {}
+    for row in timings:
+        run_id = row.get("run_id")
+        dur = row.get("duration_seconds")
+        if run_id is not None and isinstance(dur, (int, float)):
+            by_run[run_id] = by_run.get(run_id, 0.0) + float(dur)
+    total_durs = list(by_run.values()) if by_run else []
+    iteration_summary: Dict[str, Any] = {}
+    if total_durs:
+        arr = np.array(total_durs)
+        iteration_summary = {
+            "mean_total_seconds": float(np.mean(arr)),
+            "std_total_seconds": float(np.std(arr)) if len(arr) > 1 else 0.0,
+            "n_iterations": int(len(arr)),
+        }
+    # n_train_samples, n_val_samples (one value per run)
+    run_to_train: Dict[str, int] = {}
+    run_to_val: Dict[str, int] = {}
+    for row in timings:
+        run_id = row.get("run_id")
+        if run_id is None:
+            continue
+        if "n_train_samples" in row and row["n_train_samples"] is not None:
+            run_to_train[run_id] = int(row["n_train_samples"])
+        if "n_val_samples" in row and row["n_val_samples"] is not None:
+            run_to_val[run_id] = int(row["n_val_samples"])
+    sample_summary: Dict[str, Any] = {}
+    if run_to_train:
+        vals = list(run_to_train.values())
+        sample_summary["n_train_samples"] = {
+            "min": int(min(vals)),
+            "max": int(max(vals)),
+            "mean": float(np.mean(vals)),
+        }
+    if run_to_val:
+        vals = list(run_to_val.values())
+        sample_summary["n_val_samples"] = {
+            "min": int(min(vals)),
+            "max": int(max(vals)),
+            "mean": float(np.mean(vals)),
+        }
+    return {
+        "per_step_duration_seconds": steps_summary,
+        "per_iteration_total_seconds": iteration_summary,
+        "sample_sizes": sample_summary,
+    }
+
+
+def write_resource_summary_json(summary: Dict[str, Any], path: str | Path) -> None:
+    """Write the resource summary dict to JSON."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)

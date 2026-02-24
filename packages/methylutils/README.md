@@ -48,4 +48,7 @@ updated_centroid = centroid.add_sample(sample)
 
 ## Documentation
 
-See METHYLUTILS_COMPREHENSIVE_ANALYSIS.md for detailed analysis.
+- **[Usage Guide (Docker and venv)](docs/USAGE.md)** — Setup with Docker or a local virtual environment; install order for dependent packages.
+- [Theoretical Foundation](docs/MethylUtils_Theoretical_Foundation.md) — Role of MethylUtils, project config, sample/centroid model, Beta and metrics.
+- [Implementation](docs/METHYLUTILS_IMPLEMENTATION.md) — Package layout and how downstream packages use MethylUtils.
+- [Comprehensive Documentation](docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md) — Full math, distance formulas, data structures, and API details.
