@@ -1,6 +1,6 @@
 # MethylDetector Quick Start Guide
 
-This guide will help you get MethylDetector up and running quickly.
+This guide will help you get MethylDetector up and running quickly. For Docker vs virtual environment setup, see [docs/USAGE.md](docs/USAGE.md).
 
 ## Prerequisites
 

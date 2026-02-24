@@ -62,7 +62,7 @@ python -c "import cupy as cp; print(f'GPU count: {cp.cuda.runtime.getDeviceCount
 ```bash
 methyl-detector config.json
 ```
-<parameter name="replace_all">true
+
 ### Multi-Chromosome Usage
 
 Process multiple chromosomes in a single run:
@@ -372,9 +372,13 @@ Copy and customize for your data!
 
 ## Documentation
 
-- **[Quick Start Guide](QUICKSTART.md)** - Get started quickly
-- **[Context Selection Guide](CONTEXT_SELECTION_GUIDE.md)** - Choosing methylation contexts
-- **[Comprehensive Documentation](docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)** - Complete API reference
+- **[Theoretical Foundation](docs/MethylDetector_Theoretical_Foundation.md)** — Probabilistic distributions (Beta, LRT, Storey q-values, effect size, overlap)
+- **[Implementation (MethylUtils)](docs/METHYLDETECTOR_IMPLEMENTATION.md)** — MethylCentroidPair, statistical_tests, classifier usage
+- **[User Manual](docs/USAGE.md)** — Docker container and virtual environment setup and usage
+- **[Quick Start Guide](QUICKSTART.md)** — Get started quickly
+- **[Context Selection Guide](CONTEXT_SELECTION_GUIDE.md)** — Choosing methylation contexts
+- **[Comprehensive Documentation](docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)** — Complete API reference
+- **[Classifier Weights and Accuracy](docs/CLASSIFIER_WEIGHTS_AND_ACCURACY.md)** — effect_size and classifier accuracy
 
 ## Contributing
 

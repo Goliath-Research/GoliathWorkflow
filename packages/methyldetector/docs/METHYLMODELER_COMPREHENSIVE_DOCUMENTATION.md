@@ -1,4 +1,10 @@
-# MethylModeler: Comprehensive Documentation
+# MethylDetector: Comprehensive Documentation
+
+This document is the full reference for MethylDetector (formerly MethylModeler). For concise summaries and setup:
+
+- **Theory (distributions, LRT, q-values, effect size):** [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md)
+- **Implementation (MethylUtils):** [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md)
+- **User Manual (Docker and virtual environment):** [USAGE.md](USAGE.md)
 
 ## Table of Contents
 
@@ -21,11 +27,11 @@
 
 ## Overview
 
-**MethylModeler** is a production-ready pipeline for detecting differentially methylated positions (DMPs) between two methylation centroids. It combines statistical rigor with biological relevance to identify positions that truly discriminate between experimental groups.
+**MethylDetector** is a production-ready pipeline for detecting differentially methylated positions (DMPs) between two methylation centroids. It combines statistical rigor with biological relevance to identify positions that truly discriminate between experimental groups.
 
-### What is MethylModeler?
+### What is MethylDetector?
 
-MethylModeler compares two centroids (representing different biological conditions) to identify positions where methylation significantly differs:
+MethylDetector compares two centroids (representing different biological conditions) to identify positions where methylation significantly differs:
 
 - **Statistical DMP Detection**: Likelihood ratio tests with FDR correction (Storey's q-value method)
 - **Biological Filtering**: Multi-factor importance ranking (effect size, variance reliability, statistical significance, context weighting)
@@ -90,6 +96,8 @@ q_{(i)} = \min_{j \geq i} \left\{\hat{\pi}_0 \cdot \frac{m \cdot p_{(j)}}{j}\rig
 $$
 
 **Advantage**: More powerful than Benjamini-Hochberg for genomics data with many true nulls.
+
+**Implementation:** MethylUtils `storey_qvalues`; MethylCentroidPair uses it when comparing centroids. See [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md) and [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md).
 
 ### Effect Size Metrics
 
@@ -194,6 +202,10 @@ $$
 $$
 
 where $\Phi$ is the standard normal CDF, and $\mu_{\text{LLR}}, \sigma^2_{\text{LLR}}$ are computed from Beta distribution parameters.
+
+### Implementation (MethylUtils)
+
+Centroid comparison and all statistics are implemented in **MethylUtils**. MethylDetector calls **MethylCentroidPair** for load_and_align, compare_centroids (which uses `likelihood_ratio_test_beta` and `storey_qvalues`), effect_size and overlap; it uses **BetaClassifier** / **BetaBinomialClassifier** for training and validation. See [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md) for full details.
 
 ---
 
