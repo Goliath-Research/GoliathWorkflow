@@ -188,11 +188,10 @@ def main() -> None:
             configs = resolve_predictor_config_per_comparison(
                 args.project,
                 step_override_path=args.step_override,
+                test_control_paths=test_control,
+                test_disease_paths=test_disease,
             )
             for cfg, label in configs:
-                if test_control is not None and test_disease is not None:
-                    cfg.test_control_paths = test_control
-                    cfg.test_disease_paths = test_disease
                 if args.model is not None:
                     cfg.model_path = str(args.model)
                     cfg.model_dir = None

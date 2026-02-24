@@ -150,15 +150,24 @@ def resolve_predictor_config(
 def resolve_predictor_config_per_comparison(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
+    test_control_paths: Optional[List[str]] = None,
+    test_disease_paths: Optional[List[str]] = None,
 ) -> List[Tuple[PredictorConfig, str]]:
     """
     Build one PredictorConfig per comparison (control/disease projects).
+    When test_control_paths and test_disease_paths are provided (e.g. from CLI --test-control/--test-disease),
+    they override step_config and project groups so the same holdout test set is used for every comparison.
     Returns list of (PredictorConfig, comparison_label).
     """
     project = load_project(project_path)
     if not getattr(project, "uses_control_disease", lambda: False)():
         # Flat groups: single config
-        config = resolve_predictor_config(project_path, step_override_path=step_override_path)
+        config = resolve_predictor_config(
+            project_path,
+            step_override_path=step_override_path,
+            test_control_paths=test_control_paths,
+            test_disease_paths=test_disease_paths,
+        )
         return [(config, "validation")]
 
     step_cfg = (project.get_step_config("predictor") or project.get_step_config("validator") or {}).copy()
@@ -173,8 +182,14 @@ def resolve_predictor_config_per_comparison(
     comparisons = project.get_comparisons()
     paths = project.get_derived_paths()
     base_path = getattr(project, "samples_base_path", None)
+    # Caller-provided test paths (e.g. CLI) take precedence over step_config and over project training groups
+    use_caller_test_paths = (
+        test_control_paths is not None and test_disease_paths is not None
+    )
     step_has_test_lists = (
-        step_cfg.get("test_control_paths") is not None and step_cfg.get("test_disease_paths") is not None
+        not use_caller_test_paths
+        and step_cfg.get("test_control_paths") is not None
+        and step_cfg.get("test_disease_paths") is not None
     )
 
     result: List[Tuple[PredictorConfig, str]] = []
@@ -200,7 +215,10 @@ def resolve_predictor_config_per_comparison(
             model_dir = detection_dir
         out_dir = project.get_validator_output_dir(ctrl_label, dis_label)
 
-        if step_has_test_lists:
+        if use_caller_test_paths:
+            control_paths = list(test_control_paths)
+            disease_paths = list(test_disease_paths)
+        elif step_has_test_lists:
             control_paths = _expand_test_paths(step_cfg["test_control_paths"], base_path)
             disease_paths = _expand_test_paths(step_cfg["test_disease_paths"], base_path)
         else:
