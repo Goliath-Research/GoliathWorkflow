@@ -2846,6 +2846,7 @@ class MethylDetector:
                 'version': '2.0.0',
                 'classifier_type': classifier_label,
                 'bmm_mixture_attached': mixture_attached,
+                'context': ctx_str,
                 'config': self.config.model_dump(),
                 'trimmed_percentile_low': self.config.trimmed_percentile_low,
                 'trimmed_percentile_high': self.config.trimmed_percentile_high,

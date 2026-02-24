@@ -176,11 +176,20 @@ class MethylClassifier:
                     self.n_classes = getattr(model_package, "n_classes", 2)
                     self.class_names = getattr(model_package, "class_names", None)
                     self.context_metadata = getattr(model_package, "context_metadata", None)
+                    if not self.context_metadata and self.model_packages:
+                        first_chrom = sorted(self.classifiers.keys())[0]
+                        pkg = self.model_packages.get(first_chrom, {})
+                        meta = pkg.get('metadata', {})
+                        self.context_metadata = meta.get('context')
+                        if not self.context_metadata and meta.get('config'):
+                            ctxs = meta.get('config', {}).get('contexts')
+                            if ctxs:
+                                self.context_metadata = ','.join(sorted(ctxs))
                     self.chromosome = sorted(self.classifiers.keys())[0] if self.classifiers else None
                     self._calibrated = getattr(model_package, "_calibrated", False)
                     self._run_centroid_self_check(self.model_packages)
                     self._collect_all_dmp_positions()
-                    print(f"📋 Context: {self.context_metadata or 'from model'}; chromosomes: {list(sorted(self.classifiers.keys()))}")
+                    print(f"📋 Context: {self.context_metadata or 'unknown'}; chromosomes: {list(sorted(self.classifiers.keys()))}")
                 else:
                     # Old format: raw ProbabilisticBetaClassifier (single chromosome)
                     print("✅ Loaded classifier (legacy format)")
@@ -371,7 +380,7 @@ class MethylClassifier:
         self.chromosome = first_chrom
         self.n_classes = n_classes_list[0] if n_classes_list else 2
         
-        # Try to get class names from metadata
+        # Try to get class names and context from metadata
         if first_chrom in model_packages:
             metadata = model_packages[first_chrom].get('metadata', {})
             if 'class_names' in metadata:
@@ -381,7 +390,15 @@ class MethylClassifier:
                     metadata.get('centroid1_name', 'centroid1'),
                     metadata.get('centroid2_name', 'centroid2')
                 ]
-            self.context_metadata = metadata.get('context', 'unknown')
+            self.context_metadata = metadata.get('context')
+            if not self.context_metadata:
+                # Fallback: extract from filename (e.g. classifier-1-CG.pkl)
+                first_files = chrom_files.get(first_chrom, [])
+                if first_files:
+                    newest_path = sorted(first_files, key=lambda p: p.stat().st_mtime, reverse=True)[0]
+                    self.context_metadata = _extract_context_from_classifier_filename(newest_path.name)
+            if not self.context_metadata:
+                self.context_metadata = 'unknown'
         
         print(f"\n✅ Multi-chromosome classifier ready: {len(self.classifiers)} chromosomes, {self.n_classes} classes")
 
@@ -967,6 +984,18 @@ class MethylClassifier:
             adjust_for_missing=adjust_for_missing,
             availability_mask=availability_mask
         )
+
+
+def _extract_context_from_classifier_filename(filename: str) -> Optional[str]:
+    """
+    Extract context from classifier filename (e.g. classifier-1-CG.pkl -> CG).
+    Returns None if context cannot be extracted.
+    """
+    stem = Path(filename).stem
+    parts = stem.split('-')
+    if len(parts) >= 3:
+        return parts[-1]
+    return None
 
 
 def extract_chrom_context_from_classifier(classifier_path: Path) -> Tuple[str, str]:
