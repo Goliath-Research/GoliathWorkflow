@@ -27,9 +27,11 @@ from .split import load_and_resolve_sample_paths, stratified_split
 from .validator_metrics import (
     _scalar_metrics_from_dict,
     build_metrics_table,
+    compute_resource_summary,
     compute_summary,
     load_metrics_from_json,
     write_all_metrics_csv,
+    write_resource_summary_json,
     write_step_timings_csv,
     write_summary_json,
 )
@@ -253,6 +255,11 @@ def main() -> None:
         step_timings_path = monte_carlo_runs_root / "step_timings.csv"
         write_step_timings_csv(all_timings, step_timings_path)
         print(f"Wrote {step_timings_path}")
+        resource_summary = compute_resource_summary(all_timings)
+        if resource_summary:
+            resource_summary_path = monte_carlo_runs_root / "resource_summary.json"
+            write_resource_summary_json(resource_summary, resource_summary_path)
+            print(f"Wrote {resource_summary_path}")
 
     print("Done.")
 

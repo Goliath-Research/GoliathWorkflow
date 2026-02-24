@@ -1,6 +1,12 @@
 # MethylValidation
 
-Monte Carlo validation runner for MethylPipeline. Performs repeated stratified train/validation splits, runs the pipeline (MethylCentroid → MethylDetector → MethylClassifier → MethylValidator) per iteration with the training set, validates on the holdout set, and aggregates MethylValidator metrics into empirical distributions.
+Monte Carlo validation runner for MethylPipeline. Performs repeated stratified train/validation splits, runs the pipeline (MethylCentroid → MethylDetector → MethylClassifier → MethylPredictor) per iteration with the training set, validates on the holdout set, and aggregates validation metrics into **empirical distributions** (balanced accuracy, sensitivity, specificity, F1, etc.). It also records step timings (duration, n_train/n_val samples) so you can **estimate processing time and storage** for a given number of samples and iterations.
+
+## Documentation
+
+- **[Usage Guide (Docker and venv)](docs/USAGE.md)** — Setup, config, outputs, quality metrics distribution, and estimating processing and storage.
+- [Theoretical Foundation](docs/MethylValidation_Theoretical_Foundation.md) — Goal, stratified split, empirical metric distribution.
+- [Implementation](docs/METHYLVALIDATION_IMPLEMENTATION.md) — Modules, data flow, MethylUtils usage.
 
 ## Config
 
@@ -30,9 +36,13 @@ methyl-validation --config monte_carlo_config.json --iterations 20 --seed 42 --o
 
 ## Outputs
 
-- `output_base/run_0001/`, `run_0002/`, ... — per-iteration project, train/val CSVs, and pipeline outputs (centroid, detection, classifier, validator).
-- `output_base/all_metrics.csv` — one row per successful iteration with all scalar metrics.
-- `output_base/metrics_summary.json` — empirical distribution summary (mean, std, min, max, percentiles) per metric.
+Outputs are under `output_base/project_name/monte_carlo_runs/`:
+
+- `run_0001/`, `run_0002/`, ... — per-iteration project, train/val CSVs, and pipeline outputs (centroid, detection, classifier, predictor).
+- `all_metrics.csv` — one row per successful iteration with all scalar metrics.
+- `metrics_summary.json` — empirical distribution (mean, std, min, max, percentiles) per metric — the **probability distribution** of BA, sensitivity, specificity, F1, etc.
+- `step_timings.csv` — per step per run: duration, n_train_samples, n_val_samples (for processing estimation).
+- `resource_summary.json` — (if generated) mean duration per step and per iteration for quick run-time estimation.
 
 ## Dependencies
 
