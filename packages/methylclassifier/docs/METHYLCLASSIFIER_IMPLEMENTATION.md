@@ -1,0 +1,78 @@
+# MethylClassifier Implementation (MethylUtils)
+
+This document describes how MethylClassifier is implemented: it loads models produced by **MethylDetector** (which uses MethylUtils for training) and uses MethylUtils for data loading and, internally, for the classifier objects stored in those models.
+
+## Architecture Overview
+
+- **MethylDetector** (with MethylUtils) trains per-chromosome classifiers (BetaClassifier / BetaBinomialClassifier), saves them as pickle files (e.g. `classifier-1.pkl`, `classifier-2.pkl`), and stores metadata (contexts, DMP positions, chromosome weights).
+- **MethylClassifier** loads those pickles, collects DMP positions, loads sample methylation at those positions (via MethylUtils and its own DataLoader), and runs prediction by calling the stored classifier(s) and combining per-chromosome probabilities with chromosome weights.
+
+```mermaid
+flowchart LR
+  Config[ClassifierConfig]
+  MC[MethylClassifier]
+  Load[Load classifiers from MethylDetector output]
+  DataLoader[DataLoader]
+  MethylSample[MethylSample load_from_h5]
+  BetaClassifier[BetaClassifier predict_proba]
+  Weights[Chromosome weights]
+  Out[Predictions CSV]
+
+  Config --> MC
+  MC --> Load
+  MC --> DataLoader
+  DataLoader --> MethylSample
+  MC --> BetaClassifier
+  BetaClassifier --> Weights
+  Weights --> Out
+```
+
+## Loading Models
+
+- **Single file** (`model_path`): One pickle file (e.g. `classifier-1-CG.pkl`) containing a classifier bundle. MethylClassifier loads it and uses a single ProbabilisticBetaClassifier (from MethylUtils) for that chromosome/context.
+- **Directory** (`model_dir`): Multi-chromosome mode. MethylClassifier loads all `classifier-{chrom}.pkl` files from the directory, builds a map of chromosome → classifier, and computes **chromosome weights**:
+  - **effect_size** (default): Trimmed mean of effect_size per chromosome from the saved DMP metadata.
+  - **config**: Predefined weights from config (`chromosome_weights`).
+  - **linear_fitted** / **logistic_fitted** / **elasticnet_fitted**: Weights fitted from validation data (per-chromosome probabilities and labels) when centroid validation is used.
+
+The classifier objects inside the pickle are MethylUtils **BetaClassifier** or **BetaBinomialClassifier** instances; MethylClassifier does not reimplement prediction, it calls their `.predict_proba()`, `.predict()`, and optionally `.predict_proba_calibrated()` or `.predict_with_threshold()`.
+
+## MethylUtils Usage
+
+| Component | Use in MethylClassifier |
+|-----------|--------------------------|
+| **Classifier (in pickle)** | Stored by MethylDetector; MethylClassifier loads and calls `.predict_proba()`, `.predict()`, `.predict_proba_calibrated()`, `.predict_with_threshold()`. |
+| **MethylSample / load_from_h5** | DataLoader uses these to load sample HDF5 files and extract methylation at DMP positions. |
+| **MultiClassBetaMixtureClassifier, MethylBetaMixtureCentroid** | Used by the multiclass builder ([multiclass_builder.py](packages/methylclassifier/methyl_classifier/utils/multiclass_builder.py)) for multi-class models. |
+| **load_project** | Used when resolving config from a pipeline project (e.g. CLI `--project`). |
+
+## Context Handling
+
+Contexts (CG, CHG, CHH) are **not** set in MethylClassifier config; they are determined by the **model** that was trained by MethylDetector.
+
+- MethylDetector’s config has **contexts** (e.g. `["CG"]` or `["CG","CHG","CHH"]`). The detector trains on DMPs from those contexts and stores `contexts` in the saved model metadata.
+- MethylClassifier reads **model_contexts** from the loaded model(s) (see `model_contexts` property in [classifier.py](packages/methylclassifier/methyl_classifier/core/classifier.py)) and passes **contexts_to_load** to the DataLoader.
+- **CG-only model**: `contexts_to_load = ['CG']` → only `{chrom}-CG.h5` files are loaded; CHG/CHH are skipped.
+- **Multi-context model**: `contexts_to_load = ['CG','CHG','CHH']` → all three context files are loaded per chromosome and merged (union of positions, with context-specific DMPs). Sample directories must contain the corresponding `{chrom}-CG.h5`, `{chrom}-CHG.h5`, `{chrom}-CHH.h5` for each chromosome.
+
+This ensures that inference uses the same contexts as training.
+
+## Data Flow
+
+1. **Config**: `model_dir` or `model_path`, `input_path` or `samples`, and optional validation/weight/calibration options.
+2. **Load classifiers**: From directory or single file; build DMP position list (and optional DataFrame) from saved metadata.
+3. **Chromosome weights**: Compute or load from config (effect_size, config, or fitted).
+4. **Load samples**: For each sample path, DataLoader loads HDF5 per chromosome and context (according to `contexts_to_load`), merges contexts when multiple, and extracts methylation at the DMP positions required by each chromosome’s classifier.
+5. **Predict**: For each chromosome, call the stored classifier’s `predict_proba` on the corresponding methylation slice; weight by chromosome weight; sum and normalize to get combined class probabilities.
+6. **Output**: Predictions and probabilities written to CSV (and optional validation report if centroid validation paths are provided).
+
+## Summary
+
+| Layer | Component | Role |
+|-------|-----------|------|
+| MethylDetector | Trains and saves classifiers | Produces classifier-{chrom}.pkl and metadata (contexts, DMPs, effect_size). |
+| MethylUtils | BetaClassifier / BetaBinomialClassifier | Stored in pickle; used for predict_proba / predict. |
+| MethylUtils | MethylSample, load_from_h5 | DataLoader loads sample data at DMP positions. |
+| MethylClassifier | MethylClassifier (class) | Loads models, manages chromosome weights, orchestrates DataLoader and per-chromosome prediction, combines and writes results. |
+
+For theoretical background, see [MethylClassifier_Theoretical_Foundation.md](MethylClassifier_Theoretical_Foundation.md). For running with Docker/venv, contexts, and improving balanced accuracy, see [USAGE.md](USAGE.md).

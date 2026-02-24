@@ -3,6 +3,11 @@
 **Version:** 0.1.0  
 **Last Updated:** 2025-10-23
 
+**Related documentation:**
+- **Theory (Beta, Naive Bayes, posterior):** [MethylClassifier_Theoretical_Foundation.md](MethylClassifier_Theoretical_Foundation.md)
+- **Implementation (MethylUtils):** [METHYLCLASSIFIER_IMPLEMENTATION.md](METHYLCLASSIFIER_IMPLEMENTATION.md)
+- **User Manual (Docker, venv, contexts, improving balanced accuracy):** [USAGE.md](USAGE.md)
+
 ---
 
 ## Table of Contents
@@ -161,6 +166,10 @@ $$
 2. **Centroids capture population statistics**: Alpha and beta parameters encode the mean and variance of methylation at each position
 3. **DMPs are informative**: Only differentially methylated positions are used (high discriminatory power)
 4. **Bayesian optimality**: Under the naive Bayes assumption, this is the optimal classifier
+
+### Implementation (MethylUtils)
+
+MethylClassifier does not implement the Beta likelihood or training; it loads classifiers produced by **MethylDetector**, which uses MethylUtils **BetaClassifier** / **BetaBinomialClassifier** for training. The stored classifier objects are MethylUtils instances; MethylClassifier calls their `.predict_proba()`, `.predict()`, and optionally `.predict_proba_calibrated()` or `.predict_with_threshold()`. Sample loading uses MethylUtils **MethylSample** and **load_from_h5** via the DataLoader. For full details, see [METHYLCLASSIFIER_IMPLEMENTATION.md](METHYLCLASSIFIER_IMPLEMENTATION.md).
 
 ---
 

@@ -123,15 +123,12 @@ For each sample:
 
 ## Documentation
 
-📖 **[Complete Documentation](docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)**
-
-The comprehensive documentation includes:
-- Mathematical theory and Bayesian framework
-- Detailed classification algorithm
-- Complete API reference
-- Advanced features (temperature scaling, Platt calibration, threshold-based prediction)
-- Usage examples and troubleshooting
-- Performance optimization tips
+- **[Theoretical Foundation](docs/MethylClassifier_Theoretical_Foundation.md)** — Beta/Naive Bayes, posterior, BMM option
+- **[Implementation (MethylUtils)](docs/METHYLCLASSIFIER_IMPLEMENTATION.md)** — How MethylClassifier uses MethylUtils and MethylDetector output
+- **[User Manual](docs/USAGE.md)** — Docker and virtual environment setup, using one or several contexts, improving balanced accuracy
+- **[Comprehensive Documentation](docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)** — Full API, mathematical theory, algorithm, examples, troubleshooting
+- **[Config File Guide](CONFIG_FILE_GUIDE.md)** — Configuration schema and options
+- **Effect size and classifier accuracy:** See [MethylDetector CLASSIFIER_WEIGHTS_AND_ACCURACY](../methyldetector/docs/CLASSIFIER_WEIGHTS_AND_ACCURACY.md) for how effect_size flows into the classifier
 
 ## Examples
 

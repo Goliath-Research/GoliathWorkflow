@@ -4,12 +4,108 @@
 
 MethylClassifier classifies methylation samples using trained Bayesian models. It loads classifiers produced by **MethylDetector** (per-chromosome) or single trained models and applies them to new samples. Classification can use a JSON config file or command-line arguments.
 
-## Installation
+There are **two ways to run MethylClassifier**:
+
+1. **Docker container** — Run inside the MethylPipeline container (e.g. `methylpipeline`) with dependencies provided.
+2. **Local host with virtual environment** — Create a venv, install MethylUtils and MethylClassifier, activate the venv, and run on the host.
+
+Use one or the other; the CLI and Python API are the same once the environment is active.
+
+---
+
+## Setup 1: Docker container
+
+Use this when you want a reproducible environment (e.g. same as MethylCentroid/MethylDetector).
+
+**Prerequisites:** Docker; for GPU (if used), NVIDIA Container Toolkit.
+
+**1. Start the container**
+
+From the MethylPipeline repo:
 
 ```bash
-cd packages/methylclassifier
-poetry install
+cd /path/to/MethylPipeline/docker
+docker compose up -d
 ```
+
+(Use the same container name as in your compose file; below assumes `methylpipeline` and repo mounted at `/workspace`.)
+
+**2. Run MethylClassifier**
+
+Paths in your config must be valid **inside** the container (e.g. `/workspace/...`). From the host:
+
+```bash
+docker exec -w /workspace/packages/methylclassifier methylpipeline \
+  methyl_classifier --config /workspace/path/to/your_config.json
+```
+
+Or run the CLI module:
+
+```bash
+docker exec -w /workspace/packages/methylclassifier methylpipeline \
+  python -m methyl_classifier.cli --config /workspace/path/to/config.json
+```
+
+**Common options:** `--config`, `--model`, `--model-dir`, `--input`, `--output`, `--project`, `--verbose`, etc. Paths in config must be container paths (e.g. `/workspace/...`).
+
+---
+
+## Setup 2: Local host with virtual environment
+
+Use this when you run on the host (e.g. laptop or login node) and want to activate a virtual environment before running MethylClassifier.
+
+**Prerequisites:** Python 3.8+.
+
+**1. Create a virtual environment**
+
+```bash
+python3 -m venv venv
+```
+
+**2. Activate the virtual environment**
+
+```bash
+source ./venv/bin/activate
+```
+
+On Windows: `venv\Scripts\activate`. After activation, the prompt usually shows `(venv)`.
+
+**3. Install MethylUtils (required dependency)**
+
+MethylClassifier depends on MethylUtils. Install it first:
+
+```bash
+cd /path/to/MethylPipeline/packages/methylutils/methyl_utils
+pip install -e .
+```
+
+**4. Install MethylClassifier**
+
+```bash
+cd /path/to/MethylPipeline/packages/methylclassifier
+pip install -e .
+# or: poetry install
+```
+
+**5. Run MethylClassifier**
+
+With the virtual environment **activated** (`source ./venv/bin/activate`), use the CLI. Paths in the config are on the **host**; you do not use a container.
+
+```bash
+methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json
+methyl_classifier --model-dir /path/to/classifiers/ --input /path/to/samples/ --output results.csv
+```
+
+---
+
+## Quick Start
+
+After completing either setup:
+
+- **Docker:** Run via `docker exec -w /workspace/packages/methylclassifier methylpipeline methyl_classifier --config <config.json>` (paths in config must be valid inside the container).
+- **Virtual environment:** Activate the venv (`source ./venv/bin/activate`), then run `methyl_classifier --config <config.json>` (paths in config are on the host).
+
+---
 
 ## Command-Line Usage
 
@@ -88,6 +184,56 @@ The directory must contain files matching `classifier-{chrom}.pkl` (e.g. `classi
 ### Alternative: samples list in config
 
 Instead of **input_path**, you can pass a list of sample directories in the config (**samples**). Each directory should contain `{chrom}-CG.h5` (and optionally CHG/CHH) per chromosome. See `CONFIG_FILE_GUIDE.md` for the full schema.
+
+---
+
+## Using one or several contexts
+
+Contexts (CG, CHG, CHH) are **set in MethylDetector**, not in MethylClassifier. The detector trains per-chromosome classifiers using DMPs from the contexts you specify; the saved model metadata stores those contexts. MethylClassifier reads **model_contexts** from the loaded model and loads only the corresponding sample files for each chromosome.
+
+### Single context (e.g. CG only)
+
+- In **MethylDetector** config, set `"contexts": ["CG"]`.
+- Sample directories must contain `{chrom}-CG.h5` for each chromosome. MethylClassifier will load only CG; CHG/CHH are skipped. This is faster and often sufficient for many applications.
+
+### Multiple contexts (CG + CHG + CHH)
+
+- In **MethylDetector** config, set `"contexts": ["CG", "CHG", "CHH"]`.
+- Sample directories must contain `{chrom}-CG.h5`, `{chrom}-CHG.h5`, and `{chrom}-CHH.h5` for each chromosome. MethylClassifier merges contexts (union of positions) so that more DMPs contribute; this can improve accuracy at the cost of more data and compute.
+
+**Important:** The model and samples must match. If the model was trained with multiple contexts, provide all context files; if it was trained with CG only, provide only `{chrom}-CG.h5`. MethylClassifier infers which contexts to load from the model metadata and will log e.g. "Model is CG-only: loading only CG context from samples".
+
+**Practical tip:** Start with CG-only for speed and simplicity; add CHG/CHH in MethylDetector if validation balanced accuracy is insufficient or for context-specific biology.
+
+---
+
+## Improving the classifier's balanced accuracy
+
+Balanced accuracy (average of per-class accuracy) can be improved both **upstream** (MethylDetector) and in **MethylClassifier** settings.
+
+### Upstream (MethylDetector)
+
+- **More or better DMPs:** Relax the significance or biological filters so more DMPs are retained (e.g. increase `alpha`, lower `min_delta_mean`, raise `max_bc`). Alternatively, use **target_balanced_accuracy** so the detector selects enough DMPs to meet the target on validation.
+- **Effect size:** DMPs are ranked by effect_size, and per-DMP weights in the classifier are derived from effect_size. Detector biological filters and DMP selection therefore directly affect classifier accuracy. See [MethylDetector CLASSIFIER_WEIGHTS_AND_ACCURACY](../methyldetector/docs/CLASSIFIER_WEIGHTS_AND_ACCURACY.md) for how effect_size flows into the classifier.
+- **Contexts:** Adding CHG/CHH (if not already) in MethylDetector can add discriminative DMPs and improve accuracy.
+
+### MethylClassifier side
+
+- **Chromosome weights:** Use **weight_method** to combine per-chromosome probabilities. Default **effect_size** uses a trimmed mean of effect_size per chromosome. Use **config** with predefined **chromosome_weights** if you know which chromosomes are most informative. Use **linear_fitted**, **logistic_fitted**, or **elasticnet_fitted** when you have validation labels (e.g. centroid validation): weights are fitted from per-chromosome P(class 1) and labels, which can improve balanced accuracy when some chromosomes are more discriminative.
+- **Platt calibration:** Set **enable_platt_calibration: true** if the model was trained with calibration; this improves probability estimates and can help threshold-based decisions.
+- **Temperature:** Adjust **temperature** (e.g. &lt; 1 to sharpen, &gt; 1 to soften) for confidence calibration.
+- **Validation:** Use centroid validation (**centroid1_dir** / **centroid2_dir** or **centroid1_sample_paths** / **centroid2_sample_paths**) so the CLI reports balanced accuracy on centroid samples; use that to tune detector and classifier settings.
+
+### Summary of levers
+
+| Lever | Where | Effect on balanced accuracy |
+|-------|--------|-----------------------------|
+| alpha, min_delta_mean, max_bc, target_balanced_accuracy | MethylDetector | More/better DMPs and effect_size ranking improve classifier accuracy. |
+| contexts | MethylDetector | Adding CHG/CHH can add discriminative DMPs. |
+| weight_method, chromosome_weights | MethylClassifier | Better chromosome weighting can improve combined prediction. |
+| enable_platt_calibration, temperature | MethylClassifier | Better-calibrated probabilities and decision boundaries. |
+
+---
 
 ## Python API
 
