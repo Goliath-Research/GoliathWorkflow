@@ -91,6 +91,9 @@ def resolve_predictor_config(
 ) -> PredictorConfig:
     """
     Build a single PredictorConfig from project (flat groups: group0 = control, group1 = disease).
+    Test sample precedence: (1) Caller test_control_paths/test_disease_paths (e.g. CLI) supersede all.
+    (2) If step_config.predictor has valid test_control_paths and test_disease_paths (non-empty after expansion), use them.
+    (3) Otherwise use training data (project resolved groups).
     When project uses control/disease + comparisons, consider using
     resolve_predictor_config_per_comparison for one run per comparison.
     """
@@ -113,22 +116,35 @@ def resolve_predictor_config(
     out_dir = output_dir if output_dir is not None else paths.validator_dir
     out_dir = str(Path(out_dir).resolve())
 
+    # Precedence: (1) CLI/caller test paths, (2) valid config test paths, (3) training data
     if test_control_paths is not None and test_disease_paths is not None:
         control_paths = list(test_control_paths)
         disease_paths = list(test_disease_paths)
-    elif step_cfg.get("test_control_paths") is not None and step_cfg.get("test_disease_paths") is not None:
-        base_path = getattr(project, "samples_base_path", None)
-        control_paths = _expand_test_paths(step_cfg["test_control_paths"], base_path)
-        disease_paths = _expand_test_paths(step_cfg["test_disease_paths"], base_path)
     else:
-        resolved = project.get_resolved_groups()
-        if len(resolved) < 2:
-            raise ValueError(
-                "Project has fewer than 2 groups; provide test_control_paths and test_disease_paths "
-                "in step_config.predictor or via CLI, or use a project with at least 2 groups."
-            )
-        control_paths = list(resolved[0][1])
-        disease_paths = list(resolved[1][1])
+        base_path = getattr(project, "samples_base_path", None)
+        step_control = step_cfg.get("test_control_paths")
+        step_disease = step_cfg.get("test_disease_paths")
+        if step_control is not None and step_disease is not None:
+            control_paths = _expand_test_paths(step_control, base_path)
+            disease_paths = _expand_test_paths(step_disease, base_path)
+            if not control_paths or not disease_paths:
+                # Config test paths invalid (empty after expansion); fall back to training data
+                resolved = project.get_resolved_groups()
+                if len(resolved) >= 2:
+                    control_paths = list(resolved[0][1])
+                    disease_paths = list(resolved[1][1])
+        else:
+            control_paths = None
+            disease_paths = None
+        if control_paths is None or disease_paths is None:
+            resolved = project.get_resolved_groups()
+            if len(resolved) < 2:
+                raise ValueError(
+                    "Project has fewer than 2 groups; provide test_control_paths and test_disease_paths "
+                    "in step_config.predictor or via CLI, or use a project with at least 2 groups."
+                )
+            control_paths = list(resolved[0][1])
+            disease_paths = list(resolved[1][1])
 
     if project.path_remap:
         control_paths = _apply_path_remap(control_paths, project.path_remap)
@@ -155,8 +171,9 @@ def resolve_predictor_config_per_comparison(
 ) -> List[Tuple[PredictorConfig, str]]:
     """
     Build one PredictorConfig per comparison (control/disease projects).
-    When test_control_paths and test_disease_paths are provided (e.g. from CLI --test-control/--test-disease),
-    they override step_config and project groups so the same holdout test set is used for every comparison.
+    Test sample precedence: (1) Caller test_control_paths/test_disease_paths (e.g. CLI) supersede all.
+    (2) If step_config.predictor has valid test_control_paths and test_disease_paths (non-empty after expansion), use them.
+    (3) Otherwise use training data (project group sample paths).
     Returns list of (PredictorConfig, comparison_label).
     """
     project = load_project(project_path)
@@ -182,15 +199,20 @@ def resolve_predictor_config_per_comparison(
     comparisons = project.get_comparisons()
     paths = project.get_derived_paths()
     base_path = getattr(project, "samples_base_path", None)
-    # Caller-provided test paths (e.g. CLI) take precedence over step_config and over project training groups
+    # Precedence: (1) CLI/caller test paths, (2) valid config test paths, (3) training data
     use_caller_test_paths = (
         test_control_paths is not None and test_disease_paths is not None
     )
-    step_has_test_lists = (
-        not use_caller_test_paths
-        and step_cfg.get("test_control_paths") is not None
-        and step_cfg.get("test_disease_paths") is not None
-    )
+    step_control = step_cfg.get("test_control_paths") if not use_caller_test_paths else None
+    step_disease = step_cfg.get("test_disease_paths") if not use_caller_test_paths else None
+    config_test_control: Optional[List[str]] = None
+    config_test_disease: Optional[List[str]] = None
+    if step_control is not None and step_disease is not None:
+        config_test_control = _expand_test_paths(step_control, base_path)
+        config_test_disease = _expand_test_paths(step_disease, base_path)
+        if not config_test_control or not config_test_disease:
+            config_test_control = None
+            config_test_disease = None
 
     result: List[Tuple[PredictorConfig, str]] = []
     for spec in comparisons:
@@ -218,9 +240,9 @@ def resolve_predictor_config_per_comparison(
         if use_caller_test_paths:
             control_paths = list(test_control_paths)
             disease_paths = list(test_disease_paths)
-        elif step_has_test_lists:
-            control_paths = _expand_test_paths(step_cfg["test_control_paths"], base_path)
-            disease_paths = _expand_test_paths(step_cfg["test_disease_paths"], base_path)
+        elif config_test_control is not None and config_test_disease is not None:
+            control_paths = list(config_test_control)
+            disease_paths = list(config_test_disease)
         else:
             control_paths = list(project.get_group_sample_paths_by_label(spec.control_group))
             disease_paths = list(project.get_group_sample_paths_by_label(spec.disease_group))
