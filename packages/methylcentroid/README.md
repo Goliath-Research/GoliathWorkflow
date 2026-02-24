@@ -171,6 +171,8 @@ Optional extended stats and binned histograms are included when enabled.
 
 ## Documentation
 
-📚 **[Comprehensive Documentation](docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)**
-📄 **[Distributions Reference](docs/METHYLCENTROID_DISTRIBUTIONS.tex)**
-📘 **[Usage Guide](docs/USAGE.md)**
+- **[Theoretical Foundation](docs/MethylCentroid_Theoretical_Foundation.md)** — Probabilistic distributions (Normal, Beta, Beta-Binomial, Beta Mixture), sufficient statistics, and formulas.
+- **[Implementation (MethylUtils)](docs/METHYLCENTROID_IMPLEMENTATION.md)** — MethylCentroidBuilder, MethylExtendedCentroid/MethylBetaBinomialCentroid, I/O, and how the package uses them.
+- **[User Manual](docs/USAGE.md)** — Docker container and virtual environment setup, CLI, Python API, config, and workflows.
+- **[Comprehensive Documentation](docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)** — Data model, configuration, GPU/memory, output files, examples, troubleshooting.
+- **[Distributions Reference (LaTeX)](docs/METHYLCENTROID_DISTRIBUTIONS.tex)** — Full derivations and sufficient-statistics reference.
