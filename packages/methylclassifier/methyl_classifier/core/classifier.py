@@ -222,7 +222,7 @@ class MethylClassifier:
         
         # Group files by chromosome, load newest per chrom (prefers multi-context if newer)
         chrom_files: Dict[str, List[Path]] = defaultdict(list)
-        pattern = re.compile(r'^classifier-(\d+)(?:-[^.]+)?\.pkl$')
+        pattern = re.compile(r'^classifier-(\d+|X|Y)(?:-[^.]+)?\.pkl$')
         
         for file_path in model_dir.glob('classifier-*.pkl'):
             match = pattern.match(file_path.name)
