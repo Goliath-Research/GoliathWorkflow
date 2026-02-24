@@ -4,20 +4,20 @@
 
 MethylCentroid calculates representative methylation profiles (centroids) from groups of samples, with accurate aggregation, memory efficiency, and optional GPU acceleration. It is built on **MethylUtils** for centroid construction (see **METHYLCENTROID_IMPLEMENTATION.md**).
 
+There are **two ways to run MethylCentroid**:
+
+1. **Docker container** — all commands run inside the `methylpipeline` image (GPU and dependencies included).
+2. **Local host with virtual environment** — you create a venv, install MethylUtils and MethylCentroid, activate the venv, and run on the host.
+
+Use one or the other; the CLI and Python API are the same once the environment is active.
+
 ---
 
-## Installation and Running
+## Setup 1: Docker container
 
-You can run MethylCentroid either **inside the MethylPipeline Docker container** (recommended for GPU and consistent dependencies) or **in a local virtual environment** with the libraries installed.
+Use this when you want a single, reproducible environment (e.g. shared GPU, CI, or no local Python install).
 
-### Option A: Using the Docker container
-
-The monorepo provides a `methylpipeline` Docker image and a wrapper script so that all commands run inside the container with CUDA and dependencies configured.
-
-**Prerequisites**
-
-- Docker and (for GPU) NVIDIA Container Toolkit.
-- MethylPipeline repo with `docker compose` setup (e.g. `docker compose up -d` from the repo’s `docker` directory).
+**Prerequisites:** Docker; for GPU, NVIDIA Container Toolkit.
 
 **1. Start the container**
 
@@ -26,87 +26,99 @@ cd /path/to/MethylPipeline/docker
 docker compose up -d
 ```
 
-**2. Run MethylCentroid via the wrapper script**
+**2. Run MethylCentroid**
 
-From the methylcentroid package directory:
+From the methylcentroid package directory, use the wrapper script (it runs the CLI inside the container):
 
 ```bash
 cd /path/to/MethylPipeline/packages/methylcentroid
 ./mc --batch-config configs/pb-cancer_batch_stage1_config.json
 ```
 
-The `./mc` script runs `python3 -m methyl_centroid.cli` inside the `methylpipeline` container with the current directory mounted (host paths under `/home/ubuntu/MethylPipeline` are typically available under `/workspace` in the container).
-
-**3. Single config or other CLI options**
+Other examples:
 
 ```bash
 ./mc --config configs/example_config.json
 ./mc --no-gpu --batch-config configs/batch.json
 ```
 
-**4. Run CLI directly inside the container (optional)**
+**Alternative:** run the CLI directly in the container (paths must be valid inside the container, e.g. `/workspace/...`):
 
 ```bash
 docker exec -w /workspace/packages/methylcentroid methylpipeline \
   python3 -m methyl_centroid.cli --batch-config configs/pb-cancer_batch_stage1_config.json
 ```
 
-Use the same paths as in the container (e.g. `/workspace/...` if the repo is mounted there).
+---
 
-### Option B: Virtual environment (pip or Poetry)
+## Setup 2: Local host with virtual environment
 
-Install MethylUtils first (MethylCentroid depends on it), then MethylCentroid.
+Use this when you run on the host (e.g. your laptop or a login node) and want to activate a virtual environment before running MethylCentroid.
 
-**1. Create and activate a virtual environment**
+**Prerequisites:** Python 3.8+; optional CuPy for GPU.
+
+**1. Create a virtual environment**
+
+From the repo root or from `packages/methylcentroid`:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate   # Linux/macOS
-# or:  .venv\Scripts\activate   # Windows
+python3 -m venv venv
 ```
 
-**2. Install MethylUtils (from monorepo)**
+(You can use another name, e.g. `.venv`; the rest of the doc uses `venv`.)
+
+**2. Activate the virtual environment**
+
+```bash
+source ./venv/bin/activate
+```
+
+On Windows: `venv\Scripts\activate`. After activation, your shell prompt usually shows `(venv)`.
+
+**3. Install MethylUtils (required dependency)**
 
 ```bash
 cd /path/to/MethylPipeline/packages/methylutils/methyl_utils
 pip install -e .
 ```
 
-**3. Install MethylCentroid (from monorepo)**
+**4. Install MethylCentroid**
 
 ```bash
 cd /path/to/MethylPipeline/packages/methylcentroid
 pip install -e .
-# or with Poetry:
-# poetry install
 ```
 
-**4. Optional: GPU support**
+(Or use Poetry: `poetry install` in the methylcentroid package.)
 
-Install CuPy to match your CUDA version, e.g.:
+**5. Optional: GPU support**
+
+If you have CUDA and want GPU acceleration:
 
 ```bash
-pip install cupy-cuda12x   # adjust to your CUDA version
+pip install cupy-cuda12x   # adjust to your CUDA version (e.g. cupy-cuda11x)
 ```
 
-**5. Run**
+**6. Run MethylCentroid**
+
+With the virtual environment **activated** (`source ./venv/bin/activate`), use the CLI from any directory:
 
 ```bash
-python -m methyl_centroid.cli --config config.json
-python -m methyl_centroid.cli --batch-config batch_config.json
+python -m methyl_centroid.cli --batch-config configs/pb-cancer_batch_stage1_config.json
+python -m methyl_centroid.cli --config configs/example_config.json
 python -m methyl_centroid.cli --config config.json --no-gpu
 ```
+
+Or run Python and use the API (see Python API below). You do **not** use the `./mc` script when using the venv; that script is for Docker only.
 
 ---
 
 ## Quick Start
 
-### Command line (batch config)
+After you have chosen a setup and completed it:
 
-```bash
-cd /path/to/MethylPipeline/packages/methylcentroid
-./mc --batch-config configs/pb-cancer_batch_stage1_config.json
-```
+- **Docker:** from `packages/methylcentroid`, run `./mc --batch-config <your_batch_config.json>`.
+- **Virtual environment:** activate the venv (`source ./venv/bin/activate`), then run `python -m methyl_centroid.cli --batch-config <your_batch_config.json>` (paths in the config must be valid on your host).
 
 ### Python API
 
