@@ -104,6 +104,24 @@ python -m methyl_centroid.cli --config config.json
 python -m methyl_centroid.cli --config config.json --no-gpu
 ```
 
+### MethylCentroidExplorer
+
+Inspect a MethylFrame (a single `.h5` file or a folder of `.h5` files): detect type (MethylSample, MethylBasicCentroid, MethylExtendedCentroid, MethylBetaBinomialCentroid), print metadata, and optionally describe a range of positions in detail (pos, mC, uC, coverage, mean, N, Sx, Sx2, alpha, beta, variance).
+
+```bash
+# Metadata and type for a folder (uses first .h5) or single file
+methyl-centroid-explorer /path/to/centroid_or_sample
+
+# Filter to one chromosome/context when path is a folder
+methyl-centroid-explorer /path/to/centroids --chrom 1 --context CG
+
+# Per-position detail for a genomic range (avoids loading full 4M–80M positions)
+methyl-centroid-explorer /path/to/centroid.h5 --pos-start 1000000 --pos-end 1000100
+
+# JSON metadata and higher cap for position detail
+methyl-centroid-explorer /path/to/centroid.h5 --json-metadata --pos-start 0 --pos-end 5000 --max-positions 5000
+```
+
 ## Configuration
 
 ### JSON Configuration Example
