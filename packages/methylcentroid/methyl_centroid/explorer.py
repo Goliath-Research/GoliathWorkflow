@@ -1,7 +1,7 @@
 """
-MethylCentroidExplorer: Inspect a MethylFrame (single H5 or folder of H5 files).
-Identifies type (MethylSample, MethylBasicCentroid, MethylExtendedCentroid, MethylBetaBinomialCentroid),
-prints metadata, and optionally describes a range of positions in detail.
+MethylCentroidExplorer: Inspect a MethylFrame (single H5, single JSON mixture, or folder of H5 files).
+Identifies type (MethylSample, MethylBasicCentroid, MethylExtendedCentroid, MethylBetaBinomialCentroid,
+MethylBetaMixtureCentroid), prints metadata, and optionally describes a range of positions in detail.
 """
 
 from __future__ import annotations
@@ -40,15 +40,29 @@ def _detect_type_from_keys(keys: List[str]) -> str:
     return "MethylExtendedCentroid"
 
 
+def _get_mixture_info(path: Path) -> Tuple[str, int, Dict[str, Any], List[str]]:
+    """Load MethylBetaMixtureCentroid from JSON. Returns (type_name, n_positions, metadata, column_names)."""
+    from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
+    path = Path(path)
+    centroid = MethylBetaMixtureCentroid.from_json(path)
+    df = centroid.df
+    n_positions = len(df)
+    metadata = dict(centroid.metadata)
+    keys = list(df.columns)
+    return "MethylBetaMixtureCentroid", n_positions, metadata, keys
+
+
 def get_frame_info(path: Path) -> Tuple[str, int, Dict[str, Any], List[str]]:
     """
-    Read HDF5 without loading full data. Returns (type_name, n_positions, metadata, dataset_keys).
+    Read HDF5 or JSON without loading full data. Returns (type_name, n_positions, metadata, dataset_keys).
     """
-    if not h5py:
-        raise RuntimeError("h5py is required for MethylCentroidExplorer")
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"Not a file: {path}")
+    if path.suffix.lower() == ".json":
+        return _get_mixture_info(path)
+    if not h5py:
+        raise RuntimeError("h5py is required for MethylCentroidExplorer")
     with h5py.File(path, "r") as f:
         group = _get_methyl_group(f)
         if isinstance(group, h5py.Group):
@@ -75,10 +89,16 @@ def get_frame_info(path: Path) -> Tuple[str, int, Dict[str, Any], List[str]]:
 
 
 def get_positions_in_range(path: Path, pos_start: int, pos_end: int) -> np.ndarray:
-    """Read pos dataset and return positions that fall in [pos_start, pos_end] (inclusive)."""
+    """Read pos/position dataset and return positions that fall in [pos_start, pos_end] (inclusive)."""
+    path = Path(path)
+    if path.suffix.lower() == ".json":
+        from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
+        centroid = MethylBetaMixtureCentroid.from_json(path)
+        pos = np.asarray(centroid.df["position"].values, dtype=np.uint32)
+        mask = (pos >= pos_start) & (pos <= pos_end)
+        return np.unique(pos[mask])
     if not h5py:
         raise RuntimeError("h5py is required")
-    path = Path(path)
     with h5py.File(path, "r") as f:
         group = _get_methyl_group(f)
         pos_ds = group["pos"]
@@ -88,9 +108,72 @@ def get_positions_in_range(path: Path, pos_start: int, pos_end: int) -> np.ndarr
 
 
 def load_frame(path: Path, positions: Optional[np.ndarray] = None):
-    """Load a MethylFrame from H5; optionally only for given positions. Returns the methyl_utils object."""
+    """Load a MethylFrame from H5 or MethylBetaMixtureCentroid from JSON; optionally filter by positions."""
+    path = Path(path)
+    if path.suffix.lower() == ".json":
+        from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
+        centroid = MethylBetaMixtureCentroid.from_json(path)
+        if positions is not None and len(positions) > 0:
+            df = centroid.df
+            mask = np.isin(np.asarray(df["position"].values, dtype=np.uint32), positions)
+            subset = df.loc[mask].copy()
+            return MethylBetaMixtureCentroid(subset, metadata=centroid.metadata)
+        return centroid
     from methyl_utils.core.io import load_from_h5
     return load_from_h5(path, positions=positions)
+
+
+# --- Mean/variance formulas per distribution (for position table) ---
+
+def _mean_var_normal_from_sufficient(N: float, Sx: float, Sx2: float):
+    """Normal (sample) mean and variance from sufficient stats: mean = Sx/N, var = (Sx2 - Sx²/N)/(N-1)."""
+    if N is None or N < 1:
+        return None, None
+    mean = Sx / N
+    if N <= 1:
+        return mean, None
+    var = (Sx2 - (Sx * Sx) / N) / (N - 1)
+    var = max(0.0, var) if var is not None else None
+    return mean, var
+
+
+def _mean_var_normal_from_counts(mC: int, uC: int):
+    """Normal (empirical proportion) mean and variance from counts: mean = mC/(mC+uC), var = p(1-p)/n."""
+    cov = mC + uC
+    if cov <= 0:
+        return None, None
+    mean = mC / cov
+    var = (mean * (1 - mean) / cov) if cov > 0 else None
+    return mean, var
+
+
+def _mean_var_beta(alpha: float, beta: float):
+    """Beta: mean = α/(α+β), var = αβ/((α+β)²(α+β+1))."""
+    if alpha is None or beta is None or (alpha + beta) <= 0:
+        return None, None
+    s = alpha + beta
+    mean = alpha / s
+    var = (alpha * beta) / ((s * s) * (s + 1))
+    return mean, var
+
+
+def _mean_var_betamixture_row(weights: Any, alphas: Any, betas: Any):
+    """Beta mixture for one row: mean = Σ w_j μ_j, var = Σ w_j(σ²_j + μ²_j) - mean²."""
+    if weights is None or alphas is None or betas is None:
+        return None, None
+    w = np.asarray(weights if isinstance(weights, (list, np.ndarray)) else json.loads(weights) if isinstance(weights, str) else [])
+    a = np.asarray(alphas if isinstance(alphas, (list, np.ndarray)) else json.loads(alphas) if isinstance(alphas, str) else [])
+    b = np.asarray(betas if isinstance(betas, (list, np.ndarray)) else json.loads(betas) if isinstance(betas, str) else [])
+    if len(w) == 0 or len(a) != len(w) or len(b) != len(w):
+        return None, None
+    a = np.maximum(np.asarray(a, dtype=np.float64), 1e-10)
+    b = np.maximum(np.asarray(b, dtype=np.float64), 1e-10)
+    comp_mean = a / (a + b)
+    comp_var = (a * b) / ((a + b) ** 2 * (a + b + 1))
+    mean = float(np.sum(w * comp_mean))
+    var = float(np.sum(w * (comp_var + comp_mean ** 2)) - mean ** 2)
+    var = max(0.0, var)
+    return mean, var
 
 
 def _safe_series_values(obj, name: str):
@@ -107,11 +190,52 @@ def _safe_series_values(obj, name: str):
     return None
 
 
+def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
+    """Build per-position table for MethylBetaMixtureCentroid (position, context, k, weights, alphas, betas, mean_betamixture, var_betamixture, best_distribution, ...)."""
+    df = frame._df.copy()
+    if "position" not in df.columns:
+        return pd.DataFrame()
+    pos = np.asarray(df["position"], dtype=np.uint32)
+    mask = (pos >= pos_start) & (pos <= pos_end)
+    df = df.loc[mask].copy()
+    if len(df) == 0:
+        return pd.DataFrame()
+    # Mean and variance for BetaMixture at each position
+    mean_bmm = []
+    var_bmm = []
+    for _, row in df.iterrows():
+        m, v = _mean_var_betamixture_row(
+            row.get("weights"), row.get("alphas"), row.get("betas")
+        )
+        mean_bmm.append(m)
+        var_bmm.append(v)
+    out = df.copy()
+    out["mean_betamixture"] = mean_bmm
+    out["var_betamixture"] = var_bmm
+    out["best_distribution"] = "BetaMixture"
+    # Other distribution columns N/A for mixture-only data (for consistent table shape)
+    out["mean_normal"] = None
+    out["var_normal"] = None
+    out["mean_beta"] = None
+    out["var_beta"] = None
+    out["mean_betabinomial"] = None
+    out["var_betabinomial"] = None
+    # Serialize list columns for CSV/TSV (weights, alphas, betas)
+    for col in ("weights", "alphas", "betas"):
+        if col in out.columns:
+            out[col] = out[col].apply(lambda x: json.dumps(x) if isinstance(x, (list, np.ndarray)) else x)
+    return out
+
+
 def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
     """
     Build a per-position table with pos, mC, uC, coverage, mean, and type-specific fields
-    (N, Sx, Sx2, alpha, beta, variance for centroids).
+    (N, Sx, Sx2, alpha, beta, variance for centroids; BetaBinomial: Sx3, Sx4, count_zero, count_one, sum_*;
+    BetaMixture: position, context, k, weights, alphas, betas, n_samples, converged, bic, loglik, status).
     """
+    # MethylBetaMixtureCentroid: no "pos", has "position" and "weights"
+    if hasattr(frame, "_df") and "position" in frame._df.columns and "weights" in frame._df.columns:
+        return _build_mixture_position_table(frame, pos_start, pos_end)
     frame = frame.to_cpu()
     df = frame._df.copy()
     pos = np.asarray(df["pos"])
@@ -127,6 +251,16 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
             if "alpha" in frame._df.columns and "beta" in frame._df.columns:
                 df["alpha"] = frame._df.loc[df.index, "alpha"].values
                 df["beta"] = frame._df.loc[df.index, "beta"].values
+        except Exception:
+            pass
+    # Trigger alpha_bb/beta_bb for BetaBinomial centroids
+    if hasattr(frame, "alpha_bb"):
+        try:
+            _ = frame.alpha_bb
+            _ = frame.beta_bb
+            if "alpha_bb" in frame._df.columns and "beta_bb" in frame._df.columns:
+                df["alpha_bb"] = frame._df.loc[df.index, "alpha_bb"].values
+                df["beta_bb"] = frame._df.loc[df.index, "beta_bb"].values
         except Exception:
             pass
     rows = []
@@ -153,6 +287,45 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
             r["variance"] = (a * b) / ((a + b) ** 2 * (a + b + 1))
         else:
             r["variance"] = None
+        # BetaBinomial sufficient statistics for parameter estimation
+        for col in (
+            "sum_mC", "sum_uC", "sum_cov", "sum_cov2", "sum_mC2", "sum_uC2",
+            "Sx3", "Sx4", "count_zero", "count_one",
+        ):
+            if col in df.columns:
+                val = row[col]
+                r[col] = int(val) if isinstance(val, (np.integer, int)) else float(val) if isinstance(val, (np.floating, float)) else val
+
+        # --- Distribution-specific mean and variance (formulas per distribution) ---
+        # Normal: sample mean and variance (from sufficient stats or from counts)
+        if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
+            mn, vn = _mean_var_normal_from_sufficient(
+                float(row["N"]), float(row["Sx"]), float(row["Sx2"])
+            )
+        else:
+            mn, vn = _mean_var_normal_from_counts(int(row["mC"]), int(row["uC"]))
+        r["mean_normal"] = mn
+        r["var_normal"] = vn
+        # Beta: mean = α/(α+β), var = αβ/((α+β)²(α+β+1))
+        mean_beta, var_beta = _mean_var_beta(a, b)
+        r["mean_beta"] = mean_beta
+        r["var_beta"] = var_beta
+        # BetaBinomial: same formula with alpha_bb, beta_bb when available
+        a_bb = float(row["alpha_bb"]) if "alpha_bb" in df.columns else None
+        b_bb = float(row["beta_bb"]) if "beta_bb" in df.columns else None
+        mean_bb, var_bb = _mean_var_beta(a_bb, b_bb)
+        r["mean_betabinomial"] = mean_bb
+        r["var_betabinomial"] = var_bb
+        # BetaMixture: not computed per position for HDF5 centroids (only in mixture table)
+        r["mean_betamixture"] = None
+        r["var_betamixture"] = None
+        # Best distribution for this centroid type
+        if a_bb is not None and b_bb is not None:
+            r["best_distribution"] = "BetaBinomial"
+        elif a is not None and b is not None:
+            r["best_distribution"] = "Beta"
+        else:
+            r["best_distribution"] = "Normal"
         rows.append(r)
     return pd.DataFrame(rows)
 
@@ -286,10 +459,10 @@ def run_explorer(
 def main() -> None:
     import argparse
     parser = argparse.ArgumentParser(
-        description="MethylCentroidExplorer: Inspect a MethylFrame (folder or .h5 file), detect type, print metadata, and optionally describe a range of positions.",
+        description="MethylCentroidExplorer: Inspect a MethylFrame (folder or .h5 file) or MethylBetaMixtureCentroid (.json), detect type, print metadata, and optionally describe a range of positions.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("path", type=Path, help="Path to a MethylFrame folder or a single .h5 file")
+    parser.add_argument("path", type=Path, help="Path to a MethylFrame folder, a single .h5 file, or a MethylBetaMixtureCentroid .json file")
     parser.add_argument("--file", dest="file_filter", metavar="SUBSTR", help="If path is a folder, only consider .h5 files whose name contains SUBSTR (e.g. '1-CG')")
     parser.add_argument("--chrom", "-c", help="If path is a folder, filter to .h5 files for this chromosome (e.g. 1)")
     parser.add_argument("--context", "-x", choices=["CG", "CHG", "CHH"], help="If path is a folder, filter to this context")
