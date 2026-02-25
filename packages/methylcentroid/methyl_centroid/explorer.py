@@ -275,10 +275,6 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
         r = {"pos": int(row["pos"]), "mC": int(row["mC"]), "uC": int(row["uC"])}
         cov = int(row["mC"]) + int(row["uC"])
         r["coverage"] = cov
-        # Count-based (empirical) mean and variance: mean_counts = mC/(mC+uC), var_counts = p(1-p)/n
-        mean_counts, var_counts = _mean_var_normal_from_counts(int(row["mC"]), int(row["uC"]))
-        r["mean_counts"] = mean_counts
-        r["var_counts"] = var_counts
         if "N" in df.columns:
             r["N"] = int(row["N"])
         if "Sx" in df.columns:
@@ -302,7 +298,10 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
                 val = row[col]
                 r[col] = int(val) if isinstance(val, (np.integer, int)) else float(val) if isinstance(val, (np.floating, float)) else val
 
-        # --- Distribution-specific mean and variance (formulas per distribution) ---
+        # --- Count-based and distribution-specific mean/variance (all estimated parameters together) ---
+        mean_counts, var_counts = _mean_var_normal_from_counts(int(row["mC"]), int(row["uC"]))
+        r["mean_counts"] = mean_counts
+        r["var_counts"] = var_counts
         # Normal: sample mean and variance (from sufficient stats or from counts)
         if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
             mn, vn = _mean_var_normal_from_sufficient(
