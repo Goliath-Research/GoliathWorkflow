@@ -555,6 +555,8 @@ class MethylBasicCentroid(MethylFrame):
 
     @property
     def mean(self):
+        """Pooled proportion mC/coverage. Only appropriate for single-sample centroids (N=1).
+        For multi-sample centroids use MethylExtendedCentroid, which defines mean = Sx/N."""
         if "mean" not in self._df.columns:
             self._df["mean"] = (self.mC / self.coverage).astype("float32")
         return self._df["mean"]
@@ -616,6 +618,23 @@ class MethylExtendedCentroid(MethylBasicCentroid):
     _required_stats = {"Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"}
 
     @property
+    def mean(self):
+        """Sample mean of proportions (Sx/N). Use this for comparisons; mC/coverage is only
+        appropriate for single-sample centroids."""
+        col = "_mean_sx_n"
+        if col not in self._df.columns:
+            N = self.N
+            denom = N if getattr(N, "clip", None) else np.maximum(np.asarray(N), 1)
+            if hasattr(denom, "clip"):
+                denom = denom.clip(lower=1)
+            else:
+                denom = np.maximum(np.asarray(denom), 1)
+            self._df[col] = (self.Sx / denom).astype("float64")
+            if hasattr(self._df[col], "clip"):
+                self._df[col] = self._df[col].clip(0.0, 1.0)
+        return self._df[col]
+
+    @property
     def alpha(self):
         if "alpha" not in self._df.columns:
             from methyl_utils.statistical_tests import beta_estimation_hybrid
@@ -652,19 +671,11 @@ class MethylExtendedCentroid(MethylBasicCentroid):
     def β(self):
         return self.beta
 
-    # Adaptive mean (uses Beta distribution parameters to estimate mean)
-    # For N>=20: mean = alpha/(alpha+beta) with MoM (alpha,beta). Same formula as
-    # MethylBetaBinomialCentroid.mean, so both converge as N increases.
+    # Adaptive mean: same as mean (Sx/N) so we always use the sample mean of proportions.
     @property
     def adaptive_mean(self):
-        col = "adaptive_mean"
-        if col not in self._df.columns:
-            small = self.N < 20
-            self._df[col] = self.mC / self.coverage
-            if small.any():
-                tau = self.alpha + self.beta
-                self._df.loc[~small, col] = self.alpha[~small] / (tau[~small] + 1e-12)
-        return self._df[col]
+        """Same as mean (Sx/N). Kept for API compatibility with MethylDetector."""
+        return self.mean
 
     # Lightning-fast context filters
     def cg(self):
