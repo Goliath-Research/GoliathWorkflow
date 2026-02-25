@@ -616,26 +616,16 @@ class MethylExtendedCentroid(MethylBasicCentroid):
     _required_stats = {"Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"}
 
     @property
-    # Beta distribution alpha parameter
     def alpha(self):
         if "alpha" not in self._df.columns:
-            from methyl_utils.statistical_tests import beta_mle_estimation
-
-            alpha, beta = beta_mle_estimation(
+            from methyl_utils.statistical_tests import beta_mom_estimation
+            alpha, beta = beta_mom_estimation(
                 n=self._get_values(self.N),
-                log_x_sum=self._get_values(self._df["log_x_sum"]),
-                log_1mx_sum=self._get_values(self._df["log_1_minus_x_sum"]),
+                Sx=self._get_values(self.Sx),
+                Sx2=self._get_values(self.Sx2),
             )
-            if self.is_gpu:
-                self._df["alpha"] = cudf.Series(alpha, dtype="float64")
-                self._df["beta"] = cudf.Series(beta, dtype="float64")
-            else:
-                self._df["alpha"] = pd.Series(
-                    alpha, dtype="float64", index=self._df.index
-                )
-                self._df["beta"] = pd.Series(
-                    beta, dtype="float64", index=self._df.index
-                )
+            self._df["alpha"] = pd.Series(alpha, dtype="float64", index=self._df.index)
+            self._df["beta"] = pd.Series(beta, dtype="float64", index=self._df.index)
         return self._df["alpha"]
 
     # Beautiful name for alpha parameter
