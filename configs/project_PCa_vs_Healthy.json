@@ -1,5 +1,8 @@
 {
   "project_name": "PCa_vs_Healthy",
+  "disease": "Prostate Cancer",
+  "laboratory": "psomagen",
+  "batch": "Second batch of prostate cancer samples",
   "output_base": "/work/david-gladys/all-prostate",
   "samples_base_path": "/work/david-gladys/all-prostate",
   "controls": {

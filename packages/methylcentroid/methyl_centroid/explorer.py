@@ -165,6 +165,23 @@ def list_h5_in_folder(folder: Path) -> List[Path]:
     return sorted(folder.glob("*.h5"))
 
 
+def _check_output_not_under_input(output_path: Path, input_path: Path) -> None:
+    """Raise ValueError if output would be written under the read-only input path."""
+    output_resolved = output_path.resolve()
+    input_base = input_path.resolve() if input_path.is_dir() else input_path.resolve().parent
+    try:
+        output_resolved.resolve().relative_to(input_base)
+        raise ValueError(
+            f"Refusing to write under read-only input path. "
+            f"Output would be inside {input_base}. Use a path outside the centroid or package (e.g. current directory)."
+        )
+    except ValueError as e:
+        if "Refusing to write" in str(e):
+            raise
+        # relative_to raised: output is not under input, which is good
+        pass
+
+
 def run_explorer(
     path: Path,
     *,
@@ -175,6 +192,8 @@ def run_explorer(
     pos_end: Optional[int] = None,
     max_positions: int = 10_000,
     json_metadata: bool = False,
+    output: Optional[Path] = None,
+    export_format: str = "csv",
 ) -> None:
     """
     Main explorer logic: resolve path (file or folder), detect type, print metadata,
@@ -239,6 +258,23 @@ def run_explorer(
         if table is None or len(table) == 0:
             print("No rows in position table.")
             return
+
+        # Export path: explicit --output or default to cwd with basename (never write into centroid/package)
+        basename = target.stem
+        if output is not None:
+            out_path = Path(output).resolve()
+            fmt = export_format
+        else:
+            out_path = Path.cwd() / f"{basename}_positions_{pos_start}_{pos_end}.{export_format}"
+            fmt = export_format
+        _check_output_not_under_input(out_path, path)
+
+        if fmt == "csv":
+            table.to_csv(out_path, index=False)
+        else:
+            table.to_csv(out_path, index=False, sep="\t")
+        print(f"Exported {len(table):,} rows to {out_path} ({fmt.upper()})")
+
         pd.set_option("display.max_rows", None)
         pd.set_option("display.width", None)
         print("\nPosition detail (first rows):")
@@ -261,7 +297,13 @@ def main() -> None:
     parser.add_argument("--pos-end", type=int, default=None, metavar="POS", help="End of position range (inclusive) for per-position detail")
     parser.add_argument("--max-positions", type=int, default=10_000, metavar="N", help="Maximum number of positions to load for detail (default 10000)")
     parser.add_argument("--json-metadata", action="store_true", help="Print metadata as JSON")
+    parser.add_argument("--output", "-o", type=Path, default=None, metavar="FILE", help="Export position table to FILE (CSV, TSV, or TXT by extension). Default: current directory, basename_positions_START_END.csv")
+    parser.add_argument("--format", "-f", choices=["csv", "tsv", "txt"], default="csv", dest="export_format", help="Format when using default output path (default: csv). With --output, format is inferred from extension.")
     args = parser.parse_args()
+    # Infer format from --output extension if provided
+    export_format = args.export_format
+    if args.output is not None and args.output.suffix.lower() in (".csv", ".tsv", ".txt"):
+        export_format = args.output.suffix.lower().lstrip(".")
     run_explorer(
         args.path,
         file_filter=args.file_filter,
@@ -271,6 +313,8 @@ def main() -> None:
         pos_end=args.pos_end,
         max_positions=args.max_positions,
         json_metadata=args.json_metadata,
+        output=args.output,
+        export_format=export_format,
     )
 
 
