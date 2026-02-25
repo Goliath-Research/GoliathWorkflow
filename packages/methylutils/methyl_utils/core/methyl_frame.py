@@ -652,6 +652,8 @@ class MethylExtendedCentroid(MethylBasicCentroid):
         return self.beta
 
     # Adaptive mean (uses Beta distribution parameters to estimate mean)
+    # For N>=20: mean = alpha/(alpha+beta) with MoM (alpha,beta). Same formula as
+    # MethylBetaBinomialCentroid.mean, so both converge as N increases.
     @property
     def adaptive_mean(self):
         col = "adaptive_mean"
@@ -1068,8 +1070,9 @@ class MethylBetaBinomialCentroid(MethylExtendedCentroid):
 
     @property
     def mean(self):
-        """Virtual mean: alpha_bb / (alpha_bb + beta_bb), safe for 0/1."""
-        a, b = self.alpha_bb.values, self.beta_bb.values
+        """Mean = alpha/(alpha+beta) using MoM Beta params (same as extended centroid).
+        Uses parent's alpha/beta so Beta and Beta-Binomial means converge as N increases."""
+        a, b = self.alpha.values, self.beta.values
         if hasattr(a, "__cuda_array_interface__"):
             a, b = np.asarray(a), np.asarray(b)
         tau = np.maximum(a + b, 1e-12)
