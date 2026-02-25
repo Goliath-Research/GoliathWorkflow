@@ -365,6 +365,12 @@ def _check_output_not_under_input(output_path: Path, input_path: Path) -> None:
         pass
 
 
+def _stem_to_chrom_context(stem: str) -> Tuple[str, str]:
+    """Parse chrom and context from stem (e.g. '1-CG' -> ('1', 'CG'), '2-CHG' -> ('2', 'CHG'))."""
+    parts = stem.split("-")
+    return (parts[0], parts[1]) if len(parts) >= 2 else (stem, "")
+
+
 def run_explorer(
     path: Path,
     *,
@@ -377,6 +383,7 @@ def run_explorer(
     json_metadata: bool = False,
     output: Optional[Path] = None,
     export_format: str = "csv",
+    single_csv: bool = False,
 ) -> None:
     """
     Main explorer logic: resolve path (file or folder), detect type, print metadata,
@@ -417,6 +424,7 @@ def run_explorer(
     pos_start_val = pos_start if pos_start is not None else 0
     pos_end_val = pos_end if pos_end is not None else (1 << 32) - 1
     has_position_range = pos_start is not None or pos_end is not None
+    combined_tables: List[pd.DataFrame] = []  # for --single-csv
 
     for idx, target in enumerate(targets):
         if len(targets) > 1:
@@ -450,21 +458,31 @@ def run_explorer(
             print("No rows in position table.")
             continue
 
-        # Export path: -o is output directory; same filename as default (e.g. 1-CG_positions_100000_200000.csv)
-        basename = target.stem
-        out_dir = Path(output).resolve() if output is not None else Path.cwd()
-        if out_dir.suffix.lower() in (".csv", ".tsv", ".txt"):
-            out_dir = out_dir.parent
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{basename}_positions_{pos_start_val}_{pos_end_val}.{export_format}"
-        fmt = export_format
-        _check_output_not_under_input(out_path, path)
+        chrom_str, context_str = _stem_to_chrom_context(target.stem)
 
-        if fmt == "csv":
-            table.to_csv(out_path, index=False)
+        if single_csv:
+            # Prepend chromosome and context; accumulate for one CSV at the end
+            out_df = table.copy()
+            out_df.insert(0, "context", context_str)
+            out_df.insert(0, "chromosome", chrom_str)
+            combined_tables.append(out_df)
+            print(f"Collected {len(table):,} rows for {target.name} (chromosome={chrom_str}, context={context_str})")
         else:
-            table.to_csv(out_path, index=False, sep="\t")
-        print(f"Exported {len(table):,} rows to {out_path} ({fmt.upper()})")
+            # Export path: -o is output directory; same filename as default (e.g. 1-CG_positions_100000_200000.csv)
+            basename = target.stem
+            out_dir = Path(output).resolve() if output is not None else Path.cwd()
+            if out_dir.suffix.lower() in (".csv", ".tsv", ".txt"):
+                out_dir = out_dir.parent
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / f"{basename}_positions_{pos_start_val}_{pos_end_val}.{export_format}"
+            fmt = export_format
+            _check_output_not_under_input(out_path, path)
+
+            if fmt == "csv":
+                table.to_csv(out_path, index=False)
+            else:
+                table.to_csv(out_path, index=False, sep="\t")
+            print(f"Exported {len(table):,} rows to {out_path} ({fmt.upper()})")
 
         pd.set_option("display.max_rows", None)
         pd.set_option("display.width", None)
@@ -472,6 +490,21 @@ def run_explorer(
         print(table.head(500).to_string(index=False))
         if len(table) > 500:
             print(f"... and {len(table) - 500} more rows.")
+
+    # Write single combined CSV when --single-csv was used
+    if single_csv and combined_tables:
+        out_dir = Path(output).resolve() if output is not None else Path.cwd()
+        if out_dir.suffix.lower() in (".csv", ".tsv", ".txt"):
+            out_dir = out_dir.parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+        combined = pd.concat(combined_tables, ignore_index=True)
+        out_path = out_dir / f"positions_{pos_start_val}_{pos_end_val}.{export_format}"
+        _check_output_not_under_input(out_path, path)
+        if export_format == "csv":
+            combined.to_csv(out_path, index=False)
+        else:
+            combined.to_csv(out_path, index=False, sep="\t")
+        print(f"\nExported single {export_format.upper()} with chromosome and context: {out_path} ({len(combined):,} rows)")
 
 
 def main() -> None:
@@ -489,6 +522,7 @@ def main() -> None:
     parser.add_argument("--max-positions", type=int, default=10_000, metavar="N", help="Maximum number of positions to load for detail (default 10000)")
     parser.add_argument("--json-metadata", action="store_true", help="Print metadata as JSON")
     parser.add_argument("--output", "-o", type=Path, default=None, metavar="DIR", help="Output directory for exported position tables. Files keep the same name (e.g. 1-CG_positions_START_END.csv). Default: current directory.")
+    parser.add_argument("--single-csv", action="store_true", help="Export one CSV/TSV with chromosome and context as first two columns (combines all files when path is a folder).")
     parser.add_argument("--format", "-f", choices=["csv", "tsv", "txt"], default="csv", dest="export_format", help="Format when using default output path (default: csv). With --output, format is inferred from extension.")
     args = parser.parse_args()
     # Infer format from --output extension if provided
@@ -506,6 +540,7 @@ def main() -> None:
         json_metadata=args.json_metadata,
         output=args.output,
         export_format=export_format,
+        single_csv=args.single_csv,
     )
 
 
