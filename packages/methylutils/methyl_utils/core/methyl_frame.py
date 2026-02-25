@@ -619,13 +619,20 @@ class MethylExtendedCentroid(MethylBasicCentroid):
     def alpha(self):
         if "alpha" not in self._df.columns:
             from methyl_utils.statistical_tests import beta_mom_estimation
-            alpha, beta = beta_mom_estimation(
-                n=self._get_values(self.N),
-                Sx=self._get_values(self.Sx),
-                Sx2=self._get_values(self.Sx2),
-            )
-            self._df["alpha"] = pd.Series(alpha, dtype="float64", index=self._df.index)
-            self._df["beta"] = pd.Series(beta, dtype="float64", index=self._df.index)
+            n = self._get_values(self.N)
+            Sx = self._get_values(self.Sx)
+            Sx2 = self._get_values(self.Sx2)
+            # Ensure CPU numpy for beta_mom_estimation (it uses np.*)
+            n = np.asarray(n, dtype=np.float64)
+            Sx = np.asarray(Sx, dtype=np.float64)
+            Sx2 = np.asarray(Sx2, dtype=np.float64)
+            alpha, beta = beta_mom_estimation(n=n, Sx=Sx, Sx2=Sx2)
+            if self.is_gpu:
+                self._df["alpha"] = cudf.Series(alpha, dtype="float64")
+                self._df["beta"] = cudf.Series(beta, dtype="float64")
+            else:
+                self._df["alpha"] = pd.Series(alpha, dtype="float64", index=self._df.index)
+                self._df["beta"] = pd.Series(beta, dtype="float64", index=self._df.index)
         return self._df["alpha"]
 
     # Beautiful name for alpha parameter
