@@ -404,52 +404,60 @@ def run_explorer(
         if not h5_files:
             print("No matching .h5 file after filter.", file=sys.stderr)
             return
-        # If multiple, show first or list and pick first for detail
-        if len(h5_files) > 1 and (pos_start is not None or pos_end is not None):
-            print(f"Multiple files match; using first: {h5_files[0].name}", file=sys.stderr)
-        target = h5_files[0]
-        target = Path(target) if not isinstance(target, Path) else target
+        # Process all matching .h5 files ({chrom}-{context}.h5)
+        targets = [Path(p) if not isinstance(p, Path) else p for p in h5_files]
     else:
         print(f"Path not found: {path}", file=sys.stderr)
         return
 
-    type_name, n_positions, metadata, keys = get_frame_info(target)
-    print(f"Path: {target}")
-    print(f"Type: {type_name}")
-    print(f"Positions: {n_positions:,}")
-    print(f"Datasets: {', '.join(sorted(keys))}")
-    if json_metadata:
-        print("Metadata (JSON):")
-        print(json.dumps(metadata, indent=2, default=str))
-    else:
-        print("Metadata:")
-        for k, v in metadata.items():
-            print(f"  {k}: {v}")
+    # Single file: path was a file
+    if path.is_file():
+        targets = [target]
 
-    if pos_start is not None or pos_end is not None:
-        pos_start = pos_start if pos_start is not None else 0
-        pos_end = pos_end if pos_end is not None else (1 << 32) - 1
-        positions_to_load = get_positions_in_range(target, pos_start, pos_end)
+    pos_start_val = pos_start if pos_start is not None else 0
+    pos_end_val = pos_end if pos_end is not None else (1 << 32) - 1
+    has_position_range = pos_start is not None or pos_end is not None
+
+    for idx, target in enumerate(targets):
+        if len(targets) > 1:
+            print(f"\n--- {target.name} ({idx + 1}/{len(targets)}) ---")
+        type_name, n_positions, metadata, keys = get_frame_info(target)
+        print(f"Path: {target}")
+        print(f"Type: {type_name}")
+        print(f"Positions: {n_positions:,}")
+        print(f"Datasets: {', '.join(sorted(keys))}")
+        if json_metadata:
+            print("Metadata (JSON):")
+            print(json.dumps(metadata, indent=2, default=str))
+        else:
+            print("Metadata:")
+            for k, v in metadata.items():
+                print(f"  {k}: {v}")
+
+        if not has_position_range:
+            continue
+
+        positions_to_load = get_positions_in_range(target, pos_start_val, pos_end_val)
         if len(positions_to_load) == 0:
-            print(f"No positions in range [{pos_start}, {pos_end}].", file=sys.stderr)
-            return
+            print(f"No positions in range [{pos_start_val}, {pos_end_val}].", file=sys.stderr)
+            continue
         if len(positions_to_load) > max_positions:
             print(f"Range has {len(positions_to_load):,} positions; capping to {max_positions} (use --max-positions to change).", file=sys.stderr)
             positions_to_load = positions_to_load[:max_positions]
         frame = load_frame(target, positions=positions_to_load)
-        table = build_position_table(frame, pos_start, pos_end)
+        table = build_position_table(frame, pos_start_val, pos_end_val)
         if table is None or len(table) == 0:
             print("No rows in position table.")
-            return
+            continue
 
-        # Export path: explicit --output or default to cwd with basename (never write into centroid/package)
+        # Export path: -o is output directory; same filename as default (e.g. 1-CG_positions_100000_200000.csv)
         basename = target.stem
-        if output is not None:
-            out_path = Path(output).resolve()
-            fmt = export_format
-        else:
-            out_path = Path.cwd() / f"{basename}_positions_{pos_start}_{pos_end}.{export_format}"
-            fmt = export_format
+        out_dir = Path(output).resolve() if output is not None else Path.cwd()
+        if out_dir.suffix.lower() in (".csv", ".tsv", ".txt"):
+            out_dir = out_dir.parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{basename}_positions_{pos_start_val}_{pos_end_val}.{export_format}"
+        fmt = export_format
         _check_output_not_under_input(out_path, path)
 
         if fmt == "csv":
@@ -480,7 +488,7 @@ def main() -> None:
     parser.add_argument("--pos-end", type=int, default=None, metavar="POS", help="End of position range (inclusive) for per-position detail")
     parser.add_argument("--max-positions", type=int, default=10_000, metavar="N", help="Maximum number of positions to load for detail (default 10000)")
     parser.add_argument("--json-metadata", action="store_true", help="Print metadata as JSON")
-    parser.add_argument("--output", "-o", type=Path, default=None, metavar="FILE", help="Export position table to FILE (CSV, TSV, or TXT by extension). Default: current directory, basename_positions_START_END.csv")
+    parser.add_argument("--output", "-o", type=Path, default=None, metavar="DIR", help="Output directory for exported position tables. Files keep the same name (e.g. 1-CG_positions_START_END.csv). Default: current directory.")
     parser.add_argument("--format", "-f", choices=["csv", "tsv", "txt"], default="csv", dest="export_format", help="Format when using default output path (default: csv). With --output, format is inferred from extension.")
     args = parser.parse_args()
     # Infer format from --output extension if provided
