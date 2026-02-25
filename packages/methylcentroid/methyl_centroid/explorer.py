@@ -315,10 +315,10 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
         mean_beta, var_beta = _mean_var_beta(a, b)
         r["mean_beta"] = mean_beta
         r["var_beta"] = var_beta
-        # BetaBinomial: use same MoM (α,β) as Beta so mean_betabinomial = mean_beta = mean_normal (Sx/N)
+        # BetaBinomial: mean and var from BB params (α_bb, β_bb) — correct discrete model mean
         a_bb = float(row["alpha_bb"]) if "alpha_bb" in df.columns else None
         b_bb = float(row["beta_bb"]) if "beta_bb" in df.columns else None
-        mean_bb, var_bb = _mean_var_beta(a, b) if (a is not None and b is not None) else _mean_var_beta(a_bb, b_bb)
+        mean_bb, var_bb = _mean_var_beta(a_bb, b_bb)
         r["mean_betabinomial"] = mean_bb
         r["var_betabinomial"] = var_bb
         # BetaMixture: not computed per position for HDF5 centroids (only in mixture table)
