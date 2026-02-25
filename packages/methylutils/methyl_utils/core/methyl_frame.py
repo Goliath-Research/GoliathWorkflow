@@ -1060,13 +1060,17 @@ class MethylBetaBinomialCentroid(MethylExtendedCentroid):
 
     @property
     def alpha_bb(self):
-        """Beta-Binomial alpha at each position (from bounded MLE; clipped for 0/1)."""
+        """Beta-Binomial α from discrete count statistics (MoM: sum_mC, sum_mC2, sum_cov).
+        Uses count-based sufficient stats, not proportion MoM, so the discrete model is respected."""
         if "alpha_bb" not in self._df.columns:
-            from methyl_utils.statistical_tests import _estimate_beta_params_bounded
-            n = np.asarray(self._get_values(self.N), dtype=np.float64)
-            log_x = np.asarray(self._get_values(self._df["log_x_sum"]), dtype=np.float64)
-            log_1mx = np.asarray(self._get_values(self._df["log_1_minus_x_sum"]), dtype=np.float64)
-            alpha, beta = _estimate_beta_params_bounded(n, log_x, log_1mx)
+            from methyl_utils.statistical_tests import beta_binomial_mom_estimation
+            n_samples = np.asarray(self._get_values(self.N), dtype=np.float64)
+            sum_mC = np.asarray(self._get_values(self.sum_mC), dtype=np.float64)
+            sum_mC2 = np.asarray(self._get_values(self.sum_mC2), dtype=np.float64)
+            sum_cov = np.asarray(self._get_values(self.sum_cov), dtype=np.float64)
+            alpha, beta = beta_binomial_mom_estimation(
+                n_samples=n_samples, sum_mC=sum_mC, sum_mC2=sum_mC2, sum_cov=sum_cov
+            )
             if self.is_gpu:
                 self._df["alpha_bb"] = cudf.Series(alpha, dtype="float64")
                 self._df["beta_bb"] = cudf.Series(beta, dtype="float64")

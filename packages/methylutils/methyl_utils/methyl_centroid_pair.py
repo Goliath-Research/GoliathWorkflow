@@ -971,6 +971,17 @@ class MethylCentroidPair:
         if np.any(use_beta_binom_mask):
             from scipy.stats import chi2
             from methyl_utils.statistical_tests import _estimate_beta_params_bounded
+            # Use BB params from count-based MoM when available (discrete model)
+            has_bb1 = getattr(centroid1, "alpha_bb", None) is not None
+            has_bb2 = getattr(centroid2, "alpha_bb", None) is not None
+            if has_bb1 and has_bb2:
+                bb_a1 = centroid1.alpha_bb[indices1].astype(np.float32)
+                bb_b1 = centroid1.beta_bb[indices1].astype(np.float32)
+                bb_a2 = centroid2.alpha_bb[indices2].astype(np.float32)
+                bb_b2 = centroid2.beta_bb[indices2].astype(np.float32)
+            else:
+                bb_a1, bb_b1 = alpha1, beta1
+                bb_a2, bb_b2 = alpha2, beta2
             # Use available sum counts or fallback to averages * N
             if getattr(centroid1, "sum_mC", None) is not None and getattr(centroid2, "sum_mC", None) is not None:
                 k1 = centroid1.sum_mC[indices1].astype(np.float64)
@@ -982,14 +993,14 @@ class MethylCentroidPair:
             n1 = sum_cov1.astype(np.float64)
             n2 = sum_cov2.astype(np.float64)
 
-            # Pooled beta params from combined log sums
+            # Pooled beta params from combined log sums (null model)
             N0 = N1 + N2
             log_x_sum0 = log_x_sum1 + log_x_sum2
             log_1mx_sum0 = log_1mx_sum1 + log_1mx_sum2
             alpha0, beta0 = _estimate_beta_params_bounded(N0, log_x_sum0, log_1mx_sum0)
 
-            ll1 = log_beta_binomial_pmf(k1, n1, alpha1, beta1, use_gpu=self.gpu_available)
-            ll2 = log_beta_binomial_pmf(k2, n2, alpha2, beta2, use_gpu=self.gpu_available)
+            ll1 = log_beta_binomial_pmf(k1, n1, bb_a1, bb_b1, use_gpu=self.gpu_available)
+            ll2 = log_beta_binomial_pmf(k2, n2, bb_a2, bb_b2, use_gpu=self.gpu_available)
             ll0_1 = log_beta_binomial_pmf(k1, n1, alpha0, beta0, use_gpu=self.gpu_available)
             ll0_2 = log_beta_binomial_pmf(k2, n2, alpha0, beta0, use_gpu=self.gpu_available)
             llr = 2.0 * ((ll1 + ll2) - (ll0_1 + ll0_2))

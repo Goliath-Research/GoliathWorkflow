@@ -487,6 +487,51 @@ def beta_mom_estimation(n: np.ndarray, Sx: np.ndarray, Sx2: np.ndarray) -> Tuple
     return alpha, beta
 
 
+def beta_binomial_mom_estimation(
+    n_samples: np.ndarray,
+    sum_mC: np.ndarray,
+    sum_mC2: np.ndarray,
+    sum_cov: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Method of Moments for Beta-Binomial parameters from discrete count statistics.
+
+    Beta-Binomial models counts k out of n trials; this uses the count-based
+    sufficient statistics (sum_mC = Σ k_i, sum_mC2 = Σ k_i^2, sum_cov = Σ n_i)
+    rather than proportion moments. For varying n per sample we use
+    n_eff = sum_cov / n_samples (average trials per sample).
+
+    Formulas (fixed n): m1 = (1/N)Σy_i, m2 = (1/N)Σy_i^2;
+    α̂ = (n*m1 - m2) / (n*(m2/m1 - m1 - 1) + m1),
+    β̂ = (n - m1)(n - m2/m1) / (n*(m2/m1 - m1 - 1) + m1).
+    See e.g. statproofbook.github.io/P/betabin-mome.
+
+    Returns:
+        (alpha, beta) float64 arrays; invalid positions get (1.0, 1.0).
+    """
+    n_samples = np.asarray(n_samples, dtype=np.float64)
+    sum_mC = np.asarray(sum_mC, dtype=np.float64)
+    sum_mC2 = np.asarray(sum_mC2, dtype=np.float64)
+    sum_cov = np.asarray(sum_cov, dtype=np.float64)
+    N = np.maximum(n_samples, 1.0)
+    n_eff = np.maximum(sum_cov / N, 1.0)
+    m1 = sum_mC / N
+    m2 = sum_mC2 / N
+    # Avoid m1=0 for m2/m1
+    m1_safe = np.where(m1 > 1e-12, m1, 1e-12)
+    ratio = np.where(m2 > 1e-20, m2 / m1_safe, m1_safe)
+    denom = n_eff * (ratio - m1 - 1.0) + m1
+    denom = np.where(np.abs(denom) < 1e-12, np.sign(denom) * 1e-12 + (denom == 0) * 1e-12, denom)
+    alpha = (n_eff * m1 - m2) / denom
+    beta = (n_eff - m1) * (n_eff - ratio) / denom
+    invalid = (
+        (alpha <= 0) | (beta <= 0) | ~np.isfinite(alpha) | ~np.isfinite(beta) |
+        (m1 <= 0) | (m1 >= n_eff)
+    )
+    alpha = np.where(invalid, 1.0, alpha)
+    beta = np.where(invalid, 1.0, beta)
+    return alpha, beta
+
 
 def likelihood_ratio_test_beta(
     centroid1: 'MethylSample', centroid2: 'MethylSample',
@@ -949,6 +994,7 @@ __all__ = [
     "beta_mle_estimation",
     "beta_estimation_hybrid",
     "beta_mom_estimation",
+    "beta_binomial_mom_estimation",
     "likelihood_ratio_test_beta",
     "aggregate_pvalues_fisher",
     "aggregate_pvalues_stouffer",
