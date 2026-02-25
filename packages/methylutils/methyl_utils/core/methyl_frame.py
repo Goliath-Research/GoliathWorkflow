@@ -1086,9 +1086,10 @@ class MethylBetaBinomialCentroid(MethylExtendedCentroid):
 
     @property
     def mean(self):
-        """Mean = alpha/(alpha+beta) using MoM Beta params (same as extended centroid).
-        Uses parent's alpha/beta so Beta and Beta-Binomial means converge as N increases."""
-        a, b = self.alpha.values, self.beta.values
+        """Beta-Binomial mean α_bb/(α_bb+β_bb) from count-based MoM parameters.
+        This is the correct mean for the discrete model and is generally better than
+        the Beta approximation unless N is large (both converge as N increases)."""
+        a, b = self.alpha_bb.values, self.beta_bb.values
         if hasattr(a, "__cuda_array_interface__"):
             a, b = np.asarray(a), np.asarray(b)
         tau = np.maximum(a + b, 1e-12)
