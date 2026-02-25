@@ -32,6 +32,7 @@
     "centroid": {
       "base_config": { "min_coverage": 4, "use_gpu": true, "max_sample_workers": null, "verbose": true },
       "parallel_combinations": 1,
+      "min_samples": 3,
       "continue_on_error": true,
       "save_batch_summary": true
     },
@@ -47,7 +48,7 @@
       "optimization_method": "featurecuts",
       "export_sample_size_estimate": true,
       "random_state": 42,
-      "min_N_pct": 0.05
+      "min_N_pct": 0.1
     },
     "mapper": {
       "csv_pattern": "dmps-*-biological-sorted.csv",
