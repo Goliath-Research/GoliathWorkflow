@@ -33,13 +33,13 @@ def write_train_csv(path: Path, full_paths: List[str], base_path: str) -> None:
 
 
 def write_val_csv(path: Path, full_paths: List[str]) -> None:
-    """Write a validation CSV with header 'path' and one column of full paths for MethylValidator."""
+    """Write a validation CSV with header 'path' and one column of absolute paths for MethylPredictor."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["path"])
         for p in full_paths:
-            w.writerow([p])
+            w.writerow([str(Path(p).resolve())])
 
 
 def _first_control_and_disease_labels(base: Dict[str, Any]) -> tuple[str, str]:

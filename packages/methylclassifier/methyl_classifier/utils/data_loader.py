@@ -344,13 +344,11 @@ class DataLoader:
                 if debug:
                     print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes) in {load_time:.1f}s")
             except Exception as e:
-                import traceback
                 print(f"❌ Failed to load sample {sample_name}: {e}", flush=True)
-                print(f"   Error type: {type(e).__name__}", flush=True)
-                print("   Traceback:", flush=True)
-                traceback.print_exc()
-                import sys
-                sys.stdout.flush()
+                if debug:
+                    import traceback
+                    print(f"   Error type: {type(e).__name__}", flush=True)
+                    traceback.print_exc()
                 continue
         
         return samples

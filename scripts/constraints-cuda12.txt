@@ -1,0 +1,3 @@
+# Pin cuda-bindings to the version required by torch 2.x on Linux x86_64.
+# Used by scripts/setup_host.sh when installing GPU deps for CUDA 12.x.
+cuda-bindings==12.9.4

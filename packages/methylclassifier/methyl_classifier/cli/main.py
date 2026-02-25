@@ -466,6 +466,18 @@ def classify_samples_from_list(
             classifier, loaded_samples, output_file, debug,
             expected_classes=expected_classes
         )
+    elif (
+        getattr(classifier, "dmp_positions_df", None) is not None
+        and len(classifier.dmp_positions_df) > 0
+        and hasattr(classifier.dmp_positions_df, "columns")
+        and "chromosome" in classifier.dmp_positions_df.columns
+        and classifier.dmp_positions_df["chromosome"].nunique() > 1
+    ):
+        # Single-file multiclass with DMPs spanning multiple chromosomes: build flat feature matrix in dmp_df order
+        _classify_single_file_multichrom_dmps(
+            classifier, loaded_samples, output_file, debug,
+            expected_classes=expected_classes,
+        )
     else:
         # Single chromosome mode: use first chromosome from merged samples
         # Extract chromosome from classifier (may be None for legacy saved wrappers)
@@ -523,6 +535,52 @@ def classify_samples_from_list(
         )
         if expected_classes is not None and len(expected_classes) == len(sample_names):
             _print_validation_report(classifier, sample_names, predictions, probabilities, expected_classes)
+
+
+def _classify_single_file_multichrom_dmps(
+    classifier: MethylClassifier,
+    loaded_samples: List[Tuple[str, Dict[str, Any]]],
+    output_file: Optional[Path] = None,
+    debug: bool = False,
+    expected_classes: Optional[List[int]] = None,
+) -> None:
+    """
+    Classify samples using a single-file classifier whose DMPs span multiple chromosomes
+    (e.g. multiclass-classifier.pkl). Builds a flat feature matrix in dmp_positions_df row order.
+    """
+    dmp_df = classifier.dmp_positions_df
+    chrom_order = dmp_df["chromosome"].drop_duplicates().tolist()
+    n_dmps = len(dmp_df)
+    n_samples = len(loaded_samples)
+    feature_matrix = np.zeros((n_samples, n_dmps), dtype=np.float64)
+    availability_mask = np.zeros((n_samples, n_dmps), dtype=bool)
+    sample_names = []
+
+    for sample_idx, (sample_name, chrom_samples) in enumerate(loaded_samples):
+        sample_names.append(sample_name)
+        offset = 0
+        for chrom in chrom_order:
+            pos_arr = dmp_df.loc[dmp_df["chromosome"] == chrom, "position"].values.astype(np.uint32)
+            if chrom in chrom_samples and len(pos_arr) > 0:
+                feats, mask, _ = DataLoader.extract_sample_features(chrom_samples[chrom], pos_arr)
+                feature_matrix[sample_idx, offset : offset + len(pos_arr)] = feats
+                availability_mask[sample_idx, offset : offset + len(pos_arr)] = mask
+            else:
+                feature_matrix[sample_idx, offset : offset + len(pos_arr)] = 0.5
+                availability_mask[sample_idx, offset : offset + len(pos_arr)] = False
+            offset += len(pos_arr)
+
+    predictions, probabilities = classify_samples_batch(
+        classifier, feature_matrix, availability_mask, debug
+    )
+    dmp_positions_flat = dmp_df["position"].values.astype(np.uint32)
+    _save_classification_results(
+        classifier, sample_names, predictions, probabilities,
+        availability_mask, dmp_positions_flat, output_file,
+        expected_classes=expected_classes,
+    )
+    if expected_classes is not None and len(expected_classes) == len(sample_names):
+        _print_validation_report(classifier, sample_names, predictions, probabilities, expected_classes)
 
 
 def _classify_multi_chromosome_samples(

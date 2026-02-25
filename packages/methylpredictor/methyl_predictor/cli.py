@@ -4,13 +4,16 @@ Command-line interface for MethylPredictor.
 
 import argparse
 import csv
+import json
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from .core.predictor import run_prediction
 from .models.config import PredictorConfig
 from .project_resolver import (
+    _expand_test_paths,
+    _resolve_one_path,
     resolve_predictor_config,
     resolve_predictor_config_per_comparison,
 )
@@ -134,6 +137,12 @@ Examples:
         help="Override disease test set (overrides step_config.predictor): CSV path or comma-separated paths.",
     )
     parser.add_argument(
+        "--test-groups",
+        type=Path,
+        metavar="JSON",
+        help="Multi-class: path to JSON list of {label, paths} (overrides step_config.predictor.test_group_paths).",
+    )
+    parser.add_argument(
         "--per-comparison",
         action="store_true",
         help="With --project: run one run per comparison. Auto-enabled when project uses controls/diseases.",
@@ -165,8 +174,10 @@ def main() -> None:
             data["output_dir"] = str(args.output_dir)
         if args.test_control is not None:
             data["test_control_paths"] = _parse_test_paths_arg(args.test_control) or []
+            print(f"Test control paths: {data['test_control_paths']}")
         if args.test_disease is not None:
             data["test_disease_paths"] = _parse_test_paths_arg(args.test_disease) or []
+            print(f"Test disease paths: {data['test_disease_paths']}")
         data["debug"] = data.get("debug", False) or args.debug
         config = PredictorConfig(**data)
         run_prediction(config)
@@ -199,6 +210,26 @@ def main() -> None:
                     cfg.model_dir = str(args.model_dir)
                     cfg.model_path = None
                 cfg.debug = cfg.debug or args.debug
+                if label == "multiclass" and getattr(args, "test_groups", None) is not None:
+                    path = Path(args.test_groups)
+                    if path.is_file():
+                        with open(path) as f:
+                            raw = json.load(f)
+                        if isinstance(raw, list):
+                            base_path = getattr(project, "samples_base_path", None)
+                            resolved_groups: List[Dict[str, Any]] = []
+                            for x in raw:
+                                if not isinstance(x, dict):
+                                    continue
+                                label_name = x.get("label") or x.get("class_name") or str(len(resolved_groups))
+                                paths_raw = x.get("paths") or []
+                                if isinstance(paths_raw, str):
+                                    paths_raw = [paths_raw]
+                                expanded = _expand_test_paths(paths_raw, base_path)
+                                paths_abs = [_resolve_one_path(p, base_path) for p in expanded if p]
+                                resolved_groups.append({"label": label_name, "paths": paths_abs})
+                            if resolved_groups:
+                                cfg.test_group_paths = resolved_groups
                 print(f"\n🔬 Prediction run: {label}")
                 run_prediction(cfg)
             return
