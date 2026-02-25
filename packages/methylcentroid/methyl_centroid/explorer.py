@@ -383,6 +383,7 @@ def run_explorer(
     output: Optional[Path] = None,
     export_format: str = "csv",
     single_csv: bool = False,
+    single_json: bool = False,
 ) -> None:
     """
     Main explorer logic: resolve path (file or folder), detect type, print metadata,
@@ -420,15 +421,25 @@ def run_explorer(
     if path.is_file():
         targets = [target]
 
+    # Full range when only --max-positions is set; otherwise use --pos-start/--pos-end
     pos_start_val = pos_start if pos_start is not None else 0
     pos_end_val = pos_end if pos_end is not None else (1 << 32) - 1
-    has_position_range = pos_start is not None or pos_end is not None
+    has_position_range = (pos_start is not None or pos_end is not None) or max_positions is not None
     combined_tables: List[pd.DataFrame] = []  # for --single-csv
+    combined_metadata: Dict[str, Any] = {}   # for --single-json: stem -> {path, type, positions, datasets, metadata}
 
     for idx, target in enumerate(targets):
         if len(targets) > 1:
             print(f"\n--- {target.name} ({idx + 1}/{len(targets)}) ---")
         type_name, n_positions, metadata, keys = get_frame_info(target)
+        if single_json:
+            combined_metadata[target.stem] = {
+                "path": str(target.resolve()),
+                "type": type_name,
+                "positions": n_positions,
+                "datasets": sorted(keys),
+                "metadata": metadata,
+            }
         print(f"Path: {target}")
         print(f"Type: {type_name}")
         print(f"Positions: {n_positions:,}")
@@ -451,8 +462,11 @@ def run_explorer(
         if len(positions_to_load) > max_positions:
             print(f"Range has {len(positions_to_load):,} positions; capping to {max_positions} (use --max-positions to change).", file=sys.stderr)
             positions_to_load = positions_to_load[:max_positions]
+        # When user gave only --max-positions (no pos-start/pos-end), use actual range for filename and table
+        file_start = int(positions_to_load.min()) if pos_start is None and pos_end is None else pos_start_val
+        file_end = int(positions_to_load.max()) if pos_start is None and pos_end is None else pos_end_val
         frame = load_frame(target, positions=positions_to_load)
-        table = build_position_table(frame, pos_start_val, pos_end_val)
+        table = build_position_table(frame, file_start, file_end)
         if table is None or len(table) == 0:
             print("No rows in position table.")
             continue
@@ -473,7 +487,7 @@ def run_explorer(
             if out_dir.suffix.lower() in (".csv", ".tsv", ".txt"):
                 out_dir = out_dir.parent
             out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / f"{basename}_positions_{pos_start_val}_{pos_end_val}.{export_format}"
+            out_path = out_dir / f"{basename}_positions_{file_start}_{file_end}.{export_format}"
             fmt = export_format
             _check_output_not_under_input(out_path, path)
 
@@ -497,13 +511,26 @@ def run_explorer(
             out_dir = out_dir.parent
         out_dir.mkdir(parents=True, exist_ok=True)
         combined = pd.concat(combined_tables, ignore_index=True)
-        out_path = out_dir / f"positions_{pos_start_val}_{pos_end_val}.{export_format}"
+        c_min, c_max = int(combined["pos"].min()), int(combined["pos"].max())
+        out_path = out_dir / f"positions_{c_min}_{c_max}.{export_format}"
         _check_output_not_under_input(out_path, path)
         if export_format == "csv":
             combined.to_csv(out_path, index=False)
         else:
             combined.to_csv(out_path, index=False, sep="\t")
         print(f"\nExported single {export_format.upper()} with chromosome and context: {out_path} ({len(combined):,} rows)")
+
+    # Write single JSON with metadata for all chrom-context .h5 when --single-json was used
+    if single_json and combined_metadata:
+        out_dir = Path(output).resolve() if output is not None else Path.cwd()
+        if out_dir.suffix.lower() in (".csv", ".tsv", ".txt", ".json"):
+            out_dir = out_dir.parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / "metadata.json"
+        _check_output_not_under_input(out_path, path)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(combined_metadata, f, indent=2, default=str)
+        print(f"\nExported single JSON with metadata for {len(combined_metadata)} file(s): {out_path}")
 
 
 def main() -> None:
@@ -518,10 +545,11 @@ def main() -> None:
     parser.add_argument("--context", "-x", choices=["CG", "CHG", "CHH"], help="If path is a folder, filter to this context")
     parser.add_argument("--pos-start", type=int, default=None, metavar="POS", help="Start of position range (inclusive) for per-position detail")
     parser.add_argument("--pos-end", type=int, default=None, metavar="POS", help="End of position range (inclusive) for per-position detail")
-    parser.add_argument("--max-positions", type=int, default=10_000, metavar="N", help="Maximum number of positions to load for detail (default 10000)")
+    parser.add_argument("--max-positions", type=int, default=10_000, metavar="N", help="Maximum number of positions to load. If only this is set (no --pos-start/--pos-end), uses the full range of each file capped at N (default 10000).")
     parser.add_argument("--json-metadata", action="store_true", help="Print metadata as JSON")
     parser.add_argument("--output", "-o", type=Path, default=None, metavar="DIR", help="Output directory for exported position tables. Files keep the same name (e.g. 1-CG_positions_START_END.csv). Default: current directory.")
     parser.add_argument("--single-csv", action="store_true", help="Export one CSV/TSV with chromosome and context as first two columns (combines all files when path is a folder).")
+    parser.add_argument("--single-json", action="store_true", help="Export one valid JSON file with metadata for all chrom-context .h5 in the folder (keyed by stem, e.g. 1-CG).")
     parser.add_argument("--format", "-f", choices=["csv", "tsv", "txt"], default="csv", dest="export_format", help="Format when using default output path (default: csv). With --output, format is inferred from extension.")
     args = parser.parse_args()
     # Infer format from --output extension if provided
@@ -540,6 +568,7 @@ def main() -> None:
         output=args.output,
         export_format=export_format,
         single_csv=args.single_csv,
+        single_json=args.single_json,
     )
 
 
