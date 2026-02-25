@@ -409,6 +409,51 @@ def beta_mle_estimation(n: np.ndarray,
     return alpha, beta
 
 
+def beta_estimation_hybrid(
+    n: np.ndarray,
+    Sx: np.ndarray,
+    Sx2: np.ndarray,
+    log_x_sum: np.ndarray,
+    log_1_minus_x_sum: np.ndarray,
+    mean_low: float = 0.01,
+    mean_high: float = 0.99,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Beta (α, β) from sufficient stats: use closed-form MoM when mean is not near 0/1,
+    otherwise MLE to avoid unstable MoM.
+
+    When mean = Sx/n is in (mean_low, mean_high), MoM is closed-form and correct;
+    when mean is close to 0 or 1, MoM can be invalid (e.g. negative or huge α, β),
+    so we use MLE for those positions.
+
+    Returns
+    -------
+    (alpha, beta) : Tuple[np.ndarray, np.ndarray], float64, same shape as n.
+    """
+    n = np.asarray(n, dtype=np.float64)
+    Sx = np.asarray(Sx, dtype=np.float64)
+    Sx2 = np.asarray(Sx2, dtype=np.float64)
+    log_x_sum = np.asarray(log_x_sum, dtype=np.float64)
+    log_1_minus_x_sum = np.asarray(log_1_minus_x_sum, dtype=np.float64)
+    mean = Sx / np.maximum(n, 1.0)
+    use_mom = (mean >= mean_low) & (mean <= mean_high)
+    alpha_mom, beta_mom = beta_mom_estimation(n, Sx, Sx2)
+    # Only use MoM where it is valid
+    use_mom = (
+        use_mom
+        & (alpha_mom > 0)
+        & (beta_mom > 0)
+        & np.isfinite(alpha_mom)
+        & np.isfinite(beta_mom)
+    )
+    alpha_mle, beta_mle = beta_mle_estimation(n, log_x_sum, log_1_minus_x_sum)
+    alpha_mle = np.asarray(alpha_mle, dtype=np.float64)
+    beta_mle = np.asarray(beta_mle, dtype=np.float64)
+    alpha = np.where(use_mom, alpha_mom, alpha_mle)
+    beta = np.where(use_mom, beta_mom, beta_mle)
+    return alpha, beta
+
+
 def beta_mom_estimation(n: np.ndarray, Sx: np.ndarray, Sx2: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     """
     Method of Moments estimation for Beta distribution parameters.
@@ -902,6 +947,8 @@ __all__ = [
     "stouffer_global_p",
     "beta_loglikelihood",
     "beta_mle_estimation",
+    "beta_estimation_hybrid",
+    "beta_mom_estimation",
     "likelihood_ratio_test_beta",
     "aggregate_pvalues_fisher",
     "aggregate_pvalues_stouffer",

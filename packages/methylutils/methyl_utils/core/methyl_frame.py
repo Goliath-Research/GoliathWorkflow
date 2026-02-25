@@ -618,15 +618,16 @@ class MethylExtendedCentroid(MethylBasicCentroid):
     @property
     def alpha(self):
         if "alpha" not in self._df.columns:
-            from methyl_utils.statistical_tests import beta_mom_estimation
-            n = self._get_values(self.N)
-            Sx = self._get_values(self.Sx)
-            Sx2 = self._get_values(self.Sx2)
-            # Ensure CPU numpy for beta_mom_estimation (it uses np.*)
-            n = np.asarray(n, dtype=np.float64)
-            Sx = np.asarray(Sx, dtype=np.float64)
-            Sx2 = np.asarray(Sx2, dtype=np.float64)
-            alpha, beta = beta_mom_estimation(n=n, Sx=Sx, Sx2=Sx2)
+            from methyl_utils.statistical_tests import beta_estimation_hybrid
+            n = np.asarray(self._get_values(self.N), dtype=np.float64)
+            Sx = np.asarray(self._get_values(self.Sx), dtype=np.float64)
+            Sx2 = np.asarray(self._get_values(self.Sx2), dtype=np.float64)
+            log_x = np.asarray(self._get_values(self._df["log_x_sum"]), dtype=np.float64)
+            log_1mx = np.asarray(self._get_values(self._df["log_1_minus_x_sum"]), dtype=np.float64)
+            alpha, beta = beta_estimation_hybrid(
+                n=n, Sx=Sx, Sx2=Sx2,
+                log_x_sum=log_x, log_1_minus_x_sum=log_1mx,
+            )
             if self.is_gpu:
                 self._df["alpha"] = cudf.Series(alpha, dtype="float64")
                 self._df["beta"] = cudf.Series(beta, dtype="float64")
