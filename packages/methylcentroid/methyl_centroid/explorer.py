@@ -213,7 +213,12 @@ def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.Dat
     out["mean_betamixture"] = mean_bmm
     out["var_betamixture"] = var_bmm
     out["best_distribution"] = "BetaMixture"
-    # Other distribution columns N/A for mixture-only data (for consistent table shape)
+    # mean and variance = best-distribution estimates (BetaMixture here)
+    out["mean"] = mean_bmm
+    out["variance"] = var_bmm
+    # Count-based and other distribution columns N/A for mixture-only data (consistent table shape)
+    out["mean_counts"] = None
+    out["var_counts"] = None
     out["mean_normal"] = None
     out["var_normal"] = None
     out["mean_beta"] = None
@@ -229,8 +234,10 @@ def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.Dat
 
 def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
     """
-    Build a per-position table with pos, mC, uC, coverage, mean, and type-specific fields
-    (N, Sx, Sx2, alpha, beta, variance for centroids; BetaBinomial: Sx3, Sx4, count_zero, count_one, sum_*;
+    Build a per-position table with pos, mC, uC, coverage; mean_counts, var_counts (from counts);
+    distribution-specific mean_* and var_* (Normal, Beta, BetaBinomial, BetaMixture); best_distribution;
+    and mean, variance as the best-distribution estimates (for MethylCentroidPair / MethylDetector).
+    Also type-specific fields (N, Sx, Sx2, alpha, beta; BetaBinomial: Sx3, Sx4, count_zero, count_one, sum_*;
     BetaMixture: position, context, k, weights, alphas, betas, n_samples, converged, bic, loglik, status).
     """
     # MethylBetaMixtureCentroid: no "pos", has "position" and "weights"
@@ -268,7 +275,10 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
         r = {"pos": int(row["pos"]), "mC": int(row["mC"]), "uC": int(row["uC"])}
         cov = int(row["mC"]) + int(row["uC"])
         r["coverage"] = cov
-        r["mean"] = (int(row["mC"]) / cov) if cov > 0 else None
+        # Count-based (empirical) mean and variance: mean_counts = mC/(mC+uC), var_counts = p(1-p)/n
+        mean_counts, var_counts = _mean_var_normal_from_counts(int(row["mC"]), int(row["uC"]))
+        r["mean_counts"] = mean_counts
+        r["var_counts"] = var_counts
         if "N" in df.columns:
             r["N"] = int(row["N"])
         if "Sx" in df.columns:
@@ -283,10 +293,6 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
         b = float(row["beta"]) if "beta" in df.columns else None
         r["alpha"] = a
         r["beta"] = b
-        if a is not None and b is not None and (a + b) > 0:
-            r["variance"] = (a * b) / ((a + b) ** 2 * (a + b + 1))
-        else:
-            r["variance"] = None
         # BetaBinomial sufficient statistics for parameter estimation
         for col in (
             "sum_mC", "sum_uC", "sum_cov", "sum_cov2", "sum_mC2", "sum_uC2",
@@ -326,6 +332,10 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
             r["best_distribution"] = "Beta"
         else:
             r["best_distribution"] = "Normal"
+        # mean and variance = best-distribution estimates (for MethylCentroidPair / MethylDetector)
+        best = r["best_distribution"]
+        r["mean"] = r.get("mean_betamixture") if best == "BetaMixture" else r.get("mean_betabinomial") if best == "BetaBinomial" else r.get("mean_beta") if best == "Beta" else r.get("mean_normal")
+        r["variance"] = r.get("var_betamixture") if best == "BetaMixture" else r.get("var_betabinomial") if best == "BetaBinomial" else r.get("var_beta") if best == "Beta" else r.get("var_normal")
         rows.append(r)
     return pd.DataFrame(rows)
 

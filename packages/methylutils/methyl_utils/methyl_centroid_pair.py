@@ -730,26 +730,30 @@ class MethylCentroidPair:
         pos2_vals = centroid2.pos.values if hasattr(centroid2.pos, 'values') else np.asarray(centroid2.pos)
         common_positions = np.intersect1d(pos1_vals, pos2_vals)
 
-        # Filter by minimum coverage if centroids have coverage info
-        if hasattr(centroid1, 'mC') and hasattr(centroid1, 'uC') and \
-           hasattr(centroid2, 'mC') and hasattr(centroid2, 'uC'):
-
-            # Get coverage for common positions
+        # Filter by minimum sample count (N) per position so positions with too few samples are excluded (min_N_pct semantics)
+        if hasattr(centroid1, 'N') and centroid1.N is not None and hasattr(centroid2, 'N') and centroid2.N is not None:
+            N1_vals = centroid1.N.values if hasattr(centroid1.N, 'values') else np.asarray(centroid1.N)
+            N2_vals = centroid2.N.values if hasattr(centroid2.N, 'values') else np.asarray(centroid2.N)
+            # Align by position so N1[i] and N2[i] refer to the same position (positions assumed sorted)
+            idx1 = np.searchsorted(pos1_vals, common_positions, side='left')
+            idx2 = np.searchsorted(pos2_vals, common_positions, side='left')
+            N1_common = N1_vals[idx1]
+            N2_common = N2_vals[idx2]
+            # Require min(N1, N2) >= min_coverage (min_coverage = effective_min_N from min_N_pct in MethylDetector)
+            min_N_both = np.minimum(N1_common.astype(np.int64), N2_common.astype(np.int64))
+            coverage_mask = min_N_both >= self.min_coverage
+            common_positions = common_positions[coverage_mask]
+        elif hasattr(centroid1, 'mC') and hasattr(centroid1, 'uC') and hasattr(centroid2, 'mC') and hasattr(centroid2, 'uC'):
+            # Fallback when N is not available: filter by total read coverage (mC+uC)
             c1_mask = np.isin(pos1_vals, common_positions)
             c2_mask = np.isin(pos2_vals, common_positions)
-
             mC1_vals = centroid1.mC.values if hasattr(centroid1.mC, 'values') else np.asarray(centroid1.mC)
             uC1_vals = centroid1.uC.values if hasattr(centroid1.uC, 'values') else np.asarray(centroid1.uC)
             mC2_vals = centroid2.mC.values if hasattr(centroid2.mC, 'values') else np.asarray(centroid2.mC)
             uC2_vals = centroid2.uC.values if hasattr(centroid2.uC, 'values') else np.asarray(centroid2.uC)
-
             c1_coverage = mC1_vals[c1_mask] + uC1_vals[c1_mask]
             c2_coverage = mC2_vals[c2_mask] + uC2_vals[c2_mask]
-
-            # Filter positions by minimum coverage
             coverage_mask = (c1_coverage + c2_coverage) >= self.min_coverage
-
-            # Get positions that pass coverage filter
             c1_positions = pos1_vals[c1_mask][coverage_mask]
             common_positions = c1_positions
 
