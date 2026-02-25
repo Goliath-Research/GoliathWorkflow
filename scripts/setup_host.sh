@@ -365,7 +365,19 @@ if [ "$GPU_DEPS" -eq 1 ]; then
   fi
   CUDA_MAJOR="${CUDA_MAJOR:-12}"
   info "Installing GPU requirements (CUDA ${CUDA_MAJOR}.x)..."
-  "$PYTHON_BIN" -m pip install -r "$REQ_GPU" --extra-index-url https://pypi.nvidia.com
+  PIP_GPU_EXTRA=()
+  if [ "$CUDA_MAJOR" = "12" ]; then
+    CONSTRAINT_FILE="$SCRIPT_DIR/constraints-cuda12.txt"
+    if [ -f "$CONSTRAINT_FILE" ]; then
+      PIP_GPU_EXTRA=(-c "$CONSTRAINT_FILE")
+      info "Using cuda-bindings constraint for torch compatibility (CUDA 12)."
+    fi
+  fi
+  "$PYTHON_BIN" -m pip install -r "$REQ_GPU" --extra-index-url https://pypi.nvidia.com "${PIP_GPU_EXTRA[@]}"
+  if [ "$CUDA_MAJOR" = "13" ]; then
+    warn "CUDA 13.x: torch (e.g. from methylutils) requires cuda-bindings==12.9.4 and may conflict."
+    warn "If you see a cuda-bindings conflict and need torch, use: pip install cuda-bindings==12.9.4"
+  fi
   if ! install_nvrtc_system_deps "$CUDA_MAJOR"; then
     warn "CUDA NVRTC library (libnvrtc.so.${CUDA_MAJOR}) not detected."
     warn "On ARM64 systems, pip GPU wheels may omit NVRTC."
