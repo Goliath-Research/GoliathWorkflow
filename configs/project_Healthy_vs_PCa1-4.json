@@ -3,8 +3,8 @@
   "disease": "Prostate Cancer",
   "laboratory": "psomagen",
   "batch": "Second batch of prostate cancer samples",
-  "output_base": "/work/david-gladys/all-prostate",
-  "samples_base_path": "/work/david-gladys/all-prostate",
+  "output_base": "/home/ubuntu/Work/prostate-cancer",
+  "samples_base_path": "/home/ubuntu/Work/prostate-cancer/samples",
   "groups": [
     {
       "label": "healthy",
@@ -40,6 +40,7 @@
     "centroid": {
       "base_config": { "min_coverage": 4, "use_gpu": true, "max_sample_workers": null, "verbose": true },
       "parallel_combinations": 1,
+      "min_samples": 3,
       "continue_on_error": true,
       "save_batch_summary": true
     },
