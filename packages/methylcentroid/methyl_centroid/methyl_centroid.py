@@ -375,9 +375,9 @@ class MethylCentroid:
             disease=config.disease,
             group=config.group,
             batch=config.batch,
-            cap_coverage=getattr(config, "cap_coverage", False),
-            cap_coverage_n_cap=getattr(config, "cap_coverage_n_cap", None),
-            cap_coverage_seed=getattr(config, "cap_coverage_seed", None),
+            cap_coverage=config.cap_coverage,
+            cap_coverage_n_cap=config.cap_coverage_n_cap,
+            cap_coverage_seed=config.cap_coverage_seed,
         )
 
     @classmethod
@@ -403,9 +403,9 @@ class MethylCentroid:
             "disease": self.disease,
             "group": self.group,
             "batch": self.batch,
-            "cap_coverage": getattr(self, "_cap_coverage", False),
-            "cap_coverage_n_cap": getattr(self, "_cap_coverage_n_cap", None),
-            "cap_coverage_seed": getattr(self, "_cap_coverage_seed", None),
+            "cap_coverage": self._cap_coverage,
+            "cap_coverage_n_cap": self._cap_coverage_n_cap,
+            "cap_coverage_seed": self._cap_coverage_seed,
         }
 
         return MethylCentroidConfig(**config_dict)
@@ -1500,10 +1500,10 @@ class MethylCentroid:
             methyl_sample = self._ensure_numpy_arrays(methyl_sample)
 
             # Optionally cap per-CpG coverage (binomial thinning) to correct high-coverage outliers
-            if getattr(self, "_cap_coverage", False) and getattr(self, "_cap_coverage_n_cap", None):
+            if self._cap_coverage and self._cap_coverage_n_cap is not None:
                 methyl_sample = methyl_sample.cap_coverage_binomial(
                     self._cap_coverage_n_cap,
-                    seed=getattr(self, "_cap_coverage_seed", None),
+                    seed=self._cap_coverage_seed,
                 )
                 self.logger.debug(
                     "Applied coverage cap n_cap=%s to sample %s",
