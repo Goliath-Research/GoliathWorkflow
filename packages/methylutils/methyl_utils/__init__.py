@@ -97,6 +97,7 @@ from .core.methyl_frame import (
     MethylBasicCentroid,
     MethylExtendedCentroid,
     MethylBetaBinomialCentroid,
+    compute_coverage_outlier_flags,
 )
 # Compatibility aliases
 MethylCentroid = MethylExtendedCentroid
@@ -755,6 +756,7 @@ __all__ = [
     "MethylBasicCentroid",
     "MethylExtendedCentroid",
     "MethylBetaBinomialCentroid",
+    "compute_coverage_outlier_flags",
     "MethylBetaMixtureCentroid",
     "get_distribution_view",
     "log_probability_sample_given_centroid",

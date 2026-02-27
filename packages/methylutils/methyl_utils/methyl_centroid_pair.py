@@ -1523,57 +1523,77 @@ class MethylCentroidPair:
         return results
 
     @staticmethod
-    def compute_effect_sizes(
+    def compute_effect_sizes_altA(
         alpha1: np.ndarray,
         beta1: np.ndarray,
         alpha2: np.ndarray,
         beta2: np.ndarray,
         delta_mean: np.ndarray,
         bc_values: np.ndarray,
-        min_overlap_floor: float = 0.01,
         numerical_epsilon: float = 1e-6,
         variance_reliability: bool = True,
+        bc_nan_fill: float = 0.5,
     ) -> np.ndarray:
         """
-        Compute effect size (single biological importance measure).
+        Compute effect size (single biological importance measure) using Alternative A.
 
-        effect_size = |delta_mean| / (max(overlap, min_overlap_floor) * combined_std)
-        Optionally multiplied by variance reliability 1 / (1 + max_var / 0.05).
+        Alternative A replaces dividing by overlap (BC) with multiplying by a bounded
+        separation weight (1 - BC), avoiding blow-ups when BC -> 0.
+
+            effect_size = |delta_mean| * (1 - BC) / (combined_std + numerical_epsilon)
+
+        Optionally multiplied by variance reliability:
+            var_factor = 1 / (1 + max_var / 0.05)
+
+        Notes:
+        - BC (Bhattacharyya coefficient) is assumed in [0, 1], where 0 = no overlap, 1 = complete overlap.
+        - This keeps the “less overlap → higher score” behavior, but caps it naturally.
 
         Args:
-            alpha1, beta1: Beta parameters for centroid 1
-            alpha2, beta2: Beta parameters for centroid 2
+            alpha1, beta1: Beta parameters for centroid 1 (fitted across individuals)
+            alpha2, beta2: Beta parameters for centroid 2 (fitted across individuals)
             delta_mean: Difference in means (can be signed; absolute value is used)
             bc_values: Bhattacharyya coefficient (overlap), 0 = no overlap, 1 = complete overlap
-            min_overlap_floor: Minimum overlap in denominator to avoid unbounded values
             numerical_epsilon: Small value to prevent division by zero
             variance_reliability: If True, penalize high variance (noisy positions)
+            bc_nan_fill: Value to fill NaN BCs before clipping (default 0.5)
 
         Returns:
             Array of effect size values (unnormalized, for downstream weighting)
         """
         eps = 1e-12
+
+        # Concentrations
         tau1 = alpha1 + beta1
         tau2 = alpha2 + beta2
+
+        # Means (mainly needed for variance; keep consistent with your original)
         mean1 = alpha1 / np.maximum(tau1, eps)
         mean2 = alpha2 / np.maximum(tau2, eps)
 
-        var1 = mean1 * (1 - mean1) / np.maximum(tau1 + 1, eps)
-        var2 = mean2 * (1 - mean2) / np.maximum(tau2 + 1, eps)
+        # Beta variance
+        var1 = mean1 * (1.0 - mean1) / np.maximum(tau1 + 1.0, eps)
+        var2 = mean2 * (1.0 - mean2) / np.maximum(tau2 + 1.0, eps)
 
+        # Combined std (your original structure)
         combined_std = np.sqrt(var1 + var2)
         combined_std = np.maximum(combined_std, numerical_epsilon)
 
-        bc_safe = np.clip(np.nan_to_num(bc_values, nan=0.5), 0.0, 1.0)
-        overlap_safe = np.maximum(bc_safe, min_overlap_floor)
-        denom = overlap_safe * combined_std + numerical_epsilon
-        raw_effect_size = np.abs(delta_mean) / denom
+        # BC safety and bounded separability weight
+        bc_safe = np.clip(np.nan_to_num(bc_values, nan=bc_nan_fill), 0.0, 1.0)
+        sep_weight = 1.0 - bc_safe  # 0..1, higher = less overlap
 
+        # Core Alternative A effect size
+        denom = combined_std + numerical_epsilon
+        raw_effect_size = (np.abs(delta_mean) * sep_weight) / denom
+
+        # Optional reliability penalty (kept exactly as your original)
         if variance_reliability:
             max_var = np.maximum(var1, var2)
             var_factor = 1.0 / (1.0 + max_var / 0.05)
             raw_effect_size = raw_effect_size * var_factor
 
+        # Final cleanup (kept consistent with your original)
         effect_sizes = np.maximum(raw_effect_size, 1e-8)
         effect_sizes = np.nan_to_num(effect_sizes, nan=0.0)
         return effect_sizes.astype(np.float32)
