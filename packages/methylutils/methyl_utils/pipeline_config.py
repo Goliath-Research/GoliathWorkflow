@@ -224,7 +224,8 @@ class ProjectConfig(BaseModel):
     @classmethod
     def normalize_control_disease_keys(cls, data: Any) -> Any:
         """Unified config: accept 'controls'/'diseases' (plural) for multiple groups; default comparisons to control_vs_each_disease.
-        MethylCentroid, MethylDetector, MethylMapper, MethylEnricher, MethylClassifier all load via load_project() and get this normalization."""
+        When chromosomes/contexts/path_remap/step_config are nested under diseases (or controls), promote them to top level
+        so ProjectConfig has them; MethylCentroid and others need project.chromosomes and project.contexts."""
         if not isinstance(data, dict):
             return data
         data = dict(data)
@@ -238,6 +239,20 @@ class ProjectConfig(BaseModel):
             and data.get("comparisons") is None
         ):
             data["comparisons"] = "control_vs_each_disease"
+        # Promote project-level keys from control/disease side to top level when missing at root
+        for side_key in ("control", "disease"):
+            side = data.get(side_key)
+            if not isinstance(side, dict):
+                continue
+            for key in ("comparisons", "chromosomes", "contexts", "path_remap", "step_config"):
+                if key in side and (key not in data or data.get(key) is None):
+                    data[key] = side[key]
+            if "predictor" in side and side.get("predictor") is not None:
+                sc = data.setdefault("step_config", {})
+                if isinstance(sc, dict) and "predictor" not in sc:
+                    sc = dict(sc)
+                    sc["predictor"] = side["predictor"]
+                    data["step_config"] = sc
         return data
 
     @model_validator(mode="before")
