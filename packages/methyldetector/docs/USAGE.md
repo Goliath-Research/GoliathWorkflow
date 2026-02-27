@@ -169,6 +169,8 @@ Minimal JSON config example:
 - **max_bc**: Maximum Bhattacharyya coefficient (overlap); lower = more discriminative.  
 - **use_gpu**: Use GPU when available.
 
+Optional **filter funnel exploration** (`filter_funnel_explore`): sweep biological filter values (min/max/step) in one run and write `filter_funnel.json` with counts per value or per combination for charting; see README “Filter funnel exploration”.
+
 For all parameters (biological filters, validation, BMM refinement, etc.), see [METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md](METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md) and the config schema in the package.
 
 ---

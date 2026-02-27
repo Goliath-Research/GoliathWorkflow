@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional, Union, Dict, Any
+from typing import List, Literal, Optional, Union, Dict, Any
 from math import ceil
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -22,6 +22,43 @@ except ImportError:
 class ClassifierType(Enum):
     BETA = "beta"
     BETA_BINOMIAL = "beta_binomial"
+
+
+class FilterFunnelRangeSpec(BaseModel):
+    """Range and step for sweeping one biological filter (min, min+step, ... up to max)."""
+    min: float = Field(..., description="Minimum value (inclusive)")
+    max: float = Field(..., description="Maximum value (inclusive)")
+    step: float = Field(..., gt=0, description="Step between values")
+
+    @model_validator(mode="after")
+    def min_le_max(self):
+        if self.min > self.max:
+            raise ValueError("min must be <= max")
+        return self
+
+
+class FilterFunnelExplore(BaseModel):
+    """
+    Optional exploration: sweep biological filters and write filter_funnel.json.
+    Mode: one_at_a_time (vary each filter over its range, others fixed) or full_grid (all combinations).
+    """
+    mode: Literal["one_at_a_time", "full_grid"] = Field(
+        default="one_at_a_time",
+        description="one_at_a_time: vary each filter over its range with others fixed. full_grid: all combinations of the three value lists."
+    )
+    min_delta_mean: Optional[FilterFunnelRangeSpec] = Field(
+        default=None,
+        description="Range/step for min_delta_mean (values in [0,1], e.g. 0.1 = 10%% methylation change)"
+    )
+    max_overlap: Optional[FilterFunnelRangeSpec] = Field(
+        default=None,
+        description="Range/step for max_overlap (values in [0,1])"
+    )
+    min_effect_size: Optional[FilterFunnelRangeSpec] = Field(
+        default=None,
+        description="Range/step for min_effect_size (values >= 0)"
+    )
+
 
 class MethylModelerConfig(BaseModel):
     """Simplified configuration for MethylModeler analysis."""
@@ -205,6 +242,15 @@ class MethylModelerConfig(BaseModel):
         default=None, ge=0.0, le=1.0,
         description="Maximum overlap (Bhattacharyya coefficient, 0–1) for biological filter. Keep DMPs with overlap <= max_overlap (low overlap = good separation). Set null to disable. Easy to interpret for biologists."
     )
+
+    # ----------------
+    # Filter funnel exploration (sweep biological filters, write JSON)
+    # ----------------
+    filter_funnel_explore: Optional[FilterFunnelExplore] = Field(
+        default=None,
+        description="Optional. Sweep biological filter values over range/step and write filter_funnel.json (counts per value or per combination). One run; no large CSV. Set to null to disable."
+    )
+
     # ----------------
     # Context Weighting
     # ----------------
