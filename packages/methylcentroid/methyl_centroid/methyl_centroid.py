@@ -106,6 +106,10 @@ class MethylCentroid:
         disease: str = None,
         group: str = None,
         batch: str = None,
+        # Coverage capping (binomial thinning) for outlier correction
+        cap_coverage: bool = False,
+        cap_coverage_n_cap: Optional[int] = None,
+        cap_coverage_seed: Optional[int] = None,
     ):
         from contextlib import contextmanager
         import logging
@@ -207,6 +211,9 @@ class MethylCentroid:
         self.min_coverage = max(1, min_coverage)
         self.min_samples = max(1, int(min_samples))
         self.max_sample_workers = max_sample_workers
+        self._cap_coverage = cap_coverage and cap_coverage_n_cap is not None and cap_coverage_n_cap >= 1
+        self._cap_coverage_n_cap = cap_coverage_n_cap if self._cap_coverage else None
+        self._cap_coverage_seed = cap_coverage_seed
         self.chrom = chrom
         self.ctx = ctx
         self.output_dir = (
@@ -368,6 +375,9 @@ class MethylCentroid:
             disease=config.disease,
             group=config.group,
             batch=config.batch,
+            cap_coverage=getattr(config, "cap_coverage", False),
+            cap_coverage_n_cap=getattr(config, "cap_coverage_n_cap", None),
+            cap_coverage_seed=getattr(config, "cap_coverage_seed", None),
         )
 
     @classmethod
@@ -393,6 +403,9 @@ class MethylCentroid:
             "disease": self.disease,
             "group": self.group,
             "batch": self.batch,
+            "cap_coverage": getattr(self, "_cap_coverage", False),
+            "cap_coverage_n_cap": getattr(self, "_cap_coverage_n_cap", None),
+            "cap_coverage_seed": getattr(self, "_cap_coverage_seed", None),
         }
 
         return MethylCentroidConfig(**config_dict)
@@ -1485,6 +1498,18 @@ class MethylCentroid:
 
             # Convert from CuPy to NumPy if needed (MethylSample structure is trusted)
             methyl_sample = self._ensure_numpy_arrays(methyl_sample)
+
+            # Optionally cap per-CpG coverage (binomial thinning) to correct high-coverage outliers
+            if getattr(self, "_cap_coverage", False) and getattr(self, "_cap_coverage_n_cap", None):
+                methyl_sample = methyl_sample.cap_coverage_binomial(
+                    self._cap_coverage_n_cap,
+                    seed=getattr(self, "_cap_coverage_seed", None),
+                )
+                self.logger.debug(
+                    "Applied coverage cap n_cap=%s to sample %s",
+                    self._cap_coverage_n_cap,
+                    getattr(sample_path, "name", sample_path),
+                )
 
             # Pre-compute and cache statistical properties if this is a centroid
             if methyl_sample.is_centroid and len(methyl_sample.pos) > 1000:
