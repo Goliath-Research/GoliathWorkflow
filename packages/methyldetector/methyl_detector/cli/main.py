@@ -110,6 +110,13 @@ def main(
     """
     if (config is None) == (project is None):
         raise click.UsageError("Provide either CONFIG or --project (not both, not neither).")
+    # When project has multiple comparisons, always use per-comparison output (detections/control/disease) to avoid overwriting
+    if project is not None:
+        from methyl_utils import load_project
+        _proj = load_project(project, output_base_override=str(output_base) if output_base else None)
+        _multi = getattr(_proj, "uses_control_disease", lambda: False)() and len(_proj.get_comparisons()) > 1
+        if _multi and not (per_cancer_group or multi_class_model):
+            per_cancer_group = True  # run each comparison to detections/healthy/pca1, etc.
     if project is not None and (per_cancer_group or multi_class_model):
         from methyl_utils import load_project
         from ..utils.multiclass_merge import (
