@@ -111,7 +111,7 @@
         "save_batch_summary": true
       },
       "detection": {
-        "alpha": 0.05,
+        "alpha": 0.01,
         "optimize_dmps": true,
         "validation_mode": "real",
         "target_balanced_accuracy": 0.99,
