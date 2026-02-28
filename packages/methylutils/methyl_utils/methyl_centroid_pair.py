@@ -429,14 +429,14 @@ class MethylCentroidPair:
         import numpy as np
         
         # Build ordered position array and (position, context) -> column index mapping.
-        # Key by (pos, ctx) so the same position in different contexts gets distinct columns.
+        # Use reference_positions key order so column order matches caller's DMP/centroid list
+        # (e.g. detector uses np.unique(dmp_contexts) → same order as config.contexts).
         all_positions = []
         all_contexts = []
         position_to_index = {}  # (pos, ctx) -> column index
         context_indices_dict = {}
         
-        for ctx in ["CG", "CHG", "CHH"]:
-            if ctx in reference_positions:
+        for ctx in reference_positions.keys():
                 ctx_positions = reference_positions[ctx].astype(np.uint32)
                 ctx_indices = []
                 for pos in ctx_positions:

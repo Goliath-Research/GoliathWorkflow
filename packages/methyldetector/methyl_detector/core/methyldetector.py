@@ -2068,7 +2068,8 @@ class MethylDetector:
         )
         
         # Map extracted (position, context) back to DMP column index so X columns match DMP row order.
-        # Join by (position, context) to guarantee alignment (same as a Pandas merge on position+context).
+        # Extraction uses the same context order as reference_positions (→ config/DMP list order);
+        # this (pos, ctx) key mapping guarantees alignment with the classifier's feature order.
         dmp_key_to_idx = {
             (int(dmp_positions[i]), str(dmp_contexts[i])): i
             for i in range(n_positions)
