@@ -460,7 +460,8 @@ class BetaClassifier:
         sum_log_like_class0[mask_no_valid] = 0.0
         sum_log_like_class1[mask_no_valid] = 0.0
 
-        # Assign to classes: Column 0 = class0, Column 1 = class1
+        # Assign to classes. Returned array: column 0 = P(class0), column 1 = P(class1).
+        # class0=centroid1, class1=centroid2. Store so softmax gives [P(class0), P(class1)].
         log_likelihoods[:, 0] = sum_log_like_class0
         log_likelihoods[:, 1] = sum_log_like_class1
 

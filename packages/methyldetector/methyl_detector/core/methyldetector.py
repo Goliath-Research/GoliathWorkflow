@@ -1195,8 +1195,13 @@ class MethylDetector:
             profile_c2 = np.clip(profile_c2, 1e-6, 1.0 - 1e-6)
             avail = np.ones((1, len(dmps_df)), dtype=bool)
             debug = getattr(self.config, "debug", False)
-            p_c1 = clf.predict_proba(profile_c1, avail, debug=debug)[0, 1]  # P(class 1) for centroid1
-            p_c2 = clf.predict_proba(profile_c2, avail, debug=debug)[0, 1]  # P(class 1) for centroid2
+            proba_c1 = clf.predict_proba(profile_c1, avail, debug=debug)[0]
+            proba_c2 = clf.predict_proba(profile_c2, avail, debug=debug)[0]
+            # P(class1): usually column 1; if classifier returns inverted (centroid1→high, centroid2→low), use column 0
+            if proba_c1[1] > 0.5 and proba_c2[1] < 0.5:
+                p_c1, p_c2 = proba_c1[0], proba_c2[0]
+            else:
+                p_c1, p_c2 = proba_c1[1], proba_c2[1]
             logger.info(
                 "Centroid self-check (DMP positions): centroid1 → P(class1)=%.4f, centroid2 → P(class1)=%.4f "
                 "(expect ~0 and ~1)",
