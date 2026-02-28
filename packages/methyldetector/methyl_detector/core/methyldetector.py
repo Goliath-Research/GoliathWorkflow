@@ -1194,8 +1194,9 @@ class MethylDetector:
             profile_c1 = np.clip(profile_c1, 1e-6, 1.0 - 1e-6)
             profile_c2 = np.clip(profile_c2, 1e-6, 1.0 - 1e-6)
             avail = np.ones((1, len(dmps_df)), dtype=bool)
-            p_c1 = clf.predict_proba(profile_c1, avail, debug=False)[0, 1]  # P(class 1) for centroid1
-            p_c2 = clf.predict_proba(profile_c2, avail, debug=False)[0, 1]  # P(class 1) for centroid2
+            debug = getattr(self.config, "debug", False)
+            p_c1 = clf.predict_proba(profile_c1, avail, debug=debug)[0, 1]  # P(class 1) for centroid1
+            p_c2 = clf.predict_proba(profile_c2, avail, debug=debug)[0, 1]  # P(class 1) for centroid2
             logger.info(
                 "Centroid self-check (DMP positions): centroid1 → P(class1)=%.4f, centroid2 → P(class1)=%.4f "
                 "(expect ~0 and ~1)",

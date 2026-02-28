@@ -369,6 +369,14 @@ class MethylModelerConfig(BaseModel):
 
     
     # ----------------
+    # Debug / Logging
+    # ----------------
+    debug: bool = Field(
+        default=False,
+        description="Enable debug output (e.g. classifier predict_proba in centroid self-check, extra validation logs)."
+    )
+
+    # ----------------
     # System Settings
     # ----------------
     random_state: Optional[int] = Field(
