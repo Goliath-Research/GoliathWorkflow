@@ -39,7 +39,7 @@ class FilterFunnelRangeSpec(BaseModel):
 
 class FilterFunnelExplore(BaseModel):
     """
-    Optional exploration: sweep biological filters and write filter_funnel.json.
+    Optional exploration: sweep biological filters and write filter_funnel.csv.
     Mode: one_at_a_time (vary each filter over its range, others fixed) or full_grid (all combinations).
     """
     mode: Literal["one_at_a_time", "full_grid"] = Field(
@@ -248,7 +248,7 @@ class MethylModelerConfig(BaseModel):
     # ----------------
     filter_funnel_explore: Optional[FilterFunnelExplore] = Field(
         default=None,
-        description="Optional. Sweep biological filter values over range/step and write filter_funnel.json (counts per value or per combination). One run; no large CSV. Set to null to disable."
+        description="Optional. Sweep biological filter values over range/step and write filter_funnel.csv (n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps). One run; no large DMP CSV. Set to null to disable."
     )
 
     # ----------------

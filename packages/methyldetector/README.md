@@ -147,13 +147,13 @@ else:
 
 ### Filter funnel exploration
 
-You can sweep biological filter values over a range (min/max/step) in a **single run** and write `filter_funnel.json` with counts per value or per combination—no large CSV, no re-runs.
+You can sweep biological filter values over a range (min/max/step) in a **single run** and write `filter_funnel.csv` describing how statistical DMPs are filtered by the biological parameters—no large DMP CSV, no re-runs.
 
 - **Config:** Set `filter_funnel_explore` in your project/config JSON. Inside it:
   - **`mode`**: `"one_at_a_time"` (default) or `"full_grid"`. One-at-a-time varies each filter over its range while fixing the other two; full_grid iterates over all combinations of the three value lists.
   - **Per filter (optional):** `min_delta_mean`, `max_overlap`, `min_effect_size` each with `{ "min", "max", "step" }` to define the sweep (e.g. `"min_delta_mean": { "min": 0.10, "max": 0.25, "step": 0.05 }`).
-- **Output:** `filter_funnel.json` in the detection output directory with `run_filters`, `explore`, `mode`, `n_statistical`, and `rows`. In one-at-a-time mode each row has `filter`, `value`, `fixed` (other two thresholds), and `n_remaining`. In full_grid each row has `min_delta_mean`, `max_overlap`, `min_effect_size`, and `n_remaining`.
-- **Charting:** Use the rows to plot n_remaining vs value per filter (one-at-a-time) or heatmaps/surfaces (full_grid: two filters on axes, color = n_remaining, third as facet).
+- **Output:** `filter_funnel.csv` in the detection output directory with columns: `n_statistical_dmps`, `min_delta_mean`, `max_overlap`, `min_effect_size`, `n_biological_dmps`. Each row is one parameter combination and the resulting count of biological DMPs.
+- **Charting:** Use the CSV to plot n_biological_dmps vs filter value (one-at-a-time) or heatmaps/surfaces (full_grid: two filters on axes, color = n_biological_dmps, third as facet).
 
 ### Context Weighting
 

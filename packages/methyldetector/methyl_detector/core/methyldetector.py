@@ -3,7 +3,7 @@
 import itertools
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
@@ -233,7 +233,7 @@ class MethylDetector:
             dmps_df['context_weight'] = 1.0 / len(self.config.contexts)
             logger.info("Using equal context weights")
 
-        # Optional: filter funnel sweep (range/step per biological filter → filter_funnel.json)
+        # Optional: filter funnel sweep (range/step per biological filter → filter_funnel.csv)
         self._run_filter_funnel_sweep(dmps_df)
         
         # Filter biological DMPs (apply biological filters)
@@ -675,8 +675,9 @@ class MethylDetector:
 
     def _run_filter_funnel_sweep(self, dmps_df: pd.DataFrame) -> None:
         """
-        If filter_funnel_explore is set, sweep biological filter values and write filter_funnel.json.
-        Uses statistical DMPs already in memory; one run, no large CSV.
+        If filter_funnel_explore is set, sweep biological filter values and write filter_funnel.csv.
+        CSV columns: n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps.
+        Uses statistical DMPs already in memory; one run, no large DMP CSV.
         """
         explore = self.config.filter_funnel_explore
         if explore is None or self.config.output_dir is None:
@@ -690,18 +691,14 @@ class MethylDetector:
         if not has_any:
             return
 
+        n_statistical = len(dmps_df)
         run_min_delta = self.config.min_delta_mean
         run_max_overlap = self.config.max_overlap
         run_min_effect = self.config.min_effect_size
-        run_filters = {
-            "min_delta_mean": run_min_delta,
-            "max_overlap": run_max_overlap,
-            "min_effect_size": run_min_effect,
-        }
-        explore_dump = explore.model_dump()
 
-        rows: List[Dict] = []
+        csv_rows: List[Dict[str, Any]] = []
         mode = explore.mode
+        csv_columns = ["n_statistical_dmps", "min_delta_mean", "max_overlap", "min_effect_size", "n_biological_dmps"]
 
         if mode == "one_at_a_time":
             # Vary each filter over its range; fix the other two at run values.
@@ -710,22 +707,37 @@ class MethylDetector:
                     n = len(
                         _apply_biological_filters(dmps_df, v, run_max_overlap, run_min_effect)
                     )
-                    fixed = {"max_overlap": run_max_overlap, "min_effect_size": run_min_effect}
-                    rows.append({"filter": "min_delta_mean", "value": v, "fixed": fixed, "n_remaining": n})
+                    csv_rows.append({
+                        "n_statistical_dmps": n_statistical,
+                        "min_delta_mean": v,
+                        "max_overlap": run_max_overlap,
+                        "min_effect_size": run_min_effect,
+                        "n_biological_dmps": n,
+                    })
             if explore.max_overlap is not None:
                 for v in self._range_step_values(explore.max_overlap):
                     n = len(
                         _apply_biological_filters(dmps_df, run_min_delta, v, run_min_effect)
                     )
-                    fixed = {"min_delta_mean": run_min_delta, "min_effect_size": run_min_effect}
-                    rows.append({"filter": "max_overlap", "value": v, "fixed": fixed, "n_remaining": n})
+                    csv_rows.append({
+                        "n_statistical_dmps": n_statistical,
+                        "min_delta_mean": run_min_delta,
+                        "max_overlap": v,
+                        "min_effect_size": run_min_effect,
+                        "n_biological_dmps": n,
+                    })
             if explore.min_effect_size is not None:
                 for v in self._range_step_values(explore.min_effect_size):
                     n = len(
                         _apply_biological_filters(dmps_df, run_min_delta, run_max_overlap, v)
                     )
-                    fixed = {"min_delta_mean": run_min_delta, "max_overlap": run_max_overlap}
-                    rows.append({"filter": "min_effect_size", "value": v, "fixed": fixed, "n_remaining": n})
+                    csv_rows.append({
+                        "n_statistical_dmps": n_statistical,
+                        "min_delta_mean": run_min_delta,
+                        "max_overlap": run_max_overlap,
+                        "min_effect_size": v,
+                        "n_biological_dmps": n,
+                    })
         else:
             # full_grid: all combinations of the three value lists
             vals_delta = (
@@ -745,24 +757,18 @@ class MethylDetector:
             )
             for md, mo, me in itertools.product(vals_delta, vals_overlap, vals_effect):
                 n = len(_apply_biological_filters(dmps_df, md, mo, me))
-                rows.append({
+                csv_rows.append({
+                    "n_statistical_dmps": n_statistical,
                     "min_delta_mean": md,
                     "max_overlap": mo,
                     "min_effect_size": me,
-                    "n_remaining": n,
+                    "n_biological_dmps": n,
                 })
 
-        out = {
-            "run_filters": run_filters,
-            "explore": explore_dump,
-            "mode": mode,
-            "n_statistical": len(dmps_df),
-            "rows": rows,
-        }
-        out_path = Path(self.config.output_dir) / "filter_funnel.json"
+        out_path = Path(self.config.output_dir) / "filter_funnel.csv"
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        save_json(out, out_path)
-        logger.info(f"📊 Filter funnel: wrote {len(rows)} rows to {out_path}")
+        save_csv(csv_rows, out_path, csv_columns)
+        logger.info(f"📊 Filter funnel: wrote {len(csv_rows)} rows to {out_path}")
 
     def _load_binned_counts_from_centroids(
         self,
