@@ -760,6 +760,7 @@ class MethylDetector:
             "rows": rows,
         }
         out_path = Path(self.config.output_dir) / "filter_funnel.json"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         save_json(out, out_path)
         logger.info(f"📊 Filter funnel: wrote {len(rows)} rows to {out_path}")
 

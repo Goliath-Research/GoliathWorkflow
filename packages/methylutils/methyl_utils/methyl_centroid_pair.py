@@ -1522,6 +1522,26 @@ class MethylCentroidPair:
 
         return results
 
+    def compute_effect_sizes(
+        self,
+        alpha1: np.ndarray,
+        beta1: np.ndarray,
+        alpha2: np.ndarray,
+        beta2: np.ndarray,
+        delta_mean: np.ndarray,
+        bc_values: np.ndarray,
+        min_overlap_floor: float = 0.01,
+        variance_reliability: bool = True,
+    ) -> np.ndarray:
+        """Compute effect size (delegates to compute_effect_sizes_altA with optional BC floor)."""
+        bc_safe = np.maximum(bc_values.astype(np.float64), min_overlap_floor)
+        return self.compute_effect_sizes_altA(
+            alpha1, beta1, alpha2, beta2,
+            delta_mean.astype(np.float64),
+            bc_safe,
+            variance_reliability=variance_reliability,
+        )
+
     @staticmethod
     def compute_effect_sizes_altA(
         alpha1: np.ndarray,
