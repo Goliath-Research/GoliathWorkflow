@@ -1215,6 +1215,14 @@ class MethylDetector:
                         "Validation BA may be low or meaningless.",
                         p_c1, p_c2
                     )
+                elif p_c1 <= 0.2 and p_c2 <= 0.2:
+                    logger.warning(
+                        "Centroid self-check FAILED: both centroids classify as class0 (centroid1→P(class1)=%.2f, centroid2→%.2f). "
+                        "Context/position merging matches the DMP list; this often happens when most positions use the Normal "
+                        "approximation and class0 has smaller variance than class1, so the sum of log-normalizers favors class0. "
+                        "Check centroid separation (delta_mean) or use a subset of well-separated DMPs. Validation BA may be low.",
+                        p_c1, p_c2
+                    )
                 else:
                     logger.warning(
                         "Centroid self-check FAILED: centroid1 → P(class1)=%.2f, centroid2 → P(class1)=%.2f (expect ~0 and ~1). "
