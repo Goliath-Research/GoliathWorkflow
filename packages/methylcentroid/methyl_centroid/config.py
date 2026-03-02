@@ -61,6 +61,20 @@ class MethylCentroidConfig(BaseModel):
         default=True,
         description="Enable verbose output"
     )
+    # Coverage capping (binomial thinning) to correct high-coverage outliers before centroid
+    cap_coverage: bool = Field(
+        default=False,
+        description="If True, cap per-CpG coverage on each sample with binomial thinning before adding to centroid",
+    )
+    cap_coverage_n_cap: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Max coverage per position; positions with coverage > this are thinned (requires cap_coverage=True)",
+    )
+    cap_coverage_seed: Optional[int] = Field(
+        default=None,
+        description="RNG seed for reproducible capping (optional)",
+    )
 
     @field_validator('ctx')
     @classmethod

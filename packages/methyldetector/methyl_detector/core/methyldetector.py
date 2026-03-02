@@ -1,8 +1,9 @@
 """Core MethylDetector pipeline for DMP detection, filtering, and selection."""
 
+import itertools
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 
@@ -72,6 +73,29 @@ def bhattacharyya_coefficient(bd: np.ndarray) -> np.ndarray:
         Bhattacharyya Coefficient (overlap) values in [0, 1].
     """
     return np.exp(-bd)
+
+
+def _apply_biological_filters(
+    df: pd.DataFrame,
+    min_delta_mean: Optional[float],
+    max_overlap: Optional[float],
+    min_effect_size: Optional[float],
+) -> pd.DataFrame:
+    """
+    Apply biological filters in order (AND). Used by _filter_biological_dmps and by filter-funnel sweep.
+    - min_delta_mean: keep |delta_mean| >= value
+    - max_overlap: keep overlap <= value
+    - min_effect_size: keep effect_size >= value
+    Pass None for any filter to skip it. Returns a copy of df with filters applied.
+    """
+    out = df.copy()
+    if min_delta_mean is not None and "delta_mean" in out.columns:
+        out = out[np.abs(out["delta_mean"].astype(float)) >= min_delta_mean]
+    if max_overlap is not None and "overlap" in out.columns:
+        out = out[out["overlap"].astype(float) <= max_overlap]
+    if min_effect_size is not None and "effect_size" in out.columns:
+        out = out[out["effect_size"].astype(float) >= min_effect_size]
+    return out
 
 
 class MethylDetector:
@@ -208,6 +232,9 @@ class MethylDetector:
             # Equal weights
             dmps_df['context_weight'] = 1.0 / len(self.config.contexts)
             logger.info("Using equal context weights")
+
+        # Optional: filter funnel sweep (range/step per biological filter → filter_funnel.csv)
+        self._run_filter_funnel_sweep(dmps_df)
         
         # Filter biological DMPs (apply biological filters)
         logger.info("🔬 Filtering biologically significant DMPs...")
@@ -314,6 +341,7 @@ class MethylDetector:
             delta_mean_mode=self.config.delta_mean_mode,
             overlap_mode=self.config.overlap_mode,
             distribution=self.config.distribution,
+            max_N_for_ecdf=getattr(self.config, "max_N_for_ecdf", 30),
         )
         
         # Compare centroids
@@ -577,33 +605,37 @@ class MethylDetector:
         - max_overlap: keep overlap <= value (easy: low overlap = good separation)
         - min_effect_size: keep effect_size >= value (effect_size from MethylCentroidPair)
         """
-        bio_df = dmps_df.copy()
-        initial_count = len(bio_df)
-
-        if self.config.min_delta_mean is not None and "delta_mean" in bio_df.columns:
-            before = len(bio_df)
-            bio_df = bio_df[np.abs(bio_df["delta_mean"].astype(float)) >= self.config.min_delta_mean]
+        initial_count = len(dmps_df)
+        bio_df = _apply_biological_filters(
+            dmps_df,
+            self.config.min_delta_mean,
+            self.config.max_overlap,
+            self.config.min_effect_size,
+        )
+        # Log per-filter retention (intermediate counts for messages)
+        prev_count = initial_count
+        if self.config.min_delta_mean is not None and "delta_mean" in dmps_df.columns:
+            step_df = _apply_biological_filters(dmps_df, self.config.min_delta_mean, None, None)
+            n = len(step_df)
             logger.info(
                 f"After min_delta_mean filter (|delta_mean| ≥ {self.config.min_delta_mean}): "
-                f"{len(bio_df):,} DMPs ({len(bio_df)/before*100:.1f}% retained)"
+                f"{n:,} DMPs ({n/prev_count*100:.1f}% retained)"
             )
-
-        if self.config.max_overlap is not None and "overlap" in bio_df.columns:
-            before = len(bio_df)
-            bio_df = bio_df[bio_df["overlap"].astype(float) <= self.config.max_overlap]
+            prev_count = n
+        if self.config.max_overlap is not None and "overlap" in dmps_df.columns:
+            step_df = _apply_biological_filters(dmps_df, self.config.min_delta_mean, self.config.max_overlap, None)
+            n = len(step_df)
             logger.info(
                 f"After max_overlap filter (overlap ≤ {self.config.max_overlap}): "
-                f"{len(bio_df):,} DMPs ({len(bio_df)/before*100:.1f}% retained)"
+                f"{n:,} DMPs ({n/prev_count*100:.1f}% retained)"
             )
-
-        if self.config.min_effect_size is not None and "effect_size" in bio_df.columns:
-            before = len(bio_df)
-            bio_df = bio_df[bio_df["effect_size"].astype(float) >= self.config.min_effect_size]
+            prev_count = n
+        if self.config.min_effect_size is not None and "effect_size" in dmps_df.columns:
+            n = len(bio_df)
             logger.info(
                 f"After min_effect_size filter (effect_size ≥ {self.config.min_effect_size}): "
-                f"{len(bio_df):,} DMPs ({len(bio_df)/before*100:.1f}% retained)"
+                f"{n:,} DMPs ({n/prev_count*100:.1f}% retained)"
             )
-
         if initial_count != len(bio_df):
             logger.info(
                 f"Biological filter total: {len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}% of initial)"
@@ -632,6 +664,112 @@ class MethylDetector:
             "value_ranges": value_ranges,
         }
         return bio_df
+
+    def _range_step_values(self, spec) -> List[float]:
+        """Build [min, min+step, ...] up to max from a FilterFunnelRangeSpec (inclusive max)."""
+        vals: List[float] = []
+        x = spec.min
+        while x <= spec.max + 1e-12:
+            vals.append(round(x, 10))
+            x += spec.step
+        return vals
+
+    def _run_filter_funnel_sweep(self, dmps_df: pd.DataFrame) -> None:
+        """
+        If filter_funnel_explore is set, sweep biological filter values and write filter_funnel.csv.
+        CSV columns: n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps.
+        Uses statistical DMPs already in memory; one run, no large DMP CSV.
+        """
+        explore = self.config.filter_funnel_explore
+        if explore is None or self.config.output_dir is None:
+            return
+        # At least one filter must have a range spec
+        has_any = (
+            explore.min_delta_mean is not None
+            or explore.max_overlap is not None
+            or explore.min_effect_size is not None
+        )
+        if not has_any:
+            return
+
+        n_statistical = len(dmps_df)
+        run_min_delta = self.config.min_delta_mean
+        run_max_overlap = self.config.max_overlap
+        run_min_effect = self.config.min_effect_size
+
+        csv_rows: List[Dict[str, Any]] = []
+        mode = explore.mode
+        csv_columns = ["n_statistical_dmps", "min_delta_mean", "max_overlap", "min_effect_size", "n_biological_dmps"]
+
+        if mode == "one_at_a_time":
+            # Vary each filter over its range; fix the other two at run values.
+            if explore.min_delta_mean is not None:
+                for v in self._range_step_values(explore.min_delta_mean):
+                    n = len(
+                        _apply_biological_filters(dmps_df, v, run_max_overlap, run_min_effect)
+                    )
+                    csv_rows.append({
+                        "n_statistical_dmps": n_statistical,
+                        "min_delta_mean": v,
+                        "max_overlap": run_max_overlap,
+                        "min_effect_size": run_min_effect,
+                        "n_biological_dmps": n,
+                    })
+            if explore.max_overlap is not None:
+                for v in self._range_step_values(explore.max_overlap):
+                    n = len(
+                        _apply_biological_filters(dmps_df, run_min_delta, v, run_min_effect)
+                    )
+                    csv_rows.append({
+                        "n_statistical_dmps": n_statistical,
+                        "min_delta_mean": run_min_delta,
+                        "max_overlap": v,
+                        "min_effect_size": run_min_effect,
+                        "n_biological_dmps": n,
+                    })
+            if explore.min_effect_size is not None:
+                for v in self._range_step_values(explore.min_effect_size):
+                    n = len(
+                        _apply_biological_filters(dmps_df, run_min_delta, run_max_overlap, v)
+                    )
+                    csv_rows.append({
+                        "n_statistical_dmps": n_statistical,
+                        "min_delta_mean": run_min_delta,
+                        "max_overlap": run_max_overlap,
+                        "min_effect_size": v,
+                        "n_biological_dmps": n,
+                    })
+        else:
+            # full_grid: all combinations of the three value lists
+            vals_delta = (
+                self._range_step_values(explore.min_delta_mean)
+                if explore.min_delta_mean is not None
+                else ([run_min_delta] if run_min_delta is not None else [None])
+            )
+            vals_overlap = (
+                self._range_step_values(explore.max_overlap)
+                if explore.max_overlap is not None
+                else ([run_max_overlap] if run_max_overlap is not None else [None])
+            )
+            vals_effect = (
+                self._range_step_values(explore.min_effect_size)
+                if explore.min_effect_size is not None
+                else ([run_min_effect] if run_min_effect is not None else [None])
+            )
+            for md, mo, me in itertools.product(vals_delta, vals_overlap, vals_effect):
+                n = len(_apply_biological_filters(dmps_df, md, mo, me))
+                csv_rows.append({
+                    "n_statistical_dmps": n_statistical,
+                    "min_delta_mean": md,
+                    "max_overlap": mo,
+                    "min_effect_size": me,
+                    "n_biological_dmps": n,
+                })
+
+        out_path = Path(self.config.output_dir) / "filter_funnel.csv"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        save_csv(csv_rows, out_path, csv_columns)
+        logger.info(f"📊 Filter funnel: wrote {len(csv_rows)} rows to {out_path}")
 
     def _load_binned_counts_from_centroids(
         self,
@@ -1057,8 +1195,14 @@ class MethylDetector:
             profile_c1 = np.clip(profile_c1, 1e-6, 1.0 - 1e-6)
             profile_c2 = np.clip(profile_c2, 1e-6, 1.0 - 1e-6)
             avail = np.ones((1, len(dmps_df)), dtype=bool)
-            p_c1 = clf.predict_proba(profile_c1, avail, debug=False)[0, 1]  # P(class 1) for centroid1
-            p_c2 = clf.predict_proba(profile_c2, avail, debug=False)[0, 1]  # P(class 1) for centroid2
+            debug = getattr(self.config, "debug", False)
+            proba_c1 = clf.predict_proba(profile_c1, avail, debug=debug)[0]
+            proba_c2 = clf.predict_proba(profile_c2, avail, debug=debug)[0]
+            # P(class1): usually column 1; if classifier returns inverted (centroid1→high, centroid2→low), use column 0
+            if proba_c1[1] > 0.5 and proba_c2[1] < 0.5:
+                p_c1, p_c2 = proba_c1[0], proba_c2[0]
+            else:
+                p_c1, p_c2 = proba_c1[1], proba_c2[1]
             logger.info(
                 "Centroid self-check (DMP positions): centroid1 → P(class1)=%.4f, centroid2 → P(class1)=%.4f "
                 "(expect ~0 and ~1)",
@@ -1070,6 +1214,14 @@ class MethylDetector:
                         "Centroid self-check FAILED: both centroids classify as class1 (centroid1→%.2f, centroid2→%.2f). "
                         "Often due to poor centroid separation on this chromosome (see earlier 'Poor separation' / small delta_mean). "
                         "Validation BA may be low or meaningless.",
+                        p_c1, p_c2
+                    )
+                elif p_c1 <= 0.2 and p_c2 <= 0.2:
+                    logger.warning(
+                        "Centroid self-check FAILED: both centroids classify as class0 (centroid1→P(class1)=%.2f, centroid2→%.2f). "
+                        "Context/position merging matches the DMP list; this often happens when most positions use the Normal "
+                        "approximation and class0 has smaller variance than class1, so the sum of log-normalizers favors class0. "
+                        "Check centroid separation (delta_mean) or use a subset of well-separated DMPs. Validation BA may be low.",
                         p_c1, p_c2
                     )
                 else:
@@ -1925,7 +2077,8 @@ class MethylDetector:
         )
         
         # Map extracted (position, context) back to DMP column index so X columns match DMP row order.
-        # Join by (position, context) to guarantee alignment (same as a Pandas merge on position+context).
+        # Extraction uses the same context order as reference_positions (→ config/DMP list order);
+        # this (pos, ctx) key mapping guarantees alignment with the classifier's feature order.
         dmp_key_to_idx = {
             (int(dmp_positions[i]), str(dmp_contexts[i])): i
             for i in range(n_positions)
@@ -2734,7 +2887,7 @@ class MethylDetector:
             'overlap', 'delta_mean', 'delta_sign', 'effect_size',
             'p_value', 'q_value', 'dist', 'dist_name',
         ]
-        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture'}
+        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture', 5: 'ECDF'}
         # Optional / distribution-specific columns
         EXTRA_EXPORT_COLS = [
             'context_weight', 'alpha1', 'beta1', 'alpha2', 'beta2',
@@ -3147,7 +3300,7 @@ class MethylDetector:
             return
 
         export_df = biological_dmps_df.copy()
-        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture'}
+        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture', 5: 'ECDF'}
         if 'dist' in export_df.columns:
             export_df['dist_name'] = export_df['dist'].map(DIST_NAMES).fillna('Unknown').astype(str)
         if 'mean1' in export_df.columns and 'mean2' in export_df.columns:

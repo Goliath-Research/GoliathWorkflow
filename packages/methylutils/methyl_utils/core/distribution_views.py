@@ -1,7 +1,7 @@
 # methyl_utils/core/distribution_views.py
 """
 Distribution views for methylation centroids: common protocol (parameters, mean, overlap)
-and five implementations: Counts, Normal, Beta, Beta-Binomial, Beta Mixture Model.
+and six implementations: Counts, Normal, Beta, Beta-Binomial, Beta Mixture Model, ECDF.
 All handle edge cases where methylation level is 0 (mC=0) or 1 (uC=0).
 """
 from __future__ import annotations
@@ -9,6 +9,11 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Protocol, Union
 
 import numpy as np
+
+try:
+    from scipy.interpolate import PchipInterpolator
+except ImportError:
+    PchipInterpolator = None  # type: ignore
 
 try:
     from .methyl_frame import MethylExtendedCentroid, MethylBetaBinomialCentroid, MethylSample
@@ -191,6 +196,122 @@ class BetaBinomialView:
         )
 
 
+# --- ECDF view (spline-interpolated from binned_stats) ---
+# KS grid size for overlap
+_ECDF_KS_GRID_SIZE = 256
+
+
+class ECDFView:
+    """
+    Empirical CDF view: parameters from binned_stats (bin_edges, bin_counts).
+    Uses PCHIP spline interpolation so F(x) and PDF(x)=F'(x) are defined for any x in [0,1].
+    Mean = Sx/N, variance = sample variance from Sx, Sx2, N.
+    """
+
+    def __init__(
+        self,
+        bin_edges: np.ndarray,
+        bin_counts: np.ndarray,
+        Sx: np.ndarray,
+        N: np.ndarray,
+        Sx2: Optional[np.ndarray] = None,
+    ):
+        self._bin_edges = np.asarray(bin_edges, dtype=np.float64)
+        self._bin_counts = np.asarray(bin_counts, dtype=np.float64)
+        n_positions, n_bins = self._bin_counts.shape
+        if len(self._bin_edges) != n_bins + 1:
+            raise ValueError("bin_edges length must be n_bins + 1")
+        self._Sx = np.asarray(Sx, dtype=np.float64)
+        self._N = np.maximum(np.asarray(N, dtype=np.float64), 1.0)
+        self._mean = self._Sx / self._N
+        if Sx2 is not None:
+            self._Sx2 = np.asarray(Sx2, dtype=np.float64)
+            self._variance = np.maximum(
+                (self._Sx2 / self._N) - (self._Sx / self._N) ** 2,
+                MIN_EPS,
+            )
+            self._variance = self._variance / np.maximum(self._N - 1.0, 1.0)
+        else:
+            self._Sx2 = None
+            self._variance = np.full(n_positions, MIN_EPS, dtype=np.float64)
+
+        # Build per-position CDF at bin edges: [0, cdf_1, cdf_2, ..., 1]
+        total = np.sum(self._bin_counts, axis=1, keepdims=True)
+        total = np.maximum(total, MIN_EPS)
+        cdf_at_edges = np.cumsum(self._bin_counts, axis=1) / total
+        cdf_at_edges = np.concatenate(
+            [np.zeros((n_positions, 1), dtype=np.float64), cdf_at_edges],
+            axis=1,
+        )
+
+        self._interpolators: List[Any] = []
+        if PchipInterpolator is not None:
+            for i in range(n_positions):
+                interp = PchipInterpolator(self._bin_edges, cdf_at_edges[i])
+                self._interpolators.append(interp)
+        else:
+            self._interpolators = None
+        self._cdf_at_edges = cdf_at_edges
+        self._n_positions = n_positions
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        out: Dict[str, Any] = {
+            "bin_edges": self._bin_edges,
+            "bin_counts": self._bin_counts,
+            "Sx": self._Sx,
+            "N": self._N,
+        }
+        if self._Sx2 is not None:
+            out["Sx2"] = self._Sx2
+        return out
+
+    @property
+    def mean(self) -> np.ndarray:
+        return self._mean
+
+    @property
+    def variance(self) -> np.ndarray:
+        return self._variance
+
+    def _cdf(self, position_idx: int, x: np.ndarray) -> np.ndarray:
+        x = np.clip(np.asarray(x, dtype=np.float64), 0.0, 1.0)
+        if self._interpolators is not None:
+            return np.clip(self._interpolators[position_idx](x), 0.0, 1.0)
+        # Fallback: piecewise constant from edges
+        return np.interp(x, self._bin_edges, self._cdf_at_edges[position_idx])
+
+    def _pdf(self, position_idx: int, x: float) -> float:
+        if self._interpolators is not None:
+            interp = self._interpolators[position_idx]
+            deriv = interp.derivative()
+            pdf_val = float(deriv(x))
+            return max(pdf_val, MIN_EPS)
+        # Piecewise constant: find bin, return (count/total)/width
+        total = np.sum(self._bin_counts[position_idx])
+        if total <= 0:
+            return MIN_EPS
+        idx = np.searchsorted(self._bin_edges, x, side="right") - 1
+        idx = np.clip(idx, 0, self._bin_counts.shape[1] - 1)
+        width = self._bin_edges[idx + 1] - self._bin_edges[idx]
+        width = max(width, 1e-10)
+        return max(float(self._bin_counts[position_idx, idx] / total / width), MIN_EPS)
+
+    def overlap(self, other: MethylDistributionView) -> np.ndarray:
+        if isinstance(other, ECDFView):
+            n = min(self._n_positions, len(other.mean))
+            grid = np.linspace(0.0, 1.0, _ECDF_KS_GRID_SIZE, dtype=np.float64)
+            ks = np.zeros(n, dtype=np.float64)
+            for i in range(n):
+                f1 = self._cdf(i, grid)
+                f2 = other._cdf(i, grid)
+                ks[i] = np.max(np.abs(f1 - f2))
+            return np.clip(1.0 - ks, 0.0, 1.0)
+        om = np.asarray(other.mean, dtype=np.float64)
+        n = min(len(self._mean), len(om))
+        return np.clip(1.0 - np.abs(self._mean[:n] - om[:n]), 0.0, 1.0)
+
+
 # --- BMM view (per-position weights, alphas, betas) ---
 class BMMView:
     """Beta Mixture Model view: parameters = (weights, alphas, betas) per position, mean = weighted component means."""
@@ -257,9 +378,24 @@ def get_distribution_view(
         a = getattr(centroid, "alpha_bb", centroid.alpha).values
         b = getattr(centroid, "beta_bb", centroid.beta).values
         return BetaBinomialView(np.asarray(a), np.asarray(b), np.asarray(centroid.N.values))
+    if mode == "ecdf":
+        binned = getattr(centroid, "binned_stats", None)
+        if binned is None or "bin_edges" not in binned or "bin_counts" not in binned:
+            raise ValueError(
+                "ecdf view requires centroid with binned_stats (bin_edges, bin_counts). "
+                "Build centroid with enable_binned_stats=True."
+            )
+        bin_edges = np.asarray(binned["bin_edges"], dtype=np.float64)
+        bin_counts = np.asarray(binned["bin_counts"], dtype=np.float64)
+        Sx = np.asarray(centroid.Sx.values, dtype=np.float64)
+        N = np.asarray(centroid.N.values, dtype=np.float64)
+        Sx2 = np.asarray(centroid.Sx2.values, dtype=np.float64) if hasattr(centroid, "Sx2") else None
+        return ECDFView(bin_edges, bin_counts, Sx, N, Sx2)
     if mode == "beta_mixture":
         raise ValueError("beta_mixture view requires MethylBetaMixtureCentroid; use its mean/overlap directly.")
-    raise ValueError(f"Unknown mode: {mode}. Use one of: counts, normal, beta, beta_binomial, beta_mixture")
+    raise ValueError(
+        f"Unknown mode: {mode}. Use one of: counts, normal, beta, beta_binomial, beta_mixture, ecdf"
+    )
 
 
 def log_probability_sample_given_centroid(
@@ -324,6 +460,23 @@ def log_probability_sample_given_centroid(
         k = np.asarray(sample.mC.values, dtype=np.int64)[idx_s]
         n_trials = np.asarray(sample.mC.values, dtype=np.int64)[idx_s] + np.asarray(sample.uC.values, dtype=np.int64)[idx_s]
         return log_beta_binomial_pmf(k, n_trials, alpha, beta, use_gpu=use_gpu)
+
+    if mode == "ecdf":
+        binned = getattr(centroid, "binned_stats", None)
+        if binned is None or "bin_edges" not in binned or "bin_counts" not in binned:
+            raise ValueError(
+                "log_probability with mode=ecdf requires centroid with binned_stats. "
+                "Build centroid with enable_binned_stats=True."
+            )
+        view = get_distribution_view(centroid, "ecdf", positions=common)
+        cov_s = np.asarray(sample.mC.values, dtype=np.float64)[idx_s] + np.asarray(sample.uC.values, dtype=np.float64)[idx_s]
+        x = np.where(cov_s > 0, np.asarray(sample.mC.values, dtype=np.float64)[idx_s] / cov_s, 0.5)
+        x = _clip_proportion(x)
+        log_p = np.zeros(n, dtype=np.float64)
+        for i in range(n):
+            pdf_val = view._pdf(i, float(x[i]))
+            log_p[i] = np.log(max(pdf_val, MIN_EPS))
+        return log_p
 
     if mode == "beta_mixture":
         raise ValueError("beta_mixture requires MethylBetaMixtureCentroid; use mixture_logpdf separately.")

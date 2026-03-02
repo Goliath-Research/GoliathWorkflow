@@ -1,7 +1,7 @@
 # methyl_utils/core/methyl_frame.py
 from __future__ import annotations
 
-from typing import Optional, Dict, Any, Union, List
+from typing import Optional, Dict, Any, Union, List, Literal
 from pathlib import Path
 
 import numpy as np
@@ -544,6 +544,91 @@ class MethylFrame:
 # Single sample class
 class MethylSample(MethylFrame):
     _required_cols = {"pos", "mC", "uC", "tnc"}
+
+    def cap_coverage_binomial(
+        self,
+        n_cap: int,
+        *,
+        seed: Optional[int] = None,
+    ) -> "MethylSample":
+        """
+        Cap per-CpG coverage by binomial thinning (in-place).
+
+        For each position where total coverage n = mC + uC > n_cap, reduce counts
+        by random thinning: keep probability p = n_cap / n, draw mC' ~ Binomial(mC, p)
+        and uC' ~ Binomial(uC, p). Keeps methylation proportion unbiased in expectation
+        while preventing ultra-deep positions from dominating. Mutates this sample
+        in place and returns self for chaining.
+
+        Args:
+            n_cap: Maximum coverage per position; positions with coverage > n_cap are thinned.
+            seed: Optional RNG seed for reproducibility.
+
+        Returns:
+            self (for chaining).
+        """
+        if n_cap < 1:
+            raise ValueError("n_cap must be >= 1")
+        self = self.to_cpu()
+        mC = np.asarray(self._get_values(self.mC), dtype=np.uint32)
+        uC = np.asarray(self._get_values(self.uC), dtype=np.uint32)
+        cov = mC.astype(np.float64) + uC.astype(np.float64)
+        over = cov > n_cap
+        if not np.any(over):
+            return self
+        rng = np.random.default_rng(seed)
+        p_over = n_cap / cov[over]
+        mC_new = mC.copy()
+        uC_new = uC.copy()
+        mC_new[over] = rng.binomial(mC[over].astype(np.int64), p_over).astype(np.uint32)
+        uC_new[over] = rng.binomial(uC[over].astype(np.int64), p_over).astype(np.uint32)
+        self._df = self._df.copy()
+        self._df.loc[over, "mC"] = mC_new[over]
+        self._df.loc[over, "uC"] = uC_new[over]
+        return self
+
+    def median_coverage(
+        self,
+        *,
+        max_positions: int = 100_000,
+        seed: Optional[int] = None,
+    ) -> float:
+        """
+        Median coverage across positions (sampled for large samples).
+
+        For samples with more than max_positions positions, uses a random subset
+        so the result is fast and scalable (e.g. for 80M+ positions). Intended
+        for cohort-level outlier detection.
+
+        Args:
+            max_positions: Cap the number of positions used to compute the median.
+            seed: Optional RNG seed when sampling positions.
+
+        Returns:
+            Median of (mC + uC) over positions (or over a random subset).
+        """
+        cov = self.get_coverage()
+        n = len(cov)
+        if n == 0:
+            return 0.0
+        if n <= max_positions:
+            return float(np.median(cov))
+        rng = np.random.default_rng(seed)
+        idx = rng.choice(n, size=max_positions, replace=False)
+        return float(np.median(cov[idx]))
+
+    def mean_coverage(self) -> float:
+        """
+        Mean coverage across positions (single-pass, O(n)).
+
+        Returns:
+            Mean of (mC + uC) over all positions.
+        """
+        cov = self.get_coverage()
+        n = len(cov)
+        if n == 0:
+            return 0.0
+        return float(np.mean(cov))
 
 # Basic centroid class (aggregated from multiple samples to use naive methylation level calculation - deprecated)
 class MethylBasicCentroid(MethylFrame):
@@ -1385,3 +1470,51 @@ class MethylBetaBinomialCentroid(MethylExtendedCentroid):
         new_metadata = self._metadata.copy() if self._metadata else {}
         new_metadata["n_samples"] = max(0, new_metadata.get("n_samples", 1) - 1)
         return MethylBetaBinomialCentroid(new_df, metadata=new_metadata)
+
+
+def compute_coverage_outlier_flags(
+    samples: List[MethylSample],
+    *,
+    method: Literal["robust_z", "iqr"] = "robust_z",
+    threshold: float = 3.5,
+    max_positions: int = 100_000,
+    seed: Optional[int] = None,
+) -> List[bool]:
+    """
+    Flag samples with outlying coverage (for optional capping).
+
+    Computes a per-sample coverage summary (sampled median) and flags samples
+    that are outliers using robust z-score or IQR. Use the result to cap only
+    flagged samples: e.g. for i, s in enumerate(samples): if flags[i]: s.cap_coverage_binomial(n_cap=35, seed=0).
+
+    Args:
+        samples: List of MethylSample instances.
+        method: "robust_z" (median, MAD, rz = 0.6745*(x-med)/mad, flag rz > threshold)
+            or "iqr" (flag summary > Q3 + 1.5*IQR).
+        threshold: For robust_z, flag when robust z-score > threshold (default 3.5).
+        max_positions: Passed to each sample's median_coverage (sampled median).
+        seed: Passed to each sample's median_coverage for reproducibility.
+
+    Returns:
+        List of bool, one per sample: True if that sample is flagged as outlier.
+    """
+    if not samples:
+        return []
+    summaries = np.array(
+        [s.median_coverage(max_positions=max_positions, seed=seed) for s in samples],
+        dtype=np.float64,
+    )
+    if method == "robust_z":
+        med = np.median(summaries)
+        mad = np.median(np.abs(summaries - med))
+        if mad <= 0:
+            return [False] * len(samples)
+        rz = 0.6745 * (summaries - med) / mad
+        return (rz > threshold).tolist()
+    if method == "iqr":
+        q1, q3 = np.percentile(summaries, [25, 75])
+        iqr = q3 - q1
+        if iqr <= 0:
+            return [False] * len(samples)
+        return (summaries > q3 + 1.5 * iqr).tolist()
+    raise ValueError(f"method must be 'robust_z' or 'iqr', got {method!r}")

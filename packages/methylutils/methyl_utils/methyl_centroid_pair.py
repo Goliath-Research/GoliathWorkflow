@@ -57,6 +57,7 @@ DIST_BETA = 1
 DIST_NORMAL = 2
 DIST_BETA_BINOM = 3
 DIST_BETA_MIXTURE = 4
+DIST_ECDF = 5
 
 # Simplified dtype for centroid comparison results
 # effect_size is the single biological importance measure (computed here; MethylDetector uses as-is)
@@ -115,6 +116,7 @@ class MethylCentroidPair:
         min_coverage_binom: int = 10,
         overdispersion_threshold: float = 1.5,
         enable_mixture: bool = True,
+        max_N_for_ecdf: int = 30,
         bmm_centroid1: Any = None,
         bmm_centroid2: Any = None,
     ):
@@ -159,6 +161,7 @@ class MethylCentroidPair:
         self.min_coverage_binom = min_coverage_binom
         self.overdispersion_threshold = overdispersion_threshold
         self.enable_mixture = enable_mixture
+        self.max_N_for_ecdf = int(max_N_for_ecdf)
 
         # Metric modes for delta_mean/overlap calculations
         self.delta_mean_mode = self._normalize_metric_mode(
@@ -429,14 +432,14 @@ class MethylCentroidPair:
         import numpy as np
         
         # Build ordered position array and (position, context) -> column index mapping.
-        # Key by (pos, ctx) so the same position in different contexts gets distinct columns.
+        # Use reference_positions key order so column order matches caller's DMP/centroid list
+        # (e.g. detector uses np.unique(dmp_contexts) → same order as config.contexts).
         all_positions = []
         all_contexts = []
         position_to_index = {}  # (pos, ctx) -> column index
         context_indices_dict = {}
         
-        for ctx in ["CG", "CHG", "CHH"]:
-            if ctx in reference_positions:
+        for ctx in reference_positions.keys():
                 ctx_positions = reference_positions[ctx].astype(np.uint32)
                 ctx_indices = []
                 for pos in ctx_positions:
@@ -857,16 +860,39 @@ class MethylCentroidPair:
         use_normal_mask = np.zeros(len(positions), dtype=bool)
         use_beta_binom_mask = np.zeros(len(positions), dtype=bool)
         use_mixture_mask = np.zeros(len(positions), dtype=bool)
+        use_ecdf_mask = np.zeros(len(positions), dtype=bool)
         force_mixture = dist_mode == "beta_mixture"
+
+        # Check binned_stats availability and bin_edges match (for ECDF)
+        bs1 = getattr(centroid1, "binned_stats", None)
+        bs2 = getattr(centroid2, "binned_stats", None)
+        has_binned1 = bs1 is not None and "bin_edges" in (bs1 or {}) and "bin_counts" in (bs1 or {})
+        has_binned2 = bs2 is not None and "bin_edges" in (bs2 or {}) and "bin_counts" in (bs2 or {})
+        same_bin_edges = False
+        if has_binned1 and has_binned2:
+            e1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
+            e2 = np.asarray(bs2["bin_edges"], dtype=np.float64)
+            same_bin_edges = e1.shape == e2.shape and np.allclose(e1, e2)
 
         if dist_mode == "normal":
             use_normal_mask[:] = True
         elif dist_mode == "beta_binomial":
             use_beta_binom_mask[:] = True
+        elif dist_mode == "ecdf":
+            if has_binned1 and has_binned2 and same_bin_edges:
+                use_ecdf_mask[:] = True
+            else:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "distribution='ecdf' but centroids lack binned_stats or bin_edges differ; falling back to beta."
+                )
         elif dist_mode == "beta":
             pass
         else:
-            # Auto selection
+            # Auto selection: ECDF first when N below threshold and binned_stats present
+            if has_binned1 and has_binned2 and same_bin_edges:
+                use_ecdf_mask = (N1 < self.max_N_for_ecdf) & (N2 < self.max_N_for_ecdf)
+            # Then existing rules for the remainder
             use_normal_mask = (N1 < self.min_samples_normal) | (N2 < self.min_samples_normal)
 
             # Coverage-based Beta-Binomial selection (low coverage or overdispersion)
@@ -902,6 +928,10 @@ class MethylCentroidPair:
                         wsum1 = centroid1._df["mix_w1"].values[indices1] + centroid1._df["mix_w2"].values[indices1] + centroid1._df["mix_w3"].values[indices1]
                         wsum2 = centroid2._df["mix_w1"].values[indices2] + centroid2._df["mix_w2"].values[indices2] + centroid2._df["mix_w3"].values[indices2]
                         use_mixture_mask = (wsum1 > 0) & (wsum2 > 0) & (N1 >= self.min_samples_beta) & (N2 >= self.min_samples_beta)
+            # ECDF has precedence: clear other masks where ECDF is selected
+            use_normal_mask = use_normal_mask & ~use_ecdf_mask
+            use_beta_binom_mask = use_beta_binom_mask & ~use_ecdf_mask
+            use_mixture_mask = use_mixture_mask & ~use_ecdf_mask
 
         if force_mixture and self.enable_mixture:
             if self._bmm_positions_common is not None:
@@ -914,7 +944,7 @@ class MethylCentroidPair:
                     wsum2 = centroid2._df["mix_w1"].values[indices2] + centroid2._df["mix_w2"].values[indices2] + centroid2._df["mix_w3"].values[indices2]
                     use_mixture_mask = (wsum1 > 0) & (wsum2 > 0)
 
-        use_beta_mask = ~(use_normal_mask | use_beta_binom_mask | use_mixture_mask)
+        use_beta_mask = ~(use_normal_mask | use_beta_binom_mask | use_mixture_mask | use_ecdf_mask)
 
         # Create temporary centroid objects for LRT (still needed for current API)
         class TempCentroid:
@@ -1118,6 +1148,25 @@ class MethylCentroidPair:
                     except Exception:
                         continue
 
+        # ECDF: approximate p-value (chi-square on binned counts) and dist
+        if np.any(use_ecdf_mask):
+            from scipy.stats import chi2_contingency
+            from methyl_utils.core.distribution_views import ECDFView
+            bin_edges = np.asarray(bs1["bin_edges"], dtype=np.float64)
+            bc1 = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
+            bc2 = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
+            ecdf_indices = np.where(use_ecdf_mask)[0]
+            for idx in ecdf_indices:
+                table = np.stack([bc1[idx], bc2[idx]], axis=0)
+                if np.any(table < 0) or np.sum(table) == 0:
+                    continue
+                try:
+                    _, p_ecdf, _, _ = chi2_contingency(table)
+                    p_values[idx] = np.float32(p_ecdf)
+                    dist_ids[idx] = DIST_ECDF
+                except Exception:
+                    pass
+
         # Fill beta default for remaining positions
         if np.any(use_beta_mask):
             p_values[use_beta_mask] = p_values_beta[use_beta_mask]
@@ -1243,6 +1292,9 @@ class MethylCentroidPair:
             if np.any(use_normal_mask):
                 mean1_out[use_normal_mask] = mean_normal1[use_normal_mask]
                 mean2_out[use_normal_mask] = mean_normal2[use_normal_mask]
+            if np.any(use_ecdf_mask):
+                mean1_out[use_ecdf_mask] = mean_normal1[use_ecdf_mask]
+                mean2_out[use_ecdf_mask] = mean_normal2[use_ecdf_mask]
             if mix_mean1 is not None and mix_mean2 is not None and mixture_indices is not None:
                 mix_valid = np.isfinite(mix_mean1) & np.isfinite(mix_mean2)
                 if np.any(mix_valid):
@@ -1263,6 +1315,9 @@ class MethylCentroidPair:
         if delta_mode == "normal" or (delta_mode == "auto" and np.any(use_normal_mask)):
             variance1_out[use_normal_mask] = var_normal1[use_normal_mask]
             variance2_out[use_normal_mask] = var_normal2[use_normal_mask]
+        if delta_mode == "auto" and np.any(use_ecdf_mask):
+            variance1_out[use_ecdf_mask] = var_normal1[use_ecdf_mask]
+            variance2_out[use_ecdf_mask] = var_normal2[use_ecdf_mask]
         if mix_var1 is not None and mix_var2 is not None and mixture_indices is not None:
             mix_valid = np.isfinite(mix_var1) & np.isfinite(mix_var2)
             if np.any(mix_valid):
@@ -1290,6 +1345,24 @@ class MethylCentroidPair:
                             mix_mean2[mix_valid], mix_var2[mix_valid]
                         ).astype(np.float32)
                         bhattacharyya[mixture_indices[mix_valid]] = mix_bd
+        if bhattacharyya is not None and np.any(use_ecdf_mask) and has_binned1 and has_binned2 and same_bin_edges:
+            from methyl_utils.core.distribution_views import ECDFView
+            bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
+            bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
+            bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
+            view1 = ECDFView(
+                bin_edges_arr, bc1_batch,
+                Sx1.astype(np.float64), N1.astype(np.float64),
+                Sx2_1.astype(np.float64),
+            )
+            view2 = ECDFView(
+                bin_edges_arr, bc2_batch,
+                Sx2_vals.astype(np.float64), N2.astype(np.float64),
+                Sx2_2.astype(np.float64),
+            )
+            overlap_ecdf = view1.overlap(view2)
+            bd_ecdf = -np.log(np.clip(np.asarray(overlap_ecdf, dtype=np.float64), 1e-10, 1.0)).astype(np.float32)
+            bhattacharyya[use_ecdf_mask] = bd_ecdf[use_ecdf_mask]
 
         # Fill results array directly (vectorized assignment)
         results_view['position'] = positions.astype(np.uint32)
@@ -1522,8 +1595,8 @@ class MethylCentroidPair:
 
         return results
 
-    @staticmethod
     def compute_effect_sizes(
+        self,
         alpha1: np.ndarray,
         beta1: np.ndarray,
         alpha2: np.ndarray,
@@ -1531,49 +1604,89 @@ class MethylCentroidPair:
         delta_mean: np.ndarray,
         bc_values: np.ndarray,
         min_overlap_floor: float = 0.01,
-        numerical_epsilon: float = 1e-6,
         variance_reliability: bool = True,
     ) -> np.ndarray:
-        """
-        Compute effect size (single biological importance measure).
+        """Compute effect size (delegates to compute_effect_sizes_altA with optional BC floor)."""
+        bc_safe = np.maximum(bc_values.astype(np.float64), min_overlap_floor)
+        return self.compute_effect_sizes_altA(
+            alpha1, beta1, alpha2, beta2,
+            delta_mean.astype(np.float64),
+            bc_safe,
+            variance_reliability=variance_reliability,
+        )
 
-        effect_size = |delta_mean| / (max(overlap, min_overlap_floor) * combined_std)
-        Optionally multiplied by variance reliability 1 / (1 + max_var / 0.05).
+    @staticmethod
+    def compute_effect_sizes_altA(
+        alpha1: np.ndarray,
+        beta1: np.ndarray,
+        alpha2: np.ndarray,
+        beta2: np.ndarray,
+        delta_mean: np.ndarray,
+        bc_values: np.ndarray,
+        numerical_epsilon: float = 1e-6,
+        variance_reliability: bool = True,
+        bc_nan_fill: float = 0.5,
+    ) -> np.ndarray:
+        """
+        Compute effect size (single biological importance measure) using Alternative A.
+
+        Alternative A replaces dividing by overlap (BC) with multiplying by a bounded
+        separation weight (1 - BC), avoiding blow-ups when BC -> 0.
+
+            effect_size = |delta_mean| * (1 - BC) / (combined_std + numerical_epsilon)
+
+        Optionally multiplied by variance reliability:
+            var_factor = 1 / (1 + max_var / 0.05)
+
+        Notes:
+        - BC (Bhattacharyya coefficient) is assumed in [0, 1], where 0 = no overlap, 1 = complete overlap.
+        - This keeps the “less overlap → higher score” behavior, but caps it naturally.
 
         Args:
-            alpha1, beta1: Beta parameters for centroid 1
-            alpha2, beta2: Beta parameters for centroid 2
+            alpha1, beta1: Beta parameters for centroid 1 (fitted across individuals)
+            alpha2, beta2: Beta parameters for centroid 2 (fitted across individuals)
             delta_mean: Difference in means (can be signed; absolute value is used)
             bc_values: Bhattacharyya coefficient (overlap), 0 = no overlap, 1 = complete overlap
-            min_overlap_floor: Minimum overlap in denominator to avoid unbounded values
             numerical_epsilon: Small value to prevent division by zero
             variance_reliability: If True, penalize high variance (noisy positions)
+            bc_nan_fill: Value to fill NaN BCs before clipping (default 0.5)
 
         Returns:
             Array of effect size values (unnormalized, for downstream weighting)
         """
         eps = 1e-12
+
+        # Concentrations
         tau1 = alpha1 + beta1
         tau2 = alpha2 + beta2
+
+        # Means (mainly needed for variance; keep consistent with your original)
         mean1 = alpha1 / np.maximum(tau1, eps)
         mean2 = alpha2 / np.maximum(tau2, eps)
 
-        var1 = mean1 * (1 - mean1) / np.maximum(tau1 + 1, eps)
-        var2 = mean2 * (1 - mean2) / np.maximum(tau2 + 1, eps)
+        # Beta variance
+        var1 = mean1 * (1.0 - mean1) / np.maximum(tau1 + 1.0, eps)
+        var2 = mean2 * (1.0 - mean2) / np.maximum(tau2 + 1.0, eps)
 
+        # Combined std (your original structure)
         combined_std = np.sqrt(var1 + var2)
         combined_std = np.maximum(combined_std, numerical_epsilon)
 
-        bc_safe = np.clip(np.nan_to_num(bc_values, nan=0.5), 0.0, 1.0)
-        overlap_safe = np.maximum(bc_safe, min_overlap_floor)
-        denom = overlap_safe * combined_std + numerical_epsilon
-        raw_effect_size = np.abs(delta_mean) / denom
+        # BC safety and bounded separability weight
+        bc_safe = np.clip(np.nan_to_num(bc_values, nan=bc_nan_fill), 0.0, 1.0)
+        sep_weight = 1.0 - bc_safe  # 0..1, higher = less overlap
 
+        # Core Alternative A effect size
+        denom = combined_std + numerical_epsilon
+        raw_effect_size = (np.abs(delta_mean) * sep_weight) / denom
+
+        # Optional reliability penalty (kept exactly as your original)
         if variance_reliability:
             max_var = np.maximum(var1, var2)
             var_factor = 1.0 / (1.0 + max_var / 0.05)
             raw_effect_size = raw_effect_size * var_factor
 
+        # Final cleanup (kept consistent with your original)
         effect_sizes = np.maximum(raw_effect_size, 1e-8)
         effect_sizes = np.nan_to_num(effect_sizes, nan=0.0)
         return effect_sizes.astype(np.float32)

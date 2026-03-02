@@ -40,10 +40,32 @@ def _detect_type_from_keys(keys: List[str]) -> str:
     return "MethylExtendedCentroid"
 
 
+def _is_project_config(path: Path) -> bool:
+    """Return True if the JSON file looks like a project config (not a MethylBetaMixtureCentroid)."""
+    path = Path(path)
+    if path.suffix.lower() != ".json" or not path.is_file():
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    has_project = "project_name" in data
+    has_project_keys = any(k in data for k in ("output_base", "controls", "diseases", "step_config"))
+    return bool(has_project and has_project_keys)
+
+
 def _get_mixture_info(path: Path) -> Tuple[str, int, Dict[str, Any], List[str]]:
     """Load MethylBetaMixtureCentroid from JSON. Returns (type_name, n_positions, metadata, column_names)."""
-    from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
     path = Path(path)
+    if _is_project_config(path):
+        raise ValueError(
+            f"{path} is a project config file, not a MethylFrame or mixture centroid. "
+            "Point to a centroid output folder (containing .h5 files such as 1-CG.h5) or to a single .h5 file."
+        )
+    from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
     centroid = MethylBetaMixtureCentroid.from_json(path)
     df = centroid.df
     n_positions = len(df)
@@ -92,6 +114,11 @@ def get_positions_in_range(path: Path, pos_start: int, pos_end: int) -> np.ndarr
     """Read pos/position dataset and return positions that fall in [pos_start, pos_end] (inclusive)."""
     path = Path(path)
     if path.suffix.lower() == ".json":
+        if _is_project_config(path):
+            raise ValueError(
+                f"{path} is a project config file, not a MethylFrame or mixture centroid. "
+                "Point to a centroid output folder (containing .h5 files) or to a single .h5 file."
+            )
         from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
         centroid = MethylBetaMixtureCentroid.from_json(path)
         pos = np.asarray(centroid.df["position"].values, dtype=np.uint32)
@@ -111,6 +138,11 @@ def load_frame(path: Path, positions: Optional[np.ndarray] = None):
     """Load a MethylFrame from H5 or MethylBetaMixtureCentroid from JSON; optionally filter by positions."""
     path = Path(path)
     if path.suffix.lower() == ".json":
+        if _is_project_config(path):
+            raise ValueError(
+                f"{path} is a project config file, not a MethylFrame or mixture centroid. "
+                "Point to a centroid output folder (containing .h5 files) or to a single .h5 file."
+            )
         from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
         centroid = MethylBetaMixtureCentroid.from_json(path)
         if positions is not None and len(positions) > 0:
@@ -235,7 +267,7 @@ def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.Dat
 def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
     """
     Build a per-position table with pos, mC, uC, coverage; mean_counts, var_counts (from counts);
-    distribution-specific mean_* and var_* (Normal, Beta, BetaBinomial, BetaMixture); best_distribution;
+    distribution-specific mean_* and var_* (Normal, Beta, BetaBinomial, BetaMixture, ECDF); best_distribution;
     and mean, variance as the best-distribution estimates (for MethylCentroidPair / MethylDetector).
     Also type-specific fields (N, Sx, Sx2, alpha, beta; BetaBinomial: Sx3, Sx4, count_zero, count_one, sum_*;
     BetaMixture: position, context, k, weights, alphas, betas, n_samples, converged, bic, loglik, status).
@@ -270,6 +302,13 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
                 df["beta_bb"] = frame._df.loc[df.index, "beta_bb"].values
         except Exception:
             pass
+    has_binned = (
+        getattr(frame, "binned_stats", None) is not None
+        and isinstance(getattr(frame, "binned_stats", None), dict)
+        and "bin_edges" in getattr(frame, "binned_stats", {})
+        and "bin_counts" in getattr(frame, "binned_stats", {})
+    )
+    max_n_ecdf = 30
     rows = []
     for _, row in df.iterrows():
         r = {"pos": int(row["pos"]), "mC": int(row["mC"]), "uC": int(row["uC"])}
@@ -324,8 +363,23 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
         # BetaMixture: not computed per position for HDF5 centroids (only in mixture table)
         r["mean_betamixture"] = None
         r["var_betamixture"] = None
-        # Best distribution for this centroid type
-        if a_bb is not None and b_bb is not None:
+        # ECDF: mean = Sx/N, variance = sample variance (when binned_stats present)
+        if has_binned and "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
+            n_val = float(row["N"])
+            sx_val = float(row["Sx"])
+            sx2_val = float(row["Sx2"])
+            mean_ecdf = sx_val / max(n_val, 1.0)
+            var_ecdf = (sx2_val / max(n_val, 1.0) - mean_ecdf ** 2) / max(n_val - 1.0, 1.0)
+            r["mean_ecdf"] = mean_ecdf
+            r["var_ecdf"] = max(var_ecdf, 1e-12)
+        else:
+            r["mean_ecdf"] = None
+            r["var_ecdf"] = None
+        # Best distribution for this centroid type (ECDF when binned_stats and N < threshold)
+        n_val = int(row["N"]) if "N" in df.columns else 0
+        if has_binned and n_val < max_n_ecdf and r.get("mean_ecdf") is not None:
+            r["best_distribution"] = "ECDF"
+        elif a_bb is not None and b_bb is not None:
             r["best_distribution"] = "BetaBinomial"
         elif a is not None and b is not None:
             r["best_distribution"] = "Beta"
@@ -333,8 +387,12 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
             r["best_distribution"] = "Normal"
         # mean and variance = best-distribution estimates (for MethylCentroidPair / MethylDetector)
         best = r["best_distribution"]
-        r["mean"] = r.get("mean_betamixture") if best == "BetaMixture" else r.get("mean_betabinomial") if best == "BetaBinomial" else r.get("mean_beta") if best == "Beta" else r.get("mean_normal")
-        r["variance"] = r.get("var_betamixture") if best == "BetaMixture" else r.get("var_betabinomial") if best == "BetaBinomial" else r.get("var_beta") if best == "Beta" else r.get("var_normal")
+        if best == "ECDF":
+            r["mean"] = r["mean_ecdf"]
+            r["variance"] = r["var_ecdf"]
+        else:
+            r["mean"] = r.get("mean_betamixture") if best == "BetaMixture" else r.get("mean_betabinomial") if best == "BetaBinomial" else r.get("mean_beta") if best == "Beta" else r.get("mean_normal")
+            r["variance"] = r.get("var_betamixture") if best == "BetaMixture" else r.get("var_betabinomial") if best == "BetaBinomial" else r.get("var_beta") if best == "Beta" else r.get("var_normal")
         rows.append(r)
     return pd.DataFrame(rows)
 

@@ -78,6 +78,8 @@ MethylCentroid (inherits from MethylBasicCentroid)
 - `get_methylation_levels() -> np.ndarray` - Get methylation levels (mC/(mC+uC))
 - `get_coverage() -> np.ndarray` - Get total coverage (mC+uC)
 - `get_sample_count() -> Optional[np.ndarray]` - Get sample counts (returns None for base class)
+- `median_coverage(*, max_positions=100_000, seed=None) -> float` - Median coverage across positions; uses a random subset when `len(self) > max_positions` for speed (e.g. 80M+ positions). For cohort-level outlier detection.
+- `mean_coverage() -> float` - Mean coverage across positions (single-pass O(n)).
 
 #### Statistical Methods
 - `methylation_stats() -> dict` - Basic methylation statistics
@@ -93,6 +95,7 @@ MethylCentroid (inherits from MethylBasicCentroid)
 - `apply_mask(mask) -> MethylSample` - Apply boolean mask to data
 - `create_position_mask(positions) -> np.ndarray` - Create position-based mask
 - `merge_contexts() -> MethylSample` - Merge different methylation contexts
+- `cap_coverage_binomial(n_cap, *, seed=None) -> MethylSample` - Cap per-CpG coverage by binomial thinning (in-place). For positions with coverage > n_cap, reduces mC/uC by random thinning (p = n_cap/n; mC' ~ Bin(mC,p), uC' ~ Bin(uC,p)) so methylation proportion stays unbiased. Returns self for chaining. Use to correct outlier counts (e.g. after flagging with `compute_coverage_outlier_flags`).
 
 #### Utility Methods
 - `to_numpy(extended=False) -> np.ndarray` - Convert to numpy structured array
@@ -102,6 +105,9 @@ MethylCentroid (inherits from MethylBasicCentroid)
 #### Factory Methods
 - `from_sample_data(pos, mC, uC, tnc) -> MethylSample` - Create from basic data
 - `from_centroid_data(centroid_data, metadata=None) -> MethylSample` - Auto-detect and create appropriate type
+
+#### Coverage outlier detection (module-level)
+- `compute_coverage_outlier_flags(samples, *, method="robust_z", threshold=3.5, max_positions=100_000, seed=None) -> List[bool]` (from `methyl_utils.core.methyl_frame` or `methyl_utils`) — Flags samples with outlying coverage using robust z-score (median, MAD) or IQR. Optionally run this, then cap only flagged samples in place: `for i, s in enumerate(samples): if flags[i]: s.cap_coverage_binomial(n_cap=35, seed=0)`.
 
 ## 2. MethylBasicCentroid
 
