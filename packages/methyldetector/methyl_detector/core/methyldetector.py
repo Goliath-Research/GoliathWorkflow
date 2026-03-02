@@ -341,6 +341,7 @@ class MethylDetector:
             delta_mean_mode=self.config.delta_mean_mode,
             overlap_mode=self.config.overlap_mode,
             distribution=self.config.distribution,
+            max_N_for_ecdf=getattr(self.config, "max_N_for_ecdf", 30),
         )
         
         # Compare centroids
@@ -2886,7 +2887,7 @@ class MethylDetector:
             'overlap', 'delta_mean', 'delta_sign', 'effect_size',
             'p_value', 'q_value', 'dist', 'dist_name',
         ]
-        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture'}
+        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture', 5: 'ECDF'}
         # Optional / distribution-specific columns
         EXTRA_EXPORT_COLS = [
             'context_weight', 'alpha1', 'beta1', 'alpha2', 'beta2',
@@ -3299,7 +3300,7 @@ class MethylDetector:
             return
 
         export_df = biological_dmps_df.copy()
-        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture'}
+        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture', 5: 'ECDF'}
         if 'dist' in export_df.columns:
             export_df['dist_name'] = export_df['dist'].map(DIST_NAMES).fillna('Unknown').astype(str)
         if 'mean1' in export_df.columns and 'mean2' in export_df.columns:

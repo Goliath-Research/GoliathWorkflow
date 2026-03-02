@@ -174,7 +174,12 @@ class MethylModelerConfig(BaseModel):
     )
     distribution: str = Field(
         default="auto",
-        description="Per-position distribution for DMP testing: auto (choose by coverage/overdispersion), beta, normal, beta_binomial, beta_mixture. Auto uses Beta-Binomial for low/ variable coverage, Beta otherwise."
+        description="Per-position distribution for DMP testing: auto, beta, normal, beta_binomial, beta_mixture, ecdf. Auto uses ECDF when N < max_N_for_ecdf (and binned_stats present), Beta-Binomial for low/variable coverage, Beta otherwise."
+    )
+    max_N_for_ecdf: int = Field(
+        default=30,
+        ge=2,
+        description="In distribution=auto, use ECDF when both centroids have N < this and binned_stats; requires centroids built with enable_binned_stats."
     )
 
     # New calibration parameters (for trained classifier metadata)
@@ -484,7 +489,7 @@ class MethylModelerConfig(BaseModel):
     def validate_distribution(cls, v):
         if v is None or (isinstance(v, str) and v.strip() == ""):
             return "auto"
-        valid = {"auto", "beta", "normal", "beta_binomial", "beta_mixture"}
+        valid = {"auto", "beta", "normal", "beta_binomial", "beta_mixture", "ecdf"}
         vnorm = str(v).strip().lower()
         if vnorm not in valid:
             raise ValueError(f"distribution must be one of: {sorted(valid)}, got: {v}")

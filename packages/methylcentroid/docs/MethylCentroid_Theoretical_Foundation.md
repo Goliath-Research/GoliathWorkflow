@@ -2,7 +2,7 @@
 
 ## Overview
 
-MethylCentroid summarizes per-position methylation across a cohort of samples using **sufficient statistics**. This enables robust downstream modeling (Normal, Beta, Beta-Binomial, Beta Mixture) while avoiding storage of full sample matrices and supporting streaming updates and GPU-friendly aggregation.
+MethylCentroid summarizes per-position methylation across a cohort of samples using **sufficient statistics**. This enables robust downstream modeling (Normal, Beta, Beta-Binomial, Beta Mixture, ECDF) while avoiding storage of full sample matrices and supporting streaming updates and GPU-friendly aggregation.
 
 ## Notation
 
@@ -94,6 +94,18 @@ $$x_i \sim \sum_{k=1}^K w_k \, \mathrm{Beta}(\alpha_k, \beta_k)$$
 
 Fitting mixtures typically requires sample-level values or a histogram. **Binned statistics** (per-position histograms) are optional and stored only when explicitly enabled; otherwise refinement can use masked subsets or sample-based values.
 
+### 5. Empirical distribution (ECDF)
+
+When **binned statistics** are enabled (`enable_binned_stats=True`), the centroid stores per-position histograms: `bin_edges` (e.g. \([0, 0.02, \ldots, 1]\)) and `bin_counts` (counts per bin). These define an empirical CDF at bin edges; **spline interpolation** (e.g. PCHIP) is used so that \(F(x)\) and the PDF \(F'(x)\) are defined for any \(x \in [0,1]\), not only at bin edges.
+
+- **Mean**: \(\hat{\mu} = S_x / N\) (same as Normal).
+- **Variance**: sample variance \((S_{x^2}/N - (S_x/N)^2) / \max(N-1, 1)\).
+- **Overlap**: between two ECDFs, overlap is \(1 - \mathrm{KS}\) where KS is the Kolmogorov–Smirnov statistic \(\max_x |F_1(x) - F_2(x)|\) evaluated on a fine grid using the interpolated CDFs.
+- **Log-probability**: \(\log P(x \mid \text{centroid}) = \log F'(x)\) from the spline derivative, with a small floor to avoid \(\log(0)\).
+- **P-value**: approximate (e.g. chi-square on binned counts or two-sample KS).
+
+In **MethylCentroidPair** with `distribution="auto"`, ECDF is the **default when \(N < \texttt{max\_N\_for\_ecdf}\)** (e.g. 30) and both centroids have binned_stats with the same bin edges, so the real data distribution is used for small samples; Beta is used for large \(N\), and Beta-Binomial when coverage differences matter. Requires centroids built with `enable_binned_stats=True`.
+
 ---
 
 ## Why Sufficient Statistics?
@@ -101,7 +113,7 @@ Fitting mixtures typically requires sample-level values or a histogram. **Binned
 - **Memory**: Storage scales with number of positions, not positions × samples.
 - **Streaming**: New samples update aggregates without reloading previous samples.
 - **GPU**: Vectorized accumulation maps well to GPU kernels (MethylCentroidBuilder).
-- **Model flexibility**: Normal, Beta, Beta-Binomial, and mixture views can be derived from the same centroid.
+- **Model flexibility**: Normal, Beta, Beta-Binomial, mixture, and ECDF views can be derived from the same centroid (ECDF when binned_stats are present).
 
 ## Summary table
 
@@ -111,8 +123,9 @@ Fitting mixtures typically requires sample-level values or a histogram. **Binned
 | Beta           | \(\alpha, \beta\) | \(N\), log_x_sum, log_1_minus_x_sum |
 | Beta-Binomial  | \(\alpha, \beta\), coverage | Beta stats + \(\Sigma n\), \(\Sigma mC\), \(\Sigma uC\), etc. |
 | Beta Mixture   | \(\{w_k, \alpha_k, \beta_k\}\) | Optional binned histograms or samples |
+| ECDF           | bin_edges, bin_counts | binned_stats + \(N, S_x, S_{x^2}\); spline-interpolated CDF/PDF |
 
 ## References
 
 - **Formulas and LaTeX**: `docs/METHYLCENTROID_DISTRIBUTIONS.tex`
-- **Implementation**: MethylUtils `MethylCentroidBuilder`, `MethylExtendedCentroid`, `MethylBetaBinomialCentroid`; comparison via `MethylCentroidPair` with distribution selection (`auto`, `beta`, `normal`, `beta_binomial`, `beta_mixture`).
+- **Implementation**: MethylUtils `MethylCentroidBuilder`, `MethylExtendedCentroid`, `MethylBetaBinomialCentroid`; comparison via `MethylCentroidPair` with distribution selection (`auto`, `beta`, `normal`, `beta_binomial`, `beta_mixture`, `ecdf`). ECDF requires `enable_binned_stats` when building centroids.
