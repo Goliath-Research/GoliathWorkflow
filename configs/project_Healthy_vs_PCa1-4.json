@@ -103,7 +103,9 @@
           "cap_coverage": true,
           "cap_coverage_seed": 0,
           "max_sample_workers": null,
-          "verbose": true
+          "verbose": true,
+          "enable_binned_stats": true,
+          "binned_stats_bins": 50
         },
         "parallel_combinations": 1,
         "min_samples": 3,
@@ -112,6 +114,8 @@
       },
       "detection": {
         "alpha": 0.01,
+        "distribution": "ecdf",
+        "max_N_for_ecdf": 30,
         "optimize_dmps": true,
         "validation_mode": "real",
         "target_balanced_accuracy": 0.99,

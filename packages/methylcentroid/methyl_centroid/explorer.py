@@ -40,10 +40,32 @@ def _detect_type_from_keys(keys: List[str]) -> str:
     return "MethylExtendedCentroid"
 
 
+def _is_project_config(path: Path) -> bool:
+    """Return True if the JSON file looks like a project config (not a MethylBetaMixtureCentroid)."""
+    path = Path(path)
+    if path.suffix.lower() != ".json" or not path.is_file():
+        return False
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    has_project = "project_name" in data
+    has_project_keys = any(k in data for k in ("output_base", "controls", "diseases", "step_config"))
+    return bool(has_project and has_project_keys)
+
+
 def _get_mixture_info(path: Path) -> Tuple[str, int, Dict[str, Any], List[str]]:
     """Load MethylBetaMixtureCentroid from JSON. Returns (type_name, n_positions, metadata, column_names)."""
-    from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
     path = Path(path)
+    if _is_project_config(path):
+        raise ValueError(
+            f"{path} is a project config file, not a MethylFrame or mixture centroid. "
+            "Point to a centroid output folder (containing .h5 files such as 1-CG.h5) or to a single .h5 file."
+        )
+    from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
     centroid = MethylBetaMixtureCentroid.from_json(path)
     df = centroid.df
     n_positions = len(df)
@@ -92,6 +114,11 @@ def get_positions_in_range(path: Path, pos_start: int, pos_end: int) -> np.ndarr
     """Read pos/position dataset and return positions that fall in [pos_start, pos_end] (inclusive)."""
     path = Path(path)
     if path.suffix.lower() == ".json":
+        if _is_project_config(path):
+            raise ValueError(
+                f"{path} is a project config file, not a MethylFrame or mixture centroid. "
+                "Point to a centroid output folder (containing .h5 files) or to a single .h5 file."
+            )
         from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
         centroid = MethylBetaMixtureCentroid.from_json(path)
         pos = np.asarray(centroid.df["position"].values, dtype=np.uint32)
@@ -111,6 +138,11 @@ def load_frame(path: Path, positions: Optional[np.ndarray] = None):
     """Load a MethylFrame from H5 or MethylBetaMixtureCentroid from JSON; optionally filter by positions."""
     path = Path(path)
     if path.suffix.lower() == ".json":
+        if _is_project_config(path):
+            raise ValueError(
+                f"{path} is a project config file, not a MethylFrame or mixture centroid. "
+                "Point to a centroid output folder (containing .h5 files) or to a single .h5 file."
+            )
         from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
         centroid = MethylBetaMixtureCentroid.from_json(path)
         if positions is not None and len(positions) > 0:
@@ -235,7 +267,7 @@ def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.Dat
 def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
     """
     Build a per-position table with pos, mC, uC, coverage; mean_counts, var_counts (from counts);
-    distribution-specific mean_* and var_* (Normal, Beta, BetaBinomial, BetaMixture); best_distribution;
+    distribution-specific mean_* and var_* (Normal, Beta, BetaBinomial, BetaMixture, ECDF); best_distribution;
     and mean, variance as the best-distribution estimates (for MethylCentroidPair / MethylDetector).
     Also type-specific fields (N, Sx, Sx2, alpha, beta; BetaBinomial: Sx3, Sx4, count_zero, count_one, sum_*;
     BetaMixture: position, context, k, weights, alphas, betas, n_samples, converged, bic, loglik, status).

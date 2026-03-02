@@ -706,6 +706,11 @@ from .core.distribution_views import (
     BMMView,
 )
 from .core.methyl_distribution_utils import clip_beta_params_for_bounds
+from .ecdf_fit import (
+    ecdf_vs_theoretical_ks,
+    ecdf_vs_theoretical_ks_pvalue,
+    compare_ecdf_to_theoretical_at_positions,
+)
 from .pipeline_config import (
     ProjectConfig,
     GroupConfig,
@@ -767,6 +772,9 @@ __all__ = [
     "BetaBinomialView",
     "BMMView",
     "clip_beta_params_for_bounds",
+    "ecdf_vs_theoretical_ks",
+    "ecdf_vs_theoretical_ks_pvalue",
+    "compare_ecdf_to_theoretical_at_positions",
     "MethylCentroid",  # Alias for MethylExtendedCentroid
     "MethylBetaCentroid",  # Alias for MethylExtendedCentroid
     "load_from_h5",
