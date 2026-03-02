@@ -191,6 +191,18 @@ class ProjectConfig(BaseModel):
         description="When control+disease: list of {control_group, disease_group, comparison_label?} or shorthand: "
         '"control_vs_each_disease" (first control vs each disease), "all_pairs" (all control x disease).',
     )
+    disease_name: Optional[str] = Field(
+        default=None,
+        description="Human-readable disease name for metadata (e.g. 'Prostate Cancer'). Use 'disease' when it's a string and 'diseases' for structure.",
+    )
+    laboratory: Optional[str] = Field(
+        default=None,
+        description="Laboratory name for metadata.",
+    )
+    batch: Optional[str] = Field(
+        default=None,
+        description="Batch identifier for metadata.",
+    )
     samples_base_path: Optional[str] = Field(
         default=None,
         description="Base directory to resolve sample names. When set, group sample_paths that point to files "
@@ -224,13 +236,17 @@ class ProjectConfig(BaseModel):
     @classmethod
     def normalize_control_disease_keys(cls, data: Any) -> Any:
         """Unified config: accept 'controls'/'diseases' (plural) for multiple groups; default comparisons to control_vs_each_disease.
-        MethylCentroid, MethylDetector, MethylMapper, MethylEnricher, MethylClassifier all load via load_project() and get this normalization."""
+        When 'disease' is a string (metadata) and 'diseases' exists (structure), store string in disease_name and use diseases for disease."""
         if not isinstance(data, dict):
             return data
         data = dict(data)
         if "controls" in data and "control" not in data:
             data["control"] = data.pop("controls")
-        if "diseases" in data and "disease" not in data:
+        # disease: string = metadata; diseases: object = structure
+        if "disease" in data and isinstance(data["disease"], str) and "diseases" in data:
+            data["disease_name"] = data.pop("disease")
+            data["disease"] = data.pop("diseases")
+        elif "diseases" in data and "disease" not in data:
             data["disease"] = data.pop("diseases")
         if (
             data.get("control") is not None
