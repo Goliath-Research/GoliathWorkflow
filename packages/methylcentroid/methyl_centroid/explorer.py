@@ -243,8 +243,9 @@ def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.Dat
 def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
     """
     Build a per-position table with pos, mC, uC, coverage; N, Sx, Sx2; type-specific fields (alpha, beta;
-    BetaBinomial: Sx3, Sx4, count_zero, count_one, sum_*); and a single mean and variance (unbiased
-    estimators: mean = Sx/N, variance = (Sx2 - Sx²/N)/(N-1) when sufficient stats exist, else from counts).
+    BetaBinomial: Sx3, Sx4, count_zero, count_one, sum_*); a single mean and variance (unbiased
+    estimators); and when binned_stats exist, distribution analysis: which theoretical (Normal, Beta,
+    Beta-Binomial) best approximates the ECDF (closest_distribution, ks_normal, ks_beta, ks_betabinomial).
     """
     # MethylBetaMixtureCentroid: no "pos", has "position" and "weights"
     if hasattr(frame, "_df") and "position" in frame._df.columns and "weights" in frame._df.columns:
@@ -316,6 +317,50 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
             r["mean"] = mn
             r["variance"] = vn if vn is not None else 0.0
         rows.append(r)
+
+    # When centroid has binned_stats, add which distribution best approximates the ECDF (KS vs Normal, Beta, Beta-Binomial)
+    binned = getattr(frame, "binned_stats", None)
+    has_binned = (
+        binned is not None
+        and isinstance(binned, dict)
+        and "bin_edges" in binned
+        and "bin_counts" in binned
+        and "N" in df.columns
+        and "Sx" in df.columns
+        and "Sx2" in df.columns
+    )
+    if has_binned and rows:
+        try:
+            from methyl_utils.ecdf_fit import compare_ecdf_to_theoretical_at_positions
+            position_indices = df.index.to_numpy(dtype=np.intp)
+            results = compare_ecdf_to_theoretical_at_positions(
+                frame,
+                position_indices=position_indices,
+                grid_size=256,
+                include_pvalues=True,
+            )
+            for i, r in enumerate(rows):
+                if i < len(results):
+                    res = results[i]
+                    r["closest_distribution"] = res.get("closest", "")
+                    r["ks_normal"] = res.get("ks_normal")
+                    r["ks_beta"] = res.get("ks_beta")
+                    r["ks_betabinomial"] = res.get("ks_betabinomial")
+                    r["p_normal"] = res.get("p_normal")
+                    r["p_beta"] = res.get("p_beta")
+                    r["p_betabinomial"] = res.get("p_betabinomial")
+                    r["could_use_instead"] = res.get("could_use_instead")
+        except Exception:
+            for r in rows:
+                r["closest_distribution"] = None
+                r["ks_normal"] = None
+                r["ks_beta"] = None
+                r["ks_betabinomial"] = None
+                r["p_normal"] = None
+                r["p_beta"] = None
+                r["p_betabinomial"] = None
+                r["could_use_instead"] = None
+
     return pd.DataFrame(rows)
 
 
