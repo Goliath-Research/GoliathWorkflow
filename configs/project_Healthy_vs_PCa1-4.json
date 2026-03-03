@@ -101,6 +101,7 @@
           "min_coverage": 4,
           "use_gpu": true,
           "cap_coverage": true,
+          "cap_coverage_n_cap": 50,
           "cap_coverage_seed": 0,
           "max_sample_workers": null,
           "verbose": true,

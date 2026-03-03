@@ -214,6 +214,11 @@ class MethylCentroid:
         self._cap_coverage = cap_coverage and cap_coverage_n_cap is not None and cap_coverage_n_cap >= 1
         self._cap_coverage_n_cap = cap_coverage_n_cap if self._cap_coverage else None
         self._cap_coverage_seed = cap_coverage_seed
+        if cap_coverage and not self._cap_coverage:
+            self.logger.warning(
+                "cap_coverage=True but cap_coverage_n_cap is missing or < 1; coverage capping disabled. "
+                "Set cap_coverage_n_cap (e.g. 50) in base_config for capping to take effect."
+            )
         self.chrom = chrom
         self.ctx = ctx
         self.output_dir = (
