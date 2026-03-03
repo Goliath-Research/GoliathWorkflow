@@ -521,6 +521,12 @@ def run_explorer(
             out_df.insert(0, "chromosome", chrom_str)
             combined_tables.append(out_df)
             print(f"Collected {len(table):,} rows for {target.name} (chromosome={chrom_str}, context={context_str})")
+            if "closest_distribution" not in table.columns and len(table) > 1000:
+                print(
+                    "Tip: No distribution columns (closest_distribution, ks_*, p_*) in this export. "
+                    "Use --max-positions 1000 to include them.",
+                    file=sys.stderr,
+                )
         else:
             # Export path: -o is output directory; same filename as default (e.g. 1-CG_positions_100000_200000.csv)
             basename = target.stem
@@ -537,6 +543,11 @@ def run_explorer(
             else:
                 table.to_csv(out_path, index=False, sep="\t")
             print(f"Exported {len(table):,} rows to {out_path} ({fmt.upper()})")
+            if "closest_distribution" not in table.columns and len(table) > 1000:
+                print(
+                    "Tip: No distribution columns in this export. Use --max-positions 1000 to include them.",
+                    file=sys.stderr,
+                )
 
         pd.set_option("display.max_rows", None)
         pd.set_option("display.width", None)
@@ -560,6 +571,11 @@ def run_explorer(
         else:
             combined.to_csv(out_path, index=False, sep="\t")
         print(f"\nExported single {export_format.upper()} with chromosome and context: {out_path} ({len(combined):,} rows)")
+        if "closest_distribution" not in combined.columns:
+            print(
+                "Tip: To include distribution columns (closest_distribution, ks_*, p_*), use --max-positions 1000.",
+                file=sys.stderr,
+            )
 
     # Write single JSON with metadata for all chrom-context .h5 when --single-json was used
     if single_json and combined_metadata:
