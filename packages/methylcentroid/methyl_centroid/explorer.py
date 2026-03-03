@@ -392,23 +392,6 @@ def list_h5_in_folder(folder: Path) -> List[Path]:
     return sorted(folder.glob("*.h5"))
 
 
-def _check_output_not_under_input(output_path: Path, input_path: Path) -> None:
-    """Raise ValueError if output would be written under the read-only input path."""
-    output_resolved = output_path.resolve()
-    input_base = input_path.resolve() if input_path.is_dir() else input_path.resolve().parent
-    try:
-        output_resolved.resolve().relative_to(input_base)
-        raise ValueError(
-            f"Refusing to write under read-only input path. "
-            f"Output would be inside {input_base}. Use a path outside the centroid or package (e.g. current directory)."
-        )
-    except ValueError as e:
-        if "Refusing to write" in str(e):
-            raise
-        # relative_to raised: output is not under input, which is good
-        pass
-
-
 def _stem_to_chrom_context(stem: str) -> Tuple[str, str]:
     """Parse chrom and context from stem (e.g. '1-CG' -> ('1', 'CG'), '2-CHG' -> ('2', 'CHG'))."""
     parts = stem.split("-")
@@ -725,7 +708,6 @@ def run_explorer(
             out_dir.mkdir(parents=True, exist_ok=True)
             out_path = out_dir / f"{chrom_str}-{context_str}-{file_start}-{file_end}.{export_format}"
             fmt = export_format
-            _check_output_not_under_input(out_path, path)
 
             if fmt == "csv":
                 table.to_csv(out_path, index=False)
@@ -746,7 +728,6 @@ def run_explorer(
             plot_out_dir.mkdir(parents=True, exist_ok=True)
             for row_idx, pos in quartile_pairs:
                 out_html = plot_out_dir / f"{chrom_str}-{context_str}-{pos}.html"
-                _check_output_not_under_input(out_html, path)
                 if _export_density_plot(frame, row_idx, pos, chrom_str, context_str, out_html):
                     print(f"Exported density plot: {out_html}")
 
@@ -766,7 +747,6 @@ def run_explorer(
         combined = pd.concat(combined_tables, ignore_index=True)
         c_min, c_max = int(combined["pos"].min()), int(combined["pos"].max())
         out_path = out_dir / f"positions_{c_min}_{c_max}.{export_format}"
-        _check_output_not_under_input(out_path, path)
         if export_format == "csv":
             combined.to_csv(out_path, index=False)
         else:
@@ -785,7 +765,6 @@ def run_explorer(
             out_dir = out_dir.parent
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "metadata.json"
-        _check_output_not_under_input(out_path, path)
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(combined_metadata, f, indent=2, default=str)
         print(f"\nExported single JSON with metadata for {len(combined_metadata)} file(s): {out_path}")
