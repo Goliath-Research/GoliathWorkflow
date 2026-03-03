@@ -2271,6 +2271,19 @@ class MethylCentroid:
         # Update config with final state
         self.save_final_config()
 
+        # Release GPU and CPU memory after this chromosome/context so the next
+        # combination starts with a clean slate (MethylUtils GPU cleanup is used
+        # inside compute_centroid_chunked; non-chunked path and batch loop need this too).
+        try:
+            memory_manager = get_memory_manager()
+            memory_manager.force_gpu_cleanup()
+            if hasattr(self, "sample_cache") and self.sample_cache is not None:
+                self.sample_cache.clear()
+            import gc
+            gc.collect()
+        except Exception as e:
+            self.logger.debug(f"Post-build cleanup: {e}")
+
         # Return results
         return CentroidResults(
             final_centroid_path=str(centroid_path),
