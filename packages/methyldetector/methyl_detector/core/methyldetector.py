@@ -982,7 +982,8 @@ class MethylDetector:
         df = dmps_df.copy()
         if "effect_size" not in df.columns:
             raise ValueError("DMPs DataFrame must have 'effect_size' (computed by MethylCentroidPair)")
-        df = df.sort_values("effect_size", ascending=False).reset_index(drop=True)
+        sort_col = "bounded_effect_size" if "bounded_effect_size" in df.columns else "effect_size"
+        df = df.sort_values(sort_col, ascending=False).reset_index(drop=True)
         return df
 
     def _get_validation_samples(

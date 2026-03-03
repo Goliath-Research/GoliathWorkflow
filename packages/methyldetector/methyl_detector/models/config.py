@@ -392,6 +392,18 @@ class MethylModelerConfig(BaseModel):
         default=True,
         description="Whether to use GPU acceleration"
     )
+    effect_size_mode: str = Field(
+        default="legacy",
+        description="Effect size computation mode. 'legacy': |delta_mean| / (overlap * combined_std) * reliability. 'welch_sigmoid': sigmoid(scale * (|delta| / sqrt(var1/N1 + var2/N2)))."
+    )
+    sigmoid_scale: float = Field(
+        default=4.0, ge=1.0, le=10.0,
+        description="Scale parameter for sigmoid in 'welch_sigmoid' mode (steepness of discrimination curve)."
+    )
+    min_bounded_effect_size: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Minimum bounded_effect_size for biological filter (when effect_size_mode='welch_sigmoid')."
+    )
     eps: float = Field(
         default=1e-6, gt=0,
         description="Epsilon for numerical stability in variance calculations (prevents division by zero in effect_size = |delta_mu / var_delta_mu|)"

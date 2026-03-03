@@ -179,16 +179,6 @@ def _mean_var_normal_from_counts(mC: int, uC: int):
     return mean, var
 
 
-def _mean_var_beta(alpha: float, beta: float):
-    """Beta: mean = α/(α+β), var = αβ/((α+β)²(α+β+1))."""
-    if alpha is None or beta is None or (alpha + beta) <= 0:
-        return None, None
-    s = alpha + beta
-    mean = alpha / s
-    var = (alpha * beta) / ((s * s) * (s + 1))
-    return mean, var
-
-
 def _mean_var_betamixture_row(weights: Any, alphas: Any, betas: Any):
     """Beta mixture for one row: mean = Σ w_j μ_j, var = Σ w_j(σ²_j + μ²_j) - mean²."""
     if weights is None or alphas is None or betas is None:
@@ -223,7 +213,7 @@ def _safe_series_values(obj, name: str):
 
 
 def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
-    """Build per-position table for MethylBetaMixtureCentroid (position, context, k, weights, alphas, betas, mean_betamixture, var_betamixture, best_distribution, ...)."""
+    """Build per-position table for MethylBetaMixtureCentroid with single mean and variance per row."""
     df = frame._df.copy()
     if "position" not in df.columns:
         return pd.DataFrame()
@@ -232,31 +222,17 @@ def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.Dat
     df = df.loc[mask].copy()
     if len(df) == 0:
         return pd.DataFrame()
-    # Mean and variance for BetaMixture at each position
-    mean_bmm = []
-    var_bmm = []
+    mean_list = []
+    var_list = []
     for _, row in df.iterrows():
         m, v = _mean_var_betamixture_row(
             row.get("weights"), row.get("alphas"), row.get("betas")
         )
-        mean_bmm.append(m)
-        var_bmm.append(v)
+        mean_list.append(m)
+        var_list.append(v)
     out = df.copy()
-    out["mean_betamixture"] = mean_bmm
-    out["var_betamixture"] = var_bmm
-    out["best_distribution"] = "BetaMixture"
-    # mean and variance = best-distribution estimates (BetaMixture here)
-    out["mean"] = mean_bmm
-    out["variance"] = var_bmm
-    # Count-based and other distribution columns N/A for mixture-only data (consistent table shape)
-    out["mean_counts"] = None
-    out["var_counts"] = None
-    out["mean_normal"] = None
-    out["var_normal"] = None
-    out["mean_beta"] = None
-    out["var_beta"] = None
-    out["mean_betabinomial"] = None
-    out["var_betabinomial"] = None
+    out["mean"] = mean_list
+    out["variance"] = var_list
     # Serialize list columns for CSV/TSV (weights, alphas, betas)
     for col in ("weights", "alphas", "betas"):
         if col in out.columns:
@@ -266,11 +242,9 @@ def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.Dat
 
 def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
     """
-    Build a per-position table with pos, mC, uC, coverage; mean_counts, var_counts (from counts);
-    distribution-specific mean_* and var_* (Normal, Beta, BetaBinomial, BetaMixture, ECDF); best_distribution;
-    and mean, variance as the best-distribution estimates (for MethylCentroidPair / MethylDetector).
-    Also type-specific fields (N, Sx, Sx2, alpha, beta; BetaBinomial: Sx3, Sx4, count_zero, count_one, sum_*;
-    BetaMixture: position, context, k, weights, alphas, betas, n_samples, converged, bic, loglik, status).
+    Build a per-position table with pos, mC, uC, coverage; N, Sx, Sx2; type-specific fields (alpha, beta;
+    BetaBinomial: Sx3, Sx4, count_zero, count_one, sum_*); and a single mean and variance (unbiased
+    estimators: mean = Sx/N, variance = (Sx2 - Sx²/N)/(N-1) when sufficient stats exist, else from counts).
     """
     # MethylBetaMixtureCentroid: no "pos", has "position" and "weights"
     if hasattr(frame, "_df") and "position" in frame._df.columns and "weights" in frame._df.columns:
@@ -302,13 +276,6 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
                 df["beta_bb"] = frame._df.loc[df.index, "beta_bb"].values
         except Exception:
             pass
-    has_binned = (
-        getattr(frame, "binned_stats", None) is not None
-        and isinstance(getattr(frame, "binned_stats", None), dict)
-        and "bin_edges" in getattr(frame, "binned_stats", {})
-        and "bin_counts" in getattr(frame, "binned_stats", {})
-    )
-    max_n_ecdf = 30
     rows = []
     for _, row in df.iterrows():
         r = {"pos": int(row["pos"]), "mC": int(row["mC"]), "uC": int(row["uC"])}
@@ -337,71 +304,17 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
                 val = row[col]
                 r[col] = int(val) if isinstance(val, (np.integer, int)) else float(val) if isinstance(val, (np.floating, float)) else val
 
-        # --- Count-based and distribution-specific mean/variance (all estimated parameters together) ---
-        mean_counts, var_counts = _mean_var_normal_from_counts(int(row["mC"]), int(row["uC"]))
-        r["mean_counts"] = mean_counts
-        r["var_counts"] = var_counts
-        # Normal: sample mean and variance (from sufficient stats or from counts)
+        # Single mean and variance (unbiased, distribution-agnostic)
         if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
             mn, vn = _mean_var_normal_from_sufficient(
                 float(row["N"]), float(row["Sx"]), float(row["Sx2"])
             )
+            r["mean"] = mn
+            r["variance"] = max(vn, 1e-12) if vn is not None else None
         else:
             mn, vn = _mean_var_normal_from_counts(int(row["mC"]), int(row["uC"]))
-        r["mean_normal"] = mn
-        r["var_normal"] = vn
-        # Beta: mean = α/(α+β), var = αβ/((α+β)²(α+β+1))
-        mean_beta, var_beta = _mean_var_beta(a, b)
-        r["mean_beta"] = mean_beta
-        r["var_beta"] = var_beta
-        # BetaBinomial: use same unbiased mean/variance as Normal/ECDF when sufficient stats exist (N>=2)
-        a_bb = float(row["alpha_bb"]) if "alpha_bb" in df.columns else None
-        b_bb = float(row["beta_bb"]) if "beta_bb" in df.columns else None
-        if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns and vn is not None:
-            # Distribution-independent: mean = Sx/N, variance = (Sx2 - Sx²/N)/(N-1)
-            r["mean_betabinomial"] = mn
-            r["var_betabinomial"] = vn
-        elif a_bb is not None and b_bb is not None:
-            mean_bb, var_bb = _mean_var_beta(a_bb, b_bb)
-            r["mean_betabinomial"] = mean_bb
-            r["var_betabinomial"] = var_bb
-        else:
-            r["mean_betabinomial"] = None
-            r["var_betabinomial"] = None
-        # BetaMixture: not computed per position for HDF5 centroids (only in mixture table)
-        r["mean_betamixture"] = None
-        r["var_betamixture"] = None
-        # ECDF: mean = Sx/N, variance = unbiased sample variance (Sx2 - Sx²/N)/(N-1), same as Normal/BetaBinomial
-        if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
-            n_val = float(row["N"])
-            sx_val = float(row["Sx"])
-            sx2_val = float(row["Sx2"])
-            mean_ecdf = sx_val / max(n_val, 1.0)
-            # Unbiased sample variance, distribution-independent
-            var_ecdf = (sx2_val - (sx_val ** 2) / max(n_val, 1.0)) / max(n_val - 1.0, 1.0)
-            r["mean_ecdf"] = mean_ecdf
-            r["var_ecdf"] = max(var_ecdf, 1e-12)
-        else:
-            r["mean_ecdf"] = None
-            r["var_ecdf"] = None
-        # Best distribution for this centroid type (ECDF when binned_stats and N < threshold)
-        n_val = int(row["N"]) if "N" in df.columns else 0
-        if has_binned and n_val < max_n_ecdf and r.get("mean_ecdf") is not None:
-            r["best_distribution"] = "ECDF"
-        elif a_bb is not None and b_bb is not None:
-            r["best_distribution"] = "BetaBinomial"
-        elif a is not None and b is not None:
-            r["best_distribution"] = "Beta"
-        else:
-            r["best_distribution"] = "Normal"
-        # mean and variance = best-distribution estimates (for MethylCentroidPair / MethylDetector)
-        best = r["best_distribution"]
-        if best == "ECDF":
-            r["mean"] = r["mean_ecdf"]
-            r["variance"] = r["var_ecdf"]
-        else:
-            r["mean"] = r.get("mean_betamixture") if best == "BetaMixture" else r.get("mean_betabinomial") if best == "BetaBinomial" else r.get("mean_beta") if best == "Beta" else r.get("mean_normal")
-            r["variance"] = r.get("var_betamixture") if best == "BetaMixture" else r.get("var_betabinomial") if best == "BetaBinomial" else r.get("var_beta") if best == "Beta" else r.get("var_normal")
+            r["mean"] = mn
+            r["variance"] = vn
         rows.append(r)
     return pd.DataFrame(rows)
 
