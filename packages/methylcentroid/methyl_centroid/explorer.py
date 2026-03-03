@@ -423,6 +423,14 @@ def run_explorer(
     optionally print position range detail.
     """
     path = Path(path).resolve()
+    if path.is_file() and _is_project_config(path):
+        print(
+            f"Error: {path} is a project config file, not a centroid or MethylFrame.\n"
+            "Point to a centroid output folder (containing .h5 files like 1-CG.h5) or to a single .h5 file.\n"
+            "Example: methyl-centroid-explorer /path/to/centroids/controls/healthy/healthy --single-csv --max-positions 1000",
+            file=sys.stderr,
+        )
+        return
     if path.is_file():
         target = path
     elif path.is_dir():
@@ -578,7 +586,7 @@ def main() -> None:
     parser.add_argument("--context", "-x", choices=["CG", "CHG", "CHH"], help="If path is a folder, filter to this context")
     parser.add_argument("--pos-start", type=int, default=None, metavar="POS", help="Start of position range (inclusive) for per-position detail")
     parser.add_argument("--pos-end", type=int, default=None, metavar="POS", help="End of position range (inclusive) for per-position detail")
-    parser.add_argument("--max-positions", type=int, default=10_000, metavar="N", help="Maximum number of positions to load. If only this is set (no --pos-start/--pos-end), uses the full range of each file capped at N (default 10000).")
+    parser.add_argument("--max-positions", type=int, default=10_000, metavar="N", help="Maximum number of positions to load. If only this is set (no --pos-start/--pos-end), uses the full range of each file capped at N (default 10000). Use 1000 or less to include distribution analysis columns (closest_distribution, ks_*, p_*).")
     parser.add_argument("--json-metadata", action="store_true", help="Print metadata as JSON")
     parser.add_argument("--output", "-o", type=Path, default=None, metavar="DIR", help="Output directory for exported position tables. Files keep the same name (e.g. 1-CG_positions_START_END.csv). Default: current directory.")
     parser.add_argument("--single-csv", action="store_true", help="Export one CSV/TSV with chromosome and context as first two columns (combines all files when path is a folder).")
