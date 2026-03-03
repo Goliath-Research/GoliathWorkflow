@@ -116,7 +116,14 @@ def ecdf_vs_theoretical_ks_pvalue(
 ) -> Dict[str, Any]:
     """
     Same as ecdf_vs_theoretical_ks plus asymptotic p-values for each theoretical
-    (H0: data from that distribution) and could_use_instead (True if closest has p > alpha_threshold).
+    (H0: data from that distribution).
+
+    P-value interpretation vs the ECDF:
+    - Small p (e.g. < 0.05): reject H0 → that theoretical distribution is inconsistent with the ECDF (different from it).
+    - Large p (e.g. > 0.05): do not reject → that theoretical distribution could match the ECDF (consistent with it).
+    could_use_instead is True when the closest distribution has p > alpha_threshold.
+
+    When the mean is near 0 or 1 or variance is very small, the asymptotic KS approximation can be less reliable.
     """
     out = ecdf_vs_theoretical_ks(
         ecdf_view, position_idx, mu, sigma2, alpha, beta, alpha_bb, beta_bb, grid_size
@@ -127,8 +134,9 @@ def ecdf_vs_theoretical_ks_pvalue(
     def p_from_ks(ks: float) -> float:
         if not np.isfinite(ks) or ks < 0:
             return np.nan
-        # Two-sided asymptotic KS: sqrt(n)*D ~ Kolmogorov limit
-        return float(2.0 * kstwobign.sf(sqrt_n * ks))
+        # Asymptotic two-sided KS: sqrt(n)*D_n has kstwobign limit; p = P(stat >= observed) = sf(sqrt_n * ks)
+        p = float(kstwobign.sf(sqrt_n * ks))
+        return float(np.clip(p, 0.0, 1.0))
 
     out["p_normal"] = p_from_ks(out["ks_normal"])
     out["p_beta"] = p_from_ks(out["ks_beta"])
