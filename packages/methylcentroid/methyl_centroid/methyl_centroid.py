@@ -378,6 +378,8 @@ class MethylCentroid:
             cap_coverage=config.cap_coverage,
             cap_coverage_n_cap=config.cap_coverage_n_cap,
             cap_coverage_seed=config.cap_coverage_seed,
+            enable_binned_stats=getattr(config, "enable_binned_stats", False),
+            binned_stats_bins=getattr(config, "binned_stats_bins", 50),
         )
 
     @classmethod
@@ -406,6 +408,8 @@ class MethylCentroid:
             "cap_coverage": self._cap_coverage,
             "cap_coverage_n_cap": self._cap_coverage_n_cap,
             "cap_coverage_seed": self._cap_coverage_seed,
+            "enable_binned_stats": self.enable_binned_stats,
+            "binned_stats_bins": self.binned_stats_bins,
         }
 
         return MethylCentroidConfig(**config_dict)

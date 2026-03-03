@@ -75,6 +75,16 @@ class MethylCentroidConfig(BaseModel):
         default=None,
         description="RNG seed for reproducible capping (optional)",
     )
+    # ECDF / binned stats (for distribution comparison and ECDF overlap)
+    enable_binned_stats: bool = Field(
+        default=False,
+        description="If True, compute and store bin_edges and bin_counts per position for ECDF and comparison to Normal/Beta/Beta-Binomial",
+    )
+    binned_stats_bins: Optional[int] = Field(
+        default=50,
+        ge=2,
+        description="Number of bins for binned_stats histogram when enable_binned_stats is True",
+    )
 
     @field_validator('ctx')
     @classmethod

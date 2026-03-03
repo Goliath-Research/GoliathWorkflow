@@ -363,8 +363,9 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
         # BetaMixture: not computed per position for HDF5 centroids (only in mixture table)
         r["mean_betamixture"] = None
         r["var_betamixture"] = None
-        # ECDF: mean = Sx/N, variance = sample variance (when binned_stats present)
-        if has_binned and "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
+        # ECDF: mean = Sx/N, variance = sample variance (same formula with or without binned_stats)
+        # Centroid has the information whenever N, Sx, Sx2 exist; binned_stats only needed for CDF/overlap.
+        if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
             n_val = float(row["N"])
             sx_val = float(row["Sx"])
             sx2_val = float(row["Sx2"])
