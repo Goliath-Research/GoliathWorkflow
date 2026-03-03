@@ -61,7 +61,7 @@ Usage Examples:
 For detailed documentation, see documentation.html
 """
 
-from .gpu_detection import (
+from .methyl_utils.gpu_detection import (
     is_gpu_available,
     is_cupy_available,
     is_cudf_available,
@@ -84,14 +84,14 @@ from .gpu_detection import (
     compare_implementations
 )
 
-from .logging_utils import (
+from .methyl_utils.logging_utils import (
     setup_logging,
     setup_module_logging,
     get_logger,
     PerformanceLogger
 )
 
-from .core.methyl_frame import (
+from .methyl_utils.core.methyl_frame import (
     MethylFrame,
     MethylSample,
     MethylBasicCentroid,
@@ -101,11 +101,11 @@ from .core.methyl_frame import (
 MethylCentroid = MethylExtendedCentroid
 
 # Import I/O functions
-from .core.io import load_from_h5
+from .methyl_utils.core.io import load_from_h5
 
 # Legacy exports from old methyl_sample.py (for backward compatibility during migration)
 try:
-    from .methyl_sample import (
+    from .methyl_utils.methyl_sample import (
         TNCBits,
         METHYL_SAMPLE_DTYPE,
         METHYL_CENTROID_DTYPE,
@@ -135,7 +135,7 @@ except ImportError:
 # coverage_stats, methylation_stats) are available as instance properties
 
 # Import from new modular architecture
-from .metrics_core import (
+from .methyl_utils.metrics_core import (
     DistanceCalculator,
     compute_jeffreys_divergence,
     compute_beta_llr_moments,
@@ -151,13 +151,13 @@ from .metrics_core import (
     get_sample_beta_mom
 )
 
-from .metrics_factory import (
+from .methyl_utils.metrics_factory import (
     MetricFactory,
     get_metric_factory,
     auto_compute_distance
 )
 
-from .statistical_tests import (
+from .methyl_utils.statistical_tests import (
     storey_qvalues,
     stouffer_global_p,
     beta_loglikelihood,
@@ -174,17 +174,17 @@ from .statistical_tests import (
     PVALUE_AGGREGATION_METHODS
 )
 
-from .genomic_utils import (
+from .methyl_utils.genomic_utils import (
     group_significant_positions
 )
 
 # Import utility modules for advanced usage
-from .gpu_utils import (
+from .methyl_utils.gpu_utils import (
     _prepare_arrays_for_backend,
     _ensure_cpu_output
 )
 
-from .metric_validations import (
+from .methyl_utils.metric_validations import (
     validate_beta_parameters,
     validate_array_shapes,
     validate_methylation_data,
@@ -193,7 +193,7 @@ from .metric_validations import (
 )
 
 # Import Phase 2: Performance Optimization components
-from .memory_manager import (
+from .methyl_utils.memory_manager import (
     MemoryManager,
     get_memory_manager,
     memory_usage_monitor,
@@ -206,7 +206,7 @@ from .memory_manager import (
     is_shared_memory_array
 )
 
-from .chunked_processor import (
+from .methyl_utils.chunked_processor import (
     ChunkedGenomicProcessor,
     ChunkInfo,
     ProcessingResult,
@@ -214,7 +214,7 @@ from .chunked_processor import (
     create_genome_statistics_processor
 )
 
-from .performance_profiler import (
+from .methyl_utils.performance_profiler import (
     PerformanceProfiler,
     PerformanceMetrics,
     get_performance_profiler,
@@ -226,7 +226,7 @@ from .performance_profiler import (
 
 # PositionAligner has been deprecated - use MethylExtendedCentroid.add_sample()/remove_sample() instead
 # from .position_aligner import PositionAligner, align_multiple_samples
-from .models import (
+from .methyl_utils.models import (
     PositionMethylationStats,
     GroupMethylationStats,
     AlignmentStats,
@@ -235,20 +235,20 @@ from .models import (
 )
 
 # Import Beta-Binomial Classifier (for multi-context analysis)
-from .beta_binomial_classifier import BetaBinomialClassifier
+from .methyl_utils.beta_binomial_classifier import BetaBinomialClassifier
 
 # Import MethylCentroidPair for centroid comparison
-from .methyl_centroid_pair import MethylCentroidPair
+from .methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
 # Import Bayesian Classifier Trainer
-from .bayesian_classifier_trainer import (
+from .methyl_utils.bayesian_classifier_trainer import (
     BayesianClassifierTrainer,
     FilterConfig,
     train_classifier_from_centroids
 )
 
 # Import Beta Analytics (improved algorithm functions)
-from .beta_analytics import (
+from .methyl_utils.beta_analytics import (
     compute_per_site_llr_stats,
     compute_precision_weighted_score,
     compute_bhattacharyya_coefficient,
@@ -257,13 +257,13 @@ from .beta_analytics import (
     compute_beta_variance
 )
 
-from .beta_classifier import BetaClassifier
+from .methyl_utils.beta_classifier import BetaClassifier
 
 # Backward compatibility
-from .beta_classifier import ProbabilisticBetaClassifier
+from .methyl_utils.beta_classifier import ProbabilisticBetaClassifier
 
 # Import EAT (Entropy-weighted Asymmetry Transformation) functions
-from .transformations import (
+from .methyl_utils.transformations import (
     compute_eat_T,
     apply_eat_transform,
     eat_transform_from_betas,
@@ -272,7 +272,7 @@ from .transformations import (
 
 # Add ClassifierFactory if it exists
 try:
-    from .classifier_factory import ClassifierFactory
+    from .methyl_utils.classifier_factory import ClassifierFactory
 except ImportError:
     pass
 

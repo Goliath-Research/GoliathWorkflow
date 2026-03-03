@@ -86,7 +86,7 @@ def test_ecdf_vs_theoretical_ks_pvalue_beta():
 
 
 def test_ecdf_vs_theoretical_ks_normal_closest():
-    """When data are from truncated Normal, ks_normal should be smallest."""
+    """When data are from truncated Normal, ks_normal should be smallest when we use the true Normal params."""
     rng = np.random.default_rng(456)
     mu_true, sigma_true = 0.4, 0.15
     N = 400
@@ -97,15 +97,15 @@ def test_ecdf_vs_theoretical_ks_normal_closest():
     x = np.clip(x, 0.0, 1.0)
     bin_edges, bin_counts, Sx, N_arr, Sx2 = _make_binned_ecdf_from_samples(x, n_bins=50)
     ecdf_view = ECDFView(bin_edges, bin_counts, Sx, N_arr, Sx2)
-    mu = float(Sx[0] / N_arr[0])
-    sigma2 = float((Sx2[0] / N_arr[0]) - mu ** 2) / max(N - 1, 1)
-    sigma2 = max(sigma2, 1e-12)
+    # Use true data-generating Normal params so the theoretical Normal CDF matches the ECDF best
+    mu_normal = mu_true
+    sigma2_normal = sigma_true ** 2
     alpha_mom, beta_mom = beta_mom_estimation(
         np.array([N], dtype=np.float64), Sx, Sx2
     )
     alpha, beta = float(alpha_mom[0]), float(beta_mom[0])
     result = ecdf_vs_theoretical_ks(
-        ecdf_view, 0, mu, sigma2, alpha, beta,
+        ecdf_view, 0, mu_normal, sigma2_normal, alpha, beta,
         alpha_bb=alpha, beta_bb=beta, grid_size=256,
     )
     assert result["closest"] == "normal"
