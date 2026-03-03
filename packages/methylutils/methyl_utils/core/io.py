@@ -15,15 +15,37 @@ def _indices_for_positions(pos_arr: np.ndarray, positions: np.ndarray):
     return np.flatnonzero(mask)
 
 
+def load_pos_from_h5(path: Union[str, Path]) -> np.ndarray:
+    """
+    Load only the position array from an HDF5 methylation file (lightweight read for indexing).
+    Use with load_from_h5(path, indices=...) to avoid reading the full file repeatedly.
+    Supports the same three formats as load_from_h5: methylation_data as Group, as compound
+    Dataset (structured array), or pos at root.
+    """
+    path = Path(path)
+    with h5py.File(path, "r") as f:
+        if "methylation_data" in f:
+            group = f["methylation_data"]
+            if isinstance(group, h5py.Group) and "pos" in group:
+                return np.asarray(group["pos"][:], dtype=np.uint32)
+            if isinstance(group, h5py.Dataset) and group.dtype.names and "pos" in group.dtype.names:
+                return np.asarray(group["pos"][:], dtype=np.uint32)
+        if "pos" in f:
+            return np.asarray(f["pos"][:], dtype=np.uint32)
+    raise ValueError(f"No 'pos' dataset found in {path}")
+
+
 def load_from_h5(
     path: Union[str, Path],
     positions: Optional[np.ndarray] = None,
+    indices: Optional[np.ndarray] = None,
 ) -> MethylExtendedCentroid | MethylBasicCentroid | MethylSample | MethylBetaBinomialCentroid:
     """
     Load methylation data from HDF5 file.
 
-    When positions is provided, only those rows are read from disk (hyperslice),
-    so only classifier DMP positions are loaded—same approach as MethylDetector validation.
+    When positions is provided, only those rows are read from disk (hyperslice).
+    When indices is provided, only those row indices are read (no full pos read); use with
+    load_pos_from_h5() + _indices_for_positions for chunked centroid building.
 
     Supports both new and old formats:
     - New format: Datasets stored in 'methylation_data' group
@@ -32,6 +54,7 @@ def load_from_h5(
     Args:
         path: Path to HDF5 file
         positions: Optional array of positions to load; if set, only these rows are read (saves memory).
+        indices: Optional integer array of row indices; if set, only these rows are read (avoids full pos read).
 
     Returns:
         MethylSample, MethylBasicCentroid, or MethylExtendedCentroid instance
@@ -55,7 +78,15 @@ def load_from_h5(
                 required_core = ["pos", "mC", "uC", "tnc"]
                 missing = [d for d in required_core if d not in datasets]
                 if not missing:
-                    if positions is not None:
+                    if indices is not None:
+                        idx = np.asarray(indices, dtype=np.intp)
+                        data = {
+                            "pos": np.asarray(methyl_data["pos"][idx], dtype=np.uint32),
+                            "mC": np.asarray(methyl_data["mC"][idx], dtype=np.uint32),
+                            "uC": np.asarray(methyl_data["uC"][idx], dtype=np.uint32),
+                            "tnc": np.asarray(methyl_data["tnc"][idx], dtype=np.uint8),
+                        }
+                    elif positions is not None:
                         pos_arr = np.asarray(methyl_data["pos"][:], dtype=np.uint32)
                         idx = _indices_for_positions(pos_arr, positions)
                         data = {
@@ -65,6 +96,7 @@ def load_from_h5(
                             "tnc": np.asarray(methyl_data["tnc"][idx], dtype=np.uint8),
                         }
                     else:
+                        idx = None
                         data = {
                             "pos": np.asarray(methyl_data["pos"][:], dtype=np.uint32),
                             "mC": np.asarray(methyl_data["mC"][:], dtype=np.uint32),
@@ -73,13 +105,13 @@ def load_from_h5(
                         }
                     # Load optional centroid datasets
                     if "N" in datasets:
-                        if positions is not None:
+                        if indices is not None or positions is not None:
                             data["N"] = np.asarray(methyl_data["N"][idx], dtype=np.uint32)
                         else:
                             data["N"] = np.asarray(methyl_data["N"][:], dtype=np.uint32)
                     for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
                         if col in datasets:
-                            if positions is not None:
+                            if indices is not None or positions is not None:
                                 data[col] = np.asarray(methyl_data[col][idx], dtype=np.float32)
                             else:
                                 data[col] = np.asarray(methyl_data[col][:], dtype=np.float32)
@@ -98,7 +130,7 @@ def load_from_h5(
                     }
                     for col, dtype_cast in extra_cols.items():
                         if col in datasets:
-                            if positions is not None:
+                            if indices is not None or positions is not None:
                                 data[col] = np.asarray(methyl_data[col][idx], dtype=dtype_cast)
                             else:
                                 data[col] = np.asarray(methyl_data[col][:], dtype=dtype_cast)
@@ -112,7 +144,15 @@ def load_from_h5(
             missing = [d for d in required_core if d not in root_keys]
             if not missing:
                 datasets = root_keys
-                if positions is not None:
+                if indices is not None:
+                    idx = np.asarray(indices, dtype=np.intp)
+                    data = {
+                        "pos": np.asarray(f["pos"][idx], dtype=np.uint32),
+                        "mC": np.asarray(f["mC"][idx], dtype=np.uint32),
+                        "uC": np.asarray(f["uC"][idx], dtype=np.uint32),
+                        "tnc": np.asarray(f["tnc"][idx], dtype=np.uint8),
+                    }
+                elif positions is not None:
                     pos_arr = np.asarray(f["pos"][:], dtype=np.uint32)
                     idx = _indices_for_positions(pos_arr, positions)
                     data = {
@@ -122,6 +162,7 @@ def load_from_h5(
                         "tnc": np.asarray(f["tnc"][idx], dtype=np.uint8),
                     }
                 else:
+                    idx = None
                     data = {
                         "pos": np.asarray(f["pos"][:], dtype=np.uint32),
                         "mC": np.asarray(f["mC"][:], dtype=np.uint32),
@@ -130,13 +171,13 @@ def load_from_h5(
                     }
                 # Load optional centroid datasets
                 if "N" in root_keys:
-                    if positions is not None:
+                    if indices is not None or positions is not None:
                         data["N"] = np.asarray(f["N"][idx], dtype=np.uint32)
                     else:
                         data["N"] = np.asarray(f["N"][:], dtype=np.uint32)
                 for col in ["Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"]:
                     if col in root_keys:
-                        if positions is not None:
+                        if indices is not None or positions is not None:
                             data[col] = np.asarray(f[col][idx], dtype=np.float32)
                         else:
                             data[col] = np.asarray(f[col][:], dtype=np.float32)
@@ -155,7 +196,7 @@ def load_from_h5(
                 }
                 for col, dtype_cast in extra_cols.items():
                     if col in root_keys:
-                        if positions is not None:
+                        if indices is not None or positions is not None:
                             data[col] = np.asarray(f[col][idx], dtype=dtype_cast)
                         else:
                             data[col] = np.asarray(f[col][:], dtype=dtype_cast)
@@ -252,8 +293,8 @@ def load_from_h5(
         df = pd.DataFrame(data)
         obj = cls(df, metadata)
 
-        # Load optional binned stats
-        if "binned_stats" in f:
+        # Load optional binned stats (skip for partial load by indices)
+        if indices is None and "binned_stats" in f:
             try:
                 bgroup = f["binned_stats"]
                 if "bin_edges" in bgroup and "bin_counts" in bgroup:

@@ -104,7 +104,7 @@ MethylCentroid = MethylExtendedCentroid
 MethylBetaCentroid = MethylExtendedCentroid
 
 # Import I/O functions
-from .core.io import load_from_h5
+from .core.io import load_from_h5, load_pos_from_h5
 
 # Legacy exports from old methyl_sample.py (for backward compatibility during migration)
 # Legacy imports - these are now defined directly below
@@ -778,6 +778,7 @@ __all__ = [
     "MethylCentroid",  # Alias for MethylExtendedCentroid
     "MethylBetaCentroid",  # Alias for MethylExtendedCentroid
     "load_from_h5",
+    "load_pos_from_h5",
     "TNCBits",
     "encode_nucleotide",
     "decode_nucleotide",

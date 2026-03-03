@@ -1671,6 +1671,10 @@ class MethylCentroid:
 
             self.logger.info(f"Processing {total_chunks} chunks...")
 
+            # Cache position array per sample so we only read each file's pos once;
+            # then load only chunk rows via indices (avoids 34*96 full file reads).
+            pos_cache = {}
+
             for chunk_idx in tqdm(range(total_chunks), desc="Processing chunks"):
                 start_pos = chunk_idx * chunk_size_positions
                 end_pos = min(start_pos + chunk_size_positions, total_positions)
@@ -1680,7 +1684,7 @@ class MethylCentroid:
                     f"chunk_{chunk_idx}_processing"
                 ):
                     chunk_centroid = self._compute_centroid_for_positions(
-                        chunk_positions, extended
+                        chunk_positions, extended, pos_cache=pos_cache
                     )
                     if chunk_centroid is not None:
                         if self.enable_binned_stats and isinstance(
@@ -1727,7 +1731,10 @@ class MethylCentroid:
             return final_centroid
 
     def _compute_centroid_for_positions(
-        self, positions: np.ndarray, extended: bool = False
+        self,
+        positions: np.ndarray,
+        extended: bool = False,
+        pos_cache: Optional[dict] = None,
     ) -> Optional[np.ndarray]:
         """
         Compute centroid for a specific set of positions.
@@ -1735,10 +1742,16 @@ class MethylCentroid:
         Args:
             positions: Array of genomic positions
             extended: Whether to compute extended statistics
+            pos_cache: Optional dict path -> pos array; when provided, use indexed
+                load (load_pos_from_h5 + load_from_h5(..., indices=)) to avoid
+                reading each full file per chunk.
 
         Returns:
             Centroid data for these positions, or None if no data
         """
+        from methyl_utils import load_from_h5, load_pos_from_h5
+        from methyl_utils.core.io import _indices_for_positions
+
         sample_count = len(self.active_samples) if self._centroid is not None else 0
         if sample_count == 0:
             return None
@@ -1760,6 +1773,8 @@ class MethylCentroid:
                 (len(positions), self.binned_stats_bins), dtype=bin_dtype
             )
 
+        use_indexed_load = pos_cache is not None
+
         # Process each sample for these positions
         for sample_idx in range(sample_count):
             # Load sample directly instead of getting from aligner
@@ -1768,21 +1783,40 @@ class MethylCentroid:
                 if sample_idx < len(self.samples)
                 else self.add_samples[sample_idx - len(self.samples)]
             )
-            sample_data_obj = self.load_sample(sample_path)
 
-            # Align sample to target positions (returns only common positions, length <= len(positions))
-            aligned_sample = sample_data_obj.align_to_positions(positions)
-            if len(aligned_sample) == 0:
-                continue
+            if use_indexed_load:
+                # Fast path: get pos from cache (or load once), then load only chunk rows
+                path_key = str(Path(sample_path))
+                if path_key not in pos_cache:
+                    pos_cache[path_key] = load_pos_from_h5(sample_path)
+                pos_arr = pos_cache[path_key]
+                idx = _indices_for_positions(pos_arr, positions)
+                if len(idx) == 0:
+                    continue
+                sample_data_obj = load_from_h5(sample_path, indices=idx)
+                sample_data_obj = self._ensure_numpy_arrays(sample_data_obj)
+            else:
+                sample_data_obj = self.load_sample(sample_path)
 
-            # Convert to CPU first to ensure numpy arrays
-            aligned_sample_cpu = aligned_sample.to_cpu()
-            aligned_pos = np.asarray(aligned_sample_cpu.pos.values, dtype=np.uint32)
-            aligned_mC = np.asarray(aligned_sample_cpu.mC.values, dtype=np.uint32)
-            aligned_uC = np.asarray(aligned_sample_cpu.uC.values, dtype=np.uint32)
+            if use_indexed_load:
+                aligned_sample_cpu = sample_data_obj.to_cpu() if hasattr(sample_data_obj, "to_cpu") else sample_data_obj
+                aligned_pos = np.asarray(aligned_sample_cpu.pos.values, dtype=np.uint32)
+                aligned_mC = np.asarray(aligned_sample_cpu.mC.values, dtype=np.uint32)
+                aligned_uC = np.asarray(aligned_sample_cpu.uC.values, dtype=np.uint32)
+            else:
+                # Align sample to target positions (returns only common positions, length <= len(positions))
+                aligned_sample = sample_data_obj.align_to_positions(positions)
+                if len(aligned_sample) == 0:
+                    continue
+                aligned_sample_cpu = aligned_sample.to_cpu()
+                aligned_pos = np.asarray(aligned_sample_cpu.pos.values, dtype=np.uint32)
+                aligned_mC = np.asarray(aligned_sample_cpu.mC.values, dtype=np.uint32)
+                aligned_uC = np.asarray(aligned_sample_cpu.uC.values, dtype=np.uint32)
 
             # Map aligned rows back to indices in the full positions array (positions is sorted)
-            target_idx = np.searchsorted(positions, aligned_pos)
+            target_idx = np.searchsorted(positions, aligned_pos, side="left")
+            # searchsorted can return len(positions) when value == positions[-1]; clip to valid range
+            target_idx = np.minimum(target_idx, len(positions) - 1)
             if np.any(positions[target_idx] != aligned_pos):
                 # Should not happen if align_to_positions returns subset of positions
                 valid_map = positions[target_idx] == aligned_pos
