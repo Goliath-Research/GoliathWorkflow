@@ -1770,44 +1770,57 @@ class MethylCentroid:
             )
             sample_data_obj = self.load_sample(sample_path)
 
-            # Align sample to target positions
+            # Align sample to target positions (returns only common positions, length <= len(positions))
             aligned_sample = sample_data_obj.align_to_positions(positions)
             if len(aligned_sample) == 0:
                 continue
 
             # Convert to CPU first to ensure numpy arrays
             aligned_sample_cpu = aligned_sample.to_cpu()
+            aligned_pos = np.asarray(aligned_sample_cpu.pos.values, dtype=np.uint32)
             aligned_mC = np.asarray(aligned_sample_cpu.mC.values, dtype=np.uint32)
             aligned_uC = np.asarray(aligned_sample_cpu.uC.values, dtype=np.uint32)
 
-            # Accumulate
-            mC_accum += aligned_mC
-            uC_accum += aligned_uC
+            # Map aligned rows back to indices in the full positions array (positions is sorted)
+            target_idx = np.searchsorted(positions, aligned_pos)
+            if np.any(positions[target_idx] != aligned_pos):
+                # Should not happen if align_to_positions returns subset of positions
+                valid_map = positions[target_idx] == aligned_pos
+                target_idx = target_idx[valid_map]
+                aligned_mC = aligned_mC[valid_map]
+                aligned_uC = aligned_uC[valid_map]
+                aligned_pos = aligned_pos[valid_map]
+                if len(target_idx) == 0:
+                    continue
+
+            # Accumulate at the correct indices
+            np.add.at(mC_accum, target_idx, aligned_mC)
+            np.add.at(uC_accum, target_idx, aligned_uC)
 
             # Track per-position sample count (N) for min_samples filtering
             coverage = aligned_mC + aligned_uC
-            N_accum += (coverage > 0).astype(np.uint32)
+            np.add.at(N_accum, target_idx, (coverage > 0).astype(np.uint32))
 
             if extended or self.enable_binned_stats:
-                # Calculate methylation level for this sample
-                valid_positions = coverage > 0
-                if valid_positions.any():
-                    methylation_level = np.zeros(len(positions), dtype=np.float32)
-                    methylation_level[valid_positions] = (
-                        aligned_mC[valid_positions] / coverage[valid_positions]
+                # Calculate methylation level for this sample (in aligned space)
+                valid_in_aligned = coverage > 0
+                if valid_in_aligned.any():
+                    methylation_level = np.zeros(len(aligned_mC), dtype=np.float32)
+                    methylation_level[valid_in_aligned] = (
+                        aligned_mC[valid_in_aligned] / coverage[valid_in_aligned]
                     )
 
                     if extended:
-                        Sx_accum += methylation_level
-                        Sx2_accum += methylation_level**2
+                        np.add.at(Sx_accum, target_idx, methylation_level)
+                        np.add.at(Sx2_accum, target_idx, methylation_level**2)
 
                     if self.enable_binned_stats and bin_counts is not None:
                         bin_idx = np.floor(
                             methylation_level * self.binned_stats_bins
                         ).astype(np.int32)
                         bin_idx = np.clip(bin_idx, 0, self.binned_stats_bins - 1)
-                        idxs = np.where(valid_positions)[0]
-                        np.add.at(bin_counts, (idxs, bin_idx[idxs]), 1)
+                        idxs = np.where(valid_in_aligned)[0]
+                        np.add.at(bin_counts, (target_idx[idxs], bin_idx[idxs]), 1)
 
         # Filter positions with sufficient coverage
         total_coverage = mC_accum + uC_accum
