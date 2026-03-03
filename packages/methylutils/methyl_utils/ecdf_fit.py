@@ -189,11 +189,11 @@ def compare_ecdf_to_theoretical_at_positions(
     )
     sigma2_arr = np.full(n_pos, MIN_EPS, dtype=np.float64)
     if hasattr(centroid, "Sx2") and Sx2 is not None:
+        # Unbiased sample variance: (Sx2 - Sx²/N) / (N-1), distribution-independent
         sigma2_arr = np.maximum(
-            (Sx2 / np.maximum(N, 1.0)) - (Sx / np.maximum(N, 1.0)) ** 2,
+            (Sx2 - (Sx ** 2) / np.maximum(N, 1.0)) / np.maximum(N - 1.0, 1.0),
             MIN_EPS,
         )
-        sigma2_arr = sigma2_arr / np.maximum(N - 1.0, 1.0)
     alpha_arr = np.asarray(centroid.alpha.values, dtype=np.float64)
     beta_arr = np.asarray(centroid.beta.values, dtype=np.float64)
     pos_arr = np.asarray(centroid.pos.values, dtype=np.uint32) if hasattr(centroid, "pos") else np.arange(n_pos, dtype=np.uint32)

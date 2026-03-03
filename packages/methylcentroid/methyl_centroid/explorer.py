@@ -354,23 +354,31 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
         mean_beta, var_beta = _mean_var_beta(a, b)
         r["mean_beta"] = mean_beta
         r["var_beta"] = var_beta
-        # BetaBinomial: mean and var from BB params (α_bb, β_bb) — correct discrete model mean
+        # BetaBinomial: use same unbiased mean/variance as Normal/ECDF when sufficient stats exist (N>=2)
         a_bb = float(row["alpha_bb"]) if "alpha_bb" in df.columns else None
         b_bb = float(row["beta_bb"]) if "beta_bb" in df.columns else None
-        mean_bb, var_bb = _mean_var_beta(a_bb, b_bb)
-        r["mean_betabinomial"] = mean_bb
-        r["var_betabinomial"] = var_bb
+        if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns and vn is not None:
+            # Distribution-independent: mean = Sx/N, variance = (Sx2 - Sx²/N)/(N-1)
+            r["mean_betabinomial"] = mn
+            r["var_betabinomial"] = vn
+        elif a_bb is not None and b_bb is not None:
+            mean_bb, var_bb = _mean_var_beta(a_bb, b_bb)
+            r["mean_betabinomial"] = mean_bb
+            r["var_betabinomial"] = var_bb
+        else:
+            r["mean_betabinomial"] = None
+            r["var_betabinomial"] = None
         # BetaMixture: not computed per position for HDF5 centroids (only in mixture table)
         r["mean_betamixture"] = None
         r["var_betamixture"] = None
-        # ECDF: mean = Sx/N, variance = sample variance (same formula with or without binned_stats)
-        # Centroid has the information whenever N, Sx, Sx2 exist; binned_stats only needed for CDF/overlap.
+        # ECDF: mean = Sx/N, variance = unbiased sample variance (Sx2 - Sx²/N)/(N-1), same as Normal/BetaBinomial
         if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
             n_val = float(row["N"])
             sx_val = float(row["Sx"])
             sx2_val = float(row["Sx2"])
             mean_ecdf = sx_val / max(n_val, 1.0)
-            var_ecdf = (sx2_val / max(n_val, 1.0) - mean_ecdf ** 2) / max(n_val - 1.0, 1.0)
+            # Unbiased sample variance, distribution-independent
+            var_ecdf = (sx2_val - (sx_val ** 2) / max(n_val, 1.0)) / max(n_val - 1.0, 1.0)
             r["mean_ecdf"] = mean_ecdf
             r["var_ecdf"] = max(var_ecdf, 1e-12)
         else:

@@ -226,11 +226,11 @@ class ECDFView:
         self._mean = self._Sx / self._N
         if Sx2 is not None:
             self._Sx2 = np.asarray(Sx2, dtype=np.float64)
+            # Unbiased sample variance: (Sx2 - Sx²/N) / (N-1), distribution-independent
             self._variance = np.maximum(
-                (self._Sx2 / self._N) - (self._Sx / self._N) ** 2,
+                (self._Sx2 - (self._Sx ** 2) / self._N) / np.maximum(self._N - 1.0, 1.0),
                 MIN_EPS,
             )
-            self._variance = self._variance / np.maximum(self._N - 1.0, 1.0)
         else:
             self._Sx2 = None
             self._variance = np.full(n_positions, MIN_EPS, dtype=np.float64)

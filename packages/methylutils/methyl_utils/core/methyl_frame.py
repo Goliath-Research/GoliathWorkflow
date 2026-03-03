@@ -733,6 +733,8 @@ class MethylBasicCentroid(MethylFrame):
         return data
 
 # Extended centroid class (aggregated from multiple samples to use Beta distribution parameter estimation)
+# Mean and variance are computed here with unbiased, distribution-agnostic estimators (Sx/N and (Sx2 - Sx²/N)/(N-1)).
+# Subclasses must not override mean or variance.
 class MethylExtendedCentroid(MethylBasicCentroid):
     _required_cols = {
         "pos",
@@ -750,8 +752,7 @@ class MethylExtendedCentroid(MethylBasicCentroid):
 
     @property
     def mean(self):
-        """Sample mean of proportions (Sx/N). Use this for comparisons; mC/coverage is only
-        appropriate for single-sample centroids."""
+        """Unbiased sample mean of proportions (Sx/N). Distribution-agnostic; do not override in subclasses."""
         col = "_mean_sx_n"
         if col not in self._df.columns:
             N = self.N
@@ -763,6 +764,22 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             self._df[col] = (self.Sx / denom).astype("float64")
             if hasattr(self._df[col], "clip"):
                 self._df[col] = self._df[col].clip(0.0, 1.0)
+        return self._df[col]
+
+    @property
+    def variance(self):
+        """Unbiased sample variance (Sx2 - Sx²/N)/(N-1). Distribution-agnostic; do not override in subclasses."""
+        col = "_var_unbiased"
+        if col not in self._df.columns:
+            N = self._get_values(self.N).astype(np.float64)
+            Sx = self._get_values(self.Sx).astype(np.float64)
+            Sx2 = self._get_values(self.Sx2).astype(np.float64)
+            denom = np.maximum(N - 1.0, 1.0)
+            var = np.maximum((Sx2 - (Sx ** 2) / np.maximum(N, 1.0)) / denom, 1e-12)
+            if self.is_gpu:
+                self._df[col] = cudf.Series(var, dtype="float64", index=self._df.index)
+            else:
+                self._df[col] = pd.Series(var, dtype="float64", index=self._df.index)
         return self._df[col]
 
     @property
@@ -1214,20 +1231,6 @@ class MethylBetaBinomialCentroid(MethylExtendedCentroid):
     def beta_bb(self):
         self.alpha_bb  # trigger
         return self._df["beta_bb"]
-
-    @property
-    def mean(self):
-        """Beta-Binomial mean α_bb/(α_bb+β_bb) from count-based MoM parameters.
-        This is the correct mean for the discrete model and is generally better than
-        the Beta approximation unless N is large (both converge as N increases)."""
-        a, b = self.alpha_bb.values, self.beta_bb.values
-        if hasattr(a, "__cuda_array_interface__"):
-            a, b = np.asarray(a), np.asarray(b)
-        tau = np.maximum(a + b, 1e-12)
-        mu = np.where(tau > 0, a / tau, 0.5)
-        if self.is_gpu:
-            return cudf.Series(mu, dtype="float64", index=self._df.index)
-        return pd.Series(mu, dtype="float64", index=self._df.index)
 
     def overlap(self, other: Union["MethylBetaBinomialCentroid", "MethylExtendedCentroid"]) -> np.ndarray:
         """Overlap with another centroid (Bhattacharyya coefficient of Beta distributions)."""
