@@ -528,13 +528,12 @@ def run_explorer(
                     file=sys.stderr,
                 )
         else:
-            # Export path: -o is output directory; same filename as default (e.g. 1-CG_positions_100000_200000.csv)
-            basename = target.stem
-            out_dir = Path(output).resolve() if output is not None else Path.cwd()
+            # Export to same location as the .h5 by default; filename {chrom}-{context}-{pos-start}-{pos-end}.csv
+            out_dir = Path(output).resolve() if output is not None else target.parent
             if out_dir.suffix.lower() in (".csv", ".tsv", ".txt"):
                 out_dir = out_dir.parent
             out_dir.mkdir(parents=True, exist_ok=True)
-            out_path = out_dir / f"{basename}_positions_{file_start}_{file_end}.{export_format}"
+            out_path = out_dir / f"{chrom_str}-{context_str}-{file_start}-{file_end}.{export_format}"
             fmt = export_format
             _check_output_not_under_input(out_path, path)
 
