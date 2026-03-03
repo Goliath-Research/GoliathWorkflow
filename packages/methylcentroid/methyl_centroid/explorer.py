@@ -19,6 +19,18 @@ except ImportError:
 import numpy as np
 import pandas as pd
 
+try:
+    import plotly.graph_objects as go
+except ImportError:
+    go = None
+
+try:
+    from scipy.stats import beta as scipy_beta
+    from scipy.stats import truncnorm as scipy_truncnorm
+except ImportError:
+    scipy_beta = None
+    scipy_truncnorm = None
+
 
 def _get_methyl_group(f) -> Any:
     """Return the group containing pos, mC, uC, tnc (methylation_data or root)."""
@@ -403,6 +415,183 @@ def _stem_to_chrom_context(stem: str) -> Tuple[str, str]:
     return (parts[0], parts[1]) if len(parts) >= 2 else (stem, "")
 
 
+def _select_quartile_positions(table: pd.DataFrame) -> List[Tuple[int, int]]:
+    """
+    Select one position per quartile of coverage (N or coverage column).
+    Returns list of (table_row_index, position) for 4 positions (Q1, Q2, Q3, Q4).
+    """
+    if len(table) == 0:
+        return []
+    sort_col = "N" if "N" in table.columns else "coverage"
+    if sort_col not in table.columns:
+        return []
+    sorted_idx = table[sort_col].values.argsort()
+    n = len(sorted_idx)
+    if n < 4:
+        indices = [sorted_idx[i] for i in range(n)]
+    else:
+        indices = [
+            sorted_idx[n // 8],
+            sorted_idx[3 * n // 8],
+            sorted_idx[5 * n // 8],
+            sorted_idx[7 * n // 8],
+        ]
+    return [(int(i), int(table.iloc[i]["pos"])) for i in indices]
+
+
+def _pdf_normal_truncated(x: np.ndarray, mu: float, sigma2: float) -> np.ndarray:
+    """PDF of truncated Normal on [0,1] with mean mu and variance sigma2."""
+    if scipy_truncnorm is None or sigma2 <= 0 or not np.isfinite(sigma2):
+        return np.zeros_like(x, dtype=np.float64)
+    sigma = np.sqrt(max(sigma2, 1e-12))
+    a_std = (0.0 - mu) / sigma
+    b_std = (1.0 - mu) / sigma
+    if a_std >= b_std:
+        return np.zeros_like(x, dtype=np.float64)
+    x_arr = np.asarray(x, dtype=np.float64)
+    return scipy_truncnorm.pdf(x_arr, a_std, b_std, loc=mu, scale=sigma)
+
+
+def _get_centroid_property(centroid: Any, position_idx: int, prop_name: str) -> Optional[float]:
+    """
+    Get a scalar at position_idx from a centroid property (mean, variance, alpha, beta, alpha_bb, beta_bb).
+    Uses the centroid's own implementation; no duplicate computation.
+    """
+    prop = getattr(centroid, prop_name, None)
+    if prop is None:
+        return None
+    try:
+        if hasattr(prop, "iloc"):
+            v = prop.iloc[position_idx]
+        else:
+            v = np.asarray(prop).flat[position_idx]
+        v = float(v)
+        return v if np.isfinite(v) else None
+    except Exception:
+        return None
+
+
+def _export_density_plot(
+    frame: Any,
+    position_idx: int,
+    position: int,
+    chrom_str: str,
+    context_str: str,
+    out_path: Path,
+) -> bool:
+    """
+    Export a single interactive Plotly HTML with density plots for Normal, Beta,
+    Beta-Binomial, and ECDF at the given position. Uses the centroid's mean, variance,
+    alpha, beta, alpha_bb, beta_bb (no duplicate computation). Returns True if written.
+    """
+    if go is None:
+        print("plotly not installed; skipping density plot. pip install plotly", file=sys.stderr)
+        return False
+    grid = np.linspace(0.0, 1.0, 300, dtype=np.float64)
+    grid = np.clip(grid, 1e-9, 1.0 - 1e-9)
+
+    # Use centroid properties only (mean, variance, alpha, beta, alpha_bb, beta_bb)
+    mu = _get_centroid_property(frame, position_idx, "mean")
+    sigma2 = _get_centroid_property(frame, position_idx, "variance")
+    if mu is None:
+        mu = 0.5
+    if sigma2 is None or sigma2 <= 0:
+        sigma2 = 1e-6
+
+    traces = []
+
+    # Normal (truncated on [0,1])
+    if scipy_truncnorm is not None:
+        pdf_norm = _pdf_normal_truncated(grid, mu, sigma2)
+        traces.append(
+            go.Scatter(
+                x=grid.tolist(),
+                y=pdf_norm.tolist(),
+                name="Normal",
+                mode="lines",
+                line=dict(width=2),
+            )
+        )
+
+    # Beta (centroid.alpha, centroid.beta)
+    alpha = _get_centroid_property(frame, position_idx, "alpha")
+    beta = _get_centroid_property(frame, position_idx, "beta")
+    if scipy_beta is not None and alpha is not None and beta is not None and alpha > 0 and beta > 0:
+        pdf_beta = scipy_beta.pdf(grid, alpha, beta)
+        traces.append(
+            go.Scatter(
+                x=grid.tolist(),
+                y=pdf_beta.tolist(),
+                name="Beta",
+                mode="lines",
+                line=dict(width=2),
+            )
+        )
+
+    # Beta-Binomial (centroid.alpha_bb, centroid.beta_bb; proportion distribution = Beta(alpha_bb, beta_bb))
+    alpha_bb = _get_centroid_property(frame, position_idx, "alpha_bb")
+    beta_bb = _get_centroid_property(frame, position_idx, "beta_bb")
+    if (
+        scipy_beta is not None
+        and alpha_bb is not None
+        and beta_bb is not None
+        and alpha_bb > 0
+        and beta_bb > 0
+    ):
+        pdf_bb = scipy_beta.pdf(grid, alpha_bb, beta_bb)
+        traces.append(
+            go.Scatter(
+                x=grid.tolist(),
+                y=pdf_bb.tolist(),
+                name="Beta-Binomial",
+                mode="lines",
+                line=dict(width=2),
+            )
+        )
+
+    # ECDF (PDF from interpolated CDF derivative)
+    binned = getattr(frame, "binned_stats", None)
+    if (
+        binned is not None
+        and isinstance(binned, dict)
+        and "bin_edges" in binned
+        and "bin_counts" in binned
+    ):
+        try:
+            from methyl_utils.core.distribution_views import get_distribution_view
+
+            ecdf_view = get_distribution_view(frame, "ecdf")
+            pdf_ecdf = np.array([ecdf_view._pdf(position_idx, float(x)) for x in grid])
+            traces.append(
+                go.Scatter(
+                    x=grid.tolist(),
+                    y=pdf_ecdf.tolist(),
+                    name="ECDF",
+                    mode="lines",
+                    line=dict(width=2),
+                )
+            )
+        except Exception:
+            pass
+
+    if not traces:
+        print(f"No distribution data for position {position}; skip {out_path}", file=sys.stderr)
+        return False
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(
+        title=dict(text=f"Methylation density — {chrom_str}-{context_str} pos {position}"),
+        xaxis_title="Methylation level",
+        yaxis_title="Density",
+        legend=dict(yanchor="top", y=0.99, xanchor="left", x=0.01),
+        template="plotly_white",
+    )
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.write_html(str(out_path))
+    return True
+
+
 def run_explorer(
     path: Path,
     *,
@@ -417,6 +606,7 @@ def run_explorer(
     export_format: str = "csv",
     single_csv: bool = False,
     single_json: bool = False,
+    plot_quartiles: bool = False,
 ) -> None:
     """
     Main explorer logic: resolve path (file or folder), detect type, print metadata,
@@ -548,6 +738,18 @@ def run_explorer(
                     file=sys.stderr,
                 )
 
+        if plot_quartiles:
+            quartile_pairs = _select_quartile_positions(table)
+            plot_out_dir = Path(output).resolve() if output is not None else target.parent
+            if plot_out_dir.suffix.lower() in (".csv", ".tsv", ".txt", ".json"):
+                plot_out_dir = plot_out_dir.parent
+            plot_out_dir.mkdir(parents=True, exist_ok=True)
+            for row_idx, pos in quartile_pairs:
+                out_html = plot_out_dir / f"{chrom_str}-{context_str}-{pos}.html"
+                _check_output_not_under_input(out_html, path)
+                if _export_density_plot(frame, row_idx, pos, chrom_str, context_str, out_html):
+                    print(f"Exported density plot: {out_html}")
+
         pd.set_option("display.max_rows", None)
         pd.set_option("display.width", None)
         print("\nPosition detail (first rows):")
@@ -606,6 +808,7 @@ def main() -> None:
     parser.add_argument("--output", "-o", type=Path, default=None, metavar="DIR", help="Output directory for exported position tables. Files keep the same name (e.g. 1-CG_positions_START_END.csv). Default: current directory.")
     parser.add_argument("--single-csv", action="store_true", help="Export one CSV/TSV with chromosome and context as first two columns (combines all files when path is a folder).")
     parser.add_argument("--single-json", action="store_true", help="Export one valid JSON file with metadata for all chrom-context .h5 in the folder (keyed by stem, e.g. 1-CG).")
+    parser.add_argument("--plot-quartiles", action="store_true", help="Export one interactive Plotly HTML density plot per coverage quartile (4 positions: Normal, Beta, Beta-Binomial, ECDF). Files named {chrom}-{context}-{position}.html.")
     parser.add_argument("--format", "-f", choices=["csv", "tsv", "txt"], default="csv", dest="export_format", help="Format when using default output path (default: csv). With --output, format is inferred from extension.")
     args = parser.parse_args()
     # Infer format from --output extension if provided
@@ -625,6 +828,7 @@ def main() -> None:
         export_format=export_format,
         single_csv=args.single_csv,
         single_json=args.single_json,
+        plot_quartiles=args.plot_quartiles,
     )
 
 
