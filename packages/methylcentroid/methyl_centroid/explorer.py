@@ -228,8 +228,8 @@ def _build_mixture_position_table(frame, pos_start: int, pos_end: int) -> pd.Dat
         m, v = _mean_var_betamixture_row(
             row.get("weights"), row.get("alphas"), row.get("betas")
         )
-        mean_list.append(m)
-        var_list.append(v)
+        mean_list.append(m if m is not None else 0.0)
+        var_list.append(v if v is not None else 0.0)
     out = df.copy()
     out["mean"] = mean_list
     out["variance"] = var_list
@@ -304,17 +304,17 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
                 val = row[col]
                 r[col] = int(val) if isinstance(val, (np.integer, int)) else float(val) if isinstance(val, (np.floating, float)) else val
 
-        # Single mean and variance (unbiased, distribution-agnostic)
+        # Single mean and variance (unbiased, distribution-agnostic). None variance means zero.
         if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
             mn, vn = _mean_var_normal_from_sufficient(
                 float(row["N"]), float(row["Sx"]), float(row["Sx2"])
             )
             r["mean"] = mn
-            r["variance"] = vn
+            r["variance"] = vn if vn is not None else 0.0
         else:
             mn, vn = _mean_var_normal_from_counts(int(row["mC"]), int(row["uC"]))
             r["mean"] = mn
-            r["variance"] = vn
+            r["variance"] = vn if vn is not None else 0.0
         rows.append(r)
     return pd.DataFrame(rows)
 
