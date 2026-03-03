@@ -310,7 +310,7 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
                 float(row["N"]), float(row["Sx"]), float(row["Sx2"])
             )
             r["mean"] = mn
-            r["variance"] = max(vn, 1e-12) if vn is not None else None
+            r["variance"] = vn
         else:
             mn, vn = _mean_var_normal_from_counts(int(row["mC"]), int(row["uC"]))
             r["mean"] = mn
