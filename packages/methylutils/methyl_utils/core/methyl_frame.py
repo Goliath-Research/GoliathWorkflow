@@ -789,8 +789,14 @@ class MethylExtendedCentroid(MethylBasicCentroid):
             n = np.asarray(self._get_values(self.N), dtype=np.float64)
             Sx = np.asarray(self._get_values(self.Sx), dtype=np.float64)
             Sx2 = np.asarray(self._get_values(self.Sx2), dtype=np.float64)
-            log_x = np.asarray(self._get_values(self._df["log_x_sum"]), dtype=np.float64)
-            log_1mx = np.asarray(self._get_values(self._df["log_1_minus_x_sum"]), dtype=np.float64)
+            with np.errstate(invalid="ignore"):
+                log_x = np.asarray(self._get_values(self._df["log_x_sum"]), dtype=np.float64)
+                log_1mx = np.asarray(self._get_values(self._df["log_1_minus_x_sum"]), dtype=np.float64)
+            # Replace non-finite log sums so beta_estimation_hybrid gets valid inputs
+            if not np.isfinite(log_x).all():
+                log_x = np.where(np.isfinite(log_x), log_x, -1e10)
+            if not np.isfinite(log_1mx).all():
+                log_1mx = np.where(np.isfinite(log_1mx), log_1mx, -1e10)
             alpha, beta = beta_estimation_hybrid(
                 n=n, Sx=Sx, Sx2=Sx2,
                 log_x_sum=log_x, log_1_minus_x_sum=log_1mx,

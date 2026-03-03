@@ -318,7 +318,9 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
             r["variance"] = vn if vn is not None else 0.0
         rows.append(r)
 
-    # When centroid has binned_stats, add which distribution best approximates the ECDF (KS vs Normal, Beta, Beta-Binomial)
+    # When centroid has binned_stats, add which distribution best approximates the ECDF (KS vs Normal, Beta, Beta-Binomial).
+    # Limit to a small position count so export stays fast; ECDF-vs-theoretical is O(positions × grid_size).
+    _MAX_POSITIONS_FOR_DISTRIBUTION_ANALYSIS = 1000
     binned = getattr(frame, "binned_stats", None)
     has_binned = (
         binned is not None
@@ -329,7 +331,7 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
         and "Sx" in df.columns
         and "Sx2" in df.columns
     )
-    if has_binned and rows:
+    if has_binned and rows and len(rows) <= _MAX_POSITIONS_FOR_DISTRIBUTION_ANALYSIS:
         try:
             from methyl_utils.ecdf_fit import compare_ecdf_to_theoretical_at_positions
             position_indices = df.index.to_numpy(dtype=np.intp)
@@ -360,6 +362,12 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
                 r["p_beta"] = None
                 r["p_betabinomial"] = None
                 r["could_use_instead"] = None
+    elif has_binned and rows and len(rows) > _MAX_POSITIONS_FOR_DISTRIBUTION_ANALYSIS:
+        print(
+            f"Skipping ECDF-vs-theoretical distribution analysis ({len(rows):,} positions > {_MAX_POSITIONS_FOR_DISTRIBUTION_ANALYSIS}). "
+            "Use --max-positions 1000 for per-position closest_distribution and KS columns.",
+            file=sys.stderr,
+        )
 
     return pd.DataFrame(rows)
 

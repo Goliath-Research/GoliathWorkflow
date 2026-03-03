@@ -2,6 +2,11 @@
 Compare continuous ECDF (per position) to theoretical CDFs (Normal, Beta, Beta-Binomial)
 via KS statistic and significance tests. Used to identify the closest theoretical
 distribution and whether it could be used instead of ECDF.
+
+Note: This module uses CPU-only scipy.stats (truncnorm, beta, kstwobign). A GPU path
+would require vectorizing over positions: batch-evaluate theoretical CDFs on a (N, grid_size)
+grid using cupyx.scipy.stats (where available), batch-evaluate ECDF per position (e.g. from
+binned CDF or batched PCHIP), then KS = max(|F_ecdf - F_theory|) and argmin per position on GPU.
 """
 from __future__ import annotations
 
