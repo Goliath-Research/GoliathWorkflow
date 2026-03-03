@@ -1649,9 +1649,12 @@ class MethylCentroid:
                 "Failed to compute centroid: no samples were successfully added"
             )
 
-        # Compute and save centroid
+        # Compute and save centroid (chunk size from memory-derived params in chunked_processor)
         if self.enable_binned_stats:
-            centroid = self.compute_centroid_chunked(extended=extended)
+            centroid = self.compute_centroid_chunked(
+                extended=extended,
+                chunk_size_positions=self.chunked_processor.chunk_size_positions,
+            )
         else:
             centroid = self.compute_centroid(extended=extended)
         if centroid is None or len(centroid) == 0:
@@ -1666,22 +1669,25 @@ class MethylCentroid:
         return centroid_path
 
     def compute_centroid_chunked(
-        self, extended: bool = False, chunk_size_positions: int = 2_000_000
+        self, extended: bool = False, chunk_size_positions: Optional[int] = None
     ) -> Optional[np.ndarray]:
         """
         Compute centroid using chunked processing for memory efficiency.
 
         This method processes the genome in chunks to handle very large datasets
-        that exceed available memory, especially for chromosome 1 contexts with
-        tens of millions of positions. Now uses MethylUtils GPU optimizations.
+        that exceed available memory. Chunk size is determined by MethylUtils
+        memory management (GPU when available, else system RAM via get_memory_usage).
 
         Args:
             extended: Whether to compute extended centroid with statistics
-            chunk_size_positions: Number of positions to process per chunk
+            chunk_size_positions: Number of positions per chunk; if None, uses
+                the instance's memory-derived value from chunked_processor.
 
         Returns:
             Centroid data as numpy array, or None if computation fails
         """
+        if chunk_size_positions is None:
+            chunk_size_positions = self.chunked_processor.chunk_size_positions
         with self.performance_profiler.profile_operation(
             "chunked_centroid_computation"
         ):
@@ -2698,7 +2704,7 @@ def attach_binned_stats_to_centroid(
     centroid_path: Union[str, Path],
     bins: int = 32,
     output_dir: Optional[Union[str, Path]] = None,
-    chunk_size_positions: int = 2_000_000,
+    chunk_size_positions: Optional[int] = None,
     sample_dirs: Optional[List[str]] = None,
     verbose: bool = True,
 ) -> Path:
@@ -2708,6 +2714,9 @@ def attach_binned_stats_to_centroid(
     This reuses the existing centroid positions but recomputes statistics
     from the original samples to generate bin counts. It overwrites the
     centroid file unless output_dir is provided.
+
+    Chunk size is memory-derived (GPU or system RAM via MethylUtils) when
+    chunk_size_positions is None.
     """
     centroid_path = Path(centroid_path)
     from methyl_utils import MethylSample
