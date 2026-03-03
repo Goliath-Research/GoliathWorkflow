@@ -110,6 +110,10 @@ class MethylCentroid:
         cap_coverage: bool = False,
         cap_coverage_n_cap: Optional[int] = None,
         cap_coverage_seed: Optional[int] = None,
+        cap_coverage_auto_n_cap: bool = False,
+        cap_coverage_n_cap_method: str = "iqr",
+        cap_coverage_n_cap_iqr_multiplier: float = 1.5,
+        cap_coverage_n_cap_max_positions: int = 100_000,
     ):
         from contextlib import contextmanager
         import logging
@@ -214,10 +218,14 @@ class MethylCentroid:
         self._cap_coverage = cap_coverage and cap_coverage_n_cap is not None and cap_coverage_n_cap >= 1
         self._cap_coverage_n_cap = cap_coverage_n_cap if self._cap_coverage else None
         self._cap_coverage_seed = cap_coverage_seed
-        if cap_coverage and not self._cap_coverage:
+        self._cap_coverage_auto_n_cap = cap_coverage_auto_n_cap
+        self._cap_coverage_n_cap_method = cap_coverage_n_cap_method
+        self._cap_coverage_n_cap_iqr_multiplier = cap_coverage_n_cap_iqr_multiplier
+        self._cap_coverage_n_cap_max_positions = cap_coverage_n_cap_max_positions
+        if cap_coverage and not self._cap_coverage and not cap_coverage_auto_n_cap:
             self.logger.warning(
                 "cap_coverage=True but cap_coverage_n_cap is missing or < 1; coverage capping disabled. "
-                "Set cap_coverage_n_cap (e.g. 50) in base_config for capping to take effect."
+                "Set cap_coverage_n_cap (e.g. 50) in base_config, or cap_coverage_auto_n_cap=True to estimate from IQR on sampled coverage."
             )
         self.chrom = chrom
         self.ctx = ctx
@@ -383,6 +391,10 @@ class MethylCentroid:
             cap_coverage=config.cap_coverage,
             cap_coverage_n_cap=config.cap_coverage_n_cap,
             cap_coverage_seed=config.cap_coverage_seed,
+            cap_coverage_auto_n_cap=getattr(config, "cap_coverage_auto_n_cap", False),
+            cap_coverage_n_cap_method=getattr(config, "cap_coverage_n_cap_method", "iqr"),
+            cap_coverage_n_cap_iqr_multiplier=getattr(config, "cap_coverage_n_cap_iqr_multiplier", 1.5),
+            cap_coverage_n_cap_max_positions=getattr(config, "cap_coverage_n_cap_max_positions", 100_000),
             enable_binned_stats=getattr(config, "enable_binned_stats", False),
             binned_stats_bins=getattr(config, "binned_stats_bins", 50),
         )
@@ -413,6 +425,10 @@ class MethylCentroid:
             "cap_coverage": self._cap_coverage,
             "cap_coverage_n_cap": self._cap_coverage_n_cap,
             "cap_coverage_seed": self._cap_coverage_seed,
+            "cap_coverage_auto_n_cap": self._cap_coverage_auto_n_cap,
+            "cap_coverage_n_cap_method": self._cap_coverage_n_cap_method,
+            "cap_coverage_n_cap_iqr_multiplier": self._cap_coverage_n_cap_iqr_multiplier,
+            "cap_coverage_n_cap_max_positions": self._cap_coverage_n_cap_max_positions,
             "enable_binned_stats": self.enable_binned_stats,
             "binned_stats_bins": self.binned_stats_bins,
         }
@@ -1593,6 +1609,37 @@ class MethylCentroid:
             raise FileNotFoundError(
                 f"No valid sample files found. Expected files like {expected_suffix}."
             )
+
+        # Auto-estimate n_cap from first sample (IQR: Q3 + 1.5*IQR on sampled positions)
+        if (
+            self._cap_coverage_auto_n_cap
+            and getattr(self, "_cap_coverage_n_cap", None) is None
+        ):
+            first_path = self.samples[0] if self.samples else self.add_samples[0]
+            try:
+                from methyl_utils.core.io import estimate_n_cap_from_sample_path_with_log
+                median, upper_fence, n_cap = estimate_n_cap_from_sample_path_with_log(
+                    first_path,
+                    max_positions=self._cap_coverage_n_cap_max_positions,
+                    iqr_multiplier=self._cap_coverage_n_cap_iqr_multiplier,
+                    seed=self._cap_coverage_seed,
+                )
+                self._cap_coverage_n_cap = n_cap
+                self._cap_coverage = True
+                self.logger.info(
+                    "Estimated cap_coverage_n_cap=%s from IQR on sampled coverage (median=%.1f, upper_fence=%.1f, %s positions) on %s",
+                    n_cap,
+                    median,
+                    upper_fence,
+                    self._cap_coverage_n_cap_max_positions,
+                    getattr(first_path, "name", first_path),
+                )
+            except Exception as e:
+                self.logger.warning(
+                    "Failed to auto-estimate n_cap from %s: %s; coverage capping disabled.",
+                    getattr(first_path, "name", first_path),
+                    e,
+                )
 
         self.add_samples_parallel()
 

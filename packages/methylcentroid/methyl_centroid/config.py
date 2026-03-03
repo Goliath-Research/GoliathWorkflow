@@ -75,6 +75,25 @@ class MethylCentroidConfig(BaseModel):
         default=None,
         description="RNG seed for reproducible capping (optional)",
     )
+    # Auto-estimate n_cap from first sample using IQR (median + 1.5*IQR upper fence)
+    cap_coverage_auto_n_cap: bool = Field(
+        default=False,
+        description="If True and cap_coverage_n_cap is None, estimate n_cap from first sample using Q3+1.5*IQR on sampled positions (outlier limit)",
+    )
+    cap_coverage_n_cap_method: str = Field(
+        default="iqr",
+        description="Method for auto n_cap: 'iqr' (Q3+iqr_multiplier*IQR, default).",
+    )
+    cap_coverage_n_cap_iqr_multiplier: float = Field(
+        default=1.5,
+        ge=0.0,
+        description="IQR multiplier for auto n_cap when method=iqr (standard boxplot fence=1.5)",
+    )
+    cap_coverage_n_cap_max_positions: int = Field(
+        default=100_000,
+        ge=1000,
+        description="Max positions to sample when auto-estimating n_cap (keeps estimation fast)",
+    )
     # ECDF / binned stats (for distribution comparison and ECDF overlap)
     enable_binned_stats: bool = Field(
         default=False,

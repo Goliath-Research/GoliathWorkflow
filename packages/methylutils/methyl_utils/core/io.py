@@ -308,3 +308,71 @@ def load_from_h5(
                 pass
 
         return obj
+
+
+def estimate_n_cap_from_sample_path(
+    path: Union[str, Path],
+    *,
+    max_positions: int = 100_000,
+    iqr_multiplier: float = 1.5,
+    seed: Optional[int] = None,
+) -> int:
+    """
+    Estimate n_cap (coverage cap for outlier limiting) from one sample using IQR on sampled positions.
+
+    Loads a random subset of positions (up to max_positions) from the file. The median is
+    estimated from this sample (robust to outliers). The outlier limit is the upper fence
+    Q3 + iqr_multiplier*IQR (standard 1.5*IQR rule); positions with coverage above that
+    (e.g. re-sequencing duplicates) are capped. Returns n_cap = ceil(upper_fence) for use
+    with cap_coverage_binomial.
+
+    Args:
+        path: Path to a methylation sample HDF5 file (e.g. 1-CG.h5).
+        max_positions: Max number of positions to sample for the estimate.
+        iqr_multiplier: Multiplier for IQR (default 1.5 = standard boxplot fence).
+        seed: Optional RNG seed for reproducible sampling.
+
+    Returns:
+        Integer n_cap >= 1 (ceil of upper fence Q3 + iqr_multiplier*IQR).
+    """
+    path = Path(path)
+    pos = load_pos_from_h5(path)
+    n = len(pos)
+    if n == 0:
+        return 1
+    rng = np.random.default_rng(seed)
+    n_sample = min(n, max_positions)
+    idx = rng.choice(n, size=n_sample, replace=False)
+    obj = load_from_h5(path, indices=idx)
+    _, _, n_cap = obj.coverage_iqr_n_cap(
+        max_positions=n_sample,
+        iqr_multiplier=iqr_multiplier,
+        seed=seed,
+    )
+    return n_cap
+
+
+def estimate_n_cap_from_sample_path_with_log(
+    path: Union[str, Path],
+    *,
+    max_positions: int = 100_000,
+    iqr_multiplier: float = 1.5,
+    seed: Optional[int] = None,
+) -> tuple[float, float, int]:
+    """
+    Like estimate_n_cap_from_sample_path but returns (median, upper_fence, n_cap) for logging.
+    """
+    path = Path(path)
+    pos = load_pos_from_h5(path)
+    n = len(pos)
+    if n == 0:
+        return 0.0, 0.0, 1
+    rng = np.random.default_rng(seed)
+    n_sample = min(n, max_positions)
+    idx = rng.choice(n, size=n_sample, replace=False)
+    obj = load_from_h5(path, indices=idx)
+    return obj.coverage_iqr_n_cap(
+        max_positions=n_sample,
+        iqr_multiplier=iqr_multiplier,
+        seed=seed,
+    )

@@ -96,6 +96,8 @@ MethylCentroid (inherits from MethylBasicCentroid)
 - `create_position_mask(positions) -> np.ndarray` - Create position-based mask
 - `merge_contexts() -> MethylSample` - Merge different methylation contexts
 - `cap_coverage_binomial(n_cap, *, seed=None) -> MethylSample` - Cap per-CpG coverage by binomial thinning (in-place). For positions with coverage > n_cap, reduces mC/uC by random thinning (p = n_cap/n; mC' ~ Bin(mC,p), uC' ~ Bin(uC,p)) so methylation proportion stays unbiased. Returns self for chaining. Use to correct outlier counts (e.g. after flagging with `compute_coverage_outlier_flags`).
+- `median_coverage(*, max_positions=100_000, seed=None) -> float` - Median coverage across positions; uses a random sample of positions when n > max_positions (robust to outliers, cheap).
+- `coverage_iqr_n_cap(*, max_positions=100_000, iqr_multiplier=1.5, seed=None) -> (median, upper_fence, n_cap)` - From the same random sample of positions: median, upper fence Q3 + iqr_multiplier*IQR, and n_cap = ceil(upper_fence). Use n_cap as the outlier limit (only positions with coverage above the fence are capped). When IQR=0, n_cap is set from median so we do not cap everything.
 
 #### Utility Methods
 - `to_numpy(extended=False) -> np.ndarray` - Convert to numpy structured array
@@ -108,6 +110,7 @@ MethylCentroid (inherits from MethylBasicCentroid)
 
 #### Coverage outlier detection (module-level)
 - `compute_coverage_outlier_flags(samples, *, method="robust_z", threshold=3.5, max_positions=100_000, seed=None) -> List[bool]` (from `methyl_utils.core.methyl_frame` or `methyl_utils`) — Flags samples with outlying coverage using robust z-score (median, MAD) or IQR. Optionally run this, then cap only flagged samples in place: `for i, s in enumerate(samples): if flags[i]: s.cap_coverage_binomial(n_cap=35, seed=0)`.
+- `estimate_n_cap_from_sample_path(path, *, max_positions=100_000, iqr_multiplier=1.5, seed=None) -> int` (from `methyl_utils.core.io` or `methyl_utils`) — Estimate n_cap from one sample file using IQR on a random subset of positions: upper fence = Q3 + 1.5*IQR; positions with coverage above that (e.g. re-sequencing duplicates) are outliers. Returns n_cap = ceil(upper_fence) for use with cap_coverage_binomial. `estimate_n_cap_from_sample_path_with_log` returns (median, upper_fence, n_cap) for logging.
 
 ## 2. MethylBasicCentroid
 

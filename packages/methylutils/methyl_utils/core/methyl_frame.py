@@ -617,6 +617,52 @@ class MethylSample(MethylFrame):
         idx = rng.choice(n, size=max_positions, replace=False)
         return float(np.median(cov[idx]))
 
+    def coverage_iqr_n_cap(
+        self,
+        *,
+        max_positions: int = 100_000,
+        iqr_multiplier: float = 1.5,
+        seed: Optional[int] = None,
+    ) -> tuple[float, float, int]:
+        """
+        Estimate median, upper fence (Q3 + k*IQR), and n_cap from a random sample of positions.
+
+        Uses the same random subset of positions as median_coverage. The median is robust
+        to outliers (e.g. re-sequencing duplicates). The outlier limit is the upper fence
+        Q3 + iqr_multiplier*IQR (standard 1.5*IQR boxplot rule); positions with coverage
+        above that are considered impossible given the distribution and should be capped.
+
+        Args:
+            max_positions: Cap the number of positions used (same as median_coverage).
+            iqr_multiplier: Multiplier for IQR (default 1.5 = standard boxplot fence).
+            seed: Optional RNG seed when sampling positions.
+
+        Returns:
+            (median, upper_fence, n_cap) where n_cap = max(1, ceil(upper_fence)).
+            If IQR == 0, n_cap is set from ceil(median) so we do not cap everything.
+        """
+        cov = self.get_coverage()
+        n = len(cov)
+        if n == 0:
+            return 0.0, 0.0, 1
+        if n <= max_positions:
+            cov_sample = np.asarray(cov, dtype=np.float64)
+        else:
+            rng = np.random.default_rng(seed)
+            idx = rng.choice(n, size=max_positions, replace=False)
+            cov_sample = np.asarray(cov, dtype=np.float64)[idx]
+        median = float(np.median(cov_sample))
+        q1 = float(np.percentile(cov_sample, 25))
+        q3 = float(np.percentile(cov_sample, 75))
+        iqr = q3 - q1
+        if iqr <= 0:
+            upper_fence = float(q3) if q3 > 0 else median
+            n_cap = max(1, int(np.ceil(upper_fence)))
+        else:
+            upper_fence = q3 + iqr_multiplier * iqr
+            n_cap = max(1, int(np.ceil(upper_fence)))
+        return median, upper_fence, n_cap
+
     def mean_coverage(self) -> float:
         """
         Mean coverage across positions (single-pass, O(n)).
