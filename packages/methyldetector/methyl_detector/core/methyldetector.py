@@ -121,7 +121,9 @@ class MethylDetector:
             self._current_chromosome = chromosomes[0]
             return self._run_multi_context()
         else:
-            # Multiple chromosomes: process each one
+            # Multiple chromosomes: require binned_stats once before any work (fail fast)
+            self._current_chromosome = chromosomes[0]
+            self._require_binned_stats_available()
             logger.info(f"🧬 Processing {len(chromosomes)} chromosomes: {', '.join(chromosomes)}")
             results = []
             failed_chromosomes = []
@@ -289,14 +291,23 @@ class MethylDetector:
         """Require that centroids have binned_stats (ECDF-based metrics). Raise at start of run if missing."""
         context0 = self.config.contexts[0] if self.config.contexts else "CG"
         c1_path = Path(self.config.centroid1_dir) / f"{self.chromosome}-{context0}.h5"
+        c2_path = Path(self.config.centroid2_dir) / f"{self.chromosome}-{context0}.h5"
         if not c1_path.exists():
-            return  # Skip check if file not found (will fail later when loading)
+            raise FileNotFoundError(
+                f"Centroid1 file not found: {c1_path}. "
+                "MethylDetector requires centroids with binned_stats; build them first (methyl-centroid with enable_binned_stats=True)."
+            )
+        if not c2_path.exists():
+            raise FileNotFoundError(
+                f"Centroid2 file not found: {c2_path}. "
+                "MethylDetector requires centroids with binned_stats; build them first (methyl-centroid with enable_binned_stats=True)."
+            )
         centroid = MethylSample.load_from_h5(str(c1_path))
         binned = getattr(centroid, "binned_stats", None)
         if not binned or "bin_edges" not in binned or "bin_counts" not in binned:
             raise ValueError(
-                "Centroids must have binned_stats (enable_binned_stats=True when building centroids). "
-                "MethylDetector uses ECDF-based overlap and bounded_effect_size; legacy metrics are not used."
+                "Centroids must have binned_stats for MethylDetector (ECDF-based overlap and bounded_effect_size). "
+                "Re-run methyl-centroid with enable_binned_stats=True (or set enable_binned_stats in the project step_config for MethylCentroid)."
             )
 
     def _detect_statistical_dmps_for_context(
