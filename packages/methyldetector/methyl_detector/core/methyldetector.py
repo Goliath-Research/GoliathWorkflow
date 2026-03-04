@@ -2947,6 +2947,9 @@ class MethylDetector:
             classifier: Classifier instance (ignored, we create BetaClassifier from dmpDF)
             selected_dmps_df: DataFrame with selected DMPs (final DMPs used by classifier)
         """
+        if selected_dmps_df is None or len(selected_dmps_df) == 0:
+            logger.warning("No selected DMPs; skipping classifier model save")
+            return
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
@@ -2966,6 +2969,9 @@ class MethylDetector:
         else:
             weights = np.ones(len(selected_dmps_df), dtype=np.float64)
         weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1e-6)
+        if weights.size == 0:
+            logger.warning("No selected DMPs (zero weights); skipping classifier model save")
+            return
         w_max = float(np.max(weights))
         if w_max > 1e-6:
             weights = np.clip(weights / w_max, 1e-6, 1.0)
