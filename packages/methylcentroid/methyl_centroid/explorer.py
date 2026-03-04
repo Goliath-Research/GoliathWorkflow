@@ -885,9 +885,9 @@ def run_explorer(
         if len(table) > 500:
             print(f"... and {len(table) - 500} more rows.")
 
-    # Write single combined CSV when --single-csv was used
+    # Write single combined CSV when --single-csv was used (same location as centroid, like plots)
     if single_csv and combined_tables:
-        out_dir = Path(output).resolve() if output is not None else Path.cwd()
+        out_dir = Path(output).resolve() if output is not None else (path if path.is_dir() else path.parent)
         if out_dir.suffix.lower() in (".csv", ".tsv", ".txt"):
             out_dir = out_dir.parent
         out_dir.mkdir(parents=True, exist_ok=True)

@@ -107,7 +107,7 @@
           "max_sample_workers": null,
           "verbose": true,
           "enable_binned_stats": true,
-          "binned_stats_bins": 50
+          "binned_stats_bins": 20
         },
         "parallel_combinations": 1,
         "min_samples": 3,
