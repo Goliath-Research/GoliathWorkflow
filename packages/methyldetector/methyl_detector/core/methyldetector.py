@@ -307,7 +307,9 @@ class MethylDetector:
         if not binned or "bin_edges" not in binned or "bin_counts" not in binned:
             raise ValueError(
                 "Centroids must have binned_stats for MethylDetector (ECDF-based overlap and bounded_effect_size). "
-                "Re-run methyl-centroid with enable_binned_stats=True (or set enable_binned_stats in the project step_config for MethylCentroid)."
+                "Re-run methyl-centroid with enable_binned_stats=True (e.g. in project step_config.centroid.base_config: "
+                "enable_binned_stats=true, binned_stats_bins=20). If you already did, check that the H5 files at "
+                "centroid1_dir/centroid2_dir are the ones just built (e.g. Python: MethylSample.load_from_h5(path).binned_stats)."
             )
 
     def _detect_statistical_dmps_for_context(
