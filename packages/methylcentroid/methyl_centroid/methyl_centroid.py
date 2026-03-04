@@ -988,6 +988,10 @@ class MethylCentroid:
                                     initial_chunk = 50_000_000
                                     if builder is not None:
                                         try:
+                                            builder.release_gpu()
+                                        except Exception:
+                                            pass
+                                        try:
                                             del builder
                                         except Exception:
                                             pass

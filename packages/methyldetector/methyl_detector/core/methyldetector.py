@@ -3188,13 +3188,14 @@ class MethylDetector:
         from methyl_utils.statistical_tests import welch_d_ks_overlap
         position_indices = np.arange(start_idx, start_idx + len(chunk_df), dtype=np.intp)
         sigmoid_scale = getattr(self.config, "sigmoid_scale", 4.0)
+        grid_size = getattr(self.config, "ecdf_ks_grid_size", 256)
         results = welch_d_ks_overlap(
             dm, var1, n1, var2, n2,
             ecdf_view1=ecdf_view1,
             ecdf_view2=ecdf_view2,
             position_indices=position_indices,
             scale=sigmoid_scale,
-            grid_size=256,
+            grid_size=grid_size,
         )
         chunk_df['welch_d'] = results['welch_d'].astype(np.float32)
         chunk_df['ks_d'] = results['ks_d'].astype(np.float32)

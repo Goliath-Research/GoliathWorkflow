@@ -653,7 +653,12 @@ def _estimate_beta_params_bounded(n: np.ndarray, log_x_sum: np.ndarray, log_1mx_
     extreme values that can occur with MLE estimation on edge cases.
     """
     # First try method of moments as a baseline
-    mean_est = np.exp(log_x_sum / n)
+    # Clip exponent to avoid overflow in exp (float64 overflows for |x| > ~709)
+    n = np.asarray(n, dtype=np.float64)
+    log_x_sum = np.asarray(log_x_sum, dtype=np.float64)
+    log_mean = np.where(n > 0, log_x_sum / n, 0.0)
+    log_mean = np.clip(log_mean, -700.0, 700.0)
+    mean_est = np.exp(log_mean)
     mean_est = np.clip(mean_est, 1e-6, 1-1e-6)
 
     # Conservative MoM estimates
@@ -983,8 +988,19 @@ def ecdf_ks_statistic(
 ) -> np.ndarray:
     """
     KS statistic between two ECDFs at each position: D = sup_x |F1(x) - F2(x)| on a grid in [0, 1].
+    Uses vectorized _cdf_batch when available for speed; falls back to per-position _cdf otherwise.
     """
+    position_indices = np.asarray(position_indices, dtype=np.intp).ravel()
     grid = np.linspace(0.0, 1.0, grid_size, dtype=np.float64)
+    use_batch = (
+        hasattr(ecdf_view1, "_cdf_batch")
+        and hasattr(ecdf_view2, "_cdf_batch")
+    )
+    if use_batch:
+        f1 = ecdf_view1._cdf_batch(position_indices, grid)  # (n_positions, grid_size)
+        f2 = ecdf_view2._cdf_batch(position_indices, grid)
+        ks_stats = np.max(np.abs(f1 - f2), axis=1)
+        return ks_stats.astype(np.float64)
     ks_stats = np.zeros(len(position_indices), dtype=np.float64)
     for i, pos_idx in enumerate(position_indices):
         pos_idx = int(pos_idx)
@@ -1063,7 +1079,8 @@ def welch_d_ks_overlap(
         ks_p = ks_p_arr
 
     corrected_d = welch_d * (1.0 - ks_d)
-    bounded_effect_size = expit(scale * corrected_d)
+    expit_arg = np.clip(scale * corrected_d, -700.0, 700.0)
+    bounded_effect_size = expit(expit_arg)
 
     return {
         "welch_d": welch_d,

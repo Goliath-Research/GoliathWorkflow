@@ -281,6 +281,28 @@ class ECDFView:
         # Fallback: piecewise constant from edges
         return np.interp(x, self._bin_edges, self._cdf_at_edges[position_idx])
 
+    def _cdf_batch(
+        self, position_indices: np.ndarray, grid: np.ndarray
+    ) -> np.ndarray:
+        """
+        Evaluate CDF at multiple positions and grid points. Returns array of shape
+        (len(position_indices), len(grid)) using piecewise-linear CDF at bin edges.
+        """
+        position_indices = np.asarray(position_indices, dtype=np.intp).ravel()
+        grid = np.clip(np.asarray(grid, dtype=np.float64).ravel(), 0.0, 1.0)
+        P, G = len(position_indices), len(grid)
+        cdf_slice = self._cdf_at_edges[position_indices]  # (P, n_edges)
+        bin_edges = self._bin_edges
+        E = len(bin_edges)
+        out = np.zeros((P, G), dtype=np.float64)
+        for j, g in enumerate(grid):
+            idx = np.searchsorted(bin_edges, g, side="right") - 1
+            idx = np.clip(idx, 0, E - 2)
+            t = (g - bin_edges[idx]) / (bin_edges[idx + 1] - bin_edges[idx])
+            t = np.clip(t, 0.0, 1.0)
+            out[:, j] = (1.0 - t) * cdf_slice[:, idx] + t * cdf_slice[:, idx + 1]
+        return np.clip(out, 0.0, 1.0)
+
     def _pdf(self, position_idx: int, x: float) -> float:
         if self._interpolators is not None:
             interp = self._interpolators[position_idx]

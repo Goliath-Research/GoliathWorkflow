@@ -508,27 +508,51 @@ class MemoryManager:
         return decorator
 
     def force_gpu_cleanup(self):
-        """Force comprehensive cleanup of GPU memory."""
-        if CUPY_AVAILABLE:
-            try:
-                # Multiple cleanup attempts for thorough cleanup
-                cleanup_gpu_memory()
+        """Force comprehensive cleanup of GPU memory (CuPy, cuDF/RMM, PyTorch)."""
+        try:
+            # 1. Collect first so any released Python refs (e.g. builder.release_gpu()) are dropped
+            gc.collect()
 
-                # Free memory pools
+            if CUPY_AVAILABLE:
+                # 2. CuPy: free pools and sync
+                cleanup_gpu_memory()
                 if self.gpu_pool:
                     self.gpu_pool.free_all_blocks()
-
-                # Force garbage collection
-                gc.collect()
-
-                # Additional cleanup for CuPy
                 if hasattr(cp, 'cuda'):
                     cp.cuda.Device().synchronize()
                     cp.cuda.runtime.deviceSynchronize()
+                if hasattr(cp, 'clear_memo'):
+                    cp.clear_memo()
 
-                logger.info("GPU memory cleanup completed")
+            # 3. PyTorch: clear cached allocator so GPU memory is released
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize()
+            except ImportError:
+                pass
             except Exception as e:
-                logger.warning(f"GPU cleanup failed: {e}")
+                logger.debug("PyTorch GPU cleanup skipped: %s", e)
+
+            # 4. RMM/cuDF: release pool memory when RAPIDS is used
+            try:
+                import rmm
+                if hasattr(rmm, 'get_current_allocator'):
+                    allocator = rmm.get_current_allocator()
+                    if hasattr(allocator, 'free_all_blocks'):
+                        allocator.free_all_blocks()
+            except ImportError:
+                pass
+            except Exception as e:
+                logger.debug("RMM GPU cleanup skipped: %s", e)
+
+            # 5. Final GC so freed GPU allocations are reflected
+            gc.collect()
+
+            logger.info("GPU memory cleanup completed")
+        except Exception as e:
+            logger.warning(f"GPU cleanup failed: {e}")
 
     def cleanup_gpu_after_operation(self, operation_name: str = "unknown"):
         """

@@ -404,6 +404,10 @@ class MethylModelerConfig(BaseModel):
         default=None, ge=0.0, le=1.0,
         description="Minimum bounded_effect_size for biological filter (when effect_size_mode='welch_sigmoid')."
     )
+    ecdf_ks_grid_size: int = Field(
+        default=256, ge=16, le=1024,
+        description="Number of grid points for ECDF/KS comparison (speed vs resolution tradeoff; default 256)."
+    )
     eps: float = Field(
         default=1e-6, gt=0,
         description="Epsilon for numerical stability in variance calculations (prevents division by zero in effect_size = |delta_mu / var_delta_mu|)"

@@ -76,6 +76,29 @@ class MethylCentroidBuilder:
         self.capacity = chunk_size
         self.samples_processed = 0
 
+    def release_gpu(self) -> None:
+        """
+        Release all GPU array references so memory can be freed.
+        Call after finalize() when the builder is no longer needed, so that
+        force_gpu_cleanup / gc.collect() can reclaim GPU memory.
+        """
+        if not self.use_gpu or not HAS_GPU:
+            return
+        attrs = [
+            "pos", "mC_sum", "uC_sum", "N", "Sx", "Sx2",
+            "log_x_sum", "log_1x_sum", "tnc",
+        ]
+        if self.store_extended_stats:
+            attrs.extend([
+                "sum_cov", "sum_cov2", "sum_mC", "sum_uC",
+                "sum_mC2", "sum_uC2", "Sx3", "Sx4",
+                "count_zero", "count_one",
+            ])
+        for attr in attrs:
+            if hasattr(self, attr):
+                setattr(self, attr, None)
+        logger.debug("MethylCentroidBuilder GPU arrays released")
+
     def _grow(self, min_needed: int):
         new_cap = max(min_needed, int(self.capacity * 1.6))
         logger.debug(f"Growing accumulators: {self.capacity:,} → {new_cap:,} positions")
@@ -344,9 +367,11 @@ class MethylCentroidBuilder:
             df["count_one"] = count_one[mask].astype(np.uint32)
             if log_finalize:
                 logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples (Beta-Binomial)")
+            self.release_gpu()
             return MethylBetaBinomialCentroid(df, final_metadata)
         if log_finalize:
             logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples")
+        self.release_gpu()
         return MethylExtendedCentroid(df, final_metadata)
 
 

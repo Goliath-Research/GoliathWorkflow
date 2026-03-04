@@ -90,9 +90,6 @@
     "contexts": [
       "CG"
     ],
-    "path_remap": {
-      "/home/dizada/data": "/work/david-gladys/all-prostate/samples"
-    },
     "step_config": {
       "centroid": {
         "base_config": {
