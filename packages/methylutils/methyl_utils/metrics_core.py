@@ -337,8 +337,10 @@ def compute_bhattacharyya_distance(
     # Prepare arrays for backend
     (a1, b1, a2, b2), _ = _prepare_arrays_for_backend([a1, b1, a2, b2], calc, use_gpu)
 
-    # Bhattacharyya coefficient for Beta distributions
-    bc = xp.exp(xbetaln((a1 + a2)/2, (b1 + b2)/2) - 0.5 * (xbetaln(a1, b1) + xbetaln(a2, b2)))
+    # Bhattacharyya coefficient for Beta distributions (clip ln_BC to avoid exp overflow)
+    ln_bc = xbetaln((a1 + a2) / 2, (b1 + b2) / 2) - 0.5 * (xbetaln(a1, b1) + xbetaln(a2, b2))
+    ln_bc = xp.clip(ln_bc, -700.0, 0.0)  # BC in (0, 1] so ln_BC <= 0; clip to avoid overflow
+    bc = xp.exp(ln_bc)
 
     # Bhattacharyya distance
     bd = -xp.log(bc + DEFAULT_EPS)
@@ -380,8 +382,10 @@ def compute_hellinger_distance(
     # Prepare arrays for backend
     (a1, b1, a2, b2), _ = _prepare_arrays_for_backend([a1, b1, a2, b2], calc, use_gpu)
 
-    # Bhattacharyya coefficient
-    bc = xp.exp(xbetaln((a1 + a2)/2, (b1 + b2)/2) - 0.5 * (xbetaln(a1, b1) + xbetaln(a2, b2)))
+    # Bhattacharyya coefficient (clip to avoid exp overflow)
+    ln_bc = xbetaln((a1 + a2) / 2, (b1 + b2) / 2) - 0.5 * (xbetaln(a1, b1) + xbetaln(a2, b2))
+    ln_bc = xp.clip(ln_bc, -700.0, 0.0)
+    bc = xp.exp(ln_bc)
 
     # Normalized Hellinger distance: H = √(1 - BC)
     # This is equivalent to √(2 - 2BC) / √(2), normalized to [0, 1]

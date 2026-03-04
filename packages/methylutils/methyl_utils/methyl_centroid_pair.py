@@ -1329,9 +1329,21 @@ class MethylCentroidPair:
                 variance1_out[mixture_indices[mix_valid]] = np.asarray(mix_var1[mix_valid], dtype=np.float32)
                 variance2_out[mixture_indices[mix_valid]] = np.asarray(mix_var2[mix_valid], dtype=np.float32)
 
+        # When both centroids have binned_stats, use discrete overlap (fast) instead of Beta BD
+        overlap_approx_batch = None
+        if has_binned1 and has_binned2 and same_bin_edges:
+            bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
+            bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
+            overlap_approx_batch = discrete_overlap_from_bin_counts(bc1_batch, bc2_batch)
+
         bhattacharyya = None
         overlap_mode = (self.overlap_mode or "beta").lower()
-        if overlap_mode in {"auto", "normal"}:
+        if overlap_approx_batch is not None:
+            # Fast path: use discrete overlap for all; skip compute_bhattacharyya_distance
+            ov = np.clip(np.asarray(overlap_approx_batch, dtype=np.float64), 1e-10, 1.0)
+            bhattacharyya = (-np.log(ov)).astype(np.float32)
+            # Optionally overwrite ECDF positions with ECDF overlap (same as before) if desired; keep discrete for speed
+        elif overlap_mode in {"auto", "normal"}:
             normal_bd = _bhattacharyya_normal(mean_normal1, var_normal1, mean_normal2, var_normal2)
             if overlap_mode == "normal":
                 bhattacharyya = normal_bd.astype(np.float32)
@@ -1350,7 +1362,7 @@ class MethylCentroidPair:
                             mix_mean2[mix_valid], mix_var2[mix_valid]
                         ).astype(np.float32)
                         bhattacharyya[mixture_indices[mix_valid]] = mix_bd
-        if bhattacharyya is not None and np.any(use_ecdf_mask) and has_binned1 and has_binned2 and same_bin_edges:
+        if bhattacharyya is not None and np.any(use_ecdf_mask) and has_binned1 and has_binned2 and same_bin_edges and overlap_approx_batch is None:
             from methyl_utils.core.distribution_views import ECDFView
             bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
             bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
@@ -1407,7 +1419,9 @@ class MethylCentroidPair:
         # overlap_approx: discrete overlap from bin counts when binned_stats present (NaN otherwise)
         n_batch = len(positions)
         results_view['overlap_approx'] = np.full(n_batch, np.nan, dtype=np.float32)
-        if has_binned1 and has_binned2 and same_bin_edges:
+        if overlap_approx_batch is not None:
+            results_view['overlap_approx'] = np.asarray(overlap_approx_batch, dtype=np.float32)
+        elif has_binned1 and has_binned2 and same_bin_edges:
             bc1 = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
             bc2 = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
             overlap_arr = discrete_overlap_from_bin_counts(bc1, bc2)

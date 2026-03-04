@@ -587,7 +587,10 @@ from .statistical_tests import (
     aggregate_pvalues_edgington,
     aggregate_pvalues_mudholkar_george,
     aggregate_pvalues_simes,
-    PVALUE_AGGREGATION_METHODS
+    PVALUE_AGGREGATION_METHODS,
+    discrete_overlap_from_bin_counts,
+    welch_d_fast_overlap_approx,
+    welch_d_ks_overlap,
 )
 
 from .genomic_utils import (
@@ -908,6 +911,9 @@ __all__ = [
     "aggregate_pvalues_mudholkar_george",
     "aggregate_pvalues_simes",
     "PVALUE_AGGREGATION_METHODS",
+    "discrete_overlap_from_bin_counts",
+    "welch_d_fast_overlap_approx",
+    "welch_d_ks_overlap",
     'BetaClassifier',
     'ClassifierFactory',  # if added
     # EAT transformation functions

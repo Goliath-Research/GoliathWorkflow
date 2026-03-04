@@ -225,7 +225,7 @@ def compute_bhattacharyya_coefficient(
     ln_numerator = xbetaln(0.5 * (a1 + a2), 0.5 * (b1 + b2))
     ln_denominator = 0.5 * (xbetaln(a1, b1) + xbetaln(a2, b2))
     ln_BC = ln_numerator - ln_denominator
-    
+    ln_BC = xp.clip(ln_BC, -700.0, 0.0)  # BC in (0, 1]; avoid exp overflow
     BC = xp.exp(ln_BC)
     
     # Ensure output is CPU array

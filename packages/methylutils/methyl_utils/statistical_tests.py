@@ -654,12 +654,14 @@ def _estimate_beta_params_bounded(n: np.ndarray, log_x_sum: np.ndarray, log_1mx_
     """
     # First try method of moments as a baseline
     # Clip exponent to avoid overflow in exp (float64 overflows for |x| > ~709)
-    n = np.asarray(n, dtype=np.float64)
-    log_x_sum = np.asarray(log_x_sum, dtype=np.float64)
-    log_mean = np.where(n > 0, log_x_sum / n, 0.0)
-    log_mean = np.clip(log_mean, -700.0, 700.0)
-    mean_est = np.exp(log_mean)
-    mean_est = np.clip(mean_est, 1e-6, 1-1e-6)
+    n = np.asarray(n, dtype=np.float64).ravel()
+    log_x_sum = np.asarray(log_x_sum, dtype=np.float64).ravel()
+    log_mean = np.where(n > 0, log_x_sum / np.maximum(n, 1e-20), 0.0)
+    log_mean = np.asarray(log_mean, dtype=np.float64)
+    log_mean = np.clip(log_mean, -500.0, 500.0)  # safe for exp; avoid pandas __array_ufunc__ path
+    with np.errstate(over="ignore", invalid="ignore"):
+        mean_est = np.exp(log_mean)
+    mean_est = np.clip(np.asarray(mean_est, dtype=np.float64), 1e-6, 1 - 1e-6)
 
     # Conservative MoM estimates
     alpha_mom = mean_est * 10
