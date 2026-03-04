@@ -378,9 +378,9 @@ class MethylDetector:
                    f"out of {total_positions:,} ({(statistical_dmps_count/total_positions)*100:.1f}% pass rate)")
         
         # ECDF views required (binned_stats validated at start of MethylDetector)
-        from methyl_utils.core.distribution_views import view_from_centroid
-        ecdf_view1 = view_from_centroid(centroid1, "ecdf")
-        ecdf_view2 = view_from_centroid(centroid2, "ecdf")
+        from methyl_utils.core.distribution_views import get_distribution_view
+        ecdf_view1 = get_distribution_view(centroid1, "ecdf")
+        ecdf_view2 = get_distribution_view(centroid2, "ecdf")
 
         # Compute metrics: welch_d, ks_d, overlap = 1 - ks_d, bounded_effect_size, effect_size
         dmp_df = self._compute_missing_metrics_df(filtered_results, ecdf_view1=ecdf_view1, ecdf_view2=ecdf_view2)
@@ -1512,9 +1512,8 @@ class MethylDetector:
     
     def _validate_centroid_parameters(self) -> None:
         """
-        Log basic centroid statistics. No distribution validation (Beta/Normal etc.).
-        Correct group classification is checked by the centroid self-check when
-        building the classifier (centroid1 → class 0, centroid2 → class 1).
+        Log centroid summary: mean, variance, ECDF availability, and KS between ECDFs (sampled).
+        Correct group classification is checked by the centroid self-check when building the classifier.
         """
         from pathlib import Path
 
@@ -1537,11 +1536,29 @@ class MethylDetector:
                 logger.warning(f"Centroid summary failed: {results['error']}")
                 return
 
-            c1 = results["centroid1"]
-            c2 = results["centroid2"]
-            logger.info("Centroid1: %s positions, mean N = %.1f", c1["n_positions"], c1["sample_stats"]["mean_N"])
-            logger.info("Centroid2: %s positions, mean N = %.1f", c2["n_positions"], c2["sample_stats"]["mean_N"])
+            c1, c2 = results["centroid1"], results["centroid2"]
+            logger.info("Centroid1: %s positions, N = %.1f ± %.1f", c1["n_positions"], c1["sample_stats"]["mean_N"], c1["sample_stats"]["std_N"])
+            logger.info("  mean (median) = %.4f, variance (median) = %.6f, ECDF = %s", c1["mean_median"], c1["variance_median"], "yes" if c1["has_ecdf"] else "no")
+            logger.info("Centroid2: %s positions, N = %.1f ± %.1f", c2["n_positions"], c2["sample_stats"]["mean_N"], c2["sample_stats"]["std_N"])
+            logger.info("  mean (median) = %.4f, variance (median) = %.6f, ECDF = %s", c2["mean_median"], c2["variance_median"], "yes" if c2["has_ecdf"] else "no")
             logger.info("Trimmed mean |Δβ| (group separation) = %.4f", results["group_separation"])
+
+            # KS between ECDFs on a sample of positions (low performance hit); use aligned centroids
+            if c1["has_ecdf"] and c2["has_ecdf"]:
+                try:
+                    from methyl_utils.core.distribution_views import get_distribution_view
+                    from methyl_utils.statistical_tests import ecdf_ks_statistic
+                    cent1, cent2, _ = MethylCentroidPair.load_and_align(str(centroid1_path), str(centroid2_path), min_coverage=1)
+                    n_pos = len(cent1)
+                    sample_size = min(500, max(100, n_pos // 1000))
+                    rng = np.random.default_rng(42)
+                    position_indices = rng.choice(n_pos, size=sample_size, replace=False).astype(np.intp)
+                    ecdf1 = get_distribution_view(cent1, "ecdf")
+                    ecdf2 = get_distribution_view(cent2, "ecdf")
+                    ks_sample = ecdf_ks_statistic(ecdf1, ecdf2, position_indices, grid_size=128)
+                    logger.info("ECDF KS (sample of %s positions): median = %.4f, mean = %.4f", sample_size, float(np.median(ks_sample)), float(np.mean(ks_sample)))
+                except Exception as e:
+                    logger.debug("ECDF KS summary skipped: %s", e)
 
         except Exception as e:
             logger.debug("Centroid summary failed: %s", e)

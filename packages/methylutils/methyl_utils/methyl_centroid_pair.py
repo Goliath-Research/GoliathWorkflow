@@ -1437,31 +1437,44 @@ class MethylCentroidPair:
         except ValueError as e:
             return {"error": f"Failed to align centroids: {e}"}
 
-        alpha1, beta1 = centroid1.alpha.values, centroid1.beta.values
-        alpha2, beta2 = centroid2.alpha.values, centroid2.beta.values
         N1, N2 = centroid1.N, centroid2.N
+        mean1 = np.asarray(centroid1.mean, dtype=np.float64)
+        mean2 = np.asarray(centroid2.mean, dtype=np.float64)
+        # Per-position variance: (Sx2 - Sx²/N) / (N-1)
+        Sx1, Sx2_1 = np.asarray(centroid1.Sx.values, dtype=np.float64), np.asarray(centroid1.Sx2.values, dtype=np.float64)
+        Sx2, Sx2_2 = np.asarray(centroid2.Sx.values, dtype=np.float64), np.asarray(centroid2.Sx2.values, dtype=np.float64)
+        var1 = np.maximum((Sx2_1 - (Sx1 ** 2) / np.maximum(N1, 1)) / np.maximum(N1 - 1, 1), 1e-12)
+        var2 = np.maximum((Sx2_2 - (Sx2 ** 2) / np.maximum(N2, 1)) / np.maximum(N2 - 1, 1), 1e-12)
+        has_ecdf1 = bool(getattr(centroid1, "binned_stats", None) and "bin_edges" in getattr(centroid1, "binned_stats", {}) and "bin_counts" in getattr(centroid1, "binned_stats", {}))
+        has_ecdf2 = bool(getattr(centroid2, "binned_stats", None) and "bin_edges" in getattr(centroid2, "binned_stats", {}) and "bin_counts" in getattr(centroid2, "binned_stats", {}))
 
-        position_diffs = np.abs(centroid1.mean - centroid2.mean)
+        position_diffs = np.abs(mean1 - mean2)
         n_positions = len(position_diffs)
         trim_bottom = int(0.10 * n_positions)
         if trim_bottom < n_positions:
             sorted_diffs = np.sort(position_diffs)
             trimmed_mean_diff = float(np.mean(sorted_diffs[trim_bottom:]))
         else:
-            trimmed_mean_diff = float(np.abs(centroid1.mean.mean() - centroid2.mean.mean()))
+            trimmed_mean_diff = float(np.abs(mean1.mean() - mean2.mean()))
 
         return {
             "centroid1": {
-                "n_positions": len(alpha1),
-                "alpha_stats": {"mean": float(alpha1.mean()), "std": float(alpha1.std())},
-                "beta_stats": {"mean": float(beta1.mean()), "std": float(beta1.std())},
-                "sample_stats": {"min_N": int(N1.min()), "max_N": int(N1.max()), "mean_N": float(N1.mean()), "std_N": float(N1.std())}
+                "n_positions": len(mean1),
+                "mean_median": float(np.median(mean1)),
+                "mean_mean": float(np.mean(mean1)),
+                "variance_median": float(np.median(var1)),
+                "variance_mean": float(np.mean(var1)),
+                "sample_stats": {"min_N": int(N1.min()), "max_N": int(N1.max()), "mean_N": float(N1.mean()), "std_N": float(N1.std())},
+                "has_ecdf": has_ecdf1,
             },
             "centroid2": {
-                "n_positions": len(alpha2),
-                "alpha_stats": {"mean": float(alpha2.mean()), "std": float(alpha2.std())},
-                "beta_stats": {"mean": float(beta2.mean()), "std": float(beta2.std())},
-                "sample_stats": {"min_N": int(N2.min()), "max_N": int(N2.max()), "mean_N": float(N2.mean()), "std_N": float(N2.std())}
+                "n_positions": len(mean2),
+                "mean_median": float(np.median(mean2)),
+                "mean_mean": float(np.mean(mean2)),
+                "variance_median": float(np.median(var2)),
+                "variance_mean": float(np.mean(var2)),
+                "sample_stats": {"min_N": int(N2.min()), "max_N": int(N2.max()), "mean_N": float(N2.mean()), "std_N": float(N2.std())},
+                "has_ecdf": has_ecdf2,
             },
             "group_separation": trimmed_mean_diff,
             "separation_stats": {
