@@ -435,6 +435,43 @@ def _pdf_normal_truncated(x: np.ndarray, mu: float, sigma2: float) -> np.ndarray
     return scipy_truncnorm.pdf(x_arr, a_std, b_std, loc=mu, scale=sigma)
 
 
+def _kde_from_binned(
+    bin_edges: np.ndarray,
+    bin_counts: np.ndarray,
+    x_grid: np.ndarray,
+    bandwidth: Optional[float] = None,
+) -> np.ndarray:
+    """
+    KDE (kernel density estimate) from binned counts: smooth density equivalent to
+    smoothing the empirical histogram. Uses Gaussian kernel; density integrates to 1.
+    """
+    bin_edges = np.asarray(bin_edges, dtype=np.float64)
+    bin_counts = np.asarray(bin_counts, dtype=np.float64)
+    n_bins = len(bin_counts)
+    if n_bins == 0 or bin_edges.shape[0] != n_bins + 1:
+        return np.zeros_like(x_grid, dtype=np.float64)
+    total = float(np.sum(bin_counts))
+    if total <= 0:
+        return np.zeros_like(x_grid, dtype=np.float64)
+    midpoints = (bin_edges[:-1] + bin_edges[1:]) * 0.5
+    widths = np.diff(bin_edges)
+    if bandwidth is None:
+        # Scott-style: h proportional to typical bin width and 1/n_bins
+        mean_width = float(np.mean(widths))
+        bandwidth = max(mean_width * 1.5, 0.02)
+    x_grid = np.asarray(x_grid, dtype=np.float64).ravel()
+    # density(x) = (1/N) * sum_i count_i * (1/h) * norm.pdf((x - mid_i) / h)
+    density = np.zeros_like(x_grid, dtype=np.float64)
+    for i in range(n_bins):
+        w = float(bin_counts[i]) / total
+        if w <= 0:
+            continue
+        # Gaussian kernel: (1/h) * phi((x - mid_i)/h) so that integral = 1 per bin contribution
+        u = (x_grid - midpoints[i]) / max(bandwidth, 1e-10)
+        density += w * np.exp(-0.5 * u * u) / (bandwidth * np.sqrt(2.0 * np.pi))
+    return density
+
+
 def _get_centroid_property(centroid: Any, position_idx: int, prop_name: str) -> Optional[float]:
     """
     Get a scalar at position_idx from a centroid property (mean, variance, alpha, beta, alpha_bb, beta_bb).
@@ -463,9 +500,10 @@ def _export_density_plot(
     out_path: Path,
 ) -> bool:
     """
-    Export a single interactive Plotly HTML with density plots for Normal, Beta,
-    Beta-Binomial, and ECDF at the given position. Uses the centroid's mean, variance,
-    alpha, beta, alpha_bb, beta_bb (no duplicate computation). Returns True if written.
+    Export a single interactive Plotly HTML with density plots (KDE-style) for Normal, Beta,
+    Beta-Binomial, and ECDF at the given position. Parametric curves use the centroid's
+    mean, variance, alpha, beta, alpha_bb, beta_bb. ECDF uses a Gaussian-kernel KDE
+    from the binned counts (smooth empirical density), not the CDF derivative. Returns True if written.
     """
     if go is None:
         print("plotly not installed; skipping density plot. pip install plotly", file=sys.stderr)
@@ -532,7 +570,7 @@ def _export_density_plot(
             )
         )
 
-    # ECDF (PDF from interpolated CDF derivative)
+    # ECDF: KDE from binned data (smooth density equivalent to histogram/KDE, not PCHIP derivative)
     binned = getattr(frame, "binned_stats", None)
     if (
         binned is not None
@@ -541,10 +579,13 @@ def _export_density_plot(
         and "bin_counts" in binned
     ):
         try:
-            from methyl_utils.core.distribution_views import get_distribution_view
-
-            ecdf_view = get_distribution_view(frame, "ecdf")
-            pdf_ecdf = np.array([ecdf_view._pdf(position_idx, float(x)) for x in grid])
+            bin_edges = np.asarray(binned["bin_edges"], dtype=np.float64)
+            bin_counts_arr = np.asarray(binned["bin_counts"], dtype=np.float64)
+            if bin_counts_arr.ndim == 2 and position_idx < bin_counts_arr.shape[0]:
+                counts_one = bin_counts_arr[position_idx, :]
+            else:
+                counts_one = bin_counts_arr.ravel()
+            pdf_ecdf = _kde_from_binned(bin_edges, counts_one, grid)
             traces.append(
                 go.Scatter(
                     x=grid.tolist(),
