@@ -240,8 +240,8 @@ class MethylModelerConfig(BaseModel):
         return v
 
     min_effect_size: Optional[float] = Field(
-        default=None, ge=0.0,
-        description="Minimum effect_size for biological filter. Keep DMPs with effect_size >= min_effect_size. Set null to disable. effect_size is computed by MethylCentroidPair (|delta_mean|/(overlap*combined_std))."
+        default=None, ge=0.0, le=1.0,
+        description="Minimum effect size for biological filter (value in [0, 1]). Keep DMPs with effect_size >= min_effect_size. Set null to disable."
     )
     min_delta_mean: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
@@ -259,6 +259,14 @@ class MethylModelerConfig(BaseModel):
         default=None,
         description="Optional. Sweep biological filter values over range/step and write filter_funnel.csv (n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps). One run; no large DMP CSV. Set to null to disable."
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def backward_compat_min_effect_size(cls, data: Any) -> Any:
+        """Accept legacy min_bounded_effect_size from JSON and map to min_effect_size."""
+        if isinstance(data, dict) and "min_bounded_effect_size" in data and data.get("min_effect_size") is None:
+            data = {**data, "min_effect_size": data["min_bounded_effect_size"]}
+        return data
 
     # ----------------
     # Context Weighting
@@ -403,10 +411,6 @@ class MethylModelerConfig(BaseModel):
     sigmoid_scale: float = Field(
         default=4.0, ge=1.0, le=10.0,
         description="Scale parameter for sigmoid in 'welch_sigmoid' mode (steepness of discrimination curve)."
-    )
-    min_bounded_effect_size: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0,
-        description="Minimum bounded_effect_size for biological filter (when effect_size_mode='welch_sigmoid')."
     )
     ecdf_ks_grid_size: int = Field(
         default=256, ge=16, le=1024,
