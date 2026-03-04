@@ -369,6 +369,7 @@ class MethylFrame:
     def apply_mask(self, mask_or_indices: Union[np.ndarray, List[int], bool]) -> "MethylFrame":
         """
         Apply a boolean mask or integer indices to filter the data.
+        Preserves binned_stats when present (slices bin_counts to match filtered rows).
 
         Args:
             mask_or_indices: Boolean mask array or integer indices
@@ -377,18 +378,25 @@ class MethylFrame:
             New instance with filtered data
         """
         if isinstance(mask_or_indices, (list, np.ndarray)) and len(mask_or_indices) > 0:
-            # Check if it's a boolean mask
+            # Resolve to (new_instance, indices_for_binned)
             if isinstance(mask_or_indices, np.ndarray) and mask_or_indices.dtype == bool:
-                # Boolean mask - use .loc with boolean array
-                return type(self)(self._df.loc[mask_or_indices], self._metadata.copy())
+                new_self = type(self)(self._df.loc[mask_or_indices], self._metadata.copy())
+                binned_idx = mask_or_indices
             elif isinstance(mask_or_indices[0], bool):
-                # Boolean mask (list or array with bool elements)
                 mask_array = np.asarray(mask_or_indices, dtype=bool)
-                return type(self)(self._df.loc[mask_array], self._metadata.copy())
+                new_self = type(self)(self._df.loc[mask_array], self._metadata.copy())
+                binned_idx = mask_array
             else:
-                # Integer indices - use .iloc for position-based indexing
                 indices_array = np.asarray(mask_or_indices, dtype=np.int64)
-                return type(self)(self._df.iloc[indices_array], self._metadata.copy())
+                new_self = type(self)(self._df.iloc[indices_array], self._metadata.copy())
+                binned_idx = indices_array
+            # Preserve binned_stats so ECDF/KS work after load_and_align
+            if getattr(self, "_binned_stats", None) and "bin_edges" in self._binned_stats and "bin_counts" in self._binned_stats:
+                bin_edges = self._binned_stats["bin_edges"]
+                bin_counts = np.asarray(self._binned_stats["bin_counts"])
+                if bin_counts.ndim == 2 and bin_counts.shape[0] == len(self._df):
+                    new_self.set_binned_stats(bin_edges, bin_counts[binned_idx, :])
+            return new_self
         return self
 
     def align_to_positions(self, positions: np.ndarray) -> "MethylFrame":
