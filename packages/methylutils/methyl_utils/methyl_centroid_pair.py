@@ -39,7 +39,11 @@ from .performance_profiler import (
     start_performance_monitoring,
     stop_performance_monitoring,
 )
-from .statistical_tests import likelihood_ratio_test_beta, storey_qvalues
+from .statistical_tests import (
+    likelihood_ratio_test_beta,
+    storey_qvalues,
+    discrete_overlap_from_bin_counts,
+)
 from methyl_utils.logging_utils import setup_module_logging
 from .core.methyl_mixture_centroid import MethylBetaMixtureCentroid
 logger = setup_module_logging(__name__)
@@ -79,6 +83,7 @@ CENTROID_COMPARISON_DTYPE = np.dtype([
     ('variance1', np.float32),
     ('variance2', np.float32),
     ('effect_size', np.float32),  # Biological importance: |delta_mean| / (max(overlap, min_floor) * combined_std)
+    ('overlap_approx', np.float32),  # Discrete overlap from bin counts (NaN when binned_stats not available)
 ])
 
 
@@ -1398,6 +1403,15 @@ class MethylCentroidPair:
             variance_reliability=True,
         )
         results_view['effect_size'] = effect_sizes
+
+        # overlap_approx: discrete overlap from bin counts when binned_stats present (NaN otherwise)
+        n_batch = len(positions)
+        results_view['overlap_approx'] = np.full(n_batch, np.nan, dtype=np.float32)
+        if has_binned1 and has_binned2 and same_bin_edges:
+            bc1 = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
+            bc2 = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
+            overlap_arr = discrete_overlap_from_bin_counts(bc1, bc2)
+            results_view['overlap_approx'] = np.asarray(overlap_arr, dtype=np.float32)
 
     def _apply_fdr_correction(self, results_array: np.ndarray) -> np.ndarray:
         """Apply FDR correction to p-values using Storey's method."""

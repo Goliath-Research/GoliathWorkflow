@@ -1032,6 +1032,102 @@ def ecdf_ks_pvalue(
     return ks_stats, p_values
 
 
+def discrete_overlap_from_bin_counts(
+    bc1: np.ndarray,
+    bc2: np.ndarray,
+    method: str = "bhattacharyya",
+) -> np.ndarray:
+    """
+    Compute overlap in [0, 1] between two binned count distributions (discrete).
+    Respects asymmetry of the underlying distribution (e.g. ECDF).
+
+    Args:
+        bc1: Bin counts for centroid 1, shape (n_bins,) or (n_positions, n_bins).
+        bc2: Bin counts for centroid 2, same shape as bc1.
+        method: "bhattacharyya" (sum sqrt(p1*p2)) or "histogram_intersection" (sum min(p1,p2)).
+
+    Returns:
+        Overlap per position, shape (n_positions,) or scalar if inputs are (n_bins,).
+    """
+    bc1 = np.asarray(bc1, dtype=np.float64)
+    bc2 = np.asarray(bc2, dtype=np.float64)
+    squeeze = False
+    if bc1.ndim == 1:
+        bc1 = bc1.reshape(1, -1)
+        bc2 = bc2.reshape(1, -1)
+        squeeze = True
+    total1 = np.sum(bc1, axis=1, keepdims=True)
+    total2 = np.sum(bc2, axis=1, keepdims=True)
+    total1 = np.maximum(total1, 1e-20)
+    total2 = np.maximum(total2, 1e-20)
+    p1 = bc1 / total1
+    p2 = bc2 / total2
+    if method == "histogram_intersection":
+        overlap = np.sum(np.minimum(p1, p2), axis=1)
+    else:
+        # Bhattacharyya coefficient (discrete): sum sqrt(p1 * p2)
+        overlap = np.sum(np.sqrt(np.maximum(p1 * p2, 0.0)), axis=1)
+    out = np.clip(overlap.astype(np.float64), 0.0, 1.0)
+    return out[0] if squeeze else out
+
+
+def welch_d_fast_overlap_approx(
+    delta_mean: np.ndarray,
+    var1: np.ndarray,
+    n1: np.ndarray,
+    var2: np.ndarray,
+    n2: np.ndarray,
+    scale: float = 4.0,
+    overlap_approx: Optional[np.ndarray] = None,
+) -> dict:
+    """
+    Fast biological metrics without ECDF: Welch's d, overlap (discrete or Normal fallback),
+    and bounded effect size approx. Use for funnel filtering before computing real ECDF metrics.
+
+    Args:
+        delta_mean, var1, n1, var2, n2: Per-position stats (same as welch_d_ks_overlap).
+        scale: Sigmoid scale for bounded_effect_size (default 4.0).
+        overlap_approx: Optional precomputed overlap (e.g. from discrete_overlap_from_bin_counts).
+            If None, use Normal-based fallback: 2 * norm.cdf(-welch_d/2).
+
+    Returns:
+        Dict with welch_d, overlap_approx, bounded_effect_size_approx (all in [0,1] for overlap/effect).
+    """
+    from scipy.special import expit
+    from scipy.stats import norm
+    WELCH_D_MAX = 50.0
+    delta_mean = np.asarray(delta_mean, dtype=np.float64).ravel()
+    var1 = np.asarray(var1, dtype=np.float64).ravel()
+    n1 = np.asarray(n1, dtype=np.float64).ravel()
+    var2 = np.asarray(var2, dtype=np.float64).ravel()
+    n2 = np.asarray(n2, dtype=np.float64).ravel()
+    se = np.sqrt(var1 / np.maximum(n1, 1) + var2 / np.maximum(n2, 1))
+    se = np.maximum(se, 1e-12)
+    welch_d = np.abs(delta_mean) / se
+    welch_d = np.minimum(welch_d, WELCH_D_MAX)
+    n_pos = len(welch_d)
+    if overlap_approx is not None:
+        overlap_approx = np.asarray(overlap_approx, dtype=np.float64).ravel()
+        if len(overlap_approx) != n_pos:
+            overlap_approx = np.resize(overlap_approx, n_pos)
+        overlap_approx = np.clip(overlap_approx, 0.0, 1.0)
+        # Replace NaN with Normal fallback for that position
+        bad = ~np.isfinite(overlap_approx)
+        if np.any(bad):
+            overlap_approx = overlap_approx.copy()
+            overlap_approx[bad] = 2.0 * norm.cdf(-welch_d[bad] / 2.0)
+    else:
+        overlap_approx = 2.0 * norm.cdf(-welch_d / 2.0)
+        overlap_approx = np.clip(overlap_approx, 0.0, 1.0)
+    expit_arg = np.clip(scale * welch_d * (1.0 - overlap_approx), -700.0, 700.0)
+    bounded_effect_size_approx = expit(expit_arg)
+    return {
+        "welch_d": welch_d,
+        "overlap_approx": overlap_approx,
+        "bounded_effect_size_approx": bounded_effect_size_approx,
+    }
+
+
 def welch_d_ks_overlap(
     delta_mean: np.ndarray,
     var1: np.ndarray,
@@ -1122,5 +1218,7 @@ __all__ = [
     "PVALUE_AGGREGATION_METHODS",
     "ecdf_ks_statistic",
     "ecdf_ks_pvalue",
+    "discrete_overlap_from_bin_counts",
+    "welch_d_fast_overlap_approx",
     "welch_d_ks_overlap",
 ]

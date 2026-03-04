@@ -112,7 +112,7 @@
         "save_batch_summary": true
       },
       "detection": {
-        "alpha": 0.01,
+        "alpha": 0.05,
         "distribution": "ecdf",
         "max_N_for_ecdf": 30,
         "optimize_dmps": true,

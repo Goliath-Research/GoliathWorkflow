@@ -181,6 +181,10 @@ class MethylModelerConfig(BaseModel):
         ge=2,
         description="In distribution=auto, use ECDF when both centroids have N < this and binned_stats; requires centroids built with enable_binned_stats."
     )
+    use_fast_biological_funnel: bool = Field(
+        default=True,
+        description="If True: compute fast approximate metrics (Welch's d, discrete/Normal overlap, bounded effect size approx), apply biological filters, then compute real ECDF overlap and bounded_effect_size only for survivors and sort by real bounded_effect_size. If False: legacy path (ECDF metrics for all statistically filtered positions, then filter)."
+    )
 
     # New calibration parameters (for trained classifier metadata)
     temperature: float = Field(
