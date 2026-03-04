@@ -1074,6 +1074,10 @@ class MethylCentroid:
                         except Exception as e:
                             self.logger.debug(f"Sample cleanup failed: {e}")
                     if builder is not None:
+                        try:
+                            builder.release_gpu()
+                        except Exception as e:
+                            self.logger.debug("Builder GPU release failed: %s", e)
                         del builder
                     self._cleanup_gpu_after_sample()
 
@@ -1759,6 +1763,9 @@ class MethylCentroid:
                         else:
                             chunk_results.append(chunk_centroid)
 
+                # Release GPU memory after each chunk so it does not accumulate
+                memory_manager.force_gpu_cleanup()
+
             if not chunk_results:
                 self.logger.error("No chunks produced valid centroid data")
                 return None
@@ -1839,84 +1846,94 @@ class MethylCentroid:
 
         # Process each sample for these positions
         for sample_idx in range(sample_count):
-            # Load sample directly instead of getting from aligner
-            sample_path = (
-                self.samples[sample_idx]
-                if sample_idx < len(self.samples)
-                else self.add_samples[sample_idx - len(self.samples)]
-            )
+            sample_data_obj = None
+            try:
+                # Load sample directly instead of getting from aligner
+                sample_path = (
+                    self.samples[sample_idx]
+                    if sample_idx < len(self.samples)
+                    else self.add_samples[sample_idx - len(self.samples)]
+                )
 
-            if use_indexed_load:
-                # Fast path: get pos from cache (or load once), then load only chunk rows
-                path_key = str(Path(sample_path))
-                if path_key not in pos_cache:
-                    pos_cache[path_key] = load_pos_from_h5(sample_path)
-                pos_arr = pos_cache[path_key]
-                idx = _indices_for_positions(pos_arr, positions)
-                if len(idx) == 0:
-                    continue
-                sample_data_obj = load_from_h5(sample_path, indices=idx)
-                sample_data_obj = self._ensure_numpy_arrays(sample_data_obj)
-            else:
-                sample_data_obj = self.load_sample(sample_path)
+                if use_indexed_load:
+                    # Fast path: get pos from cache (or load once), then load only chunk rows
+                    path_key = str(Path(sample_path))
+                    if path_key not in pos_cache:
+                        pos_cache[path_key] = load_pos_from_h5(sample_path)
+                    pos_arr = pos_cache[path_key]
+                    idx = _indices_for_positions(pos_arr, positions)
+                    if len(idx) == 0:
+                        continue
+                    sample_data_obj = load_from_h5(sample_path, indices=idx)
+                    sample_data_obj = self._ensure_numpy_arrays(sample_data_obj)
+                else:
+                    sample_data_obj = self.load_sample(sample_path)
 
-            if use_indexed_load:
-                aligned_sample_cpu = sample_data_obj.to_cpu() if hasattr(sample_data_obj, "to_cpu") else sample_data_obj
-                aligned_pos = np.asarray(aligned_sample_cpu.pos.values, dtype=np.uint32)
-                aligned_mC = np.asarray(aligned_sample_cpu.mC.values, dtype=np.uint32)
-                aligned_uC = np.asarray(aligned_sample_cpu.uC.values, dtype=np.uint32)
-            else:
-                # Align sample to target positions (returns only common positions, length <= len(positions))
-                aligned_sample = sample_data_obj.align_to_positions(positions)
-                if len(aligned_sample) == 0:
-                    continue
-                aligned_sample_cpu = aligned_sample.to_cpu()
-                aligned_pos = np.asarray(aligned_sample_cpu.pos.values, dtype=np.uint32)
-                aligned_mC = np.asarray(aligned_sample_cpu.mC.values, dtype=np.uint32)
-                aligned_uC = np.asarray(aligned_sample_cpu.uC.values, dtype=np.uint32)
+                if use_indexed_load:
+                    aligned_sample_cpu = sample_data_obj.to_cpu() if hasattr(sample_data_obj, "to_cpu") else sample_data_obj
+                    aligned_pos = np.asarray(aligned_sample_cpu.pos.values, dtype=np.uint32)
+                    aligned_mC = np.asarray(aligned_sample_cpu.mC.values, dtype=np.uint32)
+                    aligned_uC = np.asarray(aligned_sample_cpu.uC.values, dtype=np.uint32)
+                else:
+                    # Align sample to target positions (returns only common positions, length <= len(positions))
+                    aligned_sample = sample_data_obj.align_to_positions(positions)
+                    if len(aligned_sample) == 0:
+                        continue
+                    aligned_sample_cpu = aligned_sample.to_cpu()
+                    aligned_pos = np.asarray(aligned_sample_cpu.pos.values, dtype=np.uint32)
+                    aligned_mC = np.asarray(aligned_sample_cpu.mC.values, dtype=np.uint32)
+                    aligned_uC = np.asarray(aligned_sample_cpu.uC.values, dtype=np.uint32)
 
-            # Map aligned rows back to indices in the full positions array (positions is sorted)
-            target_idx = np.searchsorted(positions, aligned_pos, side="left")
-            # searchsorted can return len(positions) when value == positions[-1]; clip to valid range
-            target_idx = np.minimum(target_idx, len(positions) - 1)
-            if np.any(positions[target_idx] != aligned_pos):
-                # Should not happen if align_to_positions returns subset of positions
-                valid_map = positions[target_idx] == aligned_pos
-                target_idx = target_idx[valid_map]
-                aligned_mC = aligned_mC[valid_map]
-                aligned_uC = aligned_uC[valid_map]
-                aligned_pos = aligned_pos[valid_map]
-                if len(target_idx) == 0:
-                    continue
+                # Map aligned rows back to indices in the full positions array (positions is sorted)
+                target_idx = np.searchsorted(positions, aligned_pos, side="left")
+                # searchsorted can return len(positions) when value == positions[-1]; clip to valid range
+                target_idx = np.minimum(target_idx, len(positions) - 1)
+                if np.any(positions[target_idx] != aligned_pos):
+                    # Should not happen if align_to_positions returns subset of positions
+                    valid_map = positions[target_idx] == aligned_pos
+                    target_idx = target_idx[valid_map]
+                    aligned_mC = aligned_mC[valid_map]
+                    aligned_uC = aligned_uC[valid_map]
+                    aligned_pos = aligned_pos[valid_map]
+                    if len(target_idx) == 0:
+                        continue
 
-            # Accumulate at the correct indices
-            np.add.at(mC_accum, target_idx, aligned_mC)
-            np.add.at(uC_accum, target_idx, aligned_uC)
+                # Accumulate at the correct indices
+                np.add.at(mC_accum, target_idx, aligned_mC)
+                np.add.at(uC_accum, target_idx, aligned_uC)
 
-            # Track per-position sample count (N) for min_samples filtering
-            coverage = aligned_mC + aligned_uC
-            np.add.at(N_accum, target_idx, (coverage > 0).astype(np.uint32))
+                # Track per-position sample count (N) for min_samples filtering
+                coverage = aligned_mC + aligned_uC
+                np.add.at(N_accum, target_idx, (coverage > 0).astype(np.uint32))
 
-            if extended or self.enable_binned_stats:
-                # Calculate methylation level for this sample (in aligned space)
-                valid_in_aligned = coverage > 0
-                if valid_in_aligned.any():
-                    methylation_level = np.zeros(len(aligned_mC), dtype=np.float32)
-                    methylation_level[valid_in_aligned] = (
-                        aligned_mC[valid_in_aligned] / coverage[valid_in_aligned]
-                    )
+                if extended or self.enable_binned_stats:
+                    # Calculate methylation level for this sample (in aligned space)
+                    valid_in_aligned = coverage > 0
+                    if valid_in_aligned.any():
+                        methylation_level = np.zeros(len(aligned_mC), dtype=np.float32)
+                        methylation_level[valid_in_aligned] = (
+                            aligned_mC[valid_in_aligned] / coverage[valid_in_aligned]
+                        )
 
-                    if extended:
-                        np.add.at(Sx_accum, target_idx, methylation_level)
-                        np.add.at(Sx2_accum, target_idx, methylation_level**2)
+                        if extended:
+                            np.add.at(Sx_accum, target_idx, methylation_level)
+                            np.add.at(Sx2_accum, target_idx, methylation_level**2)
 
-                    if self.enable_binned_stats and bin_counts is not None:
-                        bin_idx = np.floor(
-                            methylation_level * self.binned_stats_bins
-                        ).astype(np.int32)
-                        bin_idx = np.clip(bin_idx, 0, self.binned_stats_bins - 1)
-                        idxs = np.where(valid_in_aligned)[0]
-                        np.add.at(bin_counts, (target_idx[idxs], bin_idx[idxs]), 1)
+                        if self.enable_binned_stats and bin_counts is not None:
+                            bin_idx = np.floor(
+                                methylation_level * self.binned_stats_bins
+                            ).astype(np.int32)
+                            bin_idx = np.clip(bin_idx, 0, self.binned_stats_bins - 1)
+                            idxs = np.where(valid_in_aligned)[0]
+                            np.add.at(bin_counts, (target_idx[idxs], bin_idx[idxs]), 1)
+            finally:
+                if sample_data_obj is not None:
+                    try:
+                        if hasattr(sample_data_obj, "close"):
+                            sample_data_obj.close()
+                    except Exception as e:
+                        self.logger.debug("Sample close failed: %s", e)
+                    sample_data_obj = None
 
         # Filter positions with sufficient coverage
         total_coverage = mC_accum + uC_accum
