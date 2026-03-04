@@ -226,7 +226,9 @@ class MethylDetector:
         # Filter biological DMPs (apply biological filters)
         logger.info("🔬 Filtering biologically significant DMPs...")
         bio_dmps_df = self._filter_biological_dmps(dmps_df)
-        logger.info(f"✅ Biological DMPs: {len(bio_dmps_df):,} (retention: {len(bio_dmps_df)/len(dmps_df)*100:.1f}%)")
+        n_bio, n_stat = len(bio_dmps_df), len(dmps_df)
+        pct = f"{n_bio / n_stat * 100:.1f}%" if n_stat and n_stat > 0 else "N/A"
+        logger.info(f"✅ Biological DMPs: {n_bio:,} (retention: {pct})")
 
         # When using fast funnel: compute real ECDF overlap and bounded_effect_size only for biological DMPs, then sort
         if getattr(self.config, "use_fast_biological_funnel", True) and "_context_row_index" in bio_dmps_df.columns:
