@@ -88,9 +88,7 @@
       "Y"
     ],
     "contexts": [
-      "CG",
-      "CHG",
-      "CHH"
+      "CG"
     ],
     "path_remap": {
       "/home/dizada/data": "/work/david-gladys/all-prostate/samples"

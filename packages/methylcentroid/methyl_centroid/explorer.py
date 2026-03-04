@@ -554,6 +554,7 @@ def _export_density_plot(
     chrom_str: str,
     context_str: str,
     out_path: Path,
+    grid_size: int = 300,
 ) -> bool:
     """
     Export a single interactive Plotly HTML with density plots (KDE-style) for Normal, Beta,
@@ -577,9 +578,7 @@ def _export_density_plot(
         print(f"    Skipped: position_idx={position_idx} out of range [0, {n_rows})")
         return False
 
-    # Use a fine grid so the X axis shows many values (advantage of continuous ECDF and smooth PDFs)
-    _DENSITY_GRID_SIZE = 1000
-    grid = np.linspace(0.0, 1.0, _DENSITY_GRID_SIZE, dtype=np.float64)
+    grid = np.linspace(0.0, 1.0, max(2, grid_size), dtype=np.float64)
     grid = np.clip(grid, 1e-9, 1.0 - 1e-9)
 
     # Use only centroid public API (no Sx, Sx2, or other internal columns)
@@ -712,6 +711,7 @@ def run_explorer(
     single_csv: bool = False,
     single_json: bool = False,
     plot_quartiles: bool = False,
+    plot_grid_size: int = 300,
 ) -> None:
     """
     Main explorer logic: resolve path (file or folder), detect type, print metadata,
@@ -865,7 +865,7 @@ def run_explorer(
                 out_html = plot_out_dir / f"{chrom_str}-{context_str}-{pos}.html"
                 print(f"  Writing: {out_html}")
                 try:
-                    if _export_density_plot(frame, row_idx, pos, chrom_str, context_str, out_html):
+                    if _export_density_plot(frame, row_idx, pos, chrom_str, context_str, out_html, grid_size=plot_grid_size):
                         print(f"  Exported: {out_html}")
                         n_exported += 1
                     else:
@@ -935,6 +935,7 @@ def main() -> None:
     parser.add_argument("--single-csv", action="store_true", help="Export one CSV/TSV with chromosome and context as first two columns (combines all files when path is a folder).")
     parser.add_argument("--single-json", action="store_true", help="Export one valid JSON file with metadata for all chrom-context .h5 in the folder (keyed by stem, e.g. 1-CG).")
     parser.add_argument("--plot-quartiles", action="store_true", help="Export one interactive Plotly HTML density plot per coverage quartile (4 positions: Normal, Beta, Beta-Binomial, ECDF). Files named {chrom}-{context}-{position}.html.")
+    parser.add_argument("--grid-size", type=int, default=300, metavar="N", help="Number of points on the X axis for density plots (default 300). Use e.g. 1000 for finer resolution with continuous ECDF.")
     parser.add_argument("--format", "-f", choices=["csv", "tsv", "txt"], default="csv", dest="export_format", help="Format when using default output path (default: csv). With --output, format is inferred from extension.")
     args = parser.parse_args()
     # Infer format from --output extension if provided
@@ -955,6 +956,7 @@ def main() -> None:
         single_csv=args.single_csv,
         single_json=args.single_json,
         plot_quartiles=args.plot_quartiles,
+        plot_grid_size=args.grid_size,
     )
 
 
