@@ -108,7 +108,7 @@ python -m methyl_centroid.cli --config config.json --no-gpu
 
 Inspect a MethylFrame (a single `.h5` file or a folder of `.h5` files): detect type (MethylSample, MethylBasicCentroid, MethylExtendedCentroid, MethylBetaBinomialCentroid), print metadata, and optionally describe a range of positions in detail (pos, mC, uC, coverage, mean, N, Sx, Sx2, alpha, beta, variance).
 
-**Run with the project virtual environment activated** (e.g. `source .venv/bin/activate` or `source venv/bin/activate` from the repo root). The `methyl-centroid-explorer` CLI is installed into the venv.
+**Run with the project virtual environment activated** (e.g. `source .venv/bin/activate` or `source venv/bin/activate` from the repo root). The `methyl-centroid-explorer` CLI is installed into the venv. If you see `ModuleNotFoundError: No module named 'methyl_centroid.explorer'`, reinstall the package so the CLI picks up the explorer module: from the repo root run `pip install -e packages/methylcentroid`.
 
 ```bash
 # Activate venv first (required)

@@ -431,6 +431,53 @@ def _select_quartile_positions(table: pd.DataFrame) -> List[Tuple[int, int]]:
     return [(int(i), int(table.iloc[i][pos_col])) for i in indices]
 
 
+def _select_plot_positions_replace_ecdf(table: pd.DataFrame) -> List[Tuple[int, int]]:
+    """
+    Select up to 4 positions where a theoretical distribution could replace the ECDF
+    (could_use_instead is True). If none or no distribution analysis, fall back to
+    quartile-by-coverage selection.
+    """
+    if len(table) == 0:
+        return []
+    pos_col = "pos" if "pos" in table.columns else ("position" if "position" in table.columns else None)
+    if pos_col is None:
+        return []
+
+    if "could_use_instead" not in table.columns:
+        return _select_quartile_positions(table)
+
+    # Positions where some theoretical distribution could replace ECDF
+    col = table["could_use_instead"]
+    mask = (col == True) | (col.astype(str).str.lower() == "true")
+    subset = table.loc[mask]
+    if len(subset) == 0:
+        return _select_quartile_positions(table)
+
+    # Up to 4 positions from this subset (spread by coverage quartile within subset)
+    sort_col = "N" if "N" in subset.columns else ("coverage" if "coverage" in subset.columns else None)
+    if sort_col is not None:
+        sorted_idx = subset[sort_col].values.argsort()
+        n = len(sorted_idx)
+        if n <= 4:
+            indices = [int(subset.index[i]) for i in range(n)]
+        else:
+            indices = [
+                int(subset.index[sorted_idx[n // 8]]),
+                int(subset.index[sorted_idx[3 * n // 8]]),
+                int(subset.index[sorted_idx[5 * n // 8]]),
+                int(subset.index[sorted_idx[7 * n // 8]]),
+            ]
+    else:
+        ilocs = subset.index.tolist()
+        n = len(ilocs)
+        if n <= 4:
+            indices = [int(i) for i in ilocs]
+        else:
+            indices = [int(ilocs[n // 8]), int(ilocs[3 * n // 8]), int(ilocs[5 * n // 8]), int(ilocs[7 * n // 8])]
+
+    return [(int(i), int(table.loc[i, pos_col])) for i in indices]
+
+
 def _pdf_normal_truncated(x: np.ndarray, mu: float, sigma2: float) -> np.ndarray:
     """PDF of truncated Normal on [0,1] with mean mu and variance sigma2."""
     if scipy_truncnorm is None or sigma2 <= 0 or not np.isfinite(sigma2):
@@ -515,7 +562,7 @@ def _export_density_plot(
     if no distribution data is available, writes a placeholder figure.
     """
     if go is None:
-        print("plotly not installed; skipping density plot. pip install plotly", file=sys.stderr)
+        print("    plotly not installed; pip install plotly")
         return False
 
     # Support both _df and .df (e.g. MethylBetaMixtureCentroid uses .df); avoid "or" so DataFrame truthiness is not used
@@ -523,7 +570,11 @@ def _export_density_plot(
     if df is None:
         df = getattr(frame, "df", None)
     n_rows = len(df) if df is not None else 0
+    if df is None:
+        print("    Skipped: frame has no _df or .df")
+        return False
     if position_idx < 0 or position_idx >= n_rows:
+        print(f"    Skipped: position_idx={position_idx} out of range [0, {n_rows})")
         return False
 
     grid = np.linspace(0.0, 1.0, 300, dtype=np.float64)
@@ -639,6 +690,7 @@ def _export_density_plot(
     )
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    # File is written below; caller prints "Exported" on success
     fig.write_html(str(out_path))
     return True
 
@@ -789,27 +841,40 @@ def run_explorer(
                 )
 
         if plot_quartiles:
-            quartile_pairs = _select_quartile_positions(table)
-            # With --single-csv, write plots to same dir as combined CSV (output or cwd); else use output or centroid folder
-            if single_csv:
-                plot_out_dir = Path(output).resolve() if output is not None else Path.cwd()
-            else:
+            print("Generating density plots (--plot-quartiles)...")
+            try:
+                quartile_pairs = _select_plot_positions_replace_ecdf(table)
+            except Exception as e:
+                print(f"Density plots: failed to select positions: {e}")
+                quartile_pairs = []
+            plot_out_dir = None
+            if quartile_pairs:
+                # HTML is saved to the same location as the centroid (directory of the .h5 file), or -o if given
                 plot_out_dir = Path(output).resolve() if output is not None else target.parent
-            if plot_out_dir.suffix.lower() in (".csv", ".tsv", ".txt", ".json"):
-                plot_out_dir = plot_out_dir.parent
-            plot_out_dir.mkdir(parents=True, exist_ok=True)
-            print(f"Density plots (--plot-quartiles): {plot_out_dir}", file=sys.stderr)
+                if plot_out_dir.suffix.lower() in (".csv", ".tsv", ".txt", ".json"):
+                    plot_out_dir = plot_out_dir.parent
+                plot_out_dir.mkdir(parents=True, exist_ok=True)
+                print(f"Density plot output directory (same as centroid): {plot_out_dir}")
+                print(f"Selected {len(quartile_pairs)} position(s) for density plots: {[pos for _, pos in quartile_pairs]}")
+            else:
+                print("Density plots: no positions selected (need could_use_instead or N/coverage in table).")
             n_exported = 0
             for row_idx, pos in quartile_pairs:
                 out_html = plot_out_dir / f"{chrom_str}-{context_str}-{pos}.html"
-                if _export_density_plot(frame, row_idx, pos, chrom_str, context_str, out_html):
-                    print(f"Exported density plot: {out_html}")
-                    n_exported += 1
-            if n_exported == 0 and quartile_pairs:
-                print(
-                    "No density plots were written (no distribution data or plotly missing).",
-                    file=sys.stderr,
-                )
+                print(f"  Writing: {out_html}")
+                try:
+                    if _export_density_plot(frame, row_idx, pos, chrom_str, context_str, out_html):
+                        print(f"  Exported: {out_html}")
+                        n_exported += 1
+                    else:
+                        print(f"  Skipped (plot failed): {out_html}")
+                except Exception as e:
+                    print(f"  Error writing {out_html}: {e}")
+            if quartile_pairs:
+                if n_exported == 0:
+                    print(f"Density plots: 0 exported to {plot_out_dir} (check plotly/scipy or frame data).")
+                else:
+                    print(f"Density plots: exported {n_exported} file(s) to {plot_out_dir}")
 
         pd.set_option("display.max_rows", None)
         pd.set_option("display.width", None)
