@@ -577,7 +577,9 @@ def _export_density_plot(
         print(f"    Skipped: position_idx={position_idx} out of range [0, {n_rows})")
         return False
 
-    grid = np.linspace(0.0, 1.0, 300, dtype=np.float64)
+    # Use a fine grid so the X axis shows many values (advantage of continuous ECDF and smooth PDFs)
+    _DENSITY_GRID_SIZE = 1000
+    grid = np.linspace(0.0, 1.0, _DENSITY_GRID_SIZE, dtype=np.float64)
     grid = np.clip(grid, 1e-9, 1.0 - 1e-9)
 
     # Use only centroid public API (no Sx, Sx2, or other internal columns)
