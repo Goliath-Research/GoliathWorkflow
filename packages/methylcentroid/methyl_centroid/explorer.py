@@ -27,9 +27,11 @@ except ImportError:
 try:
     from scipy.stats import beta as scipy_beta
     from scipy.stats import truncnorm as scipy_truncnorm
+    from scipy.stats import betabinom as scipy_betabinom
 except ImportError:
     scipy_beta = None
     scipy_truncnorm = None
+    scipy_betabinom = None
 
 
 def _get_methyl_group(f) -> Any:
@@ -528,6 +530,47 @@ def _kde_from_binned(
     return density
 
 
+def _beta_binomial_mom_diagnostic(
+    N: float,
+    sum_mC: float,
+    sum_mC2: float,
+    sum_cov: float,
+    position: int,
+) -> str:
+    """
+    Recompute Beta-Binomial MoM from sufficient statistics and return a string explaining
+    why the parameters might be invalid (leading to stored (1,1) and a uniform plot).
+    Uses the same formulas as methyl_utils.statistical_tests.beta_binomial_mom_estimation.
+    """
+    if N <= 0 or sum_cov <= 0:
+        return f"pos {position}: N={N}, sum_cov={sum_cov} (need both > 0)"
+    n_eff = sum_cov / N
+    m1 = sum_mC / N
+    m2 = sum_mC2 / N
+    m1_safe = m1 if m1 > 1e-12 else 1e-12
+    ratio = (m2 / m1_safe) if m2 > 1e-20 else m1_safe
+    denom = n_eff * (ratio - m1 - 1.0) + m1
+    raw_alpha = (n_eff * m1 - m2) / denom if abs(denom) >= 1e-12 else float("nan")
+    raw_beta = (n_eff - m1) * (n_eff - ratio) / denom if abs(denom) >= 1e-12 else float("nan")
+    reasons = []
+    if m1 <= 0 or m1 >= n_eff:
+        reasons.append(f"m1={m1:.6g} out of (0, n_eff={n_eff:.4g})")
+    if abs(denom) < 1e-12:
+        reasons.append(f"denom≈0 (denom={denom:.6g})")
+    elif denom <= 0:
+        reasons.append(f"denom<=0 (denom={denom:.6g}); ratio-m1-1={ratio - m1 - 1.0:.6g}")
+    if not reasons and (raw_alpha <= 0 or raw_beta <= 0):
+        reasons.append(f"raw_alpha={raw_alpha:.6g} or raw_beta={raw_beta:.6g} non-positive")
+    if not reasons and (not np.isfinite(raw_alpha) or not np.isfinite(raw_beta)):
+        reasons.append("raw alpha or beta non-finite")
+    reason_str = "; ".join(reasons) if reasons else "valid"
+    return (
+        f"Beta-Binomial MoM pos {position}: N={N:.0f}, sum_mC={sum_mC:.0f}, sum_mC2={sum_mC2:.2f}, sum_cov={sum_cov:.0f} -> "
+        f"n_eff={n_eff:.2f}, m1={m1:.6g}, m2={m2:.4g}, ratio=m2/m1={ratio:.6g}, denom={denom:.6g}, "
+        f"raw_alpha={raw_alpha:.6g}, raw_beta={raw_beta:.6g} -> {reason_str}"
+    )
+
+
 def _get_centroid_property(centroid: Any, position_idx: int, prop_name: str) -> Optional[float]:
     """
     Get a scalar at position_idx from a centroid property (mean, variance, alpha, beta, alpha_bb, beta_bb).
@@ -558,9 +601,10 @@ def _export_density_plot(
 ) -> bool:
     """
     Export a single interactive Plotly HTML with density plots (KDE-style) for Normal, Beta,
-    Beta-Binomial, and ECDF at the given position. Uses only the centroid's public API
-    (mean, variance, alpha, beta, alpha_bb, beta_bb, binned_stats). Always writes an HTML file;
-    if no distribution data is available, writes a placeholder figure.
+    Beta-Binomial (discrete PMF as density on proportion axis, interpolated for smooth display),
+    and ECDF at the given position. Uses only the centroid's public API (mean, variance, alpha,
+    beta, alpha_bb, beta_bb, N, sum_cov, binned_stats). Always writes an HTML file; if no
+    distribution data is available, writes a placeholder figure.
     """
     if go is None:
         print("    plotly not installed; pip install plotly")
@@ -619,21 +663,48 @@ def _export_density_plot(
             )
         )
 
-    # Beta-Binomial (centroid.alpha_bb, centroid.beta_bb)
+    # Beta-Binomial: discrete PMF using (alpha, beta) from proportion mean/var (same as Beta curve).
+    # This avoids broken count-based MoM (alpha_bb, beta_bb) and uses the Normal(mean,var)-based Beta fit.
+    sum_cov = _get_centroid_property(frame, position_idx, "sum_cov")
+    N_prop = _get_centroid_property(frame, position_idx, "N")
+    sum_mC = _get_centroid_property(frame, position_idx, "sum_mC")
+    sum_mC2 = _get_centroid_property(frame, position_idx, "sum_mC2")
     alpha_bb = _get_centroid_property(frame, position_idx, "alpha_bb")
     beta_bb = _get_centroid_property(frame, position_idx, "beta_bb")
+    # Optional: when count-based MoM is invalid, print why (for debugging).
+    is_bb_invalid = (
+        alpha_bb is not None and beta_bb is not None
+        and (
+            (abs(alpha_bb - 1.0) < 1e-6 and abs(beta_bb - 1.0) < 1e-6)
+            or alpha_bb <= 0 or beta_bb <= 0
+        )
+    )
+    if is_bb_invalid and N_prop is not None and sum_mC is not None and sum_mC2 is not None and sum_cov is not None:
+        print("    " + _beta_binomial_mom_diagnostic(
+            float(N_prop), float(sum_mC), float(sum_mC2), float(sum_cov), position
+        ))
+    # Plot Beta-Binomial(n, alpha, beta) with alpha, beta from proportion mean/var (centroid.alpha, centroid.beta).
     if (
-        scipy_beta is not None
-        and alpha_bb is not None
-        and beta_bb is not None
-        and alpha_bb > 0
-        and beta_bb > 0
+        scipy_betabinom is not None
+        and alpha is not None
+        and beta is not None
+        and alpha > 0
+        and beta > 0
     ):
-        pdf_bb = scipy_beta.pdf(grid, alpha_bb, beta_bb)
+        if sum_cov is not None and N_prop is not None and N_prop > 0:
+            n_eff = sum_cov / N_prop
+            n = max(2, min(500, int(round(n_eff))))
+        else:
+            n = 50
+        k_vals = np.arange(0, n + 1, dtype=np.intp)
+        pmf_vals = scipy_betabinom.pmf(k_vals, n, alpha, beta)
+        x_bb = k_vals.astype(np.float64) / n
+        density_bb_discrete = n * pmf_vals
+        density_bb = np.interp(grid, x_bb, density_bb_discrete)
         traces.append(
             go.Scatter(
                 x=grid.tolist(),
-                y=pdf_bb.tolist(),
+                y=density_bb.tolist(),
                 name="Beta-Binomial",
                 mode="lines",
                 line=dict(width=2),
