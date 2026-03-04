@@ -7,7 +7,7 @@ and meta-analysis commonly used in methylation studies.
 
 import logging
 import numpy as np
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Any
 
 # Import GPU detection utilities
 from .gpu_detection import is_gpu_available, is_cupyx_scipy_stats_available, get_cupy
@@ -975,6 +975,105 @@ def aggregate_pvalues_simes(pvalues: np.ndarray) -> float:
     return combined_p
 
 
+def ecdf_ks_statistic(
+    ecdf_view1: Any,
+    ecdf_view2: Any,
+    position_indices: np.ndarray,
+    grid_size: int = 256,
+) -> np.ndarray:
+    """
+    KS statistic between two ECDFs at each position: D = sup_x |F1(x) - F2(x)| on a grid in [0, 1].
+    """
+    grid = np.linspace(0.0, 1.0, grid_size, dtype=np.float64)
+    ks_stats = np.zeros(len(position_indices), dtype=np.float64)
+    for i, pos_idx in enumerate(position_indices):
+        pos_idx = int(pos_idx)
+        f1 = ecdf_view1._cdf(pos_idx, grid)
+        f2 = ecdf_view2._cdf(pos_idx, grid)
+        ks_stats[i] = np.max(np.abs(f1 - f2))
+    return ks_stats
+
+
+def ecdf_ks_pvalue(
+    ecdf_view1: "ECDFView",
+    ecdf_view2: "ECDFView",
+    position_indices: np.ndarray,
+    n1: np.ndarray,
+    n2: np.ndarray,
+    grid_size: int = 256,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    KS statistic and asymptotic two-sided p-value for two ECDFs at each position.
+    n_eff = harmonic mean of n1, n2; p = kstwobign.sf(sqrt(n_eff) * D).
+    """
+    from scipy.stats import kstwobign
+    ks_stats = ecdf_ks_statistic(ecdf_view1, ecdf_view2, position_indices, grid_size)
+    n1 = np.asarray(n1, dtype=np.float64).ravel()
+    n2 = np.asarray(n2, dtype=np.float64).ravel()
+    n_eff = 2.0 / (1.0 / np.maximum(n1, 1) + 1.0 / np.maximum(n2, 1))
+    sqrt_n_eff = np.sqrt(n_eff)
+    p_values = kstwobign.sf(sqrt_n_eff * ks_stats)
+    return ks_stats, p_values
+
+
+def welch_d_ks_overlap(
+    delta_mean: np.ndarray,
+    var1: np.ndarray,
+    n1: np.ndarray,
+    var2: np.ndarray,
+    n2: np.ndarray,
+    ecdf_view1: Optional[Any] = None,
+    ecdf_view2: Optional[Any] = None,
+    position_indices: Optional[np.ndarray] = None,
+    scale: float = 4.0,
+    grid_size: int = 256,
+) -> dict:
+    """
+    Welch's d = |delta_mean| / sqrt(var1/n1 + var2/n2).
+    If ECDF views and position_indices are provided: KS statistic D at each position,
+    corrected_d = welch_d * (1 - D), bounded_effect_size = sigmoid(scale * corrected_d) in [0, 1].
+    Otherwise: bounded_effect_size = sigmoid(scale * welch_d).
+    Returns dict with keys: welch_d, ks_d, ks_p, corrected_d, bounded_effect_size.
+
+    When variance1 and variance2 are both zero (or very small), the standard error is floored
+    to avoid division by zero; welch_d can become very large. welch_d is capped to WELCH_D_MAX
+    so that bounded_effect_size does not overflow and is interpretable (zero variance → perfect
+    discrimination → bounded_effect_size ≈ 1).
+    """
+    from scipy.special import expit
+    WELCH_D_MAX = 50.0  # cap so expit(scale * corrected_d) is stable and zero variance → effect ≈ 1
+    delta_mean = np.asarray(delta_mean, dtype=np.float64).ravel()
+    var1 = np.asarray(var1, dtype=np.float64).ravel()
+    n1 = np.asarray(n1, dtype=np.float64).ravel()
+    var2 = np.asarray(var2, dtype=np.float64).ravel()
+    n2 = np.asarray(n2, dtype=np.float64).ravel()
+    se = np.sqrt(var1 / np.maximum(n1, 1) + var2 / np.maximum(n2, 1))
+    se = np.maximum(se, 1e-12)  # avoid division by zero when both variances are 0
+    welch_d = np.abs(delta_mean) / se
+    welch_d = np.minimum(welch_d, WELCH_D_MAX)  # cap: zero variance → max effect, no overflow
+
+    ks_d = np.zeros_like(welch_d)
+    ks_p = np.ones_like(welch_d)
+    if ecdf_view1 is not None and ecdf_view2 is not None and position_indices is not None:
+        pos_idx = np.asarray(position_indices, dtype=np.intp).ravel()
+        n1_sub = n1[: len(pos_idx)] if len(n1) >= len(pos_idx) else np.resize(n1, len(pos_idx))
+        n2_sub = n2[: len(pos_idx)] if len(n2) >= len(pos_idx) else np.resize(n2, len(pos_idx))
+        ks_d_arr, ks_p_arr = ecdf_ks_pvalue(ecdf_view1, ecdf_view2, pos_idx, n1_sub, n2_sub, grid_size)
+        ks_d = ks_d_arr
+        ks_p = ks_p_arr
+
+    corrected_d = welch_d * (1.0 - ks_d)
+    bounded_effect_size = expit(scale * corrected_d)
+
+    return {
+        "welch_d": welch_d,
+        "ks_d": ks_d,
+        "ks_p": ks_p,
+        "corrected_d": corrected_d,
+        "bounded_effect_size": bounded_effect_size,
+    }
+
+
 # Dictionary of available aggregation methods
 PVALUE_AGGREGATION_METHODS = {
     'fisher': aggregate_pvalues_fisher,
@@ -1003,5 +1102,8 @@ __all__ = [
     "aggregate_pvalues_edgington",
     "aggregate_pvalues_mudholkar_george",
     "aggregate_pvalues_simes",
-    "PVALUE_AGGREGATION_METHODS"
+    "PVALUE_AGGREGATION_METHODS",
+    "ecdf_ks_statistic",
+    "ecdf_ks_pvalue",
+    "welch_d_ks_overlap",
 ]

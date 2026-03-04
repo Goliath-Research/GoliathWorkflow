@@ -9,7 +9,6 @@ import pandas as pd
 
 # Import statistical functions from MethylUtils (required)
 from methyl_utils import (
-    compute_bhattacharyya_distance,
     MethylBetaMixtureCentroid,
     cleanup_gpu_memory
 )
@@ -56,36 +55,17 @@ except ImportError:
     get_chromosome_context_from_filename = None
 logger = setup_module_logging(__name__)
 
-def bhattacharyya_coefficient(bd: np.ndarray) -> np.ndarray:
-    """
-    Convert Bhattacharyya Distance (BD) to Bhattacharyya Coefficient (BC).
-    This is the overlap measure used in biological filters and exported as 'overlap' in dmps-*.csv.
-
-    Relationship:  overlap = BC = exp(-BD); BD = -ln(BC) (unbounded above).
-    - BC (Bhattacharyya Coefficient): in [0, 1]; 0 = no overlap, 1 = identical.
-    - effect_size is computed by MethylCentroidPair (|delta_mean|/(overlap*combined_std)) and is not bounded to [0,1].
-    Biological filter: keep DMPs with effect_size >= min_effect_size when min_effect_size is set.
-
-    Args:
-        bd: Bhattacharyya Distance values (0 to ∞, typically capped at 20)
-
-    Returns:
-        Bhattacharyya Coefficient (overlap) values in [0, 1].
-    """
-    return np.exp(-bd)
-
-
 def _apply_biological_filters(
     df: pd.DataFrame,
     min_delta_mean: Optional[float],
     max_overlap: Optional[float],
-    min_effect_size: Optional[float],
+    min_bounded_effect_size: Optional[float] = None,
 ) -> pd.DataFrame:
     """
-    Apply biological filters in order (AND). Used by _filter_biological_dmps and by filter-funnel sweep.
+    Apply biological filters (ECDF-based). Used by _filter_biological_dmps and filter-funnel sweep.
     - min_delta_mean: keep |delta_mean| >= value
-    - max_overlap: keep overlap <= value
-    - min_effect_size: keep effect_size >= value
+    - max_overlap: keep overlap <= value (overlap = 1 - ks_d, ECDF-based)
+    - min_bounded_effect_size: keep bounded_effect_size >= value
     Pass None for any filter to skip it. Returns a copy of df with filters applied.
     """
     out = df.copy()
@@ -93,8 +73,8 @@ def _apply_biological_filters(
         out = out[np.abs(out["delta_mean"].astype(float)) >= min_delta_mean]
     if max_overlap is not None and "overlap" in out.columns:
         out = out[out["overlap"].astype(float) <= max_overlap]
-    if min_effect_size is not None and "effect_size" in out.columns:
-        out = out[out["effect_size"].astype(float) >= min_effect_size]
+    if min_bounded_effect_size is not None and "bounded_effect_size" in out.columns:
+        out = out[out["bounded_effect_size"].astype(float) >= min_bounded_effect_size]
     return out
 
 
@@ -178,6 +158,9 @@ class MethylDetector:
         """Run multi-context analysis (new unified approach)."""
         logger.info(f"🧬 Starting multi-context analysis for chromosome {self.chromosome}")
         logger.info(f"📍 Contexts: {', '.join(self.config.contexts)}")
+
+        # Require binned_stats on centroids (ECDF-based metrics); fail fast before any context
+        self._require_binned_stats_available()
 
         # Validate centroid parameters before analysis
         self._validate_centroid_parameters()
@@ -302,6 +285,20 @@ class MethylDetector:
                 raise
         return wrapper
 
+    def _require_binned_stats_available(self) -> None:
+        """Require that centroids have binned_stats (ECDF-based metrics). Raise at start of run if missing."""
+        context0 = self.config.contexts[0] if self.config.contexts else "CG"
+        c1_path = Path(self.config.centroid1_dir) / f"{self.chromosome}-{context0}.h5"
+        if not c1_path.exists():
+            return  # Skip check if file not found (will fail later when loading)
+        centroid = MethylSample.load_from_h5(str(c1_path))
+        binned = getattr(centroid, "binned_stats", None)
+        if not binned or "bin_edges" not in binned or "bin_counts" not in binned:
+            raise ValueError(
+                "Centroids must have binned_stats (enable_binned_stats=True when building centroids). "
+                "MethylDetector uses ECDF-based overlap and bounded_effect_size; legacy metrics are not used."
+            )
+
     def _detect_statistical_dmps_for_context(
         self, 
         centroid1_path: Path, 
@@ -380,8 +377,13 @@ class MethylDetector:
         logger.info(f"Context {context}: {statistical_dmps_count:,} significant DMPs (q≤{self.config.alpha}) "
                    f"out of {total_positions:,} ({(statistical_dmps_count/total_positions)*100:.1f}% pass rate)")
         
-        # Compute missing metrics
-        dmp_df = self._compute_missing_metrics_df(filtered_results)
+        # ECDF views required (binned_stats validated at start of MethylDetector)
+        from methyl_utils.core.distribution_views import view_from_centroid
+        ecdf_view1 = view_from_centroid(centroid1, "ecdf")
+        ecdf_view2 = view_from_centroid(centroid2, "ecdf")
+
+        # Compute metrics: welch_d, ks_d, overlap = 1 - ks_d, bounded_effect_size, effect_size
+        dmp_df = self._compute_missing_metrics_df(filtered_results, ecdf_view1=ecdf_view1, ecdf_view2=ecdf_view2)
         
         # Add chromosome and context columns
         dmp_df['chromosome'] = self.chromosome
@@ -600,17 +602,18 @@ class MethylDetector:
     
     def _filter_biological_dmps(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Filter DMPs by biological significance. All set filters are applied (AND):
-        - min_delta_mean: keep |delta_mean| >= value (easy: e.g. 0.1 = 10% methylation change)
-        - max_overlap: keep overlap <= value (easy: low overlap = good separation)
-        - min_effect_size: keep effect_size >= value (effect_size from MethylCentroidPair)
+        Filter DMPs by biological significance (ECDF-based). All set filters are applied (AND):
+        - min_delta_mean: keep |delta_mean| >= value
+        - max_overlap: keep overlap <= value (overlap = 1 - ks_d, ECDF-based)
+        - min_bounded_effect_size: keep bounded_effect_size >= value
         """
         initial_count = len(dmps_df)
+        min_bounded = getattr(self.config, "min_bounded_effect_size", None)
         bio_df = _apply_biological_filters(
             dmps_df,
             self.config.min_delta_mean,
             self.config.max_overlap,
-            self.config.min_effect_size,
+            min_bounded_effect_size=min_bounded,
         )
         # Log per-filter retention (intermediate counts for messages)
         prev_count = initial_count
@@ -630,10 +633,10 @@ class MethylDetector:
                 f"{n:,} DMPs ({n/prev_count*100:.1f}% retained)"
             )
             prev_count = n
-        if self.config.min_effect_size is not None and "effect_size" in dmps_df.columns:
+        if min_bounded is not None and "bounded_effect_size" in dmps_df.columns:
             n = len(bio_df)
             logger.info(
-                f"After min_effect_size filter (effect_size ≥ {self.config.min_effect_size}): "
+                f"After min_bounded_effect_size filter (bounded_effect_size ≥ {min_bounded}): "
                 f"{n:,} DMPs ({n/prev_count*100:.1f}% retained)"
             )
         if initial_count != len(bio_df):
@@ -647,11 +650,11 @@ class MethylDetector:
             thresholds_used["min_delta_mean"] = self.config.min_delta_mean
         if self.config.max_overlap is not None:
             thresholds_used["max_overlap"] = self.config.max_overlap
-        if self.config.min_effect_size is not None:
-            thresholds_used["min_effect_size"] = self.config.min_effect_size
+        if min_bounded is not None:
+            thresholds_used["min_bounded_effect_size"] = min_bounded
 
         value_ranges = {}
-        for col, label in [("delta_mean", "delta_mean"), ("overlap", "overlap"), ("effect_size", "effect_size")]:
+        for col, label in [("delta_mean", "delta_mean"), ("overlap", "overlap"), ("bounded_effect_size", "bounded_effect_size")]:
             if col in bio_df.columns and len(bio_df) > 0:
                 ser = bio_df[col].astype(float)
                 value_ranges[label] = {"min": float(ser.min()), "max": float(ser.max())}
@@ -677,13 +680,13 @@ class MethylDetector:
     def _run_filter_funnel_sweep(self, dmps_df: pd.DataFrame) -> None:
         """
         If filter_funnel_explore is set, sweep biological filter values and write filter_funnel.csv.
-        CSV columns: n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps.
+        CSV columns: n_statistical_dmps, min_delta_mean, max_overlap, min_bounded_effect_size, n_biological_dmps.
         Uses statistical DMPs already in memory; one run, no large DMP CSV.
         """
         explore = self.config.filter_funnel_explore
         if explore is None or self.config.output_dir is None:
             return
-        # At least one filter must have a range spec
+        # At least one filter must have a range spec (min_effect_size range sweeps min_bounded_effect_size)
         has_any = (
             explore.min_delta_mean is not None
             or explore.max_overlap is not None
@@ -695,36 +698,35 @@ class MethylDetector:
         n_statistical = len(dmps_df)
         run_min_delta = self.config.min_delta_mean
         run_max_overlap = self.config.max_overlap
-        run_min_effect = self.config.min_effect_size
+        run_min_bounded = getattr(self.config, "min_bounded_effect_size", None)
 
         csv_rows: List[Dict[str, Any]] = []
         mode = explore.mode
-        csv_columns = ["n_statistical_dmps", "min_delta_mean", "max_overlap", "min_effect_size", "n_biological_dmps"]
+        csv_columns = ["n_statistical_dmps", "min_delta_mean", "max_overlap", "min_bounded_effect_size", "n_biological_dmps"]
 
         if mode == "one_at_a_time":
-            # Vary each filter over its range; fix the other two at run values.
             if explore.min_delta_mean is not None:
                 for v in self._range_step_values(explore.min_delta_mean):
                     n = len(
-                        _apply_biological_filters(dmps_df, v, run_max_overlap, run_min_effect)
+                        _apply_biological_filters(dmps_df, v, run_max_overlap, run_min_bounded)
                     )
                     csv_rows.append({
                         "n_statistical_dmps": n_statistical,
                         "min_delta_mean": v,
                         "max_overlap": run_max_overlap,
-                        "min_effect_size": run_min_effect,
+                        "min_bounded_effect_size": run_min_bounded,
                         "n_biological_dmps": n,
                     })
             if explore.max_overlap is not None:
                 for v in self._range_step_values(explore.max_overlap):
                     n = len(
-                        _apply_biological_filters(dmps_df, run_min_delta, v, run_min_effect)
+                        _apply_biological_filters(dmps_df, run_min_delta, v, run_min_bounded)
                     )
                     csv_rows.append({
                         "n_statistical_dmps": n_statistical,
                         "min_delta_mean": run_min_delta,
                         "max_overlap": v,
-                        "min_effect_size": run_min_effect,
+                        "min_bounded_effect_size": run_min_bounded,
                         "n_biological_dmps": n,
                     })
             if explore.min_effect_size is not None:
@@ -736,11 +738,10 @@ class MethylDetector:
                         "n_statistical_dmps": n_statistical,
                         "min_delta_mean": run_min_delta,
                         "max_overlap": run_max_overlap,
-                        "min_effect_size": v,
+                        "min_bounded_effect_size": v,
                         "n_biological_dmps": n,
                     })
         else:
-            # full_grid: all combinations of the three value lists
             vals_delta = (
                 self._range_step_values(explore.min_delta_mean)
                 if explore.min_delta_mean is not None
@@ -751,18 +752,18 @@ class MethylDetector:
                 if explore.max_overlap is not None
                 else ([run_max_overlap] if run_max_overlap is not None else [None])
             )
-            vals_effect = (
+            vals_bounded = (
                 self._range_step_values(explore.min_effect_size)
                 if explore.min_effect_size is not None
-                else ([run_min_effect] if run_min_effect is not None else [None])
+                else ([run_min_bounded] if run_min_bounded is not None else [None])
             )
-            for md, mo, me in itertools.product(vals_delta, vals_overlap, vals_effect):
-                n = len(_apply_biological_filters(dmps_df, md, mo, me))
+            for md, mo, mb in itertools.product(vals_delta, vals_overlap, vals_bounded):
+                n = len(_apply_biological_filters(dmps_df, md, mo, mb))
                 csv_rows.append({
                     "n_statistical_dmps": n_statistical,
                     "min_delta_mean": md,
                     "max_overlap": mo,
-                    "min_effect_size": me,
+                    "min_bounded_effect_size": mb,
                     "n_biological_dmps": n,
                 })
 
@@ -3095,7 +3096,7 @@ class MethylDetector:
         if 'position' not in df.columns:
             logger.warning("Structured array missing 'position' field; adding dummy positions")
             df['position'] = np.arange(len(df), dtype=np.uint32)
-        # Ensure dtypes (include n1, n2, variance1, variance2 from centroid comparison)
+        # Ensure dtypes (include n1, n2, variance1, variance2 from centroid comparison). No bhattacharyya (ECDF overlap only).
         dtype_map = {
             "position": "uint32",
             "chromosome": "str",
@@ -3103,7 +3104,6 @@ class MethylDetector:
             "p_value": "float32",
             "q_value": "float32",
             "delta_mean": "float32",
-            "bhattacharyya": "float32",
             "weight": "float32",
             "alpha1": "float64",
             "beta1": "float64",
@@ -3120,10 +3120,24 @@ class MethylDetector:
         for col, dtype in dtype_map.items():
             if col in df:
                 df[col] = df[col].astype(dtype)
+        # Drop legacy columns; overlap and effect_size come from ECDF/Welch in _compute_chunk_metrics_df
+        for legacy in ("bhattacharyya", "bhattacharyya_coefficient"):
+            if legacy in df.columns:
+                df.drop(columns=[legacy], inplace=True)
         return df
 
-    def _compute_missing_metrics_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Vectorized computation of missing biological metrics on DataFrame. GPU-memory aware chunking."""
+    def _compute_missing_metrics_df(
+        self,
+        df: pd.DataFrame,
+        ecdf_view1: Any,
+        ecdf_view2: Any,
+    ) -> pd.DataFrame:
+        """Vectorized computation of biological metrics. Requires ECDF views (centroids with binned_stats).
+        Computes welch_d, ks_d, ks_p_value, overlap = 1 - ks_d, bounded_effect_size, effect_size."""
+        # Drop legacy columns if present (from MethylCentroidPair output); we use ECDF overlap only
+        legacy_cols = [c for c in ("bhattacharyya", "bhattacharyya_coefficient") if c in df.columns]
+        if legacy_cols:
+            df = df.drop(columns=legacy_cols)
         n_rows = len(df)
         # Determine chunk size based on GPU memory (use max memory for performance)
         from methyl_utils import get_memory_usage
@@ -3140,74 +3154,56 @@ class MethylDetector:
             for i in range(0, n_rows, chunk_size):
                 end_i = min(i + chunk_size, n_rows)
                 chunk_df = df.iloc[i:end_i].copy()
-                chunk_result = self._compute_chunk_metrics_df(chunk_df)
+                chunk_result = self._compute_chunk_metrics_df(
+                    chunk_df, ecdf_view1=ecdf_view1, ecdf_view2=ecdf_view2, start_idx=i
+                )
                 chunks.append(chunk_result)
             # Concat chunk DFs
             result_df = pd.concat(chunks, ignore_index=True)
             logger.info(f"📊 Chunked metrics complete for {n_rows:,} rows")
             return result_df
         else:
-            return self._compute_chunk_metrics_df(df)
-
-    def _compute_chunk_metrics_df(self, chunk_df: pd.DataFrame) -> pd.DataFrame:
-        """Compute only essential metrics for a chunk DataFrame (vectorized, GPU-optimized)."""
-        import time
-        start_time = time.time()
-        
-        # MethylUtils provides 'bhattacharyya' column with Distance (BD) values
-        # Convert to Coefficient (BC) for biologist-friendly interpretation
-        if 'bhattacharyya' not in chunk_df.columns:
-            logger.warning("Bhattacharyya Distance not found in chunk, computing from beta parameters...")
-            alpha1 = chunk_df['alpha1'].values
-            beta1 = chunk_df['beta1'].values
-            alpha2 = chunk_df['alpha2'].values
-            beta2 = chunk_df['beta2'].values
-
-            try:
-                # Compute Bhattacharyya Distance (BD) from MethylUtils
-                bd_values = []
-                for i in range(len(alpha1)):
-                    try:
-                        bd = compute_bhattacharyya_distance(alpha1[i], beta1[i], alpha2[i], beta2[i])
-                        bd_values.append(bd)
-                    except Exception as e:
-                        logger.warning(f"Bhattacharyya Distance computation failed for position {i}: {e}")
-                        # Use delta_mean as fallback, but better would be to use MethylSample's mean property
-                        bd_values.append(abs(chunk_df['delta_mean'].values[i]))
-                bd_array = np.array(bd_values, dtype=np.float32)
-            except Exception as e:
-                logger.warning(f"Bhattacharyya Distance computation failed: {e}, using delta_mean fallback")
-                bd_array = np.abs(chunk_df['delta_mean'].values).astype(np.float32)
-        else:
-            # BD values from MethylUtils
-            bd_array = chunk_df['bhattacharyya'].values
-        
-        # Convert BD to BC (overlap coefficient) for biologist-friendly interpretation
-        # BC = exp(-BD), where BC ∈ [0,1]: 0 = no overlap, 1 = complete overlap
-        bc_values = bhattacharyya_coefficient(bd_array)
-        chunk_df['bhattacharyya_coefficient'] = bc_values
-        chunk_df['overlap'] = bc_values  # Add 'overlap' column for CSV export (biologist-friendly name)
-
-        # effect_size: computed by MethylCentroidPair; do not overwrite. If missing (edge case), delegate to same formula.
-        if not chunk_df.empty and 'effect_size' not in chunk_df.columns:
-            from methyl_utils.methyl_centroid_pair import MethylCentroidPair
-            a1 = chunk_df['alpha1'].values.astype(np.float64)
-            b1 = chunk_df['beta1'].values.astype(np.float64)
-            a2 = chunk_df['alpha2'].values.astype(np.float64)
-            b2 = chunk_df['beta2'].values.astype(np.float64)
-            dm = chunk_df['delta_mean'].values.astype(np.float64)
-            chunk_df['effect_size'] = MethylCentroidPair.compute_effect_sizes(
-                a1, b1, a2, b2, dm, bc_values.astype(np.float64),
-                min_overlap_floor=0.01, variance_reliability=True,
+            return self._compute_chunk_metrics_df(
+                df, ecdf_view1=ecdf_view1, ecdf_view2=ecdf_view2, start_idx=0
             )
 
-        # combined_variance for downstream (e.g. power/sample-size)
-        if 'variance1' in chunk_df.columns and 'variance2' in chunk_df.columns:
-            chunk_df['combined_variance'] = (chunk_df['variance1'].values.astype(np.float64) + chunk_df['variance2'].values.astype(np.float64)).astype(np.float32)
+    def _compute_chunk_metrics_df(
+        self,
+        chunk_df: pd.DataFrame,
+        ecdf_view1: Any,
+        ecdf_view2: Any,
+        start_idx: int = 0,
+    ) -> pd.DataFrame:
+        """Compute metrics for a chunk: variance1/2, Welch's d, KS statistic, overlap = 1 - ks_d,
+        bounded_effect_size, effect_size. ECDF views and variance1/variance2 are required."""
+        import time
+        start_time = time.time()
 
-        # Remove the BD column - we only keep BC for outputs
-        if 'bhattacharyya' in chunk_df.columns:
-            chunk_df.drop(columns=['bhattacharyya'], inplace=True)
+        dm = chunk_df['delta_mean'].values.astype(np.float64)
+        n1 = chunk_df['n1'].values.astype(np.float64)
+        n2 = chunk_df['n2'].values.astype(np.float64)
+        var1 = chunk_df['variance1'].values.astype(np.float64)
+        var2 = chunk_df['variance2'].values.astype(np.float64)
+
+        from methyl_utils.statistical_tests import welch_d_ks_overlap
+        position_indices = np.arange(start_idx, start_idx + len(chunk_df), dtype=np.intp)
+        sigmoid_scale = getattr(self.config, "sigmoid_scale", 4.0)
+        results = welch_d_ks_overlap(
+            dm, var1, n1, var2, n2,
+            ecdf_view1=ecdf_view1,
+            ecdf_view2=ecdf_view2,
+            position_indices=position_indices,
+            scale=sigmoid_scale,
+            grid_size=256,
+        )
+        chunk_df['welch_d'] = results['welch_d'].astype(np.float32)
+        chunk_df['ks_d'] = results['ks_d'].astype(np.float32)
+        chunk_df['ks_p_value'] = results['ks_p'].astype(np.float32)
+        chunk_df['overlap'] = (1.0 - results['ks_d']).astype(np.float32)  # ECDF-based overlap
+        chunk_df['bounded_effect_size'] = results['bounded_effect_size'].astype(np.float32)
+        chunk_df['effect_size'] = chunk_df['bounded_effect_size']
+
+        chunk_df['combined_variance'] = (var1 + var2).astype(np.float32)
 
         total_time = time.time() - start_time
         logger.debug(f"Chunk metrics completed in {total_time:.2f}s for {len(chunk_df):,} rows")
@@ -3307,8 +3303,6 @@ class MethylDetector:
         if 'mean1' in export_df.columns and 'mean2' in export_df.columns:
             export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2'])
             export_df['delta_mean'] = (export_df['mean1'] - export_df['mean2']).astype(np.float32)
-        if 'overlap' not in export_df.columns and 'bhattacharyya_coefficient' in export_df.columns:
-            export_df['overlap'] = export_df['bhattacharyya_coefficient']
         if 'effect_size' in export_df.columns:
             export_df['weight'] = export_df['effect_size']
         elif 'importance' in export_df.columns:
@@ -3413,7 +3407,7 @@ class MethylDetector:
             "alpha": self.config.alpha,
             "min_delta_mean": self.config.min_delta_mean,
             "max_overlap": self.config.max_overlap,
-            "min_effect_size": self.config.min_effect_size,
+            "min_bounded_effect_size": getattr(self.config, "min_bounded_effect_size", None),
             "target_balanced_accuracy": self.config.target_balanced_accuracy,
             "min_selected_dmps": self.config.min_selected_dmps,
             "eps": self.config.eps,
@@ -3465,10 +3459,10 @@ class MethylDetector:
             f"  Alpha (q-value threshold): {self.config.alpha}",
             f"  Min delta_mean (|Δβ|): {self.config.min_delta_mean}",
             f"  Max overlap: {self.config.max_overlap}",
-            f"  Min effect_size: {self.config.min_effect_size}",
+            f"  Min bounded_effect_size: {getattr(self.config, 'min_bounded_effect_size', None)}",
             f"  Target Balanced Accuracy: {self.config.target_balanced_accuracy}",
             "",
-            "Biological filter: any set of min_delta_mean (|Δβ|≥), max_overlap (overlap≤), min_effect_size (≥) applied (AND). effect_size from MethylCentroidPair.",
+            "Biological filter: min_delta_mean (|Δβ|≥), max_overlap (overlap≤, ECDF-based), min_bounded_effect_size (≥). Overlap = 1 - ks_d.",
             "",
             "Results:",
             f"  Statistical DMPs (q≤{self.config.alpha}): {result.total_statistical_dmps:,}",
