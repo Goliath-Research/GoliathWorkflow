@@ -101,7 +101,7 @@ pip install cupy-cuda12x   # adjust to your CUDA version (e.g. cupy-cuda11x)
 
 **6. Run MethylCentroid**
 
-With the virtual environment **activated** (`source ./venv/bin/activate`), use the CLI from any directory:
+With the virtual environment **activated** (e.g. `source .venv/bin/activate` or `source ./venv/bin/activate` from the repo root), use the CLI from any directory:
 
 ```bash
 python -m methyl_centroid.cli --batch-config configs/pb-cancer_batch_stage1_config.json

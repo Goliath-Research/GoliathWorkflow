@@ -108,7 +108,12 @@ python -m methyl_centroid.cli --config config.json --no-gpu
 
 Inspect a MethylFrame (a single `.h5` file or a folder of `.h5` files): detect type (MethylSample, MethylBasicCentroid, MethylExtendedCentroid, MethylBetaBinomialCentroid), print metadata, and optionally describe a range of positions in detail (pos, mC, uC, coverage, mean, N, Sx, Sx2, alpha, beta, variance).
 
+**Run with the project virtual environment activated** (e.g. `source .venv/bin/activate` or `source venv/bin/activate` from the repo root). The `methyl-centroid-explorer` CLI is installed into the venv.
+
 ```bash
+# Activate venv first (required)
+source .venv/bin/activate   # or: source venv/bin/activate
+
 # Metadata and type for a folder (uses first .h5) or single file
 methyl-centroid-explorer /path/to/centroid_or_sample
 
@@ -117,6 +122,9 @@ methyl-centroid-explorer /path/to/centroids --chrom 1 --context CG
 
 # Per-position detail for a genomic range (avoids loading full 4M–80M positions)
 methyl-centroid-explorer /path/to/centroid.h5 --pos-start 1000000 --pos-end 1000100
+
+# Single CSV + density plots (one HTML per coverage quartile); output in cwd
+methyl-centroid-explorer /path/to/centroid.h5 --single-csv --pos-start 1000000 --max-positions 1000 --plot-quartiles
 
 # JSON metadata and higher cap for position detail
 methyl-centroid-explorer /path/to/centroid.h5 --json-metadata --pos-start 0 --pos-end 5000 --max-positions 5000

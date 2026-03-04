@@ -400,26 +400,35 @@ def _stem_to_chrom_context(stem: str) -> Tuple[str, str]:
 
 def _select_quartile_positions(table: pd.DataFrame) -> List[Tuple[int, int]]:
     """
-    Select one position per quartile of coverage (N or coverage column).
-    Returns list of (table_row_index, position) for 4 positions (Q1, Q2, Q3, Q4).
+    Select one position per quartile of coverage (N or coverage column when present).
+    Returns list of (table_row_index, position) for up to 4 positions (Q1, Q2, Q3, Q4).
+    If no N/coverage column, use 4 evenly spaced row indices so plots are still produced.
     """
     if len(table) == 0:
         return []
-    sort_col = "N" if "N" in table.columns else "coverage"
-    if sort_col not in table.columns:
+    pos_col = "pos" if "pos" in table.columns else ("position" if "position" in table.columns else None)
+    if pos_col is None:
         return []
-    sorted_idx = table[sort_col].values.argsort()
-    n = len(sorted_idx)
-    if n < 4:
-        indices = [sorted_idx[i] for i in range(n)]
+    sort_col = "N" if "N" in table.columns else ("coverage" if "coverage" in table.columns else None)
+    if sort_col is not None:
+        sorted_idx = table[sort_col].values.argsort()
+        n = len(sorted_idx)
+        if n < 4:
+            indices = [sorted_idx[i] for i in range(n)]
+        else:
+            indices = [
+                int(sorted_idx[n // 8]),
+                int(sorted_idx[3 * n // 8]),
+                int(sorted_idx[5 * n // 8]),
+                int(sorted_idx[7 * n // 8]),
+            ]
     else:
-        indices = [
-            sorted_idx[n // 8],
-            sorted_idx[3 * n // 8],
-            sorted_idx[5 * n // 8],
-            sorted_idx[7 * n // 8],
-        ]
-    return [(int(i), int(table.iloc[i]["pos"])) for i in indices]
+        n = len(table)
+        if n < 4:
+            indices = list(range(n))
+        else:
+            indices = [n // 8, 3 * n // 8, 5 * n // 8, 7 * n // 8]
+    return [(int(i), int(table.iloc[i][pos_col])) for i in indices]
 
 
 def _pdf_normal_truncated(x: np.ndarray, mu: float, sigma2: float) -> np.ndarray:
@@ -501,17 +510,26 @@ def _export_density_plot(
 ) -> bool:
     """
     Export a single interactive Plotly HTML with density plots (KDE-style) for Normal, Beta,
-    Beta-Binomial, and ECDF at the given position. Parametric curves use the centroid's
-    mean, variance, alpha, beta, alpha_bb, beta_bb. ECDF uses a Gaussian-kernel KDE
-    from the binned counts (smooth empirical density), not the CDF derivative. Returns True if written.
+    Beta-Binomial, and ECDF at the given position. Uses only the centroid's public API
+    (mean, variance, alpha, beta, alpha_bb, beta_bb, binned_stats). Always writes an HTML file;
+    if no distribution data is available, writes a placeholder figure.
     """
     if go is None:
         print("plotly not installed; skipping density plot. pip install plotly", file=sys.stderr)
         return False
+
+    # Support both _df and .df (e.g. MethylBetaMixtureCentroid uses .df); avoid "or" so DataFrame truthiness is not used
+    df = getattr(frame, "_df", None)
+    if df is None:
+        df = getattr(frame, "df", None)
+    n_rows = len(df) if df is not None else 0
+    if position_idx < 0 or position_idx >= n_rows:
+        return False
+
     grid = np.linspace(0.0, 1.0, 300, dtype=np.float64)
     grid = np.clip(grid, 1e-9, 1.0 - 1e-9)
 
-    # Use centroid properties only (mean, variance, alpha, beta, alpha_bb, beta_bb)
+    # Use only centroid public API (no Sx, Sx2, or other internal columns)
     mu = _get_centroid_property(frame, position_idx, "mean")
     sigma2 = _get_centroid_property(frame, position_idx, "variance")
     if mu is None:
@@ -549,7 +567,7 @@ def _export_density_plot(
             )
         )
 
-    # Beta-Binomial (centroid.alpha_bb, centroid.beta_bb; proportion distribution = Beta(alpha_bb, beta_bb))
+    # Beta-Binomial (centroid.alpha_bb, centroid.beta_bb)
     alpha_bb = _get_centroid_property(frame, position_idx, "alpha_bb")
     beta_bb = _get_centroid_property(frame, position_idx, "beta_bb")
     if (
@@ -570,7 +588,7 @@ def _export_density_plot(
             )
         )
 
-    # ECDF: KDE from binned data (smooth density equivalent to histogram/KDE, not PCHIP derivative)
+    # ECDF: KDE from binned data (frame.binned_stats)
     binned = getattr(frame, "binned_stats", None)
     if (
         binned is not None
@@ -598,9 +616,18 @@ def _export_density_plot(
         except Exception:
             pass
 
+    # Always write an HTML file; use placeholder if no distribution curves
     if not traces:
-        print(f"No distribution data for position {position}; skip {out_path}", file=sys.stderr)
-        return False
+        traces = [
+            go.Scatter(
+                x=[0.5],
+                y=[1.0],
+                name="(no distribution data)",
+                mode="markers+text",
+                text=["No distribution data"],
+                textposition="top center",
+            )
+        ]
 
     fig = go.Figure(data=traces)
     fig.update_layout(
@@ -763,14 +790,26 @@ def run_explorer(
 
         if plot_quartiles:
             quartile_pairs = _select_quartile_positions(table)
-            plot_out_dir = Path(output).resolve() if output is not None else target.parent
+            # With --single-csv, write plots to same dir as combined CSV (output or cwd); else use output or centroid folder
+            if single_csv:
+                plot_out_dir = Path(output).resolve() if output is not None else Path.cwd()
+            else:
+                plot_out_dir = Path(output).resolve() if output is not None else target.parent
             if plot_out_dir.suffix.lower() in (".csv", ".tsv", ".txt", ".json"):
                 plot_out_dir = plot_out_dir.parent
             plot_out_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Density plots (--plot-quartiles): {plot_out_dir}", file=sys.stderr)
+            n_exported = 0
             for row_idx, pos in quartile_pairs:
                 out_html = plot_out_dir / f"{chrom_str}-{context_str}-{pos}.html"
                 if _export_density_plot(frame, row_idx, pos, chrom_str, context_str, out_html):
                     print(f"Exported density plot: {out_html}")
+                    n_exported += 1
+            if n_exported == 0 and quartile_pairs:
+                print(
+                    "No density plots were written (no distribution data or plotly missing).",
+                    file=sys.stderr,
+                )
 
         pd.set_option("display.max_rows", None)
         pd.set_option("display.width", None)

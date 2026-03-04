@@ -64,6 +64,7 @@ def load_from_h5(
         KeyError: If required datasets are missing
     """
     path = Path(path)
+    load_idx = None  # when set, binned_stats will be sliced to match data rows
     with h5py.File(path, "r") as f:
         data = {}
         datasets = []
@@ -80,6 +81,7 @@ def load_from_h5(
                 if not missing:
                     if indices is not None:
                         idx = np.asarray(indices, dtype=np.intp)
+                        load_idx = idx
                         data = {
                             "pos": np.asarray(methyl_data["pos"][idx], dtype=np.uint32),
                             "mC": np.asarray(methyl_data["mC"][idx], dtype=np.uint32),
@@ -89,6 +91,7 @@ def load_from_h5(
                     elif positions is not None:
                         pos_arr = np.asarray(methyl_data["pos"][:], dtype=np.uint32)
                         idx = _indices_for_positions(pos_arr, positions)
+                        load_idx = idx
                         data = {
                             "pos": np.asarray(methyl_data["pos"][idx], dtype=np.uint32),
                             "mC": np.asarray(methyl_data["mC"][idx], dtype=np.uint32),
@@ -146,6 +149,7 @@ def load_from_h5(
                 datasets = root_keys
                 if indices is not None:
                     idx = np.asarray(indices, dtype=np.intp)
+                    load_idx = idx
                     data = {
                         "pos": np.asarray(f["pos"][idx], dtype=np.uint32),
                         "mC": np.asarray(f["mC"][idx], dtype=np.uint32),
@@ -155,6 +159,7 @@ def load_from_h5(
                 elif positions is not None:
                     pos_arr = np.asarray(f["pos"][:], dtype=np.uint32)
                     idx = _indices_for_positions(pos_arr, positions)
+                    load_idx = idx
                     data = {
                         "pos": np.asarray(f["pos"][idx], dtype=np.uint32),
                         "mC": np.asarray(f["mC"][idx], dtype=np.uint32),
@@ -214,6 +219,7 @@ def load_from_h5(
                     pos_arr = np.asarray(struct_data["pos"], dtype=np.uint32)
                     if positions is not None:
                         idx = _indices_for_positions(pos_arr, positions)
+                        load_idx = idx
                         data = {
                             "pos": np.asarray(struct_data["pos"][idx], dtype=np.uint32),
                             "mC": np.asarray(struct_data["mC"][idx], dtype=np.uint32),
@@ -293,13 +299,15 @@ def load_from_h5(
         df = pd.DataFrame(data)
         obj = cls(df, metadata)
 
-        # Load optional binned stats (skip for partial load by indices)
-        if indices is None and "binned_stats" in f:
+        # Load optional binned stats (slice to load_idx when we loaded a subset of rows)
+        if "binned_stats" in f:
             try:
                 bgroup = f["binned_stats"]
                 if "bin_edges" in bgroup and "bin_counts" in bgroup:
                     bin_edges = np.asarray(bgroup["bin_edges"][:], dtype=np.float32)
                     bin_counts = np.asarray(bgroup["bin_counts"][:])
+                    if load_idx is not None and bin_counts.ndim == 2:
+                        bin_counts = bin_counts[load_idx, :]
                     if hasattr(obj, "set_binned_stats"):
                         obj.set_binned_stats(bin_edges, bin_counts)
                     else:
