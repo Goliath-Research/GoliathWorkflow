@@ -1382,7 +1382,8 @@ class MethylCentroidPair:
             bhattacharyya[use_ecdf_mask] = bd_ecdf[use_ecdf_mask]
 
         # Fill results array directly (vectorized assignment)
-        results_view['position'] = positions.astype(np.uint32)
+        # Safe cast for integer fields: avoid NaN/inf so pandas/numpy do not emit "invalid value in cast"
+        results_view['position'] = np.asarray(positions, dtype=np.uint32, copy=False)
         results_view['p_value'] = p_values
         results_view['q_value'] = p_values  # Will be updated by FDR correction
         results_view['alpha1'] = alpha1.astype(np.float64)
@@ -1397,8 +1398,10 @@ class MethylCentroidPair:
         else:
             results_view['bhattacharyya'] = np.zeros(len(positions), dtype=np.float32)  # Will be computed later
         results_view['dist'] = dist_ids
-        results_view['n1'] = N1.astype(np.uint32)
-        results_view['n2'] = N2.astype(np.uint32)
+        n1_safe = np.nan_to_num(N1.astype(np.float64), nan=0, posinf=0, neginf=0)
+        n2_safe = np.nan_to_num(N2.astype(np.float64), nan=0, posinf=0, neginf=0)
+        results_view['n1'] = np.clip(n1_safe, 0, np.iinfo(np.uint32).max).astype(np.uint32)
+        results_view['n2'] = np.clip(n2_safe, 0, np.iinfo(np.uint32).max).astype(np.uint32)
         results_view['variance1'] = variance1_out
         results_view['variance2'] = variance2_out
 

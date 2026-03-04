@@ -641,12 +641,13 @@ class MethylDetector:
         )
         # Log per-filter retention (intermediate counts for messages)
         prev_count = initial_count
+        _pct = lambda n, d: f"{n / d * 100:.1f}%" if d and d > 0 else "N/A"
         if self.config.min_delta_mean is not None and "delta_mean" in dmps_df.columns:
             step_df = _apply_biological_filters(dmps_df, self.config.min_delta_mean, None, None)
             n = len(step_df)
             logger.info(
                 f"After min_delta_mean filter (|delta_mean| ≥ {self.config.min_delta_mean}): "
-                f"{n:,} DMPs ({n/prev_count*100:.1f}% retained)"
+                f"{n:,} DMPs ({_pct(n, prev_count)} retained)"
             )
             prev_count = n
         if self.config.max_overlap is not None and "overlap" in dmps_df.columns:
@@ -654,18 +655,18 @@ class MethylDetector:
             n = len(step_df)
             logger.info(
                 f"After max_overlap filter (overlap ≤ {self.config.max_overlap}): "
-                f"{n:,} DMPs ({n/prev_count*100:.1f}% retained)"
+                f"{n:,} DMPs ({_pct(n, prev_count)} retained)"
             )
             prev_count = n
         if min_bounded is not None and "bounded_effect_size" in dmps_df.columns:
             n = len(bio_df)
             logger.info(
                 f"After min_bounded_effect_size filter (bounded_effect_size ≥ {min_bounded}): "
-                f"{n:,} DMPs ({n/prev_count*100:.1f}% retained)"
+                f"{n:,} DMPs ({_pct(n, prev_count)} retained)"
             )
         if initial_count != len(bio_df):
             logger.info(
-                f"Biological filter total: {len(bio_df):,} DMPs ({len(bio_df)/initial_count*100:.1f}% of initial)"
+                f"Biological filter total: {len(bio_df):,} DMPs ({_pct(len(bio_df), initial_count)} of initial)"
             )
 
         # Log and store value ranges of delta_mean, overlap, effect_size for retained DMPs
