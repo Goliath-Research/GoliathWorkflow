@@ -1425,42 +1425,32 @@ class MethylCentroidPair:
     def validate_centroid_parameters(centroid1: MethylSample, centroid2: MethylSample,
                                    extreme_threshold: float = 1000) -> dict:
         """
-        Validate centroid parameters by comparing alpha/beta against simple statistics.
-
-        This is a utility method that can be used by higher-level components like
-        MethylModeler to validate the quality of beta parameter estimation.
-
-        Args:
-            centroid1: First centroid to validate
-            centroid2: Second centroid to validate
-            extreme_threshold: Threshold for detecting extreme beta parameters
-
-        Returns:
-            Dictionary with validation results and statistics
+        Return basic centroid statistics (no distribution validation).
+        Correct group classification is checked by the classifier centroid self-check
+        when running the pipeline.
         """
         if not centroid1.is_extended_centroid or not centroid2.is_extended_centroid:
             return {"error": "Both centroids must be extended centroids"}
 
-        # Align centroids to common positions for proper comparison
         try:
             centroid1, centroid2, common_pos = MethylCentroidPair.load_and_align_from_samples(centroid1, centroid2)
         except ValueError as e:
             return {"error": f"Failed to align centroids: {e}"}
 
-        # Get Beta parameters using MethylExtendedCentroid properties
         alpha1, beta1 = centroid1.alpha.values, centroid1.beta.values
         alpha2, beta2 = centroid2.alpha.values, centroid2.beta.values
+        N1, N2 = centroid1.N, centroid2.N
 
-        # Get sample statistics
-        N1 = centroid1.N
-        Sx1 = centroid1.Sx
-        Sx2_1 = centroid1.Sx2
+        position_diffs = np.abs(centroid1.mean - centroid2.mean)
+        n_positions = len(position_diffs)
+        trim_bottom = int(0.10 * n_positions)
+        if trim_bottom < n_positions:
+            sorted_diffs = np.sort(position_diffs)
+            trimmed_mean_diff = float(np.mean(sorted_diffs[trim_bottom:]))
+        else:
+            trimmed_mean_diff = float(np.abs(centroid1.mean.mean() - centroid2.mean.mean()))
 
-        N2 = centroid2.N
-        Sx2 = centroid2.Sx
-        Sx2_2 = centroid2.Sx2
-
-        results = {
+        return {
             "centroid1": {
                 "n_positions": len(alpha1),
                 "alpha_stats": {"mean": float(alpha1.mean()), "std": float(alpha1.std())},
@@ -1473,127 +1463,14 @@ class MethylCentroidPair:
                 "beta_stats": {"mean": float(beta2.mean()), "std": float(beta2.std())},
                 "sample_stats": {"min_N": int(N2.min()), "max_N": int(N2.max()), "mean_N": float(N2.mean()), "std_N": float(N2.std())}
             },
-            "validation": {},
-            "warnings": []
+            "group_separation": trimmed_mean_diff,
+            "separation_stats": {
+                "mean_diff": float(np.mean(position_diffs)),
+                "median_diff": float(np.median(position_diffs)),
+                "min_diff": float(np.min(position_diffs)),
+                "max_diff": float(np.max(position_diffs)),
+            },
         }
-
-        # Estimate mean and variance from Sx and Sx2 (assuming Normal) for validation
-        valid_positions1 = N1 >= 5  # At least 5 samples for reliable variance estimate
-        valid_positions2 = N2 >= 5
-
-        if np.any(valid_positions1):
-            N1_valid = N1[valid_positions1]
-            Sx1_valid = Sx1[valid_positions1]
-            Sx2_1_valid = Sx2_1[valid_positions1]
-
-            normal_mean1 = float(np.median(Sx1_valid / N1_valid))
-            normal_var1 = float(np.median((Sx2_1_valid - (Sx1_valid**2)/N1_valid) / (N1_valid - 1)))
-
-            # Use MethylSample's mean and calculate variance from Beta parameters for Beta comparison
-            beta_mean1 = float(centroid1.mean[valid_positions1].mean())
-            # Beta distribution variance: αβ/((α+β)²(α+β+1))
-            alpha1_valid = centroid1.alpha.values[valid_positions1]
-            beta1_valid = centroid1.beta.values[valid_positions1]
-            beta_var1 = float(((alpha1_valid * beta1_valid) / ((alpha1_valid + beta1_valid)**2 * (alpha1_valid + beta1_valid + 1))).mean())
-
-            results["validation"]["centroid1"] = {
-                "normal_estimate": {"mean": normal_mean1, "var": normal_var1},
-                "beta_estimate": {"mean": beta_mean1, "var": beta_var1},
-                "mean_difference": abs(normal_mean1 - beta_mean1)
-            }
-
-            # Check if estimates are reasonable - only warn for large samples where Beta should be accurate
-            mean_N1 = float(N1_valid.mean())
-            mean_diff = abs(normal_mean1 - beta_mean1)
-            if mean_N1 >= 20 and mean_diff > 0.1:
-                results["warnings"].append(f"Centroid1: Large mean difference ({mean_diff:.4f}) between normal and beta estimates (N={mean_N1:.1f})")
-            elif mean_N1 < 20 and mean_diff > 0.1:
-                logger.debug(f"Centroid1: Expected difference ({mean_diff:.4f}) for small samples (N={mean_N1:.1f} < 20), using normal approximation")
-
-        if np.any(valid_positions2):
-            N2_valid = N2[valid_positions2]
-            Sx2_valid = Sx2[valid_positions2]
-            Sx2_2_valid = Sx2_2[valid_positions2]
-
-            normal_mean2 = float(np.median(Sx2_valid / N2_valid))
-            normal_var2 = float(np.median((Sx2_2_valid - (Sx2_valid**2)/N2_valid) / (N2_valid - 1)))
-
-            # Use MethylSample's mean and calculate variance from Beta parameters for Beta comparison
-            beta_mean2 = float(centroid2.mean[valid_positions2].mean())
-            # Beta distribution variance: αβ/((α+β)²(α+β+1))
-            alpha2_valid = centroid2.alpha.values[valid_positions2]
-            beta2_valid = centroid2.beta.values[valid_positions2]
-            beta_var2 = float(((alpha2_valid * beta2_valid) / ((alpha2_valid + beta2_valid)**2 * (alpha2_valid + beta2_valid + 1))).mean())
-
-            results["validation"]["centroid2"] = {
-                "normal_estimate": {"mean": normal_mean2, "var": normal_var2},
-                "beta_estimate": {"mean": beta_mean2, "var": beta_var2},
-                "mean_difference": abs(normal_mean2 - beta_mean2)
-            }
-
-            # Check if estimates are reasonable - only warn for large samples where Beta should be accurate
-            mean_N2 = float(N2_valid.mean())
-            mean_diff = abs(normal_mean2 - beta_mean2)
-            if mean_N2 >= 20 and mean_diff > 0.1:
-                results["warnings"].append(f"Centroid2: Large mean difference ({mean_diff:.4f}) between normal and beta estimates (N={mean_N2:.1f})")
-            elif mean_N2 < 20 and mean_diff > 0.1:
-                logger.debug(f"Centroid2: Expected difference ({mean_diff:.4f}) for small samples (N={mean_N2:.1f} < 20), using normal approximation")
-
-        # Check for extreme parameters - only warn for large samples where Beta should be stable
-        n_extreme1 = int(np.sum((alpha1 > extreme_threshold) | (beta1 > extreme_threshold)))
-        n_extreme2 = int(np.sum((alpha2 > extreme_threshold) | (beta2 > extreme_threshold)))
-
-        mean_N_overall = (centroid1.N.mean() + centroid2.N.mean()) / 2.0
-        if n_extreme1 > 0 and mean_N_overall >= 20:
-            results["warnings"].append(f"Centroid1 has {n_extreme1} positions with extreme Beta parameters (> {extreme_threshold})")
-        elif n_extreme1 > 0 and mean_N_overall < 20:
-            logger.debug(f"Centroid1 has {n_extreme1} positions with extreme Beta parameters, but using normal approximation for small samples (N={mean_N_overall:.1f} < 20)")
-
-        if n_extreme2 > 0 and mean_N_overall >= 20:
-            results["warnings"].append(f"Centroid2 has {n_extreme2} positions with extreme Beta parameters (> {extreme_threshold})")
-        elif n_extreme2 > 0 and mean_N_overall < 20:
-            logger.debug(f"Centroid2 has {n_extreme2} positions with extreme Beta parameters, but using normal approximation for small samples (N={mean_N_overall:.1f} < 20)")
-
-        # Check group separation using trimmed mean to focus on truly discriminative positions
-        # Calculate absolute differences between centroids at each position
-        position_diffs = np.abs(centroid1.mean - centroid2.mean)
-
-        # Sort differences to identify positions with minimal differences
-        sorted_diffs = np.sort(position_diffs)
-
-        # Remove only 10% from positions with least difference (bottom 10%) to focus
-        # on positions that actually show group differences, keeping the most discriminative
-        n_positions = len(sorted_diffs)
-        trim_bottom = int(0.10 * n_positions)  # Remove bottom 10% (least different)
-
-        if trim_bottom < n_positions:
-            # Keep positions with meaningful differences
-            trimmed_diffs = sorted_diffs[trim_bottom:]
-            mean_diff = float(np.mean(trimmed_diffs))
-        else:
-            # Fallback to simple mean if trimming would remove too much data
-            mean_diff = abs(centroid1.mean.mean() - centroid2.mean.mean())
-
-        # Add detailed statistics about position differences
-        results["group_separation"] = float(mean_diff)
-        results["separation_stats"] = {
-            "mean_diff": float(np.mean(position_diffs)),
-            "median_diff": float(np.median(position_diffs)),
-            "std_diff": float(np.std(position_diffs)),
-            "min_diff": float(np.min(position_diffs)),
-            "max_diff": float(np.max(position_diffs)),
-            "percentile_90_diff": float(np.percentile(position_diffs, 90)),
-            "percentile_95_diff": float(np.percentile(position_diffs, 95)),
-            "percentile_99_diff": float(np.percentile(position_diffs, 99)),
-            "n_positions_above_0_1": int(np.sum(position_diffs > 0.1)),
-            "n_positions_above_0_2": int(np.sum(position_diffs > 0.2)),
-            "n_positions_above_0_5": int(np.sum(position_diffs > 0.5))
-        }
-
-        if mean_diff < 0.05:
-            results["warnings"].append(f"Poor separation between centroids (trimmed mean difference = {mean_diff:.4f})")
-
-        return results
 
     def compute_effect_sizes(
         self,

@@ -1512,69 +1512,39 @@ class MethylDetector:
     
     def _validate_centroid_parameters(self) -> None:
         """
-        Validate centroid parameters by delegating to MethylUtils.
-
-        Uses MethylCentroidPair.validate_centroid_parameters() to compare
-        Beta distribution parameters against estimates derived from Sx and Sx2.
+        Log basic centroid statistics. No distribution validation (Beta/Normal etc.).
+        Correct group classification is checked by the centroid self-check when
+        building the classifier (centroid1 → class 0, centroid2 → class 1).
         """
         from pathlib import Path
 
-        logger.info("🔍 Validating centroid parameters...")
+        logger.info("🔍 Centroid summary (CG context)...")
 
         try:
-            # Load centroids - use CG context as representative
             context = "CG"
             centroid1_path = Path(self.config.centroid1_dir) / f"{self.chromosome}-{context}.h5"
             centroid2_path = Path(self.config.centroid2_dir) / f"{self.chromosome}-{context}.h5"
 
-            logger.info(f"Loading centroid1 (healthy): {centroid1_path}")
-            centroid1 = MethylSample.load_from_h5(str(centroid1_path))
-
-            logger.info(f"Loading centroid2 (cancer): {centroid2_path}")
-            centroid2 = MethylSample.load_from_h5(str(centroid2_path))
-
-            # Delegate validation to MethylUtils
-            validation_results = MethylCentroidPair.validate_centroid_parameters(centroid1, centroid2)
-
-            if "error" in validation_results:
-                logger.warning(f"Centroid validation failed: {validation_results['error']}")
+            if not centroid1_path.exists() or not centroid2_path.exists():
+                logger.debug("Skipping centroid summary: CG files not found")
                 return
 
-            # Log validation results
-            c1_stats = validation_results["centroid1"]
-            c2_stats = validation_results["centroid2"]
+            centroid1 = MethylSample.load_from_h5(str(centroid1_path))
+            centroid2 = MethylSample.load_from_h5(str(centroid2_path))
+            results = MethylCentroidPair.validate_centroid_parameters(centroid1, centroid2)
 
-            logger.info("Centroid1 (healthy) statistics:")
-            logger.info(f"  Positions: {c1_stats['n_positions']:,}, Samples: {c1_stats['sample_stats']['mean_N']:.1f}±{c1_stats['sample_stats']['std_N']:.1f}")
-            logger.info(f"  Beta params: α={c1_stats['alpha_stats']['mean']:.2f}±{c1_stats['alpha_stats']['std']:.2f}, β={c1_stats['beta_stats']['mean']:.2f}±{c1_stats['beta_stats']['std']:.2f}")
+            if "error" in results:
+                logger.warning(f"Centroid summary failed: {results['error']}")
+                return
 
-            logger.info("Centroid2 (cancer) statistics:")
-            logger.info(f"  Positions: {c2_stats['n_positions']:,}, Samples: {c2_stats['sample_stats']['mean_N']:.1f}±{c2_stats['sample_stats']['std_N']:.1f}")
-            logger.info(f"  Beta params: α={c2_stats['alpha_stats']['mean']:.2f}±{c2_stats['alpha_stats']['std']:.2f}, β={c2_stats['beta_stats']['mean']:.2f}±{c2_stats['beta_stats']['std']:.2f}")
-
-            # Log validation comparisons if available
-            if "centroid1" in validation_results["validation"]:
-                v1 = validation_results["validation"]["centroid1"]
-                logger.info("Centroid1 validation (median of valid positions):")
-                logger.info(f"  Normal estimate: mean={v1['normal_estimate']['mean']:.4f}, var={v1['normal_estimate']['var']:.6f}")
-                logger.info(f"  Beta estimate:   mean={v1['beta_estimate']['mean']:.4f}, var={v1['beta_estimate']['var']:.6f}")
-
-            if "centroid2" in validation_results["validation"]:
-                v2 = validation_results["validation"]["centroid2"]
-                logger.info("Centroid2 validation (median of valid positions):")
-                logger.info(f"  Normal estimate: mean={v2['normal_estimate']['mean']:.4f}, var={v2['normal_estimate']['var']:.6f}")
-                logger.info(f"  Beta estimate:   mean={v2['beta_estimate']['mean']:.4f}, var={v2['beta_estimate']['var']:.6f}")
-
-            logger.info(f"Group separation: mean difference = {validation_results['group_separation']:.4f}")
-
-            # Log any warnings
-            for warning in validation_results["warnings"]:
-                logger.warning(f"  ⚠️  {warning}")
+            c1 = results["centroid1"]
+            c2 = results["centroid2"]
+            logger.info("Centroid1: %s positions, mean N = %.1f", c1["n_positions"], c1["sample_stats"]["mean_N"])
+            logger.info("Centroid2: %s positions, mean N = %.1f", c2["n_positions"], c2["sample_stats"]["mean_N"])
+            logger.info("Trimmed mean |Δβ| (group separation) = %.4f", results["group_separation"])
 
         except Exception as e:
-            logger.error(f"Centroid parameter validation failed: {e}")
-            import traceback
-            logger.debug(traceback.format_exc())
+            logger.debug("Centroid summary failed: %s", e)
 
     def _validate_selected_dmps(self, selected_dmps_df: pd.DataFrame, sorted_df: Optional[pd.DataFrame] = None) -> Optional[dict]:
         """
