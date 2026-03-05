@@ -82,8 +82,8 @@ def _extract_phase1_data(
     centroid1: Any,
     centroid2: Any,
     indices: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Extract delta_mean, var1, var2, n1, n2, bc1, bc2 for given indices. All arrays same length as indices."""
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Extract delta_mean, var1, var2, n1, n2, bc1, bc2, mean1, mean2 for given indices. All arrays same length as indices."""
     n1 = _to_arr(centroid1.N)[indices]
     n2 = _to_arr(centroid2.N)[indices]
     mean1 = _to_arr(centroid1.mean)[indices]
@@ -97,7 +97,7 @@ def _extract_phase1_data(
     bc1 = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices]
     bc2 = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices]
 
-    return delta_mean, var1, var2, n1, n2, bc1, bc2, indices
+    return delta_mean, var1, var2, n1, n2, bc1, bc2, indices, mean1, mean2
 
 
 def _choose_k(
@@ -248,7 +248,7 @@ class MethylDetectorExplorer:
         self._phase1_indices = phase1_indices
 
         # Phase 1: approximate bounded_effect_size
-        delta_mean, var1, var2, n1, n2, bc1, bc2, _ = _extract_phase1_data(
+        delta_mean, var1, var2, n1, n2, bc1, bc2, _, mean1, mean2 = _extract_phase1_data(
             centroid1, centroid2, phase1_indices
         )
         overlap_approx = discrete_overlap_from_bin_counts(bc1, bc2, method="bhattacharyya")
@@ -260,6 +260,8 @@ class MethylDetectorExplorer:
         positions_phase1 = common_pos[phase1_indices]
         df = pd.DataFrame({
             "position": positions_phase1,
+            "mean1": mean1,
+            "mean2": mean2,
             "delta_mean": delta_mean,
             "variance1": var1,
             "variance2": var2,

@@ -66,7 +66,7 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 
 - **Report JSON** (default: `methyldetectorexplorer_report.json` in output-dir):  
   `total_positions`, `positions_after_min_N_filter`, `phase1_sample_size`, `sample_fraction`, `k_chosen`, `k_heuristic`, `k_info`, `time_phase1_s`, `time_phase2_s`, `time_total_s`.
-- **Optional CSV** (with `--csv`): Table of positions with `position`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `overlap_approx`, `bounded_effect_size_approx`, `welch_d`, and for top K refined `bounded_effect_size` and `overlap`.
+- **Optional CSV** (with `--csv`): Table of positions with `position`, `mean1`, `mean2`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `overlap_approx`, `bounded_effect_size_approx`, `welch_d`, and for top K refined `bounded_effect_size` and `overlap`.
 
 ## K heuristics
 
