@@ -65,7 +65,7 @@ Invalid or low-coverage positions fall back to a uniform Beta$(1,1)$. This yield
 
 ## Distance and Effect-Size Metrics
 
-All metrics below are implemented for **Beta distributions** parameterized by $(\alpha_1,\beta_1)$ and $(\alpha_2,\beta_2)$, with optional GPU acceleration via CuPy.
+For **centroid comparison and DMP detection**, the pipeline uses **only the ECDF** (empirical distribution from binned_stats). The formulas below for **Beta distributions** are available internally (e.g. BetaClassifier); overlap and comparison in MethylCentroidPair/MethylDetector use ECDF-based metrics. All metrics are implemented with optional GPU acceleration via CuPy.
 
 ### KL Divergence (Beta)
 

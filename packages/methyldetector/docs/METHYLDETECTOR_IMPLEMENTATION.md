@@ -90,7 +90,7 @@ MethylDetector uses **MethylCentroidPair** for all centroid-to-centroid comparis
 
 MethylDetector does not implement classifier math; it uses MethylUtils:
 
-- **BetaClassifier** / **BetaBinomialClassifier**: Training and prediction on DMP positions using Beta (and optionally Beta-Binomial) likelihoods.
+- **BetaClassifier**: Training and prediction on DMP positions; comparison and overlap use **ECDF only** (centroids must have binned_stats).
 - Validation metrics (e.g. Balanced Accuracy) are computed from classifier predictions on validation samples whose methylation fractions are extracted via MethylCentroidPair.
 
 ## Summary

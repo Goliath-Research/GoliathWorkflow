@@ -88,7 +88,9 @@
       "Y"
     ],
     "contexts": [
-      "CG"
+      "CG",
+      "CHG",
+      "CHH"
     ],
     "step_config": {
       "centroid": {

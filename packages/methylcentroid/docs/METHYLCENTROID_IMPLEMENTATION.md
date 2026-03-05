@@ -1,6 +1,6 @@
 # MethylCentroid Implementation (MethylUtils)
 
-This document describes how MethylCentroid is implemented on top of **MethylUtils**: the builder, data types, I/O, and how the methylcentroid package uses them.
+This document describes how MethylCentroid is implemented on top of **MethylUtils**: the builder, data types, I/O, and how the methylcentroid package uses them. **Only the ECDF distribution is supported**; Normal, Beta, Beta-Binomial, and Beta-Mixture have been removed.
 
 ## Architecture Overview
 
@@ -12,7 +12,7 @@ User / CLI
     → methyl_centroid.MethylCentroid (config, chrom/ctx, samples)
         → methyl_utils.core.centroid_builder.MethylCentroidBuilder
             → add_sample(path) per sample
-            → finalize() → MethylExtendedCentroid or MethylBetaBinomialCentroid
+            → finalize() → MethylExtendedCentroid
         → methyl_utils.core.io.save_to_h5 / load_from_h5
 ```
 
@@ -20,15 +20,13 @@ User / CLI
 
 ### 1. MethylCentroidBuilder (`methyl_utils.core.centroid_builder`)
 
-The **single** way to build extended centroids in the pipeline:
+The **single** way to build extended centroids:
 
-- **Streaming**: Processes one sample at a time via `add_sample(sample_path)`; no need to load all samples into memory.
+- **Streaming**: Processes one sample at a time via `add_sample(sample_path)`.
 - **Position alignment**: Maintains a sorted union of positions; new positions are merged and accumulators updated (GPU or CPU).
-- **Accumulators**: Keeps running sums for `N`, `Sx`, `Sx2`, `log_x_sum`, `log_1_minus_x_sum`, and optionally extended stats (`sum_cov`, `sum_mC`, `sum_uC`, `Sx3`, `Sx4`, `count_zero`, `count_one`).
-- **GPU**: Uses CuPy when `use_gpu=True` and available; otherwise NumPy. All accumulation is vectorized.
-- **Finalize**: `finalize()` applies `min_coverage` filter and returns:
-  - **MethylBetaBinomialCentroid** when `store_extended_stats=True` (default): includes count columns for Beta-Binomial and overlap.
-  - **MethylExtendedCentroid** when `store_extended_stats=False`: only base sufficient stats (N, Sx, Sx2, log sums).
+- **Accumulators**: N, Sx, Sx2, mC_sum, uC_sum, and **bin_edges** / **bin_counts** (binned histogram for ECDF). Number of bins is set by `binned_stats_bins` (default 20 in MethylCentroid).
+- **GPU**: Uses CuPy when `use_gpu=True` and available.
+- **Finalize**: `finalize()` applies `min_coverage` filter and returns **MethylExtendedCentroid** with core columns and binned_stats (bin_edges, bin_counts).
 
 **Constructor** (simplified):
 
@@ -40,11 +38,11 @@ builder = MethylCentroidBuilder(
     use_gpu=True,
     chunk_size=100_000_000,
     metadata=None,
-    store_extended_stats=True,
+    binned_stats_bins=20,
 )
 builder.add_sample("/path/to/sample/dir")  # or path to {chrom}-{ctx}.h5
 # ... more add_sample() ...
-centroid = builder.finalize()  # MethylExtendedCentroid | MethylBetaBinomialCentroid
+centroid = builder.finalize()  # MethylExtendedCentroid
 ```
 
 ### 2. Convenience function: `build_centroid`
@@ -57,43 +55,36 @@ centroid = build_centroid(
     min_coverage=4,
     use_gpu=True,
     metadata={"chrom": "1", "ctx": "CG"},
-    store_extended_stats=True,
+    binned_stats_bins=20,
 )
 ```
-
-Creates a `MethylCentroidBuilder`, adds all paths, and returns `finalize()`.
 
 ### 3. Data types (`methyl_utils.core.methyl_frame`)
 
 - **MethylSample**: Single sample (pos, mC, uC, tnc). Loaded from per-sample HDF5.
-- **MethylBasicCentroid**: pos, mC, uC, tnc, N (no Sx/Sx2/log sums). Legacy/simple centroid.
-- **MethylExtendedCentroid**: Extends MethylBasicCentroid with **required** fields:
-  - N, Sx, Sx2, log_x_sum, log_1_minus_x_sum  
-  No count columns (sum_cov, sum_mC, etc.). Supports `.alpha`, `.beta` (Beta MLE from log sums).
-- **MethylBetaBinomialCentroid**: Subclass of MethylExtendedCentroid with **required** count columns (sum_cov, sum_mC, sum_uC, sum_cov2, sum_mC2, sum_uC2, Sx3, Sx4, count_zero, count_one). Used when `store_extended_stats=True` in the builder. Supports Beta-Binomial views and `overlap(other)` (e.g. Bhattacharyya).
+- **MethylExtendedCentroid**: The only centroid type. Fields: pos, mC, uC, tnc, N, Sx, Sx2. Optional **binned_stats** (bin_edges, bin_counts) for ECDF. Beta parameters (alpha, beta) are derived via method-of-moments from N, Sx, Sx2 when needed for internal use; **comparison and overlap use ECDF only**.
 
-**Type alias**: `MethylCentroid` in MethylUtils is an alias for `MethylExtendedCentroid` (both basic and Beta-Binomial centroids are instances of MethylExtendedCentroid).
+**Type alias**: `MethylCentroid` in MethylUtils is an alias for `MethylExtendedCentroid`.
 
 ### 4. I/O (`methyl_utils.core.io`)
 
-- **load_from_h5(path)**: Returns `MethylSample`, `MethylBasicCentroid`, `MethylExtendedCentroid`, or `MethylBetaBinomialCentroid` depending on which datasets/attributes are present (e.g. if all Beta-Binomial count columns exist → MethylBetaBinomialCentroid).
-- **save_to_h5**: Persists centroid/sample to HDF5; used by methylcentroid package when writing `{chrom}-{ctx}.h5`.
+- **load_from_h5(path)**: Returns `MethylSample` or `MethylExtendedCentroid` depending on presence of N, Sx, Sx2. Binned stats (bin_edges, bin_counts) loaded when present.
+- **save_to_h5**: Persists centroid/sample to HDF5; writes only the current schema (no log sums or Beta-Binomial columns).
 
 ### 5. How the methylcentroid package uses MethylUtils
 
-- **Initial centroid (first sample)** or **CHH streaming path**: Instantiates `MethylCentroidBuilder(min_coverage, use_gpu, store_extended_stats=True)`, calls `add_sample(path)` for each sample, then `finalize()`. Applies optional `min_samples` filter on the result.
-- **Incremental add/remove**: For in-memory updates after the first build, uses `MethylExtendedCentroid.add_sample(sample)` and `.remove_sample(sample)` (samples are MethylSample instances loaded via `load_from_h5`).
-- **Saving**: Writes the finalized centroid (MethylExtendedCentroid or MethylBetaBinomialCentroid) to `output_dir` as `{chrom}-{ctx}.h5` and saves config/metadata to `{chrom}-{ctx}_config.json`.
-- **Dependencies**: Uses MethylUtils for `MethylSample`, `MethylExtendedCentroid`, `MethylCentroidBuilder`, `load_from_h5`, GPU/memory helpers (`is_gpu_available`, `get_memory_manager`), logging (`get_logger`), and optional chunked processing.
+- **Build**: Instantiates `MethylCentroidBuilder(min_coverage, use_gpu, binned_stats_bins=20)`, calls `add_sample(path)` for each sample, then `finalize()`. Applies optional `min_samples` filter on the result.
+- **Incremental add/remove**: Uses `MethylExtendedCentroid.add_sample(sample)` and `.remove_sample(sample)` for in-memory updates.
+- **Saving**: Writes the finalized MethylExtendedCentroid to `output_dir` as `{chrom}-{ctx}.h5` with binned_stats when bins > 0.
+- **Distribution**: Only **ECDF** is used for comparison and overlap (MethylCentroidPair, MethylDetector).
 
 ## Summary
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| MethylUtils | MethylCentroidBuilder | Streaming, GPU-capable accumulation; finalize → MethylExtendedCentroid or MethylBetaBinomialCentroid |
-| MethylUtils | build_centroid() | One-shot build from list of paths |
-| MethylUtils | MethylExtendedCentroid / MethylBetaBinomialCentroid | In-memory centroid type; Beta MLE (alpha, beta); optional count columns for Beta-Binomial |
+| MethylUtils | MethylCentroidBuilder | Streaming, GPU; finalize → MethylExtendedCentroid with binned_stats |
+| MethylUtils | MethylExtendedCentroid | Single centroid type; N, Sx, Sx2, binned_stats; ECDF only for comparison |
 | MethylUtils | load_from_h5 / save_to_h5 | Load/save samples and centroids |
-| MethylCentroid package | MethylCentroid (class) | Config, chrom/ctx, batch, CLI; delegates building to MethylCentroidBuilder and in-memory updates to MethylExtendedCentroid.add_sample/remove_sample |
+| MethylCentroid package | MethylCentroid (class) | Config, chrom/ctx, batch, CLI; delegates to MethylCentroidBuilder |
 
-For theoretical background (distributions and sufficient statistics), see **MethylCentroid_Theoretical_Foundation.md** and **METHYLCENTROID_DISTRIBUTIONS.tex**.
+For theoretical background (ECDF, sufficient statistics), see **MethylCentroid_Theoretical_Foundation.md**.

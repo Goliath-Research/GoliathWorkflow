@@ -27,7 +27,7 @@ So the “theory” of project config is: one source of truth for groups and com
 
 Methylation level at a position is a fraction in [0, 1]. MethylUtils models it with a **Beta(α, β)** distribution. Parameters are derived from coverage and methylation fraction via a **method-of-moments** style mapping (effective size, clamped α/β; invalid/low-coverage falls back to a uniform Beta). This supports likelihoods and distances between positions.
 
-**Distance and effect-size metrics** (all for Beta distributions, with optional GPU):
+**Distance and effect-size metrics** (Beta formulas available internally; **centroid comparison and DMP detection use ECDF only**, with optional GPU):
 
 - KL divergence, Jeffreys (symmetric KL), Bhattacharyya coefficient/distance, Hellinger, Jensen–Shannon distance, Wasserstein (moment approximation), and an effect-size formula combining mean separation and overlap (used for DMP ranking).
 

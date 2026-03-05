@@ -57,19 +57,16 @@ for large genomes (e.g., CHH).
 
 ### Implementation (MethylUtils)
 
-Centroid construction is implemented in **MethylUtils**: **MethylCentroidBuilder** (streaming, GPU), **build_centroid()**, **MethylExtendedCentroid** / **MethylBetaBinomialCentroid**, and **load_from_h5** / **save_to_h5**. See **METHYLCENTROID_IMPLEMENTATION.md** for full details.
+Centroid construction is implemented in **MethylUtils**: **MethylCentroidBuilder** (streaming, GPU), **build_centroid()**, **MethylExtendedCentroid**, and **load_from_h5** / **save_to_h5**. See **METHYLCENTROID_IMPLEMENTATION.md** for full details.
 
-## 4. Sufficient Statistics and Distributions
+## 4. Sufficient Statistics and ECDF
 
-The centroid stores sufficient statistics for:
-- **Normal** (mean/variance via Sx, Sx2)
-- **Beta** (MLE via log-sums)
-- **Beta-Binomial** (coverage-aware overdispersion)
-- **Beta Mixture** (optional binned stats or masked refinement)
+The centroid stores sufficient statistics and binned histograms for **ECDF only** (no Normal, Beta, Beta-Binomial, or Beta-Mixture):
 
-Full derivations and formulas are documented in:
+- **N, Sx, Sx2**: mean and variance per position
+- **bin_edges, bin_counts**: per-position binned histogram (when `binned_stats_bins` > 0, default 20) for empirical CDF/PDF via spline interpolation
 
-📄 **`docs/METHYLCENTROID_DISTRIBUTIONS.tex`**
+Only the ECDF distribution is supported for comparison and overlap in MethylCentroidPair and MethylDetector.
 
 ## 5. Configuration
 
@@ -227,14 +224,13 @@ A **methylation centroid** is a statistical summary that represents the average 
 MethylCentroid uses `MethylSample` (from MethylUtils) as a unified container that supports three data types:
 
 1. **Basic Sample**: Individual methylation sample with `pos`, `mC`, `uC`, `tnc` fields
-2. **Basic Centroid**: Aggregated sample with additional `N` (sample count), `Sx`, `Sx2` (sufficient statistics for mean/variance)
-3. **Extended Centroid**: Basic centroid plus `log_x_sum`, `log_1_minus_x_sum` (sufficient statistics for Beta distribution MLE)
+2. **Centroid (MethylExtendedCentroid)**: Aggregated with `N`, `Sx`, `Sx2` and optional **binned_stats** (bin_edges, bin_counts) for **ECDF only**. No log sums or Beta-Binomial columns.
 
-This unified design allows MethylCentroid to:
+This design allows MethylCentroid to:
 - Process individual samples during centroid calculation
-- Accumulate statistics (Sx, Sx2, log sums) incrementally
-- Extract Beta distribution parameters (α, β) from extended centroids for probabilistic outlier detection
-- Maintain backward compatibility with existing HDF5 files
+- Accumulate N, Sx, Sx2 and bin_counts incrementally
+- Use ECDF (binned_stats) for comparison and overlap; only ECDF is supported
+- Maintain backward compatibility when loading older HDF5 files (extra columns ignored)
 
 ### Key Features
 
@@ -395,41 +391,9 @@ $$
 - Proper metric
 - **Use when**: Spatial relationships matter
 
-### 4. Statistical Distribution Modeling
+### 4. Distribution: ECDF Only
 
-MethylCentroid adaptively selects between Normal and Beta distributions using AIC:
-
-#### Beta Distribution (Preferred for Bounded Metrics)
-
-For distances bounded in [0, 1]:
-
-$$
-f(x; \alpha, \beta) = \frac{x^{\alpha-1}(1-x)^{\beta-1}}{B(\alpha, \beta)}
-$$
-
-**Parameter Estimation** (Method of Moments):
-
-$$
-\hat{\alpha} = \frac{\mu^2(1-\mu)}{\sigma^2} - \mu, \quad \hat{\beta} = \frac{\hat{\alpha}(1-\mu)}{\mu}
-$$
-
-**P-value Calculation**:
-
-$$
-p\text{-value} = 1 - F_{\text{Beta}}(d_{\text{observed}}; \hat{\alpha}, \hat{\beta})
-$$
-
-#### Normal Distribution (Fallback for Unbounded Metrics)
-
-$$
-f(x; \mu, \sigma) = \frac{1}{\sigma\sqrt{2\pi}} \exp\left(-\frac{(x-\mu)^2}{2\sigma^2}\right)
-$$
-
-**P-value Calculation**:
-
-$$
-p\text{-value} = 1 - \Phi\left(\frac{d_{\text{observed}} - \hat{\mu}}{\hat{\sigma}}\right)
-$$
+The pipeline supports **only the empirical distribution (ECDF)** for per-position comparison and overlap. Centroids are built with `binned_stats_bins` (default 20) so that `bin_edges` and `bin_counts` define the empirical CDF; spline interpolation provides CDF/PDF for any \(x \in [0,1]\). Overlap and p-values use ECDF-based metrics (e.g. KS statistic). Normal, Beta, Beta-Binomial, and Beta-Mixture are not supported.
 
 ---
 
@@ -539,7 +503,7 @@ MethylCentroid implements three outlier detection strategies, automatically sele
 **Algorithm**:
 ```
 1. Calculate distances for all samples
-2. Fit Beta distribution to distance values
+2. Use distance distribution for outlier scoring
 3. Compute outlier probability for each sample
 4. Select sample with highest outlier probability
 5. Check if p-value < α (significance threshold)
@@ -603,7 +567,7 @@ config = MethylCentroidConfig(
 ```
 1. Use single distance metric (default: Jensen-Shannon)
 2. Calculate distances for all samples
-3. Fit Normal distribution to distances
+3. Use ECDF-based or distance distribution for outlier detection
 4. Identify most extreme outlier (highest z-score)
 5. Check if p-value < α
 ```

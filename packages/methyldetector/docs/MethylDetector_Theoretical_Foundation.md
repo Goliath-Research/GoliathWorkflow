@@ -11,39 +11,11 @@ Downstream, selected DMPs are used for classifier training and validation (Balan
 
 ## Probabilistic Model
 
-Per genomic position, methylation is modeled as bounded in \([0, 1]\), so the natural choice is the **Beta distribution**:
+Per genomic position, methylation is bounded in \([0, 1]\). MethylDetector uses **only the empirical distribution (ECDF)** for comparison and overlap. Centroids must have **binned_stats** (bin_edges, bin_counts), built with `binned_stats_bins` (default 20). MethylUtils **MethylCentroidPair** computes overlap, p-values, and effect size using ECDF only; Normal, Beta, Beta-Binomial, and Beta-Mixture are not supported.
 
-- \(x \sim \text{Beta}(\alpha, \beta)\)
-- Mean: \(\mu = \alpha / (\alpha + \beta)\)
-- Variance: \(\sigma^2 = \frac{\alpha\beta}{(\alpha+\beta)^2(\alpha+\beta+1)}\)
+## Statistical Testing
 
-Centroid sufficient statistics (from MethylCentroid) provide MLEs for \(\alpha, \beta\) per position and per group. MethylDetector (via MethylUtils **MethylCentroidPair**) can use:
-
-- **Beta**: default for mean/overlap and LRT
-- **Normal**: approximation when appropriate (delta_mean_mode / overlap_mode)
-- **Beta-Binomial**: coverage-aware; optional
-
-Distribution selection is configured by `delta_mean_mode`, `overlap_mode`, and `distribution` in the detector config and is implemented in MethylCentroidPair.
-
-## Likelihood Ratio Test (LRT)
-
-For each position, test:
-
-- \(H_0\): same Beta in both groups — \(\text{Beta}(\alpha_1, \beta_1) = \text{Beta}(\alpha_2, \beta_2)\)
-- \(H_1\): different Betas
-
-**Test statistic:**
-
-$$\Lambda = -2 \log \frac{\mathcal{L}(H_0)}{\mathcal{L}(H_1)}$$
-
-- \(\mathcal{L}(H_0)\): likelihood under null (pooled parameters)
-- \(\mathcal{L}(H_1)\): likelihood under alternative (separate \(\alpha_1,\beta_1\) and \(\alpha_2,\beta_2\))
-
-Under \(H_0\), \(\Lambda \sim \chi^2_2\) (2 degrees of freedom). **P-value:**
-
-$$p = P(\chi^2_2 \geq \Lambda) = 1 - F_{\chi^2_2}(\Lambda)$$
-
-Implementation: MethylUtils `likelihood_ratio_test_beta`; MethylCentroidPair calls it and returns p-values in the comparison table.
+Per-position significance and effect size are computed by MethylUtils **MethylCentroidPair** using **ECDF-based** metrics (e.g. z-test on means with variances, or KS-based tests). P-values and q-values are attached to the comparison table. Implementation: MethylUtils statistical_tests and MethylCentroidPair.
 
 ## FDR Correction: Storey's q-value
 
@@ -91,11 +63,11 @@ with Sensitivity = TP/(TP+FN), Specificity = TN/(TN+FP). This treats both classe
 
 | Component | Role |
 |-----------|------|
-| Distribution | Beta (default); Normal / Beta-Binomial via MethylCentroidPair modes |
-| LRT | \(H_0\): same Beta vs \(H_1\): different; \(\Lambda \sim \chi^2_2\) |
+| Distribution | **ECDF only** (binned_stats required; build with binned_stats_bins, default 20) |
+| Testing | ECDF-based p-values (MethylCentroidPair) |
 | q-value | Storey's method (MethylUtils `storey_qvalues`) |
-| effect_size | \|Δμ\| / (max(overlap, ε) × σ_combined) × variance_reliability (MethylCentroidPair) |
-| Overlap | Bhattacharyya coefficient BC = exp(-BD) |
+| effect_size | From MethylCentroidPair (overlap and delta mean; ECDF-based overlap) |
+| Overlap | ECDF-based (e.g. 1 − KS or discrete overlap from bin_counts) |
 | Validation | Balanced Accuracy |
 
 ## References
