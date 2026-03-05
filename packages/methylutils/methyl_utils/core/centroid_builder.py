@@ -162,6 +162,17 @@ class MethylCentroidBuilder:
 
             # Final indices after merge - positions are now properly sorted
             final_idx = self.xp.searchsorted(self.pos[: self.size], pos)
+            # searchsorted can return self.size when pos > max(self.pos); skip those rows to avoid OOB
+            valid = final_idx < self.size
+            if not self.xp.all(valid):
+                n_skip = int((~valid).sum())
+                logger.warning(
+                    "Builder: %d sample position(s) not in builder after merge (skipping)",
+                    n_skip,
+                )
+                final_idx = final_idx[valid]
+                mC = mC[valid]
+                uC = uC[valid]
 
             # Update accumulators
             total_cov = mC + uC
