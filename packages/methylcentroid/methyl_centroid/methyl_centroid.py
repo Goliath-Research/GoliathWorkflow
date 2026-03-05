@@ -1654,12 +1654,28 @@ class MethylCentroid:
                 "Failed to compute centroid: no samples were successfully added"
             )
 
-        # Compute and save centroid (chunk size from memory-derived params in chunked_processor)
-        if (self.binned_stats_bins > 0):
-            centroid = self.compute_centroid_chunked(
-                extended=extended,
-                chunk_size_positions=self.chunked_processor.chunk_size_positions,
+        # Compute and save centroid (chunk size from memory-derived params in chunked_processor).
+        # When we already have a full centroid with binned_stats from add_samples_parallel (builder
+        # + add_sample path), skip the redundant chunked recompute that re-reads all sample files.
+        if self.binned_stats_bins > 0:
+            from methyl_utils import MethylExtendedCentroid
+            use_existing = (
+                self._centroid is not None
+                and isinstance(self._centroid, MethylExtendedCentroid)
+                and getattr(self._centroid, "binned_stats", None) is not None
             )
+            if use_existing:
+                self.logger.info(
+                    "Using centroid built during sample addition (skipping chunked recompute)"
+                )
+                centroid_cpu = self._centroid.to_cpu()
+                centroid = centroid_cpu.df
+                self._binned_stats = self._centroid.binned_stats
+            else:
+                centroid = self.compute_centroid_chunked(
+                    extended=extended,
+                    chunk_size_positions=self.chunked_processor.chunk_size_positions,
+                )
         else:
             centroid = self.compute_centroid(extended=extended)
         if centroid is None or len(centroid) == 0:
