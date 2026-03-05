@@ -44,7 +44,19 @@
   "contexts": ["CG","CHG","CHH"],  
   "step_config": {
     "centroid": {
-      "base_config": { "min_coverage": 4, "use_gpu": true, "max_sample_workers": null, "verbose": true },
+      "base_config": {
+        "min_coverage": 4,
+        "use_gpu": true,
+        "cap_coverage": true,
+        "cap_coverage_auto_n_cap": "true",
+        "cap_coverage_n_cap_method": "iqr",
+        "cap_coverage_n_cap_iqr_multiplier": 3.0,
+        "cap_coverage_n_cap": null,
+        "cap_coverage_seed": 0,
+        "max_sample_workers": null,
+        "verbose": true,
+        "binned_stats_bins": 20        
+      },
       "parallel_combinations": 1,
       "min_samples": 3,
       "continue_on_error": true,
@@ -52,16 +64,25 @@
     },
     "detection": {
       "alpha": 0.05,
+      "distribution": "ecdf",
+      "max_N_for_ecdf": 30,
       "optimize_dmps": true,
       "validation_mode": "real",
       "target_balanced_accuracy": 0.99,
-      "min_delta_mean": 0.2,
+      "min_delta_mean": 0.1,
       "max_overlap": 0.8,
       "min_effect_size": 0.2,
       "min_validation_coverage_per_position": 5,
       "optimization_method": "featurecuts",
       "random_state": 42,
-      "min_N_pct": 0.1
+      "min_N_pct": 0.1,
+      "filter_funnel_explore": {
+          "mode": "full_grid",
+          "min_delta_mean": { "min": 0.1, "max": 0.3, "step": 0.05 },
+          "max_overlap": { "min": 0.5, "max": 0.9, "step": 0.1 },
+          "min_effect_size": { "min": 0.1, "max": 0.5, "step": 0.1 }
+        },
+        "debug": true
     },
     "mapper": {
       "csv_pattern": "dmps-*.csv",
