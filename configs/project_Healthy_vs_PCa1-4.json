@@ -103,7 +103,6 @@
           "cap_coverage_seed": 0,
           "max_sample_workers": null,
           "verbose": true,
-          "enable_binned_stats": true,
           "binned_stats_bins": 20
         },
         "parallel_combinations": 1,

@@ -305,20 +305,20 @@ class MethylDetector:
         if not c1_path.exists():
             raise FileNotFoundError(
                 f"Centroid1 file not found: {c1_path}. "
-                "MethylDetector requires centroids with binned_stats; build them first (methyl-centroid with enable_binned_stats=True)."
+                "MethylDetector requires centroids with binned_stats; build them first (methyl-centroid with binned_stats_bins, default 20)."
             )
         if not c2_path.exists():
             raise FileNotFoundError(
                 f"Centroid2 file not found: {c2_path}. "
-                "MethylDetector requires centroids with binned_stats; build them first (methyl-centroid with enable_binned_stats=True)."
+                "MethylDetector requires centroids with binned_stats; build them first (methyl-centroid with binned_stats_bins, default 20)."
             )
         centroid = MethylSample.load_from_h5(str(c1_path))
         binned = getattr(centroid, "binned_stats", None)
         if not binned or "bin_edges" not in binned or "bin_counts" not in binned:
             raise ValueError(
                 "Centroids must have binned_stats for MethylDetector (ECDF-based overlap and bounded_effect_size). "
-                "Re-run methyl-centroid with enable_binned_stats=True (e.g. in project step_config.centroid.base_config: "
-                "enable_binned_stats=true, binned_stats_bins=20). If you already did, check that the H5 files at "
+                "Re-run methyl-centroid with binned_stats_bins (e.g. base_config.binned_stats_bins=20, or use default 20). "
+                "If you already did, check that the H5 files at "
                 "centroid1_dir/centroid2_dir are the ones just built (e.g. Python: MethylSample.load_from_h5(path).binned_stats)."
             )
 

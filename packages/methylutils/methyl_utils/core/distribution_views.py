@@ -372,7 +372,7 @@ def get_distribution_view(
         if binned is None or "bin_edges" not in binned or "bin_counts" not in binned:
             raise ValueError(
                 "ecdf view requires centroid with binned_stats (bin_edges, bin_counts). "
-                "Build centroid with enable_binned_stats=True."
+                "Build centroid with binned_stats_bins (default 20)."
             )
         bin_edges = np.asarray(binned["bin_edges"], dtype=np.float64)
         bin_counts = np.asarray(binned["bin_counts"], dtype=np.float64)
@@ -450,7 +450,7 @@ def log_probability_sample_given_centroid(
         if binned is None or "bin_edges" not in binned or "bin_counts" not in binned:
             raise ValueError(
                 "log_probability with mode=ecdf requires centroid with binned_stats. "
-                "Build centroid with enable_binned_stats=True."
+                "Build centroid with binned_stats_bins (default 20)."
             )
         view = get_distribution_view(centroid, "ecdf", positions=common)
         cov_s = np.asarray(sample.mC.values, dtype=np.float64)[idx_s] + np.asarray(sample.uC.values, dtype=np.float64)[idx_s]

@@ -96,7 +96,7 @@ Fitting mixtures typically requires sample-level values or a histogram. **Binned
 
 ### 5. Empirical distribution (ECDF)
 
-When **binned statistics** are enabled (`enable_binned_stats=True`), the centroid stores per-position histograms: `bin_edges` (e.g. \([0, 0.02, \ldots, 1]\)) and `bin_counts` (counts per bin). These define an empirical CDF at bin edges; **spline interpolation** (e.g. PCHIP) is used so that \(F(x)\) and the PDF \(F'(x)\) are defined for any \(x \in [0,1]\), not only at bin edges.
+When **binned statistics** are enabled (`binned_stats_bins` > 0, default 20), the centroid stores per-position histograms: `bin_edges` (e.g. \([0, 0.02, \ldots, 1]\)) and `bin_counts` (counts per bin). These define an empirical CDF at bin edges; **spline interpolation** (e.g. PCHIP) is used so that \(F(x)\) and the PDF \(F'(x)\) are defined for any \(x \in [0,1]\), not only at bin edges.
 
 - **Mean**: \(\hat{\mu} = S_x / N\) (same as Normal).
 - **Variance**: sample variance \((S_{x^2}/N - (S_x/N)^2) / \max(N-1, 1)\).
@@ -104,7 +104,7 @@ When **binned statistics** are enabled (`enable_binned_stats=True`), the centroi
 - **Log-probability**: \(\log P(x \mid \text{centroid}) = \log F'(x)\) from the spline derivative, with a small floor to avoid \(\log(0)\).
 - **P-value**: approximate (e.g. chi-square on binned counts or two-sample KS).
 
-In **MethylCentroidPair** with `distribution="auto"`, ECDF is the **default when \(N < \texttt{max\_N\_for\_ecdf}\)** (e.g. 30) and both centroids have binned_stats with the same bin edges, so the real data distribution is used for small samples; Beta is used for large \(N\), and Beta-Binomial when coverage differences matter. Requires centroids built with `enable_binned_stats=True`.
+In **MethylCentroidPair** with `distribution="auto"`, ECDF is the **default when \(N < \texttt{max\_N\_for\_ecdf}\)** (e.g. 30) and both centroids have binned_stats with the same bin edges, so the real data distribution is used for small samples; Beta is used for large \(N\), and Beta-Binomial when coverage differences matter. Requires centroids built with `binned_stats_bins` (default 20).
 
 ---
 
@@ -128,4 +128,4 @@ In **MethylCentroidPair** with `distribution="auto"`, ECDF is the **default when
 ## References
 
 - **Formulas and LaTeX**: `docs/METHYLCENTROID_DISTRIBUTIONS.tex`
-- **Implementation**: MethylUtils `MethylCentroidBuilder`, `MethylExtendedCentroid`, `MethylBetaBinomialCentroid`; comparison via `MethylCentroidPair` with distribution selection (`auto`, `beta`, `normal`, `beta_binomial`, `beta_mixture`, `ecdf`). ECDF requires `enable_binned_stats` when building centroids.
+- **Implementation**: MethylUtils `MethylCentroidBuilder`, `MethylExtendedCentroid`, `MethylBetaBinomialCentroid`; comparison via `MethylCentroidPair` with distribution selection (`auto`, `beta`, `normal`, `beta_binomial`, `beta_mixture`, `ecdf`). ECDF requires binned stats when building centroids (`binned_stats_bins`, default 20).

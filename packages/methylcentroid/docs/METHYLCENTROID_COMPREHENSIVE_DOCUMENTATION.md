@@ -139,7 +139,7 @@ For CHH, consider:
 
 ### Optional Binned Stats
 
-When `enable_binned_stats=True`, a `binned_stats` group is saved in HDF5 for
+When `binned_stats_bins` > 0 (default 20), a `binned_stats` group is saved in HDF5 for
 mixture refinement (bin edges + per-position counts). Binned stats are also
 **required for the ECDF distribution option** in MethylDetector/MethylCentroidPair
 (distribution `ecdf` or `auto` with small N); see MethylCentroid_Theoretical_Foundation.md.
@@ -182,8 +182,7 @@ mc = MethylCentroid(
     ctx='CG',
     output_dir='./centroids',
     add_samples=['sample1', 'sample2'],
-    enable_binned_stats=True,
-    binned_stats_bins=32
+    binned_stats_bins=20
 )
 mc.build_centroid()
 ```

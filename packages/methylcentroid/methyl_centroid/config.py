@@ -94,15 +94,11 @@ class MethylCentroidConfig(BaseModel):
         ge=1000,
         description="Max positions to sample when auto-estimating n_cap (keeps estimation fast)",
     )
-    # ECDF / binned stats (for distribution comparison and ECDF overlap)
-    enable_binned_stats: bool = Field(
-        default=False,
-        description="If True, compute and store bin_edges and bin_counts per position for ECDF and comparison to Normal/Beta/Beta-Binomial",
-    )
-    binned_stats_bins: Optional[int] = Field(
-        default=50,
-        ge=2,
-        description="Number of bins for binned_stats histogram when enable_binned_stats is True",
+    # Binned stats (bin_edges, bin_counts) for ECDF and distribution comparison
+    binned_stats_bins: int = Field(
+        default=20,
+        ge=0,
+        description="Number of bins for per-position binned histogram (0 = disabled). Default 20.",
     )
 
     @field_validator('ctx')

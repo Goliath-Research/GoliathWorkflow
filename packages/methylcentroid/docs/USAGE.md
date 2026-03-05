@@ -230,8 +230,7 @@ mc = MethylCentroid(
     output_dir='./centroids/healthy',
     add_samples=['sample1', 'sample2'],
     min_coverage=4,
-    enable_binned_stats=True,
-    binned_stats_bins=32
+    binned_stats_bins=20
 )
 mc.build_centroid()
 ```

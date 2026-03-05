@@ -178,7 +178,7 @@ class MethylModelerConfig(BaseModel):
     max_N_for_ecdf: int = Field(
         default=30,
         ge=2,
-        description="In distribution=auto, use ECDF when both centroids have N < this and binned_stats; requires centroids built with enable_binned_stats."
+        description="In distribution=auto, use ECDF when both centroids have N < this and binned_stats (build with binned_stats_bins, default 20)."
     )
     use_fast_biological_funnel: bool = Field(
         default=True,
