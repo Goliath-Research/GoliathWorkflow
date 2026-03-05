@@ -145,6 +145,14 @@ else:
   - Lower values = less overlap = stronger discrimination
 - **`biological_filters`**: List of filters to apply (default: `["delta_mean", "bhattacharyya"]`)
 
+### MethylDetectorExplorer (two-phase effect size)
+
+**MethylDetectorExplorer** is a standalone CLI to analyze and tune how many positions get **refined** effect size (ECDF overlap) vs approximate only. It uses a two-phase strategy: Phase 1 computes approximate bounded effect size for a sample of positions (fast, no Pchip); Phase 2 refines effect size via ECDF overlap only for the top K positions chosen by a decay heuristic. See [METHYLDETECTOR_EXPLORER.md](docs/METHYLDETECTOR_EXPLORER.md) for usage and options.
+
+```bash
+methyl-detector-explorer --centroid1-dir /path/to/c1 --centroid2-dir /path/to/c2 --chromosome 1 --context CG --output-dir /out --csv
+```
+
 ### Filter funnel exploration
 
 You can sweep biological filter values over a range (min/max/step) in a **single run** and write `filter_funnel.csv` describing how statistical DMPs are filtered by the biological parameters—no large DMP CSV, no re-runs.
@@ -382,7 +390,8 @@ Copy and customize for your data!
 
 ## Documentation
 
-- **[Theoretical Foundation](docs/MethylDetector_Theoretical_Foundation.md)** — Probabilistic distributions (Beta, LRT, Storey q-values, effect size, overlap)
+- **[Theoretical Foundation](docs/MethylDetector_Theoretical_Foundation.md)** — ECDF-based comparison, Storey q-values, effect size, overlap
+- **[MethylDetectorExplorer](docs/METHYLDETECTOR_EXPLORER.md)** — Two-phase effect size analysis and K-selection heuristics
 - **[Implementation (MethylUtils)](docs/METHYLDETECTOR_IMPLEMENTATION.md)** — MethylCentroidPair, statistical_tests, classifier usage
 - **[User Manual](docs/USAGE.md)** — Docker container and virtual environment setup and usage
 - **[Quick Start Guide](QUICKSTART.md)** — Get started quickly

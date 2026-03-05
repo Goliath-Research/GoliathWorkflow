@@ -39,6 +39,7 @@ mypy = "^1.8.0"
 
 [tool.poetry.scripts]
 methyl-detector = "methyl_detector.cli.main:main"
+methyl-detector-explorer = "methyl_detector.cli.explorer_main:main"
 
 [build-system]
 requires = ["poetry-core"]
