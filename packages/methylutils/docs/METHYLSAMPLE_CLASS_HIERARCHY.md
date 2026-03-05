@@ -211,6 +211,6 @@ All classes support HDF5 serialization with automatic type detection on loading:
 
 - Individual samples save/load basic methylation data
 - Centroids save/load with sample count information
-- Extended centroids include statistical accumulators for Beta distribution analysis
+- Extended centroids include N, Sx, Sx2 and optional binned_stats for ECDF-based analysis (only ECDF is supported)
 
 The `load_from_h5()` method automatically detects the data type and returns the appropriate class instance.

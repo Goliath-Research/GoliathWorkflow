@@ -35,13 +35,13 @@ MethylDetector compares two centroids (representing different biological conditi
 
 - **Statistical DMP Detection**: Likelihood ratio tests with FDR correction (Storey's q-value method)
 - **Biological Filtering**: Multi-factor importance ranking (effect size, variance reliability, statistical significance, context weighting)
-- **Classifier Training**: Automatic training of hybrid Beta/Normal Bayesian classifiers on selected DMPs
+- **Classifier Training**: Automatic training of classifiers on selected DMPs (ECDF-based comparison and overlap)
 - **Validation**: Real or synthetic sample validation with Balanced Accuracy
 - **Model Packaging**: Complete model serialization with metadata for deployment
 
 ### Key Features
 
-- **Robust Statistics**: Likelihood ratio tests for Beta distributions with Storey's FDR correction
+- **Robust Statistics**: ECDF-based comparison and testing with Storey's FDR correction (only ECDF is supported; centroids require binned_stats)
 - **Biological Relevance**: Multi-criteria filtering (effect size, overlap, divergence)
 - **Balanced Accuracy**: Class-imbalance robust metric for DMP selection
 - **GPU Accelerated**: Leverages MethylUtils for 10-50x speedup

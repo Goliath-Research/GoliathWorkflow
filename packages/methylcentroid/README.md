@@ -17,7 +17,7 @@ A **methylation centroid** enables:
 - **🧠 Smart Memory Management**: Chunked processing and memory-aware batching
 - **🔄 Incremental Operations**: Add/remove samples without full recalculation
 - **📦 MethylUtils Integration**: Shared GPU utilities and optimized math kernels
-- **🎯 Extended Statistics**: Sufficient stats for Normal/Beta/Beta-Binomial modeling
+- **🎯 ECDF only**: Binned stats (bin_edges, bin_counts) for empirical distribution; sufficient stats N, Sx, Sx2
 - **📊 Optional Binned Stats**: Histogram summaries for Beta Mixture refinement
 
 ## How It Works
@@ -197,8 +197,8 @@ Optional extended stats and binned histograms are included when enabled.
 
 ## Documentation
 
-- **[Theoretical Foundation](docs/MethylCentroid_Theoretical_Foundation.md)** — Probabilistic distributions (Normal, Beta, Beta-Binomial, Beta Mixture), sufficient statistics, and formulas.
-- **[Implementation (MethylUtils)](docs/METHYLCENTROID_IMPLEMENTATION.md)** — MethylCentroidBuilder, MethylExtendedCentroid/MethylBetaBinomialCentroid, I/O, and how the package uses them.
+- **[Theoretical Foundation](docs/MethylCentroid_Theoretical_Foundation.md)** — ECDF-only model, sufficient statistics (N, Sx, Sx2), and binned stats.
+- **[Implementation (MethylUtils)](docs/METHYLCENTROID_IMPLEMENTATION.md)** — MethylCentroidBuilder, MethylExtendedCentroid, I/O, and how the package uses them.
 - **[User Manual](docs/USAGE.md)** — Docker container and virtual environment setup, CLI, Python API, config, and workflows.
 - **[Comprehensive Documentation](docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)** — Data model, configuration, GPU/memory, output files, examples, troubleshooting.
 - **[Distributions Reference (LaTeX)](docs/METHYLCENTROID_DISTRIBUTIONS.tex)** — Full derivations and sufficient-statistics reference.
