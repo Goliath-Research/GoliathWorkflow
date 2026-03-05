@@ -1,20 +1,20 @@
 {
-  "project_name": "healthy_vs_prostate-4",
+  "project_name": "allHealthy_vs_PCa1-4",
   "laboratory": "psomagen",
-  "batch": "Second batch of prostate cancer samples",
-  "output_base": "/backup1/mp_experiments/healthy_vs_prostate-4",
+  "batch": "Prostate cancer samples",
+  "output_base": "/backup1/mp_experiments",
   "samples_base_path": "/work/david-gladys/all-prostate",
   "controls": {
     "label": "healthy",
     "groups": [
       {
-        "label": "healthy",
+        "label": "all",
         "sample_paths": ["configs/healthy.csv"]
       }
     ]
   },
   "diseases": {
-    "label": "prostate cancer",
+    "label": "prostate",
     "groups": [
       {
         "label": "pca1",
@@ -35,10 +35,10 @@
     ]
   },    
   "comparisons": [
-    { "control_group": "healthy", "disease_group": "pca1" },
-    { "control_group": "healthy", "disease_group": "pca2" },
-    { "control_group": "healthy", "disease_group": "pca3" },
-    { "control_group": "healthy", "disease_group": "pca4" }
+    { "control_group": "all", "disease_group": "pca1" },
+    { "control_group": "all", "disease_group": "pca2" },
+    { "control_group": "all", "disease_group": "pca3" },
+    { "control_group": "all", "disease_group": "pca4" }
   ],
   "chromosomes": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
   "contexts": ["CG","CHG","CHH"],  
