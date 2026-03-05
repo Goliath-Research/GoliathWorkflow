@@ -1,5 +1,7 @@
 # GPU/accelerated requirements (CUDA 13.x).
 # Requires Python 3.12.x. Install with:
 #   pip install -r requirements-gpu.txt --extra-index-url https://pypi.nvidia.com
+# Used by: centroid comparison (cupy, cudf), GPU cleanup (torch), RMM via cudf.
 cupy-cuda13x
 cudf-cu13
+torch

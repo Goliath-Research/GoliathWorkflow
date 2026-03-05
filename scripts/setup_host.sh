@@ -20,9 +20,15 @@ Options:
 Notes:
   - This script is intended for host installs (not inside Docker).
   - Most Python dependencies are installed from requirements-pipeline.txt.
-  - Use --gpu to install GPU packages from requirements-gpu.txt.
+  - Use --gpu to install GPU packages from requirements-gpu*.txt (CuPy, cuDF, torch).
   - If Python headers/build tools are missing, hdbscan is installed only
     when a prebuilt wheel is available; otherwise it is skipped with a warning.
+
+Libraries in use (for verification):
+  - Base: requirements-pipeline.txt (scipy, h5py, hdf5plugin, pandas, numpy, etc.).
+  - GPU: requirements-gpu-cuda12.txt or requirements-gpu.txt (cupy, cudf, torch).
+  - System (--system-deps): Python dev, build-essential, hdf5-tools, libhdf5-dev,
+    libzstd-dev, ODBC; with GPU, libnvrtc{N} for NVRTC.
 EOF
 }
 
