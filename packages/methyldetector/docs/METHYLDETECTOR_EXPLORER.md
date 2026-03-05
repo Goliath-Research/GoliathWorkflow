@@ -21,9 +21,18 @@ Before Phase 1, positions are filtered so that only those with sufficient N in *
 
 Subsampling (e.g. `--sample-fraction`) and Phase 1 then operate only on this filtered set. The report includes `positions_after_min_N_filter`.
 
+## Approximate overlap (Phase 1) and bin alignment
+
+Phase 1 uses an **approximate overlap** to compute bounded effect size without ECDF. Two modes:
+
+- **Discrete Bhattacharyya** (sum √(p₁·p₂) over bins): Used only when both centroids share the **same** `bin_edges`. If the two centroids were built with different `binned_stats_bins` or bin edges, bin index *i* in one is a different value range than in the other, so discrete overlap can be misleading (often inflated → approximate effect size too low).
+- **Normal-based overlap** (2·Φ(−welch_d/2)): Does not use bin counts; avoids bin alignment issues.
+
+With **`--approx-overlap auto`** (default): discrete Bhattacharyya is used when `bin_edges` match; otherwise a warning is logged and Normal-based overlap is used. Use **`--approx-overlap normal`** to force Normal overlap and get approximate effect sizes that do not depend on bin alignment (useful when approx vs exact counts differ a lot). For comparable exact vs approx results, build both centroids with the same `binned_stats_bins`; the report field `approx_overlap_method` shows which method was used (`discrete_bhattacharyya` or `normal`).
+
 ## Requirements
 
-- Centroids must have **binned_stats** (bin_edges, bin_counts). Build them with MethylCentroid using `binned_stats_bins` (e.g. 20).
+- Centroids must have **binned_stats** (bin_edges, bin_counts). Build them with MethylCentroid using `binned_stats_bins` (e.g. 20). For comparable Phase 1 vs Phase 2 results, use the same bin edges for both centroids.
 - MethylUtils (methyl_utils) must be installed (e.g. from the monorepo `packages/methylutils`).
 
 ## CLI
@@ -57,6 +66,7 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 | `--min-coverage` | 4 | Minimum coverage passed to load_and_align. |
 | `--min-N` | - | Minimum N per group (absolute): keep positions where n1 ≥ min-N and n2 ≥ min-N. Overrides `--min-N-pct` if set. |
 | `--min-N-pct` | 0.05 | Minimum N as fraction of max at position (default 5%): keep where min(n1,n2) ≥ min-N-pct × max(n1,n2). Used when `--min-N` is not set. |
+| `--approx-overlap` | auto | Phase 1 overlap: `auto` (discrete when bin_edges match, else normal), `discrete` (Bhattacharyya from bin counts), `normal` (2·Φ(−welch_d/2)). Use `normal` to avoid bin alignment issues. |
 | `--output-dir`, `-o` | . | Directory for report and optional CSV. |
 | `--output` | - | Explicit path for report JSON. |
 | `--csv` | false | Write result table to CSV in output-dir. |
@@ -65,7 +75,7 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 ## Outputs
 
 - **Report JSON** (default: `methyldetectorexplorer_report.json` in output-dir):  
-  `total_positions`, `positions_after_min_N_filter`, `phase1_sample_size`, `sample_fraction`, `k_chosen`, `k_heuristic`, `k_info`, `time_phase1_s`, `time_phase2_s`, `time_total_s`.
+  `total_positions`, `positions_after_min_N_filter`, `phase1_sample_size`, `sample_fraction`, `approx_overlap_method`, `k_chosen`, `k_heuristic`, `k_info`, `time_phase1_s`, `time_phase2_s`, `time_total_s`.
 - **Optional CSV** (with `--csv`): Table of positions with `position`, `mean1`, `mean2`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `overlap_approx`, `bounded_effect_size_approx`, `welch_d`, and for top K refined `bounded_effect_size` and `overlap`.
 
 ## K heuristics
@@ -87,6 +97,7 @@ explorer = MethylDetectorExplorer(
     sample_fraction=0.01,
     min_N=None,       # or e.g. 10 for absolute; default uses min_N_pct=0.05
     min_N_pct=0.05,
+    approx_overlap="auto",  # or "normal" to avoid bin alignment issues
     k_heuristic="decay_limit",
     max_decay_per_position=0.01,
 )

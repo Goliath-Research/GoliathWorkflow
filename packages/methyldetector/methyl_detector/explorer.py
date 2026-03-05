@@ -37,6 +37,7 @@ except ImportError as e:
 
 
 K_HEURISTIC = Literal["decay_limit", "knee", "threshold", "fraction", "fixed"]
+APPROX_OVERLAP = Literal["auto", "discrete", "normal"]
 
 
 def _require_binned_stats(centroid: Any) -> None:
@@ -47,6 +48,17 @@ def _require_binned_stats(centroid: Any) -> None:
             "Centroids must have binned_stats (bin_edges, bin_counts) for MethylDetectorExplorer. "
             "Build centroids with binned_stats_bins (e.g. 20)."
         )
+
+
+def _same_bin_edges(centroid1: Any, centroid2: Any) -> bool:
+    """True if both centroids have binned_stats with identical bin_edges (shape and values)."""
+    bs1 = getattr(centroid1, "binned_stats", None)
+    bs2 = getattr(centroid2, "binned_stats", None)
+    if not bs1 or "bin_edges" not in bs1 or not bs2 or "bin_edges" not in bs2:
+        return False
+    e1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
+    e2 = np.asarray(bs2["bin_edges"], dtype=np.float64)
+    return e1.shape == e2.shape and bool(np.allclose(e1, e2))
 
 
 def _to_arr(x: Any) -> np.ndarray:
@@ -181,6 +193,7 @@ class MethylDetectorExplorer:
         min_coverage: int = 4,
         min_N: Optional[int] = None,
         min_N_pct: float = 0.05,
+        approx_overlap: APPROX_OVERLAP = "auto",
         sample_fraction: float = 0.01,
         sigmoid_scale: float = 4.0,
         k_heuristic: K_HEURISTIC = "decay_limit",
@@ -194,6 +207,7 @@ class MethylDetectorExplorer:
         self.min_coverage = min_coverage
         self.min_N = min_N
         self.min_N_pct = float(min_N_pct)
+        self.approx_overlap = approx_overlap
         self.sample_fraction = float(sample_fraction)
         self.sigmoid_scale = sigmoid_scale
         self.k_heuristic = k_heuristic
@@ -251,7 +265,29 @@ class MethylDetectorExplorer:
         delta_mean, var1, var2, n1, n2, bc1, bc2, _, mean1, mean2 = _extract_phase1_data(
             centroid1, centroid2, phase1_indices
         )
-        overlap_approx = discrete_overlap_from_bin_counts(bc1, bc2, method="bhattacharyya")
+        # Overlap for approx: discrete Bhattacharyya only when bin_edges align; else Normal fallback
+        use_discrete = self.approx_overlap == "discrete" or (
+            self.approx_overlap == "auto" and _same_bin_edges(centroid1, centroid2)
+        )
+        if self.approx_overlap == "normal":
+            overlap_approx = None
+            approx_overlap_method = "normal"
+        elif use_discrete:
+            if self.approx_overlap == "discrete" and not _same_bin_edges(centroid1, centroid2):
+                logger.warning(
+                    "approx_overlap='discrete' but centroid bin_edges differ; "
+                    "discrete overlap may be misleading. Prefer same binned_stats_bins or use --approx-overlap normal."
+                )
+            overlap_approx = discrete_overlap_from_bin_counts(bc1, bc2, method="bhattacharyya")
+            approx_overlap_method = "discrete_bhattacharyya"
+        else:
+            if self.approx_overlap == "auto":
+                logger.warning(
+                    "Centroid bin_edges differ; using Normal-based overlap for Phase 1 "
+                    "(discrete overlap skipped). Build both centroids with the same binned_stats_bins for comparable approx vs exact."
+                )
+            overlap_approx = None
+            approx_overlap_method = "normal"
         result_fast = welch_d_fast_overlap_approx(
             delta_mean, var1, n1, var2, n2,
             scale=self.sigmoid_scale,
@@ -331,6 +367,7 @@ class MethylDetectorExplorer:
             "positions_after_min_N_filter": int(n_after_filter),
             "phase1_sample_size": int(len(phase1_indices)),
             "sample_fraction": self.sample_fraction,
+            "approx_overlap_method": approx_overlap_method,
             "k_chosen": int(k),
             "k_heuristic": self.k_heuristic,
             "k_info": k_info,

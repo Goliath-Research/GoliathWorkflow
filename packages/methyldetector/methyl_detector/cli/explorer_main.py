@@ -110,6 +110,12 @@ logger = logging.getLogger(__name__)
     help="Minimum N as fraction of max at position (default 5%%): keep where min(n1,n2) >= min-N-pct * max(n1,n2). Used when --min-N is not set.",
 )
 @click.option(
+    "--approx-overlap",
+    type=click.Choice(["auto", "discrete", "normal"]),
+    default="auto",
+    help="Phase 1 overlap: auto (discrete when bin_edges match, else normal), discrete (Bhattacharyya from bin counts), normal (2*Phi(-welch_d/2)). Use normal to avoid bin alignment issues.",
+)
+@click.option(
     "--output-dir",
     "-o",
     type=click.Path(path_type=Path, file_okay=False),
@@ -151,6 +157,7 @@ def main(
     min_coverage: int,
     min_n: Optional[int],
     min_n_pct: float,
+    approx_overlap: str,
     output_dir: Optional[Path],
     output: Optional[Path],
     csv: bool,
@@ -191,6 +198,7 @@ def main(
         min_coverage=min_coverage,
         min_N=min_n,
         min_N_pct=min_n_pct,
+        approx_overlap=approx_overlap,
         sample_fraction=sample_fraction,
         k_heuristic=effective_heuristic,
         refine_top_k=refine_top_k,
@@ -217,6 +225,7 @@ def main(
         f"Total positions: {report['total_positions']:,}, "
         f"After min-N filter: {report['positions_after_min_N_filter']:,}, "
         f"Phase 1 sample: {report['phase1_sample_size']:,}, "
+        f"approx overlap: {report.get('approx_overlap_method', 'n/a')}, "
         f"K chosen: {report['k_chosen']}, "
         f"heuristic: {report['k_heuristic']}, "
         f"time: {report['time_total_s']:.2f}s"
