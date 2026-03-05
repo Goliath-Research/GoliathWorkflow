@@ -1383,7 +1383,8 @@ class MethylCentroidPair:
 
         # Fill results array directly (vectorized assignment)
         # Safe cast for integer fields: avoid NaN/inf so pandas/numpy do not emit "invalid value in cast"
-        results_view['position'] = np.asarray(positions, dtype=np.uint32, copy=False)
+        pos_safe = np.nan_to_num(np.asarray(positions, dtype=np.float64), nan=0, posinf=0, neginf=0)
+        results_view['position'] = np.clip(pos_safe, 0, np.iinfo(np.uint32).max).astype(np.uint32)
         results_view['p_value'] = p_values
         results_view['q_value'] = p_values  # Will be updated by FDR correction
         results_view['alpha1'] = alpha1.astype(np.float64)
@@ -1397,7 +1398,8 @@ class MethylCentroidPair:
             results_view['bhattacharyya'] = bhattacharyya.astype(np.float32)
         else:
             results_view['bhattacharyya'] = np.zeros(len(positions), dtype=np.float32)  # Will be computed later
-        results_view['dist'] = dist_ids
+        dist_safe = np.nan_to_num(np.asarray(dist_ids, dtype=np.float64), nan=0, posinf=0, neginf=0)
+        results_view['dist'] = np.clip(dist_safe, 0, np.iinfo(np.uint8).max).astype(np.uint8)
         n1_safe = np.nan_to_num(N1.astype(np.float64), nan=0, posinf=0, neginf=0)
         n2_safe = np.nan_to_num(N2.astype(np.float64), nan=0, posinf=0, neginf=0)
         results_view['n1'] = np.clip(n1_safe, 0, np.iinfo(np.uint32).max).astype(np.uint32)
