@@ -111,7 +111,7 @@ class SmartSampleCache:
                     total_bytes += arr.nbytes
 
         # Centroid arrays
-        for attr in ['N', 'Sx', 'Sx2', 'log_x_sum', 'log_1_minus_x_sum']:
+        for attr in ['N', 'Sx', 'Sx2']:
             if hasattr(sample, attr):
                 arr = getattr(sample, attr)
                 if arr is not None and hasattr(arr, 'nbytes'):

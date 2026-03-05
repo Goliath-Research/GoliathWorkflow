@@ -18,7 +18,7 @@ So the “theory” of project config is: one source of truth for groups and com
 
 - **MethylSample**: Per-position methylation data (methylated counts `mC`, unmethylated `uC`, context bits `tnc`). Supports HDF5 serialization and position-indexed access. Used everywhere a single sample is loaded or compared.
 - **Centroid types**: Aggregations over many samples with sufficient statistics for Beta (and related) models:
-  - **MethylBasicCentroid**: Count-based (mC, uC, N).
+  - **MethylExtendedCentroid**: Counts and accumulators (N, mC, uC, Sx, Sx2); Beta via MoM.
   - **MethylExtendedCentroid**: Adds Sx, Sx2, log sums for method-of-moments and log-likelihood.
   - **MethylBetaMixtureCentroid**, **MethylBetaBinomialCentroid**: For mixture and beta-binomial modeling.
 - **MethylCentroidPair**: Wraps two centroids (or samples); used for distance, effect-size, and DMP-style comparison (e.g. in MethylDetector).

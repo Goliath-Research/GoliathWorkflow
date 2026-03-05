@@ -98,7 +98,7 @@ class TestGenomeProcessing:
         # Test chunk size calculation
         chunk_size = memory_manager.calculate_optimal_chunk_size(
             total_positions=total_positions,
-            data_structure="basic_centroid",
+            data_structure="extended_centroid",
             maximize_gpu_usage=True
         )
 
@@ -108,7 +108,7 @@ class TestGenomeProcessing:
         assert chunk_size >= 10_000_000  # Minimum for GPU efficiency
 
         # Test different data structures
-        for data_structure in ["basic_sample", "basic_centroid", "extended_centroid"]:
+        for data_structure in ["basic_sample", "extended_centroid"]:
             chunk_size = memory_manager.calculate_optimal_chunk_size(
                 total_positions=total_positions,
                 data_structure=data_structure
@@ -339,7 +339,7 @@ class TestGenomeProcessing:
             # 2. Calculate optimal chunk size
             chunk_size = memory_manager.calculate_optimal_chunk_size(
                 total_positions=len(sample),
-                data_structure="basic_centroid"
+                data_structure="extended_centroid"
             )
 
             # 3. Process in chunks

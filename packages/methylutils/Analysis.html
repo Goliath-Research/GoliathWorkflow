@@ -9,7 +9,7 @@
 <li><code>MethylSample</code> (in <code>methyl_utils/methyl_sample.py</code>) represents either:<ul>
 <li>A single sample: Raw counts (<code>pos</code>, <code>mC</code> (methylated), <code>uC</code> (unmethylated), <code>tnc</code> (context)).</li>
 <li>A basic centroid: Aggregated counts + <code>N</code> (sample count per position) + <code>Sx</code> (sum of β values) + <code>Sx2</code> (sum of squared β values).</li>
-<li>An extended centroid: Above + <code>log_x_sum</code> (∑ log(β)) + <code>log_1_minus_x_sum</code> (∑ log(1-β)) for sufficient statistics.</li>
+<li>Centroid (MethylExtendedCentroid): N, Sx, Sx2 for mean/variance and Beta via MoM; optional bin_edges/bin_counts for ECDF.</li>
 </ul>
 </li>
 <li>Centroids represent group averages: For a group of samples, the centroid&#39;s effective β at position <em>i</em> is the average methylation level, but stored as sufficient statistics to avoid recomputing from raw data.</li>

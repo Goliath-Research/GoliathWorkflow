@@ -19,8 +19,8 @@ except ImportError:
     CuArray = np.ndarray
     HAS_GPU = False
 
-from .methyl_frame import MethylExtendedCentroid, MethylBetaBinomialCentroid
-from .io import load_from_h5  # or your preferred loader
+from .methyl_frame import MethylExtendedCentroid
+from .io import load_from_h5
 
 logger = logging.getLogger(__name__)
 
@@ -36,65 +36,37 @@ class MethylCentroidBuilder:
         self,
         min_coverage: int = 4,
         use_gpu: bool = True,
-        chunk_size: int = 100_000_000,  # ~100M positions → covers hg38 + margin
+        chunk_size: int = 100_000_000,
         metadata: Optional[Dict[str, Any]] = None,
-        store_extended_stats: bool = True,
+        binned_stats_bins: int = 101,
     ):
         self.min_coverage = min_coverage
         self.use_gpu = use_gpu and HAS_GPU
         self.xp = cp if self.use_gpu else np
         self.metadata = metadata or {}
-        self.store_extended_stats = store_extended_stats
+        self.binned_stats_bins = binned_stats_bins
+        self.bin_edges = np.linspace(0.0, 1.0, binned_stats_bins + 1, dtype=np.float64)
 
-        logger.info(f"MethylCentroidBuilder initialized → GPU: {self.use_gpu}")
+        logger.info(f"MethylCentroidBuilder initialized → GPU: {self.use_gpu}, binned_stats_bins={binned_stats_bins}")
 
-        # Dynamic accumulators
         self.pos: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
         self.mC_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
         self.uC_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
         self.N: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
         self.Sx: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
         self.Sx2: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
-        self.log_x_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
-        self.log_1x_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
         self.tnc: CuArray = self.xp.zeros(chunk_size, dtype=np.uint8)
-
-        # Extended sufficient stats for additional distributions
-        if self.store_extended_stats:
-            self.sum_cov: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
-            self.sum_cov2: CuArray = self.xp.zeros(chunk_size, dtype=np.float64)
-            self.sum_mC: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
-            self.sum_uC: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
-            self.sum_mC2: CuArray = self.xp.zeros(chunk_size, dtype=np.float64)
-            self.sum_uC2: CuArray = self.xp.zeros(chunk_size, dtype=np.float64)
-            self.Sx3: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
-            self.Sx4: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
-            self.count_zero: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
-            self.count_one: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
+        self.bin_counts: CuArray = self.xp.zeros((chunk_size, binned_stats_bins), dtype=np.uint32)
 
         self.size = 0
         self.capacity = chunk_size
         self.samples_processed = 0
 
     def release_gpu(self) -> None:
-        """
-        Release all GPU array references so memory can be freed.
-        Call after finalize() when the builder is no longer needed, so that
-        force_gpu_cleanup / gc.collect() can reclaim GPU memory.
-        """
+        """Release GPU array references so memory can be freed."""
         if not self.use_gpu or not HAS_GPU:
             return
-        attrs = [
-            "pos", "mC_sum", "uC_sum", "N", "Sx", "Sx2",
-            "log_x_sum", "log_1x_sum", "tnc",
-        ]
-        if self.store_extended_stats:
-            attrs.extend([
-                "sum_cov", "sum_cov2", "sum_mC", "sum_uC",
-                "sum_mC2", "sum_uC2", "Sx3", "Sx4",
-                "count_zero", "count_one",
-            ])
-        for attr in attrs:
+        for attr in ["pos", "mC_sum", "uC_sum", "N", "Sx", "Sx2", "tnc", "bin_counts"]:
             if hasattr(self, attr):
                 setattr(self, attr, None)
         logger.debug("MethylCentroidBuilder GPU arrays released")
@@ -102,38 +74,15 @@ class MethylCentroidBuilder:
     def _grow(self, min_needed: int):
         new_cap = max(min_needed, int(self.capacity * 1.6))
         logger.debug(f"Growing accumulators: {self.capacity:,} → {new_cap:,} positions")
-
-        grow_attrs = [
-            "pos",
-            "mC_sum",
-            "uC_sum",
-            "N",
-            "Sx",
-            "Sx2",
-            "log_x_sum",
-            "log_1x_sum",
-            "tnc",
-        ]
-        if self.store_extended_stats:
-            grow_attrs.extend([
-                "sum_cov",
-                "sum_cov2",
-                "sum_mC",
-                "sum_uC",
-                "sum_mC2",
-                "sum_uC2",
-                "Sx3",
-                "Sx4",
-                "count_zero",
-                "count_one",
-            ])
-
-        for attr in grow_attrs:
+        for attr in ["pos", "mC_sum", "uC_sum", "N", "Sx", "Sx2", "tnc"]:
             old = getattr(self, attr)
             new = self.xp.zeros(new_cap, dtype=old.dtype)
             new[: self.size] = old[: self.size]
             setattr(self, attr, new)
-
+        old_bc = self.bin_counts
+        new_bc = self.xp.zeros((new_cap, self.binned_stats_bins), dtype=old_bc.dtype)
+        new_bc[: self.size, :] = old_bc[: self.size, :]
+        self.bin_counts = new_bc
         self.capacity = new_cap
 
     def add_sample(self, sample_path: Union[str, Path]):
@@ -182,56 +131,27 @@ class MethylCentroidBuilder:
                 new_tnc = tnc[is_new]
 
                 # Get existing positions
-                existing_pos = self.pos[:self.size]
-                existing_tnc = self.tnc[:self.size]
-                existing_mC_sum = self.mC_sum[:self.size]
-                existing_uC_sum = self.uC_sum[:self.size]
-                existing_N = self.N[:self.size]
-                existing_Sx = self.Sx[:self.size]
-                existing_Sx2 = self.Sx2[:self.size]
-                existing_log_x_sum = self.log_x_sum[:self.size]
-                existing_log_1x_sum = self.log_1x_sum[:self.size]
-
-                if self.store_extended_stats:
-                    existing_sum_cov = self.sum_cov[:self.size]
-                    existing_sum_cov2 = self.sum_cov2[:self.size]
-                    existing_sum_mC = self.sum_mC[:self.size]
-                    existing_sum_uC = self.sum_uC[:self.size]
-                    existing_sum_mC2 = self.sum_mC2[:self.size]
-                    existing_sum_uC2 = self.sum_uC2[:self.size]
-                    existing_Sx3 = self.Sx3[:self.size]
-                    existing_Sx4 = self.Sx4[:self.size]
-                    existing_count_zero = self.count_zero[:self.size]
-                    existing_count_one = self.count_one[:self.size]
-
-                # Merge and sort all positions
+                existing_pos = self.pos[: self.size]
+                existing_tnc = self.tnc[: self.size]
+                existing_mC_sum = self.mC_sum[: self.size]
+                existing_uC_sum = self.uC_sum[: self.size]
+                existing_N = self.N[: self.size]
+                existing_Sx = self.Sx[: self.size]
+                existing_Sx2 = self.Sx2[: self.size]
+                existing_bin_counts = self.bin_counts[: self.size, :]
                 all_pos = self.xp.concatenate([existing_pos, new_pos])
                 sort_indices = self.xp.argsort(all_pos)
-
-                # Update arrays with merged and sorted data
-                self.pos[:len(all_pos)] = all_pos[sort_indices]
-                self.tnc[:len(all_pos)] = self.xp.concatenate([existing_tnc, new_tnc])[sort_indices]
-                self.mC_sum[:len(all_pos)] = self.xp.concatenate([existing_mC_sum, self.xp.zeros(n_new, dtype=self.mC_sum.dtype)])[sort_indices]
-                self.uC_sum[:len(all_pos)] = self.xp.concatenate([existing_uC_sum, self.xp.zeros(n_new, dtype=self.uC_sum.dtype)])[sort_indices]
-                self.N[:len(all_pos)] = self.xp.concatenate([existing_N, self.xp.zeros(n_new, dtype=self.N.dtype)])[sort_indices]
-                self.Sx[:len(all_pos)] = self.xp.concatenate([existing_Sx, self.xp.zeros(n_new, dtype=self.Sx.dtype)])[sort_indices]
-                self.Sx2[:len(all_pos)] = self.xp.concatenate([existing_Sx2, self.xp.zeros(n_new, dtype=self.Sx2.dtype)])[sort_indices]
-                self.log_x_sum[:len(all_pos)] = self.xp.concatenate([existing_log_x_sum, self.xp.zeros(n_new, dtype=self.log_x_sum.dtype)])[sort_indices]
-                self.log_1x_sum[:len(all_pos)] = self.xp.concatenate([existing_log_1x_sum, self.xp.zeros(n_new, dtype=self.log_1x_sum.dtype)])[sort_indices]
-
-                if self.store_extended_stats:
-                    self.sum_cov[:len(all_pos)] = self.xp.concatenate([existing_sum_cov, self.xp.zeros(n_new, dtype=self.sum_cov.dtype)])[sort_indices]
-                    self.sum_cov2[:len(all_pos)] = self.xp.concatenate([existing_sum_cov2, self.xp.zeros(n_new, dtype=self.sum_cov2.dtype)])[sort_indices]
-                    self.sum_mC[:len(all_pos)] = self.xp.concatenate([existing_sum_mC, self.xp.zeros(n_new, dtype=self.sum_mC.dtype)])[sort_indices]
-                    self.sum_uC[:len(all_pos)] = self.xp.concatenate([existing_sum_uC, self.xp.zeros(n_new, dtype=self.sum_uC.dtype)])[sort_indices]
-                    self.sum_mC2[:len(all_pos)] = self.xp.concatenate([existing_sum_mC2, self.xp.zeros(n_new, dtype=self.sum_mC2.dtype)])[sort_indices]
-                    self.sum_uC2[:len(all_pos)] = self.xp.concatenate([existing_sum_uC2, self.xp.zeros(n_new, dtype=self.sum_uC2.dtype)])[sort_indices]
-                    self.Sx3[:len(all_pos)] = self.xp.concatenate([existing_Sx3, self.xp.zeros(n_new, dtype=self.Sx3.dtype)])[sort_indices]
-                    self.Sx4[:len(all_pos)] = self.xp.concatenate([existing_Sx4, self.xp.zeros(n_new, dtype=self.Sx4.dtype)])[sort_indices]
-                    self.count_zero[:len(all_pos)] = self.xp.concatenate([existing_count_zero, self.xp.zeros(n_new, dtype=self.count_zero.dtype)])[sort_indices]
-                    self.count_one[:len(all_pos)] = self.xp.concatenate([existing_count_one, self.xp.zeros(n_new, dtype=self.count_one.dtype)])[sort_indices]
-
-                self.size = len(all_pos)
+                n_all = len(all_pos)
+                self.pos[: n_all] = all_pos[sort_indices]
+                self.tnc[: n_all] = self.xp.concatenate([existing_tnc, new_tnc])[sort_indices]
+                self.mC_sum[: n_all] = self.xp.concatenate([existing_mC_sum, self.xp.zeros(n_new, dtype=self.mC_sum.dtype)])[sort_indices]
+                self.uC_sum[: n_all] = self.xp.concatenate([existing_uC_sum, self.xp.zeros(n_new, dtype=self.uC_sum.dtype)])[sort_indices]
+                self.N[: n_all] = self.xp.concatenate([existing_N, self.xp.zeros(n_new, dtype=self.N.dtype)])[sort_indices]
+                self.Sx[: n_all] = self.xp.concatenate([existing_Sx, self.xp.zeros(n_new, dtype=self.Sx.dtype)])[sort_indices]
+                self.Sx2[: n_all] = self.xp.concatenate([existing_Sx2, self.xp.zeros(n_new, dtype=self.Sx2.dtype)])[sort_indices]
+                new_bin_rows = self.xp.zeros((n_new, self.binned_stats_bins), dtype=self.bin_counts.dtype)
+                self.bin_counts[: n_all, :] = self.xp.concatenate([existing_bin_counts, new_bin_rows])[sort_indices, :]
+                self.size = n_all
 
             # Final indices after merge - positions are now properly sorted
             final_idx = self.xp.searchsorted(self.pos[: self.size], pos)
@@ -250,33 +170,14 @@ class MethylCentroidBuilder:
             self.uC_sum[final_idx] += uC
             self.N[final_idx] += 1
             self.Sx[final_idx] += mean
-            self.Sx2[final_idx] += mean**2
-
-            if self.store_extended_stats:
-                cov = total_cov.astype(self.xp.uint64)
-                self.sum_cov[final_idx] += cov
-                self.sum_cov2[final_idx] += cov.astype(self.xp.float64) ** 2
-                self.sum_mC[final_idx] += mC.astype(self.xp.uint64)
-                self.sum_uC[final_idx] += uC.astype(self.xp.uint64)
-                self.sum_mC2[final_idx] += mC.astype(self.xp.float64) ** 2
-                self.sum_uC2[final_idx] += uC.astype(self.xp.float64) ** 2
-                self.Sx3[final_idx] += mean.astype(self.xp.float32) ** 3
-                self.Sx4[final_idx] += mean.astype(self.xp.float32) ** 4
-                zero_mask = (mC == 0) & (total_cov > 0)
-                one_mask = (uC == 0) & (total_cov > 0)
-                self.count_zero[final_idx] += zero_mask.astype(self.xp.uint32)
-                self.count_one[final_idx] += one_mask.astype(self.xp.uint32)
-
-            # Clip for log calculations - ensure we never get exactly 0 or 1
-            # Use tighter bounds to avoid log(0) warnings
-            eps = np.finfo(np.float32).eps * 10  # ~1e-6 for float32
-            safe_mean = self.xp.clip(mean, eps, 1.0 - eps)
-            # Ensure 1 - safe_mean is also >= eps to avoid log(0)
-            one_minus_mean = self.xp.clip(1.0 - safe_mean, eps, 1.0 - eps)
-            with np.errstate(divide='ignore', invalid='ignore'):
-                self.log_x_sum[final_idx] += self.xp.log(safe_mean)
-                self.log_1x_sum[final_idx] += self.xp.log(one_minus_mean)
-
+            self.Sx2[final_idx] += mean ** 2
+            bin_edges_xp = self.xp.asarray(self.bin_edges)
+            if self.binned_stats_bins > 1:
+                bin_idx = self.xp.digitize(mean.astype(self.xp.float64), bin_edges_xp[1:-1])
+                bin_idx = self.xp.clip(bin_idx, 0, self.binned_stats_bins - 1).astype(self.xp.intp)
+            else:
+                bin_idx = self.xp.zeros(len(mean), dtype=self.xp.intp)
+            self.xp.add.at(self.bin_counts, (final_idx, bin_idx), 1)
             self.samples_processed += 1
             if self.samples_processed % 50 == 0:
                 logger.info(
@@ -288,61 +189,32 @@ class MethylCentroidBuilder:
             except Exception as e:
                 logger.debug(f"Sample cleanup failed: {e}")
 
-    def finalize(
-        self, log_finalize: bool = True
-    ) -> MethylExtendedCentroid | MethylBetaBinomialCentroid:
-        """Return MethylBetaBinomialCentroid when store_extended_stats=True, else MethylExtendedCentroid.
-        Set log_finalize=False to suppress the 'Centroid finalized' log (e.g. when bootstrapping from one sample).
-        """
+    def finalize(self, log_finalize: bool = True) -> MethylExtendedCentroid:
+        """Return MethylExtendedCentroid with pos, mC, uC, tnc, N, Sx, Sx2 and binned_stats."""
         if self.size == 0:
             raise ValueError("No data accumulated")
-
-        # Move to CPU
         to_cpu = cp.asnumpy if self.use_gpu else lambda x: x
-
         pos = to_cpu(self.pos[: self.size])
         mC_sum = to_cpu(self.mC_sum[: self.size])
         uC_sum = to_cpu(self.uC_sum[: self.size])
         N = to_cpu(self.N[: self.size])
         Sx = to_cpu(self.Sx[: self.size])
         Sx2 = to_cpu(self.Sx2[: self.size])
-        log_x = to_cpu(self.log_x_sum[: self.size])
-        log_1x = to_cpu(self.log_1x_sum[: self.size])
         tnc = to_cpu(self.tnc[: self.size])
-        if self.store_extended_stats:
-            sum_cov = to_cpu(self.sum_cov[: self.size])
-            sum_cov2 = to_cpu(self.sum_cov2[: self.size])
-            sum_mC = to_cpu(self.sum_mC[: self.size])
-            sum_uC = to_cpu(self.sum_uC[: self.size])
-            sum_mC2 = to_cpu(self.sum_mC2[: self.size])
-            sum_uC2 = to_cpu(self.sum_uC2[: self.size])
-            Sx3 = to_cpu(self.Sx3[: self.size])
-            Sx4 = to_cpu(self.Sx4[: self.size])
-            count_zero = to_cpu(self.count_zero[: self.size])
-            count_one = to_cpu(self.count_one[: self.size])
-
-        # Apply coverage filter
+        bin_counts = to_cpu(self.bin_counts[: self.size, :])
         coverage = mC_sum + uC_sum
         mask = coverage >= self.min_coverage
-
-        # Averaged counts for basic centroid compatibility
         avg_mC = (mC_sum[mask] / N[mask]).astype(np.uint32)
         avg_uC = (uC_sum[mask] / N[mask]).astype(np.uint32)
-
-        df = pd.DataFrame(
-            {
-                "pos": pos[mask].astype(np.uint32),
-                "mC": avg_mC,
-                "uC": avg_uC,
-                "tnc": tnc[mask],
-                "N": N[mask].astype(np.uint32),
-                "Sx": Sx[mask],
-                "Sx2": Sx2[mask],
-                "log_x_sum": log_x[mask],
-                "log_1_minus_x_sum": log_1x[mask],
-            }
-        ).reset_index(drop=True)
-
+        df = pd.DataFrame({
+            "pos": pos[mask].astype(np.uint32),
+            "mC": avg_mC,
+            "uC": avg_uC,
+            "tnc": tnc[mask],
+            "N": N[mask].astype(np.uint32),
+            "Sx": Sx[mask].astype(np.float32),
+            "Sx2": Sx2[mask].astype(np.float32),
+        }).reset_index(drop=True)
         final_metadata = {
             **self.metadata,
             "builder": "MethylCentroidBuilder",
@@ -351,28 +223,14 @@ class MethylCentroidBuilder:
             "positions_after_filter": len(df),
             "min_coverage": self.min_coverage,
             "gpu_acceleration": self.use_gpu,
-            "extended_stats": self.store_extended_stats,
+            "binned_stats_bins": self.binned_stats_bins,
         }
-
-        if self.store_extended_stats:
-            df["sum_cov"] = sum_cov[mask].astype(np.uint64)
-            df["sum_cov2"] = sum_cov2[mask].astype(np.float64)
-            df["sum_mC"] = sum_mC[mask].astype(np.uint64)
-            df["sum_uC"] = sum_uC[mask].astype(np.uint64)
-            df["sum_mC2"] = sum_mC2[mask].astype(np.float64)
-            df["sum_uC2"] = sum_uC2[mask].astype(np.float64)
-            df["Sx3"] = Sx3[mask].astype(np.float32)
-            df["Sx4"] = Sx4[mask].astype(np.float32)
-            df["count_zero"] = count_zero[mask].astype(np.uint32)
-            df["count_one"] = count_one[mask].astype(np.uint32)
-            if log_finalize:
-                logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples (Beta-Binomial)")
-            self.release_gpu()
-            return MethylBetaBinomialCentroid(df, final_metadata)
+        centroid = MethylExtendedCentroid(df, final_metadata)
+        centroid.set_binned_stats(self.bin_edges.copy(), bin_counts[mask, :].astype(np.float64))
         if log_finalize:
             logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples")
         self.release_gpu()
-        return MethylExtendedCentroid(df, final_metadata)
+        return centroid
 
 
 # Convenience factory
@@ -381,13 +239,13 @@ def build_centroid(
     min_coverage: int = 4,
     use_gpu: bool = True,
     metadata: Optional[Dict[str, Any]] = None,
-    store_extended_stats: bool = True,
-) -> MethylExtendedCentroid | MethylBetaBinomialCentroid:
+    binned_stats_bins: int = 101,
+) -> MethylExtendedCentroid:
     builder = MethylCentroidBuilder(
-        min_coverage=min_coverage, 
-        use_gpu=use_gpu, 
+        min_coverage=min_coverage,
+        use_gpu=use_gpu,
         metadata=metadata,
-        store_extended_stats=store_extended_stats,
+        binned_stats_bins=binned_stats_bins,
     )
     for path in sample_paths:
         builder.add_sample(path)

@@ -609,16 +609,15 @@ def likelihood_ratio_test_beta(
             beta2 = (1 - mean2_clipped) * 10
 
     else:
-        # TempCentroid objects (from batch processing) - already aligned
-        N1 = centroid1.N.astype(np.float32)
-        N2 = centroid2.N.astype(np.float32)
-
-        # For TempCentroids, we need to estimate parameters from the available data
-        # Use bounded MLE estimation with fallbacks
-        alpha1, beta1 = _estimate_beta_params_bounded(N1, centroid1.log_x_sum, centroid1.log_1_minus_x_sum)
-        alpha2, beta2 = _estimate_beta_params_bounded(N2, centroid2.log_x_sum, centroid2.log_1_minus_x_sum)
-
-        # Compute means from estimated parameters
+        # TempCentroid or centroid with N, Sx, Sx2 (MoM)
+        N1 = np.asarray(centroid1.N, dtype=np.float64).ravel()
+        N2 = np.asarray(centroid2.N, dtype=np.float64).ravel()
+        if hasattr(centroid1, "Sx") and hasattr(centroid1, "Sx2"):
+            alpha1, beta1 = beta_mom_estimation(n=N1, Sx=np.asarray(centroid1.Sx, dtype=np.float64).ravel(), Sx2=np.asarray(centroid1.Sx2, dtype=np.float64).ravel())
+            alpha2, beta2 = beta_mom_estimation(n=N2, Sx=np.asarray(centroid2.Sx, dtype=np.float64).ravel(), Sx2=np.asarray(centroid2.Sx2, dtype=np.float64).ravel())
+        else:
+            alpha1, beta1 = _estimate_beta_params_bounded(N1, centroid1.log_x_sum, centroid1.log_1_minus_x_sum)
+            alpha2, beta2 = _estimate_beta_params_bounded(N2, centroid2.log_x_sum, centroid2.log_1_minus_x_sum)
         mean1 = alpha1 / (alpha1 + beta1)
         mean2 = alpha2 / (alpha2 + beta2)
 

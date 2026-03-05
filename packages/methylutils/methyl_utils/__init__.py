@@ -94,12 +94,9 @@ from .logging_utils import (
 from .core.methyl_frame import (
     MethylFrame,
     MethylSample,
-    MethylBasicCentroid,
     MethylExtendedCentroid,
-    MethylBetaBinomialCentroid,
     compute_coverage_outlier_flags,
 )
-# Compatibility aliases
 MethylCentroid = MethylExtendedCentroid
 MethylBetaCentroid = MethylExtendedCentroid
 
@@ -194,8 +191,8 @@ METHYL_CENTROID_DTYPE = [
     ("N", np.uint32),  # Number of samples contributing to each position
 ]
 
-# Extended centroid dtype (Beta/Normal only: no count columns)
-METHYL_EXTENDED_ONLY_DTYPE = [
+# Single data-driven centroid dtype (pos, mC, uC, tnc, N, Sx, Sx2 only)
+METHYL_CENTROID_DTYPE_EXTENDED = [
     ("pos", np.uint32),
     ("mC", np.uint32),
     ("uC", np.uint32),
@@ -203,23 +200,9 @@ METHYL_EXTENDED_ONLY_DTYPE = [
     ("N", np.uint32),
     ("Sx", np.float32),
     ("Sx2", np.float32),
-    ("log_x_sum", np.float32),
-    ("log_1_minus_x_sum", np.float32),
 ]
-
-# Full extended centroid dtype (includes count stats for Beta-Binomial; used by MethylBetaBinomialCentroid)
-METHYL_EXTENDED_CENTROID_DTYPE = METHYL_EXTENDED_ONLY_DTYPE + [
-    ("sum_mC", np.uint64),
-    ("sum_uC", np.uint64),
-    ("sum_cov", np.uint64),
-    ("sum_cov2", np.float64),
-    ("sum_mC2", np.float64),
-    ("sum_uC2", np.float64),
-    ("Sx3", np.float32),
-    ("Sx4", np.float32),
-    ("count_zero", np.uint32),
-    ("count_one", np.uint32),
-]
+# Backward-compat alias
+METHYL_EXTENDED_ONLY_DTYPE = METHYL_CENTROID_DTYPE_EXTENDED
 
 # Type aliases for better type hints (compatible with older Python versions)
 MethylSampleDtype = np.ndarray
@@ -228,18 +211,17 @@ MethylExtendedCentroidDtype = np.ndarray
 
 def get_methyl_dtype(extended: bool = False) -> list:
     """
-    Get the appropriate methylation dtype based on the data type.
+    Get the appropriate methylation dtype (sample or centroid).
 
     Args:
-        extended: If True, return extended centroid dtype with statistics
+        extended: If True, return centroid dtype with N, Sx, Sx2
 
     Returns:
         List of (field_name, dtype) tuples for numpy structured array
     """
     if extended:
-        return METHYL_EXTENDED_CENTROID_DTYPE
-    else:
-        return METHYL_CENTROID_DTYPE
+        return METHYL_CENTROID_DTYPE_EXTENDED
+    return METHYL_CENTROID_DTYPE
 
 def _pack_tnc_byte(tnc: int, context: int, strand: int) -> int:
     # Range checks (raise ValueError on bad inputs)
@@ -766,9 +748,7 @@ __all__ = [
     # Methylation sample functions
     "MethylFrame",
     "MethylSample",
-    "MethylBasicCentroid",
     "MethylExtendedCentroid",
-    "MethylBetaBinomialCentroid",
     "compute_coverage_outlier_flags",
     "MethylBetaMixtureCentroid",
     "get_distribution_view",
@@ -805,7 +785,7 @@ __all__ = [
     "METHYL_SAMPLE_DTYPE",
     "METHYL_CENTROID_DTYPE",
     "METHYL_EXTENDED_ONLY_DTYPE",
-    "METHYL_EXTENDED_CENTROID_DTYPE",
+    "METHYL_CENTROID_DTYPE_EXTENDED",
     "MethylSampleDtype",
     "MethylCentroidDtype",
     "MethylExtendedCentroidDtype",

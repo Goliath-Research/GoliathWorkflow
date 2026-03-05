@@ -94,10 +94,8 @@ from .methyl_utils.logging_utils import (
 from .methyl_utils.core.methyl_frame import (
     MethylFrame,
     MethylSample,
-    MethylBasicCentroid,
     MethylExtendedCentroid,
 )
-# Compatibility alias
 MethylCentroid = MethylExtendedCentroid
 
 # Import I/O functions
@@ -109,7 +107,7 @@ try:
         TNCBits,
         METHYL_SAMPLE_DTYPE,
         METHYL_CENTROID_DTYPE,
-        METHYL_EXTENDED_CENTROID_DTYPE,
+        METHYL_CENTROID_DTYPE_EXTENDED,
         MethylSampleDtype,
         MethylCentroidDtype,
         MethylExtendedCentroidDtype,
@@ -119,15 +117,16 @@ try:
         DMRExporter,
     )
 except ImportError:
-    # If legacy file is removed, these won't be available
+    from .methyl_utils import (
+        METHYL_SAMPLE_DTYPE,
+        METHYL_CENTROID_DTYPE,
+        METHYL_CENTROID_DTYPE_EXTENDED,
+        get_methyl_dtype,
+        MethylSampleDtype,
+        MethylCentroidDtype,
+        MethylExtendedCentroidDtype,
+    )
     TNCBits = None
-    METHYL_SAMPLE_DTYPE = None
-    METHYL_CENTROID_DTYPE = None
-    METHYL_EXTENDED_CENTROID_DTYPE = None
-    MethylSampleDtype = None
-    MethylCentroidDtype = None
-    MethylExtendedCentroidDtype = None
-    get_methyl_dtype = None
     DMPSample = None
     DMPExporter = None
     DMRExporter = None
@@ -307,7 +306,6 @@ __all__ = [
     # Methylation sample functions
     "MethylFrame",
     "MethylSample",
-    "MethylBasicCentroid",
     "MethylExtendedCentroid",
     "MethylCentroid",  # Alias for MethylExtendedCentroid
     "load_from_h5",

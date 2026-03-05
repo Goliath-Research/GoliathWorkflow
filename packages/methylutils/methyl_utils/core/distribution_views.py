@@ -16,10 +16,9 @@ except ImportError:
     PchipInterpolator = None  # type: ignore
 
 try:
-    from .methyl_frame import MethylExtendedCentroid, MethylBetaBinomialCentroid, MethylSample
+    from .methyl_frame import MethylExtendedCentroid, MethylSample
 except ImportError:
     MethylExtendedCentroid = None  # type: ignore
-    MethylBetaBinomialCentroid = None  # type: ignore
     MethylSample = None  # type: ignore
 
 MIN_EPS = 1e-12
@@ -147,49 +146,11 @@ class BetaView:
 
     def overlap(self, other: MethylDistributionView) -> np.ndarray:
         from methyl_utils.beta_analytics import compute_bhattacharyya_coefficient
-        a2 = np.asarray(getattr(other, "parameters", {}).get("alpha", getattr(other, "alpha_bb", None)), dtype=np.float64)
-        b2 = np.asarray(getattr(other, "parameters", {}).get("beta", getattr(other, "beta_bb", None)), dtype=np.float64)
-        if a2 is None or b2 is None:
-            a2 = np.asarray(other.mean, dtype=np.float64)
-            b2 = np.maximum(1 - a2, MIN_EPS) * 10
-            a2 = np.maximum(a2 * 10, MIN_EPS)
-        n = min(len(self._alpha), len(a2))
-        return compute_bhattacharyya_coefficient(
-            self._alpha[:n], self._beta[:n], a2[:n], b2[:n], use_gpu=False
-        )
-
-
-# --- Beta-Binomial view ---
-class BetaBinomialView:
-    """Beta-Binomial view: parameters = (alpha, beta[, n]), mean = alpha/(alpha+beta)."""
-
-    def __init__(self, alpha: np.ndarray, beta: np.ndarray, n: Optional[np.ndarray] = None):
-        from .methyl_distribution_utils import clip_beta_params_for_bounds
-        self._alpha, self._beta = clip_beta_params_for_bounds(
-            np.asarray(alpha, dtype=np.float64),
-            np.asarray(beta, dtype=np.float64),
-        )
-        self._n = np.asarray(n, dtype=np.uint32) if n is not None else None
-        self._mean = _safe_mean_numer(self._alpha, self._beta)
-
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        out: Dict[str, Any] = {"alpha": self._alpha, "beta": self._beta}
-        if self._n is not None:
-            out["n"] = self._n
-        return out
-
-    @property
-    def mean(self) -> np.ndarray:
-        return self._mean
-
-    def overlap(self, other: MethylDistributionView) -> np.ndarray:
-        from methyl_utils.beta_analytics import compute_bhattacharyya_coefficient
-        a2 = np.asarray(getattr(other, "parameters", {}).get("alpha", getattr(other, "alpha_bb", other.mean)), dtype=np.float64)
-        b2 = np.asarray(getattr(other, "parameters", {}).get("beta", getattr(other, "beta_bb", None)), dtype=np.float64)
-        if b2 is None:
-            b2 = np.maximum(1 - a2, MIN_EPS) * 10
-            a2 = np.maximum(a2 * 10, MIN_EPS)
+        params = getattr(other, "parameters", {})
+        a2 = np.asarray(params.get("alpha", other.mean), dtype=np.float64)
+        b2 = np.asarray(params.get("beta", np.maximum(1 - a2, MIN_EPS) * 10), dtype=np.float64)
+        if np.any(b2 <= 0):
+            b2 = np.where(b2 <= 0, np.maximum(1 - a2, MIN_EPS) * 10, b2)
         n = min(len(self._alpha), len(a2))
         return compute_bhattacharyya_coefficient(
             self._alpha[:n], self._beta[:n], a2[:n], b2[:n], use_gpu=False
@@ -378,11 +339,11 @@ class BMMView:
 
 
 def get_distribution_view(
-    centroid: Union[MethylExtendedCentroid, MethylBetaBinomialCentroid],
+    centroid: Union[MethylExtendedCentroid, MethylSample],
     mode: str,
     positions: Optional[np.ndarray] = None,
 ) -> MethylDistributionView:
-    """Build a distribution view from a centroid for the given mode."""
+    """Build a distribution view from a centroid (counts, normal, beta, ecdf)."""
     mode = (mode or "beta").lower()
     if positions is not None:
         pos_arr = np.asarray(centroid.pos.values, dtype=np.uint32)
@@ -405,9 +366,7 @@ def get_distribution_view(
             np.asarray(centroid.beta.values),
         )
     if mode == "beta_binomial":
-        a = getattr(centroid, "alpha_bb", centroid.alpha).values
-        b = getattr(centroid, "beta_bb", centroid.beta).values
-        return BetaBinomialView(np.asarray(a), np.asarray(b), np.asarray(centroid.N.values))
+        raise ValueError("beta_binomial mode removed; use beta (MoM) or ecdf.")
     if mode == "ecdf":
         binned = getattr(centroid, "binned_stats", None)
         if binned is None or "bin_edges" not in binned or "bin_counts" not in binned:
@@ -424,13 +383,13 @@ def get_distribution_view(
     if mode == "beta_mixture":
         raise ValueError("beta_mixture view requires MethylBetaMixtureCentroid; use its mean/overlap directly.")
     raise ValueError(
-        f"Unknown mode: {mode}. Use one of: counts, normal, beta, beta_binomial, beta_mixture, ecdf"
+        f"Unknown mode: {mode}. Use one of: counts, normal, beta, beta_mixture, ecdf"
     )
 
 
 def log_probability_sample_given_centroid(
     sample: Any,
-    centroid: Union[MethylExtendedCentroid, MethylBetaBinomialCentroid],
+    centroid: Union[MethylExtendedCentroid, MethylSample],
     mode: str,
     positions: Optional[np.ndarray] = None,
     use_gpu: bool = False,
@@ -484,12 +443,7 @@ def log_probability_sample_given_centroid(
         return beta_log_pdf(x, alpha, beta, use_gpu=use_gpu)
 
     if mode == "beta_binomial":
-        from methyl_utils.beta_analytics import log_beta_binomial_pmf
-        alpha = np.asarray(getattr(centroid, "alpha_bb", centroid.alpha).values, dtype=np.float64)[idx_c]
-        beta = np.asarray(getattr(centroid, "beta_bb", centroid.beta).values, dtype=np.float64)[idx_c]
-        k = np.asarray(sample.mC.values, dtype=np.int64)[idx_s]
-        n_trials = np.asarray(sample.mC.values, dtype=np.int64)[idx_s] + np.asarray(sample.uC.values, dtype=np.int64)[idx_s]
-        return log_beta_binomial_pmf(k, n_trials, alpha, beta, use_gpu=use_gpu)
+        raise ValueError("beta_binomial mode removed; use beta or ecdf.")
 
     if mode == "ecdf":
         binned = getattr(centroid, "binned_stats", None)
@@ -514,8 +468,8 @@ def log_probability_sample_given_centroid(
 
 
 def overlap_between_centroids(
-    centroid1: Union[MethylExtendedCentroid, MethylBetaBinomialCentroid],
-    centroid2: Union[MethylExtendedCentroid, MethylBetaBinomialCentroid],
+    centroid1: Union[MethylExtendedCentroid, MethylSample],
+    centroid2: Union[MethylExtendedCentroid, MethylSample],
     mode: str,
     positions: Optional[np.ndarray] = None,
 ) -> np.ndarray:

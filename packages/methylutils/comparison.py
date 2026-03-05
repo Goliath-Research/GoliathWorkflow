@@ -77,39 +77,18 @@ class MethylCentroidPair:
         # 1. Align
         h, d = self.align_centroids(healthy, diseased)
 
-        # 2. Move to GPU if both are on GPU (transparent)
-        if h.is_gpu and d.is_gpu and HAS_GPU:
-            xp = cp
-            df_h = h.df
-            df_d = d.df
-        else:
-            xp = np
-            df_h = h.to_cpu().df
-            df_d = d.to_cpu().df
+        # 2. Likelihood-ratio test (centroid API; uses N, Sx, Sx2 / MoM internally)
+        use_gpu = bool(h.is_gpu and d.is_gpu and HAS_GPU)
+        _, p_values = likelihood_ratio_test_beta(h, d, use_gpu=use_gpu)
+        p_values = np.asarray(p_values).ravel()
 
-        # 3. Extract vectors (zero-copy)
-        N1 = df_h["N"].values
-        N2 = df_d["N"].values
-        log_x1 = df_h["log_x_sum"].values
-        log_1x1 = df_h["log_1_minus_x_sum"].values
-        log_x2 = df_d["log_x_sum"].values
-        log_1x2 = df_d["log_1_minus_x_sum"].values
-
-        # 4. Likelihood-ratio test (GPU kernel if xp=cp)
-        _, p_values = likelihood_ratio_test_beta(
-            n1=N1, log_x1=log_x1, log_1x1=log_1x1,
-            n2=N2, log_x2=log_x2, log_1x2=log_1x2,
-            use_gpu=(xp == cp)
-        )
-        p_values = xp.asnumpy(p_values)
-
-        # 5. Beta parameters (already cached in MethylExtendedCentroid)
-        alpha1, beta1 = h.alpha.values, h.beta.values
-        alpha2, beta2 = d.alpha.values, d.beta.values
-
-        if xp == cp:
-            alpha1, beta1 = cp.asnumpy(alpha1), cp.asnumpy(beta1)
-            alpha2, beta2 = cp.asnumpy(alpha2), cp.asnumpy(beta2)
+        # 3. Beta parameters from centroids (MoM from N, Sx, Sx2)
+        alpha1 = np.asarray(h.alpha).ravel()
+        beta1 = np.asarray(h.beta).ravel()
+        alpha2 = np.asarray(d.alpha).ravel()
+        beta2 = np.asarray(d.beta).ravel()
+        N1 = np.asarray(h.N).ravel()
+        N2 = np.asarray(d.N).ravel()
 
         mean1 = alpha1 / (alpha1 + beta1 + 1e-12)
         mean2 = alpha2 / (alpha2 + beta2 + 1e-12)

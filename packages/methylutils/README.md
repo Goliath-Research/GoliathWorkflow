@@ -37,9 +37,7 @@ centroid = MethylExtendedCentroid.from_sample_data(
     tnc=np.array([1, 2]),
     N=np.array([5, 5]),
     Sx=np.array([2.5, 5.0]),
-    Sx2=np.array([1.25, 5.0]),
-    log_x_sum=np.array([0.5, 1.0]),
-    log_1_minus_x_sum=np.array([-0.5, -1.0])
+    Sx2=np.array([1.25, 5.0])
 )
 
 # Add sample to centroid

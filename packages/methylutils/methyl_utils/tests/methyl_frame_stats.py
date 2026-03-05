@@ -28,7 +28,7 @@ try:
 except ImportError:
     HAS_PLOTLY = False
 
-from methyl_utils.core.methyl_frame import MethylSample, MethylBasicCentroid, MethylExtendedCentroid
+from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
 
 
 def load_samples_from_csv(csv_path: Path, input_dir: Path, 
@@ -178,12 +178,12 @@ def load_samples_from_config(config_path: Path,
     return samples
 
 
-def compute_sample_statistics(sample: Union[MethylSample, MethylBasicCentroid, MethylExtendedCentroid]) -> Dict[str, Any]:
+def compute_sample_statistics(sample: Union[MethylSample, MethylExtendedCentroid]) -> Dict[str, Any]:
     """
     Compute global statistics for a methylation sample or centroid.
     
     Args:
-        sample: MethylSample, MethylBasicCentroid, or MethylExtendedCentroid instance
+        sample: MethylSample or MethylExtendedCentroid instance
         
     Returns:
         Dictionary containing computed statistics
@@ -223,25 +223,17 @@ def compute_sample_statistics(sample: Union[MethylSample, MethylBasicCentroid, M
         'median_coverage': float(np.median(coverage_vals)) if len(coverage_vals) > 0 else 0.0,
     }
     
-    # Add centroid-specific statistics
-    if isinstance(sample_cpu, (MethylBasicCentroid, MethylExtendedCentroid)):
+    # Add centroid-specific statistics (MethylExtendedCentroid has N, Sx, Sx2)
+    if isinstance(sample_cpu, MethylExtendedCentroid):
         N_vals = np.asarray(sample_cpu.N.values) if hasattr(sample_cpu.N, 'values') else np.asarray(sample_cpu.N)
         stats['avg_N'] = float(np.mean(N_vals))
         stats['min_N'] = int(np.min(N_vals)) if len(N_vals) > 0 else 0
         stats['max_N'] = int(np.max(N_vals)) if len(N_vals) > 0 else 0
         stats['total_samples'] = int(np.max(N_vals)) if len(N_vals) > 0 else 0
-    
-    # Add extended centroid-specific statistics
-    if isinstance(sample_cpu, MethylExtendedCentroid):
         Sx_vals = np.asarray(sample_cpu.Sx.values) if hasattr(sample_cpu.Sx, 'values') else np.asarray(sample_cpu.Sx)
         Sx2_vals = np.asarray(sample_cpu.Sx2.values) if hasattr(sample_cpu.Sx2, 'values') else np.asarray(sample_cpu.Sx2)
-        log_x_sum_vals = np.asarray(sample_cpu.log_x_sum.values) if hasattr(sample_cpu.log_x_sum, 'values') else np.asarray(sample_cpu.log_x_sum)
-        log_1mx_sum_vals = np.asarray(sample_cpu.log_1_minus_x_sum.values) if hasattr(sample_cpu.log_1_minus_x_sum, 'values') else np.asarray(sample_cpu.log_1_minus_x_sum)
-        
         stats['avg_Sx'] = float(np.mean(Sx_vals))
         stats['avg_Sx2'] = float(np.mean(Sx2_vals))
-        stats['avg_log_x_sum'] = float(np.mean(log_x_sum_vals))
-        stats['avg_log_1_minus_x_sum'] = float(np.mean(log_1mx_sum_vals))
     
     # Add sample type
     stats['sample_type'] = sample_cpu.sample_type
@@ -311,13 +303,13 @@ def create_histogram_html(data: np.ndarray, title: str, xlabel: str, output_path
     print(f"Saved histogram: {output_path}")
 
 
-def generate_all_histograms(sample: Union[MethylSample, MethylBasicCentroid, MethylExtendedCentroid], 
+def generate_all_histograms(sample: Union[MethylSample, MethylExtendedCentroid], 
                            output_dir: Path, sample_name: str) -> Dict[str, Path]:
     """
     Generate all histograms for a sample (mC, uC, coverage, methylation level).
     
     Args:
-        sample: MethylSample, MethylBasicCentroid, or MethylExtendedCentroid instance
+        sample: MethylSample or MethylExtendedCentroid instance
         output_dir: Directory to save histogram HTML files
         sample_name: Name identifier for the sample (used in filenames)
         

@@ -1,6 +1,6 @@
 ---
 name: Single data-driven centroid
-overview: Consolidate to one centroid type that stores only N, mC, uC, Sx, Sx2 (mean/variance) and first-class bin_edges/bin_counts (ECDF). Remove MethylBasicCentroid and MethylBetaBinomialCentroid, drop log_x_sum/log_1_minus_x_sum and all Beta-Binomial count stats. Derive Beta parameters from Sx/Sx2/N via method-of-moments. Update MethylUtils, MethylCentroid, MethylCentroidExplorer, MethylDetector, MethylClassifier, MethylCluster, IO, tests, and docs.
+overview: Consolidate to one centroid type that stores only N, mC, uC, Sx, Sx2 (mean/variance) and first-class bin_edges/bin_counts (ECDF). Remove MethylBasicCentroid and MethylBetaBinomialCentroid, drop log_x_sum/log_1_minus_x_sum and all Beta-Binomial count stats. Beta-Binomial is removed everywhere with no fallback (no mapping to Beta/ECDF, no wrapper). Derive Beta parameters from Sx/Sx2/N via method-of-moments. Update MethylUtils, MethylCentroid, MethylCentroidExplorer, MethylDetector, MethylClassifier, MethylCluster, IO, tests, and docs.
 todos: []
 isProject: false
 ---
@@ -18,6 +18,7 @@ One centroid type with:
 
 - `log_x_sum`, `log_1_minus_x_sum` (Beta MLE)
 - All Beta-Binomial count columns: `sum_cov`, `sum_cov2`, `sum_mC`, `sum_uC`, `sum_mC2`, `sum_uC2`, `Sx3`, `Sx4`, `count_zero`, `count_one`
+- **Beta-Binomial everywhere**: no fallback to Beta or ECDF, no wrapper, no `distribution=beta_binomial` option; remove all `alpha_bb`/`beta_bb` and BB-only code paths.
 
 **Derived (not stored)**:
 
@@ -69,20 +70,20 @@ One centroid type with:
 - **Types**: Use only `MethylExtendedCentroid` (no MethylBetaBinomialCentroid).
 - **Beta path**: Use centroid.N, Sx, Sx2 (and derived alpha/beta from MoM) only. Remove all uses of `log_x_sum`, `log_1_minus_x_sum`, `sum_cov`, `sum_cov2`, `alpha_bb`, `beta_bb`, and other BB-only fields.
 - **ECDF path**: Keep and rely on `binned_stats` (bin_edges, bin_counts); require same bin_edges for both centroids when using ECDF.
-- **distribution=beta_binomial**: Remove or map to Beta (MoM) or ECDF; document that Beta-Binomial is no longer a separate centroid type.
+- **distribution=beta_binomial**: Remove entirely (no fallback). Drop the option from config/API; remove all code paths that use it; document removal.
 - **Zero-fill / empty centroid**: Still return `MethylExtendedCentroid` with only core columns (no log, no BB).
 
 ### 2.2 [packages/methylutils/methyl_utils/statistical_tests.py](packages/methylutils/methyl_utils/statistical_tests.py)
 
 - **Functions** that take `log_x_sum` / `log_1_minus_x_sum` for centroid-based tests: switch to MoM from N, Sx, Sx2 where appropriate, or accept only (N, Sx, Sx2) and use `beta_mom_estimation`.
 - `**_estimate_beta_params_bounded`**: Used in pair tests; either refactor to use (N, Sx, Sx2) and MoM, or keep for internal use with explicit N, Sx, Sx2 (no log sums from centroid).
-- **beta_binomial_mom_estimation**: Keep for non-centroid use if needed; centroid code paths will no longer pass count stats from centroids.
+- **beta_binomial_mom_estimation**: Remove from centroid-related code; remove or deprecate the function if it is only used for Beta-Binomial centroid support (no fallback).
 
 ### 2.3 [packages/methylutils/methyl_utils/core/distribution_views.py](packages/methylutils/methyl_utils/core/distribution_views.py)
 
 - **BetaView**: Build from Sx, N, Sx2 (MoM alpha/beta). Remove dependency on `log_x_sum` or BB columns.
 - **ECDFView**: Unchanged; requires `binned_stats` (bin_edges, bin_counts).
-- **BetaBinomial view**: Remove or implement as thin wrapper over Beta (MoM) if still needed for API compatibility; no centroid-specific count stats.
+- **BetaBinomial view**: Remove entirely (no fallback, no wrapper).
 - `**ecdf_view_from_centroid` / `log_probability(..., mode="ecdf")`**: Keep; they already require binned_stats.
 
 ### 2.4 [packages/methylutils/methyl_utils/ecdf_fit.py](packages/methylutils/methyl_utils/ecdf_fit.py)
@@ -119,6 +120,7 @@ One centroid type with:
 ### 4.1 [packages/methyldetector/methyl_detector/core/methyldetector.py](packages/methyldetector/methyl_detector/core/methyldetector.py)
 
 - **Require** centroids to have `binned_stats` (already does); ensure no use of `alpha_bb`/`beta_bb` or log sums. Use only mean/variance (Sx, N, Sx2) and ECDF (binned_stats) as needed.
+- **Remove** any `distribution=beta_binomial` (or equivalent) option from config/API; no fallback.
 - **Config / messages**: Keep “build with enable_binned_stats” style messaging; align with single centroid format.
 
 ### 4.2 [packages/methylclassifier/methyl_classifier/utils/multiclass_builder.py](packages/methylclassifier/methyl_classifier/utils/multiclass_builder.py) and data loading

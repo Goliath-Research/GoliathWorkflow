@@ -27,9 +27,9 @@ class MethylCentroidPair:
         centroid1 = MethylSample.load_from_h5(path1)
         centroid2 = MethylSample.load_from_h5(path2)
 
-        # Validate extended centroids (assume is_extended_centroid checks N, Sx, etc.)
-        if not centroid1.is_extended_centroid or not centroid2.is_extended_centroid:
-            raise ValueError("Both inputs must be extended centroids with N, Sx, Sx2, log sums.")
+        # Validate extended centroids (N, Sx, Sx2)
+        if not getattr(centroid1, "is_centroid", False) or not getattr(centroid2, "is_centroid", False):
+            raise ValueError("Both inputs must be extended centroids with N, Sx, Sx2.")
 
         # Assume positions are sorted (typical for genomic data); if not, sort them
         if not np.all(np.diff(centroid1.pos) > 0):
@@ -84,33 +84,27 @@ class MethylCentroidPair:
     @staticmethod
     def _slice_sample(sample: 'MethylSample', indices: np.ndarray) -> 'MethylSample':
         """
-        Helper to slice a MethylSample by indices (fallback if no native method).
-
-        Creates a new MethylSample with sliced arrays (numpy slicing is view-based for efficiency).
+        Helper to slice a MethylSample or MethylExtendedCentroid by indices (fallback if no native method).
+        Builds a DataFrame and returns MethylExtendedCentroid if N, Sx, Sx2 present, else MethylSample.
         """
-        # Slice all arrays (zero-copy views where possible)
-        new_pos = sample.pos[indices]
-        new_mC = sample.mC[indices]
-        new_uC = sample.uC[indices]
-        new_tnc = sample.tnc[indices] if sample.tnc is not None else None
-        new_N = sample.N[indices] if sample.N is not None else None
-        new_Sx = sample.Sx[indices] if sample.Sx is not None else None
-        new_Sx2 = sample.Sx2[indices] if sample.Sx2 is not None else None
-        new_log_x_sum = sample.log_x_sum[indices] if sample.log_x_sum is not None else None
-        new_log_1_minus_x_sum = sample.log_1_minus_x_sum[indices] if sample.log_1_minus_x_sum is not None else None
+        import pandas as pd
+        from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
 
-        # Reconstruct MethylSample (assumes constructor takes sliced arrays)
-        return MethylSample(
-            pos=new_pos,
-            mC=new_mC,
-            uC=new_uC,
-            tnc=new_tnc,
-            N=new_N,
-            Sx=new_Sx,
-            Sx2=new_Sx2,
-            log_x_sum=new_log_x_sum,
-            log_1_minus_x_sum=new_log_1_minus_x_sum
-        )
+        new_pos = sample.pos[indices] if hasattr(sample.pos, '__getitem__') else np.asarray(sample.pos).ravel()[indices]
+        new_mC = sample.mC[indices] if hasattr(sample.mC, '__getitem__') else np.asarray(sample.mC).ravel()[indices]
+        new_uC = sample.uC[indices] if hasattr(sample.uC, '__getitem__') else np.asarray(sample.uC).ravel()[indices]
+        new_tnc = (sample.tnc[indices] if sample.tnc is not None else None)
+        if hasattr(sample, 'N') and sample.N is not None and hasattr(sample, 'Sx') and sample.Sx is not None and hasattr(sample, 'Sx2') and sample.Sx2 is not None:
+            new_N = sample.N[indices] if hasattr(sample.N, '__getitem__') else np.asarray(sample.N).ravel()[indices]
+            new_Sx = sample.Sx[indices] if hasattr(sample.Sx, '__getitem__') else np.asarray(sample.Sx).ravel()[indices]
+            new_Sx2 = sample.Sx2[indices] if hasattr(sample.Sx2, '__getitem__') else np.asarray(sample.Sx2).ravel()[indices]
+            df = pd.DataFrame({
+                'pos': new_pos, 'mC': new_mC, 'uC': new_uC, 'tnc': new_tnc,
+                'N': new_N, 'Sx': new_Sx, 'Sx2': new_Sx2,
+            })
+            return MethylExtendedCentroid(df)
+        df = pd.DataFrame({'pos': new_pos, 'mC': new_mC, 'uC': new_uC, 'tnc': new_tnc})
+        return MethylSample(df)
 
     @classmethod
     def _sort_sample(cls, sample: 'MethylSample', sort_indices: np.ndarray) -> 'MethylSample':

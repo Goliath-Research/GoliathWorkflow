@@ -124,17 +124,7 @@ def display_sample_properties(h5_path: Path):
         if sample.Sx2 is not None:
             print("\n7. Sum of Squared Methylation Levels (Sx2):")
             print(f"   {format_array_summary(sample.Sx2)}")
-        
-        # Extended centroid fields
-        if sample.is_extended_centroid:
-            if sample.log_x_sum is not None:
-                print("\n8. Sum of Log(Methylation) (log_x_sum):")
-                print(f"   {format_array_summary(sample.log_x_sum)}")
-            
-            if sample.log_1_minus_x_sum is not None:
-                print("\n9. Sum of Log(1-Methylation) (log_1_minus_x_sum):")
-                print(f"   {format_array_summary(sample.log_1_minus_x_sum)}")
-    
+
     # ========================================================================
     # METADATA
     # ========================================================================

@@ -205,10 +205,7 @@ class MemoryManager:
                 mapped_data['Sx'] = data_group['Sx']
             if 'Sx2' in data_group:
                 mapped_data['Sx2'] = data_group['Sx2']
-            if 'log_x_sum' in data_group:
-                mapped_data['log_x_sum'] = data_group['log_x_sum']
-            if 'log_1_minus_x_sum' in data_group:
-                mapped_data['log_1_minus_x_sum'] = data_group['log_1_minus_x_sum']
+            # log_x_sum, log_1_minus_x_sum and BB columns in file are ignored (single centroid: N, Sx, Sx2 only)
 
             # Keep file handle alive for memory mapping
             mapped_data['_file_handle'] = f
@@ -254,10 +251,6 @@ class MemoryManager:
                         mapped_data['Sx'] = np.asarray(data_group['Sx'][:], dtype=np.float32)
                     if 'Sx2' in data_group:
                         mapped_data['Sx2'] = np.asarray(data_group['Sx2'][:], dtype=np.float32)
-                    if 'log_x_sum' in data_group:
-                        mapped_data['log_x_sum'] = np.asarray(data_group['log_x_sum'][:], dtype=np.float32)
-                    if 'log_1_minus_x_sum' in data_group:
-                        mapped_data['log_1_minus_x_sum'] = np.asarray(data_group['log_1_minus_x_sum'][:], dtype=np.float32)
 
                     # Mark as not memory mapped
                     mapped_data['_is_memory_mapped'] = False
@@ -288,7 +281,7 @@ class MemoryManager:
     def calculate_optimal_chunk_size(
         self,
         total_positions: int,
-        data_structure: str = "basic_centroid",
+        data_structure: str = "extended_centroid",
         maximize_gpu_usage: bool = True
     ) -> int:
         """
@@ -359,7 +352,7 @@ class MemoryManager:
             "uint32": 4,   # positions, mC, uC, N
             "uint16": 2,   # compressed mC/uC for centroids (potential optimization)
             "uint8": 1,    # tnc
-            "float32": 4,  # Sx, Sx2, log_x_sum, log_1_minus_x_sum, methylation levels
+            "float32": 4,  # Sx, Sx2, methylation levels
             "float64": 8   # high precision calculations (rarely used)
         }
 
@@ -370,19 +363,12 @@ class MemoryManager:
                 memory_per_type["uint32"] * 3 +  # pos, mC, uC
                 memory_per_type["uint8"]         # tnc
             )
-        elif data_structure == "basic_centroid":
-            # Basic centroid: basic sample + N(uint32) + Sx(float32) + Sx2(float32)
+        elif data_structure in ("basic_centroid", "extended_centroid"):
+            # Single centroid type: pos, mC, uC, tnc, N, Sx, Sx2 (no log sums or BB)
             bytes_per_position = (
                 memory_per_type["uint32"] * 4 +  # pos, mC, uC, N
                 memory_per_type["uint8"] +       # tnc
                 memory_per_type["float32"] * 2   # Sx, Sx2
-            )
-        elif data_structure == "extended_centroid":
-            # Extended centroid: basic centroid + log_x_sum(float32) + log_1_minus_x_sum(float32)
-            bytes_per_position = (
-                memory_per_type["uint32"] * 4 +  # pos, mC, uC, N
-                memory_per_type["uint8"] +       # tnc
-                memory_per_type["float32"] * 4   # Sx, Sx2, log_x_sum, log_1_minus_x_sum
             )
         else:
             raise ValueError(f"Unknown data structure: {data_structure}")

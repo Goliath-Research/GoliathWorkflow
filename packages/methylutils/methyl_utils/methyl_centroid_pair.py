@@ -22,7 +22,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .beta_analytics import log_beta_binomial_pmf
 from .beta_mixture import fit_beta_mixture, estimate_js_divergence
 from .core.methyl_frame import MethylSample, MethylExtendedCentroid
 from .gpu_detection import (
@@ -365,15 +364,12 @@ class MethylCentroidPair:
         df = pd.DataFrame({
             "pos": positions.astype(np.uint32),
             "mC": np.zeros(n_positions, dtype=np.uint32),
-            "uC": np.ones(n_positions, dtype=np.uint32) * min_coverage,  # Ensure coverage >= min_coverage
+            "uC": np.ones(n_positions, dtype=np.uint32) * min_coverage,
             "tnc": dummy_tnc,
             "N": np.ones(n_positions, dtype=np.uint32),
             "Sx": np.zeros(n_positions, dtype=np.float32),
             "Sx2": np.zeros(n_positions, dtype=np.float32),
-            "log_x_sum": np.zeros(n_positions, dtype=np.float32),
-            "log_1_minus_x_sum": np.zeros(n_positions, dtype=np.float32),
         })
-
         return MethylExtendedCentroid(df, metadata={"context": context})
 
     @classmethod
@@ -816,28 +812,19 @@ class MethylCentroidPair:
         alpha2 = centroid2.alpha[indices2].astype(np.float32)
         beta2 = centroid2.beta[indices2].astype(np.float32)
 
-        # Extract other data needed for statistical tests
         N1 = centroid1.N[indices1].astype(np.float32)
         N2 = centroid2.N[indices2].astype(np.float32)
-        log_x_sum1 = centroid1.log_x_sum[indices1].astype(np.float32)
-        log_1mx_sum1 = centroid1.log_1_minus_x_sum[indices1].astype(np.float32)
-        log_x_sum2 = centroid2.log_x_sum[indices2].astype(np.float32)
-        log_1mx_sum2 = centroid2.log_1_minus_x_sum[indices2].astype(np.float32)
+        Sx1 = centroid1.Sx[indices1].astype(np.float64)
+        Sx2_vals = centroid2.Sx[indices2].astype(np.float64)
+        Sx2_1 = centroid1.Sx2[indices1].astype(np.float64)
+        Sx2_2 = centroid2.Sx2[indices2].astype(np.float64)
 
-        # Use MethylSample's encapsulated mean property which includes adaptive estimation
-        # This ensures consistency with edge case handling for small samples vs large samples
         mean1 = centroid1.mean[indices1].astype(np.float32)
         mean2 = centroid2.mean[indices2].astype(np.float32)
 
-        # Optional stats for distribution selection
-        Sx1 = centroid1.Sx[indices1].astype(np.float32)
-        Sx2_vals = centroid2.Sx[indices2].astype(np.float32)
-        Sx2_1 = centroid1.Sx2[indices1].astype(np.float32)
-        Sx2_2 = centroid2.Sx2[indices2].astype(np.float32)
-
         # Normal-distribution moments (used for normal-mode metrics)
-        mean_normal1 = Sx1 / np.maximum(N1, 1.0)
-        mean_normal2 = Sx2_vals / np.maximum(N2, 1.0)
+        mean_normal1 = Sx1 / np.maximum(N1.astype(np.float64), 1.0)
+        mean_normal2 = Sx2_vals / np.maximum(N2.astype(np.float64), 1.0)
         var_normal1 = np.maximum(
             Sx2_1 - (Sx1**2 / np.maximum(N1, 1.0)), 1e-12
         ) / np.maximum(N1 - 1, 1)
@@ -845,27 +832,9 @@ class MethylCentroidPair:
             Sx2_2 - (Sx2_vals**2 / np.maximum(N2, 1.0)), 1e-12
         ) / np.maximum(N2 - 1, 1)
 
-        # Coverage statistics for Beta-Binomial selection
-        sum_cov1 = None
-        sum_cov2 = None
-        if getattr(centroid1, "sum_cov", None) is not None and getattr(centroid2, "sum_cov", None) is not None:
-            sum_cov1 = centroid1.sum_cov[indices1].astype(np.float64)
-            sum_cov2 = centroid2.sum_cov[indices2].astype(np.float64)
-        else:
-            # Fallback: approximate using average counts * N
-            sum_cov1 = (centroid1.mC[indices1].astype(np.float64) + centroid1.uC[indices1].astype(np.float64)) * N1
-            sum_cov2 = (centroid2.mC[indices2].astype(np.float64) + centroid2.uC[indices2].astype(np.float64)) * N2
-
-        sum_cov2_1 = None
-        sum_cov2_2 = None
-        if getattr(centroid1, "sum_cov2", None) is not None and getattr(centroid2, "sum_cov2", None) is not None:
-            sum_cov2_1 = centroid1.sum_cov2[indices1].astype(np.float64)
-            sum_cov2_2 = centroid2.sum_cov2[indices2].astype(np.float64)
-
         # Distribution selection masks
         dist_mode = (self.distribution or "auto").lower()
         use_normal_mask = np.zeros(len(positions), dtype=bool)
-        use_beta_binom_mask = np.zeros(len(positions), dtype=bool)
         use_mixture_mask = np.zeros(len(positions), dtype=bool)
         use_ecdf_mask = np.zeros(len(positions), dtype=bool)
         force_mixture = dist_mode == "beta_mixture"
@@ -884,7 +853,8 @@ class MethylCentroidPair:
         if dist_mode == "normal":
             use_normal_mask[:] = True
         elif dist_mode == "beta_binomial":
-            use_beta_binom_mask[:] = True
+            import logging
+            logging.getLogger(__name__).warning("distribution='beta_binomial' removed; using beta.")
         elif dist_mode == "ecdf":
             if has_binned1 and has_binned2 and same_bin_edges:
                 use_ecdf_mask[:] = True
@@ -899,27 +869,7 @@ class MethylCentroidPair:
             # Auto selection: ECDF first when N below threshold and binned_stats present
             if has_binned1 and has_binned2 and same_bin_edges:
                 use_ecdf_mask = (N1 < self.max_N_for_ecdf) & (N2 < self.max_N_for_ecdf)
-            # Then existing rules for the remainder
             use_normal_mask = (N1 < self.min_samples_normal) | (N2 < self.min_samples_normal)
-
-            # Coverage-based Beta-Binomial selection (low coverage or overdispersion)
-            mean_cov1 = sum_cov1 / np.maximum(N1, 1.0)
-            mean_cov2 = sum_cov2 / np.maximum(N2, 1.0)
-
-            overdisp1 = np.zeros_like(mean_cov1, dtype=np.float64)
-            overdisp2 = np.zeros_like(mean_cov2, dtype=np.float64)
-            if sum_cov2_1 is not None and sum_cov2_2 is not None:
-                var_cov1 = np.maximum(sum_cov2_1 / np.maximum(N1, 1.0) - mean_cov1**2, 0.0)
-                var_cov2 = np.maximum(sum_cov2_2 / np.maximum(N2, 1.0) - mean_cov2**2, 0.0)
-                overdisp1 = var_cov1 / np.maximum(mean_cov1, 1e-6)
-                overdisp2 = var_cov2 / np.maximum(mean_cov2, 1e-6)
-
-            use_beta_binom_mask = (
-                (mean_cov1 < self.min_coverage_binom)
-                | (mean_cov2 < self.min_coverage_binom)
-                | (overdisp1 > self.overdispersion_threshold)
-                | (overdisp2 > self.overdispersion_threshold)
-            )
 
             # Mixture selection if mixture params are present
             if self.enable_mixture:
@@ -935,9 +885,7 @@ class MethylCentroidPair:
                         wsum1 = centroid1._df["mix_w1"].values[indices1] + centroid1._df["mix_w2"].values[indices1] + centroid1._df["mix_w3"].values[indices1]
                         wsum2 = centroid2._df["mix_w1"].values[indices2] + centroid2._df["mix_w2"].values[indices2] + centroid2._df["mix_w3"].values[indices2]
                         use_mixture_mask = (wsum1 > 0) & (wsum2 > 0) & (N1 >= self.min_samples_beta) & (N2 >= self.min_samples_beta)
-            # ECDF has precedence: clear other masks where ECDF is selected
             use_normal_mask = use_normal_mask & ~use_ecdf_mask
-            use_beta_binom_mask = use_beta_binom_mask & ~use_ecdf_mask
             use_mixture_mask = use_mixture_mask & ~use_ecdf_mask
 
         if force_mixture and self.enable_mixture:
@@ -951,29 +899,27 @@ class MethylCentroidPair:
                     wsum2 = centroid2._df["mix_w1"].values[indices2] + centroid2._df["mix_w2"].values[indices2] + centroid2._df["mix_w3"].values[indices2]
                     use_mixture_mask = (wsum1 > 0) & (wsum2 > 0)
 
-        use_beta_mask = ~(use_normal_mask | use_beta_binom_mask | use_mixture_mask | use_ecdf_mask)
+        use_beta_mask = ~(use_normal_mask | use_mixture_mask | use_ecdf_mask)
 
-        # Create temporary centroid objects for LRT (still needed for current API)
         class TempCentroid:
-            def __init__(self, N, log_x_sum, log_1_minus_x_sum, mC, uC):
+            """Minimal centroid-like container for LRT (N, Sx, Sx2 → MoM alpha/beta)."""
+            def __init__(self, N, Sx, Sx2, mC, uC):
                 self.N = N
-                self.log_x_sum = log_x_sum
-                self.log_1_minus_x_sum = log_1_minus_x_sum
+                self.Sx = Sx
+                self.Sx2 = Sx2
                 self.mC = mC
                 self.uC = uC
                 self.is_extended_centroid = True
-                # Add attributes needed for the z-test
-                self.alpha = None  # Will be computed by the z-test function
-                self.beta = None   # Will be computed by the z-test function
-                self.mean = None   # Will be computed by the z-test function
+                self.alpha = None
+                self.beta = None
+                self.mean = None
 
         centroid1_batch = TempCentroid(
-            N=N1, log_x_sum=log_x_sum1, log_1_minus_x_sum=log_1mx_sum1,
+            N=N1, Sx=Sx1, Sx2=Sx2_1,
             mC=centroid1.mC[indices1], uC=centroid1.uC[indices1]
         )
-
         centroid2_batch = TempCentroid(
-            N=N2, log_x_sum=log_x_sum2, log_1_minus_x_sum=log_1mx_sum2,
+            N=N2, Sx=Sx2_vals, Sx2=Sx2_2,
             mC=centroid2.mC[indices2], uC=centroid2.uC[indices2]
         )
 
@@ -1003,48 +949,6 @@ class MethylCentroidPair:
             p_norm = 2 * (1 - norm.cdf(np.abs(z_stat)))
             p_values[use_normal_mask] = p_norm[use_normal_mask].astype(np.float32)
             dist_ids[use_normal_mask] = DIST_NORMAL
-
-        # Beta-Binomial test using aggregated counts (if selected)
-        if np.any(use_beta_binom_mask):
-            from scipy.stats import chi2
-            from methyl_utils.statistical_tests import _estimate_beta_params_bounded
-            # Use BB params from count-based MoM when available (discrete model)
-            has_bb1 = getattr(centroid1, "alpha_bb", None) is not None
-            has_bb2 = getattr(centroid2, "alpha_bb", None) is not None
-            if has_bb1 and has_bb2:
-                bb_a1 = centroid1.alpha_bb[indices1].astype(np.float32)
-                bb_b1 = centroid1.beta_bb[indices1].astype(np.float32)
-                bb_a2 = centroid2.alpha_bb[indices2].astype(np.float32)
-                bb_b2 = centroid2.beta_bb[indices2].astype(np.float32)
-            else:
-                bb_a1, bb_b1 = alpha1, beta1
-                bb_a2, bb_b2 = alpha2, beta2
-            # Use available sum counts or fallback to averages * N
-            if getattr(centroid1, "sum_mC", None) is not None and getattr(centroid2, "sum_mC", None) is not None:
-                k1 = centroid1.sum_mC[indices1].astype(np.float64)
-                k2 = centroid2.sum_mC[indices2].astype(np.float64)
-            else:
-                k1 = centroid1.mC[indices1].astype(np.float64) * N1
-                k2 = centroid2.mC[indices2].astype(np.float64) * N2
-
-            n1 = sum_cov1.astype(np.float64)
-            n2 = sum_cov2.astype(np.float64)
-
-            # Pooled beta params from combined log sums (null model)
-            N0 = N1 + N2
-            log_x_sum0 = log_x_sum1 + log_x_sum2
-            log_1mx_sum0 = log_1mx_sum1 + log_1mx_sum2
-            alpha0, beta0 = _estimate_beta_params_bounded(N0, log_x_sum0, log_1mx_sum0)
-
-            ll1 = log_beta_binomial_pmf(k1, n1, bb_a1, bb_b1, use_gpu=self.gpu_available)
-            ll2 = log_beta_binomial_pmf(k2, n2, bb_a2, bb_b2, use_gpu=self.gpu_available)
-            ll0_1 = log_beta_binomial_pmf(k1, n1, alpha0, beta0, use_gpu=self.gpu_available)
-            ll0_2 = log_beta_binomial_pmf(k2, n2, alpha0, beta0, use_gpu=self.gpu_available)
-            llr = 2.0 * ((ll1 + ll2) - (ll0_1 + ll0_2))
-            llr = np.maximum(llr, 0.0)
-            p_bb = chi2.sf(llr, df=2)
-            p_values[use_beta_binom_mask] = p_bb[use_beta_binom_mask].astype(np.float32)
-            dist_ids[use_beta_binom_mask] = DIST_BETA_BINOM
 
         # Beta mixture handling (optional, if mixture params are stored)
         if np.any(use_mixture_mask):

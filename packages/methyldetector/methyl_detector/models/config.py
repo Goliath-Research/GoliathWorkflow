@@ -21,7 +21,6 @@ except ImportError:
 
 class ClassifierType(Enum):
     BETA = "beta"
-    BETA_BINOMIAL = "beta_binomial"
 
 
 class FilterFunnelRangeSpec(BaseModel):
@@ -174,7 +173,7 @@ class MethylModelerConfig(BaseModel):
     )
     distribution: str = Field(
         default="auto",
-        description="Per-position distribution for DMP testing: auto, beta, normal, beta_binomial, beta_mixture, ecdf. Auto uses ECDF when N < max_N_for_ecdf (and binned_stats present), Beta-Binomial for low/variable coverage, Beta otherwise."
+        description="Per-position distribution for DMP testing: auto, beta, normal, beta_mixture, ecdf. Auto uses ECDF when N < max_N_for_ecdf (and binned_stats present), Beta otherwise."
     )
     max_N_for_ecdf: int = Field(
         default=30,
@@ -513,7 +512,7 @@ class MethylModelerConfig(BaseModel):
     def validate_distribution(cls, v):
         if v is None or (isinstance(v, str) and v.strip() == ""):
             return "auto"
-        valid = {"auto", "beta", "normal", "beta_binomial", "beta_mixture", "ecdf"}
+        valid = {"auto", "beta", "normal", "beta_mixture", "ecdf"}
         vnorm = str(v).strip().lower()
         if vnorm not in valid:
             raise ValueError(f"distribution must be one of: {sorted(valid)}, got: {v}")
@@ -529,7 +528,7 @@ class MethylModelerConfig(BaseModel):
     
     classifier_type: str = Field(
         default="beta",
-        description="Classifier type. 'beta' (recommended): Uses fractions with sufficient stats. 'beta_binomial' (discouraged): For low-coverage counts only."
+        description="Classifier type. Use 'beta' (fractions with sufficient stats)."
     )
     
     min_sample_coverage: int = Field(
@@ -600,9 +599,8 @@ class MethylModelerConfig(BaseModel):
     @field_validator('classifier_type', mode='before')
     @classmethod
     def validate_classifier_type(cls, v):
-        valid_types = ["beta", "beta_binomial"]
-        if v not in valid_types:
-            raise ValueError(f"Invalid classifier_type: {v}. Must be one of {valid_types}.")
+        if v != "beta":
+            raise ValueError("classifier_type must be 'beta'. beta_binomial has been removed.")
         return v
 
     @field_validator('synthetic_config', mode='before')

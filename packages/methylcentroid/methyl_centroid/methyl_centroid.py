@@ -535,7 +535,7 @@ class MethylCentroid:
                 builder = MethylCentroidBuilder(
                     min_coverage=self._min_coverage,
                     use_gpu=self.use_gpu,
-                    store_extended_stats=True,
+                    binned_stats_bins=getattr(self, "binned_stats_bins", 101),
                 )
                 builder.add_sample(sample)
                 self._centroid = builder.finalize()
@@ -567,8 +567,6 @@ class MethylCentroid:
                                     "N": [],
                                     "Sx": [],
                                     "Sx2": [],
-                                    "log_x_sum": [],
-                                    "log_1_minus_x_sum": [],
                                 }
                             )
                             self._centroid = MethylExtendedCentroid(
@@ -777,7 +775,7 @@ class MethylCentroid:
             builder = MethylCentroidBuilder(
                 min_coverage=self._min_coverage,
                 use_gpu=self.use_gpu,
-                store_extended_stats=True,
+                binned_stats_bins=getattr(self, "binned_stats_bins", 101),
             )
 
             for sample_idx, sample_path in tqdm(
@@ -836,8 +834,6 @@ class MethylCentroid:
                                 "N": [],
                                 "Sx": [],
                                 "Sx2": [],
-                                "log_x_sum": [],
-                                "log_1_minus_x_sum": [],
                             }
                         )
                         self._centroid = MethylExtendedCentroid(
@@ -957,7 +953,7 @@ class MethylCentroid:
                                     min_coverage=self._min_coverage,
                                     use_gpu=use_gpu_builder,
                                     chunk_size=initial_chunk,
-                                    store_extended_stats=True,
+                                    binned_stats_bins=getattr(self, "binned_stats_bins", 101),
                                 )
                                 builder.add_sample(sample_path)
                                 self._centroid = builder.finalize(log_finalize=False)
@@ -1031,8 +1027,6 @@ class MethylCentroid:
                                             "N": [],
                                             "Sx": [],
                                             "Sx2": [],
-                                            "log_x_sum": [],
-                                            "log_1_minus_x_sum": [],
                                         }
                                     )
                                     self._centroid = MethylExtendedCentroid(
@@ -1411,11 +1405,7 @@ class MethylCentroid:
         # Create MethylSample from centroid data with metadata
         # centroid_data is a structured numpy array, convert to DataFrame
         import pandas as pd
-        from methyl_utils import (
-            MethylSample,
-            MethylBasicCentroid,
-            MethylExtendedCentroid,
-        )
+        from methyl_utils import MethylSample, MethylExtendedCentroid
 
         # Convert structured array to DataFrame
         if isinstance(centroid_data, np.ndarray) and centroid_data.dtype.names:
@@ -1435,12 +1425,9 @@ class MethylCentroid:
                 else centroid_data
             )
 
-        # Determine which class to use based on available columns
-        if "N" in df.columns:
-            if set(MethylExtendedCentroid._required_stats).issubset(df.columns):
-                methyl_sample = MethylExtendedCentroid(df, metadata=metadata)
-            else:
-                methyl_sample = MethylBasicCentroid(df, metadata=metadata)
+        # Single centroid type: MethylExtendedCentroid when N, Sx, Sx2 present
+        if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
+            methyl_sample = MethylExtendedCentroid(df, metadata=metadata)
         else:
             methyl_sample = MethylSample(df, metadata=metadata)
 

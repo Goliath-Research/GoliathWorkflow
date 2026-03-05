@@ -1,7 +1,7 @@
 """
 MethylCentroidExplorer: Inspect a MethylFrame (single H5, single JSON mixture, or folder of H5 files).
-Identifies type (MethylSample, MethylBasicCentroid, MethylExtendedCentroid, MethylBetaBinomialCentroid,
-MethylBetaMixtureCentroid), prints metadata, and optionally describes a range of positions in detail.
+Identifies type (MethylSample, MethylExtendedCentroid, MethylBetaMixtureCentroid), prints metadata,
+and optionally describes a range of positions in detail. Single data-driven centroid (N, Sx, Sx2, binned_stats).
 """
 
 from __future__ import annotations
@@ -42,16 +42,13 @@ def _get_methyl_group(f) -> Any:
 
 
 def _detect_type_from_keys(keys: List[str]) -> str:
-    """Infer MethylFrame type from HDF5 dataset keys (without loading data)."""
+    """Infer MethylFrame type from HDF5 dataset keys (single centroid: N, Sx, Sx2)."""
     keys_set = set(keys)
     if "N" not in keys_set:
         return "MethylSample"
-    if not {"Sx", "Sx2", "log_x_sum", "log_1_minus_x_sum"}.issubset(keys_set):
-        return "MethylBasicCentroid"
-    bb = {"sum_mC", "sum_uC", "sum_cov", "sum_cov2", "sum_mC2", "sum_uC2", "Sx3", "Sx4", "count_zero", "count_one"}
-    if bb.issubset(keys_set):
-        return "MethylBetaBinomialCentroid"
-    return "MethylExtendedCentroid"
+    if {"Sx", "Sx2"}.issubset(keys_set):
+        return "MethylExtendedCentroid"
+    return "MethylSample"
 
 
 def _is_project_config(path: Path) -> bool:
@@ -281,16 +278,6 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
                 df["beta"] = frame._df.loc[df.index, "beta"].values
         except Exception:
             pass
-    # Trigger alpha_bb/beta_bb for BetaBinomial centroids
-    if hasattr(frame, "alpha_bb"):
-        try:
-            _ = frame.alpha_bb
-            _ = frame.beta_bb
-            if "alpha_bb" in frame._df.columns and "beta_bb" in frame._df.columns:
-                df["alpha_bb"] = frame._df.loc[df.index, "alpha_bb"].values
-                df["beta_bb"] = frame._df.loc[df.index, "beta_bb"].values
-        except Exception:
-            pass
     rows = []
     for _, row in df.iterrows():
         r = {"pos": int(row["pos"]), "mC": int(row["mC"]), "uC": int(row["uC"])}
@@ -302,23 +289,10 @@ def build_position_table(frame, pos_start: int, pos_end: int) -> pd.DataFrame:
             r["Sx"] = float(row["Sx"])
         if "Sx2" in df.columns:
             r["Sx2"] = float(row["Sx2"])
-        if "log_x_sum" in df.columns:
-            r["log_x_sum"] = float(row["log_x_sum"])
-        if "log_1_minus_x_sum" in df.columns:
-            r["log_1_minus_x_sum"] = float(row["log_1_minus_x_sum"])
         a = float(row["alpha"]) if "alpha" in df.columns else None
         b = float(row["beta"]) if "beta" in df.columns else None
         r["alpha"] = a
         r["beta"] = b
-        # BetaBinomial sufficient statistics for parameter estimation
-        for col in (
-            "sum_mC", "sum_uC", "sum_cov", "sum_cov2", "sum_mC2", "sum_uC2",
-            "Sx3", "Sx4", "count_zero", "count_one",
-        ):
-            if col in df.columns:
-                val = row[col]
-                r[col] = int(val) if isinstance(val, (np.integer, int)) else float(val) if isinstance(val, (np.floating, float)) else val
-
         # Single mean and variance (unbiased, distribution-agnostic). None variance means zero.
         if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
             mn, vn = _mean_var_normal_from_sufficient(
@@ -573,8 +547,7 @@ def _beta_binomial_mom_diagnostic(
 
 def _get_centroid_property(centroid: Any, position_idx: int, prop_name: str) -> Optional[float]:
     """
-    Get a scalar at position_idx from a centroid property (mean, variance, alpha, beta, alpha_bb, beta_bb).
-    Uses the centroid's own implementation; no duplicate computation.
+    Get a scalar at position_idx from a centroid property (mean, variance, alpha, beta, N, binned_stats).
     """
     prop = getattr(centroid, prop_name, None)
     if prop is None:
@@ -600,11 +573,8 @@ def _export_density_plot(
     grid_size: int = 300,
 ) -> bool:
     """
-    Export a single interactive Plotly HTML with density plots (KDE-style) for Normal, Beta,
-    Beta-Binomial (discrete PMF as density on proportion axis, interpolated for smooth display),
-    and ECDF at the given position. Uses only the centroid's public API (mean, variance, alpha,
-    beta, alpha_bb, beta_bb, N, sum_cov, binned_stats). Always writes an HTML file; if no
-    distribution data is available, writes a placeholder figure.
+    Export a single interactive Plotly HTML with density plots for Normal, Beta, and ECDF at the given position.
+    Uses centroid's public API (mean, variance, alpha, beta, binned_stats). Always writes an HTML file.
     """
     if go is None:
         print("    plotly not installed; pip install plotly")
@@ -663,27 +633,7 @@ def _export_density_plot(
             )
         )
 
-    # Beta-Binomial: discrete PMF using (alpha, beta) from proportion mean/var (same as Beta curve).
-    # This avoids broken count-based MoM (alpha_bb, beta_bb) and uses the Normal(mean,var)-based Beta fit.
-    sum_cov = _get_centroid_property(frame, position_idx, "sum_cov")
-    N_prop = _get_centroid_property(frame, position_idx, "N")
-    sum_mC = _get_centroid_property(frame, position_idx, "sum_mC")
-    sum_mC2 = _get_centroid_property(frame, position_idx, "sum_mC2")
-    alpha_bb = _get_centroid_property(frame, position_idx, "alpha_bb")
-    beta_bb = _get_centroid_property(frame, position_idx, "beta_bb")
-    # Optional: when count-based MoM is invalid, print why (for debugging).
-    is_bb_invalid = (
-        alpha_bb is not None and beta_bb is not None
-        and (
-            (abs(alpha_bb - 1.0) < 1e-6 and abs(beta_bb - 1.0) < 1e-6)
-            or alpha_bb <= 0 or beta_bb <= 0
-        )
-    )
-    if is_bb_invalid and N_prop is not None and sum_mC is not None and sum_mC2 is not None and sum_cov is not None:
-        print("    " + _beta_binomial_mom_diagnostic(
-            float(N_prop), float(sum_mC), float(sum_mC2), float(sum_cov), position
-        ))
-    # Plot Beta-Binomial(n, alpha, beta) with alpha, beta from proportion mean/var (centroid.alpha, centroid.beta).
+    # Beta-Binomial view removed; use Beta (alpha, beta from MoM) and ECDF only.
     if (
         scipy_betabinom is not None
         and alpha is not None
@@ -691,9 +641,9 @@ def _export_density_plot(
         and alpha > 0
         and beta > 0
     ):
-        if sum_cov is not None and N_prop is not None and N_prop > 0:
-            n_eff = sum_cov / N_prop
-            n = max(2, min(500, int(round(n_eff))))
+        N_prop = _get_centroid_property(frame, position_idx, "N")
+        if N_prop is not None and N_prop > 0:
+            n = max(2, min(500, int(round(N_prop))))
         else:
             n = 50
         k_vals = np.arange(0, n + 1, dtype=np.intp)

@@ -187,15 +187,9 @@ def compare_ecdf_to_theoretical_at_positions(
     )
     indices = indices[(indices >= 0) & (indices < n_pos)]
 
-    try:
-        _ = centroid.alpha_bb
-        alpha_bb_arr = np.asarray(centroid.alpha_bb.values, dtype=np.float64)
-        beta_bb_arr = np.asarray(centroid.beta_bb.values, dtype=np.float64)
-        has_bb = True
-    except (AttributeError, KeyError):
-        alpha_bb_arr = None
-        beta_bb_arr = None
-        has_bb = False
+    # Use centroid.alpha, centroid.beta (MoM from N, Sx, Sx2) for theoretical CDF comparison
+    alpha_bb_arr = np.asarray(centroid.alpha.values, dtype=np.float64)
+    beta_bb_arr = np.asarray(centroid.beta.values, dtype=np.float64)
 
     mu_arr = np.asarray(centroid.Sx.values, dtype=np.float64) / np.maximum(
         np.asarray(centroid.N.values, dtype=np.float64), 1.0

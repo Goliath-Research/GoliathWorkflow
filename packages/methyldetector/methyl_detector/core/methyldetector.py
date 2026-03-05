@@ -2985,30 +2985,15 @@ class MethylDetector:
             'weight': weights.astype(np.float64)
         })
 
-        classifier_type = self.config.classifier_type
-        if classifier_type == 'beta_binomial':
-            # Beta-Binomial classifier: expects position, context, alpha1, beta1, alpha2, beta2, context_weight
-            if 'context' not in selected_dmps_df.columns:
-                ctx = self.config.contexts[0]
-                df_bb = selected_dmps_df[['position', 'alpha1', 'beta1', 'alpha2', 'beta2']].copy()
-                df_bb['context'] = ctx
-            else:
-                df_bb = selected_dmps_df[['position', 'context', 'alpha1', 'beta1', 'alpha2', 'beta2']].copy()
-            df_bb['context_weight'] = weights.astype(np.float64)
-            beta_classifier = BetaBinomialClassifier.from_dataframe(df_bb, chromosome=self.chromosome)
-            mixture_attached = False
-            classifier_label = "BetaBinomialClassifier"
-            logger.info("Saved classifier type: Beta-Binomial (count-based comparisons)")
-        else:
-            beta_classifier = BetaClassifier.from_dataframe(
-                dmpDF,
-                min_sample_coverage=self.config.min_sample_coverage,
-                coverage_weighting=self.config.classifier_coverage_weighting
-            )
-            mixture_attached = self._attach_bmm_mixtures(beta_classifier, selected_dmps_df)
-            if mixture_attached:
-                logger.info("Attached BMM mixtures to classifier (hybrid Beta/BMM)")
-            classifier_label = "BetaMixtureClassifier" if mixture_attached else "BetaClassifier"
+        beta_classifier = BetaClassifier.from_dataframe(
+            dmpDF,
+            min_sample_coverage=self.config.min_sample_coverage,
+            coverage_weighting=self.config.classifier_coverage_weighting
+        )
+        mixture_attached = self._attach_bmm_mixtures(beta_classifier, selected_dmps_df)
+        if mixture_attached:
+            logger.info("Attached BMM mixtures to classifier (hybrid Beta/BMM)")
+        classifier_label = "BetaMixtureClassifier" if mixture_attached else "BetaClassifier"
 
         # Create model package
         import pickle

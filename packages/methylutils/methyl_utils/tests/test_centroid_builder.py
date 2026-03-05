@@ -182,8 +182,9 @@ def test_accumulator_correctness_property(n_samples, n_positions, seed):
     )
     np.testing.assert_array_almost_equal(centroid.Sx.values, truth_Sx[mask].astype(np.float32), decimal=5)
     np.testing.assert_array_almost_equal(centroid.Sx2.values, truth_Sx2[mask].astype(np.float32), decimal=5)
-    np.testing.assert_array_almost_equal(centroid.log_x_sum.values, truth_log_x[mask].astype(np.float32), decimal=5)
-    np.testing.assert_array_almost_equal(centroid.log_1_minus_x_sum.values, truth_log_1x[mask].astype(np.float32), decimal=5)
+    # binned_stats (bin_edges, bin_counts) present when binned_stats_bins set
+    assert centroid.binned_stats is not None
+    assert "bin_edges" in centroid.binned_stats and "bin_counts" in centroid.binned_stats
 
 
 # --------------------------------------------------------------------------- #
