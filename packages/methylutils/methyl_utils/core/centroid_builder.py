@@ -114,18 +114,13 @@ class MethylCentroidBuilder:
                 uC = self.xp.asarray(uC)
                 tnc = self.xp.asarray(tnc)
 
-            # Find insertion points (searchsorted can return self.size when pos > max existing)
-            idx = self.xp.searchsorted(self.pos[: self.size], pos)
-
-            # Detect new positions: beyond current max (idx == size) or not found in place.
-            # Do not index self.pos[idx] when idx == size (out of bounds).
-            is_new = (idx == self.size)
-            in_bounds = idx < self.size
-            if self.xp.any(in_bounds):
-                is_new = is_new.copy()
-                is_new[in_bounds] = is_new[in_bounds] | (
-                    self.pos[idx[in_bounds]] != pos[in_bounds]
-                )
+            # Find insertion points. Cap pos to current max so searchsorted never returns self.size
+            # (CuPy can OOB internally when the return value equals the array length).
+            max_pos = self.pos[self.size - 1]
+            pos_capped = self.xp.minimum(pos, max_pos)
+            idx = self.xp.searchsorted(self.pos[: self.size], pos_capped)
+            # idx is now in [0, self.size-1]; positions with pos > max_pos are new
+            is_new = (pos > max_pos) | (self.pos[idx] != pos)
             n_new = int(is_new.sum())
 
             if n_new > 0:
@@ -160,12 +155,21 @@ class MethylCentroidBuilder:
                 self.bin_counts[: n_all, :] = self.xp.concatenate([existing_bin_counts, new_bin_rows])[sort_indices, :]
                 self.size = n_all
 
-            # Final indices after merge - positions are now properly sorted
-            final_idx = self.xp.searchsorted(self.pos[: self.size], pos)
-            # searchsorted can return self.size when pos > max(self.pos); skip those rows to avoid OOB
-            valid = final_idx < self.size
-            if not self.xp.all(valid):
-                n_skip = int((~valid).sum())
+            # Final indices after merge. Cap pos to current max so searchsorted never returns self.size.
+            max_pos = self.pos[self.size - 1]
+            pos_capped = self.xp.minimum(pos, max_pos)
+            final_idx = self.xp.searchsorted(self.pos[: self.size], pos_capped)
+            # Rows with pos > max_pos would be OOB; mark and skip them.
+            # Use explicit Python int so the check is reliable on all backends (e.g. CuPy).
+            size_int = int(self.size)
+            oob_any = self.xp.any(final_idx >= size_int)
+            if self.use_gpu:
+                oob_any = bool(cp.asnumpy(oob_any))
+            else:
+                oob_any = bool(oob_any)
+            if oob_any:
+                valid = final_idx < size_int
+                n_skip = int(cp.asnumpy((~valid).sum()) if self.use_gpu else (~valid).sum())
                 logger.warning(
                     "Builder: %d sample position(s) not in builder after merge (skipping)",
                     n_skip,
@@ -173,6 +177,9 @@ class MethylCentroidBuilder:
                 final_idx = final_idx[valid]
                 mC = mC[valid]
                 uC = uC[valid]
+
+            # Defensive: clip so we never index with size (avoids OOB on any backend)
+            final_idx = self.xp.clip(final_idx, 0, size_int - 1)
 
             # Update accumulators
             total_cov = mC + uC

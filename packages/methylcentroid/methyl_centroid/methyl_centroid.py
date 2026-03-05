@@ -814,6 +814,7 @@ class MethylCentroid:
                     self.logger.error(
                         f"Failed to process sample {sample_path.name}: {e}"
                     )
+                    self.logger.exception("Full traceback:")
                 finally:
                     self._cleanup_gpu_after_sample()
 
@@ -1068,6 +1069,7 @@ class MethylCentroid:
                     self.logger.error(
                         f"Failed to process sample {sample_path.name}: {e}"
                     )
+                    self.logger.exception("Full traceback:")
                     continue
                 finally:
                     if methyl_sample is not None:
