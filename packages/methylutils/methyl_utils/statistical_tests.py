@@ -1143,8 +1143,9 @@ def welch_d_ks_overlap(
 ) -> dict:
     """
     Welch's d = |delta_mean| / sqrt(var1/n1 + var2/n2).
-    If ECDF views and position_indices are provided: KS statistic D at each position,
-    corrected_d = welch_d * (1 - D), bounded_effect_size = sigmoid(scale * corrected_d) in [0, 1].
+    If ECDF views and position_indices are provided: KS statistic D at each position.
+    With overlap O_KS = 1 - D, effect = sigmoid(scale * d * (1 - O_KS)) = sigmoid(scale * d * D).
+    So corrected_d = welch_d * D (separation), bounded_effect_size = sigmoid(scale * corrected_d) in [0, 1].
     Otherwise: bounded_effect_size = sigmoid(scale * welch_d).
     Returns dict with keys: welch_d, ks_d, ks_p, corrected_d, bounded_effect_size.
 
@@ -1175,7 +1176,8 @@ def welch_d_ks_overlap(
         ks_d = ks_d_arr
         ks_p = ks_p_arr
 
-    corrected_d = welch_d * (1.0 - ks_d)
+    # (1 - O_KS) = D (separation); effect = sigmoid(scale * d * (1 - O_KS)) per Effect_Size_Theory.tex
+    corrected_d = welch_d * ks_d
     expit_arg = np.clip(scale * corrected_d, -700.0, 700.0)
     bounded_effect_size = expit(expit_arg)
 

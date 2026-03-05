@@ -141,6 +141,18 @@ Implementation & \texttt{welch\_d\_fast\_overlap\_approx()} & \texttt{welch\_d\_
 
 See \texttt{methyl\_detector.explorer.MethylDetectorExplorer}.
 
+\section{Precision of the ``Exact'' Effect Size}
+
+The refined (ECDF-based) effect size is \emph{exact} only relative to the following approximations:
+
+\begin{itemize}
+    \item \textbf{Binned ECDF}: The CDF is built from histogram \texttt{bin\_counts} at \texttt{bin\_edges}, not from raw sample values. Finer bins (e.g.\ 20--50) give a better approximation to the true distribution; coarse bins can smooth out separation and under- or overestimate $D$.
+    \item \textbf{PCHIP interpolation}: The ECDF is interpolated between bin edges via PCHIP. This gives a smooth, monotone CDF but is still an approximation to the true empirical CDF.
+    \item \textbf{Finite KS grid}: The KS statistic is computed as $\max_{x \in \text{grid}} |F_1(x) - F_2(x)|$ on a fixed grid (default 256 points in $[0,1]$). The true $D = \sup_x |F_1 - F_2|$ may occur between grid points, so we can slightly underestimate $D$ (and thus the effect size) when the maximum is sharp.
+\end{itemize}
+
+Approximate (Normal) and refined (KS) effect sizes can still differ in \emph{scale} because they use different overlap notions: Normal uses $O = 2\Phi(-d/2)$ (overlap of two Normals with the same $d$), while refined uses $O_{\text{KS}} = 1 - D$ (from the actual ECDFs). For comparable ordering, use the same overlap mode (e.g.\ \texttt{--approx-overlap normal}) and the same scale; the refined value is then the more distribution-aware estimate for the top positions.
+
 \section{Implementation Details (MethylUtils)}
 
 Files: \texttt{methyl\_utils/statistical\_tests.py}, \texttt{distribution\_views.py}.

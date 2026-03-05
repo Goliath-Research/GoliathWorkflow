@@ -30,6 +30,8 @@ Phase 1 uses an **approximate overlap** to compute bounded effect size without E
 
 With **`--approx-overlap auto`** (default): discrete Bhattacharyya is used when `bin_edges` match; otherwise a warning is logged and Normal-based overlap is used. Use **`--approx-overlap normal`** to force Normal overlap and get approximate effect sizes that do not depend on bin alignment (useful when approx vs exact counts differ a lot). For comparable exact vs approx results, build both centroids with the same `binned_stats_bins`; the report field `approx_overlap_method` shows which method was used (`discrete_bhattacharyya` or `normal`).
 
+**How exact is the refined effect size?** It is exact relative to: (1) the binned ECDF (finer bins → closer to the true distribution), (2) PCHIP interpolation between bin edges, and (3) the KS statistic computed on a finite grid (default 256 points), which can slightly underestimate the true sup. Approx (e.g. Normal overlap) and refined (KS-based) can still differ in scale because they use different overlap notions; the refined value is the more distribution-aware estimate. See [Effect_Size_Theory.tex](Effect_Size_Theory.tex) § “Precision of the exact effect size”.
+
 ## Requirements
 
 - Centroids must have **binned_stats** (bin_edges, bin_counts). Build them with MethylCentroid using `binned_stats_bins` (e.g. 20). For comparable Phase 1 vs Phase 2 results, use the same bin edges for both centroids.
