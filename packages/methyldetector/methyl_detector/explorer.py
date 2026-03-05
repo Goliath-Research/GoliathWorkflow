@@ -325,6 +325,8 @@ class MethylDetectorExplorer:
         # Phase 2: refine top K with ECDF
         df["bounded_effect_size"] = df["bounded_effect_size_approx"]
         df["overlap"] = df["overlap_approx"]
+        df["ks_d"] = np.nan
+        df["ks_p"] = np.nan
         if k > 0:
             top_k_indices_in_phase1 = np.arange(k)
             positions_top_k = df.loc[top_k_indices_in_phase1, "position"].values
@@ -355,10 +357,16 @@ class MethylDetectorExplorer:
             )
             refined_bes = res["bounded_effect_size"]
             refined_overlap = 1.0 - res["ks_d"]
+            ks_d_arr = res["ks_d"]
+            ks_p_arr = res["ks_p"]
             for i, idx_df in enumerate(top_k_indices_in_phase1):
                 if i < len(refined_bes):
                     df.loc[idx_df, "bounded_effect_size"] = refined_bes[i]
                     df.loc[idx_df, "overlap"] = refined_overlap[i]
+                if i < len(ks_d_arr):
+                    df.loc[idx_df, "ks_d"] = ks_d_arr[i]
+                if i < len(ks_p_arr):
+                    df.loc[idx_df, "ks_p"] = ks_p_arr[i]
 
         t2 = time.perf_counter()
         self._df_phase1 = df
