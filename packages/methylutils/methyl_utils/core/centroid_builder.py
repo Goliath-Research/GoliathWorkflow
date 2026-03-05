@@ -114,11 +114,18 @@ class MethylCentroidBuilder:
                 uC = self.xp.asarray(uC)
                 tnc = self.xp.asarray(tnc)
 
-            # Find insertion points
+            # Find insertion points (searchsorted can return self.size when pos > max existing)
             idx = self.xp.searchsorted(self.pos[: self.size], pos)
 
-            # Detect new positions
-            is_new = (idx == self.size) | (self.pos[idx] != pos)
+            # Detect new positions: beyond current max (idx == size) or not found in place.
+            # Do not index self.pos[idx] when idx == size (out of bounds).
+            is_new = (idx == self.size)
+            in_bounds = idx < self.size
+            if self.xp.any(in_bounds):
+                is_new = is_new.copy()
+                is_new[in_bounds] = is_new[in_bounds] | (
+                    self.pos[idx[in_bounds]] != pos[in_bounds]
+                )
             n_new = int(is_new.sum())
 
             if n_new > 0:
