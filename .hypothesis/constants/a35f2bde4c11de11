@@ -1,0 +1,4 @@
+# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/pipeline_config.py
+# hypothesis_version: 6.151.9
+
+['#', '.csv', '.json', '.txt', '/', ':', 'GroupConfig', '[', '\\', 'after', 'all_pairs', 'before', 'cancer', 'centroid', 'chromosomes', 'comparisons', 'contexts', 'control', 'controls', 'default', 'derived_labels', 'disease', 'disease_name', 'diseases', 'grade', 'groups', 'hdbscan', 'hierarchical', 'id', 'jensen_shannon', 'label', 'labels', 'level', 'levels', 'manifest.json', 'name', 'output_base', 'path', 'path_remap', 'predictor', 'sample', 'sample_path', 'samples_base_path', 'stage', 'step_config', 'utf-8', 'validator']

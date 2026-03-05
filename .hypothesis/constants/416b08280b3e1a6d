@@ -1,0 +1,4 @@
+# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/core/distribution_views.py
+# hypothesis_version: 6.151.9
+
+[-0.5, 0.0, 1e-12, 1e-10, 0.5, 1.0, 256, 'N', 'Sx', 'Sx2', 'alpha', 'alphas', 'beta', 'beta_binomial', 'beta_mixture', 'betas', 'bin_counts', 'bin_edges', 'binned_stats', 'counts', 'ecdf', 'mC', 'mu', 'normal', 'parameters', 'right', 'sigma2', 'uC', 'weights']

@@ -1,0 +1,4 @@
+# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/models/methylation.py
+# hypothesis_version: 6.151.9
+
+[0.0, 'BaseModel', 'Genomic position', 'analysis_id', 'gpu_acceleration', 'has_data', 'is_initialized', 'item', 'memory_usage_mb', 'position_range', 'r', 'sample_count', 'timestamp', 'total_coverage', 'total_positions', 'valid_positions', 'w']

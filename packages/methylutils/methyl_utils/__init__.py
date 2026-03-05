@@ -692,7 +692,6 @@ from .core.distribution_views import (
     CountsView,
     NormalView,
     BetaView,
-    BetaBinomialView,
     BMMView,
 )
 from .core.methyl_distribution_utils import clip_beta_params_for_bounds
@@ -757,7 +756,6 @@ __all__ = [
     "CountsView",
     "NormalView",
     "BetaView",
-    "BetaBinomialView",
     "BMMView",
     "clip_beta_params_for_bounds",
     "ecdf_vs_theoretical_ks",

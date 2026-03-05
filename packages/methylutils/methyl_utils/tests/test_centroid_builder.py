@@ -8,12 +8,23 @@ from typing import List
 import numpy as np
 import pandas as pd
 import pytest
-from hypothesis import given, settings, strategies as st
-from hypothesis.extra.numpy import arrays
+
+try:
+    from hypothesis import given, settings, strategies as st
+    from hypothesis.extra.numpy import arrays
+    HAS_HYPOTHESIS = True
+except ImportError:
+    HAS_HYPOTHESIS = False
 
 from methyl_utils.core.centroid_builder import MethylCentroidBuilder, build_centroid
 from methyl_utils.core.methyl_frame import MethylExtendedCentroid
 from methyl_utils.core.io import load_from_h5  # assuming you have a minimal loader
+
+try:
+    from methyl_utils.gpu_detection import is_gpu_available
+    HAS_GPU = is_gpu_available()
+except ImportError:
+    HAS_GPU = False
 
 
 # --------------------------------------------------------------------------- #
@@ -77,10 +88,10 @@ def test_multiple_samples_are_averaged_correctly():
     builder.add_sample(sample2)
     centroid = builder.finalize()
 
-    assert centroid.samples_processed == 2
-    assert centroid.N.to_list() == [2, 2]
-    np.testing.assert_array_equal(centroid.mC.values, [10, 20])  # exact avg
-    np.testing.assert_array_equal(centroid.uC.values, [5, 0])
+    assert centroid.metadata.get("n_samples") == 2
+    assert list(centroid.N) == [2, 2]
+    np.testing.assert_array_equal(np.asarray(centroid.mC), [10, 20])  # exact avg
+    np.testing.assert_array_equal(np.asarray(centroid.uC), [5, 0])
 
 
 def test_coverage_filter_removes_low_coverage():
@@ -100,91 +111,93 @@ def test_coverage_filter_removes_low_coverage():
 # --------------------------------------------------------------------------- #
 # Property-based testing with Hypothesis (real confidence)
 # --------------------------------------------------------------------------- #
-@settings(deadline=1000)
-@given(
-    n_samples=st.integers(1, 20),
-    n_positions=st.integers(1, 500),
-    seed=st.integers(0, 2**32 - 1),
-)
-def test_accumulator_correctness_property(n_samples, n_positions, seed):
-    rng = np.random.default_rng(seed)
+if HAS_HYPOTHESIS:
 
-    # Generate realistic random data
-    positions = rng.integers(1, 10**9, size=n_positions, dtype=np.uint32)
-    positions = np.unique(positions)
-    positions.sort()
-    n_pos = len(positions)
-
-    # Create n_samples with some overlap
-    sample_paths = []
-    for i in range(n_samples):
-        # Each sample covers 30–100% of positions
-        subset = rng.choice([False, True], size=n_pos, p=[0.3, 0.7])
-        if not subset.any():
-            subset[0] = True
-
-        pos_idx = np.where(subset)[0]
-        mC = rng.integers(0, 50, size=len(pos_idx), dtype=np.uint32)
-        uC = rng.integers(0, 50, size=len(pos_idx), dtype=np.uint32)
-        tnc = rng.integers(0, 255, size=len(pos_idx), dtype=np.uint8)
-
-        path = create_temp_sample(positions[pos_idx], mC.tolist(), uC.tolist(), tnc.tolist())
-        sample_paths.append(path)
-
-    builder = MethylCentroidBuilder(min_coverage=1)
-    for p in sample_paths:
-        builder.add_sample(p)
-
-    centroid = builder.finalize()
-
-    # Ground truth: manual accumulation
-    truth_mC = np.zeros(n_pos, dtype=np.uint64)
-    truth_uC = np.zeros(n_pos, dtype=np.uint64)
-    truth_N = np.zeros(n_pos, dtype=np.uint32)
-    truth_Sx = np.zeros(n_pos, dtype=np.float64)
-    truth_Sx2 = np.zeros(n_pos, dtype=np.float64)
-    truth_log_x = np.zeros(n_pos, dtype=np.float64)
-    truth_log_1x = np.zeros(n_pos, dtype=np.float64)
-
-    for path in sample_paths:
-        # Re-load to accumulate manually
-        df = pd.read_hdf(path, "methylation_data")
-        idx = np.searchsorted(positions, df["pos"].values)
-        mC = df["mC"].values
-        uC = df["uC"].values
-        cov = mC + uC
-        mean = np.divide(mC, cov, where=cov > 0, out=np.zeros_like(mC, float))
-
-        truth_mC[idx] += mC
-        truth_uC[idx] += uC
-        truth_N[idx] += 1
-        truth_Sx[idx] += mean
-        truth_Sx2[idx] += mean ** 2
-
-        safe = np.clip(mean, 1e-10, 1 - 1e-10)
-        truth_log_x[idx] += np.log(safe)
-        truth_log_1x[idx] += np.log(1 - safe)
-
-    # Compare
-    mask = truth_N > 0
-    final_pos = positions[mask]
-
-    # Map centroid rows to global positions
-    centroid_idx = np.searchsorted(final_pos, centroid.pos.values)
-    assert np.all(centroid.pos.values == final_pos[centroid_idx])
-
-    np.testing.assert_array_equal(centroid.N.values, truth_N[mask])
-    np.testing.assert_array_almost_equal(
-        centroid.mC.values, (truth_mC[mask] / truth_N[mask]).astype(np.uint32)
+    @settings(deadline=1000)
+    @given(
+        n_samples=st.integers(1, 20),
+        n_positions=st.integers(1, 500),
+        seed=st.integers(0, 2**32 - 1),
     )
-    np.testing.assert_array_almost_equal(
-        centroid.uC.values, (truth_uC[mask] / truth_N[mask]).astype(np.uint32)
-    )
-    np.testing.assert_array_almost_equal(centroid.Sx.values, truth_Sx[mask].astype(np.float32), decimal=5)
-    np.testing.assert_array_almost_equal(centroid.Sx2.values, truth_Sx2[mask].astype(np.float32), decimal=5)
-    # binned_stats (bin_edges, bin_counts) present when binned_stats_bins set
-    assert centroid.binned_stats is not None
-    assert "bin_edges" in centroid.binned_stats and "bin_counts" in centroid.binned_stats
+    def test_accumulator_correctness_property(n_samples, n_positions, seed):
+        rng = np.random.default_rng(seed)
+
+        # Generate realistic random data
+        positions = rng.integers(1, 10**9, size=n_positions, dtype=np.uint32)
+        positions = np.unique(positions)
+        positions.sort()
+        n_pos = len(positions)
+
+        # Create n_samples with some overlap
+        sample_paths = []
+        for i in range(n_samples):
+            # Each sample covers 30–100% of positions
+            subset = rng.choice([False, True], size=n_pos, p=[0.3, 0.7])
+            if not subset.any():
+                subset[0] = True
+
+            pos_idx = np.where(subset)[0]
+            mC = rng.integers(0, 50, size=len(pos_idx), dtype=np.uint32)
+            uC = rng.integers(0, 50, size=len(pos_idx), dtype=np.uint32)
+            tnc = rng.integers(0, 255, size=len(pos_idx), dtype=np.uint8)
+
+            path = create_temp_sample(positions[pos_idx], mC.tolist(), uC.tolist(), tnc.tolist())
+            sample_paths.append(path)
+
+        builder = MethylCentroidBuilder(min_coverage=1)
+        for p in sample_paths:
+            builder.add_sample(p)
+
+        centroid = builder.finalize()
+
+        # Ground truth: manual accumulation
+        truth_mC = np.zeros(n_pos, dtype=np.uint64)
+        truth_uC = np.zeros(n_pos, dtype=np.uint64)
+        truth_N = np.zeros(n_pos, dtype=np.uint32)
+        truth_Sx = np.zeros(n_pos, dtype=np.float64)
+        truth_Sx2 = np.zeros(n_pos, dtype=np.float64)
+        truth_log_x = np.zeros(n_pos, dtype=np.float64)
+        truth_log_1x = np.zeros(n_pos, dtype=np.float64)
+
+        for path in sample_paths:
+            # Re-load to accumulate manually
+            df = pd.read_hdf(path, "methylation_data")
+            idx = np.searchsorted(positions, df["pos"].values)
+            mC = df["mC"].values
+            uC = df["uC"].values
+            cov = mC + uC
+            mean = np.divide(mC, cov, where=cov > 0, out=np.zeros_like(mC, float))
+
+            truth_mC[idx] += mC
+            truth_uC[idx] += uC
+            truth_N[idx] += 1
+            truth_Sx[idx] += mean
+            truth_Sx2[idx] += mean ** 2
+
+            safe = np.clip(mean, 1e-10, 1 - 1e-10)
+            truth_log_x[idx] += np.log(safe)
+            truth_log_1x[idx] += np.log(1 - safe)
+
+        # Compare
+        mask = truth_N > 0
+        final_pos = positions[mask]
+
+        # Map centroid rows to global positions
+        centroid_idx = np.searchsorted(final_pos, centroid.pos.values)
+        assert np.all(centroid.pos.values == final_pos[centroid_idx])
+
+        np.testing.assert_array_equal(centroid.N.values, truth_N[mask])
+        np.testing.assert_array_almost_equal(
+            centroid.mC.values, (truth_mC[mask] / truth_N[mask]).astype(np.uint32)
+        )
+        np.testing.assert_array_almost_equal(
+            centroid.uC.values, (truth_uC[mask] / truth_N[mask]).astype(np.uint32)
+        )
+        np.testing.assert_array_almost_equal(centroid.Sx.values, truth_Sx[mask].astype(np.float32), decimal=5)
+        np.testing.assert_array_almost_equal(centroid.Sx2.values, truth_Sx2[mask].astype(np.float32), decimal=5)
+        # binned_stats (bin_edges, bin_counts) present when binned_stats_bins set
+        assert centroid.binned_stats is not None
+        assert "bin_edges" in centroid.binned_stats and "bin_counts" in centroid.binned_stats
 
 
 # --------------------------------------------------------------------------- #

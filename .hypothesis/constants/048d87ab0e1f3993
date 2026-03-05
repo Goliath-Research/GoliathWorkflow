@@ -1,0 +1,4 @@
+# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/bayesian_classifier_trainer.py
+# hypothesis_version: 6.151.9
+
+[0.05, 0.1, 0.3, 0.5, 0.6, 100, 500, 1000, '1.0', '1.0.0', 'alpha1', 'alpha2', 'auc', 'auc_score', 'beta1', 'beta2', 'bhattacharyya', 'centroid1', 'centroid1_accuracy', 'centroid1_name', 'centroid2', 'centroid2_accuracy', 'centroid2_name', 'chromosome', 'classifier', 'cohen_d', 'context', 'delta_mean', 'directions', 'dmp_positions', 'effect_size', 'extended_centroid', 'filter_config', 'jeffreys_divergence', 'max_dmps', 'max_overlap', 'max_q_value', 'mean1', 'mean2', 'metadata', 'methyl_utils_version', 'min_coverage', 'min_delta_mean', 'n_dmps', 'n_test_samples', 'overall_accuracy', 'overlap', 'package_version', 'position', 'positions', 'q_value', 'sort_by', 'training_date', 'unknown', 'validation', 'validation_method', 'validation_performed', 'wb', 'weights']

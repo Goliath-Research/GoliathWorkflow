@@ -1,0 +1,4 @@
+# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/classifier_factory.py
+# hypothesis_version: 6.151.9
+
+['BaseClassifier', 'beta', 'beta_binomial']

@@ -1,0 +1,4 @@
+# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/performance_profiler.py
+# hypothesis_version: 6.151.9
+
+[0.0, 1.0, 2.0, 80.0, 100, 300, 1000, 1024, '\nPerformance Report:', '-', '.1f', '.2f', '=', 'Current Metrics:', '__main__', 'chunks_processed', 'count', 'cpu', 'cpu_avg_percent', 'cpu_count', 'cpu_peak_percent', 'disk_io_read_mb', 'disk_io_write_mb', 'duration_seconds', 'end_time', 'export_timestamp', 'gpu', 'gpu_available', 'gpu_memory_delta_gb', 'gpu_temperature_avg', 'io_rate_mb_per_sec', 'memory_available_gb', 'memory_avg_percent', 'memory_avg_used_gb', 'memory_delta_gb', 'memory_peak_used_gb', 'memory_percent', 'memory_total_gb', 'memory_used_gb', 'metrics', 'monitoring_interval', 'network_io_mb', 'operation', 'percent', 'processing', 'sample_count', 'start_time', 'system', 'system_info', 'temperature', 'time_window_seconds', 'timestamp', 'total_samples', 'utilization_percent', 'w']

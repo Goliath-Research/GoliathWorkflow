@@ -1,0 +1,4 @@
+# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/chunked_processor.py
+# hypothesis_version: 6.151.9
+
+[0.0, 1.0, 1.5, 350.0, 1024, 10000000, '.2f', '06d', '=', '__main__', '_chunk_info', 'chunk_id', 'chunk_info', 'chunks', 'chunks_processed', 'compression', 'coverage_mean', 'coverage_median', 'data', 'datasets', 'dtype', 'end_position', 'error', 'errors', 'estimated_positions', 'failed_chunks', 'file_analysis', 'file_path', 'file_size_gb', 'gpu', 'gpu_memory_gb', 'gpu_peak_memory_gb', 'mC', 'mean_methylation', 'median_methylation', 'methylation_data', 'methylation_std', 'output_dir', 'peak_memory_mb', 'pos', 'positions_processed', 'processing_time', 'r', 'results', 'shape', 'size_mb', 'size_positions', 'start_position', 'successful_chunks', 'system', 'system_memory_mb', 'total_positions', 'uC', 'w']
