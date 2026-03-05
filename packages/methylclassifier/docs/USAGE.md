@@ -428,7 +428,7 @@ patient_003,1,0.45,0.55,low,Cancer
 ## Model Information
 
 Trained models contain:
-- `classifier`: ProbabilisticBetaClassifier instance
+- `classifier`: ECDF-based classifier instance
 - `metadata`: Training information (chromosome, context, DMPs, accuracy)
 - `selected_dmps_df`: DataFrame of selected DMPs
 

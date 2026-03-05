@@ -178,7 +178,7 @@ You can sweep biological filter values over a range (min/max/step) in a **single
 - `p_value`, `q_value`, `delta_mean`, `delta_sign`
 - `overlap` (Bhattacharyya coefficient)
 - `effect_size`, `context_weight`
-- `alpha1`, `beta1`, `alpha2`, `beta2` (Beta distribution parameters)
+- `alpha1`, `beta1`, `alpha2`, `beta2` (optional centroid parameters from method-of-moments; comparison uses ECDF)
 - `mean1`, `mean2` (mean methylation levels)
 
 ## Core Workflow

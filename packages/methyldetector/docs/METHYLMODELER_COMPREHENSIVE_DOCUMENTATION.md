@@ -53,31 +53,13 @@ MethylDetector compares two centroids (representing different biological conditi
 
 ## Mathematical Theory
 
-### DMP Detection: Likelihood Ratio Test
+### DMP Detection: ECDF-Based Testing
 
-For each genomic position, test the hypothesis:
+For each genomic position, the pipeline tests whether the two centroids differ at that position using **ECDF-based** metrics (e.g. comparison of empirical distributions from binned_stats). No parametric Beta or other distribution is assumed.
 
-$$
-H_0: \text{Beta}(\alpha_1, \beta_1) = \text{Beta}(\alpha_2, \beta_2)
-$$
+**Significance**: P-values and test statistics are computed from the empirical distributions (e.g. from MethylCentroidPair); FDR is controlled via Storey's q-value.
 
-**Test Statistic**:
-
-$$
-\Lambda = -2\log\frac{\mathcal{L}(H_0)}{\mathcal{L}(H_1)}
-$$
-
-where:
-- $\mathcal{L}(H_0)$: Likelihood under null (pooled parameters)
-- $\mathcal{L}(H_1)$: Likelihood under alternative (separate parameters)
-
-Under $H_0$, $\Lambda \sim \chi^2_2$ with 2 degrees of freedom.
-
-**P-value**:
-
-$$
-p = P(\chi^2_2 \geq \Lambda) = 1 - F_{\chi^2_2}(\Lambda)
-$$
+P-values are computed from the ECDF-based test; FDR is applied via Storey's method.
 
 ### FDR Correction: Storey's q-value Method
 
@@ -103,21 +85,11 @@ $$
 
 #### Delta Mean
 
-Absolute difference in mean methylation:
+Absolute difference in mean methylation: $\Delta\mu = |\mu_1 - \mu_2|$, where $\mu_1, \mu_2$ are the per-position means from the centroids (from N, Sx, Sx2 or ECDF).
 
-$$
-\Delta\mu = |\mu_1 - \mu_2| = \left|\frac{\alpha_1}{\alpha_1 + \beta_1} - \frac{\alpha_2}{\alpha_2 + \beta_2}\right|
-$$
+#### Bhattacharyya Coefficient (Overlap)
 
-#### Bhattacharyya Coefficient
-
-Distribution overlap measure:
-
-$$
-BC(\alpha_1, \beta_1, \alpha_2, \beta_2) = \frac{B\left(\frac{\alpha_1 + \alpha_2}{2}, \frac{\beta_1 + \beta_2}{2}\right)}{\sqrt{B(\alpha_1, \beta_1) \cdot B(\alpha_2, \beta_2)}}
-$$
-
-Where $B(\alpha, \beta)$ is the Beta function.
+Distribution overlap is computed from the **ECDF** (binned_stats). Higher overlap means more similar distributions; lower overlap means better discrimination. The pipeline uses **ECDF only** for overlap; no Beta or other parametric form.
 
 **Interpretation**:
 - $BC \approx 1$: High overlap (poor discrimination)
@@ -131,16 +103,7 @@ $$
 D_{\text{Jeffreys}} = D_{\text{KL}}(P_1 \| P_2) + D_{\text{KL}}(P_2 \| P_1)
 $$
 
-where for Beta distributions:
-
-$$
-D_{\text{KL}}(P_1 \| P_2) = \log\frac{B(\alpha_2, \beta_2)}{B(\alpha_1, \beta_1)} + (\alpha_1 - \alpha_2)[\psi(\alpha_1) - \psi(\alpha_1 + \beta_1)]
-$$
-$$
-+ (\beta_1 - \beta_2)[\psi(\beta_1) - \psi(\alpha_1 + \beta_1)]
-$$
-
-$\psi$ is the digamma function.
+For **ECDF-based** comparison, divergence and distance metrics are computed from the empirical distributions (e.g. from binned_stats). MethylUtils may provide optional formulas for parametric distributions internally; the pipeline uses **ECDF only** for centroid comparison and DMP detection.
 
 #### Cohen's d
 
@@ -150,11 +113,7 @@ $$
 d = \frac{\mu_1 - \mu_2}{\sqrt{\frac{\sigma_1^2 + \sigma_2^2}{2}}}
 $$
 
-For Beta distributions:
-
-$$
-\sigma^2 = \frac{\alpha\beta}{(\alpha + \beta)^2(\alpha + \beta + 1)}
-$$
+Means and variances come from centroid statistics (N, Sx, Sx2 or from the ECDF).
 
 ### Effect Size (Single Biological Importance Measure)
 
@@ -169,7 +128,7 @@ $$
 
 - **overlap**: Bhattacharyya coefficient (BC) from the comparison; $\text{BC} = e^{-\text{BD}}$.
 - **min_overlap_floor** $\epsilon$ (e.g. 0.01): prevents unbounded values when overlap → 0; in practice overlap is rarely zero.
-- **combined_std**: $\sigma_{\text{combined}} = \sqrt{\text{var}_1 + \text{var}_2}$ from Beta parameters (MethylSample-style variance).
+- **combined_std**: $\sigma_{\text{combined}} = \sqrt{\text{var}_1 + \text{var}_2}$ from centroid variances (N, Sx, Sx2 or ECDF).
 - **variance_reliability**: $1 / (1 + \max(\text{var}_1, \text{var}_2) / 0.05)$ to down-weight high-variance (noisy) positions.
 
 Larger |delta_mean| and smaller overlap increase effect_size; higher variance decreases it. Downstream steps (e.g. classifier) may normalize weights to [1e-6, 1] for stability; the relative ordering of effect_size is preserved for chromosome/context weighting.
@@ -201,11 +160,11 @@ $$
 \text{AUC} = \Phi\left(\frac{\mu_{\text{LLR}}}{\sqrt{2\sigma^2_{\text{LLR}}}}\right)
 $$
 
-where $\Phi$ is the standard normal CDF, and $\mu_{\text{LLR}}, \sigma^2_{\text{LLR}}$ are computed from Beta distribution parameters.
+where $\Phi$ is the standard normal CDF; in the **ECDF-only** pipeline, LLR moments (when used) are derived from ECDF-based comparison. Centroid comparison and DMP detection use **ECDF only**.
 
 ### Implementation (MethylUtils)
 
-Centroid comparison and all statistics are implemented in **MethylUtils**. MethylDetector calls **MethylCentroidPair** for load_and_align, compare_centroids (which uses `likelihood_ratio_test_beta` and `storey_qvalues`), effect_size and overlap; it uses **BetaClassifier** / **BetaBinomialClassifier** for training and validation. See [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md) for full details.
+Centroid comparison and all statistics are implemented in **MethylUtils**. MethylDetector calls **MethylCentroidPair** for load_and_align, compare_centroids (ECDF-based comparison, `storey_qvalues`), effect_size and overlap; classifier training uses **ECDF-based** classifiers. See [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md) for full details.
 
 ---
 
@@ -231,8 +190,8 @@ Centroid comparison and all statistics are implemented in **MethylUtils**. Methy
    └─ Intersection of genomic positions
 
 3. Statistical Testing
-   ├─ Estimate Beta parameters (MLE)
-   ├─ Likelihood ratio tests
+   ├─ ECDF-based comparison (centroid binned_stats)
+   ├─ Per-position significance tests
    └─ FDR correction (Storey's method)
 
 4. Effect Size Computation
@@ -254,7 +213,7 @@ Centroid comparison and all statistics are implemented in **MethylUtils**. Methy
    └─ Stop: Target achieved or minimum reached
 
 7. Classifier Training
-   ├─ Train ProbabilisticBetaClassifier
+   ├─ Train ECDF-based classifier
    ├─ Validate on real or synthetic samples
    └─ Package model with metadata
 ```
@@ -269,11 +228,7 @@ Uses actual samples from:
 
 #### Synthetic Sample Validation
 
-Generates samples from Beta distributions when real samples unavailable:
-
-$$
-x_i \sim \text{Beta}(\alpha_{k,i}, \beta_{k,i}) \quad \text{for class } k
-$$
+When real samples are unavailable, synthetic samples can be generated from the centroid’s empirical distribution (e.g. inverse ECDF / binned_stats) for class \(k\), or from summary statistics (mean/variance) where appropriate.
 
 ### 4. Binary Search for DMP Selection
 
@@ -364,9 +319,8 @@ dmps = pair.find_dmps(
 
 # dmps DataFrame contains:
 # - position, p_value, q_value
-# - alpha1, beta1, alpha2, beta2 (Beta parameters)
-# - mean1, mean2, delta_mean
-# - bhattacharyya distance
+# - mean1, mean2, delta_mean (and optional alpha/beta from MoM if stored)
+# - bhattacharyya distance (ECDF-based overlap)
 ```
 
 #### Step 4: Apply Biological Filtering
@@ -445,7 +399,7 @@ dmps_df = dmps_df.sort_values('importance', ascending=False)
 #### Step 6: Binary Search for Optimal DMP Count
 
 ```python
-from methyl_utils import ProbabilisticBetaClassifier
+# Use MethylUtils ECDF-based classifier for training
 
 def select_dmps_binary_search(dmps_df, target_balanced_accuracy=0.95):
     """Binary search for optimal DMP count."""
@@ -482,19 +436,16 @@ def select_dmps_binary_search(dmps_df, target_balanced_accuracy=0.95):
 #### Step 7: Train Final Classifier
 
 ```python
-# Prepare training data
+# Prepare training data (centroid/ECDF data; alpha/beta optional if from MoM)
 training_data = {
     'positions': selected_dmps['position'].values,
-    'alpha1': selected_dmps['alpha1'].values,
-    'beta1': selected_dmps['beta1'].values,
-    'alpha2': selected_dmps['alpha2'].values,
-    'beta2': selected_dmps['beta2'].values,
     'weights': selected_dmps['importance'].values,
-    'directions': np.sign(selected_dmps['delta_mean']).values
+    'directions': np.sign(selected_dmps['delta_mean']).values,
+    # Centroid or ECDF data for class 0 and 1 (e.g. from MethylCentroidPair)
 }
 
-# Create classifier
-classifier = ProbabilisticBetaClassifier(training_data)
+# Create ECDF-based classifier
+classifier = train_classifier(training_data)  # ECDF-based; from MethylUtils
 
 # Validate
 validation_accuracy = validate(classifier, validation_samples)
@@ -602,12 +553,9 @@ $$
 ```python
 training_data = {
     'positions': np.array([pos1, pos2, ...]),        # Genomic positions
-    'alpha1': np.array([α1_1, α1_2, ...]),          # Beta params class 1
-    'beta1': np.array([β1_1, β1_2, ...]),
-    'alpha2': np.array([α2_1, α2_2, ...]),          # Beta params class 2
-    'beta2': np.array([β2_1, β2_2, ...]),
     'weights': np.array([w1, w2, ...]),             # DMP importance weights
-    'directions': np.array([d1, d2, ...])            # Direction indicators
+    'directions': np.array([d1, d2, ...]),           # Direction indicators
+    # Centroid/ECDF data for class 0 and 1 (e.g. centroids with binned_stats; optional alpha/beta from MoM)
 }
 ```
 
@@ -640,16 +588,9 @@ centroid2_samples = centroid2.metadata['samples']
 #### Strategy 3: Synthetic Samples
 
 ```python
-# Generate synthetic samples from Beta distributions
-def generate_synthetic_samples(alpha, beta, n_samples=100):
-    samples = []
-    for _ in range(n_samples):
-        methylation = np.random.beta(alpha, beta, size=len(alpha))
-        samples.append(methylation)
-    return np.array(samples)
-
-synthetic_class1 = generate_synthetic_samples(alpha1, beta1)
-synthetic_class2 = generate_synthetic_samples(alpha2, beta2)
+# Generate synthetic samples from centroid ECDF (e.g. inverse CDF from bin_edges/bin_counts)
+# Centroid binned_stats define the empirical distribution per position; sample via inverse ECDF
+# or use mean/variance from N, Sx, Sx2 for simple parametric sampling if needed for validation.
 ```
 
 ### Performance Metrics
@@ -682,12 +623,12 @@ class MethylModeler:
     def filter_dmps(self, dmps: pd.DataFrame) -> pd.DataFrame:
         """Apply biological filtering to DMPs."""
     
-    def train_classifier(self, dmps: pd.DataFrame) -> ProbabilisticBetaClassifier:
-        """Train classifier on selected DMPs."""
+    def train_classifier(self, dmps: pd.DataFrame):
+        """Train ECDF-based classifier on selected DMPs."""
     
     def validate_classifier(
         self,
-        classifier: ProbabilisticBetaClassifier
+        classifier
     ) -> Dict[str, float]:
         """Validate classifier and return metrics."""
 ```
@@ -738,7 +679,7 @@ class MethylModelerResult(BaseModel):
     selected_dmps: pd.DataFrame                   # Final selected DMPs
     
     # Classifier
-    classifier: ProbabilisticBetaClassifier
+    classifier  # ECDF-based classifier
     classifier_path: str                          # Saved model path
     
     # Validation metrics
@@ -805,16 +746,9 @@ class MethylModelerResult(BaseModel):
 | `min_N_pct` | float | 0.10 | Minimum coverage percentage |
 | `min_delta_mean` | float | 0.2 | Minimum effect size (20% methylation difference) |
 | `max_bc` | float | 0.6 | Maximum Bhattacharyya coefficient (overlap threshold) |
-| `delta_mean_mode` | str | "mean" | Mean/delta_mean mode: "mean", "beta", "normal", "auto" |
-| `overlap_mode` | str | "beta" | Overlap mode: "beta", "normal", "auto" |
 | `target_balanced_accuracy` | float | 0.95 | Target Balanced Accuracy for DMP selection |
 | `validation_mode` | str | "real" | Validation mode: "real" or "synthetic" |
 | `use_gpu` | bool | True | Enable GPU acceleration |
-| `bmm_refine_enabled` | bool | False | Enable detector-stage BMM refinement on top DMPs |
-| `bmm_refine_mode` | str | "filter" | "annotate" or "filter" (drop weak mixture separations) |
-| `bmm_refine_use_gpu` | bool | True | Use GPU for BMM EM + JS divergence when available |
-| `bmm_refine_use_binned_stats` | bool | True | Use binned counts for faster EM |
-| `bmm_refine_bin_count` | int | 32 | Number of bins for binned stats |
 
 ---
 
@@ -832,19 +766,7 @@ dmps = pair.find_dmps()  # GPU-accelerated
 
 **Performance**: 20-50x speedup for statistical testing and distance calculations.
 
-### 2. BMM Refinement (Detector Stage)
-
-Optional beta-mixture refinement for top biological DMPs. Uses binned counts when available, supports GPU acceleration for EM fitting and JS divergence, and saves BMM centroids per chromosome/context for downstream use.
-
-Outputs when enabled:
-
-- `bmm_centroids/bmm-centroid-{chromosome}-{context}.json` (centroid1)
-- `bmm_centroids/bmm-centroid-{chromosome}-{context}-centroid2.json` (centroid2)
-- `results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files`
-
-These BMM centroids can be consumed by **MethylClassifier** to compute mixture likelihoods for refined DMPs (with Beta fallback for all others).
-
-### 3. Gene-Level Feature Importance
+### 2. Gene-Level Feature Importance
 
 Aggregate DMP importance by gene:
 

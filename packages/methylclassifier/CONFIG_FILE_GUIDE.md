@@ -152,7 +152,7 @@ methyl_classifier --config classification_config.json
 
 ### Multi-class Model Build
 
-Build a multi-class model (optional BMM centroids) using:
+Build a multi-class model (centroids with binned_stats for ECDF) using:
 
 ```bash
 python build_multiclass_model.py configs/example_multiclass_model.json

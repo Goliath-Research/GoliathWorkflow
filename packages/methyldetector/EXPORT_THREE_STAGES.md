@@ -110,8 +110,8 @@ chromosome,context,position,p_value,q_value,delta_mean,delta_sign,overlap,effect
 - **overlap**: Bhattacharyya coefficient (distribution overlap)
 - **effect_size**: Computed biological effect size
 - **context_weight**: Multi-context weight (for weighted classification)
-- **alpha1, beta1**: Beta distribution parameters for centroid 1
-- **alpha2, beta2**: Beta distribution parameters for centroid 2
+- **alpha1, beta1**: Optional centroid parameters (method-of-moments) for centroid 1; comparison uses ECDF
+- **alpha2, beta2**: Optional centroid parameters (method-of-moments) for centroid 2; comparison uses ECDF
 - **mean1, mean2**: Mean methylation for each centroid
 
 ## Usage for Gene Mapping

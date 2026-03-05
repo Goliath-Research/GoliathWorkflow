@@ -23,7 +23,7 @@ So: **p-values affect which DMPs exist in the pipeline; they do not weight the c
 - **Where used:**
   1. **Ranking:** DMPs are sorted by `effect_size` descending (`_compute_biological_importance`). All downstream “top-k” or “select DMPs” logic uses this order.
   2. **Context weights (multi-context):** Trimmed mean of `effect_size` per context → `context_weight` per context. Used for aggregating across contexts (e.g. in multi-chromosome classifiers); it is **not** the per-DMP weight inside a single classifier.
-  3. **Per-DMP classifier weight:** When building the BetaClassifier (or BetaBinomialClassifier), the **per-DMP weight** is set from `effect_size` (normalized and bounded to `[1e-6, 1]`). So the classifier’s internal weights are effect_size-based.
+  3. **Per-DMP classifier weight:** When building the ECDF-based classifier, the **per-DMP weight** is set from `effect_size` (normalized and bounded to `[1e-6, 1]`). So the classifier’s internal weights are effect_size-based.
 
 So: **effect_size drives both the order in which DMPs are added (ranking) and how much each DMP contributes to the classifier (per-DMP weight).**
 
@@ -31,9 +31,9 @@ So: **effect_size drives both the order in which DMPs are added (ranking) and ho
 
 ## 2. How the classifier uses these weights
 
-The underlying classifier (e.g. `BetaClassifier` in methylutils) receives a weight per DMP (from effect_size). For each sample it computes:
+The underlying classifier (ECDF-based in methylutils) receives a weight per DMP (from effect_size). For each sample it computes:
 
-- Per position: `log P(x_i | class)` under the fitted Beta (or mixture) model for each class.
+- Per position: `log P(x_i | class)` from the centroid ECDF PDF for each class.
 - Weighted sum (joint log-likelihood under independence):
   - `log P(data | class) = sum_i ( weight_i * log P(x_i | class) )`
 - Weights are the normalized effect_size values (`self.weights` in the classifier).
@@ -66,7 +66,7 @@ Centroid comparison
        ↓
   For selected DMPs: per-DMP weight = effect_size (normalized to [1e-6, 1])
        ↓
-  BetaClassifier/BetaBinomialClassifier(positions, alpha1, beta1, alpha2, beta2, weight=effect_size)
+  ECDF-based classifier(positions, centroid/ECDF data, weight=effect_size)
        ↓
   Prediction: weighted sum of log P(x_i|class) → class probabilities
 ```
@@ -95,7 +95,7 @@ The binary-search optimization in the code explicitly **assumes** that balanced 
 | effect_size required for context weighting | `_compute_context_weights`: requires `effect_size` column; no delta_mean fallback |
 | Ranking by effect_size | `_compute_biological_importance`: `sort_values("effect_size", ascending=False)` |
 | Per-DMP weight for classifier | `_validate_classifier_subset`, `_save_classifier`: `weights = dmps_for_classifier['effect_size']` then normalized; same for saved model |
-| Weighted log-likelihood in classifier | `methyl_utils.beta_classifier`: `weighted_log_p_class0 = self.weights[np.newaxis, :] * log_p_class0`, then sum over positions |
+| Weighted log-likelihood in classifier | ECDF-based classifier: weighted sum of log PDF_ECDF over positions |
 | DMP selection (top-k by effect_size) | `_select_dmps_multicontext` → `_optimize_dmps_binary_search` (or bayesian/featurecuts): `sorted_df.iloc[:k]` |
 | p-value only for filtering | Comparison results filtered by `q_value <= alpha`; EAT optionally modifies p_value before FDR |
 

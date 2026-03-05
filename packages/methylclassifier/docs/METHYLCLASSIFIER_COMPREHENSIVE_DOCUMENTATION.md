@@ -4,7 +4,7 @@
 **Last Updated:** 2025-10-23
 
 **Related documentation:**
-- **Theory (Beta, Naive Bayes, posterior):** [MethylClassifier_Theoretical_Foundation.md](MethylClassifier_Theoretical_Foundation.md)
+- **Theory (ECDF, Naive Bayes, posterior):** [MethylClassifier_Theoretical_Foundation.md](MethylClassifier_Theoretical_Foundation.md)
 - **Implementation (MethylUtils):** [METHYLCLASSIFIER_IMPLEMENTATION.md](METHYLCLASSIFIER_IMPLEMENTATION.md)
 - **User Manual (Docker, venv, contexts, improving balanced accuracy):** [USAGE.md](USAGE.md)
 
@@ -33,10 +33,10 @@
 
 ### Key Features
 
-- **Probabilistic Classification**: Uses exact Beta distribution likelihoods (no approximations)
+- **Probabilistic Classification**: Uses ECDF-based likelihoods (per-position PDF from centroid binned_stats; no parametric Beta/Normal/BMM)
 - **Bayesian Framework**: Provides true posterior probabilities P(class | data)
 - **Handles Missing Data**: Robust to incomplete methylation coverage
-- **No Training Required**: Uses pre-computed Beta parameters from centroids
+- **No Training Required**: Uses pre-computed centroids with binned_stats from MethylDetector
 - **Multiple Prediction Modes**:
   - Standard Bayesian (posterior probabilities)
   - Threshold-based (log-likelihood ratio)
@@ -44,7 +44,7 @@
 - **Temperature Control**: Softmax temperature for confidence calibration
 - **Binary + Multi-class Classification**: Supports two-class and multi-class models (e.g., healthy vs. multiple cancers)
 - **Multi-Chromosome Support**: Combine predictions from multiple chromosome classifiers with weighted probabilities based on trimmed-mean effect_size
-- **Hybrid Beta/BMM Likelihoods**: Optional Beta Mixture override for refined DMPs (when BMM centroids are available)
+- **ECDF-only**: Only the empirical distribution (ECDF) is used; no Beta, Normal, or Beta-Mixture models
 
 ### Why Probabilistic Instead of Machine Learning?
 
@@ -54,9 +54,9 @@ Traditional ML approaches (Random Forest, SVM, Neural Networks) require:
 - Approximating probability distributions
 
 **MethylClassifier's probabilistic approach:**
-- Uses exact Beta distribution parameters from centroids
-- No sampling error or approximation
-- Mathematically optimal under Bayesian framework
+- Uses ECDF-based PDF from centroid binned_stats at each DMP
+- Data-driven; no parametric distribution assumption
+- Bayesian posterior from empirical likelihoods
 - Direct interpretation of results
 
 ---
@@ -90,36 +90,27 @@ python -c "from methyl_classifier import MethylClassifier; print('✓ MethylClas
 
 ### The Bayesian Classification Framework
 
-MethylClassifier implements **Naive Bayes classification** using Beta distributions for continuous methylation data.
+MethylClassifier implements **Naive Bayes classification** using **ECDF-based likelihoods** for continuous methylation data. Only the empirical distribution (ECDF) is used; no Beta, Normal, or Beta-Mixture.
 
-#### 1. Centroids and Beta Distributions
+#### 1. Centroids and ECDF
 
-Each **centroid** (e.g., healthy, cancer) is represented by Beta distribution parameters at each DMP position:
+Each **centroid** (e.g., healthy, cancer) has **binned_stats** (bin_edges, bin_counts) at each DMP position, defining an empirical cumulative distribution. The PDF at position $i$ for class $k$ is obtained from the ECDF view (spline-interpolated derivative).
 
 $$
-\text{Centroid } k \text{ at position } i:\quad \text{Methylation} \sim \mathrm{Beta}(\alpha_{k,i}, \beta_{k,i})
+\text{Centroid } k \text{ at position } i:\quad \text{PDF}_k(x) = \mathrm{PDF}_{\mathrm{ECDF},k,i}(x)
 $$
 
-Where:
-- $\alpha$ (alpha): Shape parameter related to methylated counts
-- $\beta$ (beta): Shape parameter related to unmethylated counts
-- Mean methylation = $\alpha / (\alpha + \beta)$
+Centroids must be built with binned_stats (e.g. `binned_stats_bins=20`). Mean and variance at each position can be derived from N, Sx, Sx2 where available.
 
 #### 2. Likelihood Function
 
-For a sample with methylation value $x$ at position $i$, the likelihood under class $k$ is:
+For a sample with methylation value $x$ at position $i$, the likelihood under class $k$ is the ECDF-based PDF:
 
 $$
-P(x_i \mid \text{Class } k) = \mathrm{BetaPDF}(x_i; \alpha_{k,i}, \beta_{k,i})
+P(x_i \mid \text{Class } k) = \mathrm{PDF}_{\mathrm{ECDF},k,i}(x_i)
 $$
 
-The Beta probability density function:
-
-$$
-\mathrm{BetaPDF}(x; \alpha, \beta) = \frac{x^{\alpha-1}(1-x)^{\beta-1}}{B(\alpha, \beta)}
-$$
-
-Where $B(\alpha, \beta)$ is the Beta function (normalization constant).
+A small floor is applied to avoid $\log(0)$; the implementation uses MethylUtils ECDF view / log_probability_sample_given_centroid with mode=ecdf.
 
 #### 3. Naive Bayes Assumption
 
@@ -140,7 +131,7 @@ P(\text{Class } k \mid \mathbf{X}) = \frac{P(\mathbf{X} \mid \text{Class } k) \c
 $$
 
 Where:
-- $P(\mathbf{X} \mid \text{Class } k)$: Likelihood (from Beta distributions)
+- $P(\mathbf{X} \mid \text{Class } k)$: Likelihood (from ECDF-based PDFs)
 - $P(\text{Class } k)$: Prior probability (default: 0.5 for binary classification)
 - $P(\mathbf{X})$: Evidence (normalizing constant)
 
@@ -149,7 +140,7 @@ Where:
 For numerical stability, we work in log space:
 
 $$
-\log P(\text{Class } k \mid \mathbf{X}) \propto \log P(\text{Class } k) + \sum_{i=1}^{n} \log \mathrm{BetaPDF}(x_i; \alpha_{k,i}, \beta_{k,i})
+\log P(\text{Class } k \mid \mathbf{X}) \propto \log P(\text{Class } k) + \sum_{i=1}^{n} \log \mathrm{PDF}_{\mathrm{ECDF},k,i}(x_i)
 $$
 
 #### 6. Posterior Probabilities
@@ -162,14 +153,14 @@ $$
 
 ### Why This Works for Methylation Data
 
-1. **Beta distributions naturally model methylation**: Methylation levels ∈ [0,1] are well-represented by Beta distributions
-2. **Centroids capture population statistics**: Alpha and beta parameters encode the mean and variance of methylation at each position
-3. **DMPs are informative**: Only differentially methylated positions are used (high discriminatory power)
-4. **Bayesian optimality**: Under the naive Bayes assumption, this is the optimal classifier
+1. **ECDF is data-driven**: No parametric assumption; the empirical distribution at each DMP reflects the cohort.
+2. **Centroids capture binned_stats**: bin_edges and bin_counts define the per-position distribution for comparison and classification.
+3. **DMPs are informative**: Only differentially methylated positions are used (high discriminatory power).
+4. **Bayesian posterior**: Under the naive Bayes assumption, the classifier is optimal given the ECDF likelihoods.
 
 ### Implementation (MethylUtils)
 
-MethylClassifier does not implement the Beta likelihood or training; it loads classifiers produced by **MethylDetector**, which uses MethylUtils **BetaClassifier** / **BetaBinomialClassifier** for training. The stored classifier objects are MethylUtils instances; MethylClassifier calls their `.predict_proba()`, `.predict()`, and optionally `.predict_proba_calibrated()` or `.predict_with_threshold()`. Sample loading uses MethylUtils **MethylSample** and **load_from_h5** via the DataLoader. For full details, see [METHYLCLASSIFIER_IMPLEMENTATION.md](METHYLCLASSIFIER_IMPLEMENTATION.md).
+MethylClassifier loads classifiers produced by **MethylDetector**, which uses **ECDF-based comparison and training** (MethylUtils ECDF view, log_probability_sample_given_centroid with mode=ecdf). The stored classifier objects use ECDF-based prediction; MethylClassifier calls their `.predict_proba()`, `.predict()`, and optionally `.predict_proba_calibrated()` or `.predict_with_threshold()`. Sample loading uses MethylUtils **MethylSample** and **load_from_h5** via the DataLoader. For full details, see [METHYLCLASSIFIER_IMPLEMENTATION.md](METHYLCLASSIFIER_IMPLEMENTATION.md).
 
 ---
 
@@ -248,12 +239,12 @@ X_clipped = clip(X, ε, 1-ε)  where ε = 1e-6
 
 For **Class 0** (e.g., Healthy):
 ```python
-log_p_class0 = Σ log Beta_PDF(x_i; α₀,ᵢ, β₀,ᵢ)  for available positions i
+log_p_class0 = Σ log PDF_ECDF_class0,i(x_i)  for available positions i
 ```
 
 For **Class 1** (e.g., Cancer):
 ```python
-log_p_class1 = Σ log Beta_PDF(x_i; α₁,ᵢ, β₁,ᵢ)  for available positions i
+log_p_class1 = Σ log PDF_ECDF_class1,i(x_i)  for available positions i
 ```
 
 **4. Average by available positions** (handles missing data)
@@ -542,7 +533,7 @@ MethylClassifier(config: ClassifierConfig)
 - `config`: ClassifierConfig object with model path and settings
 
 **Attributes:**
-- `classifier`: ProbabilisticBetaClassifier instance
+- `classifier`: ECDF-based classifier instance (e.g. from MethylUtils)
 - `chromosome`: Chromosome identifier (from metadata)
 - `context`: Methylation context (CG, CHG, CHH)
 - `n_classes`: Number of classes (2 for binary, N for multi-class)
@@ -652,9 +643,9 @@ print(f"Using {info['n_features']} DMPs")
 
 ---
 
-### `ProbabilisticBetaClassifier` Class
+### ECDF-based classifier (low-level)
 
-Low-level classifier (accessed via `MethylClassifier.classifier`).
+Low-level classifier (accessed via `MethylClassifier.classifier`); uses ECDF-based likelihoods per position.
 
 #### Key Methods
 
@@ -732,12 +723,13 @@ MethylClassifier models are saved as Python pickle files (.pkl) with the followi
 
 ```python
 model_package = {
-    'classifier': ProbabilisticBetaClassifier(...),
+    'classifier': <ECDF-based classifier>,  # From MethylUtils
     'data': {
         'positions': np.array([...]),  # Genomic positions
-        'alpha1': np.array([...]),     # Beta params for class 0
+        # Centroid/ECDF data for class 0 and 1 (e.g. binned_stats, or alpha/beta from MoM if stored)
+        'alpha1': np.array([...]),     # Optional; class 0
         'beta1': np.array([...]),
-        'alpha2': np.array([...]),     # Beta params for class 1
+        'alpha2': np.array([...]),     # Optional; class 1
         'beta2': np.array([...]),
         'weights': np.array([...]),    # DMP weights
         'directions': np.array([...]), # Direction indicators
@@ -772,8 +764,8 @@ model_package = {
 To create a classifier, you need:
 
 1. **Two centroids** (e.g., healthy and cancer populations)
-   - Each centroid contains Beta parameters (α, β) at each genomic position
-   - Created using MethylCentroid from individual samples
+   - Each centroid has binned_stats (bin_edges, bin_counts) for ECDF-based likelihoods; N, Sx, Sx2 for mean/variance
+   - Created using MethylCentroid (with binned_stats_bins, e.g. 20) from individual samples
 
 2. **Differentially methylated positions (DMPs)**
    - Identified using MethylModeler via statistical comparison of centroids
@@ -792,8 +784,7 @@ To create a classifier, you need:
 You can build a multi-class classifier (e.g., healthy + multiple cancers) from:
 
 - A **global DMP list** (CSV with `chromosome`, `context`, `position`)
-- Per-class centroid directories (`{chrom}-{context}.h5`)
-- Optional BMM centroids per class (for mixture likelihoods)
+- Per-class centroid directories (`{chrom}-{context}.h5`) with binned_stats for ECDF
 
 Example:
 
@@ -801,7 +792,7 @@ Example:
 python build_multiclass_model.py configs/example_multiclass_model.json
 ```
 
-See `configs/example_multiclass_model.json` for the full schema (centroid dirs, optional BMM centroids).
+See `configs/example_multiclass_model.json` for the full schema (centroid dirs; ECDF-only).
 
 ---
 
@@ -896,20 +887,6 @@ result = minimize_scalar(
 )
 optimal_T = result.x
 ```
-
-### 3. Beta Mixture (BMM) Likelihoods
-
-When detector-stage BMM refinement is enabled, MethylClassifier can use **Beta Mixture**
-likelihoods for those DMPs (and fall back to Beta for the rest). This better models
-multi-modal methylation distributions while preserving the Bayesian framework.
-
-**Inputs**:
-- `bmm_centroids/bmm-centroid-{chromosome}-{context}.json` (centroid1)
-- `bmm_centroids/bmm-centroid-{chromosome}-{context}-centroid2.json` (centroid2)
-
-**Behavior**:
-- Uses mixture log-pdf for positions with valid BMM parameters in both classes
-- Falls back to Beta log-pdf for all other positions
 
 ### 3. Threshold-Based Classification
 
@@ -1234,7 +1211,7 @@ print(f"Sample: {sample_chrom}-{sample_context}")
 
 #### 3. Module Import Errors
 
-**Error:** `ImportError: cannot import name 'ProbabilisticBetaClassifier'`
+**Error:** `ImportError` when loading classifier (e.g. missing or incompatible MethylUtils)
 
 **Solution:**
 ```bash
@@ -1269,19 +1246,15 @@ classifier.load_classifier(model_path)
 **Symptom:** `predict_proba` returns NaN
 
 **Causes:**
-- Invalid Beta parameters (α ≤ 0 or β ≤ 0)
+- Invalid or missing centroid/ECDF data (e.g. empty binned_stats)
 - All positions have missing data
 - Numerical overflow in log-likelihood
 
 **Solution:**
 ```python
-# Check for invalid parameters
+# Check feature info and data
 info = classifier.get_feature_info()
-alpha1 = classifier.classifier.data['alpha1']
-beta1 = classifier.classifier.data['beta1']
-
-invalid = (alpha1 <= 0) | (beta1 <= 0) | ~np.isfinite(alpha1) | ~np.isfinite(beta1)
-print(f"Invalid parameters: {np.sum(invalid)} / {len(alpha1)}")
+# Verify sample data and availability
 
 # Verify sample data
 print(f"Sample values: min={np.nanmin(methylation)}, max={np.nanmax(methylation)}")
@@ -1331,8 +1304,8 @@ predictions = np.concatenate(predictions)
 1. **Naive Bayes Classification**
    - Murphy, K. P. (2012). *Machine Learning: A Probabilistic Perspective*. MIT Press.
 
-2. **Beta Distributions for Methylation**
-   - Ji, Y., et al. (2008). "Flexible and interpretable genotyping of DNA methylation." *Genome Research*.
+2. **ECDF and empirical distributions for methylation**
+   - Centroid binned_stats and ECDF-based comparison; see MethylUtils and MethylCentroid docs.
 
 3. **Platt Scaling**
    - Platt, J. (1999). "Probabilistic outputs for support vector machines." *Advances in Large Margin Classifiers*.
@@ -1343,9 +1316,9 @@ predictions = np.concatenate(predictions)
 ### Related Documentation
 
 - **MethylModeler**: DMP detection and model training
-- ****: Classifier training pipeline
-- **MethylUtils**: Core utilities and Beta distribution operations
-- **MethylCentroid**: Centroid creation from samples
+- **MethylDetector**: Classifier training pipeline (ECDF-based)
+- **MethylUtils**: Core utilities and ECDF-based comparison
+- **MethylCentroid**: Centroid creation from samples (binned_stats for ECDF)
 
 ---
 
@@ -1354,7 +1327,7 @@ predictions = np.concatenate(predictions)
 ### v0.1.0 (2025-10-23)
 - Initial release
 - Bayesian probabilistic classification
-- Beta distribution likelihoods
+- ECDF-based likelihoods (no Beta/Normal/BMM)
 - Temperature scaling support
 - Platt calibration support
 - Threshold-based prediction

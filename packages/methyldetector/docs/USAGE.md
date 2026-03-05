@@ -171,7 +171,7 @@ Minimal JSON config example:
 
 Optional **filter funnel exploration** (`filter_funnel_explore`): sweep biological filter values (min/max/step) in one run and write `filter_funnel.csv` (columns: n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps) for charting; see README “Filter funnel exploration”.
 
-For all parameters (biological filters, validation, BMM refinement, etc.), see [METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md](METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md) and the config schema in the package.
+For all parameters (biological filters, validation, etc.), see [METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md](METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md) and the config schema in the package.
 
 ---
 

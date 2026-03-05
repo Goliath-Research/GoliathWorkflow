@@ -4,7 +4,7 @@ This document describes how MethylDetector is implemented on top of **MethylUtil
 
 ## Architecture Overview
 
-- **MethylUtils** provides centroid comparison (MethylCentroidPair), LRT and q-values (statistical_tests), Bhattacharyya metrics, GPU/memory utilities, and classifier training (BetaClassifier, BetaBinomialClassifier).
+- **MethylUtils** provides centroid comparison (MethylCentroidPair), ECDF-based testing and q-values (statistical_tests), overlap/distance metrics, GPU/memory utilities, and ECDF-based classifier training.
 - **MethylDetector** provides the pipeline: config, per-chromosome/per-context orchestration, filtering, validation, and exports; it delegates all centroid math and statistics to MethylUtils.
 
 ```mermaid
@@ -12,17 +12,17 @@ flowchart LR
   Config[JSON Config]
   Detector[MethylDetector]
   Pair[MethylCentroidPair]
-  LRT[likelihood_ratio_test_beta]
+  ECDF[ECDF-based comparison]
   Storey[storey_qvalues]
   Filter[Biological Filter]
-  Classifier[BetaClassifier]
+  Classifier[ECDF classifier]
   Out[CSV and Classifier]
 
   Config --> Detector
   Detector --> Pair
-  Pair --> LRT
+  Pair --> ECDF
   Pair --> Storey
-  LRT --> Filter
+  ECDF --> Filter
   Storey --> Filter
   Filter --> Classifier
   Classifier --> Out
@@ -40,14 +40,14 @@ MethylDetector uses **MethylCentroidPair** for all centroid-to-centroid comparis
 
 ### compare_centroids
 
-- **Signature**: `centroid_pair.compare_centroids(centroid1, centroid2)` where `centroid_pair = MethylCentroidPair(min_coverage=..., delta_mean_mode=..., overlap_mode=..., distribution=...)`.
-- **Returns**: Structured array / DataFrame with per-position columns: `p_value`, `q_value`, `alpha1`, `beta1`, `alpha2`, `beta2`, `mean1`, `mean2`, `delta_mean`, `bhattacharyya`, `effect_size`, `n1`, `n2`, `variance1`, `variance2`, etc.
-- **Implementation**: Uses MethylUtils `likelihood_ratio_test_beta` for p-values and `storey_qvalues` for q-values. Computes Bhattacharyya distance (and thus overlap BC = exp(-BD)), effect_size, and other metrics inside MethylCentroidPair. MethylDetector does **not** recompute effect_size or overlap; it uses the columns from this comparison.
+- **Signature**: `centroid_pair.compare_centroids(centroid1, centroid2)` (centroids must have binned_stats for ECDF).
+- **Returns**: Structured array / DataFrame with per-position columns: `p_value`, `q_value`, `mean1`, `mean2`, `delta_mean`, `bhattacharyya`, `effect_size`, `n1`, `n2`, `variance1`, `variance2`, etc. (optional alpha/beta from MoM if stored.)
+- **Implementation**: Uses **ECDF-based** comparison (MethylUtils); `storey_qvalues` for q-values. Overlap and effect_size from ECDF. MethylDetector uses the columns from this comparison.
 
 ### validate_centroid_parameters
 
 - **Signature**: `MethylCentroidPair.validate_centroid_parameters(centroid1, centroid2)`.
-- **Role**: Pre-check that centroid parameters (e.g. Beta MLEs) are valid before running the full pipeline. MethylDetector calls this at the start of a run.
+- **Role**: Pre-check that centroid parameters (e.g. binned_stats, N, Sx, Sx2) are valid before running the full pipeline. MethylDetector calls this at the start of a run.
 
 ### extract_methylation_fractions
 
@@ -65,42 +65,41 @@ MethylDetector uses **MethylCentroidPair** for all centroid-to-centroid comparis
 | Module / symbol | Use in MethylDetector |
 |-----------------|------------------------|
 | `methyl_centroid_pair` (MethylCentroidPair) | load_and_align, compare_centroids, validate_centroid_parameters, extract_methylation_fractions, effect_size, bhattacharyya |
-| `statistical_tests` | `likelihood_ratio_test_beta`, `storey_qvalues` (via MethylCentroidPair) |
-| `metrics_core` | `compute_bhattacharyya_distance` (used where needed) |
+| `statistical_tests` | ECDF-based testing, `storey_qvalues` (via MethylCentroidPair) |
+| `metrics_core` | Overlap/distance from ECDF (used where needed) |
 | `gpu_detection` | GPU availability and device selection |
 | `memory_manager` | GPUConfig for memory management and cleanup |
 | `core.methyl_frame` | MethylSample (validation samples) |
-| `core.methyl_mixture_centroid` | MethylBetaMixtureCentroid (BMM refinement when enabled) |
 | Optional | `compute_eat_T` (EAT transformation when enabled) |
-| Classifiers | BetaClassifier, BetaBinomialClassifier for training and validation |
+| Classifiers | ECDF-based classifier for training and validation |
 
 ## Data Flow
 
 1. **Config** — Chromosome(s), contexts, centroid1_dir, centroid2_dir, output_dir, alpha, biological filters (min_delta_mean, max_bc, min_effect_size), validation and classifier options.
 2. **Per context** — For each (chromosome, context), build paths to `{chrom}-{context}.h5` for both centroids.
 3. **Load and align** — `MethylCentroidPair.load_and_align(c1_path, c2_path, min_coverage)`.
-4. **Compare** — `MethylCentroidPair(..., delta_mean_mode, overlap_mode, distribution).compare_centroids(centroid1, centroid2)` → table with p_value, q_value, effect_size, overlap, etc.
+4. **Compare** — `MethylCentroidPair(...).compare_centroids(centroid1, centroid2)` (ECDF-based) → table with p_value, q_value, effect_size, overlap, etc.
 5. **Statistical filter** — Keep rows with `q_value <= alpha`.
 6. **Biological filter** — Apply min_delta_mean, max_overlap (BC), min_effect_size (AND). effect_size and overlap come from MethylCentroidPair; MethylDetector does not recompute them.
 7. **DMP selection** — Optional binary search / ranking by effect_size to meet target_balanced_accuracy; export DMP list (e.g. dmps-{chrom}-biological-sorted.csv).
-8. **Classifier training** — MethylDetector uses MethylUtils **BetaClassifier** and **BetaBinomialClassifier** to train on selected DMPs and validate (real or synthetic samples).
-9. **Outputs** — CSV(s), summary, classifier artifact path, optional BMM centroid files when BMM refinement is enabled.
+8. **Classifier training** — MethylDetector uses MethylUtils **ECDF-based classifier** to train on selected DMPs and validate (real or synthetic samples).
+9. **Outputs** — CSV(s), summary, classifier artifact path.
 
 ## Classifier Training
 
 MethylDetector does not implement classifier math; it uses MethylUtils:
 
-- **BetaClassifier**: Training and prediction on DMP positions; comparison and overlap use **ECDF only** (centroids must have binned_stats).
+- **ECDF-based classifier**: Training and prediction on DMP positions; likelihoods from centroid ECDF (centroids must have binned_stats).
 - Validation metrics (e.g. Balanced Accuracy) are computed from classifier predictions on validation samples whose methylation fractions are extracted via MethylCentroidPair.
 
 ## Summary
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| MethylUtils | MethylCentroidPair | load_and_align, compare_centroids (LRT, q-values, effect_size, overlap), validate_centroid_parameters, extract_methylation_fractions |
-| MethylUtils | statistical_tests | likelihood_ratio_test_beta, storey_qvalues |
-| MethylUtils | BetaClassifier / BetaBinomialClassifier | Train and validate classifier on DMPs |
+| MethylUtils | MethylCentroidPair | load_and_align, compare_centroids (ECDF-based, q-values, effect_size, overlap), validate_centroid_parameters, extract_methylation_fractions |
+| MethylUtils | statistical_tests | ECDF-based testing, storey_qvalues |
+| MethylUtils | ECDF-based classifier | Train and validate classifier on DMPs |
 | MethylUtils | GPUConfig, gpu_detection, memory_manager | GPU and memory handling |
 | MethylDetector | MethylDetector (class) | Config, per-chromosome/per-context loop, filtering, DMP selection, classifier invocation, exports |
 
-For theoretical background (distributions, LRT, q-values, effect_size, overlap), see [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md).
+For theoretical background (ECDF, q-values, effect_size, overlap), see [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md).

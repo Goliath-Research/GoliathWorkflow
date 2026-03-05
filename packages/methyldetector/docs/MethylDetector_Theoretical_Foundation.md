@@ -39,7 +39,7 @@ $$\text{effect\_size} = \frac{|\Delta\mu|}{\max(\text{overlap}, \epsilon) \times
 - **\(\Delta\mu\)**: \(|\mu_1 - \mu_2|\) (delta mean)
 - **overlap**: Bhattacharyya coefficient \(\text{BC} = e^{-\text{BD}}\) (BD = Bhattacharyya distance)
 - **\(\epsilon\)**: min_overlap_floor (e.g. 0.01) to avoid division by zero
-- **\(\sigma_{\text{combined}}\)**: \(\sqrt{\text{var}_1 + \text{var}_2}\) from Beta variances
+- **\(\sigma_{\text{combined}}\)**: \(\sqrt{\text{var}_1 + \text{var}_2}\) from centroid variances (from N, Sx, Sx2 or ECDF)
 - **variance_reliability**: \(1 / (1 + \max(\text{var}_1, \text{var}_2) / 0.05)\) to down-weight noisy (high-variance) positions
 
 Larger \(|\Delta\mu|\) and smaller overlap increase effect_size; higher variance decreases it. Downstream (e.g. MethylClassifier) use effect_size for weighting and ranking.
@@ -73,5 +73,5 @@ with Sensitivity = TP/(TP+FN), Specificity = TN/(TN+FP). This treats both classe
 ## References
 
 - Full derivations and extra metrics: [METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md](METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
-- LRT and q-values: MethylUtils `statistical_tests` (`likelihood_ratio_test_beta`, `storey_qvalues`)
+- Testing and q-values: MethylUtils `statistical_tests` (ECDF-based tests, `storey_qvalues`)
 - Effect size and overlap: MethylUtils `MethylCentroidPair` (compare_centroids output)

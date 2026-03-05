@@ -2,16 +2,16 @@
 
 ## Goal
 
-MethylClassifier assigns DNA methylation samples to biological classes (e.g. healthy vs cancer) using methylation at **differentially methylated positions (DMPs)**. It uses a **Bayesian classification** framework: no training is performed in MethylClassifier; it loads pre-computed class-wise Beta (and optionally Beta Mixture) parameters from **MethylDetector** output and computes posterior class probabilities.
+MethylClassifier assigns DNA methylation samples to biological classes (e.g. healthy vs cancer) using methylation at **differentially methylated positions (DMPs)**. It uses a **Bayesian classification** framework with **ECDF-based likelihoods**: no parametric distribution (Beta, Normal, Beta-Binomial, or Beta-Mixture) is used. Class-wise centroids provide an **empirical distribution (ECDF)** per position via binned_stats (bin_edges, bin_counts); the likelihood is the PDF from that ECDF (spline-interpolated). Parameters come from **MethylDetector** output (centroids with binned_stats).
 
-## Model: Naive Bayes with Beta Likelihoods
+## Model: Naive Bayes with ECDF Likelihoods
 
-Per DMP position \(i\) and class \(k\), methylation is modeled as:
+Per DMP position \(i\) and class \(k\), the class centroid has a per-position empirical distribution from **binned_stats** (bin_edges, bin_counts). The PDF is defined by spline interpolation so that \(F(x)\) and \(F'(x)\) exist for any \(x \in [0,1]\).
 
-$$P(x_i \mid \text{Class } k) = \mathrm{BetaPDF}(x_i; \alpha_{k,i}, \beta_{k,i})$$
+$$P(x_i \mid \text{Class } k) = \mathrm{PDF}_{\mathrm{ECDF},k,i}(x_i)$$
 
-- **Parameters**: \(\alpha_{k,i}, \beta_{k,i}\) come from centroids (MethylCentroid) and DMP selection (MethylDetector). Mean methylation at position \(i\) for class \(k\) is \(\alpha_{k,i} / (\alpha_{k,i} + \beta_{k,i})\).
-- **Beta PDF**: \(\mathrm{BetaPDF}(x; \alpha, \beta) = x^{\alpha-1}(1-x)^{\beta-1} / B(\alpha, \beta)\), with \(B(\alpha,\beta)\) the Beta function.
+- **Source**: Centroid for class \(k\) at position \(i\) has binned_stats; the ECDF view gives a continuous PDF via the spline derivative. A small floor is applied to avoid \(\log(0)\).
+- **No Beta/Normal/BMM**: Only the empirical distribution (ECDF) is used; no \(\alpha, \beta\) or other parametric form.
 
 **Naive Bayes assumption**: Methylation values at different DMPs are independent given the class, so the likelihood over all positions is the product of per-position likelihoods.
 
@@ -21,11 +21,10 @@ By Bayes' theorem:
 
 $$P(\text{Class } k \mid X) \propto P(\text{Class } k) \prod_i P(x_i \mid \text{Class } k)$$
 
-In practice the implementation uses **log-likelihoods** (sum of log Beta PDFs) for numerical stability. Optionally, each DMP can be **weighted** (e.g. by effect_size from MethylDetector); the classifier then uses a weighted sum of log-likelihoods. Prediction is the class with highest posterior probability (argmax over \(k\)).
+In practice the implementation uses **log-likelihoods** (sum of log PDF values) for numerical stability. Each DMP can be **weighted** (e.g. by effect_size from MethylDetector); the classifier then uses a weighted sum of log-likelihoods. Prediction is the class with highest posterior probability (argmax over \(k\)).
 
 ## Optional Extensions
 
-- **Beta Mixture (BMM)**: When MethylDetector was run with BMM refinement, some DMPs have Beta Mixture likelihoods; MethylClassifier uses those where available and falls back to Beta otherwise. The Bayesian formulation (posterior from likelihood × prior) is unchanged.
 - **Temperature scaling**: A temperature parameter can sharpen or soften the posterior (e.g. softmax over log-likelihoods with temperature \(T\)).
 - **Platt calibration**: Optional probability calibration (Platt scaling) can be applied to the raw posteriors for better-calibrated confidence estimates.
 
@@ -33,8 +32,8 @@ In practice the implementation uses **log-likelihoods** (sum of log Beta PDFs) f
 
 | Aspect | Role |
 |--------|------|
-| Training | None in MethylClassifier; parameters come from MethylDetector (which uses MethylUtils BetaClassifier/BetaBinomialClassifier for training). |
-| Likelihood | Beta (and optionally BMM) per DMP; Naive Bayes product over positions. |
+| Training | None in MethylClassifier; centroids and DMPs come from MethylDetector (ECDF-based comparison and training). |
+| Likelihood | **ECDF only**: per-position PDF from centroid binned_stats; Naive Bayes product over positions. |
 | Weights | Per-DMP weights (e.g. from effect_size) weight the log-likelihood sum. |
 | Output | Posterior probabilities per class; prediction = argmax. |
 
