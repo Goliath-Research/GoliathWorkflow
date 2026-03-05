@@ -286,15 +286,23 @@ class ECDFView:
     ) -> np.ndarray:
         """
         Evaluate CDF at multiple positions and grid points. Returns array of shape
-        (len(position_indices), len(grid)) using piecewise-linear CDF at bin edges.
+        (len(position_indices), len(grid)). When Pchip interpolators are available,
+        uses the monotonic continuous ECDF; otherwise uses piecewise-linear at bin edges.
         """
         position_indices = np.asarray(position_indices, dtype=np.intp).ravel()
         grid = np.clip(np.asarray(grid, dtype=np.float64).ravel(), 0.0, 1.0)
         P, G = len(position_indices), len(grid)
+        out = np.zeros((P, G), dtype=np.float64)
+        if self._interpolators is not None:
+            for i in range(P):
+                out[i] = np.clip(
+                    self._interpolators[position_indices[i]](grid), 0.0, 1.0
+                )
+            return out
+        # Fallback: piecewise-linear CDF at bin edges
         cdf_slice = self._cdf_at_edges[position_indices]  # (P, n_edges)
         bin_edges = self._bin_edges
         E = len(bin_edges)
-        out = np.zeros((P, G), dtype=np.float64)
         for j, g in enumerate(grid):
             idx = np.searchsorted(bin_edges, g, side="right") - 1
             idx = np.clip(idx, 0, E - 2)

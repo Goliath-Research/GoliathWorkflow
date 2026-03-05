@@ -122,6 +122,7 @@ class MethylCentroidPair:
         overdispersion_threshold: float = 1.5,
         enable_mixture: bool = True,
         max_N_for_ecdf: int = 30,
+        ecdf_ks_grid_size: int = 256,
         bmm_centroid1: Any = None,
         bmm_centroid2: Any = None,
     ):
@@ -167,6 +168,7 @@ class MethylCentroidPair:
         self.overdispersion_threshold = overdispersion_threshold
         self.enable_mixture = enable_mixture
         self.max_N_for_ecdf = int(max_N_for_ecdf)
+        self.ecdf_ks_grid_size = int(ecdf_ks_grid_size)
 
         # Metric modes for delta_mean/overlap calculations
         self.delta_mean_mode = self._normalize_metric_mode(
@@ -1153,24 +1155,33 @@ class MethylCentroidPair:
                     except Exception:
                         continue
 
-        # ECDF: approximate p-value (chi-square on binned counts) and dist
-        if np.any(use_ecdf_mask):
-            from scipy.stats import chi2_contingency
+        # ECDF: p-value from continuous ECDF (KS statistic + asymptotic p-value via Pchip)
+        # Assume binned stats present when use_ecdf_mask; build views once and reuse for overlap below
+        ecdf_view1 = ecdf_view2 = None
+        if np.any(use_ecdf_mask) and has_binned1 and has_binned2 and same_bin_edges:
             from methyl_utils.core.distribution_views import ECDFView
-            bin_edges = np.asarray(bs1["bin_edges"], dtype=np.float64)
-            bc1 = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
-            bc2 = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
-            ecdf_indices = np.where(use_ecdf_mask)[0]
-            for idx in ecdf_indices:
-                table = np.stack([bc1[idx], bc2[idx]], axis=0)
-                if np.any(table < 0) or np.sum(table) == 0:
-                    continue
-                try:
-                    _, p_ecdf, _, _ = chi2_contingency(table)
-                    p_values[idx] = np.float32(p_ecdf)
-                    dist_ids[idx] = DIST_ECDF
-                except Exception:
-                    pass
+            from methyl_utils.statistical_tests import ecdf_ks_pvalue
+            bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
+            bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
+            bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
+            ecdf_view1 = ECDFView(
+                bin_edges_arr, bc1_batch,
+                Sx1.astype(np.float64), N1.astype(np.float64),
+                Sx2_1.astype(np.float64),
+            )
+            ecdf_view2 = ECDFView(
+                bin_edges_arr, bc2_batch,
+                Sx2_vals.astype(np.float64), N2.astype(np.float64),
+                Sx2_2.astype(np.float64),
+            )
+            _, p_ecdf = ecdf_ks_pvalue(
+                ecdf_view1, ecdf_view2,
+                np.arange(len(positions), dtype=np.intp),
+                N1.astype(np.float64), N2.astype(np.float64),
+                grid_size=self.ecdf_ks_grid_size,
+            )
+            p_values[use_ecdf_mask] = np.asarray(p_ecdf, dtype=np.float32)[use_ecdf_mask]
+            dist_ids[use_ecdf_mask] = DIST_ECDF
 
         # Fill beta default for remaining positions
         if np.any(use_beta_mask):
@@ -1363,20 +1374,23 @@ class MethylCentroidPair:
                         ).astype(np.float32)
                         bhattacharyya[mixture_indices[mix_valid]] = mix_bd
         if bhattacharyya is not None and np.any(use_ecdf_mask) and has_binned1 and has_binned2 and same_bin_edges and overlap_approx_batch is None:
-            from methyl_utils.core.distribution_views import ECDFView
-            bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
-            bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
-            bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
-            view1 = ECDFView(
-                bin_edges_arr, bc1_batch,
-                Sx1.astype(np.float64), N1.astype(np.float64),
-                Sx2_1.astype(np.float64),
-            )
-            view2 = ECDFView(
-                bin_edges_arr, bc2_batch,
-                Sx2_vals.astype(np.float64), N2.astype(np.float64),
-                Sx2_2.astype(np.float64),
-            )
+            if ecdf_view1 is not None and ecdf_view2 is not None:
+                view1, view2 = ecdf_view1, ecdf_view2
+            else:
+                from methyl_utils.core.distribution_views import ECDFView
+                bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
+                bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
+                bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
+                view1 = ECDFView(
+                    bin_edges_arr, bc1_batch,
+                    Sx1.astype(np.float64), N1.astype(np.float64),
+                    Sx2_1.astype(np.float64),
+                )
+                view2 = ECDFView(
+                    bin_edges_arr, bc2_batch,
+                    Sx2_vals.astype(np.float64), N2.astype(np.float64),
+                    Sx2_2.astype(np.float64),
+                )
             overlap_ecdf = view1.overlap(view2)
             bd_ecdf = -np.log(np.clip(np.asarray(overlap_ecdf, dtype=np.float64), 1e-10, 1.0)).astype(np.float32)
             bhattacharyya[use_ecdf_mask] = bd_ecdf[use_ecdf_mask]
