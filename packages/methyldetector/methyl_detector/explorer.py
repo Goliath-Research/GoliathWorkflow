@@ -56,12 +56,34 @@ def _to_arr(x: Any) -> np.ndarray:
     return np.asarray(x, dtype=np.float64).ravel()
 
 
+def _min_n_filter_indices(
+    n1: np.ndarray,
+    n2: np.ndarray,
+    min_N: Optional[int],
+    min_N_pct: float,
+) -> np.ndarray:
+    """
+    Return indices of positions that pass the minimum-N filter (for centroid comparison).
+    If min_N is set: keep where n1 >= min_N and n2 >= min_N.
+    Else: keep where min(n1,n2) >= min_N_pct * max(n1,n2), and max(n1,n2) > 0.
+    """
+    n1 = np.asarray(n1, dtype=np.float64).ravel()
+    n2 = np.asarray(n2, dtype=np.float64).ravel()
+    if min_N is not None:
+        keep = (n1 >= min_N) & (n2 >= min_N)
+    else:
+        max_n = np.maximum(n1, n2)
+        min_n = np.minimum(n1, n2)
+        keep = (max_n > 0) & (min_n >= min_N_pct * max_n)
+    return np.where(keep)[0].astype(np.intp)
+
+
 def _extract_phase1_data(
     centroid1: Any,
     centroid2: Any,
     indices: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Extract delta_mean, var1, var2, n1, n2, bc1, bc2 for given indices. All arrays same length as indices."""
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Extract delta_mean, var1, var2, n1, n2, bc1, bc2, mean1, mean2 for given indices. All arrays same length as indices."""
     n1 = _to_arr(centroid1.N)[indices]
     n2 = _to_arr(centroid2.N)[indices]
     mean1 = _to_arr(centroid1.mean)[indices]
@@ -75,7 +97,7 @@ def _extract_phase1_data(
     bc1 = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices]
     bc2 = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices]
 
-    return delta_mean, var1, var2, n1, n2, bc1, bc2, indices
+    return delta_mean, var1, var2, n1, n2, bc1, bc2, indices, mean1, mean2
 
 
 def _choose_k(
@@ -157,6 +179,8 @@ class MethylDetectorExplorer:
         centroid1_path: Union[str, Path],
         centroid2_path: Union[str, Path],
         min_coverage: int = 4,
+        min_N: Optional[int] = None,
+        min_N_pct: float = 0.05,
         sample_fraction: float = 0.01,
         sigmoid_scale: float = 4.0,
         k_heuristic: K_HEURISTIC = "decay_limit",
@@ -168,6 +192,8 @@ class MethylDetectorExplorer:
         self.centroid1_path = Path(centroid1_path)
         self.centroid2_path = Path(centroid2_path)
         self.min_coverage = min_coverage
+        self.min_N = min_N
+        self.min_N_pct = float(min_N_pct)
         self.sample_fraction = float(sample_fraction)
         self.sigmoid_scale = sigmoid_scale
         self.k_heuristic = k_heuristic
@@ -196,14 +222,25 @@ class MethylDetectorExplorer:
         _require_binned_stats(centroid2)
         n_total = len(common_pos)
 
-        # Optionally subsample for Phase 1
-        if self.sample_fraction < 1.0 and n_total > 0:
-            n_sample = max(1, int(n_total * self.sample_fraction))
+        # Min-N filter: keep only positions with sufficient N in both centroids (before delta_mean / Phase 1)
+        n1_all = _to_arr(centroid1.N)
+        n2_all = _to_arr(centroid2.N)
+        indices_after_N_filter = _min_n_filter_indices(
+            n1_all, n2_all, self.min_N, self.min_N_pct
+        )
+        n_after_filter = len(indices_after_N_filter)
+
+        # Optionally subsample for Phase 1 (from N-filtered pool only)
+        if self.sample_fraction < 1.0 and n_after_filter > 0:
+            n_sample = max(1, int(n_after_filter * self.sample_fraction))
             rng = np.random.default_rng(42)
-            phase1_indices = rng.choice(n_total, size=min(n_sample, n_total), replace=False)
-            phase1_indices = np.sort(phase1_indices)
+            phase1_local = rng.choice(
+                n_after_filter, size=min(n_sample, n_after_filter), replace=False
+            )
+            phase1_local = np.sort(phase1_local)
+            phase1_indices = indices_after_N_filter[phase1_local]
         else:
-            phase1_indices = np.arange(n_total)
+            phase1_indices = indices_after_N_filter
 
         self._centroid1 = centroid1
         self._centroid2 = centroid2
@@ -211,7 +248,7 @@ class MethylDetectorExplorer:
         self._phase1_indices = phase1_indices
 
         # Phase 1: approximate bounded_effect_size
-        delta_mean, var1, var2, n1, n2, bc1, bc2, _ = _extract_phase1_data(
+        delta_mean, var1, var2, n1, n2, bc1, bc2, _, mean1, mean2 = _extract_phase1_data(
             centroid1, centroid2, phase1_indices
         )
         overlap_approx = discrete_overlap_from_bin_counts(bc1, bc2, method="bhattacharyya")
@@ -223,6 +260,8 @@ class MethylDetectorExplorer:
         positions_phase1 = common_pos[phase1_indices]
         df = pd.DataFrame({
             "position": positions_phase1,
+            "mean1": mean1,
+            "mean2": mean2,
             "delta_mean": delta_mean,
             "variance1": var1,
             "variance2": var2,
@@ -289,6 +328,7 @@ class MethylDetectorExplorer:
         self._df_phase1 = df
         self._report = {
             "total_positions": int(n_total),
+            "positions_after_min_N_filter": int(n_after_filter),
             "phase1_sample_size": int(len(phase1_indices)),
             "sample_fraction": self.sample_fraction,
             "k_chosen": int(k),

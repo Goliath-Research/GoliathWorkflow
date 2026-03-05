@@ -8,7 +8,7 @@
     "label": "healthy",
     "groups": [
       {
-        "label": "healthy",
+        "label": "all",
         "sample_paths": [
           "configs/healthy.csv"
         ]
@@ -45,19 +45,19 @@
     ],
     "comparisons": [
       {
-        "control_group": "healthy",
+        "control_group": "all",
         "disease_group": "pca1"
       },
       {
-        "control_group": "healthy",
+        "control_group": "all",
         "disease_group": "pca2"
       },
       {
-        "control_group": "healthy",
+        "control_group": "all",
         "disease_group": "pca3"
       },
       {
-        "control_group": "healthy",
+        "control_group": "all",
         "disease_group": "pca4"
       }
     ],

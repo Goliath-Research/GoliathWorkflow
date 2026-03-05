@@ -12,6 +12,15 @@ MethylDetectorExplorer is a CLI utility that analyzes and optimizes how MethylDe
 
 So the Explorer helps you choose how many positions to refine and produces a report and optional CSV/plot for inspection.
 
+## Position filter (min-N)
+
+Before Phase 1, positions are filtered so that only those with sufficient N in **both** centroids are compared. This avoids comparing when one group has almost no data at a position.
+
+- **`--min-N`** (absolute): Keep a position only if n1 ≥ min-N and n2 ≥ min-N. If set, this overrides the percentage rule.
+- **`--min-N-pct`** (default **5%**): Keep a position only if min(n1, n2) ≥ min-N-pct × max(n1, n2) at that position (and max(n1, n2) > 0). So the smaller group must have at least 5% of the larger group’s count.
+
+Subsampling (e.g. `--sample-fraction`) and Phase 1 then operate only on this filtered set. The report includes `positions_after_min_N_filter`.
+
 ## Requirements
 
 - Centroids must have **binned_stats** (bin_edges, bin_counts). Build them with MethylCentroid using `binned_stats_bins` (e.g. 20).
@@ -46,6 +55,8 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 | `--threshold-fraction` | 0.1 | For `threshold`: keep positions with effect_size ≥ this fraction of max. |
 | `--fraction-top` | 0.01 | For `fraction`: fraction of (sorted) positions to refine. |
 | `--min-coverage` | 4 | Minimum coverage passed to load_and_align. |
+| `--min-N` | - | Minimum N per group (absolute): keep positions where n1 ≥ min-N and n2 ≥ min-N. Overrides `--min-N-pct` if set. |
+| `--min-N-pct` | 0.05 | Minimum N as fraction of max at position (default 5%): keep where min(n1,n2) ≥ min-N-pct × max(n1,n2). Used when `--min-N` is not set. |
 | `--output-dir`, `-o` | . | Directory for report and optional CSV. |
 | `--output` | - | Explicit path for report JSON. |
 | `--csv` | false | Write result table to CSV in output-dir. |
@@ -54,8 +65,8 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 ## Outputs
 
 - **Report JSON** (default: `methyldetectorexplorer_report.json` in output-dir):  
-  `total_positions`, `phase1_sample_size`, `sample_fraction`, `k_chosen`, `k_heuristic`, `k_info`, `time_phase1_s`, `time_phase2_s`, `time_total_s`.
-- **Optional CSV** (with `--csv`): Table of positions with `position`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `overlap_approx`, `bounded_effect_size_approx`, `welch_d`, and for top K refined `bounded_effect_size` and `overlap`.
+  `total_positions`, `positions_after_min_N_filter`, `phase1_sample_size`, `sample_fraction`, `k_chosen`, `k_heuristic`, `k_info`, `time_phase1_s`, `time_phase2_s`, `time_total_s`.
+- **Optional CSV** (with `--csv`): Table of positions with `position`, `mean1`, `mean2`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `overlap_approx`, `bounded_effect_size_approx`, `welch_d`, and for top K refined `bounded_effect_size` and `overlap`.
 
 ## K heuristics
 
@@ -74,6 +85,8 @@ explorer = MethylDetectorExplorer(
     centroid1_path="/path/to/c1.h5",
     centroid2_path="/path/to/c2.h5",
     sample_fraction=0.01,
+    min_N=None,       # or e.g. 10 for absolute; default uses min_N_pct=0.05
+    min_N_pct=0.05,
     k_heuristic="decay_limit",
     max_decay_per_position=0.01,
 )

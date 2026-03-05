@@ -98,6 +98,18 @@ logger = logging.getLogger(__name__)
     help="Minimum coverage (min_coverage) for load_and_align.",
 )
 @click.option(
+    "--min-N",
+    type=int,
+    default=None,
+    help="Minimum N per group (absolute): keep positions where n1 >= min-N and n2 >= min-N. Overrides --min-N-pct if set.",
+)
+@click.option(
+    "--min-N-pct",
+    type=float,
+    default=0.05,
+    help="Minimum N as fraction of max at position (default 5%%): keep where min(n1,n2) >= min-N-pct * max(n1,n2). Used when --min-N is not set.",
+)
+@click.option(
     "--output-dir",
     "-o",
     type=click.Path(path_type=Path, file_okay=False),
@@ -137,6 +149,8 @@ def main(
     threshold_fraction: float,
     fraction_top: float,
     min_coverage: int,
+    min_n: Optional[int],
+    min_n_pct: float,
     output_dir: Optional[Path],
     output: Optional[Path],
     csv: bool,
@@ -175,6 +189,8 @@ def main(
         centroid1_path=c1_path,
         centroid2_path=c2_path,
         min_coverage=min_coverage,
+        min_N=min_n,
+        min_N_pct=min_n_pct,
         sample_fraction=sample_fraction,
         k_heuristic=effective_heuristic,
         refine_top_k=refine_top_k,
@@ -199,6 +215,7 @@ def main(
     click.echo(f"Report written to {report_path}")
     click.echo(
         f"Total positions: {report['total_positions']:,}, "
+        f"After min-N filter: {report['positions_after_min_N_filter']:,}, "
         f"Phase 1 sample: {report['phase1_sample_size']:,}, "
         f"K chosen: {report['k_chosen']}, "
         f"heuristic: {report['k_heuristic']}, "

@@ -65,6 +65,57 @@ def _require_binned_stats_local(centroid):
         raise ValueError("Centroids must have binned_stats (bin_edges, bin_counts).")
 
 
+def _min_n_filter_indices_local(n1, n2, min_N, min_N_pct):
+    """Mirror of explorer._min_n_filter_indices for testing without methyl_utils."""
+    n1 = np.asarray(n1, dtype=np.float64).ravel()
+    n2 = np.asarray(n2, dtype=np.float64).ravel()
+    if min_N is not None:
+        keep = (n1 >= min_N) & (n2 >= min_N)
+    else:
+        max_n = np.maximum(n1, n2)
+        min_n = np.minimum(n1, n2)
+        keep = (max_n > 0) & (min_n >= min_N_pct * max_n)
+    return np.where(keep)[0].astype(np.intp)
+
+
+class TestMinNFilter:
+    """Test min-N position filter (mirrors explorer._min_n_filter_indices)."""
+
+    def test_absolute_min_N(self):
+        n1 = np.array([3, 10, 5, 10, 10])
+        n2 = np.array([10, 2, 10, 10, 10])
+        idx = _min_n_filter_indices_local(n1, n2, min_N=5, min_N_pct=0.05)
+        # Keep only positions where n1 >= 5 and n2 >= 5: indices 2, 3, 4
+        np.testing.assert_array_equal(idx, [2, 3, 4])
+
+    def test_min_N_pct_default(self):
+        # At index 0: n1=1, n2=20 -> min/max=1/20=0.05, keep. Index 1: 1/10=0.1, keep. Index 2: 0/5 -> drop (max>0 but min=0). Index 3: 2/20=0.1, keep.
+        n1 = np.array([1, 1, 0, 2])
+        n2 = np.array([20, 10, 5, 20])
+        idx = _min_n_filter_indices_local(n1, n2, min_N=None, min_N_pct=0.05)
+        # 1>=0.05*20, 1>=0.05*10, 0>=0.05*5 false (and 0>0 false), 2>=0.05*20
+        np.testing.assert_array_equal(idx, [0, 1, 3])
+
+    def test_min_N_pct_stricter(self):
+        n1 = np.array([2, 10, 5])
+        n2 = np.array([20, 10, 5])
+        # 2/20=0.1, 10/10=1, 5/5=1. With 0.2: keep only 1, 2
+        idx = _min_n_filter_indices_local(n1, n2, min_N=None, min_N_pct=0.2)
+        np.testing.assert_array_equal(idx, [1, 2])
+
+    def test_all_dropped_absolute(self):
+        n1 = np.array([1, 2])
+        n2 = np.array([2, 1])
+        idx = _min_n_filter_indices_local(n1, n2, min_N=5, min_N_pct=0.05)
+        assert len(idx) == 0
+
+    def test_all_kept_absolute(self):
+        n1 = np.array([10, 10])
+        n2 = np.array([10, 10])
+        idx = _min_n_filter_indices_local(n1, n2, min_N=5, min_N_pct=0.05)
+        np.testing.assert_array_equal(idx, [0, 1])
+
+
 class TestChooseK:
     """Test K selection heuristics with synthetic effect size curves (mirrors explorer._choose_k)."""
 
