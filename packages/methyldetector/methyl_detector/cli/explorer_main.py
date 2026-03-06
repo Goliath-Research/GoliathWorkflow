@@ -116,6 +116,12 @@ logger = logging.getLogger(__name__)
     help="Phase 1 overlap: auto (discrete when bin_edges match, else normal), discrete (Bhattacharyya from bin counts), normal (2*Phi(-welch_d/2)). Use normal to avoid bin alignment issues.",
 )
 @click.option(
+    "--calibrate-scale",
+    is_flag=True,
+    default=False,
+    help="Calibrate sigmoid scale to maximize Spearman correlation between effect_size and (1 - ks_p) on refined positions; report chosen scale and correlation.",
+)
+@click.option(
     "--output-dir",
     "-o",
     type=click.Path(path_type=Path, file_okay=False),
@@ -158,6 +164,7 @@ def main(
     min_n: Optional[int],
     min_n_pct: float,
     approx_overlap: str,
+    calibrate_scale: bool,
     output_dir: Optional[Path],
     output: Optional[Path],
     csv: bool,
@@ -199,6 +206,7 @@ def main(
         min_N=min_n,
         min_N_pct=min_n_pct,
         approx_overlap=approx_overlap,
+        calibrate_scale=calibrate_scale,
         sample_fraction=sample_fraction,
         k_heuristic=effective_heuristic,
         refine_top_k=refine_top_k,
@@ -221,15 +229,19 @@ def main(
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
     click.echo(f"Report written to {report_path}")
-    click.echo(
+    msg = (
         f"Total positions: {report['total_positions']:,}, "
         f"After min-N filter: {report['positions_after_min_N_filter']:,}, "
         f"Phase 1 sample: {report['phase1_sample_size']:,}, "
         f"approx overlap: {report.get('approx_overlap_method', 'n/a')}, "
+        f"scale: {report.get('sigmoid_scale_used', 'n/a')}, "
         f"K chosen: {report['k_chosen']}, "
         f"heuristic: {report['k_heuristic']}, "
         f"time: {report['time_total_s']:.2f}s"
     )
+    if "effect_size_vs_ks_p_correlation" in report:
+        msg += f", effect_size vs (1-ks_p) Spearman: {report['effect_size_vs_ks_p_correlation']:.4f}"
+    click.echo(msg)
 
     if csv:
         csv_path = out_dir / "methyldetectorexplorer_results.csv"

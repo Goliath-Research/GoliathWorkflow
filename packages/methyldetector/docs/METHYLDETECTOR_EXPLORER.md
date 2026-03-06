@@ -30,6 +30,10 @@ Phase 1 uses an **approximate overlap** to compute bounded effect size without E
 
 With **`--approx-overlap auto`** (default): discrete Bhattacharyya is used when `bin_edges` match; otherwise a warning is logged and Normal-based overlap is used. Use **`--approx-overlap normal`** to force Normal overlap and get approximate effect sizes that do not depend on bin alignment (useful when approx vs exact counts differ a lot). For comparable exact vs approx results, build both centroids with the same `binned_stats_bins`; the report field `approx_overlap_method` shows which method was used (`discrete_bhattacharyya` or `normal`).
 
+## Scale calibration (effect size vs ks_p)
+
+Use **`--calibrate-scale`** to have the Explorer choose the sigmoid scale that **maximizes Spearman correlation** between refined `bounded_effect_size` and (1 − ks_p) on the top K positions. The grid search tries scales from 0.5 to 12 in steps of 0.5; the chosen scale and the achieved correlation are written to the report (`sigmoid_scale_used`, `effect_size_vs_ks_p_correlation`) and the refined effect sizes are recomputed with that scale. This gives a data-driven scale so effect size better approximates the “expected p-value for DMP classification” on that run.
+
 **How exact is the refined effect size?** It is exact relative to: (1) the binned ECDF (finer bins → closer to the true distribution), (2) PCHIP interpolation between bin edges, and (3) the KS statistic computed on a finite grid (default 256 points), which can slightly underestimate the true sup. Approx (e.g. Normal overlap) and refined (KS-based) can still differ in scale because they use different overlap notions; the refined value is the more distribution-aware estimate. See [Effect_Size_Theory.tex](Effect_Size_Theory.tex) § “Precision of the exact effect size”.
 
 ## Requirements
@@ -69,6 +73,7 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 | `--min-N` | - | Minimum N per group (absolute): keep positions where n1 ≥ min-N and n2 ≥ min-N. Overrides `--min-N-pct` if set. |
 | `--min-N-pct` | 0.05 | Minimum N as fraction of max at position (default 5%): keep where min(n1,n2) ≥ min-N-pct × max(n1,n2). Used when `--min-N` is not set. |
 | `--approx-overlap` | auto | Phase 1 overlap: `auto` (discrete when bin_edges match, else normal), `discrete` (Bhattacharyya from bin counts), `normal` (2·Φ(−welch_d/2)). Use `normal` to avoid bin alignment issues. |
+| `--calibrate-scale` | false | Calibrate sigmoid scale to maximize Spearman correlation between effect_size and (1 − ks_p) on refined positions; report includes chosen scale and correlation. |
 | `--output-dir`, `-o` | . | Directory for report and optional CSV. |
 | `--output` | - | Explicit path for report JSON. |
 | `--csv` | false | Write result table to CSV in output-dir. |
@@ -77,7 +82,7 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 ## Outputs
 
 - **Report JSON** (default: `methyldetectorexplorer_report.json` in output-dir):  
-  `total_positions`, `positions_after_min_N_filter`, `phase1_sample_size`, `sample_fraction`, `approx_overlap_method`, `k_chosen`, `k_heuristic`, `k_info`, `time_phase1_s`, `time_phase2_s`, `time_total_s`.
+  `total_positions`, `positions_after_min_N_filter`, `phase1_sample_size`, `sample_fraction`, `approx_overlap_method`, `sigmoid_scale_used`, `k_chosen`, `k_heuristic`, `k_info`, `time_phase1_s`, `time_phase2_s`, `time_total_s`. With `--calibrate-scale`: also `effect_size_vs_ks_p_correlation` (Spearman).
 - **Optional CSV** (with `--csv`): Table of positions with `position`, `mean1`, `mean2`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `overlap_approx`, `bounded_effect_size_approx`, `welch_d`, and for top K refined `bounded_effect_size`, `overlap`, `ks_d` (KS statistic), and `ks_p` (KS p-value). Non-refined rows have NaN for `ks_d` and `ks_p`.
 
 ## K heuristics
@@ -100,6 +105,7 @@ explorer = MethylDetectorExplorer(
     min_N=None,       # or e.g. 10 for absolute; default uses min_N_pct=0.05
     min_N_pct=0.05,
     approx_overlap="auto",  # or "normal" to avoid bin alignment issues
+    calibrate_scale=False,  # set True to maximize correlation effect_size vs (1 - ks_p)
     k_heuristic="decay_limit",
     max_decay_per_position=0.01,
 )

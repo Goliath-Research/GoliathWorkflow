@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from scipy.special import expit
+from scipy.stats import spearmanr
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +198,7 @@ class MethylDetectorExplorer:
         approx_overlap: APPROX_OVERLAP = "auto",
         sample_fraction: float = 0.01,
         sigmoid_scale: float = 4.0,
+        calibrate_scale: bool = False,
         k_heuristic: K_HEURISTIC = "decay_limit",
         refine_top_k: Optional[int] = None,
         max_decay_per_position: float = 0.01,
@@ -210,6 +213,7 @@ class MethylDetectorExplorer:
         self.approx_overlap = approx_overlap
         self.sample_fraction = float(sample_fraction)
         self.sigmoid_scale = sigmoid_scale
+        self.calibrate_scale = calibrate_scale
         self.k_heuristic = k_heuristic
         self.refine_top_k = refine_top_k
         self.max_decay_per_position = max_decay_per_position
@@ -327,6 +331,8 @@ class MethylDetectorExplorer:
         df["overlap"] = df["overlap_approx"]
         df["ks_d"] = np.nan
         df["ks_p"] = np.nan
+        scale_used = self.sigmoid_scale
+        effect_size_vs_ks_p_correlation: Optional[float] = None
         if k > 0:
             top_k_indices_in_phase1 = np.arange(k)
             positions_top_k = df.loc[top_k_indices_in_phase1, "position"].values
@@ -368,6 +374,37 @@ class MethylDetectorExplorer:
                 if i < len(ks_p_arr):
                     df.loc[idx_df, "ks_p"] = ks_p_arr[i]
 
+            # Optional: calibrate scale to maximize correlation between effect_size and (1 - ks_p)
+            if self.calibrate_scale:
+                sub = df.iloc[:k]
+                n1_k = np.asarray(sub["n1"].values, dtype=np.float64)
+                n2_k = np.asarray(sub["n2"].values, dtype=np.float64)
+                n_eff = 2.0 / (1.0 / np.maximum(n1_k, 1) + 1.0 / np.maximum(n2_k, 1))
+                T = np.minimum(np.sqrt(n_eff) * np.asarray(sub["ks_d"].values, dtype=np.float64), 15.0)
+                welch_d_k = np.asarray(sub["welch_d"].values, dtype=np.float64)
+                one_minus_p = 1.0 - np.asarray(sub["ks_p"].values, dtype=np.float64)
+                scales = np.arange(0.5, 12.5, 0.5)
+                best_scale = float(self.sigmoid_scale)
+                best_corr = -np.inf
+                for s in scales:
+                    bes = expit(s * welch_d_k * T)
+                    r, _ = spearmanr(bes, one_minus_p)
+                    if np.isfinite(r) and r > best_corr:
+                        best_corr = float(r)
+                        best_scale = float(s)
+                scale_used = best_scale
+                effect_size_vs_ks_p_correlation = best_corr
+                # Recompute bounded_effect_size for refined rows with chosen scale
+                bes_calibrated = expit(best_scale * welch_d_k * T)
+                for i, idx_df in enumerate(top_k_indices_in_phase1):
+                    if i < len(bes_calibrated):
+                        df.loc[idx_df, "bounded_effect_size"] = bes_calibrated[i]
+                logger.info(
+                    "Calibrated sigmoid_scale=%.2f (Spearman effect_size vs (1-ks_p)=%.4f)",
+                    scale_used,
+                    effect_size_vs_ks_p_correlation,
+                )
+
         t2 = time.perf_counter()
         self._df_phase1 = df
         self._report = {
@@ -376,6 +413,7 @@ class MethylDetectorExplorer:
             "phase1_sample_size": int(len(phase1_indices)),
             "sample_fraction": self.sample_fraction,
             "approx_overlap_method": approx_overlap_method,
+            "sigmoid_scale_used": scale_used,
             "k_chosen": int(k),
             "k_heuristic": self.k_heuristic,
             "k_info": k_info,
@@ -383,6 +421,8 @@ class MethylDetectorExplorer:
             "time_phase2_s": t2 - t1,
             "time_total_s": t2 - t0,
         }
+        if effect_size_vs_ks_p_correlation is not None:
+            self._report["effect_size_vs_ks_p_correlation"] = effect_size_vs_ks_p_correlation
         return df, self._report
 
     @property
