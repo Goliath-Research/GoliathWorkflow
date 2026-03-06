@@ -115,6 +115,14 @@ where:
     \item $d \gg 0$, $O \to 0$: effect $\to 1$ (perfect discrimination).
 \end{itemize}
 
+\subsection{Refined formula: alignment with KS test}
+
+The refined (ECDF) effect size uses the \emph{same} statistic as the two-sample KS test so that effect size correlates well with the test $p$-value. The test statistic is $T = \sqrt{n_{\text{eff}}} \cdot D$, with $n_{\text{eff}} = 2/(1/n_1 + 1/n_2)$. Then
+\begin{equation}
+    \text{effect}_{\text{refined}} = \sigma\left( s \cdot d \cdot \min(T, T_{\max}) \right), \quad T_{\max} = 15.
+\end{equation}
+So $d$ retains biological meaning (standardized mean difference) and $T$ (separation scaled by effective sample size) aligns with significance; $T$ is capped so the sigmoid remains in a sensible range.
+
 \section{Approximate vs Refined Computation}
 
 \begin{table}[h]

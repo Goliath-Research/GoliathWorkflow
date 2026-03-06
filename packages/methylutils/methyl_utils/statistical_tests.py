@@ -1144,9 +1144,10 @@ def welch_d_ks_overlap(
     """
     Welch's d = |delta_mean| / sqrt(var1/n1 + var2/n2).
     If ECDF views and position_indices are provided: KS statistic D at each position.
-    With overlap O_KS = 1 - D, effect = sigmoid(scale * d * (1 - O_KS)) = sigmoid(scale * d * D).
-    So corrected_d = welch_d * D (separation), bounded_effect_size = sigmoid(scale * corrected_d) in [0, 1].
-    Otherwise: bounded_effect_size = sigmoid(scale * welch_d).
+    Effect size uses the KS test statistic T = sqrt(n_eff)*D (same as drives ks_p) so it correlates
+    with statistical significance: corrected_d = welch_d * min(T, 15), bounded_effect_size = sigmoid(scale * corrected_d).
+    welch_d keeps biological meaning (mean difference); T aligns with the test. n_eff = 2/(1/n1+1/n2).
+    Otherwise (no ECDF): bounded_effect_size = sigmoid(scale * welch_d * ks_d) with ks_d=0 -> 0.5.
     Returns dict with keys: welch_d, ks_d, ks_p, corrected_d, bounded_effect_size.
 
     When variance1 and variance2 are both zero (or very small), the standard error is floored
@@ -1176,8 +1177,12 @@ def welch_d_ks_overlap(
         ks_d = ks_d_arr
         ks_p = ks_p_arr
 
-    # (1 - O_KS) = D (separation); effect = sigmoid(scale * d * (1 - O_KS)) per Effect_Size_Theory.tex
-    corrected_d = welch_d * ks_d
+    # Use KS test statistic T = sqrt(n_eff)*D so effect size aligns with KS p-value (Option 2:
+    # biological meaning via welch_d, replacement for the test via T). effect = sigmoid(scale * d * T).
+    n_eff = 2.0 / (1.0 / np.maximum(n1, 1) + 1.0 / np.maximum(n2, 1))
+    T = np.sqrt(n_eff) * ks_d  # same statistic that drives ks_p
+    T = np.minimum(T, 15.0)  # cap so sigmoid(scale * welch_d * T) stays in a sensible range
+    corrected_d = welch_d * T
     expit_arg = np.clip(scale * corrected_d, -700.0, 700.0)
     bounded_effect_size = expit(expit_arg)
 
