@@ -327,7 +327,9 @@ class MethylCentroid:
             memory_limit_gb=chunked_params["memory_limit_gb"],
         )
 
-        # Track active samples (those currently included in centroid calculation)
+        # Track active samples (those currently included in centroid calculation).
+        # Once the centroid is built, samples are only used to know which were added;
+        # centroid data is loaded from the centroid H5 (with slicing by pos index) when needed.
         self.active_samples: set = set()
 
         self.sample_cache = SmartSampleCache(self.memory_manager)
@@ -1513,6 +1515,42 @@ class MethylCentroid:
         # Use to_cpu() method instead of manual .get() calls
         return methyl_sample.to_cpu()
 
+    def get_centroid(
+        self,
+        positions: Optional[np.ndarray] = None,
+        indices: Optional[np.ndarray] = None,
+    ):
+        """
+        Return the centroid, loading from the centroid H5 with slicing when not cached.
+
+        Once the centroid is built, its data is read from the centroid H5 file (using
+        position or row-index slicing). The samples list is only used to know which
+        samples were added to the centroid; it is not used to load centroid data.
+
+        Args:
+            positions: If set, load only rows for these genomic positions (H5 pos index).
+            indices: If set, load only these row indices from the H5 file.
+
+        Returns:
+            MethylExtendedCentroid (or MethylSample) instance, or None if no centroid.
+        """
+        from methyl_utils import load_from_h5
+
+        path = getattr(self, "centroid_path", None) or getattr(self, "centroid", None)
+        if path is not None:
+            path = Path(path)
+        if path is None or not path.exists():
+            return self._centroid if (positions is None and indices is None) else None
+
+        if positions is not None or indices is not None:
+            loaded = load_from_h5(path, positions=positions, indices=indices)
+            return loaded.to_cpu() if hasattr(loaded, "to_cpu") else loaded
+
+        if self._centroid is not None:
+            return self._centroid
+        loaded = load_from_h5(path)
+        return loaded.to_cpu() if hasattr(loaded, "to_cpu") else loaded
+
     def load_sample(
         self, sample_path: Union[str, Path], memory_map: bool = True
     ) -> "MethylSample":
@@ -1739,6 +1777,10 @@ class MethylCentroid:
         """
         Compute centroid using chunked processing for memory efficiency.
 
+        When the centroid is already built and saved, loads from the centroid H5
+        using position-based slicing (H5 pos index); samples are not re-read.
+        Samples are only used to know which samples were added to the centroid.
+
         This method processes the genome in chunks to handle very large datasets
         that exceed available memory. Chunk size is determined by MethylUtils
         memory management (GPU when available, else system RAM via get_memory_usage).
@@ -1756,23 +1798,75 @@ class MethylCentroid:
         with self.performance_profiler.profile_operation(
             "chunked_centroid_computation"
         ):
-            # Use MethylUtils GPU cleanup for safe resource management
             memory_manager = get_memory_manager()
+            path = getattr(self, "centroid_path", None)
+            if path is not None:
+                path = Path(path)
+
+            if path is not None and path.exists():
+                self.logger.info(
+                    "Centroid already built: loading from H5 in chunks (using H5 pos index)"
+                )
+                from methyl_utils import load_pos_from_h5, load_from_h5
+                from methyl_utils.core.io import _indices_for_positions
+
+                pos_arr = load_pos_from_h5(path)
+                sorted_idx = np.argsort(pos_arr)
+                sorted_positions = np.asarray(pos_arr[sorted_idx], dtype=np.uint32)
+                total_positions = len(sorted_positions)
+                if total_positions == 0:
+                    return None
+                total_chunks = (
+                    total_positions + chunk_size_positions - 1
+                ) // chunk_size_positions
+                chunk_results = []
+                chunk_bin_counts = []
+                for chunk_idx in tqdm(range(total_chunks), desc="Loading chunks from H5"):
+                    start_pos = chunk_idx * chunk_size_positions
+                    end_pos = min(start_pos + chunk_size_positions, total_positions)
+                    chunk_positions = sorted_positions[start_pos:end_pos]
+                    idx = _indices_for_positions(pos_arr, chunk_positions)
+                    if len(idx) == 0:
+                        continue
+                    loaded = load_from_h5(path, indices=idx)
+                    if loaded is None or len(loaded) == 0:
+                        continue
+                    arr = loaded.to_numpy(extended=extended) if hasattr(loaded, "to_numpy") else None
+                    if arr is None:
+                        df = getattr(loaded, "_df", None)
+                        if df is not None:
+                            arr = df.to_records(index=False)
+                    if arr is not None:
+                        chunk_results.append(arr)
+                    if self.binned_stats_bins > 0 and hasattr(loaded, "binned_stats") and getattr(loaded, "binned_stats", None) is not None:
+                        bc = loaded.binned_stats.get("bin_counts")
+                        if bc is not None:
+                            chunk_bin_counts.append(np.asarray(bc))
+                if not chunk_results:
+                    return None
+                combined = np.concatenate(chunk_results)
+                if self.binned_stats_bins > 0 and chunk_bin_counts:
+                    combined_bins = np.concatenate(chunk_bin_counts)
+                    bin_edges = np.linspace(0.0, 1.0, self.binned_stats_bins + 1, dtype=np.float32)
+                    self._binned_stats = {"bin_edges": bin_edges, "bin_counts": combined_bins}
+                else:
+                    self._binned_stats = None
+                sort_idx = np.argsort(combined["pos"])
+                combined = combined[sort_idx]
+                if self._binned_stats is not None and "bin_counts" in self._binned_stats:
+                    self._binned_stats["bin_counts"] = self._binned_stats["bin_counts"][sort_idx]
+                return combined
 
             self.logger.info(
                 f"Computing centroid using chunked processing (chunk size: {chunk_size_positions:,} positions)"
             )
 
-            # Get all unique positions across all samples
-            all_positions = set()
             if self._centroid is None or len(self._centroid) == 0:
                 self.logger.warning("No samples available for centroid computation")
                 return None
 
-            # Get positions from centroid
             centroid_positions = np.asarray(self._centroid.pos.values, dtype=np.uint32)
             all_positions = set(centroid_positions)
-
             total_positions = len(all_positions)
             self.logger.info(
                 f"Found {total_positions:,} unique positions across all samples"
@@ -1782,10 +1876,8 @@ class MethylCentroid:
                 self.logger.warning("No positions found in samples")
                 return None
 
-            # Sort positions for chunking
             sorted_positions = np.array(sorted(all_positions), dtype=np.uint32)
 
-            # Process in chunks
             chunk_results = []
             chunk_bin_counts = []
             total_chunks = (
@@ -1793,9 +1885,6 @@ class MethylCentroid:
             ) // chunk_size_positions
 
             self.logger.info(f"Processing {total_chunks} chunks...")
-
-            # Cache position array per sample so we only read each file's pos once;
-            # then load only chunk rows via indices (avoids 34*96 full file reads).
             pos_cache = {}
 
             for chunk_idx in tqdm(range(total_chunks), desc="Processing chunks"):
@@ -1906,15 +1995,16 @@ class MethylCentroid:
 
         use_indexed_load = pos_cache is not None
 
-        # Process each sample for these positions
-        for sample_idx in range(sample_count):
+        # Process each sample that was actually added (iterate active_samples so indices match;
+        # using range(sample_count) would load wrong paths when some samples failed to add)
+        for sample_id in sorted(self.active_samples):
             sample_data_obj = None
             try:
-                # Load sample directly instead of getting from aligner
+                is_new_sample, sample_index = sample_id
                 sample_path = (
-                    self.samples[sample_idx]
-                    if sample_idx < len(self.samples)
-                    else self.add_samples[sample_idx - len(self.samples)]
+                    self.add_samples[sample_index]
+                    if is_new_sample
+                    else self.samples[sample_index]
                 )
 
                 if use_indexed_load:
@@ -2521,15 +2611,13 @@ class MethylCentroid:
         print(f"Total samples: {len(current_samples)}")
 
     def validate_centroid_calculation(self) -> bool:
-        if self._centroid is None or len(self._centroid) == 0:
+        centroid_obj = self.get_centroid()
+        if centroid_obj is None or len(centroid_obj) == 0:
             print("No centroid data available for validation")
             return False
 
-        # Get valid positions from centroid (coverage >= min_coverage)
-        if self._centroid is None:
-            return False
-        # Convert to CPU first to ensure numpy arrays
-        centroid_cpu = self._centroid.to_cpu()
+        # Get valid positions from centroid (coverage >= min_coverage); load from H5 if not cached
+        centroid_cpu = centroid_obj.to_cpu()
         coverage = np.asarray(centroid_cpu.coverage.values, dtype=np.uint32)
         valid_mask = coverage >= self._min_coverage
         # Convert to numpy arrays before indexing to avoid pandas indexing issues
