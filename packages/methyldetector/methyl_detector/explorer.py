@@ -365,6 +365,7 @@ class MethylDetectorExplorer:
             refined_overlap = 1.0 - res["ks_d"]
             ks_d_arr = res["ks_d"]
             ks_p_arr = res["ks_p"]
+            welch_d_refined = res["welch_d"]
             for i, idx_df in enumerate(top_k_indices_in_phase1):
                 if i < len(refined_bes):
                     df.loc[idx_df, "bounded_effect_size"] = refined_bes[i]
@@ -373,6 +374,14 @@ class MethylDetectorExplorer:
                     df.loc[idx_df, "ks_d"] = ks_d_arr[i]
                 if i < len(ks_p_arr):
                     df.loc[idx_df, "ks_p"] = ks_p_arr[i]
+                # Use Phase 2 (ECDF) stats for refined rows so row agrees with bounded_effect_size
+                if i < len(welch_d_refined):
+                    df.loc[idx_df, "welch_d"] = welch_d_refined[i]
+                df.loc[idx_df, "mean1"] = view1.mean[i]
+                df.loc[idx_df, "mean2"] = view2.mean[i]
+                df.loc[idx_df, "delta_mean"] = np.abs(dm_k[i])
+                df.loc[idx_df, "variance1"] = var1_k[i]
+                df.loc[idx_df, "variance2"] = var2_k[i]
 
             # Optional: calibrate scale to maximize correlation between effect_size and (1 - ks_p)
             if self.calibrate_scale:
