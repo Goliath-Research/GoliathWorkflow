@@ -122,6 +122,12 @@ logger = logging.getLogger(__name__)
     help="Calibrate sigmoid scale to maximize Spearman correlation between effect_size and (1 - ks_p) on refined positions; report chosen scale and correlation.",
 )
 @click.option(
+    "--sigmoid-scale",
+    type=float,
+    default=3.0,
+    help="Sigmoid scale for bounded effect size (default 3.0). Ignored when --calibrate-scale is set.",
+)
+@click.option(
     "--output-dir",
     "-o",
     type=click.Path(path_type=Path, file_okay=False),
@@ -165,6 +171,7 @@ def main(
     min_n_pct: float,
     approx_overlap: str,
     calibrate_scale: bool,
+    sigmoid_scale: float,
     output_dir: Optional[Path],
     output: Optional[Path],
     csv: bool,
@@ -207,6 +214,7 @@ def main(
         min_N_pct=min_n_pct,
         approx_overlap=approx_overlap,
         calibrate_scale=calibrate_scale,
+        sigmoid_scale=sigmoid_scale,
         sample_fraction=sample_fraction,
         k_heuristic=effective_heuristic,
         refine_top_k=refine_top_k,

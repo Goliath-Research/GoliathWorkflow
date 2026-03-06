@@ -104,7 +104,7 @@ Core formula (both approx/refined):
 where:
 \begin{itemize}
     \item $\sigma(z) = \frac{1}{1 + e^{-z}}$ (logistic sigmoid, bounds to $[0,1]$).
-    \item $s = 4.0$ (scale hyperparameter; $s \cdot d_\text{max} \approx 200 \to \sigma \approx 1$).
+    \item $s = 3.0$ (scale hyperparameter; default in detector config and Explorer).
     \item $O$: Overlap ($O_\text{approx}$ or $O_\text{KS}$).
 \end{itemize}
 
@@ -169,11 +169,11 @@ Key functions:
 
 \begin{verbatim}
 welch_d_fast_overlap_approx(delta_mean, var1, n1, var2, n2, 
-                           overlap_approx=None, scale=4.0)
+                           overlap_approx=None, scale=3.0)
     -> {"welch_d", "overlap_approx", "bounded_effect_size_approx"}
 
 welch_d_ks_overlap(delta_mean, var1, n1, var2, n2, ecdf_view1, 
-                   ecdf_view2, position_indices, scale=4.0)
+                   ecdf_view2, position_indices, scale=3.0)
     -> {"welch_d", "ks_d", "ks_p", "corrected_d", "bounded_effect_size"}
 \end{verbatim}
 

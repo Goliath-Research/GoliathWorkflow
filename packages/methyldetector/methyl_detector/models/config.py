@@ -408,7 +408,7 @@ class MethylModelerConfig(BaseModel):
         description="Effect size computation mode. 'legacy': |delta_mean| / (overlap * combined_std) * reliability. 'welch_sigmoid': sigmoid(scale * (|delta| / sqrt(var1/N1 + var2/N2)))."
     )
     sigmoid_scale: float = Field(
-        default=4.0, ge=1.0, le=10.0,
+        default=3.0, ge=1.0, le=10.0,
         description="Scale parameter for sigmoid in 'welch_sigmoid' mode (steepness of discrimination curve)."
     )
     ecdf_ks_grid_size: int = Field(

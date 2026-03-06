@@ -3140,7 +3140,7 @@ class MethylDetector:
         from methyl_utils.statistical_tests import welch_d_ks_overlap
         from methyl_utils import load_from_h5
         bio_dmps_df = bio_dmps_df.copy()
-        scale = getattr(self.config, "sigmoid_scale", 4.0)
+        scale = getattr(self.config, "sigmoid_scale", 3.0)
         grid_size = getattr(self.config, "ecdf_ks_grid_size", 256)
         for context in bio_dmps_df["context"].unique():
             mask = bio_dmps_df["context"] == context
@@ -3200,7 +3200,7 @@ class MethylDetector:
             oa = df["overlap_approx"].values.astype(np.float64)
             if np.any(np.isfinite(oa)):
                 overlap_approx_col = oa
-        scale = getattr(self.config, "sigmoid_scale", 4.0)
+        scale = getattr(self.config, "sigmoid_scale", 3.0)
         result = welch_d_fast_overlap_approx(
             dm, var1, n1, var2, n2, scale=scale, overlap_approx=overlap_approx_col
         )
@@ -3274,7 +3274,7 @@ class MethylDetector:
 
         from methyl_utils.statistical_tests import welch_d_ks_overlap
         position_indices = np.arange(start_idx, start_idx + len(chunk_df), dtype=np.intp)
-        sigmoid_scale = getattr(self.config, "sigmoid_scale", 4.0)
+        sigmoid_scale = getattr(self.config, "sigmoid_scale", 3.0)
         grid_size = getattr(self.config, "ecdf_ks_grid_size", 256)
         results = welch_d_ks_overlap(
             dm, var1, n1, var2, n2,

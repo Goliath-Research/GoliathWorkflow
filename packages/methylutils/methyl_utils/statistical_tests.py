@@ -1078,7 +1078,7 @@ def welch_d_fast_overlap_approx(
     n1: np.ndarray,
     var2: np.ndarray,
     n2: np.ndarray,
-    scale: float = 4.0,
+    scale: float = 3.0,
     overlap_approx: Optional[np.ndarray] = None,
 ) -> dict:
     """
@@ -1087,7 +1087,7 @@ def welch_d_fast_overlap_approx(
 
     Args:
         delta_mean, var1, n1, var2, n2: Per-position stats (same as welch_d_ks_overlap).
-        scale: Sigmoid scale for bounded_effect_size (default 4.0).
+        scale: Sigmoid scale for bounded_effect_size (default 3.0).
         overlap_approx: Optional precomputed overlap (e.g. from discrete_overlap_from_bin_counts).
             If None, use Normal-based fallback: 2 * norm.cdf(-welch_d/2).
 
@@ -1138,7 +1138,7 @@ def welch_d_ks_overlap(
     ecdf_view1: Optional[Any] = None,
     ecdf_view2: Optional[Any] = None,
     position_indices: Optional[np.ndarray] = None,
-    scale: float = 4.0,
+    scale: float = 3.0,
     grid_size: int = 256,
 ) -> dict:
     """

@@ -74,6 +74,7 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 | `--min-N-pct` | 0.05 | Minimum N as fraction of max at position (default 5%): keep where min(n1,n2) ≥ min-N-pct × max(n1,n2). Used when `--min-N` is not set. |
 | `--approx-overlap` | auto | Phase 1 overlap: `auto` (discrete when bin_edges match, else normal), `discrete` (Bhattacharyya from bin counts), `normal` (2·Φ(−welch_d/2)). Use `normal` to avoid bin alignment issues. |
 | `--calibrate-scale` | false | Calibrate sigmoid scale to maximize Spearman correlation between effect_size and (1 − ks_p) on refined positions; report includes chosen scale and correlation. |
+| `--sigmoid-scale` | 3.0 | Sigmoid scale for bounded effect size. Ignored when `--calibrate-scale` is set. Same parameter as detector config `sigmoid_scale`. |
 | `--output-dir`, `-o` | . | Directory for report and optional CSV. |
 | `--output` | - | Explicit path for report JSON. |
 | `--csv` | false | Write result table to CSV in output-dir. |
@@ -106,6 +107,7 @@ explorer = MethylDetectorExplorer(
     min_N_pct=0.05,
     approx_overlap="auto",  # or "normal" to avoid bin alignment issues
     calibrate_scale=False,  # set True to maximize correlation effect_size vs (1 - ks_p)
+    sigmoid_scale=3.0,     # same default as detector config
     k_heuristic="decay_limit",
     max_decay_per_position=0.01,
 )

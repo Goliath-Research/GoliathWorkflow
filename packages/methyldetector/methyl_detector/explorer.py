@@ -197,7 +197,7 @@ class MethylDetectorExplorer:
         min_N_pct: float = 0.05,
         approx_overlap: APPROX_OVERLAP = "auto",
         sample_fraction: float = 0.01,
-        sigmoid_scale: float = 4.0,
+        sigmoid_scale: float = 3.0,
         calibrate_scale: bool = False,
         k_heuristic: K_HEURISTIC = "decay_limit",
         refine_top_k: Optional[int] = None,
