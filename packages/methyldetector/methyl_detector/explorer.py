@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from scipy.special import expit
-from scipy.stats import spearmanr
+from scipy.stats import rankdata, spearmanr
 
 logger = logging.getLogger(__name__)
 
@@ -201,6 +201,7 @@ class MethylDetectorExplorer:
         calibrate_scale: bool = False,
         k_heuristic: K_HEURISTIC = "decay_limit",
         refine_top_k: Optional[int] = None,
+        refine_all: bool = False,
         max_decay_per_position: float = 0.01,
         threshold_fraction: float = 0.1,
         fraction_top: float = 0.01,
@@ -216,6 +217,7 @@ class MethylDetectorExplorer:
         self.calibrate_scale = calibrate_scale
         self.k_heuristic = k_heuristic
         self.refine_top_k = refine_top_k
+        self.refine_all = bool(refine_all)
         self.max_decay_per_position = max_decay_per_position
         self.threshold_fraction = threshold_fraction
         self.fraction_top = fraction_top
@@ -314,23 +316,29 @@ class MethylDetectorExplorer:
         df = df.sort_values("bounded_effect_size_approx", ascending=False).reset_index(drop=True)
         t1 = time.perf_counter()
 
-        # Choose K
-        k, k_info = _choose_k(
-            df["bounded_effect_size_approx"].values,
-            heuristic=self.k_heuristic,
-            refine_top_k=self.refine_top_k,
-            max_decay_per_position=self.max_decay_per_position,
-            threshold_fraction=self.threshold_fraction,
-            fraction_top=self.fraction_top,
-        )
-        self._k = k
-        k_info["k"] = k
+        # Choose K (or refine all when requested)
+        if self.refine_all:
+            k = len(df)
+            k_info = {"k": k, "reason": "refine_all"}
+            self._k = k
+        else:
+            k, k_info = _choose_k(
+                df["bounded_effect_size_approx"].values,
+                heuristic=self.k_heuristic,
+                refine_top_k=self.refine_top_k,
+                max_decay_per_position=self.max_decay_per_position,
+                threshold_fraction=self.threshold_fraction,
+                fraction_top=self.fraction_top,
+            )
+            self._k = k
+            k_info["k"] = k
 
         # Phase 2: refine top K with ECDF
         df["bounded_effect_size"] = df["bounded_effect_size_approx"]
         df["overlap"] = df["overlap_approx"]
         df["ks_d"] = np.nan
         df["ks_p"] = np.nan
+        df["effect_size_ecdf"] = np.nan
         scale_used = self.sigmoid_scale
         effect_size_vs_ks_p_correlation: Optional[float] = None
         if k > 0:
@@ -414,6 +422,27 @@ class MethylDetectorExplorer:
                     effect_size_vs_ks_p_correlation,
                 )
 
+            # ECDF of refined effect_size for cut-point / extreme-value interpretation
+            bes_refined = df.loc[df.index[top_k_indices_in_phase1], "bounded_effect_size"].values.astype(np.float64)
+            if len(bes_refined) > 0:
+                ranks = rankdata(bes_refined)
+                ecdf_vals = (ranks - 0.5) / len(ranks)
+                for i, idx_df in enumerate(top_k_indices_in_phase1):
+                    if i < len(ecdf_vals):
+                        df.loc[idx_df, "effect_size_ecdf"] = ecdf_vals[i]
+                effect_size_quantiles = np.percentile(bes_refined, [90, 95, 99])
+                effect_size_90th_percentile = float(effect_size_quantiles[0])
+                effect_size_95th_percentile = float(effect_size_quantiles[1])
+                effect_size_99th_percentile = float(effect_size_quantiles[2])
+            else:
+                effect_size_90th_percentile = None
+                effect_size_95th_percentile = None
+                effect_size_99th_percentile = None
+        else:
+            effect_size_90th_percentile = None
+            effect_size_95th_percentile = None
+            effect_size_99th_percentile = None
+
         t2 = time.perf_counter()
         self._df_phase1 = df
         self._report = {
@@ -432,6 +461,10 @@ class MethylDetectorExplorer:
         }
         if effect_size_vs_ks_p_correlation is not None:
             self._report["effect_size_vs_ks_p_correlation"] = effect_size_vs_ks_p_correlation
+        if effect_size_90th_percentile is not None:
+            self._report["effect_size_90th_percentile"] = effect_size_90th_percentile
+            self._report["effect_size_95th_percentile"] = effect_size_95th_percentile
+            self._report["effect_size_99th_percentile"] = effect_size_99th_percentile
         return df, self._report
 
     @property

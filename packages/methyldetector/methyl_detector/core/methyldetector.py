@@ -401,6 +401,8 @@ class MethylDetector:
                    f"out of {total_positions:,} ({(statistical_dmps_count/total_positions)*100:.1f}% pass rate)")
         
         use_fast_funnel = getattr(self.config, "use_fast_biological_funnel", True)
+        if getattr(self.config, "effect_size_quantile", None) is not None:
+            use_fast_funnel = False  # need refined effect_size for all to build ECDF and apply quantile cut
         if use_fast_funnel:
             # Fast path: approximate metrics only (no ECDF for all positions)
             dmp_df = self._compute_fast_metrics_df(filtered_results)
@@ -412,11 +414,18 @@ class MethylDetector:
             ecdf_view1 = get_distribution_view(centroid1, "ecdf")
             ecdf_view2 = get_distribution_view(centroid2, "ecdf")
             dmp_df = self._compute_missing_metrics_df(filtered_results, ecdf_view1=ecdf_view1, ecdf_view2=ecdf_view2)
-        
+            # ECDF of refined effect_size for cut-point / extreme-value selection (only when we have refined metrics)
+            col_es = "bounded_effect_size" if "bounded_effect_size" in dmp_df.columns else "effect_size"
+            if col_es in dmp_df.columns and len(dmp_df) > 0:
+                from scipy.stats import rankdata
+                bes = dmp_df[col_es].values.astype(np.float64)
+                ranks = rankdata(bes)
+                dmp_df["effect_size_ecdf"] = (ranks - 0.5) / len(ranks)
+
         # Add chromosome and context columns
         dmp_df['chromosome'] = self.chromosome
         dmp_df['context'] = context
-        
+
         return dmp_df
 
     def _apply_eat_transformation(self, comparison_results: pd.DataFrame,
@@ -633,10 +642,20 @@ class MethylDetector:
         Filter DMPs by biological significance (ECDF-based). All set filters are applied (AND):
         - min_delta_mean: keep |delta_mean| >= value
         - max_overlap: keep overlap <= value (overlap = 1 - ks_d, ECDF-based)
-        - min_effect_size: keep effect_size >= value (effect size in [0, 1])
+        - min_effect_size: keep effect_size >= value (or effect_size_quantile: keep >= empirical quantile)
         """
         initial_count = len(dmps_df)
         min_eff = self.config.min_effect_size
+        if getattr(self.config, "effect_size_quantile", None) is not None:
+            col_es = "bounded_effect_size" if "bounded_effect_size" in dmps_df.columns else "effect_size"
+            if col_es in dmps_df.columns and len(dmps_df) > 0:
+                threshold = float(np.percentile(dmps_df[col_es].astype(float), 100.0 * self.config.effect_size_quantile))
+                min_eff = threshold if min_eff is None else max(min_eff, threshold)
+                logger.info(
+                    "Effect size quantile cut: %.2f → threshold = %.4f (refined effect_size >= threshold)",
+                    self.config.effect_size_quantile,
+                    threshold,
+                )
         bio_df = _apply_biological_filters(
             dmps_df,
             self.config.min_delta_mean,
@@ -681,6 +700,8 @@ class MethylDetector:
             thresholds_used["max_overlap"] = self.config.max_overlap
         if min_eff is not None:
             thresholds_used["min_effect_size"] = min_eff
+        if getattr(self.config, "effect_size_quantile", None) is not None:
+            thresholds_used["effect_size_quantile"] = self.config.effect_size_quantile
 
         value_ranges = {}
         for col, label in [("delta_mean", "delta_mean"), ("overlap", "overlap"), ("bounded_effect_size", "effect_size")]:

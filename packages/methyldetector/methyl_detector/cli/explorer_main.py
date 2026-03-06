@@ -68,6 +68,12 @@ logger = logging.getLogger(__name__)
     help="Fixed number of top positions to refine with ECDF (overrides --k-heuristic).",
 )
 @click.option(
+    "--refine-all",
+    is_flag=True,
+    default=False,
+    help="Refine effect_size with ECDF for all positions (slow). Builds ECDF of refined effect_size for cut-point selection.",
+)
+@click.option(
     "--k-heuristic",
     type=click.Choice(["decay_limit", "knee", "threshold", "fraction", "fixed"]),
     default="decay_limit",
@@ -162,6 +168,7 @@ def main(
     context: str,
     sample_fraction: float,
     refine_top_k: Optional[int],
+    refine_all: bool,
     k_heuristic: str,
     max_decay_per_position: float,
     threshold_fraction: float,
@@ -218,6 +225,7 @@ def main(
         sample_fraction=sample_fraction,
         k_heuristic=effective_heuristic,
         refine_top_k=refine_top_k,
+        refine_all=refine_all,
         max_decay_per_position=max_decay_per_position,
         threshold_fraction=threshold_fraction,
         fraction_top=fraction_top,
@@ -249,6 +257,8 @@ def main(
     )
     if "effect_size_vs_ks_p_correlation" in report:
         msg += f", effect_size vs (1-ks_p) Spearman: {report['effect_size_vs_ks_p_correlation']:.4f}"
+    if "effect_size_95th_percentile" in report:
+        msg += f", effect_size 95th %ile: {report['effect_size_95th_percentile']:.4f}"
     click.echo(msg)
 
     if csv:

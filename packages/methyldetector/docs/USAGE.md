@@ -167,6 +167,8 @@ Minimal JSON config example:
 - **alpha**: FDR threshold (e.g. 0.01 or 0.05).  
 - **min_delta_mean**: Minimum |Δμ| for biological filter.  
 - **max_bc**: Maximum Bhattacharyya coefficient (overlap); lower = more discriminative.  
+- **min_effect_size**: Minimum (refined) effect size in [0,1] for biological filter.  
+- **effect_size_quantile**: If set (e.g. 0.95), keep only DMPs with refined effect_size ≥ this empirical quantile (ECDF-based cut-point). Uses full ECDF path.  
 - **use_gpu**: Use GPU when available.
 
 Optional **filter funnel exploration** (`filter_funnel_explore`): sweep biological filter values (min/max/step) in one run and write `filter_funnel.csv` (columns: n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps) for charting; see README “Filter funnel exploration”.

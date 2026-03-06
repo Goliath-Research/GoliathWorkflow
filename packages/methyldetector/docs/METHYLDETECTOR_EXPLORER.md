@@ -36,6 +36,16 @@ Use **`--calibrate-scale`** to have the Explorer choose the sigmoid scale that *
 
 **How exact is the refined effect size?** It is exact relative to: (1) the binned ECDF (finer bins → closer to the true distribution), (2) PCHIP interpolation between bin edges, and (3) the KS statistic computed on a finite grid (default 256 points), which can slightly underestimate the true sup. Approx (e.g. Normal overlap) and refined (KS-based) can still differ in scale because they use different overlap notions; the refined value is the more distribution-aware estimate. See [Effect_Size_Theory.tex](Effect_Size_Theory.tex) § “Precision of the exact effect size”.
 
+## Refined effect size and ECDF cut-point
+
+The biologist’s goal is to select DMPs with **significant differences in means** (corrected by variance and overlap). Because the refined effect size has no known null distribution, significance is assessed practically by building the **ECDF of (refined) effect_size** and using it to define a cut-point (extreme values).
+
+- **`--refine-all`**: Refine effect size with ECDF for **all** positions (no K limit). Slower, but gives refined effect_size and ECDF for every position so the cut-point is based on the full distribution.
+- For refined rows, the CSV includes **`effect_size_ecdf`**: the empirical CDF value of that row’s `bounded_effect_size` among the refined set (so ECDF ∈ (0, 1); high effect → high ECDF). Use it to flag “top” positions (e.g. effect_size_ecdf ≥ 0.95).
+- The report JSON includes **`effect_size_90th_percentile`**, **`effect_size_95th_percentile`**, **`effect_size_99th_percentile`** (when K > 0): the value of refined effect_size at that quantile. Use e.g. `effect_size_95th_percentile` as a suggested cut: keep positions with `bounded_effect_size` ≥ that value (top 5%).
+
+In **MethylDetector**, set **`effect_size_quantile`** in the config (e.g. `0.95`) to keep only DMPs with refined effect_size ≥ that empirical quantile. When set, the detector uses the full ECDF path (refined effect_size for all statistical DMPs), adds `effect_size_ecdf` to the table, and applies the quantile cut.
+
 ## Requirements
 
 - Centroids must have **binned_stats** (in memory: bin_edges, bin_counts). Build them with MethylCentroid using `binned_stats_bins` (e.g. 20). For comparable Phase 1 vs Phase 2 results, use the same bin count for both centroids. Centroid H5 files store only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]`; bin edges are derived as `np.linspace(0, 1, bins+1)` (proportions are always in [0,1]).
@@ -65,6 +75,7 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 | `--context` | CG | Methylation context (CG, CHG, CHH). |
 | `--sample-fraction` | 0.01 | Fraction of positions used in Phase 1 (e.g. 0.01 = 1%). Use 1.0 for all positions. |
 | `--refine-top-k` | - | Fixed number of top positions to refine (overrides K heuristic). |
+| `--refine-all` | false | Refine effect_size with ECDF for all positions (slow). Use for ECDF-based cut-point on full set. |
 | `--k-heuristic` | decay_limit | How to choose K: `decay_limit`, `knee`, `threshold`, `fraction`, or `fixed`. |
 | `--max-decay-per-position` | 0.01 | For `decay_limit`: stop when decay rate (drop per position) exceeds this. |
 | `--threshold-fraction` | 0.1 | For `threshold`: keep positions with effect_size ≥ this fraction of max. |
@@ -83,8 +94,8 @@ methyl-detector-explorer --centroid1 /path/to/1-CG.h5 --centroid2 /path/to/2-CG.
 ## Outputs
 
 - **Report JSON** (default: `methyldetectorexplorer_report.json` in output-dir):  
-  `total_positions`, `positions_after_min_N_filter`, `phase1_sample_size`, `sample_fraction`, `approx_overlap_method`, `sigmoid_scale_used`, `k_chosen`, `k_heuristic`, `k_info`, `time_phase1_s`, `time_phase2_s`, `time_total_s`. With `--calibrate-scale`: also `effect_size_vs_ks_p_correlation` (Spearman).
-- **Optional CSV** (with `--csv`): Table of positions with `position`, `mean1`, `mean2`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `overlap_approx`, `bounded_effect_size_approx`, `welch_d`, and for top K refined `bounded_effect_size`, `overlap`, `ks_d` (KS statistic), and `ks_p` (KS p-value). Non-refined rows have NaN for `ks_d` and `ks_p`. Bounded effect size is in [0,1] with **0 = no difference**, 1 = maximum separation.
+  `total_positions`, `positions_after_min_N_filter`, `phase1_sample_size`, `sample_fraction`, `approx_overlap_method`, `sigmoid_scale_used`, `k_chosen`, `k_heuristic`, `k_info`, `time_phase1_s`, `time_phase2_s`, `time_total_s`. With `--calibrate-scale`: also `effect_size_vs_ks_p_correlation` (Spearman). When K > 0: `effect_size_90th_percentile`, `effect_size_95th_percentile`, `effect_size_99th_percentile` (refined effect_size at that quantile, for cut-point selection).
+- **Optional CSV** (with `--csv`): Table of positions with `position`, `mean1`, `mean2`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `overlap_approx`, `bounded_effect_size_approx`, `welch_d`, and for refined rows `bounded_effect_size`, `overlap`, `ks_d`, `ks_p`, **`effect_size_ecdf`** (ECDF of refined effect_size among refined set; use for extreme-value cut). Non-refined rows have NaN for `ks_d`, `ks_p`, and `effect_size_ecdf`. Bounded effect size is in [0,1] with **0 = no difference**, 1 = maximum separation.
 
 ## K heuristics
 

@@ -242,6 +242,10 @@ class MethylModelerConfig(BaseModel):
         default=None, ge=0.0, le=1.0,
         description="Minimum effect size for biological filter (value in [0, 1]). Keep DMPs with effect_size >= min_effect_size. Set null to disable."
     )
+    effect_size_quantile: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="If set, keep DMPs with refined effect_size >= this quantile of the empirical distribution (e.g. 0.95 = top 5%%). Uses ECDF of refined effect_size; requires full ECDF path (disables fast funnel when set). Ignored if null."
+    )
     min_delta_mean: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
         description="Minimum absolute methylation difference for biological filter. Keep DMPs with |delta_mean| >= min_delta_mean (e.g. 0.1 = 10%% change). Set null to disable. Easy to interpret for biologists."
