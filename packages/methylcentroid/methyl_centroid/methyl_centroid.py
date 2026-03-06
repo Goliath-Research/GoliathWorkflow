@@ -803,11 +803,6 @@ class MethylCentroid:
                     continue
                 try:
                     builder.add_sample(sample_path)
-                    self._log_memory_after_operation(
-                        "sample_added",
-                        sample_index=sample_idx,
-                        total_samples=len(all_samples),
-                    )
 
                     is_new_sample = sample_idx >= len(self.samples)
                     actual_sample_idx = (
@@ -1069,11 +1064,6 @@ class MethylCentroid:
                             with progress_lock:
                                 progress_bar.update(1)
                                 progress_bar.set_postfix_str(sample_path.name, refresh=True)
-                            self._log_memory_after_operation(
-                                "sample_added",
-                                sample_index=sample_idx,
-                                total_samples=len(all_samples),
-                            )
                         else:
                             self.logger.warning(
                                 f"Failed to add sample {sample_path.name} to position aligner"
@@ -1627,33 +1617,6 @@ class MethylCentroid:
         if self.use_gpu:
             cleanup_gpu_memory()
 
-    def _log_memory_after_operation(
-        self,
-        operation: str,
-        sample_index: Optional[int] = None,
-        total_samples: Optional[int] = None,
-    ) -> None:
-        """Log free CPU and GPU memory after an operation for leak debugging."""
-        try:
-            usage = self.memory_manager.get_memory_usage()
-            process_rss_mb = usage.get("system_memory_mb", 0.0)
-            vm = psutil.virtual_memory()
-            system_free_gb = vm.available / (1024**3)
-            gpu_used_gb = usage.get("gpu_memory_gb", 0.0)
-            gpu_free_gb = usage.get("gpu_free_gb", 0.0)
-            chrom_ctx = f"{self.chrom}-{self.ctx}"
-            parts = [f"Memory after {operation} [{chrom_ctx}]"]
-            if sample_index is not None and total_samples is not None:
-                parts.append(f"sample {sample_index + 1}/{total_samples}")
-            parts.append(
-                f"process RSS {process_rss_mb:.0f} MB | system free {system_free_gb:.2f} GB"
-            )
-            if gpu_used_gb > 0 or gpu_free_gb > 0:
-                parts.append(f"| GPU used {gpu_used_gb:.2f} GB GPU free {gpu_free_gb:.2f} GB")
-            self.logger.info(" ".join(parts))
-        except Exception as e:
-            self.logger.debug("Memory log failed: %s", e)
-
     def calculate_centroid(self, output_dir: str, extended: bool = False) -> Path:
         print(
             f"Adding {len(self.samples) + len(self.add_samples)} samples for {self.chrom}-{self.ctx}"
@@ -1727,7 +1690,6 @@ class MethylCentroid:
                 )
 
         self.add_samples_parallel()
-        self._log_memory_after_operation("all_samples_added")
 
         # Check if any samples were successfully added
         if len(self.active_samples) == 0:
@@ -1767,7 +1729,6 @@ class MethylCentroid:
         centroid_path = self.save_centroid(output_dir, centroid, extended=extended)
         if centroid_path is None:
             raise RuntimeError("Failed to save centroid: no valid data to save")
-        self._log_memory_after_operation("centroid_saved")
 
         return centroid_path
 
@@ -2390,10 +2351,6 @@ class MethylCentroid:
 
             gc.collect()
 
-            # Report memory after clearing
-            memory_after_gb = psutil.virtual_memory().used / (1024**3)
-            self.logger.info(f"Memory after cache clear: {memory_after_gb:.1f}GB")
-
     def _get_memory_usage_info(self) -> dict:
         memory_info = self.memory_manager.get_memory_usage()
         return {
@@ -2523,7 +2480,6 @@ class MethylCentroid:
 
     def build_centroid(self) -> CentroidResults:
         """Build centroid with comprehensive performance profiling."""
-        self._log_memory_after_operation("build_centroid_start")
         with self.performance_profiler.profile_operation("build_centroid"):
             # Check if centroid exists
             centroid_exists = self.centroid_path.exists()
@@ -2568,7 +2524,6 @@ class MethylCentroid:
                 self.sample_cache.clear()
             import gc
             gc.collect()
-            self._log_memory_after_operation("after_cleanup")
         except Exception as e:
             self.logger.debug(f"Post-build cleanup: {e}")
 
