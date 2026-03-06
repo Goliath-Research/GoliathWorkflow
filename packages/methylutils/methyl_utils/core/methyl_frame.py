@@ -537,6 +537,16 @@ class MethylFrame:
 class MethylSample(MethylFrame):
     _required_cols = {"pos", "mC", "uC", "tnc"}
 
+    def close(self, free_gpu_pool: bool = False) -> None:
+        """
+        Release references and free memory used by this sample.
+
+        Call when done with the sample to avoid memory leaks (e.g. after
+        extracting data or when evicting from a cache). Idempotent; safe to
+        call more than once. After close(), the instance must not be used.
+        """
+        super().close(free_gpu_pool=free_gpu_pool)
+
     def cap_coverage_binomial(
         self,
         n_cap: int,

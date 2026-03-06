@@ -1806,6 +1806,11 @@ class MethylCentroid:
                     chunk_results, extended
                 )
 
+            # Release chunk and position cache references to avoid holding memory
+            chunk_results.clear()
+            chunk_bin_counts.clear()
+            pos_cache.clear()
+
             # Ensure GPU cleanup after chunked processing
             memory_manager.force_gpu_cleanup()
 
@@ -2079,6 +2084,7 @@ class MethylCentroid:
                 return (pos_vals[sort_idx], mC_vals[sort_idx], uC_vals[sort_idx])
 
         # Fallback: load without caching
+        methyl_sample = None
         try:
             methyl_sample = self.load_sample(sample_path, memory_map=True)
 
@@ -2102,11 +2108,11 @@ class MethylCentroid:
                 else np.asarray(methyl_sample.uC)
             )
 
-            # Sort by position
+            # Sort by position (copies; safe to close sample after)
             sort_idx = np.argsort(pos_vals)
-            sorted_pos = pos_vals[sort_idx]
-            sorted_mC = mC_vals[sort_idx]
-            sorted_uC = uC_vals[sort_idx]
+            sorted_pos = pos_vals[sort_idx].copy()
+            sorted_mC = mC_vals[sort_idx].copy()
+            sorted_uC = uC_vals[sort_idx].copy()
 
             return sorted_pos, sorted_mC, sorted_uC
 
@@ -2118,6 +2124,13 @@ class MethylCentroid:
                 np.array([], dtype=np.uint32),
                 np.array([], dtype=np.uint32),
             )
+        finally:
+            if methyl_sample is not None:
+                try:
+                    if hasattr(methyl_sample, "close"):
+                        methyl_sample.close()
+                except Exception:
+                    pass
 
     def process_large_sample_chunked(
         self, sample_path: Path, chunk_size: int = 1_000_000

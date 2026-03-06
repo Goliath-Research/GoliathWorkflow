@@ -127,6 +127,13 @@ class SmartSampleCache:
         # Get LRU item
         lru_path, lru_sample = self.cache.popitem(last=False)  # FIFO order
 
+        # Release sample references and any internal state (avoid memory leak)
+        try:
+            if hasattr(lru_sample, "close"):
+                lru_sample.close()
+        except Exception:
+            pass
+
         # Update memory tracking
         if lru_path in self.memory_usage_mb:
             self.total_cached_memory_mb -= self.memory_usage_mb[lru_path]
@@ -135,7 +142,13 @@ class SmartSampleCache:
         return True
 
     def clear(self):
-        """Clear all cached samples."""
+        """Clear all cached samples and release their resources."""
+        for _path, sample in list(self.cache.items()):
+            try:
+                if hasattr(sample, "close"):
+                    sample.close()
+            except Exception:
+                pass
         self.cache.clear()
         self.memory_usage_mb.clear()
         self.total_cached_memory_mb = 0.0
@@ -455,16 +468,24 @@ class SampleManager:
                 # Evict least recently used (simple FIFO for now)
                 oldest_key = next(iter(self._aligned_cache))
                 del self._aligned_cache[oldest_key]
-            sample_obj = self.load_sample(sample_path)
-            # Align sample to centroid positions if provided
-            if centroid_positions is not None:
-                aligned_sample = sample_obj.align_to_positions(centroid_positions)
-                mC = np.asarray(aligned_sample.mC.values, dtype=np.uint32)
-                uC = np.asarray(aligned_sample.uC.values, dtype=np.uint32)
-            else:
-                mC = np.asarray(sample_obj.mC.values, dtype=np.uint32)
-                uC = np.asarray(sample_obj.uC.values, dtype=np.uint32)
-            self._aligned_cache[cache_key] = (mC, uC)
+            sample_obj = None
+            try:
+                sample_obj = self.load_sample(sample_path)
+                # Align sample to centroid positions if provided
+                if centroid_positions is not None:
+                    aligned_sample = sample_obj.align_to_positions(centroid_positions)
+                    mC = np.asarray(aligned_sample.mC.values, dtype=np.uint32).copy()
+                    uC = np.asarray(aligned_sample.uC.values, dtype=np.uint32).copy()
+                else:
+                    mC = np.asarray(sample_obj.mC.values, dtype=np.uint32).copy()
+                    uC = np.asarray(sample_obj.uC.values, dtype=np.uint32).copy()
+                self._aligned_cache[cache_key] = (mC, uC)
+            finally:
+                if sample_obj is not None and hasattr(sample_obj, "close"):
+                    try:
+                        sample_obj.close()
+                    except Exception:
+                        pass
         return self._aligned_cache[cache_key]
 
     # Call clear_cache() after updating centroid
