@@ -846,23 +846,19 @@ class MethylExtendedCentroid(MethylFrame):
         sample_coverage = sample_mC + sample_uC
         with np.errstate(divide="ignore", invalid="ignore"):
             sample_mean = np.where(sample_coverage > 0, sample_mC.astype(np.float32) / sample_coverage.astype(np.float32), 0.0)
-        # Find common positions
-        common_mask_centroid = np.isin(centroid_pos, sample_pos)
+        # Find common positions using intersect1d so indexing is by position value, not searchsorted order
+        common_pos, idx_centroid, idx_sample = np.intersect1d(
+            centroid_pos, sample_pos, assume_unique=True, return_indices=True
+        )
         common_mask_sample = np.isin(sample_pos, centroid_pos)
-        
-        # Update common positions
-        if np.any(common_mask_centroid):
-            # Find indices in sample for common positions (do not index sample_pos when index == len(sample_pos))
-            sample_indices = np.searchsorted(sample_pos, centroid_pos[common_mask_centroid])
-            in_range = sample_indices < len(sample_pos)
-            valid_sample_mask = in_range.copy()
-            valid_sample_mask[in_range] = sample_pos[sample_indices[in_range]] == centroid_pos[common_mask_centroid][in_range]
-            safe_idx = np.minimum(sample_indices, len(sample_pos) - 1)
-            centroid_mC_sum[common_mask_centroid] += np.where(valid_sample_mask, sample_mC[safe_idx].astype(np.uint64), np.uint64(0))
-            centroid_uC_sum[common_mask_centroid] += np.where(valid_sample_mask, sample_uC[safe_idx].astype(np.uint64), np.uint64(0))
-            centroid_N[common_mask_centroid] += np.where(valid_sample_mask, np.uint32(1), np.uint32(0))
-            centroid_Sx[common_mask_centroid] += np.where(valid_sample_mask, sample_mean[safe_idx], 0)
-            centroid_Sx2[common_mask_centroid] += np.where(valid_sample_mask, sample_mean[safe_idx] ** 2, 0)
+
+        # Update common positions: add sample mC/uC at the correct position-matched indices
+        if len(common_pos) > 0:
+            centroid_mC_sum[idx_centroid] += sample_mC[idx_sample].astype(np.uint64)
+            centroid_uC_sum[idx_centroid] += sample_uC[idx_sample].astype(np.uint64)
+            centroid_N[idx_centroid] += np.uint32(1)
+            centroid_Sx[idx_centroid] += sample_mean[idx_sample]
+            centroid_Sx2[idx_centroid] += sample_mean[idx_sample].astype(np.float32) ** 2
         # Add new positions from sample
         new_pos_mask = ~common_mask_sample
         if np.any(new_pos_mask):
@@ -911,23 +907,25 @@ class MethylExtendedCentroid(MethylFrame):
             bin_edges = np.asarray(self._binned_stats["bin_edges"], dtype=np.float64)
             centroid_bin_counts = np.asarray(self._binned_stats["bin_counts"], dtype=np.float64)
             n_bins = len(bin_edges) - 1
-            position_in_sample = np.isin(all_pos, sample_pos)
             sample_mean_at_all = np.zeros(len(all_pos), dtype=np.float64)
-            sidx = np.searchsorted(sample_pos, all_pos)
-            # Do not index sample_pos with sidx when sidx == len(sample_pos) (OOB)
-            in_range = sidx < len(sample_pos)
-            valid = in_range.copy()
-            valid[in_range] = sample_pos[sidx[in_range]] == all_pos[in_range]
-            sample_mean_at_all[valid] = np.clip(sample_mean[sidx[valid]].astype(np.float64), 1e-9, 1.0 - 1e-9)
+            # Position-based lookup: match all_pos to sample positions (no assumption on sample_pos order)
+            common_pos_bin, idx_all, idx_samp = np.intersect1d(
+                all_pos, sample_pos, assume_unique=True, return_indices=True
+            )
+            if len(common_pos_bin) > 0:
+                sample_mean_at_all[idx_all] = np.clip(
+                    sample_mean[idx_samp].astype(np.float64), 1e-9, 1.0 - 1e-9
+                )
             bin_idx = np.digitize(sample_mean_at_all, bin_edges[1:-1] if n_bins > 1 else np.array([0.5]))
             bin_idx = np.clip(bin_idx, 0, n_bins - 1)
             all_bin_counts = np.zeros((len(all_pos), n_bins), dtype=centroid_bin_counts.dtype)
-            pos_in_centroid = np.searchsorted(centroid_pos, all_pos)
-            # Do not index centroid_pos with pos_in_centroid when pos_in_centroid == len(centroid_pos) (OOB)
-            cent_in_range = pos_in_centroid < len(centroid_pos)
-            from_centroid = cent_in_range.copy()
-            from_centroid[cent_in_range] = centroid_pos[pos_in_centroid[cent_in_range]] == all_pos[cent_in_range]
-            all_bin_counts[from_centroid] = centroid_bin_counts[pos_in_centroid[from_centroid]]
+            # Position-based copy from centroid bin_counts (no assumption on centroid_pos order)
+            common_pos_c, idx_all_c, idx_cent_c = np.intersect1d(
+                all_pos, centroid_pos, assume_unique=True, return_indices=True
+            )
+            if len(common_pos_c) > 0:
+                all_bin_counts[idx_all_c] = centroid_bin_counts[idx_cent_c]
+            position_in_sample = np.isin(all_pos, sample_pos)
             row_idx = np.arange(len(all_pos))[position_in_sample]
             bc_idx = bin_idx[position_in_sample]
             np.add.at(all_bin_counts, (row_idx, bc_idx), 1)
@@ -951,18 +949,18 @@ class MethylExtendedCentroid(MethylFrame):
         sample_coverage = sample_mC + sample_uC
         with np.errstate(divide="ignore", invalid="ignore"):
             sample_mean = np.where(sample_coverage > 0, sample_mC.astype(np.float32) / sample_coverage.astype(np.float32), 0.0)
-        common_mask_centroid = np.isin(centroid_pos, sample_pos)
-        if np.any(common_mask_centroid):
-            sample_indices = np.searchsorted(sample_pos, centroid_pos[common_mask_centroid])
-            in_range = sample_indices < len(sample_pos)
-            valid_sample_mask = in_range.copy()
-            valid_sample_mask[in_range] = sample_pos[sample_indices[in_range]] == centroid_pos[common_mask_centroid][in_range]
-            safe_idx = np.minimum(sample_indices, len(sample_pos) - 1)
-            centroid_mC_sum[common_mask_centroid] -= np.where(valid_sample_mask, sample_mC[safe_idx].astype(np.uint64), np.uint64(0))
-            centroid_uC_sum[common_mask_centroid] -= np.where(valid_sample_mask, sample_uC[safe_idx].astype(np.uint64), np.uint64(0))
-            centroid_N[common_mask_centroid] = np.maximum(0, centroid_N[common_mask_centroid] - np.where(valid_sample_mask, np.uint32(1), np.uint32(0)).astype(np.int32)).astype(np.uint32)
-            centroid_Sx[common_mask_centroid] -= np.where(valid_sample_mask, sample_mean[safe_idx], 0)
-            centroid_Sx2[common_mask_centroid] -= np.where(valid_sample_mask, sample_mean[safe_idx] ** 2, 0)
+        common_pos, idx_centroid, idx_sample = np.intersect1d(
+            centroid_pos, sample_pos, assume_unique=True, return_indices=True
+        )
+        if len(common_pos) > 0:
+            centroid_mC_sum[idx_centroid] -= sample_mC[idx_sample].astype(np.uint64)
+            centroid_uC_sum[idx_centroid] -= sample_uC[idx_sample].astype(np.uint64)
+            centroid_N[idx_centroid] = np.maximum(
+                0,
+                centroid_N[idx_centroid].astype(np.int32) - 1
+            ).astype(np.uint32)
+            centroid_Sx[idx_centroid] -= sample_mean[idx_sample]
+            centroid_Sx2[idx_centroid] -= sample_mean[idx_sample].astype(np.float32) ** 2
         valid_mask = centroid_N > 0
         if not np.any(valid_mask):
             raise ValueError("Cannot remove sample: centroid would have no valid positions")
@@ -980,17 +978,20 @@ class MethylExtendedCentroid(MethylFrame):
             bin_edges = np.asarray(self._binned_stats["bin_edges"], dtype=np.float64)
             centroid_bin_counts = np.asarray(self._binned_stats["bin_counts"], dtype=np.float64)
             n_bins = len(bin_edges) - 1
-            position_in_sample = np.isin(centroid_pos[valid_mask], sample_pos)
-            sample_mean_at_valid = np.zeros(np.sum(valid_mask), dtype=np.float64)
-            sidx = np.searchsorted(sample_pos, centroid_pos[valid_mask])
-            in_range_s = sidx < len(sample_pos)
-            valid_s = in_range_s.copy()
-            valid_s[in_range_s] = sample_pos[sidx[in_range_s]] == centroid_pos[valid_mask][in_range_s]
-            sample_mean_at_valid[valid_s] = np.clip(sample_mean[sidx[valid_s]].astype(np.float64), 1e-9, 1.0 - 1e-9)
+            valid_pos = centroid_pos[valid_mask]
+            sample_mean_at_valid = np.zeros(len(valid_pos), dtype=np.float64)
+            common_r, idx_valid, idx_samp = np.intersect1d(
+                valid_pos, sample_pos, assume_unique=True, return_indices=True
+            )
+            if len(common_r) > 0:
+                sample_mean_at_valid[idx_valid] = np.clip(
+                    sample_mean[idx_samp].astype(np.float64), 1e-9, 1.0 - 1e-9
+                )
             bin_idx = np.digitize(sample_mean_at_valid, bin_edges[1:-1] if n_bins > 1 else np.array([0.5]))
             bin_idx = np.clip(bin_idx, 0, n_bins - 1)
             new_bin_counts = centroid_bin_counts[valid_mask].copy()
-            row_idx = np.arange(np.sum(valid_mask))[position_in_sample]
+            position_in_sample = np.isin(valid_pos, sample_pos)
+            row_idx = np.arange(len(valid_pos))[position_in_sample]
             np.add.at(new_bin_counts, (row_idx, bin_idx[position_in_sample]), -1)
             new_bin_counts = np.maximum(new_bin_counts, 0)
             out.set_binned_stats(bin_edges, new_bin_counts)
