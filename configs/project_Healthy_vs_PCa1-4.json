@@ -116,6 +116,7 @@
         "alpha": 0.05,
         "distribution": "ecdf",
         "max_N_for_ecdf": 30,
+        "sigmoid_scale": 3.0,
         "optimize_dmps": true,
         "validation_mode": "real",
         "target_balanced_accuracy": 0.99,
