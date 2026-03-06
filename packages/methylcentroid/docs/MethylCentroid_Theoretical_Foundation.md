@@ -56,7 +56,7 @@ The pipeline supports **only the empirical distribution (ECDF)** for:
 - **Log-probability**: \(\log P(x \mid \text{centroid}) = \log F'(x)\) from the spline derivative
 - **P-value**: approximate (e.g. two-sample KS or chi-square on binned counts)
 
-Centroids must be built with `binned_stats_bins` > 0 (default 20) so that `bin_edges` and `bin_counts` are present. MethylCentroidPair and MethylDetector use ECDF only; Normal, Beta, Beta-Binomial, and Beta-Mixture distribution options have been removed.
+Centroids must be built with `binned_stats_bins` > 0 (default 20) so that binned stats are present. In memory the centroid has `bin_edges` and `bin_counts`; in HDF5 only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored (bin edges are derived as uniform in [0,1]). MethylCentroidPair and MethylDetector use ECDF only; Normal, Beta, Beta-Binomial, and Beta-Mixture distribution options have been removed.
 
 ---
 

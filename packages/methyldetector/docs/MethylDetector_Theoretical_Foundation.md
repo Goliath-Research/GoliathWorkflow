@@ -11,7 +11,7 @@ Downstream, selected DMPs are used for classifier training and validation (Balan
 
 ## Probabilistic Model
 
-Per genomic position, methylation is bounded in \([0, 1]\). MethylDetector uses **only the empirical distribution (ECDF)** for comparison and overlap. Centroids must have **binned_stats** (bin_edges, bin_counts), built with `binned_stats_bins` (default 20). MethylUtils **MethylCentroidPair** computes overlap, p-values, and effect size using ECDF only; Normal, Beta, Beta-Binomial, and Beta-Mixture are not supported.
+Per genomic position, methylation is bounded in \([0, 1]\). MethylDetector uses **only the empirical distribution (ECDF)** for comparison and overlap. Centroids must have **binned_stats** (in memory: bin_edges, bin_counts), built with `binned_stats_bins` (default 20). In HDF5 only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored; bin edges are derived. MethylUtils **MethylCentroidPair** computes overlap, p-values, and effect size using ECDF only; Normal, Beta, Beta-Binomial, and Beta-Mixture are not supported.
 
 ## Statistical Testing
 

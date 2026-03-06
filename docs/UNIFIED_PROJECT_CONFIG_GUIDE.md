@@ -19,12 +19,15 @@ This document is the **single reference** for the **unified project config** (pr
 Tools that support `--project`:
 
 - **methyl-centroid** — builds centroids per group
+- **methyl-centroid-explorer** — explore centroid build options (optional)
 - **methyl-detector** — DMP detection (per comparison when using control/disease)
+- **methyl-detector-explorer** — explore refinement and effect-size options (optional)
 - **methyl-mapper** — maps DMPs to genes (per comparison)
 - **methyl-enricher** — enrichment (per comparison)
 - **methyl-classifier** — classification (per comparison)
-- **methyl-predictor** — prediction and validation metrics (per comparison)
-- **methyl-qc** — alignment QC (optional)
+- **methyl-predictor** — classification metrics on test sets
+- **methyl-validation** — validation workflows (e.g. Monte Carlo; uses `--config` for validation config)
+- **methyl-qc** / **methyl-alignment-qc** — alignment QC (optional)
 
 Optional **step overrides**: `--step-override path/to/overrides.json` merges over the project’s `step_config` for that run.
 

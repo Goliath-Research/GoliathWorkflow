@@ -32,7 +32,7 @@ This manual describes how to **run** the pipeline (users) and how to **extend an
 - **Docker (recommended):** Build and start the dev container (see [README](../README.md#option-1-docker-recommended)). Use `scripts/setup_dev.sh`; then `docker exec -it methylpipeline bash`.
 - **Host (non-Docker):** From repo root, run `bash scripts/setup_host.sh --system-deps --gpu`. Omit `--gpu` for CPU-only. Use `--venv /path/to/venv` to control the virtualenv. See [README_ENV.md](../README_ENV.md) and [ENV_SETUP.md](../ENV_SETUP.md) if you use conda or a custom env.
 
-All pipeline CLIs are invoked as: `methyl-centroid`, `methyl-detector`, `methyl-mapper`, `methyl-enricher`, `methyl-classifier`, `methyl-qc`. Ensure the MethylPipeline packages are installed (e.g. `pip install -e .` in each package or use the repo-level setup script).
+All pipeline CLIs: `methyl-centroid`, `methyl-centroid-explorer`, `methyl-detector`, `methyl-detector-explorer`, `methyl-mapper`, `methyl-enricher`, `methyl-classifier`, `methyl-predictor`, `methyl-validation`, `methyl-qc` / `methyl-alignment-qc`. Ensure the MethylPipeline packages are installed (e.g. `pip install -e .` in each package or use the repo-level setup script).
 
 ### Project configuration
 
@@ -70,13 +70,17 @@ Run steps in this order:
 | Step | Tool | Input | Output |
 |------|------|--------|--------|
 | 1 | Centroid (per group) | Sample dirs from project | `{project_root}/centroids/{group.label}/` (HDF5 per chrom/context) |
+| 1b (optional) | MethylCentroid Explorer | Centroid H5 paths | Report/CSV for centroid build options |
 | 2 | MethylDetector | Centroid dirs (group1, group2, …) from project | `{project_root}/detection/` (DMP CSVs, classifier PKL, results JSON) |
+| 2b (optional) | MethylDetector Explorer | Centroid H5 paths | Report/CSV for refinement and effect-size options |
 | 3 | MethylMapper | DMP CSVs from detection | `{project_root}/mapper/` (gene/feature CSVs, optional disease enrichment) |
 | 4 | MethylEnricher | Mapper combined gene CSV | `{project_root}/enricher/` (enrichment results) |
 | 5 | MethylClassifier | Model from detection + centroid dirs from project | `{project_root}/classifier/` (e.g. results CSV) |
-| 6 (optional) | MethylAlignmentQC | Sample dirs from project | `{project_root}/alignment_qc/` (one JSON per sample) |
+| 6 | MethylPredictor | Classifier + test samples | Classification metrics |
+| 7 | MethylValidation | Project + validation config (e.g. Monte Carlo) | Runs centroid, detector, classifier, predictor per run |
+| 0 (optional) | MethylAlignmentQC | Sample dirs from project | `{project_root}/alignment_qc/` (one JSON per sample) |
 
-Classifier can be run whenever detection and centroid dirs are ready; it does not depend on mapper or enricher. Mapper reads DMP CSVs (e.g. `dmps-*-optimized.csv`) from detection.
+Classifier can be run whenever detection and centroid dirs are ready; it does not depend on mapper or enricher. Mapper reads DMP CSVs (e.g. `dmps-*-optimized.csv`) from detection. Centroid HDF5 files use only the `methylation_data` group (with optional `bins` attr and `bin_counts` dataset for binned stats); no separate `binned_stats` group.
 
 ### CLI reference
 
@@ -85,11 +89,15 @@ All commands support `--project PATH` (and where noted, `--step-override PATH`).
 | Command | Required (with --project) | Key options |
 |---------|----------------------------|-------------|
 | **methyl-centroid** | `--project`, `--group` (group1, group2, all, or 0-based index) | `--step-override`, `--use-gpu` / `--no-gpu` |
+| **methyl-centroid-explorer** | Centroid H5 paths or `--centroid1` / `--centroid2` | Explore centroid build options; see package README. |
 | **methyl-detector** | `--project` *or* CONFIG path (not both) | `--step-override`, `--verbose`, `--log-file` |
+| **methyl-detector-explorer** | `--centroid1-dir`, `--centroid2-dir` (or `--centroid1`/`--centroid2`) | `--approx-overlap` (auto/discrete/normal), `--min-N`, `--sample-fraction`; see [METHYLDETECTOR_EXPLORER](../packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md). |
 | **methyl-mapper** | `--project` (bedtools flow) or config + input/output | `--step-override`, mapper-specific (e.g. `--gtf`, env `GROK_API_KEY`) |
 | **methyl-enricher** | `--project` or input + `--outdir` | `--step-override`, `--gene-column`, `--disease-only`, etc. |
 | **methyl-classifier** | Config or `--model-dir` + `--input` + `--output` | See package README for full CLI. |
-| **methyl-qc** | `--project` or `--samples` + `--output-dir` | `--step-override`, `--no-validation` |
+| **methyl-predictor** | Config or model + test input | Run classifier on test sets and compute metrics. |
+| **methyl-validation** | `--config` (validation config), `--project` | Runs centroid, detector, classifier, predictor per run (e.g. Monte Carlo, stratified splits). |
+| **methyl-qc** / **methyl-alignment-qc** | `--project` or `--samples` + `--output-dir` | `--step-override`, `--no-validation` |
 
 Example (project-based):
 
@@ -107,8 +115,8 @@ For full option lists, see each package’s README and comprehensive documentati
 
 ### Key config fields per step
 
-- **Centroid:** `min_coverage`, `use_gpu`; batch options (e.g. `parallel_combinations`) when using batch config.
-- **Detection:** `chromosomes`, `contexts`, `fdr_threshold` (or `min_pvalue`), `min_delta_mean`, `max_overlap`, `min_effect_size`, `target_balanced_accuracy`, `validation_mode`, `output_dir` (usually derived from project).
+- **Centroid:** `min_coverage`, `use_gpu`, `binned_stats_bins` (optional; e.g. 20 for ECDF/Explorer); batch options (e.g. `parallel_combinations`) when using batch config.
+- **Detection:** `chromosomes`, `contexts`, `fdr_threshold` (or `min_pvalue`), `min_delta_mean`, `max_overlap`, `min_effect_size`, `target_balanced_accuracy`, `validation_mode`, `output_dir` (usually derived from project). Explorer: `approx_overlap` (auto/discrete/normal), `min_N`, `min_N_pct`, `sample_fraction`.
 - **Mapper:** `csv_filename_pattern` (e.g. `dmps-*.csv`), `gtf`, `disease_term`, `enrich_*`; set `grok_api_key` via env or step-override.
 - **Enricher:** `gene_column`, `libraries`, `disease_only`, `output_dir`.
 - **Classifier:** `model_path` or `model_dir`, `input`, `output_path`; multi-chromosome and calibration options (see MethylClassifier docs).
@@ -120,8 +128,8 @@ Full schemas live in each package (e.g. Pydantic models in `*_detector/models/co
 
 | Step | Reads | Writes |
 |------|--------|--------|
-| Centroid | Sample dirs (HDF5 per sample), project or batch config | `centroids/{label}/*.h5` |
-| Detector | Centroid dirs, project or detector config | `detection/dmps-*.csv`, `detection/classifier-*.pkl`, `detection/results-*.json` |
+| Centroid | Sample dirs (HDF5 per sample), project or batch config | `centroids/{label}/*.h5` (methylation_data group only; optional `bins` attr + `bin_counts` for binned stats) |
+| Detector | Centroid dirs (HDF5 with methylation_data; centroids used for DMP/ECDF must have binned stats: `bins` + `bin_counts`), project or detector config | `detection/dmps-*.csv`, `detection/classifier-*.pkl`, `detection/results-*.json` |
 | Mapper | `detection/dmps-*.csv` (pattern from config), GTF | `mapper/` (gene/feature CSVs, combined CSV) |
 | Enricher | Mapper combined CSV or gene list (TXT/CSV) | `enricher/` (per-library and merged results) |
 | Classifier | Detection model (PKL), centroid dirs, sample dirs or methylation matrix | CSV/TSV of predictions and probabilities |
@@ -151,7 +159,7 @@ See individual package documentation (e.g. MethylDetector, MethylClassifier) for
 
 ### Repository layout
 
-- **Monorepo:** All packages live under `packages/`: `methylutils`, `methylcentroid`, `methylcluster`, `methyldetector`, `methylclassifier`, `methylmapper`, `methylenricher`, `methylalignmentqc`.
+- **Monorepo:** All packages live under `packages/`: `methylutils`, `methylcentroid`, `methylcluster`, `methyldetector`, `methylclassifier`, `methylmapper`, `methylenricher`, `methylalignmentqc`, `methylpredictor`, `methylvalidation`.
 - **Shared config:** Repo-level project configs live under `configs/` (e.g. `project_PCa_vs_Healthy.json`). Per-package examples and configs live in `packages/<name>/configs/` or `packages/<name>/examples/`.
 - **Docs:** Pipeline-level docs in `docs/` (this manual, THEORY_AND_PACKAGES, ARCHITECTURE, DEVELOPMENT, PRODUCTION). Package-level docs in `packages/<name>/docs/` and `packages/<name>/README.md`.
 

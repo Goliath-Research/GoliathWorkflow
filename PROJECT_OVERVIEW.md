@@ -2,7 +2,7 @@
 
 ## 🎯 Project Summary
 
-MethylPipeline is a unified monorepo for genome-scale methylation analysis, optimized for NVIDIA GPU acceleration. It consolidates 8 Python packages, optional Docker configurations, and host setup tooling into a single, well-organized structure.
+MethylPipeline is a unified monorepo for genome-scale methylation analysis, optimized for NVIDIA GPU acceleration. It consolidates 10 Python packages, optional Docker configurations, and host setup tooling into a single, well-organized structure.
 
 ## 📦 Package Ecosystem
 
@@ -32,6 +32,10 @@ methylclassifier       methylmapper          methylenricher
 └── Sample             └── Gene mapping +    └── Functional
     classification         disease context       enrichment (ORA)
     (Beta/BMM, multi-class)
+
+methylpredictor        methylvalidation
+└── Classification      └── Validation workflows
+    metrics on test sets    (Monte Carlo, stratified splits)
 ```
 
 ## 🏗️ Architecture
@@ -42,13 +46,15 @@ MethylPipeline/
 │
 ├── 📦 packages/              # All Python packages
 │   ├── methylutils/         # Core utilities & GPU helpers
-│   ├── methylcentroid/      # Centroid generation
+│   ├── methylcentroid/      # Centroid generation (+ explorer)
 │   ├── methylcluster/       # QC & clustering
-│   ├── methyldetector/      # DMP detection + model creation
+│   ├── methyldetector/      # DMP detection + model creation (+ explorer)
 │   ├── methylclassifier/    # Classification CLI/API
 │   ├── methylmapper/        # Gene mapping & disease context
 │   ├── methylenricher/      # Functional enrichment
-│   └── methylalignmentqc/   # Alignment QC parsing
+│   ├── methylalignmentqc/   # Alignment QC parsing
+│   ├── methylpredictor/     # Classification metrics
+│   └── methylvalidation/    # Validation workflows
 │
 ├── 🐋 docker/               # Container configs
 │   ├── Dockerfile           # Development

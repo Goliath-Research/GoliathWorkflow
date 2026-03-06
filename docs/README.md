@@ -5,7 +5,7 @@ This directory contains comprehensive documentation for the MethylPipeline syste
 ## Documentation Files
 
 ### [THEORY_AND_PACKAGES.md](THEORY_AND_PACKAGES.md)
-Project and all 8 packages with theoretical foundations (LaTeX formulas): MethylUtils, MethylCentroid, MethylCluster, MethylDetector, MethylClassifier, MethylMapper, MethylEnricher, MethylAlignmentQC.
+Project and all 10 packages with theoretical foundations (LaTeX formulas): MethylUtils, MethylCentroid, MethylCluster, MethylDetector, MethylClassifier, MethylMapper, MethylEnricher, MethylAlignmentQC, MethylPredictor, MethylValidation.
 
 ### [OPERATIONS_MANUAL.md](OPERATIONS_MANUAL.md)
 Operations manual for users and developers: installation, project config, workflow order, CLI reference, config fields, inputs/outputs, troubleshooting, rendering/printing docs; plus developer guide (repo layout, adding steps, config schema, testing, logging, doc conventions).

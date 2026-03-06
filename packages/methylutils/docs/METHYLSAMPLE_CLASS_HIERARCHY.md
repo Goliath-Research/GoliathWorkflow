@@ -77,6 +77,9 @@ MethylExtendedCentroid (inherits from MethylFrame; single centroid type)
 - `median_coverage(*, max_positions=100_000, seed=None) -> float` - Median coverage across positions; uses a random subset when `len(self) > max_positions` for speed (e.g. 80M+ positions). For cohort-level outlier detection.
 - `mean_coverage() -> float` - Mean coverage across positions (single-pass O(n)).
 
+#### Resource Management
+- `close(free_gpu_pool: bool = False) -> None` - Release references and free memory. Call when done with the sample (e.g. after extraction or when evicting from cache). Idempotent; do not use the instance after calling.
+
 #### Statistical Methods
 - `methylation_stats() -> dict` - Basic methylation statistics
 - `coverage_stats() -> dict` - Coverage statistics

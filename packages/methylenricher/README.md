@@ -23,8 +23,10 @@ pip install -e .
 
 ### Command Line
 
+CLI: **methyl-enricher**. With pipeline project config: `methyl-enricher --project configs/project.json`.
+
 ```bash
-methyl_enricher --input genes.txt --outdir enrichment_results
+methyl-enricher --input genes.txt --outdir enrichment_results
 ```
 
 ### Using MethylMapper Output

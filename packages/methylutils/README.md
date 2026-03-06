@@ -4,11 +4,12 @@ MethylUtils is a Python package for methylation data analysis, providing efficie
 
 ## Key Features
 
-- Efficient MethylSample class for samples and centroids
+- Efficient MethylSample class for samples and centroids; `close()` for memory cleanup
 - GPU-accelerated distance metrics
 - Statistical tests; centroid comparison uses ECDF only
-- Centroid comparison and DMP detection
-- Bayesian classification (Beta/BMM, multi-class)
+- Centroid HDF5: `methylation_data` only (optional `bins` attr + `bin_counts` dataset)
+- Centroid comparison and DMP detection; Bayesian classification (Beta/BMM, multi-class)
+- **CLIs**: `methyl-utils`, `chrom-mapping`, `methyl-utils-deploy`
 
 ## Installation
 

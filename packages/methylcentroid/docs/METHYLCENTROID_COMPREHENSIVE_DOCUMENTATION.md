@@ -64,7 +64,7 @@ Centroid construction is implemented in **MethylUtils**: **MethylCentroidBuilder
 The centroid stores sufficient statistics and binned histograms for **ECDF only** (no Normal, Beta, Beta-Binomial, or Beta-Mixture):
 
 - **N, Sx, Sx2**: mean and variance per position
-- **bin_edges, bin_counts**: per-position binned histogram (when `binned_stats_bins` > 0, default 20) for empirical CDF/PDF via spline interpolation
+- **Binned stats**: per-position histogram for ECDF/PDF (when `binned_stats_bins` > 0, default 20). In memory: `bin_edges`, `bin_counts`. In HDF5 only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored; bin edges are derived as uniform in [0,1].
 
 Only the ECDF distribution is supported for comparison and overlap in MethylCentroidPair and MethylDetector.
 

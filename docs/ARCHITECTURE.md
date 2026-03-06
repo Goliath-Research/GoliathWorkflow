@@ -4,7 +4,7 @@ This document describes the architecture of the MethylPipeline system.
 
 ## System Overview
 
-MethylPipeline is a monorepo containing 7 integrated Python packages for methylation-based genomic analysis. The system is designed to leverage GPU acceleration for high-performance computation on large-scale genomic datasets.
+MethylPipeline is a monorepo containing 10 integrated Python packages for methylation-based genomic analysis: MethylUtils, MethylCentroid, MethylCluster, MethylDetector, MethylClassifier, MethylMapper, MethylEnricher, MethylAlignmentQC, MethylPredictor, and MethylValidation. The system uses a single data-driven centroid type and ECDF-based comparison for DMP detection, with optional Explorer CLIs for centroid and detector tuning. It is designed to leverage GPU acceleration for high-performance computation on large-scale genomic datasets.
 
 ## Component Architecture
 
@@ -221,7 +221,7 @@ A single **project config** (JSON) defines the two cohorts, the project root, an
 | **MethylClassifier** | `--project project.json`; optional `--step-override`. Output to `classifier_dir`. |
 | **MethylAlignmentQC** | `--project project.json`; optional `--step-override`. Output to `{output_base}/{project_name}/alignment_qc` (one JSON per sample). |
 
-CLI commands: `methyl-centroid`, `methyl-detector`, `methyl-mapper`, `methyl-enricher`, `methyl-classifier`, `methyl-qc`.
+CLI commands: `methyl-centroid`, `methyl-centroid-explorer`, `methyl-detector`, `methyl-detector-explorer`, `methyl-mapper`, `methyl-enricher`, `methyl-classifier`, `methyl-predictor`, `methyl-validation`, `methyl-qc` / `methyl-alignment-qc`.
 
 Shared types and loader live in **MethylUtils**: `ProjectConfig`, `GroupConfig`, `DerivedPaths`, `load_project()`.
 

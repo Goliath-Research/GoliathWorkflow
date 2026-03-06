@@ -56,12 +56,10 @@ print(f"Class probabilities:\n{probabilities}")
 
 ### Command Line
 
+CLI: **methyl-classifier**. With pipeline project config: `methyl-classifier --project configs/project.json`.
+
 ```bash
-methyl_classifier \
-    --model classifier-1-CG.pkl \
-    --input sample.h5 \
-    --output results.csv \
-    --temperature 1.0
+methyl-classifier --model classifier-1-CG.pkl --input sample.h5 --output results.csv --temperature 1.0
 ```
 
 ## How It Works

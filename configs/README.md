@@ -62,7 +62,7 @@ Resolution order: **project shared + derived paths → `step_config[step]` → `
 
 ### Usage
 
-All pipeline CLIs use hyphens: `methyl-centroid`, `methyl-detector`, `methyl-mapper`, `methyl-enricher`, `methyl-classifier`, `methyl-qc`.
+All pipeline CLIs use hyphens: `methyl-centroid`, `methyl-centroid-explorer`, `methyl-detector`, `methyl-detector-explorer`, `methyl-mapper`, `methyl-enricher`, `methyl-classifier`, `methyl-predictor`, `methyl-validation`, `methyl-qc`. Explorer and validation tools have their own options (see package docs).
 
 ```bash
 # Centroid for group1 (healthy)

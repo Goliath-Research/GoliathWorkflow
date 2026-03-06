@@ -22,7 +22,7 @@ MethylPipeline is a comprehensive, production-ready pipeline for methylation-bas
 
 ## Architecture
 
-MethylPipeline now ships **8 packages** that share the MethylUtils foundation.
+MethylPipeline ships **10 packages** that share the MethylUtils foundation.
 
 ### Foundation
 
@@ -30,17 +30,18 @@ MethylPipeline now ships **8 packages** that share the MethylUtils foundation.
 Core utilities, GPU detection, statistical functions, and data structures used everywhere.
 
 **Key Components**:
-- `MethylSample`, `PositionAligner`, `MethylCentroidPair`
-- Probabilistic Beta classifier + multi-class Beta Mixture support
+- `MethylSample`, `PositionAligner`, `MethylCentroidPair` (single data-driven centroid type)
+- Centroid HDF5: `methylation_data` only (bins attr + bin_counts; no separate binned_stats group)
+- ECDF-based centroid comparison and DMP detection; probabilistic Beta classifier + multi-class Beta Mixture support
 - Seven GPU-aware distance metrics (Jensen-Shannon, Hellinger, Wasserstein, etc.)
-- Unified GPU/CPU memory management, logging, and profiling helpers
+- Unified GPU/CPU memory management, logging, profiling; `MethylSample.close()` for cleanup
 
 📚 [MethylUtils README](packages/methylutils/README.md) | [Comprehensive Guide](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
 
 ### Analysis & Quality Control
 
 #### 2. **MethylCentroid** – Group Representatives
-Creates extended centroids (Sx, Sx2, N) with adaptive outlier detection and GPU acceleration.
+Creates extended centroids (N, Sx, Sx2) with optional binned stats (bins + bin_counts in methylation_data), adaptive outlier detection, and GPU acceleration. **CLI**: `methyl-centroid`, `methyl-centroid-explorer`.
 
 📚 [MethylCentroid README](packages/methylcentroid/README.md) | [Comprehensive Guide](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
 
@@ -50,9 +51,9 @@ Multi-method clustering (HDBSCAN, Hierarchical, Centroid-based) with forced grou
 📚 [MethylCluster README](packages/methylcluster/README.md) | [Comprehensive Guide](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
 
 #### 4. **MethylModeler (MethylDetector)** – DMP Detection & Model Packaging
-Detects Differentially Methylated Positions, applies biological filters, optimizes Balanced Accuracy, and exports classifier bundles for MethylClassifier. Implemented by the **methyldetector** package.
+Detects Differentially Methylated Positions (ECDF-based), applies biological filters, optimizes Balanced Accuracy, and exports classifier bundles for MethylClassifier. **CLI**: `methyl-detector`, `methyl-detector-explorer` (explore refinement and effect-size options).
 
-📚 [MethylDetector README](packages/methyldetector/README.md) | [Comprehensive Guide](packages/methyldetector/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
+📚 [MethylDetector README](packages/methyldetector/README.md) | [Comprehensive Guide](packages/methyldetector/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md) | [Explorer](packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md)
 
 ### Interpretation & Reporting
 
@@ -62,7 +63,7 @@ Loads packaged classifiers (single or multi-class), applies temperature scaling/
 📚 [MethylClassifier README](packages/methylclassifier/README.md) | [Comprehensive Guide](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
 
 #### 6. **MethylMapper** – Gene Mapping & Disease Context
-Maps optimized DMPs to genomic features using either the legacy Azure SQL workflow or the preferred bedtools-based mapper with Grok + Open Targets disease enrichment (optional DisGeNET).
+Maps optimized DMPs to genomic features using the preferred bedtools-based mapper with optional Grok + Open Targets disease enrichment (legacy Azure SQL workflow also available).
 
 📚 [MethylMapper README](packages/methylmapper/README.md) | [Quick Start](packages/methylmapper/QUICK_START.md)
 
@@ -72,9 +73,21 @@ Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and Wik
 📚 [MethylEnricher README](packages/methylenricher/README.md) | [Installation Notes](packages/methylenricher/INSTALLATION.md)
 
 #### 8. **MethylAlignmentQC** – Alignment QC
-Parses Parabricks/bwa-mem2 alignment QC metrics into per-sample JSON for database storage. Optional step in the pipeline.
+Parses Parabricks/bwa-mem2 alignment QC metrics into per-sample JSON for database storage. Optional step. **CLI**: `methyl-qc`, `methyl-alignment-qc`.
 
 📚 [MethylAlignmentQC README](packages/methylalignmentqc/README.md)
+
+### Validation & Prediction
+
+#### 9. **MethylPredictor** – Classification Metrics
+Runs MethylClassifier on test sets and computes classification metrics. **CLI**: `methyl-predictor`.
+
+📚 [MethylPredictor README](packages/methylpredictor/README.md)
+
+#### 10. **MethylValidation** – Validation Workflows
+Runs centroid, detector, classifier, and predictor (and related steps) per run using a validation config (e.g. Monte Carlo, stratified splits). **CLI**: `methyl-validation`.
+
+📚 [MethylValidation README](packages/methylvalidation/README.md)
 
 ## Complete Workflow
 
@@ -135,28 +148,25 @@ Run the pipeline as a sequence of command-line scripts in this order:
 
 | Step | Command | Description |
 |------|---------|-------------|
-| 1 | **methyl-alignmentqc** | Parse Parabricks/alignment QC metrics into per-sample JSON (optional). |
-| 2 | **methyl-centroid** | Build group centroids from samples. |
-| 3 | **methyl-detector** | Detect DMPs and package classifiers. |
-| 4 | **methyl-mapper** | Map DMPs to genes and genomic features. |
-| 5 | **methyl-enricher** | Functional enrichment from MethylMapper gene lists. |
-| 6 | **methyl-classifier** | Load packaged classifiers and score samples. |
-| 7 | **methyl-predictor** | Run MethylClassifier on test sets and compute classification metrics. |
-
-The final module runs under its own config and executes most of the steps above as part of a validation workflow:
-
-| Step | Command | Description |
-|------|---------|-------------|
-| 8 | **methyl-validation** | Uses an additional validation config (e.g. Monte Carlo runs, stratified splits). Runs centroid, detector, classifier, predictor (and related steps) for each run. |
+| 0 (optional) | **methyl-qc** / **methyl-alignment-qc** | Parse Parabricks/alignment QC metrics into per-sample JSON. |
+| 1 | **methyl-centroid** | Build group centroids from samples (per group). |
+| 1b (optional) | **methyl-centroid-explorer** | Explore centroid build options. |
+| 2 | **methyl-detector** | Detect DMPs and package classifiers. |
+| 2b (optional) | **methyl-detector-explorer** | Explore refinement and effect-size options. |
+| 3 | **methyl-mapper** | Map DMPs to genes and genomic features. |
+| 4 | **methyl-enricher** | Functional enrichment from MethylMapper gene lists. |
+| 5 | **methyl-classifier** | Load packaged classifiers and score samples. |
+| 6 | **methyl-predictor** | Run MethylClassifier on test sets and compute classification metrics. |
+| 7 | **methyl-validation** | Validation workflow (e.g. Monte Carlo, stratified splits); runs centroid, detector, classifier, predictor per run. |
 
 Example:
 
 ```bash
-methyl-alignmentqc --input /path/to/qc ...
-methyl-centroid --project configs/project.json
+methyl-centroid --project configs/project.json --group group1
+methyl-centroid --project configs/project.json --group group2
 methyl-detector --project configs/project.json
 methyl-mapper --project configs/project.json
-methyl-enricher ...
+methyl-enricher --project configs/project.json
 methyl-classifier ...
 methyl-predictor ...
 # Or run the full validation workflow (most steps above are executed internally):
@@ -280,7 +290,7 @@ for sample in ['/data/test1', '/data/test2', '/data/test3']:
 
 Deep dives with algorithms, math, and advanced workflows:
 
-- [Theory and packages](docs/THEORY_AND_PACKAGES.md) – Project and all 8 packages with theoretical foundations (LaTeX formulas)
+- [Theory and packages](docs/THEORY_AND_PACKAGES.md) – Project and all 10 packages with theoretical foundations (LaTeX formulas)
 - [Operations manual](docs/OPERATIONS_MANUAL.md) – User and developer workflows, CLI reference, troubleshooting
 - [MethylUtils Comprehensive Documentation](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCentroid Comprehensive Documentation](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
@@ -294,11 +304,13 @@ Deep dives with algorithms, math, and advanced workflows:
 - [MethylUtils README](packages/methylutils/README.md)
 - [MethylCentroid README](packages/methylcentroid/README.md)
 - [MethylCluster README](packages/methylcluster/README.md)
-- [MethylDetector README](packages/methyldetector/README.md)
+- [MethylDetector README](packages/methyldetector/README.md) | [MethylDetector Explorer](packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md)
 - [MethylClassifier README](packages/methylclassifier/README.md)
 - [MethylMapper README](packages/methylmapper/README.md) | [Bedtools Quick Start](packages/methylmapper/QUICK_START.md)
 - [MethylEnricher README](packages/methylenricher/README.md)
 - [MethylAlignmentQC README](packages/methylalignmentqc/README.md)
+- [MethylPredictor README](packages/methylpredictor/README.md)
+- [MethylValidation README](packages/methylvalidation/README.md)
 
 ### 🏗️ Architecture Documentation
 
@@ -474,13 +486,15 @@ See individual package documentation for detailed troubleshooting guides.
 MethylPipeline/
 ├── packages/                    # Python packages
 │   ├── methylutils/            # Core utilities + GPU helpers
-│   ├── methylcentroid/         # Centroid generation
+│   ├── methylcentroid/         # Centroid generation (+ explorer CLI)
 │   ├── methylcluster/          # Sample clustering/QC
-│   ├── methyldetector/         # DMP detection + model packaging (MethylModeler)
+│   ├── methyldetector/         # DMP detection + model packaging (+ explorer CLI)
 │   ├── methylclassifier/       # Classification CLI/API
 │   ├── methylmapper/           # Gene mapping + enrichment hooks
 │   ├── methylenricher/         # Functional enrichment CLI
-│   └── methylalignmentqc/     # Alignment QC (optional)
+│   ├── methylalignmentqc/     # Alignment QC (optional)
+│   ├── methylpredictor/        # Classification metrics on test sets
+│   └── methylvalidation/      # Validation workflows (Monte Carlo, etc.)
 ├── docker/                      # Container definitions
 │   ├── Dockerfile
 │   └── docker-compose.yml

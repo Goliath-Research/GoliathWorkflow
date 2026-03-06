@@ -1,6 +1,6 @@
 # Theory and Packages Reference
 
-This document gives an overview of MethylPipeline and the theoretical foundations of each of its **8 packages**. All mathematics use LaTeX so they render correctly in the documentation site and can be printed or exported to PDF.
+This document gives an overview of MethylPipeline and the theoretical foundations of each of its **10 packages**. The pipeline uses a **single data-driven centroid type** and **ECDF-based comparison** for DMP detection; centroid HDF5 files store only the `methylation_data` group (with optional `bins` attr and `bin_counts` for binned stats). All mathematics use LaTeX so they render correctly in the documentation site and can be printed or exported to PDF.
 
 ---
 
@@ -15,6 +15,7 @@ This document gives an overview of MethylPipeline and the theoretical foundation
 7. [MethylMapper](#methylmapper)
 8. [MethylEnricher](#methylenricher)
 9. [MethylAlignmentQC](#methylalignmentqc)
+10. [MethylPredictor and MethylValidation](#methylpredictor-and-methylvalidation)
 
 ---
 
@@ -27,20 +28,22 @@ MethylPipeline is a unified genomics pipeline for methylation-based biomarker di
 - **Bayesian classification**: Exact Beta (and optional Beta mixture) likelihoods, posterior probabilities
 - **GPU acceleration**: Shared via MethylUtils across packages
 
-### The Eight Packages
+### The Ten Packages
 
 | # | Package | Role |
 |---|---------|------|
-| 1 | **MethylUtils** | Foundation: core types, GPU/IO, distance metrics, Beta statistics |
-| 2 | **MethylCentroid** | Build representative centroids (sufficient statistics) per group |
+| 1 | **MethylUtils** | Foundation: core types, GPU/IO, distance metrics, ECDF-based comparison, Beta statistics |
+| 2 | **MethylCentroid** | Build representative centroids (N, Sx, Sx2; optional bins + bin_counts in methylation_data) per group; Explorer CLI for options |
 | 3 | **MethylCluster** | Exploratory clustering and QC (HDBSCAN, hierarchical, centroid-based) |
-| 4 | **MethylDetector** | DMP detection, biological filters, classifier training, model packaging *(documented as MethylModeler)* |
+| 4 | **MethylDetector** | ECDF-based DMP detection, biological filters, classifier training, model packaging; Explorer CLI *(documented as MethylModeler)* |
 | 5 | **MethylClassifier** | Load packaged models and score samples (posterior probabilities) |
 | 6 | **MethylMapper** | Map DMPs to genes/features; optional disease enrichment (Grok, Open Targets, DisGeNET) |
 | 7 | **MethylEnricher** | ORA/Enrichr enrichment on gene lists from MethylMapper |
 | 8 | **MethylAlignmentQC** | Parse alignment QC metrics (e.g. Parabricks) to per-sample JSON *(optional)* |
+| 9 | **MethylPredictor** | Run MethylClassifier on test sets and compute classification metrics |
+| 10 | **MethylValidation** | Validation workflows (e.g. Monte Carlo, stratified splits); runs centroid, detector, classifier, predictor per run |
 
-**Note:** The DMP detection and model-packaging component is implemented by the **methyldetector** package and is referred to in user-facing docs as **MethylModeler**.
+**Note:** The DMP detection and model-packaging component is implemented by the **methyldetector** package and is referred to in user-facing docs as **MethylModeler**. Centroid HDF5 uses only the `methylation_data` group; binned stats are `bins` (attr) + `bin_counts` (dataset); bin edges are derived as uniform in [0,1].
 
 ### High-Level Data Flow
 
@@ -186,3 +189,11 @@ Computation is in log-space for stability; posteriors via softmax (log-sum-exp).
 No distributional or statistical theory; purely parsing and schema validation.
 
 **Reference:** [MethylAlignmentQC README](../packages/methylalignmentqc/README.md)
+
+---
+
+## MethylPredictor and MethylValidation
+
+**MethylPredictor** runs MethylClassifier on test sets and computes classification metrics (e.g. accuracy, balanced accuracy, per-class metrics). **MethylValidation** runs multi-run validation (e.g. Monte Carlo, stratified splits) by executing centroid, detector, classifier, and predictor per run under a validation config. No additional theoretical content; both use the same classifier and centroid/detector outputs as the main pipeline.
+
+**Reference:** [MethylPredictor README](../packages/methylpredictor/README.md), [MethylValidation README](../packages/methylvalidation/README.md)

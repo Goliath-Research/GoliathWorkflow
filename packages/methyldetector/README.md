@@ -129,8 +129,7 @@ else:
 - **`chromosome`**: Single chromosome (e.g., `"1"`) or list (e.g., `["1", "2", "X"]`)
 - **`contexts`**: List of contexts to process (default: `["CG"]`)
   - Options: `"CG"`, `"CHG"`, `"CHH"` or any combination
-- **`centroid1_dir`**: Directory containing centroid1 `.h5` files (format: `{chrom}-{context}.h5`)
-- **`centroid2_dir`**: Directory containing centroid2 `.h5` files
+- **`centroid1_dir`** / **`centroid2_dir`**: Directories containing centroid `.h5` files (format: `{chrom}-{context}.h5`). Centroids must have binned stats for ECDF comparison: in HDF5, `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` (build with MethylCentroid using `binned_stats_bins` e.g. 20).
 - **`output_dir`**: Output directory for results
 
 ### Statistical Parameters

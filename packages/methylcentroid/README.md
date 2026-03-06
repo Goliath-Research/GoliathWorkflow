@@ -190,10 +190,12 @@ centroid.h5
 │   ├── Sx2
 │   ├── log_x_sum
 │   └── log_1_minus_x_sum
+│   ├── bins (attribute; number of bins when binned stats enabled)
+│   └── bin_counts (dataset; per-position histogram when binned stats enabled)
 └── metadata (attributes)
 ```
 
-Optional extended stats and binned histograms are included when enabled.
+All centroid data lives in `methylation_data` only (no separate `binned_stats` group). Bin edges are derived as uniform in [0,1] from `bins`. Optional extended stats and binned histograms are included when enabled.
 
 ## Documentation
 

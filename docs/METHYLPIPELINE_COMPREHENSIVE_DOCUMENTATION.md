@@ -19,7 +19,7 @@
 
 ## Overview
 
-**MethylPipeline** is a unified genomics pipeline for comprehensive methylation analysis, integrating five specialized packages for centroid generation, clustering, differential methylation detection, classifier training, and sample classification.
+**MethylPipeline** is a unified genomics pipeline for comprehensive methylation analysis, integrating 10 packages: MethylUtils (foundation), MethylCentroid, MethylCluster, MethylDetector, MethylClassifier, MethylMapper, MethylEnricher, MethylAlignmentQC, MethylPredictor, and MethylValidation. The pipeline uses a single data-driven centroid type and ECDF-based DMP detection; centroid HDF5 uses only the `methylation_data` group (optional `bins` + `bin_counts` for binned stats).
 
 ### What is MethylPipeline?
 
@@ -35,12 +35,16 @@ MethylPipeline provides a complete ecosystem for methylation-based biomarker dis
 
 MethylPipeline follows a **modular, composable** architecture:
 
-1. **MethylUtils**: Foundation library (shared utilities, GPU, statistical functions)
-2. **MethylCentroid**: Centroid generation with outlier detection
+1. **MethylUtils**: Foundation library (shared utilities, GPU, ECDF-based comparison, statistical functions)
+2. **MethylCentroid**: Centroid generation (N, Sx, Sx2; optional bins + bin_counts in methylation_data) with outlier detection; Explorer CLI
 3. **MethylCluster**: Sample clustering (HDBSCAN, Hierarchical, Centroid-based)
-4. **MethylModeler**: DMP detection and classifier training
-5. ****: Advanced classifier training with validation
-6. **MethylClassifier**: Sample classification with Bayesian models
+4. **MethylModeler (MethylDetector)**: ECDF-based DMP detection and classifier training; Explorer CLI
+5. **MethylClassifier**: Sample classification with Bayesian models
+6. **MethylMapper**: Gene mapping and optional disease enrichment
+7. **MethylEnricher**: Functional enrichment from MethylMapper gene lists
+8. **MethylAlignmentQC**: Alignment QC parsing (optional)
+9. **MethylPredictor**: Classification metrics on test sets
+10. **MethylValidation**: Validation workflows (Monte Carlo, stratified splits)
 
 Each package is **self-contained** but **tightly integrated** through MethylUtils.
 
@@ -63,29 +67,25 @@ Each package is **self-contained** but **tightly integrated** through MethylUtil
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                          MethylUtils                            │
-│  (Core library: GPU, Memory, Statistics, Data Structures)      │
+│  (Core library: GPU, Memory, ECDF comparison, Data Structures)  │
 └─────────────────────────────────────────────────────────────────┘
                               ↑
-                   ┌──────────┴──────────┐
-                   │                     │
-        ┌──────────┴──────────┐    ┌────┴──────────┐
-        │   MethylCentroid    │    │ MethylCluster │
-        │  (Centroid + QC)    │    │ (Exploratory) │
-        └──────────┬──────────┘    └───────────────┘
-                   │
-        ┌──────────┴──────────┐
-        │                     │
- ┌──────┴────────┐   ┌───────┴────────┐
- │ MethylModeler│   │   │
- │ (DMP + Model) │   │ (Advanced DMP) │
- └──────┬────────┘   └───────┬────────┘
-        │                    │
-        └──────────┬─────────┘
-                   │
-        ┌──────────┴──────────┐
-        │  MethylClassifier   │
-        │ (Sample Prediction) │
-        └─────────────────────┘
+     ┌────────────────────────┼────────────────────────┐
+     │                        │                        │
+┌────┴────┐            ┌──────┴──────┐           ┌─────┴─────┐
+│ Methyl  │            │ Methyl      │           │ Methyl    │
+│Centroid │            │ Cluster     │           │ Detector  │
+└────┬────┘            └─────────────┘           └─────┬─────┘
+     │                                                 │
+     └──────────────────┬─────────────────────────────┘
+                         │
+              ┌──────────┴──────────┐
+              │  MethylClassifier   │
+              │ MethylMapper,       │
+              │ MethylEnricher,     │
+              │ MethylPredictor,     │
+              │ MethylValidation    │
+              └─────────────────────┘
 ```
 
 ### Data Flow
@@ -1085,7 +1085,11 @@ For package-specific documentation, see:
 - [MethylUtils Documentation](../packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCentroid Documentation](../packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCluster Documentation](../packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylModeler Documentation](../packages/methylmodeler/docs/METHYLDETECTOR_COMPREHENSIVE_DOCUMENTATION.md)
-- [ Documentation](../packages//docs/METHYLTRAINER_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylDetector (MethylModeler) Documentation](../packages/methyldetector/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylClassifier Documentation](../packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylMapper README](../packages/methylmapper/README.md)
+- [MethylEnricher README](../packages/methylenricher/README.md)
+- [MethylAlignmentQC README](../packages/methylalignmentqc/README.md)
+- [MethylPredictor README](../packages/methylpredictor/README.md)
+- [MethylValidation README](../packages/methylvalidation/README.md)
 
