@@ -94,24 +94,22 @@ Implemented in \texttt{welch\_d\_ks\_overlap()} with \texttt{ECDFView.\_cdf\_bat
 
 \section{Bounded Effect Size Formula}
 
-Core formula (both approx/refined):
-
+Core formula (both approx/refined). The reported effect is shifted so that no difference gives 0 and strong separation gives 1:
 \begin{equation}
-    \text{effect} = \sigma\left( s \cdot d \cdot (1 - O) \right)
+    \text{effect} = \max\left(0,\; 2\,\sigma\left( s \cdot d \cdot (1 - O) \right) - 1\right)
     \label{eq:bounded_effect}
 \end{equation}
 
 where:
 \begin{itemize}
-    \item $\sigma(z) = \frac{1}{1 + e^{-z}}$ (logistic sigmoid, bounds to $[0,1]$).
+    \item $\sigma(z) = \frac{1}{1 + e^{-z}}$ (logistic sigmoid).
     \item $s = 3.0$ (scale hyperparameter; default in detector config and Explorer).
-    \item $O$: Overlap ($O_\text{approx}$ or $O_\text{KS}$).
+    \item $O$: Overlap ($O_\text{approx}$ or $O_\text{KS}$). Range of effect is $[0,1]$; no difference $\Rightarrow$ effect $= 0$.
 \end{itemize}
 
 \textbf{Interpretation}:
 \begin{itemize}
-    \item $d \to 0$: effect $\to 0$.
-    \item $O \to 1$: effect $\to 0$ (overlap dominates).
+    \item $d \to 0$ or $O \to 1$: effect $\to 0$ (no difference / full overlap).
     \item $d \gg 0$, $O \to 0$: effect $\to 1$ (perfect discrimination).
 \end{itemize}
 
@@ -119,9 +117,9 @@ where:
 
 The refined (ECDF) effect size uses the \emph{same} statistic as the two-sample KS test so that effect size correlates well with the test $p$-value. The test statistic is $T = \sqrt{n_{\text{eff}}} \cdot D$, with $n_{\text{eff}} = 2/(1/n_1 + 1/n_2)$. Then
 \begin{equation}
-    \text{effect}_{\text{refined}} = \sigma\left( s \cdot d \cdot \min(T, T_{\max}) \right), \quad T_{\max} = 15.
+    \text{effect}_{\text{refined}} = \max\left(0,\; 2\,\sigma\left( s \cdot d \cdot \min(T, T_{\max}) \right) - 1\right), \quad T_{\max} = 15.
 \end{equation}
-So $d$ retains biological meaning (standardized mean difference) and $T$ (separation scaled by effective sample size) aligns with significance; $T$ is capped so the sigmoid remains in a sensible range.
+So $d$ retains biological meaning (standardized mean difference) and $T$ (separation scaled by effective sample size) aligns with significance; no difference gives effect 0, strong separation gives effect 1.
 
 \section{Approximate vs Refined Computation}
 

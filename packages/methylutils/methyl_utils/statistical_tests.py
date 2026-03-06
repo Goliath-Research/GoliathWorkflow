@@ -1092,7 +1092,8 @@ def welch_d_fast_overlap_approx(
             If None, use Normal-based fallback: 2 * norm.cdf(-welch_d/2).
 
     Returns:
-        Dict with welch_d, overlap_approx, bounded_effect_size_approx (all in [0,1] for overlap/effect).
+        Dict with welch_d, overlap_approx, bounded_effect_size_approx. Effect is max(0, 2*sigmoid(x)-1)
+        so no difference (x=0) gives 0; range [0,1].
     """
     from scipy.special import expit
     from scipy.stats import norm
@@ -1121,7 +1122,7 @@ def welch_d_fast_overlap_approx(
         overlap_approx = 2.0 * norm.cdf(-welch_d / 2.0)
         overlap_approx = np.clip(overlap_approx, 0.0, 1.0)
     expit_arg = np.clip(scale * welch_d * (1.0 - overlap_approx), -700.0, 700.0)
-    bounded_effect_size_approx = expit(expit_arg)
+    bounded_effect_size_approx = np.clip(2.0 * expit(expit_arg) - 1.0, 0.0, 1.0)
     return {
         "welch_d": welch_d,
         "overlap_approx": overlap_approx,
@@ -1145,9 +1146,9 @@ def welch_d_ks_overlap(
     Welch's d = |delta_mean| / sqrt(var1/n1 + var2/n2).
     If ECDF views and position_indices are provided: KS statistic D at each position.
     Effect size uses the KS test statistic T = sqrt(n_eff)*D (same as drives ks_p) so it correlates
-    with statistical significance: corrected_d = welch_d * min(T, 15), bounded_effect_size = sigmoid(scale * corrected_d).
+    with statistical significance: corrected_d = welch_d * min(T, 15), bounded_effect_size = max(0, 2*sigmoid(scale * corrected_d) - 1).
     welch_d keeps biological meaning (mean difference); T aligns with the test. n_eff = 2/(1/n1+1/n2).
-    Otherwise (no ECDF): bounded_effect_size = sigmoid(scale * welch_d * ks_d) with ks_d=0 -> 0.5.
+    No difference (welch_d=0 or ks_d=0) gives effect 0; strong separation gives effect 1; range [0,1].
     Returns dict with keys: welch_d, ks_d, ks_p, corrected_d, bounded_effect_size.
 
     When variance1 and variance2 are both zero (or very small), the standard error is floored
@@ -1184,7 +1185,7 @@ def welch_d_ks_overlap(
     T = np.minimum(T, 15.0)  # cap so sigmoid(scale * welch_d * T) stays in a sensible range
     corrected_d = welch_d * T
     expit_arg = np.clip(scale * corrected_d, -700.0, 700.0)
-    bounded_effect_size = expit(expit_arg)
+    bounded_effect_size = np.clip(2.0 * expit(expit_arg) - 1.0, 0.0, 1.0)
 
     return {
         "welch_d": welch_d,

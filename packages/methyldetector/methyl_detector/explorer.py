@@ -387,7 +387,7 @@ class MethylDetectorExplorer:
                 best_scale = float(self.sigmoid_scale)
                 best_corr = -np.inf
                 for s in scales:
-                    bes = expit(s * welch_d_k * T)
+                    bes = np.clip(2.0 * expit(s * welch_d_k * T) - 1.0, 0.0, 1.0)
                     r, _ = spearmanr(bes, one_minus_p)
                     if np.isfinite(r) and r > best_corr:
                         best_corr = float(r)
@@ -395,7 +395,7 @@ class MethylDetectorExplorer:
                 scale_used = best_scale
                 effect_size_vs_ks_p_correlation = best_corr
                 # Recompute bounded_effect_size for refined rows with chosen scale
-                bes_calibrated = expit(best_scale * welch_d_k * T)
+                bes_calibrated = np.clip(2.0 * expit(best_scale * welch_d_k * T) - 1.0, 0.0, 1.0)
                 for i, idx_df in enumerate(top_k_indices_in_phase1):
                     if i < len(bes_calibrated):
                         df.loc[idx_df, "bounded_effect_size"] = bes_calibrated[i]
