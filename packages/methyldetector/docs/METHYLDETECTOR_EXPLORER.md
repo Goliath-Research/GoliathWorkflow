@@ -34,7 +34,7 @@ With **`--approx-overlap auto`** (default): discrete Bhattacharyya is used when 
 
 ## Requirements
 
-- Centroids must have **binned_stats** (bin_edges, bin_counts). Build them with MethylCentroid using `binned_stats_bins` (e.g. 20). For comparable Phase 1 vs Phase 2 results, use the same bin edges for both centroids.
+- Centroids must have **binned_stats** (in memory: bin_edges, bin_counts). Build them with MethylCentroid using `binned_stats_bins` (e.g. 20). For comparable Phase 1 vs Phase 2 results, use the same bin count for both centroids. Centroid H5 files store only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]`; bin edges are derived as `np.linspace(0, 1, bins+1)` (proportions are always in [0,1]).
 - MethylUtils (methyl_utils) must be installed (e.g. from the monorepo `packages/methylutils`).
 
 ## CLI

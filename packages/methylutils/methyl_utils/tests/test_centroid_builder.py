@@ -200,6 +200,38 @@ if HAS_HYPOTHESIS:
         assert "bin_edges" in centroid.binned_stats and "bin_counts" in centroid.binned_stats
 
 
+def test_binned_stats_h5_schema_save_and_load():
+    """Save centroid with binned_stats: H5 has only methylation_data.bins + bin_counts, no binned_stats group. Round-trip load restores binned_stats."""
+    import h5py
+
+    positions = [100, 200, 300]
+    sample_path = create_temp_sample(positions, [5, 10, 15], [2, 0, 5], [0, 1, 2])
+    builder = MethylCentroidBuilder(min_coverage=1, binned_stats_bins=20)
+    builder.add_sample(sample_path)
+    centroid = builder.finalize()
+    assert centroid.binned_stats is not None
+
+    with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tmp:
+        path = Path(tmp.name)
+    try:
+        centroid.save_to_h5(path, compressed=False)
+        with h5py.File(path, "r") as f:
+            assert "binned_stats" not in f
+            md = f["methylation_data"]
+            assert "bins" in md.attrs
+            assert md.attrs["bins"] == 20
+            assert "bin_counts" in md
+            bc = md["bin_counts"][:]
+            assert bc.shape == (len(positions), 20)
+        loaded = load_from_h5(path)
+        assert loaded.binned_stats is not None
+        assert "bin_edges" in loaded.binned_stats and "bin_counts" in loaded.binned_stats
+        assert len(loaded.binned_stats["bin_edges"]) == 21
+        np.testing.assert_array_almost_equal(loaded.binned_stats["bin_counts"], centroid.binned_stats["bin_counts"])
+    finally:
+        path.unlink(missing_ok=True)
+
+
 # --------------------------------------------------------------------------- #
 # GPU path smoke test (only runs if CuPy available)
 # --------------------------------------------------------------------------- #

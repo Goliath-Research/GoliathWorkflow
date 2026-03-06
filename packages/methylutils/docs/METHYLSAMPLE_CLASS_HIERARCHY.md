@@ -28,7 +28,7 @@ MethylSample (base class)
 
 MethylExtendedCentroid (inherits from MethylFrame; single centroid type)
 ├── Adds sample count and accumulators (N, Sx, Sx2)
-├── Optional binned_stats (bin_edges, bin_counts) for ECDF
+├── Optional binned_stats (in memory: bin_edges, bin_counts) for ECDF; H5 stores only methylation_data.attrs["bins"] and methylation_data["bin_counts"]
 ├── Beta parameters via Method of Moments (MoM) from N, Sx, Sx2
 └── Centroid aggregation (add_sample / remove_sample)
 ```
@@ -121,7 +121,7 @@ MethylExtendedCentroid (inherits from MethylFrame; single centroid type)
 | `N` | `np.ndarray` (uint32) | Sample counts per position |
 | `Sx` | `np.ndarray` (float32) | Sum of methylation levels |
 | `Sx2` | `np.ndarray` (float32) | Sum of squared methylation levels |
-| `binned_stats` | `Optional[dict]` | If present: `bin_edges`, `bin_counts` for ECDF |
+| `binned_stats` | `Optional[dict]` | If present: `bin_edges`, `bin_counts` for ECDF. In H5, only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored; edges are derived. Basic sample has no bins. |
 
 ### Properties
 

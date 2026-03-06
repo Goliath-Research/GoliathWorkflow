@@ -1686,26 +1686,29 @@ class MethylCentroidPair:
 
             try:
                 with h5py.File(c1_path, "r") as f1, h5py.File(c2_path, "r") as f2:
-                    if "binned_stats" not in f1 or "binned_stats" not in f2:
+                    md1 = f1.get("methylation_data")
+                    md2 = f2.get("methylation_data")
+                    if not (isinstance(md1, h5py.Group) and isinstance(md2, h5py.Group)):
                         return None
-                    be1 = np.asarray(f1["binned_stats"]["bin_edges"][:], dtype=np.float32)
-                    be2 = np.asarray(f2["binned_stats"]["bin_edges"][:], dtype=np.float32)
-                    if be1.shape != be2.shape or not np.allclose(be1, be2):
-                        logger.warning(f"Binned bin_edges mismatch for context {ctx}; falling back to samples")
+                    if "bins" not in md1.attrs or "bin_counts" not in md1 or "bins" not in md2.attrs or "bin_counts" not in md2:
                         return None
-
+                    bins1 = int(md1.attrs["bins"])
+                    bins2 = int(md2.attrs["bins"])
+                    if bins1 != bins2 or bins1 <= 0:
+                        logger.warning(f"Binned bins mismatch for context {ctx}; falling back to samples")
+                        return None
+                    n_bins = bins1
                     if bin_edges_ref is None:
-                        bin_edges_ref = be1
-                        n_bins = len(bin_edges_ref) - 1
+                        bin_edges_ref = np.linspace(0, 1, n_bins + 1, dtype=np.float64)
                         counts1 = np.zeros((len(dmps_df), n_bins), dtype=np.int32)
                         counts2 = np.zeros((len(dmps_df), n_bins), dtype=np.int32)
                     else:
-                        if len(be1) != len(bin_edges_ref):
+                        if n_bins != len(bin_edges_ref) - 1:
                             logger.warning(f"Binned bins mismatch for context {ctx}; falling back to samples")
                             return None
 
-                    pos1 = np.asarray(f1["methylation_data"]["pos"][:], dtype=np.uint32)
-                    pos2 = np.asarray(f2["methylation_data"]["pos"][:], dtype=np.uint32)
+                    pos1 = np.asarray(md1["pos"][:], dtype=np.uint32)
+                    pos2 = np.asarray(md2["pos"][:], dtype=np.uint32)
                     idx1 = np.searchsorted(pos1, ctx_positions)
                     idx2 = np.searchsorted(pos2, ctx_positions)
                     valid1 = (idx1 < len(pos1)) & (pos1[idx1] == ctx_positions)
@@ -1714,8 +1717,8 @@ class MethylCentroidPair:
                     if not np.any(valid):
                         continue
 
-                    bc1 = f1["binned_stats"]["bin_counts"][idx1[valid]]
-                    bc2 = f2["binned_stats"]["bin_counts"][idx2[valid]]
+                    bc1 = np.asarray(md1["bin_counts"][idx1[valid]])
+                    bc2 = np.asarray(md2["bin_counts"][idx2[valid]])
                     global_idx = np.where(ctx_mask)[0][valid]
                     counts1[global_idx] = bc1
                     counts2[global_idx] = bc2

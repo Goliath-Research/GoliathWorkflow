@@ -487,17 +487,19 @@ class MethylFrame:
                     else:
                         group.create_dataset(col, data=data)
 
-            # Optional binned stats (large arrays) stored in separate group
+            # Optional binned stats: bins attr + bin_counts dataset in methylation_data only (no bin_edges)
             if hasattr(self, "_binned_stats") and self._binned_stats:
                 binned = self._binned_stats
                 if "bin_edges" in binned and "bin_counts" in binned:
-                    bgroup = f.create_group("binned_stats")
-                    if compressed:
-                        bgroup.create_dataset("bin_edges", data=binned["bin_edges"], **hdf5plugin.Blosc())
-                        bgroup.create_dataset("bin_counts", data=binned["bin_counts"], **hdf5plugin.Blosc())
-                    else:
-                        bgroup.create_dataset("bin_edges", data=binned["bin_edges"])
-                        bgroup.create_dataset("bin_counts", data=binned["bin_counts"])
+                    bin_edges = binned["bin_edges"]
+                    bin_counts = binned["bin_counts"]
+                    n_bins = int(len(bin_edges) - 1)
+                    if n_bins > 0:
+                        group.attrs["bins"] = n_bins
+                        if compressed:
+                            group.create_dataset("bin_counts", data=bin_counts, **hdf5plugin.Blosc())
+                        else:
+                            group.create_dataset("bin_counts", data=bin_counts)
 
         return path
 

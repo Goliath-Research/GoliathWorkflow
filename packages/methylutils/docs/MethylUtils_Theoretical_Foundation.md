@@ -17,7 +17,7 @@ So the “theory” of project config is: one source of truth for groups and com
 ## Sample and centroid types
 
 - **MethylSample**: Per-position methylation data (methylated counts `mC`, unmethylated `uC`, context bits `tnc`). Supports HDF5 serialization and position-indexed access. Used everywhere a single sample is loaded or compared.
-- **Centroid types**: A single centroid type, **MethylExtendedCentroid**, with N, mC, uC, Sx, Sx2 and optional **binned_stats** (bin_edges, bin_counts) for ECDF. Mean/variance can be derived from N, Sx, Sx2 (method-of-moments); **only ECDF is used** for centroid comparison and classifier likelihoods.
+- **Centroid types**: A single centroid type, **MethylExtendedCentroid**, with N, mC, uC, Sx, Sx2 and optional **binned_stats** (in memory: bin_edges, bin_counts) for ECDF. In HDF5, only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored; bin edges are derived as uniform in [0,1]. Mean/variance can be derived from N, Sx, Sx2 (method-of-moments); **only ECDF is used** for centroid comparison and classifier likelihoods.
 - **MethylCentroidPair**: Wraps two centroids (or samples); used for distance, effect-size, and DMP-style comparison (e.g. in MethylDetector) using **ECDF only**.
 
 ## ECDF model and metrics

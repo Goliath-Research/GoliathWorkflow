@@ -58,7 +58,9 @@ def load_from_h5(
         KeyError: If required datasets are missing
     """
     path = Path(path)
-    load_idx = None  # when set, binned_stats will be sliced to match data rows
+    load_idx = None  # when set, bin_counts will be sliced to match data rows
+    loaded_bins = None
+    loaded_bin_counts = None
     with h5py.File(path, "r") as f:
         data = {}
         datasets = []
@@ -112,6 +114,14 @@ def load_from_h5(
                                 data[col] = np.asarray(methyl_data[col][idx], dtype=np.float32)
                             else:
                                 data[col] = np.asarray(methyl_data[col][:], dtype=np.float32)
+                    # Binned stats: bins attr + bin_counts in methylation_data only (same row slice as N, Sx, Sx2)
+                    if "bins" in methyl_data.attrs and "bin_counts" in datasets:
+                        loaded_bins = int(methyl_data.attrs["bins"])
+                        if loaded_bins > 0:
+                            if indices is not None or positions is not None:
+                                loaded_bin_counts = np.asarray(methyl_data["bin_counts"][idx])
+                            else:
+                                loaded_bin_counts = np.asarray(methyl_data["bin_counts"][:])
 
         # Fallback to old format: datasets at root level
         if not data:
@@ -237,21 +247,13 @@ def load_from_h5(
         df = pd.DataFrame(data)
         obj = cls(df, metadata)
 
-        # Load optional binned stats (slice to load_idx when we loaded a subset of rows)
-        if "binned_stats" in f:
-            try:
-                bgroup = f["binned_stats"]
-                if "bin_edges" in bgroup and "bin_counts" in bgroup:
-                    bin_edges = np.asarray(bgroup["bin_edges"][:], dtype=np.float32)
-                    bin_counts = np.asarray(bgroup["bin_counts"][:])
-                    if load_idx is not None and bin_counts.ndim == 2:
-                        bin_counts = bin_counts[load_idx, :]
-                    if hasattr(obj, "set_binned_stats"):
-                        obj.set_binned_stats(bin_edges, bin_counts)
-                    else:
-                        obj._binned_stats = {"bin_edges": bin_edges, "bin_counts": bin_counts}
-            except Exception:
-                pass
+        # Binned stats from methylation_data (bins attr + bin_counts); derive bin_edges
+        if loaded_bins is not None and loaded_bin_counts is not None:
+            bin_edges = np.linspace(0, 1, loaded_bins + 1, dtype=np.float32)
+            if hasattr(obj, "set_binned_stats"):
+                obj.set_binned_stats(bin_edges, loaded_bin_counts)
+            else:
+                obj._binned_stats = {"bin_edges": bin_edges, "bin_counts": loaded_bin_counts}
 
         return obj
 
