@@ -302,7 +302,8 @@ class SampleManager:
         self.logger.info(f"Loading {len(sample_paths)} samples with {max_workers} parallel workers")
 
         loaded_samples = []
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+        try:
             # Submit all loading tasks
             futures = {}
             for i, sample_path in enumerate(sample_paths):
@@ -332,6 +333,9 @@ class SampleManager:
                     # Memory monitoring and cache management
                     if successful_loads % 10 == 0:  # Check every 10 samples
                         self._monitor_memory_during_loading()
+
+        finally:
+            executor.shutdown(wait=True)
 
         self.logger.info(f"Sample loading completed: {successful_loads} successful, {failed_loads} failed")
         return loaded_samples

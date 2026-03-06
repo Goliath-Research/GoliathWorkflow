@@ -924,176 +924,181 @@ class MethylCentroid:
 
         total_samples = len(all_samples)
         progress_lock = threading.Lock()
-        # Load samples in parallel batches
-        with tqdm(
-            total=total_samples,
-            desc="Adding samples",
-            unit="sample",
-        ) as progress_bar, ThreadPoolExecutor(max_workers=actual_batch_size) as executor:
-            # Submit all sample loading tasks
-            future_to_sample = {}
-            for i, sample_path in enumerate(all_samples):
-                future = executor.submit(load_sample_data, sample_path)
-                future_to_sample[future] = (i, sample_path)
+        # Load samples in parallel batches; executor is explicitly shut down in finally so all threads close
+        executor = ThreadPoolExecutor(max_workers=actual_batch_size)
+        try:
+            with tqdm(
+                total=total_samples,
+                desc="Adding samples",
+                unit="sample",
+            ) as progress_bar:
+                # Submit all sample loading tasks
+                future_to_sample = {}
+                for i, sample_path in enumerate(all_samples):
+                    future = executor.submit(load_sample_data, sample_path)
+                    future_to_sample[future] = (i, sample_path)
 
-            # Process completed tasks and add samples to position aligner
-            for future in as_completed(future_to_sample):
-                sample_idx, sample_path = future_to_sample[future]
-                methyl_sample = None
-                builder = None
-                try:
-                    result = future.result()
+                # Process completed tasks and add samples to position aligner
+                for future in as_completed(future_to_sample):
+                    sample_idx, sample_path = future_to_sample[future]
+                    methyl_sample = None
+                    builder = None
+                    try:
+                        result = future.result()
 
-                    if result is None:
-                        continue
+                        if result is None:
+                            continue
 
-                    pos, mC, uC, tnc = result
+                        pos, mC, uC, tnc = result
 
-                    # Skip empty samples
-                    if len(pos) == 0:
-                        # Skip debug logging during tqdm operations to avoid progress bar interference
-                        continue
+                        # Skip empty samples
+                        if len(pos) == 0:
+                            # Skip debug logging during tqdm operations to avoid progress bar interference
+                            continue
 
-                    # Create MethylSample-like object for position aligner
-                    # Add sample using new method
-                    if self._centroid is None:
-                        # Smaller initial chunk on GPU to avoid OOM (builder will grow as needed)
-                        initial_chunk = 10_000_000 if self.use_gpu else 50_000_000
-                        use_gpu_builder = self.use_gpu
-                        last_error = None
-                        for attempt in range(2):
-                            try:
-                                builder = _create_centroid_builder(
-                                    self._min_coverage,
-                                    use_gpu_builder,
-                                    binned_stats_bins=getattr(self, "binned_stats_bins", 20),
-                                    chunk_size=initial_chunk,
-                                )
-                                builder.add_sample(sample_path)
-                                self._centroid = builder.finalize(log_finalize=False)
-                                self.logger.info(
-                                    "Initial centroid built from first sample; merging remaining samples"
-                                )
-                                break
-                            except (RuntimeError, MemoryError) as e:
-                                last_error = e
-                                err_msg = str(e).lower()
-                                if (
-                                    attempt == 0
-                                    and use_gpu_builder
-                                    and (
-                                        "out of memory" in err_msg
-                                        or "out_of_memory" in err_msg
-                                        or "memoryallocation" in err_msg
-                                        or "cuda error" in err_msg
-                                        or "bad_alloc" in err_msg
+                        # Create MethylSample-like object for position aligner
+                        # Add sample using new method
+                        if self._centroid is None:
+                            # Smaller initial chunk on GPU to avoid OOM (builder will grow as needed)
+                            initial_chunk = 10_000_000 if self.use_gpu else 50_000_000
+                            use_gpu_builder = self.use_gpu
+                            last_error = None
+                            for attempt in range(2):
+                                try:
+                                    builder = _create_centroid_builder(
+                                        self._min_coverage,
+                                        use_gpu_builder,
+                                        binned_stats_bins=getattr(self, "binned_stats_bins", 20),
+                                        chunk_size=initial_chunk,
                                     )
-                                ):
-                                    self.logger.warning(
-                                        "GPU allocation failed (%s), retrying with CPU for this centroid: %s",
-                                        type(e).__name__,
-                                        str(e)[:200],
+                                    builder.add_sample(sample_path)
+                                    self._centroid = builder.finalize(log_finalize=False)
+                                    self.logger.info(
+                                        "Initial centroid built from first sample; merging remaining samples"
                                     )
-                                    use_gpu_builder = False
-                                    initial_chunk = 50_000_000
-                                    if builder is not None:
-                                        try:
-                                            builder.release_gpu()
-                                        except Exception:
-                                            pass
-                                        try:
-                                            del builder
-                                        except Exception:
-                                            pass
-                                        builder = None
-                                else:
-                                    raise
+                                    break
+                                except (RuntimeError, MemoryError) as e:
+                                    last_error = e
+                                    err_msg = str(e).lower()
+                                    if (
+                                        attempt == 0
+                                        and use_gpu_builder
+                                        and (
+                                            "out of memory" in err_msg
+                                            or "out_of_memory" in err_msg
+                                            or "memoryallocation" in err_msg
+                                            or "cuda error" in err_msg
+                                            or "bad_alloc" in err_msg
+                                        )
+                                    ):
+                                        self.logger.warning(
+                                            "GPU allocation failed (%s), retrying with CPU for this centroid: %s",
+                                            type(e).__name__,
+                                            str(e)[:200],
+                                        )
+                                        use_gpu_builder = False
+                                        initial_chunk = 50_000_000
+                                        if builder is not None:
+                                            try:
+                                                builder.release_gpu()
+                                            except Exception:
+                                                pass
+                                            try:
+                                                del builder
+                                            except Exception:
+                                                pass
+                                            builder = None
+                                    else:
+                                        raise
+                            else:
+                                if last_error is not None:
+                                    raise last_error
+                            # Apply min_samples filter after builder finalizes
+                            if hasattr(self._centroid, "N") and len(self._centroid) > 0:
+                                N_vals = (
+                                    np.asarray(self._centroid.N.values)
+                                    if hasattr(self._centroid.N, "values")
+                                    else np.asarray(self._centroid.N)
+                                )
+                                valid_mask = N_vals >= self.min_samples
+                                if not valid_mask.all():
+                                    # Filter out positions with N < min_samples
+                                    # Use integer indices instead of boolean mask to avoid pandas indexing issues
+                                    valid_indices = np.where(valid_mask)[0]
+                                    if len(valid_indices) > 0:
+                                        self._centroid = self._centroid.apply_mask(
+                                            valid_indices
+                                        )
+                                    else:
+                                        # No valid positions, create empty centroid
+                                        from methyl_utils import MethylExtendedCentroid
+                                        import pandas as pd
+
+                                        empty_df = pd.DataFrame(
+                                            {
+                                                "pos": [],
+                                                "mC": [],
+                                                "uC": [],
+                                                "tnc": [],
+                                                "N": [],
+                                                "Sx": [],
+                                                "Sx2": [],
+                                            }
+                                        )
+                                        self._centroid = MethylExtendedCentroid(
+                                            empty_df, self._centroid.metadata
+                                        )
                         else:
-                            if last_error is not None:
-                                raise last_error
-                        # Apply min_samples filter after builder finalizes
-                        if hasattr(self._centroid, "N") and len(self._centroid) > 0:
-                            N_vals = (
-                                np.asarray(self._centroid.N.values)
-                                if hasattr(self._centroid.N, "values")
-                                else np.asarray(self._centroid.N)
+                            # Load the actual MethylSample and add it
+                            methyl_sample = self.load_sample(sample_path)
+                            self._centroid = self._centroid.add_sample(methyl_sample)
+                        success = True
+
+                        if success:
+                            # Mark as active sample
+                            is_new_sample = sample_idx >= len(self.samples)
+                            actual_sample_idx = (
+                                sample_idx - len(self.samples)
+                                if is_new_sample
+                                else sample_idx
                             )
-                            valid_mask = N_vals >= self.min_samples
-                            if not valid_mask.all():
-                                # Filter out positions with N < min_samples
-                                # Use integer indices instead of boolean mask to avoid pandas indexing issues
-                                valid_indices = np.where(valid_mask)[0]
-                                if len(valid_indices) > 0:
-                                    self._centroid = self._centroid.apply_mask(
-                                        valid_indices
-                                    )
-                                else:
-                                    # No valid positions, create empty centroid
-                                    from methyl_utils import MethylExtendedCentroid
-                                    import pandas as pd
+                            sample_id = (is_new_sample, actual_sample_idx)
+                            self.active_samples.add(sample_id)
+                            with progress_lock:
+                                progress_bar.update(1)
+                                progress_bar.set_postfix_str(sample_path.name, refresh=True)
+                            self._log_memory_after_operation(
+                                "sample_added",
+                                sample_index=sample_idx,
+                                total_samples=len(all_samples),
+                            )
+                        else:
+                            self.logger.warning(
+                                f"Failed to add sample {sample_path.name} to position aligner"
+                            )
 
-                                    empty_df = pd.DataFrame(
-                                        {
-                                            "pos": [],
-                                            "mC": [],
-                                            "uC": [],
-                                            "tnc": [],
-                                            "N": [],
-                                            "Sx": [],
-                                            "Sx2": [],
-                                        }
-                                    )
-                                    self._centroid = MethylExtendedCentroid(
-                                        empty_df, self._centroid.metadata
-                                    )
-                    else:
-                        # Load the actual MethylSample and add it
-                        methyl_sample = self.load_sample(sample_path)
-                        self._centroid = self._centroid.add_sample(methyl_sample)
-                    success = True
+                    except Exception as e:
+                        self.logger.error(
+                            f"Failed to process sample {sample_path.name}: {e}"
+                        )
+                        self.logger.exception("Full traceback:")
+                        continue
+                    finally:
+                        if methyl_sample is not None:
+                            try:
+                                methyl_sample.close()
+                            except Exception as e:
+                                self.logger.debug(f"Sample cleanup failed: {e}")
+                        if builder is not None:
+                            try:
+                                builder.release_gpu()
+                            except Exception as e:
+                                self.logger.debug("Builder GPU release failed: %s", e)
+                            del builder
+                        self._cleanup_gpu_after_sample()
 
-                    if success:
-                        # Mark as active sample
-                        is_new_sample = sample_idx >= len(self.samples)
-                        actual_sample_idx = (
-                            sample_idx - len(self.samples)
-                            if is_new_sample
-                            else sample_idx
-                        )
-                        sample_id = (is_new_sample, actual_sample_idx)
-                        self.active_samples.add(sample_id)
-                        with progress_lock:
-                            progress_bar.update(1)
-                            progress_bar.set_postfix_str(sample_path.name, refresh=True)
-                        self._log_memory_after_operation(
-                            "sample_added",
-                            sample_index=sample_idx,
-                            total_samples=len(all_samples),
-                        )
-                    else:
-                        self.logger.warning(
-                            f"Failed to add sample {sample_path.name} to position aligner"
-                        )
-
-                except Exception as e:
-                    self.logger.error(
-                        f"Failed to process sample {sample_path.name}: {e}"
-                    )
-                    self.logger.exception("Full traceback:")
-                    continue
-                finally:
-                    if methyl_sample is not None:
-                        try:
-                            methyl_sample.close()
-                        except Exception as e:
-                            self.logger.debug(f"Sample cleanup failed: {e}")
-                    if builder is not None:
-                        try:
-                            builder.release_gpu()
-                        except Exception as e:
-                            self.logger.debug("Builder GPU release failed: %s", e)
-                        del builder
-                    self._cleanup_gpu_after_sample()
+        finally:
+            executor.shutdown(wait=True)
 
         self.logger.info(
             f"Parallel sample addition completed: {len(self.active_samples)} samples added"
