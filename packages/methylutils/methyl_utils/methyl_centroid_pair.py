@@ -245,10 +245,10 @@ class MethylCentroidPair:
 
         # Clamp zero-coverage in-place (efficient masking)
         for cent in [aligned1, aligned2]:
-            zero_mask = (cent.mC + cent.uC) == 0
+            cov = cent.coverage.values if hasattr(cent.coverage, "values") else np.asarray(cent.coverage)
+            zero_mask = cov == 0
             if np.any(zero_mask):
-                # Use .loc to avoid SettingWithCopyWarning when modifying DataFrame
-                cent._df.loc[zero_mask, "uC"] = 1  # Ensure mean=0, avoid div-by-zero in comparisons
+                cent._df.loc[zero_mask, "Su"] = 1  # Avoid div-by-zero in comparisons
                 logger.debug(f"Clamped {np.sum(zero_mask)} zero-coverage positions in centroid")
 
         # Validate min_coverage post-alignment
@@ -313,10 +313,10 @@ class MethylCentroidPair:
 
         # Clamp zero-coverage in-place (efficient masking)
         for cent in [aligned1, aligned2]:
-            zero_mask = (cent.mC + cent.uC) == 0
+            cov = cent.coverage.values if hasattr(cent.coverage, "values") else np.asarray(cent.coverage)
+            zero_mask = cov == 0
             if np.any(zero_mask):
-                # Use .loc to avoid SettingWithCopyWarning when modifying DataFrame
-                cent._df.loc[zero_mask, "uC"] = 1  # Ensure mean=0, avoid div-by-zero in comparisons
+                cent._df.loc[zero_mask, "Su"] = 1  # Avoid div-by-zero in comparisons
                 logger.debug(f"Clamped {np.sum(zero_mask)} zero-coverage positions in centroid")
 
         # Validate min_coverage post-alignment
@@ -749,17 +749,15 @@ class MethylCentroidPair:
             min_N_both = np.minimum(N1_common.astype(np.int64), N2_common.astype(np.int64))
             coverage_mask = min_N_both >= self.min_coverage
             common_positions = common_positions[coverage_mask]
-        elif hasattr(centroid1, 'mC') and hasattr(centroid1, 'uC') and hasattr(centroid2, 'mC') and hasattr(centroid2, 'uC'):
-            # Fallback when N is not available: filter by total read coverage (mC+uC)
+        elif hasattr(centroid1, "coverage") and hasattr(centroid2, "coverage"):
+            # Fallback: filter by total coverage (e.g. c.coverage >= min_coverage)
             c1_mask = np.isin(pos1_vals, common_positions)
             c2_mask = np.isin(pos2_vals, common_positions)
-            mC1_vals = centroid1.mC.values if hasattr(centroid1.mC, 'values') else np.asarray(centroid1.mC)
-            uC1_vals = centroid1.uC.values if hasattr(centroid1.uC, 'values') else np.asarray(centroid1.uC)
-            mC2_vals = centroid2.mC.values if hasattr(centroid2.mC, 'values') else np.asarray(centroid2.mC)
-            uC2_vals = centroid2.uC.values if hasattr(centroid2.uC, 'values') else np.asarray(centroid2.uC)
-            c1_coverage = mC1_vals[c1_mask] + uC1_vals[c1_mask]
-            c2_coverage = mC2_vals[c2_mask] + uC2_vals[c2_mask]
-            coverage_mask = (c1_coverage + c2_coverage) >= self.min_coverage
+            cov1 = centroid1.coverage.values if hasattr(centroid1.coverage, "values") else np.asarray(centroid1.coverage)
+            cov2 = centroid2.coverage.values if hasattr(centroid2.coverage, "values") else np.asarray(centroid2.coverage)
+            c1_coverage = cov1[c1_mask]
+            c2_coverage = cov2[c2_mask]
+            coverage_mask = (c1_coverage >= self.min_coverage) & (c2_coverage >= self.min_coverage)
             c1_positions = pos1_vals[c1_mask][coverage_mask]
             common_positions = c1_positions
 

@@ -50,8 +50,10 @@ class MethylCentroidBuilder:
         logger.info(f"MethylCentroidBuilder initialized → GPU: {self.use_gpu}, binned_stats_bins={binned_stats_bins}")
 
         self.pos: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
-        self.mC_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
-        self.uC_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.uint64)
+        self.mC_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
+        self.uC_sum: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
+        self.Sc2: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
+        self.Swx2: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
         self.N: CuArray = self.xp.zeros(chunk_size, dtype=np.uint32)
         self.Sx: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
         self.Sx2: CuArray = self.xp.zeros(chunk_size, dtype=np.float32)
@@ -66,7 +68,7 @@ class MethylCentroidBuilder:
         """Release GPU array references so memory can be freed."""
         if not self.use_gpu or not HAS_GPU:
             return
-        for attr in ["pos", "mC_sum", "uC_sum", "N", "Sx", "Sx2", "tnc", "bin_counts"]:
+        for attr in ["pos", "mC_sum", "uC_sum", "Sc2", "Swx2", "N", "Sx", "Sx2", "tnc", "bin_counts"]:
             if hasattr(self, attr):
                 setattr(self, attr, None)
         logger.debug("MethylCentroidBuilder GPU arrays released")
@@ -74,7 +76,7 @@ class MethylCentroidBuilder:
     def _grow(self, min_needed: int):
         new_cap = max(min_needed, int(self.capacity * 1.6))
         logger.debug(f"Growing accumulators: {self.capacity:,} → {new_cap:,} positions")
-        for attr in ["pos", "mC_sum", "uC_sum", "N", "Sx", "Sx2", "tnc"]:
+        for attr in ["pos", "mC_sum", "uC_sum", "Sc2", "Swx2", "N", "Sx", "Sx2", "tnc"]:
             old = getattr(self, attr)
             new = self.xp.zeros(new_cap, dtype=old.dtype)
             new[: self.size] = old[: self.size]
@@ -102,8 +104,8 @@ class MethylCentroidBuilder:
                 return
 
             pos = sample.pos.values.astype(np.uint32)
-            mC = sample.mC.values.astype(np.uint64)
-            uC = sample.uC.values.astype(np.uint64)
+            mC = sample.mC.values.astype(np.uint32)
+            uC = sample.uC.values.astype(np.uint32)
             # Access tnc from DataFrame directly
             tnc = sample._df["tnc"].values.astype(np.uint8)
 
@@ -137,6 +139,8 @@ class MethylCentroidBuilder:
                 existing_tnc = self.tnc[: self.size]
                 existing_mC_sum = self.mC_sum[: self.size]
                 existing_uC_sum = self.uC_sum[: self.size]
+                existing_Sc2 = self.Sc2[: self.size]
+                existing_Swx2 = self.Swx2[: self.size]
                 existing_N = self.N[: self.size]
                 existing_Sx = self.Sx[: self.size]
                 existing_Sx2 = self.Sx2[: self.size]
@@ -148,6 +152,8 @@ class MethylCentroidBuilder:
                 self.tnc[: n_all] = self.xp.concatenate([existing_tnc, new_tnc])[sort_indices]
                 self.mC_sum[: n_all] = self.xp.concatenate([existing_mC_sum, self.xp.zeros(n_new, dtype=self.mC_sum.dtype)])[sort_indices]
                 self.uC_sum[: n_all] = self.xp.concatenate([existing_uC_sum, self.xp.zeros(n_new, dtype=self.uC_sum.dtype)])[sort_indices]
+                self.Sc2[: n_all] = self.xp.concatenate([existing_Sc2, self.xp.zeros(n_new, dtype=self.Sc2.dtype)])[sort_indices]
+                self.Swx2[: n_all] = self.xp.concatenate([existing_Swx2, self.xp.zeros(n_new, dtype=self.Swx2.dtype)])[sort_indices]
                 self.N[: n_all] = self.xp.concatenate([existing_N, self.xp.zeros(n_new, dtype=self.N.dtype)])[sort_indices]
                 self.Sx[: n_all] = self.xp.concatenate([existing_Sx, self.xp.zeros(n_new, dtype=self.Sx.dtype)])[sort_indices]
                 self.Sx2[: n_all] = self.xp.concatenate([existing_Sx2, self.xp.zeros(n_new, dtype=self.Sx2.dtype)])[sort_indices]
@@ -182,17 +188,24 @@ class MethylCentroidBuilder:
             final_idx = self.xp.clip(final_idx, 0, size_int - 1)
 
             # Update accumulators
-            total_cov = mC + uC
-            # Use xp.where instead of xp.divide with where parameter for CuPy compatibility
-            # xp is either cp (CuPy) or np (NumPy), both support where()
+            total_cov = mC.astype(self.xp.float64) + uC.astype(self.xp.float64)
             mean = self.xp.where(
                 total_cov > 0,
-                mC.astype(self.xp.float64) / total_cov.astype(self.xp.float64),
+                mC.astype(self.xp.float64) / total_cov,
                 self.xp.float64(0.0)
             ).astype(self.xp.float32)
+            # c_i * x_i^2 = mC_i^2 / c_i
+            swx2_inc = self.xp.where(
+                total_cov > 0,
+                (mC.astype(self.xp.float64) ** 2) / total_cov,
+                self.xp.float64(0.0)
+            ).astype(self.xp.float32)
+            c_sq = (mC + uC).astype(self.xp.uint32)
 
             self.mC_sum[final_idx] += mC
             self.uC_sum[final_idx] += uC
+            self.Sc2[final_idx] += (c_sq.astype(self.xp.uint64) ** 2).astype(self.xp.uint32)
+            self.Swx2[final_idx] += swx2_inc
             self.N[final_idx] += 1
             self.Sx[final_idx] += mean
             self.Sx2[final_idx] += mean ** 2
@@ -215,30 +228,32 @@ class MethylCentroidBuilder:
                 logger.debug(f"Sample cleanup failed: {e}")
 
     def finalize(self, log_finalize: bool = True) -> MethylExtendedCentroid:
-        """Return MethylExtendedCentroid with pos, mC, uC, tnc, N, Sx, Sx2 and binned_stats."""
+        """Return MethylExtendedCentroid with pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 and binned_stats."""
         if self.size == 0:
             raise ValueError("No data accumulated")
         to_cpu = cp.asnumpy if self.use_gpu else lambda x: x
         pos = to_cpu(self.pos[: self.size])
         mC_sum = to_cpu(self.mC_sum[: self.size])
         uC_sum = to_cpu(self.uC_sum[: self.size])
+        Sc2 = to_cpu(self.Sc2[: self.size])
+        Swx2 = to_cpu(self.Swx2[: self.size])
         N = to_cpu(self.N[: self.size])
         Sx = to_cpu(self.Sx[: self.size])
         Sx2 = to_cpu(self.Sx2[: self.size])
         tnc = to_cpu(self.tnc[: self.size])
         bin_counts = to_cpu(self.bin_counts[: self.size, :])
-        coverage = mC_sum + uC_sum
+        coverage = mC_sum.astype(np.uint64) + uC_sum.astype(np.uint64)
         mask = coverage >= self.min_coverage
-        avg_mC = (mC_sum[mask] / N[mask]).astype(np.uint32)
-        avg_uC = (uC_sum[mask] / N[mask]).astype(np.uint32)
         df = pd.DataFrame({
             "pos": pos[mask].astype(np.uint32),
-            "mC": avg_mC,
-            "uC": avg_uC,
             "tnc": tnc[mask],
             "N": N[mask].astype(np.uint32),
             "Sx": Sx[mask].astype(np.float32),
             "Sx2": Sx2[mask].astype(np.float32),
+            "Sm": mC_sum[mask].astype(np.uint32),
+            "Su": uC_sum[mask].astype(np.uint32),
+            "Sc2": Sc2[mask].astype(np.uint32),
+            "Swx2": Swx2[mask].astype(np.float32),
         }).reset_index(drop=True)
         final_metadata = {
             **self.metadata,

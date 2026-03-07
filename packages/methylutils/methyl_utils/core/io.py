@@ -47,8 +47,8 @@ def load_from_h5(
     When indices is provided, only those row indices are read (no full pos read); use with
     load_pos_from_h5() + _indices_for_positions for chunked centroid building.
 
-    Centroid detection: presence of N, Sx, Sx2 (and core columns). Always returns MethylExtendedCentroid
-    for centroids. log_x_sum, log_1_minus_x_sum and BB columns in file are ignored (backward compat).
+    Centroid detection: presence of pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2. Requires binned_stats (bins attr + bin_counts).
+    No backward compatibility: only the new centroid schema is supported for centroids.
 
     Returns:
         MethylSample or MethylExtendedCentroid instance
@@ -67,14 +67,48 @@ def load_from_h5(
         methyl_data = None
 
         # Try new format first: 'methylation_data' as a group
+        centroid_required = ["pos", "tnc", "N", "Sx", "Sx2", "Sm", "Su", "Sc2", "Swx2"]
+        sample_required = ["pos", "mC", "uC", "tnc"]
         if "methylation_data" in f:
             methyl_data = f["methylation_data"]
             if isinstance(methyl_data, h5py.Group):
                 datasets = list(methyl_data.keys())
-                # Check for required core datasets
-                required_core = ["pos", "mC", "uC", "tnc"]
-                missing = [d for d in required_core if d not in datasets]
-                if not missing:
+                # Centroid: all nine fields + binned_stats required
+                if all(d in datasets for d in centroid_required):
+                    if indices is not None:
+                        idx = np.asarray(indices, dtype=np.intp)
+                        load_idx = idx
+                    elif positions is not None:
+                        pos_arr = np.asarray(methyl_data["pos"][:], dtype=np.uint32)
+                        idx = _indices_for_positions(pos_arr, positions)
+                        load_idx = idx
+                    else:
+                        idx = None
+                        load_idx = None
+                    def _load(key):
+                        if idx is not None:
+                            return np.asarray(methyl_data[key][idx])
+                        return np.asarray(methyl_data[key][:])
+                    data = {
+                        "pos": _load("pos").astype(np.uint32),
+                        "tnc": _load("tnc").astype(np.uint8),
+                        "N": _load("N").astype(np.uint32),
+                        "Sx": _load("Sx").astype(np.float32),
+                        "Sx2": _load("Sx2").astype(np.float32),
+                        "Sm": _load("Sm").astype(np.uint32),
+                        "Su": _load("Su").astype(np.uint32),
+                        "Sc2": _load("Sc2").astype(np.uint32),
+                        "Swx2": _load("Swx2").astype(np.float32),
+                    }
+                    if "bins" not in methyl_data.attrs or "bin_counts" not in datasets:
+                        raise ValueError("Centroid file must have binned_stats (bins attr and bin_counts dataset)")
+                    loaded_bins = int(methyl_data.attrs["bins"])
+                    if loaded_bins > 0:
+                        loaded_bin_counts = _load("bin_counts")
+                    else:
+                        raise ValueError("Centroid binned_stats must have bins > 0")
+                elif all(d in datasets for d in sample_required):
+                    # Sample
                     if indices is not None:
                         idx = np.asarray(indices, dtype=np.intp)
                         load_idx = idx
@@ -95,33 +129,13 @@ def load_from_h5(
                             "tnc": np.asarray(methyl_data["tnc"][idx], dtype=np.uint8),
                         }
                     else:
-                        idx = None
+                        load_idx = None
                         data = {
                             "pos": np.asarray(methyl_data["pos"][:], dtype=np.uint32),
                             "mC": np.asarray(methyl_data["mC"][:], dtype=np.uint32),
                             "uC": np.asarray(methyl_data["uC"][:], dtype=np.uint32),
                             "tnc": np.asarray(methyl_data["tnc"][:], dtype=np.uint8),
                         }
-                    # Load centroid columns (single data-driven: N, Sx, Sx2 only; log/BB ignored)
-                    if "N" in datasets:
-                        if indices is not None or positions is not None:
-                            data["N"] = np.asarray(methyl_data["N"][idx], dtype=np.uint32)
-                        else:
-                            data["N"] = np.asarray(methyl_data["N"][:], dtype=np.uint32)
-                    for col in ["Sx", "Sx2"]:
-                        if col in datasets:
-                            if indices is not None or positions is not None:
-                                data[col] = np.asarray(methyl_data[col][idx], dtype=np.float32)
-                            else:
-                                data[col] = np.asarray(methyl_data[col][:], dtype=np.float32)
-                    # Binned stats: bins attr + bin_counts in methylation_data only (same row slice as N, Sx, Sx2)
-                    if "bins" in methyl_data.attrs and "bin_counts" in datasets:
-                        loaded_bins = int(methyl_data.attrs["bins"])
-                        if loaded_bins > 0:
-                            if indices is not None or positions is not None:
-                                loaded_bin_counts = np.asarray(methyl_data["bin_counts"][idx])
-                            else:
-                                loaded_bin_counts = np.asarray(methyl_data["bin_counts"][:])
 
         # Fallback to old format: datasets at root level
         if not data:
@@ -212,16 +226,8 @@ def load_from_h5(
                 f"Required: ['pos', 'mC', 'uC', 'tnc']. Available keys: {available_keys}"
             )
         
-        # Centroid: N and Sx, Sx2 present -> MethylExtendedCentroid. Else sample.
-        if "N" in data and "Sx" in data and "Sx2" in data:
-            cls = MethylExtendedCentroid
-        elif "N" in data:
-            # Old file with N but no Sx/Sx2: derive Sx, Sx2 from mC, uC for backward compat
-            mC, uC = np.asarray(data["mC"], dtype=np.float64), np.asarray(data["uC"], dtype=np.float64)
-            cov = mC + uC
-            mean = np.where(cov > 0, mC / cov, 0.0)
-            data["Sx"] = (mean * np.asarray(data["N"], dtype=np.float64)).astype(np.float32)
-            data["Sx2"] = (mean ** 2 * np.asarray(data["N"], dtype=np.float64)).astype(np.float32)
+        # Centroid: full schema (Sm, Su, Sc2, Swx2) present -> MethylExtendedCentroid. Else sample.
+        if "Sm" in data and "Su" in data and "Sc2" in data and "Swx2" in data:
             cls = MethylExtendedCentroid
         else:
             cls = MethylSample

@@ -577,12 +577,14 @@ class MethylCentroid:
                             empty_df = pd.DataFrame(
                                 {
                                     "pos": [],
-                                    "mC": [],
-                                    "uC": [],
                                     "tnc": [],
                                     "N": [],
                                     "Sx": [],
                                     "Sx2": [],
+                                    "Sm": [],
+                                    "Su": [],
+                                    "Sc2": [],
+                                    "Swx2": [],
                                 }
                             )
                             self._centroid = MethylExtendedCentroid(
@@ -843,12 +845,14 @@ class MethylCentroid:
                         empty_df = pd.DataFrame(
                             {
                                 "pos": [],
-                                "mC": [],
-                                "uC": [],
                                 "tnc": [],
                                 "N": [],
                                 "Sx": [],
                                 "Sx2": [],
+                                "Sm": [],
+                                "Su": [],
+                                "Sc2": [],
+                                "Swx2": [],
                             }
                         )
                         self._centroid = MethylExtendedCentroid(
@@ -1034,12 +1038,14 @@ class MethylCentroid:
                                         empty_df = pd.DataFrame(
                                             {
                                                 "pos": [],
-                                                "mC": [],
-                                                "uC": [],
                                                 "tnc": [],
                                                 "N": [],
                                                 "Sx": [],
                                                 "Sx2": [],
+                                                "Sm": [],
+                                                "Su": [],
+                                                "Sc2": [],
+                                                "Swx2": [],
                                             }
                                         )
                                         self._centroid = MethylExtendedCentroid(
@@ -1442,8 +1448,8 @@ class MethylCentroid:
                 else centroid_data
             )
 
-        # Single centroid type: MethylExtendedCentroid when N, Sx, Sx2 present
-        if "N" in df.columns and "Sx" in df.columns and "Sx2" in df.columns:
+        # Single centroid type: MethylExtendedCentroid when full schema (Sm, Su, Sc2, Swx2) present
+        if "Sm" in df.columns and "Su" in df.columns and "Sc2" in df.columns and "Swx2" in df.columns:
             methyl_sample = MethylExtendedCentroid(df, metadata=metadata)
         else:
             methyl_sample = MethylSample(df, metadata=metadata)
@@ -1937,15 +1943,14 @@ class MethylCentroid:
         if sample_count == 0:
             return None
 
-        # Initialize arrays for accumulation
-        mC_accum = np.zeros(len(positions), dtype=np.uint32)
-        uC_accum = np.zeros(len(positions), dtype=np.uint32)
-        # Always track N_accum for min_samples filtering, even for non-extended centroids
+        # Initialize arrays for accumulation (single centroid schema: Sm, Su, Sc2, Swx2, N, Sx, Sx2)
+        Sm_accum = np.zeros(len(positions), dtype=np.uint32)
+        Su_accum = np.zeros(len(positions), dtype=np.uint32)
+        Sc2_accum = np.zeros(len(positions), dtype=np.uint32)
+        Swx2_accum = np.zeros(len(positions), dtype=np.float32)
         N_accum = np.zeros(len(positions), dtype=np.uint32)
-
-        if extended:
-            Sx_accum = np.zeros(len(positions), dtype=np.float32)
-            Sx2_accum = np.zeros(len(positions), dtype=np.float32)
+        Sx_accum = np.zeros(len(positions), dtype=np.float32)
+        Sx2_accum = np.zeros(len(positions), dtype=np.float32)
 
         bin_counts = None
         if (self.binned_stats_bins > 0):
@@ -2012,33 +2017,35 @@ class MethylCentroid:
                         continue
 
                 # Accumulate at the correct indices
-                np.add.at(mC_accum, target_idx, aligned_mC)
-                np.add.at(uC_accum, target_idx, aligned_uC)
-
-                # Track per-position sample count (N) for min_samples filtering
-                coverage = aligned_mC + aligned_uC
+                coverage = aligned_mC.astype(np.uint32) + aligned_uC.astype(np.uint32)
+                np.add.at(Sm_accum, target_idx, aligned_mC)
+                np.add.at(Su_accum, target_idx, aligned_uC)
                 np.add.at(N_accum, target_idx, (coverage > 0).astype(np.uint32))
+                # Sc2 += c_i^2, Swx2 += c_i*x_i^2 = mC^2/c
+                np.add.at(Sc2_accum, target_idx, (coverage.astype(np.uint64) ** 2).astype(np.uint32))
+                valid_in_aligned = coverage > 0
+                swx2_inc = np.zeros(len(aligned_mC), dtype=np.float32)
+                swx2_inc[valid_in_aligned] = (
+                    (aligned_mC[valid_in_aligned].astype(np.float64) ** 2)
+                    / coverage[valid_in_aligned].astype(np.float64)
+                )
+                np.add.at(Swx2_accum, target_idx, swx2_inc)
 
-                if extended or (self.binned_stats_bins > 0):
-                    # Calculate methylation level for this sample (in aligned space)
-                    valid_in_aligned = coverage > 0
-                    if valid_in_aligned.any():
-                        methylation_level = np.zeros(len(aligned_mC), dtype=np.float32)
-                        methylation_level[valid_in_aligned] = (
-                            aligned_mC[valid_in_aligned] / coverage[valid_in_aligned]
-                        )
+                if valid_in_aligned.any():
+                    methylation_level = np.zeros(len(aligned_mC), dtype=np.float32)
+                    methylation_level[valid_in_aligned] = (
+                        aligned_mC[valid_in_aligned].astype(np.float32) / coverage[valid_in_aligned].astype(np.float32)
+                    )
+                    np.add.at(Sx_accum, target_idx, methylation_level)
+                    np.add.at(Sx2_accum, target_idx, methylation_level ** 2)
 
-                        if extended:
-                            np.add.at(Sx_accum, target_idx, methylation_level)
-                            np.add.at(Sx2_accum, target_idx, methylation_level**2)
-
-                        if (self.binned_stats_bins > 0) and bin_counts is not None:
-                            bin_idx = np.floor(
-                                methylation_level * self.binned_stats_bins
-                            ).astype(np.int32)
-                            bin_idx = np.clip(bin_idx, 0, self.binned_stats_bins - 1)
-                            idxs = np.where(valid_in_aligned)[0]
-                            np.add.at(bin_counts, (target_idx[idxs], bin_idx[idxs]), 1)
+                    if (self.binned_stats_bins > 0) and bin_counts is not None:
+                        bin_idx = np.floor(
+                            methylation_level * self.binned_stats_bins
+                        ).astype(np.int32)
+                        bin_idx = np.clip(bin_idx, 0, self.binned_stats_bins - 1)
+                        idxs = np.where(valid_in_aligned)[0]
+                        np.add.at(bin_counts, (target_idx[idxs], bin_idx[idxs]), 1)
             finally:
                 if sample_data_obj is not None:
                     try:
@@ -2048,48 +2055,26 @@ class MethylCentroid:
                         self.logger.debug("Sample close failed: %s", e)
                     sample_data_obj = None
 
-        # Filter positions with sufficient coverage
-        total_coverage = mC_accum + uC_accum
+        # Filter positions with sufficient coverage (c.coverage >= min_coverage)
+        total_coverage = Sm_accum.astype(np.uint64) + Su_accum.astype(np.uint64)
         valid_positions = total_coverage >= self.min_coverage
-
-        # Apply min_samples filter - filter out positions where N < min_samples
         valid_positions = valid_positions & (N_accum >= self.min_samples)
 
         if not valid_positions.any():
             return None
 
-        # Create centroid data
-        if extended:
-            from methyl_utils import get_methyl_dtype
-
-            dtype = get_methyl_dtype(extended=True)
-            centroid_data = np.empty(np.sum(valid_positions), dtype=dtype)
-
-            centroid_data["pos"] = positions[valid_positions]
-            centroid_data["mC"] = mC_accum[valid_positions]
-            centroid_data["uC"] = uC_accum[valid_positions]
-            centroid_data["tnc"] = np.zeros(
-                np.sum(valid_positions), dtype=np.uint8
-            )  # Default context
-            centroid_data["N"] = N_accum[valid_positions]
-            centroid_data["Sx"] = Sx_accum[valid_positions]
-            centroid_data["Sx2"] = Sx2_accum[valid_positions]
-            # Extended fields would be computed separately if needed
-
-        else:
-            from methyl_utils import get_methyl_dtype
-
-            dtype = get_methyl_dtype(extended=False)
-            centroid_data = np.empty(np.sum(valid_positions), dtype=dtype)
-
-            centroid_data["pos"] = positions[valid_positions]
-            centroid_data["mC"] = mC_accum[valid_positions]
-            centroid_data["uC"] = uC_accum[valid_positions]
-            centroid_data["tnc"] = np.zeros(
-                np.sum(valid_positions), dtype=np.uint8
-            )  # Default context
-            # Use actual per-position N (number of samples that contributed to each position)
-            centroid_data["N"] = N_accum[valid_positions]
+        from methyl_utils import get_methyl_dtype
+        dtype = get_methyl_dtype(extended=True)
+        centroid_data = np.empty(np.sum(valid_positions), dtype=dtype)
+        centroid_data["pos"] = positions[valid_positions]
+        centroid_data["tnc"] = np.zeros(np.sum(valid_positions), dtype=np.uint8)
+        centroid_data["N"] = N_accum[valid_positions]
+        centroid_data["Sx"] = Sx_accum[valid_positions]
+        centroid_data["Sx2"] = Sx2_accum[valid_positions]
+        centroid_data["Sm"] = Sm_accum[valid_positions]
+        centroid_data["Su"] = Su_accum[valid_positions]
+        centroid_data["Sc2"] = Sc2_accum[valid_positions]
+        centroid_data["Swx2"] = Swx2_accum[valid_positions]
 
         if (self.binned_stats_bins > 0) and bin_counts is not None:
             bin_counts = bin_counts[valid_positions]

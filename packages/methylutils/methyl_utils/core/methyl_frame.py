@@ -36,7 +36,7 @@ HAS_GPU = cp is not None and cudf is not None and is_gpu_available()
 
 
 # Single source of truth — column name → optimal dtype
-# Centroid uses only pos, mC, uC, tnc, N, Sx, Sx2 (no log_x_sum, log_1_minus_x_sum or BB columns)
+# Samples: pos, mC, uC, tnc. Centroids: pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 (no mC/uC stored).
 COLUMN_DTYPES = {
     "pos": "uint32",
     "mC": "uint32",
@@ -45,6 +45,10 @@ COLUMN_DTYPES = {
     "N": "uint32",
     "Sx": "float32",
     "Sx2": "float32",
+    "Sm": "uint32",
+    "Su": "uint32",
+    "Sc2": "uint32",
+    "Swx2": "float32",
 }
 
 # Categorical definitions
@@ -678,10 +682,10 @@ class MethylSample(MethylFrame):
             return 0.0
         return float(np.mean(cov))
 
-# Single data-driven centroid: N, mC, uC, Sx, Sx2, bin_edges, bin_counts (binned_stats first-class).
-# Mean/variance from Sx, Sx2, N; Beta (alpha, beta) from method-of-moments.
+# Single centroid type: pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 + binned_stats (required).
+# mean/variance from Sx, Sx2, N; weighted_mean/weighted_variance from Sm, Su, Sc2, Swx2; coverage = Sm+Su.
 class MethylExtendedCentroid(MethylFrame):
-    _required_cols = {"pos", "mC", "uC", "tnc", "N", "Sx", "Sx2"}
+    _required_cols = {"pos", "tnc", "N", "Sx", "Sx2", "Sm", "Su", "Sc2", "Swx2"}
     _required_stats = {"Sx", "Sx2"}
 
     @property
@@ -800,39 +804,156 @@ class MethylExtendedCentroid(MethylFrame):
         """Sum of squared methylation levels."""
         return self._df["Sx2"]
 
+    @property
+    def Sm(self):
+        """Sum of methylated counts across samples."""
+        return self._df["Sm"]
+
+    @property
+    def Su(self):
+        """Sum of unmethylated counts across samples."""
+        return self._df["Su"]
+
+    @property
+    def Sc2(self):
+        """Sum of squared coverages (c_i^2) across samples."""
+        return self._df["Sc2"]
+
+    @property
+    def Swx2(self):
+        """Sum of c_i * x_i^2 across samples (for weighted variance)."""
+        return self._df["Swx2"]
+
+    @property
+    def coverage(self):
+        """Total coverage (Sm + Su). Use e.g. c.coverage >= min_coverage."""
+        Sm = self._get_values(self.Sm).astype(np.uint64)
+        Su = self._get_values(self.Su).astype(np.uint64)
+        cov = Sm + Su
+        if self.is_gpu:
+            return cudf.Series(cov, dtype="uint64", index=self._df.index)
+        return pd.Series(cov, dtype="uint64", index=self._df.index)
+
+    @property
+    def mC(self):
+        """Derived per-position mean methylated count (Sm/N) for compatibility."""
+        N = self._get_values(self.N).astype(np.float64)
+        denom = np.maximum(N, 1.0)
+        out = (self._get_values(self.Sm).astype(np.float64) / denom).astype(np.uint32)
+        if self.is_gpu:
+            return cudf.Series(out, dtype="uint32", index=self._df.index)
+        return pd.Series(out, dtype="uint32", index=self._df.index)
+
+    @property
+    def uC(self):
+        """Derived per-position mean unmethylated count (Su/N) for compatibility."""
+        N = self._get_values(self.N).astype(np.float64)
+        denom = np.maximum(N, 1.0)
+        out = (self._get_values(self.Su).astype(np.float64) / denom).astype(np.uint32)
+        if self.is_gpu:
+            return cudf.Series(out, dtype="uint32", index=self._df.index)
+        return pd.Series(out, dtype="uint32", index=self._df.index)
+
+    @property
+    def weighted_mean(self):
+        """Coverage-weighted mean: Sm / (Sm + Su)."""
+        Sm = self._get_values(self.Sm).astype(np.float64)
+        Su = self._get_values(self.Su).astype(np.float64)
+        tot = Sm + Su
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out = np.where(tot > 0, Sm / tot, 0.0)
+        if self.is_gpu:
+            return cudf.Series(out, dtype="float64", index=self._df.index)
+        return pd.Series(out, dtype="float64", index=self._df.index)
+
+    @property
+    def weighted_variance(self):
+        """Coverage-weighted population variance: Swx2/(Sm+Su) - (Sm/(Sm+Su))^2."""
+        Sm = self._get_values(self.Sm).astype(np.float64)
+        Su = self._get_values(self.Su).astype(np.float64)
+        Swx2 = self._get_values(self.Swx2).astype(np.float64)
+        tot = Sm + Su
+        with np.errstate(divide="ignore", invalid="ignore"):
+            xw = np.where(tot > 0, Sm / tot, 0.0)
+            vw = np.where(tot > 0, Swx2 / tot - xw * xw, 0.0)
+            vw = np.maximum(vw, 0.0)
+        if self.is_gpu:
+            return cudf.Series(vw, dtype="float64", index=self._df.index)
+        return pd.Series(vw, dtype="float64", index=self._df.index)
+
+    @property
+    def mean_coverage(self) -> float:
+        """Mean coverage (Sm+Su)/N over positions with N > 0."""
+        cov = self.get_coverage()
+        N = self._get_values(self.N)
+        n = len(cov)
+        if n == 0:
+            return 0.0
+        N = np.asarray(N, dtype=np.float64)
+        denom = np.maximum(N, 1.0)
+        return float(np.mean(cov / denom))
+
+    def save_to_h5(self, path: Union[str, Path], compressed: bool = True) -> Path:
+        """Save centroid to HDF5 with pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 and binned_stats (required)."""
+        path = Path(path)
+        import h5py
+        import hdf5plugin
+        if not getattr(self, "_binned_stats", None) or "bin_edges" not in self._binned_stats or "bin_counts" not in self._binned_stats:
+            raise ValueError("Centroid must have binned_stats (bin_edges, bin_counts) before saving to H5")
+        with h5py.File(path, "w") as f:
+            for key, value in self._metadata.items():
+                if isinstance(value, (dict, list)):
+                    import json
+                    f.attrs[key] = json.dumps(value)
+                else:
+                    f.attrs[key] = value
+            group = f.create_group("methylation_data")
+            for col in ["pos", "tnc", "N", "Sx", "Sx2", "Sm", "Su", "Sc2", "Swx2"]:
+                data = self._get_values(self._df[col])
+                data = np.asarray(data)
+                if compressed:
+                    group.create_dataset(col, data=data, **hdf5plugin.Blosc())
+                else:
+                    group.create_dataset(col, data=data)
+            bin_edges = self._binned_stats["bin_edges"]
+            bin_counts = self._binned_stats["bin_counts"]
+            n_bins = int(len(bin_edges) - 1)
+            group.attrs["bins"] = n_bins
+            if compressed:
+                group.create_dataset("bin_counts", data=np.asarray(bin_counts), **hdf5plugin.Blosc())
+            else:
+                group.create_dataset("bin_counts", data=np.asarray(bin_counts))
+        return path
+
     def to_numpy(self, extended: bool = True) -> np.ndarray:
-        """Convert to structured array (pos, mC, uC, tnc, N, Sx, Sx2 only)."""
-        from .. import METHYL_CENTROID_DTYPE_EXTENDED
+        """Convert to structured array (pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2)."""
+        from .. import METHYL_CENTROID_DTYPE
         df_cpu = self.to_cpu()._df
-        dtype = np.dtype(METHYL_CENTROID_DTYPE_EXTENDED)
+        dtype = np.dtype(METHYL_CENTROID_DTYPE)
         data = np.empty(len(df_cpu), dtype=dtype)
         data["pos"] = np.asarray(self._get_values(df_cpu["pos"]), dtype=np.uint32)
-        data["mC"] = np.asarray(self._get_values(df_cpu["mC"]), dtype=np.uint32)
-        data["uC"] = np.asarray(self._get_values(df_cpu["uC"]), dtype=np.uint32)
         data["tnc"] = np.asarray(self._get_values(df_cpu["tnc"]), dtype=np.uint8)
         data["N"] = np.asarray(self._get_values(df_cpu["N"]), dtype=np.uint32)
         data["Sx"] = np.asarray(self._get_values(df_cpu["Sx"]), dtype=np.float32)
         data["Sx2"] = np.asarray(self._get_values(df_cpu["Sx2"]), dtype=np.float32)
+        data["Sm"] = np.asarray(self._get_values(df_cpu["Sm"]), dtype=np.uint32)
+        data["Su"] = np.asarray(self._get_values(df_cpu["Su"]), dtype=np.uint32)
+        data["Sc2"] = np.asarray(self._get_values(df_cpu["Sc2"]), dtype=np.uint32)
+        data["Swx2"] = np.asarray(self._get_values(df_cpu["Swx2"]), dtype=np.float32)
         return data
 
     def add_sample(self, sample: "MethylSample") -> "MethylExtendedCentroid":
         """
         Add a sample to this centroid, returning a new MethylExtendedCentroid.
-        
-        Args:
-            sample: MethylSample to add to the centroid
-            
-        Returns:
-            New MethylExtendedCentroid with the sample added
+        Accumulates N, Sx, Sx2, Sm, Su, Sc2, Swx2 and binned_stats.
         """
-        # Convert to CPU for operations
         centroid_cpu = self.to_cpu()
         sample_cpu = sample.to_cpu()
-        
-        # Get numpy arrays
         centroid_pos = np.asarray(centroid_cpu.pos.values, dtype=np.uint32)
-        centroid_mC_sum = np.asarray(centroid_cpu.mC.values, dtype=np.uint64) * np.asarray(centroid_cpu.N.values, dtype=np.uint64)
-        centroid_uC_sum = np.asarray(centroid_cpu.uC.values, dtype=np.uint64) * np.asarray(centroid_cpu.N.values, dtype=np.uint64)
+        centroid_Sm = np.asarray(centroid_cpu.Sm.values, dtype=np.uint32)
+        centroid_Su = np.asarray(centroid_cpu.Su.values, dtype=np.uint32)
+        centroid_Sc2 = np.asarray(centroid_cpu.Sc2.values, dtype=np.uint32)
+        centroid_Swx2 = np.asarray(centroid_cpu.Swx2.values, dtype=np.float32)
         centroid_N = np.asarray(centroid_cpu.N.values, dtype=np.uint32)
         centroid_Sx = np.asarray(centroid_cpu.Sx.values, dtype=np.float32)
         centroid_Sx2 = np.asarray(centroid_cpu.Sx2.values, dtype=np.float32)
@@ -841,64 +962,66 @@ class MethylExtendedCentroid(MethylFrame):
         sample_mC = np.asarray(sample_cpu.mC.values, dtype=np.uint32)
         sample_uC = np.asarray(sample_cpu.uC.values, dtype=np.uint32)
         sample_tnc = np.asarray(sample_cpu._df["tnc"].values, dtype=np.uint8)
-        
-        # Calculate methylation levels for sample
-        sample_coverage = sample_mC + sample_uC
+        sample_c = sample_mC.astype(np.uint32) + sample_uC.astype(np.uint32)
         with np.errstate(divide="ignore", invalid="ignore"):
-            sample_mean = np.where(sample_coverage > 0, sample_mC.astype(np.float32) / sample_coverage.astype(np.float32), 0.0)
-        # Find common positions using intersect1d so indexing is by position value, not searchsorted order
+            sample_mean = np.where(sample_c > 0, sample_mC.astype(np.float32) / sample_c.astype(np.float32), 0.0)
+        # c_i * x_i^2 = mC_i^2 / c_i
+        sample_swx2 = np.where(sample_c > 0, (sample_mC.astype(np.float64) ** 2) / sample_c.astype(np.float64), 0.0).astype(np.float32)
         common_pos, idx_centroid, idx_sample = np.intersect1d(
             centroid_pos, sample_pos, assume_unique=True, return_indices=True
         )
         common_mask_sample = np.isin(sample_pos, centroid_pos)
-
-        # Update common positions: add sample mC/uC at the correct position-matched indices
         if len(common_pos) > 0:
-            centroid_mC_sum[idx_centroid] += sample_mC[idx_sample].astype(np.uint64)
-            centroid_uC_sum[idx_centroid] += sample_uC[idx_sample].astype(np.uint64)
+            centroid_Sm[idx_centroid] += sample_mC[idx_sample]
+            centroid_Su[idx_centroid] += sample_uC[idx_sample]
+            centroid_Sc2[idx_centroid] += (sample_c[idx_sample].astype(np.uint64) ** 2).astype(np.uint32)
+            centroid_Swx2[idx_centroid] += sample_swx2[idx_sample]
             centroid_N[idx_centroid] += np.uint32(1)
             centroid_Sx[idx_centroid] += sample_mean[idx_sample]
             centroid_Sx2[idx_centroid] += sample_mean[idx_sample].astype(np.float32) ** 2
-        # Add new positions from sample
         new_pos_mask = ~common_mask_sample
         if np.any(new_pos_mask):
             new_pos = sample_pos[new_pos_mask]
             new_mC = sample_mC[new_pos_mask]
             new_uC = sample_uC[new_pos_mask]
             new_tnc = sample_tnc[new_pos_mask]
-            new_mean = sample_mean[new_pos_mask]
+            new_c = new_mC + new_uC
+            new_mean = np.where(new_c > 0, new_mC.astype(np.float32) / new_c.astype(np.float32), 0.0)
+            new_swx2 = np.where(new_c > 0, (new_mC.astype(np.float64) ** 2) / new_c.astype(np.float64), 0.0).astype(np.float32)
             all_pos = np.concatenate([centroid_pos, new_pos])
-            all_mC_sum = np.concatenate([centroid_mC_sum, new_mC.astype(np.uint64)])
-            all_uC_sum = np.concatenate([centroid_uC_sum, new_uC.astype(np.uint64)])
+            all_Sm = np.concatenate([centroid_Sm, new_mC])
+            all_Su = np.concatenate([centroid_Su, new_uC])
+            all_Sc2 = np.concatenate([centroid_Sc2, (new_c.astype(np.uint64) ** 2).astype(np.uint32)])
+            all_Swx2 = np.concatenate([centroid_Swx2, new_swx2])
             all_N = np.concatenate([centroid_N, np.ones(len(new_pos), dtype=np.uint32)])
             all_Sx = np.concatenate([centroid_Sx, new_mean])
             all_Sx2 = np.concatenate([centroid_Sx2, new_mean.astype(np.float32) ** 2])
             all_tnc = np.concatenate([centroid_tnc, new_tnc])
             sort_idx = np.argsort(all_pos)
             all_pos = all_pos[sort_idx]
-            all_mC_sum = all_mC_sum[sort_idx]
-            all_uC_sum = all_uC_sum[sort_idx]
+            all_Sm = all_Sm[sort_idx]
+            all_Su = all_Su[sort_idx]
+            all_Sc2 = all_Sc2[sort_idx]
+            all_Swx2 = all_Swx2[sort_idx]
             all_N = all_N[sort_idx]
             all_Sx = all_Sx[sort_idx]
             all_Sx2 = all_Sx2[sort_idx]
             all_tnc = all_tnc[sort_idx]
         else:
             all_pos = centroid_pos
-            all_mC_sum = centroid_mC_sum
-            all_uC_sum = centroid_uC_sum
+            all_Sm = centroid_Sm
+            all_Su = centroid_Su
+            all_Sc2 = centroid_Sc2
+            all_Swx2 = centroid_Swx2
             all_N = centroid_N
             all_Sx = centroid_Sx
             all_Sx2 = centroid_Sx2
             all_tnc = centroid_tnc
 
-        # Recalculate averaged mC/uC from sums
-        with np.errstate(divide='ignore', invalid='ignore'):
-            avg_mC = np.where(all_N > 0, (all_mC_sum / all_N.astype(np.float64)).astype(np.uint32), 0)
-            avg_uC = np.where(all_N > 0, (all_uC_sum / all_N.astype(np.float64)).astype(np.uint32), 0)
-        
         new_df = pd.DataFrame({
-            "pos": all_pos, "mC": avg_mC, "uC": avg_uC, "tnc": all_tnc,
-            "N": all_N, "Sx": all_Sx.astype(np.float32), "Sx2": all_Sx2.astype(np.float32),
+            "pos": all_pos, "tnc": all_tnc, "N": all_N,
+            "Sx": all_Sx.astype(np.float32), "Sx2": all_Sx2.astype(np.float32),
+            "Sm": all_Sm, "Su": all_Su, "Sc2": all_Sc2, "Swx2": all_Swx2.astype(np.float32),
         })
         new_metadata = self._metadata.copy() if self._metadata else {}
         new_metadata["n_samples"] = new_metadata.get("n_samples", 0) + 1
@@ -933,12 +1056,14 @@ class MethylExtendedCentroid(MethylFrame):
         return out
 
     def remove_sample(self, sample: "MethylSample") -> "MethylExtendedCentroid":
-        """Remove a sample from this centroid; accumulates only N, mC, uC, Sx, Sx2. Updates binned_stats when present."""
+        """Remove a sample from this centroid; subtracts N, Sx, Sx2, Sm, Su, Sc2, Swx2 and updates binned_stats."""
         centroid_cpu = self.to_cpu()
         sample_cpu = sample.to_cpu()
         centroid_pos = np.asarray(centroid_cpu.pos.values, dtype=np.uint32)
-        centroid_mC_sum = np.asarray(centroid_cpu.mC.values, dtype=np.uint64) * np.asarray(centroid_cpu.N.values, dtype=np.uint64)
-        centroid_uC_sum = np.asarray(centroid_cpu.uC.values, dtype=np.uint64) * np.asarray(centroid_cpu.N.values, dtype=np.uint64)
+        centroid_Sm = np.asarray(centroid_cpu.Sm.values, dtype=np.uint32)
+        centroid_Su = np.asarray(centroid_cpu.Su.values, dtype=np.uint32)
+        centroid_Sc2 = np.asarray(centroid_cpu.Sc2.values, dtype=np.uint32)
+        centroid_Swx2 = np.asarray(centroid_cpu.Swx2.values, dtype=np.float32)
         centroid_N = np.asarray(centroid_cpu.N.values, dtype=np.uint32)
         centroid_Sx = np.asarray(centroid_cpu.Sx.values, dtype=np.float32)
         centroid_Sx2 = np.asarray(centroid_cpu.Sx2.values, dtype=np.float32)
@@ -946,30 +1071,29 @@ class MethylExtendedCentroid(MethylFrame):
         sample_pos = np.asarray(sample_cpu.pos.values, dtype=np.uint32)
         sample_mC = np.asarray(sample_cpu.mC.values, dtype=np.uint32)
         sample_uC = np.asarray(sample_cpu.uC.values, dtype=np.uint32)
-        sample_coverage = sample_mC + sample_uC
+        sample_c = sample_mC + sample_uC
         with np.errstate(divide="ignore", invalid="ignore"):
-            sample_mean = np.where(sample_coverage > 0, sample_mC.astype(np.float32) / sample_coverage.astype(np.float32), 0.0)
+            sample_mean = np.where(sample_c > 0, sample_mC.astype(np.float32) / sample_c.astype(np.float32), 0.0)
+        sample_swx2 = np.where(sample_c > 0, (sample_mC.astype(np.float64) ** 2) / sample_c.astype(np.float64), 0.0).astype(np.float32)
         common_pos, idx_centroid, idx_sample = np.intersect1d(
             centroid_pos, sample_pos, assume_unique=True, return_indices=True
         )
         if len(common_pos) > 0:
-            centroid_mC_sum[idx_centroid] -= sample_mC[idx_sample].astype(np.uint64)
-            centroid_uC_sum[idx_centroid] -= sample_uC[idx_sample].astype(np.uint64)
-            centroid_N[idx_centroid] = np.maximum(
-                0,
-                centroid_N[idx_centroid].astype(np.int32) - 1
-            ).astype(np.uint32)
+            centroid_Sm[idx_centroid] = (centroid_Sm[idx_centroid].astype(np.int64) - sample_mC[idx_sample].astype(np.int64)).clip(0).astype(np.uint32)
+            centroid_Su[idx_centroid] = (centroid_Su[idx_centroid].astype(np.int64) - sample_uC[idx_sample].astype(np.int64)).clip(0).astype(np.uint32)
+            centroid_Sc2[idx_centroid] = (centroid_Sc2[idx_centroid].astype(np.int64) - (sample_c[idx_sample].astype(np.uint64) ** 2).astype(np.int64)).clip(0).astype(np.uint32)
+            centroid_Swx2[idx_centroid] -= sample_swx2[idx_sample]
+            centroid_N[idx_centroid] = np.maximum(0, centroid_N[idx_centroid].astype(np.int32) - 1).astype(np.uint32)
             centroid_Sx[idx_centroid] -= sample_mean[idx_sample]
             centroid_Sx2[idx_centroid] -= sample_mean[idx_sample].astype(np.float32) ** 2
         valid_mask = centroid_N > 0
         if not np.any(valid_mask):
             raise ValueError("Cannot remove sample: centroid would have no valid positions")
-        with np.errstate(divide="ignore", invalid="ignore"):
-            avg_mC = np.where(centroid_N[valid_mask] > 0, (centroid_mC_sum[valid_mask] / centroid_N[valid_mask].astype(np.float64)).astype(np.uint32), 0)
-            avg_uC = np.where(centroid_N[valid_mask] > 0, (centroid_uC_sum[valid_mask] / centroid_N[valid_mask].astype(np.float64)).astype(np.uint32), 0)
         new_df = pd.DataFrame({
-            "pos": centroid_pos[valid_mask], "mC": avg_mC, "uC": avg_uC, "tnc": centroid_tnc[valid_mask],
+            "pos": centroid_pos[valid_mask], "tnc": centroid_tnc[valid_mask],
             "N": centroid_N[valid_mask], "Sx": centroid_Sx[valid_mask].astype(np.float32), "Sx2": centroid_Sx2[valid_mask].astype(np.float32),
+            "Sm": centroid_Sm[valid_mask], "Su": centroid_Su[valid_mask],
+            "Sc2": centroid_Sc2[valid_mask], "Swx2": centroid_Swx2[valid_mask].astype(np.float32),
         })
         new_metadata = self._metadata.copy() if self._metadata else {}
         new_metadata["n_samples"] = max(0, new_metadata.get("n_samples", 1) - 1)
@@ -1015,8 +1139,9 @@ class MethylExtendedCentroid(MethylFrame):
         """
         if isinstance(data, np.ndarray):
             df = pd.DataFrame({
-                "pos": data["pos"], "mC": data["mC"], "uC": data["uC"], "tnc": data["tnc"],
-                "N": data["N"], "Sx": data["Sx"], "Sx2": data["Sx2"],
+                "pos": data["pos"], "tnc": data["tnc"], "N": data["N"],
+                "Sx": data["Sx"], "Sx2": data["Sx2"],
+                "Sm": data["Sm"], "Su": data["Su"], "Sc2": data["Sc2"], "Swx2": data["Swx2"],
             })
         else:
             df = pd.DataFrame(data)

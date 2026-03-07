@@ -30,17 +30,19 @@ sample = MethylSample(
     tnc=np.array([1, 2])
 )
 
-# Create centroid
-centroid = MethylExtendedCentroid.from_sample_data(
-    pos=np.array([100, 200]),
-    mC=np.array([50, 100]),
-    uC=np.array([25, 75]),
-    tnc=np.array([1, 2]),
-    N=np.array([5, 5]),
-    Sx=np.array([2.5, 5.0]),
-    Sx2=np.array([1.25, 5.0])
-)
-
+# Create centroid (single type: pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 + binned_stats)
+centroid = MethylExtendedCentroid.from_centroid_data({
+    "pos": np.array([100, 200], dtype=np.uint32),
+    "tnc": np.array([1, 2], dtype=np.uint8),
+    "N": np.array([5, 5], dtype=np.uint32),
+    "Sx": np.array([2.5, 5.0], dtype=np.float32),
+    "Sx2": np.array([1.25, 5.0], dtype=np.float32),
+    "Sm": np.array([50, 100], dtype=np.uint32),
+    "Su": np.array([25, 75], dtype=np.uint32),
+    "Sc2": np.array([5625, 30625], dtype=np.uint32),
+    "Swx2": np.array([1.25, 5.0], dtype=np.float32),
+})
+# Properties: centroid.mean, centroid.variance (unweighted); centroid.weighted_mean, centroid.weighted_variance; centroid.coverage (Sm+Su)
 # Add sample to centroid
 updated_centroid = centroid.add_sample(sample)
 ```

@@ -261,10 +261,28 @@ def test_build_centroid_function():
     centroid = build_centroid(paths, min_coverage=1, use_gpu=False)
 
     assert isinstance(centroid, MethylExtendedCentroid)
-    assert centroid.samples_processed == 2
+    assert centroid._metadata.get("n_samples") == 2
     assert centroid.N.iloc[0] == 2
+    # mC, uC are derived (Sm/N, Su/N): Sm=8+12=20, Su=2+3=5 → mC=10, uC=2
     assert centroid.mC.iloc[0] == 10
-    assert centroid.uC.iloc[0] == 2  # (2+3)/2 = 2.5 → uint32 flooring? Wait — we use proper division in finalize
+    assert centroid.uC.iloc[0] == 2
+
+
+def test_centroid_schema_has_sm_su_sc2_swx2_and_properties():
+    """Centroid has stored Sm, Su, Sc2, Swx2 and properties coverage, weighted_mean, weighted_variance."""
+    positions = [100, 200]
+    path = create_temp_sample(positions, [8, 12], [2, 3], [0, 1])
+    centroid = build_centroid([path], min_coverage=1, use_gpu=False)
+    assert hasattr(centroid, "Sm") and hasattr(centroid, "Su")
+    assert hasattr(centroid, "Sc2") and hasattr(centroid, "Swx2")
+    assert hasattr(centroid, "coverage") and hasattr(centroid, "weighted_mean") and hasattr(centroid, "weighted_variance")
+    np.testing.assert_array_equal(np.asarray(centroid.coverage), [8 + 2, 12 + 3])
+    np.testing.assert_array_almost_equal(
+        np.asarray(centroid.weighted_mean), [8 / (8 + 2), 12 / (12 + 3)]
+    )
+    assert list(centroid.to_numpy().dtype.names) == [
+        "pos", "tnc", "N", "Sx", "Sx2", "Sm", "Su", "Sc2", "Swx2"
+    ]
 
 
 if __name__ == "__main__":

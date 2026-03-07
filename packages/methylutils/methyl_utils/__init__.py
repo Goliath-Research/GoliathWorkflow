@@ -182,27 +182,20 @@ METHYL_SAMPLE_DTYPE = [
     ("tnc", np.uint8),
 ]
 
-# Basic centroid dtype (sample + N)
+# Single centroid dtype: (pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2). uint32 for integers, float for fractions.
 METHYL_CENTROID_DTYPE = [
     ("pos", np.uint32),
-    ("mC", np.uint32),
-    ("uC", np.uint32),
-    ("tnc", np.uint8),
-    ("N", np.uint32),  # Number of samples contributing to each position
-]
-
-# Single data-driven centroid dtype (pos, mC, uC, tnc, N, Sx, Sx2 only)
-METHYL_CENTROID_DTYPE_EXTENDED = [
-    ("pos", np.uint32),
-    ("mC", np.uint32),
-    ("uC", np.uint32),
     ("tnc", np.uint8),
     ("N", np.uint32),
     ("Sx", np.float32),
     ("Sx2", np.float32),
+    ("Sm", np.uint32),
+    ("Su", np.uint32),
+    ("Sc2", np.uint32),
+    ("Swx2", np.float32),
 ]
-# Backward-compat alias
-METHYL_EXTENDED_ONLY_DTYPE = METHYL_CENTROID_DTYPE_EXTENDED
+METHYL_CENTROID_DTYPE_EXTENDED = METHYL_CENTROID_DTYPE  # alias
+METHYL_EXTENDED_ONLY_DTYPE = METHYL_CENTROID_DTYPE
 
 # Type aliases for better type hints (compatible with older Python versions)
 MethylSampleDtype = np.ndarray
@@ -214,14 +207,14 @@ def get_methyl_dtype(extended: bool = False) -> list:
     Get the appropriate methylation dtype (sample or centroid).
 
     Args:
-        extended: If True, return centroid dtype with N, Sx, Sx2
+        extended: If True, return centroid dtype (pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2).
 
     Returns:
         List of (field_name, dtype) tuples for numpy structured array
     """
     if extended:
-        return METHYL_CENTROID_DTYPE_EXTENDED
-    return METHYL_CENTROID_DTYPE
+        return METHYL_CENTROID_DTYPE
+    return METHYL_SAMPLE_DTYPE
 
 def _pack_tnc_byte(tnc: int, context: int, strand: int) -> int:
     # Range checks (raise ValueError on bad inputs)
