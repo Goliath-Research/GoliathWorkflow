@@ -16,9 +16,9 @@ except ImportError:
     PchipInterpolator = None  # type: ignore
 
 try:
-    from .methyl_frame import MethylExtendedCentroid, MethylSample
+    from .methyl_frame import MethylCentroid, MethylSample
 except ImportError:
-    MethylExtendedCentroid = None  # type: ignore
+    MethylCentroid = None  # type: ignore
     MethylSample = None  # type: ignore
 
 MIN_EPS = 1e-12
@@ -339,7 +339,7 @@ class BMMView:
 
 
 def get_distribution_view(
-    centroid: Union[MethylExtendedCentroid, MethylSample],
+    centroid: Union[MethylCentroid, MethylSample],
     mode: str,
     positions: Optional[np.ndarray] = None,
 ) -> MethylDistributionView:
@@ -389,7 +389,7 @@ def get_distribution_view(
 
 def log_probability_sample_given_centroid(
     sample: Any,
-    centroid: Union[MethylExtendedCentroid, MethylSample],
+    centroid: Union[MethylCentroid, MethylSample],
     mode: str,
     positions: Optional[np.ndarray] = None,
     use_gpu: bool = False,
@@ -468,8 +468,8 @@ def log_probability_sample_given_centroid(
 
 
 def overlap_between_centroids(
-    centroid1: Union[MethylExtendedCentroid, MethylSample],
-    centroid2: Union[MethylExtendedCentroid, MethylSample],
+    centroid1: Union[MethylCentroid, MethylSample],
+    centroid2: Union[MethylCentroid, MethylSample],
     mode: str,
     positions: Optional[np.ndarray] = None,
 ) -> np.ndarray:

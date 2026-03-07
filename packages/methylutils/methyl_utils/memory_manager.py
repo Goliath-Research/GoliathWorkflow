@@ -281,7 +281,7 @@ class MemoryManager:
     def calculate_optimal_chunk_size(
         self,
         total_positions: int,
-        data_structure: str = "extended_centroid",
+        data_structure: str = "centroid",
         maximize_gpu_usage: bool = True
     ) -> int:
         """
@@ -363,7 +363,7 @@ class MemoryManager:
                 memory_per_type["uint32"] * 3 +  # pos, mC, uC
                 memory_per_type["uint8"]         # tnc
             )
-        elif data_structure in ("basic_centroid", "extended_centroid"):
+        elif data_structure == "centroid":
             # Single centroid type: pos, mC, uC, tnc, N, Sx, Sx2 (no log sums or BB)
             bytes_per_position = (
                 memory_per_type["uint32"] * 4 +  # pos, mC, uC, N

@@ -28,7 +28,7 @@ try:
 except ImportError:
     HAS_PLOTLY = False
 
-from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
+from methyl_utils.core.methyl_frame import MethylSample, MethylCentroid
 
 
 def load_samples_from_csv(csv_path: Path, input_dir: Path, 
@@ -178,12 +178,12 @@ def load_samples_from_config(config_path: Path,
     return samples
 
 
-def compute_sample_statistics(sample: Union[MethylSample, MethylExtendedCentroid]) -> Dict[str, Any]:
+def compute_sample_statistics(sample: Union[MethylSample, MethylCentroid]) -> Dict[str, Any]:
     """
     Compute global statistics for a methylation sample or centroid.
     
     Args:
-        sample: MethylSample or MethylExtendedCentroid instance
+        sample: MethylSample or MethylCentroid instance
         
     Returns:
         Dictionary containing computed statistics
@@ -223,8 +223,8 @@ def compute_sample_statistics(sample: Union[MethylSample, MethylExtendedCentroid
         'median_coverage': float(np.median(coverage_vals)) if len(coverage_vals) > 0 else 0.0,
     }
     
-    # Add centroid-specific statistics (MethylExtendedCentroid has N, Sx, Sx2)
-    if isinstance(sample_cpu, MethylExtendedCentroid):
+    # Add centroid-specific statistics (MethylCentroid has N, Sx, Sx2)
+    if isinstance(sample_cpu, MethylCentroid):
         N_vals = np.asarray(sample_cpu.N.values) if hasattr(sample_cpu.N, 'values') else np.asarray(sample_cpu.N)
         stats['avg_N'] = float(np.mean(N_vals))
         stats['min_N'] = int(np.min(N_vals)) if len(N_vals) > 0 else 0
@@ -303,13 +303,13 @@ def create_histogram_html(data: np.ndarray, title: str, xlabel: str, output_path
     print(f"Saved histogram: {output_path}")
 
 
-def generate_all_histograms(sample: Union[MethylSample, MethylExtendedCentroid], 
+def generate_all_histograms(sample: Union[MethylSample, MethylCentroid], 
                            output_dir: Path, sample_name: str) -> Dict[str, Path]:
     """
     Generate all histograms for a sample (mC, uC, coverage, methylation level).
     
     Args:
-        sample: MethylSample or MethylExtendedCentroid instance
+        sample: MethylSample or MethylCentroid instance
         output_dir: Directory to save histogram HTML files
         sample_name: Name identifier for the sample (used in filenames)
         

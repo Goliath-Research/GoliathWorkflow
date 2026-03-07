@@ -17,7 +17,7 @@ except ImportError:
     HAS_HYPOTHESIS = False
 
 from methyl_utils.core.centroid_builder import MethylCentroidBuilder, build_centroid
-from methyl_utils.core.methyl_frame import MethylExtendedCentroid
+from methyl_utils.core.methyl_frame import MethylCentroid
 from methyl_utils.core.io import load_from_h5  # assuming you have a minimal loader
 
 try:
@@ -67,7 +67,7 @@ def test_single_sample_passes_through():
 
     centroid = builder.finalize()
 
-    assert isinstance(centroid, MethylExtendedCentroid)
+    assert isinstance(centroid, MethylCentroid)
     assert len(centroid) == 3
     assert centroid.N.to_list() == [1, 1, 1]
     np.testing.assert_array_equal(centroid.pos.values, positions)
@@ -260,7 +260,7 @@ def test_build_centroid_function():
 
     centroid = build_centroid(paths, min_coverage=1, use_gpu=False)
 
-    assert isinstance(centroid, MethylExtendedCentroid)
+    assert isinstance(centroid, MethylCentroid)
     assert centroid._metadata.get("n_samples") == 2
     assert centroid.N.iloc[0] == 2
     # mC, uC are derived (Sm/N, Su/N): Sm=8+12=20, Su=2+3=5 → mC=10, uC=2

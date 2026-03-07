@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass
 
 from .beta_classifier import BetaClassifier
-from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
+from methyl_utils.core.methyl_frame import MethylSample, MethylCentroid
 from .logging_utils import setup_module_logging
 
 logger = setup_module_logging(__name__)
@@ -156,11 +156,11 @@ class BayesianClassifierTrainer:
         if not isinstance(centroid1, MethylSample) or not isinstance(centroid2, MethylSample):
             raise ValueError("Both inputs must be MethylSample objects")
         
-        if centroid1.sample_type != "extended_centroid":
-            raise ValueError(f"centroid1 must be extended_centroid type, got {centroid1.sample_type}")
+        if centroid1.sample_type != "centroid":
+            raise ValueError(f"centroid1 must be centroid type, got {centroid1.sample_type}")
         
-        if centroid2.sample_type != "extended_centroid":
-            raise ValueError(f"centroid2 must be extended_centroid type, got {centroid2.sample_type}")
+        if centroid2.sample_type != "centroid":
+            raise ValueError(f"centroid2 must be centroid type, got {centroid2.sample_type}")
         
         if len(centroid1.pos) == 0 or len(centroid2.pos) == 0:
             raise ValueError("Centroids must have positions")

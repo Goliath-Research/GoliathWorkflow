@@ -1,6 +1,6 @@
 # MethylFrame Statistics Test Suite - Usage Guide
 
-This test suite provides tools to compute statistics and generate histograms for `MethylSample` and `MethylExtendedCentroid` (single centroid type).
+This test suite provides tools to compute statistics and generate histograms for `MethylSample` and `MethylCentroid` (single centroid type).
 
 ## Quick Start
 
@@ -216,7 +216,7 @@ for i, sample in enumerate(samples):
 
 ## Testing Centroids
 
-The test suite includes tests for `MethylExtendedCentroid`. 
+The test suite includes tests for `MethylCentroid`. 
 These tests create centroids from multiple samples and verify:
 - Statistics computation (including N, Sx, Sx2, etc.)
 - Histogram generation
@@ -225,7 +225,7 @@ These tests create centroids from multiple samples and verify:
 Run centroid tests:
 ```bash
 pytest methylutils/methyl_utils/tests/test_methyl_frame_statistics.py::test_methyl_centroid_statistics -v
-pytest methylutils/methyl_utils/tests/test_methyl_frame_statistics.py::test_methyl_extended_centroid_statistics -v
+pytest methylutils/methyl_utils/tests/test_methyl_frame_statistics.py::test_methyl_centroid_statistics -v
 ```
 
 ## Troubleshooting

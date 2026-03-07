@@ -94,11 +94,9 @@ from .logging_utils import (
 from .core.methyl_frame import (
     MethylFrame,
     MethylSample,
-    MethylExtendedCentroid,
+    MethylCentroid,
     compute_coverage_outlier_flags,
 )
-MethylCentroid = MethylExtendedCentroid
-MethylBetaCentroid = MethylExtendedCentroid
 
 # Import I/O functions
 from .core.io import (
@@ -200,7 +198,6 @@ METHYL_EXTENDED_ONLY_DTYPE = METHYL_CENTROID_DTYPE
 # Type aliases for better type hints (compatible with older Python versions)
 MethylSampleDtype = np.ndarray
 MethylCentroidDtype = np.ndarray
-MethylExtendedCentroidDtype = np.ndarray
 
 def get_methyl_dtype(extended: bool = False) -> list:
     """
@@ -619,7 +616,7 @@ from .performance_profiler import (
     profile_performance
 )
 
-# PositionAligner has been deprecated - use MethylExtendedCentroid.add_sample()/remove_sample() instead
+# PositionAligner has been deprecated - use MethylCentroid.add_sample()/remove_sample() instead
 # from .position_aligner import PositionAligner, align_multiple_samples
 from .models import (
     PositionMethylationStats,
@@ -740,7 +737,7 @@ __all__ = [
     # Methylation sample functions
     "MethylFrame",
     "MethylSample",
-    "MethylExtendedCentroid",
+    "MethylCentroid",
     "compute_coverage_outlier_flags",
     "MethylBetaMixtureCentroid",
     "get_distribution_view",
@@ -754,8 +751,6 @@ __all__ = [
     "ecdf_vs_theoretical_ks",
     "ecdf_vs_theoretical_ks_pvalue",
     "compare_ecdf_to_theoretical_at_positions",
-    "MethylCentroid",  # Alias for MethylExtendedCentroid
-    "MethylBetaCentroid",  # Alias for MethylExtendedCentroid
     "load_from_h5",
     "load_pos_from_h5",
     "estimate_n_cap_from_sample_path",
@@ -779,7 +774,6 @@ __all__ = [
     "METHYL_CENTROID_DTYPE_EXTENDED",
     "MethylSampleDtype",
     "MethylCentroidDtype",
-    "MethylExtendedCentroidDtype",
     "get_methyl_dtype",
     "DMPSample",
     "DMPExporter",
@@ -853,7 +847,7 @@ __all__ = [
     "stop_performance_monitoring",
     "get_performance_report",
     "profile_performance",
-    # PositionAligner deprecated - use MethylExtendedCentroid methods instead
+    # PositionAligner deprecated - use MethylCentroid methods instead
     # "PositionAligner",
     # "align_multiple_samples",
     "PositionMethylationStats",

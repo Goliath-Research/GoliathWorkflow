@@ -5,7 +5,7 @@ import hdf5plugin  # noqa: F401 - Must be imported before h5py
 import h5py
 import numpy as np
 import pandas as pd
-from .methyl_frame import MethylExtendedCentroid, MethylSample
+from .methyl_frame import MethylCentroid, MethylSample
 
 
 def _indices_for_positions(pos_arr: np.ndarray, positions: np.ndarray):
@@ -39,7 +39,7 @@ def load_from_h5(
     path: Union[str, Path],
     positions: Optional[np.ndarray] = None,
     indices: Optional[np.ndarray] = None,
-) -> MethylExtendedCentroid | MethylSample:
+) -> MethylCentroid | MethylSample:
     """
     Load methylation data from HDF5 file.
 
@@ -51,7 +51,7 @@ def load_from_h5(
     No backward compatibility: only the new centroid schema is supported for centroids.
 
     Returns:
-        MethylSample or MethylExtendedCentroid instance
+        MethylSample or MethylCentroid instance
 
     Raises:
         ValueError: If file doesn't have required datasets in any format
@@ -226,9 +226,9 @@ def load_from_h5(
                 f"Required: ['pos', 'mC', 'uC', 'tnc']. Available keys: {available_keys}"
             )
         
-        # Centroid: full schema (Sm, Su, Sc2, Swx2) present -> MethylExtendedCentroid. Else sample.
+        # Centroid: full schema (Sm, Su, Sc2, Swx2) present -> MethylCentroid. Else sample.
         if "Sm" in data and "Su" in data and "Sc2" in data and "Swx2" in data:
-            cls = MethylExtendedCentroid
+            cls = MethylCentroid
         else:
             cls = MethylSample
         

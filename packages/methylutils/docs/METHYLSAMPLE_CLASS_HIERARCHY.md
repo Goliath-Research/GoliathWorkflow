@@ -26,7 +26,7 @@ MethylSample (base class)
 ├── Basic sample operations
 └── Metadata management
 
-MethylExtendedCentroid (inherits from MethylFrame; single centroid type)
+MethylCentroid (inherits from MethylFrame; single centroid type)
 ├── Adds sample count and accumulators (N, Sx, Sx2)
 ├── Optional binned_stats (in memory: bin_edges, bin_counts) for ECDF; H5 stores only methylation_data.attrs["bins"] and methylation_data["bin_counts"]
 ├── Beta parameters via Method of Moments (MoM) from N, Sx, Sx2
@@ -53,7 +53,7 @@ MethylExtendedCentroid (inherits from MethylFrame; single centroid type)
 |----------|------|-------------|
 | `sample_type` | `str` | Returns `"sample"` |
 | `is_centroid` | `bool` | Returns `False` |
-| `is_extended_centroid` | `bool` | Returns `False` |
+| `is_centroid` | `bool` | Returns `False` |
 | `laboratory` | `Optional[str]` | Laboratory name from metadata (read/write) |
 | `disease` | `Optional[str]` | Disease type from metadata (read/write) |
 | `group` | `Optional[str]` | Group identifier from metadata (read/write) |
@@ -111,7 +111,7 @@ MethylExtendedCentroid (inherits from MethylFrame; single centroid type)
 - `compute_coverage_outlier_flags(samples, *, method="robust_z", threshold=3.5, max_positions=100_000, seed=None) -> List[bool]` (from `methyl_utils.core.methyl_frame` or `methyl_utils`) — Flags samples with outlying coverage using robust z-score (median, MAD) or IQR. Optionally run this, then cap only flagged samples in place: `for i, s in enumerate(samples): if flags[i]: s.cap_coverage_binomial(n_cap=35, seed=0)`.
 - `estimate_n_cap_from_sample_path(path, *, max_positions=100_000, iqr_multiplier=1.5, seed=None) -> int` (from `methyl_utils.core.io` or `methyl_utils`) — Estimate n_cap from one sample file using IQR on a random subset of positions: upper fence = Q3 + 1.5*IQR; positions with coverage above that (e.g. re-sequencing duplicates) are outliers. Returns n_cap = ceil(upper_fence) for use with cap_coverage_binomial. `estimate_n_cap_from_sample_path_with_log` returns (median, upper_fence, n_cap) for logging.
 
-## 2. MethylExtendedCentroid
+## 2. MethylCentroid
 
 **Purpose**: Single centroid type: aggregated counts (N, mC, uC) and statistical accumulators (Sx, Sx2) for mean/variance and optional binned ECDF (bin_edges, bin_counts). Beta parameters are computed via Method of Moments (MoM).
 
@@ -130,7 +130,7 @@ MethylExtendedCentroid (inherits from MethylFrame; single centroid type)
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `sample_type` | `str` | Returns `"extended_centroid"` |
+| `sample_type` | `str` | Returns `"centroid"` |
 | `is_centroid` | `bool` | Returns `True` |
 | `alpha` | `np.ndarray` | Beta alpha (MoM from N, Sx, Sx2) |
 | `beta` | `np.ndarray` | Beta beta (MoM) |
@@ -164,9 +164,9 @@ print(f"Sample type: {sample.sample_type}")  # "sample"
 print(f"Methylation levels: {sample.get_methylation_levels()}")  # [0.67, 0.57, 0.55]
 ```
 
-### Creating Centroids (MethylExtendedCentroid)
+### Creating Centroids (MethylCentroid)
 ```python
-from methyl_utils import MethylExtendedCentroid
+from methyl_utils import MethylCentroid
 import pandas as pd
 
 df = pd.DataFrame({
@@ -178,26 +178,26 @@ df = pd.DataFrame({
     'Sx': np.array([3.0, 5.0, 7.0], dtype=np.float32),
     'Sx2': np.array([10.0, 25.0, 49.0], dtype=np.float32),
 })
-centroid = MethylExtendedCentroid(df, metadata={'context': 'CG'})
+centroid = MethylCentroid(df, metadata={'context': 'CG'})
 
-print(centroid.sample_type)   # "extended_centroid"
+print(centroid.sample_type)   # "centroid"
 print(centroid.alpha[0])      # Beta (MoM)
 print(centroid.mean[0])
 ```
 
 ### Auto-Detection on Load
 
-When loading from HDF5, if N, Sx, and Sx2 are present, the loader returns `MethylExtendedCentroid`; otherwise `MethylSample`.
+When loading from HDF5, if the full centroid schema (N, Sx, Sx2, Sm, Su, Sc2, Swx2) is present, the loader returns `MethylCentroid`; otherwise `MethylSample`.
 
 ## Inheritance and Polymorphism
 
 - **MethylSample**: base for single-sample data (pos, mC, uC, tnc).
-- **MethylExtendedCentroid**: single centroid type (adds N, Sx, Sx2; optional binned_stats); `is_centroid` is True.
+- **MethylCentroid**: single centroid type (pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2; binned_stats required); `is_centroid` is True.
 
 ## Data Type Validation
 
 - **MethylSample**: Validates pos, mC, uC, tnc (uint32, uint32, uint32, uint8).
-- **MethylExtendedCentroid**: Additionally requires N (uint32), Sx (float32), Sx2 (float32).
+- **MethylCentroid**: Additionally requires N, Sx, Sx2, Sm, Su, Sc2, Swx2 (uint32/float32 per schema).
 
 All arrays must have matching lengths and proper data types or initialization will raise `AssertionError`.
 

@@ -37,7 +37,7 @@ except ImportError:
 
 import numpy as np
 import pytest
-from methyl_utils.core.methyl_frame import MethylExtendedCentroid, MethylSample
+from methyl_utils.core.methyl_frame import MethylCentroid, MethylSample
 
 def test_centroid_creation():
     # Create samples
@@ -48,7 +48,7 @@ def test_centroid_creation():
     # Create centroid
     centroid = sample1.add_sample(sample2)
     
-    assert centroid.is_extended_centroid
+    assert centroid.is_centroid
     assert np.all(centroid.N == 2)
     assert np.all(centroid.mC == (10+15)//2)  # Average, but actual implementation may vary
 

@@ -207,7 +207,7 @@ def classify_samples(classifier: MethylClassifier,
     if debug:
         print(f"\n🔍 Classification Analysis by Sample Type:")
         for i, (name, sample_type, pred, prob) in enumerate(zip(sample_names, sample_types, predictions, probabilities)):
-            if sample_type in ['basic_centroid', 'extended_centroid']:
+            if sample_type == 'centroid':
                 available_dmps = np.sum(availability_mask[i])
                 print(f"  {name} ({sample_type}): Class_{pred}, Available DMPs: {available_dmps}/{len(dmp_positions)}")
 
@@ -357,7 +357,7 @@ def classify_samples(classifier: MethylClassifier,
         print(f"  • {sample_type}: {np.mean(type_dmps):.1f} ± {np.std(type_dmps):.1f} DMPs ({np.mean(type_dmps)/len(dmp_positions)*100:.1f}% ± {np.std(type_dmps)/len(dmp_positions)*100:.1f}%)")
 
     # Check for potential issues
-    centroid_samples = [i for i, st in enumerate(sample_types) if st in ['basic_centroid', 'extended_centroid']]
+    centroid_samples = [i for i, st in enumerate(sample_types) if st == 'centroid']
     if centroid_samples:
         print(f"\n⚠️  Note: {len(centroid_samples)} centroid samples detected.")
         print(f"  Centroids may represent training data and classification results should be interpreted carefully.")

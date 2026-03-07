@@ -8,7 +8,7 @@ The installable package is **methylutils**; the Python package name is **methyl_
 
 - **methyl_utils/__init__.py** — Public API: project config, sample/centroid types, metrics, classifiers, GPU/memory helpers. Downstream packages import from `methyl_utils` (e.g. `from methyl_utils import load_project`, `MethylSample`, `MethylCentroidBuilder`).
 - **methyl_utils/core/** — Core data and building blocks:
-  - **methyl_frame.py** — MethylSample, MethylExtendedCentroid (single centroid type), MethylFrame.
+  - **methyl_frame.py** — MethylSample, MethylCentroid (single centroid type), MethylFrame.
   - **centroid_builder.py** — MethylCentroidBuilder, build_centroid.
   - **io.py** — load_from_h5, save_to_h5 (and related I/O).
   - **distribution_views.py** — ECDFView (used for centroid comparison), get_distribution_view, log_probability_sample_given_centroid, overlap_between_centroids. **Only ECDF is supported** for centroid comparison; Normal, Beta, Beta-Binomial, and Beta-Mixture views are not used in the pipeline.

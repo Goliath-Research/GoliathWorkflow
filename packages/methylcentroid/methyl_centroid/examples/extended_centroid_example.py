@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Example demonstrating extended centroid functionality with methylation level statistics.
+Example demonstrating centroid functionality with methylation level statistics.
 
-This example shows how to build extended centroid files that include additional
-columns: N (sample count), Sx (methylation level sum), and Sx2 (squared methylation level sum).
+This example shows how to build centroid files with full schema: N (sample count),
+Sx, Sx2 (sample mean/variance), and Sm, Su, Sc2, Swx2 (coverage-weighted statistics).
 """
 
 import numpy as np
@@ -25,9 +25,9 @@ def create_sample_file(filepath: Path, positions: np.ndarray, mC: np.ndarray,
         data_group.create_dataset("tnc", data=tnc, dtype=np.uint8)
 
 
-def demonstrate_basic_vs_extended_centroid():
-    """Demonstrate the difference between basic and extended centroids."""
-    print("=== Basic vs Extended Centroid Demonstration ===")
+def demonstrate_basic_vs_centroid():
+    """Demonstrate the difference between basic output and full centroid schema."""
+    print("=== Basic vs Centroid (full schema) Demonstration ===")
     
     # Create temporary directory for sample files
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -78,18 +78,18 @@ def demonstrate_basic_vs_extended_centroid():
             print(f"   uC values: {data['uC'][:]}")
             print(f"   N values: {data['N'][:]}")
         
-        print("\n2. Building Extended Centroid:")
-        # Reset for extended centroid
+        print("\n2. Building Centroid (full schema):")
+        # Reset for centroid
         methyl_centroid.position_aligner.reset()
         methyl_centroid.active_samples.clear()
         
-        extended_centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
-        print(f"   Extended centroid saved to: {extended_centroid_path}")
+        centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
+        print(f"   Centroid saved to: {centroid_path}")
         
-        # Examine extended centroid
-        with h5py.File(extended_centroid_path, "r") as f:
+        # Examine centroid
+        with h5py.File(centroid_path, "r") as f:
             data = f["methylation_data"]
-            print(f"   Extended centroid columns: {list(data.keys())}")
+            print(f"   Centroid columns: {list(data.keys())}")
             print(f"   Number of positions: {len(data['pos'])}")
             print(f"   Positions: {data['pos'][:]}")
             print(f"   mC values: {data['mC'][:]}")
@@ -224,7 +224,7 @@ def main():
     
     try:
         # Demonstrate basic vs extended centroids
-        demonstrate_basic_vs_extended_centroid()
+        demonstrate_basic_vs_centroid()
         
         # Demonstrate incremental operations
         demonstrate_incremental_operations()

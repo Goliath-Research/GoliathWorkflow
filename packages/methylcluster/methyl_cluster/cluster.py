@@ -24,13 +24,13 @@ from .centroid_manager import ClusterCentroid
 
 # Import MethylUtils components
 try:
-    from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
+    from methyl_utils.core.methyl_frame import MethylSample, MethylCentroid
 except ImportError:
     # Fallback for development
     import sys
     sys.path.insert(
         0, str(Path(__file__).parent.parent.parent / 'methylutils'))
-    from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
+    from methyl_utils.core.methyl_frame import MethylSample, MethylCentroid
 
 logger = logging.getLogger(__name__)
 

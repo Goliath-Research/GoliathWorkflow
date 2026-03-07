@@ -21,10 +21,8 @@ from tqdm import tqdm
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from methyl_utils.core.methyl_frame import (
-    # METHYL_CENTROID_DTYPE,
-    # METHYL_EXTENDED_CENTROID_DTYPE,
     MethylSample,
-    MethylExtendedCentroid,
+    MethylCentroid as MethylCentroidData,
 )
 
 try:
@@ -309,7 +307,7 @@ class MethylCentroid:
             self.logger.warning("GPU disabled or unavailable; using CPU processing")
 
         # Initialize centroid accumulator (will be created when first sample is added)
-        self._centroid: Optional[MethylExtendedCentroid] = None
+        self._centroid: Optional[MethylCentroidData] = None
         self._min_coverage = min_coverage
 
         # Initialize memory manager from MethylUtils
@@ -472,21 +470,17 @@ class MethylCentroid:
             print(f"Centroid file not found: {centroid_path}")
             return False
         try:
-            # Load the centroid as MethylExtendedCentroid
+            # Load the centroid as MethylCentroid (data)
             from methyl_utils.core.io import load_from_h5
 
             loaded_centroid = load_from_h5(centroid_path)
 
-            # Ensure it's an extended centroid
-            if not isinstance(loaded_centroid, MethylExtendedCentroid):
-                # Try to convert if it's a basic centroid or sample
-                if hasattr(loaded_centroid, "as_extended_centroid"):
-                    loaded_centroid = loaded_centroid.as_extended_centroid()
-                else:
-                    print(
-                        f"Loaded centroid is not an extended centroid: {type(loaded_centroid)}"
-                    )
-                    return False
+            # Ensure it's a centroid (full schema with Sm, Su, Sc2, Swx2)
+            if not isinstance(loaded_centroid, MethylCentroidData):
+                print(
+                    f"Loaded file is not a centroid: {type(loaded_centroid)}"
+                )
+                return False
 
             self._centroid = loaded_centroid
 
@@ -571,7 +565,6 @@ class MethylCentroid:
                             self._centroid = self._centroid.apply_mask(valid_indices)
                         else:
                             # No valid positions, create empty centroid
-                            from methyl_utils import MethylExtendedCentroid
                             import pandas as pd
 
                             empty_df = pd.DataFrame(
@@ -587,7 +580,7 @@ class MethylCentroid:
                                     "Swx2": [],
                                 }
                             )
-                            self._centroid = MethylExtendedCentroid(
+                            self._centroid = MethylCentroidData(
                                 empty_df, self._centroid.metadata
                             )
             else:
@@ -839,7 +832,6 @@ class MethylCentroid:
                     if len(valid_indices) > 0:
                         self._centroid = self._centroid.apply_mask(valid_indices)
                     else:
-                        from methyl_utils import MethylExtendedCentroid
                         import pandas as pd
 
                         empty_df = pd.DataFrame(
@@ -855,7 +847,7 @@ class MethylCentroid:
                                 "Swx2": [],
                             }
                         )
-                        self._centroid = MethylExtendedCentroid(
+                        self._centroid = MethylCentroidData(
                             empty_df, self._centroid.metadata
                         )
             self.logger.info(
@@ -1032,7 +1024,6 @@ class MethylCentroid:
                                         )
                                     else:
                                         # No valid positions, create empty centroid
-                                        from methyl_utils import MethylExtendedCentroid
                                         import pandas as pd
 
                                         empty_df = pd.DataFrame(
@@ -1048,7 +1039,7 @@ class MethylCentroid:
                                                 "Swx2": [],
                                             }
                                         )
-                                        self._centroid = MethylExtendedCentroid(
+                                        self._centroid = MethylCentroidData(
                                             empty_df, self._centroid.metadata
                                         )
                         else:
@@ -1380,7 +1371,7 @@ class MethylCentroid:
             return np.array([], dtype=get_methyl_dtype(extended))
 
         if extended:
-            # Get centroid as MethylExtendedCentroid
+            # Get centroid as MethylCentroidData
             centroid_sample = self._centroid
 
             # Convert to numpy array format for saving
@@ -1428,7 +1419,6 @@ class MethylCentroid:
         # Create MethylSample from centroid data with metadata
         # centroid_data is a structured numpy array, convert to DataFrame
         import pandas as pd
-        from methyl_utils import MethylSample, MethylExtendedCentroid
 
         # Convert structured array to DataFrame
         if isinstance(centroid_data, np.ndarray) and centroid_data.dtype.names:
@@ -1448,9 +1438,9 @@ class MethylCentroid:
                 else centroid_data
             )
 
-        # Single centroid type: MethylExtendedCentroid when full schema (Sm, Su, Sc2, Swx2) present
+        # Single centroid type: MethylCentroidData when full schema (Sm, Su, Sc2, Swx2) present
         if "Sm" in df.columns and "Su" in df.columns and "Sc2" in df.columns and "Swx2" in df.columns:
-            methyl_sample = MethylExtendedCentroid(df, metadata=metadata)
+            methyl_sample = MethylCentroidData(df, metadata=metadata)
         else:
             methyl_sample = MethylSample(df, metadata=metadata)
 
@@ -1528,7 +1518,7 @@ class MethylCentroid:
             indices: If set, load only these row indices from the H5 file.
 
         Returns:
-            MethylExtendedCentroid (or MethylSample) instance, or None if no centroid.
+            MethylCentroidData (or MethylSample) instance, or None if no centroid.
         """
         from methyl_utils import load_from_h5
 
@@ -1707,10 +1697,9 @@ class MethylCentroid:
         # When we already have a full centroid with binned_stats from add_samples_parallel (builder
         # + add_sample path), skip the redundant chunked recompute that re-reads all sample files.
         if self.binned_stats_bins > 0:
-            from methyl_utils import MethylExtendedCentroid
             use_existing = (
                 self._centroid is not None
-                and isinstance(self._centroid, MethylExtendedCentroid)
+                and isinstance(self._centroid, MethylCentroidData)
                 and getattr(self._centroid, "binned_stats", None) is not None
             )
             if use_existing:
@@ -2768,7 +2757,7 @@ if __name__ == "__main__":
                 # Add methylation statistics if available
                 # Check if centroid has methylation stats (extended centroid always has them)
                 if mc._centroid is not None and isinstance(
-                    mc._centroid, MethylExtendedCentroid
+                    mc._centroid, MethylCentroidData
                 ):
                     # Create alignment stats from centroid
                     # Note: These methods may need to be implemented differently

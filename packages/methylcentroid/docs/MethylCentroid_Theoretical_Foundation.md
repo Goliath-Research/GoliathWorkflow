@@ -76,4 +76,4 @@ Centroids must be built with `binned_stats_bins` > 0 (default 20) so that binned
 
 ## References
 
-- **Implementation**: MethylUtils `MethylCentroidBuilder`, `MethylExtendedCentroid`; comparison via `MethylCentroidPair` using **ECDF only**. Build centroids with `binned_stats_bins` (default 20).
+- **Implementation**: MethylUtils `MethylCentroidBuilder`, `MethylCentroid` (data class); comparison via `MethylCentroidPair` using **ECDF only**. Build centroids with `binned_stats_bins` (default 20).

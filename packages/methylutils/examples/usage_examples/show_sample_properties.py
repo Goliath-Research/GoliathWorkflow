@@ -82,7 +82,7 @@ def display_sample_properties(h5_path: Path):
     
     print(f"\nSample Type: {sample.sample_type}")
     print(f"Is Centroid: {sample.is_centroid}")
-    print(f"Is Extended Centroid: {sample.is_extended_centroid}")
+    print(f"Is Centroid: {sample.is_centroid}")
     print(f"Position Count: {sample.position_count:,}")
     print(f"Memory Usage: {sample.memory_usage_mb:.2f} MB")
     print(f"Bytes per Position: {sample.bytes_per_position:.2f}")

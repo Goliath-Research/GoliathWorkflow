@@ -106,7 +106,7 @@ python -m methyl_centroid.cli --config config.json --no-gpu
 
 ### MethylCentroidExplorer
 
-Inspect a MethylFrame (a single `.h5` file or a folder of `.h5` files): detect type (MethylSample, MethylBasicCentroid, MethylExtendedCentroid, MethylBetaBinomialCentroid), print metadata, and optionally describe a range of positions in detail (pos, mC, uC, coverage, mean, N, Sx, Sx2, alpha, beta, variance).
+Inspect a MethylFrame (a single `.h5` file or a folder of `.h5` files): detect type (MethylSample, MethylCentroid), print metadata, and optionally describe a range of positions in detail (pos, mC, uC, coverage, mean, N, Sx, Sx2, alpha, beta, variance). Centroid data is MethylUtils’ **MethylCentroid** (data class).
 
 **Run with the project virtual environment activated** (e.g. `source .venv/bin/activate` or `source venv/bin/activate` from the repo root). The `methyl-centroid-explorer` CLI is installed into the venv. If you see `ModuleNotFoundError: No module named 'methyl_centroid.explorer'`, reinstall the package so the CLI picks up the explorer module: from the repo root run `pip install -e packages/methylcentroid`.
 
@@ -200,7 +200,7 @@ All centroid data lives in `methylation_data` only (no separate `binned_stats` g
 ## Documentation
 
 - **[Theoretical Foundation](docs/MethylCentroid_Theoretical_Foundation.md)** — ECDF-only model, sufficient statistics (N, Sx, Sx2), and binned stats.
-- **[Implementation (MethylUtils)](docs/METHYLCENTROID_IMPLEMENTATION.md)** — MethylCentroidBuilder, MethylExtendedCentroid, I/O, and how the package uses them.
+- **[Implementation (MethylUtils)](docs/METHYLCENTROID_IMPLEMENTATION.md)** — MethylCentroidBuilder, MethylCentroid (data), I/O, and how the package uses them.
 - **[User Manual](docs/USAGE.md)** — Docker container and virtual environment setup, CLI, Python API, config, and workflows.
 - **[Comprehensive Documentation](docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)** — Data model, configuration, GPU/memory, output files, examples, troubleshooting.
 - **[Distributions Reference (LaTeX)](docs/METHYLCENTROID_DISTRIBUTIONS.tex)** — Full derivations and sufficient-statistics reference.

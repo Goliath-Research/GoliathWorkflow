@@ -11,7 +11,7 @@ from typing import List, Tuple, Optional
 from pathlib import Path
 from methyl_utils.beta_analytics import beta_log_pdf
 
-from methyl_utils.core.methyl_frame import MethylExtendedCentroid, MethylSample
+from methyl_utils.core.methyl_frame import MethylCentroid, MethylSample
 
 logger = logging.getLogger(__name__)
 
@@ -55,73 +55,68 @@ class ClusterCentroid:
         self.use_gpu = use_gpu
         
         # Initialize empty centroid
-        self.centroid: Optional[MethylExtendedCentroid] = None
+        self.centroid: Optional[MethylCentroid] = None
         
         # Track samples in this cluster: list of (sample_idx, sample_path)
         self.samples: List[Tuple[int, Path]] = []
         
         logger.debug(f"Initialized ClusterCentroid {cluster_id} for {chrom}-{ctx}")
     
-    def _ensure_extended_centroid(self, sample) -> MethylExtendedCentroid:
+    def _ensure_centroid(self, sample) -> MethylCentroid:
         """
-        Convert a sample to MethylExtendedCentroid if needed.
-        
+        Convert a sample to MethylCentroid if needed.
+
         Args:
-            sample: MethylSample or MethylExtendedCentroid instance
-            
+            sample: MethylSample or MethylCentroid instance
+
         Returns:
-            MethylExtendedCentroid instance
+            MethylCentroid instance
         """
-        if isinstance(sample, MethylExtendedCentroid):
+        if isinstance(sample, MethylCentroid):
             return sample
-        
-        # Convert MethylSample to MethylExtendedCentroid
-        # Create extended centroid from sample data
+
+        # Convert MethylSample to MethylCentroid (pos, N, Sx, Sx2, Sm, Su, Sc2, Swx2)
         sample_cpu = sample.to_cpu()
-        
-        # Calculate methylation levels
+
         sample_mC = np.asarray(sample_cpu.mC.values, dtype=np.uint32)
         sample_uC = np.asarray(sample_cpu.uC.values, dtype=np.uint32)
         sample_coverage = sample_mC + sample_uC
-        
-        # Calculate statistics for extended centroid
+
         with np.errstate(divide='ignore', invalid='ignore'):
             sample_mean = np.where(
                 sample_coverage > 0,
                 sample_mC.astype(np.float32) / sample_coverage.astype(np.float32),
                 0.0
             )
-        
-        # Clip for log calculations
-        eps = np.finfo(np.float32).eps * 10
-        sample_mean_clipped = np.clip(sample_mean, eps, 1.0 - eps)
-        
-        # Create DataFrame with extended centroid columns
+        sample_mean_clipped = np.clip(sample_mean, 1e-9, 1.0 - 1e-9)
+        c = sample_coverage.astype(np.uint64)
+        sc2 = (c * c).astype(np.uint32)
+        swx2 = np.where(sample_coverage > 0, (sample_mC.astype(np.float64) ** 2) / sample_coverage.astype(np.float64), 0.0).astype(np.float32)
+
         import pandas as pd
         df = pd.DataFrame({
             'pos': np.asarray(sample_cpu.pos.values, dtype=np.uint32),
-            'mC': sample_mC,
-            'uC': sample_uC,
             'tnc': np.asarray(sample_cpu._df['tnc'].values, dtype=np.uint8),
-            'N': np.ones(len(sample_mC), dtype=np.uint32),  # Single sample
+            'N': np.ones(len(sample_mC), dtype=np.uint32),
             'Sx': sample_mean_clipped.astype(np.float32),
             'Sx2': (sample_mean_clipped ** 2).astype(np.float32),
-            'log_x_sum': np.log(sample_mean_clipped).astype(np.float32),
-            'log_1_minus_x_sum': np.log(1.0 - sample_mean_clipped).astype(np.float32),
+            'Sm': sample_mC,
+            'Su': sample_uC,
+            'Sc2': sc2,
+            'Swx2': swx2,
         })
-        
-        # Filter by min_coverage
+
         valid = sample_coverage >= self.min_coverage
         df = df[valid].reset_index(drop=True)
-        
-        # Preserve metadata
-        metadata = getattr(sample, 'metadata', {})
+
+        metadata = getattr(sample, 'metadata', {}) or {}
+        metadata = dict(metadata)
         metadata.update({
             'chromosome': self.chrom,
             'context': self.ctx,
         })
-        
-        return MethylExtendedCentroid(df, metadata=metadata)
+
+        return MethylCentroid(df, metadata=metadata)
     
     def add_sample(self, sample_idx: int, sample, sample_path: Path) -> bool:
         """
@@ -129,7 +124,7 @@ class ClusterCentroid:
         
         Args:
             sample_idx: Index of the sample
-            sample: MethylSample or MethylExtendedCentroid instance
+            sample: MethylSample or MethylCentroid instance
             sample_path: Path to the sample file
             
         Returns:
@@ -137,11 +132,10 @@ class ClusterCentroid:
         """
         try:
             if self.centroid is None:
-                # First sample - convert to extended centroid if needed
-                self.centroid = self._ensure_extended_centroid(sample)
+                # First sample - convert to centroid if needed
+                self.centroid = self._ensure_centroid(sample)
             else:
                 # Add sample to existing centroid
-                # add_sample() accepts MethylSample (MethylExtendedCentroid inherits from MethylFrame like MethylSample)
                 self.centroid = self.centroid.add_sample(sample)
             
             self.samples.append((sample_idx, sample_path))
@@ -153,13 +147,13 @@ class ClusterCentroid:
             logger.error(f"Error adding sample {sample_idx} to cluster {self.cluster_id}: {e}")
             return False
     
-    def remove_sample(self, sample_idx: int, sample: MethylExtendedCentroid) -> bool:
+    def remove_sample(self, sample_idx: int, sample: MethylSample) -> bool:
         """
         Remove a sample from this cluster and recalculate centroid.
-        
+
         Args:
             sample_idx: Index of the sample to remove
-            sample: MethylExtendedCentroid instance
+            sample: MethylSample instance to remove from the centroid
             
         Returns:
             True if sample was removed successfully
@@ -182,12 +176,12 @@ class ClusterCentroid:
             logger.error(f"Error removing sample {sample_idx} from cluster {self.cluster_id}: {e}")
             return False
     
-    def get_centroid(self) -> MethylExtendedCentroid:
+    def get_centroid(self) -> MethylCentroid:
         """
-        Get the current centroid as a MethylExtendedCentroid instance.
-        
+        Get the current centroid as a MethylCentroid instance.
+
         Returns:
-            MethylExtendedCentroid representing the centroid with extended statistics
+            MethylCentroid representing the centroid with full statistics
             
         Raises:
             RuntimeError: If no samples in cluster or no valid positions
@@ -198,7 +192,7 @@ class ClusterCentroid:
         
         return self.centroid
     
-    def compute_log_likelihood(self, sample: MethylExtendedCentroid) -> float:
+    def compute_log_likelihood(self, sample: MethylCentroid) -> float:
         """
         Compute log-likelihood of a sample belonging to this centroid.
         
@@ -206,7 +200,7 @@ class ClusterCentroid:
         log P(sample|centroid) = Σ log Beta(sample_meth | centroid_α, centroid_β)
         
         Args:
-            sample: MethylExtendedCentroid instance to evaluate
+            sample: MethylCentroid instance to evaluate
             
         Returns:
             Log-likelihood value (higher = better fit)
@@ -277,13 +271,13 @@ class ClusterCentroid:
             logger.error(f"Error computing log-likelihood for cluster {self.cluster_id}: {e}")
             return -np.inf
     
-    def compute_membership_probabilities(self, sample: MethylExtendedCentroid, other_centroids: List['ClusterCentroid'], temperature: float = 1.0) -> float:
+    def compute_membership_probabilities(self, sample: MethylCentroid, other_centroids: List['ClusterCentroid'], temperature: float = 1.0) -> float:
         """
         Compute the posterior probability of the sample belonging to this centroid
         relative to other centroids using softmax of averaged log-likelihoods.
         
         Args:
-            sample: MethylExtendedCentroid to evaluate
+            sample: MethylCentroid to evaluate
             other_centroids: List of other ClusterCentroid instances for comparison
             temperature: Softmax temperature to control uncertainty (default 1.0)
         

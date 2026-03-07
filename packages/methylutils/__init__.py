@@ -94,9 +94,8 @@ from .methyl_utils.logging_utils import (
 from .methyl_utils.core.methyl_frame import (
     MethylFrame,
     MethylSample,
-    MethylExtendedCentroid,
+    MethylCentroid,
 )
-MethylCentroid = MethylExtendedCentroid
 
 # Import I/O functions
 from .methyl_utils.core.io import load_from_h5
@@ -110,7 +109,6 @@ try:
         METHYL_CENTROID_DTYPE_EXTENDED,
         MethylSampleDtype,
         MethylCentroidDtype,
-        MethylExtendedCentroidDtype,
         get_methyl_dtype,
         DMPSample,
         DMPExporter,
@@ -124,7 +122,6 @@ except ImportError:
         get_methyl_dtype,
         MethylSampleDtype,
         MethylCentroidDtype,
-        MethylExtendedCentroidDtype,
     )
     TNCBits = None
     DMPSample = None
@@ -223,7 +220,7 @@ from .methyl_utils.performance_profiler import (
     profile_performance
 )
 
-# PositionAligner has been deprecated - use MethylExtendedCentroid.add_sample()/remove_sample() instead
+# PositionAligner has been deprecated - use MethylCentroid.add_sample()/remove_sample() instead
 # from .position_aligner import PositionAligner, align_multiple_samples
 from .methyl_utils.models import (
     PositionMethylationStats,
@@ -306,8 +303,7 @@ __all__ = [
     # Methylation sample functions
     "MethylFrame",
     "MethylSample",
-    "MethylExtendedCentroid",
-    "MethylCentroid",  # Alias for MethylExtendedCentroid
+    "MethylCentroid",
     "load_from_h5",
     # Core metric functions
     "DistanceCalculator",

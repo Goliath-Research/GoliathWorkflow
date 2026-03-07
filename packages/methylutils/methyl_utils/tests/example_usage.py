@@ -17,7 +17,7 @@ from methyl_utils.tests.methyl_frame_stats import (
     generate_all_histograms,
     create_mock_sample
 )
-from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
+from methyl_utils.core.methyl_frame import MethylSample, MethylCentroid
 from methyl_utils.core.centroid_builder import MethylCentroidBuilder
 import pandas as pd
 

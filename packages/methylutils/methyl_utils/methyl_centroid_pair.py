@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 
 from .beta_mixture import fit_beta_mixture, estimate_js_divergence
-from .core.methyl_frame import MethylSample, MethylExtendedCentroid
+from .core.methyl_frame import MethylSample, MethylCentroid
 from .gpu_detection import (
     is_gpu_available,
     get_gpu_memory_gb,
@@ -109,8 +109,8 @@ class MethylCentroidPair:
 
     def __init__(
         self,
-        centroid1: Optional[MethylExtendedCentroid] = None,
-        centroid2: Optional[MethylExtendedCentroid] = None,
+        centroid1: Optional[MethylCentroid] = None,
+        centroid2: Optional[MethylCentroid] = None,
         min_coverage: int = 4,
         distribution: str = "auto",
         delta_mean_mode: str = "mean",
@@ -207,8 +207,8 @@ class MethylCentroidPair:
         centroid1 = load_from_h5(path1)
         centroid2 = load_from_h5(path2)
 
-        # Validate extended centroids (assume is_extended_centroid checks N, Sx, etc.)
-        if not centroid1.is_extended_centroid or not centroid2.is_extended_centroid:
+        # Validate centroids (assume is_centroid checks N, Sx, etc.)
+        if not centroid1.is_centroid or not centroid2.is_centroid:
             raise ValueError("Both inputs must be extended centroids with N, Sx, Sx2, log sums.")
 
         # Assume positions are sorted (typical for genomic data); if not, sort them
@@ -276,7 +276,7 @@ class MethylCentroidPair:
             (centroid1: MethylSample, centroid2: MethylSample, common_pos: np.ndarray)
         """
         # Validate extended centroids
-        if not centroid1.is_extended_centroid or not centroid2.is_extended_centroid:
+        if not centroid1.is_centroid or not centroid2.is_centroid:
             raise ValueError("Both inputs must be extended centroids with N, Sx, Sx2, log sums.")
 
         # Assume positions are sorted (typical for genomic data); if not, sort them
@@ -335,7 +335,7 @@ class MethylCentroidPair:
         positions: np.ndarray,
         context: str = "CG",
         min_coverage: int = 4
-    ) -> MethylExtendedCentroid:
+    ) -> MethylCentroid:
         """
         Create an empty extended centroid for use as a reference/alignment template.
 
@@ -345,9 +345,9 @@ class MethylCentroidPair:
             min_coverage: Minimum coverage threshold
 
         Returns:
-            MethylExtendedCentroid with zero-filled data
+            MethylCentroid with zero-filled data
         """
-        from methyl_utils.core.methyl_frame import MethylExtendedCentroid
+        from methyl_utils.core.methyl_frame import MethylCentroid
         import pandas as pd
 
         n_positions = len(positions)
@@ -370,7 +370,7 @@ class MethylCentroidPair:
             "Sx": np.zeros(n_positions, dtype=np.float32),
             "Sx2": np.zeros(n_positions, dtype=np.float32),
         })
-        return MethylExtendedCentroid(df, metadata={"context": context})
+        return MethylCentroid(df, metadata={"context": context})
 
     @classmethod
     def align_samples(
@@ -717,11 +717,11 @@ class MethylCentroidPair:
 
     def _validate_centroids(self, centroid1: MethylSample, centroid2: MethylSample) -> None:
         """Validate that centroids are suitable for comparison."""
-        if not (centroid1.is_extended_centroid and centroid2.is_extended_centroid):
+        if not (centroid1.is_centroid and centroid2.is_centroid):
             raise ValueError(
                 "MethylCentroidPair requires extended centroids. "
-                f"Centroid1 extended: {centroid1.is_extended_centroid}, "
-                f"Centroid2 extended: {centroid2.is_extended_centroid}"
+                f"Centroid1 is_centroid: {centroid1.is_centroid}, "
+                f"Centroid2 is_centroid: {centroid2.is_centroid}"
             )
 
         # Use MethylUtils validation on the methylation proportions
@@ -773,7 +773,7 @@ class MethylCentroidPair:
         # Calculate optimal batch size
         batch_size = self.memory_manager.calculate_optimal_chunk_size(
             total_positions=len(positions),
-            data_structure="extended_centroid",
+            data_structure="centroid",
             maximize_gpu_usage=self.gpu_available
         )
 
@@ -907,7 +907,7 @@ class MethylCentroidPair:
                 self.Sx2 = Sx2
                 self.mC = mC
                 self.uC = uC
-                self.is_extended_centroid = True
+                self.is_centroid = True
                 self.alpha = None
                 self.beta = None
                 self.mean = None
@@ -1378,7 +1378,7 @@ class MethylCentroidPair:
         Correct group classification is checked by the classifier centroid self-check
         when running the pipeline.
         """
-        if not centroid1.is_extended_centroid or not centroid2.is_extended_centroid:
+        if not centroid1.is_centroid or not centroid2.is_centroid:
             return {"error": "Both centroids must be extended centroids"}
 
         try:

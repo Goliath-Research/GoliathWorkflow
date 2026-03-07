@@ -6,10 +6,9 @@ from typing import List, Optional
 import numpy as np
 import random
 from collections import defaultdict
-from methyl_utils.core.methyl_frame import MethylExtendedCentroid
+from methyl_utils.core.methyl_frame import MethylCentroid
 from methyl_utils.beta_analytics import beta_log_pdf, compute_beta_mean, compute_beta_variance
 
-MethylSample = MethylExtendedCentroid  # type: ignore
 
 
 @dataclass

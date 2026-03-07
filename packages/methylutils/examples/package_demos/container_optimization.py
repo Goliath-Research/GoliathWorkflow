@@ -116,13 +116,13 @@ class ContainerOptimizer:
 
         return optimization
 
-    def get_memory_requirements(self, positions: int = None, data_structure: str = "extended_centroid") -> Dict[str, Any]:
+    def get_memory_requirements(self, positions: int = None, data_structure: str = "centroid") -> Dict[str, Any]:
         """
         Calculate detailed memory requirements for different data structures.
 
         Args:
             positions: Number of positions (uses chunk_size if None)
-            data_structure: Type of data structure ("basic_sample", "extended_centroid")
+            data_structure: Type of data structure ("basic_sample", "centroid")
 
         Returns:
             Dictionary with detailed memory breakdown
@@ -146,7 +146,7 @@ class ContainerOptimizer:
                 memory_per_type["uint32"] * 3 +  # pos, mC, uC
                 memory_per_type["uint8"]         # tnc
             )
-        elif data_structure in ("basic_centroid", "extended_centroid"):
+        elif data_structure == "centroid":
             # Single centroid: pos, mC, uC, tnc, N, Sx, Sx2 (no log sums or BB)
             bytes_per_position = (
                 memory_per_type["uint32"] * 4 +  # pos, mC, uC, N
@@ -181,7 +181,7 @@ class ContainerOptimizer:
 
         # Get memory requirements for different data structures
         basic_sample_req = self.get_memory_requirements(positions_per_chunk, "basic_sample")
-        centroid_req = self.get_memory_requirements(positions_per_chunk, "extended_centroid")
+        centroid_req = self.get_memory_requirements(positions_per_chunk, "centroid")
 
         # Calculate processing overhead (temporary arrays, processing buffers)
         processing_overhead_factor = 1.5  # 50% overhead for processing
@@ -190,12 +190,12 @@ class ContainerOptimizer:
         # Create detailed breakdown
         memory_breakdown = {
             "basic_sample_mb": basic_sample_req["memory_mb"],
-            "extended_centroid_mb": centroid_req["memory_mb"],
+            "centroid_mb": centroid_req["memory_mb"],
             "processing_overhead_mb": centroid_req["processing_overhead_mb"],
             "total_per_chunk_mb": total_memory_mb,
             "bytes_per_position": {
                 "basic_sample": basic_sample_req["bytes_per_position"],
-                "extended_centroid": centroid_req["bytes_per_position"]
+                "centroid": centroid_req["bytes_per_position"]
             },
             "data_types_used": centroid_req["memory_per_type"],
             "chunk_info": {
@@ -206,7 +206,7 @@ class ContainerOptimizer:
 
         return memory_breakdown
 
-    def calculate_genome_chunk_size(self, total_positions: int, data_structure: str = "extended_centroid") -> int:
+    def calculate_genome_chunk_size(self, total_positions: int, data_structure: str = "centroid") -> int:
         """
         Calculate optimal chunk size for genome-scale processing using maximum GPU utilization.
 
@@ -216,7 +216,7 @@ class ContainerOptimizer:
 
         Args:
             total_positions: Total number of genomic positions
-            data_structure: Type of data structure ("basic_sample", "extended_centroid")
+            data_structure: Type of data structure ("basic_sample", "centroid")
 
         Returns:
             Optimal chunk size in positions

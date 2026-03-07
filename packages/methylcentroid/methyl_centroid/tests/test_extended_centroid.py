@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for extended centroid functionality with methylation level statistics.
+Tests for centroid functionality with methylation level statistics (N, Sx, Sx2, Sm, Su, Sc2, Swx2).
 """
 
 import pytest
@@ -23,11 +23,11 @@ def create_sample_file(filepath: Path, positions: np.ndarray, mC: np.ndarray,
         data_group.create_dataset("tnc", data=tnc, dtype=np.uint8)
 
 
-class TestExtendedCentroid:
-    """Test extended centroid functionality."""
-    
-    def test_basic_vs_extended_centroid(self):
-        """Test that extended centroids include additional columns."""
+class TestCentroid:
+    """Test centroid functionality (full schema with Sm, Su, Sc2, Swx2)."""
+
+    def test_basic_vs_centroid(self):
+        """Test that centroid output (extended=True) includes full schema columns."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
@@ -81,11 +81,11 @@ class TestExtendedCentroid:
             methyl_centroid.position_aligner.reset()
             methyl_centroid.active_samples.clear()
             
-            # Build extended centroid
-            extended_centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
+            # Build centroid (full schema)
+            centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
             
-            # Check extended centroid columns
-            with h5py.File(extended_centroid_path, "r") as f:
+            # Check centroid columns (full schema: Sm, Su, Sc2, Swx2 in addition to N, Sx, Sx2)
+            with h5py.File(centroid_path, "r") as f:
                 data = f["methylation_data"]
                 extended_columns = list(data.keys())
                 assert "pos" in extended_columns
@@ -96,8 +96,8 @@ class TestExtendedCentroid:
                 assert "Sx" in extended_columns
                 assert "Sx2" in extended_columns
     
-    def test_extended_centroid_calculations(self):
-        """Test that Sx and Sx2 calculations are correct."""
+    def test_centroid_calculations(self):
+        """Test that Sx and Sx2 (and full schema) calculations are correct."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
@@ -132,11 +132,11 @@ class TestExtendedCentroid:
                 min_coverage=4
             )
             
-            # Build extended centroid
-            extended_centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
+            # Build centroid
+            centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
             
             # Check calculations
-            with h5py.File(extended_centroid_path, "r") as f:
+            with h5py.File(centroid_path, "r") as f:
                 data = f["methylation_data"]
                 
                 # For position 2000, we have data from both samples
@@ -240,8 +240,8 @@ class TestExtendedCentroid:
                 pos_2000_idx = np.where(data['pos'][:] == 2000)[0][0]
                 assert data['N'][pos_2000_idx] == 2  # Back to 2 samples
     
-    def test_build_extended_centroid(self):
-        """Test the build_extended_centroid method."""
+    def test_build_centroid(self):
+        """Test the build_centroid method."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
@@ -263,24 +263,23 @@ class TestExtendedCentroid:
             output_dir = temp_path / "output"
             output_dir.mkdir(exist_ok=True)
             
-            # Initialize MethylCentroid
+            # Initialize MethylCentroid runner
             methyl_centroid = MethylCentroid(
                 samples=sample_files,
                 chrom="1",
                 ctx="CG",
                 output_dir=output_dir,
-                output_dir=output_dir,
                 min_coverage=4,
             )
             
-            # Build extended centroid
+            # Build centroid
             results = methyl_centroid.build_centroid()
 
             # Check results
             assert results.final_centroid_path is not None
             assert Path(results.final_centroid_path).exists()
             
-            # Check final centroid has extended data
+            # Check final centroid has full schema (Sx, Sx2, Sm, Su, etc.)
             with h5py.File(results.final_centroid_path, "r") as f:
                 data = f["methylation_data"]
                 assert "Sx" in data
@@ -289,8 +288,8 @@ class TestExtendedCentroid:
 
 
     
-    def test_position_aligner_extended_methods(self):
-        """Test the new PositionAligner methods for extended centroids."""
+    def test_position_aligner_centroid_methods(self):
+        """Test PositionAligner methods for centroid output."""
         from genomic_position_aligner import PositionAligner
         
         # Create a simple position aligner

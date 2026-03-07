@@ -84,25 +84,36 @@ class MethylCentroidPair:
     @staticmethod
     def _slice_sample(sample: 'MethylSample', indices: np.ndarray) -> 'MethylSample':
         """
-        Helper to slice a MethylSample or MethylExtendedCentroid by indices (fallback if no native method).
-        Builds a DataFrame and returns MethylExtendedCentroid if N, Sx, Sx2 present, else MethylSample.
+        Helper to slice a MethylSample or MethylCentroid by indices (fallback if no native method).
+        Builds a DataFrame and returns MethylCentroid if full centroid schema present, else MethylSample.
         """
         import pandas as pd
-        from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
+        from methyl_utils.core.methyl_frame import MethylSample, MethylCentroid
 
         new_pos = sample.pos[indices] if hasattr(sample.pos, '__getitem__') else np.asarray(sample.pos).ravel()[indices]
         new_mC = sample.mC[indices] if hasattr(sample.mC, '__getitem__') else np.asarray(sample.mC).ravel()[indices]
         new_uC = sample.uC[indices] if hasattr(sample.uC, '__getitem__') else np.asarray(sample.uC).ravel()[indices]
         new_tnc = (sample.tnc[indices] if sample.tnc is not None else None)
-        if hasattr(sample, 'N') and sample.N is not None and hasattr(sample, 'Sx') and sample.Sx is not None and hasattr(sample, 'Sx2') and sample.Sx2 is not None:
+        has_centroid = (
+            hasattr(sample, 'N') and sample.N is not None
+            and hasattr(sample, 'Sx') and sample.Sx is not None
+            and hasattr(sample, 'Sx2') and sample.Sx2 is not None
+            and hasattr(sample, 'Sm') and hasattr(sample, 'Su')
+            and hasattr(sample, 'Sc2') and hasattr(sample, 'Swx2')
+        )
+        if has_centroid:
             new_N = sample.N[indices] if hasattr(sample.N, '__getitem__') else np.asarray(sample.N).ravel()[indices]
             new_Sx = sample.Sx[indices] if hasattr(sample.Sx, '__getitem__') else np.asarray(sample.Sx).ravel()[indices]
             new_Sx2 = sample.Sx2[indices] if hasattr(sample.Sx2, '__getitem__') else np.asarray(sample.Sx2).ravel()[indices]
+            new_Sm = sample.Sm[indices] if hasattr(sample.Sm, '__getitem__') else np.asarray(sample.Sm).ravel()[indices]
+            new_Su = sample.Su[indices] if hasattr(sample.Su, '__getitem__') else np.asarray(sample.Su).ravel()[indices]
+            new_Sc2 = sample.Sc2[indices] if hasattr(sample.Sc2, '__getitem__') else np.asarray(sample.Sc2).ravel()[indices]
+            new_Swx2 = sample.Swx2[indices] if hasattr(sample.Swx2, '__getitem__') else np.asarray(sample.Swx2).ravel()[indices]
             df = pd.DataFrame({
-                'pos': new_pos, 'mC': new_mC, 'uC': new_uC, 'tnc': new_tnc,
-                'N': new_N, 'Sx': new_Sx, 'Sx2': new_Sx2,
+                'pos': new_pos, 'tnc': new_tnc, 'N': new_N, 'Sx': new_Sx, 'Sx2': new_Sx2,
+                'Sm': new_Sm, 'Su': new_Su, 'Sc2': new_Sc2, 'Swx2': new_Swx2,
             })
-            return MethylExtendedCentroid(df)
+            return MethylCentroid(df)
         df = pd.DataFrame({'pos': new_pos, 'mC': new_mC, 'uC': new_uC, 'tnc': new_tnc})
         return MethylSample(df)
 

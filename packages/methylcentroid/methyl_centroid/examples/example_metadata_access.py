@@ -28,7 +28,7 @@ def example_metadata_access(centroid_path: Path):
     # Check if it's a centroid
     print(f"\nSample type: {centroid.sample_type}")
     print(f"Is centroid: {centroid.is_centroid}")
-    print(f"Is extended centroid: {centroid.is_extended_centroid}")
+    print(f"Is centroid: {centroid.is_centroid}")
     
     # Access metadata properties
     print("\nMetadata:")

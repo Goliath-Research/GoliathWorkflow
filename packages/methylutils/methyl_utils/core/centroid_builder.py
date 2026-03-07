@@ -19,7 +19,7 @@ except ImportError:
     CuArray = np.ndarray
     HAS_GPU = False
 
-from .methyl_frame import MethylExtendedCentroid
+from .methyl_frame import MethylCentroid
 from .io import load_from_h5
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 class MethylCentroidBuilder:
     """
     The one and only way to build extended centroids in 2025+.
-    Streaming, GPU-accelerated, memory-efficient, and outputs clean MethylExtendedCentroid.
+    Streaming, GPU-accelerated, memory-efficient, and outputs clean MethylCentroid.
     Replaces PositionAligner + old MethylSample logic completely.
     """
 
@@ -227,8 +227,8 @@ class MethylCentroidBuilder:
             except Exception as e:
                 logger.debug(f"Sample cleanup failed: {e}")
 
-    def finalize(self, log_finalize: bool = True) -> MethylExtendedCentroid:
-        """Return MethylExtendedCentroid with pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 and binned_stats."""
+    def finalize(self, log_finalize: bool = True) -> MethylCentroid:
+        """Return MethylCentroid with pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 and binned_stats."""
         if self.size == 0:
             raise ValueError("No data accumulated")
         to_cpu = cp.asnumpy if self.use_gpu else lambda x: x
@@ -265,7 +265,7 @@ class MethylCentroidBuilder:
             "gpu_acceleration": self.use_gpu,
             "binned_stats_bins": self.binned_stats_bins,
         }
-        centroid = MethylExtendedCentroid(df, final_metadata)
+        centroid = MethylCentroid(df, final_metadata)
         centroid.set_binned_stats(self.bin_edges.copy(), bin_counts[mask, :].astype(np.float64))
         if log_finalize:
             logger.info(f"Centroid finalized → {len(df):,} positions from {self.samples_processed} samples")
@@ -280,7 +280,7 @@ def build_centroid(
     use_gpu: bool = True,
     metadata: Optional[Dict[str, Any]] = None,
     binned_stats_bins: int = 101,
-) -> MethylExtendedCentroid:
+) -> MethylCentroid:
     builder = MethylCentroidBuilder(
         min_coverage=min_coverage,
         use_gpu=use_gpu,

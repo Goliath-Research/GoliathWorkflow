@@ -347,11 +347,6 @@ class MethylFrame:
         return False
 
     @property
-    def is_extended_centroid(self) -> bool:
-        """Check if this is an extended centroid."""
-        return False
-
-    @property
     def sample_type(self) -> str:
         """Get the sample type."""
         return "sample"
@@ -438,7 +433,7 @@ class MethylFrame:
             positions: Optional positions to load; only these rows are read (saves memory).
 
         Returns:
-            MethylSample or MethylExtendedCentroid instance
+            MethylSample or MethylCentroid instance
         """
         from .io import load_from_h5
         result = load_from_h5(path, positions=positions)
@@ -684,7 +679,7 @@ class MethylSample(MethylFrame):
 
 # Single centroid type: pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 + binned_stats (required).
 # mean/variance from Sx, Sx2, N; weighted_mean/weighted_variance from Sm, Su, Sc2, Swx2; coverage = Sm+Su.
-class MethylExtendedCentroid(MethylFrame):
+class MethylCentroid(MethylFrame):
     _required_cols = {"pos", "tnc", "N", "Sx", "Sx2", "Sm", "Su", "Sc2", "Swx2"}
     _required_stats = {"Sx", "Sx2"}
 
@@ -698,7 +693,7 @@ class MethylExtendedCentroid(MethylFrame):
 
     @property
     def sample_type(self) -> str:
-        return "extended_centroid"
+        return "centroid"
 
     def get_sample_count(self) -> np.ndarray:
         return self.N.values if hasattr(self.N, "values") else np.asarray(self.N)
@@ -783,16 +778,6 @@ class MethylExtendedCentroid(MethylFrame):
 
     def chh(self):
         return self[self.context == "CHH"]
-
-    @property
-    def is_extended_centroid(self) -> bool:
-        """Check if this is an extended centroid."""
-        return True
-
-    @property
-    def sample_type(self) -> str:
-        """Get the sample type."""
-        return "extended_centroid"
 
     @property
     def Sx(self):
@@ -942,9 +927,9 @@ class MethylExtendedCentroid(MethylFrame):
         data["Swx2"] = np.asarray(self._get_values(df_cpu["Swx2"]), dtype=np.float32)
         return data
 
-    def add_sample(self, sample: "MethylSample") -> "MethylExtendedCentroid":
+    def add_sample(self, sample: "MethylSample") -> "MethylCentroid":
         """
-        Add a sample to this centroid, returning a new MethylExtendedCentroid.
+        Add a sample to this centroid, returning a new MethylCentroid.
         Accumulates N, Sx, Sx2, Sm, Su, Sc2, Swx2 and binned_stats.
         """
         centroid_cpu = self.to_cpu()
@@ -1025,7 +1010,7 @@ class MethylExtendedCentroid(MethylFrame):
         })
         new_metadata = self._metadata.copy() if self._metadata else {}
         new_metadata["n_samples"] = new_metadata.get("n_samples", 0) + 1
-        out = MethylExtendedCentroid(new_df, metadata=new_metadata)
+        out = MethylCentroid(new_df, metadata=new_metadata)
         if getattr(self, "_binned_stats", None) and "bin_edges" in self._binned_stats and "bin_counts" in self._binned_stats:
             bin_edges = np.asarray(self._binned_stats["bin_edges"], dtype=np.float64)
             centroid_bin_counts = np.asarray(self._binned_stats["bin_counts"], dtype=np.float64)
@@ -1055,7 +1040,7 @@ class MethylExtendedCentroid(MethylFrame):
             out.set_binned_stats(bin_edges, all_bin_counts)
         return out
 
-    def remove_sample(self, sample: "MethylSample") -> "MethylExtendedCentroid":
+    def remove_sample(self, sample: "MethylSample") -> "MethylCentroid":
         """Remove a sample from this centroid; subtracts N, Sx, Sx2, Sm, Su, Sc2, Swx2 and updates binned_stats."""
         centroid_cpu = self.to_cpu()
         sample_cpu = sample.to_cpu()
@@ -1097,7 +1082,7 @@ class MethylExtendedCentroid(MethylFrame):
         })
         new_metadata = self._metadata.copy() if self._metadata else {}
         new_metadata["n_samples"] = max(0, new_metadata.get("n_samples", 1) - 1)
-        out = MethylExtendedCentroid(new_df, metadata=new_metadata)
+        out = MethylCentroid(new_df, metadata=new_metadata)
         if getattr(self, "_binned_stats", None) and "bin_edges" in self._binned_stats and "bin_counts" in self._binned_stats:
             bin_edges = np.asarray(self._binned_stats["bin_edges"], dtype=np.float64)
             centroid_bin_counts = np.asarray(self._binned_stats["bin_counts"], dtype=np.float64)
@@ -1126,16 +1111,16 @@ class MethylExtendedCentroid(MethylFrame):
         cls,
         data: Union[Dict[str, np.ndarray], np.ndarray],
         metadata: Optional[Dict[str, Any]] = None
-    ) -> "MethylExtendedCentroid":
+    ) -> "MethylCentroid":
         """
-        Create MethylExtendedCentroid from data dictionary or structured array.
+        Create MethylCentroid from data dictionary or structured array.
 
         Args:
             data: Dictionary with arrays or structured numpy array
             metadata: Optional metadata
 
         Returns:
-            MethylExtendedCentroid instance
+            MethylCentroid instance
         """
         if isinstance(data, np.ndarray):
             df = pd.DataFrame({

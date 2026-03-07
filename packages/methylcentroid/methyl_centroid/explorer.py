@@ -1,6 +1,6 @@
 """
 MethylCentroidExplorer: Inspect a MethylFrame (single H5, single JSON mixture, or folder of H5 files).
-Identifies type (MethylSample, MethylExtendedCentroid, MethylBetaMixtureCentroid), prints metadata,
+Identifies type (MethylSample, MethylCentroid, MethylBetaMixtureCentroid), prints metadata,
 and optionally describes a range of positions in detail. Single data-driven centroid (N, Sx, Sx2, binned_stats).
 """
 
@@ -47,7 +47,7 @@ def _detect_type_from_keys(keys: List[str]) -> str:
     if "N" not in keys_set:
         return "MethylSample"
     if {"Sx", "Sx2"}.issubset(keys_set):
-        return "MethylExtendedCentroid"
+        return "MethylCentroid"
     return "MethylSample"
 
 

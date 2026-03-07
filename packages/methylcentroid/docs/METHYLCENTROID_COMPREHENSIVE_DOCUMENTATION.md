@@ -57,7 +57,7 @@ for large genomes (e.g., CHH).
 
 ### Implementation (MethylUtils)
 
-Centroid construction is implemented in **MethylUtils**: **MethylCentroidBuilder** (streaming, GPU), **build_centroid()**, **MethylExtendedCentroid**, and **load_from_h5** / **save_to_h5**. See **METHYLCENTROID_IMPLEMENTATION.md** for full details.
+Centroid construction is implemented in **MethylUtils**: **MethylCentroidBuilder** (streaming, GPU), **build_centroid()**, **MethylCentroid** (data class), and **load_from_h5** / **save_to_h5**. See **METHYLCENTROID_IMPLEMENTATION.md** for full details.
 
 ## 4. Sufficient Statistics and ECDF
 
@@ -224,7 +224,7 @@ A **methylation centroid** is a statistical summary that represents the average 
 MethylCentroid uses `MethylSample` (from MethylUtils) as a unified container that supports three data types:
 
 1. **Basic Sample**: Individual methylation sample with `pos`, `mC`, `uC`, `tnc` fields
-2. **Centroid (MethylExtendedCentroid)**: Aggregated with `N`, `Sx`, `Sx2` and optional **binned_stats** (bin_edges, bin_counts) for **ECDF only**. No log sums or Beta-Binomial columns.
+2. **Centroid (MethylCentroid)**: Aggregated with `N`, `Sx`, `Sx2`, `Sm`, `Su`, `Sc2`, `Swx2` and required **binned_stats** (bin_edges, bin_counts) for **ECDF only**.
 
 This design allows MethylCentroid to:
 - Process individual samples during centroid calculation

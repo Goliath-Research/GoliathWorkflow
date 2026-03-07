@@ -18,7 +18,7 @@ except ImportError:
     cudf = None
     HAS_GPU = False
 
-from .core.methyl_frame import MethylExtendedCentroid
+from .core.methyl_frame import MethylCentroid
 from .statistical_tests import (
     likelihood_ratio_test_beta,
     compute_bhattacharyya_distance,
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 class MethylCentroidPair:
     """
-    Ultra-clean, GPU-native comparator for two extended centroids.
+    Ultra-clean, GPU-native comparator for two centroids.
     Returns a ready-to-use pandas DataFrame with everything MethylDetector needs.
     """
 
@@ -39,9 +39,9 @@ class MethylCentroidPair:
 
     @staticmethod
     def align_centroids(
-        c1: MethylExtendedCentroid,
-        c2: MethylExtendedCentroid,
-    ) -> Tuple[MethylExtendedCentroid, MethylExtendedCentroid]:
+        c1: MethylCentroid,
+        c2: MethylCentroid,
+    ) -> Tuple[MethylCentroid, MethylCentroid]:
         """Find common positions and return aligned views (zero-copy when possible)."""
         common_pos = np.intersect1d(c1.pos.values, c2.pos.values, assume_unique=True)
 
@@ -60,15 +60,15 @@ class MethylCentroidPair:
         for cent in (aligned1, aligned2):
             zero_cov = cent.coverage == 0
             if zero_cov.any():
-                cent._df.loc[zero_cov, "uC"] = 1  # force mean = 0
+                cent._df.loc[zero_cov, "Su"] = 1  # force mean = 0
 
         logger.info(f"Aligned on {len(common_pos):,} common positions")
         return aligned1, aligned2
 
     def compare(
         self,
-        healthy: MethylExtendedCentroid,
-        diseased: MethylExtendedCentroid,
+        healthy: MethylCentroid,
+        diseased: MethylCentroid,
         fdr: float = 0.05,
     ) -> pd.DataFrame:
         """

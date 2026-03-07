@@ -17,7 +17,7 @@ So the “theory” of project config is: one source of truth for groups and com
 ## Sample and centroid types
 
 - **MethylSample**: Per-position methylation data (methylated counts `mC`, unmethylated `uC`, context bits `tnc`). Supports HDF5 serialization and position-indexed access. Used everywhere a single sample is loaded or compared.
-- **Centroid types**: A single centroid type, **MethylExtendedCentroid**, with N, mC, uC, Sx, Sx2 and optional **binned_stats** (in memory: bin_edges, bin_counts) for ECDF. In HDF5, only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored; bin edges are derived as uniform in [0,1]. Mean/variance can be derived from N, Sx, Sx2 (method-of-moments); **only ECDF is used** for centroid comparison and classifier likelihoods.
+- **Centroid types**: A single centroid type, **MethylCentroid**, with N, Sx, Sx2, Sm, Su, Sc2, Swx2 and required **binned_stats** (in memory: bin_edges, bin_counts) for ECDF. In HDF5, only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored; bin edges are derived as uniform in [0,1]. Mean/variance can be derived from N, Sx, Sx2 (method-of-moments); **only ECDF is used** for centroid comparison and classifier likelihoods.
 - **MethylCentroidPair**: Wraps two centroids (or samples); used for distance, effect-size, and DMP-style comparison (e.g. in MethylDetector) using **ECDF only**.
 
 ## ECDF model and metrics
@@ -45,7 +45,7 @@ So the “theory” is: one implementation of centroid building, ECDF-based metr
 | Aspect | Role |
 |--------|------|
 | Project config | Single JSON → ProjectConfig; get_derived_paths() for all step outputs. |
-| Data types | MethylSample, MethylExtendedCentroid (with binned_stats for ECDF), MethylCentroidPair. |
+| Data types | MethylSample, MethylCentroid (with binned_stats for ECDF), MethylCentroidPair. |
 | Distribution | **ECDF only** for comparison and DMP detection; distance/effect-size from ECDF. |
 | Building blocks | MethylCentroidBuilder, build_centroid, ECDF-based classifier, MethylCentroidPair. |
 

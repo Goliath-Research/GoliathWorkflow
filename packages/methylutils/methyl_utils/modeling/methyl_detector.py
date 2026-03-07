@@ -14,7 +14,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score, brier_score_
 from sklearn.model_selection import StratifiedKFold
 
 from ..comparison import MethylCentroidPair
-from ..core.methyl_frame import MethylExtendedCentroid
+from ..core.methyl_frame import MethylCentroid
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +63,8 @@ class MethylDetector:
 
     def train(
         self,
-        control_centroid: MethylExtendedCentroid,
-        disease_centroid: MethylExtendedCentroid,
+        control_centroid: MethylCentroid,
+        disease_centroid: MethylCentroid,
         disease_name: str = "disease",
     ) -> "MethylDetector":
         """
@@ -141,7 +141,7 @@ class MethylDetector:
         )
         return self
 
-    def predict_proba_centroid(self, centroid: MethylExtendedCentroid) -> np.ndarray:
+    def predict_proba_centroid(self, centroid: MethylCentroid) -> np.ndarray:
         """Score any new centroid (or individual sample converted to centroid)"""
         if self.model is None or self.feature_positions is None:
             raise RuntimeError("Model not trained")
@@ -157,7 +157,7 @@ class MethylDetector:
 
         return self.model.predict_proba(X)
 
-    def predict_centroid(self, centroid: MethylExtendedCentroid) -> str:
+    def predict_centroid(self, centroid: MethylCentroid) -> str:
         proba = self.predict_proba_centroid(centroid)[0, 1]
         return "disease" if proba > 0.5 else "healthy"
 

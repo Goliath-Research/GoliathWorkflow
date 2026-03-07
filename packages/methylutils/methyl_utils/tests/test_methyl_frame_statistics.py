@@ -2,7 +2,7 @@
 """
 Test suite for MethylFrame statistics and histogram generation.
 
-Tests MethylSample and MethylExtendedCentroid (single centroid type):
+Tests MethylSample and MethylCentroid (single centroid type):
 - Loading samples from CSV files or config.json
 - Computing global statistics (averages, totals)
 - Generating interactive Plotly HTML histograms
@@ -32,7 +32,7 @@ try:
 except ImportError:
     pytest = None
 
-from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
+from methyl_utils.core.methyl_frame import MethylSample, MethylCentroid
 
 # Import helper functions - handle both relative and absolute imports
 try:
@@ -164,7 +164,7 @@ def test_methyl_sample_statistics_from_config(tmp_path):
 
 
 def test_methyl_centroid_statistics(tmp_path):
-    """Test statistics computation for MethylExtendedCentroid (single centroid type)."""
+    """Test statistics computation for MethylCentroid (single centroid type)."""
     # Create multiple samples and save to temp files
     sample_files = []
     for i in range(3):
@@ -217,14 +217,19 @@ def test_methyl_centroid_statistics(tmp_path):
             tnc[valid] = sample._df["tnc"].values[valid]
         avg_mC = (mC_sum / np.maximum(N, 1)).astype(np.uint32)
         avg_uC = (uC_sum / np.maximum(N, 1)).astype(np.uint32)
+        cov = avg_mC + avg_uC
+        Sc2 = (cov.astype(np.uint64) ** 2).astype(np.uint32)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            Swx2 = np.where(cov > 0, (avg_mC.astype(np.float64) ** 2) / cov.astype(np.float64), 0.0).astype(np.float32)
         df = pd.DataFrame({
-            "pos": all_positions, "mC": avg_mC, "uC": avg_uC, "tnc": tnc,
+            "pos": all_positions, "tnc": tnc,
             "N": N, "Sx": Sx.astype(np.float32), "Sx2": Sx2.astype(np.float32),
+            "Sm": avg_mC, "Su": avg_uC, "Sc2": Sc2, "Swx2": Swx2,
         })
-        centroid = MethylExtendedCentroid(df)
+        centroid = MethylCentroid(df)
 
     stats = compute_sample_statistics(centroid)
-    assert stats["sample_type"] == "extended_centroid"
+    assert stats["sample_type"] == "centroid"
     assert 'avg_N' in stats
     assert stats['avg_N'] > 0
     assert 'total_samples' in stats
@@ -233,12 +238,12 @@ def test_methyl_centroid_statistics(tmp_path):
     output_dir = tmp_path / "histograms"
     output_dir.mkdir()
     
-    hist_paths = generate_all_histograms(centroid, output_dir, "extended_centroid")
+    hist_paths = generate_all_histograms(centroid, output_dir, "centroid")
     assert len(hist_paths) == 4
 
 
-def test_methyl_extended_centroid_statistics(tmp_path):
-    """Test statistics computation for MethylExtendedCentroid."""
+def test_methyl_centroid_statistics(tmp_path):
+    """Test statistics computation for MethylCentroid."""
     # Create multiple samples and save to temp files
     sample_files = []
     for i in range(3):
@@ -262,38 +267,41 @@ def test_methyl_extended_centroid_statistics(tmp_path):
             builder.add_sample(h5_file)
         
         centroid = builder.finalize()
-        assert isinstance(centroid, MethylExtendedCentroid)
+        assert isinstance(centroid, MethylCentroid)
     except ImportError:
         # Fallback: try using add_sample method
         try:
             samples = [MethylSample.load_from_h5(f) for f in sample_files]
-            # Try to create extended centroid by adding samples
-            # Start with first sample converted to extended centroid
-            from methyl_utils.core.methyl_frame import MethylExtendedCentroid
+            # Create centroid by adding samples (first sample becomes base)
+            from methyl_utils.core.methyl_frame import MethylCentroid
             import pandas as pd
-            
+
             base_sample = samples[0]
             df = base_sample._df.copy()
-            df['N'] = np.ones(len(df), dtype=np.uint32)
-            
-            # Initialize extended stats (N, Sx, Sx2 only)
-            coverage = df['mC'] + df['uC']
-            with np.errstate(divide='ignore', invalid='ignore'):
-                mean = np.where(coverage > 0, df['mC'].astype(np.float32) / coverage.astype(np.float32), 0.0)
-            df['Sx'] = mean.astype(np.float32)
-            df['Sx2'] = (mean ** 2).astype(np.float32)
-            centroid = MethylExtendedCentroid(df[['pos', 'mC', 'uC', 'tnc', 'N', 'Sx', 'Sx2']])
-            
-            # Add other samples using add_sample
+            mC = np.asarray(df["mC"].values, dtype=np.uint32)
+            uC = np.asarray(df["uC"].values, dtype=np.uint32)
+            cov = mC + uC
+            with np.errstate(divide="ignore", invalid="ignore"):
+                mean = np.where(cov > 0, mC.astype(np.float32) / cov.astype(np.float32), 0.0)
+            Sc2 = (cov.astype(np.uint64) ** 2).astype(np.uint32)
+            Swx2 = np.where(cov > 0, (mC.astype(np.float64) ** 2) / cov.astype(np.float64), 0.0).astype(np.float32)
+            df = pd.DataFrame({
+                "pos": df["pos"], "tnc": df["tnc"],
+                "N": np.ones(len(df), dtype=np.uint32),
+                "Sx": mean.astype(np.float32), "Sx2": (mean ** 2).astype(np.float32),
+                "Sm": mC, "Su": uC, "Sc2": Sc2, "Swx2": Swx2,
+            })
+            centroid = MethylCentroid(df)
+
             for sample in samples[1:]:
                 centroid = centroid.add_sample(sample)
         except Exception as e:
-            pytest.skip(f"Could not create extended centroid: {e}")
+            pytest.skip(f"Could not create centroid: {e}")
     
     # Compute statistics
     stats = compute_sample_statistics(centroid)
     
-    assert stats['sample_type'] == 'extended_centroid'
+    assert stats['sample_type'] == 'centroid'
     assert 'avg_N' in stats
     assert 'avg_Sx' in stats
     assert 'avg_Sx2' in stats
@@ -301,7 +309,7 @@ def test_methyl_extended_centroid_statistics(tmp_path):
     # Generate histograms
     output_dir = tmp_path / "histograms"
     output_dir.mkdir()
-    hist_paths = generate_all_histograms(centroid, output_dir, "extended_centroid")
+    hist_paths = generate_all_histograms(centroid, output_dir, "centroid")
     assert len(hist_paths) == 4
 
 
@@ -323,17 +331,20 @@ def test_context_property_collision_fix():
     Ensures that:
     1. frame.context returns DataFrame column (Series) for filtering
     2. frame.context_metadata returns/sets metadata context (str)
-    3. cg/chg/chh methods work correctly on MethylExtendedCentroid
+    3. cg/chg/chh methods work correctly on MethylCentroid
     """
-    # Create test data with CG context (tnc=1). MethylExtendedCentroid uses pos, mC, uC, tnc, N, Sx, Sx2 only.
+    # Create test data with CG context (tnc=1). MethylCentroid uses pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2.
+    mC, uC = np.array([10, 20, 30], dtype=np.uint32), np.array([5, 15, 25], dtype=np.uint32)
+    cov = mC + uC
+    Sx = np.where(cov > 0, mC.astype(np.float32) / cov.astype(np.float32), 0.0)
     test_data = pd.DataFrame({
         'pos': [100, 200, 300],
-        'mC': [10, 20, 30],
-        'uC': [5, 15, 25],
-        'tnc': [1, 1, 1],  # CG context
+        'tnc': [1, 1, 1],
         'N': [1, 1, 1],
-        'Sx': [10.0, 20.0, 30.0],
-        'Sx2': [100.0, 400.0, 900.0],
+        'Sx': Sx, 'Sx2': Sx ** 2,
+        'Sm': mC, 'Su': uC,
+        'Sc2': (cov.astype(np.uint64) ** 2).astype(np.uint32),
+        'Swx2': np.where(cov > 0, (mC.astype(np.float64) ** 2) / cov.astype(np.float64), 0.0).astype(np.float32),
     })
     # Base MethylSample can have extra columns; use subset for frame to avoid validation issues
     frame_data = test_data[['pos', 'mC', 'uC', 'tnc']].copy()
@@ -357,15 +368,15 @@ def test_context_property_collision_fix():
     assert frame.context_metadata == "CHG", "Should be able to set metadata context"
 
     # Test 3: Extended centroid context methods work
-    extended_centroid = MethylExtendedCentroid(test_data.copy(), metadata={'context': 'CG'})
+    centroid = MethylCentroid(test_data.copy(), metadata={'context': 'CG'})
 
-    cg_result = extended_centroid.cg()
+    cg_result = centroid.cg()
     assert len(cg_result) == 3, "cg() should return all positions"
 
-    chg_result = extended_centroid.chg()
+    chg_result = centroid.chg()
     assert len(chg_result) == 0, "chg() should return no positions (all are CG)"
 
-    chh_result = extended_centroid.chh()
+    chh_result = centroid.chh()
     assert len(chh_result) == 0, "chh() should return no positions (all are CG)"
 
 

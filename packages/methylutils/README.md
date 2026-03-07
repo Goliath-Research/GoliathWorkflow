@@ -20,7 +20,7 @@ pip install -e packages/methylutils
 ## Quick Start
 
 ```python
-from methyl_utils.core.methyl_frame import MethylSample, MethylExtendedCentroid
+from methyl_utils.core.methyl_frame import MethylSample, MethylCentroid
 
 # Create sample
 sample = MethylSample(
@@ -31,7 +31,7 @@ sample = MethylSample(
 )
 
 # Create centroid (single type: pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 + binned_stats)
-centroid = MethylExtendedCentroid.from_centroid_data({
+centroid = MethylCentroid.from_centroid_data({
     "pos": np.array([100, 200], dtype=np.uint32),
     "tnc": np.array([1, 2], dtype=np.uint8),
     "N": np.array([5, 5], dtype=np.uint32),
