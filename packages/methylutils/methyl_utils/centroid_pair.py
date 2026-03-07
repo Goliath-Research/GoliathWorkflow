@@ -64,12 +64,11 @@ class MethylCentroidPair:
             aligned1 = cls._slice_sample(centroid1, idx1)
             aligned2 = cls._slice_sample(centroid2, idx2)
 
-        # Clamp zero-coverage in-place (efficient masking)
+        # Clamp zero-coverage (avoids div-by-zero in comparisons)
         for cent in [aligned1, aligned2]:
-            zero_mask = (cent.mC + cent.uC) == 0
-            if np.any(zero_mask):
-                cent.uC[zero_mask] = 1  # Ensure mean=0, avoid div-by-zero in comparisons
-                logger.debug(f"Clamped {np.sum(zero_mask)} zero-coverage positions in centroid")
+            n_clamped = cent.clamp_zero_coverage()
+            if n_clamped > 0:
+                logger.debug(f"Clamped {n_clamped} zero-coverage positions")
 
         # Validate min_coverage post-alignment
         max_n = max(
@@ -105,8 +104,8 @@ class MethylCentroidPair:
             new_N = sample.N[indices] if hasattr(sample.N, '__getitem__') else np.asarray(sample.N).ravel()[indices]
             new_Sx = sample.Sx[indices] if hasattr(sample.Sx, '__getitem__') else np.asarray(sample.Sx).ravel()[indices]
             new_Sx2 = sample.Sx2[indices] if hasattr(sample.Sx2, '__getitem__') else np.asarray(sample.Sx2).ravel()[indices]
-            new_Sm = sample.Sm[indices] if hasattr(sample.Sm, '__getitem__') else np.asarray(sample.Sm).ravel()[indices]
-            new_Su = sample.Su[indices] if hasattr(sample.Su, '__getitem__') else np.asarray(sample.Su).ravel()[indices]
+            new_Sm = np.asarray(sample.methylated_counts).ravel()[indices]
+            new_Su = np.asarray(sample.unmethylated_counts).ravel()[indices]
             new_Sc2 = sample.Sc2[indices] if hasattr(sample.Sc2, '__getitem__') else np.asarray(sample.Sc2).ravel()[indices]
             new_Swx2 = sample.Swx2[indices] if hasattr(sample.Swx2, '__getitem__') else np.asarray(sample.Swx2).ravel()[indices]
             df = pd.DataFrame({

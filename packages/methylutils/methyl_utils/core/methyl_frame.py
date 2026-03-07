@@ -356,6 +356,18 @@ class MethylFrame:
         """Number of genomic positions."""
         return len(self._df)
 
+    def clamp_zero_coverage(self) -> int:
+        """Set unmethylated counts to 1 where coverage is 0 to avoid div-by-zero. Returns number of positions clamped."""
+        cov = self._get_values(self.coverage)
+        zero_mask = np.asarray(cov == 0)
+        n = int(np.sum(zero_mask))
+        if n > 0:
+            if "Su" in self._df.columns:
+                self._df.loc[zero_mask, "Su"] = 1
+            else:
+                self._df.loc[zero_mask, "uC"] = 1
+        return n
+
     @property
     def memory_usage_mb(self) -> float:
         """Memory usage in megabytes."""
@@ -798,6 +810,16 @@ class MethylCentroid(MethylFrame):
     def Su(self):
         """Sum of unmethylated counts across samples."""
         return self._df["Su"]
+
+    @property
+    def methylated_counts(self):
+        """Sum of methylated counts across samples (Sm). Use this instead of internal Sm."""
+        return self.Sm
+
+    @property
+    def unmethylated_counts(self):
+        """Sum of unmethylated counts across samples (Su). Use this instead of internal Su."""
+        return self.Su
 
     @property
     def Sc2(self):

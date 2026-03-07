@@ -243,13 +243,11 @@ class MethylCentroidPair:
         aligned1 = centroid1.apply_mask(idx1)
         aligned2 = centroid2.apply_mask(idx2)
 
-        # Clamp zero-coverage in-place (efficient masking)
+        # Clamp zero-coverage (avoids div-by-zero in comparisons)
         for cent in [aligned1, aligned2]:
-            cov = cent.coverage.values if hasattr(cent.coverage, "values") else np.asarray(cent.coverage)
-            zero_mask = cov == 0
-            if np.any(zero_mask):
-                cent._df.loc[zero_mask, "Su"] = 1  # Avoid div-by-zero in comparisons
-                logger.debug(f"Clamped {np.sum(zero_mask)} zero-coverage positions in centroid")
+            n_clamped = cent.clamp_zero_coverage()
+            if n_clamped > 0:
+                logger.debug(f"Clamped {n_clamped} zero-coverage positions in centroid")
 
         # Validate min_coverage post-alignment
         max_n = max(
@@ -311,13 +309,11 @@ class MethylCentroidPair:
         aligned1 = centroid1.apply_mask(idx1)
         aligned2 = centroid2.apply_mask(idx2)
 
-        # Clamp zero-coverage in-place (efficient masking)
+        # Clamp zero-coverage (avoids div-by-zero in comparisons)
         for cent in [aligned1, aligned2]:
-            cov = cent.coverage.values if hasattr(cent.coverage, "values") else np.asarray(cent.coverage)
-            zero_mask = cov == 0
-            if np.any(zero_mask):
-                cent._df.loc[zero_mask, "Su"] = 1  # Avoid div-by-zero in comparisons
-                logger.debug(f"Clamped {np.sum(zero_mask)} zero-coverage positions in centroid")
+            n_clamped = cent.clamp_zero_coverage()
+            if n_clamped > 0:
+                logger.debug(f"Clamped {n_clamped} zero-coverage positions in centroid")
 
         # Validate min_coverage post-alignment
         max_n = max(

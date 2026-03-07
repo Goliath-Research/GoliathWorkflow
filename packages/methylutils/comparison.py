@@ -58,9 +58,7 @@ class MethylCentroidPair:
 
         # Clamp zero-coverage positions (prevents NaN in LRT)
         for cent in (aligned1, aligned2):
-            zero_cov = cent.coverage == 0
-            if zero_cov.any():
-                cent._df.loc[zero_cov, "Su"] = 1  # force mean = 0
+            cent.clamp_zero_coverage()
 
         logger.info(f"Aligned on {len(common_pos):,} common positions")
         return aligned1, aligned2
