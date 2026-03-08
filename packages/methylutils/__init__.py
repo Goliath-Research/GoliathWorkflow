@@ -167,7 +167,12 @@ from .methyl_utils.statistical_tests import (
     aggregate_pvalues_edgington,
     aggregate_pvalues_mudholkar_george,
     aggregate_pvalues_simes,
-    PVALUE_AGGREGATION_METHODS
+    PVALUE_AGGREGATION_METHODS,
+    welch_mean_test,
+    ecdf_overlap_integral,
+    effect_size_from_components,
+    ecdf_effect_size,
+    optimize_lambda_var,
 )
 
 from .methyl_utils.genomic_utils import (
@@ -391,6 +396,11 @@ __all__ = [
     "aggregate_pvalues_mudholkar_george",
     "aggregate_pvalues_simes",
     "PVALUE_AGGREGATION_METHODS",
+    "welch_mean_test",
+    "ecdf_overlap_integral",
+    "effect_size_from_components",
+    "ecdf_effect_size",
+    "optimize_lambda_var",
     'BetaClassifier',
     'ClassifierFactory',  # if added
     # EAT transformation functions

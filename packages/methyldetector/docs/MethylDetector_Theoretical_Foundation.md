@@ -2,76 +2,50 @@
 
 ## Goal
 
-MethylDetector identifies **differentially methylated positions (DMPs)** between two methylation centroids (e.g. healthy vs disease) with:
+`MethylDetector` identifies differential methylation with a staged pipeline that separates statistical significance from biological importance:
 
-- **FDR control**: Storey's q-value method for multiple-testing correction
-- **Biological relevance**: Effect size and distribution overlap to keep meaningful DMPs
+1. Welch-style unequal-variance mean-difference testing.
+2. Storey q-value correction.
+3. `delta_mean` reduction to keep continuous ECDF work tractable.
+4. Continuous ECDF overlap and final `effect_size`.
+5. Biological filtering on `delta_mean`, `overlap`, and `effect_size`.
 
-Downstream, selected DMPs are used for classifier training and validation (Balanced Accuracy).
+## Statistical Stage
 
-## Probabilistic Model
+For each aligned position, MethylUtils computes a Welch-style test statistic and two-sided p-value using the per-group means, variances, and sample counts. Multiple testing is controlled with Storey q-values.
 
-Per genomic position, methylation is bounded in \([0, 1]\). MethylDetector uses **only the empirical distribution (ECDF)** for comparison and overlap. Centroids must have **binned_stats** (in memory: bin_edges, bin_counts), built with `binned_stats_bins` (default 20). In HDF5 only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored; bin edges are derived. MethylUtils **MethylCentroidPair** computes overlap, p-values, and effect size using ECDF only; Normal, Beta, Beta-Binomial, and Beta-Mixture are not supported.
+Positions with `q_value <= alpha` are the statistical DMP candidates.
 
-## Statistical Testing
+## Biological Score
 
-Per-position significance and effect size are computed by MethylUtils **MethylCentroidPair** using **ECDF-based** metrics (e.g. z-test on means with variances, or KS-based tests). P-values and q-values are attached to the comparison table. Implementation: MethylUtils statistical_tests and MethylCentroidPair.
+The pipeline uses one canonical biological score:
 
-## FDR Correction: Storey's q-value
+`effect_size = |delta_mean| * (1 - overlap) * exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))`
 
-Given \(m\) positions with p-values \(p_1, \ldots, p_m\):
+Where:
 
-1. **Estimate \(\pi_0\)** (proportion of true nulls), e.g. at a tuning parameter \(\lambda\):
-   $$\hat{\pi}_0(\lambda) = \frac{\#\{p_i > \lambda\}}{m(1-\lambda)}$$
+- `delta_mean = |mean1 - mean2|`
+- `overlap = integral_0^1 min(f1(x), f2(x)) dx`
+- `f1`, `f2` are the PCHIP-derived PDFs built from centroid `binned_stats`
+- `lambda_var` controls how strongly diffuse within-group distributions are penalized
 
-2. **Compute q-values** from sorted p-values so that q-value controls the false discovery rate.
+Interpretation:
 
-Implementation: MethylUtils `storey_qvalues`. MethylCentroidPair (or the detector pipeline) uses it to attach q-values to each position. Positions with \(q \leq \alpha\) are statistically significant DMPs.
+- Larger `delta_mean` increases the score.
+- Larger overlap decreases the score.
+- Larger within-group variance decreases the score symmetrically in both groups.
 
-## Effect Size (Single Biological Importance Measure)
+## Why the reduction gate comes before overlap
 
-**effect_size** is the only biological importance measure in the pipeline. It is computed by **MethylCentroidPair**; MethylDetector uses it as provided.
+The continuous overlap stage depends on `PchipInterpolator`, which is CPU-bound. At chromosome scale, evaluating every statistically significant position would be too expensive, so the detector applies a `delta_mean` reduction gate before any continuous overlap/effect-size calculation.
 
-**Formula:**
-
-$$\text{effect\_size} = \frac{|\Delta\mu|}{\max(\text{overlap}, \epsilon) \times \sigma_{\text{combined}}} \times \text{variance\_reliability}$$
-
-- **\(\Delta\mu\)**: \(|\mu_1 - \mu_2|\) (delta mean)
-- **overlap**: Bhattacharyya coefficient \(\text{BC} = e^{-\text{BD}}\) (BD = Bhattacharyya distance)
-- **\(\epsilon\)**: min_overlap_floor (e.g. 0.01) to avoid division by zero
-- **\(\sigma_{\text{combined}}\)**: \(\sqrt{\text{var}_1 + \text{var}_2}\) from centroid variances (from N, Sx, Sx2 or ECDF)
-- **variance_reliability**: \(1 / (1 + \max(\text{var}_1, \text{var}_2) / 0.05)\) to down-weight noisy (high-variance) positions
-
-Larger \(|\Delta\mu|\) and smaller overlap increase effect_size; higher variance decreases it. Downstream (e.g. MethylClassifier) use effect_size for weighting and ranking.
-
-## Overlap: Bhattacharyya Coefficient and Distance
-
-- **Bhattacharyya coefficient (BC)**: in \([0, 1]\); 1 = identical distributions, 0 = no overlap. Used as “overlap” in filters and in effect_size.
-- **Bhattacharyya distance (BD)**: \(-\ln(\text{BC})\); stored in comparison output; \(\text{BC} = e^{-\text{BD}}\).
-
-Optional: **Jeffreys divergence** (symmetric KL) is available in MethylUtils for additional metrics; the primary overlap used for biological filtering is BC.
-
-## Balanced Accuracy
-
-For validation and DMP selection under class imbalance:
-
-$$\text{Balanced Accuracy} = \frac{\text{Sensitivity} + \text{Specificity}}{2}$$
-
-with Sensitivity = TP/(TP+FN), Specificity = TN/(TN+FP). This treats both classes equally and is used as a target (e.g. target_balanced_accuracy) when selecting how many DMPs to keep.
-
-## Summary Table
+## Summary
 
 | Component | Role |
 |-----------|------|
-| Distribution | **ECDF only** (binned_stats required; build with binned_stats_bins, default 20) |
-| Testing | ECDF-based p-values (MethylCentroidPair) |
-| q-value | Storey's method (MethylUtils `storey_qvalues`) |
-| effect_size | From MethylCentroidPair (overlap and delta mean; ECDF-based overlap) |
-| Overlap | ECDF-based (e.g. 1 − KS or discrete overlap from bin_counts) |
-| Validation | Balanced Accuracy |
-
-## References
-
-- Full derivations and extra metrics: [METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md](METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
-- Testing and q-values: MethylUtils `statistical_tests` (ECDF-based tests, `storey_qvalues`)
-- Effect size and overlap: MethylUtils `MethylCentroidPair` (compare_centroids output)
+| Statistical test | Welch-style unequal-variance mean-difference test |
+| Multiple testing | Storey q-values |
+| Reduction gate | `delta_mean_reduction` or `min_delta_mean` |
+| Overlap | Continuous ECDF overlap from PCHIP-derived PDFs |
+| Biological score | Canonical `effect_size` formula |
+| Final biological filters | `min_delta_mean`, `max_overlap`, `min_effect_size`, optional `effect_size_quantile` |

@@ -1,4 +1,4 @@
-"""CLI for MethylDetectorExplorer: two-phase effect size analysis and optimization."""
+"""CLI for MethylDetectorExplorer: staged statistical and biological analysis."""
 
 import json
 import logging
@@ -56,46 +56,10 @@ logger = logging.getLogger(__name__)
     help="Methylation context. Used with centroid1-dir/centroid2-dir and --chromosome.",
 )
 @click.option(
-    "--sample-fraction",
+    "--alpha",
     type=float,
-    default=0.01,
-    help="Fraction of positions to use in Phase 1 (e.g. 0.01 = 1%%). Use 1.0 for all positions.",
-)
-@click.option(
-    "--refine-top-k",
-    type=int,
-    default=None,
-    help="Fixed number of top positions to refine with ECDF (overrides --k-heuristic).",
-)
-@click.option(
-    "--refine-all",
-    is_flag=True,
-    default=False,
-    help="Refine effect_size with ECDF for all positions (slow). Builds ECDF of refined effect_size for cut-point selection.",
-)
-@click.option(
-    "--k-heuristic",
-    type=click.Choice(["decay_limit", "knee", "threshold", "fraction", "fixed"]),
-    default="decay_limit",
-    help="Heuristic to choose how many positions get refined effect_size.",
-)
-@click.option(
-    "--max-decay-per-position",
-    type=float,
-    default=0.01,
-    help="For decay_limit heuristic: max allowed decay rate per position before stopping K.",
-)
-@click.option(
-    "--threshold-fraction",
-    type=float,
-    default=0.1,
-    help="For threshold heuristic: keep positions with effect_size >= this fraction of max.",
-)
-@click.option(
-    "--fraction-top",
-    type=float,
-    default=0.01,
-    help="For fraction heuristic: fraction of (sorted) positions to refine.",
+    default=0.05,
+    help="FDR threshold applied after the Welch-style statistical test.",
 )
 @click.option(
     "--min-coverage",
@@ -116,22 +80,64 @@ logger = logging.getLogger(__name__)
     help="Minimum N as fraction of max at position (default 5%%): keep where min(n1,n2) >= min-N-pct * max(n1,n2). Used when --min-N is not set.",
 )
 @click.option(
-    "--approx-overlap",
-    type=click.Choice(["auto", "discrete", "normal"]),
-    default="auto",
-    help="Phase 1 overlap: auto (discrete when bin_edges match, else normal), discrete (Bhattacharyya from bin counts), normal (2*Phi(-welch_d/2)). Use normal to avoid bin alignment issues.",
+    "--delta-mean-reduction",
+    type=float,
+    default=None,
+    help="Optional pre-ECDF reduction threshold: after statistical filtering, keep only positions with |delta_mean| above this value before computing continuous overlap/effect_size.",
 )
 @click.option(
-    "--calibrate-scale",
+    "--min-delta-mean",
+    type=float,
+    default=None,
+    help="Biological filter threshold for |delta_mean| after overlap/effect_size are computed.",
+)
+@click.option(
+    "--max-overlap",
+    type=float,
+    default=None,
+    help="Biological filter threshold for overlap (keep positions with overlap <= max-overlap).",
+)
+@click.option(
+    "--min-effect-size",
+    type=float,
+    default=None,
+    help="Biological filter threshold for effect_size (keep positions with effect_size >= min-effect-size).",
+)
+@click.option(
+    "--optimize-lambda-var",
     is_flag=True,
     default=False,
-    help="Calibrate sigmoid scale to maximize Spearman correlation between effect_size and (1 - ks_p) on refined positions; report chosen scale and correlation.",
+    help="Optimize lambda_var to maximize Spearman correlation between effect_size and (1 - q_value) on the reduced set.",
 )
 @click.option(
-    "--sigmoid-scale",
+    "--lambda-var",
     type=float,
-    default=3.0,
-    help="Sigmoid scale for bounded effect size (default 3.0). Ignored when --calibrate-scale is set.",
+    default=2.0,
+    help="Variance penalty strength used in the final effect_size formula.",
+)
+@click.option(
+    "--lambda-var-min",
+    type=float,
+    default=0.0,
+    help="Minimum lambda_var considered when --optimize-lambda-var is used.",
+)
+@click.option(
+    "--lambda-var-max",
+    type=float,
+    default=6.0,
+    help="Maximum lambda_var considered when --optimize-lambda-var is used.",
+)
+@click.option(
+    "--lambda-var-step",
+    type=float,
+    default=0.25,
+    help="Step size for lambda_var search when --optimize-lambda-var is used.",
+)
+@click.option(
+    "--ecdf-overlap-grid-size",
+    type=int,
+    default=512,
+    help="Number of grid points used for continuous ECDF overlap integration.",
 )
 @click.option(
     "--output-dir",
@@ -166,30 +172,26 @@ def main(
     centroid2: Optional[Path],
     chromosome: str,
     context: str,
-    sample_fraction: float,
-    refine_top_k: Optional[int],
-    refine_all: bool,
-    k_heuristic: str,
-    max_decay_per_position: float,
-    threshold_fraction: float,
-    fraction_top: float,
+    alpha: float,
     min_coverage: int,
     min_n: Optional[int],
     min_n_pct: float,
-    approx_overlap: str,
-    calibrate_scale: bool,
-    sigmoid_scale: float,
+    delta_mean_reduction: Optional[float],
+    min_delta_mean: Optional[float],
+    max_overlap: Optional[float],
+    min_effect_size: Optional[float],
+    optimize_lambda_var: bool,
+    lambda_var: float,
+    lambda_var_min: float,
+    lambda_var_max: float,
+    lambda_var_step: float,
+    ecdf_overlap_grid_size: int,
     output_dir: Optional[Path],
     output: Optional[Path],
     csv: bool,
     verbose: bool,
 ) -> None:
-    """MethylDetectorExplorer: Analyze and optimize DMP detection with two-phase effect size.
-
-    Phase 1: Approximate bounded_effect_size (delta_mean, variances, discrete overlap) for a
-    sample of positions; sort descending. Phase 2: Choose K via decay analysis (or override),
-    then compute refined bounded_effect_size using ECDF overlap only for the top K positions.
-    """
+    """MethylDetectorExplorer: staged significance, delta_mean reduction, and final effect_size."""
     setup_logging(verbose=verbose)
 
     if centroid1 is not None and centroid2 is not None:
@@ -211,24 +213,23 @@ def main(
         )
         sys.exit(1)
 
-    # User override: --refine-top-k forces K (use fixed heuristic)
-    effective_heuristic = "fixed" if refine_top_k is not None else k_heuristic
     explorer = MethylDetectorExplorer(
         centroid1_path=c1_path,
         centroid2_path=c2_path,
+        alpha=alpha,
         min_coverage=min_coverage,
         min_N=min_n,
         min_N_pct=min_n_pct,
-        approx_overlap=approx_overlap,
-        calibrate_scale=calibrate_scale,
-        sigmoid_scale=sigmoid_scale,
-        sample_fraction=sample_fraction,
-        k_heuristic=effective_heuristic,
-        refine_top_k=refine_top_k,
-        refine_all=refine_all,
-        max_decay_per_position=max_decay_per_position,
-        threshold_fraction=threshold_fraction,
-        fraction_top=fraction_top,
+        delta_mean_reduction=delta_mean_reduction,
+        min_delta_mean=min_delta_mean,
+        max_overlap=max_overlap,
+        min_effect_size=min_effect_size,
+        lambda_var=lambda_var,
+        optimize_lambda_var=optimize_lambda_var,
+        lambda_var_min=lambda_var_min,
+        lambda_var_max=lambda_var_max,
+        lambda_var_step=lambda_var_step,
+        ecdf_overlap_grid_size=ecdf_overlap_grid_size,
     )
     try:
         df, report = explorer.run()
@@ -248,15 +249,13 @@ def main(
     msg = (
         f"Total positions: {report['total_positions']:,}, "
         f"After min-N filter: {report['positions_after_min_N_filter']:,}, "
-        f"Phase 1 sample: {report['phase1_sample_size']:,}, "
-        f"approx overlap: {report.get('approx_overlap_method', 'n/a')}, "
-        f"scale: {report.get('sigmoid_scale_used', 'n/a')}, "
-        f"K chosen: {report['k_chosen']}, "
-        f"heuristic: {report['k_heuristic']}, "
+        f"After statistical filter: {report['positions_after_statistical_filter']:,}, "
+        f"After delta_mean reduction: {report['positions_after_delta_mean_reduction']:,}, "
+        f"lambda_var: {report.get('lambda_var_used', 'n/a')}, "
         f"time: {report['time_total_s']:.2f}s"
     )
-    if "effect_size_vs_ks_p_correlation" in report:
-        msg += f", effect_size vs (1-ks_p) Spearman: {report['effect_size_vs_ks_p_correlation']:.4f}"
+    if "effect_size_vs_1_minus_q_correlation" in report:
+        msg += f", effect_size vs (1-q) Spearman: {report['effect_size_vs_1_minus_q_correlation']:.4f}"
     if "effect_size_95th_percentile" in report:
         msg += f", effect_size 95th %ile: {report['effect_size_95th_percentile']:.4f}"
     click.echo(msg)

@@ -9,7 +9,7 @@
 \usepackage{booktabs}
 
 \geometry{margin=1in}
-\title{Theory and Implementation of the Bounded Effect Size in MethylDetector}
+\title{Theory and Implementation of the ECDF Biological Effect Size in MethylDetector}
 \author{MethylPipeline Team}
 \date{\today}
 
@@ -22,21 +22,34 @@
 
 \section{Introduction}
 
-In MethylDetector (built on MethylUtils), the \textbf{bounded effect size} is a key metric for ranking Differentially Methylated Positions (DMPs). It combines:
+In MethylDetector (built on MethylUtils), the \textbf{effect size} is the canonical biological score used for ranking Differentially Methylated Positions (DMPs). It combines:
 
 \begin{itemize}
-    \item \textbf{Welch's $d$} (standardized mean difference, accounting for unequal variances and sample sizes).
-    \item \textbf{Distribution overlap} (Bhattacharyya coefficient or KS statistic from ECDF).
-    \item \textbf{Sigmoid bounding} to $[0, 1]$ for interpretability (large effect $\to 1$, no effect $\to 0$).
+    \item \textbf{Mean separation} through $|\Delta \mu|$.
+    \item \textbf{Continuous ECDF overlap} from PCHIP-derived PDFs.
+    \item \textbf{Separate variance penalties} through a reliability term controlled by $\lambda_{\mathrm{var}}$.
 \end{itemize}
 
-The formula is \emph{sigmoid-like} (logistic function) and biologically interpretable: perfect separation ($\delta\mu \gg 0$, no overlap) yields $\approx 1$; identical distributions yield $\approx 0$.
+The formula is:
 
-Two computation modes exist for efficiency:
+\begin{equation}
+    \mathrm{effect\_size}
+    =
+    |\Delta \mu|
+    \cdot
+    (1 - O_{\mathrm{ECDF}})
+    \cdot
+    \exp\left(-\lambda_{\mathrm{var}} (\sqrt{\sigma_1^2} + \sqrt{\sigma_2^2})\right)
+\end{equation}
+
+This preserves a direct biological interpretation: large mean shifts, low distributional overlap, and tight within-group distributions lead to a higher score.
+
+The detector/explorer pipeline uses a staged execution strategy for efficiency:
 
 \begin{itemize}
-    \item \textbf{Approximate} (fast, vectorized): Discrete overlap from binned histograms or Normal approximation. Used for initial screening/sorting.
-    \item \textbf{Refined} (precise, CPU-bound): ECDF-based KS statistic via PCHIP interpolation. Used only for top positions (e.g., via MethylDetectorExplorer).
+    \item \textbf{Statistical test}: Welch-style mean-difference testing plus FDR correction.
+    \item \textbf{$\Delta \mu$ reduction}: apply a mean-difference gate before any CPU-bound overlap calculation.
+    \item \textbf{Continuous ECDF stage}: compute $O_{\mathrm{ECDF}}$ and the final effect size only on the reduced set.
 \end{itemize}
 
 \section{Welch's $d$ (Standardized Mean Difference)}
@@ -166,13 +179,18 @@ Files: \texttt{methyl\_utils/statistical\_tests.py}, \texttt{distribution\_views
 Key functions:
 
 \begin{verbatim}
-welch_d_fast_overlap_approx(delta_mean, var1, n1, var2, n2, 
-                           overlap_approx=None, scale=3.0)
-    -> {"welch_d", "overlap_approx", "bounded_effect_size_approx"}
+welch_mean_test(delta_mean, var1, n1, var2, n2)
+    -> {"t_stat", "p_value", "dof", "standard_error"}
 
-welch_d_ks_overlap(delta_mean, var1, n1, var2, n2, ecdf_view1, 
-                   ecdf_view2, position_indices, scale=3.0)
-    -> {"welch_d", "ks_d", "ks_p", "corrected_d", "bounded_effect_size"}
+ecdf_overlap_integral(ecdf_view1, ecdf_view2, position_indices, grid_size=512)
+    -> overlap_ecdf
+
+effect_size_from_components(delta_mean, overlap, var1, var2, lambda_var)
+    -> {"effect_size", "reliability"}
+
+ecdf_effect_size(delta_mean, var1, var2, ecdf_view1, ecdf_view2,
+                 position_indices, lambda_var, grid_size=512)
+    -> {"overlap", "effect_size", "reliability"}
 \end{verbatim}
 
 ECDF: \texttt{ECDFView} builds per-position PCHIP interpolators from \texttt{bin\_edges/bin\_counts}.

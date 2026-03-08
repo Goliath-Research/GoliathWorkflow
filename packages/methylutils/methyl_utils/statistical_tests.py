@@ -7,7 +7,7 @@ and meta-analysis commonly used in methylation studies.
 
 import logging
 import numpy as np
-from typing import Tuple, Optional, Any
+from typing import Tuple, Optional, Any, Dict
 
 # Import GPU detection utilities
 from .gpu_detection import is_gpu_available, is_cupyx_scipy_stats_available, get_cupy
@@ -1033,6 +1033,204 @@ def ecdf_ks_pvalue(
     return ks_stats, p_values
 
 
+def welch_mean_test(
+    delta_mean: np.ndarray,
+    var1: np.ndarray,
+    n1: np.ndarray,
+    var2: np.ndarray,
+    n2: np.ndarray,
+) -> Dict[str, np.ndarray]:
+    """
+    Welch-style test for difference in means with unequal variances.
+
+    Returns absolute t statistic, Welch-Satterthwaite dof, standard error,
+    and a two-sided p-value.
+    """
+    from scipy.stats import t as t_dist
+
+    delta_mean = np.asarray(delta_mean, dtype=np.float64).ravel()
+    var1 = np.asarray(var1, dtype=np.float64).ravel()
+    n1 = np.asarray(n1, dtype=np.float64).ravel()
+    var2 = np.asarray(var2, dtype=np.float64).ravel()
+    n2 = np.asarray(n2, dtype=np.float64).ravel()
+
+    term1 = np.maximum(var1, 0.0) / np.maximum(n1, 1.0)
+    term2 = np.maximum(var2, 0.0) / np.maximum(n2, 1.0)
+    se = np.sqrt(term1 + term2)
+    se = np.maximum(se, 1e-12)
+    t_stat = np.abs(delta_mean) / se
+
+    denom = (
+        (term1 ** 2) / np.maximum(n1 - 1.0, 1.0)
+        + (term2 ** 2) / np.maximum(n2 - 1.0, 1.0)
+    )
+    dof = np.where(
+        denom > 0.0,
+        ((term1 + term2) ** 2) / denom,
+        np.maximum(n1 + n2 - 2.0, 1.0),
+    )
+    dof = np.maximum(dof, 1.0)
+    p_values = 2.0 * t_dist.sf(np.abs(t_stat), df=dof)
+    p_values = np.clip(np.asarray(p_values, dtype=np.float64), 1e-300, 1.0)
+    return {
+        "t_stat": np.asarray(t_stat, dtype=np.float64),
+        "p_value": p_values,
+        "dof": np.asarray(dof, dtype=np.float64),
+        "standard_error": np.asarray(se, dtype=np.float64),
+    }
+
+
+def ecdf_overlap_integral(
+    ecdf_view1: "ECDFView",
+    ecdf_view2: "ECDFView",
+    position_indices: np.ndarray,
+    grid_size: int = 512,
+) -> np.ndarray:
+    """
+    Continuous overlap between two ECDF-derived densities:
+        overlap = integral_0^1 min(f1(x), f2(x)) dx
+
+    PDF values are renormalized on the integration grid to guard against
+    small numerical drift in PCHIP derivatives.
+    """
+    position_indices = np.asarray(position_indices, dtype=np.intp).ravel()
+    grid = np.linspace(0.0, 1.0, grid_size, dtype=np.float64)
+    trapz = getattr(np, "trapezoid", np.trapz)
+
+    if hasattr(ecdf_view1, "_pdf_batch") and hasattr(ecdf_view2, "_pdf_batch"):
+        pdf1 = np.asarray(ecdf_view1._pdf_batch(position_indices, grid), dtype=np.float64)
+        pdf2 = np.asarray(ecdf_view2._pdf_batch(position_indices, grid), dtype=np.float64)
+    else:
+        pdf1 = np.zeros((len(position_indices), len(grid)), dtype=np.float64)
+        pdf2 = np.zeros((len(position_indices), len(grid)), dtype=np.float64)
+        for i, pos_idx in enumerate(position_indices):
+            pdf1[i] = np.asarray([ecdf_view1._pdf(int(pos_idx), float(x)) for x in grid], dtype=np.float64)
+            pdf2[i] = np.asarray([ecdf_view2._pdf(int(pos_idx), float(x)) for x in grid], dtype=np.float64)
+
+    pdf1 = np.maximum(pdf1, 0.0)
+    pdf2 = np.maximum(pdf2, 0.0)
+    area1 = trapz(pdf1, grid, axis=1)
+    area2 = trapz(pdf2, grid, axis=1)
+    pdf1 = pdf1 / np.maximum(area1[:, None], 1e-12)
+    pdf2 = pdf2 / np.maximum(area2[:, None], 1e-12)
+    overlap = trapz(np.minimum(pdf1, pdf2), grid, axis=1)
+    return np.clip(np.asarray(overlap, dtype=np.float64), 0.0, 1.0)
+
+
+def effect_size_from_components(
+    delta_mean: np.ndarray,
+    overlap: np.ndarray,
+    var1: np.ndarray,
+    var2: np.ndarray,
+    lambda_var: float = 2.0,
+) -> Dict[str, np.ndarray]:
+    """
+    Canonical biological effect size used across MethylUtils/MethylDetector:
+
+        effect_size = |delta_mean| * (1 - overlap) *
+                      exp(-lambda_var * (sqrt(var1) + sqrt(var2)))
+    """
+    delta_mean = np.asarray(delta_mean, dtype=np.float64).ravel()
+    overlap = np.asarray(overlap, dtype=np.float64).ravel()
+    var1 = np.asarray(var1, dtype=np.float64).ravel()
+    var2 = np.asarray(var2, dtype=np.float64).ravel()
+
+    overlap = np.clip(overlap, 0.0, 1.0)
+    var1 = np.maximum(var1, 0.0)
+    var2 = np.maximum(var2, 0.0)
+    reliability = np.exp(-float(lambda_var) * (np.sqrt(var1) + np.sqrt(var2)))
+    effect_size = np.abs(delta_mean) * (1.0 - overlap) * reliability
+    effect_size = np.clip(effect_size, 0.0, 1.0)
+    return {
+        "effect_size": np.asarray(effect_size, dtype=np.float64),
+        "reliability": np.asarray(reliability, dtype=np.float64),
+    }
+
+
+def ecdf_effect_size(
+    delta_mean: np.ndarray,
+    var1: np.ndarray,
+    var2: np.ndarray,
+    ecdf_view1: "ECDFView",
+    ecdf_view2: "ECDFView",
+    position_indices: np.ndarray,
+    lambda_var: float = 2.0,
+    grid_size: int = 512,
+) -> Dict[str, np.ndarray]:
+    """
+    Compute continuous-ECDF overlap and the canonical biological effect size.
+    """
+    overlap = ecdf_overlap_integral(
+        ecdf_view1=ecdf_view1,
+        ecdf_view2=ecdf_view2,
+        position_indices=position_indices,
+        grid_size=grid_size,
+    )
+    effect = effect_size_from_components(
+        delta_mean=delta_mean,
+        overlap=overlap,
+        var1=var1,
+        var2=var2,
+        lambda_var=lambda_var,
+    )
+    return {
+        "overlap": overlap,
+        "effect_size": effect["effect_size"],
+        "reliability": effect["reliability"],
+    }
+
+
+def optimize_lambda_var(
+    delta_mean: np.ndarray,
+    overlap: np.ndarray,
+    var1: np.ndarray,
+    var2: np.ndarray,
+    target_scores: np.ndarray,
+    lambda_values: np.ndarray,
+) -> Dict[str, Any]:
+    """
+    Choose lambda_var by maximizing Spearman correlation between effect_size
+    and a caller-provided target score (for example 1 - p_value).
+    """
+    from scipy.stats import spearmanr
+
+    target_scores = np.asarray(target_scores, dtype=np.float64).ravel()
+    lambda_values = np.asarray(lambda_values, dtype=np.float64).ravel()
+    best_lambda = float(lambda_values[0]) if len(lambda_values) else 0.0
+    best_corr = -np.inf
+    best_effect = None
+    for lam in lambda_values:
+        effect = effect_size_from_components(
+            delta_mean=delta_mean,
+            overlap=overlap,
+            var1=var1,
+            var2=var2,
+            lambda_var=float(lam),
+        )["effect_size"]
+        if np.nanstd(effect) <= 0.0 or np.nanstd(target_scores) <= 0.0:
+            corr = np.nan
+        else:
+            corr, _ = spearmanr(effect, target_scores)
+        if np.isfinite(corr) and corr > best_corr:
+            best_corr = float(corr)
+            best_lambda = float(lam)
+            best_effect = np.asarray(effect, dtype=np.float64)
+    if best_effect is None:
+        best_effect = effect_size_from_components(
+            delta_mean=delta_mean,
+            overlap=overlap,
+            var1=var1,
+            var2=var2,
+            lambda_var=best_lambda,
+        )["effect_size"]
+        best_corr = float("nan")
+    return {
+        "lambda_var": best_lambda,
+        "correlation": best_corr,
+        "effect_size": np.asarray(best_effect, dtype=np.float64),
+    }
+
+
 def discrete_overlap_from_bin_counts(
     bc1: np.ndarray,
     bc2: np.ndarray,
@@ -1227,6 +1425,11 @@ __all__ = [
     "PVALUE_AGGREGATION_METHODS",
     "ecdf_ks_statistic",
     "ecdf_ks_pvalue",
+    "welch_mean_test",
+    "ecdf_overlap_integral",
+    "effect_size_from_components",
+    "ecdf_effect_size",
+    "optimize_lambda_var",
     "discrete_overlap_from_bin_counts",
     "welch_d_fast_overlap_approx",
     "welch_d_ks_overlap",

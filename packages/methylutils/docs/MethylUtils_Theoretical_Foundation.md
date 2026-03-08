@@ -2,51 +2,37 @@
 
 ## Role
 
-MethylUtils is the **foundational library** of MethylPipeline. It provides data structures, project configuration, **ECDF-based** comparison and metrics, centroid building, and classifier primitives. **No pipeline step runs without it**: MethylCentroid, MethylDetector, MethylClassifier, MethylPredictor, and MethylValidation all depend on MethylUtils. Centroid comparison and DMP detection use **ECDF only** (no Beta, Normal, Beta-Binomial, or Beta-Mixture).
+`MethylUtils` is the shared mathematical layer for centroid comparison, ECDF overlap, significance testing, and the canonical biological `effect_size`.
 
-## Project configuration
+## Canonical statistical and biological pipeline
 
-A single **project JSON** defines the whole workflow: sample groups, comparisons, and output layout. MethylUtils parses and validates this so downstream packages do not repeat sample paths and output structure.
+For centroid-to-centroid DMP analysis, MethylUtils now exposes four core pieces:
 
-- **ProjectConfig**: `project_name`, `output_base`, groups (e.g. control/disease with sub-groups), `comparisons`, optional `level_labels_path`, `subcluster`, `samples_base_path`, `step_config`.
-- **load_project(path)**: Loads and validates the JSON; returns a `ProjectConfig`.
-- **get_derived_paths()**: Yields paths under `{output_base}/{project_name}/` for centroids, detection, classifier, predictor, etc. Used by MethylCentroid, MethylDetector, MethylClassifier, MethylPredictor to resolve inputs and outputs from one project file.
+1. Welch-style unequal-variance mean-difference testing.
+2. Storey q-value correction.
+3. Continuous ECDF overlap from centroid `binned_stats`.
+4. The canonical biological score:
 
-So the “theory” of project config is: one source of truth for groups and comparisons; derived paths are computed from that, not hard-coded in each package.
+   `effect_size = |delta_mean| * (1 - overlap) * exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))`
 
-## Sample and centroid types
+## Continuous ECDF overlap
 
-- **MethylSample**: Per-position methylation data (methylated counts `mC`, unmethylated `uC`, context bits `tnc`). Supports HDF5 serialization and position-indexed access. Used everywhere a single sample is loaded or compared.
-- **Centroid types**: A single centroid type, **MethylCentroid**, with N, Sx, Sx2, Sm, Su, Sc2, Swx2 and required **binned_stats** (in memory: bin_edges, bin_counts) for ECDF. In HDF5, only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored; bin edges are derived as uniform in [0,1]. Mean/variance can be derived from N, Sx, Sx2 (method-of-moments); **only ECDF is used** for centroid comparison and classifier likelihoods.
-- **MethylCentroidPair**: Wraps two centroids (or samples); used for distance, effect-size, and DMP-style comparison (e.g. in MethylDetector) using **ECDF only**.
+Centroids store binned methylation values. `ECDFView` reconstructs a continuous ECDF over `[0, 1]` with PCHIP interpolation and derives a PDF by differentiating that spline.
 
-## ECDF model and metrics
+Overlap is defined as:
 
-Methylation level at a position is a fraction in [0, 1]. For **centroid comparison and DMP detection**, MethylUtils uses **only the empirical distribution (ECDF)** from centroid binned_stats. No parametric distribution (Beta, Normal, Beta-Binomial, Beta-Mixture) is used in the pipeline.
+`overlap = integral_0^1 min(f1(x), f2(x)) dx`
 
-**Distance and effect-size metrics** (centroid comparison and DMP detection use **ECDF only**, with optional GPU):
+This is different from the previous KS-style `1 - D` interpretation. The new overlap directly measures shared support between the two methylation distributions.
 
-- Overlap and distance from ECDF (e.g. Bhattacharyya coefficient/distance from binned distributions), and an effect-size formula combining mean separation and overlap (used for DMP ranking). Means/variances come from N, Sx, Sx2 where available.
+## Variance penalty
 
-Formulas and details are in [METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md](METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md); MethylUtils provides a backend-agnostic (CPU/GPU) API used by MethylCentroid, MethylDetector (ECDF-based comparison, DMPs), and classifiers (ECDF-based likelihoods).
+The reliability term is:
 
-## Classifiers and centroid building
+`exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))`
 
-MethylUtils provides the building blocks; downstream packages orchestrate them:
+This keeps the two-group variances separate and penalizes diffuse loci symmetrically without assuming equal variance.
 
-- **MethylCentroidBuilder** / **build_centroid**: Build centroids from a list of sample paths (used by MethylCentroid); centroids include binned_stats for ECDF.
-- **ECDF-based classifier**: Used by MethylDetector (training) and MethylClassifier (loading and prediction); likelihoods from centroid ECDF PDFs.
-- **MethylCentroidPair**: Comparison and metrics between two centroids (MethylDetector) using ECDF only.
+## Practical implication
 
-So the “theory” is: one implementation of centroid building, ECDF-based metrics and classifiers in MethylUtils; pipeline packages call these instead of reimplementing.
-
-## Summary
-
-| Aspect | Role |
-|--------|------|
-| Project config | Single JSON → ProjectConfig; get_derived_paths() for all step outputs. |
-| Data types | MethylSample, MethylCentroid (with binned_stats for ECDF), MethylCentroidPair. |
-| Distribution | **ECDF only** for comparison and DMP detection; distance/effect-size from ECDF. |
-| Building blocks | MethylCentroidBuilder, build_centroid, ECDF-based classifier, MethylCentroidPair. |
-
-For implementation (package layout, how each package uses MethylUtils), see [METHYLUTILS_IMPLEMENTATION.md](METHYLUTILS_IMPLEMENTATION.md). For setup (Docker, venv), see [USAGE.md](USAGE.md).
+`MethylDetector` and `MethylDetectorExplorer` both delegate their final overlap/effect-size computation to these shared MethylUtils helpers so the score definition is consistent across the pipeline.

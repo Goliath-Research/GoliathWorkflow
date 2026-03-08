@@ -180,11 +180,6 @@ class MethylModelerConfig(BaseModel):
         ge=2,
         description="In distribution=auto, use ECDF when both centroids have N < this and binned_stats (build with binned_stats_bins, default 20)."
     )
-    use_fast_biological_funnel: bool = Field(
-        default=True,
-        description="If True: compute fast approximate metrics (Welch's d, discrete/Normal overlap, bounded effect size approx), apply biological filters, then compute real ECDF overlap and bounded_effect_size only for survivors and sort by real bounded_effect_size. If False: legacy path (ECDF metrics for all statistically filtered positions, then filter)."
-    )
-
     # New calibration parameters (for trained classifier metadata)
     temperature: float = Field(
         default=1.0, ge=0.1, le=10.0,
@@ -244,7 +239,15 @@ class MethylModelerConfig(BaseModel):
     )
     effect_size_quantile: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
-        description="If set, keep DMPs with refined effect_size >= this quantile of the empirical distribution (e.g. 0.95 = top 5%%). Uses ECDF of refined effect_size; requires full ECDF path (disables fast funnel when set). Ignored if null."
+        description="If set, keep DMPs with effect_size >= this quantile of the empirical distribution (e.g. 0.95 = top 5%%). Ignored if null."
+    )
+    delta_mean_reduction: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Optional pre-ECDF reduction threshold. After statistical filtering, keep only positions with |delta_mean| >= delta_mean_reduction before computing continuous ECDF overlap/effect_size. If null, min_delta_mean is reused for the reduction gate when available."
+    )
+    lambda_var: float = Field(
+        default=2.0, ge=0.0, le=20.0,
+        description="Variance penalty strength in effect_size = |delta_mean| * (1 - overlap) * exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))."
     )
     min_delta_mean: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
@@ -252,7 +255,7 @@ class MethylModelerConfig(BaseModel):
     )
     max_overlap: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
-        description="Maximum overlap (Bhattacharyya coefficient, 0–1) for biological filter. Keep DMPs with overlap <= max_overlap (low overlap = good separation). Set null to disable. Easy to interpret for biologists."
+        description="Maximum continuous ECDF overlap (0–1) for biological filter. Keep DMPs with overlap <= max_overlap (low overlap = good separation). Set null to disable."
     )
 
     # ----------------
@@ -262,14 +265,6 @@ class MethylModelerConfig(BaseModel):
         default=None,
         description="Optional. Sweep biological filter values over range/step and write filter_funnel.csv (n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps). One run; no large DMP CSV. Set to null to disable."
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def backward_compat_min_effect_size(cls, data: Any) -> Any:
-        """Accept legacy min_bounded_effect_size from JSON and map to min_effect_size."""
-        if isinstance(data, dict) and "min_bounded_effect_size" in data and data.get("min_effect_size") is None:
-            data = {**data, "min_effect_size": data["min_bounded_effect_size"]}
-        return data
 
     # ----------------
     # Context Weighting
@@ -407,17 +402,13 @@ class MethylModelerConfig(BaseModel):
         default=True,
         description="Whether to use GPU acceleration"
     )
-    effect_size_mode: str = Field(
-        default="legacy",
-        description="Effect size computation mode. 'legacy': |delta_mean| / (overlap * combined_std) * reliability. 'welch_sigmoid': sigmoid(scale * (|delta| / sqrt(var1/N1 + var2/N2)))."
-    )
-    sigmoid_scale: float = Field(
-        default=3.0, ge=1.0, le=10.0,
-        description="Scale parameter for sigmoid in 'welch_sigmoid' mode (steepness of discrimination curve)."
-    )
     ecdf_ks_grid_size: int = Field(
         default=256, ge=16, le=1024,
         description="Number of grid points for ECDF/KS comparison (speed vs resolution tradeoff; default 256)."
+    )
+    ecdf_overlap_grid_size: int = Field(
+        default=512, ge=32, le=4096,
+        description="Number of grid points for continuous ECDF overlap integration (speed vs resolution tradeoff; default 512)."
     )
     eps: float = Field(
         default=1e-6, gt=0,

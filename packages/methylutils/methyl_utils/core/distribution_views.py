@@ -288,16 +288,52 @@ class ECDFView:
         width = max(width, 1e-10)
         return max(float(self._bin_counts[position_idx, idx] / total / width), MIN_EPS)
 
+    def _pdf_batch(
+        self, position_indices: np.ndarray, grid: np.ndarray
+    ) -> np.ndarray:
+        """
+        Evaluate PDF at multiple positions and grid points.
+
+        Returns an array of shape (len(position_indices), len(grid)).
+        Values are clipped to be non-negative so downstream overlap integrals
+        remain stable even when spline derivatives show minor numerical wiggles.
+        """
+        position_indices = np.asarray(position_indices, dtype=np.intp).ravel()
+        grid = np.clip(np.asarray(grid, dtype=np.float64).ravel(), 0.0, 1.0)
+        P, G = len(position_indices), len(grid)
+        out = np.zeros((P, G), dtype=np.float64)
+        if self._interpolators is not None:
+            for i in range(P):
+                deriv = self._interpolators[position_indices[i]].derivative()
+                out[i] = np.maximum(np.asarray(deriv(grid), dtype=np.float64), 0.0)
+            return out
+
+        total = np.sum(self._bin_counts[position_indices], axis=1, keepdims=True)
+        total = np.maximum(total, MIN_EPS)
+        probs = self._bin_counts[position_indices] / total
+        bin_edges = self._bin_edges
+        widths = np.maximum(np.diff(bin_edges), 1e-10)
+        E = len(bin_edges)
+        for j, g in enumerate(grid):
+            idx = np.searchsorted(bin_edges, g, side="right") - 1
+            idx = np.clip(idx, 0, E - 2)
+            out[:, j] = probs[:, idx] / widths[idx]
+        return np.maximum(out, 0.0)
+
     def overlap(self, other: MethylDistributionView) -> np.ndarray:
         if isinstance(other, ECDFView):
             n = min(self._n_positions, len(other.mean))
             grid = np.linspace(0.0, 1.0, _ECDF_KS_GRID_SIZE, dtype=np.float64)
-            ks = np.zeros(n, dtype=np.float64)
-            for i in range(n):
-                f1 = self._cdf(i, grid)
-                f2 = other._cdf(i, grid)
-                ks[i] = np.max(np.abs(f1 - f2))
-            return np.clip(1.0 - ks, 0.0, 1.0)
+            idx = np.arange(n, dtype=np.intp)
+            pdf1 = self._pdf_batch(idx, grid)
+            pdf2 = other._pdf_batch(idx, grid)
+            trapz = getattr(np, "trapezoid", np.trapz)
+            area1 = trapz(pdf1, grid, axis=1)
+            area2 = trapz(pdf2, grid, axis=1)
+            pdf1 = pdf1 / np.maximum(area1[:, None], MIN_EPS)
+            pdf2 = pdf2 / np.maximum(area2[:, None], MIN_EPS)
+            overlap = trapz(np.minimum(pdf1, pdf2), grid, axis=1)
+            return np.clip(overlap, 0.0, 1.0)
         om = np.asarray(other.mean, dtype=np.float64)
         n = min(len(self._mean), len(om))
         return np.clip(1.0 - np.abs(self._mean[:n] - om[:n]), 0.0, 1.0)

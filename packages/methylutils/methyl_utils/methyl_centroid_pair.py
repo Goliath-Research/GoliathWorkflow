@@ -39,9 +39,10 @@ from .performance_profiler import (
     stop_performance_monitoring,
 )
 from .statistical_tests import (
-    likelihood_ratio_test_beta,
     storey_qvalues,
     discrete_overlap_from_bin_counts,
+    welch_mean_test,
+    effect_size_from_components,
 )
 from methyl_utils.logging_utils import setup_module_logging
 from .core.methyl_mixture_centroid import MethylBetaMixtureCentroid
@@ -917,32 +918,15 @@ class MethylCentroidPair:
             mC=centroid2.mC[indices2], uC=centroid2.uC[indices2]
         )
 
-        # Compute Beta p-values for all positions (used as default/fallback)
-        lrt_result = likelihood_ratio_test_beta(
-            centroid1_batch, centroid2_batch, use_gpu=self.gpu_available
+        welch_result = welch_mean_test(
+            delta_mean=(mean_normal1 - mean_normal2),
+            var1=var_normal1,
+            n1=N1.astype(np.float64),
+            var2=var_normal2,
+            n2=N2.astype(np.float64),
         )
-
-        if lrt_result is None:
-            logger.warning("LRT returned None, using fallback values")
-            p_values_beta = np.ones(len(positions), dtype=np.float32)
-        else:
-            _, p_values_beta = lrt_result
-            p_values_beta = p_values_beta.astype(np.float32)
-
-        p_values = np.ones(len(positions), dtype=np.float32)
-        dist_ids = np.full(len(positions), DIST_BETA, dtype=np.uint8)
-
-        # Normal distribution test for small-sample positions
-        if np.any(use_normal_mask):
-            from scipy.stats import norm
-            se_diff = np.sqrt(
-                var_normal1 / np.maximum(N1, 1.0)
-                + var_normal2 / np.maximum(N2, 1.0)
-            )
-            z_stat = (mean1 - mean2) / np.maximum(se_diff, 1e-12)
-            p_norm = 2 * (1 - norm.cdf(np.abs(z_stat)))
-            p_values[use_normal_mask] = p_norm[use_normal_mask].astype(np.float32)
-            dist_ids[use_normal_mask] = DIST_NORMAL
+        p_values = np.asarray(welch_result["p_value"], dtype=np.float32)
+        dist_ids = np.full(len(positions), DIST_NORMAL, dtype=np.uint8)
 
         # Beta mixture handling (optional, if mixture params are stored)
         if np.any(use_mixture_mask):
@@ -953,8 +937,6 @@ class MethylCentroidPair:
 
             xp, betaln_fn, _ = _resolve_backend(self.gpu_available)
 
-            # Default to beta p-values unless mixture computation succeeds
-            p_values[use_mixture_mask] = p_values_beta[use_mixture_mask]
             dist_ids[use_mixture_mask] = DIST_BETA_MIXTURE
 
             mixture_indices = np.where(use_mixture_mask)[0]
@@ -1053,12 +1035,10 @@ class MethylCentroidPair:
                     except Exception:
                         continue
 
-        # ECDF: p-value from continuous ECDF (KS statistic + asymptotic p-value via Pchip)
-        # Assume binned stats present when use_ecdf_mask; build views once and reuse for overlap below
+        # ECDF views are still built for overlap and downstream continuous metrics.
         ecdf_view1 = ecdf_view2 = None
         if np.any(use_ecdf_mask) and has_binned1 and has_binned2 and same_bin_edges:
             from methyl_utils.core.distribution_views import ECDFView
-            from methyl_utils.statistical_tests import ecdf_ks_pvalue
             bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
             bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
             bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
@@ -1072,18 +1052,9 @@ class MethylCentroidPair:
                 Sx2_vals.astype(np.float64), N2.astype(np.float64),
                 Sx2_2.astype(np.float64),
             )
-            _, p_ecdf = ecdf_ks_pvalue(
-                ecdf_view1, ecdf_view2,
-                np.arange(len(positions), dtype=np.intp),
-                N1.astype(np.float64), N2.astype(np.float64),
-                grid_size=self.ecdf_ks_grid_size,
-            )
-            p_values[use_ecdf_mask] = np.asarray(p_ecdf, dtype=np.float32)[use_ecdf_mask]
             dist_ids[use_ecdf_mask] = DIST_ECDF
 
-        # Fill beta default for remaining positions
         if np.any(use_beta_mask):
-            p_values[use_beta_mask] = p_values_beta[use_beta_mask]
             dist_ids[use_beta_mask] = DIST_BETA
 
         # Metric calculations for output (delta_mean + overlap)
@@ -1441,7 +1412,7 @@ class MethylCentroidPair:
         min_overlap_floor: float = 0.01,
         variance_reliability: bool = True,
     ) -> np.ndarray:
-        """Compute effect size (delegates to compute_effect_sizes_altA with optional BC floor)."""
+        """Compute the canonical effect_size from overlap and separate variances."""
         bc_safe = np.maximum(bc_values.astype(np.float64), min_overlap_floor)
         return self.compute_effect_sizes_altA(
             alpha1, beta1, alpha2, beta2,
@@ -1462,33 +1433,7 @@ class MethylCentroidPair:
         variance_reliability: bool = True,
         bc_nan_fill: float = 0.5,
     ) -> np.ndarray:
-        """
-        Compute effect size (single biological importance measure) using Alternative A.
-
-        Alternative A replaces dividing by overlap (BC) with multiplying by a bounded
-        separation weight (1 - BC), avoiding blow-ups when BC -> 0.
-
-            effect_size = |delta_mean| * (1 - BC) / (combined_std + numerical_epsilon)
-
-        Optionally multiplied by variance reliability:
-            var_factor = 1 / (1 + max_var / 0.05)
-
-        Notes:
-        - BC (Bhattacharyya coefficient) is assumed in [0, 1], where 0 = no overlap, 1 = complete overlap.
-        - This keeps the “less overlap → higher score” behavior, but caps it naturally.
-
-        Args:
-            alpha1, beta1: Beta parameters for centroid 1 (fitted across individuals)
-            alpha2, beta2: Beta parameters for centroid 2 (fitted across individuals)
-            delta_mean: Difference in means (can be signed; absolute value is used)
-            bc_values: Bhattacharyya coefficient (overlap), 0 = no overlap, 1 = complete overlap
-            numerical_epsilon: Small value to prevent division by zero
-            variance_reliability: If True, penalize high variance (noisy positions)
-            bc_nan_fill: Value to fill NaN BCs before clipping (default 0.5)
-
-        Returns:
-            Array of effect size values (unnormalized, for downstream weighting)
-        """
+        """Legacy entry point redirected to the canonical effect_size formula."""
         eps = 1e-12
 
         # Concentrations
@@ -1503,28 +1448,17 @@ class MethylCentroidPair:
         var1 = mean1 * (1.0 - mean1) / np.maximum(tau1 + 1.0, eps)
         var2 = mean2 * (1.0 - mean2) / np.maximum(tau2 + 1.0, eps)
 
-        # Combined std (your original structure)
-        combined_std = np.sqrt(var1 + var2)
-        combined_std = np.maximum(combined_std, numerical_epsilon)
-
-        # BC safety and bounded separability weight
         bc_safe = np.clip(np.nan_to_num(bc_values, nan=bc_nan_fill), 0.0, 1.0)
-        sep_weight = 1.0 - bc_safe  # 0..1, higher = less overlap
-
-        # Core Alternative A effect size
-        denom = combined_std + numerical_epsilon
-        raw_effect_size = (np.abs(delta_mean) * sep_weight) / denom
-
-        # Optional reliability penalty (kept exactly as your original)
-        if variance_reliability:
-            max_var = np.maximum(var1, var2)
-            var_factor = 1.0 / (1.0 + max_var / 0.05)
-            raw_effect_size = raw_effect_size * var_factor
-
-        # Final cleanup (kept consistent with your original)
-        effect_sizes = np.maximum(raw_effect_size, 1e-8)
-        effect_sizes = np.nan_to_num(effect_sizes, nan=0.0)
-        return effect_sizes.astype(np.float32)
+        lambda_var = 2.0 if variance_reliability else 0.0
+        effect_sizes = effect_size_from_components(
+            delta_mean=delta_mean,
+            overlap=bc_safe,
+            var1=var1,
+            var2=var2,
+            lambda_var=lambda_var,
+        )["effect_size"]
+        effect_sizes = np.nan_to_num(effect_sizes, nan=0.0, posinf=0.0, neginf=0.0)
+        return np.asarray(effect_sizes, dtype=np.float32)
 
     def _storey_qvalue(self, p_values: np.ndarray, lambda_seq=None) -> np.ndarray:
         """
