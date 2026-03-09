@@ -656,6 +656,7 @@ from .beta_analytics import (
 )
 
 from .beta_classifier import BetaClassifier
+from .ecdf_classifier import ECDFClassifier
 
 # Beta Mixture Model utilities
 from .beta_mixture import (
@@ -860,7 +861,9 @@ __all__ = [
     "AlignmentStats",
     "MethylationAnalysisResults",
     "create_analysis_results",
-    # Probabilistic Beta Classifier
+    # Classifiers
+    "BetaClassifier",
+    "ECDFClassifier",
     "ProbabilisticBetaClassifier",
     "MultiClassBetaMixtureClassifier",
     "create_classifier_from_results",

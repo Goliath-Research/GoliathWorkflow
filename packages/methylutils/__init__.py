@@ -259,6 +259,7 @@ from .methyl_utils.beta_analytics import (
 )
 
 from .methyl_utils.beta_classifier import BetaClassifier
+from .methyl_utils.ecdf_classifier import ECDFClassifier
 
 # Backward compatibility
 from .methyl_utils.beta_classifier import ProbabilisticBetaClassifier
@@ -402,6 +403,7 @@ __all__ = [
     "ecdf_effect_size",
     "optimize_lambda_var",
     'BetaClassifier',
+    'ECDFClassifier',
     'ClassifierFactory',  # if added
     # EAT transformation functions
     'compute_eat_T',

@@ -22,6 +22,8 @@ from methyl_utils import MethylCentroidPair
 
 # Import BetaClassifier and BetaBinomialClassifier from MethylUtils
 from methyl_utils import BetaClassifier, BetaBinomialClassifier
+from methyl_utils import load_from_h5
+from methyl_utils.ecdf_classifier import ECDFClassifier
 
 # Import EAT transformation (optional - may not be available in all environments)
 try:
@@ -1303,19 +1305,33 @@ class MethylDetector:
                 weights = np.clip(weights / w_max, 1e-6, 1.0).astype(np.float64)
             dmpDF = pd.DataFrame({
                 'pos': dmps_df['position'].values.astype(np.int64),
-                'alpha1': dmps_df['alpha1'].values.astype(np.float64),
-                'beta1': dmps_df['beta1'].values.astype(np.float64),
-                'alpha2': dmps_df['alpha2'].values.astype(np.float64),
-                'beta2': dmps_df['beta2'].values.astype(np.float64),
-                'weight': weights
+                'weight': weights,
+                'context': dmps_df['context'].values if 'context' in dmps_df.columns else None,
+                'delta_sign': dmps_df['delta_sign'].values if 'delta_sign' in dmps_df.columns else None,
+                'mean1': dmps_df['mean1'].values if 'mean1' in dmps_df.columns else None,
+                'mean2': dmps_df['mean2'].values if 'mean2' in dmps_df.columns else None,
             })
-            clf = BetaClassifier.from_dataframe(
-                dmpDF,
-                min_sample_coverage=self.config.min_sample_coverage,
-                coverage_weighting=self.config.classifier_coverage_weighting
-            )
-            if self._attach_bmm_mixtures(clf, dmps_df):
-                pass  # optional
+            dmpDF = dmpDF.dropna(axis=1, how='all')
+            try:
+                bin_edges_sc, bc1_sc, bc2_sc = self._extract_bin_counts_for_dmps(dmps_df)
+                clf = ECDFClassifier.from_dataframe(
+                    dmpDF,
+                    bin_edges=bin_edges_sc,
+                    bin_counts_c1=bc1_sc,
+                    bin_counts_c2=bc2_sc,
+                    temperature=self.config.temperature,
+                )
+            except Exception as _e:
+                logger.warning("ECDFClassifier construction failed for self-check: %s; falling back to BetaClassifier", _e)
+                dmpDF_beta = pd.DataFrame({
+                    'pos': dmps_df['position'].values.astype(np.int64),
+                    'alpha1': dmps_df['alpha1'].values.astype(np.float64),
+                    'beta1': dmps_df['beta1'].values.astype(np.float64),
+                    'alpha2': dmps_df['alpha2'].values.astype(np.float64),
+                    'beta2': dmps_df['beta2'].values.astype(np.float64),
+                    'weight': weights,
+                })
+                clf = BetaClassifier.from_dataframe(dmpDF_beta, min_sample_coverage=self.config.min_sample_coverage, coverage_weighting=self.config.classifier_coverage_weighting)
             # Centroid1 profile = mean1 at each DMP (class 0); centroid2 = mean2 (class 1)
             profile_c1 = dmps_df['mean1'].values.astype(np.float64).reshape(1, -1)
             profile_c2 = dmps_df['mean2'].values.astype(np.float64).reshape(1, -1)
@@ -1460,20 +1476,34 @@ class MethylDetector:
 
             dmpDF = pd.DataFrame({
                 'pos': dmps_for_classifier['position'].values.astype(np.int64),
-                'alpha1': dmps_for_classifier['alpha1'].values.astype(np.float64),
-                'beta1': dmps_for_classifier['beta1'].values.astype(np.float64),
-                'alpha2': dmps_for_classifier['alpha2'].values.astype(np.float64),
-                'beta2': dmps_for_classifier['beta2'].values.astype(np.float64),
-                'weight': weights.astype(np.float64)
+                'weight': weights.astype(np.float64),
+                'context': dmps_for_classifier['context'].values if 'context' in dmps_for_classifier.columns else None,
+                'delta_sign': dmps_for_classifier['delta_sign'].values if 'delta_sign' in dmps_for_classifier.columns else None,
+                'mean1': dmps_for_classifier['mean1'].values if 'mean1' in dmps_for_classifier.columns else None,
+                'mean2': dmps_for_classifier['mean2'].values if 'mean2' in dmps_for_classifier.columns else None,
             })
-            
-            temp_classifier = BetaClassifier.from_dataframe(
-                dmpDF,
-                min_sample_coverage=self.config.min_sample_coverage,
-                coverage_weighting=self.config.classifier_coverage_weighting
-            )
-            if self._attach_bmm_mixtures(temp_classifier, dmps_for_classifier):
-                logger.debug("Attached BMM mixtures to validation classifier")
+            dmpDF = dmpDF.dropna(axis=1, how='all')
+            try:
+                bin_edges_v, bc1_v, bc2_v = self._extract_bin_counts_for_dmps(dmps_for_classifier)
+                temp_classifier = ECDFClassifier.from_dataframe(
+                    dmpDF,
+                    bin_edges=bin_edges_v,
+                    bin_counts_c1=bc1_v,
+                    bin_counts_c2=bc2_v,
+                    temperature=self.config.temperature,
+                )
+            except Exception as _e:
+                logger.warning("ECDFClassifier construction failed for validation: %s; falling back to BetaClassifier", _e)
+                dmpDF_beta = pd.DataFrame({
+                    'pos': dmps_for_classifier['position'].values.astype(np.int64),
+                    'alpha1': dmps_for_classifier['alpha1'].values.astype(np.float64),
+                    'beta1': dmps_for_classifier['beta1'].values.astype(np.float64),
+                    'alpha2': dmps_for_classifier['alpha2'].values.astype(np.float64),
+                    'beta2': dmps_for_classifier['beta2'].values.astype(np.float64),
+                    'weight': weights.astype(np.float64),
+                })
+                temp_classifier = BetaClassifier.from_dataframe(dmpDF_beta, min_sample_coverage=self.config.min_sample_coverage, coverage_weighting=self.config.classifier_coverage_weighting)
+            logger.debug("ECDFClassifier built for validation: %s", temp_classifier)
 
             # PHASE 1: Fit Platt calibration using calibration set (if supported)
             # BetaClassifier uses calibrate_platt method with methylation levels
@@ -3072,27 +3102,46 @@ class MethylDetector:
         
         dmpDF = pd.DataFrame({
             'pos': selected_dmps_df['position'].values.astype(np.int64),
-            'alpha1': selected_dmps_df['alpha1'].values.astype(np.float64),
-            'beta1': selected_dmps_df['beta1'].values.astype(np.float64),
-            'alpha2': selected_dmps_df['alpha2'].values.astype(np.float64),
-            'beta2': selected_dmps_df['beta2'].values.astype(np.float64),
-            'weight': weights.astype(np.float64)
+            'weight': weights.astype(np.float64),
+            'context': selected_dmps_df['context'].values if 'context' in selected_dmps_df.columns else None,
+            'delta_sign': selected_dmps_df['delta_sign'].values if 'delta_sign' in selected_dmps_df.columns else None,
+            'mean1': selected_dmps_df['mean1'].values if 'mean1' in selected_dmps_df.columns else None,
+            'mean2': selected_dmps_df['mean2'].values if 'mean2' in selected_dmps_df.columns else None,
         })
+        dmpDF = dmpDF.dropna(axis=1, how='all')
 
-        beta_classifier = BetaClassifier.from_dataframe(
-            dmpDF,
-            min_sample_coverage=self.config.min_sample_coverage,
-            coverage_weighting=self.config.classifier_coverage_weighting
-        )
-        mixture_attached = self._attach_bmm_mixtures(beta_classifier, selected_dmps_df)
-        if mixture_attached:
-            logger.info("Attached BMM mixtures to classifier (hybrid Beta/BMM)")
-        classifier_label = "BetaMixtureClassifier" if mixture_attached else "BetaClassifier"
+        try:
+            bin_edges_s, bc1_s, bc2_s = self._extract_bin_counts_for_dmps(selected_dmps_df)
+            ecdf_classifier = ECDFClassifier.from_dataframe(
+                dmpDF,
+                bin_edges=bin_edges_s,
+                bin_counts_c1=bc1_s,
+                bin_counts_c2=bc2_s,
+                temperature=self.config.temperature,
+            )
+            classifier_label = "ECDFClassifier"
+            the_classifier = ecdf_classifier
+        except Exception as _e:
+            logger.warning("ECDFClassifier construction failed for model save: %s; falling back to BetaClassifier", _e)
+            dmpDF_beta = pd.DataFrame({
+                'pos': selected_dmps_df['position'].values.astype(np.int64),
+                'alpha1': selected_dmps_df['alpha1'].values.astype(np.float64),
+                'beta1': selected_dmps_df['beta1'].values.astype(np.float64),
+                'alpha2': selected_dmps_df['alpha2'].values.astype(np.float64),
+                'beta2': selected_dmps_df['beta2'].values.astype(np.float64),
+                'weight': weights.astype(np.float64),
+            })
+            beta_classifier = BetaClassifier.from_dataframe(dmpDF_beta, min_sample_coverage=self.config.min_sample_coverage, coverage_weighting=self.config.classifier_coverage_weighting)
+            mixture_attached = self._attach_bmm_mixtures(beta_classifier, selected_dmps_df)
+            if mixture_attached:
+                logger.info("Attached BMM mixtures to classifier (hybrid Beta/BMM)")
+            classifier_label = "BetaMixtureClassifier" if mixture_attached else "BetaClassifier"
+            the_classifier = beta_classifier
 
         # Create model package
         import pickle
         model_package = {
-            'classifier': beta_classifier,
+            'classifier': the_classifier,
             'dmpDF': dmpDF,  # Strongly typed DataFrame
             'context_weights_summary': selected_dmps_df.groupby('context')['context_weight'].first().to_dict() if 'context' in selected_dmps_df.columns else {},
             'chromosome': self.chromosome,
@@ -3101,14 +3150,14 @@ class MethylDetector:
             'metadata': {
                 'version': '2.0.0',
                 'classifier_type': classifier_label,
-                'bmm_mixture_attached': mixture_attached,
+                'bmm_mixture_attached': locals().get('mixture_attached', False),
                 'context': ctx_str,
                 'config': self.config.model_dump(),
                 'trimmed_percentile_low': self.config.trimmed_percentile_low,
                 'trimmed_percentile_high': self.config.trimmed_percentile_high,
             }
         }
-        if mixture_attached and hasattr(self, "_bmm_centroid_files"):
+        if locals().get('mixture_attached', False) and hasattr(self, "_bmm_centroid_files"):
             model_package["metadata"]["bmm_centroid_files"] = self._bmm_centroid_files
 
         # Include fitted Platt calibrator when enabled (MethylClassifier can use it for better-calibrated probabilities)
@@ -3124,7 +3173,7 @@ class MethylDetector:
         
         logger.info(f"💾 Saved model to {model_path}")
         logger.info("📦 Model package includes:")
-        logger.info(f"  - Classifier: {beta_classifier}")
+        logger.info(f"  - Classifier: {the_classifier}")
         logger.info(f"  - dmpDF: {len(dmpDF)} DMPs (strongly typed)")
         logger.info(f"  - Context weights: {model_package['context_weights_summary']}")
         logger.info(f"  - Total DMPs: {model_package['n_dmps']}")
@@ -3132,6 +3181,103 @@ class MethylDetector:
         if 'effect_size' in selected_dmps_df.columns:
             logger.info(f"  - Effect size range: {selected_dmps_df['effect_size'].min():.4f} to {selected_dmps_df['effect_size'].max():.4f}")
     
+    def _extract_bin_counts_for_dmps(
+        self,
+        dmps_df: pd.DataFrame,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Load bin_counts from centroid H5 files at the positions listed in *dmps_df*.
+
+        The DMP DataFrame must have ``position``, ``context``, and ``chromosome``
+        columns (or fall back to ``self.chromosome`` for the single-chromosome case).
+        The method groups by chromosome × context so each H5 file is loaded at most
+        once per invocation.
+
+        Returns
+        -------
+        bin_edges : ndarray, shape (n_bins+1,)
+            Shared bin edges (must be identical across all contexts and centroids).
+        bc1 : ndarray, shape (n_dmps, n_bins)
+            Histograms for centroid 1 (class 0), one row per row in *dmps_df*.
+        bc2 : ndarray, shape (n_dmps, n_bins)
+            Histograms for centroid 2 (class 1), one row per row in *dmps_df*.
+        """
+        dmp_positions = np.asarray(dmps_df["position"].values, dtype=np.uint32)
+        chroms = (
+            dmps_df["chromosome"].values
+            if "chromosome" in dmps_df.columns
+            else np.full(len(dmps_df), self.chromosome, dtype=object)
+        )
+        contexts = (
+            dmps_df["context"].values
+            if "context" in dmps_df.columns
+            else np.full(len(dmps_df), self.config.contexts[0], dtype=object)
+        )
+
+        # Allocate output arrays (n_bins determined on first load)
+        n_dmps = len(dmps_df)
+        bin_edges_ref: Optional[np.ndarray] = None
+        bc1_rows: Optional[np.ndarray] = None
+        bc2_rows: Optional[np.ndarray] = None
+
+        # Group by (chromosome, context) to avoid redundant H5 loads
+        unique_pairs = list(dict.fromkeys(zip(chroms, contexts)))
+        for chrom, ctx in unique_pairs:
+            mask = (chroms == chrom) & (contexts == ctx)
+            if not np.any(mask):
+                continue
+
+            c1_path = Path(self.config.centroid1_dir) / f"{chrom}-{ctx}.h5"
+            c2_path = Path(self.config.centroid2_dir) / f"{chrom}-{ctx}.h5"
+
+            if not c1_path.exists() or not c2_path.exists():
+                logger.warning(
+                    "_extract_bin_counts_for_dmps: centroid files not found for "
+                    "%s-%s; rows will use zero histograms", chrom, ctx
+                )
+                continue
+
+            c1 = load_from_h5(c1_path)
+            c2 = load_from_h5(c2_path)
+
+            bs1 = getattr(c1, "binned_stats", None)
+            bs2 = getattr(c2, "binned_stats", None)
+            if not bs1 or "bin_counts" not in bs1 or not bs2 or "bin_counts" not in bs2:
+                logger.warning(
+                    "_extract_bin_counts_for_dmps: binned_stats missing for %s-%s",
+                    chrom, ctx,
+                )
+                continue
+
+            be1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
+            if bin_edges_ref is None:
+                n_bins = int(be1.shape[0]) - 1
+                bin_edges_ref = be1
+                bc1_rows = np.zeros((n_dmps, n_bins), dtype=np.float64)
+                bc2_rows = np.zeros((n_dmps, n_bins), dtype=np.float64)
+
+            pos1 = np.asarray(c1.pos.values, dtype=np.uint32)
+            pos2 = np.asarray(c2.pos.values, dtype=np.uint32)
+            group_positions = dmp_positions[mask]
+
+            idx1 = np.searchsorted(pos1, group_positions, side="left")
+            idx2 = np.searchsorted(pos2, group_positions, side="left")
+
+            # Clamp indices to valid range (positions should always be found)
+            idx1 = np.clip(idx1, 0, len(pos1) - 1)
+            idx2 = np.clip(idx2, 0, len(pos2) - 1)
+
+            bc1_rows[mask] = np.asarray(bs1["bin_counts"], dtype=np.float64)[idx1]
+            bc2_rows[mask] = np.asarray(bs2["bin_counts"], dtype=np.float64)[idx2]
+
+        if bin_edges_ref is None:
+            raise ValueError(
+                "_extract_bin_counts_for_dmps: no valid centroid files found. "
+                "Ensure centroid1_dir/centroid2_dir contain H5 files with binned_stats."
+            )
+
+        return bin_edges_ref, bc1_rows, bc2_rows
+
     def _create_multi_context_result(
         self, 
         dmps_df: pd.DataFrame, 
