@@ -350,6 +350,37 @@ class MethylDetector:
         cohort_size = max(max_coverage, 10)
         effective_min_coverage = self.config.effective_min_N(cohort_size)
         
+        # Pre-filter positions by delta_mean before the expensive statistical comparison.
+        # This uses only the centroid means (N, Sx), which are cheap to evaluate, to
+        # reduce the tested set from millions of positions down to those that could ever
+        # survive the biological filter.  Any position with |delta_mean| < gate would be
+        # discarded by the biological filter anyway, so testing it first is wasted work.
+        delta_gate = getattr(self.config, "delta_mean_reduction", None)
+        if delta_gate is None:
+            delta_gate = self.config.min_delta_mean
+
+        import time
+        pre_filter_position_subset = None
+        if delta_gate is not None:
+            pos1 = np.asarray(centroid1.pos.values, dtype=np.uint32)
+            pos2 = np.asarray(centroid2.pos.values, dtype=np.uint32)
+            common_pre = np.intersect1d(pos1, pos2)
+            idx1_pre = np.searchsorted(pos1, common_pre, side="left")
+            idx2_pre = np.searchsorted(pos2, common_pre, side="left")
+            m1 = np.asarray(centroid1.mean)[idx1_pre]
+            m2 = np.asarray(centroid2.mean)[idx2_pre]
+            dm_mask = np.abs(m1 - m2) >= float(delta_gate)
+            pre_filter_position_subset = common_pre[dm_mask]
+            n_pre = int(dm_mask.sum())
+            logger.info(
+                "Context %s: pre-filter |delta_mean| >= %.3f reduces %s → %s positions "
+                "before statistical test",
+                context,
+                delta_gate,
+                f"{len(common_pre):,}",
+                f"{n_pre:,}",
+            )
+
         # Create centroid pair for comparison
         centroid_pair = MethylCentroidPair(
             min_coverage=effective_min_coverage,
@@ -358,13 +389,14 @@ class MethylDetector:
             distribution=self.config.distribution,
             max_N_for_ecdf=getattr(self.config, "max_N_for_ecdf", 30),
         )
-        
-        # Compare centroids
-        import time
+
+        # Compare centroids (only at pre-filtered positions when the gate is active)
         start_time = time.time()
-        comparison_results = centroid_pair.compare_centroids(centroid1, centroid2)
+        comparison_results = centroid_pair.compare_centroids(
+            centroid1, centroid2, position_subset=pre_filter_position_subset
+        )
         processing_time = time.time() - start_time
-        
+
         logger.info(f"Context {context}: Compared {len(comparison_results):,} positions in {processing_time:.2f}s")
 
         # Apply EAT transformation if enabled
@@ -391,21 +423,27 @@ class MethylDetector:
         total_positions = len(comparison_results)
         filtered_results = comparison_results[comparison_results['q_value'] <= self.config.alpha].copy()
         statistical_dmps_count = len(filtered_results)
-        
-        logger.info(f"Context {context}: {statistical_dmps_count:,} significant DMPs (q≤{self.config.alpha}) "
-                   f"out of {total_positions:,} ({(statistical_dmps_count/total_positions)*100:.1f}% pass rate)")
-        
-        delta_gate = getattr(self.config, "delta_mean_reduction", None)
-        if delta_gate is None:
-            delta_gate = self.config.min_delta_mean
-        dmp_df = filtered_results.copy()
-        if delta_gate is not None and "delta_mean" in dmp_df.columns:
-            dmp_df = dmp_df[np.abs(dmp_df["delta_mean"].astype(float)) >= float(delta_gate)].copy()
+
         logger.info(
-            "Context %s: %s positions retained after delta_mean reduction%s",
+            f"Context {context}: {statistical_dmps_count:,} significant DMPs (q≤{self.config.alpha}) "
+            f"out of {total_positions:,} ({(statistical_dmps_count / total_positions) * 100:.1f}% pass rate)"
+            if total_positions > 0 else
+            f"Context {context}: 0 significant DMPs (no positions tested)"
+        )
+
+        # The delta_mean gate was already applied before compare_centroids, so every
+        # position in filtered_results already satisfies |delta_mean| >= gate.  The
+        # post-filter below is kept as a safety guard for the case where the gate was
+        # not active (e.g. delta_mean_reduction and min_delta_mean are both None).
+        _gate = getattr(self.config, "delta_mean_reduction", None) or self.config.min_delta_mean
+        dmp_df = filtered_results.copy()
+        if _gate is not None and "delta_mean" in dmp_df.columns:
+            dmp_df = dmp_df[np.abs(dmp_df["delta_mean"].astype(float)) >= float(_gate)].copy()
+        logger.info(
+            "Context %s: %s positions after statistical + delta_mean filter%s",
             context,
             f"{len(dmp_df):,}",
-            "" if delta_gate is None else f" (|delta_mean| >= {delta_gate})",
+            "" if _gate is None else f" (|delta_mean| >= {_gate})",
         )
 
         from methyl_utils.core.distribution_views import get_distribution_view

@@ -646,34 +646,28 @@ class MethylCentroidPair:
             self._bmm_positions_common = None
 
     def compare_centroids(
-        self, 
-        centroid1: MethylSample, 
-        centroid2: MethylSample
+        self,
+        centroid1: MethylSample,
+        centroid2: MethylSample,
+        position_subset: Optional[np.ndarray] = None,
     ) -> pd.DataFrame:
         """
         Compare two centroids and return statistical results as DataFrame.
 
-        This is the main entry point for centroid comparison. It performs:
-        1. Input validation
-        2. Position alignment
-        3. Statistical testing (LRT)
-        4. Parameter estimation (Beta MLE)
-        5. Bhattacharyya Distance computation
-        6. FDR correction
-
-        Note: biological_importance is NOT computed here - MethylDetector
-        will compute it as delta_mean / (BC + eps) where BC = exp(-BD)
-
         Args:
-            centroid1: First methylation centroid (extended centroid required)
-            centroid2: Second methylation centroid (extended centroid required)
+            centroid1: First methylation centroid (extended centroid required).
+            centroid2: Second methylation centroid (extended centroid required).
+            position_subset: Optional array of genomic positions to restrict the
+                comparison to.  Must be a sorted subset of the positions common to
+                both centroids.  When provided the statistical test, FDR correction,
+                and all downstream stages run only on these positions.  Pass this to
+                avoid computing the expensive Welch test on positions that are certain
+                to fail the downstream biological filter (e.g. all positions with
+                |delta_mean| < threshold).
 
         Returns:
             pandas DataFrame with columns: position, p_value, q_value,
-            alpha1, beta1, alpha2, beta2, mean1, mean2, delta_mean, bhattacharyya
-
-        Raises:
-            ValueError: If centroids are not extended centroids or validation fails
+            alpha1, beta1, alpha2, beta2, mean1, mean2, delta_mean, bhattacharyya.
         """
         start_performance_monitoring()
 
@@ -687,6 +681,14 @@ class MethylCentroidPair:
 
             # Align centroids (find common positions)
             common_positions = self._align_centroids(centroid1, centroid2)
+
+            # Optional early reduction: restrict to caller-provided position subset
+            if position_subset is not None and len(position_subset) > 0:
+                common_positions = np.intersect1d(common_positions, position_subset)
+                logger.info(
+                    f"Position subset applied: {len(common_positions):,} positions "
+                    f"(from {len(position_subset):,} requested)"
+                )
 
             if len(common_positions) == 0:
                 logger.warning("No common positions found between centroids")
