@@ -38,24 +38,11 @@ class FilterFunnelRangeSpec(BaseModel):
 
 class FilterFunnelExplore(BaseModel):
     """
-    Optional exploration: sweep biological filters and write filter_funnel.csv.
-    Mode: one_at_a_time (vary each filter over its range, others fixed) or full_grid (all combinations).
+    Optional exploration: sweep effect_size_coverage over a range and write filter_funnel.csv.
     """
-    mode: Literal["one_at_a_time", "full_grid"] = Field(
-        default="one_at_a_time",
-        description="one_at_a_time: vary each filter over its range with others fixed. full_grid: all combinations of the three value lists."
-    )
-    min_delta_mean: Optional[FilterFunnelRangeSpec] = Field(
+    effect_size_coverage: Optional[FilterFunnelRangeSpec] = Field(
         default=None,
-        description="Range/step for min_delta_mean (values in [0,1], e.g. 0.1 = 10%% methylation change)"
-    )
-    max_overlap: Optional[FilterFunnelRangeSpec] = Field(
-        default=None,
-        description="Range/step for max_overlap (values in [0,1])"
-    )
-    min_effect_size: Optional[FilterFunnelRangeSpec] = Field(
-        default=None,
-        description="Range/step for min_effect_size (values >= 0)"
+        description="Range/step for effect_size_coverage (values in [0,1], e.g. min=0.80, max=0.99, step=0.05)"
     )
 
 
@@ -161,7 +148,7 @@ class MethylModelerConfig(BaseModel):
     )
 
     # ----------------
-    # Biological Filter (effect_size from MethylCentroidPair: |delta_mean|/(overlap*combined_std))
+    # Biological Filter
     # ----------------
     delta_mean_mode: str = Field(
         default="mean",
@@ -233,37 +220,31 @@ class MethylModelerConfig(BaseModel):
             raise ValueError(f"Invalid bmm_refine_filter_metric '{v}'. Valid options: {valid}")
         return v
 
-    min_effect_size: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0,
-        description="Minimum effect size for biological filter (value in [0, 1]). Keep DMPs with effect_size >= min_effect_size. Set null to disable."
-    )
-    effect_size_quantile: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0,
-        description="If set, keep DMPs with effect_size >= this quantile of the empirical distribution (e.g. 0.95 = top 5%%). Ignored if null."
+    effect_size_coverage: float = Field(
+        default=0.95, ge=0.0, le=1.0,
+        description=(
+            "Biological filter: select the minimum set of statistical DMPs (per context) "
+            "whose effect sizes sum to this fraction of total effect mass. "
+            "1.0 = keep all statistical DMPs (no biological filter); "
+            "0.95 = keep the minimum set covering 95%% of total effect mass. "
+            "Applied per-context so CG/CHG/CHH are selected independently."
+        )
     )
     delta_mean_reduction: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
-        description="Optional pre-ECDF reduction threshold. After statistical filtering, keep only positions with |delta_mean| >= delta_mean_reduction before computing continuous ECDF overlap/effect_size. If null, min_delta_mean is reused for the reduction gate when available."
+        description="Coarse pre-statistical gate: before running the statistical test, discard positions where |delta_mean| < delta_mean_reduction. Reduces the test set for expensive contexts (CHH). If null, no coarse gate is applied."
     )
     lambda_var: float = Field(
         default=2.0, ge=0.0, le=20.0,
         description="Variance penalty strength in effect_size = |delta_mean| * (1 - overlap) * exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))."
     )
-    min_delta_mean: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0,
-        description="Minimum absolute methylation difference for biological filter. Keep DMPs with |delta_mean| >= min_delta_mean (e.g. 0.1 = 10%% change). Set null to disable. Easy to interpret for biologists."
-    )
-    max_overlap: Optional[float] = Field(
-        default=None, ge=0.0, le=1.0,
-        description="Maximum continuous ECDF overlap (0–1) for biological filter. Keep DMPs with overlap <= max_overlap (low overlap = good separation). Set null to disable."
-    )
 
     # ----------------
-    # Filter funnel exploration (sweep biological filters, write JSON)
+    # Filter funnel exploration (sweep effect_size_coverage, write CSV)
     # ----------------
     filter_funnel_explore: Optional[FilterFunnelExplore] = Field(
         default=None,
-        description="Optional. Sweep biological filter values over range/step and write filter_funnel.csv (n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps). One run; no large DMP CSV. Set to null to disable."
+        description="Optional. Sweep effect_size_coverage over a range and write filter_funnel.csv (n_statistical_dmps, effect_size_coverage, n_biological_dmps). One run; no large DMP CSV. Set to null to disable."
     )
 
     # ----------------

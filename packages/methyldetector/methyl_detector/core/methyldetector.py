@@ -57,27 +57,42 @@ except ImportError:
     get_chromosome_context_from_filename = None
 logger = setup_module_logging(__name__)
 
-def _apply_biological_filters(
-    df: pd.DataFrame,
-    min_delta_mean: Optional[float],
-    max_overlap: Optional[float],
-    min_effect_size: Optional[float] = None,
-) -> pd.DataFrame:
+def _select_by_effect_coverage(df: pd.DataFrame, coverage: float) -> pd.DataFrame:
     """
-    Apply biological filters (ECDF-based). Used by _filter_biological_dmps and filter-funnel sweep.
-    - min_delta_mean: keep |delta_mean| >= value
-    - max_overlap: keep overlap <= value (continuous ECDF overlap)
-    - min_effect_size: keep effect_size >= value (effect size in [0, 1])
-    Pass None for any filter to skip it. Returns a copy of df with filters applied.
+    Biological filter: per-context ECDF cumulative mass selection on effect_size.
+
+    For each context group independently, sort positions by effect_size descending
+    and keep the minimum set whose effects sum to >= coverage fraction of total
+    effect mass in that context. Applied per-context so CG/CHG/CHH are selected
+    independently (their effect size distributions are not cross-comparable).
+
+    coverage=1.0 keeps all positions. coverage=0.0 returns empty.
     """
-    out = df.copy()
-    if min_delta_mean is not None and "delta_mean" in out.columns:
-        out = out[np.abs(out["delta_mean"].astype(float)) >= min_delta_mean]
-    if max_overlap is not None and "overlap" in out.columns:
-        out = out[out["overlap"].astype(float) <= max_overlap]
-    if min_effect_size is not None and "effect_size" in out.columns:
-        out = out[out["effect_size"].astype(float) >= min_effect_size]
-    return out
+    if len(df) == 0 or "effect_size" not in df.columns:
+        return df.copy()
+    if coverage >= 1.0:
+        return df.copy()
+
+    keep_idx: list = []
+    ctx_col = "context" if "context" in df.columns else None
+
+    if ctx_col is not None:
+        groups = df.groupby(ctx_col, sort=False)
+    else:
+        groups = [("all", df)]
+
+    for _ctx, grp in groups:
+        effects = grp["effect_size"].astype(float).values
+        S = float(effects.sum())
+        if S <= 0.0:
+            continue
+        order = np.argsort(-effects)
+        cumulative = np.cumsum(effects[order]) / S
+        K = int(np.searchsorted(cumulative, coverage, side="left")) + 1
+        K = min(K, len(order))
+        keep_idx.extend(grp.index[order[:K]].tolist())
+
+    return df.loc[keep_idx].copy()
 
 
 class MethylDetector:
@@ -355,11 +370,8 @@ class MethylDetector:
         # Pre-filter positions by delta_mean before the expensive statistical comparison.
         # This uses only the centroid means (N, Sx), which are cheap to evaluate, to
         # reduce the tested set from millions of positions down to those that could ever
-        # survive the biological filter.  Any position with |delta_mean| < gate would be
-        # discarded by the biological filter anyway, so testing it first is wasted work.
+        # have any biological signal.  Only active when delta_mean_reduction is set.
         delta_gate = getattr(self.config, "delta_mean_reduction", None)
-        if delta_gate is None:
-            delta_gate = self.config.min_delta_mean
 
         import time
         pre_filter_position_subset = None
@@ -436,8 +448,8 @@ class MethylDetector:
         # The delta_mean gate was already applied before compare_centroids, so every
         # position in filtered_results already satisfies |delta_mean| >= gate.  The
         # post-filter below is kept as a safety guard for the case where the gate was
-        # not active (e.g. delta_mean_reduction and min_delta_mean are both None).
-        _gate = getattr(self.config, "delta_mean_reduction", None) or self.config.min_delta_mean
+        # not active (delta_mean_reduction is None).
+        _gate = getattr(self.config, "delta_mean_reduction", None)
         dmp_df = filtered_results.copy()
         if _gate is not None and "delta_mean" in dmp_df.columns:
             dmp_df = dmp_df[np.abs(dmp_df["delta_mean"].astype(float)) >= float(_gate)].copy()
@@ -718,80 +730,46 @@ class MethylDetector:
     
     def _filter_biological_dmps(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Filter DMPs by biological significance (ECDF-based). All set filters are applied (AND):
-        - min_delta_mean: keep |delta_mean| >= value
-        - max_overlap: keep overlap <= value (continuous ECDF overlap)
-        - min_effect_size: keep effect_size >= value (or effect_size_quantile: keep >= empirical quantile)
+        Biological filter: per-context ECDF cumulative mass selection.
+
+        Within each context, sort by effect_size descending and keep the minimum
+        set of positions whose effects sum to >= effect_size_coverage fraction of
+        total effect mass for that context.
         """
         initial_count = len(dmps_df)
-        min_eff = self.config.min_effect_size
-        if getattr(self.config, "effect_size_quantile", None) is not None:
-            if "effect_size" in dmps_df.columns and len(dmps_df) > 0:
-                threshold = float(np.percentile(dmps_df["effect_size"].astype(float), 100.0 * self.config.effect_size_quantile))
-                min_eff = threshold if min_eff is None else max(min_eff, threshold)
-                logger.info(
-                    "Effect size quantile cut: %.2f → threshold = %.4f (effect_size >= threshold)",
-                    self.config.effect_size_quantile,
-                    threshold,
-                )
-        bio_df = _apply_biological_filters(
-            dmps_df,
-            self.config.min_delta_mean,
-            self.config.max_overlap,
-            min_effect_size=min_eff,
-        )
-        # Log per-filter retention (intermediate counts for messages)
-        prev_count = initial_count
+        coverage = self.config.effect_size_coverage
         _pct = lambda n, d: f"{n / d * 100:.1f}%" if d and d > 0 else "N/A"
-        if self.config.min_delta_mean is not None and "delta_mean" in dmps_df.columns:
-            step_df = _apply_biological_filters(dmps_df, self.config.min_delta_mean, None, None)
-            n = len(step_df)
-            logger.info(
-                f"After min_delta_mean filter (|delta_mean| ≥ {self.config.min_delta_mean}): "
-                f"{n:,} DMPs ({_pct(n, prev_count)} retained)"
-            )
-            prev_count = n
-        if self.config.max_overlap is not None and "overlap" in dmps_df.columns:
-            step_df = _apply_biological_filters(dmps_df, self.config.min_delta_mean, self.config.max_overlap, None)
-            n = len(step_df)
-            logger.info(
-                f"After max_overlap filter (overlap ≤ {self.config.max_overlap}): "
-                f"{n:,} DMPs ({_pct(n, prev_count)} retained)"
-            )
-            prev_count = n
-        if min_eff is not None and "effect_size" in dmps_df.columns:
-            n = len(bio_df)
-            logger.info(
-                f"After min_effect_size filter (effect_size ≥ {min_eff}): "
-                f"{n:,} DMPs ({_pct(n, prev_count)} retained)"
-            )
-        if initial_count != len(bio_df):
-            logger.info(
-                f"Biological filter total: {len(bio_df):,} DMPs ({_pct(len(bio_df), initial_count)} of initial)"
-            )
 
-        # Log and store value ranges of delta_mean, overlap, effect_size for retained DMPs
-        thresholds_used = {}
-        if self.config.min_delta_mean is not None:
-            thresholds_used["min_delta_mean"] = self.config.min_delta_mean
-        if self.config.max_overlap is not None:
-            thresholds_used["max_overlap"] = self.config.max_overlap
-        if min_eff is not None:
-            thresholds_used["min_effect_size"] = min_eff
-        if getattr(self.config, "effect_size_quantile", None) is not None:
-            thresholds_used["effect_size_quantile"] = self.config.effect_size_quantile
+        bio_df = _select_by_effect_coverage(dmps_df, coverage)
 
+        # Per-context retention logging
+        if "context" in dmps_df.columns:
+            for ctx in dmps_df["context"].unique():
+                n_in = int((dmps_df["context"] == ctx).sum())
+                n_out = int((bio_df["context"] == ctx).sum()) if len(bio_df) > 0 else 0
+                logger.info(
+                    f"  Context {ctx}: {n_out:,} / {n_in:,} DMPs retained "
+                    f"({_pct(n_out, n_in)}) at coverage={coverage:.2f}"
+                )
+
+        logger.info(
+            f"Biological filter (effect_size_coverage={coverage:.2f}): "
+            f"{len(bio_df):,} DMPs ({_pct(len(bio_df), initial_count)} of {initial_count:,} statistical DMPs)"
+        )
+
+        # Value ranges for retained DMPs
         value_ranges = {}
-        for col, label in [("delta_mean", "delta_mean"), ("overlap", "overlap"), ("effect_size", "effect_size")]:
+        for col in ("delta_mean", "overlap", "effect_size"):
             if col in bio_df.columns and len(bio_df) > 0:
                 ser = bio_df[col].astype(float)
-                value_ranges[label] = {"min": float(ser.min()), "max": float(ser.max())}
+                value_ranges[col] = {"min": float(ser.min()), "max": float(ser.max())}
                 logger.info(
-                    f"  Retained DMPs {label}: min = {value_ranges[label]['min']:.4f}, max = {value_ranges[label]['max']:.4f}"
+                    f"  Retained DMPs {col}: min={value_ranges[col]['min']:.4f}, "
+                    f"max={value_ranges[col]['max']:.4f}"
                 )
 
         self._biological_filter_summary = {
-            "thresholds": thresholds_used,
+            "thresholds": {"effect_size_coverage": coverage},
             "value_ranges": value_ranges,
         }
         return bio_df
@@ -807,98 +785,33 @@ class MethylDetector:
 
     def _run_filter_funnel_sweep(self, dmps_df: pd.DataFrame) -> None:
         """
-        If filter_funnel_explore is set, sweep biological filter values and write filter_funnel.csv.
-        CSV columns: n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps.
+        If filter_funnel_explore is set, sweep effect_size_coverage over a range and write
+        filter_funnel.csv.
+        CSV columns: n_statistical_dmps, effect_size_coverage, n_biological_dmps.
         Uses statistical DMPs already in memory; one run, no large DMP CSV.
         """
         explore = self.config.filter_funnel_explore
         if explore is None or self.config.output_dir is None:
             return
-        # At least one filter must have a range spec
-        has_any = (
-            explore.min_delta_mean is not None
-            or explore.max_overlap is not None
-            or explore.min_effect_size is not None
-        )
-        if not has_any:
+        if explore.effect_size_coverage is None:
             return
 
         n_statistical = len(dmps_df)
-        run_min_delta = self.config.min_delta_mean
-        run_max_overlap = self.config.max_overlap
-        run_min_effect_size = self.config.min_effect_size
-
         csv_rows: List[Dict[str, Any]] = []
-        mode = explore.mode
-        csv_columns = ["n_statistical_dmps", "min_delta_mean", "max_overlap", "min_effect_size", "n_biological_dmps"]
+        csv_columns = ["n_statistical_dmps", "effect_size_coverage", "n_biological_dmps"]
 
-        if mode == "one_at_a_time":
-            if explore.min_delta_mean is not None:
-                for v in self._range_step_values(explore.min_delta_mean):
-                    n = len(
-                        _apply_biological_filters(dmps_df, v, run_max_overlap, run_min_effect_size)
-                    )
-                    csv_rows.append({
-                        "n_statistical_dmps": n_statistical,
-                        "min_delta_mean": v,
-                        "max_overlap": run_max_overlap,
-                        "min_effect_size": run_min_effect_size,
-                        "n_biological_dmps": n,
-                    })
-            if explore.max_overlap is not None:
-                for v in self._range_step_values(explore.max_overlap):
-                    n = len(
-                        _apply_biological_filters(dmps_df, run_min_delta, v, run_min_effect_size)
-                    )
-                    csv_rows.append({
-                        "n_statistical_dmps": n_statistical,
-                        "min_delta_mean": run_min_delta,
-                        "max_overlap": v,
-                        "min_effect_size": run_min_effect_size,
-                        "n_biological_dmps": n,
-                    })
-            if explore.min_effect_size is not None:
-                for v in self._range_step_values(explore.min_effect_size):
-                    n = len(
-                        _apply_biological_filters(dmps_df, run_min_delta, run_max_overlap, v)
-                    )
-                    csv_rows.append({
-                        "n_statistical_dmps": n_statistical,
-                        "min_delta_mean": run_min_delta,
-                        "max_overlap": run_max_overlap,
-                        "min_effect_size": v,
-                        "n_biological_dmps": n,
-                    })
-        else:
-            vals_delta = (
-                self._range_step_values(explore.min_delta_mean)
-                if explore.min_delta_mean is not None
-                else ([run_min_delta] if run_min_delta is not None else [None])
-            )
-            vals_overlap = (
-                self._range_step_values(explore.max_overlap)
-                if explore.max_overlap is not None
-                else ([run_max_overlap] if run_max_overlap is not None else [None])
-            )
-            vals_effect_size = (
-                self._range_step_values(explore.min_effect_size)
-                if explore.min_effect_size is not None
-                else ([run_min_effect_size] if run_min_effect_size is not None else [None])
-            )
-            for md, mo, me in itertools.product(vals_delta, vals_overlap, vals_effect_size):
-                n = len(_apply_biological_filters(dmps_df, md, mo, me))
-                csv_rows.append({
-                    "n_statistical_dmps": n_statistical,
-                    "min_delta_mean": md,
-                    "max_overlap": mo,
-                    "min_effect_size": me,
-                    "n_biological_dmps": n,
-                })
+        for v in self._range_step_values(explore.effect_size_coverage):
+            n = len(_select_by_effect_coverage(dmps_df, v))
+            csv_rows.append({
+                "n_statistical_dmps": n_statistical,
+                "effect_size_coverage": v,
+                "n_biological_dmps": n,
+            })
 
         out_path = Path(self.config.output_dir) / "filter_funnel.csv"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         save_csv(csv_rows, out_path, csv_columns)
-        logger.info(f"📊 Filter funnel: wrote {len(csv_rows)} rows to {out_path}")
+        logger.info(f"Filter funnel: wrote {len(csv_rows)} rows to {out_path}")
 
     def _load_binned_counts_from_centroids(
         self,
@@ -3664,9 +3577,8 @@ class MethylDetector:
         # Extract key parameters (only relevant ones)
         key_params = {
             "alpha": self.config.alpha,
-            "min_delta_mean": self.config.min_delta_mean,
-            "max_overlap": self.config.max_overlap,
-            "min_effect_size": self.config.min_effect_size,
+            "effect_size_coverage": self.config.effect_size_coverage,
+            "delta_mean_reduction": self.config.delta_mean_reduction,
             "target_balanced_accuracy": self.config.target_balanced_accuracy,
             "min_selected_dmps": self.config.min_selected_dmps,
             "eps": self.config.eps,
@@ -3716,12 +3628,11 @@ class MethylDetector:
             "",
             "Configuration:",
             f"  Alpha (q-value threshold): {self.config.alpha}",
-            f"  Min delta_mean (|Δβ|): {self.config.min_delta_mean}",
-            f"  Max overlap: {self.config.max_overlap}",
-            f"  Min effect size (in [0,1]): {self.config.min_effect_size}",
+            f"  Effect-size coverage (biological filter): {self.config.effect_size_coverage}",
+            f"  Delta-mean reduction gate (pre-statistical): {self.config.delta_mean_reduction}",
             f"  Target Balanced Accuracy: {self.config.target_balanced_accuracy}",
             "",
-            "Biological filter: min_delta_mean (|Δβ|≥), max_overlap (overlap≤), min_effect_size (effect size in [0,1], ≥).",
+            "Biological filter: ECDF cumulative mass selection (effect_size_coverage per context).",
             "",
             "Results:",
             f"  Statistical DMPs (q≤{self.config.alpha}): {result.total_statistical_dmps:,}",
