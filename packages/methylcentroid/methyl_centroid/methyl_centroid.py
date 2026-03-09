@@ -635,10 +635,10 @@ class MethylCentroid:
 
     def _get_active_sample_paths(self) -> list:
         """
-        Get the paths of all samples currently active in the centroid.
+        Get the basenames of all samples currently active in the centroid.
 
         Returns:
-            List of sample directory paths (as strings)
+            List of sample directory basenames (e.g. ["SAMPLE001", "SAMPLE002"])
         """
         active_paths = []
         for is_new_sample, sample_index in sorted(self.active_samples):
@@ -646,21 +646,19 @@ class MethylCentroid:
                 # Sample from add_samples list
                 if sample_index < len(self.add_samples):
                     sample_path = self.add_samples[sample_index]
-                    # Extract directory path (remove the H5 filename)
                     active_paths.append(
-                        str(sample_path.parent)
+                        sample_path.parent.name
                         if hasattr(sample_path, "parent")
-                        else str(Path(sample_path).parent)
+                        else Path(sample_path).parent.name
                     )
             else:
                 # Sample from original samples list
                 if sample_index < len(self.samples):
                     sample_path = self.samples[sample_index]
-                    # Extract directory path (remove the H5 filename)
                     active_paths.append(
-                        str(sample_path.parent)
+                        sample_path.parent.name
                         if hasattr(sample_path, "parent")
-                        else str(Path(sample_path).parent)
+                        else Path(sample_path).parent.name
                     )
         return active_paths
 
