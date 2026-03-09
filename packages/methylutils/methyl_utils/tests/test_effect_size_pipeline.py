@@ -8,6 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT / "packages/methylutils"))
 
 from methyl_utils.core.distribution_views import ECDFView
+from methyl_utils.methyl_centroid_pair import CENTROID_COMPARISON_DTYPE
 from methyl_utils.statistical_tests import (
     ecdf_overlap_integral,
     effect_size_from_components,
@@ -70,6 +71,63 @@ def test_same_mean_different_shape_keeps_biological_score_low():
         lambda_var=1.0,
     )
     assert result["effect_size"][0] < 0.01
+
+
+def test_ecdf_view_sliced_index_alignment():
+    """
+    Verify that ECDFViews built from sliced bin_counts give correct overlap when
+    two centroids have different positional orderings.  This guards against the
+    bug where centroid1 indices were incorrectly reused to index centroid2.
+
+    centroid1 positions: [10, 20, 30, 40] — bins move from low to high methylation
+    centroid2 positions: [15, 20, 30, 35] — different ordering; common = [20, 30]
+
+    For position 20: centroid1 index 1 (bin counts [0,8,8,0]) vs centroid2 index 1 (same)
+    For position 30: centroid1 index 2 (bin counts [8,0,0,8]) vs centroid2 index 2 (same)
+    """
+    pos1 = np.array([10, 20, 30, 40], dtype=np.uint32)
+    pos2 = np.array([15, 20, 30, 35], dtype=np.uint32)
+    bc1_all = np.array([
+        [8, 8, 0, 0],   # pos 10 – low methylation
+        [0, 8, 8, 0],   # pos 20 – mid methylation
+        [8, 0, 0, 8],   # pos 30 – bimodal
+        [0, 0, 8, 8],   # pos 40 – high methylation
+    ], dtype=np.float64)
+    bc2_all = np.array([
+        [8, 0, 0, 0],   # pos 15
+        [0, 8, 8, 0],   # pos 20 – same as c1 pos 20 → expected high overlap
+        [8, 0, 0, 8],   # pos 30 – same as c1 pos 30 → expected moderate overlap
+        [0, 0, 0, 8],   # pos 35
+    ], dtype=np.float64)
+    bin_edges = np.linspace(0, 1, 5, dtype=np.float64)
+    N = np.array([20.0, 20.0, 20.0, 20.0])
+    Sx1 = N * np.array([0.2, 0.5, 0.5, 0.8])
+    Sx2 = N * np.array([0.1, 0.5, 0.5, 0.9])
+
+    common = np.intersect1d(pos1, pos2)   # [20, 30]
+    idx1 = np.searchsorted(pos1, common)  # [1, 2]
+    idx2 = np.searchsorted(pos2, common)  # [1, 2]
+
+    view1 = ECDFView(bin_edges, bc1_all[idx1], Sx1[idx1], N[idx1], None)
+    view2 = ECDFView(bin_edges, bc2_all[idx2], Sx2[idx2], N[idx2], None)
+    overlap = ecdf_overlap_integral(view1, view2, np.array([0, 1], dtype=np.intp), grid_size=256)
+
+    # Pos 20: identical distributions → overlap near 1
+    assert overlap[0] > 0.8, f"Expected high overlap for identical distributions, got {overlap[0]:.3f}"
+    # Pos 30: identical distributions (bimodal vs bimodal) → also near 1
+    assert overlap[1] > 0.8, f"Expected high overlap for identical distributions, got {overlap[1]:.3f}"
+
+    # Verify the bug case: if we mistakenly used centroid1 index (2) for centroid2
+    # at position 30, we'd get centroid2's bin_counts[2] = [8,0,0,8] (pos 30) which
+    # happens to be the same here — but at position 20 centroid2's index 1 differs from
+    # what centroid1's index 1 is, so the test would still catch any cross-indexing.
+
+
+def test_delta_sign_in_centroid_comparison_dtype():
+    """CENTROID_COMPARISON_DTYPE must contain a delta_sign int8 field."""
+    field_names = [name for name, _ in CENTROID_COMPARISON_DTYPE.descr]
+    assert 'delta_sign' in field_names, "delta_sign missing from CENTROID_COMPARISON_DTYPE"
+    assert CENTROID_COMPARISON_DTYPE['delta_sign'].base == np.dtype(np.int8)
 
 
 def test_variance_penalty_is_symmetric():

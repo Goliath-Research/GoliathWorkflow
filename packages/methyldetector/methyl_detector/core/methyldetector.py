@@ -446,17 +446,52 @@ class MethylDetector:
             "" if _gate is None else f" (|delta_mean| >= {_gate})",
         )
 
-        from methyl_utils.core.distribution_views import get_distribution_view
-        ecdf_view1 = get_distribution_view(centroid1, "ecdf")
-        ecdf_view2 = get_distribution_view(centroid2, "ecdf")
-        position_lookup = {
-            int(pos): idx for idx, pos in enumerate(np.asarray(centroid1.pos.values, dtype=np.uint32))
-        }
+        # Build ECDFViews lazily: only for the DMP positions that survived the statistical
+        # and delta_mean filters.  This avoids building millions of PchipInterpolator objects
+        # for the full centroid (which would be 68M for CHH) when only tens to hundreds of
+        # positions are actually needed.
+        #
+        # Correct per-centroid index lookup: the index into centroid2's bin_counts array is
+        # *not* the same as the index into centroid1's array unless both centroids happen to
+        # have identical position orderings.  Using centroid1 indices for centroid2 is the
+        # root cause of the silent ECDF mismatch bug.  Here we derive independent indices for
+        # each centroid so the sliced ECDFViews are always positionally aligned.
+        if len(dmp_df) > 0:
+            dmp_positions = np.asarray(dmp_df["position"].values, dtype=np.uint32)
+            pos1 = np.asarray(centroid1.pos.values, dtype=np.uint32)
+            pos2 = np.asarray(centroid2.pos.values, dtype=np.uint32)
+            idx_in_c1 = np.searchsorted(pos1, dmp_positions, side="left")
+            idx_in_c2 = np.searchsorted(pos2, dmp_positions, side="left")
+            bs1 = centroid1.binned_stats
+            bs2 = centroid2.binned_stats
+            bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
+            from methyl_utils.core.distribution_views import ECDFView
+            ecdf_view1 = ECDFView(
+                bin_edges_arr,
+                np.asarray(bs1["bin_counts"], dtype=np.float64)[idx_in_c1],
+                np.asarray(centroid1.Sx.values, dtype=np.float64)[idx_in_c1],
+                np.asarray(centroid1.N.values, dtype=np.float64)[idx_in_c1],
+                np.asarray(centroid1.Sx2.values, dtype=np.float64)[idx_in_c1],
+            )
+            ecdf_view2 = ECDFView(
+                bin_edges_arr,
+                np.asarray(bs2["bin_counts"], dtype=np.float64)[idx_in_c2],
+                np.asarray(centroid2.Sx.values, dtype=np.float64)[idx_in_c2],
+                np.asarray(centroid2.N.values, dtype=np.float64)[idx_in_c2],
+                np.asarray(centroid2.Sx2.values, dtype=np.float64)[idx_in_c2],
+            )
+            logger.info(
+                "Context %s: built ECDFViews for %s DMP positions (lazy, not full centroid)",
+                context, f"{len(dmp_positions):,}",
+            )
+        else:
+            ecdf_view1 = ecdf_view2 = None
+
+        # Sequential 0-based row indices match the sliced ECDFViews row-for-row.
         dmp_df = self._compute_missing_metrics_df(
             dmp_df,
             ecdf_view1=ecdf_view1,
             ecdf_view2=ecdf_view2,
-            position_lookup=position_lookup,
         )
         if "effect_size" in dmp_df.columns and len(dmp_df) > 0:
             from scipy.stats import rankdata
@@ -2978,10 +3013,8 @@ class MethylDetector:
         export_df = bio_dmps_df.copy()
         if 'dist' in export_df.columns:
             export_df['dist_name'] = export_df['dist'].map(DIST_NAMES).fillna('Unknown').astype(str)
-        if 'mean1' in export_df.columns and 'mean2' in export_df.columns:
-            export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2'])
-            # Signed delta_mean for CSV (mean1 - mean2)
-            export_df['delta_mean'] = (export_df['mean1'] - export_df['mean2']).astype(np.float32)
+        if 'delta_sign' not in export_df.columns and 'mean1' in export_df.columns and 'mean2' in export_df.columns:
+            export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2']).astype(np.int8)
         if getattr(self.config, 'export_sample_size_estimate', False):
             export_df['n_estimated_per_group'] = self._compute_sample_size_estimate(export_df)
         available_cols = [c for c in export_cols if c in export_df.columns]
@@ -3199,25 +3232,31 @@ class MethylDetector:
         df: pd.DataFrame,
         ecdf_view1: Any,
         ecdf_view2: Any,
-        position_lookup: Dict[int, int],
     ) -> pd.DataFrame:
-        """Compute continuous-ECDF overlap and final effect_size for the reduced set."""
+        """Compute continuous-ECDF overlap and final effect_size for the reduced set.
+
+        Both ECDFViews must be pre-sliced to exactly the positions in df (row i of the
+        view corresponds to row i of df).  The caller is responsible for building the
+        views with the correct per-centroid indices.
+        """
+        if ecdf_view1 is None or ecdf_view2 is None or len(df) == 0:
+            return df
         # Drop legacy columns if present (from MethylCentroidPair output); we use ECDF overlap only
         legacy_cols = [c for c in ("bhattacharyya", "bhattacharyya_coefficient") if c in df.columns]
         if legacy_cols:
             df = df.drop(columns=legacy_cols)
         n_rows = len(df)
-        # Determine chunk size based on GPU memory (use max memory for performance)
+        # Estimate memory for the (n_positions × grid_size) PDF matrices used in ecdf_overlap_integral.
+        grid_size = getattr(self.config, "ecdf_overlap_grid_size", 512)
+        mem_per_row_mb = (2 * grid_size * 8) / (1024 ** 2)  # two float64 arrays of shape (n, grid)
         from methyl_utils import get_memory_usage
-        available_gb = get_memory_usage().get('gpu_free_gb', 80.0)  # Fallback to 80GB if unavailable
+        available_gb = get_memory_usage().get('gpu_free_gb', 80.0)
         available_mb = available_gb * 1024
-        # Estimate memory per row (rough: floats/int for columns)
-        mem_per_row_mb = 0.3  # Less conservative estimate
-        chunk_size = max(50000, int(available_mb * 0.9 / mem_per_row_mb))  # Use 90% of GPU mem
-        logger.debug(f"GPU-aware chunking: {available_mb}MB available, chunk_size={chunk_size:,} rows")
+        chunk_size = max(50000, int(available_mb * 0.9 / max(mem_per_row_mb, 1e-6)))
+        logger.debug(f"ECDF chunking: {available_mb:.0f} MB available, chunk_size={chunk_size:,} rows")
 
         if n_rows > chunk_size:
-            logger.info(f"🔄 Chunking metrics computation for {n_rows:,} rows (GPU-optimized batches of {chunk_size:,})")
+            logger.info(f"🔄 Chunking ECDF metrics for {n_rows:,} rows (batches of {chunk_size:,})")
             chunks = []
             for i in range(0, n_rows, chunk_size):
                 end_i = min(i + chunk_size, n_rows)
@@ -3226,19 +3265,18 @@ class MethylDetector:
                     chunk_df,
                     ecdf_view1=ecdf_view1,
                     ecdf_view2=ecdf_view2,
-                    position_lookup=position_lookup,
+                    start_row=i,
                 )
                 chunks.append(chunk_result)
-            # Concat chunk DFs
             result_df = pd.concat(chunks, ignore_index=True)
-            logger.info(f"📊 Chunked metrics complete for {n_rows:,} rows")
+            logger.info(f"📊 Chunked ECDF metrics complete for {n_rows:,} rows")
             return result_df
         else:
             return self._compute_chunk_metrics_df(
                 df,
                 ecdf_view1=ecdf_view1,
                 ecdf_view2=ecdf_view2,
-                position_lookup=position_lookup,
+                start_row=0,
             )
 
     def _compute_chunk_metrics_df(
@@ -3246,9 +3284,14 @@ class MethylDetector:
         chunk_df: pd.DataFrame,
         ecdf_view1: Any,
         ecdf_view2: Any,
-        position_lookup: Dict[int, int],
+        start_row: int = 0,
     ) -> pd.DataFrame:
-        """Compute overlap and effect_size for one reduced chunk."""
+        """Compute overlap and effect_size for one reduced chunk.
+
+        Both ECDFViews are pre-sliced to the DMP set, so the correct indices for this
+        chunk are simply the sequential row positions within the sliced views:
+        start_row, start_row+1, ..., start_row+len(chunk_df)-1.
+        """
         import time
         start_time = time.time()
 
@@ -3257,10 +3300,7 @@ class MethylDetector:
         var2 = chunk_df['variance2'].values.astype(np.float64)
 
         from methyl_utils.statistical_tests import ecdf_effect_size
-        position_indices = np.asarray(
-            [position_lookup[int(pos)] for pos in chunk_df["position"].values],
-            dtype=np.intp,
-        )
+        position_indices = np.arange(start_row, start_row + len(chunk_df), dtype=np.intp)
         grid_size = getattr(self.config, "ecdf_overlap_grid_size", 512)
         lambda_var = getattr(self.config, "lambda_var", 2.0)
         results = ecdf_effect_size(
@@ -3374,9 +3414,8 @@ class MethylDetector:
         DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture', 5: 'ECDF'}
         if 'dist' in export_df.columns:
             export_df['dist_name'] = export_df['dist'].map(DIST_NAMES).fillna('Unknown').astype(str)
-        if 'mean1' in export_df.columns and 'mean2' in export_df.columns:
-            export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2'])
-            export_df['delta_mean'] = (export_df['mean1'] - export_df['mean2']).astype(np.float32)
+        if 'delta_sign' not in export_df.columns and 'mean1' in export_df.columns and 'mean2' in export_df.columns:
+            export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2']).astype(np.int8)
         if 'effect_size' in export_df.columns:
             export_df['weight'] = export_df['effect_size']
         elif 'importance' in export_df.columns:

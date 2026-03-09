@@ -75,15 +75,16 @@ CENTROID_COMPARISON_DTYPE = np.dtype([
     ('beta2', np.float64),
     ('mean1', np.float32),
     ('mean2', np.float32),
-    ('delta_mean', np.float32),
-    ('bhattacharyya', np.float32),  # Bhattacharyya Distance (BC = exp(-bhattacharyya))
-    ('dist', np.uint8),  # Distribution selection (see DIST_* constants)
+    ('delta_mean', np.float32),           # |mean1 - mean2| — unsigned magnitude
+    ('delta_sign', np.int8),              # sign(mean1 - mean2): +1 = hypermethylated in group1, -1 = hypo
+    ('bhattacharyya', np.float32),        # Bhattacharyya Distance (BC = exp(-bhattacharyya))
+    ('dist', np.uint8),                   # Distribution selection (see DIST_* constants)
     ('n1', np.uint32),
     ('n2', np.uint32),
     ('variance1', np.float32),
     ('variance2', np.float32),
-    ('effect_size', np.float32),  # Biological importance: |delta_mean| / (max(overlap, min_floor) * combined_std)
-    ('overlap_approx', np.float32),  # Discrete overlap from bin counts (NaN when binned_stats not available)
+    ('effect_size', np.float32),          # Initial biological importance (overwritten by continuous ECDF stage)
+    ('overlap_approx', np.float32),       # Discrete overlap from bin counts (NaN when binned_stats not available)
 ])
 
 
@@ -1189,22 +1190,17 @@ class MethylCentroidPair:
                     mean1_out[mix_idx] = mix_mean1[mix_valid]
                     mean2_out[mix_idx] = mix_mean2[mix_valid]
 
-        delta_mean = np.abs(mean1_out - mean2_out)
+        signed_delta = mean1_out - mean2_out
+        delta_mean = np.abs(signed_delta)
 
-        # Per-position variance for the chosen distribution (for export and power)
-        eps = 1e-12
-        tau1 = alpha1.astype(np.float64) + beta1.astype(np.float64)
-        tau2 = alpha2.astype(np.float64) + beta2.astype(np.float64)
-        var_beta1 = (alpha1.astype(np.float64) * beta1.astype(np.float64)) / np.maximum(tau1 ** 2 * (tau1 + 1), eps)
-        var_beta2 = (alpha2.astype(np.float64) * beta2.astype(np.float64)) / np.maximum(tau2 ** 2 * (tau2 + 1), eps)
-        variance1_out = var_beta1.astype(np.float32)
-        variance2_out = var_beta2.astype(np.float32)
-        if delta_mode == "normal" or (delta_mode == "auto" and np.any(use_normal_mask)):
-            variance1_out[use_normal_mask] = var_normal1[use_normal_mask]
-            variance2_out[use_normal_mask] = var_normal2[use_normal_mask]
-        if delta_mode == "auto" and np.any(use_ecdf_mask):
-            variance1_out[use_ecdf_mask] = var_normal1[use_ecdf_mask]
-            variance2_out[use_ecdf_mask] = var_normal2[use_ecdf_mask]
+        # Per-position variance for the effect_size reliability term.
+        # Always use the sample variance derived from Sx/Sx2 (the same estimator used by
+        # the Welch test), so the reliability penalty is consistent with the statistical
+        # test.  Beta-distribution model variance (alpha*beta/(tau²*(tau+1))) is a
+        # property of the fitted model, not a direct measure of between-sample spread, and
+        # would produce a different scale than the Welch standard error.
+        variance1_out = var_normal1.astype(np.float32)
+        variance2_out = var_normal2.astype(np.float32)
         if mix_var1 is not None and mix_var2 is not None and mixture_indices is not None:
             mix_valid = np.isfinite(mix_var1) & np.isfinite(mix_var2)
             if np.any(mix_valid):
@@ -1279,6 +1275,7 @@ class MethylCentroidPair:
         results_view['mean1'] = mean1_out.astype(np.float32)
         results_view['mean2'] = mean2_out.astype(np.float32)
         results_view['delta_mean'] = delta_mean.astype(np.float32)
+        results_view['delta_sign'] = np.sign(signed_delta).astype(np.int8)
         if bhattacharyya is not None:
             results_view['bhattacharyya'] = bhattacharyya.astype(np.float32)
         else:
