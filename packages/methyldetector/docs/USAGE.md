@@ -153,9 +153,12 @@ Minimal JSON config example:
   "centroid1_dir": "/path/to/healthy/centroids",
   "centroid2_dir": "/path/to/cancer/centroids",
   "output_dir": "/path/to/output",
-  "alpha": 0.01,
-  "min_delta_mean": 0.2,
-  "max_bc": 0.6,
+  "alpha": 0.05,
+  "delta_mean_reduction": 0.1,
+  "lambda_var": 2.0,
+  "min_delta_mean": 0.1,
+  "max_overlap": 0.5,
+  "min_effect_size": 0.05,
   "use_gpu": true
 }
 ```
@@ -166,9 +169,9 @@ Minimal JSON config example:
 - **output_dir**: Where to write DMP CSVs, summary, and classifier outputs.  
 - **alpha**: FDR threshold (e.g. 0.01 or 0.05).  
 - **min_delta_mean**: Minimum |Δμ| for biological filter.  
-- **max_bc**: Maximum Bhattacharyya coefficient (overlap); lower = more discriminative.  
-- **min_effect_size**: Minimum (refined) effect size in [0,1] for biological filter.  
-- **effect_size_quantile**: If set (e.g. 0.95), keep only DMPs with refined effect_size ≥ this empirical quantile (ECDF-based cut-point). Uses full ECDF path.  
+- **max_overlap**: Biological filter: keep continuous ECDF overlap `<= value` (not the Bhattacharyya coefficient).  
+- **min_effect_size**: Biological filter: keep `effect_size >= value`.  
+- **effect_size_quantile**: If set (e.g. `0.95`), keep only DMPs with `effect_size >= this empirical quantile`.  
 - **use_gpu**: Use GPU when available.
 
 Optional **filter funnel exploration** (`filter_funnel_explore`): sweep biological filter values (min/max/step) in one run and write `filter_funnel.csv` (columns: n_statistical_dmps, min_delta_mean, max_overlap, min_effect_size, n_biological_dmps) for charting; see README “Filter funnel exploration”.

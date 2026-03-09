@@ -10,17 +10,18 @@ MethylDetector is a production-ready package for detecting Differentially Methyl
 
 MethylDetector provides comprehensive DMP detection and analysis:
 
-- **DMP Detection**: Statistical comparison of two centroids with FDR control
-- **Biological Filtering**: Effect size and distribution overlap criteria for meaningful DMPs
+- **DMP Detection**: Statistical comparison of two ECDF centroids with FDR control
+- **Biological Filtering**: A single canonical `effect_size` score combining mean separation, distributional overlap, and a variance reliability penalty
 - **Multi-Chromosome Support**: Process single or multiple chromosomes in one run
-- **Multi-Context Support**: Process CG, CHG, CHH contexts together
+- **Multi-Context Support**: Process CG, CHG, CHH contexts together with context weighting
 - **GPU Acceleration**: High-performance processing with NVIDIA GPUs
-- **Comprehensive Output**: Detailed DMP tables with statistical metadata
+- **ECDFClassifier**: Trains a PCHIP-PDF log-likelihood classifier on the selected DMPs
+- **Comprehensive Output**: Detailed DMP tables with statistical and biological metadata
 
 ## Key Features
 
 - 🔬 **Statistical Rigor**: Storey's q-value FDR correction (recommended for genomics)
-- 📊 **Biological Filtering**: Delta mean, Bhattacharyya coefficient, coverage thresholds
+- 📊 **Biological Filtering**: Single canonical `effect_size` score combining mean separation, distributional overlap, and variance reliability
 - 🧬 **Multi-Context Support**: Process CG, CHG, CHH contexts together
 - 🧬 **Multi-Chromosome Support**: Process multiple chromosomes in a single run
 - 🚀 **GPU Acceleration**: High-performance processing with NVIDIA GPUs
@@ -52,10 +53,12 @@ python -c "import cupy as cp; print(f'GPU count: {cp.cuda.runtime.getDeviceCount
   "centroid1_dir": "/path/to/healthy/centroids",
   "centroid2_dir": "/path/to/cancer/centroids",
   "output_dir": "/path/to/output",
-  "alpha": 0.01,
-  "min_delta_mean": 0.2,
-  "max_bc": 0.6,
-  "biological_filters": ["bhattacharyya"]
+  "alpha": 0.05,
+  "delta_mean_reduction": 0.1,
+  "min_delta_mean": 0.1,
+  "max_overlap": 0.5,
+  "min_effect_size": 0.05,
+  "lambda_var": 2.0
 }
 ```
 
@@ -70,14 +73,16 @@ Process multiple chromosomes in a single run:
 ```json
 {
   "chromosome": ["1", "2", "3", "X"],
-  "contexts": ["CG"],
+  "contexts": ["CG", "CHG", "CHH"],
   "centroid1_dir": "/path/to/healthy/centroids",
   "centroid2_dir": "/path/to/cancer/centroids",
   "output_dir": "/path/to/output",
-  "alpha": 0.01,
-  "min_delta_mean": 0.2,
-  "max_bc": 0.6,
-  "biological_filters": ["bhattacharyya"]
+  "alpha": 0.05,
+  "delta_mean_reduction": 0.1,
+  "min_delta_mean": 0.1,
+  "max_overlap": 0.5,
+  "min_effect_size": 0.05,
+  "lambda_var": 2.0
 }
 ```
 
@@ -134,19 +139,20 @@ else:
 
 ### Statistical Parameters
 
-- **`alpha`**: FDR q-value threshold (default: `0.01`)
-  - Uses Storey's q-value method for adaptive FDR control
+- **`alpha`**: FDR q-value threshold (default: `0.05`). Uses two-stage Benjamini-Hochberg correction applied to the pre-filtered position set.
+- **`delta_mean_reduction`**: Pre-ECDF gate applied **before** the Welch test. Positions with `|delta_mean| < value` are discarded before statistical testing, making large contexts (CHG, CHH) tractable. If `null`, falls back to `min_delta_mean`.
 
 ### Biological Filtering
 
-- **`min_delta_mean`**: Minimum absolute difference in mean methylation (default: `0.2`)
-- **`max_bc`**: Maximum Bhattacharyya coefficient / overlap (default: `0.6`)
-  - Lower values = less overlap = stronger discrimination
-- **`biological_filters`**: List of filters to apply (default: `["delta_mean", "bhattacharyya"]`)
+- **`min_delta_mean`**: Keep DMPs with `|mean1 - mean2| >= value` (e.g. `0.1` = 10% methylation change).
+- **`max_overlap`**: Keep DMPs with continuous ECDF overlap `<= value`. Overlap is `∫ min(f1, f2) dx` from PCHIP PDFs, not the Bhattacharyya coefficient.
+- **`min_effect_size`**: Keep DMPs with final `effect_size >= value`. The canonical score is `|delta_mean| * (1 - overlap) * exp(-lambda_var * (√var1 + √var2))`.
+- **`lambda_var`**: Variance penalty strength in `effect_size` (default `2.0`). Higher values penalise diffuse, heterogeneous positions more strongly.
+- **`effect_size_quantile`**: If set (e.g. `0.95`), keep only DMPs with `effect_size >= this empirical quantile` among the statistically significant set.
 
-### MethylDetectorExplorer (two-phase effect size)
+### MethylDetectorExplorer (staged effect-size analysis)
 
-**MethylDetectorExplorer** is a standalone CLI to analyze and tune how many positions get **refined** effect size (ECDF overlap) vs approximate only. It uses a two-phase strategy: Phase 1 computes approximate bounded effect size for a sample of positions (fast, no Pchip); Phase 2 refines effect size via ECDF overlap only for the top K positions chosen by a decay heuristic. See [METHYLDETECTOR_EXPLORER.md](docs/METHYLDETECTOR_EXPLORER.md) for usage and options.
+**MethylDetectorExplorer** is a standalone CLI that mirrors the detector pipeline — statistical significance, `delta_mean` reduction, continuous ECDF overlap, and final `effect_size` — to explore the effect of `lambda_var` and biological filter thresholds without running the full detector. See [METHYLDETECTOR_EXPLORER.md](docs/METHYLDETECTOR_EXPLORER.md) for usage and options.
 
 ```bash
 methyl-detector-explorer --centroid1-dir /path/to/c1 --centroid2-dir /path/to/c2 --chromosome 1 --context CG --output-dir /out --csv
@@ -182,40 +188,56 @@ You can sweep biological filter values over a range (min/max/step) in a **single
 ### CSV Columns
 
 - `chromosome`, `context`, `position`
-- `p_value`, `q_value`, `delta_mean`, `delta_sign`
-- `overlap` (Bhattacharyya coefficient)
-- `effect_size`, `context_weight`
-- `alpha1`, `beta1`, `alpha2`, `beta2` (optional centroid parameters from method-of-moments; comparison uses ECDF)
-- `mean1`, `mean2` (mean methylation levels)
+- `p_value`, `q_value`
+- `mean1`, `mean2`, `delta_mean` (unsigned magnitude), `delta_sign` (+1 hyper, -1 hypo)
+- `variance1`, `variance2` (sample variance from Sx/Sx2)
+- `n1`, `n2` (sample counts)
+- `overlap` (continuous ECDF overlap: ∫ min(f1, f2) dx)
+- `effect_size`, `effect_size_reliability`, `effect_size_ecdf`
+- `context_weight` (multi-context runs)
+- `alpha1`, `beta1`, `alpha2`, `beta2` (Beta MoM parameters; retained for EAT and reference, not used for comparison or classification)
 
 ## Core Workflow
 
 ```
 1. Load Centroids
-   ├─ Read centroid files for each context
-   ├─ Format: {chromosome}-{context}.h5
-   └─ Align to common positions
+   ├─ Read {chrom}-{context}.h5 for each context
+   ├─ Centroids must have binned_stats (build with binned_stats_bins=20)
+   └─ Align to common positions (min coverage filter)
 
-2. Statistical Testing
-   ├─ Compute likelihood ratio at each position
-   ├─ Calculate p-values
-   ├─ Apply FDR correction (Storey's q-value)
-   └─ Identify significant positions (q ≤ alpha)
+2. Pre-filter (delta_mean gate)
+   ├─ Compute |mean1 - mean2| from centroid means (Sx/N)
+   └─ Discard positions below delta_mean_reduction threshold
+      (avoids running expensive Welch test on positions that
+       would be removed by the biological filter anyway)
 
-3. Biological Filtering
-   ├─ Filter by minimum coverage (min_N_pct)
-   ├─ Filter by effect size (min_delta_mean)
-   ├─ Filter by distribution overlap (max_bc)
-   └─ Rank by biological importance (effect_size)
+3. Statistical Testing
+   ├─ Welch-style unequal-variance mean-difference test
+   ├─ Two-stage Benjamini-Hochberg FDR correction
+   └─ Retain positions with q_value <= alpha
 
-4. Context Weighting (multi-context only)
-   ├─ Compute trimmed mean of effect_size per context
-   ├─ Normalize weights to sum=1.0
-   └─ Assign weights to each DMP
+4. Continuous ECDF Overlap and Effect Size
+   ├─ Build ECDFView lazily for surviving DMP positions only
+   ├─ Compute overlap = ∫₀¹ min(f1(x), f2(x)) dx (PCHIP PDFs)
+   └─ Compute effect_size = |delta_mean| * (1-overlap) * exp(-λ*(√v1+√v2))
 
-5. Generate Reports
-   ├─ DMP tables (CSV) with full statistical metadata
-   └─ Summary statistics
+5. Biological Filtering
+   ├─ min_delta_mean, max_overlap, min_effect_size (AND combination)
+   └─ Sort by effect_size descending
+
+6. Context Weighting (multi-context only)
+   ├─ Trimmed mean of effect_size per context
+   ├─ Normalize to sum=1.0
+   └─ Assign context_weight to each DMP
+
+7. Classifier Training
+   ├─ ECDFClassifier: PCHIP PDF log-likelihood, effect_size-weighted
+   ├─ Validation: balanced accuracy on real or synthetic samples
+   └─ Save model as .pkl package
+
+8. Generate Reports
+   ├─ DMP CSV with all statistical and biological columns
+   └─ Summary JSON and classifier artifact
 ```
 
 ## Multi-Chromosome Processing
@@ -249,14 +271,13 @@ MethylDetector supports processing multiple chromosomes in a single run:
 └── ...
 ```
 
-## Statistical Rigor
+## Statistical Design
 
-MethylDetector uses **Storey's q-value FDR correction** for multiple testing correction:
+MethylDetector uses **Two-Stage Benjamini-Hochberg FDR correction** (statsmodels `fdr_tsbh`) on the pre-filtered position set:
 
-- **Adaptive FDR control**: Adjusts for different proportions of true null hypotheses
-- **Recommended for genomics**: Superior to Bonferroni correction for large datasets
-- **q ≤ α threshold**: Controls false discovery rate at specified level
-- **Biological filtering**: Additional effect size and overlap criteria for meaningful DMPs
+- **Pre-filtering before FDR**: Positions below the `delta_mean_reduction` gate are excluded before the Welch test. FDR correction is therefore applied to a non-random subset. Q-values are liberal relative to full testing — this is a known computational genomics trade-off.
+- **Welch test, not LRT**: The significance stage uses `welch_mean_test` (unequal-variance t-test) on sample means and variances from `(Sx2 - Sx²/N)/(N-1)`. This is consistent with the sample variances used in `effect_size`.
+- **ECDF-only**: No Beta, Normal, or Beta-Binomial distribution models are used at any stage. All comparison, overlap, and classifier density evaluation uses the ECDF from `binned_stats`.
 
 ## Integration with MethylPipeline
 
@@ -323,12 +344,16 @@ See [MethylClassifier README](../methylclassifier/README.md#running-methylclassi
 
 **Problem**: `total_biological_dmps = 0`
 
-**Solutions**:
+Use `methyl-detector-explorer` to inspect how many positions survive each filter stage and what the `effect_size` distribution looks like before committing to a full run.
+
+Relax individual filters:
 ```json
 {
-  "alpha": 0.05,  // Relax FDR threshold
-  "min_delta_mean": 0.1,  // Lower effect size threshold
-  "max_bc": 0.8  // Allow more overlap
+  "alpha": 0.10,
+  "delta_mean_reduction": 0.05,
+  "min_delta_mean": 0.05,
+  "max_overlap": 0.7,
+  "min_effect_size": 0.02
 }
 ```
 
@@ -336,27 +361,22 @@ See [MethylClassifier README](../methylclassifier/README.md#running-methylclassi
 
 **Problem**: `dmps-{chromosome}.csv` contains too many positions
 
-**Solutions**:
+Tighten individual filters:
 ```json
 {
-  "alpha": 0.001,  // Stricter FDR threshold
-  "min_delta_mean": 0.3,  // Higher effect size threshold
-  "max_bc": 0.4  // Less overlap allowed
+  "alpha": 0.01,
+  "min_delta_mean": 0.2,
+  "max_overlap": 0.3,
+  "min_effect_size": 0.1
 }
 ```
+Or use `effect_size_quantile: 0.95` to keep only the top 5% by `effect_size`.
 
-### Too Few DMPs Detected
+### Effect Size Values Are Very Low
 
-**Problem**: Very few or no DMPs found
+**Problem**: All `effect_size` values are below `0.05`
 
-**Solutions**:
-```json
-{
-  "alpha": 0.05,  // Relax FDR threshold
-  "min_delta_mean": 0.1,  // Lower effect size threshold
-  "max_bc": 0.8  // Allow more overlap
-}
-```
+The canonical `effect_size` is bounded by `|delta_mean|` × `(1 - overlap)` × reliability. Typical prostate-cancer CG context values (95th percentile ~0.047) are expected for weakly separated groups. Adjust `min_effect_size` to match the observed distribution. Use `methyl-detector-explorer` to explore the distribution before running the full detector.
 
 ### GPU Out of Memory
 
@@ -390,7 +410,7 @@ Copy and customize for your data!
 ## Documentation
 
 - **[Theoretical Foundation](docs/MethylDetector_Theoretical_Foundation.md)** — ECDF-based comparison, Storey q-values, effect size, overlap
-- **[MethylDetectorExplorer](docs/METHYLDETECTOR_EXPLORER.md)** — Two-phase effect size analysis and K-selection heuristics
+- **[MethylDetectorExplorer](docs/METHYLDETECTOR_EXPLORER.md)** — Staged effect-size analysis: significance, delta_mean reduction, lambda_var exploration
 - **[Implementation (MethylUtils)](docs/METHYLDETECTOR_IMPLEMENTATION.md)** — MethylCentroidPair, statistical_tests, classifier usage
 - **[User Manual](docs/USAGE.md)** — Docker container and virtual environment setup and usage
 - **[Quick Start Guide](QUICKSTART.md)** — Get started quickly
