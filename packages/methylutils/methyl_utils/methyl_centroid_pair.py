@@ -578,8 +578,8 @@ class MethylCentroidPair:
         validate_methylation_data(centroid1.mean, centroid1.N)
         validate_methylation_data(centroid2.mean, centroid2.N)
 
-        binned1 = getattr(centroid1, "binned_stats", None)
-        binned2 = getattr(centroid2, "binned_stats", None)
+        binned1 = centroid1.binned_stats
+        binned2 = centroid2.binned_stats
         if not binned1 or "bin_edges" not in binned1 or "bin_counts" not in binned1:
             raise ValueError(
                 "MethylCentroidPair requires centroid1 with binned_stats (bin_edges, bin_counts)"
@@ -848,8 +848,8 @@ class MethylCentroidPair:
         Sx2, Sx2_2 = np.asarray(centroid2.Sx.values, dtype=np.float64), np.asarray(centroid2.Sx2.values, dtype=np.float64)
         var1 = np.maximum((Sx2_1 - (Sx1 ** 2) / np.maximum(N1, 1)) / np.maximum(N1 - 1, 1), 1e-12)
         var2 = np.maximum((Sx2_2 - (Sx2 ** 2) / np.maximum(N2, 1)) / np.maximum(N2 - 1, 1), 1e-12)
-        has_ecdf1 = bool(getattr(centroid1, "binned_stats", None) and "bin_edges" in getattr(centroid1, "binned_stats", {}) and "bin_counts" in getattr(centroid1, "binned_stats", {}))
-        has_ecdf2 = bool(getattr(centroid2, "binned_stats", None) and "bin_edges" in getattr(centroid2, "binned_stats", {}) and "bin_counts" in getattr(centroid2, "binned_stats", {}))
+        has_ecdf1 = bool(centroid1.binned_stats and "bin_edges" in centroid1.binned_stats and "bin_counts" in centroid1.binned_stats)
+        has_ecdf2 = bool(centroid2.binned_stats and "bin_edges" in centroid2.binned_stats and "bin_counts" in centroid2.binned_stats)
 
         position_diffs = np.abs(mean1 - mean2)
         n_positions = len(position_diffs)

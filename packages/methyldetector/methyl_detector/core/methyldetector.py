@@ -10,7 +10,6 @@ import pandas as pd
 
 # Import statistical functions from MethylUtils (required)
 from methyl_utils import (
-    MethylBetaMixtureCentroid,
     cleanup_gpu_memory
 )
 from methyl_utils.logging_utils import setup_module_logging
@@ -284,20 +283,7 @@ class MethylDetector:
 
         bio_dmps_df = bio_dmps_df.sort_values("effect_size", ascending=False).reset_index(drop=True)
         logger.info("📊 Biological DMPs sorted by effect_size")
-
-        # Optional: BMM refinement stage (detector-level)
-        if self.config.bmm_refine_enabled:
-            logger.info("🧪 Running BMM refinement stage (detector-level)...")
-            bio_dmps_df = self._refine_dmps_with_bmm(bio_dmps_df)
-            logger.info(f"✅ BMM refinement complete: {len(bio_dmps_df):,} DMPs retained")
-
-            # Save BMM centroid for downstream use (per chromosome/context)
-            if self.config.output_dir:
-                self._save_bmm_centroids(Path(self.config.output_dir))
-            if self.config.bmm_refine_use_gpu and self.gpu_config.GPU_AVAILABLE:
-                cleanup_gpu_memory()
-                logger.debug("Cleaned GPU memory after BMM refinement")
-        
+       
         # Compute biological importance and sort
         logger.info("📋 Sorting DMPs by biological importance...")
         sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
@@ -894,192 +880,7 @@ class MethylDetector:
             self.config.centroid2_dir,
             self.chromosome,
         )
-
-    def _refine_dmps_with_bmm(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Refine DMPs using per-position Beta Mixture Models (BMMs).
-
-        Delegates to MethylCentroidPair for centroid-centric refinement logic.
-        """
-        if dmps_df is None or dmps_df.empty:
-            return dmps_df
-
-        from methyl_utils import MethylCentroidPair
-
-        # Resolve sample paths
-        class1_paths = self.config.centroid1_validation_samples
-        class2_paths = self.config.centroid2_validation_samples
-        if class1_paths is None and self.config.bmm_refine_use_metadata_samples:
-            class1_paths = "use_metadata"
-        if class2_paths is None and self.config.bmm_refine_use_metadata_samples:
-            class2_paths = "use_metadata"
-
-        class1_paths = self._get_validation_samples(class1_paths, self.config.centroid1_dir, "centroid1")
-        class2_paths = self._get_validation_samples(class2_paths, self.config.centroid2_dir, "centroid2")
-
-        bmm_config = {
-            "bmm_refine_max_dmps": self.config.bmm_refine_max_dmps,
-            "bmm_refine_max_fraction": self.config.bmm_refine_max_fraction,
-            "bmm_refine_use_binned_stats": self.config.bmm_refine_use_binned_stats,
-            "bmm_refine_bin_count": self.config.bmm_refine_bin_count,
-            "bmm_refine_min_samples_per_group": self.config.bmm_refine_min_samples_per_group,
-            "bmm_refine_max_samples_per_group": self.config.bmm_refine_max_samples_per_group,
-            "bmm_refine_max_components": self.config.bmm_refine_max_components,
-            "bmm_refine_use_gpu": self.config.bmm_refine_use_gpu,
-            "bmm_refine_js_threshold": self.config.bmm_refine_js_threshold,
-            "bmm_refine_skip_delta_mean": self.config.bmm_refine_skip_delta_mean,
-            "bmm_refine_skip_overlap": self.config.bmm_refine_skip_overlap,
-            "bmm_refine_mc_samples": self.config.bmm_refine_mc_samples,
-            "bmm_refine_use_metadata_samples": self.config.bmm_refine_use_metadata_samples,
-            "bmm_refine_replace_p_value": self.config.bmm_refine_replace_p_value,
-            "bmm_refine_recompute_q": self.config.bmm_refine_recompute_q,
-            "bmm_refine_mode": self.config.bmm_refine_mode,
-            "bmm_refine_filter_metric": self.config.bmm_refine_filter_metric,
-            "bmm_refine_pvalue_threshold": self.config.bmm_refine_pvalue_threshold,
-            "random_state": self.config.random_state,
-        }
-
-        extraction_min = self.config.validation_min_coverage
-        pair = MethylCentroidPair(min_coverage=extraction_min)
-        contexts = self.config.contexts
-        merged, bmm_c1, bmm_c2, records_map, bmm_summary = pair.refine_dmps_with_bmm(
-            dmps_df=dmps_df,
-            centroid1_dir=self.config.centroid1_dir,
-            centroid2_dir=self.config.centroid2_dir,
-            chromosome=self.chromosome,
-            class1_paths=class1_paths,
-            class2_paths=class2_paths,
-            contexts=contexts,
-            bmm_config=bmm_config,
-            load_validation_samples_fn=self._load_validation_samples_multicontext_impl,
-        )
-
-        self._bmm_centroid_c1 = bmm_c1
-        self._bmm_centroid_c2 = bmm_c2
-        if bmm_c1 is not None:
-            self._bmm_centroid = bmm_c1
-        self._bmm_records_map = records_map
-        self._bmm_summary = bmm_summary
-
-        return merged
-
-    def _save_bmm_centroids(self, output_dir: Path) -> None:
-        """Save BMM centroids per context for downstream use."""
-        centroids = []
-        if getattr(self, "_bmm_centroid_c1", None) is not None:
-            centroids.append(("centroid1", self._bmm_centroid_c1))
-        if getattr(self, "_bmm_centroid_c2", None) is not None:
-            centroids.append(("centroid2", self._bmm_centroid_c2))
-        if not centroids and self._bmm_centroid is not None:
-            centroids.append(("centroid1", self._bmm_centroid))
-
-        if not centroids:
-            return
-
-        out_dir = output_dir / "bmm_centroids"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        saved_files = []
-
-        for label, centroid_obj in centroids:
-            bmm_df = centroid_obj.df
-            mask_df = centroid_obj.mask
-
-            contexts = set()
-            if bmm_df is not None and not bmm_df.empty and "context" in bmm_df.columns:
-                contexts.update(bmm_df["context"].dropna().unique().tolist())
-            if mask_df is not None and not mask_df.empty and "context" in mask_df.columns:
-                contexts.update(mask_df["context"].dropna().unique().tolist())
-
-            if not contexts:
-                continue
-
-            for ctx in sorted(contexts):
-                ctx_df = bmm_df[bmm_df["context"] == ctx].copy() if bmm_df is not None else pd.DataFrame()
-                ctx_mask = mask_df[mask_df["context"] == ctx].copy() if mask_df is not None else None
-
-                metadata = dict(centroid_obj.metadata or {})
-                metadata.update({
-                    "chromosome": self.chromosome,
-                    "context": ctx,
-                    "record_count": int(len(ctx_df)),
-                    "mask_count": int(len(ctx_mask)) if ctx_mask is not None else 0,
-                    "group": label,
-                    "source": metadata.get("source", "detector_bmm_refine"),
-                })
-
-                centroid = MethylBetaMixtureCentroid.from_dataframe(
-                    ctx_df,
-                    metadata=metadata,
-                    mask=ctx_mask,
-                )
-
-                if label == "centroid1":
-                    out_path = out_dir / f"bmm-centroid-{self.chromosome}-{ctx}.json"
-                else:
-                    out_path = out_dir / f"bmm-centroid-{self.chromosome}-{ctx}-{label}.json"
-                centroid.to_json(out_path)
-                saved_files.append(str(out_path))
-
-        if saved_files:
-            logger.info(f"Saved BMM centroids to {out_dir}")
-            self._bmm_centroid_files = saved_files
-
-    def _build_bmm_mixture_arrays(self, dmps_df: pd.DataFrame) -> Optional[Dict[str, List[Optional[List[float]]]]]:
-        """Build per-position BMM mixture arrays aligned to DMP DataFrame."""
-        record_map = getattr(self, "_bmm_records_map", None)
-        if not record_map:
-            return None
-
-        mix = {
-            "mix_weights1": [],
-            "mix_alphas1": [],
-            "mix_betas1": [],
-            "mix_weights2": [],
-            "mix_alphas2": [],
-            "mix_betas2": [],
-        }
-
-        for _, row in dmps_df.iterrows():
-            pos = int(row["position"])
-            ctx = row.get("context", "CG")
-            key = (pos, ctx)
-            rec = record_map.get(key)
-
-            if rec and rec.get("status") == "fit" and rec.get("weights1") and rec.get("weights2"):
-                mix["mix_weights1"].append(rec.get("weights1"))
-                mix["mix_alphas1"].append(rec.get("alphas1"))
-                mix["mix_betas1"].append(rec.get("betas1"))
-                mix["mix_weights2"].append(rec.get("weights2"))
-                mix["mix_alphas2"].append(rec.get("alphas2"))
-                mix["mix_betas2"].append(rec.get("betas2"))
-            else:
-                mix["mix_weights1"].append(None)
-                mix["mix_alphas1"].append(None)
-                mix["mix_betas1"].append(None)
-                mix["mix_weights2"].append(None)
-                mix["mix_alphas2"].append(None)
-                mix["mix_betas2"].append(None)
-
-        if not any(v is not None for v in mix["mix_weights1"]):
-            return None
-
-        return mix
-
-    def _attach_bmm_mixtures(self, classifier, dmps_df: pd.DataFrame) -> bool:
-        """Attach BMM mixture parameters to a classifier if available."""
-        mix = self._build_bmm_mixture_arrays(dmps_df)
-        if not mix:
-            return False
-
-        for key, value in mix.items():
-            setattr(classifier, key, value)
-            try:
-                classifier.data[key] = value
-            except Exception:
-                pass
-
-        return True
-    
+  
     def _compute_biological_importance(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
         Sort DMPs by effect_size (single biological importance measure).
@@ -3022,8 +2823,7 @@ class MethylDetector:
         # Optional / distribution-specific columns
         EXTRA_EXPORT_COLS = [
             'context_weight', 'alpha1', 'beta1', 'alpha2', 'beta2',
-            'combined_variance', 'bmm_p_value', 'bmm_js', 'bmm_status',
-            'n_estimated_per_group',
+            'combined_variance', 'n_estimated_per_group',
         ]
         export_cols = STANDARD_EXPORT_COLS + [c for c in EXTRA_EXPORT_COLS if c not in STANDARD_EXPORT_COLS]
 
@@ -3086,7 +2886,6 @@ class MethylDetector:
             'metadata': {
                 'version': '2.0.0',
                 'classifier_type': classifier_label,
-                'bmm_mixture_attached': False,
                 'context': ctx_str,
                 'config': self.config.model_dump(),
                 'trimmed_percentile_low': self.config.trimmed_percentile_low,
@@ -3267,10 +3066,6 @@ class MethylDetector:
         
         # Create result
         config_summary = self.config.model_dump()
-        if hasattr(self, "_bmm_summary") and self._bmm_summary:
-            config_summary = {**config_summary, "bmm_summary": self._bmm_summary}
-        if hasattr(self, "_bmm_centroid_files"):
-            config_summary = {**config_summary, "bmm_centroid_files": self._bmm_centroid_files}
 
         balanced_accuracy = None
         if hasattr(self, '_final_validation_results') and self._final_validation_results:
@@ -3601,8 +3396,6 @@ class MethylDetector:
         )
 
         config_summary = self.config.model_dump()
-        if hasattr(self, "_bmm_summary") and self._bmm_summary:
-            config_summary = {**config_summary, "bmm_summary": self._bmm_summary}
 
         result = MethylModelerResult(
             biologically_significant_dmps_df=biological_dmps_df,
