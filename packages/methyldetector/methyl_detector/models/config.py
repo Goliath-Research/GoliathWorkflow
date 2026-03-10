@@ -54,6 +54,11 @@ class MethylModelerConfig(BaseModel):
     def reject_legacy_distribution_keys(cls, data):
         """Reject legacy detector knobs that no longer map to runtime behavior."""
         if isinstance(data, dict):
+            if "statistical_test" in data:
+                raise ValueError(
+                    "statistical_test is no longer supported. "
+                    "MethylDetector always uses the histogram-derived Mann-Whitney U test."
+                )
             legacy_keys = {"distribution", "delta_mean_mode", "overlap_mode", "max_N_for_ecdf"}
             used = sorted(k for k in legacy_keys if k in data)
             if used:
@@ -115,11 +120,6 @@ class MethylModelerConfig(BaseModel):
         default=100,
         ge=10,
         description="Number of synthetic validation samples per class when validation_mode='synthetic'."
-    )
-
-    statistical_test: str = Field(
-        default="welch",
-        description="Per-position statistical gate: 'welch' (current baseline) or 'mann_whitney' (bin-count based, assumption-light)."
     )
 
     validation_split_ratio: float = Field(
@@ -558,14 +558,6 @@ class MethylModelerConfig(BaseModel):
     def validate_classifier_type(cls, v):
         if v != "ecdf":
             raise ValueError("classifier_type must be 'ecdf'. Legacy beta/beta-binomial exports are no longer supported.")
-        return v
-
-    @field_validator('statistical_test', mode='before')
-    @classmethod
-    def validate_statistical_test(cls, v):
-        valid = {"welch", "mann_whitney"}
-        if v not in valid:
-            raise ValueError(f"statistical_test must be one of: {sorted(valid)}, got: {v}")
         return v
 
     @field_validator('synthetic_config', mode='before')

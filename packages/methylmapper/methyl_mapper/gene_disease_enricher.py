@@ -8,8 +8,10 @@ focused on cancer types like early-stage prostate cancer.
 import json
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from threading import Lock, local
+from typing import Dict, List, Optional, Tuple, Union
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
@@ -19,10 +21,20 @@ from .secure_credentials import SecureCredentialManager
 
 logger = logging.getLogger(__name__)
 
-# Cache format version (2 = DataFrame-backed; 1 = legacy dict)
-CACHE_VERSION = 2
+# Cache format version (3 = dict-backed runtime index + persisted records)
+CACHE_VERSION = 3
 CACHE_COLUMNS = ["source", "gene", "disease_term", "ts", "value_json"]
 DISEASE_CACHE_COLUMNS = ["disease_term", "ts", "disease_id"]
+TARGET_CACHE_COLUMNS = ["gene_name", "ts", "target_id"]
+
+DEFAULT_CACHE_TTL_DAYS = 7
+DEFAULT_GROK_CACHE_TTL_DAYS = 0
+DEFAULT_GROK_BATCH_SIZE = 10
+DEFAULT_GROK_MAX_WORKERS = 2
+DEFAULT_OPEN_TARGETS_MAX_WORKERS = 8
+DEFAULT_DISGENET_MAX_WORKERS = 8
+DEFAULT_SOURCE_MAX_WORKERS = 3
+NULL_CACHE_VALUE = "__NULL__"
 
 # Evidence level ordering for thresholding
 EVIDENCE_LEVEL_ORDER = {
@@ -183,9 +195,15 @@ class GeneDiseaseEnricher:
         allow_predicted: Optional[bool] = None,
         cache_enabled: bool = True,
         cache_dir: Optional[Path] = None,
-        cache_ttl_days: Optional[int] = 7,
+        cache_ttl_days: Optional[int] = DEFAULT_CACHE_TTL_DAYS,
+        grok_cache_ttl_days: Optional[int] = DEFAULT_GROK_CACHE_TTL_DAYS,
         rate_limit_delay: float = 1.0,
         max_retries: int = 3,
+        source_max_workers: int = DEFAULT_SOURCE_MAX_WORKERS,
+        grok_batch_size: int = DEFAULT_GROK_BATCH_SIZE,
+        grok_max_workers: int = DEFAULT_GROK_MAX_WORKERS,
+        open_targets_max_workers: int = DEFAULT_OPEN_TARGETS_MAX_WORKERS,
+        disgenet_max_workers: int = DEFAULT_DISGENET_MAX_WORKERS,
         azure_key_vault_url: Optional[str] = None,
         azure_secret_name: Optional[str] = None,
         encrypted_file_path: Optional[Path] = None
@@ -211,9 +229,16 @@ class GeneDiseaseEnricher:
             allow_predicted: Whether to allow "predicted" associations
             cache_enabled: Whether to persist cache to disk
             cache_dir: Directory for disk cache (default: ~/.methyl_mapper/cache)
-            cache_ttl_days: Cache TTL in days (default: 0 = never use cache for fresh Grok results; set e.g. 7 to reuse cache)
-            rate_limit_delay: Delay between API calls (seconds)
+            cache_ttl_days: Disk cache TTL in days for Open Targets / DisGeNET and metadata caches
+            grok_cache_ttl_days: Disk cache TTL in days for Grok results (default: 0 = fresh each run,
+                                 but same-process memoization still avoids duplicate calls)
+            rate_limit_delay: Delay between Grok batch requests (seconds)
             max_retries: Maximum retry attempts for API calls
+            source_max_workers: Max workers when querying multiple sources in parallel
+            grok_batch_size: Number of genes per Grok batch request
+            grok_max_workers: Max concurrent Grok batch requests
+            open_targets_max_workers: Max concurrent Open Targets gene requests
+            disgenet_max_workers: Max concurrent DisGeNET gene requests
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
             azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
             encrypted_file_path: Path to encrypted credential file (optional)
@@ -261,10 +286,15 @@ class GeneDiseaseEnricher:
         self.allow_predicted = bool(thresholds["allow_predicted"])
         self.rate_limit_delay = rate_limit_delay
         self.max_retries = max_retries
+        self.source_max_workers = max(1, int(source_max_workers))
+        self.grok_batch_size = max(1, int(grok_batch_size))
+        self.grok_max_workers = max(1, int(grok_max_workers))
+        self.open_targets_max_workers = max(1, int(open_targets_max_workers))
+        self.disgenet_max_workers = max(1, int(disgenet_max_workers))
 
         self.cache_enabled = cache_enabled
-        # 0 = never use cache (always re-query); None = no TTL (cache never expires); positive = max age in days
         self.cache_ttl_days = None if cache_ttl_days is None else int(cache_ttl_days)
+        self.grok_cache_ttl_days = None if grok_cache_ttl_days is None else int(grok_cache_ttl_days)
         self.cache_dir = Path(cache_dir).expanduser() if cache_dir else (Path.home() / ".methyl_mapper" / "cache")
         self.cache_file = self.cache_dir / "gene_disease_cache.json"
 
@@ -278,22 +308,191 @@ class GeneDiseaseEnricher:
         if self.min_open_targets_score < 0.0 or self.min_open_targets_score > 1.0:
             raise ValueError("min_open_targets_score must be between 0.0 and 1.0")
         
-        # Setup requests session with retries
-        self.session = requests.Session()
-        retry_strategy = Retry(
-            total=max_retries,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504]
-        )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
-        self.session.mount("http://", adapter)
-        self.session.mount("https://", adapter)
-        
-        # Cache for gene-disease associations (DataFrame for fast batch lookups)
-        self._cache_df: pd.DataFrame = pd.DataFrame(columns=CACHE_COLUMNS)
-        self._disease_id_df: pd.DataFrame = pd.DataFrame(columns=DISEASE_CACHE_COLUMNS)
+        self._thread_local = local()
+        self._cache_lock = Lock()
+        self._association_runtime_cache: Dict[str, Dict] = {}
+        self._association_disk_cache: Dict[str, Dict[str, Union[float, Dict]]] = {}
+        self._disease_runtime_cache: Dict[str, Optional[str]] = {}
+        self._disease_disk_cache: Dict[str, Dict[str, Optional[Union[str, float]]]] = {}
+        self._target_runtime_cache: Dict[str, Optional[str]] = {}
+        self._target_disk_cache: Dict[str, Dict[str, Optional[Union[str, float]]]] = {}
         self._cache_dirty = False
         self._load_disk_cache()
+
+    def _create_session(self) -> requests.Session:
+        """Create a requests session configured for retryable API traffic."""
+        session = requests.Session()
+        retry_strategy = Retry(
+            total=self.max_retries,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=None,
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        return session
+
+    def _get_session(self) -> requests.Session:
+        """Return a per-thread session so concurrent requests do not share mutable state."""
+        session = getattr(self._thread_local, "session", None)
+        if session is None:
+            session = self._create_session()
+            self._thread_local.session = session
+        return session
+
+    def _cache_ttl_for_source(self, source: str) -> Optional[int]:
+        """Resolve disk TTL for the given cache source."""
+        if source == "grok":
+            return self.grok_cache_ttl_days
+        return self.cache_ttl_days
+
+    @staticmethod
+    def _dedupe_gene_names(gene_names: List[str]) -> List[str]:
+        """Normalize and deduplicate gene names while preserving input order."""
+        deduped: List[str] = []
+        seen = set()
+        for gene in gene_names:
+            normalized = str(gene).strip()
+            if not normalized:
+                continue
+            gene_upper = normalized.upper()
+            if gene_upper in seen:
+                continue
+            seen.add(gene_upper)
+            deduped.append(normalized)
+        return deduped
+
+    def _build_enrichment_payload(
+        self,
+        gene_names: List[str],
+        disease_term: Optional[str] = None,
+    ) -> Dict[str, Dict]:
+        """Fetch enrichment results once for a set of genes and return reusable payload."""
+        disease_term = disease_term or self.disease_term
+        unique_genes = self._dedupe_gene_names(gene_names)
+        if not unique_genes:
+            return {
+                "genes": [],
+                "hyperlinks": {},
+                "grok": {},
+                "open_targets": {},
+                "disgenet": {},
+                "merged": {},
+            }
+
+        logger.info(f"Enriching {len(unique_genes)} unique genes with disease associations...")
+        source_results = self._query_enabled_sources(unique_genes, disease_term)
+        hyperlinks = self._generate_gene_hyperlinks(unique_genes)
+        merged_results = self._merge_results(
+            source_results.get("grok", {}),
+            source_results.get("open_targets", {}),
+            source_results.get("disgenet", {}),
+            unique_genes,
+        )
+        return {
+            "genes": unique_genes,
+            "hyperlinks": hyperlinks,
+            "grok": source_results.get("grok", {}),
+            "open_targets": source_results.get("open_targets", {}),
+            "disgenet": source_results.get("disgenet", {}),
+            "merged": merged_results,
+        }
+
+    def _query_enabled_sources(
+        self,
+        gene_names: List[str],
+        disease_term: str,
+    ) -> Dict[str, Dict[str, Dict]]:
+        """Run enabled enrichment sources, overlapping network I/O when possible."""
+        tasks = []
+        if self.use_grok:
+            tasks.append(("grok", self.query_grok_api))
+        if self.use_open_targets:
+            tasks.append(("open_targets", self.query_open_targets))
+        if self.use_disgenet:
+            tasks.append(("disgenet", self.query_disgenet))
+
+        results: Dict[str, Dict[str, Dict]] = {
+            "grok": {},
+            "open_targets": {},
+            "disgenet": {},
+        }
+        if not tasks:
+            return results
+
+        if len(tasks) == 1:
+            name, func = tasks[0]
+            results[name] = func(gene_names, disease_term)
+            return results
+
+        max_workers = min(self.source_max_workers, len(tasks))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_name = {
+                executor.submit(func, gene_names, disease_term): name
+                for name, func in tasks
+            }
+            for future in as_completed(future_to_name):
+                name = future_to_name[future]
+                try:
+                    results[name] = future.result()
+                except Exception as exc:
+                    logger.warning(f"{name} enrichment failed: {exc}")
+                    results[name] = {}
+
+        return results
+
+    def _apply_enrichment_payload(
+        self,
+        df: pd.DataFrame,
+        gene_column: str,
+        payload: Dict[str, Dict],
+        separate_sources: bool = False,
+    ) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
+        """Apply a pre-fetched enrichment payload to one or more dataframes."""
+        hyperlinks = payload.get("hyperlinks", {})
+        sources_enabled = {
+            "grok": self.use_grok,
+            "open_targets": self.use_open_targets,
+            "disgenet": self.use_disgenet,
+        }
+        sources_enabled = {k: v for k, v in sources_enabled.items() if v}
+
+        if separate_sources and len(sources_enabled) > 1:
+            logger.info("Returning separate results for each source...")
+            result_dfs: Dict[str, pd.DataFrame] = {}
+            for source_name in ("grok", "open_targets", "disgenet"):
+                if source_name in sources_enabled:
+                    source_df = df.copy()
+                    source_df = self._add_enrichment_columns(
+                        source_df,
+                        payload.get(source_name, {}),
+                        gene_column,
+                        source_name,
+                        hyperlinks,
+                    )
+                    result_dfs[source_name] = source_df
+
+            merged_df = df.copy()
+            merged_df = self._add_enrichment_columns(
+                merged_df,
+                payload.get("merged", {}),
+                gene_column,
+                "merged",
+                hyperlinks,
+            )
+            result_dfs["merged"] = merged_df
+            return result_dfs
+
+        enriched_df = df.copy()
+        enriched_df = self._add_enrichment_columns(
+            enriched_df,
+            payload.get("merged", {}),
+            gene_column,
+            "merged",
+            hyperlinks,
+        )
+        return enriched_df
     
     def query_grok_api(
         self,
@@ -315,8 +514,8 @@ class GeneDiseaseEnricher:
             return {}
         
         disease_term = disease_term or self.disease_term
+        gene_names = self._dedupe_gene_names(gene_names)
         
-        # Batch cache lookup (one DataFrame query instead of N dict lookups)
         cached_results = self._cache_get_batch("grok", gene_names, disease_term)
         uncached_genes = [g for g in gene_names if g.upper() not in cached_results]
         
@@ -330,71 +529,80 @@ class GeneDiseaseEnricher:
         logger.info(f"Querying Grok API for {len(uncached_genes)} genes associated with '{disease_term}'...")
 
         results = cached_results.copy()
-
-        # Batch genes to avoid overwhelming the API
-        batch_size = 10
-        total_batches = (len(uncached_genes) + batch_size - 1) // batch_size  # Ceiling division
-
-        # Initialize progress indicator
+        batches = [
+            uncached_genes[i:i + self.grok_batch_size]
+            for i in range(0, len(uncached_genes), self.grok_batch_size)
+        ]
+        total_batches = len(batches)
         progress = ProgressIndicator(total_batches, "Grok API batches", update_interval=1)
 
-        # Retry failed batches up to this many times (exponential backoff)
-        max_retries = 3
-        base_timeout = 60
-        per_gene_timeout = 20
-
-        for i in range(0, len(uncached_genes), batch_size):
-            batch = uncached_genes[i:i+batch_size]
-            batch_num = i // batch_size + 1
-
-            # Create prompt for Grok
-            prompt = self._create_grok_prompt(batch, disease_term)
-
-            last_error = None
-            for attempt in range(max_retries):
-                try:
-                    # Timeout: base + per-gene (increased from previous 30+10 to reduce read timeouts)
-                    timeout = max(base_timeout, base_timeout + len(batch) * per_gene_timeout)
-                    # On retry, allow more time
-                    if attempt > 0:
-                        timeout = int(timeout * (1.5 ** attempt))
-                    logger.debug(f"Querying batch {batch_num} with {len(batch)} genes (timeout: {timeout}s, attempt {attempt + 1}/{max_retries})")
-                    response = self._call_grok_api(prompt, timeout=timeout)
-
-                    # Parse response
-                    batch_results = self._parse_grok_response(response, batch)
-
-                    # Cache results
-                    for gene_name, association_info in batch_results.items():
-                        cache_key = self._cache_key("grok", gene_name, disease_term)
-                        self._cache_set(cache_key, association_info)
-
+        if self.grok_max_workers == 1 or total_batches == 1:
+            for batch_num, batch in enumerate(batches, start=1):
+                batch_results, success = self._query_grok_batch(batch, disease_term, batch_num)
+                results.update(batch_results)
+                progress.update(success=success)
+                if self.rate_limit_delay > 0 and batch_num < total_batches:
+                    time.sleep(self.rate_limit_delay)
+        else:
+            with ThreadPoolExecutor(max_workers=min(self.grok_max_workers, total_batches)) as executor:
+                future_to_batch_num = {
+                    executor.submit(self._query_grok_batch, batch, disease_term, batch_num): batch_num
+                    for batch_num, batch in enumerate(batches, start=1)
+                }
+                for future in as_completed(future_to_batch_num):
+                    try:
+                        batch_results, success = future.result()
+                    except Exception as exc:
+                        logger.warning(f"Grok API batch failed unexpectedly: {exc}")
+                        batch_results, success = {}, False
                     results.update(batch_results)
-                    progress.update(success=True)
-
-                    # Persist cache every 10 batches so interrupted runs keep progress
-                    if batch_num % 10 == 0:
-                        self._save_disk_cache()
-
-                    break
-                except Exception as e:
-                    last_error = e
-                    if attempt < max_retries - 1:
-                        delay = (2 ** attempt) * 5  # 5s, 10s, 20s
-                        logger.warning(f"Grok API query failed for batch {batch_num} (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {delay}s...")
-                        time.sleep(delay)
-                    else:
-                        logger.warning(f"Grok API query failed for batch {batch_num} after {max_retries} attempts: {last_error}")
-                        progress.update(success=False)
-                        break
-
-            # Rate limiting between batches
-            if i + batch_size < len(uncached_genes):
-                time.sleep(self.rate_limit_delay)
+                    progress.update(success=success)
 
         logger.info(f"✅ Retrieved disease associations for {len(results)} genes from Grok API ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
         self._save_disk_cache()
         return results
+
+    def _query_grok_batch(
+        self,
+        batch: List[str],
+        disease_term: str,
+        batch_num: int,
+    ) -> Tuple[Dict[str, Dict], bool]:
+        """Query one Grok batch with retries and batch-local caching."""
+        prompt = self._create_grok_prompt(batch, disease_term)
+        last_error = None
+        base_timeout = 60
+        per_gene_timeout = 20
+
+        for attempt in range(self.max_retries):
+            try:
+                timeout = max(base_timeout, base_timeout + len(batch) * per_gene_timeout)
+                if attempt > 0:
+                    timeout = int(timeout * (1.5 ** attempt))
+                logger.debug(
+                    f"Querying batch {batch_num} with {len(batch)} genes "
+                    f"(timeout: {timeout}s, attempt {attempt + 1}/{self.max_retries})"
+                )
+                response = self._call_grok_api(prompt, timeout=timeout)
+                batch_results = self._parse_grok_response(response, batch)
+                for gene_name, association_info in batch_results.items():
+                    self._cache_set(self._cache_key("grok", gene_name, disease_term), association_info)
+                return batch_results, True
+            except Exception as exc:
+                last_error = exc
+                if attempt < self.max_retries - 1:
+                    delay = (2 ** attempt) * 5
+                    logger.warning(
+                        f"Grok API query failed for batch {batch_num} "
+                        f"(attempt {attempt + 1}/{self.max_retries}): {exc}. "
+                        f"Retrying in {delay}s..."
+                    )
+                    time.sleep(delay)
+
+        logger.warning(
+            f"Grok API query failed for batch {batch_num} after {self.max_retries} attempts: {last_error}"
+        )
+        return {}, False
     
     def _create_grok_prompt(self, gene_names: List[str], disease_term: str) -> str:
         """Create a prompt for Grok API."""
@@ -456,7 +664,7 @@ Return ONLY a valid JSON array—no other text. Example:
         }
         
         logger.debug(f"Calling Grok API with timeout={timeout}s for prompt length={len(prompt)}")
-        response = self.session.post(
+        response = self._get_session().post(
             self.grok_api_url,
             headers=headers,
             json=payload,
@@ -668,8 +876,8 @@ Return ONLY a valid JSON array—no other text. Example:
             return {}
 
         disease_term = disease_term or self.disease_term
+        gene_names = self._dedupe_gene_names(gene_names)
 
-        # Batch cache lookup
         cached_results = self._cache_get_batch("disgenet", gene_names, disease_term)
         uncached_genes = [g for g in gene_names if g.upper() not in cached_results]
 
@@ -685,48 +893,26 @@ Return ONLY a valid JSON array—no other text. Example:
         disgenet_api_key = self.disgenet_api_key
 
         results = cached_results.copy()
-
-        # DisGeNET API endpoint
-        base_url = "https://api.disgenet.com/api/v1/gda/gene/"
-
-        # Initialize progress indicator for individual genes
         progress = ProgressIndicator(len(uncached_genes), "DisGeNET genes", update_interval=50)
 
-        for gene in uncached_genes:
-            try:
-                url = f"{base_url}{gene}"
-                headers = {"Authorization": f"Bearer {disgenet_api_key}"}
-
-                response = self.session.get(url, headers=headers, timeout=10)
-
-                if response.status_code == 200:
-                    data = response.json()
-
-                    # Filter by disease term if provided
-                    if disease_term:
-                        disease_lower = disease_term.lower()
-                        relevant_associations = [
-                            d for d in data
-                            if disease_lower in d.get('disease_name', '').lower() or
-                               disease_lower in d.get('disease_class', '').lower()
-                        ]
-                    else:
-                        relevant_associations = data
-
-                    if relevant_associations:
-                        # Get highest score association
-                        best = max(relevant_associations, key=lambda x: x.get('score', 0))
-                        association_info = {
-                            'associated': True,
-                            'association_type': 'database',
-                            'evidence_level': 'high' if best.get('score', 0) > 0.5 else 'medium',
-                            'description': best.get('disease_name'),
-                            'publications': best.get('nof_pmids', 0),
-                            'functional_role': best.get('disease_class'),
-                            'source': 'disgenet',
-                            'score': best.get('score', 0)
-                        }
-                    else:
+        if self.disgenet_max_workers == 1 or len(uncached_genes) == 1:
+            for gene in uncached_genes:
+                gene_upper, association_info, success = self._query_disgenet_gene(gene, disease_term, disgenet_api_key)
+                results[gene_upper] = association_info
+                progress.update(success=success)
+        else:
+            with ThreadPoolExecutor(max_workers=min(self.disgenet_max_workers, len(uncached_genes))) as executor:
+                future_to_gene = {
+                    executor.submit(self._query_disgenet_gene, gene, disease_term, disgenet_api_key): gene
+                    for gene in uncached_genes
+                }
+                for future in as_completed(future_to_gene):
+                    gene = future_to_gene[future]
+                    try:
+                        gene_upper, association_info, success = future.result()
+                    except Exception as exc:
+                        logger.debug(f"DisGeNET query failed for {gene}: {exc}")
+                        gene_upper = gene.upper()
                         association_info = {
                             'associated': False,
                             'association_type': 'none',
@@ -734,23 +920,56 @@ Return ONLY a valid JSON array—no other text. Example:
                             'description': None,
                             'publications': 0,
                             'functional_role': None,
-                            'source': 'disgenet'
+                            'source': 'disgenet_error'
                         }
+                        self._cache_set(self._cache_key("disgenet", gene, disease_term), association_info)
+                        success = False
+                    results[gene_upper] = association_info
+                    progress.update(success=success)
+        
+        logger.info(f"✅ Retrieved associations for {len(results)} genes from DisGeNET ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
+        self._save_disk_cache()
+        return results
 
-                    # Cache result
-                    cache_key = self._cache_key("disgenet", gene, disease_term)
-                    self._cache_set(cache_key, association_info)
-                    results[gene.upper()] = association_info
-                    progress.update(success=True)
+    def _query_disgenet_gene(
+        self,
+        gene: str,
+        disease_term: str,
+        disgenet_api_key: str,
+    ) -> Tuple[str, Dict, bool]:
+        """Query DisGeNET for one gene symbol."""
+        gene_upper = gene.upper()
+        base_url = "https://api.disgenet.com/api/v1/gda/gene/"
+        try:
+            url = f"{base_url}{gene}"
+            headers = {"Authorization": f"Bearer {disgenet_api_key}"}
+            response = self._get_session().get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
 
-                else:
-                    # Handle non-200 responses as errors
-                    progress.update(success=False)
+            if disease_term:
+                disease_lower = disease_term.lower()
+                relevant_associations = [
+                    entry for entry in data
+                    if disease_lower in entry.get('disease_name', '').lower()
+                    or disease_lower in entry.get('disease_class', '').lower()
+                ]
+            else:
+                relevant_associations = data
 
-                time.sleep(0.1)  # Rate limiting
-
-            except Exception as e:
-                logger.debug(f"DisGeNET query failed for {gene}: {e}")
+            if relevant_associations:
+                best = max(relevant_associations, key=lambda x: x.get('score', 0))
+                association_info = {
+                    'associated': True,
+                    'association_type': 'database',
+                    'evidence_level': 'high' if best.get('score', 0) > 0.5 else 'medium',
+                    'description': best.get('disease_name'),
+                    'publications': best.get('nof_pmids', 0),
+                    'functional_role': best.get('disease_class'),
+                    'source': 'disgenet',
+                    'score': best.get('score', 0),
+                }
+            else:
                 association_info = {
                     'associated': False,
                     'association_type': 'none',
@@ -758,17 +977,23 @@ Return ONLY a valid JSON array—no other text. Example:
                     'description': None,
                     'publications': 0,
                     'functional_role': None,
-                    'source': 'disgenet_error'
+                    'source': 'disgenet',
                 }
-                # Cache error result too (to avoid retrying failed queries)
-                cache_key = self._cache_key("disgenet", gene, disease_term)
-                self._cache_set(cache_key, association_info)
-                results[gene.upper()] = association_info
-                progress.update(success=False)
-        
-        logger.info(f"✅ Retrieved associations for {len(results)} genes from DisGeNET ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
-        self._save_disk_cache()
-        return results
+            self._cache_set(self._cache_key("disgenet", gene, disease_term), association_info)
+            return gene_upper, association_info, True
+        except Exception as exc:
+            logger.debug(f"DisGeNET query failed for {gene}: {exc}")
+            association_info = {
+                'associated': False,
+                'association_type': 'none',
+                'evidence_level': 'none',
+                'description': None,
+                'publications': 0,
+                'functional_role': None,
+                'source': 'disgenet_error'
+            }
+            self._cache_set(self._cache_key("disgenet", gene, disease_term), association_info)
+            return gene_upper, association_info, False
 
     def query_open_targets(
         self,
@@ -783,6 +1008,7 @@ Return ONLY a valid JSON array—no other text. Example:
             return {}
 
         disease_term = disease_term or self.disease_term
+        gene_names = self._dedupe_gene_names(gene_names)
 
         # Resolve disease ID once per call
         disease_id = self._resolve_open_targets_disease_id(disease_term)
@@ -790,7 +1016,6 @@ Return ONLY a valid JSON array—no other text. Example:
             logger.warning(f"Open Targets: no disease match for '{disease_term}'")
             return {}
 
-        # Batch cache lookup
         cached_results = self._cache_get_batch("open_targets", gene_names, disease_term)
         uncached_genes = [g for g in gene_names if g.upper() not in cached_results]
 
@@ -806,37 +1031,53 @@ Return ONLY a valid JSON array—no other text. Example:
 
         progress = ProgressIndicator(len(uncached_genes), "Open Targets genes", update_interval=50)
 
-        for gene in uncached_genes:
-            try:
-                target_id = self._resolve_open_targets_target_id(gene)
-                if not target_id:
-                    association_info = {
-                        'associated': False,
-                        'association_type': 'none',
-                        'evidence_level': 'none',
-                        'description': None,
-                        'publications': 0,
-                        'functional_role': None,
-                        'source': 'open_targets'
-                    }
-                else:
-                    assoc = self._fetch_open_targets_association(target_id, disease_id)
-                    association_info = assoc or {
-                        'associated': False,
-                        'association_type': 'none',
-                        'evidence_level': 'none',
-                        'description': None,
-                        'publications': 0,
-                        'functional_role': None,
-                        'source': 'open_targets'
-                    }
+        if self.open_targets_max_workers == 1 or len(uncached_genes) == 1:
+            for gene in uncached_genes:
+                gene_upper, association_info, success = self._query_open_targets_gene(gene, disease_term, disease_id)
+                results[gene_upper] = association_info
+                progress.update(success=success)
+        else:
+            with ThreadPoolExecutor(max_workers=min(self.open_targets_max_workers, len(uncached_genes))) as executor:
+                future_to_gene = {
+                    executor.submit(self._query_open_targets_gene, gene, disease_term, disease_id): gene
+                    for gene in uncached_genes
+                }
+                for future in as_completed(future_to_gene):
+                    gene = future_to_gene[future]
+                    try:
+                        gene_upper, association_info, success = future.result()
+                    except Exception as exc:
+                        logger.debug(f"Open Targets query failed for {gene}: {exc}")
+                        gene_upper = gene.upper()
+                        association_info = {
+                            'associated': False,
+                            'association_type': 'none',
+                            'evidence_level': 'none',
+                            'description': None,
+                            'publications': 0,
+                            'functional_role': None,
+                            'source': 'open_targets_error'
+                        }
+                        self._cache_set(self._cache_key("open_targets", gene, disease_term), association_info)
+                        success = False
+                    results[gene_upper] = association_info
+                    progress.update(success=success)
 
-                cache_key = self._cache_key("open_targets", gene, disease_term)
-                self._cache_set(cache_key, association_info)
-                results[gene.upper()] = association_info
-                progress.update(success=True)
-            except Exception as e:
-                logger.debug(f"Open Targets query failed for {gene}: {e}")
+        logger.info(f"✅ Retrieved associations for {len(results)} genes from Open Targets ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
+        self._save_disk_cache()
+        return results
+
+    def _query_open_targets_gene(
+        self,
+        gene: str,
+        disease_term: str,
+        disease_id: str,
+    ) -> Tuple[str, Dict, bool]:
+        """Query Open Targets for one gene symbol."""
+        gene_upper = gene.upper()
+        try:
+            target_id = self._resolve_open_targets_target_id(gene)
+            if not target_id:
                 association_info = {
                     'associated': False,
                     'association_type': 'none',
@@ -844,18 +1085,34 @@ Return ONLY a valid JSON array—no other text. Example:
                     'description': None,
                     'publications': 0,
                     'functional_role': None,
-                    'source': 'open_targets_error'
+                    'source': 'open_targets'
                 }
-                cache_key = self._cache_key("open_targets", gene, disease_term)
-                self._cache_set(cache_key, association_info)
-                results[gene.upper()] = association_info
-                progress.update(success=False)
-
-            time.sleep(0.1)
-
-        logger.info(f"✅ Retrieved associations for {len(results)} genes from Open Targets ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
-        self._save_disk_cache()
-        return results
+            else:
+                assoc = self._fetch_open_targets_association(target_id, disease_id)
+                association_info = assoc or {
+                    'associated': False,
+                    'association_type': 'none',
+                    'evidence_level': 'none',
+                    'description': None,
+                    'publications': 0,
+                    'functional_role': None,
+                    'source': 'open_targets'
+                }
+            self._cache_set(self._cache_key("open_targets", gene, disease_term), association_info)
+            return gene_upper, association_info, True
+        except Exception as exc:
+            logger.debug(f"Open Targets query failed for {gene}: {exc}")
+            association_info = {
+                'associated': False,
+                'association_type': 'none',
+                'evidence_level': 'none',
+                'description': None,
+                'publications': 0,
+                'functional_role': None,
+                'source': 'open_targets_error'
+            }
+            self._cache_set(self._cache_key("open_targets", gene, disease_term), association_info)
+            return gene_upper, association_info, False
     
     def enrich_gene_dataframe(
         self,
@@ -879,75 +1136,23 @@ Return ONLY a valid JSON array—no other text. Example:
         if gene_column not in df.columns:
             raise ValueError(f"Column '{gene_column}' not found in DataFrame")
         
-        # Get unique genes (exclude empty strings)
-        unique_genes = [g for g in df[gene_column].dropna().unique().tolist() if str(g).strip()]
+        unique_genes = self._dedupe_gene_names(df[gene_column].dropna().unique().tolist())
         
         if not unique_genes:
             logger.warning("No genes found in DataFrame; adding disease columns with empty values.")
-            empty_results = {}
-            hyperlinks = self._generate_gene_hyperlinks([])
-            return self._add_enrichment_columns(df.copy(), empty_results, gene_column, 'merged', hyperlinks)
+            payload = self._build_enrichment_payload([])
+            return self._apply_enrichment_payload(df.copy(), gene_column, payload, separate_sources=False)
 
-        logger.info(f"Enriching {len(unique_genes)} unique genes with disease associations...")
-
-        # Query enabled sources
-        grok_results = {}
-        open_targets_results = {}
-        disgenet_results = {}
-
-        if self.use_grok:
-            grok_results = self.query_grok_api(unique_genes, disease_term)
-
-        if self.use_open_targets:
-            open_targets_results = self.query_open_targets(unique_genes, disease_term)
-
-        if self.use_disgenet:
-            disgenet_results = self.query_disgenet(unique_genes, disease_term)
-
-        # Generate hyperlinks for all genes
-        hyperlinks = self._generate_gene_hyperlinks(unique_genes)
-
-        sources_enabled = {
-            'grok': self.use_grok,
-            'open_targets': self.use_open_targets,
-            'disgenet': self.use_disgenet
-        }
-        sources_enabled = {k: v for k, v in sources_enabled.items() if v}
-
-        # If separate sources requested and multiple sources enabled, return separate DataFrames
-        if separate_sources and len(sources_enabled) > 1:
-            logger.info("Returning separate results for each source...")
-
-            # Create Grok-enriched DataFrame
-            result_dfs = {}
-            if self.use_grok:
-                grok_df = df.copy()
-                grok_df = self._add_enrichment_columns(grok_df, grok_results, gene_column, 'grok', hyperlinks)
-                result_dfs['grok'] = grok_df
-
-            if self.use_open_targets:
-                ot_df = df.copy()
-                ot_df = self._add_enrichment_columns(ot_df, open_targets_results, gene_column, 'open_targets', hyperlinks)
-                result_dfs['open_targets'] = ot_df
-
-            # Create DisGeNET-enriched DataFrame
-            if self.use_disgenet:
-                disgenet_df = df.copy()
-                disgenet_df = self._add_enrichment_columns(disgenet_df, disgenet_results, gene_column, 'disgenet', hyperlinks)
-                result_dfs['disgenet'] = disgenet_df
-
-            # Create merged DataFrame (current behavior)
-            merged_results = self._merge_results(grok_results, open_targets_results, disgenet_results, unique_genes)
-            merged_df = df.copy()
-            merged_df = self._add_enrichment_columns(merged_df, merged_results, gene_column, 'merged', hyperlinks)
-
-            result_dfs['merged'] = merged_df
-            return result_dfs
-
-        # Default behavior: merge results
-        merged_results = self._merge_results(grok_results, open_targets_results, disgenet_results, unique_genes)
-        enriched_df = df.copy()
-        enriched_df = self._add_enrichment_columns(enriched_df, merged_results, gene_column, 'merged', hyperlinks)
+        payload = self._build_enrichment_payload(unique_genes, disease_term)
+        enriched_df = self._apply_enrichment_payload(df.copy(), gene_column, payload, separate_sources=separate_sources)
+        if isinstance(enriched_df, dict):
+            merged_df = enriched_df['merged']
+            n_associated = merged_df['disease_associated'].sum()
+            logger.info(
+                f"✅ Enriched DataFrame: {n_associated}/{len(merged_df)} genes associated with "
+                f"'{disease_term or self.disease_term}'"
+            )
+            return enriched_df
 
         # Log summary
         n_associated = enriched_df['disease_associated'].sum()
@@ -1102,140 +1307,168 @@ Return ONLY a valid JSON array—no other text. Example:
 
     def _cache_get(self, key: str) -> Optional[Dict]:
         """Retrieve a cached association, honoring TTL."""
-        if not self.cache_enabled:
-            return None
         source, gene, disease_term = self._cache_parse_key(key)
         if not source:
             return None
-        df = self._cache_df
-        if df.empty:
-            return None
-        mask = (
-            (df["source"] == source)
-            & (df["gene"] == gene)
-            & (df["disease_term"] == disease_term)
-        )
-        rows = df.loc[mask]
-        if rows.empty:
-            return None
-        row = rows.iloc[0]
-        ts = row.get("ts")
-        if ts is not None and hasattr(ts, "item"):
-            ts = float(ts)
-        if not self._is_cache_valid(ts):
-            self._cache_df = df[~mask].copy()
-            self._cache_dirty = True
-            return None
-        try:
-            return json.loads(row["value_json"])
-        except (TypeError, ValueError):
-            return None
+        return self._cache_get_batch(source, [gene], disease_term).get(gene)
 
     def _cache_get_batch(
         self, source: str, gene_names: List[str], disease_term: str
     ) -> Dict[str, Dict]:
-        """Batch lookup: one DataFrame query for all genes. Returns dict gene_upper -> value."""
-        if not self.cache_enabled or not gene_names:
+        """Batch lookup with same-run memoization plus optional disk-backed reuse."""
+        if not gene_names:
             return {}
-        genes_upper = [g.upper() for g in gene_names]
-        df = self._cache_df
-        if df.empty:
-            return {}
-        mask = (
-            (df["source"] == source)
-            & (df["disease_term"] == disease_term)
-            & (df["gene"].str.upper().isin(genes_upper))
-        )
-        rows = df.loc[mask]
-        if rows.empty:
-            return {}
-        valid_mask = rows.apply(
-            lambda r: self._is_cache_valid(float(r["ts"]) if r.get("ts") is not None else None),
-            axis=1
-        )
-        rows = rows.loc[valid_mask]
         result = {}
-        for _, row in rows.iterrows():
-            gene_upper = str(row["gene"]).upper()
-            if gene_upper in result:
-                continue
-            try:
-                result[gene_upper] = json.loads(row["value_json"])
-            except (TypeError, ValueError):
-                pass
+        with self._cache_lock:
+            for gene_name in gene_names:
+                gene_upper = str(gene_name).strip().upper()
+                if not gene_upper or gene_upper in result:
+                    continue
+                key = self._cache_key(source, gene_upper, disease_term)
+
+                runtime_value = self._association_runtime_cache.get(key)
+                if isinstance(runtime_value, dict):
+                    result[gene_upper] = runtime_value
+                    continue
+
+                disk_entry = self._association_disk_cache.get(key)
+                if not disk_entry:
+                    continue
+
+                ts = disk_entry.get("ts")
+                ts = float(ts) if ts is not None else None
+                if not self._is_cache_valid(ts, source):
+                    self._association_disk_cache.pop(key, None)
+                    self._cache_dirty = True
+                    continue
+
+                value = disk_entry.get("value")
+                if isinstance(value, dict):
+                    result[gene_upper] = value
+                    self._association_runtime_cache[key] = value
         return result
 
     def _cache_set(self, key: str, value: Dict) -> None:
-        """Store a cached association."""
-        if not self.cache_enabled:
-            return
+        """Store a cached association in runtime cache and, when enabled, on disk."""
         source, gene, disease_term = self._cache_parse_key(key)
         if not source:
             return
-        gene = gene.upper()
         ts = time.time()
-        value_json = json.dumps(value)
-        # Drop existing row for this key
-        df = self._cache_df
-        if not df.empty:
-            mask = (
-                (df["source"] == source)
-                & (df["gene"] == gene)
-                & (df["disease_term"] == disease_term)
-            )
-            df = df[~mask]
-        new_row = pd.DataFrame([{
-            "source": source,
-            "gene": gene,
-            "disease_term": disease_term,
-            "ts": ts,
-            "value_json": value_json,
-        }])
-        self._cache_df = pd.concat([df, new_row], ignore_index=True)
-        self._cache_dirty = True
+        with self._cache_lock:
+            self._association_runtime_cache[key] = value
+            ttl = self._cache_ttl_for_source(source)
+            if self.cache_enabled and ttl != 0:
+                self._association_disk_cache[key] = {"ts": ts, "value": value}
+                self._cache_dirty = True
+            elif key in self._association_disk_cache:
+                self._association_disk_cache.pop(key, None)
+                self._cache_dirty = True
 
     def _disease_cache_get(self, key: str) -> Optional[str]:
-        if not self.cache_enabled:
-            return None
-        df = self._disease_id_df
-        if df.empty:
-            return None
-        rows = df[df["disease_term"] == key]
-        if rows.empty:
-            return None
-        row = rows.iloc[0]
-        ts = row.get("ts")
-        if ts is not None and hasattr(ts, "item"):
-            ts = float(ts)
-        if not self._is_cache_valid(ts):
-            self._disease_id_df = df[df["disease_term"] != key].copy()
-            self._cache_dirty = True
-            return None
-        val = row.get("disease_id")
-        return str(val) if val is not None and pd.notna(val) else None
+        with self._cache_lock:
+            if key in self._disease_runtime_cache:
+                value = self._disease_runtime_cache[key]
+                return None if value == NULL_CACHE_VALUE else value
+            entry = self._disease_disk_cache.get(key)
+            if not entry:
+                return None
+            ts = entry.get("ts")
+            ts = float(ts) if ts is not None else None
+            if not self._is_cache_valid(ts, "open_targets_disease"):
+                self._disease_disk_cache.pop(key, None)
+                self._cache_dirty = True
+                return None
+            value = entry.get("value")
+            resolved = str(value) if value is not None else NULL_CACHE_VALUE
+            self._disease_runtime_cache[key] = resolved
+            return None if resolved == NULL_CACHE_VALUE else resolved
 
     def _disease_cache_set(self, key: str, value: Optional[str]) -> None:
-        if not self.cache_enabled:
-            return
-        df = self._disease_id_df
-        if not df.empty:
-            df = df[df["disease_term"] != key]
-        new_row = pd.DataFrame([{
-            "disease_term": key,
-            "ts": time.time(),
-            "disease_id": value,
-        }])
-        self._disease_id_df = pd.concat([df, new_row], ignore_index=True)
-        self._cache_dirty = True
+        stored_value = value if value is not None else NULL_CACHE_VALUE
+        with self._cache_lock:
+            self._disease_runtime_cache[key] = stored_value
+            ttl = self._cache_ttl_for_source("open_targets_disease")
+            if self.cache_enabled and ttl != 0:
+                self._disease_disk_cache[key] = {"ts": time.time(), "value": stored_value}
+                self._cache_dirty = True
+            elif key in self._disease_disk_cache:
+                self._disease_disk_cache.pop(key, None)
+                self._cache_dirty = True
 
-    def _is_cache_valid(self, ts: Optional[float]) -> bool:
+    def _target_cache_get(self, gene_name: str) -> Optional[str]:
+        key = str(gene_name).strip().upper()
+        with self._cache_lock:
+            if key in self._target_runtime_cache:
+                value = self._target_runtime_cache[key]
+                return None if value == NULL_CACHE_VALUE else value
+            entry = self._target_disk_cache.get(key)
+            if not entry:
+                return None
+            ts = entry.get("ts")
+            ts = float(ts) if ts is not None else None
+            if not self._is_cache_valid(ts, "open_targets_target"):
+                self._target_disk_cache.pop(key, None)
+                self._cache_dirty = True
+                return None
+            value = entry.get("value")
+            resolved = str(value) if value is not None else NULL_CACHE_VALUE
+            self._target_runtime_cache[key] = resolved
+            return None if resolved == NULL_CACHE_VALUE else resolved
+
+    def _target_cache_set(self, gene_name: str, target_id: Optional[str]) -> None:
+        key = str(gene_name).strip().upper()
+        stored_value = target_id if target_id is not None else NULL_CACHE_VALUE
+        with self._cache_lock:
+            self._target_runtime_cache[key] = stored_value
+            ttl = self._cache_ttl_for_source("open_targets_target")
+            if self.cache_enabled and ttl != 0:
+                self._target_disk_cache[key] = {"ts": time.time(), "value": stored_value}
+                self._cache_dirty = True
+            elif key in self._target_disk_cache:
+                self._target_disk_cache.pop(key, None)
+                self._cache_dirty = True
+
+    def _is_cache_valid(self, ts: Optional[float], source: str) -> bool:
         if ts is None:
             return True
-        if self.cache_ttl_days == 0:
-            return False  # 0 = never use cache; Grok/literature updates make cached results stale
-        if self.cache_ttl_days is None:
+        ttl = self._cache_ttl_for_source(source)
+        if ttl == 0:
+            return False
+        if ttl is None:
             return True
-        return (time.time() - ts) <= (self.cache_ttl_days * 86400)
+        return (time.time() - ts) <= (ttl * 86400)
+
+    def _prune_disk_cache_locked(self) -> None:
+        """Drop expired persisted cache entries. Caller must hold `_cache_lock`."""
+        stale_associations = [
+            key for key, entry in self._association_disk_cache.items()
+            if not self._is_cache_valid(
+                float(entry.get("ts")) if entry.get("ts") is not None else None,
+                self._cache_parse_key(key)[0],
+            )
+        ]
+        for key in stale_associations:
+            self._association_disk_cache.pop(key, None)
+
+        stale_diseases = [
+            key for key, entry in self._disease_disk_cache.items()
+            if not self._is_cache_valid(
+                float(entry.get("ts")) if entry.get("ts") is not None else None,
+                "open_targets_disease",
+            )
+        ]
+        for key in stale_diseases:
+            self._disease_disk_cache.pop(key, None)
+
+        stale_targets = [
+            key for key, entry in self._target_disk_cache.items()
+            if not self._is_cache_valid(
+                float(entry.get("ts")) if entry.get("ts") is not None else None,
+                "open_targets_target",
+            )
+        ]
+        for key in stale_targets:
+            self._target_disk_cache.pop(key, None)
 
     def _load_disk_cache(self) -> None:
         if not self.cache_enabled:
@@ -1249,61 +1482,93 @@ Return ONLY a valid JSON array—no other text. Example:
             version = data.get("version", 1)
             associations = data.get("associations") or {}
             disease_ids = data.get("disease_ids") or {}
+            target_ids = data.get("target_ids") or {}
 
-            if version == 2 and isinstance(associations, list):
-                self._cache_df = pd.DataFrame(associations)
-                if self._cache_df.empty and CACHE_COLUMNS:
-                    self._cache_df = pd.DataFrame(columns=CACHE_COLUMNS)
-            else:
-                # Legacy v1 dict: key -> {value, ts}
-                rows = []
-                for key, entry in (associations or {}).items():
-                    if isinstance(entry, dict) and "value" in entry:
-                        val, ts = entry.get("value"), entry.get("ts", time.time())
-                    else:
-                        val, ts = entry, time.time()
-                    source, gene, disease_term = self._cache_parse_key(key)
-                    if not source:
-                        continue
-                    rows.append({
-                        "source": source,
-                        "gene": gene,
-                        "disease_term": disease_term,
-                        "ts": ts,
-                        "value_json": json.dumps(val) if isinstance(val, dict) else "{}",
-                    })
-                self._cache_df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=CACHE_COLUMNS)
+            with self._cache_lock:
+                self._association_disk_cache = {}
+                self._disease_disk_cache = {}
+                self._target_disk_cache = {}
 
-            if isinstance(disease_ids, list):
-                self._disease_id_df = pd.DataFrame(disease_ids)
-                if self._disease_id_df.empty and DISEASE_CACHE_COLUMNS:
-                    self._disease_id_df = pd.DataFrame(columns=DISEASE_CACHE_COLUMNS)
-            else:
-                rows = []
-                for term, entry in (disease_ids or {}).items():
-                    if isinstance(entry, dict) and "value" in entry:
-                        val, ts = entry.get("value"), entry.get("ts", time.time())
-                    else:
-                        val, ts = entry, time.time()
-                    rows.append({"disease_term": term, "ts": ts, "disease_id": val})
-                self._disease_id_df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=DISEASE_CACHE_COLUMNS)
+                if isinstance(associations, list):
+                    for row in associations:
+                        source = str(row.get("source", "")).strip()
+                        gene = str(row.get("gene", "")).strip().upper()
+                        disease_term = str(row.get("disease_term", "")).strip()
+                        if not source or not gene or not disease_term:
+                            continue
+                        try:
+                            value = row.get("value")
+                            if value is None:
+                                value = json.loads(row.get("value_json", "{}"))
+                        except (TypeError, ValueError):
+                            continue
+                        self._association_disk_cache[self._cache_key(source, gene, disease_term)] = {
+                            "ts": float(row.get("ts")) if row.get("ts") is not None else time.time(),
+                            "value": value,
+                        }
+                else:
+                    for key, entry in (associations or {}).items():
+                        if isinstance(entry, dict) and "value" in entry:
+                            value = entry.get("value")
+                            ts = entry.get("ts", time.time())
+                        else:
+                            value = entry
+                            ts = time.time()
+                        source, gene, disease_term = self._cache_parse_key(key)
+                        if not source:
+                            continue
+                        self._association_disk_cache[self._cache_key(source, gene, disease_term)] = {
+                            "ts": float(ts) if ts is not None else time.time(),
+                            "value": value if isinstance(value, dict) else {},
+                        }
 
-            # Drop expired rows
-            if not self._cache_df.empty and "ts" in self._cache_df.columns:
-                valid = self._cache_df.apply(
-                    lambda r: self._is_cache_valid(float(r["ts"]) if r.get("ts") is not None else None),
-                    axis=1
-                )
-                self._cache_df = self._cache_df[valid]
-            if not self._disease_id_df.empty and "ts" in self._disease_id_df.columns:
-                valid = self._disease_id_df.apply(
-                    lambda r: self._is_cache_valid(float(r["ts"]) if r.get("ts") is not None else None),
-                    axis=1
-                )
-                self._disease_id_df = self._disease_id_df[valid]
+                if isinstance(disease_ids, list):
+                    for row in disease_ids:
+                        term = str(row.get("disease_term", "")).strip()
+                        if not term:
+                            continue
+                        self._disease_disk_cache[term] = {
+                            "ts": float(row.get("ts")) if row.get("ts") is not None else time.time(),
+                            "value": row.get("disease_id"),
+                        }
+                else:
+                    for term, entry in (disease_ids or {}).items():
+                        if isinstance(entry, dict) and "value" in entry:
+                            value = entry.get("value")
+                            ts = entry.get("ts", time.time())
+                        else:
+                            value = entry
+                            ts = time.time()
+                        self._disease_disk_cache[str(term)] = {
+                            "ts": float(ts) if ts is not None else time.time(),
+                            "value": value,
+                        }
 
-            self._cache_dirty = False
-            n = len(self._cache_df)
+                if isinstance(target_ids, list):
+                    for row in target_ids:
+                        gene_name = str(row.get("gene_name", "")).strip().upper()
+                        if not gene_name:
+                            continue
+                        self._target_disk_cache[gene_name] = {
+                            "ts": float(row.get("ts")) if row.get("ts") is not None else time.time(),
+                            "value": row.get("target_id"),
+                        }
+                else:
+                    for gene_name, entry in (target_ids or {}).items():
+                        if isinstance(entry, dict) and "value" in entry:
+                            value = entry.get("value")
+                            ts = entry.get("ts", time.time())
+                        else:
+                            value = entry
+                            ts = time.time()
+                        self._target_disk_cache[str(gene_name).upper()] = {
+                            "ts": float(ts) if ts is not None else time.time(),
+                            "value": value,
+                        }
+
+                self._prune_disk_cache_locked()
+                self._cache_dirty = False
+                n = len(self._association_disk_cache)
             logger.info(f"Enrichment cache: loaded {n} gene-disease associations from {self.cache_file}")
         except Exception as exc:
             logger.warning(f"Failed to load enrichment cache from {self.cache_file}: {exc}")
@@ -1313,24 +1578,51 @@ Return ONLY a valid JSON array—no other text. Example:
             return
         try:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
-            associations = self._cache_df.to_dict("records") if not self._cache_df.empty else []
-            disease_ids = self._disease_id_df.to_dict("records") if not self._disease_id_df.empty else []
+            with self._cache_lock:
+                associations = []
+                for key, entry in self._association_disk_cache.items():
+                    source, gene, disease_term = self._cache_parse_key(key)
+                    associations.append({
+                        "source": source,
+                        "gene": gene,
+                        "disease_term": disease_term,
+                        "ts": entry.get("ts"),
+                        "value_json": json.dumps(entry.get("value", {})),
+                    })
+
+                disease_ids = [
+                    {
+                        "disease_term": term,
+                        "ts": entry.get("ts"),
+                        "disease_id": entry.get("value"),
+                    }
+                    for term, entry in self._disease_disk_cache.items()
+                ]
+                target_ids = [
+                    {
+                        "gene_name": gene_name,
+                        "ts": entry.get("ts"),
+                        "target_id": entry.get("value"),
+                    }
+                    for gene_name, entry in self._target_disk_cache.items()
+                ]
             payload = {
                 "version": CACHE_VERSION,
                 "saved_at": time.time(),
                 "associations": associations,
                 "disease_ids": disease_ids,
+                "target_ids": target_ids,
             }
             with open(self.cache_file, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle)
             self._cache_dirty = False
-            logger.info(f"Enrichment cache: saved {len(self._cache_df)} associations to {self.cache_file}")
+            logger.info(f"Enrichment cache: saved {len(associations)} associations to {self.cache_file}")
         except Exception as exc:
             logger.warning(f"Failed to save enrichment cache to {self.cache_file}: {exc}")
 
     def _open_targets_request(self, query: str, variables: Dict) -> Dict:
         """Execute a GraphQL request against Open Targets."""
-        response = self.session.post(
+        response = self._get_session().post(
             self.open_targets_api_url,
             json={"query": query, "variables": variables},
             timeout=30
@@ -1367,11 +1659,13 @@ Return ONLY a valid JSON array—no other text. Example:
             return disease_id
         except Exception as exc:
             logger.debug(f"Open Targets disease search failed: {exc}")
-            self._disease_cache_set(disease_term, None)
             return None
 
     def _resolve_open_targets_target_id(self, gene_name: str) -> Optional[str]:
         """Resolve gene symbol to Open Targets target ID."""
+        cached = self._target_cache_get(gene_name)
+        if cached is not None:
+            return cached
         query = """
         query TargetSearch($queryString: String!) {
           search(queryString: $queryString, entityNames: ["target"]) {
@@ -1383,12 +1677,18 @@ Return ONLY a valid JSON array—no other text. Example:
           }
         }
         """
-        result = self._open_targets_request(query, {"queryString": gene_name})
-        hits = result.get("data", {}).get("search", {}).get("hits", [])
-        for hit in hits:
-            if str(hit.get("entity", "")).lower() == "target":
-                return hit.get("id")
-        return None
+        try:
+            result = self._open_targets_request(query, {"queryString": gene_name})
+            hits = result.get("data", {}).get("search", {}).get("hits", [])
+            target_id = None
+            for hit in hits:
+                if str(hit.get("entity", "")).lower() == "target":
+                    target_id = hit.get("id")
+                    break
+            self._target_cache_set(gene_name, target_id)
+            return target_id
+        except Exception:
+            raise
 
     def _fetch_open_targets_association(self, target_id: str, disease_id: str) -> Optional[Dict]:
         """Fetch Open Targets association score for target-disease pair."""

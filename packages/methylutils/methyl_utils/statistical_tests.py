@@ -1033,53 +1033,6 @@ def ecdf_ks_pvalue(
     return ks_stats, p_values
 
 
-def welch_mean_test(
-    delta_mean: np.ndarray,
-    var1: np.ndarray,
-    n1: np.ndarray,
-    var2: np.ndarray,
-    n2: np.ndarray,
-) -> Dict[str, np.ndarray]:
-    """
-    Welch-style test for difference in means with unequal variances.
-
-    Returns absolute t statistic, Welch-Satterthwaite dof, standard error,
-    and a two-sided p-value.
-    """
-    from scipy.stats import t as t_dist
-
-    delta_mean = np.asarray(delta_mean, dtype=np.float64).ravel()
-    var1 = np.asarray(var1, dtype=np.float64).ravel()
-    n1 = np.asarray(n1, dtype=np.float64).ravel()
-    var2 = np.asarray(var2, dtype=np.float64).ravel()
-    n2 = np.asarray(n2, dtype=np.float64).ravel()
-
-    term1 = np.maximum(var1, 0.0) / np.maximum(n1, 1.0)
-    term2 = np.maximum(var2, 0.0) / np.maximum(n2, 1.0)
-    se = np.sqrt(term1 + term2)
-    se = np.maximum(se, 1e-12)
-    t_stat = np.abs(delta_mean) / se
-
-    denom = (
-        (term1 ** 2) / np.maximum(n1 - 1.0, 1.0)
-        + (term2 ** 2) / np.maximum(n2 - 1.0, 1.0)
-    )
-    dof = np.where(
-        denom > 0.0,
-        ((term1 + term2) ** 2) / denom,
-        np.maximum(n1 + n2 - 2.0, 1.0),
-    )
-    dof = np.maximum(dof, 1.0)
-    p_values = 2.0 * t_dist.sf(np.abs(t_stat), df=dof)
-    p_values = np.clip(np.asarray(p_values, dtype=np.float64), 1e-300, 1.0)
-    return {
-        "t_stat": np.asarray(t_stat, dtype=np.float64),
-        "p_value": p_values,
-        "dof": np.asarray(dof, dtype=np.float64),
-        "standard_error": np.asarray(se, dtype=np.float64),
-    }
-
-
 def mann_whitney_from_bin_counts(
     bc1: np.ndarray,
     bc2: np.ndarray,
@@ -1358,130 +1311,6 @@ def discrete_overlap_from_bin_counts(
     return out[0] if squeeze else out
 
 
-def welch_d_fast_overlap_approx(
-    delta_mean: np.ndarray,
-    var1: np.ndarray,
-    n1: np.ndarray,
-    var2: np.ndarray,
-    n2: np.ndarray,
-    scale: float = 3.0,
-    overlap_approx: Optional[np.ndarray] = None,
-) -> dict:
-    """
-    Fast biological metrics without ECDF: Welch's d, overlap (discrete or Normal fallback),
-    and bounded effect size approx. Use for funnel filtering before computing real ECDF metrics.
-
-    Args:
-        delta_mean, var1, n1, var2, n2: Per-position stats (same as welch_d_ks_overlap).
-        scale: Sigmoid scale for bounded_effect_size (default 3.0).
-        overlap_approx: Optional precomputed overlap (e.g. from discrete_overlap_from_bin_counts).
-            If None, use Normal-based fallback: 2 * norm.cdf(-welch_d/2).
-
-    Returns:
-        Dict with welch_d, overlap_approx, bounded_effect_size_approx. Effect is max(0, 2*sigmoid(x)-1)
-        so no difference (x=0) gives 0; range [0,1].
-    """
-    from scipy.special import expit
-    from scipy.stats import norm
-    WELCH_D_MAX = 50.0
-    delta_mean = np.asarray(delta_mean, dtype=np.float64).ravel()
-    var1 = np.asarray(var1, dtype=np.float64).ravel()
-    n1 = np.asarray(n1, dtype=np.float64).ravel()
-    var2 = np.asarray(var2, dtype=np.float64).ravel()
-    n2 = np.asarray(n2, dtype=np.float64).ravel()
-    se = np.sqrt(var1 / np.maximum(n1, 1) + var2 / np.maximum(n2, 1))
-    se = np.maximum(se, 1e-12)
-    welch_d = np.abs(delta_mean) / se
-    welch_d = np.minimum(welch_d, WELCH_D_MAX)
-    n_pos = len(welch_d)
-    if overlap_approx is not None:
-        overlap_approx = np.asarray(overlap_approx, dtype=np.float64).ravel()
-        if len(overlap_approx) != n_pos:
-            overlap_approx = np.resize(overlap_approx, n_pos)
-        overlap_approx = np.clip(overlap_approx, 0.0, 1.0)
-        # Replace NaN with Normal fallback for that position
-        bad = ~np.isfinite(overlap_approx)
-        if np.any(bad):
-            overlap_approx = overlap_approx.copy()
-            overlap_approx[bad] = 2.0 * norm.cdf(-welch_d[bad] / 2.0)
-    else:
-        overlap_approx = 2.0 * norm.cdf(-welch_d / 2.0)
-        overlap_approx = np.clip(overlap_approx, 0.0, 1.0)
-    expit_arg = np.clip(scale * welch_d * (1.0 - overlap_approx), -700.0, 700.0)
-    bounded_effect_size_approx = np.clip(2.0 * expit(expit_arg) - 1.0, 0.0, 1.0)
-    return {
-        "welch_d": welch_d,
-        "overlap_approx": overlap_approx,
-        "bounded_effect_size_approx": bounded_effect_size_approx,
-    }
-
-
-def welch_d_ks_overlap(
-    delta_mean: np.ndarray,
-    var1: np.ndarray,
-    n1: np.ndarray,
-    var2: np.ndarray,
-    n2: np.ndarray,
-    ecdf_view1: Optional[Any] = None,
-    ecdf_view2: Optional[Any] = None,
-    position_indices: Optional[np.ndarray] = None,
-    scale: float = 3.0,
-    grid_size: int = 256,
-) -> dict:
-    """
-    Welch's d = |delta_mean| / sqrt(var1/n1 + var2/n2).
-    If ECDF views and position_indices are provided: KS statistic D at each position.
-    Effect size uses the KS test statistic T = sqrt(n_eff)*D (same as drives ks_p) so it correlates
-    with statistical significance: corrected_d = welch_d * min(T, 15), bounded_effect_size = max(0, 2*sigmoid(scale * corrected_d) - 1).
-    welch_d keeps biological meaning (mean difference); T aligns with the test. n_eff = 2/(1/n1+1/n2).
-    No difference (welch_d=0 or ks_d=0) gives effect 0; strong separation gives effect 1; range [0,1].
-    Returns dict with keys: welch_d, ks_d, ks_p, corrected_d, bounded_effect_size.
-
-    When variance1 and variance2 are both zero (or very small), the standard error is floored
-    to avoid division by zero; welch_d can become very large. welch_d is capped to WELCH_D_MAX
-    so that bounded_effect_size does not overflow and is interpretable (zero variance → perfect
-    discrimination → bounded_effect_size ≈ 1).
-    """
-    from scipy.special import expit
-    WELCH_D_MAX = 50.0  # cap so expit(scale * corrected_d) is stable and zero variance → effect ≈ 1
-    delta_mean = np.asarray(delta_mean, dtype=np.float64).ravel()
-    var1 = np.asarray(var1, dtype=np.float64).ravel()
-    n1 = np.asarray(n1, dtype=np.float64).ravel()
-    var2 = np.asarray(var2, dtype=np.float64).ravel()
-    n2 = np.asarray(n2, dtype=np.float64).ravel()
-    se = np.sqrt(var1 / np.maximum(n1, 1) + var2 / np.maximum(n2, 1))
-    se = np.maximum(se, 1e-12)  # avoid division by zero when both variances are 0
-    welch_d = np.abs(delta_mean) / se
-    welch_d = np.minimum(welch_d, WELCH_D_MAX)  # cap: zero variance → max effect, no overflow
-
-    ks_d = np.zeros_like(welch_d)
-    ks_p = np.ones_like(welch_d)
-    if ecdf_view1 is not None and ecdf_view2 is not None and position_indices is not None:
-        pos_idx = np.asarray(position_indices, dtype=np.intp).ravel()
-        n1_sub = n1[: len(pos_idx)] if len(n1) >= len(pos_idx) else np.resize(n1, len(pos_idx))
-        n2_sub = n2[: len(pos_idx)] if len(n2) >= len(pos_idx) else np.resize(n2, len(pos_idx))
-        ks_d_arr, ks_p_arr = ecdf_ks_pvalue(ecdf_view1, ecdf_view2, pos_idx, n1_sub, n2_sub, grid_size)
-        ks_d = ks_d_arr
-        ks_p = ks_p_arr
-
-    # Use KS test statistic T = sqrt(n_eff)*D so effect size aligns with KS p-value (Option 2:
-    # biological meaning via welch_d, replacement for the test via T). effect = sigmoid(scale * d * T).
-    n_eff = 2.0 / (1.0 / np.maximum(n1, 1) + 1.0 / np.maximum(n2, 1))
-    T = np.sqrt(n_eff) * ks_d  # same statistic that drives ks_p
-    T = np.minimum(T, 15.0)  # cap so sigmoid(scale * welch_d * T) stays in a sensible range
-    corrected_d = welch_d * T
-    expit_arg = np.clip(scale * corrected_d, -700.0, 700.0)
-    bounded_effect_size = np.clip(2.0 * expit(expit_arg) - 1.0, 0.0, 1.0)
-
-    return {
-        "welch_d": welch_d,
-        "ks_d": ks_d,
-        "ks_p": ks_p,
-        "corrected_d": corrected_d,
-        "bounded_effect_size": bounded_effect_size,
-    }
-
-
 # Dictionary of available aggregation methods
 PVALUE_AGGREGATION_METHODS = {
     'fisher': aggregate_pvalues_fisher,
@@ -1513,7 +1342,6 @@ __all__ = [
     "PVALUE_AGGREGATION_METHODS",
     "ecdf_ks_statistic",
     "ecdf_ks_pvalue",
-    "welch_mean_test",
     "mann_whitney_from_bin_counts",
     "dl_heterogeneity",
     "ecdf_overlap_integral",
@@ -1521,6 +1349,4 @@ __all__ = [
     "ecdf_effect_size",
     "optimize_lambda_var",
     "discrete_overlap_from_bin_counts",
-    "welch_d_fast_overlap_approx",
-    "welch_d_ks_overlap",
 ]

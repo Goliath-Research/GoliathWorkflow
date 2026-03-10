@@ -1,0 +1,172 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\geometry{margin=1in}
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\title{MethylClassifier Theoretical Foundation}
+\author{MethylPipeline}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% -----------------------------------------------------------------------
+\section{Goal}
+
+\texttt{MethylClassifier} assigns DNA methylation samples to biological
+classes (e.g.\ healthy vs.\ cancer) using methylation at \emph{differentially
+methylated positions} (DMPs).  It uses a \textbf{Bayesian Naive Bayes
+framework with ECDF-based likelihoods}: no parametric distribution (Beta,
+Normal, Beta-Binomial, or Beta-Mixture) is used.
+
+Class-wise centroids provide an empirical distribution (ECDF) per position
+via \texttt{binned\_stats} (\texttt{bin\_edges}, \texttt{bin\_counts}).  The
+likelihood is the PDF from that ECDF, obtained by PCHIP spline interpolation.
+DMP positions and centroid parameters come from \texttt{MethylDetector}
+output.
+
+% -----------------------------------------------------------------------
+\section{Notation}
+
+Let:
+\begin{itemize}
+  \item \(K\) --- number of classes (typically \(K=2\): control and disease).
+  \item \(I\) --- number of selected DMP positions.
+  \item \(x = (x_1,\ldots,x_I) \in [0,1]^I\) --- methylation fractions at
+        DMP positions for a new sample.
+  \item \(F_{k,i}(x)\) --- the PCHIP CDF at DMP position \(i\) for class
+        \(k\), built from centroid \texttt{bin\_counts}.
+  \item \(f_{k,i}(x) = F_{k,i}'(x)\) --- the corresponding PDF (spline
+        derivative).
+  \item \(w_i\) --- per-DMP weight (e.g.\ normalised \texttt{effect\_size}).
+\end{itemize}
+
+% -----------------------------------------------------------------------
+\section{Per-Position Likelihood}
+
+For DMP position \(i\) and class \(k\), the per-position likelihood is
+
+\begin{equation}
+  P(x_i \mid \text{class}\,k) = f_{k,i}(x_i),
+  \label{eq:perpos_likelihood}
+\end{equation}
+
+where \(f_{k,i}\) is derived from the PCHIP spline fitted to the class-$k$
+centroid histogram at position $i$.  A small floor is applied to avoid
+\(\log(0)\): \(f_{k,i}(x) \geq 10^{-300}\).
+
+% -----------------------------------------------------------------------
+\section{Naive Bayes Likelihood over All Positions}
+
+The Naive Bayes assumption asserts that methylation values at different DMP
+positions are conditionally independent given the class:
+
+\begin{equation}
+  P(x \mid \text{class}\,k)
+  = \prod_{i=1}^{I} P(x_i \mid \text{class}\,k)
+  = \prod_{i=1}^{I} f_{k,i}(x_i).
+\end{equation}
+
+% -----------------------------------------------------------------------
+\section{Weighted Log-Likelihood}
+
+In practice the classifier uses \textbf{weighted log-likelihoods} for
+numerical stability:
+
+\begin{equation}
+  \log L(\text{class}\,k \mid x)
+  = \sum_{i=1}^{I} w_i \cdot \log f_{k,i}(x_i),
+  \label{eq:loglik}
+\end{equation}
+
+where \(w_i = \mathrm{effect\_size}_i / \max_j(\mathrm{effect\_size}_j)\)
+so that positions with larger biological effect contribute more.
+
+% -----------------------------------------------------------------------
+\section{Posterior Probability}
+
+By Bayes' theorem with uniform priors:
+
+\begin{equation}
+  P(\text{class}\,k \mid x)
+  \propto P(\text{class}\,k)\cdot P(x \mid \text{class}\,k)
+  \propto \exp\!\bigl(\log L(\text{class}\,k \mid x)\bigr).
+\end{equation}
+
+The prior \(P(\text{class}\,k)\) is taken as uniform, so prediction depends
+only on the log-likelihood term.
+
+% -----------------------------------------------------------------------
+\section{Temperature Scaling and Softmax}
+
+A \emph{temperature} parameter \(T \geq 0.1\) controls the sharpness of the
+posterior:
+
+\begin{equation}
+  P(\text{class}\,k \mid x)
+  = \frac{\exp\!\left(\dfrac{\log L(\text{class}\,k \mid x)}{T}\right)}
+         {\displaystyle\sum_{k'} \exp\!\left(\dfrac{\log L(\text{class}\,k' \mid x)}{T}\right)}.
+  \label{eq:softmax}
+\end{equation}
+
+\begin{itemize}
+  \item \(T \to 1^+\): posterior concentrates on the most likely class.
+  \item \(T \gg 1\): posteriors become more uniform (softer decisions).
+\end{itemize}
+
+The default temperature is \(T = 2.0\).
+
+% -----------------------------------------------------------------------
+\section{Prediction}
+
+The predicted class is
+
+\begin{equation}
+  \hat{k} = \arg\max_k P(\text{class}\,k \mid x).
+\end{equation}
+
+% -----------------------------------------------------------------------
+\section{Optional Extensions}
+
+\paragraph{Platt Calibration.}
+
+Optionally, a logistic regression calibrator (Platt scaling) is fitted on
+calibration data to improve the probability calibration of the raw posteriors
+from Equation~\eqref{eq:softmax}.
+
+\paragraph{Missing Positions.}
+
+When a DMP position is not covered in a new sample (\(x_i\) is NaN), the
+position is excluded from the sum in Equation~\eqref{eq:loglik}: its weight
+contributes \(0\) to both classes.  This is equivalent to treating the
+missing position as uninformative rather than imputing a neutral value.
+
+% -----------------------------------------------------------------------
+\section{Summary}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+Aspect & Role \\
+\midrule
+Training & None in MethylClassifier; DMPs and centroids come from MethylDetector. \\
+Likelihood & ECDF only: per-position PDF from centroid \texttt{bin\_counts}. \\
+Combination & Weighted Naive Bayes log-sum over DMP positions. \\
+Weights & Normalised \texttt{effect\_size} from MethylDetector. \\
+Posterior & Temperature-scaled softmax over classes. \\
+Output & Posterior probabilities per class; prediction = argmax. \\
+\bottomrule
+\end{tabular}
+\caption{Summary of the MethylClassifier framework.}
+\end{table}
+
+\end{document}

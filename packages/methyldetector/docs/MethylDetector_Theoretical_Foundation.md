@@ -4,9 +4,9 @@
 
 `MethylDetector` identifies differentially methylated positions (DMPs) between two methylation centroids (e.g. healthy vs disease) with:
 
-- **Statistical rigour**: Welch-style unequal-variance testing or histogram-derived Mann-Whitney testing with FDR correction.
+- **Statistical rigour**: Histogram-derived Mann-Whitney U testing with FDR correction.
 - **Biological relevance**: A single canonical score (`effect_size`) that penalises positions where the distributions overlap heavily or where within-group variance is large.
-- **Computational tractability**: A staged funnel that avoids CPU-bound ECDF work on millions of positions that could never pass the biological filter, then evaluates top-k subsets from cached ECDF log-likelihoods.
+- **Computational tractability**: A staged funnel that first reduces the aligned locus set with `delta_mean_reduction`, then evaluates non-parametric significance and ECDF overlap only on the surviving candidates before top-k validation from cached ECDF log-likelihoods.
 
 All distribution comparisons use the **ECDF only** — no Beta, Normal, or Beta-Binomial models.
 
@@ -17,24 +17,23 @@ All distribution comparisons use the **ECDF only** — no Beta, Normal, or Beta-
 ```
 Centroid H5 files (must have binned_stats)
     │
-    ├─ Stage 1 — Pre-filter (cheap)
+    ├─ Stage 1 — Pre-filter (cheap, on aligned loci)
+    │     Start from positions present in both centroids after min_coverage.
     │     Compute |delta_mean| = |mean1 - mean2| from centroid means (Sx/N).
-    │     Discard positions below delta_mean_reduction threshold.
+    │     Keep only loci with |delta_mean| >= delta_mean_reduction.
     │     Purpose: avoid running the expensive statistical gate on positions that will
     │     be discarded by the biological filter later.
     │
-    ├─ Stage 2 — Centroid alignment
-    │     np.intersect1d(pos1, pos2) + coverage filter (min(N1,N2) >= min_coverage).
+    ├─ Stage 2 — Centroid alignment handoff
+    │     Carry the shared genomic coordinates forward as per-centroid indices so
+    │     every surviving position refers to the same locus in both centroids.
     │
     ├─ Stage 3 — Statistical significance test
     │     For each aligned position:
-    │         either Welch:
-    │             t_stat = |mean1 - mean2| / sqrt(var1/N1 + var2/N2)
-    │             p_value = 2 * t_dist.sf(t_stat, df=Welch-Satterthwaite dof)
-    │         or Mann-Whitney:
-    │             U reconstructed from centroid bin_counts with tie correction
-    │             p_value = 2 * norm.sf(|z_U|)
-    │     Sample variances from (Sx2 - Sx²/N)/(N-1).
+    │         U reconstructed from centroid bin_counts with tie correction
+    │         z_U = (U - n1*n2/2) / sqrt(var_U)
+    │         p_value = 2 * norm.sf(|z_U|)
+    │     No parametric mean-difference test is used in the detector pipeline.
     │
     ├─ Stage 4 — FDR correction
     │     Two-stage Benjamini-Hochberg (statsmodels fdr_tsbh) on the
@@ -102,13 +101,13 @@ This definition captures bimodal distributions and is consistent with the ECDFCl
 
 ## Variance in the Reliability Term
 
-The variances used in `effect_size` are the **sample variances** from `(Sx2 - Sx²/N)/(N-1)`, i.e. the same estimator used by the Welch test. This makes the reliability penalty consistent with the statistical test — a position penalised by the Welch test for high within-group spread is also penalised in `effect_size`.
+The variances used in `effect_size` are the **sample variances** from `(Sx2 - Sx²/N)/(N-1)`. They are used only in the biological reliability penalty, not in the significance test itself. This keeps the detector non-parametric at the statistical-testing stage while still down-weighting diffuse, heterogeneous loci in `effect_size`.
 
 ---
 
 ## Why the Pre-filter Is Before the Statistical Test
 
-Welch and Mann-Whitney both become expensive at CHH scale. Positions with `|delta_mean| < delta_mean_reduction` will be removed by the biological filter regardless of statistical significance, so pre-filtering them before the statistical gate avoids this work without any loss of biologically strong DMPs.
+The histogram-derived Mann-Whitney U stage and the later continuous ECDF overlap stage both become expensive at CHH scale. Positions not present in both centroids cannot be tested at all; among the aligned loci, positions with `|delta_mean| < delta_mean_reduction` will be removed by the biological filter regardless of statistical significance, so pre-filtering them before the statistical gate avoids this work without any loss of biologically strong DMPs.
 
 The cost is a liberal FDR: BH correction is applied to the pre-filtered subset rather than the full set. In practice, for prostate-cancer-scale data (CG context: ~2000 statistically significant positions out of 4.3 million), the effect is small.
 
@@ -138,7 +137,7 @@ The ECDFClassifier stores the `bin_counts` histograms per DMP position rather th
 | Component | Role |
 |-----------|------|
 | Distribution model | ECDF only (binned_stats, 20 bins default) |
-| Statistical test | Welch-style mean-difference t-test or histogram-derived Mann-Whitney |
+| Statistical test | Histogram-derived Mann-Whitney U from centroid `bin_counts` |
 | Multiple testing | Two-stage Benjamini-Hochberg (statsmodels fdr_tsbh) |
 | Pre-filter gate | `delta_mean_reduction` (before the statistical test) |
 | Overlap | Continuous ECDF overlap: ∫ min(f1, f2) |

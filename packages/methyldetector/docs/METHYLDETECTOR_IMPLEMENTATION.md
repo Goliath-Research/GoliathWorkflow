@@ -6,7 +6,7 @@ This document describes how MethylDetector is implemented on top of **MethylUtil
 
 ## Architecture
 
-- **MethylUtils** owns centroid comparison math: Welch or histogram-derived Mann-Whitney, two-stage BH FDR correction, ECDF overlap, `effect_size`, heterogeneity (`tau2`), and `ECDFClassifier`.
+- **MethylUtils** owns centroid comparison math: histogram-derived Mann-Whitney U, two-stage BH FDR correction, ECDF overlap, `effect_size`, heterogeneity (`tau2`), and `ECDFClassifier`.
 - **MethylDetector** owns the pipeline: config, per-chromosome/context orchestration, staged filtering, optional rescue track, held-out validation, classifier invocation, and exports.
 
 ```mermaid
@@ -14,7 +14,7 @@ flowchart LR
     Config[JSON Config]
     Detector[MethylDetector]
     Pair[MethylCentroidPair]
-    Welch[Welch or Mann-Whitney]
+    MWU[Mann-Whitney U]
     FDR[fdr_tsbh]
     ECDF[Continuous ECDF overlap]
     Effect[effect_size formula]
@@ -25,8 +25,8 @@ flowchart LR
 
     Config --> Detector
     Detector --> Pair
-    Pair --> Welch
-    Welch --> FDR
+    Pair --> MWU
+    MWU --> FDR
     FDR --> ECDF
     ECDF --> Effect
     Effect --> Filter
@@ -44,7 +44,7 @@ flowchart LR
 The primary comparison entry point.
 
 - Aligns centroids to common positions; applies `position_subset` to restrict the comparison when a pre-filter has already reduced the candidate set.
-- Runs either a Welch-style unequal-variance mean-difference test or a histogram-derived Mann-Whitney test on every aligned position.
+- Runs the histogram-derived Mann-Whitney U test on every aligned position in the MethylDetector path.
 - Applies Two-Stage Benjamini-Hochberg FDR correction.
 - Returns a DataFrame with columns: `position`, `p_value`, `q_value`, `mean1`, `mean2`, `delta_mean`, `delta_sign`, `variance1`, `variance2`, `tau2_1`, `tau2_2`, `n1`, `n2`, `overlap_approx`, `effect_size` (initial discrete overlap-based), `alpha1/beta1/alpha2/beta2` (retained for EAT metadata), `dist` (always `DIST_ECDF = 5`).
 
@@ -67,8 +67,7 @@ Extracts methylation fractions for real validation samples at the selected DMP p
 | Module / symbol | Role in MethylDetector |
 |----------------|------------------------|
 | `MethylCentroidPair` | All centroid comparison (see above) |
-| `statistical_tests.welch_mean_test` | Per-position Welch t-test |
-| `statistical_tests.mann_whitney_from_bin_counts` | Optional assumption-light rank test from centroid histograms |
+| `statistical_tests.mann_whitney_from_bin_counts` | Per-position non-parametric rank test reconstructed from centroid histograms |
 | `statistical_tests.dl_heterogeneity` | DerSimonian-Laird-style `tau2` heterogeneity estimate |
 | `statistical_tests.ecdf_effect_size` | Continuous ECDF overlap + final `effect_size` |
 | `statistical_tests.ecdf_overlap_integral` | Integration of min(f1, f2) |
@@ -86,9 +85,9 @@ Extracts methylation fractions for real validation samples at the selected DMP p
 
 ### 1. Pre-filter (cheap delta_mean gate)
 
-Computes `|mean1 - mean2|` from centroid means (`Sx/N`) at all common positions. Positions below `delta_mean_reduction` are removed before any expensive computation.
+Computes `|mean1 - mean2|` from centroid means (`Sx/N`) at positions already shared by both centroids. Positions below `delta_mean_reduction` are removed before any expensive computation.
 
-**Why**: Welch test (`scipy.stats.t.sf`) is CPU-bound. CHH has 70M+ positions. A position removed here would be discarded by the biological filter anyway, so pre-filtering costs nothing biologically.
+**Why**: The histogram-derived Mann-Whitney U stage plus later continuous ECDF overlap remain expensive at CHH scale. A position removed here would be discarded by the biological filter anyway, so pre-filtering costs nothing biologically.
 
 **Statistical note**: FDR is then applied to the pre-filtered subset. Q-values are therefore liberal relative to the full test set — a known screen-and-test trade-off acceptable for practical genomics.
 
@@ -98,7 +97,7 @@ Computes `|mean1 - mean2|` from centroid means (`Sx/N`) at all common positions.
 
 ### 3. Statistical gate + FDR
 
-Run either `welch_mean_test` or `mann_whitney_from_bin_counts` on all pre-filtered positions, then apply two-stage BH correction (`fdr_tsbh`). Retain positions with `q_value <= alpha`.
+Run `mann_whitney_from_bin_counts` on all pre-filtered positions, then apply two-stage BH correction (`fdr_tsbh`). Retain positions with `q_value <= alpha`.
 
 ### 4. Lazy ECDFView construction
 
@@ -172,8 +171,8 @@ The classifier model is saved as a `.pkl` package containing:
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| MethylUtils | `MethylCentroidPair` | Centroid load, align, compare (Welch/Mann-Whitney + FDR + initial effect_size + tau2) |
-| MethylUtils | `statistical_tests` | Welch/Mann-Whitney tests, ecdf_overlap_integral, effect_size_from_components |
+| MethylUtils | `MethylCentroidPair` | Centroid load, align, compare (Mann-Whitney U + FDR + initial effect_size + tau2) |
+| MethylUtils | `statistical_tests` | Mann-Whitney U, ecdf_overlap_integral, effect_size_from_components |
 | MethylUtils | `ECDFView` | Lazy PCHIP CDF/PDF for DMP positions only |
 | MethylUtils | `ECDFClassifier` | PCHIP PDF log-likelihood classifier, save/load |
 | MethylUtils | GPU/memory | Device selection, memory management |

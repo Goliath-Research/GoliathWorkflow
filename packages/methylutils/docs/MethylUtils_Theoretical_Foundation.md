@@ -8,7 +8,7 @@
 
 For centroid-to-centroid DMP analysis, MethylUtils now exposes four core pieces:
 
-1. Welch-style unequal-variance mean-difference testing.
+1. Histogram-derived Mann-Whitney U testing from centroid `bin_counts`.
 2. Storey q-value correction.
 3. Continuous ECDF overlap from centroid `binned_stats`.
 4. The canonical biological score:
@@ -31,7 +31,7 @@ The reliability term is:
 
 `exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))`
 
-This keeps the two-group variances separate and penalizes diffuse loci symmetrically without assuming equal variance.
+This keeps the two-group variances separate and penalizes diffuse loci symmetrically without assuming equal variance. These variances are part of the biological reliability term only; the significance test itself remains non-parametric.
 
 ## Practical implication
 

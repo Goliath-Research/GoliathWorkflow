@@ -4,7 +4,7 @@
 
 ## Overview
 
-MethylDetector is a production-ready package for detecting Differentially Methylated Positions (DMPs) between two methylation centroids. It combines an ECDF-first statistical gate (Welch or histogram-derived Mann-Whitney with two-stage BH FDR correction) with effect-mass biological filtering to identify meaningful biomarkers for downstream analysis.
+MethylDetector is a production-ready package for detecting Differentially Methylated Positions (DMPs) between two methylation centroids. It combines an aligned `delta_mean` pre-filter, a histogram-derived Mann-Whitney U gate with two-stage BH FDR correction, and effect-mass biological filtering to identify meaningful biomarkers for downstream analysis.
 
 ### What is MethylDetector?
 
@@ -20,7 +20,7 @@ MethylDetector provides comprehensive DMP detection and analysis:
 
 ## Key Features
 
-- 🔬 **Statistical Rigor**: Welch or histogram-derived Mann-Whitney testing with two-stage BH FDR correction
+- 🔬 **Statistical Rigor**: Histogram-derived Mann-Whitney U testing with two-stage BH FDR correction
 - 📊 **Biological Filtering**: Single canonical `effect_size` score combining mean separation, distributional overlap, and variance reliability
 - 🎯 **Held-out Selection**: Repeated stratified validation splits with balanced-accuracy top-k selection
 - 🧬 **Multi-Context Support**: Process CG, CHG, CHH contexts together
@@ -55,7 +55,6 @@ python -c "import cupy as cp; print(f'GPU count: {cp.cuda.runtime.getDeviceCount
   "centroid2_dir": "/path/to/cancer/centroids",
   "output_dir": "/path/to/output",
   "alpha": 0.05,
-  "statistical_test": "mann_whitney",
   "delta_mean_reduction": 0.1,
   "effect_size_coverage": 0.95,
   "validation_split_ratio": 0.2,
@@ -80,7 +79,6 @@ Process multiple chromosomes in a single run:
   "centroid2_dir": "/path/to/cancer/centroids",
   "output_dir": "/path/to/output",
   "alpha": 0.05,
-  "statistical_test": "mann_whitney",
   "delta_mean_reduction": 0.1,
   "effect_size_coverage": 0.95,
   "validation_split_ratio": 0.2,
@@ -143,7 +141,6 @@ else:
 ### Statistical Parameters
 
 - **`alpha`**: FDR q-value threshold (default: `0.05`). Uses two-stage Benjamini-Hochberg correction applied to the pre-filtered position set.
-- **`statistical_test`**: `"welch"` or `"mann_whitney"`. The latter reconstructs a rank test directly from centroid `bin_counts`.
 - **`delta_mean_reduction`**: Pre-ECDF gate applied **before** the statistical test. Positions with `|delta_mean| < value` are discarded before testing, making large contexts (CHG, CHH) tractable.
 
 ### Biological Filtering
@@ -162,7 +159,7 @@ else:
 
 ### MethylDetectorExplorer (staged effect-size analysis)
 
-**MethylDetectorExplorer** is a standalone CLI that mirrors the detector pipeline — statistical significance, `delta_mean` reduction, continuous ECDF overlap, and final `effect_size` — to explore the effect of `lambda_var` and biological filter thresholds without running the full detector. See [METHYLDETECTOR_EXPLORER.md](docs/METHYLDETECTOR_EXPLORER.md) for usage and options.
+**MethylDetectorExplorer** is a standalone CLI that mirrors the detector pipeline — aligned `delta_mean` reduction, Mann-Whitney significance, continuous ECDF overlap, and final `effect_size` — to explore the effect of `lambda_var` and biological filter thresholds without running the full detector. See [METHYLDETECTOR_EXPLORER.md](docs/METHYLDETECTOR_EXPLORER.md) for usage and options.
 
 ```bash
 methyl-detector-explorer --centroid1-dir /path/to/c1 --centroid2-dir /path/to/c2 --chromosome 1 --context CG --output-dir /out --csv
@@ -214,13 +211,14 @@ You can sweep `effect_size_coverage` over a range in a **single run** and write 
    └─ Align to common positions (min coverage filter)
 
 2. Pre-filter (delta_mean gate)
+   ├─ Start from positions aligned between both centroids after min coverage
    ├─ Compute |mean1 - mean2| from centroid means (Sx/N)
    └─ Discard positions below delta_mean_reduction threshold
-      (avoids running expensive Welch test on positions that
+      (avoids running the expensive Mann-Whitney/FDR stage on positions that
        would be removed by the biological filter anyway)
 
 3. Statistical Testing
-   ├─ Welch-style unequal-variance mean-difference test
+   ├─ Histogram-derived Mann-Whitney U test on the surviving aligned loci
    ├─ Two-stage Benjamini-Hochberg FDR correction
    └─ Retain positions with q_value <= alpha
 
@@ -285,8 +283,8 @@ MethylDetector supports processing multiple chromosomes in a single run:
 
 MethylDetector uses **Two-Stage Benjamini-Hochberg FDR correction** (statsmodels `fdr_tsbh`) on the pre-filtered position set:
 
-- **Pre-filtering before FDR**: Positions below the `delta_mean_reduction` gate are excluded before the Welch test. FDR correction is therefore applied to a non-random subset. Q-values are liberal relative to full testing — this is a known computational genomics trade-off.
-- **Welch test, not LRT**: The significance stage uses `welch_mean_test` (unequal-variance t-test) on sample means and variances from `(Sx2 - Sx²/N)/(N-1)`. This is consistent with the sample variances used in `effect_size`.
+- **Pre-filtering before FDR**: Positions below the `delta_mean_reduction` gate are excluded after centroid alignment and before the Mann-Whitney U test. FDR correction is therefore applied to a non-random subset. Q-values are liberal relative to full testing — this is a known computational genomics trade-off.
+- **Non-parametric significance gate**: The significance stage reconstructs Mann-Whitney U directly from centroid `bin_counts` with tie correction. Sample variances from `(Sx2 - Sx²/N)/(N-1)` are used only in the downstream `effect_size` reliability term.
 - **ECDF-only**: No Beta, Normal, or Beta-Binomial distribution models are used at any stage. All comparison, overlap, and classifier density evaluation uses the ECDF from `binned_stats`.
 
 ## Integration with MethylPipeline
@@ -418,7 +416,7 @@ Copy and customize for your data!
 
 ## Documentation
 
-- **[Theoretical Foundation](docs/MethylDetector_Theoretical_Foundation.md)** — ECDF-based comparison, Welch/Mann-Whitney gates, effect size, overlap
+- **[Theoretical Foundation](docs/MethylDetector_Theoretical_Foundation.md)** — ECDF-based comparison, Mann-Whitney gate, effect size, overlap
 - **[MethylDetectorExplorer](docs/METHYLDETECTOR_EXPLORER.md)** — Staged effect-size analysis: significance, delta_mean reduction, lambda_var exploration
 - **[Implementation (MethylUtils)](docs/METHYLDETECTOR_IMPLEMENTATION.md)** — MethylCentroidPair, statistical_tests, classifier usage
 - **[User Manual](docs/USAGE.md)** — Docker container and virtual environment setup and usage

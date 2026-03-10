@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
     "--alpha",
     type=float,
     default=0.05,
-    help="FDR threshold applied after the Welch-style statistical test.",
+    help="FDR threshold applied after the histogram-derived Mann-Whitney U test.",
 )
 @click.option(
     "--min-coverage",
@@ -83,7 +83,7 @@ logger = logging.getLogger(__name__)
     "--delta-mean-reduction",
     type=float,
     default=None,
-    help="Optional pre-ECDF reduction threshold: after statistical filtering, keep only positions with |delta_mean| above this value before computing continuous overlap/effect_size.",
+    help="Optional aligned pre-statistical reduction threshold: keep only positions with |delta_mean| above this value before running the Mann-Whitney test and continuous overlap/effect_size stages.",
 )
 @click.option(
     "--min-delta-mean",
@@ -249,8 +249,8 @@ def main(
     msg = (
         f"Total positions: {report['total_positions']:,}, "
         f"After min-N filter: {report['positions_after_min_N_filter']:,}, "
-        f"After statistical filter: {report['positions_after_statistical_filter']:,}, "
         f"After delta_mean reduction: {report['positions_after_delta_mean_reduction']:,}, "
+        f"After statistical filter: {report['positions_after_statistical_filter']:,}, "
         f"lambda_var: {report.get('lambda_var_used', 'n/a')}, "
         f"time: {report['time_total_s']:.2f}s"
     )

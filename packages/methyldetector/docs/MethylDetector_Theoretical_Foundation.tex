@@ -1,0 +1,339 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\geometry{margin=1in}
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\title{MethylDetector Theoretical Foundation}
+\author{MethylPipeline}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% -----------------------------------------------------------------------
+\section{Goal}
+
+\texttt{MethylDetector} identifies \emph{differentially methylated positions}
+(DMPs) between two methylation centroids (e.g.\ healthy vs.\ disease) with:
+
+\begin{itemize}
+  \item \textbf{Statistical rigour} --- Histogram-derived Mann--Whitney
+        testing with FDR correction.
+  \item \textbf{Biological relevance} --- A single canonical score
+        (\texttt{effect\_size}) that penalises positions where the
+        distributions overlap heavily or where within-group variance is large.
+  \item \textbf{Computational tractability} --- A staged funnel that avoids
+        expensive non-parametric testing and ECDF work on millions of
+        positions that cannot pass the biological filter.
+\end{itemize}
+
+All distribution comparisons use the \textbf{ECDF only}; no Beta, Normal, or
+Beta-Binomial models are used.
+
+% -----------------------------------------------------------------------
+\section{Staged Pipeline}
+
+\begin{description}
+  \item[Stage 1 --- Pre-filter (cheap).]
+        Start from positions present in both centroids after the coverage
+        filter. Compute \(|\Delta\mu| = |\hat\mu_1 - \hat\mu_2|\) from centroid
+        means \(\hat\mu = S_x/N\). Keep only positions with
+        \(|\Delta\mu| \geq \texttt{delta\_mean\_reduction}\).
+
+  \item[Stage 2 --- Centroid alignment handoff.]
+        Carry the shared genomic coordinates forward as per-centroid indices
+        so every surviving position refers to the same locus in both
+        centroids.
+
+  \item[Stage 3 --- Statistical significance test.]
+        For each aligned position, compute a p-value with Mann--Whitney from
+        bin counts (Section~\ref{sec:mannwhitney}).
+
+  \item[Stage 4 --- FDR correction.]
+        Two-stage Benjamini--Hochberg (\texttt{statsmodels fdr\_tsbh}) on the
+        pre-filtered position set.
+
+  \item[Stage 5 --- Statistical + heterogeneity filter.]
+        Retain positions with \(q \leq \alpha\).  Optionally drop positions
+        where both groups exceed \texttt{max\_tau2\_for\_dmp}
+        (Section~\ref{sec:tau2}).
+
+  \item[Stage 6 --- Lazy ECDFView construction.]
+        Build \texttt{PchipInterpolator} objects only for the surviving DMP
+        positions, using correct per-centroid indices.
+
+  \item[Stage 7 --- Continuous ECDF overlap and \texttt{effect\_size}.]
+        Compute overlap (Section~\ref{sec:overlap}) and the canonical
+        biological score (Section~\ref{sec:effectsize}).
+
+  \item[Stage 8 --- Biological filter.]
+        Within each context, keep the minimum prefix whose cumulative
+        \texttt{effect\_size} reaches \texttt{effect\_size\_coverage} of the
+        total effect mass.
+
+  \item[Stage 9 --- Optional biological-only rescue.]
+        Select non-significant but high-effect positions separately, flagged
+        explicitly.
+
+  \item[Stage 10 --- Held-out top-$k$ selection.]
+        Repeated stratified validation splits, cached ECDF log-likelihoods,
+        and balanced accuracy choose the final top-$k$ prefix.
+\end{description}
+
+% -----------------------------------------------------------------------
+\section{Statistical Test}
+
+\subsection{Mann--Whitney $U$ from Histogram Bin Counts}
+\label{sec:mannwhitney}
+
+The detector reconstructs the $U$ statistic directly from the centroid
+\texttt{bin\_counts} without raw sample values:
+
+\begin{equation}
+  U = \sum_{b=1}^{B} \mathrm{bc1}_b \cdot \mathrm{CS2}_{b-1}
+      + \frac{1}{2}\sum_{b=1}^{B} \mathrm{bc1}_b \cdot \mathrm{bc2}_b,
+\end{equation}
+
+where \(\mathrm{bc1}_b\) and \(\mathrm{bc2}_b\) are the bin counts and
+\(\mathrm{CS2}_{b-1} = \sum_{k<b}\mathrm{bc2}_k\) is the cumulative count of
+group~2 in all bins strictly below bin~$b$.  The first term counts
+concordant pairs, the second assigns half-credit to tied pairs.
+
+Under the null hypothesis, $U$ is approximately Normal with
+
+\begin{equation}
+  \mathbb{E}[U] = \frac{N_1 N_2}{2}, \qquad
+  \mathrm{Var}(U) = \frac{N_1 N_2}{12}
+    \left[(N_1+N_2+1) - \frac{\sum_b t_b(t_b^2-1)}{(N_1+N_2)(N_1+N_2-1)}\right],
+\end{equation}
+
+where \(t_b = \mathrm{bc1}_b + \mathrm{bc2}_b\) is the total count in bin~$b$
+(tie correction).  The z-statistic and two-sided p-value follow:
+
+\begin{equation}
+  z = \frac{U - \mathbb{E}[U]}{\sqrt{\mathrm{Var}(U)}},
+  \qquad p = 2\,\Phi(-|z|),
+\end{equation}
+
+where $\Phi$ is the standard Normal CDF.
+
+\subsection{Sample Variance for the Reliability Term}
+
+Sample variances are computed from stored sufficient statistics:
+
+\begin{equation}
+  \hat\sigma^2 = \frac{S_{x^2} - S_x^2/N}{\max(N-1,\,1)}.
+  \label{eq:samplevar}
+\end{equation}
+
+These variances are used in the biological reliability term and heterogeneity
+filters, not in the Mann--Whitney significance gate itself.
+
+% -----------------------------------------------------------------------
+\section{Between-Sample Heterogeneity (\texorpdfstring{$\tau^2$}{tau2})}
+\label{sec:tau2}
+
+A DerSimonian--Laird-style decomposition uses the stored sufficient statistics
+$(\Sigma m,\,\Sigma u,\,\Sigma w x^2,\,\Sigma c^2,\,N)$ to estimate
+between-sample variance without reading individual sample files.
+
+Let \(C = \Sigma m + \Sigma u\) (total coverage sum) and
+\(\theta = \Sigma m / C\) (coverage-weighted pooled mean).
+
+The within-group heterogeneity statistic is
+
+\begin{equation}
+  Q = \Sigma w x^2 - \frac{(\Sigma m)^2}{C},
+\end{equation}
+
+and the between-sample variance estimate is
+
+\begin{equation}
+  \hat\tau^2 = \max\!\left(0,\;\frac{Q - (N-1)}{C - \Sigma c^2/C}\right).
+\end{equation}
+
+Positions where both groups exceed \texttt{max\_tau2\_for\_dmp} are dropped
+before the biological filter, because large $\hat\tau^2$ indicates
+heterogeneous sub-populations rather than a clean methylation shift.
+
+% -----------------------------------------------------------------------
+\section{ECDF Overlap}
+\label{sec:overlap}
+
+The continuous ECDF overlap between two class distributions is defined as
+
+\begin{equation}
+  O = \int_0^1 \min\!\bigl(f_1(x),\,f_2(x)\bigr)\,dx,
+  \label{eq:overlap}
+\end{equation}
+
+where \(f_1(x)\) and \(f_2(x)\) are PCHIP-derived PDFs obtained by
+differentiating the spline CDF built from centroid \texttt{bin\_counts}.
+
+The integral is evaluated with the trapezoidal rule on a dense grid
+(default 512 points).  PDFs are renormalised before integration to guard
+against small numerical drift in spline derivatives:
+
+\begin{equation}
+  \tilde{f}_k(x) = \frac{f_k(x)}
+    {\displaystyle\int_0^1 f_k(t)\,dt}, \qquad k \in \{1,2\}.
+\end{equation}
+
+\subsection{Discrete Bhattacharyya Approximation}
+
+In the fast path the overlap is approximated by the discrete Bhattacharyya
+coefficient computed directly from bin counts:
+
+\begin{equation}
+  O_\mathrm{Bh} = \sum_{b=1}^{B} \sqrt{p_{1b}\cdot p_{2b}},
+  \qquad p_{kb} = \frac{\mathrm{bc}_{kb}}{\sum_{b'}\mathrm{bc}_{kb'}}.
+\end{equation}
+
+This is \(\mathcal{O}(n_\mathrm{pos} \cdot B)\) and is used for the full
+position set before the statistical test reduces it.
+
+% -----------------------------------------------------------------------
+\section{Canonical Effect Size}
+\label{sec:effectsize}
+
+The biological importance score is
+
+\begin{equation}
+  \boxed{
+    \mathrm{effect\_size}
+    = |\Delta\mu|
+      \cdot (1 - O)
+      \cdot \exp\!\bigl(-\lambda_\mathrm{var}
+            (\sqrt{\hat\sigma_1^2} + \sqrt{\hat\sigma_2^2})\bigr),
+  }
+  \label{eq:effectsize}
+\end{equation}
+
+where:
+\begin{itemize}
+  \item \(|\Delta\mu| = |\hat\mu_1 - \hat\mu_2|\) --- absolute mean
+        methylation difference.
+  \item \(O\) --- continuous ECDF overlap from
+        Equation~\eqref{eq:overlap}; \(1 - O\) is the distributional
+        separation (\(0\) = complete overlap, \(1\) = no overlap).
+  \item \(\exp(-\lambda_\mathrm{var}(\sqrt{\hat\sigma_1^2}+\sqrt{\hat\sigma_2^2}))\)
+        --- reliability penalty that reduces the score for diffuse,
+        heterogeneous positions.
+  \item \(\lambda_\mathrm{var}\) (default \(2.0\)) --- variance penalty
+        strength.
+\end{itemize}
+
+Both variances are treated independently; no equal-variance assumption is
+made. The variances are the estimator from Equation~\eqref{eq:samplevar} and
+act only through the biological reliability term, so a diffuse locus is
+down-weighted even though the significance gate itself remains non-parametric.
+
+The score is clipped to \([0,1]\) after computation.
+
+\subsection{Effect Size Coverage Biological Filter}
+
+Within each methylation context, positions are sorted by \texttt{effect\_size}
+descending.  The minimum prefix whose cumulative mass reaches the target fraction
+is retained:
+
+\begin{equation}
+  k^* = \min\left\{k\;:\;\frac{\sum_{i=1}^{k} e_i}{\sum_{i} e_i}
+                   \geq \texttt{effect\_size\_coverage}\right\},
+\end{equation}
+
+where \(e_i\) is the effect size of the \(i\)-th position after sorting.
+
+% -----------------------------------------------------------------------
+\section{ECDFClassifier}
+\label{sec:classifier}
+
+MethylDetector trains an \textbf{ECDFClassifier} on the selected biological DMPs.
+
+\subsection{Log-Likelihood}
+
+For a new sample with methylation fractions \(x = (x_1,\ldots,x_K)\) at the
+selected DMP positions, the log-likelihood for class \(k\) is
+
+\begin{equation}
+  \log L(\text{class}_k \mid x)
+  = \sum_{i=1}^{K} w_i \cdot \log F'_{k,i}(x_i),
+  \label{eq:loglik}
+\end{equation}
+
+where:
+\begin{itemize}
+  \item \(F'_{k,i}(x)\) is the PCHIP-derived PDF from the centroid of
+        class \(k\) at DMP position \(i\).
+  \item \(w_i = \mathrm{effect\_size}_i \;/\; \max_j(\mathrm{effect\_size}_j)\)
+        --- positions with larger effect contribute more.
+  \item A small floor is applied: \(F'_{k,i}(x) \geq 10^{-300}\) to
+        avoid \(\log(0)\).
+\end{itemize}
+
+\subsection{Posterior and Prediction}
+
+The posterior probability of class \(k\) is obtained by
+temperature-scaled softmax:
+
+\begin{equation}
+  P(\text{class}_k \mid x)
+  \propto \exp\!\left(\frac{\log L(\text{class}_k \mid x)}{T}\right),
+  \label{eq:posterior}
+\end{equation}
+
+where \(T \geq 0.1\) is the temperature parameter (default \(T = 2.0\)).
+Prediction is \(\hat{k} = \arg\max_k P(\text{class}_k \mid x)\).
+
+The ECDFClassifier stores the \texttt{bin\_counts} histograms per DMP
+position (not \(\alpha/\beta\) parameters), and uses the same PCHIP PDF
+model as the DMP detection stage, keeping detection and classification
+fully consistent.
+
+% -----------------------------------------------------------------------
+\section{FDR Correction}
+
+After computing per-position p-values, multiple-testing correction uses the
+two-stage Benjamini--Hochberg procedure (\texttt{statsmodels fdr\_tsbh}).
+
+\textbf{Note on liberality.}  FDR is applied to the pre-filtered position
+subset (after \texttt{delta\_mean\_reduction}).  Q-values are therefore
+liberal relative to testing all positions.  For prostate-cancer-scale data
+(CG context: \(\approx\!2000\) significant positions out of \(4.3\) million),
+the practical effect is small because the pre-filter removes positions that
+would not survive the biological filter regardless of significance.
+
+% -----------------------------------------------------------------------
+\section{Summary Table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+Component & Role \\
+\midrule
+Distribution model    & ECDF only (\texttt{bin\_counts}, \(B=20\) default) \\
+Statistical test      & Histogram-derived Mann--Whitney $U$ \\
+Multiple testing      & Two-stage Benjamini--Hochberg (\texttt{fdr\_tsbh}) \\
+Heterogeneity filter  & \(\hat\tau^2\) from \texttt{Sc2}, \texttt{Swx2} \\
+Pre-filter gate       & \texttt{delta\_mean\_reduction} (before the test) \\
+Overlap               & Continuous ECDF: \(\int_0^1\min(f_1,f_2)\) \\
+Biological score      & Canonical \texttt{effect\_size}, Eq.~\eqref{eq:effectsize} \\
+Biological filter     & Per-context effect-size coverage mass selection \\
+Rescue track          & Optional non-significant high-effect loci \\
+Validation            & Stratified holdout BA with ECDF log-likelihood prefixes \\
+Classifier            & ECDFClassifier: PCHIP PDF log-likelihood, weighted \\
+\bottomrule
+\end{tabular}
+\caption{Summary of the MethylDetector pipeline components.}
+\end{table}
+
+\end{document}

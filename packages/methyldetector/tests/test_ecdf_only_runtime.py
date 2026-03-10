@@ -67,6 +67,28 @@ def test_methyl_detector_config_rejects_legacy_distribution_fields():
             )
 
 
+def test_methyl_detector_config_rejects_removed_statistical_test_option():
+    with TemporaryDirectory() as temp_dir:
+        centroid1_dir = Path(temp_dir) / "c1"
+        centroid2_dir = Path(temp_dir) / "c2"
+        centroid1_dir.mkdir()
+        centroid2_dir.mkdir()
+
+        with pytest.raises(
+            ValueError,
+            match="statistical_test is no longer supported",
+        ):
+            MethylModelerConfig.model_validate(
+                {
+                    "chromosome": "1",
+                    "contexts": ["CG"],
+                    "centroid1_dir": str(centroid1_dir),
+                    "centroid2_dir": str(centroid2_dir),
+                    "statistical_test": "mann_whitney",
+                }
+            )
+
+
 def test_methyl_centroid_pair_is_ecdf_only():
     with TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
@@ -100,7 +122,7 @@ def test_methyl_centroid_pair_is_ecdf_only():
         assert set(result["dist"].unique()) == {DIST_ECDF}
 
 
-def test_methyl_centroid_pair_supports_mann_whitney_from_histograms():
+def test_methyl_centroid_pair_uses_histogram_mann_whitney():
     with TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)
         sample1 = create_sample(
@@ -126,7 +148,7 @@ def test_methyl_centroid_pair_supports_mann_whitney_from_histograms():
         builder2.add_sample(sample2)
         centroid2 = builder2.finalize()
 
-        pair = MethylCentroidPair(min_coverage=1, statistical_test="mann_whitney")
+        pair = MethylCentroidPair(min_coverage=1)
         result = pair.compare_centroids(centroid1, centroid2)
 
         assert not result.empty

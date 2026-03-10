@@ -105,7 +105,13 @@ class BedtoolsMapper:
         allow_predicted: Optional[bool] = None,
         cache_enabled: bool = True,
         cache_dir: Optional[Path] = None,  # Auto: project_root/enrich_cache or ./enrich_cache
-        cache_ttl_days: Optional[int] = 0,
+        cache_ttl_days: Optional[int] = 7,
+        grok_cache_ttl_days: Optional[int] = 0,
+        source_max_workers: int = 3,
+        grok_batch_size: int = 10,
+        grok_max_workers: int = 2,
+        open_targets_max_workers: int = 8,
+        disgenet_max_workers: int = 8,
         azure_key_vault_url: Optional[str] = None,
         azure_secret_name: Optional[str] = None,
         encrypted_file_path: Optional[Path] = None,
@@ -142,7 +148,13 @@ class BedtoolsMapper:
             allow_predicted: Whether to allow "predicted" associations
             cache_enabled: Whether to persist cache to disk
             cache_dir: Directory for disk cache (default: auto project_root/enrich_cache or ./enrich_cache)
-            cache_ttl_days: Cache TTL in days (default: 0 = never use cache; set e.g. 7 to reuse)
+            cache_ttl_days: Disk cache TTL in days for Open Targets / DisGeNET lookups (default: 7)
+            grok_cache_ttl_days: Disk cache TTL in days for Grok lookups (default: 0 = fresh each run)
+            source_max_workers: Max workers when querying multiple enrichment sources in parallel
+            grok_batch_size: Number of genes per Grok batch request
+            grok_max_workers: Max concurrent Grok batch requests
+            open_targets_max_workers: Max concurrent Open Targets gene requests
+            disgenet_max_workers: Max concurrent DisGeNET gene requests
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
             azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
             encrypted_file_path: Path to encrypted credential file (optional)
@@ -187,6 +199,12 @@ class BedtoolsMapper:
                 cache_enabled=cache_enabled,
                 cache_dir=cache_dir,
                 cache_ttl_days=cache_ttl_days,
+                grok_cache_ttl_days=grok_cache_ttl_days,
+                source_max_workers=source_max_workers,
+                grok_batch_size=grok_batch_size,
+                grok_max_workers=grok_max_workers,
+                open_targets_max_workers=open_targets_max_workers,
+                disgenet_max_workers=disgenet_max_workers,
                 azure_key_vault_url=azure_key_vault_url,
                 azure_secret_name=azure_secret_name,
                 encrypted_file_path=encrypted_file_path
@@ -255,33 +273,23 @@ class BedtoolsMapper:
                 return f'chr{s}' if s else s
             return s
 
-        # Create BED format: chrom, start (0-based), end, name
-        # Name includes chromosome:position:context for traceability (original chrom for join-back)
-        bed_data = []
-        for _, row in df.iterrows():
-            chrom = str(row['chromosome'])
-            pos = int(row['position'])
-            start = pos - 1  # BED is 0-based
-            end = pos
-            chrom_bed = _bed_chrom(chrom)  # chr-prefix so bedtools matches GTF
+        chrom_series = df['chromosome'].astype(str).str.strip()
+        pos_series = pd.to_numeric(df['position'], errors='raise').astype(np.int64)
+        name_series = chrom_series + ":" + pos_series.astype(str)
+        if 'context' in df.columns:
+            name_series = name_series + ":" + df['context'].astype(str)
+        if 'effect_size' in df.columns:
+            eff_series = pd.to_numeric(df['effect_size'], errors='coerce').fillna(0.0).map(lambda v: f"eff={v:.3f}")
+            name_series = name_series + ":" + eff_series
 
-            # Create name with key info (use original chrom so join with dmp_df works)
-            name_parts = [chrom, str(pos)]
-            if 'context' in df.columns:
-                name_parts.append(str(row['context']))
-            if 'effect_size' in df.columns:
-                name_parts.append(f"eff={row['effect_size']:.3f}")
-            
-            name = ":".join(name_parts)
-
-            bed_data.append({
-                'chrom': chrom_bed,
-                'start': start,
-                'end': end,
-                'name': name
-            })
-        
-        bed_df = pd.DataFrame(bed_data)
+        bed_df = pd.DataFrame(
+            {
+                'chrom': chrom_series.map(_bed_chrom),
+                'start': pos_series - 1,
+                'end': pos_series,
+                'name': name_series,
+            }
+        )
         
         # Write BED file (sorted for bedtools)
         bed_df = bed_df.sort_values(['chrom', 'start'])
@@ -404,32 +412,17 @@ class BedtoolsMapper:
     
     def _join_with_dmp_weights(self, intersect_df: pd.DataFrame, dmp_df: pd.DataFrame) -> pd.DataFrame:
         """Join intersection DataFrame with DMP weights."""
-        # Parse DMP name to extract chromosome and position
-        dmp_info = []
-        for name in intersect_df['dmp_name']:
-            parts = name.split(':')
-            if len(parts) >= 2:
-                chrom = parts[0]
-                try:
-                    pos = int(parts[1])
-                except ValueError:
-                    pos = None
-                dmp_info.append({'chromosome': chrom, 'position': pos})
-            else:
-                dmp_info.append({'chromosome': '', 'position': None})
-        
-        dmp_info_df = pd.DataFrame(dmp_info)
-        intersect_df = pd.concat([intersect_df.reset_index(drop=True), dmp_info_df], axis=1)
+        dmp_parts = intersect_df['dmp_name'].astype(str).str.split(':', n=2, expand=True)
+        intersect_df = intersect_df.reset_index(drop=True).copy()
+        intersect_df['chromosome'] = dmp_parts[0].fillna('').astype(str)
+        intersect_df['position'] = pd.to_numeric(dmp_parts[1], errors='coerce').astype('Int64')
         
         # Ensure consistent types for merging
-        # Convert chromosome and position to same types as in dmp_df
-        if 'chromosome' in dmp_df.columns:
-            dmp_df['chromosome'] = dmp_df['chromosome'].astype(str)
-        if 'position' in dmp_df.columns:
-            dmp_df['position'] = dmp_df['position'].astype('Int64')  # Nullable integer
-        
-        intersect_df['chromosome'] = intersect_df['chromosome'].astype(str)
-        intersect_df['position'] = pd.to_numeric(intersect_df['position'], errors='coerce').astype('Int64')
+        dmp_lookup = dmp_df.copy()
+        if 'chromosome' in dmp_lookup.columns:
+            dmp_lookup['chromosome'] = dmp_lookup['chromosome'].astype(str)
+        if 'position' in dmp_lookup.columns:
+            dmp_lookup['position'] = pd.to_numeric(dmp_lookup['position'], errors='coerce').astype('Int64')
         
         # Merge with original DMP DataFrame
         dmp_cols = ['chromosome', 'position']
@@ -437,9 +430,9 @@ class BedtoolsMapper:
             'p_value', 'q_value', 'effect_size', 'delta_mean',
             'context', 'importance', 'weight', 'overlap'
         ]
-        existing_cols = [c for c in optional_cols if c in dmp_df.columns]
+        existing_cols = [c for c in optional_cols if c in dmp_lookup.columns]
         merged = intersect_df.merge(
-            dmp_df[dmp_cols + existing_cols],
+            dmp_lookup[dmp_cols + existing_cols],
             on=['chromosome', 'position'],
             how='left'
         )
@@ -736,6 +729,55 @@ class BedtoolsMapper:
         logger.info(f"Aggregated into {len(grouped)} {group_by}s")
         return grouped
 
+    def _should_enrich_gene_results(self, group_by: str) -> bool:
+        """Return True when disease enrichment should be applied to grouped gene outputs."""
+        return bool(
+            self.enrich_disease
+            and self.disease_enricher is not None
+            and group_by in ['gene_name', 'gene_id']
+        )
+
+    def _build_shared_enrichment_payload(
+        self,
+        aggregated_frames: List[pd.DataFrame],
+        group_by: str,
+    ) -> Optional[Dict]:
+        """Build one enrichment payload for the union of genes across multiple result frames."""
+        if not self._should_enrich_gene_results(group_by):
+            return None
+
+        genes: List[str] = []
+        for frame in aggregated_frames:
+            if frame.empty or group_by not in frame.columns:
+                continue
+            genes.extend(frame[group_by].dropna().astype(str).tolist())
+
+        if not genes:
+            return None
+
+        return self.disease_enricher._build_enrichment_payload(
+            genes,
+            disease_term=self.disease_enricher.disease_term,
+        )
+
+    def _apply_shared_enrichment_payload(
+        self,
+        df: pd.DataFrame,
+        group_by: str,
+        payload: Optional[Dict],
+        separate_sources: bool = False,
+    ):
+        """Apply a precomputed enrichment payload to a grouped result frame."""
+        if payload is None or not self._should_enrich_gene_results(group_by):
+            return df
+
+        return self.disease_enricher._apply_enrichment_payload(
+            df,
+            gene_column=group_by,
+            payload=payload,
+            separate_sources=separate_sources,
+        )
+
     def _find_stable_k_by_gene_count(
         self,
         dmp_df: pd.DataFrame,
@@ -878,6 +920,10 @@ class BedtoolsMapper:
         if self.extend_after_stable and _last_gene_strongly_associated(optimal_gene_df):
             logger.info("Phase 3: Last gene strongly disease-associated; running extension loop...")
             k_ext = k_stable
+            known_genes = set(genes_at_k_stable)
+            pending_new_genes: set = set()
+            pending_stats_frames: List[pd.DataFrame] = []
+            phase3_batch_size = max(1, getattr(self.disease_enricher, 'grok_batch_size', 10))
             while k_ext < len(dmp_df):
                 k_ext += 1
                 dmp_subset = dmp_df.head(k_ext).copy()
@@ -890,10 +936,24 @@ class BedtoolsMapper:
                     continue
                 agg_k = self.aggregate_by_feature(intersect_df, group_by=group_by)
                 genes_at_k = set(agg_k[group_by].dropna().astype(str).unique())
-                new_genes = genes_at_k - genes_at_k_stable
+                new_genes = genes_at_k - known_genes
                 if not new_genes:
                     continue
-                new_df = pd.DataFrame({group_by: list(new_genes)})
+                known_genes.update(new_genes)
+                pending_new_genes.update(new_genes)
+                pending_stats_frames.append(
+                    agg_k[agg_k[group_by].astype(str).isin(new_genes)].copy()
+                )
+                if len(pending_new_genes) < phase3_batch_size and k_ext < len(dmp_df):
+                    optimization_log['phase3_steps'].append({
+                        'k': k_ext,
+                        'new_genes': len(new_genes),
+                        'batched_genes': len(pending_new_genes),
+                        'new_disease_genes': None,
+                    })
+                    continue
+
+                new_df = pd.DataFrame({group_by: sorted(pending_new_genes)})
                 enriched_new = self.disease_enricher.enrich_gene_dataframe(new_df, gene_column=group_by)
                 disease_new = set()
                 if 'disease_associated' in enriched_new.columns:
@@ -904,12 +964,14 @@ class BedtoolsMapper:
                 optimization_log['phase3_steps'].append({
                     'k': k_ext,
                     'new_genes': len(new_genes),
+                    'batched_genes': len(pending_new_genes),
                     'new_disease_genes': len(disease_new),
                 })
                 if not disease_new:
                     logger.info(f"Phase 3: k={k_ext}, no new disease-associated genes; stopping.")
                     break
-                stats_new = agg_k[agg_k[group_by].astype(str).isin(disease_new)]
+                stats_pending = pd.concat(pending_stats_frames, ignore_index=True)
+                stats_new = stats_pending[stats_pending[group_by].astype(str).isin(disease_new)]
                 enricher_cols = [c for c in enriched_new.columns if c != group_by]
                 merged_new = stats_new.merge(
                     enriched_new[[group_by] + enricher_cols],
@@ -918,6 +980,8 @@ class BedtoolsMapper:
                 )
                 optimal_gene_df = pd.concat([optimal_gene_df, merged_new], ignore_index=True)
                 genes_at_k_stable = genes_at_k
+                pending_new_genes.clear()
+                pending_stats_frames = []
                 k_stable = k_ext
                 logger.info(f"Phase 3: k={k_ext}, added {len(disease_new)} disease genes; continuing.")
             optimization_log['phase3_extended'] = True
@@ -989,6 +1053,7 @@ class BedtoolsMapper:
         output_dir.mkdir(parents=True, exist_ok=True)
         
         results = {}
+        result_artifacts = []
         
         with tempfile.TemporaryDirectory() as temp_dir:
             for csv_file in csv_files:
@@ -1000,6 +1065,7 @@ class BedtoolsMapper:
                     # Load DMPs
                     dmp_df = pd.read_csv(csv_file)
                     dmp_df_sorted = self._sort_dmps_for_optimization(dmp_df)
+                    needs_shared_enrichment = False
                     
                     # Apply DMP optimization if enabled
                     optimal_k = None
@@ -1046,43 +1112,62 @@ class BedtoolsMapper:
                         # Aggregate by feature
                         aggregated = self.aggregate_by_feature(intersect_df, group_by=group_by)
                         
-                        # Enrich with disease associations if enabled
-                        if self.enrich_disease and group_by in ['gene_name', 'gene_id']:
-                            if self.disease_enricher:
-                                logger.info(f"Enriching {group_by} with disease associations...")
-                                aggregated = self.disease_enricher.enrich_gene_dataframe(
-                                    aggregated,
-                                    gene_column=group_by,
-                                    disease_term=self.disease_enricher.disease_term
-                                )
-                            else:
-                                logger.warning("Disease enrichment was requested but enricher is not available (init failed). Output will not include disease columns.")
+                        # Defer enrichment so all per-file outputs can share one payload and cache pass
+                        needs_shared_enrichment = self._should_enrich_gene_results(group_by)
+                        if needs_shared_enrichment:
+                            logger.info(f"Deferring disease enrichment for {group_by} until the shared gene payload is built...")
+                        elif self.enrich_disease and group_by in ['gene_name', 'gene_id'] and self.disease_enricher is None:
+                            logger.warning("Disease enrichment was requested but enricher is not available (init failed). Output will not include disease columns.")
                     
-                    # Save results
                     output_csv = output_dir / f"{csv_file.stem}-features-{group_by}.csv"
                     if self.optimize_dmps and self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
-                        # Save optimized results with k suffix
                         output_csv = output_dir / f"{csv_file.stem}-optimized-k{optimal_k}-features-{group_by}.csv"
-                    aggregated.to_csv(output_csv, index=False)
                     
-                    # Save detailed intersections
                     detail_csv = output_dir / f"{csv_file.stem}-intersections.csv"
                     if self.optimize_dmps and self.enrich_disease and self.disease_enricher and group_by in ['gene_name', 'gene_id']:
                         detail_csv = output_dir / f"{csv_file.stem}-optimized-k{optimal_k}-intersections.csv"
-                    intersect_df.to_csv(detail_csv, index=False)
                     
-                    results[str(csv_file)] = aggregated
+                    result_artifacts.append(
+                        {
+                            'csv_file': str(csv_file),
+                            'aggregated': aggregated,
+                            'intersect_df': intersect_df,
+                            'output_csv': output_csv,
+                            'detail_csv': detail_csv,
+                            'needs_shared_enrichment': needs_shared_enrichment,
+                        }
+                    )
                     
                     logger.info(f"✅ Mapped {len(intersect_df)} DMP-feature pairs")
                     logger.info(f"   Found {len(aggregated)} unique {group_by}s")
-                    logger.info(f"   Results saved to: {output_csv}")
-                    logger.info(f"   Detailed intersections: {detail_csv}")
                     
                 except Exception as e:
                     logger.error(f"Failed to process {csv_file.name}: {e}")
                     import traceback
                     traceback.print_exc()
                     continue
+
+        shared_payload = self._build_shared_enrichment_payload(
+            [artifact['aggregated'] for artifact in result_artifacts if artifact['needs_shared_enrichment']],
+            group_by=group_by,
+        )
+
+        for artifact in result_artifacts:
+            aggregated = artifact['aggregated']
+            if artifact['needs_shared_enrichment']:
+                aggregated = self._apply_shared_enrichment_payload(
+                    aggregated,
+                    group_by=group_by,
+                    payload=shared_payload,
+                    separate_sources=False,
+                )
+
+            aggregated.to_csv(artifact['output_csv'], index=False)
+            artifact['intersect_df'].to_csv(artifact['detail_csv'], index=False)
+            results[artifact['csv_file']] = aggregated
+
+            logger.info(f"   Results saved to: {artifact['output_csv']}")
+            logger.info(f"   Detailed intersections: {artifact['detail_csv']}")
         
         # Combine all results if multiple files
         if len(results) > 1:
@@ -1179,33 +1264,33 @@ class BedtoolsMapper:
                 combined['gene_importance'] = combined['total_weight']
             
             # Enrich combined results with disease associations if enabled
-            if self.enrich_disease and group_by in ['gene_name', 'gene_id']:
-                if self.disease_enricher:
-                    logger.info(f"Enriching combined {group_by} results with disease associations...")
-                    unique_genes = combined[group_by].nunique()
-                    logger.info(f"Found {unique_genes} unique {group_by}s across all chromosomes")
-                    disease_term = getattr(self.disease_enricher, 'disease_term', None)
+            if self._should_enrich_gene_results(group_by):
+                logger.info(f"Enriching combined {group_by} results with disease associations...")
+                unique_genes = combined[group_by].nunique()
+                logger.info(f"Found {unique_genes} unique {group_by}s across all chromosomes")
+                combined_payload = shared_payload or self._build_shared_enrichment_payload([combined], group_by=group_by)
 
-                    if self.separate_enrichment_sources and self.enrich_source == 'both':
-                        enriched_results = self.disease_enricher.enrich_gene_dataframe(
-                            combined,
-                            gene_column=group_by,
-                            disease_term=disease_term,
-                            separate_sources=True
-                        )
-                        for source_name, enriched_df in enriched_results.items():
-                            source_csv = output_dir / f"all-{group_by}-combined-{source_name}.csv"
-                            enriched_df.to_csv(source_csv, index=False)
-                            logger.info(f"   Saved {source_name} results to: {source_csv}")
-                        combined = enriched_results['merged']
-                    else:
-                        combined = self.disease_enricher.enrich_gene_dataframe(
-                            combined,
-                            gene_column=group_by,
-                            disease_term=disease_term
-                        )
+                if self.separate_enrichment_sources and self.enrich_source == 'both':
+                    enriched_results = self._apply_shared_enrichment_payload(
+                        combined,
+                        group_by=group_by,
+                        payload=combined_payload,
+                        separate_sources=True,
+                    )
+                    for source_name, enriched_df in enriched_results.items():
+                        source_csv = output_dir / f"all-{group_by}-combined-{source_name}.csv"
+                        enriched_df.to_csv(source_csv, index=False)
+                        logger.info(f"   Saved {source_name} results to: {source_csv}")
+                    combined = enriched_results['merged']
                 else:
-                    logger.warning("Disease enrichment was requested but enricher is not available. Combined CSV will not include disease columns.")
+                    combined = self._apply_shared_enrichment_payload(
+                        combined,
+                        group_by=group_by,
+                        payload=combined_payload,
+                        separate_sources=False,
+                    )
+            elif self.enrich_disease and group_by in ['gene_name', 'gene_id'] and self.disease_enricher is None:
+                logger.warning("Disease enrichment was requested but enricher is not available. Combined CSV will not include disease columns.")
             
             combined_csv = output_dir / f"all-{group_by}-combined.csv"
             combined.to_csv(combined_csv, index=False)

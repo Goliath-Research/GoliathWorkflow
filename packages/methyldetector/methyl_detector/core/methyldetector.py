@@ -404,10 +404,11 @@ class MethylDetector:
         cohort_size = max(max_coverage, 10)
         effective_min_coverage = self.config.effective_min_N(cohort_size)
         
-        # Pre-filter positions by delta_mean before the expensive statistical comparison.
-        # This uses only the centroid means (N, Sx), which are cheap to evaluate, to
-        # reduce the tested set from millions of positions down to those that could ever
-        # have any biological signal.  Only active when delta_mean_reduction is set.
+        # Pre-filter aligned positions by delta_mean before the expensive statistical
+        # comparison. This uses only the centroid means (N, Sx), which are cheap to
+        # evaluate, to reduce the tested set from millions of positions down to those
+        # that could ever have any biological signal. Only active when
+        # delta_mean_reduction is set.
         delta_gate = getattr(self.config, "delta_mean_reduction", None)
 
         import time
@@ -3321,7 +3322,8 @@ class MethylDetector:
         for col, dtype in dtype_map.items():
             if col in df:
                 df[col] = df[col].astype(dtype)
-        # Drop legacy columns; overlap and effect_size come from ECDF/Welch in _compute_chunk_metrics_df
+        # Drop legacy columns; overlap and effect_size come from the ECDF scoring path
+        # in _compute_chunk_metrics_df.
         for legacy in ("bhattacharyya", "bhattacharyya_coefficient"):
             if legacy in df.columns:
                 df.drop(columns=[legacy], inplace=True)

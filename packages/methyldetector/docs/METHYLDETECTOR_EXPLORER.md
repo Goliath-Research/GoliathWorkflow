@@ -4,9 +4,9 @@
 
 ## Pipeline
 
-1. Run a Welch-style unequal-variance mean-difference test at every aligned position.
-2. Apply FDR correction and keep positions with `q_value <= alpha`.
-3. Apply a `delta_mean` reduction gate before any CPU-bound PCHIP overlap work.
+1. Align the centroids and keep positions supported in both groups after the min-coverage / min-N filter.
+2. Apply a `delta_mean_reduction` gate on this aligned locus set before significance testing.
+3. Run the histogram-derived Mann-Whitney U test on the surviving positions, then apply FDR correction and keep loci with `q_value <= alpha`.
 4. Compute continuous ECDF overlap from the PCHIP-derived PDFs:
 
    `overlap = integral_0^1 min(f1(x), f2(x)) dx`
@@ -19,7 +19,7 @@
 
 ## Why the `delta_mean` reduction gate exists
 
-Continuous ECDF overlap uses `PchipInterpolator`, which is CPU-bound and not practical for millions of positions. The Explorer therefore applies statistical filtering first and then a `delta_mean` reduction gate to limit the number of loci that receive continuous overlap/effect-size evaluation.
+The histogram-derived Mann-Whitney U stage and the continuous ECDF overlap stage are both expensive at large-context scale. The Explorer therefore applies `delta_mean_reduction` on the aligned locus set before significance testing so only biologically plausible candidates reach the non-parametric statistical and ECDF scoring stages.
 
 ## Requirements
 
@@ -52,7 +52,7 @@ methyl-detector-explorer \
 
 | Option | Meaning |
 |--------|---------|
-| `--alpha` | FDR threshold after the Welch-style statistical test. |
+| `--alpha` | FDR threshold after the histogram-derived Mann-Whitney U test. |
 | `--min-N`, `--min-N-pct` | Minimum per-group support before any testing. |
 | `--delta-mean-reduction` | Optional pre-ECDF reduction threshold. |
 | `--min-delta-mean` | Biological filter on `delta_mean` after final scoring. |
@@ -66,7 +66,7 @@ methyl-detector-explorer \
 ## Outputs
 
 - Report JSON:
-  `total_positions`, `positions_after_min_N_filter`, `positions_after_statistical_filter`, `positions_after_delta_mean_reduction`, `positions_after_biological_filter`, `lambda_var_used`, `time_total_s`, and the effect-size percentiles when available.
+  `total_positions`, `positions_after_min_N_filter`, `positions_after_delta_mean_reduction`, `positions_after_statistical_filter`, `positions_after_biological_filter`, `lambda_var_used`, `time_total_s`, and the effect-size percentiles when available.
 - Optional CSV:
   `position`, `mean1`, `mean2`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `p_value`, `q_value`, `overlap`, `effect_size`, `effect_size_reliability`, and `effect_size_ecdf`.
 

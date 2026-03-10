@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 try:
     from methyl_utils import MethylCentroidPair, storey_qvalues
     from methyl_utils.statistical_tests import (
-        welch_mean_test,
+        mann_whitney_from_bin_counts,
         ecdf_overlap_integral,
         effect_size_from_components,
         optimize_lambda_var,
@@ -128,6 +128,8 @@ class MethylDetectorExplorer:
             }
             return self._result_df, self._report
 
+        delta_gate = self.delta_mean_reduction
+        positions_min_n = common_pos[keep_idx]
         mean1 = _to_arr(centroid1.mean)[keep_idx]
         mean2 = _to_arr(centroid2.mean)[keep_idx]
         var1 = _to_arr(centroid1.variance)[keep_idx]
@@ -136,41 +138,57 @@ class MethylDetectorExplorer:
         n2 = n2_all[keep_idx]
         signed_delta = mean1 - mean2
         delta_mean = np.abs(signed_delta)
+        bc1 = np.asarray(centroid1.binned_stats["bin_counts"], dtype=np.float64)[keep_idx]
+        bc2 = np.asarray(centroid2.binned_stats["bin_counts"], dtype=np.float64)[keep_idx]
 
-        welch = welch_mean_test(
-            delta_mean=signed_delta,
-            var1=var1,
-            n1=n1,
-            var2=var2,
-            n2=n2,
-        )
-        q_values, _ = storey_qvalues(np.asarray(welch["p_value"], dtype=np.float64))
-        df = pd.DataFrame(
+        prefiltered_mask = np.ones(len(positions_min_n), dtype=bool)
+        if delta_gate is not None:
+            prefiltered_mask = delta_mean >= float(delta_gate)
+
+        prefiltered_positions = positions_min_n[prefiltered_mask]
+        prefiltered_mean1 = mean1[prefiltered_mask]
+        prefiltered_mean2 = mean2[prefiltered_mask]
+        prefiltered_delta = delta_mean[prefiltered_mask]
+        prefiltered_var1 = var1[prefiltered_mask]
+        prefiltered_var2 = var2[prefiltered_mask]
+        prefiltered_n1 = n1[prefiltered_mask]
+        prefiltered_n2 = n2[prefiltered_mask]
+        prefiltered_bc1 = bc1[prefiltered_mask]
+        prefiltered_bc2 = bc2[prefiltered_mask]
+
+        if len(prefiltered_positions) > 0:
+            stat_result = mann_whitney_from_bin_counts(
+                prefiltered_bc1,
+                prefiltered_bc2,
+                n1=prefiltered_n1,
+                n2=prefiltered_n2,
+            )
+            p_values = np.asarray(stat_result["p_value"], dtype=np.float64)
+            q_values, _ = storey_qvalues(p_values)
+        else:
+            p_values = np.asarray([], dtype=np.float64)
+            q_values = np.asarray([], dtype=np.float64)
+
+        prefiltered_df = pd.DataFrame(
             {
-                "position": common_pos[keep_idx],
-                "mean1": mean1,
-                "mean2": mean2,
-                "delta_mean": delta_mean,
-                "variance1": var1,
-                "variance2": var2,
-                "n1": n1,
-                "n2": n2,
-                "p_value": np.asarray(welch["p_value"], dtype=np.float64),
+                "position": prefiltered_positions,
+                "mean1": prefiltered_mean1,
+                "mean2": prefiltered_mean2,
+                "delta_mean": prefiltered_delta,
+                "variance1": prefiltered_var1,
+                "variance2": prefiltered_var2,
+                "n1": prefiltered_n1,
+                "n2": prefiltered_n2,
+                "p_value": p_values,
                 "q_value": np.asarray(q_values, dtype=np.float64),
             }
         )
 
-        stat_df = df[df["q_value"] <= self.alpha].copy()
-        delta_gate = self.delta_mean_reduction
-        if delta_gate is None:
-            delta_gate = self.min_delta_mean
-        reduced_df = stat_df.copy()
-        if delta_gate is not None and len(reduced_df) > 0:
-            reduced_df = reduced_df[reduced_df["delta_mean"].astype(float) >= float(delta_gate)].copy()
+        stat_df = prefiltered_df[prefiltered_df["q_value"] <= self.alpha].copy()
 
-        if len(reduced_df) > 0:
+        if len(stat_df) > 0:
             pos_to_idx = {int(p): i for i, p in enumerate(common_pos)}
-            idx_in_common = np.asarray([pos_to_idx[int(p)] for p in reduced_df["position"].values], dtype=np.intp)
+            idx_in_common = np.asarray([pos_to_idx[int(p)] for p in stat_df["position"].values], dtype=np.intp)
             bin_edges = np.asarray(centroid1.binned_stats["bin_edges"], dtype=np.float64)
             bc1 = np.asarray(centroid1.binned_stats["bin_counts"], dtype=np.float64)[idx_in_common]
             bc2 = np.asarray(centroid2.binned_stats["bin_counts"], dtype=np.float64)[idx_in_common]
@@ -185,12 +203,12 @@ class MethylDetectorExplorer:
             overlap = ecdf_overlap_integral(
                 view1,
                 view2,
-                np.arange(len(reduced_df), dtype=np.intp),
+                np.arange(len(stat_df), dtype=np.intp),
                 grid_size=self.ecdf_overlap_grid_size,
             )
             lambda_used = self.lambda_var
             lambda_corr = None
-            if self.optimize_lambda_var and len(reduced_df) > 1:
+            if self.optimize_lambda_var and len(stat_df) > 1:
                 lambda_values = np.arange(
                     self.lambda_var_min,
                     self.lambda_var_max + self.lambda_var_step * 0.5,
@@ -198,48 +216,48 @@ class MethylDetectorExplorer:
                     dtype=np.float64,
                 )
                 optimized = optimize_lambda_var(
-                    delta_mean=reduced_df["delta_mean"].values.astype(np.float64),
+                    delta_mean=stat_df["delta_mean"].values.astype(np.float64),
                     overlap=overlap,
-                    var1=reduced_df["variance1"].values.astype(np.float64),
-                    var2=reduced_df["variance2"].values.astype(np.float64),
-                    target_scores=1.0 - reduced_df["q_value"].values.astype(np.float64),
+                    var1=stat_df["variance1"].values.astype(np.float64),
+                    var2=stat_df["variance2"].values.astype(np.float64),
+                    target_scores=1.0 - stat_df["q_value"].values.astype(np.float64),
                     lambda_values=lambda_values,
                 )
                 lambda_used = float(optimized["lambda_var"])
                 lambda_corr = optimized["correlation"]
                 effect_size = np.asarray(optimized["effect_size"], dtype=np.float64)
                 reliability = effect_size_from_components(
-                    delta_mean=reduced_df["delta_mean"].values.astype(np.float64),
+                    delta_mean=stat_df["delta_mean"].values.astype(np.float64),
                     overlap=overlap,
-                    var1=reduced_df["variance1"].values.astype(np.float64),
-                    var2=reduced_df["variance2"].values.astype(np.float64),
+                    var1=stat_df["variance1"].values.astype(np.float64),
+                    var2=stat_df["variance2"].values.astype(np.float64),
                     lambda_var=lambda_used,
                 )["reliability"]
             else:
                 effect = effect_size_from_components(
-                    delta_mean=reduced_df["delta_mean"].values.astype(np.float64),
+                    delta_mean=stat_df["delta_mean"].values.astype(np.float64),
                     overlap=overlap,
-                    var1=reduced_df["variance1"].values.astype(np.float64),
-                    var2=reduced_df["variance2"].values.astype(np.float64),
+                    var1=stat_df["variance1"].values.astype(np.float64),
+                    var2=stat_df["variance2"].values.astype(np.float64),
                     lambda_var=lambda_used,
                 )
                 effect_size = effect["effect_size"]
                 reliability = effect["reliability"]
 
-            reduced_df["overlap"] = overlap.astype(np.float64)
-            reduced_df["effect_size"] = effect_size.astype(np.float64)
-            reduced_df["effect_size_reliability"] = np.asarray(reliability, dtype=np.float64)
-            ranks = rankdata(reduced_df["effect_size"].values.astype(np.float64))
-            reduced_df["effect_size_ecdf"] = (ranks - 0.5) / len(ranks)
+            stat_df["overlap"] = overlap.astype(np.float64)
+            stat_df["effect_size"] = effect_size.astype(np.float64)
+            stat_df["effect_size_reliability"] = np.asarray(reliability, dtype=np.float64)
+            ranks = rankdata(stat_df["effect_size"].values.astype(np.float64))
+            stat_df["effect_size_ecdf"] = (ranks - 0.5) / len(ranks)
         else:
             lambda_used = self.lambda_var
             lambda_corr = None
-            reduced_df["overlap"] = np.nan
-            reduced_df["effect_size"] = np.nan
-            reduced_df["effect_size_reliability"] = np.nan
-            reduced_df["effect_size_ecdf"] = np.nan
+            stat_df["overlap"] = np.nan
+            stat_df["effect_size"] = np.nan
+            stat_df["effect_size_reliability"] = np.nan
+            stat_df["effect_size_ecdf"] = np.nan
 
-        bio_df = reduced_df.copy()
+        bio_df = stat_df.copy()
         if self.min_delta_mean is not None and len(bio_df) > 0:
             bio_df = bio_df[bio_df["delta_mean"].astype(float) >= float(self.min_delta_mean)].copy()
         if self.max_overlap is not None and len(bio_df) > 0:
@@ -251,9 +269,9 @@ class MethylDetectorExplorer:
 
         report = {
             "total_positions": int(len(common_pos)),
-            "positions_after_min_N_filter": int(len(df)),
+            "positions_after_min_N_filter": int(len(positions_min_n)),
+            "positions_after_delta_mean_reduction": int(len(prefiltered_df)),
             "positions_after_statistical_filter": int(len(stat_df)),
-            "positions_after_delta_mean_reduction": int(len(reduced_df)),
             "positions_after_biological_filter": int(len(bio_df)),
             "alpha": self.alpha,
             "delta_mean_reduction_used": delta_gate,
@@ -263,8 +281,8 @@ class MethylDetectorExplorer:
         }
         if lambda_corr is not None:
             report["effect_size_vs_1_minus_q_correlation"] = float(lambda_corr)
-        if len(reduced_df) > 0 and np.isfinite(reduced_df["effect_size"]).any():
-            effect_vals = reduced_df["effect_size"].astype(float).values
+        if len(stat_df) > 0 and np.isfinite(stat_df["effect_size"]).any():
+            effect_vals = stat_df["effect_size"].astype(float).values
             report["effect_size_90th_percentile"] = float(np.percentile(effect_vals, 90))
             report["effect_size_95th_percentile"] = float(np.percentile(effect_vals, 95))
             report["effect_size_99th_percentile"] = float(np.percentile(effect_vals, 99))

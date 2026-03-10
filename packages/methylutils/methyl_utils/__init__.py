@@ -561,15 +561,12 @@ from .statistical_tests import (
     aggregate_pvalues_simes,
     PVALUE_AGGREGATION_METHODS,
     discrete_overlap_from_bin_counts,
-    welch_mean_test,
     mann_whitney_from_bin_counts,
     dl_heterogeneity,
     ecdf_overlap_integral,
     effect_size_from_components,
     ecdf_effect_size,
     optimize_lambda_var,
-    welch_d_fast_overlap_approx,
-    welch_d_ks_overlap,
 )
 
 from .genomic_utils import (
@@ -887,13 +884,11 @@ __all__ = [
     "aggregate_pvalues_simes",
     "PVALUE_AGGREGATION_METHODS",
     "discrete_overlap_from_bin_counts",
-    "welch_mean_test",
+    "mann_whitney_from_bin_counts",
     "ecdf_overlap_integral",
     "effect_size_from_components",
     "ecdf_effect_size",
     "optimize_lambda_var",
-    "welch_d_fast_overlap_approx",
-    "welch_d_ks_overlap",
     'BetaClassifier',
     'ClassifierFactory',  # if added
     # EAT transformation functions

@@ -154,7 +154,6 @@ Minimal JSON config example:
   "centroid2_dir": "/path/to/cancer/centroids",
   "output_dir": "/path/to/output",
   "alpha": 0.05,
-  "statistical_test": "mann_whitney",
   "delta_mean_reduction": 0.1,
   "lambda_var": 2.0,
   "effect_size_coverage": 0.95,
@@ -169,7 +168,6 @@ Minimal JSON config example:
 - **centroid1_dir** / **centroid2_dir**: Directories containing `{chrom}-{context}.h5` files (e.g. from MethylCentroid).  
 - **output_dir**: Where to write DMP CSVs, summary, and classifier outputs.  
 - **alpha**: FDR threshold (e.g. 0.01 or 0.05).  
-- **statistical_test**: `"welch"` or `"mann_whitney"`.  
 - **effect_size_coverage**: Per-context cumulative effect-mass threshold for biological selection.  
 - **validation_split_ratio / validation_n_repeats**: Repeated stratified held-out validation for BA reporting and top-k selection.  
 - **use_gpu**: Use GPU when available.

@@ -440,8 +440,44 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     disease_group.add_argument(
         '--cache-ttl-days',
         type=int,
+        default=7,
+        help='Disk cache TTL in days for Open Targets / DisGeNET lookups (default: 7)'
+    )
+    disease_group.add_argument(
+        '--grok-cache-ttl-days',
+        type=int,
         default=0,
-        help='Cache TTL in days (default: 0 = never use cache for fresh Grok results; set e.g. 7 to reuse)'
+        help='Disk cache TTL in days for Grok lookups (default: 0 = refresh each run, but same-run memoization is still used)'
+    )
+    disease_group.add_argument(
+        '--source-max-workers',
+        type=int,
+        default=3,
+        help='Maximum concurrent enrichment sources to run in parallel (default: 3)'
+    )
+    disease_group.add_argument(
+        '--grok-batch-size',
+        type=int,
+        default=10,
+        help='Number of genes per Grok batch request (default: 10)'
+    )
+    disease_group.add_argument(
+        '--grok-max-workers',
+        type=int,
+        default=2,
+        help='Maximum concurrent Grok batch requests (default: 2)'
+    )
+    disease_group.add_argument(
+        '--open-targets-max-workers',
+        type=int,
+        default=8,
+        help='Maximum concurrent Open Targets gene requests (default: 8)'
+    )
+    disease_group.add_argument(
+        '--disgenet-max-workers',
+        type=int,
+        default=8,
+        help='Maximum concurrent DisGeNET gene requests (default: 8)'
     )
     
     # DMP optimization options
@@ -720,6 +756,12 @@ def main_bedtools():
             cache_enabled=not args.no_cache,
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
             cache_ttl_days=args.cache_ttl_days,
+            grok_cache_ttl_days=args.grok_cache_ttl_days,
+            source_max_workers=args.source_max_workers,
+            grok_batch_size=args.grok_batch_size,
+            grok_max_workers=args.grok_max_workers,
+            open_targets_max_workers=args.open_targets_max_workers,
+            disgenet_max_workers=args.disgenet_max_workers,
             azure_key_vault_url=args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL'),
             azure_secret_name=args.azure_secret_name or os.environ.get('AZURE_SECRET_NAME'),
             encrypted_file_path=Path(args.encrypted_file_path) if args.encrypted_file_path else None,

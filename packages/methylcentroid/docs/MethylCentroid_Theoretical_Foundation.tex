@@ -1,0 +1,232 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\geometry{margin=1in}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  urlcolor=blue,
+}
+
+\title{MethylCentroid Theoretical Foundation}
+\author{MethylPipeline}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+% -----------------------------------------------------------------------
+\section{Goal}
+
+\texttt{MethylCentroid} summarises a cohort of methylation samples without
+storing the full sample\,\(\times\)\,position matrix.  The centroid stores
+per-position \emph{sufficient statistics} plus an empirical histogram so
+that downstream comparison can remain ECDF-based.
+
+% -----------------------------------------------------------------------
+\section{Per-Sample Quantities}
+
+For sample \(j\) at genomic position \(i\), define
+
+\begin{align}
+  mC_{ij} &\quad \text{methylated count,} \\
+  uC_{ij} &\quad \text{unmethylated count,} \\
+  c_{ij}  &= mC_{ij} + uC_{ij} \quad \text{(coverage),} \\
+  x_{ij}  &= \frac{mC_{ij}}{c_{ij}} \in [0,1]
+             \quad \text{(methylation fraction, defined when } c_{ij}>0\text{).}
+\end{align}
+
+Only samples with \(c_{ij}>0\) contribute to position \(i\)'s centroid
+statistics.
+
+% -----------------------------------------------------------------------
+\section{Stored Sufficient Statistics}
+
+For each genomic position the centroid stores the seven accumulators shown
+in Table~\ref{tab:stats}.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol & Code name & Definition \\
+\midrule
+\(N\)      & \texttt{N}    & \(\displaystyle\sum_j 1\) \\[6pt]
+\(S_x\)    & \texttt{Sx}   & \(\displaystyle\sum_j x_{ij}\) \\[6pt]
+\(S_{x^2}\)& \texttt{Sx2}  & \(\displaystyle\sum_j x_{ij}^{2}\) \\[6pt]
+\(\Sigma m\)& \texttt{Sm}  & \(\displaystyle\sum_j mC_{ij}\) \\[6pt]
+\(\Sigma u\)& \texttt{Su}  & \(\displaystyle\sum_j uC_{ij}\) \\[6pt]
+\(\Sigma c^2\)& \texttt{Sc2}& \(\displaystyle\sum_j c_{ij}^{2}\) \\[6pt]
+\(\Sigma w x^2\)& \texttt{Swx2}& \(\displaystyle\sum_j c_{ij}\,x_{ij}^{2}\) \\[6pt]
+\bottomrule
+\end{tabular}
+\caption{Sufficient statistics stored per genomic position.}
+\label{tab:stats}
+\end{table}
+
+\subsection{Derived Quantities}
+
+The stored accumulators are enough to recover commonly needed summaries
+without re-reading sample files.
+
+\paragraph{Mean methylation fraction.}
+\begin{equation}
+  \hat{\mu} = \frac{S_x}{N}.
+\end{equation}
+
+\paragraph{Sample variance of methylation fractions.}
+\begin{equation}
+  \hat{\sigma}^2 = \frac{S_{x^2} - S_x^2/N}{\max(N-1,\,1)}.
+\end{equation}
+
+\paragraph{Average counts.}
+\begin{equation}
+  \widehat{mC} = \frac{\Sigma m}{N}, \qquad
+  \widehat{uC} = \frac{\Sigma u}{N}.
+\end{equation}
+
+\paragraph{Method-of-moments Beta parameters (derived, not stored).}
+When a downstream consumer requests Beta parameters, they are computed from
+\(\hat{\mu}\) and \(\hat{\sigma}^2\):
+
+\begin{align}
+  \hat{\alpha} &= \hat{\mu}\left(
+      \frac{\hat{\mu}(1-\hat{\mu})}{\hat{\sigma}^2} - 1
+    \right), \\[4pt]
+  \hat{\beta}  &= (1-\hat{\mu})\left(
+      \frac{\hat{\mu}(1-\hat{\mu})}{\hat{\sigma}^2} - 1
+    \right).
+\end{align}
+
+These parameters are \emph{not} part of the comparison pipeline; they are
+available only as derived statistics.
+
+\paragraph{Heterogeneity statistics.}
+\texttt{Sc2} and \texttt{Swx2} allow coverage-weighted variance
+decompositions, for example DerSimonian--Laird-style between-sample
+heterogeneity estimates used by the \texttt{dl\_heterogeneity} helper in
+MethylUtils.  This is why both fields remain part of the persisted schema
+even though they are not used in the core centroid mean or variance formulas.
+
+% -----------------------------------------------------------------------
+\section{ECDF Histogram}
+
+Each supported centroid must also store a per-position histogram over
+methylation fractions:
+
+\begin{itemize}
+  \item \texttt{bins} --- number of histogram bins \(B \geq 1\).
+  \item \texttt{bin\_counts} --- array of shape \((n_\text{positions},\,B)\).
+  \item \texttt{bin\_edges} --- reconstructed in memory as uniform edges on
+        \([0,1]\): \(\,0,\,1/B,\,2/B,\,\ldots,\,1\).
+\end{itemize}
+
+The parameter \texttt{binned\_stats\_bins} is \textbf{mandatory} and must
+satisfy \(B \geq 1\).  The canonical default is \(B = 20\).
+
+For each accumulator update with sample \(j\), the bin index is
+
+\begin{equation}
+  b_{ij} = \left\lfloor x_{ij} \cdot B \right\rfloor
+           \;\text{clamped to }\{0,\ldots,B-1\},
+\end{equation}
+
+and \(\texttt{bin\_counts}[i,\,b_{ij}]\) is incremented.
+
+The histogram defines an \emph{empirical CDF} at the bin edges.  A PCHIP
+(Piecewise Cubic Hermite Interpolating Polynomial) spline is used to
+reconstruct a continuous CDF \(F(x)\) and PDF \(f(x) = F'(x)\) for any
+\(x \in [0,1]\) when downstream code evaluates overlap or log-likelihood.
+
+% -----------------------------------------------------------------------
+\section{Why ECDF Only}
+
+The current contract removes runtime switching among Normal, Beta,
+Beta-Binomial, and Beta-Mixture comparison modes.  The ECDF-only design
+offers several advantages:
+
+\begin{itemize}
+  \item \textbf{Shape preservation.}  The empirical histogram captures
+        skewed, multimodal, or otherwise irregular methylation distributions
+        without imposing a parametric family.
+  \item \textbf{Contract alignment.}  Build-time (MethylCentroid) and
+        compare-time (MethylCentroidPair, MethylDetector) both rely on the
+        same data model: sufficient statistics plus empirical histograms.
+  \item \textbf{Downstream consistency.}  ECDFClassifier (MethylDetector
+        classifier stage) uses the same PCHIP PDF model as the DMP
+        detection stage, so the score that selects DMPs is consistent with
+        the score that classifies new samples.
+\end{itemize}
+
+% -----------------------------------------------------------------------
+\section{Cohort Update Semantics}
+
+At the runner level, cohort membership is resolved as
+
+\begin{equation}
+  \text{effective\_samples}
+  = (\text{samples} \setminus \text{remove\_samples})
+    \cup \text{add\_samples}.
+\end{equation}
+
+That resolved cohort is built for the target chromosome/context and
+persisted.  The final active cohort is written to:
+
+\begin{itemize}
+  \item HDF5 metadata field \texttt{samples\_used},
+  \item sidecar config field \texttt{samples} in
+        \texttt{\{chrom\}-\{ctx\}\_config.json}.
+\end{itemize}
+
+% -----------------------------------------------------------------------
+\section{HDF5 Schema}
+
+The centroid file stores only \texttt{methylation\_data} datasets; no
+separate \texttt{binned\_stats} group is used.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Dataset / Attribute & Content \\
+\midrule
+\texttt{methylation\_data/pos}        & Genomic positions (uint32) \\
+\texttt{methylation\_data/tnc}        & Trinucleotide context (uint8) \\
+\texttt{methylation\_data/N}          & Sample count per position \\
+\texttt{methylation\_data/Sx}         & Sum of methylation fractions \\
+\texttt{methylation\_data/Sx2}        & Sum of squared fractions \\
+\texttt{methylation\_data/Sm}         & Sum of methylated counts \\
+\texttt{methylation\_data/Su}         & Sum of unmethylated counts \\
+\texttt{methylation\_data/Sc2}        & Sum of squared coverages \\
+\texttt{methylation\_data/Swx2}       & Coverage-weighted sum of squared fractions \\
+\texttt{methylation\_data/bin\_counts}& ECDF histogram \((n_\text{pos}\times B)\) \\
+\texttt{methylation\_data.attrs[bins]}& Scalar bin count \(B\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Bin edges are \emph{not} stored; they are derived as uniform edges on
+\([0,1]\) from the stored bin count \(B\).
+
+% -----------------------------------------------------------------------
+\section{Summary}
+
+\texttt{MethylCentroid} is built around four design principles:
+
+\begin{enumerate}
+  \item Compact sufficient statistics (\(N, S_x, S_{x^2}, \Sigma m, \Sigma u,
+        \Sigma c^2, \Sigma w x^2\)).
+  \item Required ECDF histogram data (\texttt{bin\_counts}, \(B \geq 1\)).
+  \item Deterministic cohort updates via set arithmetic.
+  \item One downstream comparison mode: ECDF.
+\end{enumerate}
+
+\end{document}

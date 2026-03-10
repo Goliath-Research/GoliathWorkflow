@@ -30,7 +30,6 @@ from .performance_profiler import (
 from .statistical_tests import (
     storey_qvalues,
     discrete_overlap_from_bin_counts,
-    welch_mean_test,
     mann_whitney_from_bin_counts,
     dl_heterogeneity,
     effect_size_from_components,
@@ -84,7 +83,7 @@ class MethylCentroidPair:
     The runtime path is intentionally narrow:
     - centroids must provide matching `binned_stats`
     - overlap approximation comes from discrete bin-count overlap
-    - the statistical gate is Welch or histogram-derived Mann-Whitney
+    - the statistical gate defaults to histogram-derived Mann-Whitney
     - the returned `effect_size` is an approximate, pre-ECDF score
 
     MethylDetector later recomputes the final overlap/effect_size on the reduced
@@ -96,7 +95,6 @@ class MethylCentroidPair:
         centroid1: Optional[MethylCentroid] = None,
         centroid2: Optional[MethylCentroid] = None,
         min_coverage: int = 4,
-        statistical_test: str = "welch",
         ecdf_ks_grid_size: int = 256,
     ):
         self.centroid1 = centroid1
@@ -132,12 +130,6 @@ class MethylCentroidPair:
         self.performance_profiler = get_performance_profiler()
 
         self.min_coverage = int(min_coverage)
-        self.statistical_test = str(statistical_test).strip().lower()
-        if self.statistical_test not in {"welch", "mann_whitney"}:
-            raise ValueError(
-                f"Unsupported statistical_test '{statistical_test}'. "
-                "Use 'welch' or 'mann_whitney'."
-            )
         self.ecdf_ks_grid_size = int(ecdf_ks_grid_size)
 
     @classmethod
@@ -523,7 +515,7 @@ class MethylCentroidPair:
                 comparison to.  Must be a sorted subset of the positions common to
                 both centroids.  When provided the statistical test, FDR correction,
                 and all downstream stages run only on these positions.  Pass this to
-                avoid computing the expensive Welch test on positions that are certain
+                avoid computing the expensive statistical gate on positions that are certain
                 to fail the downstream biological filter (e.g. all positions with
                 |delta_mean| < threshold).
 
@@ -554,9 +546,8 @@ class MethylCentroidPair:
                 return pd.DataFrame()  # Empty DataFrame
 
             logger.info(
-                "Comparing centroids at %s common positions using %s",
+                "Comparing centroids at %s common positions using histogram-derived Mann-Whitney U",
                 f"{len(common_positions):,}",
-                self.statistical_test,
             )
 
             # Perform statistical analysis and overlap approximation.
@@ -744,21 +735,12 @@ class MethylCentroidPair:
         signed_delta = mean1 - mean2
         delta_mean = np.abs(signed_delta)
 
-        if self.statistical_test == "mann_whitney":
-            stat_result = mann_whitney_from_bin_counts(
-                bc1_batch,
-                bc2_batch,
-                n1=N1,
-                n2=N2,
-            )
-        else:
-            stat_result = welch_mean_test(
-                delta_mean=signed_delta,
-                var1=variance1,
-                n1=N1,
-                var2=variance2,
-                n2=N2,
-            )
+        stat_result = mann_whitney_from_bin_counts(
+            bc1_batch,
+            bc2_batch,
+            n1=N1,
+            n2=N2,
+        )
         p_values = np.asarray(stat_result["p_value"], dtype=np.float32)
 
         tau2_1 = dl_heterogeneity(
