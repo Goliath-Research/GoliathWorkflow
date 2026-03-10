@@ -725,8 +725,14 @@ class MethylCentroidPair:
         bs2 = centroid2.binned_stats
         bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
         bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
+        bin_edges = np.asarray(bs1["bin_edges"], dtype=np.float64)
+        
+        from .statistical_tests import ecdf_bhattacharyya_trapezoidal_from_bin_counts
+        
         overlap_approx = np.asarray(
-            discrete_overlap_from_bin_counts(bc1_batch, bc2_batch),
+            ecdf_bhattacharyya_trapezoidal_from_bin_counts(
+                bc1_batch, bc2_batch, bin_edges, grid_size=256, use_gpu=self.gpu_available
+            ),
             dtype=np.float64,
         )
         overlap_safe = np.clip(overlap_approx, 1e-10, 1.0)

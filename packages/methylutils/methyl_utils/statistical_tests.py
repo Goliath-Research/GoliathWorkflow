@@ -1272,44 +1272,79 @@ def optimize_lambda_var(
     }
 
 
-def discrete_overlap_from_bin_counts(
+def ecdf_bhattacharyya_trapezoidal_from_bin_counts(
     bc1: np.ndarray,
     bc2: np.ndarray,
-    method: str = "bhattacharyya",
+    bin_edges: np.ndarray,
+    grid_size: int = 256,
+    use_gpu: bool = True,
 ) -> np.ndarray:
     """
-    Compute overlap in [0, 1] between two binned count distributions (discrete).
-    Respects asymmetry of the underlying distribution (e.g. ECDF).
-
-    Args:
-        bc1: Bin counts for centroid 1, shape (n_bins,) or (n_positions, n_bins).
-        bc2: Bin counts for centroid 2, same shape as bc1.
-        method: "bhattacharyya" (sum sqrt(p1*p2)) or "histogram_intersection" (sum min(p1,p2)).
-
-    Returns:
-        Overlap per position, shape (n_positions,) or scalar if inputs are (n_bins,).
+    Approximate Bhattacharyya coefficient by interpolating the ECDF on a dense
+    uniform grid, then taking finite differences to estimate the PDF.
+    
+    This provides a smoother approximation when bins are unmatched or coarse, 
+    while avoiding the full PCHIP spline overhead.
     """
-    bc1 = np.asarray(bc1, dtype=np.float64)
-    bc2 = np.asarray(bc2, dtype=np.float64)
+    from .metrics_core import DistanceCalculator
+    calc = DistanceCalculator()
+    
+    if use_gpu and getattr(calc, 'gpu_available', False) and hasattr(calc, 'cp'):
+        xp = calc.cp
+    else:
+        xp = np
+        
+    bc1 = xp.asarray(bc1, dtype=xp.float64)
+    bc2 = xp.asarray(bc2, dtype=xp.float64)
+    bin_edges = xp.asarray(bin_edges, dtype=xp.float64)
+
     squeeze = False
     if bc1.ndim == 1:
         bc1 = bc1.reshape(1, -1)
         bc2 = bc2.reshape(1, -1)
         squeeze = True
-    total1 = np.sum(bc1, axis=1, keepdims=True)
-    total2 = np.sum(bc2, axis=1, keepdims=True)
-    total1 = np.maximum(total1, 1e-20)
-    total2 = np.maximum(total2, 1e-20)
-    p1 = bc1 / total1
-    p2 = bc2 / total2
-    if method == "histogram_intersection":
-        overlap = np.sum(np.minimum(p1, p2), axis=1)
-    else:
-        # Bhattacharyya coefficient (discrete): sum sqrt(p1 * p2)
-        overlap = np.sum(np.sqrt(np.maximum(p1 * p2, 0.0)), axis=1)
-    out = np.clip(overlap.astype(np.float64), 0.0, 1.0)
-    return out[0] if squeeze else out
 
+    n_pos = bc1.shape[0]
+    total1 = xp.maximum(xp.sum(bc1, axis=1, keepdims=True), 1e-20)
+    total2 = xp.maximum(xp.sum(bc2, axis=1, keepdims=True), 1e-20)
+
+    cumsum1 = xp.cumsum(bc1, axis=1) / total1
+    cumsum2 = xp.cumsum(bc2, axis=1) / total2
+
+    # Prepend 0 to form CDF at bin edges
+    zeros = xp.zeros((n_pos, 1), dtype=xp.float64)
+    cdf1_edges = xp.concatenate([zeros, cumsum1], axis=1)
+    cdf2_edges = xp.concatenate([zeros, cumsum2], axis=1)
+
+    grid = xp.linspace(0.0, 1.0, grid_size, dtype=xp.float64)
+
+    # Vectorized searchsorted for interpolation
+    idx = xp.searchsorted(bin_edges, grid, side="right") - 1
+    idx = xp.clip(idx, 0, len(bin_edges) - 2)
+
+    # Calculate fractional distance t
+    widths = xp.maximum(bin_edges[idx + 1] - bin_edges[idx], 1e-20)
+    t = (grid - bin_edges[idx]) / widths
+    t = xp.clip(t, 0.0, 1.0)
+
+    # Linearly interpolate CDF
+    cdf1_grid = (1.0 - t) * cdf1_edges[:, idx] + t * cdf1_edges[:, idx + 1]
+    cdf2_grid = (1.0 - t) * cdf2_edges[:, idx] + t * cdf2_edges[:, idx + 1]
+
+    # Compute probability masses over the grid intervals
+    p1_grid = xp.maximum(xp.diff(cdf1_grid, axis=1), 0.0)
+    p2_grid = xp.maximum(xp.diff(cdf2_grid, axis=1), 0.0)
+
+    # Bhattacharyya coefficient
+    overlap = xp.sum(xp.sqrt(p1_grid * p2_grid), axis=1)
+    
+    out = xp.clip(overlap, 0.0, 1.0)
+    if squeeze:
+        out = out[0]
+        
+    if use_gpu and getattr(calc, 'gpu_available', False) and hasattr(xp, 'asnumpy'):
+        return xp.asnumpy(out)
+    return out
 
 # Dictionary of available aggregation methods
 PVALUE_AGGREGATION_METHODS = {
@@ -1348,5 +1383,5 @@ __all__ = [
     "effect_size_from_components",
     "ecdf_effect_size",
     "optimize_lambda_var",
-    "discrete_overlap_from_bin_counts",
+    "ecdf_bhattacharyya_trapezoidal_from_bin_counts",
 ]
