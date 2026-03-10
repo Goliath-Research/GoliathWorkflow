@@ -112,3 +112,8 @@ methylclassifier.egg-info/
 methylenricher.egg-info/
 
 packages/methylclassifier/classification_dmps_pc-hc12-1-CG.txt
+packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.out
+packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.fdb_latexmk
+packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.toc
+.gitignore
+packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.aux
