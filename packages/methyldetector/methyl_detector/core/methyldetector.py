@@ -409,7 +409,7 @@ class MethylDetector:
         # evaluate, to reduce the tested set from millions of positions down to those
         # that could ever have any biological signal. Only active when
         # delta_mean_reduction is set.
-        delta_gate = getattr(self.config, "delta_mean_reduction", None)
+        delta_gate = self.config.delta_mean_reduction
 
         import time
         pre_filter_position_subset = None
@@ -489,7 +489,7 @@ class MethylDetector:
         # position in filtered_results already satisfies |delta_mean| >= gate.  The
         # post-filter below is kept as a safety guard for the case where the gate was
         # not active (delta_mean_reduction is None).
-        _gate = getattr(self.config, "delta_mean_reduction", None)
+        _gate = self.config.delta_mean_reduction
         confirmed_results["statistical_dmp"] = True
         confirmed_results["biological_dmp"] = False
         if _gate is not None and "delta_mean" in confirmed_results.columns:
@@ -512,14 +512,14 @@ class MethylDetector:
             )
         ]
 
-        rescue_coverage = getattr(self.config, "biological_only_effect_size_coverage", None)
+        rescue_coverage = self.config.biological_only_effect_size_coverage
         if rescue_coverage is not None:
             rescue_candidates = comparison_results[comparison_results["q_value"] > self.config.alpha].copy()
             if _gate is not None and "delta_mean" in rescue_candidates.columns:
                 rescue_candidates = rescue_candidates[
                     np.abs(rescue_candidates["delta_mean"].astype(float)) >= float(_gate)
                 ].copy()
-            max_candidates = getattr(self.config, "biological_only_max_candidates", None)
+            max_candidates = self.config.biological_only_max_candidates
             if max_candidates is not None and len(rescue_candidates) > max_candidates:
                 rescue_candidates = (
                     rescue_candidates
@@ -552,7 +552,7 @@ class MethylDetector:
 
     def _apply_tau2_filter(self, comparison_results: pd.DataFrame, context: str) -> pd.DataFrame:
         """Optionally drop highly heterogeneous loci before any DMP selection."""
-        tau2_threshold = getattr(self.config, "max_tau2_for_dmp", None)
+        tau2_threshold = self.config.max_tau2_for_dmp
         if tau2_threshold is None:
             return comparison_results
         required_cols = {"tau2_1", "tau2_2"}
@@ -1297,7 +1297,7 @@ class MethylDetector:
             profile_c1 = np.clip(profile_c1, 1e-6, 1.0 - 1e-6)
             profile_c2 = np.clip(profile_c2, 1e-6, 1.0 - 1e-6)
             avail = np.ones((1, len(dmps_df)), dtype=bool)
-            debug = getattr(self.config, "debug", False)
+            debug = self.config.debug
             proba_c1 = clf.predict_proba(profile_c1, avail, debug=debug)[0]
             proba_c2 = clf.predict_proba(profile_c2, avail, debug=debug)[0]
             # P(class1): usually column 1; if classifier returns inverted (centroid1→high, centroid2→low), use column 0
@@ -1401,7 +1401,7 @@ class MethylDetector:
         if n_total == 0:
             return []
 
-        split_ratio = float(getattr(self.config, "validation_split_ratio", 0.0) or 0.0)
+        split_ratio = float(self.config.validation_split_ratio or 0.0)
         if require_holdout and split_ratio <= 0.0:
             split_ratio = 0.2
             if not self._default_holdout_warned:
@@ -1428,9 +1428,9 @@ class MethylDetector:
         if n_test0 <= 0 or n_test1 <= 0:
             return [(idx_all, idx_all)]
 
-        n_repeats = max(int(getattr(self.config, "validation_n_repeats", 1) or 1), 1)
+        n_repeats = max(int(self.config.validation_n_repeats or 1), 1)
         splits: List[Tuple[np.ndarray, np.ndarray]] = []
-        base_seed = int(getattr(self.config, "random_state", 42) or 42)
+        base_seed = int(self.config.random_state or 42)
         for repeat_idx in range(n_repeats):
             rng = np.random.default_rng(base_seed + repeat_idx * 9973)
             test0 = rng.choice(class0, size=n_test0, replace=False)
@@ -2971,8 +2971,8 @@ class MethylDetector:
         cohens_d = np.where(pooled_std > 0, delta / pooled_std, np.nan)
         # Clip to range where statsmodels solve_power typically converges (avoids ConvergenceWarning)
         cohens_d = np.clip(cohens_d, 0.02, 10.0)
-        alpha = getattr(self.config, 'alpha', 0.05)
-        power = getattr(self.config, 'target_power', 0.8)
+        alpha = self.config.alpha
+        power = self.config.target_power
         try:
             from statsmodels.stats.power import TTestIndPower
             from statsmodels.tools.sm_exceptions import ConvergenceWarning as StatsmodelsConvergenceWarning
@@ -3032,7 +3032,7 @@ class MethylDetector:
             export_df['dist_name'] = export_df['dist'].map(DIST_NAMES).fillna('Unknown').astype(str)
         if 'delta_sign' not in export_df.columns and 'mean1' in export_df.columns and 'mean2' in export_df.columns:
             export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2']).astype(np.int8)
-        if getattr(self.config, 'export_sample_size_estimate', False):
+        if self.config.export_sample_size_estimate:
             export_df['n_estimated_per_group'] = self._compute_sample_size_estimate(export_df)
         available_cols = [c for c in export_cols if c in export_df.columns]
         
@@ -3349,7 +3349,7 @@ class MethylDetector:
             df = df.drop(columns=legacy_cols)
         n_rows = len(df)
         # Estimate memory for the (n_positions × grid_size) PDF matrices used in ecdf_overlap_integral.
-        grid_size = getattr(self.config, "ecdf_overlap_grid_size", 512)
+        grid_size = self.config.ecdf_overlap_grid_size
         mem_per_row_mb = (2 * grid_size * 8) / (1024 ** 2)  # two float64 arrays of shape (n, grid)
         from methyl_utils import get_memory_usage
         available_gb = get_memory_usage().get('gpu_free_gb', 80.0)
@@ -3403,8 +3403,8 @@ class MethylDetector:
 
         from methyl_utils.statistical_tests import ecdf_effect_size
         position_indices = np.arange(start_row, start_row + len(chunk_df), dtype=np.intp)
-        grid_size = getattr(self.config, "ecdf_overlap_grid_size", 512)
-        lambda_var = getattr(self.config, "lambda_var", 2.0)
+        grid_size = self.config.ecdf_overlap_grid_size
+        lambda_var = self.config.lambda_var
         results = ecdf_effect_size(
             delta_mean=dm,
             var1=var1,
@@ -3527,7 +3527,7 @@ class MethylDetector:
             'chromosome', 'context', 'position', 'n1', 'n2', 'mean1', 'mean2', 'variance1', 'variance2',
             'overlap', 'delta_mean', 'delta_sign', 'effect_size', 'p_value', 'q_value', 'dist', 'dist_name', 'weight'
         ]
-        if getattr(self.config, 'export_sample_size_estimate', False):
+        if self.config.export_sample_size_estimate:
             export_df['n_estimated_per_group'] = self._compute_sample_size_estimate(export_df)
             standard_cols.append('n_estimated_per_group')
         export_cols = [c for c in standard_cols if c in export_df.columns]

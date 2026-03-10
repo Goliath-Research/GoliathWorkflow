@@ -547,16 +547,16 @@ class MethylCentroid:
         verbose_value = verbose if verbose is not None else config.verbose
 
         return cls(
-            samples=getattr(config, "samples", None),
+            samples=config.samples,
             chrom=config.chrom,
             ctx=config.ctx,
             output_dir=config.output_dir,
             add_samples=config.add_samples,
             remove_samples=config.remove_samples,
             min_coverage=config.min_coverage,
-            max_sample_workers=getattr(config, "max_sample_workers", None),
+            max_sample_workers=config.max_sample_workers,
             verbose=verbose_value,
-            use_gpu=getattr(config, "use_gpu", None),
+            use_gpu=config.use_gpu,
             # Metadata fields
             laboratory=config.laboratory,
             disease=config.disease,
@@ -565,11 +565,11 @@ class MethylCentroid:
             cap_coverage=config.cap_coverage,
             cap_coverage_n_cap=config.cap_coverage_n_cap,
             cap_coverage_seed=config.cap_coverage_seed,
-            cap_coverage_auto_n_cap=getattr(config, "cap_coverage_auto_n_cap", False),
-            cap_coverage_n_cap_method=getattr(config, "cap_coverage_n_cap_method", "iqr"),
-            cap_coverage_n_cap_iqr_multiplier=getattr(config, "cap_coverage_n_cap_iqr_multiplier", 1.5),
-            cap_coverage_n_cap_max_positions=getattr(config, "cap_coverage_n_cap_max_positions", 100_000),
-            binned_stats_bins=getattr(config, "binned_stats_bins", 20),
+            cap_coverage_auto_n_cap=config.cap_coverage_auto_n_cap,
+            cap_coverage_n_cap_method=config.cap_coverage_n_cap_method,
+            cap_coverage_n_cap_iqr_multiplier=config.cap_coverage_n_cap_iqr_multiplier,
+            cap_coverage_n_cap_max_positions=config.cap_coverage_n_cap_max_positions,
+            binned_stats_bins=config.binned_stats_bins,
         )
 
     @classmethod

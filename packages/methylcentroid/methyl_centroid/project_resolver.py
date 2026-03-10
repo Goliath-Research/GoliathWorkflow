@@ -132,7 +132,7 @@ def run_centroids_for_all_groups(
         group_config = _get_group_config_for_label(project, side, label)
         if (
             group_config
-            and getattr(group_config, "subcluster", None) is not None
+            and group_config.subcluster is not None
             and group_config.subcluster.enabled
             and group_config.subcluster.persist_centroids
         ):
@@ -169,7 +169,7 @@ def run_centroid_for_one_group(
     group_config = _get_group_config_for_label(project, side, label)
     if (
         group_config
-        and getattr(group_config, "subcluster", None) is not None
+        and group_config.subcluster is not None
         and group_config.subcluster.enabled
         and group_config.subcluster.persist_centroids
     ):

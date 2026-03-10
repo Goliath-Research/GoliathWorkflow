@@ -650,7 +650,7 @@ def _classify_multi_chromosome_samples(
         chrom_masks[chrom] = np.array(chrom_masks[chrom])
     
     # If weight_method is a fitted method and we have validation labels, fit weights from per-chromosome probas
-    weight_method = getattr(classifier.config, "weight_method", None)
+    weight_method = classifier.config.weight_method
     fitted_methods = ("linear_fitted", "logistic_fitted", "elasticnet_fitted")
     if (
         weight_method in fitted_methods
@@ -667,9 +667,9 @@ def _classify_multi_chromosome_samples(
             )
             # P(class1) for binary; column index 1
             chrom_proba_matrix[:, i] = chrom_probas[:, 1] if chrom_probas.shape[1] > 1 else chrom_probas[:, 0]
-        reg = getattr(classifier.config, "weight_fit_regularization", None) or "none"
-        alpha = getattr(classifier.config, "weight_fit_alpha", 1.0)
-        l1_ratio = getattr(classifier.config, "weight_fit_l1_ratio", 0.5)
+        reg = classifier.config.weight_fit_regularization or "none"
+        alpha = classifier.config.weight_fit_alpha
+        l1_ratio = classifier.config.weight_fit_l1_ratio
         method = "linear" if weight_method == "linear_fitted" else ("logistic" if weight_method == "logistic_fitted" else "elasticnet")
         classifier.fit_chromosome_weights(
             chrom_proba_matrix,
@@ -950,9 +950,9 @@ def _save_classifier_and_sample_list(
 
     output_dir: Used when deriving paths from project_name (e.g. same dir as classification output).
     """
-    project_name = getattr(classifier_config, "project_name", None)
-    save_classifier_path = getattr(classifier_config, "save_classifier_path", None)
-    samples_list_export_path = getattr(classifier_config, "samples_list_export_path", None)
+    project_name = classifier_config.project_name
+    save_classifier_path = classifier_config.save_classifier_path
+    samples_list_export_path = classifier_config.samples_list_export_path
     if output_dir is None:
         output_dir = Path.cwd()
 
@@ -1061,13 +1061,13 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
         trimmed_percentile_high=config.trimmed_percentile_high,
         chromosome_weights=config.chromosome_weights,
         chromosome_matrix_path=config.chromosome_matrix_path,
-        weight_method=getattr(config, "weight_method", None),
-        weight_fit_regularization=getattr(config, "weight_fit_regularization", "none"),
-        weight_fit_alpha=getattr(config, "weight_fit_alpha", 1.0),
-        weight_fit_l1_ratio=getattr(config, "weight_fit_l1_ratio", 0.5),
-        project_name=getattr(config, "project_name", None),
-        save_classifier_path=getattr(config, "save_classifier_path", None),
-        samples_list_export_path=getattr(config, "samples_list_export_path", None),
+        weight_method=config.weight_method,
+        weight_fit_regularization=config.weight_fit_regularization,
+        weight_fit_alpha=config.weight_fit_alpha,
+        weight_fit_l1_ratio=config.weight_fit_l1_ratio,
+        project_name=config.project_name,
+        save_classifier_path=config.save_classifier_path,
+        samples_list_export_path=config.samples_list_export_path,
     )
     classifier = MethylClassifier(classifier_config)
     chrom, context = None, None
@@ -1083,17 +1083,17 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
         print(f"📋 Multi-chromosome classifier mode: {len(classifier.classifiers)} chromosomes")
 
     expected_classes = None
-    c1_paths = getattr(config, 'centroid1_sample_paths', None)
-    c2_paths = getattr(config, 'centroid2_sample_paths', None)
-    c1_dir = getattr(config, 'centroid1_dir', None)
-    c2_dir = getattr(config, 'centroid2_dir', None)
+    c1_paths = config.centroid1_sample_paths
+    c2_paths = config.centroid2_sample_paths
+    c1_dir = config.centroid1_dir
+    c2_dir = config.centroid2_dir
     if (c1_paths and c2_paths) and (len(c1_paths) > 0 and len(c2_paths) > 0):
         config.samples = list(c1_paths) + list(c2_paths)
         expected_classes = [0] * len(c1_paths) + [1] * len(c2_paths)
         print(f"📂 Centroid validation: {len(c1_paths)} centroid1 + {len(c2_paths)} centroid2 samples")
     elif c1_dir and c2_dir:
-        path_remap = getattr(config, 'centroid_path_remap', None)
-        sample_root = getattr(config, 'centroid_sample_root', None) if not path_remap else None
+        path_remap = config.centroid_path_remap
+        sample_root = config.centroid_sample_root if not path_remap else None
         c1_resolved = _read_samples_used_from_centroid_dir(Path(c1_dir), sample_root=sample_root, path_remap=path_remap)
         c2_resolved = _read_samples_used_from_centroid_dir(Path(c2_dir), sample_root=sample_root, path_remap=path_remap)
         if not c1_resolved or not c2_resolved:
@@ -1104,10 +1104,10 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
         config.samples = c1_resolved + c2_resolved
         expected_classes = [0] * len(c1_resolved) + [1] * len(c2_resolved)
         print(f"📂 Centroid validation (from metadata): {len(c1_resolved)} + {len(c2_resolved)} samples")
-    elif getattr(config, 'centroid_dirs', None) and len(config.centroid_dirs) > 2:
+    elif config.centroid_dirs and len(config.centroid_dirs) > 2:
         centroid_dirs = config.centroid_dirs
-        path_remap = getattr(config, 'centroid_path_remap', None)
-        sample_root = getattr(config, 'centroid_sample_root', None) if not path_remap else None
+        path_remap = config.centroid_path_remap
+        sample_root = config.centroid_sample_root if not path_remap else None
         all_samples = []
         expected_classes = []
         for class_idx, c_dir in enumerate(centroid_dirs):
@@ -1160,7 +1160,7 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
         )
     output_dir = Path(config.output_path).parent if config.output_path else Path.cwd()
     _save_classifier_and_sample_list(
-        classifier, classifier_config, getattr(config, "samples", None), output_dir=output_dir
+        classifier, classifier_config, config.samples, output_dir=output_dir
     )
 
 

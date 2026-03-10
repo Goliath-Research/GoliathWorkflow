@@ -327,7 +327,7 @@ class MethylClassifier:
             raise ValueError(f"No valid classifiers loaded from {model_dir}")
         
         # Resolve weight method: explicit or inferred
-        weight_method = getattr(self.config, "weight_method", None)
+        weight_method = self.config.weight_method
         if weight_method is None:
             weight_method = "config" if self.config.chromosome_weights else "effect_size"
         
