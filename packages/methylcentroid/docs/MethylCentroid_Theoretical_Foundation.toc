@@ -1,0 +1,14 @@
+\contentsline {section}{\numberline {1}Goal}{2}{section.1}%
+\contentsline {section}{\numberline {2}Per-Sample Quantities}{2}{section.2}%
+\contentsline {section}{\numberline {3}Stored Sufficient Statistics}{2}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Derived Quantities}{2}{subsection.3.1}%
+\contentsline {paragraph}{Mean methylation fraction.}{3}{section*.2}%
+\contentsline {paragraph}{Sample variance of methylation fractions.}{3}{section*.3}%
+\contentsline {paragraph}{Average counts.}{3}{section*.4}%
+\contentsline {paragraph}{Method-of-moments Beta parameters (derived, not stored).}{3}{section*.5}%
+\contentsline {paragraph}{Heterogeneity statistics.}{3}{section*.6}%
+\contentsline {section}{\numberline {4}ECDF Histogram}{3}{section.4}%
+\contentsline {section}{\numberline {5}Why ECDF Only}{4}{section.5}%
+\contentsline {section}{\numberline {6}Cohort Update Semantics}{4}{section.6}%
+\contentsline {section}{\numberline {7}HDF5 Schema}{4}{section.7}%
+\contentsline {section}{\numberline {8}Summary}{5}{section.8}%

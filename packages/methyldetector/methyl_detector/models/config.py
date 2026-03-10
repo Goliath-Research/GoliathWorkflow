@@ -231,22 +231,6 @@ class MethylModelerConfig(BaseModel):
             raise ValueError("Temperature must be <= 10.0")
         return v
 
-    @field_validator('bmm_refine_mode', mode='before')
-    @classmethod
-    def validate_bmm_refine_mode(cls, v):
-        valid = {"annotate", "filter"}
-        if v not in valid:
-            raise ValueError(f"Invalid bmm_refine_mode '{v}'. Valid options: {valid}")
-        return v
-
-    @field_validator('bmm_refine_filter_metric', mode='before')
-    @classmethod
-    def validate_bmm_refine_filter_metric(cls, v):
-        valid = {"p_value", "js"}
-        if v not in valid:
-            raise ValueError(f"Invalid bmm_refine_filter_metric '{v}'. Valid options: {valid}")
-        return v
-
     delta_mean_reduction: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
         description="Coarse pre-statistical gate: before running the statistical test, discard positions where |delta_mean| < delta_mean_reduction. Reduces the test set for expensive contexts (CHH). If null, no coarse gate is applied."
@@ -295,86 +279,6 @@ class MethylModelerConfig(BaseModel):
         default=1000, ge=1,
         description="Minimum number of DMPs to export to CSV, even if binary search finds fewer DMPs are sufficient. Ensures enough DMPs for gene mapping and downstream analysis"
     )
-    # ----------------
-    # BMM Refinement (Detector Stage)
-    # ----------------
-    bmm_refine_enabled: bool = Field(
-        default=False,
-        description="Enable Beta Mixture Model refinement at detector stage (uses real samples if available)"
-    )
-    bmm_refine_mode: str = Field(
-        default="filter",
-        description="BMM refinement mode: 'annotate' (add BMM stats only) or 'filter' (drop weak mixture separations)"
-    )
-    bmm_refine_filter_metric: str = Field(
-        default="p_value",
-        description="Metric used for BMM filtering: 'p_value' or 'js'"
-    )
-    bmm_refine_pvalue_threshold: float = Field(
-        default=0.05, ge=0.0, le=1.0,
-        description="P-value threshold for BMM filtering when metric is 'p_value'"
-    )
-    bmm_refine_replace_p_value: bool = Field(
-        default=True,
-        description="If True, replace p_value with BMM-derived p_value (preserving original in p_value_lrt)"
-    )
-    bmm_refine_recompute_q: bool = Field(
-        default=True,
-        description="If True, recompute q_value after replacing p_value"
-    )
-    bmm_refine_max_dmps: int = Field(
-        default=200000, ge=100,
-        description="Maximum number of DMPs to evaluate with BMM (top by effect_size/importance)"
-    )
-    bmm_refine_max_fraction: Optional[float] = Field(
-        default=0.02, ge=0.0, le=1.0,
-        description="Optional fraction cap for BMM evaluation (e.g., 0.02 = top 2% of biological DMPs)"
-    )
-    bmm_refine_max_samples_per_group: int = Field(
-        default=50, ge=5,
-        description="Maximum samples per group to use for BMM fitting (subsampled for speed)"
-    )
-    bmm_refine_min_samples_per_group: int = Field(
-        default=10, ge=3,
-        description="Minimum samples per group required to fit BMM for a position"
-    )
-    bmm_refine_max_components: int = Field(
-        default=3, ge=1, le=3,
-        description="Maximum mixture components to fit per position"
-    )
-    bmm_refine_use_gpu: bool = Field(
-        default=True,
-        description="Use GPU for BMM EM when available"
-    )
-    bmm_refine_js_threshold: float = Field(
-        default=0.05, ge=0.0,
-        description="Minimum Jensen-Shannon divergence to retain a DMP when filtering"
-    )
-    bmm_refine_skip_delta_mean: float = Field(
-        default=0.4, ge=0.0, le=1.0,
-        description="Skip BMM fitting when |delta_mean| exceeds this threshold (obvious separation)"
-    )
-    bmm_refine_skip_overlap: float = Field(
-        default=0.2, ge=0.0, le=1.0,
-        description="Skip BMM fitting when overlap is already very small (obvious separation)."
-    )
-    bmm_refine_mc_samples: int = Field(
-        default=200, ge=50,
-        description="Monte Carlo samples for mixture JS divergence estimate"
-    )
-    bmm_refine_use_binned_stats: bool = Field(
-        default=True,
-        description="Use binned methylation values (counts per bin) for faster BMM fitting"
-    )
-    bmm_refine_bin_count: Optional[int] = Field(
-        default=32, ge=10,
-        description="Number of bins for binned stats. If None, uses a heuristic based on sample count."
-    )
-    bmm_refine_use_metadata_samples: bool = Field(
-        default=True,
-        description="If validation sample paths are not provided, try centroid metadata ('samples_used')"
-    )
-
     
     # ----------------
     # Debug / Logging

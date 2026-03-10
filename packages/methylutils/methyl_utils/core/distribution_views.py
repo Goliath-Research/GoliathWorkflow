@@ -338,28 +338,6 @@ class ECDFView:
         n = min(len(self._mean), len(om))
         return np.clip(1.0 - np.abs(self._mean[:n] - om[:n]), 0.0, 1.0)
 
-
-# --- BMM view (per-position weights, alphas, betas) ---
-class BMMView:
-    """Beta Mixture Model view: parameters = (weights, alphas, betas) per position, mean = weighted component means."""
-
-    def __init__(
-        self,
-        weights: Union[List[np.ndarray], np.ndarray],
-        alphas: Union[List[np.ndarray], np.ndarray],
-        betas: Union[List[np.ndarray], np.ndarray],
-    ):
-        if isinstance(weights, np.ndarray) and weights.ndim == 2:
-            self._weights = np.asarray(weights, dtype=np.float64)
-            self._alphas = np.asarray(alphas, dtype=np.float64)
-            self._betas = np.asarray(betas, dtype=np.float64)
-        else:
-            self._weights = np.stack([np.asarray(w, dtype=np.float64) for w in weights], axis=1)
-            self._alphas = np.stack([np.maximum(np.asarray(a, dtype=np.float64), MIN_EPS) for a in alphas], axis=1)
-            self._betas = np.stack([np.maximum(np.asarray(b, dtype=np.float64), MIN_EPS) for b in betas], axis=1)
-        comp_means = self._alphas / np.maximum(self._alphas + self._betas, MIN_EPS)
-        self._mean = np.sum(self._weights * comp_means, axis=1)
-
     @property
     def parameters(self) -> Dict[str, Any]:
         return {"weights": self._weights, "alphas": self._alphas, "betas": self._betas}
@@ -380,31 +358,12 @@ def get_distribution_view(
     positions: Optional[np.ndarray] = None,
 ) -> MethylDistributionView:
     """Build a distribution view from a centroid (counts, normal, beta, ecdf)."""
-    mode = (mode or "beta").lower()
     if positions is not None:
         pos_arr = np.asarray(centroid.pos.values, dtype=np.uint32)
         idx = np.isin(pos_arr, np.asarray(positions, dtype=np.uint32))
         centroid = centroid[idx]
-    if mode == "counts":
-        return CountsView(
-            np.asarray(centroid.mC.values),
-            np.asarray(centroid.uC.values),
-        )
-    if mode == "normal":
-        return NormalView(
-            np.asarray(centroid.Sx.values),
-            np.asarray(centroid.Sx2.values),
-            np.asarray(centroid.N.values),
-        )
-    if mode == "beta":
-        return BetaView(
-            np.asarray(centroid.alpha.values),
-            np.asarray(centroid.beta.values),
-        )
-    if mode == "beta_binomial":
-        raise ValueError("beta_binomial mode removed; use beta (MoM) or ecdf.")
-    if mode == "ecdf":
-        binned = getattr(centroid, "binned_stats", None)
+
+        binned = centroid.binned_stats
         if binned is None or "bin_edges" not in binned or "bin_counts" not in binned:
             raise ValueError(
                 "ecdf view requires centroid with binned_stats (bin_edges, bin_counts). "
@@ -414,14 +373,8 @@ def get_distribution_view(
         bin_counts = np.asarray(binned["bin_counts"], dtype=np.float64)
         Sx = np.asarray(centroid.Sx.values, dtype=np.float64)
         N = np.asarray(centroid.N.values, dtype=np.float64)
-        Sx2 = np.asarray(centroid.Sx2.values, dtype=np.float64) if hasattr(centroid, "Sx2") else None
+        Sx2 = np.asarray(centroid.Sx2.values, dtype=np.float64) if centroid.Sx2 is not None else None
         return ECDFView(bin_edges, bin_counts, Sx, N, Sx2)
-    if mode == "beta_mixture":
-        raise ValueError("beta_mixture view requires MethylBetaMixtureCentroid; use its mean/overlap directly.")
-    raise ValueError(
-        f"Unknown mode: {mode}. Use one of: counts, normal, beta, beta_mixture, ecdf"
-    )
-
 
 def log_probability_sample_given_centroid(
     sample: Any,
@@ -434,7 +387,6 @@ def log_probability_sample_given_centroid(
     Log P(sample | centroid) per position for the given mode.
     Aligns sample to centroid on common positions; returns log prob per position (0/1 safe).
     """
-    mode = (mode or "beta").lower()
     pos_c = np.asarray(centroid.pos.values, dtype=np.uint32)
     pos_s = np.asarray(sample.pos.values, dtype=np.uint32)
     if positions is not None:
@@ -447,61 +399,21 @@ def log_probability_sample_given_centroid(
     idx_s = np.searchsorted(pos_s, common)
     n = len(common)
 
-    if mode == "counts":
-        mC_c = np.asarray(centroid.mC.values, dtype=np.float64)[idx_c]
-        uC_c = np.asarray(centroid.uC.values, dtype=np.float64)[idx_c]
-        p = mC_c / np.maximum(mC_c + uC_c, MIN_EPS)
-        p = _clip_proportion(p)
-        k = np.asarray(sample.mC.values, dtype=np.float64)[idx_s]
-        cov = np.asarray(sample.mC.values, dtype=np.float64)[idx_s] + np.asarray(sample.uC.values, dtype=np.float64)[idx_s]
-        log_p = k * np.log(p) + (cov - k) * np.log(1 - p)
-        return np.asarray(log_p, dtype=np.float64)
-
-    if mode == "normal":
-        N = np.maximum(np.asarray(centroid.N.values, dtype=np.float64)[idx_c], 1)
-        mu = np.asarray(centroid.Sx.values, dtype=np.float64)[idx_c] / N
-        Sx2 = np.asarray(centroid.Sx2.values, dtype=np.float64)[idx_c]
-        sigma2 = np.maximum(Sx2 / N - mu ** 2, MIN_EPS)
-        x = (np.asarray(sample.mC.values, dtype=np.float64)[idx_s] / np.maximum(
-            np.asarray(sample.mC.values, dtype=np.float64)[idx_s] + np.asarray(sample.uC.values, dtype=np.float64)[idx_s],
-            MIN_EPS,
-        ))
-        log_p = -0.5 * (np.log(2 * np.pi * sigma2) + (x - mu) ** 2 / sigma2)
-        return log_p
-
-    if mode == "beta":
-        from methyl_utils.beta_analytics import beta_log_pdf
-        alpha = np.asarray(centroid.alpha.values, dtype=np.float64)[idx_c]
-        beta = np.asarray(centroid.beta.values, dtype=np.float64)[idx_c]
-        cov_s = np.asarray(sample.mC.values, dtype=np.float64)[idx_s] + np.asarray(sample.uC.values, dtype=np.float64)[idx_s]
-        x = np.where(cov_s > 0, np.asarray(sample.mC.values, dtype=np.float64)[idx_s] / cov_s, 0.5)
-        x = _clip_proportion(x)
-        return beta_log_pdf(x, alpha, beta, use_gpu=use_gpu)
-
-    if mode == "beta_binomial":
-        raise ValueError("beta_binomial mode removed; use beta or ecdf.")
-
-    if mode == "ecdf":
-        binned = getattr(centroid, "binned_stats", None)
-        if binned is None or "bin_edges" not in binned or "bin_counts" not in binned:
-            raise ValueError(
-                "log_probability with mode=ecdf requires centroid with binned_stats. "
-                "Build centroid with binned_stats_bins (default 20)."
-            )
-        view = get_distribution_view(centroid, "ecdf", positions=common)
-        cov_s = np.asarray(sample.mC.values, dtype=np.float64)[idx_s] + np.asarray(sample.uC.values, dtype=np.float64)[idx_s]
-        x = np.where(cov_s > 0, np.asarray(sample.mC.values, dtype=np.float64)[idx_s] / cov_s, 0.5)
-        x = _clip_proportion(x)
-        log_p = np.zeros(n, dtype=np.float64)
-        for i in range(n):
-            pdf_val = view._pdf(i, float(x[i]))
-            log_p[i] = np.log(max(pdf_val, MIN_EPS))
-        return log_p
-
-    if mode == "beta_mixture":
-        raise ValueError("beta_mixture requires MethylBetaMixtureCentroid; use mixture_logpdf separately.")
-    raise ValueError(f"Unknown mode: {mode}")
-
+    binned = centroid.binned_stats
+    if binned is None or "bin_edges" not in binned or "bin_counts" not in binned:
+        raise ValueError(
+            "log_probability with mode=ecdf requires centroid with binned_stats. "
+            "Build centroid with binned_stats_bins (default 20)."
+        )
+    view = get_distribution_view(centroid, "ecdf", positions=common)
+    cov_s = np.asarray(sample.mC.values, dtype=np.float64)[idx_s] + np.asarray(sample.uC.values, dtype=np.float64)[idx_s]
+    x = np.where(cov_s > 0, np.asarray(sample.mC.values, dtype=np.float64)[idx_s] / cov_s, 0.5)
+    x = _clip_proportion(x)
+    log_p = np.zeros(n, dtype=np.float64)
+    for i in range(n):
+        pdf_val = view._pdf(i, float(x[i]))
+        log_p[i] = np.log(max(pdf_val, MIN_EPS))
+    return log_p
 
 def overlap_between_centroids(
     centroid1: Union[MethylCentroid, MethylSample],

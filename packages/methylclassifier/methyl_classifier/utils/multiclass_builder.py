@@ -60,59 +60,6 @@ def _fill_class_params(
 
     return {"alpha": alpha_out, "beta": beta_out}
 
-
-def _load_bmm_records(bmm_dir: Path, chrom: str, ctx: str, group: str) -> Optional[pd.DataFrame]:
-    suffix = "" if group == "centroid1" else f"-{group}"
-    path = bmm_dir / f"bmm-centroid-{chrom}-{ctx}{suffix}.json"
-    if not path.exists():
-        return None
-    centroid = MethylBetaMixtureCentroid.from_json(path)
-    return centroid.df
-
-
-def _fill_class_mixtures(
-    dmps_df: pd.DataFrame,
-    bmm_dir: Optional[Path],
-    bmm_group: str,
-) -> Dict[str, List[Optional[List[float]]]]:
-    n = len(dmps_df)
-    mix_weights: List[Optional[List[float]]] = [None] * n
-    mix_alphas: List[Optional[List[float]]] = [None] * n
-    mix_betas: List[Optional[List[float]]] = [None] * n
-
-    if bmm_dir is None:
-        return {
-            "mix_weights": mix_weights,
-            "mix_alphas": mix_alphas,
-            "mix_betas": mix_betas,
-        }
-
-    for (chrom, ctx), group in dmps_df.groupby(["chromosome", "context"]):
-        df = _load_bmm_records(bmm_dir, chrom, ctx, bmm_group)
-        if df is None or df.empty:
-            continue
-
-        record_map = {}
-        for _, row in df.iterrows():
-            if row.get("status") != "fit":
-                continue
-            record_map[int(row["position"])] = row
-
-        for idx, row in group.iterrows():
-            rec = record_map.get(int(row["position"]))
-            if rec is None:
-                continue
-            mix_weights[idx] = rec.get("weights")
-            mix_alphas[idx] = rec.get("alphas")
-            mix_betas[idx] = rec.get("betas")
-
-    return {
-        "mix_weights": mix_weights,
-        "mix_alphas": mix_alphas,
-        "mix_betas": mix_betas,
-    }
-
-
 def build_multiclass_model(config: Dict[str, Any]) -> Path:
     dmps_csv = Path(config["dmps_csv"])
     output_model = Path(config["output_model"])
@@ -142,17 +89,10 @@ def build_multiclass_model(config: Dict[str, Any]) -> Path:
     for class_cfg in classes:
         name = class_cfg["name"]
         centroid_dir = Path(class_cfg["centroid_dir"])
-        bmm_dir = Path(class_cfg["bmm_centroid_dir"]) if class_cfg.get("bmm_centroid_dir") else None
-        bmm_group = class_cfg.get("bmm_group", "centroid1")
 
         params = _fill_class_params(dmps_df, centroid_dir)
         alpha_list.append(params["alpha"])
         beta_list.append(params["beta"])
-
-        mix = _fill_class_mixtures(dmps_df, bmm_dir, bmm_group)
-        mix_weights_list.append(mix["mix_weights"])
-        mix_alphas_list.append(mix["mix_alphas"])
-        mix_betas_list.append(mix["mix_betas"])
 
         class_names.append(name)
 
@@ -165,12 +105,9 @@ def build_multiclass_model(config: Dict[str, Any]) -> Path:
         "alpha": alpha,
         "beta": beta,
         "class_names": class_names,
-        "mix_weights": mix_weights_list,
-        "mix_alphas": mix_alphas_list,
-        "mix_betas": mix_betas_list,
     }
 
-    classifier = MultiClassBetaMixtureClassifier(
+    classifier = MultiClassClassifier(
         data,
         min_sample_coverage=config.get("min_sample_coverage", 10),
         coverage_weighting=config.get("coverage_weighting", True),

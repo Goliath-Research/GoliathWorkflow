@@ -390,10 +390,6 @@ class BetaClassifier:
 
                 log_p_class0[:, idx] = log_m1
                 log_p_class1[:, idx] = log_m2
-                mixture_valid_mask[idx] = True
-
-            if debug and mixture_valid_mask is not None:
-                print(f"Using BMM mixtures for {np.sum(mixture_valid_mask)}/{self.n_dmps} positions")
 
         # Debug: Check log-likelihood computation
         if debug:

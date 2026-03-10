@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build a multi-class Beta/BMM classifier from centroids and a DMP list.
+Build a multi-class classifier from centroids and a DMP list.
 """
 
 import argparse
@@ -11,7 +11,7 @@ from methyl_classifier.utils.multiclass_builder import build_multiclass_model_fr
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build a multi-class Beta/BMM classifier model package"
+        description="Build a multi-class classifier model package"
     )
     parser.add_argument(
         "config",
