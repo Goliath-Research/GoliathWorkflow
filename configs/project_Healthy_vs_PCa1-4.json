@@ -116,7 +116,6 @@
         "alpha": 0.05,
         "optimize_dmps": true,
         "validation_mode": "real",
-        "statistical_test": "mann_whitney",
         "validation_split_ratio": 0.2,
         "validation_n_repeats": 3,
         "target_balanced_accuracy": 0.99,
