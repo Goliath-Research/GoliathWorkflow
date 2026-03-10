@@ -49,6 +49,20 @@ class FilterFunnelExplore(BaseModel):
 class MethylModelerConfig(BaseModel):
     """Simplified configuration for MethylModeler analysis."""
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_legacy_distribution_keys(cls, data):
+        """Reject legacy detector knobs that no longer map to runtime behavior."""
+        if isinstance(data, dict):
+            legacy_keys = {"distribution", "delta_mean_mode", "overlap_mode", "max_N_for_ecdf"}
+            used = sorted(k for k in legacy_keys if k in data)
+            if used:
+                raise ValueError(
+                    "Legacy distribution-specific detector options are no longer supported: "
+                    f"{used}. MethylDetector now uses the ECDF-first comparison pipeline."
+                )
+        return data
+
     # ----------------
     # Input/Output
     # ----------------
@@ -93,20 +107,32 @@ class MethylModelerConfig(BaseModel):
 
     validation_mode: str = Field(
         default="real",
-        description="Validation mode: 'real' (prefer real samples from config or centroid metadata samples_used; fall back to synthetic if none available), 'synthetic' (skip real, use synthetic only)."
+        description="Validation mode: 'real' (prefer real samples from config or centroid metadata samples_used) or 'synthetic' (sample from centroid ECDF histograms only when explicitly requested)."
     )
 
 
-    n_validation_samples: Optional[int] = Field(
-        default=None,
-        description="Number of synthetic validation samples per class. Only used when validation is synthetic (fallback or validation_mode='synthetic'). Ignored when real samples are provided via centroid1_validation_samples / centroid2_validation_samples or use_metadata."
+    n_validation_samples: int = Field(
+        default=100,
+        ge=10,
+        description="Number of synthetic validation samples per class when validation_mode='synthetic'."
+    )
+
+    statistical_test: str = Field(
+        default="welch",
+        description="Per-position statistical gate: 'welch' (current baseline) or 'mann_whitney' (bin-count based, assumption-light)."
     )
 
     validation_split_ratio: float = Field(
-        default=0.0,
+        default=0.2,
         ge=0.0,
         le=1.0,
-        description="Fraction of validation data held out for test (rest for calibration). 0 = no split, use all real validation samples for BA (default). Set e.g. 0.2 for a holdout when you want train/test separation."
+        description="Fraction of validation data held out for test in each stratified split. Use >0 for biologically trustworthy BA reporting and top-k selection."
+    )
+
+    validation_n_repeats: int = Field(
+        default=3,
+        ge=1,
+        description="Number of repeated stratified holdout splits used when selecting/reporting top-k by balanced accuracy."
     )
 
     centroid1_validation_samples: Optional[Union[str, List[str]]] = Field(
@@ -121,7 +147,7 @@ class MethylModelerConfig(BaseModel):
     target_balanced_accuracy: float = Field(
         default=0.99,
         ge=0.5, le=1.0,
-        description="Target/max BA for optimization (finds peak BA)"
+        description="Target balanced accuracy for top-k selection on held-out validation data."
     )
 
     optimization_method: str = Field(
@@ -150,22 +176,23 @@ class MethylModelerConfig(BaseModel):
     # ----------------
     # Biological Filter
     # ----------------
-    delta_mean_mode: str = Field(
-        default="mean",
-        description="How to compute mean/delta_mean for biological filtering: mean (centroid mean), beta (alpha/beta), normal (Sx/N), auto (per-distribution)"
+    effect_size_coverage: float = Field(
+        default=0.95, ge=0.0, le=1.0,
+        description=(
+            "Biological filter: select the minimum set of statistical DMPs (per context) "
+            "whose effect sizes sum to this fraction of total effect mass. "
+            "1.0 = keep all statistical DMPs (no biological filter); "
+            "0.95 = keep the minimum set covering 95%% of total effect mass. "
+            "Applied per-context so CG/CHG/CHH are selected independently."
+        )
     )
-    overlap_mode: str = Field(
-        default="beta",
-        description="How to compute overlap for biological filtering: beta (Bhattacharyya distance between Beta), normal (Normal BD), auto (per-distribution)"
+    biological_only_effect_size_coverage: Optional[float] = Field(
+        default=None, ge=0.0, le=1.0,
+        description="Optional rescue track for biologically strong but underpowered loci (q > alpha). When set, apply the same per-context effect-mass selection to non-significant positions and flag them as biological-only."
     )
-    distribution: str = Field(
-        default="auto",
-        description="Per-position distribution for DMP testing: auto, beta, normal, beta_mixture, ecdf. Auto uses ECDF when N < max_N_for_ecdf (and binned_stats present), Beta otherwise."
-    )
-    max_N_for_ecdf: int = Field(
-        default=30,
-        ge=2,
-        description="In distribution=auto, use ECDF when both centroids have N < this and binned_stats (build with binned_stats_bins, default 20)."
+    biological_only_max_candidates: Optional[int] = Field(
+        default=5000, ge=1,
+        description="Maximum number of non-significant candidates per context to consider for biological-only rescue before ECDF rescoring."
     )
     # New calibration parameters (for trained classifier metadata)
     temperature: float = Field(
@@ -220,16 +247,6 @@ class MethylModelerConfig(BaseModel):
             raise ValueError(f"Invalid bmm_refine_filter_metric '{v}'. Valid options: {valid}")
         return v
 
-    effect_size_coverage: float = Field(
-        default=0.95, ge=0.0, le=1.0,
-        description=(
-            "Biological filter: select the minimum set of statistical DMPs (per context) "
-            "whose effect sizes sum to this fraction of total effect mass. "
-            "1.0 = keep all statistical DMPs (no biological filter); "
-            "0.95 = keep the minimum set covering 95%% of total effect mass. "
-            "Applied per-context so CG/CHG/CHH are selected independently."
-        )
-    )
     delta_mean_reduction: Optional[float] = Field(
         default=None, ge=0.0, le=1.0,
         description="Coarse pre-statistical gate: before running the statistical test, discard positions where |delta_mean| < delta_mean_reduction. Reduces the test set for expensive contexts (CHH). If null, no coarse gate is applied."
@@ -237,6 +254,10 @@ class MethylModelerConfig(BaseModel):
     lambda_var: float = Field(
         default=2.0, ge=0.0, le=20.0,
         description="Variance penalty strength in effect_size = |delta_mean| * (1 - overlap) * exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))."
+    )
+    max_tau2_for_dmp: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Optional heterogeneity filter. If set, drop positions where both groups exceed this between-sample variance estimate (tau2), because they are likely heterogeneous subpopulations rather than clean DMPs."
     )
 
     # ----------------
@@ -274,15 +295,6 @@ class MethylModelerConfig(BaseModel):
         default=1000, ge=1,
         description="Minimum number of DMPs to export to CSV, even if binary search finds fewer DMPs are sufficient. Ensures enough DMPs for gene mapping and downstream analysis"
     )
-    target_balanced_accuracy: float = Field(
-        default=0.95, ge=0.5, le=1.0,
-        description="Target Balanced Accuracy for binary search DMP selection. Balanced Accuracy = (Sensitivity + Specificity) / 2, robust to class imbalance."
-    )
-    n_validation_samples: int = Field(
-        default=100, ge=10,
-        description="Number of synthetic samples per class to generate for classifier validation (from Beta distributions)"
-    )
-
     # ----------------
     # BMM Refinement (Detector Stage)
     # ----------------
@@ -344,7 +356,7 @@ class MethylModelerConfig(BaseModel):
     )
     bmm_refine_skip_overlap: float = Field(
         default=0.2, ge=0.0, le=1.0,
-        description="Skip BMM fitting when Bhattacharyya overlap ≤ this threshold (obvious separation)"
+        description="Skip BMM fitting when overlap is already very small (obvious separation)."
     )
     bmm_refine_mc_samples: int = Field(
         default=200, ge=50,
@@ -375,10 +387,6 @@ class MethylModelerConfig(BaseModel):
     # ----------------
     # System Settings
     # ----------------
-    random_state: Optional[int] = Field(
-        default=42,
-        description="Random seed for reproducible results"
-    )
     use_gpu: bool = Field(
         default=True,
         description="Whether to use GPU acceleration"
@@ -467,33 +475,6 @@ class MethylModelerConfig(BaseModel):
                 raise ValueError("Output directory cannot be empty")
         return v
 
-    @field_validator('delta_mean_mode', mode='before')
-    @classmethod
-    def validate_delta_mean_mode(cls, v):
-        valid = {"mean", "beta", "normal", "auto", "legacy"}
-        if v not in valid:
-            raise ValueError(f"delta_mean_mode must be one of: {sorted(valid)}, got: {v}")
-        return v
-
-    @field_validator('overlap_mode', mode='before')
-    @classmethod
-    def validate_overlap_mode(cls, v):
-        valid = {"beta", "normal", "auto", "legacy"}
-        if v not in valid:
-            raise ValueError(f"overlap_mode must be one of: {sorted(valid)}, got: {v}")
-        return v
-
-    @field_validator('distribution', mode='before')
-    @classmethod
-    def validate_distribution(cls, v):
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return "auto"
-        valid = {"auto", "beta", "normal", "beta_mixture", "ecdf"}
-        vnorm = str(v).strip().lower()
-        if vnorm not in valid:
-            raise ValueError(f"distribution must be one of: {sorted(valid)}, got: {v}")
-        return vnorm
-
     # @field_validator('validation_mode', mode='before')
     # @classmethod
     # def validate_validation_mode(cls, v):
@@ -503,8 +484,8 @@ class MethylModelerConfig(BaseModel):
     #     return v
     
     classifier_type: str = Field(
-        default="beta",
-        description="Classifier type. Use 'beta' (fractions with sufficient stats)."
+        default="ecdf",
+        description="Classifier type for detector exports. Only 'ecdf' is supported."
     )
     
     min_sample_coverage: int = Field(
@@ -545,7 +526,7 @@ class MethylModelerConfig(BaseModel):
             "variability_scale": 0.2,
             "add_missing": True
         },
-        description="Configuration for synthetic data realism"
+        description="Configuration for synthetic ECDF-histogram validation sample generation."
     )
 
     # ----------------
@@ -553,7 +534,7 @@ class MethylModelerConfig(BaseModel):
     # ----------------
     enable_eat_transform: bool = Field(
         default=False,
-        description="Enable Entropy-weighted Asymmetry Transformation (EAT) preprocessing before DMP detection. EAT reweights methylation loci based on Beta distribution shape differences between healthy and cancer centroids, improving DMP selection by emphasizing biologically meaningful differences."
+        description="Enable Entropy-weighted Asymmetry Transformation (EAT) as an effect-size reweighting step after statistical filtering. EAT does not modify p-values or q-values."
     )
     eat_gamma: float = Field(
         default=1.0, ge=0.0,
@@ -575,8 +556,16 @@ class MethylModelerConfig(BaseModel):
     @field_validator('classifier_type', mode='before')
     @classmethod
     def validate_classifier_type(cls, v):
-        if v != "beta":
-            raise ValueError("classifier_type must be 'beta'. beta_binomial has been removed.")
+        if v != "ecdf":
+            raise ValueError("classifier_type must be 'ecdf'. Legacy beta/beta-binomial exports are no longer supported.")
+        return v
+
+    @field_validator('statistical_test', mode='before')
+    @classmethod
+    def validate_statistical_test(cls, v):
+        valid = {"welch", "mann_whitney"}
+        if v not in valid:
+            raise ValueError(f"statistical_test must be one of: {sorted(valid)}, got: {v}")
         return v
 
     @field_validator('synthetic_config', mode='before')

@@ -1,4 +1,0 @@
-# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/beta_binomial_classifier.py
-# hypothesis_version: 6.151.9
-
-[0.0, 1e-10, 0.1, 1.0, 'L-BFGS-B', 'alpha1', 'alpha2', 'beta1', 'beta2', 'chromosome_llr', 'context', 'context_weight', 'get_counts', 'is_calibrated', 'methylation_counts', 'n_sites_used', 'per_context_llr', 'platt_A_normalized', 'position', 'probability', 'rb', 'total_counts', 'wb']

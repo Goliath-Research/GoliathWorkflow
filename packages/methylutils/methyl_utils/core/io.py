@@ -101,12 +101,18 @@ def load_from_h5(
                         "Swx2": _load("Swx2").astype(np.float32),
                     }
                     if "bins" not in methyl_data.attrs or "bin_counts" not in datasets:
-                        raise ValueError("Centroid file must have binned_stats (bins attr and bin_counts dataset)")
+                        raise ValueError(
+                            "Centroid file is missing required ECDF histogram data "
+                            "(methylation_data.attrs['bins'] and methylation_data['bin_counts'])"
+                        )
                     loaded_bins = int(methyl_data.attrs["bins"])
                     if loaded_bins > 0:
                         loaded_bin_counts = _load("bin_counts")
                     else:
-                        raise ValueError("Centroid binned_stats must have bins > 0")
+                        raise ValueError(
+                            f"Centroid file has invalid ECDF bin count: bins={loaded_bins}. "
+                            "Supported centroids require bins >= 1."
+                        )
                 elif all(d in datasets for d in sample_required):
                     # Sample
                     if indices is not None:

@@ -110,6 +110,8 @@ def main() -> None:
 
     rows: List[Dict[str, Any]] = []
     all_timings: List[Dict[str, Any]] = []
+    previous_train_control: List[str] | None = None
+    previous_train_disease: List[str] | None = None
 
     if use_rich and console is not None:
         progress = Progress(
@@ -169,7 +171,15 @@ def main() -> None:
                     progress.advance(task_iter, 1)
                 continue
 
-            project_path, _, _, val_control_csv, val_disease_csv = generate_run_project(
+            (
+                project_path,
+                _,
+                _,
+                val_control_csv,
+                val_disease_csv,
+                centroid_group1_override,
+                centroid_group2_override,
+            ) = generate_run_project(
                 base_project,
                 run_dir,
                 run_id,
@@ -179,7 +189,11 @@ def main() -> None:
                 val_control,
                 val_disease,
                 config.samples_base_path,
+                previous_train_control_paths=previous_train_control,
+                previous_train_disease_paths=previous_train_disease,
             )
+            previous_train_control = list(train_control)
+            previous_train_disease = list(train_disease)
             # Predictor output follows structure predictors/<control_group>/<disease_group>
             run_project = load_project(project_path)
             comparisons = run_project.get_comparisons() if getattr(run_project, "get_comparisons", None) else []
@@ -200,6 +214,10 @@ def main() -> None:
                 per_cancer_group=per_cancer_group,
                 logs_dir=logs_dir,
                 progress_callback=progress_callback,
+                centroid_step_overrides={
+                    "group1": centroid_group1_override,
+                    "group2": centroid_group2_override,
+                },
             )
             if progress is not None:
                 progress.remove_task(task_steps)

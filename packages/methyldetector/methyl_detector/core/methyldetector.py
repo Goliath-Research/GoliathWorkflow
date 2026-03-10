@@ -1,6 +1,7 @@
 """Core MethylDetector pipeline for DMP detection, filtering, and selection."""
 
 import itertools
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -20,8 +21,6 @@ from methyl_utils.core.methyl_frame import MethylSample
 # Import MethylCentroidPair from MethylUtils for mathematical operations
 from methyl_utils import MethylCentroidPair
 
-# Import BetaClassifier and BetaBinomialClassifier from MethylUtils
-from methyl_utils import BetaClassifier, BetaBinomialClassifier
 from methyl_utils import load_from_h5
 from methyl_utils.ecdf_classifier import ECDFClassifier
 
@@ -56,6 +55,19 @@ except ImportError:
     create_centroid_from_arrays = None
     get_chromosome_context_from_filename = None
 logger = setup_module_logging(__name__)
+
+
+@dataclass
+class ValidationPrefixCache:
+    """Cached ECDF validation state for fast repeated top-k evaluation."""
+
+    sorted_df: pd.DataFrame
+    weights: np.ndarray
+    y_val: np.ndarray
+    splits: List[Tuple[np.ndarray, np.ndarray]]
+    prefix_ll_c1: List[np.ndarray]
+    prefix_ll_c2: List[np.ndarray]
+    temperature: float
 
 def _select_by_effect_coverage(df: pd.DataFrame, coverage: float) -> pd.DataFrame:
     """
@@ -106,6 +118,8 @@ class MethylDetector:
         self.df = None  # Current working dataframe
         self._exported_csv_path = None  # Path to exported CSV file
         self._current_chromosome = None  # Current chromosome being processed (for multi-chromosome mode)
+        self._centroid_bin_cache: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        self._default_holdout_warned = False
         logger.debug("Initialized MethylDetector")
     
     @property
@@ -205,7 +219,14 @@ class MethylDetector:
             # Detect DMPs for this context
             try:
                 dmp_df = self._detect_statistical_dmps_for_context(c1_path, c2_path, context)
-                logger.info(f"✅ Context {context}: {len(dmp_df):,} statistical DMPs detected")
+                n_confirmed = int(dmp_df["statistical_dmp"].sum()) if "statistical_dmp" in dmp_df.columns else len(dmp_df)
+                n_rescue = max(0, len(dmp_df) - n_confirmed)
+                logger.info(
+                    "✅ Context %s: %s confirmed statistical DMPs + %s biological-only rescue candidates",
+                    context,
+                    f"{n_confirmed:,}",
+                    f"{n_rescue:,}",
+                )
                 all_dmps.append(dmp_df)
             except Exception as e:
                 logger.error(f"❌ Context {context} failed: {e}")
@@ -219,7 +240,14 @@ class MethylDetector:
         # Combine all contexts into single DataFrame
         logger.info("📊 Combining all contexts into unified DataFrame...")
         dmps_df = pd.concat(all_dmps, ignore_index=True)
-        logger.info(f"✅ Combined DataFrame: {len(dmps_df):,} total DMPs across {len(all_dmps)} contexts")
+        total_confirmed = int(dmps_df["statistical_dmp"].sum()) if "statistical_dmp" in dmps_df.columns else len(dmps_df)
+        total_rescue = max(0, len(dmps_df) - total_confirmed)
+        logger.info(
+            "✅ Combined DataFrame: %s confirmed statistical DMPs + %s biological-only rescue candidates across %s contexts",
+            f"{total_confirmed:,}",
+            f"{total_rescue:,}",
+            len(all_dmps),
+        )
         
         # Compute context weights and add to DataFrame
         if self.config.use_context_weights:
@@ -241,9 +269,18 @@ class MethylDetector:
         # Filter biological DMPs (apply biological filters)
         logger.info("🔬 Filtering biologically significant DMPs...")
         bio_dmps_df = self._filter_biological_dmps(dmps_df)
-        n_bio, n_stat = len(bio_dmps_df), len(dmps_df)
-        pct = f"{n_bio / n_stat * 100:.1f}%" if n_stat and n_stat > 0 else "N/A"
-        logger.info(f"✅ Biological DMPs: {n_bio:,} (retention: {pct})")
+        n_bio = len(bio_dmps_df)
+        n_stat = total_confirmed
+        n_bio_confirmed = int(bio_dmps_df["statistical_dmp"].sum()) if "statistical_dmp" in bio_dmps_df.columns else n_bio
+        n_bio_rescue = max(0, n_bio - n_bio_confirmed)
+        pct = f"{n_bio_confirmed / n_stat * 100:.1f}%" if n_stat and n_stat > 0 else "N/A"
+        logger.info(
+            "✅ Biological DMPs: %s total (%s confirmed statistical + %s biological-only rescue; confirmed retention: %s)",
+            f"{n_bio:,}",
+            f"{n_bio_confirmed:,}",
+            f"{n_bio_rescue:,}",
+            pct,
+        )
 
         bio_dmps_df = bio_dmps_df.sort_values("effect_size", ascending=False).reset_index(drop=True)
         logger.info("📊 Biological DMPs sorted by effect_size")
@@ -280,7 +317,7 @@ class MethylDetector:
             self._save_unified_model(None, selected_dmps_df)
             self._save_validation_results(
                 n_dmps_exported=len(selected_dmps_df),
-                total_statistical_dmps=len(dmps_df),
+                total_statistical_dmps=total_confirmed,
                 total_biological_dmps=len(bio_dmps_df),
             )
         
@@ -398,10 +435,6 @@ class MethylDetector:
         # Create centroid pair for comparison
         centroid_pair = MethylCentroidPair(
             min_coverage=effective_min_coverage,
-            delta_mean_mode=self.config.delta_mean_mode,
-            overlap_mode=self.config.overlap_mode,
-            distribution=self.config.distribution,
-            max_N_for_ecdf=getattr(self.config, "max_N_for_ecdf", 30),
         )
 
         # Compare centroids (only at pre-filtered positions when the gate is active)
@@ -412,6 +445,10 @@ class MethylDetector:
         processing_time = time.time() - start_time
 
         logger.info(f"Context {context}: Compared {len(comparison_results):,} positions in {processing_time:.2f}s")
+        comparison_results["chromosome"] = self.chromosome
+        comparison_results["context"] = context
+        if "effect_size" in comparison_results.columns:
+            comparison_results["effect_size_approx"] = comparison_results["effect_size"].astype(np.float32)
 
         # Apply EAT transformation if enabled
         logger.debug(f"EAT debug: enable_eat_transform={self.config.enable_eat_transform}, EAT_AVAILABLE={EAT_AVAILABLE}")
@@ -433,10 +470,12 @@ class MethylDetector:
                     logger.warning("Continuing without EAT transformation")
                     # Continue with original comparison_results
 
+        comparison_results = self._apply_tau2_filter(comparison_results, context)
+
         # Apply statistical filtering
         total_positions = len(comparison_results)
-        filtered_results = comparison_results[comparison_results['q_value'] <= self.config.alpha].copy()
-        statistical_dmps_count = len(filtered_results)
+        confirmed_results = comparison_results[comparison_results['q_value'] <= self.config.alpha].copy()
+        statistical_dmps_count = len(confirmed_results)
 
         logger.info(
             f"Context {context}: {statistical_dmps_count:,} significant DMPs (q≤{self.config.alpha}) "
@@ -450,84 +489,166 @@ class MethylDetector:
         # post-filter below is kept as a safety guard for the case where the gate was
         # not active (delta_mean_reduction is None).
         _gate = getattr(self.config, "delta_mean_reduction", None)
-        dmp_df = filtered_results.copy()
-        if _gate is not None and "delta_mean" in dmp_df.columns:
-            dmp_df = dmp_df[np.abs(dmp_df["delta_mean"].astype(float)) >= float(_gate)].copy()
+        confirmed_results["statistical_dmp"] = True
+        confirmed_results["biological_dmp"] = False
+        if _gate is not None and "delta_mean" in confirmed_results.columns:
+            confirmed_results = confirmed_results[
+                np.abs(confirmed_results["delta_mean"].astype(float)) >= float(_gate)
+            ].copy()
         logger.info(
             "Context %s: %s positions after statistical + delta_mean filter%s",
             context,
-            f"{len(dmp_df):,}",
+            f"{len(confirmed_results):,}",
             "" if _gate is None else f" (|delta_mean| >= {_gate})",
         )
 
-        # Build ECDFViews lazily: only for the DMP positions that survived the statistical
-        # and delta_mean filters.  This avoids building millions of PchipInterpolator objects
-        # for the full centroid (which would be 68M for CHH) when only tens to hundreds of
-        # positions are actually needed.
-        #
-        # Correct per-centroid index lookup: the index into centroid2's bin_counts array is
-        # *not* the same as the index into centroid1's array unless both centroids happen to
-        # have identical position orderings.  Using centroid1 indices for centroid2 is the
-        # root cause of the silent ECDF mismatch bug.  Here we derive independent indices for
-        # each centroid so the sliced ECDFViews are always positionally aligned.
-        if len(dmp_df) > 0:
-            dmp_positions = np.asarray(dmp_df["position"].values, dtype=np.uint32)
-            pos1 = np.asarray(centroid1.pos.values, dtype=np.uint32)
-            pos2 = np.asarray(centroid2.pos.values, dtype=np.uint32)
-            idx_in_c1 = np.searchsorted(pos1, dmp_positions, side="left")
-            idx_in_c2 = np.searchsorted(pos2, dmp_positions, side="left")
-            bs1 = centroid1.binned_stats
-            bs2 = centroid2.binned_stats
-            bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
-            from methyl_utils.core.distribution_views import ECDFView
-            ecdf_view1 = ECDFView(
-                bin_edges_arr,
-                np.asarray(bs1["bin_counts"], dtype=np.float64)[idx_in_c1],
-                np.asarray(centroid1.Sx.values, dtype=np.float64)[idx_in_c1],
-                np.asarray(centroid1.N.values, dtype=np.float64)[idx_in_c1],
-                np.asarray(centroid1.Sx2.values, dtype=np.float64)[idx_in_c1],
+        frames = [
+            self._finalize_candidate_metrics_df(
+                confirmed_results,
+                centroid1=centroid1,
+                centroid2=centroid2,
+                context=context,
             )
-            ecdf_view2 = ECDFView(
-                bin_edges_arr,
-                np.asarray(bs2["bin_counts"], dtype=np.float64)[idx_in_c2],
-                np.asarray(centroid2.Sx.values, dtype=np.float64)[idx_in_c2],
-                np.asarray(centroid2.N.values, dtype=np.float64)[idx_in_c2],
-                np.asarray(centroid2.Sx2.values, dtype=np.float64)[idx_in_c2],
-            )
-            logger.info(
-                "Context %s: built ECDFViews for %s DMP positions (lazy, not full centroid)",
-                context, f"{len(dmp_positions):,}",
-            )
-        else:
-            ecdf_view1 = ecdf_view2 = None
+        ]
 
-        # Sequential 0-based row indices match the sliced ECDFViews row-for-row.
+        rescue_coverage = getattr(self.config, "biological_only_effect_size_coverage", None)
+        if rescue_coverage is not None:
+            rescue_candidates = comparison_results[comparison_results["q_value"] > self.config.alpha].copy()
+            if _gate is not None and "delta_mean" in rescue_candidates.columns:
+                rescue_candidates = rescue_candidates[
+                    np.abs(rescue_candidates["delta_mean"].astype(float)) >= float(_gate)
+                ].copy()
+            max_candidates = getattr(self.config, "biological_only_max_candidates", None)
+            if max_candidates is not None and len(rescue_candidates) > max_candidates:
+                rescue_candidates = (
+                    rescue_candidates
+                    .sort_values("effect_size", ascending=False)
+                    .head(int(max_candidates))
+                    .copy()
+                )
+            rescue_candidates = _select_by_effect_coverage(rescue_candidates, float(rescue_coverage))
+            rescue_candidates["statistical_dmp"] = False
+            rescue_candidates["biological_dmp"] = True
+            logger.info(
+                "Context %s: selected %s biological-only rescue candidates at coverage=%.2f",
+                context,
+                f"{len(rescue_candidates):,}",
+                float(rescue_coverage),
+            )
+            frames.append(
+                self._finalize_candidate_metrics_df(
+                    rescue_candidates,
+                    centroid1=centroid1,
+                    centroid2=centroid2,
+                    context=context,
+                )
+            )
+
+        frames = [f for f in frames if f is not None and len(f) > 0]
+        if not frames:
+            return pd.DataFrame()
+        return pd.concat(frames, ignore_index=True)
+
+    def _apply_tau2_filter(self, comparison_results: pd.DataFrame, context: str) -> pd.DataFrame:
+        """Optionally drop highly heterogeneous loci before any DMP selection."""
+        tau2_threshold = getattr(self.config, "max_tau2_for_dmp", None)
+        if tau2_threshold is None:
+            return comparison_results
+        required_cols = {"tau2_1", "tau2_2"}
+        if not required_cols.issubset(comparison_results.columns):
+            logger.warning("tau2 filter requested but tau2 columns are missing; skipping filter.")
+            return comparison_results
+
+        keep_mask = ~(
+            (comparison_results["tau2_1"].astype(float) > float(tau2_threshold))
+            & (comparison_results["tau2_2"].astype(float) > float(tau2_threshold))
+        )
+        dropped = int((~keep_mask).sum())
+        if dropped > 0:
+            logger.info(
+                "Context %s: dropped %s positions with tau2_1 and tau2_2 both > %.4f",
+                context,
+                f"{dropped:,}",
+                float(tau2_threshold),
+            )
+        return comparison_results.loc[keep_mask].copy()
+
+    def _finalize_candidate_metrics_df(
+        self,
+        dmp_df: pd.DataFrame,
+        centroid1: MethylSample,
+        centroid2: MethylSample,
+        context: str,
+    ) -> pd.DataFrame:
+        """Compute continuous ECDF overlap/effect_size for the selected candidate set."""
+        if dmp_df is None or len(dmp_df) == 0:
+            return dmp_df.copy() if isinstance(dmp_df, pd.DataFrame) else pd.DataFrame()
+
+        dmp_df = dmp_df.copy()
+        dmp_positions = np.asarray(dmp_df["position"].values, dtype=np.uint32)
+        pos1 = np.asarray(centroid1.pos.values, dtype=np.uint32)
+        pos2 = np.asarray(centroid2.pos.values, dtype=np.uint32)
+        idx_in_c1 = np.searchsorted(pos1, dmp_positions, side="left")
+        idx_in_c2 = np.searchsorted(pos2, dmp_positions, side="left")
+        bs1 = centroid1.binned_stats
+        bs2 = centroid2.binned_stats
+        bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
+        from methyl_utils.core.distribution_views import ECDFView
+
+        ecdf_view1 = ECDFView(
+            bin_edges_arr,
+            np.asarray(bs1["bin_counts"], dtype=np.float64)[idx_in_c1],
+            np.asarray(centroid1.Sx.values, dtype=np.float64)[idx_in_c1],
+            np.asarray(centroid1.N.values, dtype=np.float64)[idx_in_c1],
+            np.asarray(centroid1.Sx2.values, dtype=np.float64)[idx_in_c1],
+        )
+        ecdf_view2 = ECDFView(
+            bin_edges_arr,
+            np.asarray(bs2["bin_counts"], dtype=np.float64)[idx_in_c2],
+            np.asarray(centroid2.Sx.values, dtype=np.float64)[idx_in_c2],
+            np.asarray(centroid2.N.values, dtype=np.float64)[idx_in_c2],
+            np.asarray(centroid2.Sx2.values, dtype=np.float64)[idx_in_c2],
+        )
+        logger.info(
+            "Context %s: built ECDFViews for %s candidate positions (lazy, not full centroid)",
+            context,
+            f"{len(dmp_positions):,}",
+        )
+
         dmp_df = self._compute_missing_metrics_df(
             dmp_df,
             ecdf_view1=ecdf_view1,
             ecdf_view2=ecdf_view2,
         )
+        if "eat_effect_weight" in dmp_df.columns and "effect_size" in dmp_df.columns:
+            dmp_df["effect_size_raw"] = dmp_df["effect_size"].astype(np.float32)
+            dmp_df["effect_size"] = np.clip(
+                dmp_df["effect_size"].astype(np.float64)
+                * dmp_df["eat_effect_weight"].astype(np.float64),
+                0.0,
+                1.0,
+            ).astype(np.float32)
+
         if "effect_size" in dmp_df.columns and len(dmp_df) > 0:
             from scipy.stats import rankdata
+
             bes = dmp_df["effect_size"].values.astype(np.float64)
             ranks = rankdata(bes)
             dmp_df["effect_size_ecdf"] = (ranks - 0.5) / len(ranks)
 
-        # Add chromosome and context columns
-        dmp_df['chromosome'] = self.chromosome
-        dmp_df['context'] = context
-
+        dmp_df["chromosome"] = self.chromosome
+        dmp_df["context"] = context
         return dmp_df
 
     def _apply_eat_transformation(self, comparison_results: pd.DataFrame,
                                 centroid1: MethylSample, centroid2: MethylSample,
                                 context: str) -> pd.DataFrame:
         """
-        Apply Entropy-weighted Asymmetry Transformation (EAT) to enhance DMP detection.
+        Compute EAT metadata without modifying p-values or q-values.
 
-        EAT reweights loci based on Beta distribution shape differences to emphasize
-        biologically meaningful methylation differences and de-emphasize loci with
-        high/indistinguishable entropy.
+        EAT is now used only as a post-statistical effect-size reweighting signal,
+        so this method stores `eat_T` and a bounded multiplicative weight that is
+        applied later to the final ECDF-based `effect_size`.
 
         Args:
             comparison_results: DataFrame with statistical comparison results
@@ -535,7 +656,7 @@ class MethylDetector:
             context: Methylation context (for logging)
 
         Returns:
-            Modified comparison_results with EAT-enhanced statistics
+            Modified comparison_results with EAT metadata only.
         """
         if not EAT_AVAILABLE or compute_eat_T is None:
             logger.warning("EAT transformation requested but compute_eat_T not available, skipping")
@@ -559,61 +680,10 @@ class MethylDetector:
             use_gpu=self.config.use_gpu
         )
 
-        # Apply EAT transformation to enhance biological significance
         modified_results = comparison_results.copy()
-
-        # Store original values for comparison
-        modified_results['delta_mean_raw'] = modified_results['delta_mean'].copy()
-        modified_results['p_value_raw'] = modified_results['p_value'].copy()
-
-        # EAT Strategy: Focus on biological relevance rather than statistical significance
-        # 1. Amplify delta_mean for biologically important positions (T > 1)
-        # 2. Use T to modulate statistical thresholds rather than p-values directly
-
-        # Conservative EAT application: only amplify positions with high biological importance
-        # Use absolute T as importance score - amplify positions with |T| > 1.0
         importance_weight = np.abs(T)
-        high_importance_mask = importance_weight > 1.0
-
-        # For high importance positions, amplify their delta_mean by the importance weight
-        if np.any(high_importance_mask):
-            amplification_factor = np.clip(importance_weight[high_importance_mask], 1.0, 3.0)  # Limit to 3x amplification
-            modified_results.loc[high_importance_mask, 'delta_mean'] = (
-                modified_results.loc[high_importance_mask, 'delta_mean'] * amplification_factor
-            )
-
-        # For positions with high EAT score (|T| > 1.5), make them more statistically significant
-        # by slightly reducing p-values (making them pass statistical filters more easily)
-        high_importance_mask = np.abs(T) > 1.5
-        if np.any(high_importance_mask):
-            # Reduce p-values for high-importance positions (more significant)
-            boost_factor = 1.3  # 30% decrease in p-values
-            modified_results.loc[high_importance_mask, 'p_value'] = (
-                modified_results.loc[high_importance_mask, 'p_value'] / boost_factor
-            )
-
-        # For positions with low EAT score (|T| < 0.5), make them less statistically significant
-        # by slightly increasing p-values (less likely to pass filters)
-        low_importance_mask = np.abs(T) < 0.5
-        if np.any(low_importance_mask):
-            # Increase p-values for low-importance positions (less significant)
-            # Use a small penalty factor to avoid divide by zero
-            penalty_factor = 1.2  # 20% increase in p-values
-            modified_results.loc[low_importance_mask, 'p_value'] = (
-                modified_results.loc[low_importance_mask, 'p_value'] * penalty_factor
-            )
-
-        # Recompute q-values after p-value modifications
-        from statsmodels.stats.multitest import multipletests
-        reject, q_values, _, _ = multipletests(
-            modified_results['p_value'].values,
-            alpha=self.config.alpha,
-            method='fdr_bh'
-        )
-        modified_results['q_value'] = q_values
-
-        # Add EAT metadata
-        modified_results['eat_T'] = T
+        modified_results['eat_T'] = T.astype(np.float32)
+        modified_results['eat_effect_weight'] = np.clip(importance_weight, 0.5, 2.0).astype(np.float32)
         modified_results['eat_applied'] = True
 
         eat_stats = {
@@ -621,12 +691,19 @@ class MethylDetector:
             'std_T': float(np.std(T)),
             'min_T': float(np.min(T)),
             'max_T': float(np.max(T)),
-            'positions_modified': len(T)
+            'positions_modified': len(T),
+            'min_weight': float(np.min(modified_results['eat_effect_weight'])),
+            'max_weight': float(np.max(modified_results['eat_effect_weight'])),
         }
 
         logger.info(f"🧬 EAT applied to {len(comparison_results)} positions in context {context}")
         logger.info(f"   T stats: mean={eat_stats['mean_T']:.3f}, std={eat_stats['std_T']:.3f}, "
                    f"range=[{eat_stats['min_T']:.3f}, {eat_stats['max_T']:.3f}]")
+        logger.info(
+            "   effect-size weights: range=[%.3f, %.3f] (p/q-values unchanged)",
+            eat_stats["min_weight"],
+            eat_stats["max_weight"],
+        )
 
         # Check if T values are meaningful
         t_range = eat_stats['max_T'] - eat_stats['min_T']
@@ -634,24 +711,6 @@ class MethylDetector:
             logger.warning(f"⚠️  EAT T values have very small range ({t_range:.3f}), transformation may have minimal effect")
         elif eat_stats['std_T'] < 0.05:
             logger.warning(f"⚠️  EAT T values have low variance (std={eat_stats['std_T']:.3f}), transformation may have minimal effect")
-
-        # Debug: Check modifications
-        delta_raw = modified_results['delta_mean_raw'].abs()
-        delta_new = modified_results['delta_mean'].abs()
-        delta_change_pct = ((delta_new - delta_raw) / (delta_raw + 1e-12)).mean() * 100
-
-        p_raw = modified_results['p_value_raw']
-        p_new = modified_results['p_value']
-        p_change_pct = ((p_new - p_raw) / (p_raw + 1e-12)).mean() * 100
-
-        # Count positions that changed significance
-        sig_before = (modified_results['p_value_raw'] <= self.config.alpha).sum()
-        sig_after = (modified_results['p_value'] <= self.config.alpha).sum()
-        sig_change = sig_after - sig_before
-
-        logger.info(f"   Delta_mean change: {delta_change_pct:+.1f}% average")
-        logger.info(f"   P-value change: {p_change_pct:+.1f}% average")
-        logger.info(f"   Significance change: {sig_change:+d} positions (before: {sig_before}, after: {sig_after})")
 
         return modified_results
 
@@ -737,10 +796,13 @@ class MethylDetector:
         total effect mass for that context.
         """
         initial_count = len(dmps_df)
+        initial_confirmed = int(dmps_df["statistical_dmp"].sum()) if "statistical_dmp" in dmps_df.columns else initial_count
         coverage = self.config.effect_size_coverage
         _pct = lambda n, d: f"{n / d * 100:.1f}%" if d and d > 0 else "N/A"
 
         bio_df = _select_by_effect_coverage(dmps_df, coverage)
+        selected_confirmed = int(bio_df["statistical_dmp"].sum()) if "statistical_dmp" in bio_df.columns else len(bio_df)
+        selected_rescue = max(0, len(bio_df) - selected_confirmed)
 
         # Per-context retention logging
         if "context" in dmps_df.columns:
@@ -754,7 +816,8 @@ class MethylDetector:
 
         logger.info(
             f"Biological filter (effect_size_coverage={coverage:.2f}): "
-            f"{len(bio_df):,} DMPs ({_pct(len(bio_df), initial_count)} of {initial_count:,} statistical DMPs)"
+            f"{len(bio_df):,} DMPs ({selected_confirmed:,} confirmed + {selected_rescue:,} rescue; "
+            f"confirmed retention {_pct(selected_confirmed, initial_confirmed)})"
         )
 
         # Value ranges for retained DMPs
@@ -1057,53 +1120,46 @@ class MethylDetector:
     def _generate_synthetic_validation_samples(
         self,
         dmps_df: pd.DataFrame
-    ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+    ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
         """
-        Generate synthetic validation samples from Beta distributions.
+        Generate synthetic validation samples from centroid ECDF histograms.
         
         Args:
-            dmps_df: DataFrame with DMPs including alpha1, beta1, alpha2, beta2
+            dmps_df: DataFrame with DMP positions/contexts
             
         Returns:
-            Tuple of (X_calib, y_calib, X_test, y_test, positions, contexts)
+            Tuple of (X_all, y_all, positions, contexts)
         """
         try:
-            from scipy.stats import beta as beta_dist
-            
             n_samples_per_class = self.config.n_validation_samples
-            
-            # Extract DMP parameters
             positions = dmps_df['position'].values
             contexts = dmps_df['context'].values
-            alpha1 = dmps_df['alpha1'].values
-            beta1 = dmps_df['beta1'].values
-            alpha2 = dmps_df['alpha2'].values
-            beta2 = dmps_df['beta2'].values
-            
             n_positions = len(positions)
-            
-            logger.info(f"Generating {n_samples_per_class} synthetic samples per class from {n_positions:,} DMPs...")
-            
-            # Generate class 1 (healthy) samples with realistic biological variation
-            X_class1 = np.zeros((n_samples_per_class, n_positions))
-            for i in range(n_positions):
-                # Use the centroid parameters directly, but add measurement noise
-                # Biological variation should be simulated by sampling from the centroid distribution
-                # but with some additional noise to account for technical variation
-                base_samples = beta_dist.rvs(alpha1[i], beta1[i], size=n_samples_per_class, random_state=self.config.random_state + i)
-                # Add small amount of technical noise (SD ~ 0.01)
-                technical_noise = np.random.normal(0, 0.01, size=n_samples_per_class)
-                X_class1[:, i] = np.clip(base_samples + technical_noise, 0, 1)
 
-            # Generate class 2 (cancer) samples with realistic biological variation
-            X_class2 = np.zeros((n_samples_per_class, n_positions))
-            for i in range(n_positions):
-                # Use the centroid parameters directly, but add measurement noise
-                base_samples = beta_dist.rvs(alpha2[i], beta2[i], size=n_samples_per_class, random_state=self.config.random_state + n_positions + i)
-                # Add small amount of technical noise (SD ~ 0.01)
-                technical_noise = np.random.normal(0, 0.01, size=n_samples_per_class)
-                X_class2[:, i] = np.clip(base_samples + technical_noise, 0, 1)
-            
+            logger.info(
+                "Generating %s synthetic samples per class from %s DMPs using ECDF histograms...",
+                n_samples_per_class,
+                f"{n_positions:,}",
+            )
+
+            bin_edges, bc1, bc2 = self._extract_bin_counts_for_dmps(dmps_df)
+            rng = np.random.default_rng(self.config.random_state)
+
+            def _sample_histograms(bin_counts: np.ndarray) -> np.ndarray:
+                probs = np.asarray(bin_counts, dtype=np.float64)
+                probs /= np.maximum(probs.sum(axis=1, keepdims=True), 1e-12)
+                lower = bin_edges[:-1]
+                upper = bin_edges[1:]
+                out = np.zeros((n_samples_per_class, probs.shape[0]), dtype=np.float32)
+                for i in range(probs.shape[0]):
+                    chosen_bins = rng.choice(len(lower), size=n_samples_per_class, p=probs[i])
+                    jitter = rng.random(n_samples_per_class)
+                    out[:, i] = lower[chosen_bins] + jitter * (upper[chosen_bins] - lower[chosen_bins])
+                return np.clip(out, 0.0, 1.0)
+
+            X_class1 = _sample_histograms(bc1)
+            X_class2 = _sample_histograms(bc2)
+
             # Combine classes
             X_all = np.vstack([X_class1, X_class2])
             y_all = np.concatenate([np.zeros(n_samples_per_class, dtype=int), np.ones(n_samples_per_class, dtype=int)])
@@ -1133,7 +1189,8 @@ class MethylDetector:
         
         Requires samples from BOTH centroid1 and centroid2 so that Balanced Accuracy
         (classifying between the two groups) can be computed. If only one group has
-        samples, returns None and the caller falls back to synthetic validation.
+        samples, returns None and the caller decides whether to skip optimization or
+        use explicit synthetic validation.
         
         Returns:
             Tuple of (X, y, positions, contexts) or None if loading fails
@@ -1167,7 +1224,7 @@ class MethylDetector:
             if not class1_paths and not class2_paths:
                 logger.warning(
                     "No real validation samples (config and centroid metadata). "
-                    "Falling back to synthetic validation samples."
+                    "Real-sample BA optimization will be skipped unless validation_mode='synthetic'."
                 )
                 return None
 
@@ -1175,7 +1232,7 @@ class MethylDetector:
             if not class1_paths or not class2_paths:
                 logger.warning(
                     "Validation requires samples from BOTH centroid1 and centroid2 to compute Balanced Accuracy. "
-                    "Got centroid1=%s, centroid2=%s. Falling back to synthetic validation samples."
+                    "Got centroid1=%s, centroid2=%s. Real-sample BA optimization will be skipped unless validation_mode='synthetic'."
                     % (len(class1_paths), len(class2_paths))
                 )
                 return None
@@ -1225,26 +1282,14 @@ class MethylDetector:
                 'mean2': dmps_df['mean2'].values if 'mean2' in dmps_df.columns else None,
             })
             dmpDF = dmpDF.dropna(axis=1, how='all')
-            try:
-                bin_edges_sc, bc1_sc, bc2_sc = self._extract_bin_counts_for_dmps(dmps_df)
-                clf = ECDFClassifier.from_dataframe(
-                    dmpDF,
-                    bin_edges=bin_edges_sc,
-                    bin_counts_c1=bc1_sc,
-                    bin_counts_c2=bc2_sc,
-                    temperature=self.config.temperature,
-                )
-            except Exception as _e:
-                logger.warning("ECDFClassifier construction failed for self-check: %s; falling back to BetaClassifier", _e)
-                dmpDF_beta = pd.DataFrame({
-                    'pos': dmps_df['position'].values.astype(np.int64),
-                    'alpha1': dmps_df['alpha1'].values.astype(np.float64),
-                    'beta1': dmps_df['beta1'].values.astype(np.float64),
-                    'alpha2': dmps_df['alpha2'].values.astype(np.float64),
-                    'beta2': dmps_df['beta2'].values.astype(np.float64),
-                    'weight': weights,
-                })
-                clf = BetaClassifier.from_dataframe(dmpDF_beta, min_sample_coverage=self.config.min_sample_coverage, coverage_weighting=self.config.classifier_coverage_weighting)
+            bin_edges_sc, bc1_sc, bc2_sc = self._extract_bin_counts_for_dmps(dmps_df)
+            clf = ECDFClassifier.from_dataframe(
+                dmpDF,
+                bin_edges=bin_edges_sc,
+                bin_counts_c1=bc1_sc,
+                bin_counts_c2=bc2_sc,
+                temperature=self.config.temperature,
+            )
             # Centroid1 profile = mean1 at each DMP (class 0); centroid2 = mean2 (class 1)
             profile_c1 = dmps_df['mean1'].values.astype(np.float64).reshape(1, -1)
             profile_c2 = dmps_df['mean2'].values.astype(np.float64).reshape(1, -1)
@@ -1275,9 +1320,8 @@ class MethylDetector:
                 elif p_c1 <= 0.2 and p_c2 <= 0.2:
                     logger.warning(
                         "Centroid self-check FAILED: both centroids classify as class0 (centroid1→P(class1)=%.2f, centroid2→%.2f). "
-                        "Context/position merging matches the DMP list; this often happens when most positions use the Normal "
-                        "approximation and class0 has smaller variance than class1, so the sum of log-normalizers favors class0. "
-                        "Check centroid separation (delta_mean) or use a subset of well-separated DMPs. Validation BA may be low.",
+                        "Context/position merging matches the DMP list, so this usually indicates weak centroid separation or "
+                        "a DMP set dominated by low-information loci. Check delta_mean/effect_size and held-out BA.",
                         p_c1, p_c2
                     )
                 else:
@@ -1288,6 +1332,247 @@ class MethylDetector:
                     )
         except Exception as e:
             logger.warning("Centroid self-check failed: %s", e)
+
+    def _default_validation_result(self) -> dict:
+        return {
+            'balanced_accuracy': 0.5,
+            'confusion_matrix': {'tp': 0, 'tn': 0, 'fp': 0, 'fn': 0},
+            'metrics': {'sensitivity': 0.0, 'specificity': 0.0, 'accuracy': 0.0, 'precision': 0.0},
+            'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0},
+            'split_balanced_accuracy_std': 0.0,
+            'n_splits': 0,
+        }
+
+    def _get_classifier_weights(self, dmps_df: pd.DataFrame) -> np.ndarray:
+        """Extract bounded, positive feature weights from the selected DMP table."""
+        if 'effect_size' in dmps_df.columns:
+            weights = dmps_df['effect_size'].values.copy()
+        elif 'importance' in dmps_df.columns:
+            weights = dmps_df['importance'].values.copy()
+        else:
+            weights = np.ones(len(dmps_df), dtype=np.float64)
+
+        weights = np.asarray(weights, dtype=np.float64)
+        if weights.size == 0:
+            return weights
+        if np.any(~np.isfinite(weights)) or np.any(weights <= 0):
+            weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
+        w_max = float(np.max(weights))
+        if w_max > 1e-6:
+            weights = np.clip(weights / w_max, 1e-6, 1.0)
+        else:
+            weights = np.full(weights.shape, 1e-6, dtype=np.float64)
+        return weights.astype(np.float64)
+
+    def _build_ecdf_classifier(self, dmps_df: pd.DataFrame) -> Tuple[ECDFClassifier, pd.DataFrame]:
+        """Build an ECDFClassifier and typed DMP frame for the given subset."""
+        weights = self._get_classifier_weights(dmps_df)
+        dmpDF = pd.DataFrame({
+            'pos': dmps_df['position'].values.astype(np.int64),
+            'weight': weights.astype(np.float64),
+            'context': dmps_df['context'].values if 'context' in dmps_df.columns else None,
+            'delta_sign': dmps_df['delta_sign'].values if 'delta_sign' in dmps_df.columns else None,
+            'mean1': dmps_df['mean1'].values if 'mean1' in dmps_df.columns else None,
+            'mean2': dmps_df['mean2'].values if 'mean2' in dmps_df.columns else None,
+        }).dropna(axis=1, how='all')
+        bin_edges, bc1, bc2 = self._extract_bin_counts_for_dmps(dmps_df)
+        classifier = ECDFClassifier.from_dataframe(
+            dmpDF,
+            bin_edges=bin_edges,
+            bin_counts_c1=bc1,
+            bin_counts_c2=bc2,
+            temperature=self.config.temperature,
+        )
+        return classifier, dmpDF
+
+    def _prepare_validation_splits(
+        self,
+        y: np.ndarray,
+        require_holdout: bool = True,
+    ) -> List[Tuple[np.ndarray, np.ndarray]]:
+        """
+        Build repeated stratified holdout splits for balanced-accuracy evaluation.
+
+        Returns a list of `(calibration_indices, test_indices)` tuples.
+        """
+        y = np.asarray(y, dtype=int).ravel()
+        n_total = len(y)
+        if n_total == 0:
+            return []
+
+        split_ratio = float(getattr(self.config, "validation_split_ratio", 0.0) or 0.0)
+        if require_holdout and split_ratio <= 0.0:
+            split_ratio = 0.2
+            if not self._default_holdout_warned:
+                self._default_holdout_warned = True
+                logger.warning(
+                    "validation_split_ratio<=0 is not compatible with held-out BA selection; "
+                    "using a default stratified holdout ratio of 0.20."
+                )
+
+        idx_all = np.arange(n_total, dtype=np.int64)
+        class0 = idx_all[y == 0]
+        class1 = idx_all[y == 1]
+        if split_ratio <= 0.0 or len(class0) < 2 or len(class1) < 2:
+            logger.warning(
+                "Not enough samples for stratified holdout (class0=%s, class1=%s); "
+                "falling back to the full cohort for validation.",
+                len(class0),
+                len(class1),
+            )
+            return [(idx_all, idx_all)]
+
+        n_test0 = min(len(class0) - 1, max(1, int(round(len(class0) * split_ratio))))
+        n_test1 = min(len(class1) - 1, max(1, int(round(len(class1) * split_ratio))))
+        if n_test0 <= 0 or n_test1 <= 0:
+            return [(idx_all, idx_all)]
+
+        n_repeats = max(int(getattr(self.config, "validation_n_repeats", 1) or 1), 1)
+        splits: List[Tuple[np.ndarray, np.ndarray]] = []
+        base_seed = int(getattr(self.config, "random_state", 42) or 42)
+        for repeat_idx in range(n_repeats):
+            rng = np.random.default_rng(base_seed + repeat_idx * 9973)
+            test0 = rng.choice(class0, size=n_test0, replace=False)
+            test1 = rng.choice(class1, size=n_test1, replace=False)
+            test_idx = np.sort(np.concatenate([test0, test1]).astype(np.int64))
+            calib_mask = np.ones(n_total, dtype=bool)
+            calib_mask[test_idx] = False
+            calib_idx = idx_all[calib_mask]
+            splits.append((calib_idx, test_idx))
+        return splits
+
+    def _build_validation_prefix_cache(
+        self,
+        sorted_df: pd.DataFrame,
+        X_val: np.ndarray,
+        y_val: np.ndarray,
+        splits: List[Tuple[np.ndarray, np.ndarray]],
+    ) -> ValidationPrefixCache:
+        """Cache weighted prefix log-likelihoods for very fast top-k evaluation."""
+        weights = self._get_classifier_weights(sorted_df)
+        classifier, _ = self._build_ecdf_classifier(sorted_df)
+        availability_mask = ~np.isnan(X_val)
+        log_p_c1, log_p_c2, _ = classifier.compute_log_pdf_matrices(
+            X_val,
+            availability_mask=availability_mask,
+        )
+        weighted_c1 = log_p_c1 * weights[np.newaxis, :]
+        weighted_c2 = log_p_c2 * weights[np.newaxis, :]
+        prefix_ll_c1: List[np.ndarray] = []
+        prefix_ll_c2: List[np.ndarray] = []
+        for _, test_idx in splits:
+            prefix_ll_c1.append(np.cumsum(weighted_c1[test_idx], axis=1))
+            prefix_ll_c2.append(np.cumsum(weighted_c2[test_idx], axis=1))
+        return ValidationPrefixCache(
+            sorted_df=sorted_df.copy(),
+            weights=weights,
+            y_val=np.asarray(y_val, dtype=int),
+            splits=splits,
+            prefix_ll_c1=prefix_ll_c1,
+            prefix_ll_c2=prefix_ll_c2,
+            temperature=self.config.temperature,
+        )
+
+    def _evaluate_prefix_subset(
+        self,
+        cache: ValidationPrefixCache,
+        k: int,
+    ) -> dict:
+        """Evaluate the first `k` DMPs from a cached sorted table."""
+        if cache is None or cache.sorted_df is None or len(cache.sorted_df) == 0 or k <= 0:
+            return self._default_validation_result()
+
+        k = min(int(k), len(cache.sorted_df))
+        split_bas: List[float] = []
+        tp = tn = fp = fn = 0
+
+        for (calib_idx, test_idx), prefix_c1, prefix_c2 in zip(
+            cache.splits,
+            cache.prefix_ll_c1,
+            cache.prefix_ll_c2,
+        ):
+            if prefix_c1.shape[1] < k or len(test_idx) == 0:
+                continue
+            log_likes = np.stack(
+                [prefix_c1[:, k - 1], prefix_c2[:, k - 1]],
+                axis=1,
+            ) / max(cache.temperature, 0.1)
+            log_likes -= log_likes.max(axis=1, keepdims=True)
+            probs = np.exp(log_likes)
+            probs /= probs.sum(axis=1, keepdims=True)
+            y_test = cache.y_val[test_idx]
+            y_pred = np.argmax(probs, axis=1)
+
+            tp_i = int(np.sum((y_pred == 1) & (y_test == 1)))
+            tn_i = int(np.sum((y_pred == 0) & (y_test == 0)))
+            fp_i = int(np.sum((y_pred == 1) & (y_test == 0)))
+            fn_i = int(np.sum((y_pred == 0) & (y_test == 1)))
+            n_pos = tp_i + fn_i
+            n_neg = tn_i + fp_i
+            sensitivity = tp_i / n_pos if n_pos > 0 else 0.0
+            specificity = tn_i / n_neg if n_neg > 0 else 0.0
+            split_bas.append((sensitivity + specificity) / 2.0)
+
+            tp += tp_i
+            tn += tn_i
+            fp += fp_i
+            fn += fn_i
+
+        if not split_bas:
+            return self._default_validation_result()
+
+        n_pos = tp + fn
+        n_neg = tn + fp
+        sensitivity = tp / n_pos if n_pos > 0 else 0.0
+        specificity = tn / n_neg if n_neg > 0 else 0.0
+        total = n_pos + n_neg
+        return {
+            'balanced_accuracy': float(np.mean(split_bas)),
+            'confusion_matrix': {'tp': int(tp), 'tn': int(tn), 'fp': int(fp), 'fn': int(fn)},
+            'metrics': {
+                'sensitivity': sensitivity,
+                'specificity': specificity,
+                'accuracy': (tp + tn) / total if total > 0 else 0.0,
+                'precision': tp / (tp + fp) if (tp + fp) > 0 else 0.0,
+            },
+            'counts': {'n_positive': int(n_pos), 'n_negative': int(n_neg), 'n_total': int(total)},
+            'split_balanced_accuracy_std': float(np.std(split_bas)) if len(split_bas) > 1 else 0.0,
+            'n_splits': len(split_bas),
+        }
+
+    def _merge_validation_results(self, results: List[dict]) -> dict:
+        """Aggregate repeated validation runs into a single summary dict."""
+        valid_results = [r for r in results if r is not None]
+        if not valid_results:
+            return self._default_validation_result()
+
+        ba_values = [float(r.get('balanced_accuracy', 0.5)) for r in valid_results]
+        tp = sum(int(r['confusion_matrix']['tp']) for r in valid_results)
+        tn = sum(int(r['confusion_matrix']['tn']) for r in valid_results)
+        fp = sum(int(r['confusion_matrix']['fp']) for r in valid_results)
+        fn = sum(int(r['confusion_matrix']['fn']) for r in valid_results)
+        n_pos = tp + fn
+        n_neg = tn + fp
+        total = n_pos + n_neg
+        merged = {
+            'balanced_accuracy': float(np.mean(ba_values)),
+            'confusion_matrix': {'tp': int(tp), 'tn': int(tn), 'fp': int(fp), 'fn': int(fn)},
+            'metrics': {
+                'sensitivity': tp / n_pos if n_pos > 0 else 0.0,
+                'specificity': tn / n_neg if n_neg > 0 else 0.0,
+                'accuracy': (tp + tn) / total if total > 0 else 0.0,
+                'precision': tp / (tp + fp) if (tp + fp) > 0 else 0.0,
+            },
+            'counts': {'n_positive': int(n_pos), 'n_negative': int(n_neg), 'n_total': int(total)},
+            'split_balanced_accuracy_std': float(np.std(ba_values)) if len(ba_values) > 1 else 0.0,
+            'n_splits': len(ba_values),
+        }
+        for key in ('platt_calibrator', 'platt_calibrator_scaler'):
+            for result in valid_results:
+                if key in result:
+                    merged[key] = result[key]
+                    break
+        return merged
 
     def _validate_classifier_subset(
         self,
@@ -1300,7 +1585,7 @@ class MethylDetector:
         all_contexts: np.ndarray
     ) -> dict:
         """
-        Validate a DMP subset using BetaClassifier with proper train/test split.
+        Validate a DMP subset using the ECDFClassifier on calibration/test splits.
         
         Args:
             dmps_subset: Subset of DMPs to validate
@@ -1315,111 +1600,31 @@ class MethylDetector:
             Dictionary with balanced accuracy and metrics
         """
         try:
-            # Get positions for this subset
             subset_positions = dmps_subset['position'].values
             subset_contexts = dmps_subset['context'].values
-            
-            # Find indices in validation data - VECTORIZED
-            subset_indices = []
-            for pos, ctx in zip(subset_positions, subset_contexts):
-                matches = np.where((all_positions == pos) & (all_contexts == ctx))[0]
-                if len(matches) > 0:
-                    subset_indices.append(matches[0])
-            
-            subset_indices = np.array(subset_indices)
-            
+
+            feature_index_map = {
+                (int(pos), str(ctx)): idx
+                for idx, (pos, ctx) in enumerate(zip(all_positions, all_contexts))
+            }
+            subset_indices = np.asarray(
+                [feature_index_map.get((int(pos), str(ctx)), -1) for pos, ctx in zip(subset_positions, subset_contexts)],
+                dtype=np.int64,
+            )
+            matched_mask = subset_indices >= 0
+            subset_indices = subset_indices[matched_mask]
+
             if len(subset_indices) == 0:
                 logger.warning("No matching positions found in validation data")
-                return {
-                    'balanced_accuracy': 0.5,
-                    'confusion_matrix': {'tp': 0, 'tn': 0, 'fp': 0, 'fn': 0},
-                    'metrics': {'sensitivity': 0.0, 'specificity': 0.0, 'accuracy': 0.0, 'precision': 0.0},
-                    'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0}
-                }
-            
-            # Extract subset of positions
+                return self._default_validation_result()
+
             X_calib_subset = X_calib[:, subset_indices]
             X_test_subset = X_test[:, subset_indices]
-            
-            # Get the actual positions/contexts that matched (in order)
-            matched_positions = all_positions[subset_indices]
-            matched_contexts = all_contexts[subset_indices]
-            
-            # Create temporary classifier using ONLY the matched DMPs
-            matched_mask = np.isin(
-                [f"{p}_{c}" for p, c in zip(subset_positions, subset_contexts)],
-                [f"{p}_{c}" for p, c in zip(matched_positions, matched_contexts)]
-            )
-            dmps_for_classifier = dmps_subset[matched_mask].reset_index(drop=True)
-            
-            # Create dmpDF for BetaClassifier
-            # Use effect_size (single biological importance measure from MethylCentroidPair)
-            if 'effect_size' in dmps_for_classifier.columns:
-                weights = dmps_for_classifier['effect_size'].values.copy()
-                logger.debug("Using 'effect_size' for classifier weights")
-            elif 'importance' in dmps_for_classifier.columns:
-                weights = dmps_for_classifier['importance'].values.copy()
-                logger.debug("Using 'importance' for weights (fallback); will bound to [1e-6, 1]")
-            else:
-                weights = np.ones(len(dmps_for_classifier))
-                logger.warning("No weight column found, using ones")
-
-            # Check for invalid weights
-            if np.any(~np.isfinite(weights)) or np.any(weights <= 0):
-                logger.warning(f"Invalid weights found: min={weights.min():.6f}, max={weights.max():.6f}, "
-                              f"has_nan={np.any(np.isnan(weights))}, has_inf={np.any(np.isinf(weights))}")
-                weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
-
-            # Always bound weights to [1e-6, 1] so no single DMP dominates
-            w_max = float(np.max(weights))
-            if w_max > 1e-6:
-                weights = np.clip(weights / w_max, 1e-6, 1.0)
-
-            # Low variability: skip for k=1 (single weight has no variance by definition). Otherwise error only if clearly wrong.
-            w_std = weights.std()
-            if np.all(weights == 0):
-                logger.error(f"CRITICAL: All weights are zero for k={len(dmps_for_classifier)}!")
-            elif len(dmps_for_classifier) >= 2 and w_std < 1e-6 and 'effect_size' not in dmps_for_classifier.columns:
-                logger.error(f"CRITICAL: All weights nearly identical for k={len(dmps_for_classifier)}!")
-            elif len(dmps_for_classifier) >= 2 and w_std < 1e-6:
-                logger.debug("Weights from effect_size have very low std (expected when subset is similar); classifier may still be valid.")
-            logger.debug(
-                f"Classifier weights for k={len(dmps_for_classifier)}: min={weights.min():.6f}, max={weights.max():.6f}"
-            )
-
-            dmpDF = pd.DataFrame({
-                'pos': dmps_for_classifier['position'].values.astype(np.int64),
-                'weight': weights.astype(np.float64),
-                'context': dmps_for_classifier['context'].values if 'context' in dmps_for_classifier.columns else None,
-                'delta_sign': dmps_for_classifier['delta_sign'].values if 'delta_sign' in dmps_for_classifier.columns else None,
-                'mean1': dmps_for_classifier['mean1'].values if 'mean1' in dmps_for_classifier.columns else None,
-                'mean2': dmps_for_classifier['mean2'].values if 'mean2' in dmps_for_classifier.columns else None,
-            })
-            dmpDF = dmpDF.dropna(axis=1, how='all')
-            try:
-                bin_edges_v, bc1_v, bc2_v = self._extract_bin_counts_for_dmps(dmps_for_classifier)
-                temp_classifier = ECDFClassifier.from_dataframe(
-                    dmpDF,
-                    bin_edges=bin_edges_v,
-                    bin_counts_c1=bc1_v,
-                    bin_counts_c2=bc2_v,
-                    temperature=self.config.temperature,
-                )
-            except Exception as _e:
-                logger.warning("ECDFClassifier construction failed for validation: %s; falling back to BetaClassifier", _e)
-                dmpDF_beta = pd.DataFrame({
-                    'pos': dmps_for_classifier['position'].values.astype(np.int64),
-                    'alpha1': dmps_for_classifier['alpha1'].values.astype(np.float64),
-                    'beta1': dmps_for_classifier['beta1'].values.astype(np.float64),
-                    'alpha2': dmps_for_classifier['alpha2'].values.astype(np.float64),
-                    'beta2': dmps_for_classifier['beta2'].values.astype(np.float64),
-                    'weight': weights.astype(np.float64),
-                })
-                temp_classifier = BetaClassifier.from_dataframe(dmpDF_beta, min_sample_coverage=self.config.min_sample_coverage, coverage_weighting=self.config.classifier_coverage_weighting)
+            dmps_for_classifier = dmps_subset.loc[matched_mask].reset_index(drop=True)
+            temp_classifier, _ = self._build_ecdf_classifier(dmps_for_classifier)
             logger.debug("ECDFClassifier built for validation: %s", temp_classifier)
 
             # PHASE 1: Fit Platt calibration using calibration set (if supported)
-            # BetaClassifier uses calibrate_platt method with methylation levels
             X_calib_subset_clean = X_calib_subset.copy()
             X_calib_subset_clean = np.nan_to_num(X_calib_subset_clean, nan=0.5)
             X_calib_subset_clean = np.clip(X_calib_subset_clean, 1e-6, 1-1e-6)
@@ -1427,10 +1632,16 @@ class MethylDetector:
             # Create availability mask
             calib_availability = ~np.isnan(X_calib_subset)
 
-            # Fit Platt calibration only if we have a proper train/test split
-            # If validation_split_ratio=0, skip calibration to avoid overfitting
             use_calibration = False
-            if hasattr(temp_classifier, 'calibrate_platt') and self.config.validation_split_ratio > 0:
+            has_holdout = (
+                X_calib_subset.shape[0] > 0
+                and X_test_subset.shape[0] > 0
+                and (
+                    X_calib_subset.shape != X_test_subset.shape
+                    or not np.array_equal(y_calib, y_test)
+                )
+            )
+            if hasattr(temp_classifier, 'calibrate_platt') and self.config.enable_platt_calibration and has_holdout:
                 try:
                     temp_classifier.calibrate_platt(X_calib_subset_clean, y_calib, calib_availability)
                     use_calibration = True
@@ -1535,7 +1746,7 @@ class MethylDetector:
                         "Predicted: %s class0, %s class1 | True: %s class0, %s class1. "
                         "Possible causes: (1) validation data has no overlap with DMP positions (all NaN -> 0.5), "
                         "(2) validation columns vs DMP order mismatch, "
-                        "(3) one dominant weight or invalid alpha/beta. See earlier 'no per-sample variation' / 'low overlap' warnings.",
+                        "(3) one dominant weight or low-information DMPs. See earlier 'no per-sample variation' / 'low overlap' warnings.",
                         n_pred_0, n_pred_1, n_neg, n_pos
                     )
                 else:
@@ -1553,11 +1764,9 @@ class MethylDetector:
                     'accuracy': (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0,
                     'precision': tp / (tp + fp) if (tp + fp) > 0 else 0.0
                 },
-                'counts': {
-                    'n_positive': int(n_pos),
-                    'n_negative': int(n_neg),
-                    'n_total': int(n_pos + n_neg)
-                }
+                'counts': {'n_positive': int(n_pos), 'n_negative': int(n_neg), 'n_total': int(n_pos + n_neg)},
+                'split_balanced_accuracy_std': 0.0,
+                'n_splits': 1,
             }
             # Include fitted Platt calibrator for export when enabled (so MethylClassifier can use it)
             if use_calibration and self.config.enable_platt_calibration and temp_classifier.calibrator is not None:
@@ -1571,12 +1780,7 @@ class MethylDetector:
             logger.error(f"❌ Validation failed: {e}")
             import traceback
             traceback.print_exc()
-            return {
-                'balanced_accuracy': 0.5,
-                'confusion_matrix': {'tp': 0, 'tn': 0, 'fp': 0, 'fn': 0},
-                'metrics': {'sensitivity': 0.0, 'specificity': 0.0, 'accuracy': 0.0, 'precision': 0.0},
-                'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0}
-            }
+            return self._default_validation_result()
     
     def _validate_centroid_parameters(self) -> None:
         """
@@ -1650,69 +1854,38 @@ class MethylDetector:
             if n_dmps == 0:
                 logger.warning("Cannot validate: no DMPs selected")
                 return None
-            
-            # Load or generate validation samples
-            validation_data = None
+
             if self.config.validation_mode == "real":
                 logger.info("📊 Loading validation samples...")
                 validation_data = self._load_validation_samples_multicontext(selected_dmps_df)
                 if validation_data is None:
                     logger.warning("Failed to load validation samples")
                     return None
-                    
-                X_val, y_val, val_positions, val_contexts = validation_data
-                logger.info(f"✅ Loaded {len(X_val)} validation samples with {len(val_positions)} positions")
-                
-                # Split validation set based on config
-                if self.config.validation_split_ratio > 0:
-                    n_samples = len(X_val)
-                    test_ratio = self.config.validation_split_ratio
-                    
-                    # Stratified split to maintain class balance
-                    idx_class0 = np.where(y_val == 0)[0]
-                    idx_class1 = np.where(y_val == 1)[0]
-                    
-                    n_test_class0 = int(len(idx_class0) * test_ratio)
-                    n_test_class1 = int(len(idx_class1) * test_ratio)
-                    
-                    np.random.seed(self.config.random_state)
-                    test_idx_class0 = np.random.choice(idx_class0, n_test_class0, replace=False)
-                    test_idx_class1 = np.random.choice(idx_class1, n_test_class1, replace=False)
-                    
-                    test_indices = np.concatenate([test_idx_class0, test_idx_class1])
-                    calib_indices = np.array([i for i in range(n_samples) if i not in test_indices])
-                    
-                    X_calib, y_calib = X_val[calib_indices], y_val[calib_indices]
-                    X_test, y_test = X_val[test_indices], y_val[test_indices]
-                    
-                    logger.info(f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test (split_ratio={test_ratio})")
-                else:
-                    # No split: use all samples for both calibration and evaluation
-                    X_calib, y_calib = X_val, y_val
-                    X_test, y_test = X_val, y_val
-                    logger.info(f"   Using all {len(X_val)} samples for BA (no holdout, validation_split_ratio=0)")
-                
-                validation_data = (X_calib, y_calib, X_test, y_test, val_positions, val_contexts)
             else:
-                # Synthetic validation mode
-                logger.info("📊 Generating synthetic validation samples from Beta distributions...")
+                logger.info("📊 Generating synthetic validation samples from ECDF histograms...")
                 validation_data = self._generate_synthetic_validation_samples(selected_dmps_df)
                 if validation_data is None:
                     logger.warning("Failed to generate synthetic samples")
                     return None
-            
-            # Unpack validation data
-            X_calib, y_calib, X_test, y_test, val_positions, val_contexts = validation_data
-            
-            # Validate the selected DMPs
-            result = self._validate_classifier_subset(
-                selected_dmps_df,
-                X_calib, y_calib,
-                X_test, y_test,
-                val_positions, val_contexts
-            )
-            
-            return result
+
+            X_val, y_val, val_positions, val_contexts = validation_data
+            logger.info(f"✅ Loaded {len(X_val)} validation samples with {len(val_positions)} positions")
+            splits = self._prepare_validation_splits(y_val, require_holdout=True)
+            split_results = []
+            for calib_indices, test_indices in splits:
+                split_results.append(
+                    self._validate_classifier_subset(
+                        selected_dmps_df,
+                        X_val[calib_indices],
+                        y_val[calib_indices],
+                        X_val[test_indices],
+                        y_val[test_indices],
+                        val_positions,
+                        val_contexts,
+                    )
+                )
+
+            return self._merge_validation_results(split_results)
             
         except Exception as e:
             logger.error(f"Validation failed: {e}")
@@ -1759,105 +1932,53 @@ class MethylDetector:
             self._check_centroid_self_classification(sorted_df)
             return sorted_df
 
-        # Load validation samples - try real first, then synthetic
         validation_data = None
-
-        # First try real validation samples
-        logger.info("📊 Loading real validation samples for optimization...")
-        validation_data = self._load_validation_samples_multicontext(sorted_df)
-
-        # Check if validation data has any valid methylation values
-        if validation_data is not None:
-            X_val, y_val, val_positions, val_contexts = validation_data
-            n_valid_values = np.sum(~np.isnan(X_val))
-            total_values = X_val.size
-            valid_percentage = (n_valid_values / total_values) * 100
-
-            logger.info(f"Validation data validity: {n_valid_values:,}/{total_values:,} values valid ({valid_percentage:.1f}%)")
-
-            # Only fall back to synthetic if NO samples were loaded successfully
-            # It's normal for validation samples to have NaN values at positions they don't cover
-            if len(X_val) == 0:
-                logger.warning("No validation samples loaded, falling back to synthetic data")
-                validation_data = None
-
-        if validation_data is None:
-            # Fall back to synthetic validation samples
-            logger.info("📊 Generating synthetic validation samples from centroids...")
-            validation_data = self._generate_synthetic_validation_samples(sorted_df)
-
-        if validation_data is not None:
-            X_val, y_val, val_positions, val_contexts = validation_data
-            logger.info(f"✅ Loaded {len(X_val)} validation samples with {len(val_positions)} positions")
-
-            # Split validation set based on config
-            if self.config.validation_split_ratio > 0:
-                n_samples = len(X_val)
-                test_ratio = self.config.validation_split_ratio
-                idx_class0 = np.where(y_val == 0)[0]
-                idx_class1 = np.where(y_val == 1)[0]
-                n0, n1 = len(idx_class0), len(idx_class1)
-
-                # BA requires both classes in BOTH calib and test; ensure at least 1 per class in test and in calib
-                if n0 < 2 or n1 < 2:
-                    logger.warning(
-                        "Stratified split skipped: need at least 2 samples per class (got %s and %s). Using all samples for both calibration and evaluation.",
-                        n0, n1
-                    )
-                    X_calib, y_calib = X_val, y_val
-                    X_test, y_test = X_val, y_val
-                else:
-                    # Use ~test_ratio of total samples for test, with test set class-balanced
-                    # (both classes represented in equal measure in the holdout)
-                    target_test_size = max(2, int(round((n0 + n1) * test_ratio)))
-                    half = target_test_size // 2
-                    n_test_class0 = min(max(1, half), n0 - 1)
-                    n_test_class1 = min(max(1, target_test_size - n_test_class0), n1 - 1)
-                    np.random.seed(self.config.random_state)
-                    test_idx_class0 = np.random.choice(idx_class0, n_test_class0, replace=False)
-                    test_idx_class1 = np.random.choice(idx_class1, n_test_class1, replace=False)
-                    test_indices = np.concatenate([test_idx_class0, test_idx_class1])
-                    calib_indices = np.array([i for i in range(n_samples) if i not in test_indices])
-                    X_calib, y_calib = X_val[calib_indices], y_val[calib_indices]
-                    X_test, y_test = X_val[test_indices], y_val[test_indices]
-                    logger.info(
-                        f"   Split: {len(calib_indices)} calibration, {len(test_indices)} test "
-                        f"(~{100*(1-test_ratio):.0f}% / ~{100*test_ratio:.0f}%), test set balanced "
-                        f"(class0: {n_test_class0}, class1: {n_test_class1})"
-                    )
-            else:
-                # No split: use all samples for both calibration and evaluation
-                # User has separate independent test set
-                X_calib, y_calib = X_val, y_val
-                X_test, y_test = X_val, y_val
-                logger.info(f"   Using all {len(X_val)} samples for BA (no holdout, validation_split_ratio=0)")
-
-            # Store both sets for downstream optimization
-            validation_data = (X_calib, y_calib, X_test, y_test, val_positions, val_contexts)
+        if self.config.validation_mode == "real":
+            logger.info("📊 Loading real validation samples for optimization...")
+            validation_data = self._load_validation_samples_multicontext(sorted_df)
+            if validation_data is None:
+                logger.warning("No real validation data available; keeping all biological DMPs without BA optimization.")
+                self._check_centroid_self_classification(sorted_df)
+                return sorted_df
         else:
-            logger.warning("Failed to load or generate validation samples, falling back to all DMPs")
+            logger.info("📊 Generating synthetic validation samples from ECDF histograms...")
+            validation_data = self._generate_synthetic_validation_samples(sorted_df)
+            if validation_data is None:
+                logger.warning("Failed to generate synthetic validation samples; keeping all biological DMPs.")
+                self._check_centroid_self_classification(sorted_df)
+                return sorted_df
+
+        X_val, y_val, val_positions, val_contexts = validation_data
+        logger.info(f"✅ Loaded {len(X_val)} validation samples with {len(val_positions)} positions")
+        n_valid_values = np.sum(~np.isnan(X_val))
+        total_values = X_val.size
+        valid_percentage = (n_valid_values / total_values) * 100 if total_values > 0 else 0.0
+        logger.info(f"Validation data validity: {n_valid_values:,}/{total_values:,} values valid ({valid_percentage:.1f}%)")
+
+        splits = self._prepare_validation_splits(y_val, require_holdout=True)
+        if not splits:
+            logger.warning("No usable validation splits were created; keeping all biological DMPs.")
+            self._check_centroid_self_classification(sorted_df)
             return sorted_df
 
-        # Unpack validation data (now includes calibration split)
-        X_calib, y_calib, X_test, y_test, val_positions, val_contexts = validation_data
-
-        # Restrict to DMPs that have enough coverage in the TEST set so BA has signal (not all NaN -> 0.5)
-        coverage_in_test = np.sum(~np.isnan(X_test), axis=0)
-        n_test = X_test.shape[0]
-        # Require at least 10% of test samples per position (or config min), so subset has usable non-NaN fraction
-        min_by_fraction = max(1, int(np.ceil(0.1 * n_test)))
+        # Restrict to DMPs with enough coverage across the held-out evaluation splits.
+        coverage_in_eval = np.zeros(X_val.shape[1], dtype=np.int64)
+        total_test_rows = 0
+        for _, test_indices in splits:
+            coverage_in_eval += np.sum(~np.isnan(X_val[test_indices]), axis=0)
+            total_test_rows += len(test_indices)
+        min_by_fraction = max(1, int(np.ceil(0.1 * max(total_test_rows, 1) / max(len(splits), 1))))
         min_coverage = max(min_by_fraction, self.config.min_validation_coverage_per_position)
-        keep_mask = coverage_in_test >= min_coverage
+        keep_mask = coverage_in_eval >= (min_coverage * max(len(splits), 1))
         n_keep = int(np.sum(keep_mask))
         n_dropped = len(keep_mask) - n_keep
         if n_dropped > 0 and n_keep > 0:
             sorted_df = sorted_df.loc[keep_mask].reset_index(drop=True)
-            X_calib = X_calib[:, keep_mask]
-            X_test = X_test[:, keep_mask]
+            X_val = X_val[:, keep_mask]
             val_positions = val_positions[keep_mask]
             val_contexts = val_contexts[keep_mask]
             logger.info(
-                "Restricted to %s DMPs with ≥%s test-sample(s) per position (dropped %s with no test coverage) so BA can be computed.",
+                "Restricted to %s DMPs with mean held-out coverage ≥%s sample(s) per split (dropped %s low-coverage positions).",
                 n_keep, min_coverage, n_dropped
             )
         elif n_keep == 0:
@@ -1869,6 +1990,7 @@ class MethylDetector:
 
         # Sanity check: centroid profiles at DMP positions should classify as their own class (prob ~1)
         self._check_centroid_self_classification(sorted_df)
+        prefix_cache = self._build_validation_prefix_cache(sorted_df, X_val, y_val, splits)
 
         selected_dmps_df = sorted_df
         final_result = None
@@ -1890,9 +2012,7 @@ class MethylDetector:
                     sorted_df,
                     max_k=max_k,
                     initial_k=initial_k,
-                    X_calib=X_calib, y_calib=y_calib,
-                    X_test=X_test, y_test=y_test,
-                    val_positions=val_positions, val_contexts=val_contexts
+                    prefix_cache=prefix_cache,
                 )
 
                 optimized_k = int(max(1, min(optimized_k, max_k))) if max_k > 0 else 0
@@ -1913,20 +2033,12 @@ class MethylDetector:
                     sorted_df,
                     initial_k=initial_k,
                     max_k=max_k,
-                    X_calib=X_calib, y_calib=y_calib,
-                    X_test=X_test, y_test=y_test,
-                    val_positions=val_positions, val_contexts=val_contexts
+                    prefix_cache=prefix_cache,
                 )
 
                 optimized_k = int(max(1, min(optimized_k, max_k))) if max_k > 0 else 0
                 selected_dmps_df = sorted_df.iloc[:optimized_k].copy()
-
-                final_result = self._validate_classifier_subset(
-                    selected_dmps_df,
-                    X_calib, y_calib,
-                    X_test, y_test,
-                    val_positions, val_contexts
-                )
+                final_result = self._evaluate_prefix_subset(prefix_cache, optimized_k)
                 self._final_validation_results = final_result
 
                 cm = final_result['confusion_matrix']
@@ -1945,20 +2057,12 @@ class MethylDetector:
                     sorted_df,
                     target_ba=target_ba,
                     max_k=max_k,
-                    X_calib=X_calib, y_calib=y_calib,
-                    X_test=X_test, y_test=y_test,
-                    val_positions=val_positions, val_contexts=val_contexts
+                    prefix_cache=prefix_cache,
                 )
 
                 optimized_k = int(max(1, min(optimized_k, max_k))) if max_k > 0 else 0
                 selected_dmps_df = sorted_df.iloc[:optimized_k].copy()
-
-                final_result = self._validate_classifier_subset(
-                    selected_dmps_df,
-                    X_calib, y_calib,
-                    X_test, y_test,
-                    val_positions, val_contexts
-                )
+                final_result = self._evaluate_prefix_subset(prefix_cache, optimized_k)
                 self._final_validation_results = final_result
 
                 cm = final_result['confusion_matrix']
@@ -1977,14 +2081,27 @@ class MethylDetector:
                 target_ba = self.config.target_balanced_accuracy
                 if target_ba is not None and final_result.get('balanced_accuracy', 0) < target_ba:
                     selected_dmps_df = sorted_df.copy()
+                    final_result = self._evaluate_prefix_subset(prefix_cache, len(sorted_df))
                     logger.info(
                         "Target BA %.3f not achieved; exporting all %s DMPs to improve matching with future samples.",
                         target_ba, len(sorted_df)
                     )
-                # Store Platt calibrator from validation for inclusion in saved model (when enable_platt_calibration)
-                if 'platt_calibrator' in final_result:
-                    self._platt_calibrator_bytes = final_result['platt_calibrator']
-                    self._platt_calibrator_scaler_bytes = final_result.get('platt_calibrator_scaler')
+                self._final_validation_results = final_result
+
+                # Fit one final Platt calibrator on the first holdout split only.
+                first_calib_idx, first_test_idx = splits[0]
+                calibrated_result = self._validate_classifier_subset(
+                    selected_dmps_df,
+                    X_val[first_calib_idx],
+                    y_val[first_calib_idx],
+                    X_val[first_test_idx],
+                    y_val[first_test_idx],
+                    val_positions,
+                    val_contexts,
+                )
+                if 'platt_calibrator' in calibrated_result:
+                    self._platt_calibrator_bytes = calibrated_result['platt_calibrator']
+                    self._platt_calibrator_scaler_bytes = calibrated_result.get('platt_calibrator_scaler')
                 else:
                     self._platt_calibrator_bytes = None
                     self._platt_calibrator_scaler_bytes = None
@@ -2051,22 +2168,24 @@ class MethylDetector:
                 return None
             
             X_val, y_val, val_positions, val_contexts = real_val_data
-            
-            # Use all samples for validation (no need to split since we already optimized)
-            X_calib = X_val[:int(len(X_val) * 0.7)]
-            y_calib = y_val[:int(len(y_val) * 0.7)]
-            X_test = X_val[int(len(X_val) * 0.7):]
-            y_test = y_val[int(len(y_val) * 0.7):]
-            
-            # Validate
-            result = self._validate_classifier_subset(
-                selected_dmps_df,
-                X_calib, y_calib,
-                X_test, y_test,
-                val_positions, val_contexts
-            )
-            
-            return result
+            splits = self._prepare_validation_splits(y_val, require_holdout=True)
+            if not splits:
+                return None
+
+            split_results = []
+            for calib_idx, test_idx in splits:
+                split_results.append(
+                    self._validate_classifier_subset(
+                        selected_dmps_df,
+                        X_val[calib_idx],
+                        y_val[calib_idx],
+                        X_val[test_idx],
+                        y_val[test_idx],
+                        val_positions,
+                        val_contexts,
+                    )
+                )
+            return self._merge_validation_results(split_results)
             
         except Exception as e:
             logger.warning(f"Failed to validate on real samples: {e}")
@@ -2077,7 +2196,7 @@ class MethylDetector:
         dmps_df: pd.DataFrame,
         class1_paths: List[str],
         class2_paths: List[str],
-        allow_mock: bool = True
+        allow_mock: bool = False
     ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
         """
         Implementation of validation sample loading (extracted for reuse).
@@ -2140,15 +2259,16 @@ class MethylDetector:
             (int(dmp_positions[i]), str(dmp_contexts[i])): i
             for i in range(n_positions)
         }
-        for i in range(X_extracted.shape[0]):
-            for j in range(X_extracted.shape[1]):
-                pos = all_positions_extracted[j]
-                ctx = all_contexts_extracted[j]
-                key = (int(pos), str(ctx))
-                if key in dmp_key_to_idx:
-                    dmp_idx = dmp_key_to_idx[key]
-                    if not np.isnan(X_extracted[i, j]):
-                        X[i, dmp_idx] = X_extracted[i, j]
+        extracted_to_dmp = np.asarray(
+            [
+                dmp_key_to_idx.get((int(pos), str(ctx)), -1)
+                for pos, ctx in zip(all_positions_extracted, all_contexts_extracted)
+            ],
+            dtype=np.int64,
+        )
+        valid_cols = extracted_to_dmp >= 0
+        if np.any(valid_cols):
+            X[:, extracted_to_dmp[valid_cols]] = X_extracted[:, valid_cols]
         
         # Set labels
         for i, (_, label) in enumerate(all_sample_paths):
@@ -2230,12 +2350,7 @@ class MethylDetector:
         self,
         sorted_df: pd.DataFrame,
         max_k: int,
-        X_calib: np.ndarray,
-        y_calib: np.ndarray,
-        X_test: np.ndarray,
-        y_test: np.ndarray,
-        val_positions: np.ndarray,
-        val_contexts: np.ndarray,
+        prefix_cache: ValidationPrefixCache,
         initial_k: Optional[int] = None
     ) -> Tuple[int, dict]:
         """
@@ -2250,8 +2365,7 @@ class MethylDetector:
         Args:
             sorted_df: DMPs sorted by biological importance.
             max_k: Maximum number of DMPs available.
-            X_calib, y_calib, X_test, y_test: Validation matrices and labels.
-            val_positions, val_contexts: Position/context arrays for mapping.
+            prefix_cache: Cached repeated-holdout ECDF validation state.
             initial_k: Optional heuristic starting point for exploration.
 
         Returns:
@@ -2259,12 +2373,7 @@ class MethylDetector:
         """
         if max_k <= 0:
             logger.warning("FeatureCuts received empty candidate set; returning k=0")
-            empty_result = self._validate_classifier_subset(
-                sorted_df.iloc[:0],
-                X_calib, y_calib,
-                X_test, y_test,
-                val_positions, val_contexts
-            )
+            empty_result = self._default_validation_result()
             return 0, empty_result
 
         min_k = 1 if max_k > 0 else 0
@@ -2384,13 +2493,7 @@ class MethylDetector:
                 detailed_results.append(None)
                 continue
             
-            subset_df = sorted_df.iloc[:k]
-            result = self._validate_classifier_subset(
-                subset_df,
-                X_calib, y_calib,
-                X_test, y_test,
-                val_positions, val_contexts
-            )
+            result = self._evaluate_prefix_subset(prefix_cache, k)
             ba_results[i] = result['balanced_accuracy']
             detailed_results.append(result)
             
@@ -2471,13 +2574,7 @@ class MethylDetector:
                         refinement_results.append(None)
                         continue
                     
-                    subset_df = sorted_df.iloc[:k]
-                    result = self._validate_classifier_subset(
-                        subset_df,
-                        X_calib, y_calib,
-                        X_test, y_test,
-                        val_positions, val_contexts
-                    )
+                    result = self._evaluate_prefix_subset(prefix_cache, k)
                     refinement_ba[i] = result['balanced_accuracy']
                     refinement_results.append(result)
                     
@@ -2527,7 +2624,7 @@ class MethylDetector:
         if np.isclose(max_ba, 0.5, atol=1e-4):
             logger.warning(
                 "Optimization achieved BA≈0.5 (coin toss). Check that validation data has both classes in test set "
-                "and that DMP alpha/beta parameters are valid; consider trying optimization_method='binary_search' or 'bayesian_optimization'."
+                "and that held-out samples overlap the DMP positions; consider trying optimization_method='binary_search' or 'bayesian_optimization'."
             )
         top5_indices = np.argsort(-ba_results)[:5]
         if top5_indices.size > 0:
@@ -2539,12 +2636,7 @@ class MethylDetector:
         sorted_df: pd.DataFrame,
         target_ba: float,
         max_k: int,
-        X_calib: np.ndarray,
-        y_calib: np.ndarray,
-        X_test: np.ndarray,
-        y_test: np.ndarray,
-        val_positions: np.ndarray,
-        val_contexts: np.ndarray
+        prefix_cache: ValidationPrefixCache,
     ) -> int:
         """
         Logarithmic binary search to find minimal k achieving target balanced accuracy.
@@ -2574,10 +2666,7 @@ class MethylDetector:
 
         # Test geometric points to find where BA starts to stabilize
         for k in geometric_k:
-            subset_df = sorted_df.iloc[:k]
-            result = self._validate_classifier_subset(
-                subset_df, X_calib, y_calib, X_test, y_test, val_positions, val_contexts
-            )
+            result = self._evaluate_prefix_subset(prefix_cache, k)
 
             current_ba = result['balanced_accuracy']
             logger.info(f"  [geom] k={k:,} → BA={current_ba:.4f}")
@@ -2610,10 +2699,7 @@ class MethylDetector:
             mid = (left + right) // 2
 
             # Test current k
-            subset_df = sorted_df.iloc[:mid]
-            result = self._validate_classifier_subset(
-                subset_df, X_calib, y_calib, X_test, y_test, val_positions, val_contexts
-            )
+            result = self._evaluate_prefix_subset(prefix_cache, mid)
 
             current_ba = result['balanced_accuracy']
             logger.info(f"  [{iterations}] k={mid:,} → BA={current_ba:.4f}")
@@ -2629,10 +2715,7 @@ class MethylDetector:
         # Check if we achieved the target with the final best_k
         if best_k == max_k:
             # Test the maximum k to see what BA we actually achieve
-            subset_df = sorted_df.iloc[:max_k]
-            final_result = self._validate_classifier_subset(
-                subset_df, X_calib, y_calib, X_test, y_test, val_positions, val_contexts
-            )
+            final_result = self._evaluate_prefix_subset(prefix_cache, max_k)
             actual_ba = final_result['balanced_accuracy']
 
             if actual_ba < target_ba:
@@ -2646,12 +2729,7 @@ class MethylDetector:
         self,
         sorted_df: pd.DataFrame,
         max_k: int,
-        X_calib: np.ndarray,
-        y_calib: np.ndarray,
-        X_test: np.ndarray,
-        y_test: np.ndarray,
-        val_positions: np.ndarray,
-        val_contexts: np.ndarray,
+        prefix_cache: ValidationPrefixCache,
         initial_k: Optional[int] = None
     ) -> int:
         """
@@ -2663,8 +2741,7 @@ class MethylDetector:
         Args:
             sorted_df: Sorted DMPs by importance
             max_k: Maximum k to consider
-            X_calib, y_calib, X_test, y_test: Validation data
-            val_positions, val_contexts: Position/context arrays
+            prefix_cache: Cached repeated-holdout ECDF validation state
             initial_k: Optional heuristic starting point
 
         Returns:
@@ -2693,10 +2770,7 @@ class MethylDetector:
             if k in evaluation_cache:
                 return -evaluation_cache[k]
 
-            test_subset = sorted_df.iloc[:k]
-            result = self._validate_classifier_subset(
-                test_subset, X_calib, y_calib, X_test, y_test, val_positions, val_contexts
-            )
+            result = self._evaluate_prefix_subset(prefix_cache, k)
             ba = result['balanced_accuracy']
             evaluation_cache[k] = ba
 
@@ -2937,14 +3011,13 @@ class MethylDetector:
             csv_path = output_dir / f"dmps-{self.chromosome}.csv"
         
         # Standard column order for biologists: identity, sample counts, means/variances, overlap, effect, stats, distribution
-        # dist: 1=Beta, 2=Normal, 3=Beta-Binomial, 4=Beta-Mixture (see methyl_utils.methyl_centroid_pair.DIST_*)
         STANDARD_EXPORT_COLS = [
             'chromosome', 'context', 'position',
             'n1', 'n2', 'mean1', 'mean2', 'variance1', 'variance2',
             'overlap', 'delta_mean', 'delta_sign', 'effect_size',
             'p_value', 'q_value', 'dist', 'dist_name',
         ]
-        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture', 5: 'ECDF'}
+        DIST_NAMES = {5: 'ECDF'}
         # Optional / distribution-specific columns
         EXTRA_EXPORT_COLS = [
             'context_weight', 'alpha1', 'beta1', 'alpha2', 'beta2',
@@ -2978,10 +3051,10 @@ class MethylDetector:
     
     def _save_unified_model(self, classifier, selected_dmps_df: pd.DataFrame):
         """
-        Save unified BetaClassifier model with strongly-typed dmpDF.
+        Save a unified ECDFClassifier model with strongly-typed dmpDF.
         
         Args:
-            classifier: Classifier instance (ignored, we create BetaClassifier from dmpDF)
+            classifier: Classifier instance (ignored, we rebuild the ECDFClassifier from dmpDF)
             selected_dmps_df: DataFrame with selected DMPs (final DMPs used by classifier)
         """
         if selected_dmps_df is None or len(selected_dmps_df) == 0:
@@ -2993,63 +3066,12 @@ class MethylDetector:
         ctx_str = ",".join(sorted(self.config.contexts)) if self.config.contexts else "unknown"
         model_path = output_dir / f"classifier-{self.chromosome}-{ctx_str}.pkl"
         
-        # Create strongly-typed dmpDF DataFrame
-        # Use effect_size (single biological importance measure)
-        if 'effect_size' in selected_dmps_df.columns:
-            weights = selected_dmps_df['effect_size'].values.astype(np.float64)
-            logger.debug("Using 'effect_size' for saved classifier weights")
-        elif 'importance' in selected_dmps_df.columns:
-            weights = selected_dmps_df['importance'].values.astype(np.float64)
-            logger.debug("Using 'importance' for weights (fallback); will bound")
-        elif 'context_weight' in selected_dmps_df.columns:
-            weights = selected_dmps_df['context_weight'].values.astype(np.float64)
-        else:
-            weights = np.ones(len(selected_dmps_df), dtype=np.float64)
-        weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1e-6)
-        if weights.size == 0:
-            logger.warning("No selected DMPs (zero weights); skipping classifier model save")
-            return
-        w_max = float(np.max(weights))
-        if w_max > 1e-6:
-            weights = np.clip(weights / w_max, 1e-6, 1.0)
-        
-        dmpDF = pd.DataFrame({
-            'pos': selected_dmps_df['position'].values.astype(np.int64),
-            'weight': weights.astype(np.float64),
-            'context': selected_dmps_df['context'].values if 'context' in selected_dmps_df.columns else None,
-            'delta_sign': selected_dmps_df['delta_sign'].values if 'delta_sign' in selected_dmps_df.columns else None,
-            'mean1': selected_dmps_df['mean1'].values if 'mean1' in selected_dmps_df.columns else None,
-            'mean2': selected_dmps_df['mean2'].values if 'mean2' in selected_dmps_df.columns else None,
-        })
-        dmpDF = dmpDF.dropna(axis=1, how='all')
-
         try:
-            bin_edges_s, bc1_s, bc2_s = self._extract_bin_counts_for_dmps(selected_dmps_df)
-            ecdf_classifier = ECDFClassifier.from_dataframe(
-                dmpDF,
-                bin_edges=bin_edges_s,
-                bin_counts_c1=bc1_s,
-                bin_counts_c2=bc2_s,
-                temperature=self.config.temperature,
-            )
-            classifier_label = "ECDFClassifier"
-            the_classifier = ecdf_classifier
-        except Exception as _e:
-            logger.warning("ECDFClassifier construction failed for model save: %s; falling back to BetaClassifier", _e)
-            dmpDF_beta = pd.DataFrame({
-                'pos': selected_dmps_df['position'].values.astype(np.int64),
-                'alpha1': selected_dmps_df['alpha1'].values.astype(np.float64),
-                'beta1': selected_dmps_df['beta1'].values.astype(np.float64),
-                'alpha2': selected_dmps_df['alpha2'].values.astype(np.float64),
-                'beta2': selected_dmps_df['beta2'].values.astype(np.float64),
-                'weight': weights.astype(np.float64),
-            })
-            beta_classifier = BetaClassifier.from_dataframe(dmpDF_beta, min_sample_coverage=self.config.min_sample_coverage, coverage_weighting=self.config.classifier_coverage_weighting)
-            mixture_attached = self._attach_bmm_mixtures(beta_classifier, selected_dmps_df)
-            if mixture_attached:
-                logger.info("Attached BMM mixtures to classifier (hybrid Beta/BMM)")
-            classifier_label = "BetaMixtureClassifier" if mixture_attached else "BetaClassifier"
-            the_classifier = beta_classifier
+            the_classifier, dmpDF = self._build_ecdf_classifier(selected_dmps_df)
+        except Exception as exc:
+            logger.error("Failed to build ECDFClassifier for model save: %s", exc)
+            return
+        classifier_label = "ECDFClassifier"
 
         # Create model package
         import pickle
@@ -3063,15 +3085,13 @@ class MethylDetector:
             'metadata': {
                 'version': '2.0.0',
                 'classifier_type': classifier_label,
-                'bmm_mixture_attached': locals().get('mixture_attached', False),
+                'bmm_mixture_attached': False,
                 'context': ctx_str,
                 'config': self.config.model_dump(),
                 'trimmed_percentile_low': self.config.trimmed_percentile_low,
                 'trimmed_percentile_high': self.config.trimmed_percentile_high,
             }
         }
-        if locals().get('mixture_attached', False) and hasattr(self, "_bmm_centroid_files"):
-            model_package["metadata"]["bmm_centroid_files"] = self._bmm_centroid_files
 
         # Include fitted Platt calibrator when enabled (MethylClassifier can use it for better-calibrated probabilities)
         if self.config.enable_platt_calibration and getattr(self, '_platt_calibrator_bytes', None) is not None:
@@ -3133,44 +3153,62 @@ class MethylDetector:
         bc1_rows: Optional[np.ndarray] = None
         bc2_rows: Optional[np.ndarray] = None
 
-        # Group by (chromosome, context) to avoid redundant H5 loads
+        # Group by (chromosome, context) and cache centroid histograms across calls.
         unique_pairs = list(dict.fromkeys(zip(chroms, contexts)))
         for chrom, ctx in unique_pairs:
             mask = (chroms == chrom) & (contexts == ctx)
             if not np.any(mask):
                 continue
 
-            c1_path = Path(self.config.centroid1_dir) / f"{chrom}-{ctx}.h5"
-            c2_path = Path(self.config.centroid2_dir) / f"{chrom}-{ctx}.h5"
+            cache_key = (str(chrom), str(ctx))
+            cached = self._centroid_bin_cache.get(cache_key)
+            if cached is None:
+                c1_path = Path(self.config.centroid1_dir) / f"{chrom}-{ctx}.h5"
+                c2_path = Path(self.config.centroid2_dir) / f"{chrom}-{ctx}.h5"
 
-            if not c1_path.exists() or not c2_path.exists():
-                logger.warning(
-                    "_extract_bin_counts_for_dmps: centroid files not found for "
-                    "%s-%s; rows will use zero histograms", chrom, ctx
-                )
-                continue
+                if not c1_path.exists() or not c2_path.exists():
+                    logger.warning(
+                        "_extract_bin_counts_for_dmps: centroid files not found for %s-%s; rows will use zero histograms",
+                        chrom,
+                        ctx,
+                    )
+                    continue
 
-            c1 = load_from_h5(c1_path)
-            c2 = load_from_h5(c2_path)
+                c1 = load_from_h5(c1_path)
+                c2 = load_from_h5(c2_path)
 
-            bs1 = getattr(c1, "binned_stats", None)
-            bs2 = getattr(c2, "binned_stats", None)
-            if not bs1 or "bin_counts" not in bs1 or not bs2 or "bin_counts" not in bs2:
-                logger.warning(
-                    "_extract_bin_counts_for_dmps: binned_stats missing for %s-%s",
-                    chrom, ctx,
-                )
-                continue
+                bs1 = getattr(c1, "binned_stats", None)
+                bs2 = getattr(c2, "binned_stats", None)
+                if not bs1 or "bin_counts" not in bs1 or not bs2 or "bin_counts" not in bs2:
+                    logger.warning(
+                        "_extract_bin_counts_for_dmps: binned_stats missing for %s-%s",
+                        chrom,
+                        ctx,
+                    )
+                    continue
 
-            be1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
+                cached = {
+                    "bin_edges": np.asarray(bs1["bin_edges"], dtype=np.float64),
+                    "pos1": np.asarray(c1.pos.values, dtype=np.uint32),
+                    "pos2": np.asarray(c2.pos.values, dtype=np.uint32),
+                    "bc1": np.asarray(bs1["bin_counts"], dtype=np.float64),
+                    "bc2": np.asarray(bs2["bin_counts"], dtype=np.float64),
+                }
+                self._centroid_bin_cache[cache_key] = cached
+
+            be1 = cached["bin_edges"]
             if bin_edges_ref is None:
                 n_bins = int(be1.shape[0]) - 1
                 bin_edges_ref = be1
                 bc1_rows = np.zeros((n_dmps, n_bins), dtype=np.float64)
                 bc2_rows = np.zeros((n_dmps, n_bins), dtype=np.float64)
+            elif be1.shape != bin_edges_ref.shape or not np.allclose(be1, bin_edges_ref):
+                raise ValueError(
+                    "_extract_bin_counts_for_dmps: inconsistent centroid bin_edges across contexts."
+                )
 
-            pos1 = np.asarray(c1.pos.values, dtype=np.uint32)
-            pos2 = np.asarray(c2.pos.values, dtype=np.uint32)
+            pos1 = cached["pos1"]
+            pos2 = cached["pos2"]
             group_positions = dmp_positions[mask]
 
             idx1 = np.searchsorted(pos1, group_positions, side="left")
@@ -3180,8 +3218,8 @@ class MethylDetector:
             idx1 = np.clip(idx1, 0, len(pos1) - 1)
             idx2 = np.clip(idx2, 0, len(pos2) - 1)
 
-            bc1_rows[mask] = np.asarray(bs1["bin_counts"], dtype=np.float64)[idx1]
-            bc2_rows[mask] = np.asarray(bs2["bin_counts"], dtype=np.float64)[idx2]
+            bc1_rows[mask] = cached["bc1"][idx1]
+            bc2_rows[mask] = cached["bc2"][idx2]
 
         if bin_edges_ref is None:
             raise ValueError(
@@ -3208,15 +3246,18 @@ class MethylDetector:
         """
         # Compute per-context statistics
         comparison_stats = []
+        total_statistical_dmps = int(dmps_df["statistical_dmp"].sum()) if "statistical_dmp" in dmps_df.columns else len(dmps_df)
+        selected_confirmed_dmps = int(bio_dmps_df["statistical_dmp"].sum()) if "statistical_dmp" in bio_dmps_df.columns else len(bio_dmps_df)
         for context in self.config.contexts:
             ctx_dmps = dmps_df[dmps_df['context'] == context]
             ctx_bio = bio_dmps_df[bio_dmps_df['context'] == context]
             
             if len(ctx_dmps) > 0:
+                ctx_statistical = int(ctx_dmps["statistical_dmp"].sum()) if "statistical_dmp" in ctx_dmps.columns else len(ctx_dmps)
                 stats = ComparisonStats(
                     comparison_name=f"{self.chromosome}-{context}",
                     total_positions=len(ctx_dmps),
-                    statistical_dmps=len(ctx_dmps),
+                    statistical_dmps=ctx_statistical,
                     biological_dmps=len(ctx_bio),
                     processing_time_seconds=0.0,  # TODO: track per-context timing
                     gpu_used=self.gpu_config.GPU_AVAILABLE
@@ -3236,9 +3277,9 @@ class MethylDetector:
 
         result = MethylModelerResult(
             biologically_significant_dmps_df=bio_dmps_df,
-            total_statistical_dmps=len(dmps_df),
+            total_statistical_dmps=total_statistical_dmps,
             total_biological_dmps=len(bio_dmps_df),
-            biological_retention_rate=len(bio_dmps_df) / max(1, len(dmps_df)),
+            biological_retention_rate=selected_confirmed_dmps / max(1, total_statistical_dmps),
             comparison_stats=comparison_stats,
             timestamp=datetime.now().isoformat(),
             version="2.0.0-multi-context",
@@ -3464,13 +3505,13 @@ class MethylDetector:
         logger.info(f"📊 Chromosome/context breakdown saved: {chrom_html}")
 
     def _export_selected_dmps_csv(self, biological_dmps_df: pd.DataFrame) -> None:
-        """Export selected DMPs to CSV with standard columns (n1, n2, variances, overlap, effect_size, distribution)."""
+        """Export selected DMPs to CSV with standard columns (n1, n2, variances, overlap, effect_size, ECDF distribution)."""
         if biological_dmps_df.empty:
             logger.warning("No biological DMPs to export")
             return
 
         export_df = biological_dmps_df.copy()
-        DIST_NAMES = {1: 'Beta', 2: 'Normal', 3: 'Beta-Binomial', 4: 'Beta-Mixture', 5: 'ECDF'}
+        DIST_NAMES = {5: 'ECDF'}
         if 'dist' in export_df.columns:
             export_df['dist_name'] = export_df['dist'].map(DIST_NAMES).fillna('Unknown').astype(str)
         if 'delta_sign' not in export_df.columns and 'mean1' in export_df.columns and 'mean2' in export_df.columns:
@@ -3536,13 +3577,26 @@ class MethylDetector:
         stats = ComparisonStats(
             comparison_name=comp_name,
             total_positions=getattr(self, 'total_positions', len(dmp_df)),
-            statistical_dmps=getattr(self, 'statistical_dmps_count', len(dmp_df)),
+            statistical_dmps=getattr(
+                self,
+                'statistical_dmps_count',
+                int(dmp_df["statistical_dmp"].sum()) if isinstance(dmp_df, pd.DataFrame) and "statistical_dmp" in dmp_df.columns else len(dmp_df),
+            ),
             biological_dmps=len(biological_dmps_df) if biological_dmps_df is not None else 0,
             processing_time_seconds=getattr(self, 'processing_time_seconds', 0.0),
             gpu_used=self.gpu_config.GPU_AVAILABLE
         )
         comparison_stats = [stats]
-        total_statistical_dmps = getattr(self, 'statistical_dmps_count', len(dmp_df))
+        total_statistical_dmps = getattr(
+            self,
+            'statistical_dmps_count',
+            int(dmp_df["statistical_dmp"].sum()) if isinstance(dmp_df, pd.DataFrame) and "statistical_dmp" in dmp_df.columns else len(dmp_df),
+        )
+        selected_confirmed_dmps = (
+            int(biological_dmps_df["statistical_dmp"].sum())
+            if biological_dmps_df is not None and "statistical_dmp" in biological_dmps_df.columns
+            else (len(biological_dmps_df) if biological_dmps_df is not None else 0)
+        )
 
         config_summary = self.config.model_dump()
         if hasattr(self, "_bmm_summary") and self._bmm_summary:
@@ -3552,7 +3606,7 @@ class MethylDetector:
             biologically_significant_dmps_df=biological_dmps_df,
             total_statistical_dmps=total_statistical_dmps,
             total_biological_dmps=len(biological_dmps_df) if biological_dmps_df is not None else 0,
-            biological_retention_rate=len(biological_dmps_df) / max(1, total_statistical_dmps) if biological_dmps_df is not None else 0.0,
+            biological_retention_rate=selected_confirmed_dmps / max(1, total_statistical_dmps) if biological_dmps_df is not None else 0.0,
             comparison_stats=comparison_stats,
             timestamp=datetime.now().isoformat(),
             version="2.0.0",

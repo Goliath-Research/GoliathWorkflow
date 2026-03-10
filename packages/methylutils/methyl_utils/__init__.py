@@ -562,6 +562,8 @@ from .statistical_tests import (
     PVALUE_AGGREGATION_METHODS,
     discrete_overlap_from_bin_counts,
     welch_mean_test,
+    mann_whitney_from_bin_counts,
+    dl_heterogeneity,
     ecdf_overlap_integral,
     effect_size_from_components,
     ecdf_effect_size,

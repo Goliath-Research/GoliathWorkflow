@@ -197,14 +197,14 @@ class TestCentroid:
             
             # Initialize MethylCentroid
             original_samples = [str(sample1_file.parent), str(sample2_file.parent)]
-            new_samples = [str(sample3_file.parent)]
+            add_samples = [str(sample3_file.parent)]
             
             methyl_centroid = MethylCentroid(
                 samples=original_samples,
                 chrom="1",
                 ctx="CG",
                 output_dir=output_dir,
-                new_samples=new_samples,
+                add_samples=add_samples,
                 min_coverage=4
             )
             

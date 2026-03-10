@@ -1,19 +1,9 @@
 """
-MethylCentroidPair: Mathematical Comparison of Two Methylation Centroids
+MethylCentroidPair: ECDF-first comparison of two methylation centroids.
 
-This module provides the core mathematical operations for comparing two methylation
-centroids. It encapsulates the statistical analysis logic that can be reused for:
-
-1. DMP detection (MethylDetector)
-2. Multi-centroid classification (MethylCentroids)
-3. Clustering analysis (MethylCluster)
-4. Differential methylation analysis
-
-The class provides a clean API for centroid-to-centroid comparisons while leveraging
-the full power of MethylUtils for GPU acceleration and statistical computations.
-
-Author: MethylDetector Team
-Version: 1.0.0
+This module owns the low-level per-position comparison used by MethylDetector:
+coverage filtering, statistical gating, approximate overlap from bin counts, and
+the initial effect-size signal that is later rescored with continuous ECDF overlap.
 """
 
 from typing import Tuple, Dict, Any, List, Union, Optional, Callable
@@ -32,7 +22,6 @@ from .gpu_detection import (
 )
 from .memory_manager import get_memory_manager, force_gpu_cleanup
 from .metric_validations import validate_methylation_data
-from .metrics_core import compute_bhattacharyya_distance
 from .performance_profiler import (
     get_performance_profiler,
     start_performance_monitoring,
@@ -42,6 +31,8 @@ from .statistical_tests import (
     storey_qvalues,
     discrete_overlap_from_bin_counts,
     welch_mean_test,
+    mann_whitney_from_bin_counts,
+    dl_heterogeneity,
     effect_size_from_components,
 )
 from methyl_utils.logging_utils import setup_module_logging
@@ -56,11 +47,7 @@ DataFrameType = Union[pd.DataFrame, Any]  # Any for cuDF when available
 # Constants
 BD_CAP = 20.0  # Cap Bhattacharyya Distance to prevent overflow when converting to BC (exp(-20) ≈ 0)
 
-# Distribution identifiers
-DIST_BETA = 1
-DIST_NORMAL = 2
-DIST_BETA_BINOM = 3
-DIST_BETA_MIXTURE = 4
+# ECDF is the only supported centroid-comparison distribution.
 DIST_ECDF = 5
 
 # Simplified dtype for centroid comparison results
@@ -83,6 +70,8 @@ CENTROID_COMPARISON_DTYPE = np.dtype([
     ('n2', np.uint32),
     ('variance1', np.float32),
     ('variance2', np.float32),
+    ('tau2_1', np.float32),               # Between-sample heterogeneity estimate, group 1
+    ('tau2_2', np.float32),               # Between-sample heterogeneity estimate, group 2
     ('effect_size', np.float32),          # Initial biological importance (overwritten by continuous ECDF stage)
     ('overlap_approx', np.float32),       # Discrete overlap from bin counts (NaN when binned_stats not available)
 ])
@@ -90,23 +79,16 @@ CENTROID_COMPARISON_DTYPE = np.dtype([
 
 class MethylCentroidPair:
     """
-    Simplified mathematical comparison engine for two methylation centroids.
+    ECDF-first mathematical comparison engine for two methylation centroids.
 
-    This class encapsulates the core statistical operations needed to compare
-    two methylation centroids and identify differentially methylated positions (DMPs).
-    It provides essential metrics that MethylDetector uses for DMP filtering and ranking.
+    The runtime path is intentionally narrow:
+    - centroids must provide matching `binned_stats`
+    - overlap approximation comes from discrete bin-count overlap
+    - the statistical gate is Welch or histogram-derived Mann-Whitney
+    - the returned `effect_size` is an approximate, pre-ECDF score
 
-    Key features:
-    - Statistical DMP detection using likelihood ratio tests  
-    - Beta parameter estimation (MLE)
-    - Bhattacharyya Distance computation
-    - FDR correction (Storey's q-value method)
-    - GPU acceleration support via MethylUtils
-    - Memory-efficient batch processing
-    - Always returns pandas DataFrame
-    
-    Note: Biological importance and weights are computed by MethylDetector,
-    not here. This keeps the separation of concerns clean.
+    MethylDetector later recomputes the final overlap/effect_size on the reduced
+    DMP set using continuous ECDF views.
     """
 
     def __init__(
@@ -114,18 +96,8 @@ class MethylCentroidPair:
         centroid1: Optional[MethylCentroid] = None,
         centroid2: Optional[MethylCentroid] = None,
         min_coverage: int = 4,
-        distribution: str = "auto",
-        delta_mean_mode: str = "mean",
-        overlap_mode: str = "beta",
-        min_samples_normal: int = 6,
-        min_samples_beta: int = 10,
-        min_coverage_binom: int = 10,
-        overdispersion_threshold: float = 1.5,
-        enable_mixture: bool = True,
-        max_N_for_ecdf: int = 30,
+        statistical_test: str = "welch",
         ecdf_ks_grid_size: int = 256,
-        bmm_centroid1: Any = None,
-        bmm_centroid2: Any = None,
     ):
         self.centroid1 = centroid1
         self.centroid2 = centroid2
@@ -160,35 +132,13 @@ class MethylCentroidPair:
         self.performance_profiler = get_performance_profiler()
 
         self.min_coverage = int(min_coverage)
-
-        # Distribution selection parameters
-        self.distribution = distribution
-        self.min_samples_normal = min_samples_normal
-        self.min_samples_beta = min_samples_beta
-        self.min_coverage_binom = min_coverage_binom
-        self.overdispersion_threshold = overdispersion_threshold
-        self.enable_mixture = enable_mixture
-        self.max_N_for_ecdf = int(max_N_for_ecdf)
+        self.statistical_test = str(statistical_test).strip().lower()
+        if self.statistical_test not in {"welch", "mann_whitney"}:
+            raise ValueError(
+                f"Unsupported statistical_test '{statistical_test}'. "
+                "Use 'welch' or 'mann_whitney'."
+            )
         self.ecdf_ks_grid_size = int(ecdf_ks_grid_size)
-
-        # Metric modes for delta_mean/overlap calculations
-        self.delta_mean_mode = self._normalize_metric_mode(
-            delta_mean_mode, default="mean", allowed={"mean", "beta", "normal", "auto", "legacy"}
-        )
-        if self.delta_mean_mode == "legacy":
-            self.delta_mean_mode = "mean"
-        self.overlap_mode = self._normalize_metric_mode(
-            overlap_mode, default="beta", allowed={"beta", "normal", "auto", "legacy"}
-        )
-        if self.overlap_mode == "legacy":
-            self.overlap_mode = "beta"
-
-        # Optional Beta Mixture centroids (mask-based)
-        self._bmm_input1 = bmm_centroid1
-        self._bmm_input2 = bmm_centroid2
-        self._bmm_map1: Optional[Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]]] = None
-        self._bmm_map2: Optional[Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]]] = None
-        self._bmm_positions_common: Optional[np.ndarray] = None
 
     @classmethod
     def load_and_align(cls, path1: Union[str, Path], path2: Union[str, Path], min_coverage: int = 4) -> Tuple[MethylSample, MethylSample, np.ndarray]:
@@ -489,32 +439,29 @@ class MethylCentroidPair:
                     continue
                 
                 try:
-                    # Load sample (full then align). Once load_from_h5(path, positions=...) is
-                    # confirmed in MethylClassifier, switch to load_from_h5(h5_file, ctx_positions)
-                    # to avoid loading full file and duplicate logic.
-                    sample = load_from_h5(h5_file)
-                    aligned = sample.align_to_positions(ctx_positions)
+                    sample = load_from_h5(h5_file, positions=ctx_positions)
                     
-                    if len(aligned) == 0:
+                    if len(sample) == 0:
                         n_empty_align += 1
                         continue
 
                     # Extract methylation fractions efficiently
-                    mC_vals = aligned.mC.values if hasattr(aligned.mC, 'values') else np.asarray(aligned.mC)
-                    uC_vals = aligned.uC.values if hasattr(aligned.uC, 'values') else np.asarray(aligned.uC)
-                    pos_vals = aligned.pos.values if hasattr(aligned.pos, 'values') else np.asarray(aligned.pos)
+                    mC_vals = sample.mC.values if hasattr(sample.mC, 'values') else np.asarray(sample.mC)
+                    uC_vals = sample.uC.values if hasattr(sample.uC, 'values') else np.asarray(sample.uC)
+                    pos_vals = sample.pos.values if hasattr(sample.pos, 'values') else np.asarray(sample.pos)
                     
                     # Calculate methylation fractions
                     total_reads = mC_vals + uC_vals
                     with np.errstate(divide='ignore', invalid='ignore'):
                         meth_fractions = np.where(total_reads >= min_coverage, mC_vals / total_reads, np.nan)
                     
-                    # Map to correct indices in result matrix using (position, context) lookup
-                    for j, pos in enumerate(pos_vals):
-                        key = (int(pos), ctx)
-                        if key in position_to_index:
-                            idx = position_to_index[key]
-                            X[i, idx] = meth_fractions[j]
+                    mapped_indices = np.asarray(
+                        [position_to_index.get((int(pos), ctx), -1) for pos in pos_vals],
+                        dtype=np.int64,
+                    )
+                    valid = mapped_indices >= 0
+                    if np.any(valid):
+                        X[i, mapped_indices[valid]] = meth_fractions[valid]
                             
                 except Exception as e:
                     logger.debug(f"Failed to process {h5_file}: {e}")
@@ -560,92 +507,6 @@ class MethylCentroidPair:
             return default
         return mode
 
-    def _get_centroid_context(self, centroid: MethylSample) -> Optional[str]:
-        meta = getattr(centroid, "metadata", None) or getattr(centroid, "_metadata", None)
-        if isinstance(meta, dict):
-            ctx = meta.get("context")
-            if ctx:
-                return str(ctx)
-        return None
-
-    def _load_bmm_centroid(self, source: Any):
-        if source is None:
-            return None
-        try:
-            from methyl_utils.core.methyl_mixture_centroid import MethylBetaMixtureCentroid
-        except Exception:
-            return None
-        if isinstance(source, MethylBetaMixtureCentroid):
-            return source
-        try:
-            path = Path(source)
-            if path.exists():
-                return MethylBetaMixtureCentroid.from_json(path)
-        except Exception:
-            return None
-        return None
-
-    def _build_bmm_map(
-        self,
-        bmm_centroid: Any,
-        context: Optional[str] = None,
-    ) -> Optional[Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]]]:
-        if bmm_centroid is None:
-            return None
-        df = bmm_centroid.df if hasattr(bmm_centroid, "df") else None
-        if df is None or len(df) == 0:
-            return None
-        if context and "context" in df.columns:
-            df = df[df["context"] == context]
-        if hasattr(bmm_centroid, "mask") and bmm_centroid.mask is not None and not bmm_centroid.mask.empty:
-            mask_df = bmm_centroid.mask
-            if context and "context" in mask_df.columns:
-                mask_df = mask_df[mask_df["context"] == context]
-            mask_positions = set(mask_df["position"].astype(np.uint32).tolist())
-            df = df[df["position"].astype(np.uint32).isin(mask_positions)]
-        if df.empty:
-            return None
-
-        bmm_map: Dict[int, Tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
-        for row in df.itertuples(index=False):
-            pos = int(getattr(row, "position"))
-            weights = getattr(row, "weights", None)
-            alphas = getattr(row, "alphas", None)
-            betas = getattr(row, "betas", None)
-            if not weights or not alphas or not betas:
-                continue
-            try:
-                w = np.asarray(weights, dtype=float)
-                a = np.asarray(alphas, dtype=float)
-                b = np.asarray(betas, dtype=float)
-            except Exception:
-                continue
-            if len(w) == 0 or len(w) != len(a) or len(w) != len(b):
-                continue
-            if not np.all(np.isfinite(w)) or not np.all(np.isfinite(a)) or not np.all(np.isfinite(b)):
-                continue
-            if np.sum(w) <= 0:
-                continue
-            bmm_map[pos] = (w, a, b)
-
-        return bmm_map if bmm_map else None
-
-    def _prepare_bmm_maps(self, centroid1: MethylSample, centroid2: MethylSample) -> None:
-        ctx = self._get_centroid_context(centroid1) or self._get_centroid_context(centroid2)
-        bmm1 = self._load_bmm_centroid(self._bmm_input1)
-        bmm2 = self._load_bmm_centroid(self._bmm_input2)
-        self._bmm_map1 = self._build_bmm_map(bmm1, context=ctx)
-        self._bmm_map2 = self._build_bmm_map(bmm2, context=ctx)
-        if self._bmm_map1 is not None and self._bmm_map2 is not None:
-            keys1 = np.fromiter(self._bmm_map1.keys(), dtype=np.uint32)
-            keys2 = np.fromiter(self._bmm_map2.keys(), dtype=np.uint32)
-            if len(keys1) > 0 and len(keys2) > 0:
-                self._bmm_positions_common = np.intersect1d(keys1, keys2)
-            else:
-                self._bmm_positions_common = None
-        else:
-            self._bmm_positions_common = None
-
     def compare_centroids(
         self,
         centroid1: MethylSample,
@@ -668,17 +529,14 @@ class MethylCentroidPair:
 
         Returns:
             pandas DataFrame with columns: position, p_value, q_value,
-            alpha1, beta1, alpha2, beta2, mean1, mean2, delta_mean, bhattacharyya.
+            alpha1, beta1, alpha2, beta2, mean1, mean2, delta_mean,
+            overlap_approx, tau2_1, tau2_2, and effect_size.
         """
         start_performance_monitoring()
 
         try:
             # Validate inputs
             self._validate_centroids(centroid1, centroid2)
-
-            # Prepare optional BMM maps (mask-based mixtures)
-            if self.enable_mixture:
-                self._prepare_bmm_maps(centroid1, centroid2)
 
             # Align centroids (find common positions)
             common_positions = self._align_centroids(centroid1, centroid2)
@@ -695,17 +553,17 @@ class MethylCentroidPair:
                 logger.warning("No common positions found between centroids")
                 return pd.DataFrame()  # Empty DataFrame
 
-            logger.info(f"Comparing centroids at {len(common_positions)} common positions")
+            logger.info(
+                "Comparing centroids at %s common positions using %s",
+                f"{len(common_positions):,}",
+                self.statistical_test,
+            )
 
-            # Perform statistical analysis (LRT, parameter estimation, Bhattacharyya Distance)
+            # Perform statistical analysis and overlap approximation.
             results_array = self._compute_statistics(centroid1, centroid2, common_positions)
 
             # Apply FDR correction
             results_array = self._apply_fdr_correction(results_array)
-
-            # Compute Bhattacharyya Distance (beta-mode only; auto/normal handled in batch)
-            if self.overlap_mode == "beta":
-                results_array = self._compute_bhattacharyya(results_array)
 
             logger.info(f"Comparison complete: {len(results_array)} positions analyzed")
 
@@ -728,6 +586,23 @@ class MethylCentroidPair:
         # MethylSample.mean contains the proper methylation proportions (0-1)
         validate_methylation_data(centroid1.mean, centroid1.N)
         validate_methylation_data(centroid2.mean, centroid2.N)
+
+        binned1 = getattr(centroid1, "binned_stats", None)
+        binned2 = getattr(centroid2, "binned_stats", None)
+        if not binned1 or "bin_edges" not in binned1 or "bin_counts" not in binned1:
+            raise ValueError(
+                "MethylCentroidPair requires centroid1 with binned_stats (bin_edges, bin_counts)"
+            )
+        if not binned2 or "bin_edges" not in binned2 or "bin_counts" not in binned2:
+            raise ValueError(
+                "MethylCentroidPair requires centroid2 with binned_stats (bin_edges, bin_counts)"
+            )
+        edges1 = np.asarray(binned1["bin_edges"], dtype=np.float64)
+        edges2 = np.asarray(binned2["bin_edges"], dtype=np.float64)
+        if edges1.shape != edges2.shape or not np.allclose(edges1, edges2):
+            raise ValueError(
+                "MethylCentroidPair requires matching ECDF bin_edges in both centroids"
+            )
 
     def _align_centroids(self, centroid1: MethylSample, centroid2: MethylSample) -> np.ndarray:
         """Find common positions between centroids."""
@@ -797,525 +672,150 @@ class MethylCentroidPair:
 
     def _process_batch(self, centroid1: MethylSample, centroid2: MethylSample,
                       positions: np.ndarray, results_view: np.ndarray) -> None:
-        """Process a batch of positions for statistical analysis and fill results array."""
+        """Process a batch of positions using the ECDF-only centroid comparison path."""
 
-        # Find indices in centroids
-        indices1 = np.searchsorted(centroid1.pos, positions)
-        indices2 = np.searchsorted(centroid2.pos, positions)
+        pos1 = np.asarray(centroid1.pos.values, dtype=np.uint32)
+        pos2 = np.asarray(centroid2.pos.values, dtype=np.uint32)
+        indices1 = np.searchsorted(pos1, positions)
+        indices2 = np.searchsorted(pos2, positions)
 
-        # Use pre-computed Beta parameters from centroids (already bounded correctly)
-        # These are computed by MethylSample._estimate_beta_params_bounded_extended
-        alpha1 = centroid1.alpha[indices1].astype(np.float32)
-        beta1 = centroid1.beta[indices1].astype(np.float32)
-        alpha2 = centroid2.alpha[indices2].astype(np.float32)
-        beta2 = centroid2.beta[indices2].astype(np.float32)
+        alpha1_all = np.asarray(centroid1.alpha, dtype=np.float64)
+        beta1_all = np.asarray(centroid1.beta, dtype=np.float64)
+        alpha2_all = np.asarray(centroid2.alpha, dtype=np.float64)
+        beta2_all = np.asarray(centroid2.beta, dtype=np.float64)
+        N1_all = np.asarray(centroid1.N, dtype=np.float64)
+        N2_all = np.asarray(centroid2.N, dtype=np.float64)
+        Sx1_all = np.asarray(centroid1.Sx, dtype=np.float64)
+        Sx2_all = np.asarray(centroid2.Sx, dtype=np.float64)
+        Sx2_1_all = np.asarray(centroid1.Sx2, dtype=np.float64)
+        Sx2_2_all = np.asarray(centroid2.Sx2, dtype=np.float64)
+        Sm1_all = np.asarray(centroid1.Sm, dtype=np.float64)
+        Su1_all = np.asarray(centroid1.Su, dtype=np.float64)
+        Swx2_1_all = np.asarray(centroid1.Swx2, dtype=np.float64)
+        Sc2_1_all = np.asarray(centroid1.Sc2, dtype=np.float64)
+        Sm2_all = np.asarray(centroid2.Sm, dtype=np.float64)
+        Su2_all = np.asarray(centroid2.Su, dtype=np.float64)
+        Swx2_2_all = np.asarray(centroid2.Swx2, dtype=np.float64)
+        Sc2_2_all = np.asarray(centroid2.Sc2, dtype=np.float64)
+        mean1_all = np.asarray(centroid1.mean, dtype=np.float64)
+        mean2_all = np.asarray(centroid2.mean, dtype=np.float64)
 
-        N1 = centroid1.N[indices1].astype(np.float32)
-        N2 = centroid2.N[indices2].astype(np.float32)
-        Sx1 = centroid1.Sx[indices1].astype(np.float64)
-        Sx2_vals = centroid2.Sx[indices2].astype(np.float64)
-        Sx2_1 = centroid1.Sx2[indices1].astype(np.float64)
-        Sx2_2 = centroid2.Sx2[indices2].astype(np.float64)
+        alpha1 = alpha1_all[indices1]
+        beta1 = beta1_all[indices1]
+        alpha2 = alpha2_all[indices2]
+        beta2 = beta2_all[indices2]
+        N1 = N1_all[indices1]
+        N2 = N2_all[indices2]
+        Sx1 = Sx1_all[indices1]
+        Sx2_vals = Sx2_all[indices2]
+        Sx2_1 = Sx2_1_all[indices1]
+        Sx2_2 = Sx2_2_all[indices2]
+        Sm1 = Sm1_all[indices1]
+        Su1 = Su1_all[indices1]
+        Swx2_1 = Swx2_1_all[indices1]
+        Sc2_1 = Sc2_1_all[indices1]
+        Sm2 = Sm2_all[indices2]
+        Su2 = Su2_all[indices2]
+        Swx2_2 = Swx2_2_all[indices2]
+        Sc2_2 = Sc2_2_all[indices2]
+        mean1 = mean1_all[indices1]
+        mean2 = mean2_all[indices2]
 
-        mean1 = centroid1.mean[indices1].astype(np.float32)
-        mean2 = centroid2.mean[indices2].astype(np.float32)
-
-        # Normal-distribution moments (used for normal-mode metrics)
-        mean_normal1 = Sx1 / np.maximum(N1.astype(np.float64), 1.0)
-        mean_normal2 = Sx2_vals / np.maximum(N2.astype(np.float64), 1.0)
-        var_normal1 = np.maximum(
-            Sx2_1 - (Sx1**2 / np.maximum(N1, 1.0)), 1e-12
-        ) / np.maximum(N1 - 1, 1)
-        var_normal2 = np.maximum(
-            Sx2_2 - (Sx2_vals**2 / np.maximum(N2, 1.0)), 1e-12
-        ) / np.maximum(N2 - 1, 1)
-
-        # Distribution selection masks
-        dist_mode = (self.distribution or "auto").lower()
-        use_normal_mask = np.zeros(len(positions), dtype=bool)
-        use_mixture_mask = np.zeros(len(positions), dtype=bool)
-        use_ecdf_mask = np.zeros(len(positions), dtype=bool)
-        force_mixture = dist_mode == "beta_mixture"
-
-        # Check binned_stats availability and bin_edges match (for ECDF)
-        bs1 = getattr(centroid1, "binned_stats", None)
-        bs2 = getattr(centroid2, "binned_stats", None)
-        has_binned1 = bs1 is not None and "bin_edges" in (bs1 or {}) and "bin_counts" in (bs1 or {})
-        has_binned2 = bs2 is not None and "bin_edges" in (bs2 or {}) and "bin_counts" in (bs2 or {})
-        same_bin_edges = False
-        if has_binned1 and has_binned2:
-            e1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
-            e2 = np.asarray(bs2["bin_edges"], dtype=np.float64)
-            same_bin_edges = e1.shape == e2.shape and np.allclose(e1, e2)
-
-        if dist_mode == "normal":
-            use_normal_mask[:] = True
-        elif dist_mode == "beta_binomial":
-            import logging
-            logging.getLogger(__name__).warning("distribution='beta_binomial' removed; using beta.")
-        elif dist_mode == "ecdf":
-            if has_binned1 and has_binned2 and same_bin_edges:
-                use_ecdf_mask[:] = True
-            else:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "distribution='ecdf' but centroids lack binned_stats or bin_edges differ; falling back to beta."
-                )
-        elif dist_mode == "beta":
-            pass
-        else:
-            # Auto selection: ECDF first when N below threshold and binned_stats present
-            if has_binned1 and has_binned2 and same_bin_edges:
-                use_ecdf_mask = (N1 < self.max_N_for_ecdf) & (N2 < self.max_N_for_ecdf)
-            use_normal_mask = (N1 < self.min_samples_normal) | (N2 < self.min_samples_normal)
-
-            # Mixture selection if mixture params are present
-            if self.enable_mixture:
-                if self._bmm_positions_common is not None:
-                    use_mixture_mask = (
-                        np.isin(positions, self._bmm_positions_common)
-                        & (N1 >= self.min_samples_beta)
-                        & (N2 >= self.min_samples_beta)
-                    )
-                else:
-                    required_mix_cols = {"mix_w1", "mix_w2", "mix_w3", "mix_a1", "mix_a2", "mix_a3", "mix_b1", "mix_b2", "mix_b3"}
-                    if required_mix_cols.issubset(set(centroid1._df.columns)) and required_mix_cols.issubset(set(centroid2._df.columns)):
-                        wsum1 = centroid1._df["mix_w1"].values[indices1] + centroid1._df["mix_w2"].values[indices1] + centroid1._df["mix_w3"].values[indices1]
-                        wsum2 = centroid2._df["mix_w1"].values[indices2] + centroid2._df["mix_w2"].values[indices2] + centroid2._df["mix_w3"].values[indices2]
-                        use_mixture_mask = (wsum1 > 0) & (wsum2 > 0) & (N1 >= self.min_samples_beta) & (N2 >= self.min_samples_beta)
-            use_normal_mask = use_normal_mask & ~use_ecdf_mask
-            use_mixture_mask = use_mixture_mask & ~use_ecdf_mask
-
-        if force_mixture and self.enable_mixture:
-            if self._bmm_positions_common is not None:
-                use_mixture_mask = np.isin(positions, self._bmm_positions_common)
-            else:
-                # Fallback to mix columns if present
-                required_mix_cols = {"mix_w1", "mix_w2", "mix_w3", "mix_a1", "mix_a2", "mix_a3", "mix_b1", "mix_b2", "mix_b3"}
-                if required_mix_cols.issubset(set(centroid1._df.columns)) and required_mix_cols.issubset(set(centroid2._df.columns)):
-                    wsum1 = centroid1._df["mix_w1"].values[indices1] + centroid1._df["mix_w2"].values[indices1] + centroid1._df["mix_w3"].values[indices1]
-                    wsum2 = centroid2._df["mix_w1"].values[indices2] + centroid2._df["mix_w2"].values[indices2] + centroid2._df["mix_w3"].values[indices2]
-                    use_mixture_mask = (wsum1 > 0) & (wsum2 > 0)
-
-        use_beta_mask = ~(use_normal_mask | use_mixture_mask | use_ecdf_mask)
-
-        class TempCentroid:
-            """Minimal centroid-like container for LRT (N, Sx, Sx2 → MoM alpha/beta)."""
-            def __init__(self, N, Sx, Sx2, mC, uC):
-                self.N = N
-                self.Sx = Sx
-                self.Sx2 = Sx2
-                self.mC = mC
-                self.uC = uC
-                self.is_centroid = True
-                self.alpha = None
-                self.beta = None
-                self.mean = None
-
-        centroid1_batch = TempCentroid(
-            N=N1, Sx=Sx1, Sx2=Sx2_1,
-            mC=centroid1.mC[indices1], uC=centroid1.uC[indices1]
+        variance1 = np.maximum(
+            (Sx2_1 - (Sx1 ** 2) / np.maximum(N1, 1.0)) / np.maximum(N1 - 1.0, 1.0),
+            1e-12,
         )
-        centroid2_batch = TempCentroid(
-            N=N2, Sx=Sx2_vals, Sx2=Sx2_2,
-            mC=centroid2.mC[indices2], uC=centroid2.uC[indices2]
+        variance2 = np.maximum(
+            (Sx2_2 - (Sx2_vals ** 2) / np.maximum(N2, 1.0)) / np.maximum(N2 - 1.0, 1.0),
+            1e-12,
         )
 
-        welch_result = welch_mean_test(
-            delta_mean=(mean_normal1 - mean_normal2),
-            var1=var_normal1,
-            n1=N1.astype(np.float64),
-            var2=var_normal2,
-            n2=N2.astype(np.float64),
+        bs1 = centroid1.binned_stats
+        bs2 = centroid2.binned_stats
+        bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
+        bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
+        overlap_approx = np.asarray(
+            discrete_overlap_from_bin_counts(bc1_batch, bc2_batch),
+            dtype=np.float64,
         )
-        p_values = np.asarray(welch_result["p_value"], dtype=np.float32)
-        dist_ids = np.full(len(positions), DIST_NORMAL, dtype=np.uint8)
+        overlap_safe = np.clip(overlap_approx, 1e-10, 1.0)
+        bhattacharyya = (-np.log(overlap_safe)).astype(np.float32)
 
-        # Beta mixture handling (optional, if mixture params are stored)
-        if np.any(use_mixture_mask):
-            try:
-                from methyl_utils.beta_mixture import mixture_logpdf, _resolve_backend, _to_numpy
-            except ImportError:
-                from .beta_mixture import mixture_logpdf, _resolve_backend, _to_numpy
-
-            xp, betaln_fn, _ = _resolve_backend(self.gpu_available)
-
-            dist_ids[use_mixture_mask] = DIST_BETA_MIXTURE
-
-            mixture_indices = np.where(use_mixture_mask)[0]
-
-            if self._bmm_map1 is not None and self._bmm_map2 is not None:
-                for idx in mixture_indices:
-                    pos = int(positions[idx])
-                    entry1 = self._bmm_map1.get(pos)
-                    entry2 = self._bmm_map2.get(pos)
-                    if entry1 is None or entry2 is None:
-                        continue
-                    w1, a1m, b1m = entry1
-                    w2, a2m, b2m = entry2
-                    if np.sum(w1) <= 0 or np.sum(w2) <= 0:
-                        continue
-                    w1 = w1 / np.sum(w1)
-                    w2 = w2 / np.sum(w2)
-                    try:
-                        log_m1 = mixture_logpdf(
-                            xp.asarray([mean1[idx]]),
-                            xp.asarray(w1),
-                            xp.asarray(a1m),
-                            xp.asarray(b1m),
-                            xp=xp,
-                            betaln_fn=betaln_fn,
-                        )
-                        log_m2 = mixture_logpdf(
-                            xp.asarray([mean1[idx]]),
-                            xp.asarray(w2),
-                            xp.asarray(a2m),
-                            xp.asarray(b2m),
-                            xp=xp,
-                            betaln_fn=betaln_fn,
-                        )
-                        llr = 2.0 * (float(_to_numpy(log_m1)) - float(_to_numpy(log_m2)))
-                        llr = max(llr, 0.0)
-                        from scipy.stats import chi2
-                        p_values[idx] = chi2.sf(llr, df=2)
-                    except Exception:
-                        continue
-            else:
-                mix_w1 = centroid1._df["mix_w1"].values[indices1]
-                mix_w2 = centroid1._df["mix_w2"].values[indices1]
-                mix_w3 = centroid1._df["mix_w3"].values[indices1]
-                mix_a1 = centroid1._df["mix_a1"].values[indices1]
-                mix_a2 = centroid1._df["mix_a2"].values[indices1]
-                mix_a3 = centroid1._df["mix_a3"].values[indices1]
-                mix_b1 = centroid1._df["mix_b1"].values[indices1]
-                mix_b2 = centroid1._df["mix_b2"].values[indices1]
-                mix_b3 = centroid1._df["mix_b3"].values[indices1]
-
-                mix2_w1 = centroid2._df["mix_w1"].values[indices2]
-                mix2_w2 = centroid2._df["mix_w2"].values[indices2]
-                mix2_w3 = centroid2._df["mix_w3"].values[indices2]
-                mix2_a1 = centroid2._df["mix_a1"].values[indices2]
-                mix2_a2 = centroid2._df["mix_a2"].values[indices2]
-                mix2_a3 = centroid2._df["mix_a3"].values[indices2]
-                mix2_b1 = centroid2._df["mix_b1"].values[indices2]
-                mix2_b2 = centroid2._df["mix_b2"].values[indices2]
-                mix2_b3 = centroid2._df["mix_b3"].values[indices2]
-
-                for idx in mixture_indices:
-                    w1 = np.asarray([mix_w1[idx], mix_w2[idx], mix_w3[idx]], dtype=float)
-                    a1m = np.asarray([mix_a1[idx], mix_a2[idx], mix_a3[idx]], dtype=float)
-                    b1m = np.asarray([mix_b1[idx], mix_b2[idx], mix_b3[idx]], dtype=float)
-                    w2 = np.asarray([mix2_w1[idx], mix2_w2[idx], mix2_w3[idx]], dtype=float)
-                    a2m = np.asarray([mix2_a1[idx], mix2_a2[idx], mix2_a3[idx]], dtype=float)
-                    b2m = np.asarray([mix2_b1[idx], mix2_b2[idx], mix2_b3[idx]], dtype=float)
-
-                    if np.sum(w1) <= 0 or np.sum(w2) <= 0:
-                        continue
-                    w1 = w1 / np.sum(w1)
-                    w2 = w2 / np.sum(w2)
-
-                    try:
-                        log_m1 = mixture_logpdf(
-                            xp.asarray([mean1[idx]]),
-                            xp.asarray(w1),
-                            xp.asarray(a1m),
-                            xp.asarray(b1m),
-                            xp=xp,
-                            betaln_fn=betaln_fn,
-                        )
-                        log_m2 = mixture_logpdf(
-                            xp.asarray([mean1[idx]]),
-                            xp.asarray(w2),
-                            xp.asarray(a2m),
-                            xp.asarray(b2m),
-                            xp=xp,
-                            betaln_fn=betaln_fn,
-                        )
-                        llr = 2.0 * (float(_to_numpy(log_m1)) - float(_to_numpy(log_m2)))
-                        llr = max(llr, 0.0)
-                        from scipy.stats import chi2
-                        p_values[idx] = chi2.sf(llr, df=2)
-                    except Exception:
-                        continue
-
-        # ECDF views are still built for overlap and downstream continuous metrics.
-        ecdf_view1 = ecdf_view2 = None
-        if np.any(use_ecdf_mask) and has_binned1 and has_binned2 and same_bin_edges:
-            from methyl_utils.core.distribution_views import ECDFView
-            bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
-            bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
-            bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
-            ecdf_view1 = ECDFView(
-                bin_edges_arr, bc1_batch,
-                Sx1.astype(np.float64), N1.astype(np.float64),
-                Sx2_1.astype(np.float64),
-            )
-            ecdf_view2 = ECDFView(
-                bin_edges_arr, bc2_batch,
-                Sx2_vals.astype(np.float64), N2.astype(np.float64),
-                Sx2_2.astype(np.float64),
-            )
-            dist_ids[use_ecdf_mask] = DIST_ECDF
-
-        if np.any(use_beta_mask):
-            dist_ids[use_beta_mask] = DIST_BETA
-
-        # Metric calculations for output (delta_mean + overlap)
-        eps = 1e-12
-        tau1 = alpha1 + beta1
-        tau2 = alpha2 + beta2
-        mean_beta1 = alpha1 / np.maximum(tau1, eps)
-        mean_beta2 = alpha2 / np.maximum(tau2, eps)
-
-        def _bhattacharyya_normal(mu1: np.ndarray, var1: np.ndarray,
-                                  mu2: np.ndarray, var2: np.ndarray) -> np.ndarray:
-            var1 = np.maximum(var1, eps)
-            var2 = np.maximum(var2, eps)
-            sigma_sum = var1 + var2
-            denom = 2.0 * np.sqrt(var1 * var2)
-            term1 = 0.5 * np.log(np.maximum(sigma_sum, eps) / np.maximum(denom, eps))
-            term2 = 0.25 * ((mu1 - mu2) ** 2 / np.maximum(sigma_sum, eps))
-            return term1 + term2
-
-        mix_mean1 = mix_mean2 = None
-        mix_var1 = mix_var2 = None
-        mixture_indices = None
-        if np.any(use_mixture_mask) and self.enable_mixture:
-            mixture_indices = np.where(use_mixture_mask)[0]
-            if self._bmm_map1 is not None and self._bmm_map2 is not None:
-                mix_mean1 = np.full(len(mixture_indices), np.nan, dtype=np.float32)
-                mix_mean2 = np.full(len(mixture_indices), np.nan, dtype=np.float32)
-                mix_var1 = np.full(len(mixture_indices), np.nan, dtype=np.float32)
-                mix_var2 = np.full(len(mixture_indices), np.nan, dtype=np.float32)
-                for j, idx in enumerate(mixture_indices):
-                    pos = int(positions[idx])
-                    entry1 = self._bmm_map1.get(pos)
-                    entry2 = self._bmm_map2.get(pos)
-                    if entry1 is None or entry2 is None:
-                        continue
-                    w1, a1m, b1m = entry1
-                    w2, a2m, b2m = entry2
-                    if np.sum(w1) <= 0 or np.sum(w2) <= 0:
-                        continue
-                    w1 = w1 / np.sum(w1)
-                    w2 = w2 / np.sum(w2)
-                    a1m = np.asarray(a1m, dtype=np.float64)
-                    b1m = np.asarray(b1m, dtype=np.float64)
-                    a2m = np.asarray(a2m, dtype=np.float64)
-                    b2m = np.asarray(b2m, dtype=np.float64)
-                    mean1_comp = a1m / np.maximum(a1m + b1m, eps)
-                    mean2_comp = a2m / np.maximum(a2m + b2m, eps)
-                    var1_comp = (a1m * b1m) / np.maximum((a1m + b1m) ** 2 * (a1m + b1m + 1), eps)
-                    var2_comp = (a2m * b2m) / np.maximum((a2m + b2m) ** 2 * (a2m + b2m + 1), eps)
-                    mix_mean1[j] = float(np.sum(w1 * mean1_comp))
-                    mix_mean2[j] = float(np.sum(w2 * mean2_comp))
-                    mix_var1[j] = float(np.sum(w1 * (var1_comp + mean1_comp ** 2)) - mix_mean1[j] ** 2)
-                    mix_var2[j] = float(np.sum(w2 * (var2_comp + mean2_comp ** 2)) - mix_mean2[j] ** 2)
-            else:
-                required_mix_cols = {
-                    "mix_w1", "mix_w2", "mix_w3",
-                    "mix_a1", "mix_a2", "mix_a3",
-                    "mix_b1", "mix_b2", "mix_b3",
-                }
-                if required_mix_cols.issubset(set(centroid1._df.columns)) and required_mix_cols.issubset(set(centroid2._df.columns)):
-                    idx1 = indices1[mixture_indices]
-                    idx2 = indices2[mixture_indices]
-                    w1 = centroid1._df["mix_w1"].values[idx1]
-                    w2 = centroid1._df["mix_w2"].values[idx1]
-                    w3 = centroid1._df["mix_w3"].values[idx1]
-                    a1m = centroid1._df["mix_a1"].values[idx1]
-                    a2m = centroid1._df["mix_a2"].values[idx1]
-                    a3m = centroid1._df["mix_a3"].values[idx1]
-                    b1m = centroid1._df["mix_b1"].values[idx1]
-                    b2m = centroid1._df["mix_b2"].values[idx1]
-                    b3m = centroid1._df["mix_b3"].values[idx1]
-
-                    w1b = centroid2._df["mix_w1"].values[idx2]
-                    w2b = centroid2._df["mix_w2"].values[idx2]
-                    w3b = centroid2._df["mix_w3"].values[idx2]
-                    a1b = centroid2._df["mix_a1"].values[idx2]
-                    a2b = centroid2._df["mix_a2"].values[idx2]
-                    a3b = centroid2._df["mix_a3"].values[idx2]
-                    b1b = centroid2._df["mix_b1"].values[idx2]
-                    b2b = centroid2._df["mix_b2"].values[idx2]
-                    b3b = centroid2._df["mix_b3"].values[idx2]
-
-                    wsum1 = w1 + w2 + w3
-                    wsum2 = w1b + w2b + w3b
-                    mean1_comp1 = a1m / np.maximum(a1m + b1m, eps)
-                    mean1_comp2 = a2m / np.maximum(a2m + b2m, eps)
-                    mean1_comp3 = a3m / np.maximum(a3m + b3m, eps)
-                    mean2_comp1 = a1b / np.maximum(a1b + b1b, eps)
-                    mean2_comp2 = a2b / np.maximum(a2b + b2b, eps)
-                    mean2_comp3 = a3b / np.maximum(a3b + b3b, eps)
-
-                    var1_comp1 = (a1m * b1m) / np.maximum((a1m + b1m) ** 2 * (a1m + b1m + 1), eps)
-                    var1_comp2 = (a2m * b2m) / np.maximum((a2m + b2m) ** 2 * (a2m + b2m + 1), eps)
-                    var1_comp3 = (a3m * b3m) / np.maximum((a3m + b3m) ** 2 * (a3m + b3m + 1), eps)
-                    var2_comp1 = (a1b * b1b) / np.maximum((a1b + b1b) ** 2 * (a1b + b1b + 1), eps)
-                    var2_comp2 = (a2b * b2b) / np.maximum((a2b + b2b) ** 2 * (a2b + b2b + 1), eps)
-                    var2_comp3 = (a3b * b3b) / np.maximum((a3b + b3b) ** 2 * (a3b + b3b + 1), eps)
-
-                    mix_mean1 = (w1 * mean1_comp1 + w2 * mean1_comp2 + w3 * mean1_comp3) / np.maximum(wsum1, eps)
-                    mix_mean2 = (w1b * mean2_comp1 + w2b * mean2_comp2 + w3b * mean2_comp3) / np.maximum(wsum2, eps)
-                    mix_var1 = (w1 * (var1_comp1 + mean1_comp1 ** 2) +
-                                w2 * (var1_comp2 + mean1_comp2 ** 2) +
-                                w3 * (var1_comp3 + mean1_comp3 ** 2)) / np.maximum(wsum1, eps) - mix_mean1 ** 2
-                    mix_var2 = (w1b * (var2_comp1 + mean2_comp1 ** 2) +
-                                w2b * (var2_comp2 + mean2_comp2 ** 2) +
-                                w3b * (var2_comp3 + mean2_comp3 ** 2)) / np.maximum(wsum2, eps) - mix_mean2 ** 2
-
-        delta_mode = (self.delta_mean_mode or "mean").lower()
-        mean1_out = mean1
-        mean2_out = mean2
-        if delta_mode == "beta":
-            mean1_out = mean_beta1
-            mean2_out = mean_beta2
-        elif delta_mode == "normal":
-            mean1_out = mean_normal1
-            mean2_out = mean_normal2
-        elif delta_mode == "auto":
-            mean1_out = mean_beta1.copy()
-            mean2_out = mean_beta2.copy()
-            if np.any(use_normal_mask):
-                mean1_out[use_normal_mask] = mean_normal1[use_normal_mask]
-                mean2_out[use_normal_mask] = mean_normal2[use_normal_mask]
-            if np.any(use_ecdf_mask):
-                mean1_out[use_ecdf_mask] = mean_normal1[use_ecdf_mask]
-                mean2_out[use_ecdf_mask] = mean_normal2[use_ecdf_mask]
-            if mix_mean1 is not None and mix_mean2 is not None and mixture_indices is not None:
-                mix_valid = np.isfinite(mix_mean1) & np.isfinite(mix_mean2)
-                if np.any(mix_valid):
-                    mix_idx = mixture_indices[mix_valid]
-                    mean1_out[mix_idx] = mix_mean1[mix_valid]
-                    mean2_out[mix_idx] = mix_mean2[mix_valid]
-
-        signed_delta = mean1_out - mean2_out
+        signed_delta = mean1 - mean2
         delta_mean = np.abs(signed_delta)
 
-        # Per-position variance for the effect_size reliability term.
-        # Always use the sample variance derived from Sx/Sx2 (the same estimator used by
-        # the Welch test), so the reliability penalty is consistent with the statistical
-        # test.  Beta-distribution model variance (alpha*beta/(tau²*(tau+1))) is a
-        # property of the fitted model, not a direct measure of between-sample spread, and
-        # would produce a different scale than the Welch standard error.
-        variance1_out = var_normal1.astype(np.float32)
-        variance2_out = var_normal2.astype(np.float32)
-        if mix_var1 is not None and mix_var2 is not None and mixture_indices is not None:
-            mix_valid = np.isfinite(mix_var1) & np.isfinite(mix_var2)
-            if np.any(mix_valid):
-                variance1_out[mixture_indices[mix_valid]] = np.asarray(mix_var1[mix_valid], dtype=np.float32)
-                variance2_out[mixture_indices[mix_valid]] = np.asarray(mix_var2[mix_valid], dtype=np.float32)
-
-        # When both centroids have binned_stats, use discrete overlap (fast) instead of Beta BD
-        overlap_approx_batch = None
-        if has_binned1 and has_binned2 and same_bin_edges:
-            bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
-            bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
-            overlap_approx_batch = discrete_overlap_from_bin_counts(bc1_batch, bc2_batch)
-
-        bhattacharyya = None
-        overlap_mode = (self.overlap_mode or "beta").lower()
-        if overlap_approx_batch is not None:
-            # Fast path: use discrete overlap for all; skip compute_bhattacharyya_distance
-            ov = np.clip(np.asarray(overlap_approx_batch, dtype=np.float64), 1e-10, 1.0)
-            bhattacharyya = (-np.log(ov)).astype(np.float32)
-            # Optionally overwrite ECDF positions with ECDF overlap (same as before) if desired; keep discrete for speed
-        elif overlap_mode in {"auto", "normal"}:
-            normal_bd = _bhattacharyya_normal(mean_normal1, var_normal1, mean_normal2, var_normal2)
-            if overlap_mode == "normal":
-                bhattacharyya = normal_bd.astype(np.float32)
-            else:
-                beta_bd = compute_bhattacharyya_distance(
-                    alpha1, beta1, alpha2, beta2, use_gpu=self.gpu_available
-                ).astype(np.float32)
-                bhattacharyya = beta_bd
-                if np.any(use_normal_mask):
-                    bhattacharyya[use_normal_mask] = normal_bd[use_normal_mask].astype(np.float32)
-                if mix_var1 is not None and mix_var2 is not None and mixture_indices is not None:
-                    mix_valid = np.isfinite(mix_var1) & np.isfinite(mix_var2) & np.isfinite(mix_mean1) & np.isfinite(mix_mean2)
-                    if np.any(mix_valid):
-                        mix_bd = _bhattacharyya_normal(
-                            mix_mean1[mix_valid], mix_var1[mix_valid],
-                            mix_mean2[mix_valid], mix_var2[mix_valid]
-                        ).astype(np.float32)
-                        bhattacharyya[mixture_indices[mix_valid]] = mix_bd
-        if bhattacharyya is not None and np.any(use_ecdf_mask) and has_binned1 and has_binned2 and same_bin_edges and overlap_approx_batch is None:
-            if ecdf_view1 is not None and ecdf_view2 is not None:
-                view1, view2 = ecdf_view1, ecdf_view2
-            else:
-                from methyl_utils.core.distribution_views import ECDFView
-                bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
-                bc1_batch = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
-                bc2_batch = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
-                view1 = ECDFView(
-                    bin_edges_arr, bc1_batch,
-                    Sx1.astype(np.float64), N1.astype(np.float64),
-                    Sx2_1.astype(np.float64),
-                )
-                view2 = ECDFView(
-                    bin_edges_arr, bc2_batch,
-                    Sx2_vals.astype(np.float64), N2.astype(np.float64),
-                    Sx2_2.astype(np.float64),
-                )
-            overlap_ecdf = view1.overlap(view2)
-            bd_ecdf = -np.log(np.clip(np.asarray(overlap_ecdf, dtype=np.float64), 1e-10, 1.0)).astype(np.float32)
-            bhattacharyya[use_ecdf_mask] = bd_ecdf[use_ecdf_mask]
-
-        # Fill results array directly (vectorized assignment)
-        # Safe cast for integer fields: avoid NaN/inf so pandas/numpy do not emit "invalid value in cast"
-        pos_safe = np.nan_to_num(np.asarray(positions, dtype=np.float64), nan=0, posinf=0, neginf=0)
-        results_view['position'] = np.clip(pos_safe, 0, np.iinfo(np.uint32).max).astype(np.uint32)
-        results_view['p_value'] = p_values
-        results_view['q_value'] = p_values  # Will be updated by FDR correction
-        results_view['alpha1'] = alpha1.astype(np.float64)
-        results_view['beta1'] = beta1.astype(np.float64)
-        results_view['alpha2'] = alpha2.astype(np.float64)
-        results_view['beta2'] = beta2.astype(np.float64)
-        results_view['mean1'] = mean1_out.astype(np.float32)
-        results_view['mean2'] = mean2_out.astype(np.float32)
-        results_view['delta_mean'] = delta_mean.astype(np.float32)
-        results_view['delta_sign'] = np.sign(signed_delta).astype(np.int8)
-        if bhattacharyya is not None:
-            results_view['bhattacharyya'] = bhattacharyya.astype(np.float32)
+        if self.statistical_test == "mann_whitney":
+            stat_result = mann_whitney_from_bin_counts(
+                bc1_batch,
+                bc2_batch,
+                n1=N1,
+                n2=N2,
+            )
         else:
-            results_view['bhattacharyya'] = np.zeros(len(positions), dtype=np.float32)  # Will be computed later
-        dist_safe = np.nan_to_num(np.asarray(dist_ids, dtype=np.float64), nan=0, posinf=0, neginf=0)
-        results_view['dist'] = np.clip(dist_safe, 0, np.iinfo(np.uint8).max).astype(np.uint8)
-        n1_safe = np.nan_to_num(N1.astype(np.float64), nan=0, posinf=0, neginf=0)
-        n2_safe = np.nan_to_num(N2.astype(np.float64), nan=0, posinf=0, neginf=0)
-        results_view['n1'] = np.clip(n1_safe, 0, np.iinfo(np.uint32).max).astype(np.uint32)
-        results_view['n2'] = np.clip(n2_safe, 0, np.iinfo(np.uint32).max).astype(np.uint32)
-        results_view['variance1'] = variance1_out
-        results_view['variance2'] = variance2_out
+            stat_result = welch_mean_test(
+                delta_mean=signed_delta,
+                var1=variance1,
+                n1=N1,
+                var2=variance2,
+                n2=N2,
+            )
+        p_values = np.asarray(stat_result["p_value"], dtype=np.float32)
 
-        # effect_size: single biological importance measure (MethylDetector uses as-is)
-        if bhattacharyya is not None:
-            bc_values = np.exp(-np.clip(bhattacharyya.astype(np.float64), 0.0, BD_CAP))
-        else:
-            bc_values = np.ones(len(positions), dtype=np.float64) * 0.5
-        effect_sizes = self.compute_effect_sizes(
-            alpha1, beta1, alpha2, beta2,
-            delta_mean.astype(np.float64),
-            bc_values,
-            min_overlap_floor=0.01,
-            variance_reliability=True,
+        tau2_1 = dl_heterogeneity(
+            Sm=Sm1,
+            Su=Su1,
+            Swx2=Swx2_1,
+            Sc2=Sc2_1,
+            N=N1,
+        )["tau2"]
+        tau2_2 = dl_heterogeneity(
+            Sm=Sm2,
+            Su=Su2,
+            Swx2=Swx2_2,
+            Sc2=Sc2_2,
+            N=N2,
+        )["tau2"]
+
+        effect_size = effect_size_from_components(
+            delta_mean=delta_mean,
+            overlap=overlap_safe,
+            var1=variance1,
+            var2=variance2,
+            lambda_var=2.0,
+        )["effect_size"]
+
+        pos_safe = np.nan_to_num(
+            np.asarray(positions, dtype=np.float64),
+            nan=0,
+            posinf=0,
+            neginf=0,
         )
-        results_view['effect_size'] = effect_sizes
-
-        # overlap_approx: discrete overlap from bin counts when binned_stats present (NaN otherwise)
-        n_batch = len(positions)
-        results_view['overlap_approx'] = np.full(n_batch, np.nan, dtype=np.float32)
-        if overlap_approx_batch is not None:
-            results_view['overlap_approx'] = np.asarray(overlap_approx_batch, dtype=np.float32)
-        elif has_binned1 and has_binned2 and same_bin_edges:
-            bc1 = np.asarray(bs1["bin_counts"], dtype=np.float64)[indices1]
-            bc2 = np.asarray(bs2["bin_counts"], dtype=np.float64)[indices2]
-            overlap_arr = discrete_overlap_from_bin_counts(bc1, bc2)
-            results_view['overlap_approx'] = np.asarray(overlap_arr, dtype=np.float32)
+        results_view["position"] = np.clip(
+            pos_safe, 0, np.iinfo(np.uint32).max
+        ).astype(np.uint32)
+        results_view["p_value"] = p_values
+        results_view["q_value"] = p_values
+        results_view["alpha1"] = alpha1.astype(np.float64)
+        results_view["beta1"] = beta1.astype(np.float64)
+        results_view["alpha2"] = alpha2.astype(np.float64)
+        results_view["beta2"] = beta2.astype(np.float64)
+        results_view["mean1"] = mean1.astype(np.float32)
+        results_view["mean2"] = mean2.astype(np.float32)
+        results_view["delta_mean"] = delta_mean.astype(np.float32)
+        results_view["delta_sign"] = np.sign(signed_delta).astype(np.int8)
+        results_view["bhattacharyya"] = bhattacharyya
+        results_view["dist"] = np.full(len(positions), DIST_ECDF, dtype=np.uint8)
+        results_view["n1"] = np.clip(N1, 0, np.iinfo(np.uint32).max).astype(np.uint32)
+        results_view["n2"] = np.clip(N2, 0, np.iinfo(np.uint32).max).astype(np.uint32)
+        results_view["variance1"] = variance1.astype(np.float32)
+        results_view["variance2"] = variance2.astype(np.float32)
+        results_view["tau2_1"] = np.asarray(tau2_1, dtype=np.float32)
+        results_view["tau2_2"] = np.asarray(tau2_2, dtype=np.float32)
+        results_view["effect_size"] = np.asarray(effect_size, dtype=np.float32)
+        results_view["overlap_approx"] = overlap_approx.astype(np.float32)
 
     def _apply_fdr_correction(self, results_array: np.ndarray) -> np.ndarray:
-        """Apply FDR correction to p-values using Storey's method."""
+        """Apply two-stage BH FDR correction, with Storey fallback if unavailable."""
         if len(results_array) == 0:
             return results_array
 
@@ -2117,34 +1617,6 @@ class MethylCentroidPair:
         }
 
         return merged, bmm_centroid_c1, bmm_centroid_c2, bmm_records_map, bmm_summary
-
-    def _compute_bhattacharyya(self, results_array: np.ndarray) -> np.ndarray:
-        """
-        Compute Bhattacharyya Distance for all results (vectorized).
-        
-        Note: Only computes BD (distance), not BC (coefficient).
-        MethylDetector will convert BD to BC using: BC = exp(-BD)
-        """
-        if len(results_array) == 0:
-            return results_array
-
-        # Extract Beta parameters for vectorized computation
-        alpha1 = results_array['alpha1'].astype(np.float64)
-        beta1 = results_array['beta1'].astype(np.float64)
-        alpha2 = results_array['alpha2'].astype(np.float64)
-        beta2 = results_array['beta2'].astype(np.float64)
-
-        # Compute Bhattacharyya Distance (vectorized, GPU-accelerated if available)
-        bd = compute_bhattacharyya_distance(alpha1, beta1, alpha2, beta2, use_gpu=self.gpu_available)
-        
-        # Cap to prevent overflow when converting to BC (BC = exp(-BD))
-        # exp(-20) ≈ 2e-9 which is effectively 0 (perfect separation)
-        bd = np.minimum(bd, BD_CAP)
-
-        # Store Bhattacharyya Distance in results
-        results_array['bhattacharyya'] = bd.astype(np.float32)
-
-        return results_array
 
     def cleanup(self):
         """Clean up resources."""

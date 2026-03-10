@@ -1,4 +1,0 @@
-# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/beta_mixture.py
-# hypothesis_version: 6.151.9
-
-[-2.0, 0.0, 1e-08, 1e-06, 1e-05, 0.0001, 0.02, 0.05, 0.15, 0.5, 0.85, 1.0, 2.0, 10000.0, 200, 'alphas', 'betas', 'bic', 'converged', 'inf', 'k', 'loglik', 'nan', 'weights']

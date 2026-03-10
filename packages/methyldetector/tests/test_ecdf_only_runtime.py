@@ -1,0 +1,243 @@
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+import h5py
+import numpy as np
+import pandas as pd
+import pytest
+
+from methyl_detector.core.methyldetector import MethylDetector
+from methyl_detector.models.config import MethylModelerConfig
+from methyl_utils.core.centroid_builder import MethylCentroidBuilder
+from methyl_utils.methyl_centroid_pair import DIST_ECDF, MethylCentroidPair
+
+
+def create_sample(path: Path, positions, mC, uC, tnc) -> Path:
+    with h5py.File(path, "w") as f:
+        group = f.create_group("methylation_data")
+        group.create_dataset("pos", data=np.asarray(positions, dtype=np.uint32))
+        group.create_dataset("mC", data=np.asarray(mC, dtype=np.uint32))
+        group.create_dataset("uC", data=np.asarray(uC, dtype=np.uint32))
+        group.create_dataset("tnc", data=np.asarray(tnc, dtype=np.uint8))
+    return path
+
+
+def build_detector(temp_dir: str, **overrides) -> MethylDetector:
+    centroid1_dir = Path(temp_dir) / "c1"
+    centroid2_dir = Path(temp_dir) / "c2"
+    centroid1_dir.mkdir(exist_ok=True)
+    centroid2_dir.mkdir(exist_ok=True)
+    config = MethylModelerConfig.model_validate(
+        {
+            "chromosome": "1",
+            "contexts": ["CG"],
+            "centroid1_dir": str(centroid1_dir),
+            "centroid2_dir": str(centroid2_dir),
+            "output_dir": str(Path(temp_dir) / "out"),
+            **overrides,
+        }
+    )
+    detector = MethylDetector(config)
+    detector.chromosome = "1"
+    return detector
+
+
+def test_methyl_detector_config_rejects_legacy_distribution_fields():
+    with TemporaryDirectory() as temp_dir:
+        centroid1_dir = Path(temp_dir) / "c1"
+        centroid2_dir = Path(temp_dir) / "c2"
+        centroid1_dir.mkdir()
+        centroid2_dir.mkdir()
+
+        with pytest.raises(
+            ValueError,
+            match="Legacy distribution-specific detector options are no longer supported",
+        ):
+            MethylModelerConfig.model_validate(
+                {
+                    "chromosome": "1",
+                    "contexts": ["CG"],
+                    "centroid1_dir": str(centroid1_dir),
+                    "centroid2_dir": str(centroid2_dir),
+                    "distribution": "beta",
+                }
+            )
+
+
+def test_methyl_centroid_pair_is_ecdf_only():
+    with TemporaryDirectory() as temp_dir:
+        temp_root = Path(temp_dir)
+        sample1 = create_sample(
+            temp_root / "sample1.h5",
+            [1000, 2000],
+            [10, 16],
+            [10, 4],
+            [1, 1],
+        )
+        sample2 = create_sample(
+            temp_root / "sample2.h5",
+            [1000, 2000],
+            [2, 4],
+            [18, 16],
+            [1, 1],
+        )
+
+        builder1 = MethylCentroidBuilder(min_coverage=1, use_gpu=False, binned_stats_bins=20)
+        builder1.add_sample(sample1)
+        centroid1 = builder1.finalize()
+
+        builder2 = MethylCentroidBuilder(min_coverage=1, use_gpu=False, binned_stats_bins=20)
+        builder2.add_sample(sample2)
+        centroid2 = builder2.finalize()
+
+        pair = MethylCentroidPair(min_coverage=1)
+        result = pair.compare_centroids(centroid1, centroid2)
+
+        assert not result.empty
+        assert set(result["dist"].unique()) == {DIST_ECDF}
+
+
+def test_methyl_centroid_pair_supports_mann_whitney_from_histograms():
+    with TemporaryDirectory() as temp_dir:
+        temp_root = Path(temp_dir)
+        sample1 = create_sample(
+            temp_root / "sample1.h5",
+            [1000, 2000],
+            [10, 16],
+            [10, 4],
+            [1, 1],
+        )
+        sample2 = create_sample(
+            temp_root / "sample2.h5",
+            [1000, 2000],
+            [2, 4],
+            [18, 16],
+            [1, 1],
+        )
+
+        builder1 = MethylCentroidBuilder(min_coverage=1, use_gpu=False, binned_stats_bins=20)
+        builder1.add_sample(sample1)
+        centroid1 = builder1.finalize()
+
+        builder2 = MethylCentroidBuilder(min_coverage=1, use_gpu=False, binned_stats_bins=20)
+        builder2.add_sample(sample2)
+        centroid2 = builder2.finalize()
+
+        pair = MethylCentroidPair(min_coverage=1, statistical_test="mann_whitney")
+        result = pair.compare_centroids(centroid1, centroid2)
+
+        assert not result.empty
+        assert "tau2_1" in result.columns
+        assert "tau2_2" in result.columns
+        assert np.isfinite(result["p_value"]).all()
+
+
+def test_effect_size_coverage_is_applied_per_context():
+    with TemporaryDirectory() as temp_dir:
+        detector = build_detector(temp_dir, effect_size_coverage=0.75)
+        dmps_df = pd.DataFrame(
+            {
+                "position": [1000, 1001, 2000, 2001, 2002],
+                "context": ["CG", "CG", "CHH", "CHH", "CHH"],
+                "effect_size": [0.9, 0.1, 0.45, 0.35, 0.2],
+                "statistical_dmp": [True, True, True, True, False],
+            }
+        )
+
+        filtered = detector._filter_biological_dmps(dmps_df)
+
+        assert list(filtered["position"]) == [1000, 2000, 2001]
+
+
+def test_prepare_validation_splits_uses_heldout_repeats_when_ratio_is_zero():
+    with TemporaryDirectory() as temp_dir:
+        detector = build_detector(
+            temp_dir,
+            validation_split_ratio=0.0,
+            validation_n_repeats=3,
+        )
+        y = np.array([0, 0, 0, 1, 1, 1], dtype=int)
+
+        splits = detector._prepare_validation_splits(y, require_holdout=True)
+
+        assert len(splits) == 3
+        for calib_idx, test_idx in splits:
+            assert len(calib_idx) > 0
+            assert len(test_idx) > 0
+            assert set(y[test_idx]) == {0, 1}
+            assert set(y[calib_idx]) == {0, 1}
+
+
+def test_tau2_filter_drops_only_high_heterogeneity_positions():
+    with TemporaryDirectory() as temp_dir:
+        detector = build_detector(temp_dir, max_tau2_for_dmp=0.2)
+        comparison_results = pd.DataFrame(
+            {
+                "position": [1000, 1001, 1002],
+                "tau2_1": [0.3, 0.1, 0.4],
+                "tau2_2": [0.4, 0.5, 0.1],
+            }
+        )
+
+        filtered = detector._apply_tau2_filter(comparison_results, context="CG")
+
+        assert list(filtered["position"]) == [1001, 1002]
+
+
+def test_prefix_cache_matches_direct_validation(monkeypatch):
+    with TemporaryDirectory() as temp_dir:
+        detector = build_detector(
+            temp_dir,
+            validation_split_ratio=0.5,
+            validation_n_repeats=1,
+        )
+        sorted_df = pd.DataFrame(
+            {
+                "position": [1000, 2000],
+                "context": ["CG", "CG"],
+                "chromosome": ["1", "1"],
+                "effect_size": [1.0, 0.5],
+                "delta_sign": [1, -1],
+                "mean1": [0.9, 0.1],
+                "mean2": [0.1, 0.9],
+            }
+        )
+        bin_edges = np.array([0.0, 0.5, 1.0], dtype=np.float64)
+        bc1 = np.array([[0.0, 10.0], [10.0, 0.0]], dtype=np.float64)
+        bc2 = np.array([[10.0, 0.0], [0.0, 10.0]], dtype=np.float64)
+        monkeypatch.setattr(
+            detector,
+            "_extract_bin_counts_for_dmps",
+            lambda df: (bin_edges, bc1[: len(df)], bc2[: len(df)]),
+        )
+
+        X_val = np.array(
+            [
+                [0.90, 0.10],
+                [0.85, 0.15],
+                [0.10, 0.90],
+                [0.15, 0.85],
+            ],
+            dtype=np.float64,
+        )
+        y_val = np.array([0, 0, 1, 1], dtype=int)
+        splits = detector._prepare_validation_splits(y_val, require_holdout=True)
+
+        cache = detector._build_validation_prefix_cache(sorted_df, X_val, y_val, splits)
+        cached_result = detector._evaluate_prefix_subset(cache, k=2)
+
+        calib_idx, test_idx = splits[0]
+        direct_result = detector._validate_classifier_subset(
+            sorted_df,
+            X_val[calib_idx],
+            y_val[calib_idx],
+            X_val[test_idx],
+            y_val[test_idx],
+            sorted_df["position"].values,
+            sorted_df["context"].values,
+        )
+
+        assert cached_result["balanced_accuracy"] == pytest.approx(
+            direct_result["balanced_accuracy"],
+            abs=1e-9,
+        )

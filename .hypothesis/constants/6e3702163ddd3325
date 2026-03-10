@@ -1,4 +1,0 @@
-# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/core/methyl_frame.py
-# hypothesis_version: 6.151.9
-
-[0.0, 1e-12, 1e-09, 0.5, 0.6745, 1.0, 1.5, 3.5, 127, 128, 1024, 100000, '+', '-', 'CG', 'CHG', 'CHH', 'MethylFrame', 'MethylSample', 'N', 'Sx', 'Sx2', 'UNKNOWN', 'Unknown', '_binned_stats', '_closed', '_df', '_mean_sx_n', '_var_unbiased', 'alpha', 'batch', 'beta', 'bin_counts', 'bin_edges', 'binned_stats', 'chromosome', 'clip', 'context', 'cudf.DataFrame', 'disease', 'extended_centroid', 'float32', 'float64', 'group', 'group_name', 'ignore', 'iqr', 'laboratory', 'mC', 'methylation_data', 'n_cap must be >= 1', 'n_samples', 'pos', 'robust_z', 'sample', 'sample_paths', 'samples_used', 'strand', 'tnc', 'uC', 'uint32', 'uint8', 'values', 'w']

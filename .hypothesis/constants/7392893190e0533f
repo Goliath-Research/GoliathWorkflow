@@ -1,4 +1,0 @@
-# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/memory_manager.py
-# hypothesis_version: 6.151.9
-
-[0.0, 0.5, 0.8, 0.95, 1.0, 80.0, 85.0, 90.0, 350.0, 1000000.0, 100, 1024, 10000000, 500000000, '=', 'GPU', 'N', 'Sx', 'Sx2', 'System/GPU', '__main__', '_file_handle', '_is_memory_mapped', '_is_shared_memory', '_n_positions', '_shared_memory', '_shm_name', 'basic_centroid', 'basic_sample', 'bytes_per_position', 'chunks_processed', 'clear_memo', 'cuda', 'data_structure', 'extended_centroid', 'files_mapped', 'float32', 'float64', 'free_all_blocks', 'gpu_allocated', 'gpu_free_gb', 'gpu_memory_gb', 'gpu_memory_percent', 'gpu_operation', 'gpu_peak', 'int16', 'int32', 'last_cleanup', 'mC', 'memory_mb', 'memory_per_type', 'methylation_data', 'nbytes', 'pos', 'positions', 'r', 'system_allocated', 'system_memory_mb', 'system_peak', 'threshold_monitoring', 'tnc', 'uC', 'uint16', 'uint32', 'uint8', 'unknown']

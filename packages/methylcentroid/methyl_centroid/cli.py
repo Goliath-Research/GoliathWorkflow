@@ -117,6 +117,12 @@ Examples:
         default=4,
         help='Minimum coverage threshold (default: 4)'
     )
+    processing_group.add_argument(
+        '--binned-stats-bins',
+        type=int,
+        default=20,
+        help='Required number of ECDF histogram bins per position (default: 20, must be >= 1)'
+    )
     gpu_group = processing_group.add_mutually_exclusive_group()
     gpu_group.add_argument(
         '--use-gpu',
@@ -213,6 +219,7 @@ def create_config_from_args(args: argparse.Namespace) -> MethylCentroidConfig:
         output_dir=str(args.output_dir),
         samples=sample_paths,
         min_coverage=args.min_coverage,
+        binned_stats_bins=args.binned_stats_bins,
         use_gpu=True if args.use_gpu is None else bool(args.use_gpu),
     )
 

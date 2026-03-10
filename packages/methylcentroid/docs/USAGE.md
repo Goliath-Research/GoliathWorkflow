@@ -1,260 +1,244 @@
-# MethylCentroid User Manual
+# MethylCentroid Usage
 
-## Overview
+## Environment
 
-MethylCentroid calculates representative methylation profiles (centroids) from groups of samples, with accurate aggregation, memory efficiency, and optional GPU acceleration. It is built on **MethylUtils** for centroid construction (see **METHYLCENTROID_IMPLEMENTATION.md**).
-
-There are **two ways to run MethylCentroid**:
-
-1. **Docker container** — all commands run inside the `methylpipeline` image (GPU and dependencies included).
-2. **Local host with virtual environment** — you create a venv, install MethylUtils and MethylCentroid, activate the venv, and run on the host.
-
-Use one or the other; the CLI and Python API are the same once the environment is active.
-
----
-
-## Setup 1: Docker container
-
-Use this when you want a single, reproducible environment (e.g. shared GPU, CI, or no local Python install).
-
-**Prerequisites:** Docker; for GPU, NVIDIA Container Toolkit.
-
-**1. Start the container**
+Activate the repository virtual environment before using the CLI:
 
 ```bash
-cd /path/to/MethylPipeline/docker
-docker compose up -d
+source .venv/bin/activate
 ```
 
-**2. Run MethylCentroid**
-
-From the methylcentroid package directory, use the wrapper script (it runs the CLI inside the container):
+If the packages are not installed into the environment yet:
 
 ```bash
-cd /path/to/MethylPipeline/packages/methylcentroid
-./mc --batch-config configs/pb-cancer_batch_stage1_config.json
+pip install -e packages/methylutils
+pip install -e packages/methylcentroid
 ```
 
-Other examples:
+## Single Config
 
-```bash
-./mc --config configs/example_config.json
-./mc --no-gpu --batch-config configs/batch.json
-```
-
-**Alternative:** run the CLI directly in the container (paths must be valid inside the container, e.g. `/workspace/...`):
-
-```bash
-docker exec -w /workspace/packages/methylcentroid methylpipeline \
-  python3 -m methyl_centroid.cli --batch-config configs/pb-cancer_batch_stage1_config.json
-```
-
----
-
-## Setup 2: Local host with virtual environment
-
-Use this when you run on the host (e.g. your laptop or a login node) and want to activate a virtual environment before running MethylCentroid.
-
-**Prerequisites:** Python 3.8+; optional CuPy for GPU.
-
-**1. Create a virtual environment**
-
-From the repo root or from `packages/methylcentroid`:
-
-```bash
-python3 -m venv venv
-```
-
-(You can use another name, e.g. `.venv`; the rest of the doc uses `venv`.)
-
-**2. Activate the virtual environment**
-
-```bash
-source ./venv/bin/activate
-```
-
-On Windows: `venv\Scripts\activate`. After activation, your shell prompt usually shows `(venv)`.
-
-**3. Install MethylUtils (required dependency)**
-
-```bash
-cd /path/to/MethylPipeline/packages/methylutils/methyl_utils
-pip install -e .
-```
-
-**4. Install MethylCentroid**
-
-```bash
-cd /path/to/MethylPipeline/packages/methylcentroid
-pip install -e .
-```
-
-(Or use Poetry: `poetry install` in the methylcentroid package.)
-
-**5. Optional: GPU support**
-
-If you have CUDA and want GPU acceleration:
-
-```bash
-pip install cupy-cuda12x   # adjust to your CUDA version (e.g. cupy-cuda11x)
-```
-
-**6. Run MethylCentroid**
-
-With the virtual environment **activated** (e.g. `source .venv/bin/activate` or `source ./venv/bin/activate` from the repo root), use the CLI from any directory:
-
-```bash
-python -m methyl_centroid.cli --batch-config configs/pb-cancer_batch_stage1_config.json
-python -m methyl_centroid.cli --config configs/example_config.json
-python -m methyl_centroid.cli --config config.json --no-gpu
-```
-
-Or run Python and use the API (see Python API below). You do **not** use the `./mc` script when using the venv; that script is for Docker only.
-
----
-
-## Quick Start
-
-After you have chosen a setup and completed it:
-
-- **Docker:** from `packages/methylcentroid`, run `./mc --batch-config <your_batch_config.json>`.
-- **Virtual environment:** activate the venv (`source ./venv/bin/activate`), then run `python -m methyl_centroid.cli --batch-config <your_batch_config.json>` (paths in the config must be valid on your host).
-
-### Python API
-
-```python
-from methyl_centroid import MethylCentroid
-
-mc = MethylCentroid(
-    chrom='1',
-    ctx='CG',
-    output_dir='./output',
-    add_samples=['/data/sample1', '/data/sample2', '/data/sample3'],
-    min_coverage=4
-)
-
-results = mc.build_centroid()
-print(f"Centroid saved to: {results.final_centroid_path}")
-```
-
----
-
-## Configuration Files
-
-### Batch processing
+Use `MethylCentroidConfig` when you want to build one chromosome/context pair.
 
 ```json
 {
-  "chromosomes": ["1", "2", "3", "X"],
-  "contexts": ["CG", "CHG", "CHH"],
-  "base_config": {
-    "samples": ["/data/healthy1", "/data/healthy2", "/data/healthy3"],
-    "output_dir": "/output/centroids",
-    "min_coverage": 4,
-    "use_gpu": true
-  },
-  "continue_on_error": true
-}
-```
-
-### Single (chrom, context) config
-
-```json
-{
+  "laboratory": "example-lab",
+  "disease": "example-disease",
+  "group": "healthy",
+  "batch": "2026-03",
   "chrom": "1",
   "ctx": "CG",
-  "samples": ["/data/sample1", "/data/sample2", "/data/sample3"],
-  "output_dir": "/output/centroids",
+  "output_dir": "/path/to/output/centroids/healthy",
+  "samples": [],
+  "add_samples": [
+    "/path/to/samples/sample_001",
+    "/path/to/samples/sample_002"
+  ],
+  "remove_samples": [],
   "min_coverage": 4,
+  "min_samples": 1,
+  "binned_stats_bins": 20,
   "use_gpu": true,
   "verbose": true
 }
 ```
 
----
+Important points:
 
-## Key Parameters
+- `samples` is the current cohort membership.
+- `add_samples` are appended after removals are applied.
+- `remove_samples` removes by sample directory identity.
+- Sample entries are directories, not `.h5` files.
+- `binned_stats_bins` is required and must be positive.
 
-- **`min_coverage`**: Minimum coverage (mC + uC) for a position (default: 4).
-- **`use_gpu`**: Use GPU when available (default: true). Override with CLI `--no-gpu`.
-- **`verbose`**: Verbose logging (default: true).
-- **`samples`**: Current cohort sample paths (for updates).
-- **`add_samples`**: New sample paths to add.
-- **`remove_samples`**: Sample paths to remove.
+Run it with:
 
----
+```bash
+python -m methyl_centroid.cli --config packages/methylcentroid/configs/example_config.json
+```
 
-## Output Files
+## Batch Config
 
-1. **`{chrom}-{ctx}.h5`**: HDF5 centroid (pos, mC, uC, N, Sx, Sx2, log_x_sum, log_1_minus_x_sum; extended stats if built with them).
-2. **`{chrom}-{ctx}_config.json`**: Metadata and configuration.
+Use `BatchProcessingConfig` when the same cohort should be built across multiple
+chromosomes and contexts.
 
----
+```json
+{
+  "chromosomes": ["1", "2", "3"],
+  "contexts": ["CG", "CHG", "CHH"],
+  "base_config": {
+    "laboratory": "example-lab",
+    "disease": "example-disease",
+    "group": "healthy",
+    "batch": "2026-03",
+    "chrom": "1",
+    "ctx": "CG",
+    "output_dir": "/path/to/output/centroids/healthy",
+    "samples": [],
+    "add_samples": [
+      "/path/to/samples/sample_001",
+      "/path/to/samples/sample_002"
+    ],
+    "remove_samples": [],
+    "min_coverage": 4,
+    "min_samples": 1,
+    "binned_stats_bins": 20,
+    "use_gpu": true,
+    "verbose": true
+  },
+  "parallel_combinations": 1,
+  "continue_on_error": true,
+  "save_batch_summary": true
+}
+```
 
-## Common Workflows
+Run it with:
 
-### Create centroid for a cohort
+```bash
+python -m methyl_centroid.cli --batch-config packages/methylcentroid/configs/multi_chromosome_config.json
+```
+
+## CLI Modes
+
+### Config-driven CLI
+
+```bash
+python -m methyl_centroid.cli --config /path/to/config.json
+python -m methyl_centroid.cli --batch-config /path/to/batch_config.json
+python -m methyl_centroid.cli --config /path/to/config.json --no-gpu
+```
+
+### Project-driven CLI
+
+This mode resolves cohorts from a pipeline project file and is the path used by
+`MethylValidation`.
+
+```bash
+methyl-centroid --project /path/to/project.json --group group1
+methyl-centroid --project /path/to/project.json --group group2
+methyl-centroid --project /path/to/project.json --group all
+```
+
+When validation or another orchestrator wants to pass cohort deltas explicitly,
+use a step override:
+
+```bash
+methyl-centroid \
+  --project /path/to/project.json \
+  --group group1 \
+  --step-override /path/to/centroid_group1_override.json
+```
+
+Expected step override shape:
+
+```json
+{
+  "base_config": {
+    "samples": [
+      "/path/to/previous/sample_001",
+      "/path/to/previous/sample_002"
+    ],
+    "add_samples": ["/path/to/new/sample_003"],
+    "remove_samples": ["/path/to/previous/sample_001"]
+  }
+}
+```
+
+## Python Class Usage
+
+### Initial build
 
 ```python
 from methyl_centroid import MethylCentroid
 
 mc = MethylCentroid(
-    chrom='1',
-    ctx='CG',
-    output_dir='./centroids/healthy',
-    add_samples=['healthy_sample1', 'healthy_sample2'],
-    min_coverage=4
-)
-mc.build_centroid()
-```
-
-### Incremental update (add samples)
-
-```python
-mc = MethylCentroid(
-    chrom='1',
-    ctx='CG',
-    output_dir='./centroids/healthy',
-    samples=['healthy_sample1', 'healthy_sample2'],
-    add_samples=['healthy_sample_new1', 'healthy_sample_new2']
-)
-mc.build_centroid()
-```
-
-### Optional binned stats
-
-```python
-mc = MethylCentroid(
-    chrom='1',
-    ctx='CG',
-    output_dir='./centroids/healthy',
-    add_samples=['sample1', 'sample2'],
+    laboratory="example-lab",
+    disease="example-disease",
+    group="healthy",
+    batch="2026-03",
+    chrom="1",
+    ctx="CG",
+    output_dir="./centroids/healthy",
+    add_samples=[
+        "/data/samples/sample_001",
+        "/data/samples/sample_002",
+    ],
+    remove_samples=[],
     min_coverage=4,
-    binned_stats_bins=20
+    min_samples=1,
+    binned_stats_bins=20,
+    use_gpu=True,
 )
+
+results = mc.build_centroid()
+print(results.final_centroid_path)
+```
+
+### Update build
+
+```python
+mc = MethylCentroid(
+    laboratory="example-lab",
+    disease="example-disease",
+    group="healthy",
+    batch="2026-03",
+    chrom="1",
+    ctx="CG",
+    output_dir="./centroids/healthy",
+    samples=[
+        "/data/samples/sample_001",
+        "/data/samples/sample_002",
+    ],
+    add_samples=["/data/samples/sample_003"],
+    remove_samples=["/data/samples/sample_001"],
+    min_coverage=4,
+    min_samples=1,
+    binned_stats_bins=20,
+)
+
 mc.build_centroid()
 ```
 
----
+The runner resolves the effective cohort as:
 
-## Integration with MethylPipeline
-
-MethylCentroid is the first step in the pipeline:
-
-```
-MethylCentroid → MethylDetector → MethylClassifier
-    (Generate)      (Detect)          (Predict)
+```text
+effective_samples = samples - remove_samples + add_samples
 ```
 
-- **Input**: Raw methylation samples (HDF5 per chrom/context), multiple samples per group.
-- **Output**: Centroids (one per group) used by MethylDetector for DMP detection.
+The resulting active cohort is written back to:
 
----
+- HDF5 metadata field `samples_used`
+- sidecar config field `samples`
+
+## Direct CLI Parameters
+
+When not using a JSON config, the important direct flags are:
+
+- `--chromosome`
+- `--context`
+- `--samples`
+- `--output-dir`
+- `--min-coverage`
+- `--binned-stats-bins`
+- `--no-gpu`
+
+The direct CLI path is best for ad hoc usage. Project and JSON configs are the
+recommended entry points for reproducible runs.
+
+## Outputs
+
+Each successful build writes:
+
+- `{chrom}-{ctx}.h5`
+- `{chrom}-{ctx}_config.json`
+
+The HDF5 centroid contains the required ECDF histogram data in
+`methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]`.
 
 ## Troubleshooting
 
-- **GPU not used**: Set `use_gpu=false` in config or use CLI `--no-gpu`.
-- **Large CHH memory use**: Increase `min_coverage` or run with `use_gpu=false`.
-- **Missing sample files**: Ensure each sample path contains the expected `{chrom}-{ctx}.h5` file for the chrom/context you are building.
-
-For theory and implementation details, see **MethylCentroid_Theoretical_Foundation.md** and **METHYLCENTROID_IMPLEMENTATION.md**.
+- Missing sample files: each sample directory must contain `{chrom}-{ctx}.h5`.
+- Import errors: activate `.venv` and ensure both `methylutils` and
+  `methylcentroid` are installed in editable mode.
+- GPU issues: rerun with `--no-gpu` or `use_gpu: false`.
+- Comparison failures downstream: rebuild centroids with a positive
+  `binned_stats_bins` value so `bin_counts` is present.

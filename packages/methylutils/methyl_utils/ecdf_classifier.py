@@ -142,6 +142,45 @@ class ECDFClassifier:
     def set_temperature(self, temperature: float) -> None:
         self.temperature = max(float(temperature), 0.1)
 
+    def compute_log_pdf_matrices(
+        self,
+        X: np.ndarray,
+        availability_mask: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Precompute per-sample, per-feature log PDF values for both classes.
+
+        Returns
+        -------
+        (log_p_c1, log_p_c2, availability_mask)
+            Each log-PDF matrix has shape (n_samples, n_dmps).
+        """
+        if X.shape[1] != self.n_dmps:
+            raise ValueError(
+                f"ECDFClassifier expects {self.n_dmps} features, got {X.shape[1]}"
+            )
+
+        if availability_mask is not None:
+            avail = np.asarray(availability_mask, dtype=bool)
+        else:
+            avail = np.isfinite(X)
+
+        X_clean = np.where(avail, X, 0.5)
+        X_clean = np.clip(X_clean, 1e-7, 1.0 - 1e-7)
+        n_samples = X.shape[0]
+        log_p_c1 = np.zeros((n_samples, self.n_dmps), dtype=np.float64)
+        log_p_c2 = np.zeros((n_samples, self.n_dmps), dtype=np.float64)
+
+        for i in range(self.n_dmps):
+            pdf1_vals = np.interp(X_clean[:, i], self._grid, self._pdf_c1[i])
+            pdf2_vals = np.interp(X_clean[:, i], self._grid, self._pdf_c2[i])
+            log_p_c1[:, i] = np.log(np.maximum(pdf1_vals, 1e-300))
+            log_p_c2[:, i] = np.log(np.maximum(pdf2_vals, 1e-300))
+
+        log_p_c1 = np.where(avail, log_p_c1, 0.0)
+        log_p_c2 = np.where(avail, log_p_c2, 0.0)
+        return log_p_c1, log_p_c2, avail
+
     def predict_proba(
         self,
         X: np.ndarray,
@@ -163,39 +202,11 @@ class ECDFClassifier:
         -------
         ndarray, shape (n_samples, 2)  — P(class0), P(class1) for each sample.
         """
-        if X.shape[1] != self.n_dmps:
-            raise ValueError(
-                f"ECDFClassifier expects {self.n_dmps} features, got {X.shape[1]}"
-            )
-
         n_samples = X.shape[0]
-
-        # Availability: positions where we have a real measurement
-        if availability_mask is not None:
-            avail = np.asarray(availability_mask, dtype=bool)
-        else:
-            avail = np.isfinite(X)  # (n_samples, n_dmps)
-
-        # Impute NaN → 0.5 (neutral), then clip to open interval
-        X_clean = np.where(avail, X, 0.5)
-        X_clean = np.clip(X_clean, 1e-7, 1.0 - 1e-7)
-
-        # Evaluate log PDF for all samples × positions using vectorised np.interp.
-        # For each DMP position i, interpolate X_clean[:, i] against the pre-built
-        # PDF table row i.
-        log_p_c1 = np.zeros((n_samples, self.n_dmps), dtype=np.float64)
-        log_p_c2 = np.zeros((n_samples, self.n_dmps), dtype=np.float64)
-
-        for i in range(self.n_dmps):
-            # np.interp is vectorised: shape (n_samples,)
-            pdf1_vals = np.interp(X_clean[:, i], self._grid, self._pdf_c1[i])
-            pdf2_vals = np.interp(X_clean[:, i], self._grid, self._pdf_c2[i])
-            log_p_c1[:, i] = np.log(np.maximum(pdf1_vals, 1e-300))
-            log_p_c2[:, i] = np.log(np.maximum(pdf2_vals, 1e-300))
-
-        # Zero out unavailable positions so they do not contribute
-        log_p_c1 = np.where(avail, log_p_c1, 0.0)
-        log_p_c2 = np.where(avail, log_p_c2, 0.0)
+        log_p_c1, log_p_c2, avail = self.compute_log_pdf_matrices(
+            X,
+            availability_mask=availability_mask,
+        )
 
         # Weighted log-likelihood sum  Σ w_i · log p(x_i | class_k)
         w = self.weights[np.newaxis, :]  # (1, n_dmps)

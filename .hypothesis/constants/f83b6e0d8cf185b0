@@ -1,4 +1,0 @@
-# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/metrics_factory.py
-# hypothesis_version: 6.151.9
-
-['Hellinger distance', 'MetricFactory', 'a1', 'a2', 'b1', 'b2', 'bhattacharyya', 'defaults', 'description', 'function', 'get_metric_factory', 'hellinger', 'jeffreys', 'jensen_shannon', 'kl', 'params', 'use_gpu', 'wasserstein']

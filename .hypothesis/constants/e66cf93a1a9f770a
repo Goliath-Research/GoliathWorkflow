@@ -1,4 +1,0 @@
-# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/gpu_detection.py
-# hypothesis_version: 6.151.9
-
-[0.0, 1.0, 2.0, 3.0, 1024, '1', '=', 'CuPy not available', 'GPU STATUS REPORT', 'GPU state reset', 'Non-numeric results', 'available', 'compute_capability', 'cpu_error', 'cpu_result', 'cpu_time', 'cuda_version', 'cudf', 'cudf_available', 'cupy_available', 'device count unknown', 'device_count', 'difference', 'error_message', 'get', 'gpu_available', 'gpu_error', 'gpu_memory_free', 'gpu_memory_total', 'gpu_memory_used', 'gpu_name', 'gpu_result', 'gpu_time', 'major', 'memory unknown', 'memory_gb', 'minor', 'name', 'not supported', 'nvidia_gpu_available', 'on', 'pynvml_available', 'quad', 'true', 'utf-8', 'yes']

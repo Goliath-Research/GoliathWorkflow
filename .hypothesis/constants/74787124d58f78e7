@@ -1,4 +1,0 @@
-# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/core/io.py
-# hypothesis_version: 6.151.9
-
-[0.0, 1.5, 100000, 'N', 'Sx', 'Sx2', 'bin_counts', 'bin_edges', 'binned_stats', 'mC', 'methylation_data', 'pos', 'r', 'set_binned_stats', 'tnc', 'uC', 'utf-8']

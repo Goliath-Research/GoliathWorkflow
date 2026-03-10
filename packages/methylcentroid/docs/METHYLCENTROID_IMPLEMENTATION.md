@@ -1,90 +1,131 @@
-# MethylCentroid Implementation (MethylUtils)
+# MethylCentroid Implementation
 
-This document describes how MethylCentroid is implemented on top of **MethylUtils**: the builder, data types, I/O, and how the methylcentroid package uses them. **Only the ECDF distribution is supported**; Normal, Beta, Beta-Binomial, and Beta-Mixture have been removed.
+## Layers
 
-## Architecture Overview
+The implementation is split across two packages:
 
-- **MethylUtils** (package `methyl_utils`) provides the core centroid **building** and **data types**.
-- **MethylCentroid** (package `methyl_centroid`) provides the **user-facing API**, batch processing, CLI, and project/config resolution; it calls MethylUtils for actual centroid construction and uses MethylUtils types throughout.
+- `methyl_centroid`: the runner/orchestrator, CLI, config models, batch logic,
+  and project resolution.
+- `methyl_utils`: the builder, centroid data object, HDF5 I/O, GPU utilities,
+  and downstream ECDF comparison helpers.
 
-```
-User / CLI
-    → methyl_centroid.MethylCentroid (config, chrom/ctx, samples)
-        → methyl_utils.core.centroid_builder.MethylCentroidBuilder
-            → add_sample(path) per sample
-            → finalize() → MethylCentroid
-        → methyl_utils.core.io.save_to_h5 / load_from_h5
-```
+## Build Pipeline
 
-## MethylUtils Components
-
-### 1. MethylCentroidBuilder (`methyl_utils.core.centroid_builder`)
-
-The **single** way to build extended centroids:
-
-- **Streaming**: Processes one sample at a time via `add_sample(sample_path)`.
-- **Position alignment**: Maintains a sorted union of positions; new positions are merged and accumulators updated (GPU or CPU).
-- **Accumulators**: N, Sx, Sx2, mC_sum, uC_sum, and **bin_edges** / **bin_counts** (binned histogram for ECDF). Number of bins is set by `binned_stats_bins` (default 20 in MethylCentroid).
-- **GPU**: Uses CuPy when `use_gpu=True` and available.
-- **Finalize**: `finalize()` applies `min_coverage` filter and returns **MethylCentroid** with core columns and binned_stats (bin_edges, bin_counts).
-
-**Constructor** (simplified):
-
-```python
-from methyl_utils.core.centroid_builder import MethylCentroidBuilder
-
-builder = MethylCentroidBuilder(
-    min_coverage=4,
-    use_gpu=True,
-    chunk_size=100_000_000,
-    metadata=None,
-    binned_stats_bins=20,
-)
-builder.add_sample("/path/to/sample/dir")  # or path to {chrom}-{ctx}.h5
-# ... more add_sample() ...
-centroid = builder.finalize()  # MethylCentroid
+```text
+user config / CLI / project
+  -> methyl_centroid.MethylCentroid
+  -> methyl_utils.core.centroid_builder.MethylCentroidBuilder
+  -> methyl_utils.core.methyl_frame.MethylCentroid
+  -> HDF5 centroid ({chrom}-{ctx}.h5)
 ```
 
-### 2. Convenience function: `build_centroid`
+## Runner Responsibilities
 
-```python
-from methyl_utils.core.centroid_builder import build_centroid
+`methyl_centroid.MethylCentroid` is responsible for:
 
-centroid = build_centroid(
-    sample_paths=["/path/s1", "/path/s2"],
-    min_coverage=4,
-    use_gpu=True,
-    metadata={"chrom": "1", "ctx": "CG"},
-    binned_stats_bins=20,
-)
+- resolving sample directories to `{sample_dir}/{chrom}-{ctx}.h5`
+- applying the public cohort contract:
+  `samples`, `add_samples`, `remove_samples`
+- validating that `binned_stats_bins >= 1`
+- invoking the builder
+- writing metadata and the sidecar config
+
+The active cohort is resolved deterministically before the build:
+
+```text
+effective_samples = samples - remove_samples + add_samples
 ```
 
-### 3. Data types (`methyl_utils.core.methyl_frame`)
+That resolved cohort is then processed for the current chromosome/context.
 
-- **MethylSample**: Single sample (pos, mC, uC, tnc). Loaded from per-sample HDF5.
-- **MethylCentroid**: The only centroid type. Fields: pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2. Required **binned_stats** (bin_edges, bin_counts) for ECDF. Beta parameters (alpha, beta) are derived via method-of-moments from N, Sx, Sx2 when needed; **comparison and overlap use ECDF only**.
+## CPU Path
 
-The centroid data class in MethylUtils is **MethylCentroid** (single type).
+The CPU path is implemented with NumPy/pandas accumulation in
+`methyl_utils.core.centroid_builder.MethylCentroidBuilder`.
 
-### 4. I/O (`methyl_utils.core.io`)
+Key points:
 
-- **load_from_h5(path)**: Returns `MethylSample` or `MethylCentroid` depending on presence of full centroid schema (N, Sx, Sx2, Sm, Su, Sc2, Swx2). Binned stats required for centroids.
-- **save_to_h5**: Persists centroid/sample to HDF5; writes only the current schema (no log sums or Beta-Binomial columns).
+- samples are streamed one at a time with `add_sample(...)`
+- positions are aligned into a sorted union
+- sufficient statistics are accumulated per position
+- per-position ECDF histograms are accumulated into `bin_counts`
+- `finalize()` returns a CPU `MethylCentroid` data object
 
-### 5. How the methylcentroid package uses MethylUtils
+For large contexts, the runner can also use chunked recomputation over position
+windows to limit peak memory use.
 
-- **Build**: Instantiates `MethylCentroidBuilder(min_coverage, use_gpu, binned_stats_bins=20)`, calls `add_sample(path)` for each sample, then `finalize()`. Applies optional `min_samples` filter on the result.
-- **Incremental add/remove**: Uses `MethylCentroid.add_sample(sample)` and `.remove_sample(sample)` for in-memory updates.
-- **Saving**: Writes the finalized MethylCentroid to `output_dir` as `{chrom}-{ctx}.h5` with binned_stats when bins > 0.
-- **Distribution**: Only **ECDF** is used for comparison and overlap (MethylCentroidPair, MethylDetector).
+## GPU Path
+
+The GPU path uses CuPy through the same builder interface:
+
+- `use_gpu=True` requests GPU acceleration
+- if GPU support is unavailable, the code falls back to CPU
+- accumulation still targets the same sufficient statistics and histogram schema
+- finalized centroids are converted back to CPU objects before persistence
+
+The CPU and GPU paths intentionally share the same output contract so downstream
+consumers do not need separate code paths.
+
+## Data Object
+
+The persisted centroid type is
+`methyl_utils.core.methyl_frame.MethylCentroid`.
+
+It stores:
+
+- `pos`, `tnc`
+- `N`, `Sx`, `Sx2`
+- `Sm`, `Su`, `Sc2`, `Swx2`
+- required `binned_stats` (`bin_edges`, `bin_counts`) in memory
+
+The HDF5 format stores:
+
+- datasets under `methylation_data/`
+- `methylation_data.attrs["bins"]`
+- `methylation_data["bin_counts"]`
+
+Load and save boundaries now require valid positive-bin ECDF data for centroids.
+
+## Incremental Operations
+
+There are two update layers:
+
+- runner-level updates: resolve the final cohort from `samples`,
+  `add_samples`, and `remove_samples`, then build that cohort for the target
+  chromosome/context
+- data-level updates: `MethylCentroid.add_sample(...)` and
+  `MethylCentroid.remove_sample(...)` update a centroid object in memory
+
+The runner re-applies `min_coverage` and `min_samples` semantics after sample
+mutation so the result matches a full rebuild contract.
+
+## Downstream Consumers
+
+- `MethylCentroidPair` expects centroids with matching ECDF histogram bins and
+  compares them with the ECDF-only path.
+- `MethylDetector` builds on `MethylCentroidPair` and no longer accepts runtime
+  distribution-selection knobs for centroid comparison. Its current ECDF
+  utilities also reuse centroid `bin_counts`, while heterogeneity-oriented
+  filters can consume stored `Sc2` and `Swx2`.
+- `MethylValidation` can emit per-group centroid step overrides so each run
+  passes explicit `samples`, `add_samples`, and `remove_samples` deltas.
+
+## Config Defaults
+
+The supported default for `binned_stats_bins` is `20`.
+
+That default is aligned across:
+
+- `MethylCentroidConfig`
+- `MethylCentroidBuilder`
+- direct CLI usage
+- documentation examples
 
 ## Summary
 
-| Layer | Component | Role |
-|-------|-----------|------|
-| MethylUtils | MethylCentroidBuilder | Streaming, GPU; finalize → MethylCentroid with binned_stats |
-| MethylUtils | MethylCentroid | Single centroid type; N, Sx, Sx2, Sm, Su, Sc2, Swx2, binned_stats; ECDF only for comparison |
-| MethylUtils | load_from_h5 / save_to_h5 | Load/save samples and centroids |
-| MethylCentroid package | MethylCentroid (class) | Config, chrom/ctx, batch, CLI; delegates to MethylCentroidBuilder |
+Implementation-wise, the current contract is:
 
-For theoretical background (ECDF, sufficient statistics), see **MethylCentroid_Theoretical_Foundation.md**.
+- one runner class
+- one centroid data class
+- one required ECDF histogram schema
+- one supported centroid-comparison mode

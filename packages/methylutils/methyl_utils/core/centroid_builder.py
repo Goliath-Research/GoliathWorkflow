@@ -38,13 +38,17 @@ class MethylCentroidBuilder:
         use_gpu: bool = True,
         chunk_size: int = 100_000_000,
         metadata: Optional[Dict[str, Any]] = None,
-        binned_stats_bins: int = 101,
+        binned_stats_bins: int = 20,
     ):
+        if int(binned_stats_bins) < 1:
+            raise ValueError(
+                f"binned_stats_bins must be >= 1 for ECDF centroids, got {binned_stats_bins}"
+            )
         self.min_coverage = min_coverage
         self.use_gpu = use_gpu and HAS_GPU
         self.xp = cp if self.use_gpu else np
         self.metadata = metadata or {}
-        self.binned_stats_bins = binned_stats_bins
+        self.binned_stats_bins = int(binned_stats_bins)
         self.bin_edges = np.linspace(0.0, 1.0, binned_stats_bins + 1, dtype=np.float64)
 
         logger.info(f"MethylCentroidBuilder initialized → GPU: {self.use_gpu}, binned_stats_bins={binned_stats_bins}")
@@ -279,7 +283,7 @@ def build_centroid(
     min_coverage: int = 4,
     use_gpu: bool = True,
     metadata: Optional[Dict[str, Any]] = None,
-    binned_stats_bins: int = 101,
+    binned_stats_bins: int = 20,
 ) -> MethylCentroid:
     builder = MethylCentroidBuilder(
         min_coverage=min_coverage,

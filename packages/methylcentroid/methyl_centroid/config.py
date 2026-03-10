@@ -97,8 +97,8 @@ class MethylCentroidConfig(BaseModel):
     # Binned stats (bin_edges, bin_counts) for ECDF and distribution comparison
     binned_stats_bins: int = Field(
         default=20,
-        ge=0,
-        description="Number of bins for per-position binned histogram (0 = disabled). Default 20.",
+        ge=1,
+        description="Number of bins for the required per-position ECDF histogram. Must be >= 1. Default 20.",
     )
 
     @field_validator('ctx')

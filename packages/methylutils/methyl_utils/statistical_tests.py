@@ -1080,6 +1080,94 @@ def welch_mean_test(
     }
 
 
+def mann_whitney_from_bin_counts(
+    bc1: np.ndarray,
+    bc2: np.ndarray,
+    n1: np.ndarray,
+    n2: np.ndarray,
+) -> Dict[str, np.ndarray]:
+    """
+    Vectorized Mann-Whitney U test using centroid bin-count histograms.
+
+    The histogram approximation counts all pairs where a group-1 sample falls in a
+    strictly larger bin than a group-2 sample, plus half credit for tied bins.
+    """
+    from scipy.stats import norm
+
+    bc1 = np.asarray(bc1, dtype=np.float64)
+    bc2 = np.asarray(bc2, dtype=np.float64)
+    if bc1.ndim == 1:
+        bc1 = bc1.reshape(1, -1)
+        bc2 = bc2.reshape(1, -1)
+
+    n1 = np.asarray(n1, dtype=np.float64).ravel()
+    n2 = np.asarray(n2, dtype=np.float64).ravel()
+    if n1.size != bc1.shape[0]:
+        n1 = np.resize(n1, bc1.shape[0])
+    if n2.size != bc2.shape[0]:
+        n2 = np.resize(n2, bc2.shape[0])
+
+    # Reconstruct U from histogram counts: lower bins in group2 contribute a win,
+    # same-bin pairs count as ties worth 0.5.
+    cs2 = np.cumsum(bc2, axis=1)
+    lower_than_bin = np.concatenate(
+        [np.zeros((bc2.shape[0], 1), dtype=np.float64), cs2[:, :-1]],
+        axis=1,
+    )
+    u_stat = np.sum(bc1 * lower_than_bin, axis=1) + 0.5 * np.sum(bc1 * bc2, axis=1)
+
+    total_n = np.maximum(n1 + n2, 0.0)
+    ties = bc1 + bc2
+    denom = np.maximum(total_n * np.maximum(total_n - 1.0, 0.0), 1.0)
+    tie_corr = np.sum(ties * (ties**2 - 1.0), axis=1) / denom
+    var_u = (n1 * n2 / 12.0) * np.maximum((total_n + 1.0) - tie_corr, 0.0)
+
+    mean_u = (n1 * n2) / 2.0
+    z_stat = np.zeros_like(u_stat, dtype=np.float64)
+    valid = (n1 > 0) & (n2 > 0) & np.isfinite(var_u) & (var_u > 0.0)
+    z_stat[valid] = (u_stat[valid] - mean_u[valid]) / np.sqrt(var_u[valid])
+    p_value = np.ones_like(u_stat, dtype=np.float64)
+    p_value[valid] = 2.0 * norm.sf(np.abs(z_stat[valid]))
+    p_value = np.clip(p_value, 1e-300, 1.0)
+
+    return {
+        "u_stat": np.asarray(u_stat, dtype=np.float64),
+        "z_stat": np.asarray(z_stat, dtype=np.float64),
+        "p_value": np.asarray(p_value, dtype=np.float64),
+        "var_u": np.asarray(var_u, dtype=np.float64),
+    }
+
+
+def dl_heterogeneity(
+    Sm: np.ndarray,
+    Su: np.ndarray,
+    Swx2: np.ndarray,
+    Sc2: np.ndarray,
+    N: np.ndarray,
+) -> Dict[str, np.ndarray]:
+    """
+    DerSimonian-Laird-style decomposition of between-sample heterogeneity using
+    centroid sufficient statistics already stored in MethylCentroid.
+    """
+    Sm = np.asarray(Sm, dtype=np.float64).ravel()
+    Su = np.asarray(Su, dtype=np.float64).ravel()
+    Swx2 = np.asarray(Swx2, dtype=np.float64).ravel()
+    Sc2 = np.asarray(Sc2, dtype=np.float64).ravel()
+    N = np.asarray(N, dtype=np.float64).ravel()
+
+    c_total = np.maximum(Sm + Su, 1e-12)
+    theta = Sm / c_total
+    Q = Swx2 - (Sm**2 / c_total)
+    denom = c_total - (Sc2 / c_total)
+    tau2 = np.maximum(0.0, (Q - np.maximum(N - 1.0, 0.0)) / np.maximum(denom, 1e-12))
+
+    return {
+        "theta": np.asarray(theta, dtype=np.float64),
+        "Q": np.asarray(Q, dtype=np.float64),
+        "tau2": np.asarray(tau2, dtype=np.float64),
+    }
+
+
 def ecdf_overlap_integral(
     ecdf_view1: "ECDFView",
     ecdf_view2: "ECDFView",
@@ -1426,6 +1514,8 @@ __all__ = [
     "ecdf_ks_statistic",
     "ecdf_ks_pvalue",
     "welch_mean_test",
+    "mann_whitney_from_bin_counts",
+    "dl_heterogeneity",
     "ecdf_overlap_integral",
     "effect_size_from_components",
     "ecdf_effect_size",

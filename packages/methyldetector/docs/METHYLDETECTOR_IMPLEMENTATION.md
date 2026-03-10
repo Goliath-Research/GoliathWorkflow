@@ -6,19 +6,20 @@ This document describes how MethylDetector is implemented on top of **MethylUtil
 
 ## Architecture
 
-- **MethylUtils** owns all centroid comparison math: Welch test, FDR correction, ECDF overlap, `effect_size`, and ECDFClassifier.
-- **MethylDetector** owns the pipeline: config, per-chromosome/context orchestration, staged filtering, DMP selection, classifier invocation, and exports.
+- **MethylUtils** owns centroid comparison math: Welch or histogram-derived Mann-Whitney, two-stage BH FDR correction, ECDF overlap, `effect_size`, heterogeneity (`tau2`), and `ECDFClassifier`.
+- **MethylDetector** owns the pipeline: config, per-chromosome/context orchestration, staged filtering, optional rescue track, held-out validation, classifier invocation, and exports.
 
 ```mermaid
 flowchart LR
     Config[JSON Config]
     Detector[MethylDetector]
     Pair[MethylCentroidPair]
-    Welch[Welch mean test]
+    Welch[Welch or Mann-Whitney]
     FDR[fdr_tsbh]
     ECDF[Continuous ECDF overlap]
     Effect[effect_size formula]
-    Filter[Biological Filter]
+    Filter[Per-context effect_size_coverage]
+    Holdout[Repeated held-out BA]
     Clf[ECDFClassifier]
     Out[CSV and Classifier model]
 
@@ -29,7 +30,8 @@ flowchart LR
     FDR --> ECDF
     ECDF --> Effect
     Effect --> Filter
-    Filter --> Clf
+    Filter --> Holdout
+    Holdout --> Clf
     Clf --> Out
 ```
 
@@ -42,9 +44,9 @@ flowchart LR
 The primary comparison entry point.
 
 - Aligns centroids to common positions; applies `position_subset` to restrict the comparison when a pre-filter has already reduced the candidate set.
-- Runs a Welch-style unequal-variance mean-difference test on every aligned position.
+- Runs either a Welch-style unequal-variance mean-difference test or a histogram-derived Mann-Whitney test on every aligned position.
 - Applies Two-Stage Benjamini-Hochberg FDR correction.
-- Returns a DataFrame with columns: `position`, `p_value`, `q_value`, `mean1`, `mean2`, `delta_mean`, `delta_sign`, `variance1`, `variance2`, `n1`, `n2`, `overlap_approx`, `effect_size` (initial discrete overlap-based), `alpha1/beta1/alpha2/beta2` (retained for EAT downstream), `dist` (always `DIST_ECDF = 5`).
+- Returns a DataFrame with columns: `position`, `p_value`, `q_value`, `mean1`, `mean2`, `delta_mean`, `delta_sign`, `variance1`, `variance2`, `tau2_1`, `tau2_2`, `n1`, `n2`, `overlap_approx`, `effect_size` (initial discrete overlap-based), `alpha1/beta1/alpha2/beta2` (retained for EAT metadata), `dist` (always `DIST_ECDF = 5`).
 
 ### `load_and_align(path1, path2, min_coverage=...)`
 
@@ -66,6 +68,8 @@ Extracts methylation fractions for real validation samples at the selected DMP p
 |----------------|------------------------|
 | `MethylCentroidPair` | All centroid comparison (see above) |
 | `statistical_tests.welch_mean_test` | Per-position Welch t-test |
+| `statistical_tests.mann_whitney_from_bin_counts` | Optional assumption-light rank test from centroid histograms |
+| `statistical_tests.dl_heterogeneity` | DerSimonian-Laird-style `tau2` heterogeneity estimate |
 | `statistical_tests.ecdf_effect_size` | Continuous ECDF overlap + final `effect_size` |
 | `statistical_tests.ecdf_overlap_integral` | Integration of min(f1, f2) |
 | `statistical_tests.effect_size_from_components` | `\|delta_mean\| * (1-overlap) * exp(-λ*(√v1+√v2))` |
@@ -74,7 +78,7 @@ Extracts methylation fractions for real validation samples at the selected DMP p
 | `load_from_h5` | Loading centroid H5 for bin_counts extraction at classifier build |
 | `gpu_detection`, `memory_manager` | GPU and memory handling |
 | `core.methyl_frame.MethylSample` | Validation sample loading |
-| Optional: `compute_eat_T` | EAT reweighting (when enabled) |
+| Optional: `compute_eat_T` | EAT metadata used to reweight final `effect_size` (never p/q-values) |
 
 ---
 
@@ -82,7 +86,7 @@ Extracts methylation fractions for real validation samples at the selected DMP p
 
 ### 1. Pre-filter (cheap delta_mean gate)
 
-Computes `|mean1 - mean2|` from centroid means (`Sx/N`) at all common positions. Positions below `delta_mean_reduction` (or `min_delta_mean` if not set) are removed before any expensive computation.
+Computes `|mean1 - mean2|` from centroid means (`Sx/N`) at all common positions. Positions below `delta_mean_reduction` are removed before any expensive computation.
 
 **Why**: Welch test (`scipy.stats.t.sf`) is CPU-bound. CHH has 70M+ positions. A position removed here would be discarded by the biological filter anyway, so pre-filtering costs nothing biologically.
 
@@ -92,9 +96,9 @@ Computes `|mean1 - mean2|` from centroid means (`Sx/N`) at all common positions.
 
 `MethylCentroidPair.compare_centroids(..., position_subset=pre_filter_positions)` restricts the comparison to the pre-filtered set.
 
-### 3. Welch test + FDR
+### 3. Statistical gate + FDR
 
-`welch_mean_test` on all pre-filtered positions. Two-stage BH correction (`fdr_tsbh`). Retain positions with `q_value <= alpha`.
+Run either `welch_mean_test` or `mann_whitney_from_bin_counts` on all pre-filtered positions, then apply two-stage BH correction (`fdr_tsbh`). Retain positions with `q_value <= alpha`.
 
 ### 4. Lazy ECDFView construction
 
@@ -113,17 +117,17 @@ Both views use their **own correct per-centroid indices** so the PCHIP PDFs corr
 
 `ecdf_effect_size(delta_mean, var1, var2, ecdf_view1, ecdf_view2, sequential_indices, lambda_var, grid_size)` — the pre-sliced views mean the indices are simply `0, 1, 2, …`.
 
-Output: `overlap`, `effect_size`, `effect_size_reliability` added to the DMP DataFrame.
+Output: `overlap`, `effect_size`, `effect_size_reliability` added to the DMP DataFrame. If EAT is enabled, the final `effect_size` is multiplied by a bounded `eat_effect_weight`; `p_value` and `q_value` remain unchanged.
 
 ### 6. Biological filter
 
-```
-keep = (|delta_mean| >= min_delta_mean) AND
-       (overlap      <= max_overlap) AND
-       (effect_size  >= min_effect_size)   # or effect_size_quantile
-```
+Within each context independently, sort by `effect_size` descending and keep the minimum prefix whose cumulative effect mass reaches `effect_size_coverage`.
 
-Sort surviving DMPs by `effect_size` descending; add `effect_size_ecdf` column.
+Optional rescue track: after the same statistical comparison, non-significant loci can be selected separately with `biological_only_effect_size_coverage`; these rows are flagged with `statistical_dmp=False` / `biological_dmp=True` so they are never confused with confirmed statistical DMPs.
+
+### 7. Held-out validation and top-k selection
+
+Real validation samples are loaded once, aligned to the DMP order, and split into repeated stratified holdouts (`validation_split_ratio`, `validation_n_repeats`). MethylDetector caches ECDF log-likelihoods for the full sorted DMP table, then evaluates prefix subsets (`top-k`) without rebuilding the classifier for each `k`.
 
 ---
 
@@ -136,14 +140,12 @@ MethylDetector trains an `ECDFClassifier` on the selected biological DMPs.
 At the three call sites (centroid self-check, validation, model save), MethylDetector:
 
 1. Normalises `effect_size` → `weight` (divided by max, clipped to `[1e-6, 1]`).
-2. Calls `_extract_bin_counts_for_dmps(dmps_df)` to reload the `bin_counts` histograms for the selected DMP positions from the centroid H5 files.
+2. Calls `_extract_bin_counts_for_dmps(dmps_df)` to pull the `bin_counts` histograms for the selected DMP positions from the cached centroid H5 data.
 3. Calls `ECDFClassifier.from_dataframe(dmpDF, bin_edges, bc1, bc2, temperature=...)`.
-
-Fallback to `BetaClassifier` is in place for cases where centroid H5 files are unavailable.
 
 ### `_extract_bin_counts_for_dmps(dmps_df)`
 
-Groups DMPs by chromosome × context, loads the corresponding centroid H5 files (once per group), and extracts `bin_counts` at the DMP positions via `np.searchsorted`. Returns `(bin_edges, bc1, bc2)`.
+Groups DMPs by chromosome × context, loads the corresponding centroid H5 files once per group, caches the full histogram tables in memory, and extracts `bin_counts` at the DMP positions via `np.searchsorted`. Returns `(bin_edges, bc1, bc2)`.
 
 ### ECDFClassifier prediction
 
@@ -162,7 +164,7 @@ The classifier model is saved as a `.pkl` package containing:
 
 - `classifier`: `ECDFClassifier` instance (holds `bin_edges`, `bin_counts_c1/c2`, `weights`, `directions`, `temperature`).
 - `dmpDF`: DataFrame with `pos`, `weight`, `context`, `delta_sign`.
-- `metadata`: version, `classifier_type` (`"ECDFClassifier"` or `"BetaClassifier"` fallback), contexts, config, centroid file references.
+- `metadata`: version, `classifier_type` (`"ECDFClassifier"`), contexts, config, centroid file references.
 
 ---
 
@@ -170,11 +172,11 @@ The classifier model is saved as a `.pkl` package containing:
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| MethylUtils | `MethylCentroidPair` | Centroid load, align, compare (Welch + FDR + initial effect_size) |
-| MethylUtils | `statistical_tests` | Welch test, ecdf_overlap_integral, effect_size_from_components |
+| MethylUtils | `MethylCentroidPair` | Centroid load, align, compare (Welch/Mann-Whitney + FDR + initial effect_size + tau2) |
+| MethylUtils | `statistical_tests` | Welch/Mann-Whitney tests, ecdf_overlap_integral, effect_size_from_components |
 | MethylUtils | `ECDFView` | Lazy PCHIP CDF/PDF for DMP positions only |
 | MethylUtils | `ECDFClassifier` | PCHIP PDF log-likelihood classifier, save/load |
 | MethylUtils | GPU/memory | Device selection, memory management |
-| MethylDetector | `MethylDetector` | Config, orchestration, pre-filter, biological filter, classifier invocation, export |
+| MethylDetector | `MethylDetector` | Config, orchestration, pre-filter, biological filter, held-out validation, classifier invocation, export |
 
 For theoretical background, see [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md).

@@ -1,79 +1,104 @@
 # MethylCentroid Theoretical Foundation
 
-## Overview
+## Goal
 
-MethylCentroid summarizes per-position methylation across a cohort of samples using **sufficient statistics** and a **per-position binned histogram (ECDF)**. The pipeline supports **only the empirical distribution (ECDF)** for downstream comparison and overlap. This design avoids storage of full sample matrices and supports streaming updates and GPU-friendly aggregation.
+`MethylCentroid` summarizes a cohort of methylation samples without storing the
+full sample-by-position matrix. The centroid stores per-position sufficient
+statistics plus an empirical histogram so downstream comparison can stay
+ECDF-based.
 
-## Notation
+## Per-sample Quantities
 
-For a genomic position, let the sample index be \(i = 1, \ldots, N\). Let \(mC_i\) and \(uC_i\) be methylated and unmethylated counts. Define:
+For sample `j` at genomic position `i`:
 
-- **Coverage**: \(n_i = mC_i + uC_i\)
-- **Methylation fraction**: \(x_i = mC_i / n_i \in [0, 1]\)
+- `mC_ij`: methylated count
+- `uC_ij`: unmethylated count
+- `c_ij = mC_ij + uC_ij`: coverage
+- `x_ij = mC_ij / c_ij`: methylation fraction in `[0, 1]` when coverage is nonzero
 
-The centroid stores aggregated statistics and a binned histogram at each position.
+Only samples with coverage at a position contribute to that position's centroid
+statistics.
 
-## Centroid Definition
+## Stored Sufficient Statistics
 
-The centroid mean at position \(i\) is:
+For each genomic position, the centroid stores:
 
-$$\mu_i = \frac{1}{N} \sum_{j=1}^{N} x_{ij}$$
+- `N`: number of contributing samples
+- `Sx = sum(x_ij)`
+- `Sx2 = sum(x_ij^2)`
+- `Sm = sum(mC_ij)`
+- `Su = sum(uC_ij)`
+- `Sc2 = sum(c_ij^2)`
+- `Swx2 = sum(c_ij * x_ij^2)`
 
-The centroid stores **sufficient statistics** and **binned counts** so that the empirical CDF (ECDF) can be used for comparison and overlap without retaining the full sample matrix.
+These are enough to derive:
 
-## Statistics Stored
+- mean methylation: `mean = Sx / N`
+- sample variance of methylation fractions:
+  `(Sx2 - Sx^2 / N) / max(N - 1, 1)`
+- average counts and several downstream derived summaries
 
-### Core (always present)
+They also preserve enough information for downstream heterogeneity-style
+statistics, which is why `Sc2` and `Swx2` remain part of the persisted centroid
+schema.
 
-| Symbol | Name in code | Definition |
-|--------|----------------|------------|
-| \(N\) | `N` | \(\sum_i 1\) (number of samples) |
-| \(S_x\) | `Sx` | \(\sum_i x_i\) |
-| \(S_{x^2}\) | `Sx2` | \(\sum_i x_i^2\) |
+`alpha` and `beta` can still be derived from the stored statistics when a
+downstream consumer wants those moments, but they are not the runtime
+comparison mode anymore.
 
-Plus position, counts, and context: `pos`, `mC`, `uC`, `tnc` (aggregated appropriately).
+## ECDF Histogram
 
-### Binned stats (ECDF)
+Each centroid must also store a per-position histogram over methylation
+fractions:
 
-When `binned_stats_bins` > 0 (default 20), the centroid stores per-position histograms:
+- `bins`: number of histogram bins
+- `bin_counts`: shape `(n_positions, bins)`
+- `bin_edges`: reconstructed in memory as uniform edges on `[0, 1]`
 
-| Name in code | Definition |
-|--------------|------------|
-| `bin_edges` | Global edges, e.g. \([0, 0.05, 0.1, \ldots, 1]\) (length `n_bins + 1`) |
-| `bin_counts` | Per-position counts per bin (shape `(n_positions, n_bins)`) |
+`binned_stats_bins` is mandatory and must be `>= 1`. The supported default is
+`20`.
 
-These define an empirical CDF at bin edges. **Spline interpolation** (e.g. PCHIP) is used so that \(F(x)\) and the PDF \(F'(x)\) are defined for any \(x \in [0,1]\).
+The histogram is the empirical distribution used by:
 
----
+- `MethylCentroidPair`
+- `MethylDetector`
+- downstream overlap and effect-size calculations
 
-## Supported Distribution: ECDF Only
+## Why ECDF Only
 
-The pipeline supports **only the empirical distribution (ECDF)** for:
+The current contract intentionally removes runtime switching among Normal, Beta,
+Beta-Binomial, and Beta-Mixture comparison modes.
 
-- **Mean**: \(\hat{\mu} = S_x / N\)
-- **Variance**: sample variance \((S_{x^2} - S_x^2/N) / \max(N-1, 1)\)
-- **Overlap**: between two centroids, overlap is derived from the ECDFs (e.g. \(1 - \mathrm{KS}\) where KS is the Kolmogorov–Smirnov statistic on the interpolated CDFs)
-- **Log-probability**: \(\log P(x \mid \text{centroid}) = \log F'(x)\) from the spline derivative
-- **P-value**: approximate (e.g. two-sample KS or chi-square on binned counts)
+The ECDF-only design has a few benefits:
 
-Centroids must be built with `binned_stats_bins` > 0 (default 20) so that binned stats are present. In memory the centroid has `bin_edges` and `bin_counts`; in HDF5 only `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]` are stored (bin edges are derived as uniform in [0,1]). MethylCentroidPair and MethylDetector use ECDF only; Normal, Beta, Beta-Binomial, and Beta-Mixture distribution options have been removed.
+- It preserves the observed cohort shape instead of forcing a parametric fit.
+- It works for skewed, multimodal, or otherwise irregular methylation
+  distributions.
+- It keeps the build-time and compare-time contracts aligned around one data
+  model: sufficient statistics plus empirical histograms.
 
----
+## Cohort Update Semantics
 
-## Why Sufficient Statistics + Binned Histogram?
+At the runner level, cohort updates are resolved as:
 
-- **Memory**: Storage scales with number of positions and bins, not positions × samples.
-- **Streaming**: New samples update aggregates and bin counts without reloading previous samples.
-- **GPU**: Vectorized accumulation maps well to GPU kernels (MethylCentroidBuilder).
-- **Data-driven**: ECDF uses the actual distribution of the data; no parametric assumption.
+```text
+effective_samples = samples - remove_samples + add_samples
+```
+
+That resolved cohort is what gets built and persisted. The final active cohort
+is written to:
+
+- HDF5 metadata field `samples_used`
+- sidecar config field `samples`
+
+This is the contract used by `MethylValidation` when it emits per-run cohort
+deltas.
 
 ## Summary
 
-| What | Stored / used |
-|------|----------------|
-| Mean, variance | \(N\), \(S_x\), \(S_{x^2}\) |
-| ECDF (only supported view) | `bin_edges`, `bin_counts`; spline-interpolated CDF/PDF |
+`MethylCentroid` is built around:
 
-## References
-
-- **Implementation**: MethylUtils `MethylCentroidBuilder`, `MethylCentroid` (data class); comparison via `MethylCentroidPair` using **ECDF only**. Build centroids with `binned_stats_bins` (default 20).
+- compact sufficient statistics
+- required ECDF histogram data
+- deterministic cohort updates
+- one downstream comparison mode: ECDF

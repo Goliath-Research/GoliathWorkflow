@@ -6,6 +6,8 @@ This document is the full reference for MethylDetector (formerly MethylModeler).
 - **Implementation (MethylUtils):** [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md)
 - **User Manual (Docker and virtual environment):** [USAGE.md](USAGE.md)
 
+> Current runtime note: the live detector is ECDF-first, uses two-stage BH FDR, selects biological DMPs with per-context `effect_size_coverage`, reports BA from held-out/repeated validation, and never falls back to Beta/Normal/Beta-Binomial classifier exports. Historical sections below may still discuss older threshold triplets or q-value variants; treat the linked Theory/Implementation/Usage docs above as the source of truth.
+
 ## Table of Contents
 
 1. [Overview](#overview)

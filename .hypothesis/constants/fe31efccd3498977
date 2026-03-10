@@ -1,4 +1,0 @@
-# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/beta_classifier.py
-# hypothesis_version: 6.151.9
-
-[-0.5, 0.0, 1e-15, 1e-12, 1e-09, 1e-08, 1e-06, 0.001, 0.1, 0.5, 1.0, 2.0, 1000, 2000, 'Cancer', 'Healthy', 'P_C', 'P_H', 'alpha1', 'alpha2', 'beta1', 'beta2', 'calibrator_scaler', 'decision', 'directions', 'llr_const', 'mix_alphas1', 'mix_alphas2', 'mix_betas1', 'mix_betas2', 'mix_weights1', 'mix_weights2', 'n_features', 'pos', 'positions', 'predictions', 'sumLLR', 'threshold_used', 'used_positions', 'weight', 'weights']

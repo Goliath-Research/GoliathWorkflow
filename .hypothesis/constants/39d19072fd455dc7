@@ -1,4 +1,0 @@
-# file: /home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/gpu_utils.py
-# hypothesis_version: 6.151.9
-
-[0.5, 2.0, '_ensure_cpu_output', 'get', 'gpu_chi2_sf_df2', 'gpu_norm_cdf', 'gpu_trigamma']

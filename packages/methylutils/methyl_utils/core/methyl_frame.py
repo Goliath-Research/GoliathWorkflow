@@ -250,9 +250,22 @@ class MethylFrame:
 
     def set_binned_stats(self, bin_edges: np.ndarray, bin_counts: np.ndarray) -> None:
         """Attach binned stats to this object for HDF5 persistence."""
+        bin_edges_arr = np.asarray(bin_edges, dtype=np.float32)
+        bin_counts_arr = np.asarray(bin_counts)
+        if bin_edges_arr.ndim != 1 or len(bin_edges_arr) < 2:
+            raise ValueError("bin_edges must be a 1D array with at least two edges")
+        n_bins = int(len(bin_edges_arr) - 1)
+        if n_bins < 1:
+            raise ValueError("ECDF centroids require at least one histogram bin")
+        if bin_counts_arr.ndim != 2:
+            raise ValueError("bin_counts must be a 2D array of shape (n_positions, n_bins)")
+        if bin_counts_arr.shape[1] != n_bins:
+            raise ValueError(
+                f"bin_counts second dimension must match len(bin_edges)-1 ({n_bins}), got {bin_counts_arr.shape[1]}"
+            )
         self._binned_stats = {
-            "bin_edges": np.asarray(bin_edges, dtype=np.float32),
-            "bin_counts": np.asarray(bin_counts),
+            "bin_edges": bin_edges_arr,
+            "bin_counts": bin_counts_arr,
         }
 
     # Metadata properties (read-write for easy manipulation)
@@ -925,6 +938,8 @@ class MethylCentroid(MethylFrame):
             bin_edges = self._binned_stats["bin_edges"]
             bin_counts = self._binned_stats["bin_counts"]
             n_bins = int(len(bin_edges) - 1)
+            if n_bins < 1:
+                raise ValueError("Centroid must have binned_stats with bins > 0 before saving to H5")
             group.attrs["bins"] = n_bins
             if compressed:
                 group.create_dataset("bin_counts", data=np.asarray(bin_counts), **hdf5plugin.Blosc())

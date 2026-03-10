@@ -54,11 +54,11 @@ Centroid comparison
        ↓
   Filter: q_value <= alpha  (and optional biological filters)
        ↓
-  Optional: EAT modifies p_value → recompute q_value → filter again
+  Optional: EAT computes eat_T / eat_effect_weight metadata
        ↓
   effect_size required → _compute_context_weights (trimmed mean per context → context_weight)
        ↓
-  Biological filters (e.g. min_effect_size, min_delta_mean, max_overlap)
+  Biological filter: per-context effect_size_coverage (plus optional rescue track)
        ↓
   Sort by effect_size (desc) → sorted_df
        ↓
@@ -103,6 +103,6 @@ The binary-search optimization in the code explicitly **assumes** that balanced 
 
 ## 6. Summary
 
-- **p-values:** Used only to decide which positions are significant (and optionally modulated by EAT). They do **not** weight the classifier.
+- **p-values:** Used only to decide which positions are significant. They do **not** weight the classifier, and EAT no longer modifies them.
 - **effect_size:** Used to (1) rank DMPs, (2) compute context weights, and (3) set the **per-DMP weight** in the classifier. The classifier score is a **weighted sum of log-likelihoods** with these weights.
 - **Accuracy vs DMP count:** Because DMPs are added in descending effect_size and the classifier uses effect_size as weight, adding more DMPs adds more (positive-weight) signal in expectation, so classifier accuracy should **increase or asymptotically approach the maximum** as the number of DMPs increases; the code’s binary search assumes monotonic (non-decreasing) BA in k.

@@ -1,206 +1,171 @@
 # MethylCentroid
 
-## Overview
+`MethylCentroid` builds cohort methylation centroids from per-sample HDF5 data.
+It is the user-facing runner in `methyl_centroid`. The persisted centroid data
+object lives in `methyl_utils`.
 
-**MethylCentroid** computes representative methylation profiles (centroids) from
-groups of samples. A centroid summarizes per-position methylation across a
-cohort and is used downstream for DMP detection, classification, and validation.
+## Current Contract
 
-A **methylation centroid** enables:
-- **Group Comparisons**: Compare healthy vs. disease cohorts
-- **Downstream Analysis**: Generate centroids for DMP detection and classification
-- **Efficient Storage**: Persist cohort summaries without full sample matrices
+- `samples`, `add_samples`, and `remove_samples` are the supported cohort inputs.
+- Centroid comparison is ECDF-only in `MethylCentroidPair` and `MethylDetector`.
+- `binned_stats_bins` is required and must be `>= 1` for supported centroids.
+- The final active cohort is saved in both HDF5 metadata (`samples_used`) and
+  `{chrom}-{ctx}_config.json`.
 
-## Key Features
+## Two MethylCentroid Classes
 
-- **⚡ GPU Acceleration**: Optional CUDA acceleration with CPU fallback
-- **🧠 Smart Memory Management**: Chunked processing and memory-aware batching
-- **🔄 Incremental Operations**: Add/remove samples without full recalculation
-- **📦 MethylUtils Integration**: Shared GPU utilities and optimized math kernels
-- **🎯 ECDF only**: Binned stats (bin_edges, bin_counts) for empirical distribution; sufficient stats N, Sx, Sx2
-- **📊 Optional Binned Stats**: Histogram summaries for Beta Mixture refinement
+- `methyl_centroid.MethylCentroid`: runner/orchestrator used by the CLI,
+  config files, project resolution, and validation workflows.
+- `methyl_utils.core.methyl_frame.MethylCentroid`: data object written to HDF5
+  with sufficient statistics and ECDF histogram data.
 
-## How It Works
+## What The Centroid Stores
 
-For N samples at genomic position i:
+Each position stores:
 
-```
-Centroid_i = (1/N) × Σ(methylation_level_ij)
-```
+- `pos`, `tnc`
+- `N`, `Sx`, `Sx2`
+- `Sm`, `Su`, `Sc2`, `Swx2`
+- `bin_counts` plus a global bin count (`bins`) for the ECDF histogram
 
-The extended centroid stores aggregate statistics (Sx, Sx2, log sums, count
-moments) so downstream modules can estimate distribution parameters without
-retaining full sample matrices.
+The in-memory data object exposes derived properties such as mean, variance,
+`alpha`, and `beta`, but centroid-to-centroid comparison uses the empirical
+histogram data rather than alternate distribution modes.
 
-## Installation
+## Quick Start
 
-```bash
-# Using Poetry (recommended)
-cd packages/methylcentroid
-poetry install
-
-# Or using pip
-pip install -e .
-```
-
-### Optional Dependencies
-
-- **GPU Support**: `pip install cupy-cuda13x` (match your CUDA version)
-- **Visualization**: `pip install plotly matplotlib`
-
-## Usage
-
-### Basic Example
-
-```python
-from methyl_centroid import MethylCentroid
-
-mc = MethylCentroid(
-    chrom='1',
-    ctx='CG',
-    output_dir='./centroids',
-    add_samples=[
-        '/data/samples/sample1',
-        '/data/samples/sample2',
-        '/data/samples/sample3'
-    ],
-    min_coverage=4
-)
-
-results = mc.build_centroid()
-print(f"Centroid saved to: {results.final_centroid_path}")
-```
-
-### Incremental Updates
-
-```python
-# Initial centroid creation
-mc = MethylCentroid(
-    chrom='1',
-    ctx='CG',
-    output_dir='centroids',
-    add_samples=['sample1', 'sample2', 'sample3']
-)
-mc.build_centroid()
-
-# Later: add new samples
-mc_updated = MethylCentroid(
-    chrom='1',
-    ctx='CG',
-    output_dir='centroids',
-    samples=['sample1', 'sample2', 'sample3'],
-    add_samples=['sample4', 'sample5']
-)
-mc_updated.build_centroid()
-```
-
-### Command Line Interface
+Activate the repository virtual environment first:
 
 ```bash
-# Using configuration file
-python -m methyl_centroid.cli --config config.json
-
-# Disable GPU (force CPU)
-python -m methyl_centroid.cli --config config.json --no-gpu
+source .venv/bin/activate
 ```
 
-### MethylCentroidExplorer
-
-Inspect a MethylFrame (a single `.h5` file or a folder of `.h5` files): detect type (MethylSample, MethylCentroid), print metadata, and optionally describe a range of positions in detail (pos, mC, uC, coverage, mean, N, Sx, Sx2, alpha, beta, variance). Centroid data is MethylUtils’ **MethylCentroid** (data class).
-
-**Run with the project virtual environment activated** (e.g. `source .venv/bin/activate` or `source venv/bin/activate` from the repo root). The `methyl-centroid-explorer` CLI is installed into the venv. If you see `ModuleNotFoundError: No module named 'methyl_centroid.explorer'`, reinstall the package so the CLI picks up the explorer module: from the repo root run `pip install -e packages/methylcentroid`.
+Run a single-config build:
 
 ```bash
-# Activate venv first (required)
-source .venv/bin/activate   # or: source venv/bin/activate
-
-# Metadata and type for a folder (uses first .h5) or single file
-methyl-centroid-explorer /path/to/centroid_or_sample
-
-# Filter to one chromosome/context when path is a folder
-methyl-centroid-explorer /path/to/centroids --chrom 1 --context CG
-
-# Per-position detail for a genomic range (avoids loading full 4M–80M positions)
-methyl-centroid-explorer /path/to/centroid.h5 --pos-start 1000000 --pos-end 1000100
-
-# Single CSV + density plots (one HTML per coverage quartile); output in cwd
-methyl-centroid-explorer /path/to/centroid.h5 --single-csv --pos-start 1000000 --max-positions 1000 --plot-quartiles
-
-# JSON metadata and higher cap for position detail
-methyl-centroid-explorer /path/to/centroid.h5 --json-metadata --pos-start 0 --pos-end 5000 --max-positions 5000
+python -m methyl_centroid.cli --config packages/methylcentroid/configs/example_config.json
 ```
 
-## Configuration
+Run a batch build:
 
-### JSON Configuration Example
+```bash
+python -m methyl_centroid.cli --batch-config packages/methylcentroid/configs/multi_chromosome_config.json
+```
+
+Run from a pipeline project:
+
+```bash
+methyl-centroid --project /path/to/project.json --group group1
+```
+
+## Single Config Example
 
 ```json
 {
-  "laboratory": "UCSF",
-  "disease": "Breast Cancer",
-  "group": "Tumor",
-  "batch": "2024-01",
+  "laboratory": "example-lab",
+  "disease": "example-disease",
+  "group": "healthy",
+  "batch": "2026-03",
   "chrom": "1",
   "ctx": "CG",
-  "output_dir": "./centroids",
+  "output_dir": "/path/to/output/centroids/healthy",
+  "samples": [],
   "add_samples": [
-    "/data/samples/sample1",
-    "/data/samples/sample2"
+    "/path/to/samples/sample_001",
+    "/path/to/samples/sample_002"
   ],
+  "remove_samples": [],
   "min_coverage": 4,
+  "min_samples": 1,
+  "binned_stats_bins": 20,
   "use_gpu": true,
   "verbose": true
 }
 ```
 
-### Key Parameters
+Sample paths are sample directories, not `{chrom}-{ctx}.h5` file paths. The
+runner resolves each cohort member to `{sample_dir}/{chrom}-{ctx}.h5`.
 
-- **chrom**: Chromosome identifier (e.g., '1', 'X', 'MT')
-- **ctx**: Methylation context ('CG', 'CHG', 'CHH')
-- **min_coverage**: Minimum mC + uC for position inclusion (default: 4)
-- **use_gpu**: Enable GPU acceleration when available (default: true)
-- **samples / add_samples / remove_samples**: Cohort update inputs
+## Python API
 
-### Paired cohorts (healthy vs disease)
+Initial build:
 
-When building two centroids for DMP detection (e.g. healthy vs cancer), **ensure no sample appears in both configs**. A healthy centroid built from a mix of healthy and cancer samples is invalid and leads to failed classifier validation (e.g. 0% correct for the healthy class).
+```python
+from methyl_centroid import MethylCentroid
 
-Before building, check for overlapping sample IDs:
+mc = MethylCentroid(
+    laboratory="example-lab",
+    disease="example-disease",
+    group="healthy",
+    batch="2026-03",
+    chrom="1",
+    ctx="CG",
+    output_dir="./centroids/healthy",
+    add_samples=[
+        "/data/samples/sample_001",
+        "/data/samples/sample_002",
+    ],
+    remove_samples=[],
+    min_coverage=4,
+    min_samples=1,
+    binned_stats_bins=20,
+    use_gpu=True,
+)
 
-```bash
-python3 scripts/check_cohort_overlap.py --label-a healthy --label-b cancer \
-  configs/PCa_Healthy_centroid_batch_config.json configs/PCa_Cancer_centroid_batch_config.json
+results = mc.build_centroid()
+print(results.final_centroid_path)
 ```
 
-If overlap is reported, remove the shared samples from one cohort config and rebuild.
+Update an existing cohort:
 
-## Output
+```python
+mc = MethylCentroid(
+    laboratory="example-lab",
+    disease="example-disease",
+    group="healthy",
+    batch="2026-03",
+    chrom="1",
+    ctx="CG",
+    output_dir="./centroids/healthy",
+    samples=[
+        "/data/samples/sample_001",
+        "/data/samples/sample_002",
+    ],
+    add_samples=["/data/samples/sample_003"],
+    remove_samples=["/data/samples/sample_001"],
+    min_coverage=4,
+    min_samples=1,
+    binned_stats_bins=20,
+)
 
-### Centroid HDF5 Structure (core datasets)
-
+mc.build_centroid()
 ```
-centroid.h5
-├── methylation_data/
-│   ├── pos
-│   ├── mC
-│   ├── uC
-│   ├── tnc
-│   ├── N
-│   ├── Sx
-│   ├── Sx2
-│   ├── log_x_sum
-│   └── log_1_minus_x_sum
-│   ├── bins (attribute; number of bins when binned stats enabled)
-│   └── bin_counts (dataset; per-position histogram when binned stats enabled)
-└── metadata (attributes)
-```
 
-All centroid data lives in `methylation_data` only (no separate `binned_stats` group). Bin edges are derived as uniform in [0,1] from `bins`. Optional extended stats and binned histograms are included when enabled.
+## CPU And GPU Paths
+
+- CPU builds use NumPy/pandas accumulation and chunked processing when needed.
+- GPU builds use CuPy through `MethylCentroidBuilder` when available.
+- Both paths finalize to the same `MethylCentroid` HDF5 schema.
+
+## Dependencies
+
+- `MethylSample`: individual sample container loaded from per-sample HDF5 files.
+- `MethylCentroidPair`: ECDF-only centroid comparison layer.
+- `MethylDetector`: downstream DMP detection built on centroid pairs. Current
+  detector-side ECDF utilities also consume centroid `bin_counts`, and its
+  heterogeneity filters use stored sufficient statistics such as `Sc2` and
+  `Swx2`.
+- `MethylUtils`: builder, data model, I/O, GPU helpers, and statistical helpers.
+- `MethylValidation`: can pass cohort deltas via project step overrides.
+
+## Output Files
+
+- `{chrom}-{ctx}.h5`: centroid HDF5 with required ECDF histogram data.
+- `{chrom}-{ctx}_config.json`: resolved config including final active `samples`.
 
 ## Documentation
 
-- **[Theoretical Foundation](docs/MethylCentroid_Theoretical_Foundation.md)** — ECDF-only model, sufficient statistics (N, Sx, Sx2), and binned stats.
-- **[Implementation (MethylUtils)](docs/METHYLCENTROID_IMPLEMENTATION.md)** — MethylCentroidBuilder, MethylCentroid (data), I/O, and how the package uses them.
-- **[User Manual](docs/USAGE.md)** — Docker container and virtual environment setup, CLI, Python API, config, and workflows.
-- **[Comprehensive Documentation](docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)** — Data model, configuration, GPU/memory, output files, examples, troubleshooting.
-- **[Distributions Reference (LaTeX)](docs/METHYLCENTROID_DISTRIBUTIONS.tex)** — Full derivations and sufficient-statistics reference.
+- `docs/MethylCentroid_Theoretical_Foundation.md`
+- `docs/METHYLCENTROID_IMPLEMENTATION.md`
+- `docs/USAGE.md`
+- `docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md`

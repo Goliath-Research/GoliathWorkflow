@@ -37,10 +37,34 @@ def run_cmd(
         return -1, "", str(e)
 
 
-def run_centroid(project_json: str | Path) -> tuple[int, str, str]:
-    """Run methyl-centroid --project <project_json> --group all."""
-    cmd = ["methyl-centroid", "--project", str(project_json), "--group", "all"]
-    return run_cmd(cmd)
+def run_centroid(
+    project_json: str | Path,
+    centroid_step_overrides: Optional[Dict[str, str | Path]] = None,
+) -> tuple[int, str, str]:
+    """
+    Run methyl-centroid for one or both cohorts.
+
+    When group-specific step overrides are provided, runs group1 and group2 separately so
+    each cohort can receive its own samples/add_samples/remove_samples delta payload.
+    """
+    if not centroid_step_overrides:
+        cmd = ["methyl-centroid", "--project", str(project_json), "--group", "all"]
+        return run_cmd(cmd)
+
+    stdout_parts: List[str] = []
+    stderr_parts: List[str] = []
+    for group in ("group1", "group2"):
+        override = centroid_step_overrides.get(group)
+        cmd = ["methyl-centroid", "--project", str(project_json), "--group", group]
+        if override is not None:
+            cmd.extend(["--step-override", str(override)])
+        rc, out, err = run_cmd(cmd)
+        stdout_parts.append(f"=== {group} stdout ===\n{out}")
+        stderr_parts.append(f"=== {group} stderr ===\n{err}")
+        if rc != 0:
+            return rc, "\n".join(stdout_parts), "\n".join(stderr_parts)
+
+    return 0, "\n".join(stdout_parts), "\n".join(stderr_parts)
 
 
 def run_detector(project_json: str | Path, per_cancer_group: bool = False) -> tuple[int, str, str]:
@@ -98,6 +122,7 @@ def run_pipeline_for_iteration(
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
+    centroid_step_overrides: Optional[Dict[str, Path]] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Run centroid -> detector -> classifier -> predictor in order.
@@ -112,7 +137,10 @@ def run_pipeline_for_iteration(
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []
     steps = [
-        ("methyl-centroid", lambda: run_centroid(project_json)),
+        (
+            "methyl-centroid",
+            lambda: run_centroid(project_json, centroid_step_overrides=centroid_step_overrides),
+        ),
         ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=per_cancer_group)),
         ("methyl-classifier", lambda: run_classifier(project_json, per_cancer_group=per_cancer_group)),
         (

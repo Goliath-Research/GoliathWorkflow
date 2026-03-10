@@ -17,7 +17,11 @@ from typing import List, Union, Optional, Tuple, Dict
 from datetime import datetime
 import json
 import psutil
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable=None, *args, **kwargs):
+        return iterable if iterable is not None else []
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from methyl_utils.core.methyl_frame import (
@@ -60,18 +64,19 @@ def _create_centroid_builder(
     chunk_size: Optional[int] = None,
     metadata: Optional[Dict] = None,
 ):
-    """Create MethylCentroidBuilder; supports both old and new MethylUtils (with or without binned_stats_bins)."""
+    """Create the ECDF centroid builder with an explicit positive bin count."""
     from methyl_utils.core.centroid_builder import MethylCentroidBuilder
 
+    if int(binned_stats_bins) < 1:
+        raise ValueError(
+            f"binned_stats_bins must be >= 1 for ECDF centroids, got {binned_stats_bins}"
+        )
     kwargs: Dict = {"min_coverage": min_coverage, "use_gpu": use_gpu}
     if chunk_size is not None:
         kwargs["chunk_size"] = chunk_size
     if metadata is not None:
         kwargs["metadata"] = metadata
-    try:
-        return MethylCentroidBuilder(binned_stats_bins=binned_stats_bins, **kwargs)
-    except TypeError:
-        return MethylCentroidBuilder(**kwargs)
+    return MethylCentroidBuilder(binned_stats_bins=int(binned_stats_bins), **kwargs)
 
 
 from methyl_utils import (
@@ -255,8 +260,12 @@ class MethylCentroid:
             Path(output_dir) if isinstance(output_dir, str) else output_dir
         )
 
-        # Binned stats: number of bins (0 = disabled); default 20
-        self.binned_stats_bins = max(0, int(binned_stats_bins))
+        # ECDF bins are mandatory for supported centroids.
+        self.binned_stats_bins = int(binned_stats_bins)
+        if self.binned_stats_bins < 1:
+            raise ValueError(
+                f"binned_stats_bins must be >= 1 for ECDF centroids, got {binned_stats_bins}"
+            )
         self._binned_stats = None
 
         # Ensure output directory exists from the start
@@ -383,6 +392,152 @@ class MethylCentroid:
                 self.logger.info("  Already in centroid (sample ID): %s%s", preview, " ..." if n_removed_centroid > 5 else "")
         self.add_samples = new_add_paths
         self._original_add_samples = new_original
+
+    def _sample_dir_string(self, sample: Union[str, Path]) -> str:
+        """Normalize a sample directory or {chrom}-{ctx}.h5 path to the sample directory."""
+        path = Path(sample)
+        if path.suffix == ".h5":
+            path = path.parent
+        return str(path)
+
+    def _sample_key(self, sample: Union[str, Path]) -> str:
+        """Stable sample identity used for cohort deduplication and removal matching."""
+        return Path(self._sample_dir_string(sample)).name
+
+    def _resolve_effective_sample_dirs(self) -> List[str]:
+        """
+        Resolve the final cohort from samples, add_samples, and remove_samples.
+
+        Semantics are deterministic and do not require an existing centroid:
+        start from `samples`, remove `remove_samples`, then append `add_samples`.
+        Matching prefers exact directory paths and falls back to sample directory basename.
+        """
+        effective: List[str] = []
+        exact_index: Dict[str, int] = {}
+        key_index: Dict[str, int] = {}
+
+        def rebuild_index() -> None:
+            exact_index.clear()
+            key_index.clear()
+            for idx, sample_dir in enumerate(effective):
+                exact_index[sample_dir] = idx
+                key_index[self._sample_key(sample_dir)] = idx
+
+        def append_unique(sample: Union[str, Path]) -> bool:
+            sample_dir = self._sample_dir_string(sample)
+            sample_key = self._sample_key(sample_dir)
+            if sample_dir in exact_index or sample_key in key_index:
+                return False
+            exact_index[sample_dir] = len(effective)
+            key_index[sample_key] = len(effective)
+            effective.append(sample_dir)
+            return True
+
+        for sample in self._original_samples:
+            append_unique(sample)
+
+        removed_count = 0
+        unmatched_removals: List[str] = []
+        for sample in self._original_remove_samples:
+            sample_dir = self._sample_dir_string(sample)
+            sample_key = self._sample_key(sample_dir)
+            idx = exact_index.get(sample_dir)
+            if idx is None:
+                idx = key_index.get(sample_key)
+            if idx is None:
+                unmatched_removals.append(sample_dir)
+                continue
+            effective.pop(idx)
+            removed_count += 1
+            rebuild_index()
+
+        added_count = 0
+        skipped_adds = 0
+        for sample in self._original_add_samples:
+            if append_unique(sample):
+                added_count += 1
+            else:
+                skipped_adds += 1
+
+        if removed_count or added_count or skipped_adds or unmatched_removals:
+            self.logger.info(
+                "Resolved sample deltas: start=%s, removed=%s, added=%s, skipped_duplicate_adds=%s, unmatched_removals=%s, final=%s",
+                len(self._original_samples),
+                removed_count,
+                added_count,
+                skipped_adds,
+                len(unmatched_removals),
+                len(effective),
+            )
+            if unmatched_removals and self.verbose:
+                preview = unmatched_removals[:5]
+                suffix = " ..." if len(unmatched_removals) > 5 else ""
+                self.logger.warning(
+                    "remove_samples not present in current cohort: %s%s",
+                    preview,
+                    suffix,
+                )
+
+        return effective
+
+    def _apply_effective_sample_set(self) -> List[str]:
+        """Convert the resolved final cohort into the runtime sample lists used for building."""
+        effective_dirs = self._resolve_effective_sample_dirs()
+        self.samples = [
+            Path(sample_dir) / f"{self.chrom}-{self.ctx}.h5" for sample_dir in effective_dirs
+        ]
+        self.add_samples = []
+        self.remove_samples = []
+        return effective_dirs
+
+    def _apply_centroid_filters(self) -> None:
+        """
+        Reapply cohort-level filters after any centroid mutation.
+
+        This keeps the in-memory update path aligned with the full build path.
+        """
+        if self._centroid is None:
+            return
+        centroid_cpu = self._centroid.to_cpu()
+        if len(centroid_cpu) == 0:
+            self._centroid = centroid_cpu
+            return
+
+        coverage_vals = np.asarray(centroid_cpu.coverage.values, dtype=np.uint64)
+        N_vals = np.asarray(centroid_cpu.N.values, dtype=np.uint32)
+        valid_mask = (coverage_vals >= self.min_coverage) & (N_vals >= self.min_samples)
+        if valid_mask.all():
+            self._centroid = centroid_cpu
+            return
+
+        valid_indices = np.where(valid_mask)[0]
+        if len(valid_indices) == 0:
+            import pandas as pd
+
+            empty_df = pd.DataFrame(
+                {
+                    "pos": [],
+                    "tnc": [],
+                    "N": [],
+                    "Sx": [],
+                    "Sx2": [],
+                    "Sm": [],
+                    "Su": [],
+                    "Sc2": [],
+                    "Swx2": [],
+                }
+            )
+            empty_centroid = MethylCentroidData(empty_df, centroid_cpu.metadata)
+            if getattr(centroid_cpu, "binned_stats", None) is not None:
+                bin_edges = np.asarray(centroid_cpu.binned_stats["bin_edges"], dtype=np.float32)
+                empty_centroid.set_binned_stats(
+                    bin_edges,
+                    np.zeros((0, len(bin_edges) - 1), dtype=np.float64),
+                )
+            self._centroid = empty_centroid
+            return
+
+        self._centroid = centroid_cpu.apply_mask(valid_indices)
 
     @classmethod
     def from_config(
@@ -549,44 +704,11 @@ class MethylCentroid:
                 )
                 builder.add_sample(sample)
                 self._centroid = builder.finalize()
-                # Apply min_samples filter after builder finalizes
-                if hasattr(self._centroid, "N") and len(self._centroid) > 0:
-                    N_vals = (
-                        np.asarray(self._centroid.N.values)
-                        if hasattr(self._centroid.N, "values")
-                        else np.asarray(self._centroid.N)
-                    )
-                    valid_mask = N_vals >= self.min_samples
-                    if not valid_mask.all():
-                        # Filter out positions with N < min_samples
-                        # Use integer indices instead of boolean mask to avoid pandas indexing issues
-                        valid_indices = np.where(valid_mask)[0]
-                        if len(valid_indices) > 0:
-                            self._centroid = self._centroid.apply_mask(valid_indices)
-                        else:
-                            # No valid positions, create empty centroid
-                            import pandas as pd
-
-                            empty_df = pd.DataFrame(
-                                {
-                                    "pos": [],
-                                    "tnc": [],
-                                    "N": [],
-                                    "Sx": [],
-                                    "Sx2": [],
-                                    "Sm": [],
-                                    "Su": [],
-                                    "Sc2": [],
-                                    "Swx2": [],
-                                }
-                            )
-                            self._centroid = MethylCentroidData(
-                                empty_df, self._centroid.metadata
-                            )
             else:
                 # Add sample to existing centroid
                 self._centroid = self._centroid.add_sample(methyl_sample)
 
+            self._apply_centroid_filters()
             self.active_samples.add(sample_id)
             self._print_progress()
 
@@ -622,6 +744,7 @@ class MethylCentroid:
 
         try:
             self._centroid = self._centroid.remove_sample(methyl_sample)
+            self._apply_centroid_filters()
         except ValueError as e:
             raise RuntimeError(f"Failed to remove sample: {e}")
         finally:
@@ -635,10 +758,10 @@ class MethylCentroid:
 
     def _get_active_sample_paths(self) -> list:
         """
-        Get the basenames of all samples currently active in the centroid.
+        Get the sample directory paths currently active in the centroid.
 
         Returns:
-            List of sample directory basenames (e.g. ["SAMPLE001", "SAMPLE002"])
+            List of sample directory paths.
         """
         active_paths = []
         for is_new_sample, sample_index in sorted(self.active_samples):
@@ -646,20 +769,12 @@ class MethylCentroid:
                 # Sample from add_samples list
                 if sample_index < len(self.add_samples):
                     sample_path = self.add_samples[sample_index]
-                    active_paths.append(
-                        sample_path.parent.name
-                        if hasattr(sample_path, "parent")
-                        else Path(sample_path).parent.name
-                    )
+                    active_paths.append(str(sample_path.parent))
             else:
                 # Sample from original samples list
                 if sample_index < len(self.samples):
                     sample_path = self.samples[sample_index]
-                    active_paths.append(
-                        sample_path.parent.name
-                        if hasattr(sample_path, "parent")
-                        else Path(sample_path).parent.name
-                    )
+                    active_paths.append(str(sample_path.parent))
         return active_paths
 
     def _filter_missing_sample_files(self) -> List[Path]:
@@ -817,37 +932,7 @@ class MethylCentroid:
                 return
 
             self._centroid = builder.finalize()
-            # Apply min_samples filter after builder finalizes
-            if hasattr(self._centroid, "N") and len(self._centroid) > 0:
-                N_vals = (
-                    np.asarray(self._centroid.N.values)
-                    if hasattr(self._centroid.N, "values")
-                    else np.asarray(self._centroid.N)
-                )
-                valid_mask = N_vals >= self.min_samples
-                if not valid_mask.all():
-                    valid_indices = np.where(valid_mask)[0]
-                    if len(valid_indices) > 0:
-                        self._centroid = self._centroid.apply_mask(valid_indices)
-                    else:
-                        import pandas as pd
-
-                        empty_df = pd.DataFrame(
-                            {
-                                "pos": [],
-                                "tnc": [],
-                                "N": [],
-                                "Sx": [],
-                                "Sx2": [],
-                                "Sm": [],
-                                "Su": [],
-                                "Sc2": [],
-                                "Swx2": [],
-                            }
-                        )
-                        self._centroid = MethylCentroidData(
-                            empty_df, self._centroid.metadata
-                        )
+            self._apply_centroid_filters()
             self.logger.info(
                 f"Sample addition completed: {len(self.active_samples)} samples added"
             )
@@ -1410,9 +1495,13 @@ class MethylCentroid:
             "creation_date": datetime.now().isoformat(),  # NEW: Creation timestamp
             "min_coverage": self.min_coverage,
         }
-        if (self.binned_stats_bins > 0) and self._binned_stats is not None:
-            metadata["binned_stats_enabled"] = True
-            metadata["binned_stats_bins"] = int(self.binned_stats_bins)
+        if self._binned_stats is None:
+            raise ValueError(
+                "ECDF centroids require binned_stats before saving. "
+                "Build with binned_stats_bins >= 1."
+            )
+        metadata["binned_stats_enabled"] = True
+        metadata["binned_stats_bins"] = int(self.binned_stats_bins)
 
         # Create MethylSample from centroid data with metadata
         # centroid_data is a structured numpy array, convert to DataFrame
@@ -1446,13 +1535,12 @@ class MethylCentroid:
         methyl_sample.metadata = metadata
 
         # Attach binned stats if available
-        if (self.binned_stats_bins > 0) and self._binned_stats is not None:
-            try:
-                methyl_sample.set_binned_stats(
-                    self._binned_stats["bin_edges"], self._binned_stats["bin_counts"]
-                )
-            except Exception as e:
-                self.logger.warning(f"Failed to attach binned stats to centroid: {e}")
+        try:
+            methyl_sample.set_binned_stats(
+                self._binned_stats["bin_edges"], self._binned_stats["bin_counts"]
+            )
+        except Exception as e:
+            raise ValueError(f"Failed to attach required ECDF binned stats: {e}") from e
 
         # Save using MethylSample
         output_path = Path(output_dir)
@@ -1612,8 +1700,12 @@ class MethylCentroid:
             cleanup_gpu_memory()
 
     def calculate_centroid(self, output_dir: str, extended: bool = False) -> Path:
+        effective_sample_dirs = self._apply_effective_sample_set()
+        self._centroid = None
+        self._binned_stats = None
+        self.active_samples.clear()
         print(
-            f"Adding {len(self.samples) + len(self.add_samples)} samples for {self.chrom}-{self.ctx}"
+            f"Adding {len(effective_sample_dirs)} samples for {self.chrom}-{self.ctx}"
         )
 
         # Ensure output directory exists before processing
@@ -1694,26 +1786,23 @@ class MethylCentroid:
         # Compute and save centroid (chunk size from memory-derived params in chunked_processor).
         # When we already have a full centroid with binned_stats from add_samples_parallel (builder
         # + add_sample path), skip the redundant chunked recompute that re-reads all sample files.
-        if self.binned_stats_bins > 0:
-            use_existing = (
-                self._centroid is not None
-                and isinstance(self._centroid, MethylCentroidData)
-                and getattr(self._centroid, "binned_stats", None) is not None
+        use_existing = (
+            self._centroid is not None
+            and isinstance(self._centroid, MethylCentroidData)
+            and getattr(self._centroid, "binned_stats", None) is not None
+        )
+        if use_existing:
+            self.logger.info(
+                "Using centroid built during sample addition (skipping chunked recompute)"
             )
-            if use_existing:
-                self.logger.info(
-                    "Using centroid built during sample addition (skipping chunked recompute)"
-                )
-                centroid_cpu = self._centroid.to_cpu()
-                centroid = centroid_cpu.df
-                self._binned_stats = self._centroid.binned_stats
-            else:
-                centroid = self.compute_centroid_chunked(
-                    extended=extended,
-                    chunk_size_positions=self.chunked_processor.chunk_size_positions,
-                )
+            centroid_cpu = self._centroid.to_cpu()
+            centroid = centroid_cpu.df
+            self._binned_stats = self._centroid.binned_stats
         else:
-            centroid = self.compute_centroid(extended=extended)
+            centroid = self.compute_centroid_chunked(
+                extended=extended,
+                chunk_size_positions=self.chunked_processor.chunk_size_positions,
+            )
         if centroid is None or len(centroid) == 0:
             raise RuntimeError(
                 "Failed to compute centroid: no samples were successfully added"
@@ -2513,7 +2602,7 @@ class MethylCentroid:
         current_samples = []
 
         # Collect remaining samples (those still active)
-        for sample_id in self.active_samples:
+        for sample_id in sorted(self.active_samples):
             if isinstance(sample_id, tuple) and len(sample_id) == 2:
                 is_new_sample, sample_index = sample_id
                 if is_new_sample:
@@ -2527,6 +2616,8 @@ class MethylCentroid:
         # Update the original tracking lists
         self._original_samples = current_samples
         self._original_add_samples = []  # Clear add_samples after processing
+        self._original_remove_samples = []  # Removals have been applied
+        self.remove_samples = []
 
         # Save updated config
         config = self.get_config()
@@ -2810,7 +2901,7 @@ if __name__ == "__main__":
 
 def attach_binned_stats_to_centroid(
     centroid_path: Union[str, Path],
-    bins: int = 32,
+    bins: int = 20,
     output_dir: Optional[Union[str, Path]] = None,
     chunk_size_positions: Optional[int] = None,
     sample_dirs: Optional[List[str]] = None,

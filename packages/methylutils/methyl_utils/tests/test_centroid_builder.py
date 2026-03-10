@@ -54,6 +54,11 @@ def test_empty_builder_raises():
         builder.finalize()
 
 
+def test_builder_rejects_non_positive_binned_stats_bins():
+    with pytest.raises(ValueError, match="binned_stats_bins must be >= 1"):
+        MethylCentroidBuilder(binned_stats_bins=0)
+
+
 def test_single_sample_passes_through():
     positions = [100, 200, 300]
     mC = [5, 0, 10]

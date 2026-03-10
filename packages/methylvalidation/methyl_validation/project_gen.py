@@ -5,7 +5,7 @@ Generate per-iteration project JSON and train/val CSVs for Monte Carlo runs.
 import csv
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 def _sample_name_from_path(full_path: str, base_path: str) -> str:
@@ -57,6 +57,49 @@ def _first_control_and_disease_labels(base: Dict[str, Any]) -> tuple[str, str]:
     return control_label, disease_label
 
 
+def _normalize_sample_paths(paths: List[str]) -> List[str]:
+    seen = set()
+    normalized: List[str] = []
+    for path in paths:
+        resolved = str(Path(path).resolve())
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        normalized.append(resolved)
+    return normalized
+
+
+def _build_centroid_step_override(
+    previous_paths: Optional[List[str]],
+    current_paths: List[str],
+) -> Dict[str, Any]:
+    prev = _normalize_sample_paths(previous_paths or [])
+    curr = _normalize_sample_paths(current_paths)
+    prev_set = set(prev)
+    curr_set = set(curr)
+    add_paths = [path for path in curr if path not in prev_set]
+    remove_paths = [path for path in prev if path not in curr_set]
+    return {
+        "base_config": {
+            "samples": prev,
+            "add_samples": add_paths,
+            "remove_samples": remove_paths,
+        }
+    }
+
+
+def write_centroid_step_override(
+    path: Path,
+    previous_paths: Optional[List[str]],
+    current_paths: List[str],
+) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = _build_centroid_step_override(previous_paths, current_paths)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return path
+
+
 def generate_run_project(
     base_project_path: str | Path,
     run_dir: Path,
@@ -67,7 +110,9 @@ def generate_run_project(
     val_control_paths: List[str],
     val_disease_paths: List[str],
     samples_base_path: str,
-) -> tuple[Path, Path, Path, Path, Path]:
+    previous_train_control_paths: Optional[List[str]] = None,
+    previous_train_disease_paths: Optional[List[str]] = None,
+) -> tuple[Path, Path, Path, Path, Path, Path, Path]:
     """
     Load base project JSON, write train/val CSVs, and write the run's project.json.
     Overrides output_base, project_name, controls and diseases to single groups with train samples only.
@@ -75,7 +120,15 @@ def generate_run_project(
     so the run's paths are monte_carlo_runs_root/run_id/centroids|detections|...
 
     Returns:
-        (project_json_path, train_control_csv, train_disease_csv, val_control_csv, val_disease_csv)
+        (
+            project_json_path,
+            train_control_csv,
+            train_disease_csv,
+            val_control_csv,
+            val_disease_csv,
+            centroid_group1_override_json,
+            centroid_group2_override_json,
+        )
     """
     with open(base_project_path, encoding="utf-8") as f:
         base = json.load(f)
@@ -120,4 +173,23 @@ def generate_run_project(
     with open(project_path, "w", encoding="utf-8") as f:
         json.dump(project, f, indent=2)
 
-    return project_path, train_control_csv, train_disease_csv, val_control_csv, val_disease_csv
+    group1_override = write_centroid_step_override(
+        run_dir / "centroid_group1_override.json",
+        previous_train_control_paths,
+        train_control_paths,
+    )
+    group2_override = write_centroid_step_override(
+        run_dir / "centroid_group2_override.json",
+        previous_train_disease_paths,
+        train_disease_paths,
+    )
+
+    return (
+        project_path,
+        train_control_csv,
+        train_disease_csv,
+        val_control_csv,
+        val_disease_csv,
+        group1_override,
+        group2_override,
+    )
