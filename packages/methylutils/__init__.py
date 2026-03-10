@@ -156,10 +156,6 @@ from .methyl_utils.metrics_factory import (
 from .methyl_utils.statistical_tests import (
     storey_qvalues,
     stouffer_global_p,
-    beta_loglikelihood,
-    beta_mle_estimation,
-    beta_mom_estimation,
-    likelihood_ratio_test_beta,
     aggregate_pvalues_fisher,
     aggregate_pvalues_stouffer,
     aggregate_pvalues_lancaster,
@@ -168,7 +164,6 @@ from .methyl_utils.statistical_tests import (
     aggregate_pvalues_mudholkar_george,
     aggregate_pvalues_simes,
     PVALUE_AGGREGATION_METHODS,
-    discrete_overlap_from_bin_counts,
     mann_whitney_from_bin_counts,
     dl_heterogeneity,
     ecdf_overlap_integral,
@@ -237,8 +232,6 @@ from .methyl_utils.models import (
     create_analysis_results
 )
 
-# Import Beta-Binomial Classifier (for multi-context analysis)
-from .methyl_utils.beta_binomial_classifier import BetaBinomialClassifier
 
 # Import MethylCentroidPair for centroid comparison
 from .methyl_utils.methyl_centroid_pair import MethylCentroidPair
@@ -250,21 +243,8 @@ from .methyl_utils.bayesian_classifier_trainer import (
     train_classifier_from_centroids
 )
 
-# Import Beta Analytics (improved algorithm functions)
-from .methyl_utils.beta_analytics import (
-    compute_per_site_llr_stats,
-    compute_precision_weighted_score,
-    compute_bhattacharyya_coefficient,
-    beta_log_pdf,
-    compute_beta_mean,
-    compute_beta_variance
-)
 
-from .methyl_utils.beta_classifier import BetaClassifier
 from .methyl_utils.ecdf_classifier import ECDFClassifier
-
-# Backward compatibility
-from .methyl_utils.beta_classifier import ProbabilisticBetaClassifier
 
 # Import EAT (Entropy-weighted Asymmetry Transformation) functions
 from .methyl_utils.transformations import (
@@ -341,9 +321,6 @@ __all__ = [
     # Statistical test functions
     "storey_qvalues",
     "stouffer_global_p",
-    "beta_loglikelihood",
-    "beta_mle_estimation",
-    "likelihood_ratio_test_beta",
     # Genomic utilities
     "group_significant_positions",
     # GPU utilities
@@ -379,11 +356,7 @@ __all__ = [
     "AlignmentStats",
     "MethylationAnalysisResults",
     "create_analysis_results",
-    # Probabilistic Beta Classifier
-    "ProbabilisticBetaClassifier",
     "create_classifier_from_results",
-    # Beta-Binomial Classifier (multi-context)
-    "BetaBinomialClassifier",
     # MethylCentroidPair for centroid comparison
     "MethylCentroidPair",
     # Bayesian Classifier Trainer
@@ -404,7 +377,6 @@ __all__ = [
     "effect_size_from_components",
     "ecdf_effect_size",
     "optimize_lambda_var",
-    'BetaClassifier',
     'ECDFClassifier',
     'ClassifierFactory',  # if added
     # EAT transformation functions

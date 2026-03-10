@@ -19,8 +19,6 @@ except ImportError:
         return {'chromosome': 'unknown', 'context': 'unknown'}
 
 
-class ClassifierType(Enum):
-    BETA = "beta"
 
 
 class FilterFunnelRangeSpec(BaseModel):

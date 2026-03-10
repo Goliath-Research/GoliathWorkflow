@@ -12,7 +12,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .beta_mixture import fit_beta_mixture, estimate_js_divergence
 from .core.methyl_frame import MethylSample, MethylCentroid
 from .gpu_detection import (
     is_gpu_available,
@@ -29,13 +28,11 @@ from .performance_profiler import (
 )
 from .statistical_tests import (
     storey_qvalues,
-    discrete_overlap_from_bin_counts,
     mann_whitney_from_bin_counts,
     dl_heterogeneity,
     effect_size_from_components,
 )
 from methyl_utils.logging_utils import setup_module_logging
-from .core.methyl_mixture_centroid import MethylBetaMixtureCentroid
 logger = setup_module_logging(__name__)
 
 # Type aliases for better type hints

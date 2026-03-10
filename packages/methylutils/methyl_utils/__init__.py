@@ -548,10 +548,6 @@ from .metrics_factory import (
 from .statistical_tests import (
     storey_qvalues,
     stouffer_global_p,
-    beta_loglikelihood,
-    beta_mle_estimation,
-    beta_mom_estimation,
-    likelihood_ratio_test_beta,
     aggregate_pvalues_fisher,
     aggregate_pvalues_stouffer,
     aggregate_pvalues_lancaster,
@@ -560,7 +556,6 @@ from .statistical_tests import (
     aggregate_pvalues_mudholkar_george,
     aggregate_pvalues_simes,
     PVALUE_AGGREGATION_METHODS,
-    discrete_overlap_from_bin_counts,
     mann_whitney_from_bin_counts,
     dl_heterogeneity,
     ecdf_overlap_integral,
@@ -630,8 +625,6 @@ from .models import (
     create_analysis_results
 )
 
-# Import Beta-Binomial Classifier (for multi-context analysis)
-from .beta_binomial_classifier import BetaBinomialClassifier
 
 # Import MethylCentroidPair for centroid comparison
 from .methyl_centroid_pair import MethylCentroidPair
@@ -643,30 +636,8 @@ from .bayesian_classifier_trainer import (
     train_classifier_from_centroids
 )
 
-# Import Beta Analytics (improved algorithm functions)
-from .beta_analytics import (
-    compute_per_site_llr_stats,
-    compute_precision_weighted_score,
-    compute_bhattacharyya_coefficient,
-    beta_log_pdf,
-    compute_beta_mean,
-    compute_beta_variance,
-    log_beta_binomial_pmf,
-)
 
-from .beta_classifier import BetaClassifier
 from .ecdf_classifier import ECDFClassifier
-
-# Beta Mixture Model utilities
-from .beta_mixture import (
-    fit_beta_mixture,
-    estimate_js_divergence,
-    mixture_logpdf,
-)
-
-# Backward compatibility
-from .beta_classifier import ProbabilisticBetaClassifier
-from .multi_class_beta_classifier import MultiClassBetaMixtureClassifier
 
 # Import EAT (Entropy-weighted Asymmetry Transformation) functions
 from .transformations import (
@@ -676,8 +647,6 @@ from .transformations import (
     validate_eat_methylation_data
 )
 
-# Beta Mixture centroid container
-from .core.methyl_mixture_centroid import MethylBetaMixtureCentroid
 
 # Distribution views and probability helpers
 from .core.distribution_views import (
@@ -686,10 +655,8 @@ from .core.distribution_views import (
     overlap_between_centroids,
     CountsView,
     NormalView,
-    BetaView,
-    BMMView,
+    ECDFView,
 )
-from .core.methyl_distribution_utils import clip_beta_params_for_bounds
 from .ecdf_fit import (
     ecdf_vs_theoretical_ks,
     ecdf_vs_theoretical_ks_pvalue,
@@ -744,15 +711,12 @@ __all__ = [
     "MethylSample",
     "MethylCentroid",
     "compute_coverage_outlier_flags",
-    "MethylBetaMixtureCentroid",
     "get_distribution_view",
     "log_probability_sample_given_centroid",
     "overlap_between_centroids",
     "CountsView",
     "NormalView",
-    "BetaView",
-    "BMMView",
-    "clip_beta_params_for_bounds",
+    "ECDFView",
     "ecdf_vs_theoretical_ks",
     "ecdf_vs_theoretical_ks_pvalue",
     "compare_ecdf_to_theoretical_at_positions",
@@ -819,9 +783,6 @@ __all__ = [
     # Statistical test functions
     "storey_qvalues",
     "stouffer_global_p",
-    "beta_loglikelihood",
-    "beta_mle_estimation",
-    "likelihood_ratio_test_beta",
     # Genomic utilities
     "group_significant_positions",
     # GPU utilities
@@ -861,13 +822,8 @@ __all__ = [
     "MethylationAnalysisResults",
     "create_analysis_results",
     # Classifiers
-    "BetaClassifier",
     "ECDFClassifier",
-    "ProbabilisticBetaClassifier",
-    "MultiClassBetaMixtureClassifier",
     "create_classifier_from_results",
-    # Beta-Binomial Classifier (multi-context)
-    "BetaBinomialClassifier",
     # MethylCentroidPair for centroid comparison
     "MethylCentroidPair",
     # Bayesian Classifier Trainer
@@ -883,13 +839,11 @@ __all__ = [
     "aggregate_pvalues_mudholkar_george",
     "aggregate_pvalues_simes",
     "PVALUE_AGGREGATION_METHODS",
-    "discrete_overlap_from_bin_counts",
     "mann_whitney_from_bin_counts",
     "ecdf_overlap_integral",
     "effect_size_from_components",
     "ecdf_effect_size",
     "optimize_lambda_var",
-    'BetaClassifier',
     'ClassifierFactory',  # if added
     # EAT transformation functions
     'compute_eat_T',

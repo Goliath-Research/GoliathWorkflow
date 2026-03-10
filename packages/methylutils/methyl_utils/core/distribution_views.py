@@ -1,8 +1,7 @@
 # methyl_utils/core/distribution_views.py
 """
 Distribution views for methylation centroids: common protocol (parameters, mean, overlap)
-and six implementations: Counts, Normal, Beta, Beta-Binomial, Beta Mixture Model, ECDF.
-All handle edge cases where methylation level is 0 (mC=0) or 1 (uC=0).
+and ECDF-only implementation. All handle edge cases where methylation level is 0 (mC=0) or 1 (uC=0).
 """
 from __future__ import annotations
 
@@ -29,7 +28,7 @@ class MethylDistributionView(Protocol):
 
     @property
     def parameters(self) -> Dict[str, Any]:
-        """Distribution parameters (e.g. alpha, beta; or mu, sigma2; or weights, alphas, betas)."""
+        """Distribution parameters (e.g. bin_edges, bin_counts; or mu, sigma2)."""
         ...
 
     @property
@@ -73,7 +72,7 @@ class CountsView:
         if isinstance(other, CountsView):
             n = min(len(self._mean), len(other.mean))
             return np.maximum(0, 1 - np.abs(self._mean[:n] - other.mean[:n]))
-        # vs Beta: use other's mean and 1 - |p1 - p2| as proxy
+        # Generic fallback: use other's mean and 1 - |p1 - p2| as proxy
         om = np.asarray(other.mean, dtype=np.float64)
         n = min(len(self._mean), len(om))
         return np.clip(1 - np.abs(self._mean[:n] - om[:n]), 0, 1)
@@ -100,7 +99,6 @@ class NormalView:
         return self._mu
 
     def overlap(self, other: MethylDistributionView) -> np.ndarray:
-        from methyl_utils.beta_analytics import compute_bhattacharyya_coefficient
         if isinstance(other, NormalView):
             mu1, v1 = self._mu, self._sigma2
             mu2 = np.asarray(other.mean, dtype=np.float64)
@@ -112,7 +110,7 @@ class NormalView:
             denom = np.maximum(denom, MIN_EPS)
             bc = np.exp(-((mu1 - mu2) ** 2) / denom)
             return np.clip(bc, 0, 1)
-        # vs Beta: approximate Beta by Normal and use above
+        # Generic fallback: use difference in means
         om = np.asarray(other.mean, dtype=np.float64)
         n = min(len(self._mu), len(om))
         v2 = np.full(n, MIN_EPS)
@@ -124,37 +122,6 @@ class NormalView:
         return np.clip(bc, 0, 1)
 
 
-# --- Beta view ---
-class BetaView:
-    """Beta view: parameters = (alpha, beta), mean = alpha/(alpha+beta), 0/1 safe."""
-
-    def __init__(self, alpha: np.ndarray, beta: np.ndarray):
-        from .methyl_distribution_utils import clip_beta_params_for_bounds
-        self._alpha, self._beta = clip_beta_params_for_bounds(
-            np.asarray(alpha, dtype=np.float64),
-            np.asarray(beta, dtype=np.float64),
-        )
-        self._mean = _safe_mean_numer(self._alpha, self._beta)
-
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {"alpha": self._alpha, "beta": self._beta}
-
-    @property
-    def mean(self) -> np.ndarray:
-        return self._mean
-
-    def overlap(self, other: MethylDistributionView) -> np.ndarray:
-        from methyl_utils.beta_analytics import compute_bhattacharyya_coefficient
-        params = getattr(other, "parameters", {})
-        a2 = np.asarray(params.get("alpha", other.mean), dtype=np.float64)
-        b2 = np.asarray(params.get("beta", np.maximum(1 - a2, MIN_EPS) * 10), dtype=np.float64)
-        if np.any(b2 <= 0):
-            b2 = np.where(b2 <= 0, np.maximum(1 - a2, MIN_EPS) * 10, b2)
-        n = min(len(self._alpha), len(a2))
-        return compute_bhattacharyya_coefficient(
-            self._alpha[:n], self._beta[:n], a2[:n], b2[:n], use_gpu=False
-        )
 
 
 # --- ECDF view (spline-interpolated from binned_stats) ---
@@ -338,18 +305,6 @@ class ECDFView:
         n = min(len(self._mean), len(om))
         return np.clip(1.0 - np.abs(self._mean[:n] - om[:n]), 0.0, 1.0)
 
-    @property
-    def parameters(self) -> Dict[str, Any]:
-        return {"weights": self._weights, "alphas": self._alphas, "betas": self._betas}
-
-    @property
-    def mean(self) -> np.ndarray:
-        return self._mean
-
-    def overlap(self, other: MethylDistributionView) -> np.ndarray:
-        om = np.asarray(other.mean, dtype=np.float64)
-        n = min(len(self._mean), len(om))
-        return np.clip(1 - np.abs(self._mean[:n] - om[:n]), 0, 1)
 
 
 def get_distribution_view(
@@ -357,7 +312,9 @@ def get_distribution_view(
     mode: str,
     positions: Optional[np.ndarray] = None,
 ) -> MethylDistributionView:
-    """Build a distribution view from a centroid (counts, normal, beta, ecdf)."""
+    """Build a distribution view from a centroid (ecdf mode only)."""
+    if mode != "ecdf":
+        raise ValueError(f"Only 'ecdf' mode is supported, got '{mode}'.")
     if positions is not None:
         pos_arr = np.asarray(centroid.pos.values, dtype=np.uint32)
         idx = np.isin(pos_arr, np.asarray(positions, dtype=np.uint32))
