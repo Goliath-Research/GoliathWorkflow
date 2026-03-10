@@ -1,10 +1,15 @@
 from pathlib import Path
+import sys
 from tempfile import TemporaryDirectory
 
 import h5py
 import numpy as np
 import pandas as pd
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO_ROOT / "packages/methylutils"))
+sys.path.insert(0, str(REPO_ROOT / "packages/methyldetector"))
 
 from methyl_detector.core.methyldetector import MethylDetector
 from methyl_detector.models.config import MethylModelerConfig
@@ -37,9 +42,7 @@ def build_detector(temp_dir: str, **overrides) -> MethylDetector:
             **overrides,
         }
     )
-    detector = MethylDetector(config)
-    detector.chromosome = "1"
-    return detector
+    return MethylDetector(config)
 
 
 def test_methyl_detector_config_rejects_legacy_distribution_fields():
