@@ -890,9 +890,10 @@ class MethylCentroid:
 
         all_samples = self.samples + self.add_samples
 
-        if self.ctx == "CHH":
+        # Use streaming approach when GPU is enabled to avoid memory overhead and thread coordination
+        if self.use_gpu:
             self.logger.info(
-                "Using streaming centroid builder for CHH to reduce memory spikes"
+                f"Using streaming centroid builder for {self.ctx} (GPU enabled)"
             )
             builder = _create_centroid_builder(
                 self._min_coverage,
