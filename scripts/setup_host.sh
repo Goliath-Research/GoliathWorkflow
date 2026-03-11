@@ -28,7 +28,7 @@ Libraries in use (for verification):
   - Base: requirements-pipeline.txt (scipy, h5py, hdf5plugin, pandas, numpy, etc.).
   - GPU: requirements-gpu-cuda12.txt or requirements-gpu.txt (cupy, cudf, torch).
   - System (--system-deps): Python dev, build-essential, hdf5-tools, libhdf5-dev,
-    libzstd-dev, ODBC; with GPU, libnvrtc{N} for NVRTC.
+    libzstd-dev, ODBC, bedtools (for MethylMapper); with GPU, libnvrtc{N} for NVRTC.
 EOF
 }
 
@@ -196,7 +196,8 @@ install_system_deps() {
     curl \
     gnupg \
     apt-transport-https \
-    unixodbc-dev
+    unixodbc-dev \
+    bedtools
 
   if ! dpkg -s msodbcsql18 >/dev/null 2>&1; then
     info "Installing Microsoft ODBC Driver 18..."

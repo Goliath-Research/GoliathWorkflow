@@ -136,6 +136,7 @@
         "csv_pattern": "dmps-*.csv",
         "gtf": "/work/genomes/human_genome/gencode.v44.annotation.gtf",
         "disease_term": "Prostate Cancer",
+        "grok_api_key": "xai-v4I437Ldt3tmrjZ3avp315XnwsDRdO550ZNuhMvHUVNZpyJWU8qLwsYRHMetQQ64A6WVfJzwGpAcDPkJ",
         "enrich_disease": true,
         "enrich_source": "grok+opentargets",
         "enrich_profile": "permissive",
