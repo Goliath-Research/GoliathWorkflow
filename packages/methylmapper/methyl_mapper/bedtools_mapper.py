@@ -108,7 +108,7 @@ class BedtoolsMapper:
         cache_ttl_days: Optional[int] = 7,
         grok_cache_ttl_days: Optional[int] = 7,
         source_max_workers: int = 3,
-        grok_batch_size: int = 25,
+        grok_batch_size: int = 20,
         grok_max_workers: int = 8,
         open_targets_max_workers: int = 8,
         disgenet_max_workers: int = 8,
@@ -932,7 +932,7 @@ class BedtoolsMapper:
             known_genes = set(genes_at_k_stable)
             pending_new_genes: set = set()
             pending_stats_frames: List[pd.DataFrame] = []
-            phase3_batch_size = max(1, getattr(self.disease_enricher, 'grok_batch_size', 25))
+            phase3_batch_size = max(1, getattr(self.disease_enricher, 'grok_batch_size', 20))
             while k_ext < len(dmp_df):
                 k_ext += 1
                 dmp_subset = dmp_df.head(k_ext).copy()

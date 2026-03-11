@@ -458,8 +458,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     disease_group.add_argument(
         '--grok-batch-size',
         type=int,
-        default=25,
-        help='Number of genes per Grok batch request (default: 25)'
+        default=20,
+        help='Number of genes per Grok batch request (default: 20; reduce if Grok returns truncated JSON)'
     )
     disease_group.add_argument(
         '--grok-max-workers',
