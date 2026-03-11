@@ -28,9 +28,9 @@ DISEASE_CACHE_COLUMNS = ["disease_term", "ts", "disease_id"]
 TARGET_CACHE_COLUMNS = ["gene_name", "ts", "target_id"]
 
 DEFAULT_CACHE_TTL_DAYS = 7
-DEFAULT_GROK_CACHE_TTL_DAYS = 0
-DEFAULT_GROK_BATCH_SIZE = 10
-DEFAULT_GROK_MAX_WORKERS = 2
+DEFAULT_GROK_CACHE_TTL_DAYS = 7
+DEFAULT_GROK_BATCH_SIZE = 25
+DEFAULT_GROK_MAX_WORKERS = 8
 DEFAULT_OPEN_TARGETS_MAX_WORKERS = 8
 DEFAULT_DISGENET_MAX_WORKERS = 8
 DEFAULT_SOURCE_MAX_WORKERS = 3
@@ -230,8 +230,7 @@ class GeneDiseaseEnricher:
             cache_enabled: Whether to persist cache to disk
             cache_dir: Directory for disk cache (default: ~/.methyl_mapper/cache)
             cache_ttl_days: Disk cache TTL in days for Open Targets / DisGeNET and metadata caches
-            grok_cache_ttl_days: Disk cache TTL in days for Grok results (default: 0 = fresh each run,
-                                 but same-process memoization still avoids duplicate calls)
+            grok_cache_ttl_days: Disk cache TTL in days for Grok results (default: 7; set 0 to refresh each run)
             rate_limit_delay: Delay between Grok batch requests (seconds)
             max_retries: Maximum retry attempts for API calls
             source_max_workers: Max workers when querying multiple sources in parallel

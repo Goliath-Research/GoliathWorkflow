@@ -446,8 +446,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     disease_group.add_argument(
         '--grok-cache-ttl-days',
         type=int,
-        default=0,
-        help='Disk cache TTL in days for Grok lookups (default: 0 = refresh each run, but same-run memoization is still used)'
+        default=7,
+        help='Disk cache TTL in days for Grok lookups (default: 7; set 0 to refresh each run)'
     )
     disease_group.add_argument(
         '--source-max-workers',
@@ -458,14 +458,14 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     disease_group.add_argument(
         '--grok-batch-size',
         type=int,
-        default=10,
-        help='Number of genes per Grok batch request (default: 10)'
+        default=25,
+        help='Number of genes per Grok batch request (default: 25)'
     )
     disease_group.add_argument(
         '--grok-max-workers',
         type=int,
-        default=2,
-        help='Maximum concurrent Grok batch requests (default: 2)'
+        default=8,
+        help='Maximum concurrent Grok batch requests (default: 8)'
     )
     disease_group.add_argument(
         '--open-targets-max-workers',

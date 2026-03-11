@@ -106,10 +106,10 @@ class BedtoolsMapper:
         cache_enabled: bool = True,
         cache_dir: Optional[Path] = None,  # Auto: project_root/enrich_cache or ./enrich_cache
         cache_ttl_days: Optional[int] = 7,
-        grok_cache_ttl_days: Optional[int] = 0,
+        grok_cache_ttl_days: Optional[int] = 7,
         source_max_workers: int = 3,
-        grok_batch_size: int = 10,
-        grok_max_workers: int = 2,
+        grok_batch_size: int = 25,
+        grok_max_workers: int = 8,
         open_targets_max_workers: int = 8,
         disgenet_max_workers: int = 8,
         azure_key_vault_url: Optional[str] = None,
@@ -149,7 +149,7 @@ class BedtoolsMapper:
             cache_enabled: Whether to persist cache to disk
             cache_dir: Directory for disk cache (default: auto project_root/enrich_cache or ./enrich_cache)
             cache_ttl_days: Disk cache TTL in days for Open Targets / DisGeNET lookups (default: 7)
-            grok_cache_ttl_days: Disk cache TTL in days for Grok lookups (default: 0 = fresh each run)
+            grok_cache_ttl_days: Disk cache TTL in days for Grok lookups (default: 7)
             source_max_workers: Max workers when querying multiple enrichment sources in parallel
             grok_batch_size: Number of genes per Grok batch request
             grok_max_workers: Max concurrent Grok batch requests
@@ -923,7 +923,7 @@ class BedtoolsMapper:
             known_genes = set(genes_at_k_stable)
             pending_new_genes: set = set()
             pending_stats_frames: List[pd.DataFrame] = []
-            phase3_batch_size = max(1, getattr(self.disease_enricher, 'grok_batch_size', 10))
+            phase3_batch_size = max(1, getattr(self.disease_enricher, 'grok_batch_size', 25))
             while k_ext < len(dmp_df):
                 k_ext += 1
                 dmp_subset = dmp_df.head(k_ext).copy()
