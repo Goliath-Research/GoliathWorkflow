@@ -398,8 +398,8 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         '--enrich-profile',
         type=str,
         choices=['strict', 'balanced', 'permissive'],
-        default='balanced',
-        help='Preset enrichment threshold profile (default: balanced)'
+        default='permissive',
+        help='Preset enrichment threshold profile (default: permissive so Grok/Open Targets associations count)'
     )
     disease_group.add_argument(
         '--min-evidence-level',

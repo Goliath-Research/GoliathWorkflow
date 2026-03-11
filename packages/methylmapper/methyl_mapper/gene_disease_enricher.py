@@ -390,6 +390,20 @@ class GeneDiseaseEnricher:
             source_results.get("disgenet", {}),
             unique_genes,
         )
+        # Diagnostic: counts per source (raw) and after thresholds
+        n_grok_raw = sum(1 for g in unique_genes if source_results.get("grok", {}).get(g.upper(), {}).get("associated"))
+        n_ot_raw = sum(1 for g in unique_genes if source_results.get("open_targets", {}).get(g.upper(), {}).get("associated"))
+        n_merged_pass = sum(1 for g in unique_genes if self._association_meets_thresholds(merged_results.get(g.upper(), {})))
+        logger.info(f"Disease enrichment: Grok raw={n_grok_raw}, Open Targets raw={n_ot_raw}, merged (pass thresholds)={n_merged_pass} genes")
+        if n_merged_pass == 0 and (n_grok_raw > 0 or n_ot_raw > 0):
+            logger.warning(
+                "All genes have disease_associated=False after thresholds. Associations were found (Grok/Open Targets) but filtered out. "
+                "Use --enrich-profile permissive or lower min_evidence_level / allow_predicted to include them."
+            )
+        elif n_merged_pass == 0 and len(unique_genes) > 0:
+            logger.warning(
+                "No disease associations returned from any source. Check disease_term, Grok API key (GROK_API_KEY), and Open Targets connectivity."
+            )
         return {
             "genes": unique_genes,
             "hyperlinks": hyperlinks,
@@ -1651,10 +1665,24 @@ Return ONLY a valid JSON array—no other text. Example:
             result = self._open_targets_request(query, {"queryString": disease_term})
             hits = result.get("data", {}).get("search", {}).get("hits", [])
             disease_id = None
+            term_lower = (disease_term or "").strip().lower()
+            # Prefer a hit whose name matches the disease term (case-insensitive)
             for hit in hits:
-                if str(hit.get("entity", "")).lower() == "disease":
+                if str(hit.get("entity", "")).lower() != "disease":
+                    continue
+                name = (hit.get("name") or "").strip().lower()
+                if term_lower and name and (term_lower in name or name in term_lower):
                     disease_id = hit.get("id")
+                    logger.debug(f"Open Targets: matched disease '{disease_term}' to {disease_id} ({hit.get('name')})")
                     break
+            # Fallback: first disease hit
+            if not disease_id:
+                for hit in hits:
+                    if str(hit.get("entity", "")).lower() == "disease":
+                        disease_id = hit.get("id")
+                        break
+            if not disease_id and hits:
+                logger.warning(f"Open Targets: no disease entity in search hits for '{disease_term}' (first hit: {hits[0].get('entity')})")
             self._disease_cache_set(disease_term, disease_id)
             return disease_id
         except Exception as exc:

@@ -56,8 +56,8 @@ def resolve_enricher_paths_per_cancer_group(
         out: List[Tuple[EnricherStepPaths, str]] = []
         for spec in project.get_comparisons():
             comp_label = spec.comparison_label or spec.disease_group
-            map_dir = project.get_mapper_output_dir(comp_label)
-            enr_dir = project.get_enricher_output_dir(comp_label)
+            map_dir = project.get_mapper_output_dir(spec.control_group, spec.disease_group)
+            enr_dir = project.get_enricher_output_dir(spec.control_group, spec.disease_group)
             input_file = str(Path(map_dir) / csv_name)
             out.append((EnricherStepPaths(input_file=input_file, output_dir=enr_dir), comp_label))
         return out

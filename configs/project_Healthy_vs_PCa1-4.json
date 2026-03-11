@@ -134,7 +134,7 @@
       },
       "mapper": {
         "csv_pattern": "dmps-*.csv",
-        "gtf": "home/ubuntu/Work/genomes/human_genome/gencode.v44.annotation.gtf",
+        "gtf": "/work/genomes/human_genome/gencode.v44.annotation.gtf",
         "disease_term": "Prostate Cancer",
         "enrich_disease": true,
         "enrich_source": "grok+opentargets",

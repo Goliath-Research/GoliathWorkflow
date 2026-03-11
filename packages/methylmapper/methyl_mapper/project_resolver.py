@@ -69,8 +69,8 @@ def resolve_mapper_paths_per_cancer_group(
         out: List[Tuple[MapperStepPaths, str]] = []
         for spec in project.get_comparisons():
             comp_label = spec.comparison_label or spec.disease_group
-            det_dir = project.get_detection_output_dir(comp_label)
-            map_dir = project.get_mapper_output_dir(comp_label)
+            det_dir = project.get_detection_output_dir(spec.control_group, spec.disease_group)
+            map_dir = project.get_mapper_output_dir(spec.control_group, spec.disease_group)
             group_csv = str(Path(det_dir) / pattern)
             out.append((MapperStepPaths(csv_pattern=group_csv, output_dir=map_dir), comp_label))
         return out
