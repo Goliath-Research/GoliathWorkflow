@@ -577,6 +577,15 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         # Use per-cancer-group layout (mapper/cancer/<label> per group) when project has multiple groups
         per_group = resolve_mapper_paths_per_cancer_group(project_path, step_override)
         if per_group:
+            # Restrict to single group when --group is set (e.g. --group pca1)
+            if getattr(args, "group", None):
+                group_label = args.group.strip()
+                all_labels = [label for _, label in per_group]
+                per_group = [(paths, label) for paths, label in per_group if label == group_label]
+                if not per_group:
+                    raise ValueError(
+                        f"--group '{args.group}' not found in project comparisons. Valid labels: {all_labels}"
+                    )
             args.mapper_per_group = per_group
             if args.csv_pattern is None and args.output_dir is None:
                 args.csv_pattern = None

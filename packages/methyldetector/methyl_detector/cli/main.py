@@ -86,6 +86,13 @@ except ImportError:
          'If --per-cancer-group is also set, run detection first then merge and build. '
          'If only --multi-class-model: require detection/cancer/{label} to exist for all groups, then merge and build.'
 )
+@click.option(
+    '--group',
+    type=str,
+    default=None,
+    help='With --project: run detection for a single comparison only (e.g. --group pca1 for healthy vs pca1). '
+         'Overrides running all comparisons.'
+)
 @click.version_option(version='0.3.0')
 def main(
     config: Optional[Path],
@@ -98,6 +105,7 @@ def main(
     centroid2_dir: Optional[Path],
     per_cancer_group: bool,
     multi_class_model: bool,
+    group: Optional[str],
 ) -> None:
     """
     MethylDetector - Genomics sample classification using enhanced centroid-based approach.
@@ -115,8 +123,10 @@ def main(
         from methyl_utils import load_project
         _proj = load_project(project, output_base_override=str(output_base) if output_base else None)
         _multi = getattr(_proj, "uses_control_disease", lambda: False)() and len(_proj.get_comparisons()) > 1
-        if _multi and not (per_cancer_group or multi_class_model):
+        if _multi and not (per_cancer_group or multi_class_model or group):
             per_cancer_group = True  # run each comparison to detections/healthy/pca1, etc.
+        if group is not None:
+            per_cancer_group = True  # --group runs one comparison via the per-group path
     if project is not None and (per_cancer_group or multi_class_model):
         from methyl_utils import load_project
         from ..utils.multiclass_merge import (
@@ -129,8 +139,18 @@ def main(
         )
         if not configs_and_labels:
             raise click.UsageError(
-                "Project has fewer than 2 groups; --per-cancer-group/--multi-class-model require at least one control and one disease group."
+                "Project has fewer than 2 groups; --per-cancer-group/--multi-class-model/--group require at least one control and one disease group."
             )
+        if group is not None:
+            group_label = group.strip()
+            configs_and_labels = [(c, lbl) for c, lbl in configs_and_labels if lbl == group_label]
+            if not configs_and_labels:
+                from methyl_utils import load_project
+                _proj = load_project(project, output_base_override=str(output_base) if output_base else None)
+                valid = [spec.disease_group for spec in _proj.get_comparisons()]
+                raise click.UsageError(
+                    f"--group '{group}' not found. Valid disease group labels: {valid}"
+                )
         # Configure logging once
         if log_file:
             setup_logging(
