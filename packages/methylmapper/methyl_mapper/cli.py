@@ -8,7 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
-from .config import MethylMapperConfig, AzureSQLConfig, StoredProcedureConfig
+from .config import MethylMapperConfig, MapperStepConfig, AzureSQLConfig, StoredProcedureConfig
 from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
 from .project_resolver import resolve_mapper_paths, resolve_mapper_paths_per_cancer_group
@@ -605,37 +605,13 @@ For more information, visit: https://github.com/your-org/methyl_mapper
                 args.csv_pattern = mapper_paths.csv_pattern
             if args.output_dir is None:
                 args.output_dir = mapper_paths.output_dir
-        # Apply project step_config.mapper defaults (same keys as --config)
+        # Apply project step_config.mapper via Pydantic model
         from methyl_utils import load_project
         project = load_project(project_path)
         step_cfg = project.get_step_config("mapper")
         if step_cfg:
-            if step_cfg.get("csv_pattern") is not None and args.csv_pattern is None:
-                args.csv_pattern = step_cfg["csv_pattern"]
-            if step_cfg.get("disease_term") is not None and args.disease_term is None:
-                args.disease_term = step_cfg["disease_term"]
-            if step_cfg.get("gtf") is not None and args.gtf is None:
-                args.gtf = step_cfg["gtf"]
-            if step_cfg.get("output_dir") is not None and args.output_dir is None:
-                args.output_dir = step_cfg["output_dir"]
-            if step_cfg.get("enrich_disease") is True and not args.enrich_disease:
-                args.enrich_disease = True
-            if step_cfg.get("enrich_source") is not None:
-                args.enrich_source = step_cfg["enrich_source"]
-            if step_cfg.get("enrich_profile") is not None:
-                args.enrich_profile = step_cfg["enrich_profile"]
-            if step_cfg.get("grok_api_key") is not None and args.grok_api_key is None:
-                args.grok_api_key = step_cfg["grok_api_key"]
-            if step_cfg.get("azure_key_vault_url") is not None and args.azure_key_vault_url is None:
-                args.azure_key_vault_url = step_cfg["azure_key_vault_url"]
-            if step_cfg.get("encrypted_file_path") is not None and args.encrypted_file_path is None:
-                args.encrypted_file_path = step_cfg["encrypted_file_path"]
-            if step_cfg.get("optimize_dmps") is False and not args.no_optimize_dmps:
-                args.no_optimize_dmps = True
-            if step_cfg.get("extend_after_stable") is False and not getattr(args, 'no_extend_after_stable', False):
-                args.no_extend_after_stable = True
-            if step_cfg.get("feature_types") is not None and args.feature_types is None:
-                args.feature_types = step_cfg["feature_types"]
+            mapper_config = MapperStepConfig.model_validate(step_cfg)
+            _apply_mapper_config_to_args(args, mapper_config)
 
     # Apply optional config file (CLI args take precedence)
     if args.config:
@@ -643,35 +619,46 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         if config_path.exists():
             with open(config_path) as f:
                 cfg = json.load(f)
-            if cfg.get('csv_pattern') is not None and args.csv_pattern is None:
-                args.csv_pattern = cfg['csv_pattern']
-            if cfg.get('disease_term') is not None and args.disease_term is None:
-                args.disease_term = cfg['disease_term']
-            if cfg.get('gtf') is not None and args.gtf is None:
-                args.gtf = cfg['gtf']
-            if cfg.get('output_dir') is not None and args.output_dir is None:
-                args.output_dir = cfg['output_dir']
-            if cfg.get('enrich_disease') is True and not args.enrich_disease:
-                args.enrich_disease = True
-            if cfg.get('enrich_source') is not None:
-                args.enrich_source = cfg['enrich_source']
-            if cfg.get('enrich_profile') is not None:
-                args.enrich_profile = cfg['enrich_profile']
-            if cfg.get('grok_api_key') is not None and args.grok_api_key is None:
-                args.grok_api_key = cfg['grok_api_key']
-            if cfg.get('azure_key_vault_url') is not None and args.azure_key_vault_url is None:
-                args.azure_key_vault_url = cfg['azure_key_vault_url']
-            if cfg.get('encrypted_file_path') is not None and args.encrypted_file_path is None:
-                args.encrypted_file_path = cfg['encrypted_file_path']
-            # optimize_dmps: false in config => no_optimize_dmps
-            if cfg.get('optimize_dmps') is False and not args.no_optimize_dmps:
-                args.no_optimize_dmps = True
-            if cfg.get('extend_after_stable') is False:
-                args.no_extend_after_stable = True
-            if cfg.get('feature_types') is not None and args.feature_types is None:
-                args.feature_types = cfg['feature_types']
+            mapper_config = MapperStepConfig.model_validate(cfg)
+            _apply_mapper_config_to_args(args, mapper_config)
 
     return args
+
+
+def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
+    """Apply MapperStepConfig to parsed args (config values override only when set)."""
+    if config.csv_pattern is not None and args.csv_pattern is None:
+        args.csv_pattern = config.csv_pattern
+    if config.disease_term is not None and args.disease_term is None:
+        args.disease_term = config.disease_term
+    if config.gtf is not None and args.gtf is None:
+        args.gtf = config.gtf
+    if config.output_dir is not None and args.output_dir is None:
+        args.output_dir = config.output_dir
+    if config.enrich_disease is True and not args.enrich_disease:
+        args.enrich_disease = True
+    if config.enrich_source is not None:
+        args.enrich_source = config.enrich_source
+    if config.enrich_profile is not None:
+        args.enrich_profile = config.enrich_profile
+    if config.grok_max_workers is not None:
+        args.grok_max_workers = config.grok_max_workers
+    if config.grok_batch_size is not None:
+        args.grok_batch_size = config.grok_batch_size
+    if config.grok_api_key is not None and args.grok_api_key is None:
+        args.grok_api_key = config.grok_api_key
+    if config.grok_cache_ttl_days is not None:
+        args.grok_cache_ttl_days = config.grok_cache_ttl_days
+    if config.azure_key_vault_url is not None and args.azure_key_vault_url is None:
+        args.azure_key_vault_url = config.azure_key_vault_url
+    if config.encrypted_file_path is not None and args.encrypted_file_path is None:
+        args.encrypted_file_path = config.encrypted_file_path
+    if config.optimize_dmps is False and not args.no_optimize_dmps:
+        args.no_optimize_dmps = True
+    if config.extend_after_stable is False:
+        args.no_extend_after_stable = True
+    if config.feature_types is not None and args.feature_types is None:
+        args.feature_types = config.feature_types
 
 
 def main_bedtools():

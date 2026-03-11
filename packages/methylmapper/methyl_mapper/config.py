@@ -7,7 +7,8 @@ For database models, see models.py which uses SQLModel.
 
 import os
 from typing import Optional
-from pydantic import BaseModel, Field, field_validator, model_validator
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class AzureSQLConfig(BaseModel):
@@ -143,9 +144,35 @@ class StoredProcedureConfig(BaseModel):
         return v
 
 
+class MapperStepConfig(BaseModel):
+    """
+    Pydantic model for step_config.mapper in the pipeline project JSON (and --config).
+    All fields optional; used to validate and access mapper options as config.grok_max_workers etc.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    csv_pattern: Optional[str] = None
+    output_dir: Optional[str] = None
+    gtf: Optional[str] = None
+    disease_term: Optional[str] = None
+    enrich_disease: Optional[bool] = None
+    enrich_source: Optional[str] = None
+    enrich_profile: Optional[str] = None
+    grok_api_key: Optional[str] = None
+    grok_max_workers: Optional[int] = None
+    grok_batch_size: Optional[int] = None
+    grok_cache_ttl_days: Optional[int] = None
+    azure_key_vault_url: Optional[str] = None
+    encrypted_file_path: Optional[str] = None
+    optimize_dmps: Optional[bool] = None
+    extend_after_stable: Optional[bool] = None
+    feature_types: Optional[list] = None
+
+
 class MethylMapperConfig(BaseModel):
     """Complete configuration for MethylMapper."""
-    
+
     database: AzureSQLConfig = Field(
         ...,
         description="Azure SQL Database connection configuration"
