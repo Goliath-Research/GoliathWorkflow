@@ -117,3 +117,4 @@ packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.fdb_latexmk
 packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.toc
 .gitignore
 packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.aux
+.hypothesis

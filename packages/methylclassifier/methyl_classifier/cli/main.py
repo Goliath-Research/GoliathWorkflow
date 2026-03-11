@@ -157,7 +157,7 @@ def classify_samples(classifier: MethylClassifier,
     availability_mask = np.array(availability_mask)
 
     # Display prediction method
-    print(f"\n🤖 Classifying samples using Beta prediction method...")
+    print(f"\n🤖 Classifying samples using ECDF classifier...")
     
     predictions, probabilities = classify_samples_batch(
         classifier, feature_matrix, availability_mask, debug
@@ -779,21 +779,28 @@ def _classify_multi_chromosome_samples(
             first_chrom = classifier_chroms[0]
             pkg = classifier.model_packages.get(first_chrom, {})
             dmpDF = pkg.get('dmpDF')
-            if dmpDF is not None and isinstance(dmpDF, pd.DataFrame) and 'alpha1' in dmpDF.columns:
-                a1, b1 = dmpDF['alpha1'].values, dmpDF['beta1'].values
-                a2, b2 = dmpDF['alpha2'].values, dmpDF['beta2'].values
-                cent_mean0 = np.mean(np.clip(a1 / (a1 + b1), 0, 1))
-                cent_mean1 = np.mean(np.clip(a2 / (a2 + b2), 0, 1))
-                idx0 = next((i for i in range(n_samples) if expected_classes_arr[i] == 0), None)
-                idx1 = next((i for i in range(n_samples) if expected_classes_arr[i] == 1), None)
-                for idx, label in [(idx0, "expected class 0"), (idx1, "expected class 1")]:
-                    if idx is not None and first_chrom in chrom_features and first_chrom in chrom_masks:
-                        feats = chrom_features[first_chrom][idx]
-                        mask = chrom_masks[first_chrom][idx]
-                        if np.any(mask):
-                            sample_mean = np.mean(feats[mask])
-                            print(f"   Diagnostic ({first_chrom}): first {label} sample mean methylation = {sample_mean:.3f}")
-                print(f"   Diagnostic ({first_chrom}): centroid1 (class0) mean = {cent_mean0:.3f}, centroid2 (class1) mean = {cent_mean1:.3f}")
+            if dmpDF is not None and isinstance(dmpDF, pd.DataFrame):
+                if 'mean1' in dmpDF.columns and 'mean2' in dmpDF.columns:
+                    cent_mean0 = float(np.mean(np.clip(dmpDF['mean1'].values.astype(np.float64), 0, 1)))
+                    cent_mean1 = float(np.mean(np.clip(dmpDF['mean2'].values.astype(np.float64), 0, 1)))
+                elif 'alpha1' in dmpDF.columns:
+                    a1, b1 = dmpDF['alpha1'].values, dmpDF['beta1'].values
+                    a2, b2 = dmpDF['alpha2'].values, dmpDF['beta2'].values
+                    cent_mean0 = np.mean(np.clip(a1 / (a1 + b1), 0, 1))
+                    cent_mean1 = np.mean(np.clip(a2 / (a2 + b2), 0, 1))
+                else:
+                    cent_mean0 = cent_mean1 = float('nan')
+                if np.isfinite(cent_mean0) and np.isfinite(cent_mean1):
+                    idx0 = next((i for i in range(n_samples) if expected_classes_arr[i] == 0), None)
+                    idx1 = next((i for i in range(n_samples) if expected_classes_arr[i] == 1), None)
+                    for idx, label in [(idx0, "expected class 0"), (idx1, "expected class 1")]:
+                        if idx is not None and first_chrom in chrom_features and first_chrom in chrom_masks:
+                            feats = chrom_features[first_chrom][idx]
+                            mask = chrom_masks[first_chrom][idx]
+                            if np.any(mask):
+                                sample_mean = np.mean(feats[mask])
+                                print(f"   Diagnostic ({first_chrom}): first {label} sample mean methylation = {sample_mean:.3f}")
+                    print(f"   Diagnostic ({first_chrom}): centroid1 (class0) mean = {cent_mean0:.3f}, centroid2 (class1) mean = {cent_mean1:.3f}")
 
     # Save chromosome probability matrix if requested
     if chrom_proba_matrix is not None:

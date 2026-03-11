@@ -881,6 +881,78 @@ PVALUE_AGGREGATION_METHODS = {
 }
 
 
+def beta_mom_estimation(
+    n: np.ndarray,
+    Sx: np.ndarray,
+    Sx2: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Method of moments estimation for Beta distribution parameters.
+    
+    Args:
+        n: Number of samples
+        Sx: Sum of sample expectations
+        Sx2: Sum of squared sample expectations
+        
+    Returns:
+        alpha, beta arrays
+    """
+    from .gpu_detection import is_gpu_available, get_cupy
+    
+    use_gpu = is_gpu_available()
+    if use_gpu:
+        try:
+            import cupy as cp
+            xp = cp
+        except ImportError:
+            xp = np
+    else:
+        xp = np
+        
+    if use_gpu and xp is not np:
+        n = xp.asarray(n, dtype=xp.float64)
+        Sx = xp.asarray(Sx, dtype=xp.float64)
+        Sx2 = xp.asarray(Sx2, dtype=xp.float64)
+    else:
+        n = np.asarray(n, dtype=np.float64)
+        Sx = np.asarray(Sx, dtype=np.float64)
+        Sx2 = np.asarray(Sx2, dtype=np.float64)
+
+    n_safe = xp.maximum(n, 1.0)
+    mu = Sx / n_safe
+    
+    # Sample variance (unbiased)
+    denom = xp.maximum(n - 1.0, 1.0)
+    var = xp.maximum((Sx2 - (Sx**2) / n_safe) / denom, 1e-12)
+    
+    # Maximum possible theoretical variance for a variable in [0, 1] is mu*(1-mu)
+    max_var = mu * (1.0 - mu)
+    
+    # Cap variance to slightly below max_var to avoid non-positive parameters
+    var = xp.minimum(var, max_var - 1e-12)
+    
+    # Beta MOM formulas:
+    # term = alpha + beta = (mu * (1 - mu) / var) - 1
+    term = xp.maximum((mu * (1.0 - mu) / var) - 1.0, 1e-12)
+    
+    alpha = mu * term
+    beta = (1.0 - mu) * term
+    
+    # Ensure alpha and beta are not exactly zero
+    alpha = xp.maximum(alpha, 1e-6)
+    beta = xp.maximum(beta, 1e-6)
+    
+    if use_gpu and xp is not np:
+        from .metrics_core import DistanceCalculator
+        calc = DistanceCalculator()
+        try:
+            return calc.cp.asnumpy(alpha), calc.cp.asnumpy(beta)
+        except Exception:
+            return xp.asnumpy(alpha), xp.asnumpy(beta)
+            
+    return alpha, beta
+
+
 __all__ = [
     "storey_qvalues",
     "stouffer_global_p",
@@ -901,4 +973,5 @@ __all__ = [
     "ecdf_effect_size",
     "optimize_lambda_var",
     "ecdf_bhattacharyya_trapezoidal_from_bin_counts",
+    "beta_mom_estimation",
 ]

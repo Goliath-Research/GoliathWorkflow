@@ -755,38 +755,7 @@ class MethylCentroid(MethylFrame):
                 self._df[col] = pd.Series(var, dtype="float64", index=self._df.index)
         return self._df[col]
 
-    @property
-    def alpha(self):
-        """Beta distribution alpha from method-of-moments (N, Sx, Sx2)."""
-        if "alpha" not in self._df.columns:
-            from methyl_utils.statistical_tests import beta_mom_estimation
-            n = np.asarray(self._get_values(self.N), dtype=np.float64)
-            Sx = np.asarray(self._get_values(self.Sx), dtype=np.float64)
-            Sx2 = np.asarray(self._get_values(self.Sx2), dtype=np.float64)
-            alpha, beta = beta_mom_estimation(n=n, Sx=Sx, Sx2=Sx2)
-            if self.is_gpu:
-                self._df["alpha"] = cudf.Series(alpha, dtype="float64")
-                self._df["beta"] = cudf.Series(beta, dtype="float64")
-            else:
-                self._df["alpha"] = pd.Series(alpha, dtype="float64", index=self._df.index)
-                self._df["beta"] = pd.Series(beta, dtype="float64", index=self._df.index)
-        return self._df["alpha"]
 
-    # Beautiful name for alpha parameter
-    @property
-    def α(self):
-        return self.alpha
-
-    # Beta distribution beta parameter
-    @property
-    def beta(self):
-        self.alpha  # trigger
-        return self._df["beta"]
-
-    # Beautiful name for beta parameter
-    @property
-    def β(self):
-        return self.beta
 
     # Adaptive mean: same as mean (Sx/N) so we always use the sample mean of proportions.
     @property

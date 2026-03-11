@@ -52,10 +52,6 @@ CENTROID_COMPARISON_DTYPE = np.dtype([
     ('position', np.uint32),
     ('p_value', np.float32),
     ('q_value', np.float32),
-    ('alpha1', np.float64),
-    ('beta1', np.float64),
-    ('alpha2', np.float64),
-    ('beta2', np.float64),
     ('mean1', np.float32),
     ('mean2', np.float32),
     ('delta_mean', np.float32),           # |mean1 - mean2| — unsigned magnitude
@@ -667,10 +663,6 @@ class MethylCentroidPair:
         indices1 = np.searchsorted(pos1, positions)
         indices2 = np.searchsorted(pos2, positions)
 
-        alpha1_all = np.asarray(centroid1.alpha, dtype=np.float64)
-        beta1_all = np.asarray(centroid1.beta, dtype=np.float64)
-        alpha2_all = np.asarray(centroid2.alpha, dtype=np.float64)
-        beta2_all = np.asarray(centroid2.beta, dtype=np.float64)
         N1_all = np.asarray(centroid1.N, dtype=np.float64)
         N2_all = np.asarray(centroid2.N, dtype=np.float64)
         Sx1_all = np.asarray(centroid1.Sx, dtype=np.float64)
@@ -688,10 +680,6 @@ class MethylCentroidPair:
         mean1_all = np.asarray(centroid1.mean, dtype=np.float64)
         mean2_all = np.asarray(centroid2.mean, dtype=np.float64)
 
-        alpha1 = alpha1_all[indices1]
-        beta1 = beta1_all[indices1]
-        alpha2 = alpha2_all[indices2]
-        beta2 = beta2_all[indices2]
         N1 = N1_all[indices1]
         N2 = N2_all[indices2]
         Sx1 = Sx1_all[indices1]
@@ -780,10 +768,6 @@ class MethylCentroidPair:
         ).astype(np.uint32)
         results_view["p_value"] = p_values
         results_view["q_value"] = p_values
-        results_view["alpha1"] = alpha1.astype(np.float64)
-        results_view["beta1"] = beta1.astype(np.float64)
-        results_view["alpha2"] = alpha2.astype(np.float64)
-        results_view["beta2"] = beta2.astype(np.float64)
         results_view["mean1"] = mean1.astype(np.float32)
         results_view["mean2"] = mean2.astype(np.float32)
         results_view["delta_mean"] = delta_mean.astype(np.float32)
@@ -885,64 +869,6 @@ class MethylCentroidPair:
             },
         }
 
-    def compute_effect_sizes(
-        self,
-        alpha1: np.ndarray,
-        beta1: np.ndarray,
-        alpha2: np.ndarray,
-        beta2: np.ndarray,
-        delta_mean: np.ndarray,
-        bc_values: np.ndarray,
-        min_overlap_floor: float = 0.01,
-        variance_reliability: bool = True,
-    ) -> np.ndarray:
-        """Compute the canonical effect_size from overlap and separate variances."""
-        bc_safe = np.maximum(bc_values.astype(np.float64), min_overlap_floor)
-        return self.compute_effect_sizes_altA(
-            alpha1, beta1, alpha2, beta2,
-            delta_mean.astype(np.float64),
-            bc_safe,
-            variance_reliability=variance_reliability,
-        )
-
-    @staticmethod
-    def compute_effect_sizes_altA(
-        alpha1: np.ndarray,
-        beta1: np.ndarray,
-        alpha2: np.ndarray,
-        beta2: np.ndarray,
-        delta_mean: np.ndarray,
-        bc_values: np.ndarray,
-        numerical_epsilon: float = 1e-6,
-        variance_reliability: bool = True,
-        bc_nan_fill: float = 0.5,
-    ) -> np.ndarray:
-        """Legacy entry point redirected to the canonical effect_size formula."""
-        eps = 1e-12
-
-        # Concentrations
-        tau1 = alpha1 + beta1
-        tau2 = alpha2 + beta2
-
-        # Means (mainly needed for variance; keep consistent with your original)
-        mean1 = alpha1 / np.maximum(tau1, eps)
-        mean2 = alpha2 / np.maximum(tau2, eps)
-
-        # Beta variance
-        var1 = mean1 * (1.0 - mean1) / np.maximum(tau1 + 1.0, eps)
-        var2 = mean2 * (1.0 - mean2) / np.maximum(tau2 + 1.0, eps)
-
-        bc_safe = np.clip(np.nan_to_num(bc_values, nan=bc_nan_fill), 0.0, 1.0)
-        lambda_var = 2.0 if variance_reliability else 0.0
-        effect_sizes = effect_size_from_components(
-            delta_mean=delta_mean,
-            overlap=bc_safe,
-            var1=var1,
-            var2=var2,
-            lambda_var=lambda_var,
-        )["effect_size"]
-        effect_sizes = np.nan_to_num(effect_sizes, nan=0.0, posinf=0.0, neginf=0.0)
-        return np.asarray(effect_sizes, dtype=np.float32)
 
     def _storey_qvalue(self, p_values: np.ndarray, lambda_seq=None) -> np.ndarray:
         """

@@ -80,7 +80,8 @@ def test_methyl_sample_statistics_from_csv(tmp_path):
         # Create a few chromosome-context files
         for chrom in ['1', '2']:
             for ctx in ['CG']:
-                sample = create_mock_sample(chrom, ctx, n_positions=100, seed=hash(f"{folder}_{chrom}_{ctx}"))
+                seed_val = abs(hash(f"{folder}_{chrom}_{ctx}")) % (2**32)
+                sample = create_mock_sample(chrom, ctx, n_positions=100, seed=seed_val)
                 h5_file = sample_dir / f"{chrom}-{ctx}.h5"
                 sample.save_to_h5(h5_file)
     
@@ -129,7 +130,8 @@ def test_methyl_sample_statistics_from_config(tmp_path):
     
     # Create mock samples
     for sample_dir in [sample_dir1, sample_dir2]:
-        sample = create_mock_sample('1', 'CG', n_positions=100, seed=hash(str(sample_dir)))
+        seed_val = abs(hash(str(sample_dir))) % (2**32)
+        sample = create_mock_sample('1', 'CG', n_positions=100, seed=seed_val)
         h5_file = sample_dir / "1-CG.h5"
         sample.save_to_h5(h5_file)
     
@@ -273,7 +275,6 @@ def test_methyl_centroid_statistics(tmp_path):
         try:
             samples = [MethylSample.load_from_h5(f) for f in sample_files]
             # Create centroid by adding samples (first sample becomes base)
-            from methyl_utils.core.methyl_frame import MethylCentroid
             import pandas as pd
 
             base_sample = samples[0]
@@ -347,7 +348,8 @@ def test_context_property_collision_fix():
         'Swx2': np.where(cov > 0, (mC.astype(np.float64) ** 2) / cov.astype(np.float64), 0.0).astype(np.float32),
     })
     # Base MethylSample can have extra columns; use subset for frame to avoid validation issues
-    frame_data = test_data[['pos', 'mC', 'uC', 'tnc']].copy()
+    frame_data = test_data[['pos', 'Sm', 'Su', 'tnc']].copy()
+    frame_data = frame_data.rename(columns={'Sm': 'mC', 'Su': 'uC'})
     frame = MethylSample(frame_data, metadata={'context': 'CG'})
 
     # Test 1: DataFrame context column access works for filtering

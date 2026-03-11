@@ -13,20 +13,20 @@ import pandas as pd
 # Import from parent package
 from ..models.config import ClassifierConfig
 
-# Create a mapping for old module names to new ones
+# Create a mapping for old module names to new ones (ECDF-only; no Beta classifier modules)
 MODULE_MAPPING = {
     'methyl_detector': 'methyl_utils',
     'methyl_modeler': 'methyl_utils',
-    'methyl_detector.classifiers': 'methyl_utils.probabilistic_beta_classifier',
-    'methyl_modeler.classifiers': 'methyl_utils.probabilistic_beta_classifier',
-    'methyl_detector.classifiers.classifier': 'methyl_utils.probabilistic_beta_classifier',
-    'methyl_modeler.classifiers.classifier': 'methyl_utils.probabilistic_beta_classifier',
-    'methyl_detector.probabilistic_beta_classifier': 'methyl_utils.probabilistic_beta_classifier',
-    'methyl_modeler.probabilistic_beta_classifier': 'methyl_utils.probabilistic_beta_classifier',
+    'methyl_detector.classifiers': 'methyl_utils.ecdf_classifier',
+    'methyl_modeler.classifiers': 'methyl_utils.ecdf_classifier',
+    'methyl_detector.classifiers.classifier': 'methyl_utils.ecdf_classifier',
+    'methyl_modeler.classifiers.classifier': 'methyl_utils.ecdf_classifier',
+    'methyl_detector.probabilistic_beta_classifier': 'methyl_utils.ecdf_classifier',
+    'methyl_modeler.probabilistic_beta_classifier': 'methyl_utils.ecdf_classifier',
     'methyl_detector.methyl_sample': 'methyl_utils.methyl_sample',
     'methyl_modeler.methyl_sample': 'methyl_utils.methyl_sample',
-    'methyl_utils.classifiers': 'methyl_utils.probabilistic_beta_classifier',
-    'methyl_utils.classifiers.probabilistic_beta_classifier': 'methyl_utils.probabilistic_beta_classifier',
+    'methyl_utils.classifiers': 'methyl_utils.ecdf_classifier',
+    'methyl_utils.classifiers.probabilistic_beta_classifier': 'methyl_utils.ecdf_classifier',
     # Handle numpy version compatibility issues
     'numpy._core': 'numpy.core',
     'numpy._core.multiarray': 'numpy.core.multiarray',
@@ -96,8 +96,8 @@ class MethylClassifier:
         """
         Load a trained classifier from a pickle file.
         
-        Handles both old format (raw ProbabilisticBetaClassifier) and
-        new enhanced format (dict with classifier + metadata).
+        Handles both legacy format (raw classifier) and
+        new enhanced format (dict with classifier + metadata). Classifiers are ECDF-based.
 
         Args:
             model_path: Path to the classifier pickle file
@@ -201,7 +201,7 @@ class MethylClassifier:
                     self._collect_all_dmp_positions()
                     print(f"📋 Context: {self.context_metadata or 'unknown'}; chromosomes: {list(sorted(self.classifiers.keys()))}")
                 else:
-                    # Old format: raw ProbabilisticBetaClassifier (single chromosome)
+                    # Legacy format: raw classifier (single chromosome)
                     print("✅ Loaded classifier (legacy format)")
                     self.classifier = model_package
                     try:
@@ -215,7 +215,7 @@ class MethylClassifier:
             print(f"❌ Failed to load classifier from {model_path}: {e}")
             sys.exit(1)
         
-        # Set temperature on the actual classifier (handle both raw ProbabilisticBetaClassifier and saved MethylClassifier wrapper)
+        # Set temperature on the actual classifier (handle both raw classifier and saved MethylClassifier wrapper)
         if self.classifier is not None:
             _target = self.classifier
             if hasattr(_target, "classifier") and hasattr(getattr(_target, "classifier", None), "set_temperature"):
@@ -288,23 +288,14 @@ class MethylClassifier:
                         model_packages[chrom] = model_package
                         print(f"✅ Loaded classifier for chromosome {chrom}")
                     elif 'dmpDF' in model_package:
-                        # Create BetaClassifier from dmpDF
-                        from methyl_utils import BetaClassifier
-                        dmpDF = model_package['dmpDF']
-                        classifier = BetaClassifier.from_dataframe(dmpDF)
-                        classifier.set_temperature(self.config.temperature)
-                        metadata = model_package.get('metadata', {})
-                        if 'platt_calibrator' in metadata and self.config.enable_platt_calibration:
-                            import pickle
-                            classifier.calibrator = pickle.loads(metadata['platt_calibrator'])
-                            if 'platt_calibrator_scaler' in metadata:
-                                classifier.calibrator_scaler = pickle.loads(metadata['platt_calibrator_scaler'])
-                            any_platt_loaded = True
-                        self.classifiers[chrom] = classifier
-                        model_packages[chrom] = model_package
-                        print(f"✅ Created BetaClassifier from dmpDF for chromosome {chrom}")
+                        # ECDF models must be saved with a pre-built classifier; dmpDF alone is insufficient
+                        # (ECDFClassifier requires bin_edges and bin_counts from centroids).
+                        raise ValueError(
+                            f"Model package for chromosome {chrom} contains only dmpDF; "
+                            "ECDF pipeline requires a saved classifier. Re-export the model from methyl-detector."
+                        )
                     else:
-                        raise ValueError(f"No classifier or dmpDF found in model package for chromosome {chrom}")
+                        raise ValueError(f"No classifier found in model package for chromosome {chrom}")
                 else:
                     # Legacy format - classifier or saved MethylClassifier wrapper
                     classifier = model_package
@@ -424,18 +415,24 @@ class MethylClassifier:
         Expect centroid1 → P(class1) ≈ 0, centroid2 → P(class1) ≈ 1. If not, the model
         may have poor separation or inverted labels (helps diagnose all-samples-one-class).
         """
-        required = {'alpha1', 'beta1', 'alpha2', 'beta2'}
+        # ECDF models: dmpDF may have mean1/mean2; legacy had alpha1/beta1/alpha2/beta2
         bad = []
         for chrom in sorted(self.classifiers.keys()):
             package = model_packages.get(chrom, {})
             dmpDF = package.get('dmpDF')
-            if dmpDF is None or not isinstance(dmpDF, pd.DataFrame) or not required.issubset(dmpDF.columns):
+            if dmpDF is None or not isinstance(dmpDF, pd.DataFrame):
+                continue
+            if 'mean1' in dmpDF.columns and 'mean2' in dmpDF.columns:
+                mean1 = np.clip(np.asarray(dmpDF['mean1'].values, dtype=np.float64), 1e-6, 1.0 - 1e-6)
+                mean2 = np.clip(np.asarray(dmpDF['mean2'].values, dtype=np.float64), 1e-6, 1.0 - 1e-6)
+            elif {'alpha1', 'beta1', 'alpha2', 'beta2'}.issubset(dmpDF.columns):
+                a1, b1 = dmpDF['alpha1'].values.astype(np.float64), dmpDF['beta1'].values.astype(np.float64)
+                a2, b2 = dmpDF['alpha2'].values.astype(np.float64), dmpDF['beta2'].values.astype(np.float64)
+                mean1 = np.clip(a1 / (a1 + b1), 1e-6, 1.0 - 1e-6)
+                mean2 = np.clip(a2 / (a2 + b2), 1e-6, 1.0 - 1e-6)
+            else:
                 continue
             clf = self.classifiers[chrom]
-            a1, b1 = dmpDF['alpha1'].values.astype(np.float64), dmpDF['beta1'].values.astype(np.float64)
-            a2, b2 = dmpDF['alpha2'].values.astype(np.float64), dmpDF['beta2'].values.astype(np.float64)
-            mean1 = np.clip(a1 / (a1 + b1), 1e-6, 1.0 - 1e-6)
-            mean2 = np.clip(a2 / (a2 + b2), 1e-6, 1.0 - 1e-6)
             profile_c1 = mean1.reshape(1, -1)
             profile_c2 = mean2.reshape(1, -1)
             avail = np.ones((1, len(mean1)), dtype=bool)
@@ -810,7 +807,7 @@ class MethylClassifier:
                 availability_mask: Optional[np.ndarray] = None,
                 debug: bool = False) -> np.ndarray:
         """
-        Predict classes for methylation data using Beta distributions.
+        Predict classes for methylation data using the loaded ECDF classifier.
 
         Args:
             methylation_data: Array of methylation values (n_samples, n_positions)
@@ -834,7 +831,7 @@ class MethylClassifier:
                      availability_mask: Optional[np.ndarray] = None,
                      debug: bool = False) -> np.ndarray:
         """
-        Predict class probabilities for methylation data using Beta distributions.
+        Predict class probabilities for methylation data using the loaded ECDF classifier.
 
         Args:
             methylation_data: Array of methylation values (n_samples, n_positions)

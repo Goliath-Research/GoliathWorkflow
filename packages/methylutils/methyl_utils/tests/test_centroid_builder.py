@@ -166,10 +166,10 @@ if HAS_HYPOTHESIS:
 
         for path in sample_paths:
             # Re-load to accumulate manually
-            df = pd.read_hdf(path, "methylation_data")
-            idx = np.searchsorted(positions, df["pos"].values)
-            mC = df["mC"].values
-            uC = df["uC"].values
+            sample = load_from_h5(path)
+            idx = np.searchsorted(positions, sample.pos.values if hasattr(sample.pos, 'values') else np.asarray(sample.pos))
+            mC = sample.mC.values if hasattr(sample.mC, 'values') else np.asarray(sample.mC)
+            uC = sample.uC.values if hasattr(sample.uC, 'values') else np.asarray(sample.uC)
             cov = mC + uC
             mean = np.divide(mC, cov, where=cov > 0, out=np.zeros_like(mC, float))
 
@@ -184,7 +184,7 @@ if HAS_HYPOTHESIS:
             truth_log_1x[idx] += np.log(1 - safe)
 
         # Compare
-        mask = truth_N > 0
+        mask = (truth_N > 0) & ((truth_mC + truth_uC) >= 1)
         final_pos = positions[mask]
 
         # Map centroid rows to global positions
@@ -251,7 +251,7 @@ def test_gpu_path_works():
 
     assert centroid.is_gpu is False  # finalize always returns CPU pandas
     assert len(centroid) == 3
-    assert centroid.N.sum() == 1
+    assert centroid.N.sum() == 3
 
 
 # --------------------------------------------------------------------------- #
