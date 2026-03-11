@@ -437,20 +437,24 @@ class BedtoolsMapper:
             how='left'
         )
         
-        # Compute weighted scores
+        # Compute weighted scores. Use finite fallbacks so NaN/inf in p_value/q_value
+        # (e.g. missing in DMP CSV or join failure) do not zero out a gene's total_weight.
         merged['weight'] = 1.0
-        
+
         if self.use_p_value_weight and 'p_value' in merged.columns:
+            pv = merged['p_value'].clip(lower=1e-300)
             if self.p_value_log_transform:
-                merged['p_weight'] = -np.log10(merged['p_value'].clip(lower=1e-300))
+                merged['p_weight'] = -np.log10(pv)
             else:
-                merged['p_weight'] = 1.0 / (merged['p_value'].clip(lower=1e-300))
-            merged['weight'] *= merged['p_weight']
-        
+                merged['p_weight'] = 1.0 / pv
+            merged['p_weight'] = merged['p_weight'].replace([np.inf, -np.inf], np.nan).fillna(1.0)
+            merged['weight'] = merged['weight'] * merged['p_weight']
+
         if self.use_q_value_weight and 'q_value' in merged.columns:
-            merged['q_weight'] = -np.log10(merged['q_value'].clip(lower=1e-300))
-            merged['weight'] *= merged['q_weight']
-        
+            qv = merged['q_value'].clip(lower=1e-300)
+            merged['q_weight'] = -np.log10(qv).replace([np.inf, -np.inf], np.nan).fillna(1.0)
+            merged['weight'] = merged['weight'] * merged['q_weight']
+
         if self.use_effect_size_weight:
             eff_col = None
             if 'effect_size' in merged.columns:
@@ -481,11 +485,16 @@ class BedtoolsMapper:
 
             if eff_col is not None:
                 merged['eff_weight'] = merged[eff_col].abs().fillna(1.0)
-                merged['weight'] *= merged['eff_weight']
-        
+                merged['weight'] = merged['weight'] * merged['eff_weight']
+
+        # Ensure no NaN from failed join or missing p_value/q_value: every row contributes
+        merged['weight'] = merged['weight'].fillna(1.0)
+
         # Normalize weights (optional - can be disabled)
-        merged['weight'] = merged['weight'] / merged['weight'].max() if merged['weight'].max() > 0 else merged['weight']
-        
+        w_max = merged['weight'].max()
+        if w_max is not None and np.isfinite(w_max) and w_max > 0:
+            merged['weight'] = merged['weight'] / w_max
+
         return merged
 
     @staticmethod
