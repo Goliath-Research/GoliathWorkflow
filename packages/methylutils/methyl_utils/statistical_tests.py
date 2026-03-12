@@ -687,22 +687,29 @@ def _mean_level_weight(
     k: float = 0.08,
 ) -> np.ndarray:
     """
-    Weight factor f(μ̄) for mean methylation level μ̄ = (μ1 + μ2) / 2.
-    Reduces effect_size at low mean methylation (e.g. CHH) to avoid inflated scores.
+    Weight factor for mean methylation level (μ̄ or max(μ1, μ2) depending on caller).
+    Reduces effect_size at low methylation (e.g. CHH) to avoid inflated scores.
 
     Modes:
-        "sqrt": f(μ̄) = sqrt(μ̄)
-        "linear": f(μ̄) = μ̄
-        "saturating": f(μ̄) = μ̄ / (μ̄ + k), k around 0.05--0.10
+        "sqrt": f = sqrt(μ)
+        "linear": f = μ
+        "saturating": f = μ / (μ + k), k around 0.05--0.10
+        "boundary": b(μ) = min(1, μ / τ); τ = k (e.g. 0.1). Down-weights when μ < τ;
+            no penalty when μ ≥ τ. Preserves signals where one group has biologically
+            meaningful methylation (use max(μ1, μ2) as input when using this mode).
     """
     mean_level = np.asarray(mean_level, dtype=np.float64).ravel()
     mu = np.clip(mean_level, 0.0, 1.0)
+    tau_or_k = float(k)
     if weight_mode == "sqrt":
         w = np.sqrt(np.maximum(mu, 0.0))
     elif weight_mode == "linear":
         w = mu
     elif weight_mode == "saturating":
-        w = np.where(mu > 0, mu / (mu + float(k)), 0.0)
+        w = np.where(mu > 0, mu / (mu + tau_or_k), 0.0)
+    elif weight_mode == "boundary":
+        # b(μ) = min(1, μ / τ): penalty when below τ, no penalty when ≥ τ
+        w = np.where(tau_or_k > 0, np.minimum(1.0, mu / tau_or_k), np.ones_like(mu))
     else:
         w = np.ones_like(mu)
     return np.asarray(w, dtype=np.float64)
@@ -724,8 +731,8 @@ def effect_size_from_components(
         effect_size = |delta_mean| * (1 - overlap) *
                       exp(-lambda_var * (sqrt(var1) + sqrt(var2)))
 
-    Optional mean-level weight (e.g. for CHH): multiply by f(μ̄) where μ̄ = (μ1+μ2)/2.
-    Modes: "sqrt" (sqrt(μ̄)), "linear" (μ̄), "saturating" (μ̄/(μ̄+k)).
+    Optional mean-level weight (e.g. for CHH): multiply by f(μ) where μ = mean_level.
+    Modes: "sqrt", "linear", "saturating" (μ/(μ+k)), "boundary" (min(1, μ/τ); use max(μ1,μ2) as μ so one group ≥ τ removes penalty).
     """
     delta_mean = np.asarray(delta_mean, dtype=np.float64).ravel()
     overlap = np.asarray(overlap, dtype=np.float64).ravel()

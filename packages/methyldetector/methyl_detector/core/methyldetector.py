@@ -747,21 +747,25 @@ class MethylDetector:
                 w_c = S.mean() if len(S) > 0 else 0.0
             
             weight_map[context] = w_c
-        
-        # Normalize weights to sum=1
-        total_weight = sum(weight_map.values())
-        if total_weight > 0:
-            # Compute raw (unnormalized) weights for logging
-            raw_weights = weight_map.copy()
-            weight_map = {k: v / total_weight for k, v in weight_map.items()}
+
+        mean_effect_per_context = weight_map.copy()
+        # Optional: inverse weighting so contexts with inflated effect_size (e.g. CHH) get lower weight
+        if self.config.context_weight_direction == "inverse":
+            eps = 1e-8
+            raw_weights = {k: 1.0 / (v + eps) for k, v in weight_map.items()}
         else:
-            # Fallback to equal weights if all zeros
+            raw_weights = weight_map.copy()
+
+        # Normalize weights to sum=1
+        total_weight = sum(raw_weights.values())
+        if total_weight > 0:
+            weight_map = {k: v / total_weight for k, v in raw_weights.items()}
+        else:
             n_contexts = len(weight_map)
             weight_map = {k: 1.0 / n_contexts for k in weight_map.keys()}
             logger.warning("All context weights are zero, using equal weights")
-            raw_weights = weight_map.copy()
-        
-        # Log summary table: counts here are statistical DMPs (before biological filter)
+
+        # Log summary table: Mean_EffectSize = trimmed mean effect_size; Weight = final context weight
         logger.info("")
         logger.info("="*60)
         logger.info("Context Weighting Summary (statistical DMPs, before biological filter):")
@@ -770,10 +774,13 @@ class MethylDetector:
         logger.info("-" * 50)
         for ctx in sorted(weight_map.keys()):
             n_dmps = len(dmps_df[dmps_df['context'] == ctx])
-            logger.info(f"{ctx:<10} {n_dmps:>10,} {raw_weights[ctx]:>16.4f} {weight_map[ctx]:>10.4f}")
+            logger.info(f"{ctx:<10} {n_dmps:>10,} {mean_effect_per_context[ctx]:>16.4f} {weight_map[ctx]:>10.4f}")
         logger.info("-" * 50)
-        logger.info("N_stat = statistical DMPs (q ≤ α). Weights from trimmed mean of effect_size (trimmed: bottom %.0f%%, top %.0f%%).",
-                    self.config.trimmed_percentile_low * 100, self.config.trimmed_percentile_high * 100)
+        logger.info(
+            "N_stat = statistical DMPs (q ≤ α). Weights from trimmed mean effect_size (bottom %.0f%%, top %.0f%%); direction=%s.",
+            self.config.trimmed_percentile_low * 100, self.config.trimmed_percentile_high * 100,
+            self.config.context_weight_direction,
+        )
         logger.info("="*60)
         logger.info("")
         
@@ -835,6 +842,7 @@ class MethylDetector:
         _pct = lambda n, d: f"{n / d * 100:.1f}%" if d and d > 0 else "N/A"
 
         bio_df = _select_by_effect_coverage(dmps_df, coverage)
+
         selected_confirmed = int(bio_df["statistical_dmp"].sum()) if "statistical_dmp" in bio_df.columns else len(bio_df)
         selected_rescue = max(0, len(bio_df) - selected_confirmed)
 
@@ -3270,6 +3278,9 @@ class MethylDetector:
         lambda_var = self.config.lambda_var
         mean_level_weight = self.config.effect_size_mean_level_weight
         mean_level_k = self.config.effect_size_mean_level_k
+        if self.config.effect_size_mean_level_k_by_context and "context" in chunk_df.columns:
+            ctx = chunk_df["context"].iloc[0]
+            mean_level_k = self.config.effect_size_mean_level_k_by_context.get(ctx, mean_level_k)
         results = ecdf_effect_size(
             delta_mean=dm,
             var1=var1,

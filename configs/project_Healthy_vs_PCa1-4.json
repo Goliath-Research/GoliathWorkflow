@@ -125,12 +125,14 @@
         "effect_size_coverage": 0.95,
         "effect_size_use_mean_level": true,
         "effect_size_mean_level_use_max": true,
-        "effect_size_mean_level_weight": "saturating",
-        "effect_size_mean_level_k": 0.05,
+        "effect_size_mean_level_weight": "boundary",
+        "effect_size_mean_level_k": 0.10,
         "min_validation_coverage_per_position": 5,
         "optimization_method": "featurecuts",
         "random_state": 42,
         "min_N_pct": 0.1,
+        "context_weight_direction": "inverse",
+        "effect_size_mean_level_k_by_context": { "CG": 0.05, "CHG": 0.10, "CHH": 0.20 },
         "filter_funnel_explore": {
           "effect_size_coverage": { "min": 0.80, "max": 0.99, "step": 0.05 }
         },

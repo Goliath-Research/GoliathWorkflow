@@ -207,3 +207,54 @@ def test_mean_level_weight_reduces_effect_at_low_methylation():
         mean_level_k=0.08,
     )
     assert with_high["effect_size"][0] > with_low["effect_size"][0]
+
+
+def test_boundary_mode_penalizes_below_tau_preserves_above():
+    """Boundary mode: b(μ) = min(1, μ/τ). Below τ down-weighted; ≥ τ no penalty."""
+    tau = 0.1
+    base = effect_size_from_components(
+        delta_mean=np.array([0.5]),
+        overlap=np.array([0.1]),
+        var1=np.array([0.01]),
+        var2=np.array([0.01]),
+        lambda_var=1.0,
+    )
+    # Below τ (e.g. 0.05): effect = base * (0.05/0.1) = 0.5 * base
+    below = effect_size_from_components(
+        delta_mean=np.array([0.5]),
+        overlap=np.array([0.1]),
+        var1=np.array([0.01]),
+        var2=np.array([0.01]),
+        lambda_var=1.0,
+        mean_level=np.array([0.05]),
+        mean_level_weight="boundary",
+        mean_level_k=tau,
+    )
+    assert below["effect_size"][0] < base["effect_size"][0]
+    assert np.isclose(below["effect_size"][0], base["effect_size"][0] * 0.5, rtol=0.01)
+
+    # At τ: effect = base * 1
+    at_tau = effect_size_from_components(
+        delta_mean=np.array([0.5]),
+        overlap=np.array([0.1]),
+        var1=np.array([0.01]),
+        var2=np.array([0.01]),
+        lambda_var=1.0,
+        mean_level=np.array([tau]),
+        mean_level_weight="boundary",
+        mean_level_k=tau,
+    )
+    assert np.isclose(at_tau["effect_size"][0], base["effect_size"][0], rtol=0.01)
+
+    # Above τ (biologically meaningful): no penalty
+    above = effect_size_from_components(
+        delta_mean=np.array([0.5]),
+        overlap=np.array([0.1]),
+        var1=np.array([0.01]),
+        var2=np.array([0.01]),
+        lambda_var=1.0,
+        mean_level=np.array([0.2]),
+        mean_level_weight="boundary",
+        mean_level_k=tau,
+    )
+    assert np.isclose(above["effect_size"][0], base["effect_size"][0], rtol=0.01)

@@ -247,18 +247,22 @@ class MethylModelerConfig(BaseModel):
     )
     effect_size_mean_level_weight: str = Field(
         default="saturating",
-        description="Mean-level weight f(μ̄): 'sqrt' (sqrt(μ̄)), 'linear' (μ̄), or 'saturating' (μ̄/(μ̄+k))."
+        description="Mean-level weight: 'sqrt', 'linear', 'saturating' (μ/(μ+k)), or 'boundary' (min(1, μ/τ)); use max(μ1,μ2) so one group ≥ τ removes penalty."
     )
     effect_size_mean_level_k: float = Field(
         default=0.05, ge=0.01, le=0.5,
-        description="Constant k in max(μ₁,μ₂)/(max(μ₁,μ₂)+k). Use 0.05 per the canonical formula."
+        description="For saturating: k in μ/(μ+k). For boundary: τ (tau), e.g. 0.1; effect_size × min(1, max(μ1,μ2)/τ) so signals below τ are down-weighted."
+    )
+    effect_size_mean_level_k_by_context: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="Optional per-context k for mean-level weight (e.g. {\"CHH\": 0.20, \"CHG\": 0.10}). Use a larger k for CHH so effect_size is naturally lower there; CG uses effect_size_mean_level_k. None = same k for all contexts."
     )
 
     @field_validator("effect_size_mean_level_weight", mode="before")
     @classmethod
     def validate_effect_size_mean_level_weight(cls, v: str) -> str:
-        if v not in ("sqrt", "linear", "saturating"):
-            raise ValueError("effect_size_mean_level_weight must be one of: sqrt, linear, saturating")
+        if v not in ("sqrt", "linear", "saturating", "boundary"):
+            raise ValueError("effect_size_mean_level_weight must be one of: sqrt, linear, saturating, boundary")
         return v
 
     max_tau2_for_dmp: Optional[float] = Field(
@@ -288,6 +292,10 @@ class MethylModelerConfig(BaseModel):
     trimmed_percentile_high: float = Field(
         default=0.01, ge=0.0, le=0.5,
         description="Upper percentile for trimmed mean - removes top X% (default: 0.01 = remove top 1%). High effect_size DMPs are critical for classification, so only extreme outliers are removed."
+    )
+    context_weight_direction: str = Field(
+        default="inverse",
+        description="How to derive context weight from trimmed mean effect_size: 'inverse' = weight ∝ 1/mean_effect_size (down-weight contexts with inflated effect_size, e.g. CHH); 'proportional' = weight ∝ mean_effect_size (legacy)."
     )
 
     # ----------------
@@ -499,6 +507,13 @@ class MethylModelerConfig(BaseModel):
     def validate_trimmed_percentile(cls, v):
         if v < 0.0 or v > 0.5:
             raise ValueError("Trimmed percentiles must be between 0.0 and 0.5")
+        return v
+
+    @field_validator('context_weight_direction', mode='before')
+    @classmethod
+    def validate_context_weight_direction(cls, v: str) -> str:
+        if v not in ('inverse', 'proportional'):
+            raise ValueError("context_weight_direction must be 'inverse' or 'proportional'")
         return v
 
     @field_validator('eat_normalization', mode='before')
