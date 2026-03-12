@@ -237,6 +237,30 @@ class MethylModelerConfig(BaseModel):
         default=2.0, ge=0.0, le=20.0,
         description="Variance penalty strength in effect_size = |delta_mean| * (1 - overlap) * exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))."
     )
+    effect_size_use_mean_level: bool = Field(
+        default=True,
+        description="Multiply effect_size by max(μ₁,μ₂)/(max(μ₁,μ₂)+k) to reduce inflated scores at low methylation (e.g. CHH)."
+    )
+    effect_size_mean_level_use_max: bool = Field(
+        default=True,
+        description="If True, use max(mean1,mean2) for the mean-level factor; if False, use (mean1+mean2)/2. Formula uses max."
+    )
+    effect_size_mean_level_weight: str = Field(
+        default="saturating",
+        description="Mean-level weight f(μ̄): 'sqrt' (sqrt(μ̄)), 'linear' (μ̄), or 'saturating' (μ̄/(μ̄+k))."
+    )
+    effect_size_mean_level_k: float = Field(
+        default=0.05, ge=0.01, le=0.5,
+        description="Constant k in max(μ₁,μ₂)/(max(μ₁,μ₂)+k). Use 0.05 per the canonical formula."
+    )
+
+    @field_validator("effect_size_mean_level_weight", mode="before")
+    @classmethod
+    def validate_effect_size_mean_level_weight(cls, v: str) -> str:
+        if v not in ("sqrt", "linear", "saturating"):
+            raise ValueError("effect_size_mean_level_weight must be one of: sqrt, linear, saturating")
+        return v
+
     max_tau2_for_dmp: Optional[float] = Field(
         default=None, ge=0.0,
         description="Optional heterogeneity filter. If set, drop positions where both groups exceed this between-sample variance estimate (tau2), because they are likely heterogeneous subpopulations rather than clean DMPs."

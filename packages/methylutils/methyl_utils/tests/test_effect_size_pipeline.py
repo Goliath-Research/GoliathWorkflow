@@ -154,3 +154,56 @@ def test_variance_penalty_is_symmetric():
         lambda_var=2.0,
     )
     assert result_a["effect_size"][0] < baseline["effect_size"][0]
+
+
+def test_mean_level_weight_reduces_effect_at_low_methylation():
+    """Mean-level weight f(μ̄) down-weights effect_size when μ̄ is low (e.g. CHH)."""
+    base = effect_size_from_components(
+        delta_mean=np.array([0.5]),
+        overlap=np.array([0.1]),
+        var1=np.array([0.01]),
+        var2=np.array([0.01]),
+        lambda_var=1.0,
+    )
+    # No mean_level: baseline
+    assert base["effect_size"][0] > 0.1
+
+    # mean_level=0 (no methylation): effect should be zero
+    with_zero = effect_size_from_components(
+        delta_mean=np.array([0.5]),
+        overlap=np.array([0.1]),
+        var1=np.array([0.01]),
+        var2=np.array([0.01]),
+        lambda_var=1.0,
+        mean_level=np.array([0.0]),
+        mean_level_weight="saturating",
+        mean_level_k=0.08,
+    )
+    assert with_zero["effect_size"][0] == 0.0
+
+    # Low mean_level (e.g. CHH): effect reduced vs baseline
+    with_low = effect_size_from_components(
+        delta_mean=np.array([0.5]),
+        overlap=np.array([0.1]),
+        var1=np.array([0.01]),
+        var2=np.array([0.01]),
+        lambda_var=1.0,
+        mean_level=np.array([0.05]),
+        mean_level_weight="saturating",
+        mean_level_k=0.08,
+    )
+    assert with_low["effect_size"][0] < base["effect_size"][0]
+    assert with_low["effect_size"][0] > 0.0
+
+    # High mean_level (e.g. CG): effect closer to baseline (saturating f(μ̄) → 1)
+    with_high = effect_size_from_components(
+        delta_mean=np.array([0.5]),
+        overlap=np.array([0.1]),
+        var1=np.array([0.01]),
+        var2=np.array([0.01]),
+        lambda_var=1.0,
+        mean_level=np.array([0.8]),
+        mean_level_weight="saturating",
+        mean_level_k=0.08,
+    )
+    assert with_high["effect_size"][0] > with_low["effect_size"][0]

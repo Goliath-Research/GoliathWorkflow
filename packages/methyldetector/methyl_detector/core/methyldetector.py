@@ -348,7 +348,7 @@ class MethylDetector:
                 "MethylDetector requires centroids with binned_stats; build them first (methyl-centroid with binned_stats_bins, default 20)."
             )
         centroid = MethylSample.load_from_h5(str(c1_path))
-        binned = getattr(centroid, "binned_stats", None)
+        binned = centroid.binned_stats if centroid else None
         if not binned or "bin_edges" not in binned or "bin_counts" not in binned:
             raise ValueError(
                 "Centroids must have binned_stats for MethylDetector (continuous ECDF overlap and effect_size). "
@@ -1462,7 +1462,7 @@ class MethylDetector:
             # Rows identical after NaN->0.5 fill => classifier gets same input => same probability for all
             row_var_clean = np.var(X_test_subset_clean, axis=1)
             all_rows_same = n_feat > 0 and n_test > 1 and np.all(row_var_clean < 1e-9)
-            if frac_valid < 0.05 and not getattr(self, '_low_overlap_warned_once', False):
+            if frac_valid < 0.05 and not self._low_overlap_warned_once:
                 self._low_overlap_warned_once = True
                 logger.warning(
                     "Validation data has very low overlap with DMP positions: %.1f%% non-NaN. "
@@ -1470,7 +1470,7 @@ class MethylDetector:
                     "Filled NaNs with 0.5 -> no discrimination -> BA≈0.5.",
                     frac_valid * 100
                 )
-            if all_rows_same and n_test > 1 and not getattr(self, '_no_variation_warned_once', False):
+            if all_rows_same and n_test > 1 and not self._no_variation_warned_once:
                 self._no_variation_warned_once = True
                 logger.warning(
                     "Validation test matrix has no per-sample variation (all rows nearly identical). "
@@ -1494,7 +1494,7 @@ class MethylDetector:
                 # Try to get intermediate values from classifier
                 try:
                     # Try to access internal state if possible
-                    logger.error(f"Classifier temperature: {getattr(temp_classifier, 'temperature', 'unknown')}")
+                    logger.error(f"Classifier temperature: {temp_classifier.temperature if hasattr(temp_classifier, 'temperature') else 'unknown'}")
                     logger.error(f"Classifier has calibrator: {temp_classifier.calibrator is not None}")
                 except Exception:
                     pass
@@ -1508,7 +1508,7 @@ class MethylDetector:
                 
             # Warn if probabilities are completely degenerate (once per run)
             prob_range = test_probas[:, 1].max() - test_probas[:, 1].min()
-            if prob_range < 0.01 and not getattr(self, '_degenerate_probs_warned_once', False):
+            if prob_range < 0.01 and not self._degenerate_probs_warned_once:
                 self._degenerate_probs_warned_once = True
                 logger.warning(
                     "Degenerate probabilities (range=%.6f, mean=%.6f) -> BA≈0.5. See 'low overlap' / 'no per-sample variation' above.",
@@ -1541,7 +1541,7 @@ class MethylDetector:
             n_pred_0 = int(np.sum(y_pred == 0))
             n_pred_1 = int(np.sum(y_pred == 1))
             if 0.48 <= balanced_accuracy <= 0.52 and (n_pos > 0 and n_neg > 0):
-                if not getattr(self, '_ba_05_warned_once', False):
+                if not self._ba_05_warned_once:
                     self._ba_05_warned_once = True
                     logger.warning(
                         "BA≈0.5 (coin toss): classifier is predicting only one class. "
@@ -1574,7 +1574,7 @@ class MethylDetector:
             if use_calibration and self.config.enable_platt_calibration and temp_classifier.calibrator is not None:
                 import pickle
                 result['platt_calibrator'] = pickle.dumps(temp_classifier.calibrator)
-                if getattr(temp_classifier, 'calibrator_scaler', None) is not None:
+                if temp_classifier.calibrator_scaler is not None:
                     result['platt_calibrator_scaler'] = pickle.dumps(temp_classifier.calibrator_scaler)
             return result
             
@@ -2733,7 +2733,7 @@ class MethylDetector:
                 sample_counts=SampleCounts(**result['counts'])
             )
 
-        biological_filter = getattr(self, "_biological_filter_summary", None)
+        biological_filter = self._biological_filter_summary if hasattr(self, '_biological_filter_summary') else None
 
         # Create the main results object
         results = MethylModelerValidationResults(
@@ -2894,9 +2894,9 @@ class MethylDetector:
         }
 
         # Include fitted Platt calibrator when enabled (MethylClassifier can use it for better-calibrated probabilities)
-        if self.config.enable_platt_calibration and getattr(self, '_platt_calibrator_bytes', None) is not None:
+        if self.config.enable_platt_calibration and self._platt_calibrator_bytes is not None:
             model_package["metadata"]["platt_calibrator"] = self._platt_calibrator_bytes
-            if getattr(self, '_platt_calibrator_scaler_bytes', None) is not None:
+            if self._platt_calibrator_scaler_bytes is not None:
                 model_package["metadata"]["platt_calibrator_scaler"] = self._platt_calibrator_scaler_bytes
             logger.info("  - Platt calibrator included (enable_platt_calibration=True)")
         
@@ -2977,8 +2977,8 @@ class MethylDetector:
                 c1 = load_from_h5(c1_path)
                 c2 = load_from_h5(c2_path)
 
-                bs1 = getattr(c1, "binned_stats", None)
-                bs2 = getattr(c2, "binned_stats", None)
+                bs1 = c1.binned_stats if c1 else None
+                bs2 = c2.binned_stats if c2 else None
                 if not bs1 or "bin_counts" not in bs1 or not bs2 or "bin_counts" not in bs2:
                     logger.warning(
                         "_extract_bin_counts_for_dmps: binned_stats missing for %s-%s",
@@ -3196,10 +3196,31 @@ class MethylDetector:
         var1 = chunk_df['variance1'].values.astype(np.float64)
         var2 = chunk_df['variance2'].values.astype(np.float64)
 
+        mean_level = None
+        if self.config.effect_size_use_mean_level and 'mean1' in chunk_df.columns and 'mean2' in chunk_df.columns:
+            mu1 = chunk_df['mean1'].values.astype(np.float64)
+            mu2 = chunk_df['mean2'].values.astype(np.float64)
+            use_max = self.config.effect_size_mean_level_use_max
+            mean_level = np.maximum(mu1, mu2) if use_max else (mu1 + mu2) / 2.0
+        else:
+            if start_row == 0 and self.config.effect_size_use_mean_level:
+                missing = []
+                if 'mean1' not in chunk_df.columns:
+                    missing.append('mean1')
+                if 'mean2' not in chunk_df.columns:
+                    missing.append('mean2')
+                if missing:
+                    logger.warning(
+                        "effect_size mean-level weight disabled: chunk missing %s (effect_size = raw formula).",
+                        ", ".join(missing),
+                    )
+
         from methyl_utils.statistical_tests import ecdf_effect_size
         position_indices = np.arange(start_row, start_row + len(chunk_df), dtype=np.intp)
         grid_size = self.config.ecdf_overlap_grid_size
         lambda_var = self.config.lambda_var
+        mean_level_weight = self.config.effect_size_mean_level_weight
+        mean_level_k = self.config.effect_size_mean_level_k
         results = ecdf_effect_size(
             delta_mean=dm,
             var1=var1,
@@ -3209,6 +3230,9 @@ class MethylDetector:
             position_indices=position_indices,
             grid_size=grid_size,
             lambda_var=lambda_var,
+            mean_level=mean_level,
+            mean_level_weight=mean_level_weight,
+            mean_level_k=mean_level_k,
         )
         chunk_df['overlap'] = results['overlap'].astype(np.float32)
         chunk_df['effect_size'] = results['effect_size'].astype(np.float32)
@@ -3366,29 +3390,21 @@ class MethylDetector:
                     logger.info(f"Biological importance range: min={min_score:.6f}, max={max_score:.6f}, count={len(bio_scores)}")
 
         # Build comparison stats from stored metadata
-        chromosome = getattr(self, 'chrom', 'unknown')
-        context = getattr(self, 'ctx', 'unknown')
+        chromosome = self.chrom if hasattr(self, 'chrom') else 'unknown'
+        context = self.ctx if hasattr(self, 'ctx') else 'unknown'
         comp_name = f"{chromosome}-{context}" if chromosome != 'unknown' else "single_comparison"
         logger.debug(f"Processing {len(dmp_df)} DMPs for {comp_name}")
 
         stats = ComparisonStats(
             comparison_name=comp_name,
-            total_positions=getattr(self, 'total_positions', len(dmp_df)),
-            statistical_dmps=getattr(
-                self,
-                'statistical_dmps_count',
-                int(dmp_df["statistical_dmp"].sum()) if isinstance(dmp_df, pd.DataFrame) and "statistical_dmp" in dmp_df.columns else len(dmp_df),
-            ),
+                total_positions=self.total_positions if hasattr(self, 'total_positions') else len(dmp_df),
+            statistical_dmps=self.statistical_dmps_count if hasattr(self, 'statistical_dmps_count') else int(dmp_df["statistical_dmp"].sum()) if isinstance(dmp_df, pd.DataFrame) and "statistical_dmp" in dmp_df.columns else len(dmp_df),
             biological_dmps=len(biological_dmps_df) if biological_dmps_df is not None else 0,
-            processing_time_seconds=getattr(self, 'processing_time_seconds', 0.0),
+            processing_time_seconds=self.processing_time_seconds if hasattr(self, 'processing_time_seconds') else 0.0,
             gpu_used=self.gpu_config.GPU_AVAILABLE
         )
         comparison_stats = [stats]
-        total_statistical_dmps = getattr(
-            self,
-            'statistical_dmps_count',
-            int(dmp_df["statistical_dmp"].sum()) if isinstance(dmp_df, pd.DataFrame) and "statistical_dmp" in dmp_df.columns else len(dmp_df),
-        )
+        total_statistical_dmps = self.statistical_dmps_count if hasattr(self, 'statistical_dmps_count') else int(dmp_df["statistical_dmp"].sum()) if isinstance(dmp_df, pd.DataFrame) and "statistical_dmp" in dmp_df.columns else len(dmp_df)
         selected_confirmed_dmps = (
             int(biological_dmps_df["statistical_dmp"].sum())
             if biological_dmps_df is not None and "statistical_dmp" in biological_dmps_df.columns
@@ -3415,8 +3431,8 @@ class MethylDetector:
         output_dir.mkdir(parents=True, exist_ok=True)
         # Global CSV already saved in filtering for single
         # Always save summaries (JSON, TXT)
-        chrom = getattr(self, 'chrom', 'unknown')
-        ctx = getattr(self, 'ctx', 'unknown')
+        chrom = self.chrom if hasattr(self, 'chrom') else 'unknown'
+        ctx = self.ctx if hasattr(self, 'ctx') else 'unknown'
         suffix = f"-{chrom}-{ctx}"
         prefix = f"dmps{suffix}"
         save_json(result.model_dump(), output_dir / f"result{suffix}.json")
@@ -3438,7 +3454,7 @@ class MethylDetector:
             "centroid2": self.config.centroid2_path,
         }
         # CSV path for single - use exported CSV path if available, otherwise construct from prefix
-        csv_path = getattr(self, '_exported_csv_path', None)
+        csv_path = self._exported_csv_path if hasattr(self, '_exported_csv_path') else None
         if csv_path is None and result.biologically_significant_dmps_df is not None and not result.biologically_significant_dmps_df.empty:
             csv_path = output_dir / f"{prefix}.csv"
         # Get top DMP importance
@@ -3447,8 +3463,8 @@ class MethylDetector:
             if 'effect_size' in result.biologically_significant_dmps_df.columns:
                 top_dmp_importance = result.biologically_significant_dmps_df['effect_size'].max()
         # Model info
-        model_path = getattr(result, 'classifier_model_path', None)
-        training_accuracy = getattr(result, 'training_accuracy', None)
+        model_path = result.classifier_model_path if hasattr(result, 'classifier_model_path') else None
+        training_accuracy = result.training_accuracy if hasattr(result, 'training_accuracy') else None
         summary = MethylModelerSummary(
             analysis_id=str(uuid.uuid4()),
             timestamp=datetime.now().isoformat(),

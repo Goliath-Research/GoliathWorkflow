@@ -681,18 +681,51 @@ def ecdf_overlap_integral(
     return np.clip(np.asarray(overlap, dtype=np.float64), 0.0, 1.0)
 
 
+def _mean_level_weight(
+    mean_level: np.ndarray,
+    weight_mode: str = "saturating",
+    k: float = 0.08,
+) -> np.ndarray:
+    """
+    Weight factor f(μ̄) for mean methylation level μ̄ = (μ1 + μ2) / 2.
+    Reduces effect_size at low mean methylation (e.g. CHH) to avoid inflated scores.
+
+    Modes:
+        "sqrt": f(μ̄) = sqrt(μ̄)
+        "linear": f(μ̄) = μ̄
+        "saturating": f(μ̄) = μ̄ / (μ̄ + k), k around 0.05--0.10
+    """
+    mean_level = np.asarray(mean_level, dtype=np.float64).ravel()
+    mu = np.clip(mean_level, 0.0, 1.0)
+    if weight_mode == "sqrt":
+        w = np.sqrt(np.maximum(mu, 0.0))
+    elif weight_mode == "linear":
+        w = mu
+    elif weight_mode == "saturating":
+        w = np.where(mu > 0, mu / (mu + float(k)), 0.0)
+    else:
+        w = np.ones_like(mu)
+    return np.asarray(w, dtype=np.float64)
+
+
 def effect_size_from_components(
     delta_mean: np.ndarray,
     overlap: np.ndarray,
     var1: np.ndarray,
     var2: np.ndarray,
     lambda_var: float = 2.0,
+    mean_level: Optional[np.ndarray] = None,
+    mean_level_weight: str = "saturating",
+    mean_level_k: float = 0.08,
 ) -> Dict[str, np.ndarray]:
     """
     Canonical biological effect size used across MethylUtils/MethylDetector:
 
         effect_size = |delta_mean| * (1 - overlap) *
                       exp(-lambda_var * (sqrt(var1) + sqrt(var2)))
+
+    Optional mean-level weight (e.g. for CHH): multiply by f(μ̄) where μ̄ = (μ1+μ2)/2.
+    Modes: "sqrt" (sqrt(μ̄)), "linear" (μ̄), "saturating" (μ̄/(μ̄+k)).
     """
     delta_mean = np.asarray(delta_mean, dtype=np.float64).ravel()
     overlap = np.asarray(overlap, dtype=np.float64).ravel()
@@ -704,6 +737,9 @@ def effect_size_from_components(
     var2 = np.maximum(var2, 0.0)
     reliability = np.exp(-float(lambda_var) * (np.sqrt(var1) + np.sqrt(var2)))
     effect_size = np.abs(delta_mean) * (1.0 - overlap) * reliability
+    if mean_level is not None and mean_level.size == effect_size.size:
+        w = _mean_level_weight(mean_level, weight_mode=mean_level_weight, k=mean_level_k)
+        effect_size = effect_size * w
     effect_size = np.clip(effect_size, 0.0, 1.0)
     return {
         "effect_size": np.asarray(effect_size, dtype=np.float64),
@@ -720,9 +756,13 @@ def ecdf_effect_size(
     position_indices: np.ndarray,
     lambda_var: float = 2.0,
     grid_size: int = 512,
+    mean_level: Optional[np.ndarray] = None,
+    mean_level_weight: str = "saturating",
+    mean_level_k: float = 0.08,
 ) -> Dict[str, np.ndarray]:
     """
     Compute continuous-ECDF overlap and the canonical biological effect size.
+    Optional mean_level = (μ1+μ2)/2 multiplies effect_size by f(μ̄) to down-weight low methylation (e.g. CHH).
     """
     overlap = ecdf_overlap_integral(
         ecdf_view1=ecdf_view1,
@@ -736,6 +776,9 @@ def ecdf_effect_size(
         var1=var1,
         var2=var2,
         lambda_var=lambda_var,
+        mean_level=mean_level,
+        mean_level_weight=mean_level_weight,
+        mean_level_k=mean_level_k,
     )
     return {
         "overlap": overlap,

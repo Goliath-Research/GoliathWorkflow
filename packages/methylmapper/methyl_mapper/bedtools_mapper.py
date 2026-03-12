@@ -257,9 +257,10 @@ class BedtoolsMapper:
         
         logger.debug(f"Converting {csv_path} to BED format...")
         
-        # Read CSV
+        # Read CSV and normalize column names (p-value -> p_value, Effect Size -> effect_size, etc.)
         df = pd.read_csv(csv_path)
-        
+        df = self._normalize_dmp_columns(df)
+
         # Check required columns
         required_cols = ['chromosome', 'position']
         missing = [c for c in required_cols if c not in df.columns]
@@ -410,39 +411,145 @@ class BedtoolsMapper:
                 attrs[key] = value
         return attrs
     
+    @staticmethod
+    def _normalize_chrom_for_join(chrom_series: pd.Series) -> pd.Series:
+        """Normalize chromosome to canonical form (chr1, chr2, ..., chr22, chrX, chrY) for join.
+        DMPs typically use 1, 2, ..., 22, X, Y without prefix; add 'chr' so join matches either format.
+        Coerce 1.0 -> 1 so float and int CSV columns match the BED name.
+        """
+        s = chrom_series.astype(str).str.strip()
+        # Normalize numeric-looking chromosomes (e.g. "1.0" -> "1") so BED and CSV join keys match
+        def _canon(s: str) -> str:
+            if not s or s.startswith('chr'):
+                return s
+            try:
+                x = float(s)
+                if x == int(x):
+                    return str(int(x))
+            except (ValueError, TypeError):
+                pass
+            return s
+        s = s.map(_canon)
+        return s.where(s.str.startswith('chr') | (s.str.len() == 0), 'chr' + s)
+
+    @staticmethod
+    def _normalize_context_for_join(context_series: pd.Series) -> pd.Series:
+        """Normalize context to CG, CHG, CHH (uppercase, stripped) for join."""
+        return context_series.astype(str).str.strip().str.upper()
+
+    @staticmethod
+    def _normalize_dmp_columns(df: pd.DataFrame) -> pd.DataFrame:
+        """Normalize DMP CSV column names so variants (p-value, Effect Size, etc.) map to expected names."""
+        if df.empty:
+            return df
+        rename = {}
+        for c in df.columns:
+            canonical = str(c).strip().lower().replace(' ', '_').replace('-', '_')
+            if canonical in ('p_value', 'pvalue'):
+                rename[c] = 'p_value'
+            elif canonical in ('q_value', 'qvalue'):
+                rename[c] = 'q_value'
+            elif canonical in ('effect_size', 'effectsize'):
+                rename[c] = 'effect_size'
+            elif canonical in ('delta_mean', 'deltamean'):
+                rename[c] = 'delta_mean'
+            elif canonical in ('chromosome', 'chrom', 'chr'):
+                rename[c] = 'chromosome'
+            elif canonical in ('position', 'pos'):
+                rename[c] = 'position'
+            elif canonical == 'context':
+                rename[c] = 'context'
+        if rename:
+            df = df.rename(columns=rename)
+        return df
+
+    @staticmethod
+    def _build_dmp_name_series(df: pd.DataFrame) -> pd.Series:
+        """Build the same name string as csv_to_bed uses for the BED 4th column. Used for exact join."""
+        chrom = df['chromosome'].astype(str).str.strip()
+        pos = pd.to_numeric(df['position'], errors='coerce')
+        # Same as csv_to_bed: integer position, no decimal
+        pos_int = pos.fillna(0).astype(np.int64)
+        name = chrom + ":" + pos_int.astype(str)
+        if 'context' in df.columns:
+            name = name + ":" + df['context'].astype(str)
+        if 'effect_size' in df.columns:
+            eff = pd.to_numeric(df['effect_size'], errors='coerce').fillna(0.0)
+            name = name + ":" + eff.map(lambda v: f"eff={v:.3f}")
+        return name
+
     def _join_with_dmp_weights(self, intersect_df: pd.DataFrame, dmp_df: pd.DataFrame) -> pd.DataFrame:
-        """Join intersection DataFrame with DMP weights."""
-        dmp_parts = intersect_df['dmp_name'].astype(str).str.split(':', n=2, expand=True)
+        """Join intersection DataFrame with DMP weights. Uses exact BED name (dmp_name) as join key so
+        intersection rows match the same CSV rows that produced the BED, avoiding chrom/position/context parsing mismatches.
+        """
+        dmp_df = self._normalize_dmp_columns(dmp_df.copy())
         intersect_df = intersect_df.reset_index(drop=True).copy()
-        intersect_df['chromosome'] = dmp_parts[0].fillna('').astype(str)
-        intersect_df['position'] = pd.to_numeric(dmp_parts[1], errors='coerce').astype('Int64')
-        
-        # Ensure consistent types for merging
+
+        # Build dmp_name in DMP table exactly as csv_to_bed does, so we can join on it
+        if 'chromosome' not in dmp_df.columns or 'position' not in dmp_df.columns:
+            logger.warning("DMP table missing chromosome or position; cannot build join key.")
+            return intersect_df
         dmp_lookup = dmp_df.copy()
-        if 'chromosome' in dmp_lookup.columns:
-            dmp_lookup['chromosome'] = dmp_lookup['chromosome'].astype(str)
-        if 'position' in dmp_lookup.columns:
-            dmp_lookup['position'] = pd.to_numeric(dmp_lookup['position'], errors='coerce').astype('Int64')
-        
-        # Merge with original DMP DataFrame
-        dmp_cols = ['chromosome', 'position']
+        dmp_lookup['chromosome'] = dmp_lookup['chromosome'].astype(str).str.strip()
+        dmp_lookup['position'] = pd.to_numeric(dmp_lookup['position'], errors='coerce').astype('Int64')
+        dmp_lookup['dmp_name'] = self._build_dmp_name_series(dmp_lookup)
+
+        # When duplicate dmp_name exist, keep the row that has stats
+        stat_ok = pd.Series(False, index=dmp_lookup.index)
+        for c in ['p_value', 'effect_size']:
+            if c in dmp_lookup.columns:
+                vals = pd.to_numeric(dmp_lookup[c], errors='coerce')
+                stat_ok = stat_ok | (vals.notna() & np.isfinite(vals))
+        dmp_lookup = dmp_lookup.assign(_stat_ok=stat_ok).sort_values('_stat_ok', ascending=False).drop(columns=['_stat_ok'])
+        dmp_lookup = dmp_lookup.drop_duplicates(subset=['dmp_name'], keep='first')
+
         optional_cols = [
             'p_value', 'q_value', 'effect_size', 'delta_mean',
             'context', 'importance', 'weight', 'overlap'
         ]
+        stat_cols = ['p_value', 'q_value', 'effect_size', 'delta_mean']
         existing_cols = [c for c in optional_cols if c in dmp_lookup.columns]
+        if not any(c in dmp_lookup.columns for c in stat_cols):
+            logger.warning(
+                "DMP table has no stat columns (p_value, q_value, effect_size, delta_mean). "
+                "Expected headers include 'p_value'/'p-value', 'q_value'/'q-value', 'effect_size'/'effect size', 'delta_mean'/'delta mean'. "
+                "Gene aggregation stats will be missing."
+            )
+        merge_cols = ['dmp_name'] + [c for c in existing_cols if c != 'dmp_name']
         merged = intersect_df.merge(
-            dmp_lookup[dmp_cols + existing_cols],
-            on=['chromosome', 'position'],
-            how='left'
+            dmp_lookup[merge_cols],
+            on='dmp_name',
+            how='left',
+            suffixes=('', '_dmp')
         )
-        
-        # Compute weighted scores. Use finite fallbacks so NaN/inf in p_value/q_value
-        # (e.g. missing in DMP CSV or join failure) do not zero out a gene's total_weight.
+
+        # Warn if join left key stats missing (column names OK but keys may not align)
+        n_rows = len(merged)
+        if n_rows > 0:
+            for col in ['p_value', 'effect_size']:
+                if col in merged.columns:
+                    n_missing = merged[col].isna().sum()
+                    if n_missing == n_rows:
+                        logger.warning(
+                            "All %d intersection rows have missing '%s' after joining DMP data. "
+                            "Check that chromosome, position, and context in the DMP CSV match the BED (e.g. chromosome as '1' or 'chr1' consistently).",
+                            n_rows, col
+                        )
+                        break
+                    elif n_missing > 0 and n_missing >= max(1, 0.1 * n_rows):
+                        logger.warning(
+                            "%.1f%% of intersection rows (%d/%d) have missing '%s' after joining DMP data. "
+                            "Check chromosome/position/context alignment between DMP CSV and BED.",
+                            100.0 * n_missing / n_rows, n_missing, n_rows, col
+                        )
+                        break
+
+        # Compute weighted scores. p_value/q_value can be 0 or near-zero (clip to 1e-300 to avoid inf);
+        # effect_size is always > 0. Use finite fallbacks so NaN/inf do not zero out a gene's total_weight.
         merged['weight'] = 1.0
 
         if self.use_p_value_weight and 'p_value' in merged.columns:
-            pv = merged['p_value'].clip(lower=1e-300)
+            pv = merged['p_value'].clip(lower=1e-300)  # 0 or rounded zero -> finite weight
             if self.p_value_log_transform:
                 merged['p_weight'] = -np.log10(pv)
             else:
@@ -722,6 +829,49 @@ class BedtoolsMapper:
         elif 'total_weight' in grouped.columns:
             grouped['gene_importance'] = grouped['total_weight']
 
+        # Fallback: fill undefined stats (NaN) when the gene has DMPs (dmp_count > 0) by recomputing from finite values in the intersection table
+        stat_aggs = []
+        if 'p_value' in intersect_df.columns:
+            stat_aggs.append(('p_value', 'min', 'min_p_value'))
+            stat_aggs.append(('p_value', 'mean', 'mean_p_value'))
+        if 'q_value' in intersect_df.columns:
+            stat_aggs.append(('q_value', 'min', 'min_q_value'))
+            stat_aggs.append(('q_value', 'mean', 'mean_q_value'))
+        if 'effect_size' in intersect_df.columns:
+            stat_aggs.append(('effect_size', 'mean', 'mean_effect_size'))
+            stat_aggs.append(('effect_size', 'max', 'max_effect_size'))
+        if 'delta_mean' in intersect_df.columns:
+            stat_aggs.append(('delta_mean', 'mean', 'mean_delta_mean'))
+            stat_aggs.append(('delta_mean', 'max', 'max_delta_mean'))
+        if stat_aggs:
+            for src_col, agg_name, out_col in stat_aggs:
+                if out_col not in grouped.columns:
+                    continue
+                nan_mask = grouped[out_col].isna() & (grouped.get('dmp_count', 0) > 0)
+                if not nan_mask.any():
+                    continue
+                # Recompute from intersect_df using only finite values per group (avoids All-NaN / empty-slice warnings)
+                def _safe_reduce(arr, kind):
+                    a = np.ravel(arr).astype(float)
+                    finite = a[np.isfinite(a)]
+                    if finite.size == 0:
+                        return np.nan
+                    if kind == 'min':
+                        return np.min(finite)
+                    if kind == 'max':
+                        return np.max(finite)
+                    return np.mean(finite)
+
+                fallback = (
+                    intersect_df.groupby(group_by)[src_col]
+                    .apply(lambda x: _safe_reduce(x, agg_name))
+                    .reset_index()
+                )
+                fallback.columns = [group_by, out_col + '_fb']
+                grouped = grouped.merge(fallback, on=group_by, how='left')
+                grouped[out_col] = grouped[out_col].fillna(grouped[out_col + '_fb'])
+                grouped = grouped.drop(columns=[out_col + '_fb'], errors='ignore')
+
         # Add feature metadata (take first occurrence)
         metadata_cols = ['feature_type', 'feature_chrom', 'feature_strand', 'gene_id', 'transcript_id']
         available_metadata = [c for c in metadata_cols if c in intersect_df.columns]
@@ -734,7 +884,24 @@ class BedtoolsMapper:
         if 'total_weight' in grouped.columns:
             sort_cols.append('total_weight')
         grouped = grouped.sort_values(sort_cols, ascending=False).reset_index(drop=True)
-        
+
+        # Warn when genes have DMPs but all key stats are missing (join likely failed for those rows)
+        stat_check_cols = [c for c in ['min_p_value', 'mean_effect_size'] if c in grouped.columns]
+        if stat_check_cols and 'dmp_count' in grouped.columns:
+            has_dmps = grouped['dmp_count'].fillna(0) > 0
+            all_stats_missing = pd.Series(True, index=grouped.index)
+            for c in stat_check_cols:
+                all_stats_missing = all_stats_missing & grouped[c].isna()
+            genes_missing = has_dmps & all_stats_missing
+            n_genes_missing = genes_missing.sum()
+            if n_genes_missing > 0:
+                examples = grouped.loc[genes_missing, group_by].head(3).tolist()
+                logger.warning(
+                    "%d %s(s) have DMPs but missing p_value/effect_size (e.g. %s). "
+                    "Check that DMP CSV column names and chromosome/position/context match the BED.",
+                    n_genes_missing, group_by, ", ".join(str(g) for g in examples)
+                )
+
         logger.info(f"Aggregated into {len(grouped)} {group_by}s")
         return grouped
 
@@ -1071,8 +1238,9 @@ class BedtoolsMapper:
                 logger.info(f"{'='*70}")
                 
                 try:
-                    # Load DMPs
+                    # Load DMPs and normalize column names (p-value -> p_value, Effect Size -> effect_size, etc.)
                     dmp_df = pd.read_csv(csv_file)
+                    dmp_df = self._normalize_dmp_columns(dmp_df)
                     dmp_df_sorted = self._sort_dmps_for_optimization(dmp_df)
                     needs_shared_enrichment = False
                     
