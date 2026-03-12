@@ -121,10 +121,10 @@ class MethylModelerConfig(BaseModel):
     )
 
     validation_split_ratio: float = Field(
-        default=0.2,
+        default=0.0,
         ge=0.0,
         le=1.0,
-        description="Fraction of validation data held out for test in each stratified split. Use >0 for biologically trustworthy BA reporting and top-k selection."
+        description="Fraction of validation data held out for test (0 = use all data for optimization). Set >0 (e.g. 0.2) for a held-out test set."
     )
 
     validation_n_repeats: int = Field(

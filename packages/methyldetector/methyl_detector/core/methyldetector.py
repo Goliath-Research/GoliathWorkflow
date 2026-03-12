@@ -118,7 +118,6 @@ class MethylDetector:
         self._exported_csv_path = None  # Path to exported CSV file
         self._current_chromosome = None  # Current chromosome being processed (for multi-chromosome mode)
         self._centroid_bin_cache: Dict[Tuple[str, str], Dict[str, Any]] = {}
-        self._default_holdout_warned = False
         logger.debug("Initialized MethylDetector")
     
     @property
@@ -198,7 +197,8 @@ class MethylDetector:
         self._validate_centroid_parameters()
 
         all_dmps = []  # List to collect DataFrames from each context
-        
+        total_positions_tested = 0  # Positions that entered the statistical test (for funnel)
+
         # Loop over all contexts
         for context in self.config.contexts:
             logger.info(f"🔬 Processing context: {context}")
@@ -217,7 +217,8 @@ class MethylDetector:
             
             # Detect DMPs for this context
             try:
-                dmp_df = self._detect_statistical_dmps_for_context(c1_path, c2_path, context)
+                dmp_df, n_tested = self._detect_statistical_dmps_for_context(c1_path, c2_path, context)
+                total_positions_tested += n_tested
                 n_confirmed = int(dmp_df["statistical_dmp"].sum()) if "statistical_dmp" in dmp_df.columns else len(dmp_df)
                 n_rescue = max(0, len(dmp_df) - n_confirmed)
                 logger.info(
@@ -264,7 +265,7 @@ class MethylDetector:
 
         # Optional: filter funnel sweep (range/step per biological filter → filter_funnel.csv)
         self._run_filter_funnel_sweep(dmps_df)
-        
+
         # Filter biological DMPs (apply biological filters)
         logger.info("🔬 Filtering biologically significant DMPs...")
         bio_dmps_df = self._filter_biological_dmps(dmps_df)
@@ -279,6 +280,13 @@ class MethylDetector:
             f"{n_bio_confirmed:,}",
             f"{n_bio_rescue:,}",
             pct,
+        )
+
+        # Log DMP filter funnel with enter / pass / retention for each filter (after biological so we have all counts)
+        self._log_dmp_filter_funnel(
+            total_positions_tested=total_positions_tested,
+            total_statistical=total_confirmed,
+            total_biological=n_bio,
         )
 
         bio_dmps_df = bio_dmps_df.sort_values("effect_size", ascending=False).reset_index(drop=True)
@@ -459,8 +467,9 @@ class MethylDetector:
 
         comparison_results = self._apply_tau2_filter(comparison_results, context)
 
-        # Apply statistical filtering
+        # Apply statistical filtering (n_positions_compared = positions that entered the statistical step)
         total_positions = len(comparison_results)
+        n_positions_compared = total_positions
         confirmed_results = comparison_results[comparison_results['q_value'] <= self.config.alpha].copy()
         statistical_dmps_count = len(confirmed_results)
 
@@ -533,8 +542,8 @@ class MethylDetector:
 
         frames = [f for f in frames if f is not None and len(f) > 0]
         if not frames:
-            return pd.DataFrame()
-        return pd.concat(frames, ignore_index=True)
+            return pd.DataFrame(), 0
+        return pd.concat(frames, ignore_index=True), n_positions_compared
 
     def _apply_tau2_filter(self, comparison_results: pd.DataFrame, context: str) -> pd.DataFrame:
         """Optionally drop highly heterogeneous loci before any DMP selection."""
@@ -752,20 +761,19 @@ class MethylDetector:
             logger.warning("All context weights are zero, using equal weights")
             raw_weights = weight_map.copy()
         
-        # Log summary table showing why weights differ
+        # Log summary table: counts here are statistical DMPs (before biological filter)
         logger.info("")
         logger.info("="*60)
-        logger.info("Context Weighting Summary (Trimmed-Mean Normalization):")
+        logger.info("Context Weighting Summary (statistical DMPs, before biological filter):")
         logger.info("="*60)
-        logger.info(f"{'Context':<10} {'N_DMPs':>10} {'Mean_EffectSize':>16} {'Weight':>10}")
+        logger.info(f"{'Context':<10} {'N_stat':>10} {'Mean_EffectSize':>16} {'Weight':>10}")
         logger.info("-" * 50)
         for ctx in sorted(weight_map.keys()):
             n_dmps = len(dmps_df[dmps_df['context'] == ctx])
             logger.info(f"{ctx:<10} {n_dmps:>10,} {raw_weights[ctx]:>16.4f} {weight_map[ctx]:>10.4f}")
         logger.info("-" * 50)
-        logger.info("Note: Weights are based on average effect_size after trimming, not raw delta_mean.")
-        logger.info("      effect_size combines |delta_mean|, continuous overlap, and the lambda_var variance penalty.")
-        logger.info("      Trimmed: bottom %.0f%%, top %.0f%%. Higher weight = stronger separation.", self.config.trimmed_percentile_low * 100, self.config.trimmed_percentile_high * 100)
+        logger.info("N_stat = statistical DMPs (q ≤ α). Weights from trimmed mean of effect_size (trimmed: bottom %.0f%%, top %.0f%%).",
+                    self.config.trimmed_percentile_low * 100, self.config.trimmed_percentile_high * 100)
         logger.info("="*60)
         logger.info("")
         
@@ -774,6 +782,45 @@ class MethylDetector:
         
         return dmps_df
     
+    def _log_dmp_filter_funnel(
+        self,
+        total_positions_tested: int,
+        total_statistical: int,
+        total_biological: int,
+    ) -> None:
+        """Log the DMP filter funnel with enter / pass / retention for each filter step."""
+        def _pct(n: int, d: int) -> str:
+            return f"{100.0 * n / d:.1f}%" if d and d > 0 else "N/A"
+
+        logger.info("")
+        logger.info("")
+        logger.info("################################################################################")
+        logger.info("#            DMP FILTER FUNNEL — Enter / Pass / Retention by step             #")
+        logger.info("################################################################################")
+        logger.info("")
+        if self.config.delta_mean_reduction is not None:
+            logger.info("  Step 1  Pre-filter:   |delta_mean| >= %.2f  (see per-context logs for enter/pass)", self.config.delta_mean_reduction)
+        else:
+            logger.info("  Step 1  Pre-filter:   (none)")
+        logger.info("")
+        # Step 2: statistical
+        ret2 = _pct(total_statistical, total_positions_tested)
+        logger.info("  Step 2  Statistical:  Entered %s  →  Passed %s  →  Retention %s  (q ≤ α = %.2f)",
+                    f"{total_positions_tested:,}", f"{total_statistical:,}", ret2, self.config.alpha)
+        logger.info("")
+        logger.info("  Step 3  Weights:      (no filter — trimmed mean of effect_size per context for downstream use)")
+        logger.info("")
+        # Step 4: biological
+        ret4 = _pct(total_biological, total_statistical)
+        logger.info("  Step 4  Biological:   Entered %s  →  Passed %s  →  Retention %s  (effect_size_coverage = %.2f)",
+                    f"{total_statistical:,}", f"{total_biological:,}", ret4, self.config.effect_size_coverage)
+        if total_biological == 0 and total_statistical > 0:
+            logger.warning("  →  No biological DMPs retained. Consider lowering effect_size_coverage or relaxing the biological filter.")
+        logger.info("")
+        logger.info("################################################################################")
+        logger.info("")
+        logger.info("")
+
     def _filter_biological_dmps(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
         Biological filter: per-context ECDF cumulative mass selection.
@@ -791,20 +838,20 @@ class MethylDetector:
         selected_confirmed = int(bio_df["statistical_dmp"].sum()) if "statistical_dmp" in bio_df.columns else len(bio_df)
         selected_rescue = max(0, len(bio_df) - selected_confirmed)
 
-        # Per-context retention logging
+        # Per-context: statistical → biological (clear funnel table)
+        logger.info("  Per-context: statistical DMPs → biological DMPs (effect_size_coverage=%.2f):", coverage)
         if "context" in dmps_df.columns:
-            for ctx in dmps_df["context"].unique():
+            logger.info("  %-8s %12s %12s %10s", "Context", "Statistical", "Biological", "Retained")
+            logger.info("  %s", "-" * 46)
+            for ctx in sorted(dmps_df["context"].unique()):
                 n_in = int((dmps_df["context"] == ctx).sum())
                 n_out = int((bio_df["context"] == ctx).sum()) if len(bio_df) > 0 else 0
-                logger.info(
-                    f"  Context {ctx}: {n_out:,} / {n_in:,} DMPs retained "
-                    f"({_pct(n_out, n_in)}) at coverage={coverage:.2f}"
-                )
-
+                logger.info("  %-8s %12s %12s %10s", ctx, f"{n_in:,}", f"{n_out:,}", _pct(n_out, n_in))
+            logger.info("  %s", "-" * 46)
         logger.info(
-            f"Biological filter (effect_size_coverage={coverage:.2f}): "
-            f"{len(bio_df):,} DMPs ({selected_confirmed:,} confirmed + {selected_rescue:,} rescue; "
-            f"confirmed retention {_pct(selected_confirmed, initial_confirmed)})"
+            "  Total: %s biological DMPs (%s confirmed statistical + %s rescue; confirmed retention: %s)",
+            f"{len(bio_df):,}", f"{selected_confirmed:,}", f"{selected_rescue:,}",
+            _pct(selected_confirmed, initial_confirmed),
         )
 
         # Value ranges for retained DMPs
@@ -814,8 +861,8 @@ class MethylDetector:
                 ser = bio_df[col].astype(float)
                 value_ranges[col] = {"min": float(ser.min()), "max": float(ser.max())}
                 logger.info(
-                    f"  Retained DMPs {col}: min={value_ranges[col]['min']:.4f}, "
-                    f"max={value_ranges[col]['max']:.4f}"
+                    "  Retained DMPs %s: min=%.4f, max=%.4f",
+                    col, value_ranges[col]["min"], value_ranges[col]["max"],
                 )
 
         self._biological_filter_summary = {
@@ -1195,6 +1242,9 @@ class MethylDetector:
         """
         Build repeated stratified holdout splits for balanced-accuracy evaluation.
 
+        When validation_split_ratio is 0, use all data (no holdout): one split (idx_all, idx_all).
+        When > 0, hold out that fraction for test in each repeat.
+
         Returns a list of `(calibration_indices, test_indices)` tuples.
         """
         y = np.asarray(y, dtype=int).ravel()
@@ -1202,23 +1252,18 @@ class MethylDetector:
         if n_total == 0:
             return []
 
-        split_ratio = float(self.config.validation_split_ratio or 0.0)
-        if require_holdout and split_ratio <= 0.0:
-            split_ratio = 0.2
-            if not self._default_holdout_warned:
-                self._default_holdout_warned = True
-                logger.warning(
-                    "validation_split_ratio<=0 is not compatible with held-out BA selection; "
-                    "using a default stratified holdout ratio of 0.20."
-                )
-
+        split_ratio = float(self.config.validation_split_ratio if self.config.validation_split_ratio is not None else 0.0)
         idx_all = np.arange(n_total, dtype=np.int64)
         class0 = idx_all[y == 0]
         class1 = idx_all[y == 1]
-        if split_ratio <= 0.0 or len(class0) < 2 or len(class1) < 2:
+
+        # Use all data when split_ratio is 0 (no holdout)
+        if split_ratio <= 0.0:
+            logger.info("Using all %s validation samples for optimization (validation_split_ratio=0, no holdout).", n_total)
+            return [(idx_all, idx_all)]
+        if len(class0) < 2 or len(class1) < 2:
             logger.warning(
-                "Not enough samples for stratified holdout (class0=%s, class1=%s); "
-                "falling back to the full cohort for validation.",
+                "Not enough samples for stratified holdout (class0=%s, class1=%s); using full cohort.",
                 len(class0),
                 len(class1),
             )

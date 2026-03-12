@@ -116,7 +116,7 @@
         "alpha": 0.05,
         "optimize_dmps": true,
         "validation_mode": "real",
-        "validation_split_ratio": 0.2,
+        "validation_split_ratio": 0.0,
         "validation_n_repeats": 3,
         "target_balanced_accuracy": 0.99,
         "delta_mean_reduction": 0.1,
