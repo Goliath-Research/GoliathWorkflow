@@ -164,11 +164,11 @@ class MethylModelerConfig(BaseModel):
     # ----------------
     min_N_pct: float = Field(
         default=0.10, ge=0.0, le=1.0,
-        description="Minimum fraction of samples that must cover a position (e.g., 0.10 = 10%)"
+        description="Minimum fraction of (validation/centroid) samples that must cover a position to accept it as a valid DMP (e.g. 0.05 = 5%, 0.10 = 10%). Used for validation coverage in optimization."
     )
     min_N_abs: Optional[int] = Field(
         default=None, ge=1,
-        description="Absolute minimum sample count per position (optional, min_N_pct takes precedence)"
+        description="Absolute floor for sample count per position (optional). If set, effective minimum is max(min_N_pct * N, min_N_abs)."
     )
 
     # ----------------

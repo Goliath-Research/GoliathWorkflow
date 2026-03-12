@@ -1808,15 +1808,19 @@ class MethylDetector:
             self._check_centroid_self_classification(sorted_df)
             return sorted_df
 
-        # Restrict to DMPs with enough coverage across the held-out evaluation splits.
+        # Restrict to DMPs with enough coverage: require at least min_N_pct of validation samples
+        # (e.g. 5% of centroid/validation cohort) to accept a position as valid for BA optimization.
         coverage_in_eval = np.zeros(X_val.shape[1], dtype=np.int64)
         total_test_rows = 0
         for _, test_indices in splits:
             coverage_in_eval += np.sum(~np.isnan(X_val[test_indices]), axis=0)
             total_test_rows += len(test_indices)
-        min_by_fraction = max(1, int(np.ceil(0.1 * max(total_test_rows, 1) / max(len(splits), 1))))
-        min_coverage = max(min_by_fraction, self.config.min_validation_coverage_per_position)
-        keep_mask = coverage_in_eval >= (min_coverage * max(len(splits), 1))
+        n_total = max(int(total_test_rows), 1)
+        min_pct = max(0.0, min(1.0, float(self.config.min_N_pct)))
+        min_required = max(1, int(np.ceil(min_pct * n_total)))
+        if self.config.min_N_abs is not None and self.config.min_N_abs >= 1:
+            min_required = max(min_required, int(self.config.min_N_abs))
+        keep_mask = coverage_in_eval >= min_required
         n_keep = int(np.sum(keep_mask))
         n_dropped = len(keep_mask) - n_keep
         if n_dropped > 0 and n_keep > 0:
@@ -1825,8 +1829,8 @@ class MethylDetector:
             val_positions = val_positions[keep_mask]
             val_contexts = val_contexts[keep_mask]
             logger.info(
-                "Restricted to %s DMPs with mean held-out coverage ≥%s sample(s) per split (dropped %s low-coverage positions).",
-                n_keep, min_coverage, n_dropped
+                "Restricted to %s DMPs with coverage ≥%s sample(s) (min_N_pct=%.0f%% of %s validation samples; dropped %s low-coverage positions).",
+                n_keep, min_required, min_pct * 100.0, n_total, n_dropped
             )
         elif n_keep == 0:
             logger.warning(
