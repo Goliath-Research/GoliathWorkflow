@@ -1085,7 +1085,7 @@ For package-specific documentation, see:
 - [MethylUtils Documentation](../packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCentroid Documentation](../packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCluster Documentation](../packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylDetector (MethylModeler) Documentation](../packages/methyldetector/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylDetector Documentation](../packages/methyldetector/docs/MethylDetector_Comprehensive_Documentation.md)
 - [MethylClassifier Documentation](../packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylMapper README](../packages/methylmapper/README.md)
 - [MethylEnricher README](../packages/methylenricher/README.md)

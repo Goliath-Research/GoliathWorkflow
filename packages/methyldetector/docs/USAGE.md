@@ -174,7 +174,7 @@ Minimal JSON config example:
 
 Optional **filter funnel exploration** (`filter_funnel_explore`): sweep `effect_size_coverage` over a min/max/step range in one run and write `filter_funnel.csv` (columns: `n_statistical_dmps`, `effect_size_coverage`, `n_biological_dmps`) for charting; see README “Filter funnel exploration”.
 
-For all parameters (biological filters, validation, etc.), see [METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md](METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md) and the config schema in the package.
+For all parameters (biological filters, validation, etc.), see [MethylDetector_Comprehensive_Documentation.md](MethylDetector_Comprehensive_Documentation.md) and the config schema in the package.
 
 ---
 

@@ -53,7 +53,7 @@ Multi-method clustering (HDBSCAN, Hierarchical, Centroid-based) with forced grou
 #### 4. **MethylModeler (MethylDetector)** – DMP Detection & Model Packaging
 Detects Differentially Methylated Positions (ECDF-based), applies biological filters, optimizes Balanced Accuracy, and exports classifier bundles for MethylClassifier. **CLI**: `methyl-detector`, `methyl-detector-explorer` (explore refinement and effect-size options).
 
-📚 [MethylDetector README](packages/methyldetector/README.md) | [Comprehensive Guide](packages/methyldetector/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md) | [Explorer](packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md)
+📚 [MethylDetector README](packages/methyldetector/README.md) | [Comprehensive Guide](packages/methyldetector/docs/MethylDetector_Comprehensive_Documentation.md) | [Explorer](packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md)
 
 ### Interpretation & Reporting
 
@@ -295,7 +295,7 @@ Deep dives with algorithms, math, and advanced workflows:
 - [MethylUtils Comprehensive Documentation](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCentroid Comprehensive Documentation](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylCluster Comprehensive Documentation](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylModeler Comprehensive Documentation](packages/methyldetector/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
+- [MethylDetector Comprehensive Documentation](packages/methyldetector/docs/MethylDetector_Comprehensive_Documentation.md)
 - [MethylClassifier Comprehensive Documentation](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
 - [MethylPipeline Integration Documentation](docs/METHYLPIPELINE_COMPREHENSIVE_DOCUMENTATION.md)
 

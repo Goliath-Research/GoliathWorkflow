@@ -139,7 +139,7 @@ and optionally $\Sigma n$, $\Sigma mC$, $\Sigma uC$, higher moments, and binned 
 - **FDR:** Storey’s q-value from p-values; $\hat{\pi}_0$ and q-values control false discovery rate.
 - **Effect size and importance:** Delta mean $|\mu_1-\mu_2|$, Bhattacharyya coefficient (overlap), effect size $\propto |\Delta\mu|(1-BC)^\gamma/\sqrt{\sigma_1^2+\sigma_2^2}$; biological importance combines effect size, variance reliability, and context weights.
 
-**Reference:** [MethylModeler Comprehensive Documentation](../packages/methyldetector/docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)
+**Reference:** [MethylDetector Comprehensive Documentation](../packages/methyldetector/docs/MethylDetector_Comprehensive_Documentation.md)
 
 ---
 

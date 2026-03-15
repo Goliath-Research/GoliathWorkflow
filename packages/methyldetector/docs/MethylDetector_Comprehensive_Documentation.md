@@ -331,11 +331,12 @@ def compute_biological_importance(dmps_df):
 
     Importance = effect_size × variance_reliability × significance_factor × context_weight
 
-    effect_size already includes:
-    - Between-centroid variance correction: |Δμ| / √(var₁ + var₂)
-    - Distribution overlap correction: × (1 - BC)^γ
+    effect_size (from MethylUtils) is:
+    - effect_size = |Δμ| × (1 - overlap) × exp(-λ_var × (√var₁ + √var₂)) × [optional mean-level weight]
+    where overlap is ECDF-based (∫ min(f₁, f₂) dx). Optional mean-level weight down-weights
+    low methylation (e.g. CHH) via saturating or boundary mode.
 
-    importance adds biological factors:
+    importance adds:
     - Within-centroid variance reliability: reduces weight for noisy measurements
     - Statistical significance: higher weight for more significant DMPs (-log10(q_value))
     - Context reliability: CG > CHG > CHH prioritization

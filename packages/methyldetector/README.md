@@ -417,7 +417,7 @@ Copy and customize for your data!
 - **[User Manual](docs/USAGE.md)** — Docker container and virtual environment setup and usage
 - **[Quick Start Guide](QUICKSTART.md)** — Get started quickly
 - **[Context Selection Guide](CONTEXT_SELECTION_GUIDE.md)** — Choosing methylation contexts
-- **[Comprehensive Documentation](docs/METHYLMODELER_COMPREHENSIVE_DOCUMENTATION.md)** — Complete API reference
+- **[Comprehensive Documentation](docs/MethylDetector_Comprehensive_Documentation.md)** — Complete API reference
 - **[Classifier Weights and Accuracy](docs/CLASSIFIER_WEIGHTS_AND_ACCURACY.md)** — effect_size and classifier accuracy
 
 ## Contributing
