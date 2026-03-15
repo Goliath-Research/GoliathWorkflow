@@ -64,7 +64,6 @@ def main():
         apply_dmp_filtering=True,
         dmp_filter_method="combined",
         min_effect_size=0.5,
-        min_jeffreys_divergence=0.5,
         min_cohen_d=0.8,
         min_auc=0.7,
         max_selected_dmps=100

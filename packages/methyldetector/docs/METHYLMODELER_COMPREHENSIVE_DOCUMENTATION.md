@@ -42,7 +42,7 @@ MethylDetector compares two centroids (representing different biological conditi
 ### Key Features
 
 - **Robust Statistics**: ECDF-based comparison and testing with Storey's FDR correction (only ECDF is supported; centroids require binned_stats)
-- **Biological Relevance**: Multi-criteria filtering (effect size, overlap, divergence)
+- **Biological Relevance**: Multi-criteria filtering (effect size, overlap)
 - **Balanced Accuracy**: Class-imbalance robust metric for DMP selection
 - **GPU Accelerated**: Leverages MethylUtils for 10-50x speedup
 - **Flexible Validation**: Real samples from config or centroid metadata, or synthetic samples
@@ -94,16 +94,6 @@ Distribution overlap is computed from the **ECDF** (binned_stats). Higher overla
 **Interpretation**:
 - $BC \approx 1$: High overlap (poor discrimination)
 - $BC \approx 0$: Low overlap (good discrimination)
-
-#### Jeffreys Divergence
-
-Symmetric information-theoretic distance:
-
-$$
-D_{\text{Jeffreys}} = D_{\text{KL}}(P_1 \| P_2) + D_{\text{KL}}(P_2 \| P_1)
-$$
-
-For **ECDF-based** comparison, divergence and distance metrics are computed from the empirical distributions (e.g. from binned_stats). MethylUtils may provide optional formulas for parametric distributions internally; the pipeline uses **ECDF only** for centroid comparison and DMP detection.
 
 #### Cohen's d
 
@@ -196,9 +186,8 @@ Centroid comparison and all statistics are implemented in **MethylUtils**. Methy
 
 4. Effect Size Computation
    ├─ Delta mean
-   ├─ Bhattacharyya coefficient
-   ├─ Jeffreys divergence
-   └─ Cohen's d
+   ├─ ECDF-based overlap
+   └─ Single canonical effect_size (mean separation, overlap, variance reliability)
 
 5. DMP Filtering
    ├─ Coverage threshold (min_N_pct)
@@ -259,13 +248,7 @@ while low < high:
 return selected_dmps
 ```
 
-**Biological Importance Ranking**:
-
-$$
-\text{Importance}_i = w_1 \cdot \Delta\mu_i + w_2 \cdot (1 - BC_i) + w_3 \cdot D_{\text{Jeffreys}, i}
-$$
-
-Default weights: $w_1 = w_2 = w_3 = 1/3$ (equal weighting).
+**Biological Importance Ranking**: DMPs are ranked by the single **effect_size** metric (computed in MethylCentroidPair from delta mean, ECDF-based overlap, and variance reliability).
 
 ---
 
@@ -514,18 +497,7 @@ $$
 
 ### Biological Importance Ranking
 
-**Multi-Metric Score**:
-
-$$
-\text{Importance} = w_1 \cdot \text{norm}(\Delta\mu) + w_2 \cdot \text{norm}(1 - BC) + w_3 \cdot \text{norm}(D_{\text{Jeffreys}})
-$$
-
-where $\text{norm}(x) = \frac{x - \min(x)}{\max(x) - \min(x)}$ scales to [0, 1].
-
-**Default Weights**:
-- $w_1 = 1/3$: Effect size
-- $w_2 = 1/3$: Distribution separation
-- $w_3 = 1/3$: Information divergence
+DMPs are ranked by **effect_size** only (computed in MethylCentroidPair: mean separation, ECDF-based overlap, and variance reliability). The pipeline does not use a multi-metric combination of delta mean, BC, and divergence.
 
 ### Gene-Level Aggregation
 
