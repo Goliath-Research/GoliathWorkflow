@@ -54,7 +54,7 @@ Centroid H5 files (must have binned_stats)
     │         overlap = ∫₀¹ min(f1(x), f2(x)) dx
     │     where f1, f2 are PCHIP-derived PDFs from centroid binned_stats.
     │     effect_size = |delta_mean| * (1 - overlap) * exp(-λ * (√var1 + √var2))
-    │     Optional EAT reweighting multiplies final effect_size only.
+    │     Effect size from ECDF overlap and mean-level weighting.
     │
     ├─ Stage 8 — Biological filter
     │     Within each context, keep the minimum prefix whose cumulative

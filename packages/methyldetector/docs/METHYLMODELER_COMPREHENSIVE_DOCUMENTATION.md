@@ -2,11 +2,9 @@
 
 This document is the full reference for MethylDetector (formerly MethylModeler). For concise summaries and setup:
 
-- **Theory (distributions, LRT, q-values, effect size):** [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md)
+- **Theory (ECDF, Mann-Whitney, q-values, effect size):** [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md)
 - **Implementation (MethylUtils):** [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md)
 - **User Manual (Docker and virtual environment):** [USAGE.md](USAGE.md)
-
-> Current runtime note: the live detector is ECDF-first, uses two-stage BH FDR, selects biological DMPs with per-context `effect_size_coverage`, reports BA from held-out/repeated validation, and never falls back to Beta/Normal/Beta-Binomial classifier exports. Historical sections below may still discuss older threshold triplets or q-value variants; treat the linked Theory/Implementation/Usage docs above as the source of truth.
 
 ## Table of Contents
 
@@ -35,7 +33,7 @@ This document is the full reference for MethylDetector (formerly MethylModeler).
 
 MethylDetector compares two centroids (representing different biological conditions) to identify positions where methylation significantly differs:
 
-- **Statistical DMP Detection**: Likelihood ratio tests with FDR correction (Storey's q-value method)
+- **Statistical DMP Detection**: Mann-Whitney U test with FDR correction (two-stage BH)
 - **Biological Filtering**: Multi-factor importance ranking (effect size, variance reliability, statistical significance, context weighting)
 - **Classifier Training**: Automatic training of classifiers on selected DMPs (ECDF-based comparison and overlap)
 - **Validation**: Real or synthetic sample validation with Balanced Accuracy
@@ -363,16 +361,9 @@ def compute_biological_importance(dmps_df):
     # Start with effect_size (already includes statistical corrections)
     importance = dmps_df['effect_size'].copy()
 
-    # Add within-centroid variance reliability
-    if all(col in dmps_df.columns for col in ['alpha1', 'beta1', 'alpha2', 'beta2']):
-        # Compute variance for each centroid
-        tau1 = dmps_df['alpha1'] + dmps_df['beta1']
-        tau2 = dmps_df['alpha2'] + dmps_df['beta2']
-        var1 = (dmps_df['alpha1'] * dmps_df['beta1']) / (tau1**2 * (tau1 + 1))
-        var2 = (dmps_df['alpha2'] * dmps_df['beta2']) / (tau2**2 * (tau2 + 1))
-
-        # Variance reliability factor
-        max_var = np.maximum(var1, var2)
+    # Add within-centroid variance reliability (if variance columns present)
+    if all(col in dmps_df.columns for col in ['variance1', 'variance2']):
+        max_var = np.maximum(dmps_df['variance1'], dmps_df['variance2'])
         var_factor = 1.0 / (1.0 + max_var / 0.05)
         importance = importance * var_factor
 
@@ -714,11 +705,6 @@ class MethylModelerResult(BaseModel):
   "apply_dmp_filtering": true,
   "min_delta_mean": 0.2,
   "max_bc": 0.6,
-  
-  "bmm_refine_enabled": true,
-  "bmm_refine_mode": "filter",
-  "bmm_refine_use_gpu": true,
-  "bmm_refine_bin_count": 32,
   
   "target_balanced_accuracy": 0.95,
   "min_dmps": 10,
@@ -1203,8 +1189,7 @@ config = MethylModelerConfig(..., validation_mode='synthetic')
 # Save only essential data
 model_package = {
     'classifier': result.classifier,
-    'dmps': result.selected_dmps[['position', 'alpha1', 'beta1', 
-                                   'alpha2', 'beta2']],  # Essential columns only
+    'dmps': result.selected_dmps[['position', 'effect_size', 'mean1', 'mean2']],  # Essential columns only
     'metadata': essential_metadata_only
 }
 

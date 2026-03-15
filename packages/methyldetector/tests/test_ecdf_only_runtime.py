@@ -174,7 +174,7 @@ def test_effect_size_coverage_is_applied_per_context():
         assert list(filtered["position"]) == [1000, 2000, 2001]
 
 
-def test_prepare_validation_splits_uses_heldout_repeats_when_ratio_is_zero():
+def test_prepare_validation_splits_uses_all_data_when_ratio_is_zero():
     with TemporaryDirectory() as temp_dir:
         detector = build_detector(
             temp_dir,
@@ -185,12 +185,12 @@ def test_prepare_validation_splits_uses_heldout_repeats_when_ratio_is_zero():
 
         splits = detector._prepare_validation_splits(y, require_holdout=True)
 
-        assert len(splits) == 3
-        for calib_idx, test_idx in splits:
-            assert len(calib_idx) > 0
-            assert len(test_idx) > 0
-            assert set(y[test_idx]) == {0, 1}
-            assert set(y[calib_idx]) == {0, 1}
+        # When validation_split_ratio=0, all samples are used (no holdout); one split (all, all)
+        assert len(splits) == 1
+        calib_idx, test_idx = splits[0]
+        assert len(calib_idx) == len(y)
+        assert len(test_idx) == len(y)
+        assert set(calib_idx) == set(test_idx) == set(range(len(y)))
 
 
 def test_tau2_filter_drops_only_high_heterogeneity_positions():

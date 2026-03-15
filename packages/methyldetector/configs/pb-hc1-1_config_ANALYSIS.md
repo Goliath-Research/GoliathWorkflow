@@ -24,9 +24,9 @@ The config is mostly complete but is missing several important fields for optima
 
 ### 2. **Classifier Configuration**
 ```json
-"classifier_type": "beta"
+"classifier_type": "ecdf"
 ```
-**Impact**: Defaults to "beta" anyway, but explicit is better. The "beta" classifier is recommended as it uses fractions with sufficient stats.
+**Impact**: The detector uses ECDF-based comparison only. Set explicitly for clarity.
 
 ### 3. **DMP Optimization (Optional but Recommended)**
 ```json
@@ -73,7 +73,7 @@ Here are the fields that should be added to make it fully complete:
   "use_context_weights": true,
   "trimmed_percentile_low": 0.10,
   "trimmed_percentile_high": 0.01,
-  "classifier_type": "beta",
+  "classifier_type": "ecdf",
   "optimize_dmps": true,
   "optimization_method": "featurecuts",
   "biological_filters": ["delta_mean", "bhattacharyya"],
@@ -90,7 +90,7 @@ And consider replacing:
 - ✅ `use_context_weights: true`
 - ✅ `trimmed_percentile_low: 0.1`
 - ✅ `trimmed_percentile_high: 0.01`
-- ✅ `classifier_type: "beta"`
+- ✅ `classifier_type: "ecdf"`
 - ✅ `optimize_dmps: true`
 - ✅ `optimization_method: "featurecuts"`
 

@@ -128,7 +128,6 @@
             <ul>
                 <li><a href="#overview">Overview</a></li>
                 <li><a href="#statistical-framework">Statistical Framework</a></li>
-                <li><a href="#method-selection">Automatic Method Selection</a></li>
                 <li><a href="#fdr-correction">FDR Correction</a></li>
                 <li><a href="#gpu-acceleration">GPU Acceleration</a></li>
                 <li><a href="#data-formats">Data Formats and Export</a></li>
@@ -158,79 +157,20 @@
         <section id="statistical-framework" class="section">
             <h2>Statistical Framework</h2>
 
-            <h3>Beta Distribution Modeling</h3>
-            <p>DNA methylation data follows a Beta distribution due to its bounded nature (methylation levels range from 0 to 1). MethylDetector models methylation levels at each genomic position using Beta distributions:</p>
+            <p>MethylDetector uses a non-parametric, distribution-free approach for detecting differentially methylated positions.</p>
+
+            <h3>ECDF-Based Comparison</h3>
+            <p>At each genomic position, methylation levels from the two groups are compared using their empirical cumulative distribution functions (ECDFs). This avoids assumptions about the underlying distribution (e.g. Beta or Normal) and is robust to skew and small sample sizes.</p>
+
+            <h3>Mann-Whitney U Test</h3>
+            <p>Statistical significance is assessed with the Mann-Whitney U test (two-sample rank-sum test), which tests whether the two ECDFs differ. P-values are computed from the U statistic and corrected for multiple testing.</p>
 
             <div class="math-formula">
-                X ∼ Beta(α, β)<br>
-                E[X] = α/(α + β)<br>
-                Var(X) = αβ/((α + β)²(α + β + 1))
+                U = n₁n₂ + n₁(n₁+1)/2 − R₁<br>
+                (R₁ = sum of ranks in group 1; p-value from null distribution of U)
             </div>
 
-            <h3>Likelihood Ratio Test (LRT)</h3>
-            <p>For comparing two Beta distributions, MethylDetector uses the Likelihood Ratio Test:</p>
-
-            <div class="math-formula">
-                Λ = 2[log L(α₁,β₁,α₂,β₂) - log L(α₀,β₀)]<br>
-                Λ ∼ χ²(df = 2) under H₀
-            </div>
-
-            <p>Where L(α₁,β₁,α₂,β₂) is the likelihood under the alternative hypothesis (different distributions) and L(α₀,β₀) is the likelihood under the null hypothesis (same distribution).</p>
-
-            <h3>Normal Approximation</h3>
-            <p>For well-behaved Beta distributions with sufficient sample sizes, MethylDetector uses the normal approximation for faster computation:</p>
-
-            <div class="math-formula">
-                Z = (μ₁ - μ₂) / √(σ₁²/n₁ + σ₂²/n₂)<br>
-                Z ∼ N(0,1) under H₀
-            </div>
-        </section>
-
-        <section id="method-selection" class="section">
-            <h2>Automatic Method Selection</h2>
-
-            <p>MethylDetector intelligently selects the most appropriate statistical method based on data characteristics:</p>
-
-            <table class="comparison-table">
-                <thead>
-                    <tr>
-                        <th>Method</th>
-                        <th>Conditions</th>
-                        <th>Advantages</th>
-                        <th>Computational Cost</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><strong>Normal Approximation</strong></td>
-                        <td>n ≥ 30, well-behaved Beta parameters</td>
-                        <td>Fast computation, good power</td>
-                        <td>Low</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Likelihood Ratio Test</strong></td>
-                        <td>Small samples or complex distributions</td>
-                        <td>Higher accuracy, robust to violations</td>
-                        <td>Medium-High</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Method-of-Moments Fallback</strong></td>
-                        <td>When MLE fails to converge</td>
-                        <td>Guaranteed convergence, fast</td>
-                        <td>Low</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <div class="method-box">
-                <h4>Decision Criteria</h4>
-                <ul>
-                    <li><strong>Sample Size:</strong> n ≥ 30 favors normal approximation</li>
-                    <li><strong>Beta Parameters:</strong> α,β ≥ 2.0 for normal approximation</li>
-                    <li><strong>Mean Values:</strong> Extreme means (close to 0 or 1) trigger LRT</li>
-                    <li><strong>Convergence:</strong> Failed MLE automatically falls back to MoM</li>
-                </ul>
-            </div>
+            <p>Effect size is derived from the ECDF comparison and is used for ranking and biological filtering of DMPs.</p>
         </section>
 
         <section id="fdr-correction" class="section">
@@ -378,7 +318,7 @@
                 <pre>
 Data Loading → Quality Filtering → Statistical Testing → FDR Correction → Result Export
      ↓              ↓                      ↓                   ↓               ↓
-  HDF5 Files    Min Sample Size       LRT/Normal Approx    Storey's π₀    Multiple Formats
+  HDF5 Files    Min Sample Size       ECDF / Mann-Whitney U    Storey's π₀    Multiple Formats
                 Valid Ranges          GPU Acceleration     Q-values        CSV + Binary
                 No NaN/Inf           Method Selection     Global Sig.
             </pre>
@@ -396,7 +336,7 @@ Data Loading → Quality Filtering → Statistical Testing → FDR Correction �
             <div class="method-box">
                 <h4>Robust Error Recovery</h4>
                 <ul>
-                    <li><strong>MLE Convergence:</strong> Automatic fallback to Method-of-Moments</li>
+                    <li><strong>Data Validation:</strong> Positions with insufficient coverage are excluded before testing</li>
                     <li><strong>GPU Failure:</strong> Seamless CPU fallback</li>
                     <li><strong>Memory Issues:</strong> Batch processing with configurable sizes</li>
                     <li><strong>File I/O:</strong> Graceful handling of permission and disk space issues</li>
@@ -411,7 +351,7 @@ Data Loading → Quality Filtering → Statistical Testing → FDR Correction �
             <ul>
                 <li><strong>Type I Error Control:</strong> FDR correction maintains nominal false discovery rates</li>
                 <li><strong>Power Analysis:</strong> Method selection optimizes statistical power</li>
-                <li><strong>Convergence Testing:</strong> MLE algorithms validated for Beta parameter estimation</li>
+                <li><strong>ECDF Validation:</strong> Centroid self-classification checks ensure ECDF-based ranking is consistent</li>
                 <li><strong>Edge Case Handling:</strong> Robust performance with extreme methylation values</li>
             </ul>
 

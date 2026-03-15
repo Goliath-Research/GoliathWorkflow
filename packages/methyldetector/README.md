@@ -149,8 +149,6 @@ else:
 - **`biological_only_effect_size_coverage`**: Optional rescue track for high-effect loci that fail the statistical gate. Rescue loci remain explicitly flagged and are never mixed into the confirmed statistical count.
 - **`max_tau2_for_dmp`**: Optional heterogeneity filter; drops loci where both groups have high between-sample variance (`tau2`).
 - **`lambda_var`**: Variance penalty strength in `effect_size` (default `2.0`). Higher values penalise diffuse, heterogeneous positions more strongly.
-- **`enable_eat_transform`**: Optional EAT metadata; reweights the final `effect_size` only. It does **not** change p-values or q-values.
-
 ### Validation and Top-k Selection
 
 - **`validation_split_ratio`**: Fraction of samples in each held-out test split. Use a positive value (for example `0.2`) for biologically trustworthy BA reporting.
@@ -188,8 +186,6 @@ You can sweep `effect_size_coverage` over a range in a **single run** and write 
 
 1. **`dmps-{chromosome}-biological-sorted.csv`** - Biological DMPs sorted by importance
 
-`results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files` when BMM refinement runs.
-
 ### CSV Columns
 
 - `chromosome`, `context`, `position`
@@ -200,7 +196,6 @@ You can sweep `effect_size_coverage` over a range in a **single run** and write 
 - `overlap` (continuous ECDF overlap: ∫ min(f1, f2) dx)
 - `effect_size`, `effect_size_reliability`, `effect_size_ecdf`
 - `context_weight` (multi-context runs)
-- `alpha1`, `beta1`, `alpha2`, `beta2` (Beta MoM parameters; retained for EAT and reference, not used for comparison or classification)
 
 ## Core Workflow
 
@@ -285,7 +280,7 @@ MethylDetector uses **Two-Stage Benjamini-Hochberg FDR correction** (statsmodels
 
 - **Pre-filtering before FDR**: Positions below the `delta_mean_reduction` gate are excluded after centroid alignment and before the Mann-Whitney U test. FDR correction is therefore applied to a non-random subset. Q-values are liberal relative to full testing — this is a known computational genomics trade-off.
 - **Non-parametric significance gate**: The significance stage reconstructs Mann-Whitney U directly from centroid `bin_counts` with tie correction. Sample variances from `(Sx2 - Sx²/N)/(N-1)` are used only in the downstream `effect_size` reliability term.
-- **ECDF-only**: No Beta, Normal, or Beta-Binomial distribution models are used at any stage. All comparison, overlap, and classifier density evaluation uses the ECDF from `binned_stats`.
+- **ECDF-only**: All comparison, overlap, and classifier density evaluation uses the ECDF from `binned_stats`. Significance is assessed with Mann-Whitney U.
 
 ## Integration with MethylPipeline
 

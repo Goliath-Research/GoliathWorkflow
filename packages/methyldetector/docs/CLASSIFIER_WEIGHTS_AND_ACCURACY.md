@@ -11,8 +11,6 @@ This document traces how **effect_size** (from MethylCentroidPair) and **p-value
 - **Purpose:** Decide *which* positions are considered statistically significant. They are **not** used as per-DMP weights in the classifier.
 - **Where used:**
   - **Significance filter:** Positions are retained only if `q_value <= alpha` (FDR control). So p/q-values gate entry into the “significant DMP” set.
-  - **Optional EAT refinement:** If EAT is enabled, an importance score (from the EAT transformation) is used to *modify* p-values (boost for high-importance, penalty for low-importance) before FDR; the modified p-values are then used only to recompute q-values and thus which positions pass the significance filter. Again, no p-value is passed as a weight into the classifier.
-
 So: **p-values affect which DMPs exist in the pipeline; they do not weight the classifier.**
 
 ### effect_size
@@ -53,8 +51,6 @@ Centroid comparison
   p_value, q_value, effect_size, delta_mean, overlap, ...
        ↓
   Filter: q_value <= alpha  (and optional biological filters)
-       ↓
-  Optional: EAT computes eat_T / eat_effect_weight metadata
        ↓
   effect_size required → _compute_context_weights (trimmed mean per context → context_weight)
        ↓
@@ -97,12 +93,12 @@ The binary-search optimization in the code explicitly **assumes** that balanced 
 | Per-DMP weight for classifier | `_validate_classifier_subset`, `_save_classifier`: `weights = dmps_for_classifier['effect_size']` then normalized; same for saved model |
 | Weighted log-likelihood in classifier | ECDF-based classifier: weighted sum of log PDF_ECDF over positions |
 | DMP selection (top-k by effect_size) | `_select_dmps_multicontext` → `_optimize_dmps_binary_search` (or bayesian/featurecuts): `sorted_df.iloc[:k]` |
-| p-value only for filtering | Comparison results filtered by `q_value <= alpha`; EAT optionally modifies p_value before FDR |
+| p-value only for filtering | Comparison results filtered by `q_value <= alpha` |
 
 ---
 
 ## 6. Summary
 
-- **p-values:** Used only to decide which positions are significant. They do **not** weight the classifier, and EAT no longer modifies them.
+- **p-values:** Used only to decide which positions are significant. They do **not** weight the classifier.
 - **effect_size:** Used to (1) rank DMPs, (2) compute context weights, and (3) set the **per-DMP weight** in the classifier. The classifier score is a **weighted sum of log-likelihoods** with these weights.
 - **Accuracy vs DMP count:** Because DMPs are added in descending effect_size and the classifier uses effect_size as weight, adding more DMPs adds more (positive-weight) signal in expectation, so classifier accuracy should **increase or asymptotically approach the maximum** as the number of DMPs increases; the code’s binary search assumes monotonic (non-decreasing) BA in k.

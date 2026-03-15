@@ -46,7 +46,7 @@ The primary comparison entry point.
 - Aligns centroids to common positions; applies `position_subset` to restrict the comparison when a pre-filter has already reduced the candidate set.
 - Runs the histogram-derived Mann-Whitney U test on every aligned position in the MethylDetector path.
 - Applies Two-Stage Benjamini-Hochberg FDR correction.
-- Returns a DataFrame with columns: `position`, `p_value`, `q_value`, `mean1`, `mean2`, `delta_mean`, `delta_sign`, `variance1`, `variance2`, `tau2_1`, `tau2_2`, `n1`, `n2`, `overlap_approx`, `effect_size` (initial discrete overlap-based), `alpha1/beta1/alpha2/beta2` (retained for EAT metadata), `dist` (always `DIST_ECDF = 5`).
+- Returns a DataFrame with columns: `position`, `p_value`, `q_value`, `mean1`, `mean2`, `delta_mean`, `delta_sign`, `variance1`, `variance2`, `tau2_1`, `tau2_2`, `n1`, `n2`, `overlap_approx`, `effect_size`, `dist` (always `DIST_ECDF = 5`).
 
 ### `load_and_align(path1, path2, min_coverage=...)`
 
@@ -77,8 +77,6 @@ Extracts methylation fractions for real validation samples at the selected DMP p
 | `load_from_h5` | Loading centroid H5 for bin_counts extraction at classifier build |
 | `gpu_detection`, `memory_manager` | GPU and memory handling |
 | `core.methyl_frame.MethylSample` | Validation sample loading |
-| Optional: `compute_eat_T` | EAT metadata used to reweight final `effect_size` (never p/q-values) |
-
 ---
 
 ## Detection Pipeline (per chromosome × context)
@@ -116,7 +114,7 @@ Both views use their **own correct per-centroid indices** so the PCHIP PDFs corr
 
 `ecdf_effect_size(delta_mean, var1, var2, ecdf_view1, ecdf_view2, sequential_indices, lambda_var, grid_size)` — the pre-sliced views mean the indices are simply `0, 1, 2, …`.
 
-Output: `overlap`, `effect_size`, `effect_size_reliability` added to the DMP DataFrame. If EAT is enabled, the final `effect_size` is multiplied by a bounded `eat_effect_weight`; `p_value` and `q_value` remain unchanged.
+Output: `overlap`, `effect_size`, `effect_size_reliability` added to the DMP DataFrame.
 
 ### 6. Biological filter
 

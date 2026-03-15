@@ -236,7 +236,6 @@ Each DMP CSV includes:
 - Position information: `chromosome`, `context`, `position`
 - Statistics: `p_value`, `q_value`, `delta_mean`, `delta_sign`
 - Biological metrics: `overlap`, `effect_size`, `context_weight`
-- Beta parameters: `alpha1`, `beta1`, `alpha2`, `beta2`
 - Mean methylation: `mean1`, `mean2`
 
 ## Troubleshooting

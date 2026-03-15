@@ -23,14 +23,6 @@ from methyl_utils import MethylCentroidPair
 from methyl_utils import load_from_h5
 from methyl_utils.ecdf_classifier import ECDFClassifier
 
-# Import EAT transformation (optional - may not be available in all environments)
-try:
-    from methyl_utils import compute_eat_T
-    EAT_AVAILABLE = True
-except ImportError:
-    EAT_AVAILABLE = False
-    compute_eat_T = None
-
 # Handle relative imports - try module import first, fall back to direct execution setup
 try:
     from ..models.config import MethylModelerConfig
@@ -445,26 +437,6 @@ class MethylDetector:
         if "effect_size" in comparison_results.columns:
             comparison_results["effect_size_approx"] = comparison_results["effect_size"].astype(np.float32)
 
-        # Apply EAT transformation if enabled
-        logger.debug(f"EAT debug: enable_eat_transform={self.config.enable_eat_transform}, EAT_AVAILABLE={EAT_AVAILABLE}")
-        if self.config.enable_eat_transform:
-            logger.info("🧬 EAT transformation is ENABLED in config")
-            if not EAT_AVAILABLE:
-                logger.warning("EAT transformation enabled but compute_eat_T not available, skipping")
-                logger.warning(f"EAT_AVAILABLE={EAT_AVAILABLE}, compute_eat_T={compute_eat_T}")
-            else:
-                logger.info("🧬 Applying EAT transformation to enhance DMP detection...")
-                logger.info(f"   EAT parameters: gamma={self.config.eat_gamma}, clip_T={self.config.eat_clip_t}, norm={self.config.eat_normalization}")
-                try:
-                    comparison_results = self._apply_eat_transformation(comparison_results, centroid1, centroid2, context)
-                    logger.info("✅ EAT transformation applied successfully")
-                except Exception as e:
-                    logger.error(f"❌ EAT transformation failed: {e}")
-                    import traceback
-                    logger.error(f"Traceback: {traceback.format_exc()}")
-                    logger.warning("Continuing without EAT transformation")
-                    # Continue with original comparison_results
-
         comparison_results = self._apply_tau2_filter(comparison_results, context)
 
         # Apply statistical filtering (n_positions_compared = positions that entered the statistical step)
@@ -616,15 +588,6 @@ class MethylDetector:
             ecdf_view1=ecdf_view1,
             ecdf_view2=ecdf_view2,
         )
-        if "eat_effect_weight" in dmp_df.columns and "effect_size" in dmp_df.columns:
-            dmp_df["effect_size_raw"] = dmp_df["effect_size"].astype(np.float32)
-            dmp_df["effect_size"] = np.clip(
-                dmp_df["effect_size"].astype(np.float64)
-                * dmp_df["eat_effect_weight"].astype(np.float64),
-                0.0,
-                1.0,
-            ).astype(np.float32)
-
         if "effect_size" in dmp_df.columns and len(dmp_df) > 0:
             from scipy.stats import rankdata
 
@@ -635,80 +598,6 @@ class MethylDetector:
         dmp_df["chromosome"] = self.chromosome
         dmp_df["context"] = context
         return dmp_df
-
-    def _apply_eat_transformation(self, comparison_results: pd.DataFrame,
-                                centroid1: MethylSample, centroid2: MethylSample,
-                                context: str) -> pd.DataFrame:
-        """
-        Compute EAT metadata without modifying p-values or q-values.
-
-        EAT is now used only as a post-statistical effect-size reweighting signal,
-        so this method stores `eat_T` and a bounded multiplicative weight that is
-        applied later to the final ECDF-based `effect_size`.
-
-        Args:
-            comparison_results: DataFrame with statistical comparison results
-            centroid1, centroid2: MethylSample centroids
-            context: Methylation context (for logging)
-
-        Returns:
-            Modified comparison_results with EAT metadata only.
-        """
-        if not EAT_AVAILABLE or compute_eat_T is None:
-            logger.warning("EAT transformation requested but compute_eat_T not available, skipping")
-            return comparison_results
-
-        # Extract Beta parameters from comparison results
-        alpha_H = comparison_results['alpha1'].values  # Healthy centroid
-        beta_H = comparison_results['beta1'].values
-        alpha_C = comparison_results['alpha2'].values  # Cancer centroid
-        beta_C = comparison_results['beta2'].values
-
-        # Compute EAT distortion vector
-        T = compute_eat_T(
-            alpha_H=alpha_H, beta_H=beta_H,
-            alpha_C=alpha_C, beta_C=beta_C,
-            gamma=self.config.eat_gamma,
-            clip_T=self.config.eat_clip_t,
-            eps=1e-12,
-            low_tau_threshold=self.config.eat_low_tau_threshold,
-            use_loggamma=True,
-            use_gpu=self.config.use_gpu
-        )
-
-        modified_results = comparison_results.copy()
-        importance_weight = np.abs(T)
-        modified_results['eat_T'] = T.astype(np.float32)
-        modified_results['eat_effect_weight'] = np.clip(importance_weight, 0.5, 2.0).astype(np.float32)
-        modified_results['eat_applied'] = True
-
-        eat_stats = {
-            'mean_T': float(np.mean(T)),
-            'std_T': float(np.std(T)),
-            'min_T': float(np.min(T)),
-            'max_T': float(np.max(T)),
-            'positions_modified': len(T),
-            'min_weight': float(np.min(modified_results['eat_effect_weight'])),
-            'max_weight': float(np.max(modified_results['eat_effect_weight'])),
-        }
-
-        logger.info(f"🧬 EAT applied to {len(comparison_results)} positions in context {context}")
-        logger.info(f"   T stats: mean={eat_stats['mean_T']:.3f}, std={eat_stats['std_T']:.3f}, "
-                   f"range=[{eat_stats['min_T']:.3f}, {eat_stats['max_T']:.3f}]")
-        logger.info(
-            "   effect-size weights: range=[%.3f, %.3f] (p/q-values unchanged)",
-            eat_stats["min_weight"],
-            eat_stats["max_weight"],
-        )
-
-        # Check if T values are meaningful
-        t_range = eat_stats['max_T'] - eat_stats['min_T']
-        if t_range < 0.1:
-            logger.warning(f"⚠️  EAT T values have very small range ({t_range:.3f}), transformation may have minimal effect")
-        elif eat_stats['std_T'] < 0.05:
-            logger.warning(f"⚠️  EAT T values have low variance (std={eat_stats['std_T']:.3f}), transformation may have minimal effect")
-
-        return modified_results
 
     def _compute_context_weights(self, dmps_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -2162,9 +2051,9 @@ class MethylDetector:
                     logger.debug(f"Context {ctx}: {n_ctx_positions} positions, indices {ctx_indices.min()}-{ctx_indices.max()}")
 
                     # Healthy samples: lower methylation for this context
-                    X_healthy_ctx = np.random.beta(3, 1, (5, n_ctx_positions)).astype(np.float32)
+                    X_healthy_ctx = np.random.uniform(0.2, 0.5, (5, n_ctx_positions)).astype(np.float32)
                     # Cancer samples: higher methylation for this context
-                    X_cancer_ctx = np.random.beta(1, 3, (5, n_ctx_positions)).astype(np.float32)
+                    X_cancer_ctx = np.random.uniform(0.5, 0.9, (5, n_ctx_positions)).astype(np.float32)
 
                     # Assign to the appropriate positions in the full matrix
                     X[:5, ctx_indices] = X_healthy_ctx  # Healthy samples
@@ -2879,7 +2768,7 @@ class MethylDetector:
         DIST_NAMES = {5: 'ECDF'}
         # Optional / distribution-specific columns
         EXTRA_EXPORT_COLS = [
-            'context_weight', 'alpha1', 'beta1', 'alpha2', 'beta2',
+            'context_weight',
             'combined_variance', 'n_estimated_per_group',
         ]
         export_cols = STANDARD_EXPORT_COLS + [c for c in EXTRA_EXPORT_COLS if c not in STANDARD_EXPORT_COLS]
@@ -3159,10 +3048,6 @@ class MethylDetector:
             "q_value": "float32",
             "delta_mean": "float32",
             "weight": "float32",
-            "alpha1": "float64",
-            "beta1": "float64",
-            "alpha2": "float64",
-            "beta2": "float64",
             "mean1": "float32",
             "mean2": "float32",
             "selected": "bool",

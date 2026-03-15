@@ -4,8 +4,6 @@
 
 MethylModeler now exports **three separate CSV files** representing the three stages of DMP selection, allowing you to map each stage to genes and compare their biological interpretation.
 
-If BMM refinement is enabled, it runs **before** Stage 1 and can update p-values and filtering outcomes. BMM centroids are saved per chromosome/context for downstream use.
-
 ### Current multi-context export (actual filenames)
 
 The multi-context pipeline currently writes:
@@ -69,10 +67,6 @@ The files are generated based on your configuration settings:
   - Generated when DE optimization is disabled
   - Contains the final selected DMPs (same as Stage 2 in that case)
 
-### BMM Outputs (Optional):
-- **`bmm_centroids/bmm-centroid-{chromosome}-{context}.json`** when BMM refinement is enabled
-- `results-{chromosome}.json` includes `bmm_summary` and `bmm_centroid_files`
-
 ## Configuration Example
 
 ```json
@@ -96,7 +90,7 @@ With this configuration, you will get:
 All three CSVs have the same column structure:
 
 ```csv
-chromosome,context,position,p_value,q_value,delta_mean,delta_sign,overlap,effect_size,context_weight,alpha1,beta1,alpha2,beta2,mean1,mean2
+chromosome,context,position,p_value,q_value,delta_mean,delta_sign,overlap,effect_size,context_weight,mean1,mean2
 ```
 
 ### Key Columns:
@@ -107,11 +101,9 @@ chromosome,context,position,p_value,q_value,delta_mean,delta_sign,overlap,effect
 - **q_value**: FDR-corrected q-value
 - **delta_mean**: Mean methylation difference (Δμ)
 - **delta_sign**: Direction of change (+1 or -1)
-- **overlap**: Bhattacharyya coefficient (distribution overlap)
+- **overlap**: ECDF-based overlap (∫ min(f1, f2) dx)
 - **effect_size**: Computed biological effect size
 - **context_weight**: Multi-context weight (for weighted classification)
-- **alpha1, beta1**: Optional centroid parameters (method-of-moments) for centroid 1; comparison uses ECDF
-- **alpha2, beta2**: Optional centroid parameters (method-of-moments) for centroid 2; comparison uses ECDF
 - **mean1, mean2**: Mean methylation for each centroid
 
 ## Usage for Gene Mapping

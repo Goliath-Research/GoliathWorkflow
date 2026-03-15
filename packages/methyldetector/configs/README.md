@@ -59,20 +59,6 @@ Configuration without FDR correction for comparison with raw p-values.
 | `global_significance_threshold` | float | Threshold for global significance | 0.05 |
 | `use_gpu` | bool | Whether to use GPU acceleration | true |
 
-### BMM Refinement (Optional, Detector Stage)
-
-These parameters apply to both single and multiple comparison configs:
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `bmm_refine_enabled` | bool | Enable beta mixture refinement on top biological DMPs | false |
-| `bmm_refine_mode` | string | "annotate" or "filter" | "filter" |
-| `bmm_refine_use_binned_stats` | bool | Use binned counts for faster EM | true |
-| `bmm_refine_bin_count` | int | Number of bins for binned stats | 32 |
-| `bmm_refine_max_dmps` | int | Cap on number of DMPs to refine | 200000 |
-| `bmm_refine_max_fraction` | float | Optional fraction cap for refinement | 0.02 |
-| `bmm_refine_use_gpu` | bool | Use GPU for BMM EM + JS divergence when available | true |
-
 ### Multiple Comparison Config (uses `centroid1_dir` and `centroid2_dir`)
 
 | Parameter | Type | Description | Default |
@@ -109,8 +95,6 @@ For multiple comparisons, the tool expects centroid files to follow this naming 
 - `methyl_modeler_summary_report.txt` - Overall summary
 - `all_comparisons_summary.csv` - Summary table for all comparisons
 - Individual comparison files in subdirectories
-- `bmm_centroids/bmm-centroid-{chromosome}-{context}.json` - BMM centroids (when refinement enabled)
-
 ## Tips
 
 1. **GPU Usage**: Set `use_gpu: true` for faster processing (requires CUDA environment)
