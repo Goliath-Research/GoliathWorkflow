@@ -437,6 +437,62 @@ class MethylDetector:
         if "effect_size" in comparison_results.columns:
             comparison_results["effect_size_approx"] = comparison_results["effect_size"].astype(np.float32)
 
+        # Optional: replace p_value/q_value with KS on precise ECDF (default path)
+        ecdf_view_1_full = None
+        ecdf_view_2_full = None
+        if self.config.significance_test == "ks_ecdf" and len(comparison_results) > 0:
+            from methyl_utils.core.distribution_views import ECDFView
+            from methyl_utils.statistical_tests import ecdf_ks_pvalue
+            dmp_positions = np.asarray(comparison_results["position"].values, dtype=np.uint32)
+            pos1 = np.asarray(centroid1.pos.values, dtype=np.uint32)
+            pos2 = np.asarray(centroid2.pos.values, dtype=np.uint32)
+            idx_in_c1 = np.searchsorted(pos1, dmp_positions, side="left")
+            idx_in_c2 = np.searchsorted(pos2, dmp_positions, side="left")
+            bs1 = centroid1.binned_stats
+            bs2 = centroid2.binned_stats
+            bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
+            ecdf_view_1_full = ECDFView(
+                bin_edges_arr,
+                np.asarray(bs1["bin_counts"], dtype=np.float64)[idx_in_c1],
+                np.asarray(centroid1.Sx.values, dtype=np.float64)[idx_in_c1],
+                np.asarray(centroid1.N.values, dtype=np.float64)[idx_in_c1],
+                np.asarray(centroid1.Sx2.values, dtype=np.float64)[idx_in_c1],
+            )
+            ecdf_view_2_full = ECDFView(
+                bin_edges_arr,
+                np.asarray(bs2["bin_counts"], dtype=np.float64)[idx_in_c2],
+                np.asarray(centroid2.Sx.values, dtype=np.float64)[idx_in_c2],
+                np.asarray(centroid2.N.values, dtype=np.float64)[idx_in_c2],
+                np.asarray(centroid2.Sx2.values, dtype=np.float64)[idx_in_c2],
+            )
+            position_indices = np.arange(len(comparison_results), dtype=np.intp)
+            n1 = comparison_results["n1"].values.astype(np.float64)
+            n2 = comparison_results["n2"].values.astype(np.float64)
+            _, ks_pvalues = ecdf_ks_pvalue(
+                ecdf_view_1_full,
+                ecdf_view_2_full,
+                position_indices,
+                n1=n1,
+                n2=n2,
+                grid_size=self.config.ecdf_grid_size,
+            )
+            comparison_results["p_value"] = ks_pvalues.astype(np.float32)
+            try:
+                from statsmodels.stats.multitest import multipletests
+                _, q_values, _, _ = multipletests(
+                    comparison_results["p_value"].values, alpha=0.05, method="fdr_tsbh"
+                )
+                comparison_results["q_value"] = q_values.astype(np.float32)
+            except ImportError:
+                from methyl_utils.statistical_tests import storey_qvalues
+                q_values, _ = storey_qvalues(comparison_results["p_value"].values)
+                comparison_results["q_value"] = q_values.astype(np.float32)
+            logger.info(
+                "Context %s: significance from KS on precise ECDF (grid_size=%s)",
+                context,
+                self.config.ecdf_grid_size,
+            )
+
         comparison_results = self._apply_tau2_filter(comparison_results, context)
 
         # Apply statistical filtering (n_positions_compared = positions that entered the statistical step)
@@ -470,12 +526,20 @@ class MethylDetector:
             "" if _gate is None else f" (|delta_mean| >= {_gate})",
         )
 
+        use_ks_views = (
+            self.config.significance_test == "ks_ecdf"
+            and ecdf_view_1_full is not None
+            and ecdf_view_2_full is not None
+        )
         frames = [
             self._finalize_candidate_metrics_df(
                 confirmed_results,
                 centroid1=centroid1,
                 centroid2=centroid2,
                 context=context,
+                ecdf_view1=ecdf_view_1_full if use_ks_views else None,
+                ecdf_view2=ecdf_view_2_full if use_ks_views else None,
+                view_row_indices=confirmed_results.index.to_numpy(dtype=np.intp) if use_ks_views else None,
             )
         ]
 
@@ -509,6 +573,9 @@ class MethylDetector:
                     centroid1=centroid1,
                     centroid2=centroid2,
                     context=context,
+                    ecdf_view1=ecdf_view_1_full if use_ks_views else None,
+                    ecdf_view2=ecdf_view_2_full if use_ks_views else None,
+                    view_row_indices=rescue_candidates.index.to_numpy(dtype=np.intp) if use_ks_views else None,
                 )
             )
 
@@ -547,46 +614,63 @@ class MethylDetector:
         centroid1: MethylSample,
         centroid2: MethylSample,
         context: str,
+        ecdf_view1: Any = None,
+        ecdf_view2: Any = None,
+        view_row_indices: Optional[np.ndarray] = None,
     ) -> pd.DataFrame:
-        """Compute continuous ECDF overlap/effect_size for the selected candidate set."""
+        """Compute continuous ECDF overlap/effect_size for the selected candidate set.
+
+        When ecdf_view1, ecdf_view2 and view_row_indices are provided (ks_ecdf path),
+        they are reused instead of building new views; view_row_indices gives the row
+        indices into those views for each row of dmp_df.
+        """
         if dmp_df is None or len(dmp_df) == 0:
             return dmp_df.copy() if isinstance(dmp_df, pd.DataFrame) else pd.DataFrame()
 
         dmp_df = dmp_df.copy()
-        dmp_positions = np.asarray(dmp_df["position"].values, dtype=np.uint32)
-        pos1 = np.asarray(centroid1.pos.values, dtype=np.uint32)
-        pos2 = np.asarray(centroid2.pos.values, dtype=np.uint32)
-        idx_in_c1 = np.searchsorted(pos1, dmp_positions, side="left")
-        idx_in_c2 = np.searchsorted(pos2, dmp_positions, side="left")
-        bs1 = centroid1.binned_stats
-        bs2 = centroid2.binned_stats
-        bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
-        from methyl_utils.core.distribution_views import ECDFView
+        if ecdf_view1 is not None and ecdf_view2 is not None and view_row_indices is not None:
+            logger.info(
+                "Context %s: reusing ECDFViews for %s candidate positions (KS path)",
+                context,
+                f"{len(dmp_df):,}",
+            )
+        else:
+            dmp_positions = np.asarray(dmp_df["position"].values, dtype=np.uint32)
+            pos1 = np.asarray(centroid1.pos.values, dtype=np.uint32)
+            pos2 = np.asarray(centroid2.pos.values, dtype=np.uint32)
+            idx_in_c1 = np.searchsorted(pos1, dmp_positions, side="left")
+            idx_in_c2 = np.searchsorted(pos2, dmp_positions, side="left")
+            bs1 = centroid1.binned_stats
+            bs2 = centroid2.binned_stats
+            bin_edges_arr = np.asarray(bs1["bin_edges"], dtype=np.float64)
+            from methyl_utils.core.distribution_views import ECDFView
 
-        ecdf_view1 = ECDFView(
-            bin_edges_arr,
-            np.asarray(bs1["bin_counts"], dtype=np.float64)[idx_in_c1],
-            np.asarray(centroid1.Sx.values, dtype=np.float64)[idx_in_c1],
-            np.asarray(centroid1.N.values, dtype=np.float64)[idx_in_c1],
-            np.asarray(centroid1.Sx2.values, dtype=np.float64)[idx_in_c1],
-        )
-        ecdf_view2 = ECDFView(
-            bin_edges_arr,
-            np.asarray(bs2["bin_counts"], dtype=np.float64)[idx_in_c2],
-            np.asarray(centroid2.Sx.values, dtype=np.float64)[idx_in_c2],
-            np.asarray(centroid2.N.values, dtype=np.float64)[idx_in_c2],
-            np.asarray(centroid2.Sx2.values, dtype=np.float64)[idx_in_c2],
-        )
-        logger.info(
-            "Context %s: built ECDFViews for %s candidate positions (lazy, not full centroid)",
-            context,
-            f"{len(dmp_positions):,}",
-        )
+            ecdf_view1 = ECDFView(
+                bin_edges_arr,
+                np.asarray(bs1["bin_counts"], dtype=np.float64)[idx_in_c1],
+                np.asarray(centroid1.Sx.values, dtype=np.float64)[idx_in_c1],
+                np.asarray(centroid1.N.values, dtype=np.float64)[idx_in_c1],
+                np.asarray(centroid1.Sx2.values, dtype=np.float64)[idx_in_c1],
+            )
+            ecdf_view2 = ECDFView(
+                bin_edges_arr,
+                np.asarray(bs2["bin_counts"], dtype=np.float64)[idx_in_c2],
+                np.asarray(centroid2.Sx.values, dtype=np.float64)[idx_in_c2],
+                np.asarray(centroid2.N.values, dtype=np.float64)[idx_in_c2],
+                np.asarray(centroid2.Sx2.values, dtype=np.float64)[idx_in_c2],
+            )
+            view_row_indices = None
+            logger.info(
+                "Context %s: built ECDFViews for %s candidate positions (lazy, not full centroid)",
+                context,
+                f"{len(dmp_positions):,}",
+            )
 
         dmp_df = self._compute_missing_metrics_df(
             dmp_df,
             ecdf_view1=ecdf_view1,
             ecdf_view2=ecdf_view2,
+            view_row_indices=view_row_indices,
         )
         if "effect_size" in dmp_df.columns and len(dmp_df) > 0:
             from scipy.stats import rankdata
@@ -3071,12 +3155,14 @@ class MethylDetector:
         df: pd.DataFrame,
         ecdf_view1: Any,
         ecdf_view2: Any,
+        view_row_indices: Optional[np.ndarray] = None,
     ) -> pd.DataFrame:
         """Compute continuous-ECDF overlap and final effect_size for the reduced set.
 
-        Both ECDFViews must be pre-sliced to exactly the positions in df (row i of the
-        view corresponds to row i of df).  The caller is responsible for building the
-        views with the correct per-centroid indices.
+        When view_row_indices is None, both ECDFViews are pre-sliced to exactly the
+        positions in df (row i of the view corresponds to row i of df). When
+        view_row_indices is provided, the views cover a superset and view_row_indices[i]
+        is the row index into the views for df row i.
         """
         if ecdf_view1 is None or ecdf_view2 is None or len(df) == 0:
             return df
@@ -3086,7 +3172,7 @@ class MethylDetector:
             df = df.drop(columns=legacy_cols)
         n_rows = len(df)
         # Estimate memory for the (n_positions × grid_size) PDF matrices used in ecdf_overlap_integral.
-        grid_size = self.config.ecdf_overlap_grid_size
+        grid_size = self.config.ecdf_grid_size
         mem_per_row_mb = (2 * grid_size * 8) / (1024 ** 2)  # two float64 arrays of shape (n, grid)
         from methyl_utils import get_memory_usage
         available_gb = get_memory_usage().get('gpu_free_gb', 80.0)
@@ -3100,11 +3186,13 @@ class MethylDetector:
             for i in range(0, n_rows, chunk_size):
                 end_i = min(i + chunk_size, n_rows)
                 chunk_df = df.iloc[i:end_i].copy()
+                chunk_view_indices = view_row_indices[i:end_i] if view_row_indices is not None else None
                 chunk_result = self._compute_chunk_metrics_df(
                     chunk_df,
                     ecdf_view1=ecdf_view1,
                     ecdf_view2=ecdf_view2,
                     start_row=i,
+                    view_row_indices=chunk_view_indices,
                 )
                 chunks.append(chunk_result)
             result_df = pd.concat(chunks, ignore_index=True)
@@ -3116,6 +3204,7 @@ class MethylDetector:
                 ecdf_view1=ecdf_view1,
                 ecdf_view2=ecdf_view2,
                 start_row=0,
+                view_row_indices=view_row_indices,
             )
 
     def _compute_chunk_metrics_df(
@@ -3124,12 +3213,13 @@ class MethylDetector:
         ecdf_view1: Any,
         ecdf_view2: Any,
         start_row: int = 0,
+        view_row_indices: Optional[np.ndarray] = None,
     ) -> pd.DataFrame:
         """Compute overlap and effect_size for one reduced chunk.
 
-        Both ECDFViews are pre-sliced to the DMP set, so the correct indices for this
-        chunk are simply the sequential row positions within the sliced views:
-        start_row, start_row+1, ..., start_row+len(chunk_df)-1.
+        When view_row_indices is None, ECDFView row i corresponds to chunk row i
+        (start_row + i). When view_row_indices is provided, it gives the row indices
+        into the (superset) views for this chunk.
         """
         import time
         start_time = time.time()
@@ -3158,8 +3248,12 @@ class MethylDetector:
                     )
 
         from methyl_utils.statistical_tests import ecdf_effect_size
-        position_indices = np.arange(start_row, start_row + len(chunk_df), dtype=np.intp)
-        grid_size = self.config.ecdf_overlap_grid_size
+        position_indices = (
+            view_row_indices
+            if view_row_indices is not None
+            else np.arange(start_row, start_row + len(chunk_df), dtype=np.intp)
+        )
+        grid_size = self.config.ecdf_grid_size
         lambda_var = self.config.lambda_var
         mean_level_weight = self.config.effect_size_mean_level_weight
         mean_level_k = self.config.effect_size_mean_level_k

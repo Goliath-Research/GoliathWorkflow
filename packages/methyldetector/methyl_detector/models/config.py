@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Literal, Optional, Union, Dict, Any
+from typing import List, Literal, Optional, Union, Dict, Any  # noqa: F401
 from math import ceil
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -54,8 +54,8 @@ class MethylDetectorConfig(BaseModel):
         if isinstance(data, dict):
             if "statistical_test" in data:
                 raise ValueError(
-                    "statistical_test is no longer supported. "
-                    "MethylDetector always uses the histogram-derived Mann-Whitney U test."
+                    "statistical_test is no longer supported. Use significance_test instead "
+                    "(e.g. 'ks_ecdf' or 'mann_whitney')."
                 )
             legacy_keys = {"distribution", "delta_mean_mode", "overlap_mode", "max_N_for_ecdf"}
             used = sorted(k for k in legacy_keys if k in data)
@@ -64,6 +64,12 @@ class MethylDetectorConfig(BaseModel):
                     "Legacy distribution-specific detector options are no longer supported: "
                     f"{used}. MethylDetector now uses the ECDF-first comparison pipeline."
                 )
+            # Alias legacy grid keys to ecdf_grid_size for backward compatibility
+            if "ecdf_grid_size" not in data:
+                if "ecdf_overlap_grid_size" in data:
+                    data = {**data, "ecdf_grid_size": data["ecdf_overlap_grid_size"]}
+                elif "ecdf_ks_grid_size" in data:
+                    data = {**data, "ecdf_grid_size": data["ecdf_ks_grid_size"]}
         return data
 
     # ----------------
@@ -325,13 +331,13 @@ class MethylDetectorConfig(BaseModel):
         default=True,
         description="Whether to use GPU acceleration"
     )
-    ecdf_ks_grid_size: int = Field(
-        default=256, ge=16, le=1024,
-        description="Number of grid points for ECDF/KS comparison (speed vs resolution tradeoff; default 256)."
+    significance_test: Literal["ks_ecdf", "mann_whitney"] = Field(
+        default="ks_ecdf",
+        description="Statistical test for DMP significance: 'ks_ecdf' (Kolmogorov-Smirnov on precise ECDF, default) or 'mann_whitney' (Mann-Whitney from bin counts)."
     )
-    ecdf_overlap_grid_size: int = Field(
-        default=512, ge=32, le=4096,
-        description="Number of grid points for continuous ECDF overlap integration (speed vs resolution tradeoff; default 512)."
+    ecdf_grid_size: int = Field(
+        default=256, ge=16, le=4096,
+        description="Number of grid points for ECDF/KS and overlap integration (single grid; default 256)."
     )
     eps: float = Field(
         default=1e-6, gt=0,
