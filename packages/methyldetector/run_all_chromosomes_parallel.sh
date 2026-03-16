@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Run MethylModeler for all chromosomes (4-22, X) and all contexts (CG, CHG, CHH) in parallel
+# Run MethylDetector for all chromosomes (4-22, X) and all contexts (CG, CHG, CHH) in parallel
 #
 
 set -e  # Exit on error
@@ -21,7 +21,7 @@ mkdir -p "$LOG_DIR"
 
 MAIN_LOG="${LOG_DIR}/main.log"
 
-echo "Starting MethylModeler analysis for chromosomes 1-22 and X" | tee "$MAIN_LOG"
+echo "Starting MethylDetector analysis for chromosomes 1-22 and X" | tee "$MAIN_LOG"
 echo "Running with up to $MAX_JOBS parallel jobs" | tee -a "$MAIN_LOG"
 echo "Log directory: $LOG_DIR" | tee -a "$MAIN_LOG"
 echo "Started at: $(date)" | tee -a "$MAIN_LOG"
@@ -42,7 +42,7 @@ run_analysis() {
     return 1
   fi
   
-  # Run MethylModeler (md script handles container execution)
+  # Run MethylDetector (md script handles container execution)
   # Change to methylmodeler directory first since md script uses pwd
   if (cd /home/ubuntu/MethylPipeline/packages/methylmodeler && ./md "$CONFIG") >> "$LOG_FILE" 2>&1; then
     echo "[$(date)] ✅ SUCCESS: Chromosome $CHROM, Context $CTX" >> "$LOG_FILE"

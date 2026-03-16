@@ -98,7 +98,7 @@ methyl_utils/
 - scikit-learn
 - hdbscan
 
-#### 4. MethylModeler
+#### 4. MethylDetector
 
 **Purpose**: Detect differentially methylated positions and package classifiers
 
@@ -180,7 +180,7 @@ A good DMP has (1) **large |delta_mean|** (means of the two groups far apart) an
    ↓
 3. MethylCluster (QC & clustering, optional)
    ↓
-4. MethylModeler (DMP detection + model packaging)
+4. MethylDetector (DMP detection + model packaging)
    ↓
 5. MethylClassifier (sample inference)
    ↓

@@ -7,7 +7,7 @@
 **Error**: 
 ```
 JSON parse error: at process.processTicksAndRejections
-Command failed: docker compose -f /home/ubuntu/MethylModeler/Work/cuda/docker-compose.yml --profile * config
+Command failed: docker compose -f /path/to/project/Work/cuda/docker-compose.yml --profile * config
 ```
 
 **Cause**: The Docker Compose method is having issues with the `--profile *` parameter or path resolution.
@@ -76,8 +76,8 @@ docker exec epimethyl python -c "from methyl_utils.gpu_detection import print_gp
 # Check Python path in container
 docker exec epimethyl which python
 
-# Install MethylModeler dependencies
-docker exec epimethyl bash -c "cd /home/ubuntu/MethylModeler && poetry install --with dev"
+# Install MethylDetector dependencies
+docker exec epimethyl bash -c "cd /path/to/project && poetry install --with dev"
 ```
 
 ## Configuration Methods
@@ -136,13 +136,13 @@ If nothing works, follow these steps:
    ```
 
 4. **Open Cursor and try again**:
-   - Open `/home/ubuntu/MethylModeler` folder
+   - Open the project folder
    - Click "Reopen in Container"
 
 5. **If still failing, try manual attachment**:
    - In Cursor: "Remote-Containers: Attach to Running Container"
    - Select `epimethyl` container
-   - Choose `/home/ubuntu/MethylModeler` as workspace
+   - Choose the project folder as workspace
 
 ## Still Having Issues?
 

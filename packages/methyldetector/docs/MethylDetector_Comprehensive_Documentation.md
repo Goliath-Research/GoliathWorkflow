@@ -1,6 +1,6 @@
 # MethylDetector: Comprehensive Documentation
 
-This document is the full reference for MethylDetector (formerly MethylModeler). For concise summaries and setup:
+This document is the full reference for MethylDetector. For concise summaries and setup:
 
 - **Theory (ECDF, Mann-Whitney, q-values, effect size):** [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md)
 - **Implementation (MethylUtils):** [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md)
@@ -63,18 +63,18 @@ P-values are computed from the ECDF-based test; FDR is applied via Storey's meth
 
 ### FDR Correction: Storey's q-value Method
 
-Given $m$ positions with p-values $p_1, \ldots, p_m$:
+Given $m$ positions with p-values $p\_1, \ldots, p\_m$:
 
-**Step 1: Estimate $\pi_0$ (proportion of true nulls)**
+**Step 1: Estimate $\pi\_0$ (proportion of true nulls)**
 
 $$
-\hat{\pi}_0(\lambda) = \frac{\#\{p_i > \lambda\}}{m(1-\lambda)}
+\hat{\pi}\_0(\lambda) = \frac{\#\{p\_i > \lambda\}}{m(1-\lambda)}
 $$
 
 **Step 2: Compute q-values** (sorted p-values):
 
 $$
-q_{(i)} = \min_{j \geq i} \left\{\hat{\pi}_0 \cdot \frac{m \cdot p_{(j)}}{j}\right\}
+q\_{(i)} = \min\_{j \geq i} \left\{\hat{\pi}\_0 \cdot \frac{m \cdot p\_{(j)}}{j}\right\}
 $$
 
 **Advantage**: More powerful than Benjamini-Hochberg for genomics data with many true nulls.
@@ -85,22 +85,22 @@ $$
 
 #### Delta Mean
 
-Absolute difference in mean methylation: $\Delta\mu = |\mu_1 - \mu_2|$, where $\mu_1, \mu_2$ are the per-position means from the centroids (from N, Sx, Sx2 or ECDF).
+Absolute difference in mean methylation: $\Delta\mu = |\mu\_1 - \mu\_2|$, where $\mu\_1, \mu\_2$ are the per-position means from the centroids (from N, Sx, Sx2 or ECDF).
 
-#### Bhattacharyya Coefficient (Overlap)
+#### ECDF-based Overlap
 
-Distribution overlap is computed from the **ECDF** (binned_stats). Higher overlap means more similar distributions; lower overlap means better discrimination. The pipeline uses **ECDF only** for overlap; no Beta or other parametric form.
+Distribution overlap is computed from the **ECDF** (binned_stats): $\text{overlap} = \int_0^1 \min(f_1(x), f_2(x))\,dx$, where $f_1$, $f_2$ are the PCHIP-derived PDFs from each centroid’s binned counts. Higher overlap means more similar distributions; lower overlap means better discrimination. The pipeline uses **ECDF only**; no Beta or other parametric form.
 
 **Interpretation**:
-- $BC \approx 1$: High overlap (poor discrimination)
-- $BC \approx 0$: Low overlap (good discrimination)
+- overlap $\approx 1$: High overlap (poor discrimination)
+- overlap $\approx 0$: Low overlap (good discrimination)
 
 #### Cohen's d
 
 Standardized effect size:
 
 $$
-d = \frac{\mu_1 - \mu_2}{\sqrt{\frac{\sigma_1^2 + \sigma_2^2}{2}}}
+d = \frac{\mu\_1 - \mu\_2}{\sqrt{\frac{\sigma\_1^2 + \sigma\_2^2}{2}}}
 $$
 
 Means and variances come from centroid statistics (N, Sx, Sx2 or from the ECDF).
@@ -112,14 +112,14 @@ Means and variances come from centroid statistics (N, Sx, Sx2 or from the ECDF).
 **Formula (in MethylCentroidPair):**
 
 $$
-\text{effect\_size} = \frac{|\Delta\mu|}{\max(\text{overlap}, \epsilon) \times \sigma_{\text{combined}}}
+\text{effect\_size} = \frac{|\Delta\mu|}{\max(\text{overlap}, \epsilon) \times \sigma\_{\text{combined}}}
 \times \text{variance\_reliability}
 $$
 
-- **overlap**: Bhattacharyya coefficient (BC) from the comparison; $\text{BC} = e^{-\text{BD}}$.
+- **overlap**: ECDF-based overlap $\int \min(f_1, f_2)\,dx$ from the comparison (no Beta parameters).
 - **min_overlap_floor** $\epsilon$ (e.g. 0.01): prevents unbounded values when overlap → 0; in practice overlap is rarely zero.
-- **combined_std**: $\sigma_{\text{combined}} = \sqrt{\text{var}_1 + \text{var}_2}$ from centroid variances (N, Sx, Sx2 or ECDF).
-- **variance_reliability**: $1 / (1 + \max(\text{var}_1, \text{var}_2) / 0.05)$ to down-weight high-variance (noisy) positions.
+- **combined_std**: $\sigma\_{\text{combined}} = \sqrt{\text{var}\_1 + \text{var}\_2}$ from centroid variances (N, Sx, Sx2 or ECDF).
+- **variance_reliability**: $1 / (1 + \max(\text{var}\_1, \text{var}\_2) / 0.05)$ to down-weight high-variance (noisy) positions.
 
 Larger |delta_mean| and smaller overlap increase effect_size; higher variance decreases it. Downstream steps (e.g. classifier) may normalize weights to [1e-6, 1] for stability; the relative ordering of effect_size is preserved for chromosome/context weighting.
 
@@ -147,7 +147,7 @@ $$
 From likelihood ratio distribution moments:
 
 $$
-\text{AUC} = \Phi\left(\frac{\mu_{\text{LLR}}}{\sqrt{2\sigma^2_{\text{LLR}}}}\right)
+\text{AUC} = \Phi\left(\frac{\mu\_{\text{LLR}}}{\sqrt{2\sigma^2\_{\text{LLR}}}}\right)
 $$
 
 where $\Phi$ is the standard normal CDF; in the **ECDF-only** pipeline, LLR moments (when used) are derived from ECDF-based comparison. Centroid comparison and DMP detection use **ECDF only**.
@@ -192,7 +192,7 @@ Centroid comparison and all statistics are implemented in **MethylUtils**. Methy
 5. DMP Filtering
    ├─ Coverage threshold (min_N_pct)
    ├─ Effect size threshold (min_delta_mean)
-   ├─ Overlap threshold (max_bc)
+   ├─ Overlap threshold (max_bc; ECDF-based)
    └─ Biological importance ranking
 
 6. Binary Search for Optimal DMPs
@@ -217,7 +217,7 @@ Uses actual samples from:
 
 #### Synthetic Sample Validation
 
-When real samples are unavailable, synthetic samples can be generated from the centroid’s empirical distribution (e.g. inverse ECDF / binned_stats) for class \(k\), or from summary statistics (mean/variance) where appropriate.
+When real samples are unavailable, synthetic samples can be generated from the centroid’s empirical distribution (e.g. inverse ECDF / binned_stats) for class $k$, or from summary statistics (mean/variance) where appropriate.
 
 ### 4. Binary Search for DMP Selection
 
@@ -303,7 +303,7 @@ dmps = pair.find_dmps(
 # dmps DataFrame contains:
 # - position, p_value, q_value
 # - mean1, mean2, delta_mean (and optional alpha/beta from MoM if stored)
-# - bhattacharyya distance (ECDF-based overlap)
+# - overlap (ECDF-based)
 ```
 
 #### Step 4: Apply Biological Filtering
@@ -312,10 +312,10 @@ dmps = pair.find_dmps(
 # Filter by significance
 significant_dmps = dmps[dmps['q_value'] < alpha]
 
-# Filter by effect size
+# Filter by effect size and overlap
 filtered_dmps = significant_dmps[
     (significant_dmps['delta_mean'].abs() >= min_delta_mean) &
-    (significant_dmps['bhattacharyya'] <= max_bc)  # Low overlap
+    (significant_dmps['overlap'] <= max_bc)  # ECDF-based overlap; low overlap = better discrimination
 ]
 
 print(f"Significant DMPs: {len(significant_dmps)}")
@@ -461,7 +461,7 @@ with open('model.pkl', 'wb') as f:
 Minimum fraction of samples with coverage at a position:
 
 $$
-\frac{\min(N_1, N_2)}{\max(\text{total_samples}_1, \text{total_samples}_2)} \geq \text{min_N_pct}
+\frac{\min(N\_1, N\_2)}{\max(\text{total\_samples}\_1, \text{total\_samples}\_2)} \geq \text{min\_N\_pct}
 $$
 
 **Purpose**: Ensure sufficient sample support.
@@ -471,17 +471,17 @@ $$
 Minimum absolute mean difference:
 
 $$
-|\mu_1 - \mu_2| \geq \text{min_delta_mean}
+|\mu\_1 - \mu\_2| \geq \text{min\_delta\_mean}
 $$
 
 **Typical value**: 0.2 (20% methylation difference)
 
 #### 3. Distribution Overlap (`max_bc`)
 
-Maximum Bhattacharyya coefficient:
+Maximum allowed overlap (ECDF-based). Overlap is $\int_0^1 \min(f_1(x), f_2(x))\,dx$; positions with overlap above the threshold are filtered out:
 
 $$
-BC(\alpha_1, \beta_1, \alpha_2, \beta_2) \leq \text{max_bc}
+\text{overlap} \leq \text{max\_bc}
 $$
 
 **Typical value**: 0.6 (40% separation)
@@ -505,7 +505,7 @@ DMPs are ranked by **effect_size** only (computed in MethylCentroidPair: mean se
 For positions mapped to genes:
 
 $$
-\text{Gene Importance} = \sum_{i \in \text{gene}} \text{Importance}_i
+\text{Gene Importance} = \sum\_{i \in \text{gene}} \text{Importance}\_i
 $$
 
 **Use Case**: Identify most discriminative genes for biological interpretation.
@@ -571,14 +571,14 @@ centroid2_samples = centroid2.metadata['samples']
 
 ## API Reference
 
-### MethylModeler Class
+### MethylDetector Class
 
 Main class for DMP detection and classifier training:
 
 ```python
-class MethylModeler:
+class MethylDetector:
     def __init__(self, config: MethylModelerConfig):
-        """Initialize MethylModeler with configuration."""
+        """Initialize MethylDetector with configuration."""
     
     def run(self) -> MethylModelerResult:
         """Run complete DMP detection and classifier training pipeline."""
@@ -706,7 +706,7 @@ class MethylModelerResult(BaseModel):
 | `alpha` | float | 0.05 | FDR threshold for statistical significance |
 | `min_N_pct` | float | 0.10 | Minimum coverage percentage |
 | `min_delta_mean` | float | 0.2 | Minimum effect size (20% methylation difference) |
-| `max_bc` | float | 0.6 | Maximum Bhattacharyya coefficient (overlap threshold) |
+| `max_bc` | float | 0.6 | Maximum allowed overlap (ECDF-based; overlap threshold) |
 | `target_balanced_accuracy` | float | 0.95 | Target Balanced Accuracy for DMP selection |
 | `validation_mode` | str | "real" | Validation mode: "real" or "synthetic" |
 | `use_gpu` | bool | True | Enable GPU acceleration |
@@ -808,7 +808,7 @@ for chrom in chromosomes:
             ...
         )
         
-        detector = MethylModeler(config)
+        detector = MethylDetector(config)
         result = detector.run()
         
         print(f"{chrom}-{ctx}: {result.balanced_accuracy:.3f} "
@@ -822,7 +822,8 @@ for chrom in chromosomes:
 ### Example 1: Basic DMP Detection
 
 ```python
-from methyl_modeler import MethylModeler, MethylModelerConfig
+from methyl_detector import MethylDetector
+from methyl_detector.models.config import MethylModelerConfig
 
 # Configure detector
 config = MethylModelerConfig(
@@ -835,7 +836,7 @@ config = MethylModelerConfig(
 )
 
 # Run detection
-detector = MethylModeler(config)
+detector = MethylDetector(config)
 result = detector.run()
 
 print(f"Detected {len(result.all_dmps)} significant DMPs")
@@ -856,13 +857,13 @@ config = MethylModelerConfig(
     
     # Stricter filtering for highly discriminative DMPs
     min_delta_mean=0.3,      # 30% methylation difference
-    max_bc=0.4,              # 60% separation
+    max_bc=0.4,              # Stricter overlap threshold (ECDF-based)
     target_balanced_accuracy=0.98,  # Very high accuracy
     
     alpha=0.01               # Stricter FDR threshold
 )
 
-detector = MethylModeler(config)
+detector = MethylDetector(config)
 result = detector.run()
 ```
 
@@ -887,7 +888,7 @@ config = MethylModelerConfig(
     ]
 )
 
-detector = MethylModeler(config)
+detector = MethylDetector(config)
 result = detector.run()
 
 print(f"Validation Metrics:")
@@ -909,7 +910,7 @@ config = MethylModelerConfig(
     gene_annotation_file='/data/hg38_genes.bed'
 )
 
-detector = MethylModeler(config)
+detector = MethylDetector(config)
 result = detector.run()
 
 # Analyze gene-level importance
@@ -951,7 +952,7 @@ for chrom in chromosomes:
         )
         
         try:
-            detector = MethylModeler(config)
+            detector = MethylDetector(config)
             result = detector.run()
             
             results_summary.append({
@@ -989,7 +990,7 @@ config = MethylModelerConfig(
     target_balanced_accuracy=0.95
 )
 
-detector = MethylModeler(config)
+detector = MethylDetector(config)
 result = detector.run()
 
 # Step 2: Package model with metadata
@@ -1060,7 +1061,7 @@ config = MethylModelerConfig(
     ...,
     alpha=0.10,              # More lenient FDR
     min_delta_mean=0.1,      # Lower effect size threshold
-    max_bc=0.8,              # Allow more overlap
+    max_bc=0.8,              # Allow more overlap (ECDF-based)
     min_N_pct=0.05           # Lower coverage requirement
 )
 
@@ -1178,14 +1179,14 @@ with gzip.open('model.pkl.gz', 'wb') as f:
 
 ## Integration with MethylPipeline
 
-MethylModeler is a central component connecting centroids to classifiers:
+MethylDetector is a central component connecting centroids to classifiers:
 
 ### Pipeline Position
 
 ```
 MethylCentroid (Creates centroids with outlier removal)
         ↓
-MethylModeler (Detects DMPs, trains classifier)
+MethylDetector (Detects DMPs, trains classifier)
         ↓
 MethylClassifier (Classifies new samples)
 ```
@@ -1194,7 +1195,8 @@ MethylClassifier (Classifies new samples)
 
 ```python
 from methyl_centroid import MethylCentroid, MethylCentroidConfig
-from methyl_modeler import MethylModeler, MethylModelerConfig
+from methyl_detector import MethylDetector
+from methyl_detector.models.config import MethylModelerConfig
 from methyl_classifier import MethylClassifier
 
 # Step 1: Create centroids
@@ -1237,7 +1239,7 @@ detector_config = MethylModelerConfig(
     validation_mode='real'
 )
 
-detector = MethylModeler(detector_config)
+detector = MethylDetector(detector_config)
 detector_result = detector.run()
 
 # Step 3: Classify new samples
@@ -1302,7 +1304,7 @@ Where:
 
 ## License
 
-MethylModeler is licensed under the MIT License.
+MethylDetector is licensed under the MIT License.
 
 ---
 
@@ -1310,7 +1312,7 @@ MethylModeler is licensed under the MIT License.
 
 ```bibtex
 @software{methylmodeler2024,
-  title={MethylModeler: Statistical Detection of Differentially Methylated Positions with Biological Filtering},
+  title={MethylDetector: Statistical Detection of Differentially Methylated Positions with Biological Filtering},
   author={MethylPipeline Contributors},
   year={2024},
   url={https://github.com/yourusername/MethylPipeline}
@@ -1319,7 +1321,7 @@ MethylModeler is licensed under the MIT License.
 
 ---
 
-*End of MethylModeler Comprehensive Documentation*
+*End of MethylDetector Comprehensive Documentation*
 
 **Last Updated**: October 2024  
 **Version**: 1.0.0

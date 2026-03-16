@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-Example usage of MethylModeler for genomics sample classification.
+Example usage of MethylDetector for genomics sample classification.
 
-This example demonstrates how to use MethylModeler programmatically
+This example demonstrates how to use MethylDetector programmatically
 to classify two groups of genomics samples using divergences.
 """
 
 import logging
 from pathlib import Path
-from methyl_modeler import MethylModeler
-from methyl_modeler.models.config import MethylModelerConfig
+from methyl_detector import MethylDetector
+from methyl_detector.models.config import MethylModelerConfig
 
 # Setup logging
 # Use MethylUtils logging if available
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    """Example usage of MethylModeler."""
+    """Example usage of MethylDetector."""
     
     # Example file paths (replace with your actual data paths)
     centroid_path = Path("/home/ubuntu/Work/output_workflows/download_samples_azenta/4j03r7051525/1-CG.h5")
@@ -49,14 +49,14 @@ def main():
     )
     
     # Initialize detector
-    detector = MethylModeler(config)
+    detector = MethylDetector(config)
     
     # Run analysis
     result = detector.run()
     
     # Display results
     print("\n" + "="*60)
-    print("MethylModeler Analysis Results")
+    print("MethylDetector Analysis Results")
     print("="*60)
     
     print("\nModel Parameters:")

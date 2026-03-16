@@ -50,7 +50,7 @@ Multi-method clustering (HDBSCAN, Hierarchical, Centroid-based) with forced grou
 
 📚 [MethylCluster README](packages/methylcluster/README.md) | [Comprehensive Guide](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
 
-#### 4. **MethylModeler (MethylDetector)** – DMP Detection & Model Packaging
+#### 4. **MethylDetector** – DMP Detection & Model Packaging
 Detects Differentially Methylated Positions (ECDF-based), applies biological filters, optimizes Balanced Accuracy, and exports classifier bundles for MethylClassifier. **CLI**: `methyl-detector`, `methyl-detector-explorer` (explore refinement and effect-size options).
 
 📚 [MethylDetector README](packages/methyldetector/README.md) | [Comprehensive Guide](packages/methyldetector/docs/MethylDetector_Comprehensive_Documentation.md) | [Explorer](packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md)
@@ -233,7 +233,8 @@ cancer_centroid = MethylCentroid(
 ).build_centroid()
 
 # 2. Detect DMPs and train classifier
-from methyl_modeler import MethylModeler, MethylModelerConfig
+from methyl_detector import MethylDetector
+from methyl_detector.models.config import MethylModelerConfig
 
 config = MethylModelerConfig(
     chromosome="1",
@@ -244,8 +245,8 @@ config = MethylModelerConfig(
     target_balanced_accuracy=0.95
 )
 
-modeler = MethylModeler(config)
-result = modeler.run()
+detector = MethylDetector(config)
+result = detector.run()
 print(f"Model trained with {result.total_biological_dmps} high-confidence DMPs")
 print(f"Classifier saved to: {result.classifier_model_path}")
 
@@ -381,7 +382,7 @@ See [MethylPipeline Integration Documentation](docs/METHYLPIPELINE_COMPREHENSIVE
 # Process all chromosomes in parallel (one config per chromosome)
 for chrom in 1 2 3 X; do
     CUDA_VISIBLE_DEVICES=$((chrom % 4)) \
-    python -m methyl_modeler.cli configs/chr${chrom}-CG.json &
+    python -m methyl_detector configs/chr${chrom}-CG.json &
 done
 wait
 ```

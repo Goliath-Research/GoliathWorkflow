@@ -2,7 +2,7 @@
 
 ## Overview
 
-MethylModeler now exports **three separate CSV files** representing the three stages of DMP selection, allowing you to map each stage to genes and compare their biological interpretation.
+MethylDetector exports **three separate CSV files** representing the three stages of DMP selection, allowing you to map each stage to genes and compare their biological interpretation.
 
 ### Current multi-context export (actual filenames)
 
@@ -21,7 +21,7 @@ The multi-context pipeline currently writes:
 This file contains **all DMPs that pass biological significance filters**:
 - Statistical significance (q-value ≤ alpha)
 - Minimum delta mean (|Δμ| ≥ min_delta_mean)
-- Maximum Bhattacharyya coefficient (BC ≤ max_bc)
+- Maximum overlap (ECDF-based; overlap ≤ max_bc)
 - Computed effect size and biological importance
 
 **Purpose**: Shows the complete set of biologically relevant DMPs before any optimization.

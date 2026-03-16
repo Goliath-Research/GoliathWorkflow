@@ -1,4 +1,4 @@
-"""Simplified result models for MethylModeler analysis."""
+"""Simplified result models for MethylDetector analysis."""
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -48,7 +48,7 @@ class ComparisonStats(NumpyCompatibleModel):
 
 
 class MethylModelerResult(NumpyCompatibleModel):
-    """Simplified result from MethylModeler analysis (DataFrame-centric)."""
+    """Simplified result from MethylDetector analysis (DataFrame-centric)."""
 
     # Core results - DataFrame-based storage only
     biologically_significant_dmps_df: Optional[Any] = Field(
@@ -92,7 +92,7 @@ class MethylModelerResult(NumpyCompatibleModel):
 
     # Metadata
     timestamp: str = Field(..., description="Analysis timestamp")
-    version: str = Field(..., description="MethylModeler version")
+    version: str = Field(..., description="MethylDetector version")
     config_summary: Dict[str, Any] = Field(..., description="Key configuration parameters used")
 
 
@@ -102,14 +102,14 @@ class MethylModelerResult(NumpyCompatibleModel):
 
 
 class MethylModelerSummary(BaseModel):
-    """Summary configuration for completed MethylModeler analysis."""
+    """Summary configuration for completed MethylDetector analysis."""
 
     # -----------------------
     # Analysis identification
     # -----------------------
     analysis_id: str = Field(..., description="Unique identifier for this analysis")
     timestamp: str = Field(..., description="When analysis was completed")
-    version: str = Field(..., description="MethylModeler version used")
+    version: str = Field(..., description="MethylDetector version used")
 
     # -----------------------
     # Input configuration
@@ -195,7 +195,7 @@ class ValidationResults(NumpyCompatibleModel):
 
 
 class MethylModelerValidationResults(NumpyCompatibleModel):
-    """Final validation results from MethylModeler analysis."""
+    """Final validation results from MethylDetector analysis."""
 
     # Core identification
     chromosome: str = Field(..., description="Chromosome analyzed")
@@ -252,7 +252,7 @@ class MethylModelerValidationResults(NumpyCompatibleModel):
 # ✅ More expressive data manipulation
 # ✅ Easier testing and debugging
 # Architecture:
-# - DataFrame operations handled directly in MethylModeler class
+# - DataFrame operations handled directly in MethylDetector class
 # - MethylModelerResult stores DataFrame directly (no conversion)
 # - Direct CSV export from DataFrames (no object serialization)
 # - Pydantic models used only for config/results metadata 

@@ -64,7 +64,7 @@ example-run: ## Run example analysis (requires sample data)
 cli-help: ## Show CLI help
 	poetry run methyl-detector --help
 
-run: ## Run MethylModeler with config file
+run: ## Run MethylDetector with config file
 	@if [ -z "$(CONFIG)" ]; then \
 		echo "Error: CONFIG variable is required"; \
 		echo "Usage: make run CONFIG=path/to/config.json"; \
@@ -72,7 +72,7 @@ run: ## Run MethylModeler with config file
 	fi
 	python run_methyl_modeler.py $(CONFIG)
 
-run-verbose: ## Run MethylModeler with verbose logging
+run-verbose: ## Run MethylDetector with verbose logging
 	@if [ -z "$(CONFIG)" ]; then \
 		echo "Error: CONFIG variable is required"; \
 		echo "Usage: make run-verbose CONFIG=path/to/config.json"; \

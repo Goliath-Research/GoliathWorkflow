@@ -11,7 +11,7 @@ MethylMapper provides two complementary approaches for mapping Differentially Me
 1. **Azure SQL Database Integration** (`methyl_mapper`) - Enterprise-scale mapping with stored procedures
 2. **Bedtools-based Local Processing** (`methyl_mapper_bedtools`) - Fast local mapping with disease enrichment
 
-Both integrate with the MethylModeler pipeline to provide gene-level interpretation of methylation analysis results.
+Both integrate with the MethylDetector pipeline to provide gene-level interpretation of methylation analysis results.
 
 ## Quick Start
 

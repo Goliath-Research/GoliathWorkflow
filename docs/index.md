@@ -14,7 +14,7 @@ Welcome to the documentation for MethylPipeline, a unified genomics pipeline for
 - [MethylUtils](../packages/methylutils/README.md)
 - [MethylCentroid](../packages/methylcentroid/README.md) (includes methyl-centroid-explorer)
 - [MethylCluster](../packages/methylcluster/README.md)
-- [MethylModeler (MethylDetector)](../packages/methyldetector/README.md) | [MethylDetector Explorer](../packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md) (optional)
+- [MethylDetector](../packages/methyldetector/README.md) | [MethylDetector Explorer](../packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md) (optional)
 - [MethylMapper](../packages/methylmapper/README.md)
 - [MethylClassifier](../packages/methylclassifier/README.md) (multi-class + BMM)
 - [MethylEnricher](../packages/methylenricher/README.md) (functional enrichment from MethylMapper CSV/TSV)

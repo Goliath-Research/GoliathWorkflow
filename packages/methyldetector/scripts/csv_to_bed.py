@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Convert MethylModeler CSV output to BED format for gene annotation.
+Convert MethylDetector CSV output to BED format for gene annotation.
 
 Usage:
     python csv_to_bed.py <input_csv> [output_bed]
@@ -20,7 +20,7 @@ from pathlib import Path
 
 def csv_to_bed(csv_path: Path, output_path: Path = None, include_context: bool = True):
     """
-    Convert MethylModeler CSV to BED format.
+    Convert MethylDetector CSV to BED format.
     
     Args:
         csv_path: Path to input CSV file

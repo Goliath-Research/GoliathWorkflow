@@ -1,4 +1,4 @@
-"""Command line interface for MethylModeler."""
+"""Command line interface for MethylDetector."""
 
 from .main import main
 

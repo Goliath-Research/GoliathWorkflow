@@ -1,4 +1,4 @@
-"""File utility functions for MethylModeler."""
+"""File utility functions for MethylDetector."""
 
 import json
 import logging
@@ -28,7 +28,7 @@ def create_output_directory(output_dir: Union[str, Path]) -> Path:
 
 def load_config_from_json(json_path: Union[str, Path]) -> MethylModelerConfig:
     """
-    Load MethylModeler configuration from JSON file.
+    Load MethylDetector configuration from JSON file.
 
     The configuration file must contain valid MethylModelerConfig parameters.
     Warns about unused parameters that are not defined in the model.

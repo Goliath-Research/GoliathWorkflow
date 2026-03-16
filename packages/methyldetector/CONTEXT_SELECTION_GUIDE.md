@@ -2,7 +2,7 @@
 
 ## Overview
 
-MethylModeler can analyze one or more methylation contexts (CG, CHG, CHH). The `contexts` parameter in the configuration file controls which contexts are included in the analysis.
+MethylDetector can analyze one or more methylation contexts (CG, CHG, CHH). The `contexts` parameter in the configuration file controls which contexts are included in the analysis.
 
 ## Context Parameter
 
@@ -130,7 +130,7 @@ Based on actual analysis results:
 
 ### Multi-Context Weighting
 
-When using multiple contexts, MethylModeler can apply context weighting:
+When using multiple contexts, MethylDetector can apply context weighting:
 
 ```json
 {
@@ -289,7 +289,7 @@ A: Run separate analyses with `["CG"]`, `["CHG"]`, and `["CHH"]` individually, t
 A: Yes! Each run is independent. Just update the config and output directory.
 
 **Q: What if my centroid files don't exist for all contexts?**  
-A: MethylModeler will skip missing contexts with a warning. Only specify contexts you have data for.
+A: MethylDetector will skip missing contexts with a warning. Only specify contexts you have data for.
 
 **Q: Does context selection affect validation accuracy?**  
 A: Yes! Cleaner signal (e.g., CG only) typically leads to better validation performance.

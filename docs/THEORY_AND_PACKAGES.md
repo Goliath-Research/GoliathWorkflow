@@ -10,7 +10,7 @@ This document gives an overview of MethylPipeline and the theoretical foundation
 2. [MethylUtils](#methylutils)
 3. [MethylCentroid](#methylcentroid)
 4. [MethylCluster](#methylcluster)
-5. [MethylDetector (MethylModeler)](#methyldetector-methylmodeler)
+5. [MethylDetector](#methyldetector)
 6. [MethylClassifier](#methylclassifier)
 7. [MethylMapper](#methylmapper)
 8. [MethylEnricher](#methylenricher)
@@ -35,7 +35,7 @@ MethylPipeline is a unified genomics pipeline for methylation-based biomarker di
 | 1 | **MethylUtils** | Foundation: core types, GPU/IO, distance metrics, ECDF-based comparison, Beta statistics |
 | 2 | **MethylCentroid** | Build representative centroids (N, Sx, Sx2; optional bins + bin_counts in methylation_data) per group; Explorer CLI for options |
 | 3 | **MethylCluster** | Exploratory clustering and QC (HDBSCAN, hierarchical, centroid-based) |
-| 4 | **MethylDetector** | ECDF-based DMP detection, biological filters, classifier training, model packaging; Explorer CLI *(documented as MethylModeler)* |
+| 4 | **MethylDetector** | ECDF-based DMP detection, biological filters, classifier training, model packaging; Explorer CLI |
 | 5 | **MethylClassifier** | Load packaged models and score samples (posterior probabilities) |
 | 6 | **MethylMapper** | Map DMPs to genes/features; optional disease enrichment (Grok, Open Targets, DisGeNET) |
 | 7 | **MethylEnricher** | ORA/Enrichr enrichment on gene lists from MethylMapper |
@@ -43,7 +43,7 @@ MethylPipeline is a unified genomics pipeline for methylation-based biomarker di
 | 9 | **MethylPredictor** | Run MethylClassifier on test sets and compute classification metrics |
 | 10 | **MethylValidation** | Validation workflows (e.g. Monte Carlo, stratified splits); runs centroid, detector, classifier, predictor per run |
 
-**Note:** The DMP detection and model-packaging component is implemented by the **methyldetector** package and is referred to in user-facing docs as **MethylModeler**. Centroid HDF5 uses only the `methylation_data` group; binned stats are `bins` (attr) + `bin_counts` (dataset); bin edges are derived as uniform in [0,1].
+**Note:** The DMP detection and model-packaging component is implemented by the **methyldetector** package (**MethylDetector**). Centroid HDF5 uses only the `methylation_data` group; binned stats are `bins` (attr) + `bin_counts` (dataset); bin edges are derived as uniform in [0,1].
 
 ### High-Level Data Flow
 
@@ -129,7 +129,7 @@ and optionally $\Sigma n$, $\Sigma mC$, $\Sigma uC$, higher moments, and binned 
 
 ---
 
-## MethylDetector (MethylModeler)
+## MethylDetector
 
 **Role:** Detect differentially methylated positions between two (or more) centroids, apply biological filters (e.g. $\Delta\mu$, overlap, effect size), train and validate a classifier, and export a model bundle for MethylClassifier.
 

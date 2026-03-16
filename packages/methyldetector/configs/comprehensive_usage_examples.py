@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Comprehensive usage examples for MethylModeler.
+Comprehensive usage examples for MethylDetector.
 
-This file demonstrates all the different ways to use MethylModeler:
+This file demonstrates all the different ways to use MethylDetector:
 1. Command line interface with parameters
 2. Command line interface with JSON configuration
 3. Python API with Pydantic configuration model
@@ -17,9 +17,9 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Any
 
-from methyl_modeler import MethylModeler
-from methyl_modeler.models.config import MethylModelerConfig, MultipleComparisonConfig
-from methyl_modeler.models.results import MethylModelerResult
+from methyl_detector import MethylDetector
+from methyl_detector.models.config import MethylDetectorConfig
+from methyl_detector.models.results import MethylDetectorResult
 
 
 def setup_logging() -> None:
@@ -39,7 +39,7 @@ def example_1_command_line_with_parameters() -> None:
     """
     Example 1: Command line interface with parameters.
     
-    This demonstrates how to run MethylModeler using command line parameters.
+    This demonstrates how to run MethylDetector using command line parameters.
     """
     print("\n" + "="*60)
     print("Example 1: Command Line Interface with Parameters")
@@ -74,7 +74,7 @@ def example_2_command_line_with_json_config() -> None:
     """
     Example 2: Command line interface with JSON configuration.
     
-    This demonstrates how to run MethylModeler using a JSON configuration file
+    This demonstrates how to run MethylDetector using a JSON configuration file
     created from a Pydantic model for type safety.
     """
     print("\n" + "="*60)
@@ -83,7 +83,7 @@ def example_2_command_line_with_json_config() -> None:
     
     try:
         # Create configuration using Pydantic model for type safety
-        config: MethylModelerConfig = MethylModelerConfig(
+        config: MethylDetectorConfig = MethylDetectorConfig(
             centroid1_path=Path("/path/to/centroid1.h5"),
             centroid2_path=Path("/path/to/centroid2.h5"),
             output_dir=Path("/home/ubuntu/Work/output_workflows/arabidopsis/detection/WT-msh1"),
@@ -135,7 +135,7 @@ def example_3_python_api_with_pydantic_config() -> None:
     """
     Example 3: Python API using Pydantic configuration model.
     
-    This demonstrates how to use MethylModeler programmatically with
+    This demonstrates how to use MethylDetector programmatically with
     type-safe Pydantic configuration.
     """
     print("\n" + "="*60)
@@ -144,7 +144,7 @@ def example_3_python_api_with_pydantic_config() -> None:
     
     try:
         # Create configuration using Pydantic model
-        config: MethylModelerConfig = MethylModelerConfig(
+        config: MethylDetectorConfig = MethylDetectorConfig(
             centroid1_path=Path("/path/to/centroid1.h5"),
             centroid2_path=Path("/path/to/centroid2.h5"),
             output_dir=Path("./results"),
@@ -166,11 +166,11 @@ def example_3_python_api_with_pydantic_config() -> None:
         print(f"  GPU acceleration: {config.use_gpu}")
         
         # Initialize detector
-        detector: MethylModeler = MethylModeler(config)
+        detector = MethylDetector(config)
         print("\nDetector initialized successfully!")
         
         # Run analysis (commented out as it requires real data)
-        result: MethylModelerResult = detector.run()
+        result: MethylDetectorResult = detector.run()
         print(f"Analysis completed! Found {result.comparisons[0].significant_count} significant positions")
         
     except Exception as e:
@@ -182,7 +182,7 @@ def example_4_python_api_with_direct_parameters() -> None:
     """
     Example 4: Python API using direct parameters.
     
-    This demonstrates how to use MethylModeler programmatically with
+    This demonstrates how to use MethylDetector programmatically with
     direct parameter passing (without Pydantic model).
     """
     print("\n" + "="*60)
@@ -191,7 +191,7 @@ def example_4_python_api_with_direct_parameters() -> None:
     
     try:
         # Initialize detector with direct parameters
-        detector: MethylModeler = MethylModeler(
+        detector = MethylDetector(
             centroid1_path=Path("/path/to/centroid1.h5"),
             centroid2_path=Path("/path/to/centroid2.h5"),
             output_dir=Path("./results"),
@@ -211,7 +211,7 @@ def example_4_python_api_with_direct_parameters() -> None:
         print(f"  GPU acceleration: {detector.config.use_gpu}")
         
         # Run analysis (commented out as it requires real data)
-        result: MethylModelerResult = detector.run()
+        result: MethylDetectorResult = detector.run()
         print(f"Analysis completed! Found {result.comparisons[0].significant_count} significant positions")
         
     except Exception as e:
@@ -254,11 +254,11 @@ def example_5_multiple_comparisons_programmatically() -> None:
         print(f"  Total comparisons: {len(config.chromosomes) * len(config.contexts)}")
         
         # Initialize detector
-        detector: MethylModeler = MethylModeler(config)
+        detector = MethylDetector(config)
         print("\nDetector initialized successfully!")
         
         # Run multiple comparisons (commented out as it requires real data)
-        result: MethylModelerResult = detector.run()
+        result: MethylDetectorResult = detector.run()
         print("Multiple comparisons completed!")
         for comparison in result.comparisons:
             print(f"  {comparison.name}: {comparison.significant_count} significant positions")
@@ -325,7 +325,7 @@ def example_7_container_usage() -> None:
     """
     Example 7: Container usage.
     
-    This demonstrates how to use MethylModeler within the Docker container.
+    This demonstrates how to use MethylDetector within the Docker container.
     """
     print("\n" + "="*60)
     print("Example 7: Container Usage")
@@ -333,7 +333,7 @@ def example_7_container_usage() -> None:
     
     print("1. Build and start the container:")
     print("   ```bash")
-    print("   cd /home/ubuntu/MethylModeler")
+    print("   cd /path/to/project")
     print("   make docker-build")
     print("   make docker-run")
     print("   ```")
@@ -350,7 +350,7 @@ def example_7_container_usage() -> None:
     
     print("\n4. Run analysis:")
     print("   ```bash")
-    print("   python -m methyl_modeler --config examples/config_WT-msh1.json")
+    print("   python -m methyl_detector --config examples/config_WT-msh1.json")
     print("   ```")
     
     print("\n5. Container management:")
@@ -365,9 +365,9 @@ def main() -> None:
     """Run all examples."""
     setup_logging()
     
-    print("MethylModeler Comprehensive Usage Examples")
+    print("MethylDetector Comprehensive Usage Examples")
     print("="*60)
-    print("This file demonstrates all the different ways to use MethylModeler:")
+    print("This file demonstrates all the different ways to use MethylDetector:")
     print("1. Command line interface with parameters")
     print("2. Command line interface with JSON configuration")
     print("3. Python API with Pydantic configuration model")

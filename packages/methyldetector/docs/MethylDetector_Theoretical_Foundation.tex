@@ -188,18 +188,21 @@ against small numerical drift in spline derivatives:
     {\displaystyle\int_0^1 f_k(t)\,dt}, \qquad k \in \{1,2\}.
 \end{equation}
 
-\subsection{Discrete Bhattacharyya Approximation}
+\subsection{Discrete Overlap from Bin Counts}
 
-In the fast path the overlap is approximated by the discrete Bhattacharyya
-coefficient computed directly from bin counts:
+In the fast path the overlap is approximated from bin counts (no Beta
+parameters): discrete probabilities \(p_{kb}\) from each centroid's bin counts
+are used to compute an overlap measure:
 
 \begin{equation}
-  O_\mathrm{Bh} = \sum_{b=1}^{B} \sqrt{p_{1b}\cdot p_{2b}},
+  O = \sum_{b=1}^{B} \sqrt{p_{1b}\cdot p_{2b}},
   \qquad p_{kb} = \frac{\mathrm{bc}_{kb}}{\sum_{b'}\mathrm{bc}_{kb'}}.
 \end{equation}
 
 This is \(\mathcal{O}(n_\mathrm{pos} \cdot B)\) and is used for the full
-position set before the statistical test reduces it.
+position set before the statistical test reduces it. The pipeline uses
+ECDF-only comparison; overlap is also computed continuously via
+\(\int \min(f_1, f_2)\,dx\) for the reduced DMP set.
 
 % -----------------------------------------------------------------------
 \section{Canonical Effect Size}

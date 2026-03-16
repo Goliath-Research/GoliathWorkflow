@@ -1,5 +1,5 @@
 """
-MethylModeler - A genomics sample classification tool using divergences.
+MethylDetector - DMP detection and classifier training using ECDF-based comparison.
 
 This package provides tools for classifying two groups of genomics samples
 using divergences calculated against a common reference sample (centroid).
@@ -13,7 +13,7 @@ except ImportError:
     _METHYL_UTILS_AVAILABLE = False
     import warnings
     warnings.warn(
-        "MethylUtils not found. MethylUtils is a hard requirement for MethylModeler. "
+        "MethylUtils not found. MethylUtils is a hard requirement for MethylDetector. "
         "Please ensure MethylUtils is installed and available in PYTHONPATH. "
         "You can set the METHYL_UTILS_PATH environment variable or use the run_in_container.sh script.",
         ImportWarning,

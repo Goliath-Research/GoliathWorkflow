@@ -1,6 +1,6 @@
-# MethylModeler Configuration Examples
+# MethylDetector Configuration Examples
 
-This directory contains example configuration files for different MethylModeler analysis scenarios.
+This directory contains example configuration files for different MethylDetector analysis scenarios.
 
 ## Configuration Files
 
@@ -12,9 +12,9 @@ Configuration for comparing two specific centroids (e.g., WT vs msh1 for chromos
 
 **Usage:**
 ```bash
-python -m methyl_modeler examples/config_single_comparison.json
+python -m methyl_detector examples/config_single_comparison.json
 # Or with verbose output:
-python -m methyl_modeler examples/config_single_comparison.json --verbose
+python -m methyl_detector examples/config_single_comparison.json --verbose
 ```
 
 ### 3. `config_multiple_chromosomes.json` - Multiple Comparisons
@@ -22,9 +22,9 @@ Configuration for running comparisons across multiple chromosomes and contexts.
 
 **Usage:**
 ```bash
-python -m methyl_modeler examples/config_multiple_chromosomes.json
+python -m methyl_detector examples/config_multiple_chromosomes.json
 # Or with verbose output:
-python -m methyl_modeler examples/config_multiple_chromosomes.json --verbose
+python -m methyl_detector examples/config_multiple_chromosomes.json --verbose
 ```
 
 This will run comparisons for:
@@ -92,7 +92,7 @@ For multiple comparisons, the tool expects centroid files to follow this naming 
 - `{prefix}_significant_regions.csv` - Grouped significant regions
 
 ### Multiple Comparisons
-- `methyl_modeler_summary_report.txt` - Overall summary
+- `methyl_detector_summary_report.txt` (or project-specific summary) - Overall summary
 - `all_comparisons_summary.csv` - Summary table for all comparisons
 - Individual comparison files in subdirectories
 ## Tips

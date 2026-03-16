@@ -1,6 +1,6 @@
-# MethylModeler Configuration Examples
+# MethylDetector Configuration Examples
 
-This directory contains example JSON configuration files for different MethylModeler analysis scenarios.
+This directory contains example JSON configuration files for different MethylDetector analysis scenarios.
 
 ## Configuration Files
 
@@ -14,9 +14,9 @@ Configuration for comparing two specific centroids (e.g., WT vs msh1 for chromos
 
 **Usage:**
 ```bash
-python -m methyl_modeler examples/config_single_comparison.json
+python -m methyl_detector examples/config_single_comparison.json
 # Or with verbose output:
-python -m methyl_modeler examples/config_single_comparison.json --verbose
+python -m methyl_detector examples/config_single_comparison.json --verbose
 ```
 
 #### `config_strict_significance.json` - Conservative Analysis
@@ -35,9 +35,9 @@ Configuration for running comparisons across multiple chromosomes and contexts i
 
 **Usage:**
 ```bash
-python -m methyl_modeler examples/config_WT-msh1.json
+python -m methyl_detector examples/config_WT-msh1.json
 # Or with verbose output:
-python -m methyl_modeler examples/config_WT-msh1.json --verbose
+python -m methyl_detector examples/config_WT-msh1.json --verbose
 ```
 
 #### `config_multiple_chromosomes.json` - Multiple Comparisons
@@ -58,7 +58,7 @@ This will run comparisons for:
 
 4. **Run the analysis**:
    ```bash
-   python -m methyl_modeler examples/your_config.json --verbose
+   python -m methyl_detector examples/your_config.json --verbose
    ```
 
 ## Configuration Parameters

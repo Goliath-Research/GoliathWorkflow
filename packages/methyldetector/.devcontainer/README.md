@@ -1,6 +1,6 @@
-# MethylModeler Development Container
+# MethylDetector Development Container
 
-This directory contains the configuration for using Cursor (or VS Code) with the MethylModeler project inside the epimethyl container.
+This directory contains the configuration for using Cursor (or VS Code) with the MethylDetector project inside the epimethyl container.
 
 ## Overview
 
@@ -51,14 +51,14 @@ exit
 ### 3. Open in Cursor
 
 1. Open Cursor
-2. Open the `/home/ubuntu/MethylModeler` folder
+2. Open the project folder (e.g. MethylPipeline or MethylDetector)
 3. Cursor should automatically detect the `.devcontainer/devcontainer.json` file
 4. Click "Reopen in Container" when prompted
 
 ## What the Devcontainer Provides
 
 ### Volume Mounts
-- `/home/ubuntu/MethylModeler` - The main project directory
+- Project root - The main project directory
 - `/home/ubuntu/MethylUtils` - Shared utilities and packages
 - `/home/ubuntu/Work` - Work directory for data and results
 - `/home/ubuntu/working_dir` - Additional working directory
@@ -88,9 +88,9 @@ exit
 
 ## Usage
 
-### Running MethylModeler
+### Running MethylDetector
 
-Once inside the container, you can run MethylModeler as usual:
+Once inside the container, you can run MethylDetector as usual:
 
 ```bash
 # Install dependencies (done automatically, but can be run manually)
@@ -100,10 +100,10 @@ poetry install --with dev
 make test
 
 # Run an example analysis
-python -m methyl_modeler examples/config_WT-msh1.json
+python -m methyl_detector examples/config_WT-msh1.json
 
 # Run with verbose output
-python -m methyl_modeler examples/config_WT-msh1.json --verbose
+python -m methyl_detector examples/config_WT-msh1.json --verbose
 ```
 
 ### Using MethylUtils
@@ -181,7 +181,7 @@ docker exec -it epimethyl /home/ubuntu/Work/cuda/setup_methyl_packages.sh
 ```bash
 # Fix permissions
 sudo chown -R ubuntu:ubuntu /home/ubuntu/MethylUtils
-sudo chown -R ubuntu:ubuntu /home/ubuntu/MethylModeler
+sudo chown -R ubuntu:ubuntu /path/to/project
 ```
 
 ## Development Workflow

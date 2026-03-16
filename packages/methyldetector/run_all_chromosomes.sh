@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Run MethylModeler for all chromosomes (4-22, X) and all contexts (CG, CHG, CHH)
+# Run MethylDetector for all chromosomes (4-22, X) and all contexts (CG, CHG, CHH)
 #
 
 set -e  # Exit on error
@@ -15,7 +15,7 @@ CONTEXTS=(CG CHG CHH)
 # Log file
 LOG_FILE="run_all_$(date +%Y%m%d_%H%M%S).log"
 
-echo "Starting MethylModeler analysis for chromosomes 4-22 and X" | tee -a "$LOG_FILE"
+echo "Starting MethylDetector analysis for chromosomes 4-22 and X" | tee -a "$LOG_FILE"
 echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
 echo "Started at: $(date)" | tee -a "$LOG_FILE"
 echo "======================================================" | tee -a "$LOG_FILE"
@@ -42,7 +42,7 @@ for CHROM in "${CHROMOSOMES[@]}"; do
       continue
     fi
     
-    # Run MethylModeler (md script handles container execution)
+    # Run MethylDetector (md script handles container execution)
     if ./md "$CONFIG" >> "$LOG_FILE" 2>&1; then
       echo "✅ SUCCESS: Chromosome $CHROM, Context $CTX" | tee -a "$LOG_FILE"
     else

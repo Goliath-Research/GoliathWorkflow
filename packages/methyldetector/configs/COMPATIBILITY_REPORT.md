@@ -1,7 +1,7 @@
-# MethylModeler Config Compatibility Report for create_all_models.py
+# MethylDetector Config Compatibility Report for create_all_models.py
 
 ## Summary
-All **22 JSON config files** in the MethylModeler configs directory are compatible with `create_all_models.py`.
+All **22 JSON config files** in the MethylDetector configs directory are compatible with `create_all_models.py`.
 
 ## Compatibility Status
 
@@ -31,7 +31,7 @@ The `create_all_models.py` script supports three config formats:
 ### Format 3: centroid1_path + centroid2_path → converted (12 configs)
 - `WT-msh1-1-CG_config.json`
 - `fdr_methods_example.json`
-- `methyl_modeler_example.json`
+- `methyl_detector_example.json` (or similar)
 - `pb-c1c2-1-CG_config.json`
 - `pb-ch-1-CG_config.json`
 - `pb-hc1-1-CG_config.json`

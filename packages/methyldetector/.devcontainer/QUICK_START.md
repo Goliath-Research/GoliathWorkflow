@@ -1,4 +1,4 @@
-# Quick Start Guide - MethylModeler DevContainer
+# Quick Start Guide - MethylDetector DevContainer
 
 ## ✅ Docker Access Fixed!
 
@@ -8,7 +8,7 @@ The Docker permissions have been successfully configured. You can now use Cursor
 
 ### 1. Open Cursor
 - Launch Cursor
-- Open the `/home/ubuntu/MethylModeler` folder
+- Open the MethylPipeline (or MethylDetector) project folder
 
 ### 2. Connect to Container
 - Cursor should automatically detect the `.devcontainer/devcontainer.json` file
@@ -26,8 +26,8 @@ which python
 # Test MethylUtils
 python -c "from methyl_utils.gpu_detection import print_gpu_status; print_gpu_status()"
 
-# Test MethylModeler
-python -c "import methyl_modeler; print('MethylModeler imported successfully')"
+# Test MethylDetector
+python -c "import methyl_detector; print('MethylDetector imported successfully')"
 
 # Run tests
 make test
@@ -73,4 +73,4 @@ If you encounter any issues:
 
 ## Success! 🎉
 
-Your MethylModeler development environment is now ready with full GPU support and all necessary tools configured.
+Your MethylDetector development environment is now ready with full GPU support and all necessary tools configured.

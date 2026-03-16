@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create MethylModeler models for all chromosomes.
+Create MethylDetector models for all chromosomes.
 
 This script takes a single config.json file and generates configs for all chromosomes,
 processing each chromosome with all contexts (CG, CHG, CHH) in a single run.
@@ -130,7 +130,7 @@ def execute_modeler_script_with_config(config_dict: Dict[str, Any], modeler_scri
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Create MethylModeler models for all chromosomes (processing all contexts per chromosome)"
+        description="Create MethylDetector models for all chromosomes (processing all contexts per chromosome)"
     )
     parser.add_argument(
         "config_file",

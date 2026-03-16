@@ -187,12 +187,12 @@ from methyl_detector.utils.file_utils import load_config_from_json
 
 # Load configuration
 config = load_config_from_json("config.json")
-# or build MethylModelerConfig directly
+# or build MethylModelerConfig directly (MethylDetector config)
 
 detector = MethylDetector(config)
 result = detector.run()
 
-# Single chromosome: result is MethylModelerResult
+# Single chromosome: result is MethylModelerResult (MethylDetector result)
 # Multiple chromosomes: result is list of MethylModelerResult
 if isinstance(result, list):
     for r in result:

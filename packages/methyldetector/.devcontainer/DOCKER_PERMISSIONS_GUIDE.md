@@ -87,7 +87,7 @@ sudo docker-compose up -d
 2. **Connect to the running container**:
    - In Cursor, use "Remote-Containers: Attach to Running Container"
    - Select the `epimethyl` container
-   - Choose `/home/ubuntu/MethylModeler` as the workspace folder
+   - Choose the project folder as the workspace folder
 
 ### Solution 5: Use VS Code Server in Container
 
@@ -109,7 +109,7 @@ code-server --bind-addr 0.0.0.0:8080 --auth none
 
 3. **Access via web browser**:
    - Open `http://localhost:8080` in your browser
-   - Open the `/home/ubuntu/MethylModeler` folder
+   - Open the project folder
 
 ## Verification Steps
 

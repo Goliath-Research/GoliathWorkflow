@@ -2,7 +2,7 @@
 """
 Example script demonstrating binary export functionality for DMP and DMR data.
 
-This script shows how to use the enhanced MethylModeler to export significant
+This script shows how to use MethylDetector to export significant
 positions and regions in both Parquet and HDF5 formats with the naming convention:
 - {chr}-{ctx}-dmp.ext for differentially methylated positions
 - {chr}-{ctx}-dmr.ext for differentially methylated regions
@@ -17,13 +17,13 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from methyl_modeler import MethylModeler
-from methyl_modeler.models.config import MethylModelerConfig
+from methyl_detector import MethylDetector
+from methyl_detector.models.config import MethylModelerConfig
 
 
 def main():
     """Demonstrate binary export functionality."""
-    print("MethylModeler Binary Export Example")
+    print("MethylDetector Binary Export Example")
     print("=" * 50)
     
     # Example file paths (modify these to match your actual files)
@@ -78,8 +78,8 @@ def main():
     
     try:
         # Initialize detector
-        print("🚀 Initializing MethylModeler...")
-        detector = MethylModeler(config)
+        print("🚀 Initializing MethylDetector...")
+        detector = MethylDetector(config)
         
         # Run analysis
         print("🔬 Running DMP detection analysis...")

@@ -24,7 +24,7 @@ Create a JSON configuration file with only the essential parameters:
   "alpha": 0.01,
   "min_delta_mean": 0.2,
   "max_bc": 0.6,
-  "biological_filters": ["bhattacharyya"],
+  "biological_filters": ["overlap"],
   "use_gpu": true
 }
 ```
@@ -89,6 +89,7 @@ Contexts will be automatically weighted based on their biological importance.
 ## Using Python API
 
 ```python
+from methyl_detector import MethylDetector
 from methyl_detector.models.config import MethylModelerConfig
 from methyl_detector.core.methyldetector import MethylDetector
 from methyl_detector.utils.file_utils import load_config_from_json

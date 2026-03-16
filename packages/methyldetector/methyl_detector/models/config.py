@@ -45,7 +45,7 @@ class FilterFunnelExplore(BaseModel):
 
 
 class MethylModelerConfig(BaseModel):
-    """Simplified configuration for MethylModeler analysis."""
+    """Simplified configuration for MethylDetector analysis."""
 
     @model_validator(mode="before")
     @classmethod

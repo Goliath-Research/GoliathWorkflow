@@ -39,9 +39,9 @@ The config is mostly complete but is missing several important fields for optima
 
 ### 4. **Biological Filters (Optional)**
 ```json
-"biological_filters": ["delta_mean", "bhattacharyya"]
+"biological_filters": ["delta_mean", "overlap"]
 ```
-**Impact**: Defaults to this anyway, but explicit is clearer. These filters ensure DMPs have both minimum effect size (`delta_mean`) and distribution separation (`bhattacharyya`).
+**Impact**: Defaults to this anyway, but explicit is clearer. These filters ensure DMPs have both minimum effect size (`delta_mean`) and distribution separation (ECDF-based `overlap`).
 
 ### 5. **Coverage Settings (Optional)**
 ```json
@@ -60,7 +60,7 @@ The config is mostly complete but is missing several important fields for optima
 ## 🔍 Potentially Deprecated Field
 
 ### `optimize_for_validation_accuracy: true`
-This field is present in the config but **not in the current MethylModelerConfig schema**. It may be deprecated in favor of `optimize_dmps: true`. The field exists in MethylTrainer but appears to be legacy.
+This field is present in the config but **not in the current MethylDetector config schema**. It may be deprecated in favor of `optimize_dmps: true`. The field exists in MethylTrainer but appears to be legacy.
 
 **Recommendation**: Replace with `optimize_dmps: true` and `optimization_method: "featurecuts"`.
 
@@ -76,7 +76,7 @@ Here are the fields that should be added to make it fully complete:
   "classifier_type": "ecdf",
   "optimize_dmps": true,
   "optimization_method": "featurecuts",
-  "biological_filters": ["delta_mean", "bhattacharyya"],
+  "biological_filters": ["delta_mean", "overlap"],
   "min_N_pct": 0.10
 }
 ```
