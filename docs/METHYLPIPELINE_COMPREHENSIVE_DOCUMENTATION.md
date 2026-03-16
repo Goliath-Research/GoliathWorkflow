@@ -501,7 +501,7 @@ source venv/bin/activate
 cd packages/methylutils && pip install -e . && cd ../..
 cd packages/methylcentroid && pip install -e . && cd ../..
 cd packages/methylcluster && pip install -e . && cd ../..
-cd packages/methylmodeler && pip install -e . && cd ../..
+cd packages/methyldetector && pip install -e . && cd ../..
 cd packages/ && pip install -e . && cd ../..
 cd packages/methylclassifier && pip install -e . && cd ../..
 ```
@@ -516,7 +516,7 @@ cd packages/methylclassifier && pip install -e . && cd ../..
 pip install ./packages/methylutils
 pip install ./packages/methylcentroid
 pip install ./packages/methylcluster
-pip install ./packages/methylmodeler
+pip install ./packages/methyldetector
 pip install ./packages/
 pip install ./packages/methylclassifier
 ```

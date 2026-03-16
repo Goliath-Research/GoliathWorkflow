@@ -29,7 +29,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=0
-      - PYTHONPATH=/workspace/packages/methylutils:/workspace/packages/methylcentroid:/workspace/packages/methylcluster:/workspace/packages/methylmodeler:/workspace/packages/methylclassifier:/workspace/packages/methylmapper:/workspace/packages/methylenricher
+      - PYTHONPATH=/workspace/packages/methylutils:/workspace/packages/methylcentroid:/workspace/packages/methylcluster:/workspace/packages/methyldetector:/workspace/packages/methylclassifier:/workspace/packages/methylmapper:/workspace/packages/methylenricher
       - METHYL_UTILS_PATH=/workspace/packages/methylutils
       - CUPY_CACHE_DIR=/tmp/.cupy
       - POETRY_HOME=/tmp/poetry

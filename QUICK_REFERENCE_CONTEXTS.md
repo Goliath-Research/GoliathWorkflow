@@ -57,12 +57,12 @@
 ```bash
 cd /home/ubuntu/MethylPipeline
 python -m methyl_detector.cli.main \
-    packages/methylmodeler/configs/pb-hc1-1_config.json
+    packages/methyldetector/configs/pb-hc1-1_config.json
 ```
 
 ## More Info
 
-- **Full guide**: `packages/methylmodeler/CONTEXT_SELECTION_GUIDE.md`
-- **Templates**: `packages/methylmodeler/configs/TEMPLATE_*.json`
+- **Full guide**: `packages/methyldetector/CONTEXT_SELECTION_GUIDE.md`
+- **Templates**: `packages/methyldetector/configs/TEMPLATE_*.json`
 - **Changes summary**: `CONTEXT_PARAMETER_UPDATE.md`
 

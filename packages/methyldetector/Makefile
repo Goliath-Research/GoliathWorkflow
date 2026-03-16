@@ -70,7 +70,7 @@ run: ## Run MethylDetector with config file
 		echo "Usage: make run CONFIG=path/to/config.json"; \
 		exit 1; \
 	fi
-	python run_methyl_modeler.py $(CONFIG)
+	python -m methyl_detector.cli $(CONFIG)
 
 run-verbose: ## Run MethylDetector with verbose logging
 	@if [ -z "$(CONFIG)" ]; then \
@@ -78,4 +78,4 @@ run-verbose: ## Run MethylDetector with verbose logging
 		echo "Usage: make run-verbose CONFIG=path/to/config.json"; \
 		exit 1; \
 	fi
-	python run_methyl_modeler.py $(CONFIG) --verbose 
+	python -m methyl_detector.cli $(CONFIG) --verbose

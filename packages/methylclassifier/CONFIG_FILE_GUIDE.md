@@ -274,10 +274,10 @@ Use **samples** instead of **input_path** when you have a list of sample directo
 
 ## Integration with Other Tools
 
-### MethylModeler Output → MethylClassifier Input
+### MethylDetector Output → MethylClassifier Input
 
 ```bash
-# Step 1: Train classifier with MethylModeler
+# Step 1: Train classifier with MethylDetector
 md --config detector_config.json
 
 # Step 2: Create classification config using the trained model
@@ -405,7 +405,7 @@ configs/
 ## Summary
 
 ✅ **Config files improve reproducibility** - Track exact parameters used
-✅ **Compatible with existing projects** - Similar to MethylModeler
+✅ **Compatible with existing projects** - Similar to MethylDetector
 ✅ **Command-line overrides available** - Flexibility when needed
 ✅ **Smart defaults built-in** - No configuration needed for good performance
 ✅ **Validated schemas** - Clear error messages for invalid configs

@@ -236,7 +236,7 @@ methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf $GENE_GTF \
 export GENE_GTF="/home/ubuntu/data/gencode.v44.annotation.gtf"
 export GROK_API_KEY="your-grok-api-key"
 
-# 2. Navigate to MethylModeler output directory
+# 2. Navigate to MethylDetector output directory
 cd /home/ubuntu/Work/w/humans/psomagen/pc/models/hc1-1-CG
 
 # 3. Map optimized DMPs to genes with disease enrichment

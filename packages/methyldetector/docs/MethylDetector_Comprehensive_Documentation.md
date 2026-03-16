@@ -1311,7 +1311,7 @@ MethylDetector is licensed under the MIT License.
 ## Citation
 
 ```bibtex
-@software{methylmodeler2024,
+@software{methyldetector2024,
   title={MethylDetector: Statistical Detection of Differentially Methylated Positions with Biological Filtering},
   author={MethylPipeline Contributors},
   year={2024},

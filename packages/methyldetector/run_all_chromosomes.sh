@@ -5,7 +5,7 @@
 
 set -e  # Exit on error
 
-# Navigate to methylmodeler directory
+# Navigate to methyldetector directory
 cd "$(dirname "$0")"
 
 # Define chromosomes and contexts

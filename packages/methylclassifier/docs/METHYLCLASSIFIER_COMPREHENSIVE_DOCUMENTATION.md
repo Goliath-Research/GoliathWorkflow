@@ -768,7 +768,7 @@ To create a classifier, you need:
    - Created using MethylCentroid (with binned_stats_bins, e.g. 20) from individual samples
 
 2. **Differentially methylated positions (DMPs)**
-   - Identified using MethylModeler via statistical comparison of centroids
+   - Identified using MethylDetector via statistical comparison of centroids
    - Selected based on:
      - Statistical significance (q-value ≤ α)
      - Effect size (balanced accuracy ≥ target)
@@ -814,7 +814,7 @@ See `configs/example_multiclass_model.json` for the full schema (centroid dirs; 
 
 **Usage**:
 ```python
-# During training (in MethylModeler/)
+# During training (in MethylDetector/)
 config = MethylDetectorConfig(
     ...
     enable_platt_calibration=True,
@@ -1225,21 +1225,18 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/MethylPipeline/packages"
 
 #### 4. Model Loading Fails
 
-**Error:** `ModuleNotFoundError: No module named 'methyl_modeler'`
+**Error:** `ModuleNotFoundError: No module named 'methyl_detector'` (or missing methyl_utils)
 
 **Cause:** Old model format with different module names
 
 **Solution:**
-The `CustomUnpickler` in MethylClassifier automatically handles this. If it still fails:
+The `CustomUnpickler` in MethylClassifier maps known module paths (e.g. `methyl_detector.classifiers` → `methyl_utils.ecdf_classifier`) when unpickling. Ensure `methyl_utils` and `methyl_detector` (if you use detector outputs) are on `PYTHONPATH`:
 
-```python
-import sys
-sys.modules['methyl_modeler'] = methyl_utils
-sys.modules['methyl_modeler.classifiers'] = methyl_utils
-
-# Now load normally
-classifier.load_classifier(model_path)
+```bash
+export PYTHONPATH="/path/to/MethylPipeline/packages/methylutils:/path/to/MethylPipeline/packages/methyldetector:$PYTHONPATH"
 ```
+
+Then load the classifier as usual: `classifier.load_classifier(model_path)`.
 
 #### 5. NaN in Predictions
 
@@ -1315,7 +1312,7 @@ predictions = np.concatenate(predictions)
 
 ### Related Documentation
 
-- **MethylModeler**: DMP detection and model training
+- **MethylDetector**: DMP detection and model training
 - **MethylDetector**: Classifier training pipeline (ECDF-based)
 - **MethylUtils**: Core utilities and ECDF-based comparison
 - **MethylCentroid**: Centroid creation from samples (binned_stats for ECDF)

@@ -13,18 +13,12 @@ import pandas as pd
 # Import from parent package
 from ..models.config import ClassifierConfig
 
-# Create a mapping for old module names to new ones (ECDF-only; no Beta classifier modules)
+# Mapping for pickle compatibility (ECDF-only; no legacy package names)
 MODULE_MAPPING = {
-    'methyl_detector': 'methyl_utils',
-    'methyl_modeler': 'methyl_utils',
     'methyl_detector.classifiers': 'methyl_utils.ecdf_classifier',
-    'methyl_modeler.classifiers': 'methyl_utils.ecdf_classifier',
     'methyl_detector.classifiers.classifier': 'methyl_utils.ecdf_classifier',
-    'methyl_modeler.classifiers.classifier': 'methyl_utils.ecdf_classifier',
     'methyl_detector.probabilistic_beta_classifier': 'methyl_utils.ecdf_classifier',
-    'methyl_modeler.probabilistic_beta_classifier': 'methyl_utils.ecdf_classifier',
     'methyl_detector.methyl_sample': 'methyl_utils.methyl_sample',
-    'methyl_modeler.methyl_sample': 'methyl_utils.methyl_sample',
     'methyl_utils.classifiers': 'methyl_utils.ecdf_classifier',
     'methyl_utils.classifiers.probabilistic_beta_classifier': 'methyl_utils.ecdf_classifier',
     # Handle numpy version compatibility issues

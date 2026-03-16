@@ -34,7 +34,7 @@ export GENE_GTF="/path/to/gencode.v44.annotation.gtf"
 
 ```bash
 # Map DMPs to genes
-cd /path/to/methylmodeler/output
+cd /path/to/methyldetector/output
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv"
 ```
 
@@ -157,12 +157,12 @@ methyl_mapper --input biological_dmps.csv \
 ## 🔄 Complete Pipeline Workflow
 
 ```bash
-# 1. Run MethylModeler
-cd /home/ubuntu/MethylPipeline/packages/methylmodeler
-python -c "from methyl_modeler import run_methyl_modeler; run_methyl_modeler('config.json')"
+# 1. Run MethylDetector
+cd /home/ubuntu/MethylPipeline/packages/methyldetector
+python -m methyl_detector.cli config.json
 
 # 2. Map DMPs to genes with enrichment
-cd /path/to/methylmodeler/output
+cd /path/to/methyldetector/output
 export GENE_GTF="/path/to/gencode.v44.annotation.gtf"
 export GROK_API_KEY="your-key"
 

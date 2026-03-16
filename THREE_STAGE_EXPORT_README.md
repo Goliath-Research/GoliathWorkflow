@@ -2,12 +2,12 @@
 
 ## Summary
 
-MethylModeler has been modified to export **three separate CSV files** representing each stage of the DMP selection pipeline. This allows you to map each stage to genes and analyze how the selection process refines the DMP set.
+MethylDetector has been modified to export **three separate CSV files** representing each stage of the DMP selection pipeline. This allows you to map each stage to genes and analyze how the selection process refines the DMP set.
 
 ## Changes Made
 
 ### 1. Modified File
-**File**: `packages/methylmodeler/methyl_modeler/core/methylmodeler.py`
+**File**: `packages/methyldetector/methyl_detector/core/methyldetector.py`
 
 #### Key Changes:
 - Updated `_export_unified_csv()` method to accept an optional `suffix` parameter
@@ -17,20 +17,20 @@ MethylModeler has been modified to export **three separate CSV files** represent
   - Stage 3: After Differential Evolution optimization
 
 ### 2. New Documentation
-**File**: `packages/methylmodeler/EXPORT_THREE_STAGES.md`
+**File**: `packages/methyldetector/EXPORT_THREE_STAGES.md`
 - Comprehensive guide to the three-stage export feature
 - Explains each stage's purpose and when files are generated
 - Includes usage examples for gene mapping and analysis
 
 ### 3. Comparison Script
-**File**: `packages/methylmodeler/scripts/compare_dmp_stages.py`
+**File**: `packages/methyldetector/scripts/compare_dmp_stages.py`
 - Python script to compare the three CSV files
 - Generates summary statistics and overlap analysis
 - Exports a summary CSV with key metrics
 
 ## Output Files
 
-When you run MethylModeler with your configuration (`pb-hc1-1_config.json`), you will get:
+When you run MethylDetector with your configuration (`pb-hc1-1_config.json`), you will get:
 
 ```
 /home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-healthy-pilot-stage1/
@@ -74,17 +74,17 @@ This means **all three CSV files will be generated**.
 
 ## Usage
 
-### 1. Run MethylModeler
+### 1. Run MethylDetector
 
 ```bash
 cd /home/ubuntu/MethylPipeline
-python -m methyl_modeler.cli.main packages/methylmodeler/configs/pb-hc1-1_config.json
+python -m methyl_detector.cli.main packages/methyldetector/configs/pb-hc1-1_config.json
 ```
 
 ### 2. Compare the Three Stages
 
 ```bash
-python packages/methylmodeler/scripts/compare_dmp_stages.py \
+python packages/methyldetector/scripts/compare_dmp_stages.py \
     /home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-healthy-pilot-stage1 \
     1
 ```
@@ -245,7 +245,7 @@ The implementation has been tested for:
 
 ## Next Steps
 
-1. **Run MethylModeler** with your config to generate the three CSVs
+1. **Run MethylDetector** with your config to generate the three CSVs
 2. **Use the comparison script** to analyze differences between stages
 3. **Map each CSV to genes** using your annotation pipeline
 4. **Compare gene lists** to understand selection refinement
@@ -254,7 +254,7 @@ The implementation has been tested for:
 ## Support
 
 For questions or issues:
-1. Check `packages/methylmodeler/EXPORT_THREE_STAGES.md` for detailed documentation
+1. Check `packages/methyldetector/EXPORT_THREE_STAGES.md` for detailed documentation
 2. Review the comparison script output for stage statistics
 3. Examine the validation results JSON for accuracy metrics
 

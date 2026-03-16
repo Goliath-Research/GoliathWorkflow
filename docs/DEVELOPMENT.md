@@ -147,9 +147,9 @@ Packages must be installed in this order due to dependencies:
 1. **methylutils** (core, no dependencies)
 2. **methylcentroid** (depends on methylutils)
 3. **methylcluster** (depends on methylutils)
-4. **methylmodeler** (depends on methylutils)
-5. **methylmapper** (depends on methylutils, MethylModeler outputs)
-6. **methylclassifier** (depends on methylutils, MethylModeler outputs)
+4. **methyldetector** (depends on methylutils)
+5. **methylmapper** (depends on methylutils, MethylDetector outputs)
+6. **methylclassifier** (depends on methylutils, MethylDetector outputs)
 7. **methylenricher** (consumes MethylMapper gene lists/CSV outputs)
 
 Inside Docker, `scripts/install_all.sh` handles this automatically.

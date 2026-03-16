@@ -2,7 +2,7 @@
 
 ## What Was Implemented
 
-MethylModeler now **automatically exports three separate CSV files** representing each stage of the DMP selection pipeline:
+MethylDetector now **automatically exports three separate CSV files** representing each stage of the DMP selection pipeline:
 
 1. **Stage 1: Biologically Significant DMPs** - Initial selection after filtering
 2. **Stage 2: Binary Search DMPs** - Optimized selection with better Balanced Accuracy
@@ -11,13 +11,13 @@ MethylModeler now **automatically exports three separate CSV files** representin
 ## Files Modified
 
 ### Core Implementation
-- **`packages/methylmodeler/methyl_modeler/core/methylmodeler.py`**
+- **`packages/methyldetector/methyl_detector/core/methyldetector.py`**
   - Added `suffix` parameter to `_export_unified_csv()` method
   - Modified `_run_multi_context()` to export all three stages
   - Exports are conditional based on configuration flags
 
 ### Documentation
-- **`packages/methylmodeler/EXPORT_THREE_STAGES.md`**
+- **`packages/methyldetector/EXPORT_THREE_STAGES.md`**
   - Comprehensive guide to the three-stage feature
   - Explains when files are generated and their purpose
   - Includes usage examples and analysis strategies
@@ -28,17 +28,17 @@ MethylModeler now **automatically exports three separate CSV files** representin
   - Next steps and analysis examples
 
 ### Utility Scripts
-- **`packages/methylmodeler/scripts/compare_dmp_stages.py`**
+- **`packages/methyldetector/scripts/compare_dmp_stages.py`**
   - Compare the three CSV files
   - Generate summary statistics
   - Analyze DMP retention and overlap
 
-- **`packages/methylmodeler/scripts/csv_to_bed.py`**
+- **`packages/methyldetector/scripts/csv_to_bed.py`**
   - Convert CSV to BED format for gene annotation
   - Preserves context and directionality information
   - Compatible with bedtools, HOMER, etc.
 
-- **`packages/methylmodeler/scripts/workflow_example.sh`**
+- **`packages/methyldetector/scripts/workflow_example.sh`**
   - Complete workflow demonstration
   - Shows all steps from detection to annotation
   - Ready-to-use template
@@ -76,17 +76,17 @@ output_dir/
 
 ## Quick Start
 
-### 1. Run MethylModeler (generates the three CSVs)
+### 1. Run MethylDetector (generates the three CSVs)
 
 ```bash
 cd /home/ubuntu/MethylPipeline
-python -m methyl_modeler.cli.main packages/methylmodeler/configs/pb-hc1-1_config.json
+python -m methyl_detector.cli.main packages/methyldetector/configs/pb-hc1-1_config.json
 ```
 
 ### 2. Compare the stages
 
 ```bash
-python packages/methylmodeler/scripts/compare_dmp_stages.py \
+python packages/methyldetector/scripts/compare_dmp_stages.py \
     /home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-healthy-pilot-stage1 \
     1
 ```
@@ -112,13 +112,13 @@ Stage 3 (Differential Evolution):      7,156 DMPs  (  5.7% retention)
 cd /home/ubuntu/Work/samples/humans/psomagen/AN00026418/detection/pb-healthy-pilot-stage1
 
 # Create BED files
-python /home/ubuntu/MethylPipeline/packages/methylmodeler/scripts/csv_to_bed.py \
+python /home/ubuntu/MethylPipeline/packages/methyldetector/scripts/csv_to_bed.py \
     dmps-1-1-biological.csv stage1.bed
 
-python /home/ubuntu/MethylPipeline/packages/methylmodeler/scripts/csv_to_bed.py \
+python /home/ubuntu/MethylPipeline/packages/methyldetector/scripts/csv_to_bed.py \
     dmps-1-2-binary-search.csv stage2.bed
 
-python /home/ubuntu/MethylPipeline/packages/methylmodeler/scripts/csv_to_bed.py \
+python /home/ubuntu/MethylPipeline/packages/methyldetector/scripts/csv_to_bed.py \
     dmps-1-3-differential-evolution.csv stage3.bed
 ```
 
@@ -141,7 +141,7 @@ comm -23 genelist_stage1.txt genelist_stage3.txt > genes_filtered_out.txt
 
 ## Expected Log Output
 
-When you run MethylModeler, you'll see:
+When you run MethylDetector, you'll see:
 
 ```
 🔬 Filtering biologically significant DMPs...
@@ -220,15 +220,15 @@ All three CSVs have identical structure:
 ## Support Files
 
 1. **`THREE_STAGE_EXPORT_README.md`** - Complete user guide
-2. **`packages/methylmodeler/EXPORT_THREE_STAGES.md`** - Technical documentation
-3. **`packages/methylmodeler/scripts/compare_dmp_stages.py`** - Stage comparison
-4. **`packages/methylmodeler/scripts/csv_to_bed.py`** - Format conversion
-5. **`packages/methylmodeler/scripts/workflow_example.sh`** - Complete workflow
+2. **`packages/methyldetector/EXPORT_THREE_STAGES.md`** - Technical documentation
+3. **`packages/methyldetector/scripts/compare_dmp_stages.py`** - Stage comparison
+4. **`packages/methyldetector/scripts/csv_to_bed.py`** - Format conversion
+5. **`packages/methyldetector/scripts/workflow_example.sh`** - Complete workflow
 
 ## Next Steps
 
 1. ✅ **Implementation complete** - Ready to use
-2. 🚀 **Run MethylModeler** with your config
+2. 🚀 **Run MethylDetector** with your config
 3. 📊 **Use comparison script** to analyze stages
 4. 🧬 **Map to genes** using BED files
 5. 🔬 **Discover insights** from multi-stage analysis
@@ -253,5 +253,5 @@ All three CSVs have identical structure:
 
 **Status**: ✅ **READY FOR PRODUCTION USE**
 
-Run your MethylModeler analysis and you'll automatically get all three CSV files for comprehensive gene mapping and interpretation!
+Run your MethylDetector analysis and you'll automatically get all three CSV files for comprehensive gene mapping and interpretation!
 

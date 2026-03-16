@@ -354,14 +354,14 @@ GRANT EXECUTE ON dbo.spMapDMP2Genes TO your_username;
 ```bash
 # 1. Install all components
 cd /home/ubuntu/MethylPipeline
-pip install ./packages/methylutils ./packages/methylcentroid ./packages/methylcluster ./packages/methylmodeler ./packages/methylclassifier ./packages/methylmapper
+pip install ./packages/methylutils ./packages/methylcentroid ./packages/methylcluster ./packages/methyldetector ./packages/methylclassifier ./packages/methylmapper
 
 # 2. Set environment variables
 export GENE_GTF="/path/to/gencode.v44.annotation.gtf"
 export GROK_API_KEY="your-grok-key"
 
 # 3. Test complete workflow
-# Run MethylModeler → MethylMapper → Results
+# Run MethylDetector → MethylMapper → Results
 ```
 
 ### Integration Examples

@@ -8,7 +8,7 @@ All requested modifications to the MethylPipeline project have been successfully
 
 ### 1. Removed Unused Configuration Parameters
 
-**Package: methylmodeler**
+**Package: methyldetector**
 
 - ❌ Removed `apply_fdr_correction` (boolean parameter)
 - ❌ Removed `fdr_method` (string parameter with validation)
@@ -17,14 +17,14 @@ All requested modifications to the MethylPipeline project have been successfully
 - ✅ Cleaned up all documentation and example files
 
 **Files Updated:**
-- `packages/methylmodeler/methyl_modeler/models/config.py`
-- `packages/methylmodeler/methyl_modeler/core/methylmodeler.py`
-- `packages/methylmodeler/configs/comprehensive_usage_examples.py`
-- `packages/methylmodeler/examples/README.md`
-- `packages/methylmodeler/QUICKSTART.md`
-- `packages/methylmodeler/examples/config_example.json`
-- `packages/methylmodeler/examples/config_no_fdr.json`
-- `packages/methylmodeler/examples/config_strict_significance.json`
+- `packages/methyldetector/methyl_detector/models/config.py`
+- `packages/methyldetector/methyl_detector/core/methyldetector.py`
+- `packages/methyldetector/configs/comprehensive_usage_examples.py`
+- `packages/methyldetector/examples/README.md`
+- `packages/methyldetector/QUICKSTART.md`
+- `packages/methyldetector/examples/config_example.json`
+- `packages/methyldetector/examples/config_no_fdr.json`
+- `packages/methyldetector/examples/config_strict_significance.json`
 
 ### 2. Standardized Package Naming Convention
 
@@ -34,7 +34,7 @@ All internal package folders now follow Python's standard naming convention (low
 |----------|----------|--------|
 | methylutils/methyl_utils | methyl_utils | ✅ Already correct |
 | methylcentroid/methylcentroid | methyl_centroid | ✅ Renamed |
-| methylmodeler/methyl_modeler | methyl_modeler | ✅ Already correct |
+| methyldetector/methyl_detector | methyl_detector | ✅ Already correct |
 | methylclassifier/methylclassifier | methyl_classifier | ✅ Renamed |
 | methylcluster/methylcluster | methyl_cluster | ✅ Renamed |
 | methylenricher/methylenricher | methyl_enricher | ✅ Renamed |
@@ -63,7 +63,7 @@ All internal package folders now follow Python's standard naming convention (low
 
 ### 5. Updated CLI Wrappers
 
-- ✅ Fixed `packages/methylmodeler/modeler` wrapper
+- ✅ Fixed `packages/methyldetector/modeler` wrapper
 - ✅ Fixed `packages/methylcentroid/mc` wrapper
 - ✅ Added TTY detection for proper interactive/non-interactive support
 - ✅ Changed from `poetry run` to direct `python3 -m` execution
@@ -81,7 +81,7 @@ All packages were tested and are working correctly:
 
 CLI wrappers are functional:
 ```bash
-$ ./packages/methylmodeler/modeler --help
+$ ./packages/methyldetector/modeler --help
 $ ./packages/methylcentroid/mc --help
 ```
 
@@ -98,8 +98,8 @@ MethylPipeline/
 │   ├── methylcentroid/
 │   │   ├── methyl_centroid/    # ✅ Renamed from methylcentroid
 │   │   └── mc                  # ✅ Updated wrapper
-│   ├── methylmodeler/
-│   │   ├── methyl_modeler/    # ✅ Standard naming
+│   ├── methyldetector/
+│   │   ├── methyl_detector/    # ✅ Standard naming
 │   │   └── modeler            # ✅ Updated wrapper
 │   ├── methylclassifier/
 │   │   └── methyl_classifier/  # ✅ Renamed
@@ -135,7 +135,7 @@ cd /home/ubuntu/MethylPipeline
 
 **MethylDetector:**
 ```bash
-cd /home/ubuntu/MethylPipeline/packages/methylmodeler
+cd /home/ubuntu/MethylPipeline/packages/methyldetector
 ./modeler config.json
 ```
 

@@ -58,7 +58,7 @@ COPY ../packages /tmp/methylpipeline-packages
 RUN cd /tmp/methylpipeline-packages/methylutils && pip install . --no-deps && \
     cd /tmp/methylpipeline-packages/methylcentroid && pip install . --no-deps && \
     cd /tmp/methylpipeline-packages/methylcluster && pip install . --no-deps && \
-    cd /tmp/methylpipeline-packages/methylmodeler && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methyldetector && pip install . --no-deps && \
     cd /tmp/methylpipeline-packages/methylmapper && pip install . --no-deps && \
     cd /tmp/methylpipeline-packages/methylclassifier && pip install . --no-deps && \
     cd /tmp/methylpipeline-packages/methylenricher && pip install . --no-deps && \

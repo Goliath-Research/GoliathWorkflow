@@ -1,4 +1,4 @@
-# methyl_utils/modeling/methyl_modeler.py
+# methyl_utils/modeling/methyl_detector.py
 from __future__ import annotations
 
 import logging

@@ -13,7 +13,7 @@ long_description = readme_file.read_text() if readme_file.exists() else ""
 setup(
     name="methyl_mapper",
     version="0.1.0",
-    author="MethylModeler Team",
+    author="MethylDetector Team",
     description="DMP-to-gene mapping tool using Azure SQL Database and STRING-DB",
     long_description=long_description,
     long_description_content_type="text/markdown",

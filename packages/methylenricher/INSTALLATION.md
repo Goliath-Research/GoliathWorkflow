@@ -100,7 +100,7 @@ methyl_enricher --list-libraries
 
 ```bash
 # 1. Run MethylMapper (produces mapped_features/all-gene_name-combined.csv)
-cd /path/to/methylmodeler/output
+cd /path/to/methyldetector/output
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                       --enrich-disease
 
@@ -162,11 +162,11 @@ pip install -e ".[dev]"
 For issues or questions:
 - Check the README.md for usage examples
 - Open an issue on GitHub
-- Contact the MethylModeler team
+- Contact the MethylDetector team
 
 ## Related Projects
 
-- **MethylModeler**: `/home/ubuntu/MethylModeler`
+- **MethylDetector**: project `packages/methyldetector`
 - ****: `/home/ubuntu/`
 - **MethylClassifier**: `/home/ubuntu/MethylClassifier`
 - **MethylUtils**: `/home/ubuntu/MethylUtils`

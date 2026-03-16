@@ -5,7 +5,7 @@
 
 set -e  # Exit on error
 
-# Navigate to methylmodeler directory
+# Navigate to methyldetector directory
 cd "$(dirname "$0")"
 
 # Define chromosomes and contexts
@@ -42,9 +42,8 @@ run_analysis() {
     return 1
   fi
   
-  # Run MethylDetector (md script handles container execution)
-  # Change to methylmodeler directory first since md script uses pwd
-  if (cd /home/ubuntu/MethylPipeline/packages/methylmodeler && ./md "$CONFIG") >> "$LOG_FILE" 2>&1; then
+  # Run MethylDetector (modeler wrapper or python -m methyl_detector)
+  if (cd "$(dirname "$0")" && python -m methyl_detector.cli "$CONFIG") >> "$LOG_FILE" 2>&1; then
     echo "[$(date)] ✅ SUCCESS: Chromosome $CHROM, Context $CTX" >> "$LOG_FILE"
     echo "✅ SUCCESS: $CHROM-$CTX" >> "$MAIN_LOG"
     return 0

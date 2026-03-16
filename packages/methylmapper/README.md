@@ -28,7 +28,7 @@ export GROK_API_KEY="your-grok-api-key"
 export DISGENET_API_KEY="your-disgenet-api-key"  # Optional
 
 # Basic mapping with disease enrichment
-cd /path/to/methylmodeler/output
+cd /path/to/methyldetector/output
 methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
                       --enrich-disease \
                       --disease-term "early-stage prostate cancer"
