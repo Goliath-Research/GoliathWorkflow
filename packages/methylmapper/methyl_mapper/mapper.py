@@ -60,22 +60,19 @@ class DMPMapper:
         try:
             dmps_df = pd.read_csv(csv_path)
             
-            # Check for required columns
-            required_cols = ['position', 'chromosome', 'context', 'q_value', 'delta_mean', 'overlap', 'effect_size']
+            # Required for upload to sample_dmps: position, chromosome, context, and (p_value or q_value), delta_mean for direction
+            required_cols = ['position', 'chromosome', 'context']
             missing_cols = [col for col in required_cols if col not in dmps_df.columns]
-            
             if missing_cols:
-                logger.warning(f"Missing columns: {missing_cols}")
-                # Create missing columns with NaN
-                for col in missing_cols:
-                    if col == 'overlap':
-                        # Try to use bhattacharyya_coefficient if available
-                        if 'bhattacharyya_coefficient' in dmps_df.columns:
-                            dmps_df['overlap'] = dmps_df['bhattacharyya_coefficient']
-                        else:
-                            dmps_df['overlap'] = 0.0
-                    else:
-                        dmps_df[col] = None
+                raise ValueError(f"Missing required columns: {missing_cols}")
+            if 'p_value' not in dmps_df.columns and 'q_value' not in dmps_df.columns:
+                raise ValueError("DataFrame must contain p_value or q_value for sample_dmps upload")
+            if 'delta_mean' not in dmps_df.columns:
+                dmps_df['delta_mean'] = 0.0  # direction will default to 1 in database layer
+            # Optional columns (fill if missing)
+            for col in ['overlap', 'effect_size']:
+                if col not in dmps_df.columns:
+                    dmps_df[col] = 0.0 if col == 'overlap' else None
             
             logger.info(f"✅ Loaded {len(dmps_df):,} DMPs from CSV")
             logger.info(f"Columns: {', '.join(dmps_df.columns)}")
@@ -129,10 +126,7 @@ class DMPMapper:
         try:
             # Connect to database
             with AzureSQLConnection(self.config.database) as db:
-                # Ensure staging table exists
-                db.ensure_staging_table_exists()
-                
-                # Clear any existing data for this sample
+                # Clear existing DMPs for this sample (sample_dmps)
                 db.clear_sample_data(sample_id)
                 
                 # Upload DMPs

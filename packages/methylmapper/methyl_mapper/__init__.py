@@ -9,7 +9,7 @@ Also includes bedtools-based mapping for local analysis without database require
 
 from .config import MethylMapperConfig, MapperStepConfig, AzureSQLConfig, StoredProcedureConfig
 from .database import AzureSQLConnection
-from .models import DMPStaging, GeneMappingResult
+from .models import DMPStaging, GeneMappingResult, SampleDMP
 from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
 from .gene_disease_enricher import GeneDiseaseEnricher
@@ -26,6 +26,7 @@ __all__ = [
     "AzureSQLConnection",
     # Models
     "DMPStaging",
+    "SampleDMP",
     "GeneMappingResult",
     # High-level API
     "DMPMapper",

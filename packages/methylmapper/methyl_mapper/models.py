@@ -52,6 +52,20 @@ class DMPStaging(SQLModel, table=True):
         }
 
 
+class SampleDMP(SQLModel):
+    """
+    DMP row for dbo.sample_dmps (STRING-DB).
+    Used by spMapDMP2Genes. Not used for table creation (table exists in DB).
+    """
+    sample_id: int
+    chromosome: str = Field(max_length=10)
+    context: str = Field(max_length=3)
+    position: int
+    p_value: float = Field(gt=0, lt=1)
+    weight: float = Field(gt=0)
+    direction: int = Field(description="1 or -1 (sign of methylation change)")
+
+
 class GeneMappingResult(SQLModel):
     """
     Gene mapping result from spMapDMP2Genes stored procedure.

@@ -21,6 +21,7 @@ except ImportError:
     from methyl_utils.statistical_tests import storey_qvalues
 
 from .gene_disease_enricher import GeneDiseaseEnricher
+from .gtf_regions import build_sp_regions_bed, parse_region_name
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,18 @@ class BedtoolsMapper:
         stability_threshold: int = 3,
         unrelated_growth_threshold: float = 0.10,
         extend_after_stable: bool = True,
+        use_sp_regions: bool = False,
+        upstream_size: int = 5000,
+        downstream_size: int = 2000,
+        min_intron_size: int = 0,
+        max_gap: int = 1,
+        w_promoter: float = 2.0,
+        w_terminator: float = 0.5,
+        w_gene_body: float = 1.0,
+        w_exon: float = 1.5,
+        w_intron: float = 0.7,
+        w_unknown: float = 1.0,
+        storey_lambda: Optional[float] = None,
     ):
         """
         Initialize BedtoolsMapper.
@@ -165,6 +178,13 @@ class BedtoolsMapper:
             stability_threshold: Number of consecutive iterations without new genes to consider stable (default: 3)
             unrelated_growth_threshold: Growth rate threshold for unrelated genes (legacy; not used in Phase 1)
             extend_after_stable: If True, after stabilization run optional extension loop when last gene is strongly disease-associated (default: True)
+            use_sp_regions: If True, build SP-equivalent regions (promoter, terminator, gene body, exon, intron) from GTF and use region weights (default: False)
+            upstream_size: Promoter size in bp when use_sp_regions=True (default: 5000)
+            downstream_size: Terminator size in bp when use_sp_regions=True (default: 2000)
+            min_intron_size: Minimum intron length when use_sp_regions=True (default: 0)
+            max_gap: Max gap for grouping unknown-region DMPs (default: 1)
+            w_promoter, w_terminator, w_gene_body, w_exon,             w_intron, w_unknown: Region weights when use_sp_regions=True
+            storey_lambda: If set, use this single lambda for Storey FDR (for SP parity). If None, use automatic lambda (default).
         """
         self.gene_gtf = Path(gene_gtf)
         if not self.gene_gtf.exists():
@@ -221,6 +241,21 @@ class BedtoolsMapper:
         self.stability_threshold = stability_threshold
         self.unrelated_growth_threshold = unrelated_growth_threshold
         self.extend_after_stable = extend_after_stable
+
+        # SP-equivalent region model
+        self.use_sp_regions = use_sp_regions
+        self.upstream_size = upstream_size
+        self.downstream_size = downstream_size
+        self.min_intron_size = min_intron_size
+        self.max_gap = max_gap
+        self.w_promoter = w_promoter
+        self.w_terminator = w_terminator
+        self.w_gene_body = w_gene_body
+        self.w_exon = w_exon
+        self.w_intron = w_intron
+        self.w_unknown = w_unknown
+        self.storey_lambda = storey_lambda
+        self._sp_regions_bed_path: Optional[Path] = None
 
         # When optimize_dmps + enrich_disease: recommend both Grok and Open Targets for gene identification
         if optimize_dmps and enrich_disease:
@@ -299,6 +334,27 @@ class BedtoolsMapper:
         logger.debug(f"Created BED file: {output_bed} ({len(bed_df)} entries)")
         return output_bed
     
+    def _get_sp_regions_bed(self, temp_dir: Optional[Path] = None) -> Path:
+        """Build or return cached path to SP-equivalent regions BED."""
+        if self._sp_regions_bed_path is not None and self._sp_regions_bed_path.exists():
+            return self._sp_regions_bed_path
+        base = temp_dir or Path(tempfile.gettempdir())
+        out = base / "sp_regions.bed"
+        build_sp_regions_bed(
+            self.gene_gtf,
+            out,
+            upstream_size=self.upstream_size,
+            downstream_size=self.downstream_size,
+            min_intron_size=self.min_intron_size,
+            w_promoter=self.w_promoter,
+            w_terminator=self.w_terminator,
+            w_gene_body=self.w_gene_body,
+            w_exon=self.w_exon,
+            w_intron=self.w_intron,
+        )
+        self._sp_regions_bed_path = out
+        return out
+
     def intersect_with_features(
         self,
         bed_path: Path,
@@ -306,49 +362,47 @@ class BedtoolsMapper:
         output_file: Optional[Path] = None
     ) -> pd.DataFrame:
         """
-        Intersect DMP BED file with GTF features using bedtools.
-        
+        Intersect DMP BED file with GTF features or SP-equivalent regions BED using bedtools.
+
+        When use_sp_regions is True, intersects with a generated BED of promoter, terminator,
+        gene body, exon, intron regions (with weights) and adds region_weight / combined_weight.
+
         Args:
             bed_path: Path to DMP BED file
             dmp_df: Original DMP DataFrame (for joining weights)
             output_file: Optional output file path
-            
+
         Returns:
             DataFrame with DMP-feature intersections
         """
+        if self.use_sp_regions:
+            return self._intersect_with_sp_regions(bed_path, dmp_df, output_file)
+
         logger.info(f"Intersecting DMPs with features from {self.gene_gtf}...")
-        
-        # Run bedtools intersect
+
         cmd = [
             'bedtools', 'intersect',
             '-a', str(bed_path),
             '-b', str(self.gene_gtf),
-            '-wa', '-wb'  # Write both A and B entries
+            '-wa', '-wb'
         ]
-        
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         except subprocess.CalledProcessError as e:
             logger.error(f"bedtools intersect failed: {e.stderr}")
             raise
-        
-        # Parse bedtools output
-        # Format: chromA startA endA nameA | chromB startB endB nameB score strand frame attributes
+
         lines = result.stdout.strip().split('\n')
         if not lines or lines == ['']:
             logger.warning("No intersections found!")
             return pd.DataFrame()
-        
+
         intersections = []
         for line in lines:
             parts = line.split('\t')
             if len(parts) < 13:
                 continue
-            
-            # Extract DMP info (first 4 columns)
             dmp_name = parts[3]
-            
-            # Extract feature info (GTF columns)
             feature_chrom = parts[4]
             feature_source = parts[5]
             feature_type = parts[6]
@@ -358,10 +412,7 @@ class BedtoolsMapper:
             feature_strand = parts[10]
             feature_frame = parts[11]
             feature_attrs = parts[12]
-            
-            # Parse attributes
             attrs = self._parse_gtf_attributes(feature_attrs)
-            
             intersections.append({
                 'dmp_name': dmp_name,
                 'feature_chrom': feature_chrom,
@@ -379,22 +430,73 @@ class BedtoolsMapper:
                 'exon_number': attrs.get('exon_number', ''),
                 'attributes': feature_attrs
             })
-        
+
         intersect_df = pd.DataFrame(intersections)
-        
-        # Filter by feature types if specified
         if self.feature_types:
             intersect_df = intersect_df[intersect_df['feature_type'].isin(self.feature_types)]
-        
         logger.info(f"Found {len(intersect_df)} DMP-feature intersections")
-        
-        # Join with original DMP data for weights
         intersect_df = self._join_with_dmp_weights(intersect_df, dmp_df)
-        
         if output_file:
             intersect_df.to_csv(output_file, index=False)
             logger.info(f"Saved intersections to {output_file}")
-        
+        return intersect_df
+
+    def _intersect_with_sp_regions(
+        self,
+        bed_path: Path,
+        dmp_df: pd.DataFrame,
+        output_file: Optional[Path] = None,
+    ) -> pd.DataFrame:
+        """Intersect DMP BED with SP-equivalent regions BED; add region_weight and gene_id/gene_name/feature_type."""
+        regions_bed = self._get_sp_regions_bed(bed_path.parent)
+        logger.info(f"Intersecting DMPs with SP regions from {regions_bed}...")
+        cmd = [
+            'bedtools', 'intersect',
+            '-a', str(bed_path),
+            '-b', str(regions_bed),
+            '-wa', '-wb',
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"bedtools intersect failed: {e.stderr}")
+            raise
+        lines = result.stdout.strip().split('\n')
+        if not lines or lines == ['']:
+            logger.warning("No intersections found!")
+            intersect_df = pd.DataFrame()
+        else:
+            rows = []
+            for line in lines:
+                parts = line.split('\t')
+                if len(parts) < 10:
+                    continue
+                dmp_name = parts[3]
+                # BED B: chrom, start, end, name, score, strand
+                r_chrom, r_start, r_end, r_name, r_score, r_strand = parts[4], parts[5], parts[6], parts[7], parts[8], parts[9]
+                try:
+                    region_weight = float(r_score)
+                except (ValueError, TypeError):
+                    region_weight = 1.0
+                gene_id, gene_name, feature_type = parse_region_name(r_name)
+                rows.append({
+                    'dmp_name': dmp_name,
+                    'feature_chrom': r_chrom,
+                    'feature_type': feature_type,
+                    'feature_start': int(r_start),
+                    'feature_end': int(r_end),
+                    'feature_strand': r_strand,
+                    'gene_id': gene_id,
+                    'gene_name': gene_name or gene_id,
+                    'region_weight': region_weight,
+                })
+            intersect_df = pd.DataFrame(rows)
+        logger.info(f"Found {len(intersect_df)} DMP-region intersections (SP model)")
+        intersect_df = self._join_with_dmp_weights(intersect_df, dmp_df)
+        if 'region_weight' in intersect_df.columns and 'weight' in intersect_df.columns:
+            intersect_df['combined_weight'] = intersect_df['weight'] * intersect_df['region_weight']
+        if output_file:
+            intersect_df.to_csv(output_file, index=False)
         return intersect_df
     
     def _parse_gtf_attributes(self, attr_string: str) -> Dict[str, str]:
@@ -762,7 +864,12 @@ class BedtoolsMapper:
 
             def _compute_gene_pvalue(group: pd.DataFrame) -> pd.Series:
                 pvals = group['p_value'].astype(float).to_numpy()
-                weights = group['weight'].astype(float).to_numpy() if 'weight' in group.columns else np.ones_like(pvals)
+                if 'combined_weight' in group.columns:
+                    weights = group['combined_weight'].astype(float).to_numpy()
+                elif 'weight' in group.columns:
+                    weights = group['weight'].astype(float).to_numpy()
+                else:
+                    weights = np.ones_like(pvals)
                 signs = np.sign(group['delta_mean'].astype(float).to_numpy()) if 'delta_mean' in group.columns else np.ones_like(pvals)
 
                 valid = np.isfinite(pvals) & np.isfinite(weights)
@@ -820,7 +927,10 @@ class BedtoolsMapper:
             gene_qvals = np.full_like(gene_pvals, np.nan, dtype=float)
             finite_mask = np.isfinite(gene_pvals)
             if np.any(finite_mask):
-                _qvals, _ = storey_qvalues(gene_pvals[finite_mask])
+                kwargs = {}
+                if getattr(self, 'storey_lambda', None) is not None:
+                    kwargs['lambdas'] = np.array([self.storey_lambda], dtype=float)
+                _qvals, _ = storey_qvalues(gene_pvals[finite_mask], **kwargs)
             gene_qvals[finite_mask] = _qvals
             grouped["gene_q_value"] = gene_qvals
 
@@ -1177,27 +1287,159 @@ class BedtoolsMapper:
         optimization_log.setdefault('unrelated_growth_rates', [])
         logger.info(f"Optimization complete: optimal k={k_stable}")
         return k_stable, optimal_gene_df, optimization_log
-    
+
+    def _map_all_contexts_per_chromosome(
+        self,
+        csv_files: List[Path],
+        output_dir: Path,
+        group_by: str,
+    ) -> Dict[str, pd.DataFrame]:
+        """
+        Load all DMPs from the given CSV files, group by chromosome, and run
+        mapping once per chromosome (all contexts combined), matching spMapDMP2Genes.
+        """
+        all_dmps = []
+        for csv_file in csv_files:
+            df = pd.read_csv(csv_file)
+            df = self._normalize_dmp_columns(df)
+            all_dmps.append(df)
+        combined = pd.concat(all_dmps, ignore_index=True)
+        if 'chromosome' not in combined.columns:
+            raise ValueError("DMP DataFrames must have a 'chromosome' column to process by chromosome")
+        combined['chromosome'] = combined['chromosome'].astype(str).str.strip()
+        chromosomes = sorted(combined['chromosome'].unique(), key=lambda c: (c.replace('chr', '').isdigit(), c.replace('chr', '') or '0', c))
+        logger.info(f"Processing {len(chromosomes)} chromosome(s) with all contexts combined: {chromosomes}")
+
+        results = {}
+        result_artifacts = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for chrom in chromosomes:
+                dmp_df = combined[combined['chromosome'] == chrom].copy()
+                dmp_df = self._sort_dmps_for_optimization(dmp_df)
+                chrom_safe = str(chrom).replace('chr', '') or chrom
+                logger.info(f"\n{'='*70}\nChromosome {chrom} ({len(dmp_df)} DMPs, all contexts)\n{'='*70}")
+
+                try:
+                    temp_csv = Path(temp_dir) / f"chr{chrom_safe}.csv"
+                    dmp_df.to_csv(temp_csv, index=False)
+                    bed_file = Path(temp_dir) / f"chr{chrom_safe}.bed"
+                    self.csv_to_bed(temp_csv, bed_file)
+                    intersect_df = self.intersect_with_features(bed_file, dmp_df)
+
+                    if intersect_df.empty:
+                        logger.warning(f"No features found for chromosome {chrom}")
+                        results[f"chr{chrom_safe}"] = pd.DataFrame()
+                        continue
+
+                    aggregated = self.aggregate_by_feature(intersect_df, group_by=group_by)
+                    needs_shared_enrichment = self._should_enrich_gene_results(group_by)
+
+                    output_csv = output_dir / f"chr{chrom_safe}-features-{group_by}.csv"
+                    detail_csv = output_dir / f"chr{chrom_safe}-intersections.csv"
+
+                    result_artifacts.append({
+                        'key': f"chr{chrom_safe}",
+                        'chromosome': chrom,
+                        'aggregated': aggregated,
+                        'intersect_df': intersect_df,
+                        'output_csv': output_csv,
+                        'detail_csv': detail_csv,
+                        'needs_shared_enrichment': needs_shared_enrichment,
+                    })
+                    results[f"chr{chrom_safe}"] = aggregated
+                    logger.info(f"   Mapped {len(aggregated)} unique {group_by}s for chromosome {chrom}")
+                except Exception as e:
+                    logger.error(f"Failed chromosome {chrom}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    results[f"chr{chrom_safe}"] = pd.DataFrame()
+
+        shared_payload = self._build_shared_enrichment_payload(
+            [a['aggregated'] for a in result_artifacts if a['needs_shared_enrichment']],
+            group_by=group_by,
+        )
+
+        for artifact in result_artifacts:
+            agg = artifact['aggregated']
+            if artifact['needs_shared_enrichment']:
+                agg = self._apply_shared_enrichment_payload(
+                    agg, group_by=group_by, payload=shared_payload, separate_sources=False,
+                )
+            agg.to_csv(artifact['output_csv'], index=False)
+            artifact['intersect_df'].to_csv(artifact['detail_csv'], index=False)
+            results[artifact['key']] = agg
+            logger.info(f"   Saved {artifact['output_csv']}")
+
+        if len(results) > 1 and any(not df.empty for df in results.values()):
+            non_empty = [results[k] for k in results if not results[k].empty]
+            combined_df = pd.concat(non_empty, ignore_index=True)
+            sum_cols = ['dmp_count', 'unique_dmps', 'total_weight', 'total_importance', 'gene_weight_sumsq', 'gene_z_numerator']
+            combined_agg = {c: 'sum' for c in sum_cols if c in combined_df.columns}
+            numeric_cols = combined_df.select_dtypes(include=[np.number]).columns.tolist()
+            exclude = [group_by, 'gene_p_value', 'gene_q_value', 'gene_z', 'gene_direction', 'gene_weight_sumsq', 'gene_z_numerator', 'gene_importance']
+            for col in numeric_cols:
+                if col not in exclude and col not in combined_agg:
+                    combined_agg[col] = 'mean'
+            for col in ['feature_type', 'feature_chrom', 'feature_strand', 'gene_id', 'transcript_id']:
+                if col in combined_df.columns and col not in combined_agg:
+                    combined_agg[col] = 'first'
+            combined_df = combined_df.groupby(group_by).agg(combined_agg).reset_index()
+            if 'gene_weight_sumsq' in combined_df.columns and 'gene_z_numerator' in combined_df.columns:
+                from scipy.stats import norm
+                z_num = combined_df['gene_z_numerator'].to_numpy(dtype=float)
+                z_denom = np.sqrt(combined_df['gene_weight_sumsq'].to_numpy(dtype=float))
+                with np.errstate(invalid='ignore', divide='ignore'):
+                    combined_z = z_num / z_denom
+                combined_df['gene_p_value'] = np.clip(2 * (1 - norm.cdf(np.abs(combined_z))), 0.0, 1.0)
+                combined_df['gene_direction'] = np.sign(combined_z)
+                gene_pvals = combined_df['gene_p_value'].to_numpy(dtype=float)
+                finite = np.isfinite(gene_pvals)
+                gene_qvals = np.full_like(gene_pvals, np.nan, dtype=float)
+                if np.any(finite):
+                    kwargs = {}
+                    if getattr(self, 'storey_lambda', None) is not None:
+                        kwargs['lambdas'] = np.array([self.storey_lambda], dtype=float)
+                    qv, _ = storey_qvalues(gene_pvals[finite], **kwargs)
+                    gene_qvals[finite] = qv
+                combined_df['gene_q_value'] = gene_qvals
+            if 'total_importance' in combined_df.columns:
+                combined_df['gene_importance'] = combined_df['total_importance']
+            elif 'total_weight' in combined_df.columns:
+                combined_df['gene_importance'] = combined_df['total_weight']
+            combined_csv = output_dir / f"all-{group_by}-combined.csv"
+            combined_df.to_csv(combined_csv, index=False)
+            logger.info(f"   Combined results saved to {combined_csv}")
+
+        return results
+
     def map_csv_files(
         self,
         csv_pattern: str,
         output_dir: Optional[Path] = None,
-        group_by: str = 'gene_name'
+        group_by: str = 'gene_name',
+        process_all_contexts_per_chromosome: bool = True,
     ) -> Dict[str, pd.DataFrame]:
         """
         Map multiple CSV files matching a pattern.
-        
+        When process_all_contexts_per_chromosome is True (default), loads all DMPs
+        from all matching files, groups by chromosome, and runs mapping once per
+        chromosome (all contexts combined), matching spMapDMP2Genes behavior.
+
         Args:
             csv_pattern: Glob pattern for CSV files (e.g., "dmps-*-3-optimized.csv")
                         Can be absolute path or relative to current directory
             output_dir: Output directory for results. If None, uses CSV directory.
             group_by: Feature to group by ('gene_name', 'transcript_id', etc.)
-            
+            process_all_contexts_per_chromosome: If True, load all CSVs, group by
+                        chromosome, and run one mapping per chromosome (all contexts).
+                        If False, process each CSV file separately.
+
         Returns:
-            Dictionary mapping CSV file paths to aggregated results DataFrames
+            Dictionary mapping CSV file path or chromosome key to aggregated results DataFrames
         """
         csv_path = Path(csv_pattern)
-        
+
         # Support path-level wildcard (e.g. /path/to/detection/cancer/*/dmps-*.csv) for per-group detection dirs
         path_wildcard = "/*/"
         if path_wildcard in csv_pattern:
@@ -1214,23 +1456,30 @@ class BedtoolsMapper:
             else:
                 search_dir = Path.cwd()
                 pattern = csv_pattern
-        
+
         # Find matching CSV files
         csv_files = sorted(search_dir.glob(pattern))
-        
+
         if not csv_files:
             raise FileNotFoundError(f"No CSV files found matching pattern: {csv_pattern} (searched in {search_dir})")
-        
+
         logger.info(f"Found {len(csv_files)} CSV files matching pattern: {csv_pattern}")
-        
+
         if output_dir is None:
             output_dir = search_dir / "mapped_features"
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
+        if process_all_contexts_per_chromosome and len(csv_files) > 0:
+            return self._map_all_contexts_per_chromosome(
+                csv_files=csv_files,
+                output_dir=output_dir,
+                group_by=group_by,
+            )
+
         results = {}
         result_artifacts = []
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             for csv_file in csv_files:
                 logger.info(f"\n{'='*70}")
@@ -1431,8 +1680,11 @@ class BedtoolsMapper:
                 gene_qvals = np.full_like(gene_pvals, np.nan, dtype=float)
                 finite_mask = np.isfinite(gene_pvals)
                 if np.any(finite_mask):
-                    _qvals, _ = storey_qvalues(gene_pvals[finite_mask])
-                    gene_qvals[finite_mask] = _qvals
+                    kwargs = {}
+                    if getattr(self, 'storey_lambda', None) is not None:
+                        kwargs['lambdas'] = np.array([self.storey_lambda], dtype=float)
+                    _qvals, _ = storey_qvalues(gene_pvals[finite_mask], **kwargs)
+                gene_qvals[finite_mask] = _qvals
                 combined['gene_q_value'] = gene_qvals
 
             if 'total_importance' in combined.columns:

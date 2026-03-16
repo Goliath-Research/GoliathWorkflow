@@ -305,7 +305,12 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         choices=['gene_name', 'gene_id', 'transcript_id', 'transcript_name', 'feature_type'],
         help='Feature to group by for aggregation (default: gene_name)'
     )
-    
+    output_group.add_argument(
+        '--no-by-chromosome',
+        action='store_true',
+        help='Process each CSV file separately. By default, all CSVs are loaded and grouped by chromosome (all contexts per chromosome, like spMapDMP2Genes).'
+    )
+
     # Weighting options
     weight_group = parser.add_argument_group('Weighting Options')
     weight_group.add_argument(
@@ -338,7 +343,37 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         default=None,
         help='Feature types to include (e.g., gene exon intron). If not specified, defaults to gene only.'
     )
-    
+    feature_group.add_argument(
+        '--use-sp-regions',
+        action='store_true',
+        help='Use SP-equivalent regions (promoter, terminator, gene body, exon, intron) and region weights from GTF (matches spMapDMP2Genes model).'
+    )
+    feature_group.add_argument(
+        '--upstream-size',
+        type=int,
+        default=5000,
+        help='Promoter size in bp when --use-sp-regions (default: 5000)'
+    )
+    feature_group.add_argument(
+        '--downstream-size',
+        type=int,
+        default=2000,
+        help='Terminator size in bp when --use-sp-regions (default: 2000)'
+    )
+    feature_group.add_argument(
+        '--min-intron-size',
+        type=int,
+        default=0,
+        help='Minimum intron length when --use-sp-regions (default: 0)'
+    )
+    feature_group.add_argument(
+        '--storey-lambda',
+        type=float,
+        default=None,
+        metavar='LAMBDA',
+        help='Fixed lambda for Storey FDR (0-1). If not set, lambda is chosen automatically (default). Set e.g. 0.4 for SP parity.'
+    )
+
     # Disease enrichment options
     disease_group = parser.add_argument_group('Disease Enrichment Options')
     disease_group.add_argument(
@@ -734,6 +769,17 @@ def main_bedtools():
         mapper = BedtoolsMapper(
             gene_gtf=gtf_path,
             feature_types=args.feature_types,
+            use_sp_regions=getattr(args, 'use_sp_regions', False),
+            upstream_size=getattr(args, 'upstream_size', 5000),
+            downstream_size=getattr(args, 'downstream_size', 2000),
+            min_intron_size=getattr(args, 'min_intron_size', 0),
+            w_promoter=2.0,
+            w_terminator=0.5,
+            w_gene_body=1.0,
+            w_exon=1.5,
+            w_intron=0.7,
+            w_unknown=1.0,
+            storey_lambda=getattr(args, 'storey_lambda', None),
             use_p_value_weight=not args.no_p_value_weight,
             use_q_value_weight=not args.no_q_value_weight,
             use_effect_size_weight=not args.no_effect_size_weight,
@@ -781,7 +827,8 @@ def main_bedtools():
                 group_results = mapper.map_csv_files(
                     csv_pattern=paths.csv_pattern,
                     output_dir=Path(paths.output_dir),
-                    group_by=args.group_by
+                    group_by=args.group_by,
+                    process_all_contexts_per_chromosome=not getattr(args, 'no_by_chromosome', False),
                 )
                 all_results[label] = group_results
             results = {k: v for sub in all_results.values() for k, v in sub.items()}
@@ -798,7 +845,8 @@ def main_bedtools():
             results = mapper.map_csv_files(
                 csv_pattern=args.csv_pattern,
                 output_dir=output_dir,
-                group_by=args.group_by
+                group_by=args.group_by,
+                process_all_contexts_per_chromosome=not getattr(args, 'no_by_chromosome', False),
             )
             logger.info("\n" + "="*70)
             logger.info("✅ Bedtools mapping complete!")

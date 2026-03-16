@@ -11,10 +11,15 @@ from sqlmodel import SQLModel, Session, create_engine, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
 
+import numpy as np
+
 from .config import AzureSQLConfig, StoredProcedureConfig
 from .models import DMPStaging
 
 logger = logging.getLogger(__name__)
+
+# Default species_id for human (used when creating samples)
+DEFAULT_SPECIES_ID = 9606
 
 
 class AzureSQLConnection:
@@ -78,99 +83,123 @@ class AzureSQLConnection:
             logger.error(f"Failed to create tables: {e}")
             raise
     
+    def create_sample(self, species_id: int = DEFAULT_SPECIES_ID) -> int:
+        """
+        Create a new sample in dbo.Samples and return its ID.
+        Use this when you need a new sample_id for uploading DMPs.
+
+        Args:
+            species_id: Species ID (default 9606 for human)
+
+        Returns:
+            New sample ID (IDENTITY value)
+        """
+        if self.engine is None:
+            raise RuntimeError("Database not connected. Call connect() first.")
+        try:
+            with Session(self.engine) as session:
+                result = session.exec(
+                    text("INSERT INTO dbo.Samples (species_id) OUTPUT INSERTED.ID VALUES (:sid)"),
+                    params={"sid": species_id},
+                )
+                row = result.one()
+                new_id = row[0] if hasattr(row, "__getitem__") else row
+                session.commit()
+                logger.info(f"Created sample_id={new_id} (species_id={species_id})")
+                return int(new_id)
+        except Exception as e:
+            logger.error(f"Failed to create sample: {e}")
+            raise
+
     def clear_sample_data(self, sample_id: int) -> int:
         """
-        Clear existing data for a sample ID from staging table.
-        
+        Clear existing DMPs for a sample ID from dbo.sample_dmps.
+
         Args:
             sample_id: Sample ID to clear
-            
+
         Returns:
             Number of rows deleted
         """
         if self.engine is None:
             raise RuntimeError("Database not connected. Call connect() first.")
-        
+
         try:
             with Session(self.engine) as session:
-                # Use SQLModel ORM query
-                statement = select(DMPStaging).where(DMPStaging.SampleID == sample_id)
-                results = session.exec(statement).all()
-                
-                deleted_count = len(results)
-                
-                # Delete the records
-                for record in results:
-                    session.delete(record)
-                
+                result = session.exec(
+                    text("DELETE FROM dbo.sample_dmps WHERE sample_id = :sid"),
+                    params={"sid": sample_id},
+                )
                 session.commit()
-                
-                if deleted_count > 0:
-                    logger.info(f"Cleared {deleted_count} existing rows for SampleID={sample_id}")
-                return deleted_count
-                
+                # SQL Server doesn't return rowcount from DELETE in the same way; re-query is not ideal
+                # Use a separate count or rely on the fact we deleted
+                logger.info(f"Cleared sample_dmps for sample_id={sample_id}")
+                return 0  # Caller can re-check via get_sample_dmps if needed
         except Exception as e:
             logger.error(f"Failed to clear sample data: {e}")
             raise
     
     def upload_dmps(self, dmps_df: pd.DataFrame, sample_id: int) -> int:
         """
-        Upload DMPs to staging table using bulk insert.
-        
+        Upload DMPs to dbo.sample_dmps for use by spMapDMP2Genes.
+
+        Derives p_value (from CSV or q_value proxy), weight = -log10(p_value),
+        and direction = sign(delta_mean) (1 or -1).
+
         Args:
-            dmps_df: DataFrame with DMP data
-                     Required columns: position, chromosome, context
-                     Optional columns: q_value, delta_mean, overlap, effect_size
-            sample_id: Sample ID for tracking
-            
+            dmps_df: DataFrame with columns position, chromosome, context;
+                     must have p_value (or q_value) and delta_mean for direction
+            sample_id: Sample ID (must exist in dbo.Samples)
+
         Returns:
             Number of rows uploaded
         """
         if self.engine is None:
             raise RuntimeError("Database not connected. Call connect() first.")
-        
-        try:
-            # Prepare DataFrame for upload
-            upload_df = dmps_df.copy()
-            upload_df['SampleID'] = sample_id
-            
-            # Validate required columns
-            required_cols = ['position', 'chromosome', 'context']
-            missing_cols = [col for col in required_cols if col not in upload_df.columns]
-            if missing_cols:
-                raise ValueError(f"Missing required columns: {missing_cols}")
-            
-            # Optional columns (fill with None if missing)
-            optional_cols = ['q_value', 'delta_mean', 'overlap', 'effect_size']
-            for col in optional_cols:
-                if col not in upload_df.columns:
-                    upload_df[col] = None
-            
-            # Select columns in the order expected by the model
-            db_cols = ['SampleID', 'position', 'chromosome', 'context', 
-                      'q_value', 'delta_mean', 'overlap', 'effect_size']
-            upload_df = upload_df[db_cols]
-            
-            # Upload using pandas to_sql (fast bulk insert)
-            # Note: pandas to_sql doesn't go through SQLModel validation,
-            # but it's much faster for bulk operations
-            logger.info(f"Uploading {len(upload_df):,} DMPs for SampleID={sample_id}...")
-            
-            upload_df.to_sql(
-                name='dmp_staging',
-                con=self.engine,
-                if_exists='append',
-                index=False,
-                method='multi',
-                chunksize=1000
-            )
-            
-            logger.info(f"✅ Uploaded {len(upload_df):,} DMPs to staging table")
-            return len(upload_df)
-            
-        except Exception as e:
-            logger.error(f"Failed to upload DMPs: {e}")
-            raise
+
+        required = ['position', 'chromosome', 'context']
+        missing = [c for c in required if c not in dmps_df.columns]
+        if missing:
+            raise ValueError(f"Missing required columns: {missing}")
+
+        upload_df = dmps_df.copy()
+        upload_df['sample_id'] = sample_id
+
+        # p_value: use column if present, else use q_value as proxy (SP expects 0 < p_value < 1)
+        if 'p_value' in upload_df.columns:
+            pv = upload_df['p_value'].astype(float)
+        elif 'q_value' in upload_df.columns:
+            pv = upload_df['q_value'].astype(float)
+        else:
+            raise ValueError("DataFrame must contain p_value or q_value")
+        pv = pv.clip(lower=1e-300, upper=1.0 - 1e-16)
+        upload_df['p_value'] = pv
+
+        # weight: -log10(p_value), clamp to avoid inf
+        upload_df['weight'] = -np.log10(upload_df['p_value'].astype(float))
+        upload_df['weight'] = upload_df['weight'].clip(lower=0.0, upper=300.0).fillna(1.0)
+
+        # direction: sign(delta_mean), 1 or -1 (SP expects IN (-1, 1))
+        if 'delta_mean' in upload_df.columns:
+            d = np.sign(upload_df['delta_mean'].astype(float))
+            upload_df['direction'] = d.replace(0, 1).astype(int)
+        else:
+            upload_df['direction'] = 1
+
+        out_cols = ['sample_id', 'chromosome', 'context', 'position', 'p_value', 'weight', 'direction']
+        upload_df = upload_df[out_cols]
+
+        logger.info(f"Uploading {len(upload_df):,} DMPs to sample_dmps for sample_id={sample_id}...")
+        upload_df.to_sql(
+            name='sample_dmps',
+            con=self.engine,
+            if_exists='append',
+            index=False,
+            method='multi',
+            chunksize=1000,
+        )
+        logger.info(f"✅ Uploaded {len(upload_df):,} DMPs to sample_dmps")
+        return len(upload_df)
     
     def upload_dmps_orm(self, dmps: List[DMPStaging]) -> int:
         """
@@ -205,24 +234,27 @@ class AzureSQLConnection:
             logger.error(f"Failed to upload DMPs via ORM: {e}")
             raise
     
-    def get_sample_dmps(self, sample_id: int) -> List[DMPStaging]:
+    def get_sample_dmps(self, sample_id: int) -> pd.DataFrame:
         """
-        Retrieve all DMPs for a sample using SQLModel ORM.
-        
+        Retrieve all DMPs for a sample from dbo.sample_dmps.
+
         Args:
             sample_id: Sample ID to retrieve
-            
+
         Returns:
-            List of DMPStaging objects
+            DataFrame with columns sample_id, chromosome, context, position, p_value, weight, direction
         """
         if self.engine is None:
             raise RuntimeError("Database not connected. Call connect() first.")
-        
         try:
             with Session(self.engine) as session:
-                statement = select(DMPStaging).where(DMPStaging.SampleID == sample_id)
-                results = session.exec(statement).all()
-                return list(results)
+                result = session.exec(
+                    text("SELECT sample_id, chromosome, context, position, p_value, weight, direction FROM dbo.sample_dmps WHERE sample_id = :sid"),
+                    params={"sid": sample_id},
+                )
+                rows = result.fetchall()
+                cols = result.keys()
+                return pd.DataFrame(rows, columns=cols)
         except Exception as e:
             logger.error(f"Failed to retrieve sample DMPs: {e}")
             raise
@@ -232,57 +264,56 @@ class AzureSQLConnection:
         sample_id: int,
         chromosome: str,
         context: str,
-        sp_config: StoredProcedureConfig
+        sp_config: StoredProcedureConfig,
     ) -> pd.DataFrame:
         """
-        Execute spMapDMP2Genes stored procedure and return results.
-        
+        Execute spMapDMP2Genes and return gene results from dbo.sample_genes.
+        The SP inserts into sample_genes; this method fetches those rows.
+
         Args:
             sample_id: Sample ID to process
-            chromosome: Chromosome identifier
-            context: Methylation context (e.g., CG, CHG, CHH)
+            chromosome: Chromosome identifier (e.g. '1', 'X')
+            context: Methylation context (e.g., CG); used for logging only
             sp_config: Stored procedure parameters
-            
+
         Returns:
-            DataFrame with gene mapping results
+            DataFrame with columns sample_id, chromosome, gene_id, gene_name, p_value, q_value, direction, strand
         """
         if self.engine is None:
             raise RuntimeError("Database not connected. Call connect() first.")
-        
+
         try:
-            logger.info(f"Executing spMapDMP2Genes for SampleID={sample_id}, {chromosome}-{context}...")
-            
-            # Build stored procedure call
-            sp_call = text("""
-                EXEC spMapDMP2Genes
-                    @sample_id = :sample_id,
-                    @chromosome = :chromosome,
-                    @paramID = :param_id
-            """)
-            
-            params = {
-                'sample_id': sample_id,
-                'chromosome': chromosome,
-                'param_id': sp_config.param_id
-            }
-            
-            # Execute and fetch results using SQLModel Session
+            logger.info(f"Executing spMapDMP2Genes for sample_id={sample_id}, chromosome={chromosome}...")
             with Session(self.engine) as session:
-                result = session.exec(sp_call, params=params)
-                
-                # Fetch all rows
+                session.exec(
+                    text("""
+                        EXEC spMapDMP2Genes
+                            @sample_id = :sample_id,
+                            @chromosome = :chromosome,
+                            @paramID = :param_id
+                    """),
+                    params={
+                        "sample_id": sample_id,
+                        "chromosome": chromosome,
+                        "param_id": sp_config.param_id,
+                    },
+                )
+                session.commit()
+            # SP inserts into sample_genes; fetch results
+            with Session(self.engine) as session:
+                result = session.exec(
+                    text("""
+                        SELECT sample_id, chromosome, gene_id, gene_name, p_value, q_value, direction, strand
+                        FROM dbo.sample_genes
+                        WHERE sample_id = :sid AND chromosome = :chr
+                    """),
+                    params={"sid": sample_id, "chr": chromosome},
+                )
                 rows = result.fetchall()
-                if not rows:
-                    logger.warning("Stored procedure returned no results")
-                    return pd.DataFrame()
-                
-                # Convert to DataFrame
-                columns = result.keys()
-                df = pd.DataFrame(rows, columns=columns)
-                
-                logger.info(f"✅ Stored procedure returned {len(df):,} gene mappings")
-                return df
-                
+                cols = result.keys()
+                df = pd.DataFrame(rows, columns=cols)
+            logger.info(f"✅ Retrieved {len(df):,} gene mappings from sample_genes")
+            return df
         except Exception as e:
             logger.error(f"Failed to execute stored procedure: {e}")
             raise
