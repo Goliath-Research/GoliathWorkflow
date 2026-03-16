@@ -168,6 +168,18 @@ class MapperStepConfig(BaseModel):
     optimize_dmps: Optional[bool] = None
     extend_after_stable: Optional[bool] = None
     feature_types: Optional[list] = None
+    # SP-equivalent / bedtools parity (step_config.mapper in project JSON)
+    use_sp_regions: Optional[bool] = None
+    storey_lambda: Optional[float] = None
+    upstream_size: Optional[int] = None
+    downstream_size: Optional[int] = None
+    min_intron_size: Optional[int] = None
+    w_promoter: Optional[float] = None
+    w_terminator: Optional[float] = None
+    w_gene_body: Optional[float] = None
+    w_exon: Optional[float] = None
+    w_intron: Optional[float] = None
+    w_unknown: Optional[float] = None
 
 
 class MethylMapperConfig(BaseModel):

@@ -694,6 +694,29 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.no_extend_after_stable = True
     if config.feature_types is not None and args.feature_types is None:
         args.feature_types = config.feature_types
+    # SP-equivalent / bedtools parity (from step_config.mapper)
+    if config.use_sp_regions is not None:
+        args.use_sp_regions = config.use_sp_regions
+    if config.storey_lambda is not None:
+        args.storey_lambda = config.storey_lambda
+    if config.upstream_size is not None:
+        args.upstream_size = config.upstream_size
+    if config.downstream_size is not None:
+        args.downstream_size = config.downstream_size
+    if config.min_intron_size is not None:
+        args.min_intron_size = config.min_intron_size
+    if config.w_promoter is not None:
+        args.w_promoter = config.w_promoter
+    if config.w_terminator is not None:
+        args.w_terminator = config.w_terminator
+    if config.w_gene_body is not None:
+        args.w_gene_body = config.w_gene_body
+    if config.w_exon is not None:
+        args.w_exon = config.w_exon
+    if config.w_intron is not None:
+        args.w_intron = config.w_intron
+    if config.w_unknown is not None:
+        args.w_unknown = config.w_unknown
 
 
 def main_bedtools():
@@ -773,12 +796,12 @@ def main_bedtools():
             upstream_size=getattr(args, 'upstream_size', 5000),
             downstream_size=getattr(args, 'downstream_size', 2000),
             min_intron_size=getattr(args, 'min_intron_size', 0),
-            w_promoter=2.0,
-            w_terminator=0.5,
-            w_gene_body=1.0,
-            w_exon=1.5,
-            w_intron=0.7,
-            w_unknown=1.0,
+            w_promoter=getattr(args, 'w_promoter', 2.0),
+            w_terminator=getattr(args, 'w_terminator', 0.5),
+            w_gene_body=getattr(args, 'w_gene_body', 1.0),
+            w_exon=getattr(args, 'w_exon', 1.5),
+            w_intron=getattr(args, 'w_intron', 0.7),
+            w_unknown=getattr(args, 'w_unknown', 1.0),
             storey_lambda=getattr(args, 'storey_lambda', None),
             use_p_value_weight=not args.no_p_value_weight,
             use_q_value_weight=not args.no_q_value_weight,
