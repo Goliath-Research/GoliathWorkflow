@@ -641,11 +641,12 @@ For each gene provide:
 5. "description": A brief description of the association (or null if none)
 6. "publications": Number of publications mentioning this association (or 0)
 7. "functional_role": Brief description of the gene's role in {disease_term} (or null)
+8. "gene_basic_description": One-sentence summary of the gene's general biological function (or null)
 
 Return ONLY a valid JSON array—no other text. Example:
 [
-  {{"gene_name": "GENE1", "associated": true, "association_type": "direct", "evidence_level": "high", "description": "...", "publications": 15, "functional_role": "..."}},
-  {{"gene_name": "GENE2", "associated": false, "association_type": "none", "evidence_level": "none", "description": null, "publications": 0, "functional_role": null}}
+  {{"gene_name": "GENE1", "associated": true, "association_type": "direct", "evidence_level": "high", "description": "...", "publications": 15, "functional_role": "...", "gene_basic_description": "Encodes a tumor suppressor protein involved in DNA repair."}},
+  {{"gene_name": "GENE2", "associated": false, "association_type": "none", "evidence_level": "none", "description": null, "publications": 0, "functional_role": null, "gene_basic_description": null}}
 ]
 """
         return prompt
@@ -798,7 +799,8 @@ Return ONLY a valid JSON array—no other text. Example:
                             'evidence_level': 'low',
                             'description': "Mentioned in context of disease",
                             'publications': 0,
-                            'functional_role': None
+                            'functional_role': None,
+                            'gene_basic_description': None
                         })
                     else:
                         associations.append({
@@ -808,7 +810,8 @@ Return ONLY a valid JSON array—no other text. Example:
                             'evidence_level': 'none',
                             'description': None,
                             'publications': 0,
-                            'functional_role': None
+                            'functional_role': None,
+                            'gene_basic_description': None
                         })
             
             if not isinstance(associations, list):
@@ -829,6 +832,7 @@ Return ONLY a valid JSON array—no other text. Example:
                     'description': assoc.get('description'),
                     'publications': int(assoc.get('publications', 0)) if assoc.get('publications') is not None else 0,
                     'functional_role': assoc.get('functional_role'),
+                    'gene_basic_description': assoc.get('gene_basic_description'),
                     'source': 'grok_api'
                 }
             
@@ -843,6 +847,7 @@ Return ONLY a valid JSON array—no other text. Example:
                         'description': None,
                         'publications': 0,
                         'functional_role': None,
+                        'gene_basic_description': None,
                         'source': 'grok_api'
                     }
             
@@ -861,6 +866,7 @@ Return ONLY a valid JSON array—no other text. Example:
                     'description': None,
                     'publications': 0,
                     'functional_role': None,
+                    'gene_basic_description': None,
                     'source': 'grok_api_parse_error'
                 }
         
@@ -1184,22 +1190,22 @@ Return ONLY a valid JSON array—no other text. Example:
         merged_results = {}
         for gene in unique_genes:
             gene_upper = gene.upper()
+            grok_entry = grok_results.get(gene_upper, {})
 
             # Priority: Associated results first, then any available results
             if gene_upper in grok_results and self._association_meets_thresholds(grok_results[gene_upper]):
-                merged_results[gene_upper] = grok_results[gene_upper]
+                merged_results[gene_upper] = dict(grok_results[gene_upper])
             elif gene_upper in open_targets_results and self._association_meets_thresholds(open_targets_results[gene_upper]):
-                merged_results[gene_upper] = open_targets_results[gene_upper]
+                merged_results[gene_upper] = dict(open_targets_results[gene_upper])
             elif gene_upper in disgenet_results and self._association_meets_thresholds(disgenet_results[gene_upper]):
-                merged_results[gene_upper] = disgenet_results[gene_upper]
+                merged_results[gene_upper] = dict(disgenet_results[gene_upper])
             elif gene_upper in grok_results:
-                merged_results[gene_upper] = grok_results[gene_upper]
+                merged_results[gene_upper] = dict(grok_results[gene_upper])
             elif gene_upper in open_targets_results:
-                merged_results[gene_upper] = open_targets_results[gene_upper]
+                merged_results[gene_upper] = dict(open_targets_results[gene_upper])
             elif gene_upper in disgenet_results:
-                merged_results[gene_upper] = disgenet_results[gene_upper]
+                merged_results[gene_upper] = dict(disgenet_results[gene_upper])
             else:
-                # No association found
                 merged_results[gene_upper] = {
                     'associated': False,
                     'association_type': 'none',
@@ -1207,8 +1213,13 @@ Return ONLY a valid JSON array—no other text. Example:
                     'description': None,
                     'publications': 0,
                     'functional_role': None,
+                    'gene_basic_description': grok_entry.get('gene_basic_description'),
                     'source': 'none'
                 }
+
+            # gene_basic_description only comes from Grok; inject when we chose another source
+            if merged_results[gene_upper].get('gene_basic_description') is None and grok_entry.get('gene_basic_description'):
+                merged_results[gene_upper]['gene_basic_description'] = grok_entry['gene_basic_description']
         return merged_results
 
     def _association_meets_thresholds(self, assoc: Dict) -> bool:
@@ -1284,17 +1295,21 @@ Return ONLY a valid JSON array—no other text. Example:
             lambda x: hyperlinks.get(x, {}).get('omim', '') if pd.notna(x) else ''
         )
 
-        # Add basic gene description for unrelated genes
+        # gene_basic_description: only from Grok (Open Targets does not provide it)
         df['gene_basic_description'] = df[gene_column].str.upper().map(
-            lambda x: hyperlinks.get(x, {}).get('description', 'Gene function not determined') if pd.notna(x) else ''
+            lambda x: (results.get(x, {}).get('gene_basic_description') or '') if pd.notna(x) else ''
         )
+        # If no gene has a description (all empty or NaN), remove the column from export
+        if 'gene_basic_description' in df.columns:
+            filled = df['gene_basic_description'].fillna('').astype(str).str.strip()
+            if (filled == '').all():
+                df.drop(columns=['gene_basic_description'], inplace=True)
 
         return df
 
     def _generate_gene_hyperlinks(self, gene_names: List[str]) -> Dict[str, Dict]:
-        """Generate hyperlinks for gene databases."""
+        """Generate hyperlinks for gene databases (NCBI, Ensembl, UniProt, OMIM)."""
         hyperlinks = {}
-
         for gene in gene_names:
             gene_upper = gene.upper()
             hyperlinks[gene_upper] = {
@@ -1302,9 +1317,7 @@ Return ONLY a valid JSON array—no other text. Example:
                 'ensembl': f'https://www.ensembl.org/id/{gene}',
                 'uniprot': f'https://www.uniprot.org/uniprotkb?query={gene}',
                 'omim': f'https://www.omim.org/search?search={gene}',
-                'description': f'Protein-coding gene {gene} - function and biological role'
             }
-
         return hyperlinks
 
     def _cache_key(self, source: str, gene_name: str, disease_term: str) -> str:
