@@ -3,7 +3,7 @@
 
 set -e
 
-echo "Testing MethylModeler devcontainer connection methods..."
+echo "Testing MethylDetector devcontainer connection methods..."
 echo "========================================================"
 
 # Check if epimethyl container is running
@@ -78,7 +78,7 @@ if [ "$CONTAINER_STATUS" = "running" ] || [ "$CONTAINER_STATUS" = "started" ]; t
     echo ""
     echo "Next steps:"
     echo "1. Open Cursor"
-    echo "2. Open /home/ubuntu/MethylModeler folder"
+    echo "2. Open project folder"
     echo "3. Try 'Reopen in Container'"
     echo ""
     echo "If the Docker Compose method fails, try the simple method:"

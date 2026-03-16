@@ -21,8 +21,8 @@ except ImportError:
     )
 
 from .core.methyldetector import MethylDetector
-from .models.config import MethylModelerConfig
-from .models.results import MethylModelerResult
+from .models.config import MethylDetectorConfig
+from .models.results import MethylDetectorResult
 
 # Import MethylCentroidPair from MethylUtils
 from methyl_utils import MethylCentroidPair
@@ -30,7 +30,7 @@ from methyl_utils import MethylCentroidPair
 __version__ = "0.2.0"
 __all__ = [
     "MethylDetector",
-    "MethylModelerConfig",
-    "MethylModelerResult",
+    "MethylDetectorConfig",
+    "MethylDetectorResult",
     "MethylCentroidPair"
 ] 

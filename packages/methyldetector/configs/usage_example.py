@@ -9,7 +9,7 @@ to classify two groups of genomics samples using divergences.
 import logging
 from pathlib import Path
 from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 
 # Setup logging
 # Use MethylUtils logging if available
@@ -39,7 +39,7 @@ def main():
     ]
     
     # Create configuration
-    config = MethylModelerConfig(
+    config = MethylDetectorConfig(
         centroid_path=centroid_path,
         controls=control_paths,
         treatments=treatment_paths,

@@ -1,10 +1,11 @@
 """Pydantic models for configuration and results."""
 
-from .config import MethylModelerConfig
+from .config import MethylDetectorConfig
 from .results import (
-    MethylModelerResult,
+    MethylDetectorResult,
+    MethylDetectorSummary,
     ComparisonStats,
-    MethylModelerValidationResults,
+    MethylDetectorValidationResults,
     ValidationResults,
     PerformanceMetrics,
     ConfusionMatrix,
@@ -12,10 +13,11 @@ from .results import (
 )
 
 __all__ = [
-    "MethylModelerConfig",
-    "MethylModelerResult",
+    "MethylDetectorConfig",
+    "MethylDetectorResult",
+    "MethylDetectorSummary",
     "ComparisonStats",
-    "MethylModelerValidationResults",
+    "MethylDetectorValidationResults",
     "ValidationResults",
     "PerformanceMetrics",
     "ConfusionMatrix",

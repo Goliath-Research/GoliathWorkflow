@@ -25,19 +25,19 @@ from methyl_utils.ecdf_classifier import ECDFClassifier
 
 # Handle relative imports - try module import first, fall back to direct execution setup
 try:
-    from ..models.config import MethylModelerConfig
+    from ..models.config import MethylDetectorConfig
     from ..models.results import (
         ComparisonStats,
-        MethylModelerResult,
-        MethylModelerSummary,
+        MethylDetectorResult,
+        MethylDetectorSummary,
     )
     from ..utils.core import GPUConfig, save_csv, save_json, save_summary_txt
     from ..utils.file_utils import get_chromosome_context_from_filename
 except ImportError:
     # For direct execution, these will be set up in __main__
-    MethylModelerConfig = None
+    MethylDetectorConfig = None
     ComparisonStats = None
-    MethylModelerResult = None
+    MethylDetectorResult = None
     GPUConfig = None
     save_csv = None
     save_json = None
@@ -101,7 +101,7 @@ def _select_by_effect_coverage(df: pd.DataFrame, coverage: float) -> pd.DataFram
 class MethylDetector:
     """Main class for MethylDetector DMP detection and filtering."""
 
-    def __init__(self, config: MethylModelerConfig):
+    def __init__(self, config: MethylDetectorConfig):
         """Initialize with configuration."""
         self.config = config
         np.random.seed(config.random_state)
@@ -122,13 +122,13 @@ class MethylDetector:
             return self.config.chromosome[0]
         return self.config.chromosome
     
-    def run(self) -> Union[MethylModelerResult, List[MethylModelerResult]]:
+    def run(self) -> Union[MethylDetectorResult, List[MethylDetectorResult]]:
         """
         Run the complete DMP detection and filtering pipeline.
         
         Returns:
-            MethylModelerResult if processing a single chromosome,
-            List[MethylModelerResult] if processing multiple chromosomes
+            MethylDetectorResult if processing a single chromosome,
+            List[MethylDetectorResult] if processing multiple chromosomes
         """
         logger.debug("Starting MethylDetector analysis pipeline...")
         
@@ -177,7 +177,7 @@ class MethylDetector:
             
             return results
     
-    def _run_multi_context(self) -> MethylModelerResult:
+    def _run_multi_context(self) -> MethylDetectorResult:
         """Run multi-context analysis (new unified approach)."""
         logger.info(f"🧬 Starting multi-context analysis for chromosome {self.chromosome}")
         logger.info(f"📍 Contexts: {', '.join(self.config.contexts)}")
@@ -2627,7 +2627,7 @@ class MethylDetector:
         from datetime import datetime
 
         from ..models import (
-            MethylModelerValidationResults,
+            MethylDetectorValidationResults,
             ValidationResults,
             PerformanceMetrics,
             ConfusionMatrix,
@@ -2682,7 +2682,7 @@ class MethylDetector:
         biological_filter = self._biological_filter_summary if hasattr(self, '_biological_filter_summary') else None
 
         # Create the main results object
-        results = MethylModelerValidationResults(
+        results = MethylDetectorValidationResults(
             chromosome=self.chromosome,
             timestamp=datetime.now().isoformat(),
             config=config_dict,
@@ -2979,7 +2979,7 @@ class MethylDetector:
         self, 
         dmps_df: pd.DataFrame, 
         bio_dmps_df: pd.DataFrame
-    ) -> MethylModelerResult:
+    ) -> MethylDetectorResult:
         """
         Create result object for multi-context analysis.
         
@@ -2988,7 +2988,7 @@ class MethylDetector:
             bio_dmps_df: DataFrame with biological DMPs
             
         Returns:
-            MethylModelerResult
+            MethylDetectorResult
         """
         # Compute per-context statistics
         comparison_stats = []
@@ -3017,7 +3017,7 @@ class MethylDetector:
         if hasattr(self, '_final_validation_results') and self._final_validation_results:
             balanced_accuracy = self._final_validation_results.get('balanced_accuracy')
 
-        result = MethylModelerResult(
+        result = MethylDetectorResult(
             biologically_significant_dmps_df=bio_dmps_df,
             total_statistical_dmps=total_statistical_dmps,
             total_biological_dmps=len(bio_dmps_df),
@@ -3323,7 +3323,7 @@ class MethylDetector:
         logger.info(f"Saved {len(df):,} biological DMPs to {csv_path} with {len(df.columns)} columns")
 
     def _create_final_result(self, dmp_df: pd.DataFrame,
-                             biological_dmps_df: Optional[pd.DataFrame] = None) -> MethylModelerResult:
+                             biological_dmps_df: Optional[pd.DataFrame] = None) -> MethylDetectorResult:
         """Create final result object from DataFrames."""
         # Log biological importance range
         if biological_dmps_df is not None and not biological_dmps_df.empty:
@@ -3358,7 +3358,7 @@ class MethylDetector:
 
         config_summary = self.config.model_dump()
 
-        result = MethylModelerResult(
+        result = MethylDetectorResult(
             biologically_significant_dmps_df=biological_dmps_df,
             total_statistical_dmps=total_statistical_dmps,
             total_biological_dmps=len(biological_dmps_df) if biological_dmps_df is not None else 0,
@@ -3370,7 +3370,7 @@ class MethylDetector:
         )
         return result
 
-    def _save_results(self, result: MethylModelerResult) -> None:
+    def _save_results(self, result: MethylDetectorResult) -> None:
         """Save results for single mode."""
         output_dir = Path(self.config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -3410,7 +3410,7 @@ class MethylDetector:
         # Model info
         model_path = result.classifier_model_path if hasattr(result, 'classifier_model_path') else None
         training_accuracy = result.training_accuracy if hasattr(result, 'training_accuracy') else None
-        summary = MethylModelerSummary(
+        summary = MethylDetectorSummary(
             analysis_id=str(uuid.uuid4()),
             timestamp=datetime.now().isoformat(),
             version="2.0.0",
@@ -3462,8 +3462,8 @@ def _setup_imports_for_direct_execution():
     from pathlib import Path
 
     # When run directly, set up the package structure
-    script_dir = Path(__file__).parent  # methyl_modeler/core/
-    package_root = script_dir.parent  # methyl_modeler/
+    script_dir = Path(__file__).parent  # methyl_detector/core/
+    package_root = script_dir.parent  # methyl_detector/
     # Add package root to sys.path for imports
     if str(package_root) not in sys.path:
         sys.path.insert(0, str(package_root))
@@ -3473,15 +3473,15 @@ def _setup_imports_for_direct_execution():
     if methyl_utils_path.exists() and str(methyl_utils_path) not in sys.path:
         sys.path.insert(0, str(methyl_utils_path))
     # Now import the relative imports and update globals
-    global MethylModelerConfig, ComparisonStats, MethylModelerResult, MethylModelerSummary
+    global MethylDetectorConfig, ComparisonStats, MethylDetectorResult, MethylDetectorSummary
     global GPUConfig, save_csv, save_json, save_summary_txt
     global CentroidPairHandler, create_centroid_from_arrays, get_chromosome_context_from_filename
     try:
-        from models.config import MethylModelerConfig as MDC  # type: ignore[import-not-found]
+        from models.config import MethylDetectorConfig as MDC  # type: ignore[import-not-found]
         from models.results import (  # type: ignore[import-not-found]
             ComparisonStats as CS,
-            MethylModelerResult as MDR,
-            MethylModelerSummary as MDS,
+            MethylDetectorResult as MDR,
+            MethylDetectorSummary as MDS,
         )
         from utils.core import (  # type: ignore[import-not-found]
             GPUConfig as GC,
@@ -3496,10 +3496,10 @@ def _setup_imports_for_direct_execution():
         from utils.file_utils import get_chromosome_context_from_filename as gccf  # type: ignore[import-not-found]
 
         # Update the global variables
-        MethylModelerConfig = MDC
+        MethylDetectorConfig = MDC
         ComparisonStats = CS
-        MethylModelerResult = MDR
-        MethylModelerSummary = MDS
+        MethylDetectorResult = MDR
+        MethylDetectorSummary = MDS
         GPUConfig = GC
         save_csv = sc
         save_json = sj
@@ -3514,17 +3514,17 @@ def _setup_imports_for_direct_execution():
 
 
 if __name__ == "__main__":
-    """Allow direct execution of MethylModeler for development/testing."""
+    """Allow direct execution of MethylDetector for development/testing."""
     _setup_imports_for_direct_execution()
     # Delegate to CLI main function
     try:
-        from methyl_modeler.cli.main import main  # type: ignore[import-not-found]
+        from methyl_detector.cli.main import main  # type: ignore[import-not-found]
 
         main()
     except ImportError as e:
         import sys
 
         print(f"Error: {e}")
-        print("Try running: python run_methyl_modeler.py")
-        print("Or: python -m methyl_modeler.cli.main")
+        print("Try running: python run_methyl_detector.py")
+        print("Or: python -m methyl_detector.cli.main")
         sys.exit(1)

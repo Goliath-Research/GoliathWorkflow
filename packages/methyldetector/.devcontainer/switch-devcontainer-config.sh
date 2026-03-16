@@ -3,7 +3,7 @@
 
 set -e
 
-echo "MethylModeler DevContainer Configuration Switcher"
+echo "MethylDetector DevContainer Configuration Switcher"
 echo "================================================="
 
 # Check current configuration
@@ -65,7 +65,7 @@ fi
 echo ""
 echo "Next steps:"
 echo "1. Open Cursor"
-echo "2. Open /home/ubuntu/MethylModeler folder"
+echo "2. Open project folder"
 echo "3. Click 'Reopen in Container'"
 echo ""
 echo "If it fails, run this script again and try the other method."

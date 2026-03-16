@@ -18,7 +18,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 
 
 def main():
@@ -49,7 +49,7 @@ def main():
     print()
     
     # Example configuration with DMP filtering enabled
-    config = MethylModelerConfig(
+    config = MethylDetectorConfig(
         centroid1_path=Path("/home/ubuntu/Work/output_workflows/arabidopsis/centroids/WT/1-CG.h5"),
         centroid2_path=Path("/home/ubuntu/Work/output_workflows/arabidopsis/centroids/msh1/1-CG.h5"),
         output_dir=Path("./example_results"),

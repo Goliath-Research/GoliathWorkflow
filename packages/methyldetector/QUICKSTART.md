@@ -90,7 +90,7 @@ Contexts will be automatically weighted based on their biological importance.
 
 ```python
 from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 from methyl_detector.core.methyldetector import MethylDetector
 from methyl_detector.utils.file_utils import load_config_from_json
 

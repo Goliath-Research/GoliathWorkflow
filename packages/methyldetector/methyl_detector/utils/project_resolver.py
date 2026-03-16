@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from methyl_utils import load_project
 
-from ..models.config import MethylModelerConfig
+from ..models.config import MethylDetectorConfig
 
 
 def resolve_detector_config_per_cancer_group(
@@ -20,9 +20,9 @@ def resolve_detector_config_per_cancer_group(
     output_base_override: Optional[Union[str, Path]] = None,
     control_index: int = 0,
     disease_subdir: str = "cancer",
-) -> List[Tuple[MethylModelerConfig, str]]:
+) -> List[Tuple[MethylDetectorConfig, str]]:
     """
-    Build one MethylModelerConfig per comparison (control vs disease pair).
+    Build one MethylDetectorConfig per comparison (control vs disease pair).
     When project uses control/disease + comparisons: one config per comparison from get_comparisons().
     When project uses flat groups: one config per non-control group (control index 0 vs each other).
     If output_base_override is set, all paths (centroid dirs, output_dir) are derived from that base
@@ -40,7 +40,7 @@ def resolve_detector_config_per_cancer_group(
 
     if getattr(project, "uses_control_disease", lambda: False)():
         comparisons = project.get_comparisons()
-        out: List[Tuple[MethylModelerConfig, str]] = []
+        out: List[Tuple[MethylDetectorConfig, str]] = []
         for spec in comparisons:
             ctrl_label = spec.control_group
             dis_label = spec.disease_group
@@ -67,7 +67,7 @@ def resolve_detector_config_per_cancer_group(
             base["output_dir"] = project.get_detection_output_dir(ctrl_label, dis_label)
             base["centroid1_dir"] = project.get_centroid_dir("control", ctrl_label)
             base["centroid2_dir"] = project.get_centroid_dir("disease", dis_label)
-            out.append((MethylModelerConfig.model_validate(base), comp_label))
+            out.append((MethylDetectorConfig.model_validate(base), comp_label))
         return out
 
     paths = project.get_derived_paths()
@@ -100,7 +100,7 @@ def resolve_detector_config_per_cancer_group(
             base["centroid2_validation_samples"] = project.get_group_sample_paths(i)
         for k, v in step_cfg.items():
             base[k] = v
-        out.append((MethylModelerConfig.model_validate(base), label))
+        out.append((MethylDetectorConfig.model_validate(base), label))
     return out
 
 
@@ -110,10 +110,10 @@ def resolve_detector_config(
     output_base_override: Optional[Union[str, Path]] = None,
     centroid1_dir_override: Optional[Union[str, Path]] = None,
     centroid2_dir_override: Optional[Union[str, Path]] = None,
-) -> MethylModelerConfig:
+) -> MethylDetectorConfig:
     """
-    Build MethylModelerConfig from a project config and optional step overrides.
-    Uses Pydantic throughout; returns MethylModelerConfig (not dict).
+    Build MethylDetectorConfig from a project config and optional step overrides.
+    Uses Pydantic throughout; returns MethylDetectorConfig (not dict).
     Output dir follows detections/<control_group>/<disease_group> (e.g. detections/healthy/cancer).
     If output_base_override is set, centroid and output paths are derived from that base instead
     of the project's output_base (so one project JSON works across machines). Optional
@@ -170,4 +170,4 @@ def resolve_detector_config(
     if centroid2_dir_override is not None:
         base["centroid2_dir"] = str(centroid2_dir_override)
 
-    return MethylModelerConfig.model_validate(base)
+    return MethylDetectorConfig.model_validate(base)

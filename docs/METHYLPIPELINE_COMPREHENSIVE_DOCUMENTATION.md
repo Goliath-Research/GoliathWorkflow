@@ -350,9 +350,9 @@ print(f"Found {result['metrics']['n_clusters']} clusters")
 **Example**:
 ```python
 from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 
-config = MethylModelerConfig.model_validate(json.load(open('/configs/healthy_vs_cancer.json')))
+config = MethylDetectorConfig.model_validate(json.load(open('/configs/healthy_vs_cancer.json')))
 detector = MethylDetector(config)
 result = detector.run()
 
@@ -387,9 +387,9 @@ print(f"Model saved: {result['model_path']}")
 **Example**:
 ```python
 from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     centroid1_path='/centroids/healthy.h5',
     centroid2_path='/centroids/cancer.h5',
     target_balanced_accuracy=0.95,
@@ -626,14 +626,14 @@ for i in range(1, 11):
 
 from multiprocessing import Pool
 from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 import os
 
 def process_chromosome(chrom):
     """Process single chromosome."""
     os.environ['CUDA_VISIBLE_DEVICES'] = str(int(chrom) % 4)  # Distribute GPUs
     
-    config = MethylModelerConfig(
+    config = MethylDetectorConfig(
         chromosome=chrom,
         contexts=['CG'],
         centroid1_dir='/centroids/healthy',

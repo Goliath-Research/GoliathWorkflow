@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Union
 
-from ..models.config import MethylModelerConfig
+from ..models.config import MethylDetectorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -26,18 +26,18 @@ def create_output_directory(output_dir: Union[str, Path]) -> Path:
     return output_path
 
 
-def load_config_from_json(json_path: Union[str, Path]) -> MethylModelerConfig:
+def load_config_from_json(json_path: Union[str, Path]) -> MethylDetectorConfig:
     """
     Load MethylDetector configuration from JSON file.
 
-    The configuration file must contain valid MethylModelerConfig parameters.
+    The configuration file must contain valid MethylDetectorConfig parameters.
     Warns about unused parameters that are not defined in the model.
 
     Args:
         json_path: Path to JSON configuration file
 
     Returns:
-        MethylModelerConfig object
+        MethylDetectorConfig object
     """
     json_path = Path(json_path)
 
@@ -48,7 +48,7 @@ def load_config_from_json(json_path: Union[str, Path]) -> MethylModelerConfig:
         config_data = json.load(f)
 
     # Get all valid field names from the Pydantic model
-    valid_fields = set(MethylModelerConfig.model_fields.keys())
+    valid_fields = set(MethylDetectorConfig.model_fields.keys())
 
     # Check for unused parameters
     unused_params = []
@@ -61,7 +61,7 @@ def load_config_from_json(json_path: Union[str, Path]) -> MethylModelerConfig:
         logger.warning("These parameters will be ignored. Consider removing them to simplify the config.")
 
     # The unified config will validate the mode and required fields
-    return MethylModelerConfig(**config_data)
+    return MethylDetectorConfig(**config_data)
 
 
 def get_chromosome_context_from_filename(filepath: Union[str, Path]) -> Dict[str, str]:

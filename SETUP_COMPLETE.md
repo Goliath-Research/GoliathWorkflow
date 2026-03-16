@@ -74,7 +74,7 @@ All packages were tested and are working correctly:
 
 ```bash
 ✓ MethylUtils OK
-✓ MethylModeler OK
+✓ MethylDetector OK
 ✓ MethylCentroid OK
 ✓ MethylCluster OK
 ```
@@ -133,7 +133,7 @@ cd /home/ubuntu/MethylPipeline
 
 ### Running Applications
 
-**MethylModeler:**
+**MethylDetector:**
 ```bash
 cd /home/ubuntu/MethylPipeline/packages/methylmodeler
 ./modeler config.json
@@ -148,12 +148,12 @@ cd /home/ubuntu/MethylPipeline/packages/methylcentroid
 ### Direct Python Usage
 
 ```python
-from methyl_modeler import MethylModeler
-from methyl_modeler.models.config import MethylModelerConfig
+from methyl_detector import MethylDetector
+from methyl_detector.models.config import MethylDetectorConfig
 from pathlib import Path
 
 # Create configuration (note: removed unused parameters)
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     centroid1_path=Path("/path/to/centroid1.h5"),
     centroid2_path=Path("/path/to/centroid2.h5"),
     output_dir=Path("./results"),
@@ -163,7 +163,7 @@ config = MethylModelerConfig(
 )
 
 # Run analysis
-detector = MethylModeler(config)
+detector = MethylDetector(config)
 result = detector.run()
 ```
 
@@ -202,7 +202,7 @@ With automatic fallback to:
 pip3 install -e . --no-cache-dir
 ```
 
-## 📝 Configuration Changes (MethylModeler)
+## 📝 Configuration Changes (MethylDetector)
 
 ### Removed Parameters
 
@@ -226,7 +226,7 @@ pip3 install -e . --no-cache-dir
 ### Current Configuration Parameters
 
 ```python
-MethylModelerConfig(
+MethylDetectorConfig(
     centroid1_path: Path,
     centroid2_path: Path,
     output_dir: Path,

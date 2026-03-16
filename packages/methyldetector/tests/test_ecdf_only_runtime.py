@@ -12,7 +12,7 @@ sys.path.insert(0, str(REPO_ROOT / "packages/methylutils"))
 sys.path.insert(0, str(REPO_ROOT / "packages/methyldetector"))
 
 from methyl_detector.core.methyldetector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 from methyl_utils.core.centroid_builder import MethylCentroidBuilder
 from methyl_utils.methyl_centroid_pair import DIST_ECDF, MethylCentroidPair
 
@@ -32,7 +32,7 @@ def build_detector(temp_dir: str, **overrides) -> MethylDetector:
     centroid2_dir = Path(temp_dir) / "c2"
     centroid1_dir.mkdir(exist_ok=True)
     centroid2_dir.mkdir(exist_ok=True)
-    config = MethylModelerConfig.model_validate(
+    config = MethylDetectorConfig.model_validate(
         {
             "chromosome": "1",
             "contexts": ["CG"],
@@ -56,7 +56,7 @@ def test_methyl_detector_config_rejects_legacy_distribution_fields():
             ValueError,
             match="Legacy distribution-specific detector options are no longer supported",
         ):
-            MethylModelerConfig.model_validate(
+            MethylDetectorConfig.model_validate(
                 {
                     "chromosome": "1",
                     "contexts": ["CG"],
@@ -78,7 +78,7 @@ def test_methyl_detector_config_rejects_removed_statistical_test_option():
             ValueError,
             match="statistical_test is no longer supported",
         ):
-            MethylModelerConfig.model_validate(
+            MethylDetectorConfig.model_validate(
                 {
                     "chromosome": "1",
                     "contexts": ["CG"],

@@ -1,13 +1,13 @@
 #!/bin/bash
-# Setup script for MethylModeler devcontainer
+# Setup script for MethylDetector devcontainer
 
 set -e
 
-echo "Setting up MethylModeler development container..."
+echo "Setting up MethylDetector development container..."
 
 # Check if we're in the right directory
 if [ ! -f "pyproject.toml" ]; then
-    echo "Error: Please run this script from the MethylModeler root directory"
+    echo "Error: Please run this script from the MethylDetector root directory"
     exit 1
 fi
 
@@ -56,15 +56,15 @@ except ImportError as e:
     print(f'Warning: MethylUtils not properly installed: {e}')
 "
 
-echo "7. Testing MethylModeler imports..."
-docker exec epimethyl bash -c "cd /home/ubuntu/MethylModeler && python -c 'import methyl_modeler; print(\"MethylModeler imported successfully\")'"
+echo "7. Testing MethylDetector imports..."
+docker exec epimethyl bash -c "cd /workspace && python -c 'import methyl_detector; print(\"MethylDetector imported successfully\")'"
 
 echo ""
 echo "🎉 Development container setup complete!"
 echo ""
 echo "Next steps:"
 echo "1. Open Cursor"
-echo "2. Open the /home/ubuntu/MethylModeler folder"
+echo "2. Open the project folder"
 echo "3. Click 'Reopen in Container' when prompted"
 echo ""
 echo "The devcontainer will automatically:"

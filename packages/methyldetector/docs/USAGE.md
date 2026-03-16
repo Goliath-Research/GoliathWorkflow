@@ -181,19 +181,19 @@ For all parameters (biological filters, validation, etc.), see [MethylDetector_C
 ## Python API
 
 ```python
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 from methyl_detector.core.methyldetector import MethylDetector
 from methyl_detector.utils.file_utils import load_config_from_json
 
 # Load configuration
 config = load_config_from_json("config.json")
-# or build MethylModelerConfig directly (MethylDetector config)
+# or build MethylDetectorConfig directly (MethylDetector config)
 
 detector = MethylDetector(config)
 result = detector.run()
 
-# Single chromosome: result is MethylModelerResult (MethylDetector result)
-# Multiple chromosomes: result is list of MethylModelerResult
+# Single chromosome: result is MethylDetectorResult (MethylDetector result)
+# Multiple chromosomes: result is list of MethylDetectorResult
 if isinstance(result, list):
     for r in result:
         print(f"DMPs: {r.total_biological_dmps:,}")

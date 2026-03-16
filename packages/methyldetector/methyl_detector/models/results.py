@@ -47,7 +47,7 @@ class ComparisonStats(NumpyCompatibleModel):
     gpu_used: bool = Field(default=False, description="Whether GPU was used")
 
 
-class MethylModelerResult(NumpyCompatibleModel):
+class MethylDetectorResult(NumpyCompatibleModel):
     """Simplified result from MethylDetector analysis (DataFrame-centric)."""
 
     # Core results - DataFrame-based storage only
@@ -101,7 +101,7 @@ class MethylModelerResult(NumpyCompatibleModel):
     }
 
 
-class MethylModelerSummary(BaseModel):
+class MethylDetectorSummary(BaseModel):
     """Summary configuration for completed MethylDetector analysis."""
 
     # -----------------------
@@ -194,7 +194,7 @@ class ValidationResults(NumpyCompatibleModel):
     sample_counts: SampleCounts = Field(..., description="Sample counts")
 
 
-class MethylModelerValidationResults(NumpyCompatibleModel):
+class MethylDetectorValidationResults(NumpyCompatibleModel):
     """Final validation results from MethylDetector analysis."""
 
     # Core identification
@@ -241,7 +241,7 @@ class MethylModelerValidationResults(NumpyCompatibleModel):
 #
 # The system uses pandas DataFrames throughout the entire pipeline:
 # - Processing: DataFrame-based operations for filtering/selection
-# - Results: DataFrame storage in MethylModelerResult.biologically_significant_dmps_df
+# - Results: DataFrame storage in MethylDetectorResult.biologically_significant_dmps_df
 # - Export: Direct DataFrame-to-CSV without object conversion
 #
 # Benefits achieved:
@@ -253,6 +253,6 @@ class MethylModelerValidationResults(NumpyCompatibleModel):
 # ✅ Easier testing and debugging
 # Architecture:
 # - DataFrame operations handled directly in MethylDetector class
-# - MethylModelerResult stores DataFrame directly (no conversion)
+# - MethylDetectorResult stores DataFrame directly (no conversion)
 # - Direct CSV export from DataFrames (no object serialization)
 # - Pydantic models used only for config/results metadata 

@@ -1,7 +1,7 @@
 {
-  "name": "MethylModeler Development Environment",
+  "name": "MethylDetector Development Environment",
   "image": "epimethyl",
-  "workspaceFolder": "/home/ubuntu/MethylModeler",
+  "workspaceFolder": "/workspace",
   "shutdownAction": "none",
   
   // Mount additional volumes for development
@@ -30,7 +30,7 @@
   "remoteUser": "ubuntu",
   
   // Post-create command to set up the development environment
-  "postCreateCommand": "bash -c 'cd /home/ubuntu/MethylModeler && poetry install --with dev && echo \"Development environment ready!\"'",
+  "postCreateCommand": "bash -c 'cd /workspace && poetry install --with dev && echo \"Development environment ready!\"'",
   
   // Configure VS Code/Cursor extensions
   "customizations": {
@@ -103,9 +103,9 @@
   },
   
   // Lifecycle scripts
-  "onCreateCommand": "echo 'Setting up MethylModeler development environment...'",
-  "updateContentCommand": "echo 'Updating MethylModeler development environment...'",
-  "postStartCommand": "echo 'MethylModeler development environment is ready!'",
+  "onCreateCommand": "echo 'Setting up MethylDetector development environment...'",
+  "updateContentCommand": "echo 'Updating MethylDetector development environment...'",
+  "postStartCommand": "echo 'MethylDetector development environment is ready!'",
   
   // Configure the terminal
   "terminal": {
@@ -122,6 +122,6 @@
   ],
   
   // Development-specific settings
-  "workspaceMount": "source=${localWorkspaceFolder},target=/home/ubuntu/MethylModeler,type=bind,consistency=cached",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "overrideCommand": false
 }

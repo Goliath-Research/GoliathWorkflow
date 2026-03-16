@@ -78,8 +78,8 @@ def load_config_from_json(config_path: Path) -> BaseModel:
     """Load Pydantic config from JSON."""
     with open(config_path, 'r') as f:
         config_data = json.load(f)
-    from ..models.config import MethylModelerConfig
-    return MethylModelerConfig(**config_data)
+    from ..models.config import MethylDetectorConfig
+    return MethylDetectorConfig(**config_data)
 
 def save_csv(data: List[Dict], filename: Path, columns: List[str]) -> None:
     """Save data as CSV."""

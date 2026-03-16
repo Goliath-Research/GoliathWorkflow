@@ -1,8 +1,8 @@
 {
-  "name": "MethylModeler Development Environment",
+  "name": "MethylDetector Development Environment",
   "dockerComposeFile": "/home/ubuntu/Work/cuda/docker-compose.yml",
   "service": "gpu_env",
-  "workspaceFolder": "/home/ubuntu/MethylModeler",
+  "workspaceFolder": "/workspace",
   "shutdownAction": "none",
   
   // Configure the container to use the epimethyl container
@@ -34,7 +34,7 @@
   "remoteUser": "ubuntu",
   
   // Post-create command to set up the development environment
-  "postCreateCommand": "bash -c 'cd /home/ubuntu/MethylModeler && poetry install --with dev && echo \"Development environment ready!\"'",
+  "postCreateCommand": "bash -c 'cd /workspace && poetry install --with dev && echo \"Development environment ready!\"'",
   
   // Pre-create command to ensure Docker permissions and container
   "initializeCommand": "bash -c 'if ! docker ps >/dev/null 2>&1; then echo \"Docker not accessible. Please run: ./.devcontainer/fix-docker-permissions.sh\"; exit 1; fi && if ! docker ps | grep -q epimethyl; then echo \"epimethyl container not running. Please run: cd /home/ubuntu/Work/cuda && docker-compose up -d\"; exit 1; fi'",
@@ -110,9 +110,9 @@
   },
   
   // Lifecycle scripts
-  "onCreateCommand": "echo 'Setting up MethylModeler development environment...'",
-  "updateContentCommand": "echo 'Updating MethylModeler development environment...'",
-  "postStartCommand": "echo 'MethylModeler development environment is ready!'",
+  "onCreateCommand": "echo 'Setting up MethylDetector development environment...'",
+  "updateContentCommand": "echo 'Updating MethylDetector development environment...'",
+  "postStartCommand": "echo 'MethylDetector development environment is ready!'",
   
   // Configure the terminal
   "terminal": {
@@ -129,6 +129,6 @@
   ],
   
   // Development-specific settings
-  "workspaceMount": "source=${localWorkspaceFolder},target=/home/ubuntu/MethylModeler,type=bind,consistency=cached",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "overrideCommand": false
 }

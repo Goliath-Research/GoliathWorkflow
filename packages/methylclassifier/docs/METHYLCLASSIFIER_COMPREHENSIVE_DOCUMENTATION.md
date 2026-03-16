@@ -815,7 +815,7 @@ See `configs/example_multiclass_model.json` for the full schema (centroid dirs; 
 **Usage**:
 ```python
 # During training (in MethylModeler/)
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     ...
     enable_platt_calibration=True,
     validation_mode="real",

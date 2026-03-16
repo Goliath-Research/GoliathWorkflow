@@ -239,7 +239,7 @@ class BedtoolsMapper:
     
     def csv_to_bed(self, csv_path: Path, output_bed: Optional[Path] = None) -> Path:
         """
-        Convert MethylModeler CSV to BED format.
+        Convert MethylDetector CSV to BED format.
         
         Args:
             csv_path: Path to DMP CSV file

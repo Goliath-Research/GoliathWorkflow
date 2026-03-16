@@ -47,7 +47,7 @@ def example_1_command_line_with_parameters() -> None:
     
     # Example command (commented out as it requires actual data files)
     cmd: List[str] = [
-        "python", "-m", "methyl_modeler",
+        "python", "-m", "methyl_detector",
         "--centroid1", "/path/to/centroid1.h5",
         "--centroid2", "/path/to/centroid2.h5",
         "--alpha", "0.05",
@@ -103,7 +103,7 @@ def example_2_command_line_with_json_config() -> None:
         
         # Example command
         cmd: List[str] = [
-            "python", "-m", "methyl_modeler",
+            "python", "-m", "methyl_detector",
             "--config", str(config_file),
             "--verbose"
         ]

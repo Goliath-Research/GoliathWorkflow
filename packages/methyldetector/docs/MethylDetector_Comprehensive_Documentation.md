@@ -577,10 +577,10 @@ Main class for DMP detection and classifier training:
 
 ```python
 class MethylDetector:
-    def __init__(self, config: MethylModelerConfig):
+    def __init__(self, config: MethylDetectorConfig):
         """Initialize MethylDetector with configuration."""
     
-    def run(self) -> MethylModelerResult:
+    def run(self) -> MethylDetectorResult:
         """Run complete DMP detection and classifier training pipeline."""
     
     def find_dmps(self) -> pd.DataFrame:
@@ -599,12 +599,12 @@ class MethylDetector:
         """Validate classifier and return metrics."""
 ```
 
-### MethylModelerConfig Class
+### MethylDetectorConfig Class
 
 Pydantic configuration model:
 
 ```python
-class MethylModelerConfig(BaseModel):
+class MethylDetectorConfig(BaseModel):
     # Input files
     centroid1_path: str
     centroid2_path: str
@@ -633,12 +633,12 @@ class MethylModelerConfig(BaseModel):
     use_gpu: bool = True
 ```
 
-### MethylModelerResult Class
+### MethylDetectorResult Class
 
 Result container:
 
 ```python
-class MethylModelerResult(BaseModel):
+class MethylDetectorResult(BaseModel):
     # DMPs
     all_dmps: pd.DataFrame                        # All significant DMPs
     filtered_dmps: pd.DataFrame                   # After biological filtering
@@ -732,7 +732,7 @@ dmps = pair.find_dmps()  # GPU-accelerated
 Aggregate DMP importance by gene:
 
 ```python
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     ...,
     enable_gene_mapping=True,
     gene_annotation_file="/data/genes.bed"
@@ -801,7 +801,7 @@ contexts = ['CG', 'CHG', 'CHH']
 
 for chrom in chromosomes:
     for ctx in contexts:
-        config = MethylModelerConfig(
+        config = MethylDetectorConfig(
             centroid1_path=f'/data/healthy_chr{chrom}-{ctx}.h5',
             centroid2_path=f'/data/cancer_chr{chrom}-{ctx}.h5',
             output_dir=f'/output/chr{chrom}_{ctx}',
@@ -823,10 +823,10 @@ for chrom in chromosomes:
 
 ```python
 from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 
 # Configure detector
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     centroid1_path='/data/healthy_chr1-CG.h5',
     centroid2_path='/data/cancer_chr1-CG.h5',
     output_dir='/output/dmps',
@@ -850,7 +850,7 @@ result.selected_dmps.to_csv('/output/selected_dmps.csv', index=False)
 ### Example 2: Custom Filtering Thresholds
 
 ```python
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     centroid1_path='/data/healthy_chr1-CG.h5',
     centroid2_path='/data/cancer_chr1-CG.h5',
     output_dir='/output/dmps',
@@ -870,7 +870,7 @@ result = detector.run()
 ### Example 3: Real Sample Validation
 
 ```python
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     centroid1_path='/data/healthy_chr1-CG.h5',
     centroid2_path='/data/cancer_chr1-CG.h5',
     output_dir='/output/dmps',
@@ -900,7 +900,7 @@ print(f"  Specificity: {result.specificity:.3f}")
 ### Example 4: Gene-Level Analysis
 
 ```python
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     centroid1_path='/data/healthy_chr1-CG.h5',
     centroid2_path='/data/cancer_chr1-CG.h5',
     output_dir='/output/dmps',
@@ -942,7 +942,7 @@ for chrom in chromosomes:
     for ctx in contexts:
         print(f"Processing {chrom}-{ctx}...")
         
-        config = MethylModelerConfig(
+        config = MethylDetectorConfig(
             centroid1_path=f'/data/healthy_chr{chrom}-{ctx}.h5',
             centroid2_path=f'/data/cancer_chr{chrom}-{ctx}.h5',
             output_dir=f'/output/chr{chrom}_{ctx}',
@@ -983,7 +983,7 @@ print(summary_df)
 # Complete pipeline from detection to deployment
 
 # Step 1: Detect DMPs
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     centroid1_path='/data/healthy_chr1-CG.h5',
     centroid2_path='/data/cancer_chr1-CG.h5',
     output_dir='/models/production',
@@ -1057,7 +1057,7 @@ print(f"Mean delta: {stats['delta_mean'].abs().mean():.3f}")
 **Solutions**:
 ```python
 # Relax filtering thresholds
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     ...,
     alpha=0.10,              # More lenient FDR
     min_delta_mean=0.1,      # Lower effect size threshold
@@ -1078,13 +1078,13 @@ print(f"Common positions: {len(np.intersect1d(centroid1.pos, centroid2.pos))}")
 **Solutions**:
 ```python
 # Lower target
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     ...,
     target_balanced_accuracy=0.90  # More realistic target
 )
 
 # Use more DMPs
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     ...,
     max_dmps=2000  # Allow more DMPs
 )
@@ -1094,7 +1094,7 @@ print(f"Class 1 validation: {len(config.centroid1_validation_samples)}")
 print(f"Class 2 validation: {len(config.centroid2_validation_samples)}")
 
 # Try synthetic validation if real samples problematic
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     ...,
     validation_mode='synthetic'
 )
@@ -1107,7 +1107,7 @@ config = MethylModelerConfig(
 **Solutions**:
 ```python
 # Disable GPU for large datasets
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     ...,
     use_gpu=False
 )
@@ -1141,17 +1141,17 @@ print(f"Filtering: {report['filter_time']:.2f}s")
 **Solutions**:
 ```python
 # Enable GPU
-config = MethylModelerConfig(..., use_gpu=True)
+config = MethylDetectorConfig(..., use_gpu=True)
 
 # Reduce DMP search space
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     ...,
     min_delta_mean=0.3,  # Stricter initial filter
     max_dmps=500         # Limit search space
 )
 
 # Use synthetic validation (faster)
-config = MethylModelerConfig(..., validation_mode='synthetic')
+config = MethylDetectorConfig(..., validation_mode='synthetic')
 ```
 
 #### 5. Model File Size Too Large
@@ -1196,7 +1196,7 @@ MethylClassifier (Classifies new samples)
 ```python
 from methyl_centroid import MethylCentroid, MethylCentroidConfig
 from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 from methyl_classifier import MethylClassifier
 
 # Step 1: Create centroids
@@ -1231,7 +1231,7 @@ mc2 = MethylCentroid(**centroid2_config.model_dump())
 result2 = mc2.build_centroid()
 
 # Step 2: Detect DMPs and train classifier
-detector_config = MethylModelerConfig(
+detector_config = MethylDetectorConfig(
     centroid1_path=result1.final_centroid_path,
     centroid2_path=result2.final_centroid_path,
     output_dir='./models',

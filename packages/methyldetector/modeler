@@ -1,5 +1,5 @@
 #!/bin/bash
-# MethylModeler Container Wrapper
+# MethylDetector Container Wrapper
 # Usage: ./modeler [args...]
 
 if ! docker ps --format 'table {{.Names}}' | grep -q "^methylpipeline$"; then
@@ -22,9 +22,9 @@ CONTAINER_DIR="${HOST_DIR/\/home\/ubuntu\/MethylPipeline/\/workspace}"
 # Run python directly since packages are installed globally
 if [ -t 0 ]; then
     exec docker exec -it -w "$CONTAINER_DIR" methylpipeline \
-        python3 -m methyl_modeler.cli "$@"
+        python3 -m methyl_detector.cli "$@"
 else
     exec docker exec -w "$CONTAINER_DIR" methylpipeline \
-        python3 -m methyl_modeler.cli "$@"
+        python3 -m methyl_detector.cli "$@"
 fi
 

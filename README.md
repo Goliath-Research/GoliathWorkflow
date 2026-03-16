@@ -234,9 +234,9 @@ cancer_centroid = MethylCentroid(
 
 # 2. Detect DMPs and train classifier
 from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylModelerConfig
+from methyl_detector.models.config import MethylDetectorConfig
 
-config = MethylModelerConfig(
+config = MethylDetectorConfig(
     chromosome="1",
     contexts=["CG"],
     centroid1_dir='/centroids/healthy',
