@@ -580,8 +580,11 @@ class GeneDiseaseEnricher:
         batch: List[str],
         disease_term: str,
         batch_num: int,
+        _allow_smaller_retry: bool = True,
     ) -> Tuple[Dict[str, Dict], bool]:
-        """Query one Grok batch with retries and batch-local caching."""
+        """Query one Grok batch with retries and batch-local caching.
+        On JSON parse failure (e.g. response too large), retries once with half-sized batches if allowed.
+        """
         prompt = self._create_grok_prompt(batch, disease_term)
         last_error = None
         base_timeout = 60
@@ -597,7 +600,24 @@ class GeneDiseaseEnricher:
                     f"(timeout: {timeout}s, attempt {attempt + 1}/{self.max_retries})"
                 )
                 response = self._call_grok_api(prompt, timeout=timeout)
-                batch_results = self._parse_grok_response(response, batch)
+                batch_results, used_fallback = self._parse_grok_response(response, batch)
+
+                if used_fallback and len(batch) > 1 and _allow_smaller_retry:
+                    mid = len(batch) // 2
+                    sub_batch_a, sub_batch_b = batch[:mid], batch[mid:]
+                    logger.info(
+                        f"Grok batch {batch_num}: JSON parse failed (response likely too large). "
+                        f"Retrying once with smaller batches: {len(sub_batch_a)} + {len(sub_batch_b)} genes"
+                    )
+                    results_a, ok_a = self._query_grok_batch(
+                        sub_batch_a, disease_term, batch_num, _allow_smaller_retry=False
+                    )
+                    results_b, ok_b = self._query_grok_batch(
+                        sub_batch_b, disease_term, batch_num, _allow_smaller_retry=False
+                    )
+                    merged = {**results_a, **results_b}
+                    return merged, ok_a and ok_b
+
                 for gene_name, association_info in batch_results.items():
                     self._cache_set(self._cache_key("grok", gene_name, disease_term), association_info)
                 return batch_results, True
@@ -761,11 +781,14 @@ Return ONLY a valid JSON array—no other text. Example:
                     return json.loads(json_str)
         raise ValueError("Unclosed JSON array in response")
 
-    def _parse_grok_response(self, response: Dict, gene_names: List[str]) -> Dict[str, Dict]:
-        """Parse Grok API response into gene-disease associations."""
+    def _parse_grok_response(self, response: Dict, gene_names: List[str]) -> Tuple[Dict[str, Dict], bool]:
+        """Parse Grok API response into gene-disease associations.
+        Returns (results, used_fallback). used_fallback is True when JSON parsing failed and text fallback was used.
+        """
         import re
         
         results = {}
+        used_fallback = False
         
         try:
             # Extract content from response
@@ -786,6 +809,7 @@ Return ONLY a valid JSON array—no other text. Example:
                 associations = self._extract_json_array_from_content(content)
             except (ValueError, json.JSONDecodeError) as e:
                 logger.warning(f"Could not extract JSON array from Grok response: {e}")
+                used_fallback = True
                 # Fallback: infer from text
                 associations = []
                 content_upper = content.upper()
@@ -856,6 +880,7 @@ Return ONLY a valid JSON array—no other text. Example:
                     
         except (KeyError, IndexError, TypeError, ValueError) as e:
             logger.warning(f"Failed to parse Grok API response: {e}")
+            used_fallback = True
             if 'content' in locals():
                 logger.debug(f"Response content (first 500 chars): {content[:500]}")
             for gene in gene_names:
@@ -870,7 +895,7 @@ Return ONLY a valid JSON array—no other text. Example:
                     'source': 'grok_api_parse_error'
                 }
         
-        return results
+        return results, used_fallback
     
     def query_disgenet(
         self,
