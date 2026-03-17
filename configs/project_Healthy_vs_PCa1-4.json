@@ -181,7 +181,11 @@
           "Reactome_2022",
           "GO_Biological_Process_2023",
           "MSigDB_Hallmark_2020"
-        ]
+        ],
+        "modules": true,
+        "similarity_threshold": 0.15,
+        "cluster_resolution": 0.8,
+        "network_plot": "plotly"
       },
       "classifier": {
         "weight_method": "linear_fitted",

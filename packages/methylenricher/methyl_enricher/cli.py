@@ -223,6 +223,14 @@ For more information, visit: https://github.com/your-org/methyl_enricher
         metavar='F',
         help='Louvain cluster resolution (default: 0.8). Lower values yield fewer, larger modules. Tune with --similarity-threshold to target 3-5 modules.'
     )
+    parser.add_argument(
+        '--network-plot',
+        type=str,
+        default=None,
+        choices=['none', 'plotly', 'pyvis', 'cytoscape', 'all'],
+        metavar='MODE',
+        help='When --modules: generate network plot. none=skip; plotly=Plotly HTML (default when -m); pyvis=PyVis HTML; cytoscape=Cytoscape.js HTML+JSON; all=all three.'
+    )
 
     # Other options
     parser.add_argument(
@@ -258,6 +266,29 @@ For more information, visit: https://github.com/your-org/methyl_enricher
     return parser.parse_args()
 
 
+def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
+    """Apply EnricherStepConfig to parsed args (config values override only when set)."""
+    from .config import EnricherStepConfig
+    # I/O: config may use input_file/input, output_dir/outdir
+    if config.input_file is not None:
+        args.input = config.input_file
+    if config.input is not None:
+        args.input = config.input
+    if config.output_dir is not None:
+        args.outdir = config.output_dir
+    if config.outdir is not None:
+        args.outdir = config.outdir
+    # Rest: same attribute name as args
+    for name in EnricherStepConfig.model_fields:
+        if name in ("input", "input_file", "output_dir", "outdir"):
+            continue
+        val = getattr(config, name, None)
+        if val is None:
+            continue
+        if hasattr(args, name):
+            setattr(args, name, val)
+
+
 def list_available_libraries():
     """List all available Enrichr libraries."""
     try:
@@ -288,6 +319,7 @@ def main():
     if args.project:
         from methyl_utils import load_project
         from .project_resolver import resolve_enricher_paths, resolve_enricher_paths_per_cancer_group
+        from .config import EnricherStepConfig
         project_path = Path(args.project)
         if not project_path.exists() and not project_path.is_absolute():
             # When run from a package dir (e.g. packages/methylenricher), try repo root
@@ -301,10 +333,8 @@ def main():
         project = load_project(project_path)
         step_cfg = project.get_step_config("enricher")
         if step_cfg:
-            for k, v in step_cfg.items():
-                attr = k.replace("-", "_")
-                if hasattr(args, attr):
-                    setattr(args, attr, v)
+            enricher_config = EnricherStepConfig.model_validate(step_cfg)
+            _apply_enricher_config_to_args(args, enricher_config)
         step_override = Path(args.step_override) if args.step_override else None
         # Use per-cancer-group layout (enricher/cancer/<label> per group) when project has multiple groups
         per_group = resolve_enricher_paths_per_cancer_group(project_path, step_override)
@@ -388,10 +418,16 @@ def main():
         print("Mode: pathway-to-module pipeline (output: modules_ranked.csv)")
         print(f"Similarity threshold: {getattr(args, 'similarity_threshold', 0.15)}")
         print(f"Cluster resolution: {getattr(args, 'cluster_resolution', 0.8)}")
+        _np = getattr(args, "network_plot", None)
+        effective_network_plot = "plotly" if _np is None else _np
+        if effective_network_plot and effective_network_plot.lower() != "none":
+            print(f"Network plot: {effective_network_plot}")
     print("=" * 70)
     
     def _run_one(in_file: Path, out_dir: str):
         if getattr(args, "modules", False):
+            _np = getattr(args, "network_plot", None)
+            effective_network_plot = "plotly" if _np is None else _np
             return run_module_pipeline(
                 input_path=in_file,
                 output_dir=Path(out_dir),
@@ -416,6 +452,7 @@ def main():
                 sort_ascending=args.sort_ascending,
                 similarity_threshold=getattr(args, "similarity_threshold", 0.15),
                 cluster_resolution=getattr(args, "cluster_resolution", 0.8),
+                network_plot=effective_network_plot,
             )
         return run_enrichment(
             input_file=in_file,

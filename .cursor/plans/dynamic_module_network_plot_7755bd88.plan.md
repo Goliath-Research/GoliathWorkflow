@@ -51,7 +51,7 @@ Two natural levels:
     - Write `module_network.html` (or `pathway_network.html`) in the same output dir when `--modules` is used. Option: `--no-plot` to skip.
   - **Result:** One HTML file; open in browser for zoom, pan, hover. Layout is fixed at generation time.
 - **Phase 2 (optional): Richer interactivity**  
-  - **PyVis:** Add `pyvis` to methylenricher (or pipeline) deps; build the same NetworkX graph; export via PyVis to e.g. `pathway_network_pyvis.html` for drag and physics.  
+  - **PyVis:** Add `pyvis` to pipeline-level requirements and venv setup (see **Dependencies and venv** below); build the same NetworkX graph; export via PyVis to e.g. `pathway_network_pyvis.html` for drag and physics.  
   - **Cytoscape.js:** Add a small HTML template and a function that writes `nodes`/`edges` JSON (and optionally `styles`) and an HTML file that loads Cytoscape.js and renders it; call from the module pipeline when a flag is set. Gives the most “Cytoscape desktop–like” experience.
 
 ---
@@ -67,8 +67,59 @@ Two natural levels:
     - Build Plotly figure: edges as line scatter, nodes as scatter (color by module, size by n_genes or score).  
     - Add hover text (pathway name, module, n_genes).  
     - Return `go.Figure`; caller writes `fig.write_html(out_path)`.
-- **Integration:** In [module_pipeline.py](packages/methylenricher/methyl_enricher/module_pipeline.py), after writing `modules_ranked.csv` and `pathway_overlap_genes.csv`, if a flag `write_network_plot=True` (default True when `--modules`), call the plot function and write e.g. `pathway_network.html` to `output_dir`.  
-- **CLI:** No new flag for Phase 1 (plot generated whenever `--modules` is used); optionally add `--no-network-plot` to skip.
+- **Integration:** In [module_pipeline.py](packages/methylenricher/methyl_enricher/module_pipeline.py), after writing `modules_ranked.csv` and `pathway_overlap_genes.csv`, read the effective `network_plot` option from the (config-driven) args; if not `none`, call the plot layer and write the chosen output file(s) to `output_dir`.
+- **CLI / config:** Add `--network-plot [none|plotly|pyvis|cytoscape|all]`; default when `--modules` is used can be `plotly`. Option is also read from `step_config.enricher.network_plot` in the project JSON and applied via the Pydantic EnricherStepConfig (see section below).
+
+---
+
+## Dependencies and virtual environment setup
+
+- **Plotly and NetworkX:** Already in [requirements-pipeline.txt](requirements-pipeline.txt); no change.
+- **PyVis (if Option B is supported):** Add **`pyvis`** to [requirements-pipeline.txt](requirements-pipeline.txt) so it is installed with the rest of the pipeline. The standard venv setup script [scripts/setup_host.sh](scripts/setup_host.sh) installs from `requirements-pipeline.txt`; no change to the script is required—adding `pyvis` to the requirements file is sufficient for the virtual environment used to run the pipeline to include PyVis.
+- **Cytoscape.js:** No Python dependency; HTML loads Cytoscape.js from CDN.
+
+---
+
+## JSON config and Pydantic model (step_config.enricher)
+
+The pipeline is config-driven: each step reads its options from the project JSON’s `step_config.<step_name>`. The enricher step should follow the same pattern as the mapper (see [packages/methylmapper/methyl_mapper/config.py](packages/methylmapper/methyl_mapper/config.py) and [packages/methylmapper/methyl_mapper/cli.py](packages/methylmapper/methyl_mapper/cli.py)).
+
+**1. Add new keys to `step_config.enricher` in the project JSON**
+
+- **`network_plot`** (string, optional): One of `"none"`, `"plotly"`, `"pyvis"`, `"cytoscape"`, `"all"`. Default when `--modules` is used can be `"plotly"`. Omit or `"none"` to skip network plot generation.
+- Optionally ensure **`modules`** (boolean), **`similarity_threshold`** (float), **`cluster_resolution`** (float) are also present in `step_config.enricher` so the full module pipeline (including network plot) can be driven from config.
+
+Example addition under `step_config.enricher` in e.g. [configs/project_Healthy_vs_PCa1-4.json](configs/project_Healthy_vs_PCa1-4.json):
+
+```json
+"enricher": {
+  "gene_column": "gene_name",
+  ...
+  "modules": true,
+  "similarity_threshold": 0.15,
+  "cluster_resolution": 0.8,
+  "network_plot": "plotly"
+}
+```
+
+**2. Define a Pydantic model for the enricher step**
+
+- Add **`EnricherStepConfig`** (or extend an existing enricher config model) in [packages/methylenricher/methyl_enricher/project_resolver.py](packages/methylenricher/methyl_enricher/project_resolver.py) (or a dedicated `config.py`), mirroring **`MapperStepConfig`**:
+  - All fields optional; used to validate and access `step_config.enricher`.
+  - Include: `network_plot: Optional[str] = None`, `modules: Optional[bool] = None`, `similarity_threshold: Optional[float] = None`, `cluster_resolution: Optional[float] = None`, plus existing enricher options (e.g. `gene_column`, `libraries`, `top`, `cutoff`, `organism`, etc.) so one model covers the step.
+  - Use `model_config = ConfigDict(extra="ignore")` so unknown keys in the JSON do not break validation.
+
+**3. Apply step config in CLI via the Pydantic model**
+
+- In [packages/methylenricher/methyl_enricher/cli.py](packages/methylenricher/methyl_enricher/cli.py), when `args.project` is set:
+  - Load `step_cfg = project.get_step_config("enricher")`.
+  - Validate: `enricher_config = EnricherStepConfig.model_validate(step_cfg)`.
+  - Apply to args with an `_apply_enricher_config_to_args(args, enricher_config)` helper: only set args when the config field is not None (CLI flags can override if parsed first, or use “config fills in only when args not set” like the mapper).
+- Ensure `--network-plot` CLI argument exists and is applied from `enricher_config.network_plot` when provided.
+
+**4. Pipeline uses step config**
+
+- The module pipeline (and any network-plot code it calls) should receive the effective options (e.g. `network_plot`, `modules`, etc.) from the same resolved args that were populated from `EnricherStepConfig`, so that runs driven by the project JSON use `step_config.enricher` as the single source of truth for the enricher step.
 
 ---
 
@@ -100,6 +151,6 @@ flowchart LR
 ## Summary
 
 - **Best solution for a dynamic plot with no new dependencies:** **Plotly + NetworkX** — build the pathway similarity graph (and optionally module/pathway/gene graph), compute layout in NetworkX, render with Plotly, export a single HTML file for interactive zoom/pan/hover.  
-- **For a more Cytoscape-like, drag-and-physics experience:** add **PyVis** (one dependency, one HTML) or **Cytoscape.js** (HTML + JSON export from Python, no extra pip deps for viewing).  
+- **For a more Cytoscape-like, drag-and-physics experience:** add **PyVis** (add `pyvis` to [requirements-pipeline.txt](requirements-pipeline.txt) and the venv installed via [scripts/setup_host.sh](scripts/setup_host.sh) will include it) or **Cytoscape.js** (HTML + JSON export from Python, no extra pip deps for viewing).  
 - **Graph to plot first:** pathway–pathway similarity network with nodes colored by module and sized by gene count or score; then optionally a pathway–gene or module–pathway–gene view.
 

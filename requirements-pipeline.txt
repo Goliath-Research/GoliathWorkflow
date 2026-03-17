@@ -15,6 +15,7 @@ nvidia-ml-py
 pandas
 plotly
 psutil
+pyvis
 pyarrow
 pyodbc
 pydantic

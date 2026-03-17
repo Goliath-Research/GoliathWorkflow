@@ -10,9 +10,10 @@ from typing import Dict, List, Optional, Set, Tuple
 import pandas as pd
 
 from .enricher import EnrichmentAnalyzer
-from .pathway_normalizer import PathwayNormalizer, load_theme_extras, load_theme_extras
+from .pathway_normalizer import PathwayNormalizer, load_theme_extras
 from .pathway_graph import run_pathway_clustering
 from .module_scorer import score_and_rank_modules, DEFAULT_PCA_RELEVANT_GENES
+from . import module_network_plot
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,7 @@ def run_module_pipeline(
     similarity_threshold: float = 0.15,
     cluster_resolution: float = 0.8,
     disease_genes: Optional[Set[str]] = None,
+    network_plot: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Run the full pathway-to-module pipeline (Steps A–E) and write modules_ranked.csv.
@@ -204,5 +206,21 @@ def run_module_pipeline(
             pathway_out = output_dir / "pathway_overlap_genes.csv"
             pathway_df.to_csv(pathway_out, index=False)
             logger.info(f"Wrote {pathway_out} with {len(pathway_df)} pathways.")
+
+    # Network plot (pathway similarity graph) when requested
+    if network_plot and network_plot.lower() != "none":
+        module_id_to_label = {}
+        for mid in set(pathway_to_module_id.values()):
+            pathways_in_module = [p for p, m in pathway_to_module_id.items() if m == mid]
+            module_id_to_label[mid] = _module_label_from_themes(pathways_in_module, normalizer)
+        module_network_plot.write_network_plots(
+            output_dir=output_dir,
+            pathway_to_module_id=pathway_to_module_id,
+            pathway_to_genes=pathway_to_genes,
+            merged_df=merged_df,
+            module_id_to_label=module_id_to_label,
+            similarity_threshold=similarity_threshold,
+            network_plot=network_plot,
+        )
 
     return out_df
