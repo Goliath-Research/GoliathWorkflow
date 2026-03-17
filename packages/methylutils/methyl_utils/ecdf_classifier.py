@@ -392,6 +392,17 @@ class ECDFClassifier:
         )
 
     # ------------------------------------------------------------------
+    # Feature info (for MethylClassifier / pipeline compatibility)
+    # ------------------------------------------------------------------
+
+    def get_feature_info(self) -> Dict[str, Any]:
+        """Return feature info for extraction and display (positions, n_features)."""
+        return {
+            "positions": np.asarray(self.positions, dtype=np.uint32),
+            "n_features": int(self.n_dmps),
+        }
+
+    # ------------------------------------------------------------------
     # Repr
     # ------------------------------------------------------------------
 
