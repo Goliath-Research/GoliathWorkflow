@@ -11,6 +11,8 @@ python = ">=3.10,<3.13"
 gseapy = ">=1.1.0"
 pandas = ">=2.1.0,<3.0.0"
 numpy = ">=1.26.0,<3.0.0"
+networkx = ">=3.0"
+python-louvain = ">=0.16"
 methylutils = {path = "../methylutils", develop = true}
 
 [tool.poetry.scripts]

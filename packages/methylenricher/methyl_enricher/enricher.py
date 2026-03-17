@@ -7,7 +7,7 @@ filtering by disease columns and DMP/gene metrics to focus on important genes.
 
 import os
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 import pandas as pd
 
 
@@ -261,12 +261,121 @@ class EnrichmentAnalyzer:
             with open(input_path) as f:
                 genes = [line.strip() for line in f if line.strip()]
 
-        if top_n and len(genes) > top_n:
-            genes = genes[:top_n]
-        
+            if top_n and len(genes) > top_n:
+                genes = genes[:top_n]
+
         print(f"[INFO] Loaded {len(genes)} gene symbols from {input_path}")
         return genes
-    
+
+    def _gene_weight_from_row(self, row: pd.Series) -> float:
+        """Compute a single gene weight from a CSV row (gene-level or first feature row)."""
+        for col in ("gene_importance", "total_importance", "total_weight", "mean_effect_size", "mean_weight"):
+            if col in row.index and pd.notna(row.get(col)):
+                try:
+                    return float(row[col])
+                except (TypeError, ValueError):
+                    pass
+        return 1.0
+
+    def load_gene_list_with_weights(
+        self,
+        input_path: Union[str, Path],
+        top_n: Optional[int] = None,
+        gene_column: Optional[str] = None,
+        disease_only: bool = False,
+        disease_column: str = "disease_associated",
+        disease_association_types: Optional[List[str]] = None,
+        min_disease_evidence_level: Optional[str] = None,
+        min_disease_publications: Optional[int] = None,
+        min_disease_score: Optional[float] = None,
+        min_dmp_count: Optional[int] = None,
+        min_unique_dmps: Optional[int] = None,
+        max_gene_q_value: Optional[float] = None,
+        min_mean_effect_size: Optional[float] = None,
+        min_gene_z: Optional[float] = None,
+        min_gene_importance: Optional[float] = None,
+        feature_types: Optional[List[str]] = None,
+        sort_by: Optional[str] = None,
+        sort_ascending: bool = False,
+    ) -> Tuple[List[str], Dict[str, float]]:
+        """
+        Load gene list and per-gene weights for weighted enrichment and module scoring.
+        Returns (genes, weight_by_gene). Weights are from gene_importance/total_weight/mean_effect_size when available.
+        """
+        input_path = Path(input_path)
+        if not input_path.exists():
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+        suffix = input_path.suffix.lower()
+        if suffix not in [".csv", ".tsv"]:
+            genes = self.load_gene_list(
+                input_path, top_n=top_n, gene_column=gene_column,
+                disease_only=disease_only, disease_column=disease_column,
+                disease_association_types=disease_association_types,
+                min_disease_evidence_level=min_disease_evidence_level,
+                min_disease_publications=min_disease_publications,
+                min_disease_score=min_disease_score,
+                min_dmp_count=min_dmp_count,
+                min_unique_dmps=min_unique_dmps,
+                max_gene_q_value=max_gene_q_value,
+                min_mean_effect_size=min_mean_effect_size,
+                min_gene_z=min_gene_z,
+                min_gene_importance=min_gene_importance,
+                feature_types=feature_types,
+                sort_by=sort_by,
+                sort_ascending=sort_ascending,
+            )
+            return genes, {g: 1.0 for g in genes}
+        sep = "," if suffix == ".csv" else "\t"
+        df = pd.read_csv(input_path, sep=sep)
+        _gene_candidates = ["gene_name", "gene_id", "gene_symbol", "gene", "symbol"]
+        gc = gene_column
+        if gc is None:
+            gc = next((c for c in _gene_candidates if c in df.columns), None)
+        elif gc not in df.columns:
+            gc = next((c for c in _gene_candidates if c in df.columns), None)
+        if gc is None:
+            raise ValueError("Could not determine gene column. Provide gene_column.")
+        df = self._apply_csv_filters(
+            df,
+            disease_only=disease_only,
+            disease_column=disease_column,
+            disease_association_types=disease_association_types,
+            min_disease_evidence_level=min_disease_evidence_level,
+            min_disease_publications=min_disease_publications,
+            min_disease_score=min_disease_score,
+            min_dmp_count=min_dmp_count,
+            min_unique_dmps=min_unique_dmps,
+            max_gene_q_value=max_gene_q_value,
+            min_mean_effect_size=min_mean_effect_size,
+            min_gene_z=min_gene_z,
+            min_gene_importance=min_gene_importance,
+            feature_types=feature_types,
+        )
+        if len(df) == 0:
+            raise ValueError("No genes left after filters.")
+        if sort_by is None and "total_weight" in df.columns:
+            sort_by = "total_weight"
+        if sort_by is None and "gene_importance" in df.columns:
+            sort_by = "gene_importance"
+        if sort_by and sort_by in df.columns:
+            df = df.sort_values(by=sort_by, ascending=sort_ascending)
+        # One row per gene: take first occurrence (already sorted) for weight
+        weight_by_gene: Dict[str, float] = {}
+        genes_ordered: List[str] = []
+        seen = set()
+        for _, row in df.iterrows():
+            g = str(row[gc]).strip() if pd.notna(row[gc]) else ""
+            if not g or g in seen:
+                continue
+            seen.add(g)
+            genes_ordered.append(g)
+            weight_by_gene[g] = self._gene_weight_from_row(row)
+        if top_n and len(genes_ordered) > top_n:
+            genes_ordered = genes_ordered[:top_n]
+            weight_by_gene = {g: weight_by_gene[g] for g in genes_ordered}
+        print(f"[INFO] Loaded {len(genes_ordered)} gene symbols with weights from {input_path}")
+        return genes_ordered, weight_by_gene
+
     def run_enrichment(
         self,
         genes: List[str],
@@ -309,7 +418,7 @@ class EnrichmentAnalyzer:
                     outdir=str(output_dir),
                     cutoff=1.0,  # Store all results; filter later
                     background=None,  # Use Enrichr default
-                    organism=self.organism
+                    organism=(self.organism or "Human").strip().lower()
                 )
                 
                 if hasattr(enr, "results") and enr.results is not None and not enr.results.empty:

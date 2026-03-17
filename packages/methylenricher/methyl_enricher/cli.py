@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .enricher import run_enrichment, DEFAULT_LIBRARIES
+from .module_pipeline import run_module_pipeline
 
 
 def parse_args():
@@ -202,6 +203,20 @@ For more information, visit: https://github.com/your-org/methyl_enricher
         help='Organism for Enrichr analysis (default: Human)'
     )
     
+    # Module pipeline (pathway-to-module)
+    parser.add_argument(
+        '--modules', '-m',
+        action='store_true',
+        help='Run pathway-to-module pipeline: cluster pathways into modules, score and rank, write modules_ranked.csv'
+    )
+    parser.add_argument(
+        '--similarity-threshold',
+        type=float,
+        default=0.25,
+        metavar='F',
+        help='Pathway similarity threshold for clustering (default: 0.25)'
+    )
+
     # Other options
     parser.add_argument(
         '--list-libraries',
@@ -264,7 +279,6 @@ def main():
 
     # Resolve paths and apply step_config from --project if set
     if args.project:
-        from pathlib import Path
         from methyl_utils import load_project
         from .project_resolver import resolve_enricher_paths, resolve_enricher_paths_per_cancer_group
         project_path = Path(args.project)
@@ -363,9 +377,37 @@ def main():
         print(f"Libraries: {', '.join(args.libraries)}")
     else:
         print(f"Libraries: {len(DEFAULT_LIBRARIES)} default libraries")
+    if getattr(args, "modules", False):
+        print("Mode: pathway-to-module pipeline (output: modules_ranked.csv)")
+        print(f"Similarity threshold: {getattr(args, 'similarity_threshold', 0.25)}")
     print("=" * 70)
     
     def _run_one(in_file: Path, out_dir: str):
+        if getattr(args, "modules", False):
+            return run_module_pipeline(
+                input_path=in_file,
+                output_dir=Path(out_dir),
+                gene_column=args.gene_column,
+                top_n=args.top,
+                libraries=args.libraries,
+                organism=args.organism,
+                cutoff=args.cutoff,
+                disease_only=args.disease_only,
+                disease_association_types=args.disease_association_type,
+                min_disease_evidence_level=args.min_disease_evidence_level,
+                min_disease_publications=args.min_disease_publications,
+                min_disease_score=args.min_disease_score,
+                min_dmp_count=args.min_dmp_count,
+                min_unique_dmps=args.min_unique_dmps,
+                max_gene_q_value=args.max_gene_q_value,
+                min_mean_effect_size=args.min_mean_effect_size,
+                min_gene_z=args.min_gene_z,
+                min_gene_importance=args.min_gene_importance,
+                feature_types=args.feature_types,
+                sort_by=args.sort_by,
+                sort_ascending=args.sort_ascending,
+                similarity_threshold=getattr(args, "similarity_threshold", 0.25),
+            )
         return run_enrichment(
             input_file=in_file,
             output_dir=out_dir,
@@ -404,15 +446,20 @@ def main():
                     print(f"[WARN] No enrichment results for {label}.")
                 else:
                     print(f"[OK] {label}: results saved to {paths.output_dir}")
-            print("\n[SUCCESS] Per-cancer-group enrichment complete!")
+            msg = "Per-cancer-group module pipeline complete!" if getattr(args, "modules", False) else "Per-cancer-group enrichment complete!"
+            print(f"\n[SUCCESS] {msg}")
             sys.exit(0)
         else:
             results = _run_one(input_path, args.outdir)
             if results.empty:
                 print("\n[WARN] No enrichment results found. Check your gene list and try again.")
                 sys.exit(1)
-            print("\n[SUCCESS] Enrichment analysis complete!")
-            print(f"Results saved to: {args.outdir}")
+            if getattr(args, "modules", False):
+                print("\n[SUCCESS] Pathway-to-module pipeline complete!")
+                print(f"Results saved to: {args.outdir} (including modules_ranked.csv)")
+            else:
+                print("\n[SUCCESS] Enrichment analysis complete!")
+                print(f"Results saved to: {args.outdir}")
             sys.exit(0)
 
     except KeyboardInterrupt:
