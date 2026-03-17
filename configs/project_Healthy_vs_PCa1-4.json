@@ -169,7 +169,7 @@
           "indirect"
         ],
         "min_disease_evidence_level": "medium",
-        "min_disease_score": 0.2,
+        "min_disease_score": 0.00,
         "min_dmp_count": 2,
         "max_gene_q_value": 0.05,
         "sort_by": "total_weight",

@@ -352,7 +352,11 @@ class EnrichmentAnalyzer:
             feature_types=feature_types,
         )
         if len(df) == 0:
-            raise ValueError("No genes left after filters.")
+            raise ValueError(
+                "No genes left after filters. Try relaxing filters (e.g. --min-disease-score, "
+                "--min-disease-evidence-level, --disease-only) or use an input generated with "
+                "disease enrichment (Grok/Open Targets) if you need disease-associated genes."
+            )
         if sort_by is None and "total_weight" in df.columns:
             sort_by = "total_weight"
         if sort_by is None and "gene_importance" in df.columns:

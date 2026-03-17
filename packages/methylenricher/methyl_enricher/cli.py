@@ -441,7 +441,13 @@ def main():
                     print(f"[WARN] Skipping group {label}: input not found: {inp}")
                     continue
                 print(f"\n--- Enrichment for group: {label} -> {paths.output_dir} ---")
-                results = _run_one(inp, paths.output_dir)
+                try:
+                    results = _run_one(inp, paths.output_dir)
+                except ValueError as e:
+                    if "No genes left after filters" in str(e):
+                        print(f"[WARN] Skipping group {label}: {e}")
+                        continue
+                    raise
                 if results.empty:
                     print(f"[WARN] No enrichment results for {label}.")
                 else:
