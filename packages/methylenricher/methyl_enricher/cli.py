@@ -212,9 +212,16 @@ For more information, visit: https://github.com/your-org/methyl_enricher
     parser.add_argument(
         '--similarity-threshold',
         type=float,
-        default=0.25,
+        default=0.15,
         metavar='F',
-        help='Pathway similarity threshold for clustering (default: 0.25)'
+        help='Pathway similarity threshold for clustering (default: 0.15). Lower values yield more edges and fewer, larger modules.'
+    )
+    parser.add_argument(
+        '--cluster-resolution',
+        type=float,
+        default=0.8,
+        metavar='F',
+        help='Louvain cluster resolution (default: 0.8). Lower values yield fewer, larger modules. Tune with --similarity-threshold to target 3-5 modules.'
     )
 
     # Other options
@@ -379,7 +386,8 @@ def main():
         print(f"Libraries: {len(DEFAULT_LIBRARIES)} default libraries")
     if getattr(args, "modules", False):
         print("Mode: pathway-to-module pipeline (output: modules_ranked.csv)")
-        print(f"Similarity threshold: {getattr(args, 'similarity_threshold', 0.25)}")
+        print(f"Similarity threshold: {getattr(args, 'similarity_threshold', 0.15)}")
+        print(f"Cluster resolution: {getattr(args, 'cluster_resolution', 0.8)}")
     print("=" * 70)
     
     def _run_one(in_file: Path, out_dir: str):
@@ -406,7 +414,8 @@ def main():
                 feature_types=args.feature_types,
                 sort_by=args.sort_by,
                 sort_ascending=args.sort_ascending,
-                similarity_threshold=getattr(args, "similarity_threshold", 0.25),
+                similarity_threshold=getattr(args, "similarity_threshold", 0.15),
+                cluster_resolution=getattr(args, "cluster_resolution", 0.8),
             )
         return run_enrichment(
             input_file=in_file,

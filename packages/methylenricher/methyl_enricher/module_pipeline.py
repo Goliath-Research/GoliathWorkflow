@@ -16,6 +16,16 @@ from .module_scorer import score_and_rank_modules, DEFAULT_PCA_RELEVANT_GENES
 
 logger = logging.getLogger(__name__)
 
+OVERLAP_GENES_CAP = 50
+
+
+def _overlap_genes_str(module_genes: Set[str], cap: int = OVERLAP_GENES_CAP) -> str:
+    """Comma-separated overlap genes for the module, optionally capped for readability."""
+    genes = sorted(module_genes)
+    if len(genes) > cap:
+        genes = genes[:cap]
+    return ", ".join(genes)
+
 
 def _module_label_from_themes(pathways: List[str], normalizer: PathwayNormalizer) -> str:
     """Assign module label as the most frequent theme among pathways in the module."""
@@ -81,7 +91,8 @@ def run_module_pipeline(
     feature_types: Optional[List[str]] = None,
     sort_by: Optional[str] = None,
     sort_ascending: bool = False,
-    similarity_threshold: float = 0.25,
+    similarity_threshold: float = 0.15,
+    cluster_resolution: float = 0.8,
     disease_genes: Optional[Set[str]] = None,
 ) -> pd.DataFrame:
     """
@@ -124,6 +135,7 @@ def run_module_pipeline(
         merged_df,
         similarity_threshold=similarity_threshold,
         use_jaccard=True,
+        cluster_resolution=cluster_resolution,
     )
     if not pathway_to_module_id:
         logger.warning("Pathway clustering produced no modules.")
@@ -149,10 +161,12 @@ def run_module_pipeline(
         label = _module_label_from_themes(pathways, normalizer)
         main_genes = _main_genes_for_module(module_genes, gene_weights, top_k=10)
         main_pathways = _main_pathways_for_module(pathways, merged_df, top_k=5)
+        overlap_genes = _overlap_genes_str(module_genes)
         out_rows.append({
             "Module": label,
             "Score": round(row["final_score"], 4),
             "Main_genes": main_genes,
+            "Overlap_genes": overlap_genes,
             "Main_pathways": main_pathways,
             "PCa_relevance": row["pca_relevance"],
             "n_pathways": row["n_pathways"],
@@ -163,4 +177,17 @@ def run_module_pipeline(
     out_path = output_dir / "modules_ranked.csv"
     out_df.to_csv(out_path, index=False)
     logger.info(f"Wrote {out_path} with {len(out_df)} modules.")
+
+    # Per-pathway overlap genes (which genes drive each pathway)
+    if pathway_to_genes:
+        pathway_overlap = [
+            {"Pathway": term, "Overlap_genes": ", ".join(sorted(genes))}
+            for term, genes in pathway_to_genes.items()
+        ]
+        if pathway_overlap:
+            pathway_df = pd.DataFrame(pathway_overlap)
+            pathway_out = output_dir / "pathway_overlap_genes.csv"
+            pathway_df.to_csv(pathway_out, index=False)
+            logger.info(f"Wrote {pathway_out} with {len(pathway_df)} pathways.")
+
     return out_df

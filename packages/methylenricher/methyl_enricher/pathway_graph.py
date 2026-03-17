@@ -97,14 +97,15 @@ def build_similarity_graph(
     return G, nodes
 
 
-def cluster_pathways_louvain(G) -> Dict[str, int]:
+def cluster_pathways_louvain(G, resolution: float = 0.8) -> Dict[str, int]:
     """
     Run Louvain community detection. Returns pathway -> community_id (int).
     Singletons get their own community id.
+    Lower resolution (e.g. 0.5-0.8) yields fewer, larger communities.
     """
     try:
         import community as community_louvain  # python-louvain
-        partition = community_louvain.best_partition(G)
+        partition = community_louvain.best_partition(G, resolution=resolution)
         return partition
     except ImportError:
         logger.warning("python-louvain not installed; using connected components as fallback.")
@@ -119,14 +120,16 @@ def cluster_pathways_louvain(G) -> Dict[str, int]:
 
 def run_pathway_clustering(
     merged_df: pd.DataFrame,
-    similarity_threshold: float = 0.25,
+    similarity_threshold: float = 0.15,
     use_jaccard: bool = True,
+    cluster_resolution: float = 0.8,
 ) -> Tuple[Dict[str, int], Dict[str, Set[str]]]:
     """
     From merged enrichment DataFrame, build pathway graph and cluster into modules.
     Returns (pathway_to_module_id, pathway_to_genes).
     pathway_to_module_id: each pathway -> integer module id.
     pathway_to_genes: pathway -> set of gene symbols (for module scoring).
+    Lower similarity_threshold or lower cluster_resolution yields fewer, larger modules.
     """
     pathway_genes = pathway_gene_sets_from_merged(merged_df)
     if not pathway_genes:
@@ -136,5 +139,5 @@ def run_pathway_clustering(
         similarity_threshold=similarity_threshold,
         use_jaccard=use_jaccard,
     )
-    partition = cluster_pathways_louvain(G)
+    partition = cluster_pathways_louvain(G, resolution=cluster_resolution)
     return partition, pathway_genes
