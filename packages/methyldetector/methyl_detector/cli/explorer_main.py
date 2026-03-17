@@ -68,16 +68,16 @@ logger = logging.getLogger(__name__)
     help="Minimum coverage (min_coverage) for load_and_align.",
 )
 @click.option(
-    "--min-N",
+    "--min-samples-abs",
     type=int,
-    default=None,
-    help="Minimum N per group (absolute): keep positions where n1 >= min-N and n2 >= min-N. Overrides --min-N-pct if set.",
+    default=1,
+    help="Absolute minimum number of samples (N) per position in each centroid.",
 )
 @click.option(
-    "--min-N-pct",
+    "--min-samples-pct",
     type=float,
     default=0.05,
-    help="Minimum N as fraction of max at position (default 5%%): keep where min(n1,n2) >= min-N-pct * max(n1,n2). Used when --min-N is not set.",
+    help="Minimum fraction of that centroid's cohort per position (default 5%%). Effective min N = max(min-samples-abs, ceil(min-samples-pct * cohort_size)) per centroid.",
 )
 @click.option(
     "--delta-mean-reduction",
@@ -174,8 +174,8 @@ def main(
     context: str,
     alpha: float,
     min_coverage: int,
-    min_n: Optional[int],
-    min_n_pct: float,
+    min_samples_abs: int,
+    min_samples_pct: float,
     delta_mean_reduction: Optional[float],
     min_delta_mean: Optional[float],
     max_overlap: Optional[float],
@@ -218,8 +218,8 @@ def main(
         centroid2_path=c2_path,
         alpha=alpha,
         min_coverage=min_coverage,
-        min_N=min_n,
-        min_N_pct=min_n_pct,
+        min_samples_abs=min_samples_abs,
+        min_samples_pct=min_samples_pct,
         delta_mean_reduction=delta_mean_reduction,
         min_delta_mean=min_delta_mean,
         max_overlap=max_overlap,
@@ -248,7 +248,7 @@ def main(
     click.echo(f"Report written to {report_path}")
     msg = (
         f"Total positions: {report['total_positions']:,}, "
-        f"After min-N filter: {report['positions_after_min_N_filter']:,}, "
+        f"After min-samples filter: {report.get('positions_after_min_samples_filter', report.get('positions_after_min_N_filter', 0)):,}, "
         f"After delta_mean reduction: {report['positions_after_delta_mean_reduction']:,}, "
         f"After statistical filter: {report['positions_after_statistical_filter']:,}, "
         f"lambda_var: {report.get('lambda_var_used', 'n/a')}, "

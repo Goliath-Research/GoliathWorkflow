@@ -26,12 +26,14 @@ def _min_n_filter_indices_local(n1, n2, min_N, min_N_pct):
 
 
 class MockCentroid:
-    def __init__(self, means, variances, counts, n=30):
+    def __init__(self, means, variances, counts, n=30, positions=None):
         self.N = np.full(len(means), float(n), dtype=np.float64)
         self.mean = np.asarray(means, dtype=np.float64)
         self.variance = np.asarray(variances, dtype=np.float64)
         self.Sx = self.mean * self.N
         self.Sx2 = self.variance * np.maximum(self.N - 1.0, 1.0) + (self.Sx ** 2) / self.N
+        self.pos = np.asarray(positions if positions is not None else range(len(means)), dtype=np.uint32)
+        self.coverage = np.full(len(means), 100, dtype=np.int64)  # Sm+Su for min_coverage filter
         self.binned_stats = {
             "bin_edges": np.linspace(0.0, 1.0, np.asarray(counts).shape[1] + 1, dtype=np.float64),
             "bin_counts": np.asarray(counts, dtype=np.float64),
@@ -69,6 +71,7 @@ def test_explorer_lambda_var_optimization_reports_consistently(monkeypatch):
             [4, 5, 4, 5],
             [0, 0, 1, 12],
         ],
+        positions=positions,
     )
     centroid2 = MockCentroid(
         means=[0.12, 0.82, 0.52, 0.20],
@@ -79,6 +82,7 @@ def test_explorer_lambda_var_optimization_reports_consistently(monkeypatch):
             [5, 4, 5, 4],
             [10, 2, 0, 0],
         ],
+        positions=positions,
     )
 
     monkeypatch.setattr(
@@ -92,6 +96,8 @@ def test_explorer_lambda_var_optimization_reports_consistently(monkeypatch):
         centroid2_path="dummy2.h5",
         alpha=0.2,
         min_coverage=1,
+        min_samples_abs=1,
+        min_samples_pct=0.05,
         delta_mean_reduction=0.2,
         lambda_var=0.5,
         optimize_lambda_var=True,
@@ -123,6 +129,7 @@ def test_explorer_runs_mann_whitney_on_delta_reduced_positions(monkeypatch):
             [4, 5, 4, 5],
             [0, 0, 1, 12],
         ],
+        positions=positions,
     )
     centroid2 = MockCentroid(
         means=[0.12, 0.82, 0.52, 0.20],
@@ -133,6 +140,7 @@ def test_explorer_runs_mann_whitney_on_delta_reduced_positions(monkeypatch):
             [5, 4, 5, 4],
             [10, 2, 0, 0],
         ],
+        positions=positions,
     )
 
     monkeypatch.setattr(

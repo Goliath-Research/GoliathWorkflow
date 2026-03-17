@@ -109,56 +109,6 @@ class MethylDetectorConfig(BaseModel):
         description="Significance level for statistical tests (q-value threshold)"
     )
 
-    optimize_dmps: bool = Field(
-        default=True,
-        description="Enable DMP subset optimization via validation BA"
-    )
-
-    validation_mode: str = Field(
-        default="real",
-        description="Validation mode: 'real' (prefer real samples from config or centroid metadata samples_used) or 'synthetic' (sample from centroid ECDF histograms only when explicitly requested)."
-    )
-
-
-    n_validation_samples: int = Field(
-        default=100,
-        ge=10,
-        description="Number of synthetic validation samples per class when validation_mode='synthetic'."
-    )
-
-    validation_split_ratio: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description="Fraction of validation data held out for test (0 = use all data for optimization). Set >0 (e.g. 0.2) for a held-out test set."
-    )
-
-    validation_n_repeats: int = Field(
-        default=3,
-        ge=1,
-        description="Number of repeated stratified holdout splits used when selecting/reporting top-k by balanced accuracy."
-    )
-
-    centroid1_validation_samples: Optional[Union[str, List[str]]] = Field(
-        default=None,
-        description="Validation sample paths for centroid1: list of paths, 'use_metadata', or None. If None and validation_mode is 'real', centroid metadata (samples_used) is used by default; if no real data is available, synthetic samples are used."
-    )
-    centroid2_validation_samples: Optional[Union[str, List[str]]] = Field(
-        default=None,
-        description="Validation sample paths for centroid2: list of paths, 'use_metadata', or None. If None and validation_mode is 'real', centroid metadata (samples_used) is used by default; if no real data is available, synthetic samples are used."
-    )
-
-    target_balanced_accuracy: float = Field(
-        default=0.99,
-        ge=0.5, le=1.0,
-        description="Target balanced accuracy for top-k selection on held-out validation data."
-    )
-
-    optimization_method: str = Field(
-        default="featurecuts",
-        description="DMP subset optimization: 'featurecuts' (coarse+refinement), 'bayesian_optimization', or 'binary_search'. Try binary_search or bayesian_optimization if featurecuts gives BA≈0.5."
-    )
-
     random_state: int = Field(
         default=42,
         ge=0,
@@ -166,15 +116,19 @@ class MethylDetectorConfig(BaseModel):
     )
 
     # ----------------
-    # Coverage Filter
+    # Coverage and sample filters (per-centroid; candidate positions = intersection of valid sets)
     # ----------------
-    min_N_pct: float = Field(
-        default=0.10, ge=0.0, le=1.0,
-        description="Minimum fraction of (validation/centroid) samples that must cover a position to accept it as a valid DMP (e.g. 0.05 = 5%, 0.10 = 10%). Used for validation coverage in optimization."
+    min_coverage: int = Field(
+        default=4, ge=1,
+        description="Minimum total coverage (Sm+uC) per position in each centroid for a position to be a DMP candidate. Same default as MethylCentroid; use higher for stricter precision when comparing centroids."
     )
-    min_N_abs: Optional[int] = Field(
-        default=None, ge=1,
-        description="Absolute floor for sample count per position (optional). If set, effective minimum is max(min_N_pct * N, min_N_abs)."
+    min_samples_abs: int = Field(
+        default=1, ge=1,
+        description="Absolute minimum number of samples (N) per position in each centroid."
+    )
+    min_samples_pct: float = Field(
+        default=0.05, ge=0.0, le=1.0,
+        description="Minimum fraction of that centroid's cohort (samples) per position. Effective min N per centroid = max(min_samples_abs, ceil(min_samples_pct * cohort_size))."
     )
 
     # ----------------
@@ -207,12 +161,6 @@ class MethylDetectorConfig(BaseModel):
         default=False,
         description="Enable Platt scaling calibration on validation data during classification"
     )
-
-    @field_validator('n_validation_samples')
-    def validate_n_validation(cls, v):
-        if v is not None and v < 10:
-            raise ValueError("n_validation_samples must be >=10 or None")
-        return v
 
     @field_validator('contexts', mode='before')
     @classmethod
@@ -443,15 +391,6 @@ class MethylDetectorConfig(BaseModel):
         description="Minimum number of validation samples that must cover a position for it to be kept in calibration/test. Used to drop positions with too few non-NaN values so BA has signal."
     )
 
-    featurecuts_exhaustive_search: bool = Field(
-        default=True,
-        description="When optimization_method is 'featurecuts', use exhaustive search over k. If False, use a coarser search."
-    )
-    featurecuts_max_candidates: Optional[int] = Field(
-        default=None, ge=1,
-        description="When optimization_method is 'featurecuts', maximum number of k candidates to evaluate. None = no limit."
-    )
-    
     classifier_coverage_weighting: bool = Field(
         default=True,
         description="If True, weight LLR by sample precision (tau_s ~ coverage); False: uniform."
@@ -549,13 +488,11 @@ class MethylDetectorConfig(BaseModel):
     # ---------------
     # Helper Methods
     # ---------------
-    def effective_min_N(self, cohort_size: int) -> int:
+    def effective_min_samples(self, cohort_size: int) -> int:
         """
-        Compute the effective absolute min-N for a position given the cohort size.
-        Percentage gate takes precedence; absolute fallback retained for back-compat.
+        Effective minimum number of samples per position for a centroid with given cohort size.
+        Different cohort sizes (e.g. centroid1=50, centroid2=30) yield different effective minimums.
         """
-        pct = max(0.0, min(1.0, float(self.min_N_pct)))
+        pct = max(0.0, min(1.0, float(self.min_samples_pct)))
         n_from_pct = ceil(pct * cohort_size)
-        if self.min_N_abs is not None:
-            return max(n_from_pct, int(self.min_N_abs))
-        return n_from_pct
+        return max(int(self.min_samples_abs), n_from_pct)

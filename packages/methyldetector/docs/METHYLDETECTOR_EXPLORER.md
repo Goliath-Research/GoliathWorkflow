@@ -66,7 +66,7 @@ methyl-detector-explorer \
 ## Outputs
 
 - Report JSON:
-  `total_positions`, `positions_after_min_N_filter`, `positions_after_delta_mean_reduction`, `positions_after_statistical_filter`, `positions_after_biological_filter`, `lambda_var_used`, `time_total_s`, and the effect-size percentiles when available.
+  `total_positions`, `positions_after_min_samples_filter`, `positions_after_delta_mean_reduction`, `positions_after_statistical_filter`, `positions_after_biological_filter`, `lambda_var_used`, `time_total_s`, and the effect-size percentiles when available.
 - Optional CSV:
   `position`, `mean1`, `mean2`, `delta_mean`, `variance1`, `variance2`, `n1`, `n2`, `p_value`, `q_value`, `overlap`, `effect_size`, `effect_size_reliability`, and `effect_size_ecdf`.
 

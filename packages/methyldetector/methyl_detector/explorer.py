@@ -44,21 +44,10 @@ def _to_arr(x: Any) -> np.ndarray:
     return np.asarray(x, dtype=np.float64).ravel()
 
 
-def _min_n_filter_indices(
-    n1: np.ndarray,
-    n2: np.ndarray,
-    min_N: Optional[int],
-    min_N_pct: float,
-) -> np.ndarray:
-    n1 = np.asarray(n1, dtype=np.float64).ravel()
-    n2 = np.asarray(n2, dtype=np.float64).ravel()
-    if min_N is not None:
-        keep = (n1 >= min_N) & (n2 >= min_N)
-    else:
-        max_n = np.maximum(n1, n2)
-        min_n = np.minimum(n1, n2)
-        keep = (max_n > 0) & (min_n >= min_N_pct * max_n)
-    return np.where(keep)[0].astype(np.intp)
+def _effective_min_samples(min_samples_abs: int, min_samples_pct: float, cohort_size: int) -> int:
+    """Effective minimum N per position for a centroid with given cohort size (same as detector config)."""
+    from math import ceil
+    return max(min_samples_abs, ceil(min_samples_pct * cohort_size))
 
 
 class MethylDetectorExplorer:
@@ -70,8 +59,8 @@ class MethylDetectorExplorer:
         centroid2_path: Union[str, Path],
         alpha: float = 0.05,
         min_coverage: int = 4,
-        min_N: Optional[int] = None,
-        min_N_pct: float = 0.05,
+        min_samples_abs: int = 1,
+        min_samples_pct: float = 0.05,
         delta_mean_reduction: Optional[float] = None,
         min_delta_mean: Optional[float] = None,
         max_overlap: Optional[float] = None,
@@ -87,8 +76,8 @@ class MethylDetectorExplorer:
         self.centroid2_path = Path(centroid2_path)
         self.alpha = float(alpha)
         self.min_coverage = int(min_coverage)
-        self.min_N = min_N
-        self.min_N_pct = float(min_N_pct)
+        self.min_samples_abs = int(min_samples_abs)
+        self.min_samples_pct = float(min_samples_pct)
         self.delta_mean_reduction = delta_mean_reduction
         self.min_delta_mean = min_delta_mean
         self.max_overlap = max_overlap
@@ -112,14 +101,20 @@ class MethylDetectorExplorer:
         _require_binned_stats(centroid1)
         _require_binned_stats(centroid2)
 
-        n1_all = _to_arr(centroid1.N)
-        n2_all = _to_arr(centroid2.N)
-        keep_idx = _min_n_filter_indices(n1_all, n2_all, self.min_N, self.min_N_pct)
+        # Per-centroid valid sets, then intersection (same logic as MethylDetector)
+        n1_max = int(np.max(_to_arr(centroid1.N))) if centroid1.N is not None else 1
+        n2_max = int(np.max(_to_arr(centroid2.N))) if centroid2.N is not None else 1
+        min_s1 = _effective_min_samples(self.min_samples_abs, self.min_samples_pct, n1_max)
+        min_s2 = _effective_min_samples(self.min_samples_abs, self.min_samples_pct, n2_max)
+        pair = MethylCentroidPair(min_coverage=self.min_coverage, min_samples=(min_s1, min_s2))
+        candidate_pos = pair._align_centroids(centroid1, centroid2)
+        keep_mask = np.isin(common_pos, candidate_pos)
+        keep_idx = np.where(keep_mask)[0].astype(np.intp)
         if len(keep_idx) == 0:
             self._result_df = pd.DataFrame()
             self._report = {
                 "total_positions": int(len(common_pos)),
-                "positions_after_min_N_filter": 0,
+                "positions_after_min_samples_filter": 0,
                 "positions_after_statistical_filter": 0,
                 "positions_after_delta_mean_reduction": 0,
                 "positions_after_biological_filter": 0,
@@ -128,18 +123,32 @@ class MethylDetectorExplorer:
             }
             return self._result_df, self._report
 
+        # N and data at common positions, then at kept positions
+        pos1 = np.asarray(centroid1.pos)
+        pos2 = np.asarray(centroid2.pos)
+        idx1_common = np.searchsorted(pos1, common_pos, side="left")
+        idx2_common = np.searchsorted(pos2, common_pos, side="left")
+        n1_at_common = _to_arr(centroid1.N)[idx1_common]
+        n2_at_common = _to_arr(centroid2.N)[idx2_common]
+        mean1_at_common = _to_arr(centroid1.mean)[idx1_common]
+        mean2_at_common = _to_arr(centroid2.mean)[idx2_common]
+        var1_at_common = _to_arr(centroid1.variance)[idx1_common]
+        var2_at_common = _to_arr(centroid2.variance)[idx2_common]
+
         delta_gate = self.delta_mean_reduction
         positions_min_n = common_pos[keep_idx]
-        mean1 = _to_arr(centroid1.mean)[keep_idx]
-        mean2 = _to_arr(centroid2.mean)[keep_idx]
-        var1 = _to_arr(centroid1.variance)[keep_idx]
-        var2 = _to_arr(centroid2.variance)[keep_idx]
-        n1 = n1_all[keep_idx]
-        n2 = n2_all[keep_idx]
+        mean1 = mean1_at_common[keep_idx]
+        mean2 = mean2_at_common[keep_idx]
+        var1 = var1_at_common[keep_idx]
+        var2 = var2_at_common[keep_idx]
+        n1 = n1_at_common[keep_idx]
+        n2 = n2_at_common[keep_idx]
         signed_delta = mean1 - mean2
         delta_mean = np.abs(signed_delta)
-        bc1 = np.asarray(centroid1.binned_stats["bin_counts"], dtype=np.float64)[keep_idx]
-        bc2 = np.asarray(centroid2.binned_stats["bin_counts"], dtype=np.float64)[keep_idx]
+        bc1_at_common = np.asarray(centroid1.binned_stats["bin_counts"], dtype=np.float64)[idx1_common]
+        bc2_at_common = np.asarray(centroid2.binned_stats["bin_counts"], dtype=np.float64)[idx2_common]
+        bc1 = bc1_at_common[keep_idx]
+        bc2 = bc2_at_common[keep_idx]
 
         prefiltered_mask = np.ones(len(positions_min_n), dtype=bool)
         if delta_gate is not None:
@@ -269,7 +278,7 @@ class MethylDetectorExplorer:
 
         report = {
             "total_positions": int(len(common_pos)),
-            "positions_after_min_N_filter": int(len(positions_min_n)),
+            "positions_after_min_samples_filter": int(len(positions_min_n)),
             "positions_after_delta_mean_reduction": int(len(prefiltered_df)),
             "positions_after_statistical_filter": int(len(stat_df)),
             "positions_after_biological_filter": int(len(bio_df)),

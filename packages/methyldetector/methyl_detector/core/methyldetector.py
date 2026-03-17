@@ -284,21 +284,14 @@ class MethylDetector:
         bio_dmps_df = bio_dmps_df.sort_values("effect_size", ascending=False).reset_index(drop=True)
         logger.info("📊 Biological DMPs sorted by effect_size")
        
-        # Compute biological importance and sort
+        # Compute biological importance and sort (funnel output = all biological DMPs; no optimization)
         logger.info("📋 Sorting DMPs by biological importance...")
         sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
-        
-        # Export pre-optimization DMPs (biological-sorted)
-        if self.config.output_dir:
-            logger.info("💾 Exporting DMPs sorted by importance (pre-optimization)...")
-            self._export_unified_csv(sorted_by_importance_df, suffix="-biological-sorted")
-        
-        # DMP selection with validation and optional optimization (featurecuts / bayesian / binary_search)
         selected_dmps_df = self._select_dmps_multicontext(bio_dmps_df, sorted_df=sorted_by_importance_df)
-        
-        # Export final selected DMPs and save classifier when output_dir is set
+
+        # Export: single DMP CSV + Classifier
         if self.config.output_dir:
-            logger.info("💾 Exporting final selected DMPs...")
+            logger.info("💾 Exporting DMPs and classifier...")
             self._export_unified_csv(selected_dmps_df, suffix="")
             self._save_unified_model(None, selected_dmps_df)
             self._save_validation_results(
@@ -376,20 +369,17 @@ class MethylDetector:
         """
         logger.debug(f"Processing centroids for context {context}...")
         
-        # Load and align centroids
-        min_coverage = self.config.effective_min_N(10)  # Fallback cohort size
+        # Load and align centroids (all common positions; per-centroid filters applied in the pair)
         centroid1, centroid2, common_positions = MethylCentroidPair.load_and_align(
-            centroid1_path, 
-            centroid2_path, 
-            min_coverage=min_coverage
+            centroid1_path,
+            centroid2_path,
+            min_coverage=self.config.min_coverage,
         )
-        
-        # Determine cohort size
-        max_coverage = max(centroid1.N.max() if centroid1.N is not None else 0,
-                          centroid2.N.max() if centroid2.N is not None else 0)
-        cohort_size = max(max_coverage, 10)
-        effective_min_coverage = self.config.effective_min_N(cohort_size)
-        
+        n1_max = int(centroid1.N.max()) if centroid1.N is not None else 10
+        n2_max = int(centroid2.N.max()) if centroid2.N is not None else 10
+        min_s1 = self.config.effective_min_samples(n1_max)
+        min_s2 = self.config.effective_min_samples(n2_max)
+
         # Pre-filter aligned positions by delta_mean before the expensive statistical
         # comparison. This uses only the centroid means (N, Sx), which are cheap to
         # evaluate, to reduce the tested set from millions of positions down to those
@@ -419,9 +409,10 @@ class MethylDetector:
                 f"{n_pre:,}",
             )
 
-        # Create centroid pair for comparison
+        # Create centroid pair: per-centroid valid sets (coverage + N), candidate = intersection
         centroid_pair = MethylCentroidPair(
-            min_coverage=effective_min_coverage,
+            min_coverage=self.config.min_coverage,
+            min_samples=(min_s1, min_s2),
         )
 
         # Compare centroids (only at pre-filtered positions when the gate is active)
@@ -477,16 +468,9 @@ class MethylDetector:
                 grid_size=self.config.ecdf_grid_size,
             )
             comparison_results["p_value"] = ks_pvalues.astype(np.float32)
-            try:
-                from statsmodels.stats.multitest import multipletests
-                _, q_values, _, _ = multipletests(
-                    comparison_results["p_value"].values, alpha=0.05, method="fdr_tsbh"
-                )
-                comparison_results["q_value"] = q_values.astype(np.float32)
-            except ImportError:
-                from methyl_utils.statistical_tests import storey_qvalues
-                q_values, _ = storey_qvalues(comparison_results["p_value"].values)
-                comparison_results["q_value"] = q_values.astype(np.float32)
+            from methyl_utils.statistical_tests import storey_qvalues
+            q_values, _ = storey_qvalues(comparison_results["p_value"].values)
+            comparison_results["q_value"] = q_values.astype(np.float32)
             logger.info(
                 "Context %s: significance from KS on precise ECDF (grid_size=%s)",
                 context,
@@ -1031,13 +1015,11 @@ class MethylDetector:
         """
         try:
             # Resolve validation sample paths: explicit config, else centroid metadata (samples_used), else none
-            # When validation_mode is "real" (default), use centroid metadata if config does not specify paths.
-            use_metadata_by_default = (self.config.validation_mode != 'synthetic')
-            class1_config = self.config.centroid1_validation_samples
-            if class1_config is None and use_metadata_by_default:
+            class1_config = getattr(self.config, "centroid1_validation_samples", None)
+            if class1_config is None:
                 class1_config = "use_metadata"
-            class2_config = self.config.centroid2_validation_samples
-            if class2_config is None and use_metadata_by_default:
+            class2_config = getattr(self.config, "centroid2_validation_samples", None)
+            if class2_config is None:
                 class2_config = "use_metadata"
 
             class1_paths = self._get_validation_samples(
@@ -1052,18 +1034,14 @@ class MethylDetector:
             )
             
             if not class1_paths and not class2_paths:
-                logger.warning(
-                    "No real validation samples (config and centroid metadata). "
-                    "Real-sample BA optimization will be skipped unless validation_mode='synthetic'."
-                )
+                logger.warning("No real validation samples (config and centroid metadata).")
                 return None
 
             # Balanced Accuracy requires both groups; we cannot classify between groups with only one.
             if not class1_paths or not class2_paths:
                 logger.warning(
                     "Validation requires samples from BOTH centroid1 and centroid2 to compute Balanced Accuracy. "
-                    "Got centroid1=%s, centroid2=%s. Real-sample BA optimization will be skipped unless validation_mode='synthetic'."
-                    % (len(class1_paths), len(class2_paths))
+                    "Got centroid1=%s, centroid2=%s." % (len(class1_paths), len(class2_paths))
                 )
                 return None
             
@@ -1233,7 +1211,7 @@ class MethylDetector:
         if n_total == 0:
             return []
 
-        split_ratio = float(self.config.validation_split_ratio if self.config.validation_split_ratio is not None else 0.0)
+        split_ratio = float(getattr(self.config, "validation_split_ratio", 0.0) or 0.0)
         idx_all = np.arange(n_total, dtype=np.int64)
         class0 = idx_all[y == 0]
         class1 = idx_all[y == 1]
@@ -1255,7 +1233,7 @@ class MethylDetector:
         if n_test0 <= 0 or n_test1 <= 0:
             return [(idx_all, idx_all)]
 
-        n_repeats = max(int(self.config.validation_n_repeats or 1), 1)
+        n_repeats = max(int(getattr(self.config, "validation_n_repeats", 1) or 1), 1)
         splits: List[Tuple[np.ndarray, np.ndarray]] = []
         base_seed = int(self.config.random_state or 42)
         for repeat_idx in range(n_repeats):
@@ -1667,8 +1645,7 @@ class MethylDetector:
         """
         Validate selected DMPs without optimization.
         
-        This method performs validation even when optimize_dmps=False to report
-        classifier performance on the selected DMP set.
+        Optionally validate classifier performance on the selected DMP set (e.g. for reporting).
         
         Args:
             selected_dmps_df: DataFrame with selected DMPs to validate
@@ -1683,7 +1660,8 @@ class MethylDetector:
                 logger.warning("Cannot validate: no DMPs selected")
                 return None
 
-            if self.config.validation_mode == "real":
+            validation_mode = getattr(self.config, "validation_mode", "real")
+            if validation_mode == "real":
                 logger.info("📊 Loading validation samples...")
                 validation_data = self._load_validation_samples_multicontext(selected_dmps_df)
                 if validation_data is None:
@@ -1723,236 +1701,16 @@ class MethylDetector:
     
     def _select_dmps_multicontext(self, bio_dmps_df: pd.DataFrame, sorted_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
-        Prepare DMPs for validation and optimization in multi-context mode.
-
-        Loads validation data and sorts DMPs by biological importance.
-        Returns all DMPs for subsequent optimization if enabled.
-
-        Args:
-            bio_dmps_df: DataFrame of biologically filtered DMPs
-            sorted_df: Optional pre-computed sorted DataFrame (to avoid recomputation)
-
-        Returns:
-            DataFrame with sorted DMPs ready for optimization
+        Return all biological DMPs sorted by importance (no optimization).
+        Exported DMPs = funnel output only.
         """
-        n_dmps = len(bio_dmps_df)
-        self._ba_05_warned_once = False
-        self._low_overlap_warned_once = False
-        self._no_variation_warned_once = False
-        self._degenerate_probs_warned_once = False
-        self._platt_calibrator_bytes = None
-        self._platt_calibrator_scaler_bytes = None
-        logger.info(f"🔍 Preparing DMPs for validation: {n_dmps:,} candidates")
-        
-        if n_dmps == 0:
+        if len(bio_dmps_df) == 0:
             return bio_dmps_df
-        
-        # Compute importance scores and sort if not provided
         if sorted_df is None:
-            logger.debug("Computing biological importance scores...")
             sorted_df = self._compute_biological_importance(bio_dmps_df)
-        else:
-            logger.debug("Using provided sorted DMPs (biological importance already computed)")
-
-        # When optimization is disabled, return all biological DMPs (no coverage filter)
-        if not self.config.optimize_dmps:
-            logger.info("📋 optimize_dmps=False: using all %s biological DMPs (no validation coverage filter)", len(sorted_df))
-            self._check_centroid_self_classification(sorted_df)
-            return sorted_df
-
-        validation_data = None
-        if self.config.validation_mode == "real":
-            logger.info("📊 Loading real validation samples for optimization...")
-            validation_data = self._load_validation_samples_multicontext(sorted_df)
-            if validation_data is None:
-                logger.warning("No real validation data available; keeping all biological DMPs without BA optimization.")
-                self._check_centroid_self_classification(sorted_df)
-                return sorted_df
-        else:
-            logger.info("📊 Generating synthetic validation samples from ECDF histograms...")
-            validation_data = self._generate_synthetic_validation_samples(sorted_df)
-            if validation_data is None:
-                logger.warning("Failed to generate synthetic validation samples; keeping all biological DMPs.")
-                self._check_centroid_self_classification(sorted_df)
-                return sorted_df
-
-        X_val, y_val, val_positions, val_contexts = validation_data
-        logger.info(f"✅ Loaded {len(X_val)} validation samples with {len(val_positions)} positions")
-        n_valid_values = np.sum(~np.isnan(X_val))
-        total_values = X_val.size
-        valid_percentage = (n_valid_values / total_values) * 100 if total_values > 0 else 0.0
-        logger.info(f"Validation data validity: {n_valid_values:,}/{total_values:,} values valid ({valid_percentage:.1f}%)")
-
-        splits = self._prepare_validation_splits(y_val, require_holdout=True)
-        if not splits:
-            logger.warning("No usable validation splits were created; keeping all biological DMPs.")
-            self._check_centroid_self_classification(sorted_df)
-            return sorted_df
-
-        # Restrict to DMPs with enough coverage: require at least min_N_pct of validation samples
-        # (e.g. 5% of centroid/validation cohort) to accept a position as valid for BA optimization.
-        coverage_in_eval = np.zeros(X_val.shape[1], dtype=np.int64)
-        total_test_rows = 0
-        for _, test_indices in splits:
-            coverage_in_eval += np.sum(~np.isnan(X_val[test_indices]), axis=0)
-            total_test_rows += len(test_indices)
-        n_total = max(int(total_test_rows), 1)
-        min_pct = max(0.0, min(1.0, float(self.config.min_N_pct)))
-        min_required = max(1, int(np.ceil(min_pct * n_total)))
-        if self.config.min_N_abs is not None and self.config.min_N_abs >= 1:
-            min_required = max(min_required, int(self.config.min_N_abs))
-        keep_mask = coverage_in_eval >= min_required
-        n_keep = int(np.sum(keep_mask))
-        n_dropped = len(keep_mask) - n_keep
-        if n_dropped > 0 and n_keep > 0:
-            sorted_df = sorted_df.loc[keep_mask].reset_index(drop=True)
-            X_val = X_val[:, keep_mask]
-            val_positions = val_positions[keep_mask]
-            val_contexts = val_contexts[keep_mask]
-            logger.info(
-                "Restricted to %s DMPs with coverage ≥%s sample(s) (min_N_pct=%.0f%% of %s validation samples; dropped %s low-coverage positions).",
-                n_keep, min_required, min_pct * 100.0, n_total, n_dropped
-            )
-        elif n_keep == 0:
-            logger.warning(
-                "No DMP positions have validation coverage in any sample; BA will be 0.5. "
-                "Ensure validation samples cover the same chromosome/assay as the centroids."
-            )
-        n_dmps = len(sorted_df)
-
-        # Sanity check: centroid profiles at DMP positions should classify as their own class (prob ~1)
+        logger.info("📋 Using all %s biological DMPs (funnel output; no optimization)", len(sorted_df))
         self._check_centroid_self_classification(sorted_df)
-        prefix_cache = self._build_validation_prefix_cache(sorted_df, X_val, y_val, splits)
-
-        selected_dmps_df = sorted_df
-        final_result = None
-
-        if self.config.optimize_dmps:
-            logger.info("")
-            logger.info(f"🎯 Starting DMP optimization with method={self.config.optimization_method}")
-
-            max_k = n_dmps
-            initial_k = None
-            if max_k > 0:
-                heuristic_k = max(10, n_dmps // 10)
-                initial_k = max(1, min(max_k, heuristic_k))
-
-            if self.config.optimization_method == "featurecuts":
-                logger.info("🧬 FeatureCuts: maximizing balanced accuracy across candidate top-k subsets")
-
-                optimized_k, optimized_result = self._optimize_dmps_featurecuts(
-                    sorted_df,
-                    max_k=max_k,
-                    initial_k=initial_k,
-                    prefix_cache=prefix_cache,
-                )
-
-                optimized_k = int(max(1, min(optimized_k, max_k))) if max_k > 0 else 0
-                selected_dmps_df = sorted_df.iloc[:optimized_k].copy()
-                final_result = optimized_result
-                self._final_validation_results = final_result
-
-                cm = final_result['confusion_matrix']
-                logger.info(
-                    f"✅ FeatureCuts result: k={optimized_k:,}, BA={final_result['balanced_accuracy']:.4f}, "
-                    f"TP={cm['tp']}, TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}"
-                )
-
-            elif self.config.optimization_method == "bayesian_optimization":
-                logger.info("🧬 Bayesian Optimization: maximizing balanced accuracy with GP surrogate model")
-
-                optimized_k = self._optimize_dmps_bayesian(
-                    sorted_df,
-                    initial_k=initial_k,
-                    max_k=max_k,
-                    prefix_cache=prefix_cache,
-                )
-
-                optimized_k = int(max(1, min(optimized_k, max_k))) if max_k > 0 else 0
-                selected_dmps_df = sorted_df.iloc[:optimized_k].copy()
-                final_result = self._evaluate_prefix_subset(prefix_cache, optimized_k)
-                self._final_validation_results = final_result
-
-                cm = final_result['confusion_matrix']
-                logger.info(
-                    f"✅ Bayesian optimization result: k={optimized_k:,}, BA={final_result['balanced_accuracy']:.4f}, "
-                    f"TP={cm['tp']}, TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}"
-                )
-
-            elif self.config.optimization_method == "binary_search":
-                logger.info("🔍 Binary Search: finding minimal k achieving target BA (monotonic assumption)")
-
-                target_ba = self.config.target_balanced_accuracy
-                logger.info(f"Target BA: {target_ba:.3f}")
-
-                optimized_k = self._optimize_dmps_binary_search(
-                    sorted_df,
-                    target_ba=target_ba,
-                    max_k=max_k,
-                    prefix_cache=prefix_cache,
-                )
-
-                optimized_k = int(max(1, min(optimized_k, max_k))) if max_k > 0 else 0
-                selected_dmps_df = sorted_df.iloc[:optimized_k].copy()
-                final_result = self._evaluate_prefix_subset(prefix_cache, optimized_k)
-                self._final_validation_results = final_result
-
-                cm = final_result['confusion_matrix']
-                logger.info(
-                    f"✅ Binary search result: k={optimized_k:,}, BA={final_result['balanced_accuracy']:.4f}, "
-                    f"TP={cm['tp']}, TN={cm['tn']}, FP={cm['fp']}, FN={cm['fn']}"
-                )
-
-            else:
-                logger.warning(
-                    f"Unknown optimization_method '{self.config.optimization_method}', skipping optimization step."
-                )
-
-            # When target BA is not achieved, export all DMPs to improve matching with future samples
-            if final_result is not None:
-                target_ba = self.config.target_balanced_accuracy
-                if target_ba is not None and final_result.get('balanced_accuracy', 0) < target_ba:
-                    selected_dmps_df = sorted_df.copy()
-                    final_result = self._evaluate_prefix_subset(prefix_cache, len(sorted_df))
-                    logger.info(
-                        "Target BA %.3f not achieved; exporting all %s DMPs to improve matching with future samples.",
-                        target_ba, len(sorted_df)
-                    )
-                self._final_validation_results = final_result
-
-                # Fit one final Platt calibrator on the first holdout split only.
-                first_calib_idx, first_test_idx = splits[0]
-                calibrated_result = self._validate_classifier_subset(
-                    selected_dmps_df,
-                    X_val[first_calib_idx],
-                    y_val[first_calib_idx],
-                    X_val[first_test_idx],
-                    y_val[first_test_idx],
-                    val_positions,
-                    val_contexts,
-                )
-                if 'platt_calibrator' in calibrated_result:
-                    self._platt_calibrator_bytes = calibrated_result['platt_calibrator']
-                    self._platt_calibrator_scaler_bytes = calibrated_result.get('platt_calibrator_scaler')
-                else:
-                    self._platt_calibrator_bytes = None
-                    self._platt_calibrator_scaler_bytes = None
-
-        # If we used synthetic validation, verify on real samples from centroid metadata
-        if self.config.validation_mode == "synthetic":
-            logger.info("")
-            logger.info("🔬 Verifying model on real samples from centroid metadata...")
-            real_validation = self._validate_on_real_samples(selected_dmps_df)
-            if real_validation is not None:
-                logger.info(f"✅ Real validation: BA={real_validation['balanced_accuracy']:.4f}")
-                logger.info(f"   TP={real_validation['confusion_matrix']['tp']}, "
-                          f"TN={real_validation['confusion_matrix']['tn']}, "
-                          f"FP={real_validation['confusion_matrix']['fp']}, "
-                          f"FN={real_validation['confusion_matrix']['fn']}")
-                # Store real validation results alongside synthetic
-                self._real_validation_results = real_validation
-        
-        return selected_dmps_df
+        return sorted_df
     
     def _validate_on_real_samples(self, selected_dmps_df: pd.DataFrame) -> Optional[dict]:
         """
@@ -1967,12 +1725,11 @@ class MethylDetector:
         """
         try:
             # Resolve real sample paths: config, else centroid metadata (samples_used)
-            use_metadata_by_default = (self.config.validation_mode != 'synthetic')
-            c1 = self.config.centroid1_validation_samples
-            if c1 is None and use_metadata_by_default:
+            c1 = getattr(self.config, "centroid1_validation_samples", None)
+            if c1 is None:
                 c1 = "use_metadata"
-            c2 = self.config.centroid2_validation_samples
-            if c2 is None and use_metadata_by_default:
+            c2 = getattr(self.config, "centroid2_validation_samples", None)
+            if c2 is None:
                 c2 = "use_metadata"
             real_class1_paths = self._get_validation_samples(c1, self.config.centroid1_dir, "centroid1")
             real_class2_paths = self._get_validation_samples(c2, self.config.centroid2_dir, "centroid2")
@@ -2735,7 +2492,7 @@ class MethylDetector:
         if hasattr(self, '_final_validation_results') and self._final_validation_results:
             result = self._final_validation_results
             optimization_validation = ValidationResults(
-                type=self.config.validation_mode,
+                type=getattr(self.config, "validation_mode", "real"),
                 performance=PerformanceMetrics(
                     balanced_accuracy=result['balanced_accuracy'],
                     sensitivity=result['metrics']['sensitivity'],

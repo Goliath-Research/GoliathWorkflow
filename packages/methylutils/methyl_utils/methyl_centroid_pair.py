@@ -88,11 +88,13 @@ class MethylCentroidPair:
         centroid1: Optional[MethylCentroid] = None,
         centroid2: Optional[MethylCentroid] = None,
         min_coverage: int = 4,
+        min_samples: Optional[Tuple[int, int]] = None,
         ecdf_ks_grid_size: int = 256,
     ):
         self.centroid1 = centroid1
         self.centroid2 = centroid2
         self.common_pos = None
+        self.min_samples = min_samples  # (min_samples_1, min_samples_2) per-centroid N threshold; None = use min_coverage for N only
 
         if centroid1 is not None and centroid2 is not None:
             self.common_pos = np.intersect1d(centroid1.pos, centroid2.pos)
@@ -589,37 +591,48 @@ class MethylCentroidPair:
             )
 
     def _align_centroids(self, centroid1: MethylSample, centroid2: MethylSample) -> np.ndarray:
-        """Find common positions between centroids."""
-        # Find intersection of positions
+        """Find common positions valid in both centroids (per-centroid coverage and N filters, then intersection)."""
         pos1_vals = centroid1.pos.values if hasattr(centroid1.pos, 'values') else np.asarray(centroid1.pos)
         pos2_vals = centroid2.pos.values if hasattr(centroid2.pos, 'values') else np.asarray(centroid2.pos)
         common_positions = np.intersect1d(pos1_vals, pos2_vals)
+        if len(common_positions) == 0:
+            return common_positions
 
-        # Filter by minimum sample count (N) per position so positions with too few samples are excluded (min_N_pct semantics)
+        idx1 = np.searchsorted(pos1_vals, common_positions, side='left')
+        idx2 = np.searchsorted(pos2_vals, common_positions, side='left')
+
+        if self.min_samples is not None:
+            # Per-centroid valid sets: coverage >= min_coverage and N >= min_samples_i; candidate = intersection
+            min_s1, min_s2 = self.min_samples
+            # Coverage (Sm+Su) at common positions
+            cov1_arr = np.asarray(centroid1.coverage) if hasattr(centroid1, "coverage") else np.full(len(centroid1.pos), self.min_coverage, dtype=np.int64)
+            cov2_arr = np.asarray(centroid2.coverage) if hasattr(centroid2, "coverage") else np.full(len(centroid2.pos), self.min_coverage, dtype=np.int64)
+            cov1 = cov1_arr[idx1].astype(np.int64)
+            cov2 = cov2_arr[idx2].astype(np.int64)
+            N1_vals = centroid1.N.values if hasattr(centroid1.N, 'values') else np.asarray(centroid1.N)
+            N2_vals = centroid2.N.values if hasattr(centroid2.N, 'values') else np.asarray(centroid2.N)
+            N1_common = N1_vals[idx1].astype(np.int64)
+            N2_common = N2_vals[idx2].astype(np.int64)
+            valid_1 = (cov1 >= self.min_coverage) & (N1_common >= min_s1)
+            valid_2 = (cov2 >= self.min_coverage) & (N2_common >= min_s2)
+            mask = valid_1 & valid_2
+            return common_positions[mask]
+        # min_samples is None: backward compat — use min_coverage as N threshold only
         if hasattr(centroid1, 'N') and centroid1.N is not None and hasattr(centroid2, 'N') and centroid2.N is not None:
             N1_vals = centroid1.N.values if hasattr(centroid1.N, 'values') else np.asarray(centroid1.N)
             N2_vals = centroid2.N.values if hasattr(centroid2.N, 'values') else np.asarray(centroid2.N)
-            # Align by position so N1[i] and N2[i] refer to the same position (positions assumed sorted)
-            idx1 = np.searchsorted(pos1_vals, common_positions, side='left')
-            idx2 = np.searchsorted(pos2_vals, common_positions, side='left')
             N1_common = N1_vals[idx1]
             N2_common = N2_vals[idx2]
-            # Require min(N1, N2) >= min_coverage (min_coverage = effective_min_N from min_N_pct in MethylDetector)
             min_N_both = np.minimum(N1_common.astype(np.int64), N2_common.astype(np.int64))
             coverage_mask = min_N_both >= self.min_coverage
-            common_positions = common_positions[coverage_mask]
-        elif hasattr(centroid1, "coverage") and hasattr(centroid2, "coverage"):
-            # Fallback: filter by total coverage (e.g. c.coverage >= min_coverage)
-            c1_mask = np.isin(pos1_vals, common_positions)
-            c2_mask = np.isin(pos2_vals, common_positions)
+            return common_positions[coverage_mask]
+        if hasattr(centroid1, "coverage") and hasattr(centroid2, "coverage"):
             cov1 = centroid1.coverage.values if hasattr(centroid1.coverage, "values") else np.asarray(centroid1.coverage)
             cov2 = centroid2.coverage.values if hasattr(centroid2.coverage, "values") else np.asarray(centroid2.coverage)
-            c1_coverage = cov1[c1_mask]
-            c2_coverage = cov2[c2_mask]
+            c1_coverage = cov1[idx1]
+            c2_coverage = cov2[idx2]
             coverage_mask = (c1_coverage >= self.min_coverage) & (c2_coverage >= self.min_coverage)
-            c1_positions = pos1_vals[c1_mask][coverage_mask]
-            common_positions = c1_positions
-
+            return common_positions[coverage_mask]
         return common_positions
 
     def _compute_statistics(
@@ -784,23 +797,11 @@ class MethylCentroidPair:
         results_view["overlap_approx"] = overlap_approx.astype(np.float32)
 
     def _apply_fdr_correction(self, results_array: np.ndarray) -> np.ndarray:
-        """Apply two-stage BH FDR correction, with Storey fallback if unavailable."""
+        """Apply Storey's q-value method (always; no Benjamin-Hochberg)."""
         if len(results_array) == 0:
             return results_array
-
-        # Extract p-values
         p_values = results_array['p_value']
-
-        try:
-            # Use Storey's two-stage FDR method (adaptive FDR control)
-            from statsmodels.stats.multitest import multipletests
-            _, q_values, _, _ = multipletests(p_values, alpha=0.05, method='fdr_tsbh')
-        except ImportError:
-            # Fallback: Implement Storey's method manually
-            logger.warning("statsmodels not available, using manual Storey's FDR correction")
-            q_values = self._storey_qvalue(p_values)
-
-        # Update q-values in place (vectorized)
+        q_values = self._storey_qvalue(p_values)
         results_array['q_value'] = q_values.astype(np.float32)
 
         return results_array
