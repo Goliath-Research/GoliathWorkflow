@@ -267,26 +267,30 @@ For more information, visit: https://github.com/your-org/methyl_enricher
 
 
 def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
-    """Apply EnricherStepConfig to parsed args (config values override only when set)."""
+    """Apply EnricherStepConfig to parsed args. CLI overrides config when user explicitly passes a value."""
     from .config import EnricherStepConfig
-    # I/O: config may use input_file/input, output_dir/outdir
-    if config.input_file is not None:
+    # I/O: only when args not set (CLI overrides)
+    if config.input_file is not None and args.input is None:
         args.input = config.input_file
-    if config.input is not None:
+    if config.input is not None and args.input is None:
         args.input = config.input
-    if config.output_dir is not None:
+    if config.output_dir is not None and args.outdir in (None, "results"):
         args.outdir = config.output_dir
-    if config.outdir is not None:
+    if config.outdir is not None and args.outdir in (None, "results"):
         args.outdir = config.outdir
-    # Rest: same attribute name as args
+    # Rest: set from config. For network_plot, only set when user did not pass --network-plot (args is None).
     for name in EnricherStepConfig.model_fields:
         if name in ("input", "input_file", "output_dir", "outdir"):
             continue
         val = getattr(config, name, None)
         if val is None:
             continue
-        if hasattr(args, name):
-            setattr(args, name, val)
+        if not hasattr(args, name):
+            continue
+        if name == "network_plot" and getattr(args, name) is not None:
+            # CLI --network-plot wins over config
+            continue
+        setattr(args, name, val)
 
 
 def list_available_libraries():

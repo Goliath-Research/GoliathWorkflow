@@ -169,6 +169,7 @@ def write_network_plots(
         return
 
     modes = ["plotly", "pyvis", "cytoscape"] if network_plot.lower() == "all" else [network_plot.lower()]
+    skipped = []
 
     for mode in modes:
         if mode == "plotly":
@@ -178,9 +179,13 @@ def write_network_plots(
             try:
                 _write_pyvis_html(G, output_dir / "pathway_network_pyvis.html")
             except ImportError:
-                logger.warning("PyVis not installed; skipping pathway_network_pyvis.html")
+                skipped.append("pyvis (install with: pip install pyvis)")
+                logger.warning("PyVis not installed; skipping pathway_network_pyvis.html. Install with: pip install pyvis")
         elif mode == "cytoscape":
             _write_cytoscape_html(G, output_dir)
+
+    if skipped and network_plot.lower() == "all":
+        logger.info("Network plots: some formats skipped: %s. Generated: plotly, cytoscape (PyVis optional).", ", ".join(skipped))
 
 
 def _write_pyvis_html(G: nx.Graph, output_path: Path) -> None:
