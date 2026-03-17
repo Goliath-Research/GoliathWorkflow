@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import pandas as pd
 
 from .enricher import EnrichmentAnalyzer
-from .pathway_normalizer import PathwayNormalizer
+from .pathway_normalizer import PathwayNormalizer, load_theme_extras, load_theme_extras
 from .pathway_graph import run_pathway_clustering
 from .module_scorer import score_and_rank_modules, DEFAULT_PCA_RELEVANT_GENES
 
@@ -142,6 +142,8 @@ def run_module_pipeline(
         return pd.DataFrame()
 
     normalizer = PathwayNormalizer()
+    pca_relevance_tier, theme_descriptions = load_theme_extras()
+
     score_df = score_and_rank_modules(
         pathway_to_module_id,
         pathway_to_genes,
@@ -150,7 +152,6 @@ def run_module_pipeline(
         disease_genes=disease_genes or DEFAULT_PCA_RELEVANT_GENES,
     )
 
-    module_ids = score_df["module_id"].tolist()
     out_rows = []
     for _, row in score_df.iterrows():
         mid = row["module_id"]
@@ -162,18 +163,32 @@ def run_module_pipeline(
         main_genes = _main_genes_for_module(module_genes, gene_weights, top_k=10)
         main_pathways = _main_pathways_for_module(pathways, merged_df, top_k=5)
         overlap_genes = _overlap_genes_str(module_genes)
+        n_genes = row["n_genes"]
+        # Curated PCa tier override for canonical themes; else use score-based
+        pca_relevance = pca_relevance_tier.get(label, row["pca_relevance"])
+        module_type = "candidate" if n_genes <= 2 else "core"
+        main_theme = theme_descriptions.get(label, label)
         out_rows.append({
             "Module": label,
             "Score": round(row["final_score"], 4),
             "Main_genes": main_genes,
             "Overlap_genes": overlap_genes,
             "Main_pathways": main_pathways,
-            "PCa_relevance": row["pca_relevance"],
+            "Main_theme": main_theme,
+            "PCa_relevance": pca_relevance,
+            "module_type": module_type,
             "n_pathways": row["n_pathways"],
-            "n_genes": row["n_genes"],
+            "n_genes": n_genes,
         })
 
     out_df = pd.DataFrame(out_rows)
+    # Core modules first (by score desc), then candidate modules at bottom
+    out_df.sort_values(
+        by=["module_type", "Score"],
+        ascending=[True, False],
+        inplace=True,
+    )
+    out_df.reset_index(drop=True, inplace=True)
     out_path = output_dir / "modules_ranked.csv"
     out_df.to_csv(out_path, index=False)
     logger.info(f"Wrote {out_path} with {len(out_df)} modules.")

@@ -1,6 +1,14 @@
 {
   "description": "Map Enrichr pathway names to canonical biological themes for module labeling. First matching pattern (by order) wins; pattern is case-insensitive substring.",
   "patterns": [
+    {"pattern": "long-term potentiation", "theme": "Neuro / synaptic signaling"},
+    {"pattern": "long term potentiation", "theme": "Neuro / synaptic signaling"},
+    {"pattern": "neuronal", "theme": "Neuro / synaptic signaling"},
+    {"pattern": "synaptic", "theme": "Neuro / synaptic signaling"},
+    {"pattern": "NMDA", "theme": "Neuro / synaptic signaling"},
+    {"pattern": "glutamate receptor", "theme": "Neuro / synaptic signaling"},
+    {"pattern": "neurotransmitter", "theme": "Neuro / synaptic signaling"},
+    {"pattern": "synapse", "theme": "Neuro / synaptic signaling"},
     {"pattern": "calcium", "theme": "Calcium / GPCR signaling"},
     {"pattern": "GPCR", "theme": "Calcium / GPCR signaling"},
     {"pattern": "G-protein", "theme": "Calcium / GPCR signaling"},
@@ -78,6 +86,7 @@
     {"pattern": "reactive oxygen", "theme": "Oxidative stress / ROS"}
   ],
   "canonical_pca_themes": [
+    "Neuro / synaptic signaling",
     "Calcium / GPCR signaling",
     "RTK / MAPK signaling",
     "PI3K / growth-factor signaling",
@@ -88,5 +97,35 @@
     "DNA repair",
     "ECM / adhesion / migration",
     "Lipid / cholesterol metabolism"
-  ]
+  ],
+  "pca_relevance_tier": {
+    "Calcium / GPCR signaling": "High",
+    "ECM / adhesion / migration": "High",
+    "PI3K / growth-factor signaling": "High",
+    "Immune signaling": "High",
+    "RTK / MAPK signaling": "High",
+    "WNT / developmental": "Medium",
+    "EMT / invasion": "High",
+    "Androgen / steroid metabolism": "High",
+    "Neuro / synaptic signaling": "High",
+    "DNA repair": "Medium",
+    "Lipid / cholesterol metabolism": "Medium"
+  },
+  "theme_descriptions": {
+    "Calcium / GPCR signaling": "Calcium handling, GPCR and NMDA axes",
+    "ECM / adhesion / migration": "Cell-cell/ECM adhesion, migration",
+    "PI3K / growth-factor signaling": "Growth factor, RTK/PI3K-like signaling",
+    "Immune signaling": "Cytokine/immune and synaptic cues",
+    "RTK / MAPK signaling": "RTK, MAPK, ion transport regulation",
+    "WNT / developmental": "HOXA/SHH, developmental",
+    "EMT / invasion": "Cytoskeleton, ECM, invasion",
+    "Neuro / synaptic signaling": "Neuronal, synaptic, LTP/NMDA",
+    "Androgen / steroid metabolism": "Androgen, steroid metabolism",
+    "DNA repair": "DNA repair, genome stability",
+    "Lipid / cholesterol metabolism": "Lipid, cholesterol metabolism",
+    "Cell cycle / proliferation": "Cell cycle, proliferation",
+    "Apoptosis / cell death": "Apoptosis, cell death",
+    "Hypoxia / angiogenesis": "Hypoxia, angiogenesis",
+    "Oxidative stress / ROS": "Oxidative stress, ROS"
+  }
 }

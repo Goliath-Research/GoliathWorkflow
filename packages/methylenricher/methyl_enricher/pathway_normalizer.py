@@ -10,6 +10,10 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Type alias for theme -> tier (High/Medium/Low) or theme -> description string
+ThemeTierMap = Dict[str, str]
+ThemeDescriptionsMap = Dict[str, str]
+
 # Default mapping path (package data)
 _DEFAULT_MAPPING_PATH = Path(__file__).parent / "data" / "pathway_theme_mapping.json"
 
@@ -32,6 +36,22 @@ def load_theme_mapping(path: Optional[Path] = None) -> Tuple[List[Tuple[str, str
     ]
     canonical = data.get("canonical_pca_themes", [])
     return patterns, canonical
+
+
+def load_theme_extras(path: Optional[Path] = None) -> Tuple[ThemeTierMap, ThemeDescriptionsMap]:
+    """
+    Load pca_relevance_tier and theme_descriptions from the mapping JSON.
+    Returns (pca_relevance_tier, theme_descriptions).
+    Used by module_pipeline for PCa_relevance override and Main_theme column.
+    """
+    p = path or _DEFAULT_MAPPING_PATH
+    if not p.exists():
+        return {}, {}
+    with open(p, encoding="utf-8") as f:
+        data = json.load(f)
+    tier = data.get("pca_relevance_tier", {})
+    descriptions = data.get("theme_descriptions", {})
+    return tier, descriptions
 
 
 class PathwayNormalizer:
