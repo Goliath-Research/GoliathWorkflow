@@ -25,7 +25,8 @@ Notes:
     when a prebuilt wheel is available; otherwise it is skipped with a warning.
 
 Libraries in use (for verification):
-  - Base: requirements-pipeline.txt (scipy, h5py, hdf5plugin, pandas, numpy, etc.).
+  - Base: requirements-pipeline.txt (scipy, h5py, hdf5plugin, pandas, numpy, networkx,
+    python-louvain for MethylEnricher pathway-to-module, etc.).
   - GPU: requirements-gpu-cuda12.txt or requirements-gpu.txt (cupy, cudf, torch).
   - System (--system-deps): Python dev, build-essential, hdf5-tools, libhdf5-dev,
     libzstd-dev, ODBC, bedtools (for MethylMapper); with GPU, libnvrtc{N} for NVRTC.

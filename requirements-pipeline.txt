@@ -9,6 +9,7 @@ hdbscan
 hdf5plugin
 matplotlib
 numpy
+networkx
 numba
 nvidia-ml-py
 pandas
@@ -17,6 +18,7 @@ psutil
 pyarrow
 pyodbc
 pydantic
+python-louvain
 pymssql
 pysam
 pyyaml
