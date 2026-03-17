@@ -1214,12 +1214,21 @@ Return ONLY a valid JSON array—no other text. Example:
                     'publications': 0,
                     'functional_role': None,
                     'gene_basic_description': grok_entry.get('gene_basic_description'),
-                    'source': 'none'
+                    'source': 'none',
+                    'score': 0.0,
                 }
 
             # gene_basic_description only comes from Grok; inject when we chose another source
             if merged_results[gene_upper].get('gene_basic_description') is None and grok_entry.get('gene_basic_description'):
                 merged_results[gene_upper]['gene_basic_description'] = grok_entry['gene_basic_description']
+
+            # score comes from Open Targets (or DisGeNET); Grok does not return it — inject when missing
+            if merged_results[gene_upper].get('score') is None or merged_results[gene_upper].get('score') == 0:
+                ot_score = open_targets_results.get(gene_upper, {}).get('score')
+                if ot_score is not None and float(ot_score) != 0:
+                    merged_results[gene_upper]['score'] = float(ot_score)
+                elif merged_results[gene_upper].get('score') is None:
+                    merged_results[gene_upper]['score'] = 0.0
         return merged_results
 
     def _association_meets_thresholds(self, assoc: Dict) -> bool:

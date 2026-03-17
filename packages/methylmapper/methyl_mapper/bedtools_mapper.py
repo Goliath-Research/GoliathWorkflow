@@ -1374,42 +1374,9 @@ class BedtoolsMapper:
         if len(results) > 1 and any(not df.empty for df in results.values()):
             non_empty = [results[k] for k in results if not results[k].empty]
             combined_df = pd.concat(non_empty, ignore_index=True)
-            sum_cols = ['dmp_count', 'unique_dmps', 'total_weight', 'total_importance', 'gene_weight_sumsq', 'gene_z_numerator']
-            combined_agg = {c: 'sum' for c in sum_cols if c in combined_df.columns}
-            numeric_cols = combined_df.select_dtypes(include=[np.number]).columns.tolist()
-            exclude = [group_by, 'gene_p_value', 'gene_q_value', 'gene_z', 'gene_direction', 'gene_weight_sumsq', 'gene_z_numerator', 'gene_importance']
-            for col in numeric_cols:
-                if col not in exclude and col not in combined_agg:
-                    combined_agg[col] = 'mean'
-            for col in ['feature_type', 'feature_chrom', 'feature_strand', 'gene_id', 'transcript_id']:
-                if col in combined_df.columns and col not in combined_agg:
-                    combined_agg[col] = 'first'
-            combined_df = combined_df.groupby(group_by).agg(combined_agg).reset_index()
-            if 'gene_weight_sumsq' in combined_df.columns and 'gene_z_numerator' in combined_df.columns:
-                from scipy.stats import norm
-                z_num = combined_df['gene_z_numerator'].to_numpy(dtype=float)
-                z_denom = np.sqrt(combined_df['gene_weight_sumsq'].to_numpy(dtype=float))
-                with np.errstate(invalid='ignore', divide='ignore'):
-                    combined_z = z_num / z_denom
-                combined_df['gene_p_value'] = np.clip(2 * (1 - norm.cdf(np.abs(combined_z))), 0.0, 1.0)
-                combined_df['gene_direction'] = np.sign(combined_z)
-                gene_pvals = combined_df['gene_p_value'].to_numpy(dtype=float)
-                finite = np.isfinite(gene_pvals)
-                gene_qvals = np.full_like(gene_pvals, np.nan, dtype=float)
-                if np.any(finite):
-                    kwargs = {}
-                    if getattr(self, 'storey_lambda', None) is not None:
-                        kwargs['lambdas'] = np.array([self.storey_lambda], dtype=float)
-                    qv, _ = storey_qvalues(gene_pvals[finite], **kwargs)
-                    gene_qvals[finite] = qv
-                combined_df['gene_q_value'] = gene_qvals
-            if 'total_importance' in combined_df.columns:
-                combined_df['gene_importance'] = combined_df['total_importance']
-            elif 'total_weight' in combined_df.columns:
-                combined_df['gene_importance'] = combined_df['total_weight']
             combined_csv = output_dir / f"all-{group_by}-combined.csv"
             combined_df.to_csv(combined_csv, index=False)
-            logger.info(f"   Combined results saved to {combined_csv}")
+            logger.info(f"   Combined results saved to {combined_csv} (concatenated; enrichment preserved)")
 
         return results
 
@@ -1595,137 +1562,17 @@ class BedtoolsMapper:
             logger.info(f"   Results saved to: {artifact['output_csv']}")
             logger.info(f"   Detailed intersections: {artifact['detail_csv']}")
         
-        # Combine all results if multiple files
+        # Combine all results if multiple files: concatenate per-file CSVs so enrichment (Grok/Open Targets) is preserved
         if len(results) > 1:
             logger.info(f"\n{'='*70}")
-            logger.info(f"Combining results from {len(results)} files...")
+            logger.info(f"Combining results from {len(results)} files (concatenating; no aggregation)...")
             logger.info(f"{'='*70}")
-            
             combined = pd.concat(results.values(), ignore_index=True)
-            
-            # Aggregate combined results
-            combined_agg = {
-                'dmp_count': 'sum',
-                'unique_dmps': 'sum',
-            }
-
-            # Preserve additive fields across chromosomes
-            sum_cols = [
-                'total_weight',
-                'total_importance',
-                'gene_weight_sumsq',
-                'gene_z_numerator',
-            ]
-            for col in sum_cols:
-                if col in combined.columns:
-                    combined_agg[col] = 'sum'
-            
-            # Add mean aggregations for numeric columns (excluding grouping and metadata columns)
-            numeric_cols = combined.select_dtypes(include=[np.number]).columns.tolist()
-            exclude_cols = [
-                group_by,
-                'dmp_count',
-                'unique_dmps',
-                'feature_type',
-                'feature_chrom',
-                'feature_strand',
-                'gene_id',
-                'transcript_id',
-                'gene_p_value',
-                'gene_q_value',
-                'gene_z',
-                'gene_direction',
-                'gene_weight_sumsq',
-                'gene_z_numerator',
-                'gene_importance',
-            ]
-            for col in numeric_cols:
-                if col not in exclude_cols:
-                    combined_agg[col] = 'mean'
-            
-            # Handle non-numeric columns
-            # For metadata columns, take the first occurrence
-            metadata_cols = ['feature_type', 'feature_chrom', 'feature_strand', 'gene_id', 'transcript_id']
-            for col in metadata_cols:
-                if col in combined.columns:
-                    combined_agg[col] = 'first'
-            
-            # For disease enrichment columns, take the first non-null value (or first if all null)
-            disease_cols = [c for c in combined.columns if c.startswith('disease_')]
-            for col in disease_cols:
-                if col not in combined_agg:
-                    # For boolean columns, use 'any' (if any chromosome has association, mark as associated)
-                    if col in combined.columns and combined[col].dtype == bool:
-                        combined_agg[col] = 'any'
-                    else:
-                        # For other types, take first non-null value
-                        combined_agg[col] = 'first'
-            
-            # Group and aggregate
-            combined = combined.groupby(group_by).agg(combined_agg).reset_index()
-
-            # Recompute combined gene-level p-values if available
-            if 'gene_weight_sumsq' in combined.columns and 'gene_z_numerator' in combined.columns:
-                from scipy.stats import norm
-                z_num = combined['gene_z_numerator'].to_numpy(dtype=float)
-                z_denom = np.sqrt(combined['gene_weight_sumsq'].to_numpy(dtype=float))
-                with np.errstate(invalid='ignore', divide='ignore'):
-                    combined_z = z_num / z_denom
-                combined['gene_z'] = combined_z
-                combined['gene_direction'] = np.sign(combined_z)
-                gene_p = 2 * (1 - norm.cdf(np.abs(combined_z)))
-                combined['gene_p_value'] = np.clip(gene_p, 0.0, 1.0)
-
-                gene_pvals = combined['gene_p_value'].to_numpy(dtype=float)
-                gene_qvals = np.full_like(gene_pvals, np.nan, dtype=float)
-                finite_mask = np.isfinite(gene_pvals)
-                if np.any(finite_mask):
-                    kwargs = {}
-                    if getattr(self, 'storey_lambda', None) is not None:
-                        kwargs['lambdas'] = np.array([self.storey_lambda], dtype=float)
-                    _qvals, _ = storey_qvalues(gene_pvals[finite_mask], **kwargs)
-                gene_qvals[finite_mask] = _qvals
-                combined['gene_q_value'] = gene_qvals
-
-            if 'total_importance' in combined.columns:
-                combined['gene_importance'] = combined['total_importance']
-            elif 'total_weight' in combined.columns:
-                combined['gene_importance'] = combined['total_weight']
-            
-            # Enrich combined results with disease associations if enabled
-            if self._should_enrich_gene_results(group_by):
-                logger.info(f"Enriching combined {group_by} results with disease associations...")
-                unique_genes = combined[group_by].nunique()
-                logger.info(f"Found {unique_genes} unique {group_by}s across all chromosomes")
-                combined_payload = shared_payload or self._build_shared_enrichment_payload([combined], group_by=group_by)
-
-                if self.separate_enrichment_sources and self.enrich_source == 'both':
-                    enriched_results = self._apply_shared_enrichment_payload(
-                        combined,
-                        group_by=group_by,
-                        payload=combined_payload,
-                        separate_sources=True,
-                    )
-                    for source_name, enriched_df in enriched_results.items():
-                        source_csv = output_dir / f"all-{group_by}-combined-{source_name}.csv"
-                        enriched_df.to_csv(source_csv, index=False)
-                        logger.info(f"   Saved {source_name} results to: {source_csv}")
-                    combined = enriched_results['merged']
-                else:
-                    combined = self._apply_shared_enrichment_payload(
-                        combined,
-                        group_by=group_by,
-                        payload=combined_payload,
-                        separate_sources=False,
-                    )
-            elif self.enrich_disease and group_by in ['gene_name', 'gene_id'] and self.disease_enricher is None:
-                logger.warning("Disease enrichment was requested but enricher is not available. Combined CSV will not include disease columns.")
-            
             combined_csv = output_dir / f"all-{group_by}-combined.csv"
             combined.to_csv(combined_csv, index=False)
             logger.info(f"\n{'='*70}")
             logger.info(f"✅ Combined results from {len(results)} files:")
-            logger.info(f"   Total unique {group_by}s: {len(combined)}")
+            logger.info(f"   Total rows: {len(combined)} (one per file/feature; enrichment preserved)")
             logger.info(f"   Saved to: {combined_csv}")
             logger.info(f"{'='*70}")
         
