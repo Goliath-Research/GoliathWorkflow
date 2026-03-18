@@ -200,8 +200,8 @@
       "log_level": "INFO"
     },
     "predictor": {
-      "test_control_paths": ["configs/test_healthy.csv"],
-      "test_disease_paths": ["configs/test_cancer.csv"],
+      "test_control_paths": ["configs/healthy.csv"],
+      "test_disease_paths": ["configs/cancer.csv"],
       "debug": false
     }
   }

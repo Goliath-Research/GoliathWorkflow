@@ -6,6 +6,7 @@ across the entire application ecosystem. Uses CuPy for primary detection and opt
 NVML telemetry via nvidia-ml-py when enabled.
 """
 
+import gc
 import logging
 import os
 import time
@@ -418,10 +419,53 @@ def cleanup_gpu_memory() -> bool:
     
     try:
         import cupy as cp
-        cp.get_default_memory_pool().free_all_blocks()
-        cp.get_default_pinned_memory_pool().free_all_blocks()
+
+        cleaned = False
+
+        try:
+            if hasattr(cp, "cuda"):
+                cp.cuda.Device().synchronize()
+                cp.cuda.runtime.deviceSynchronize()
+        except Exception as e:
+            logger.debug("GPU synchronize before cleanup skipped: %s", e)
+
+        try:
+            cp.get_default_memory_pool().free_all_blocks()
+            cleaned = True
+        except Exception as e:
+            logger.debug("CuPy default memory pool cleanup skipped: %s", e)
+
+        try:
+            cp.get_default_pinned_memory_pool().free_all_blocks()
+            cleaned = True
+        except Exception as e:
+            logger.debug("CuPy pinned memory pool cleanup skipped: %s", e)
+
+        try:
+            if hasattr(cp, "clear_memo"):
+                cp.clear_memo()
+        except Exception as e:
+            logger.debug("CuPy memo cleanup skipped: %s", e)
+
+        # Some environments route CuPy allocations through RMM. Free those blocks too
+        # so large centroid builders do not accumulate unreleased GPU memory between samples.
+        try:
+            import rmm
+
+            allocator = None
+            if hasattr(rmm, "get_current_allocator"):
+                allocator = rmm.get_current_allocator()
+            if allocator is not None and hasattr(allocator, "free_all_blocks"):
+                allocator.free_all_blocks()
+                cleaned = True
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug("RMM cleanup skipped: %s", e)
+
+        gc.collect()
         logger.debug("GPU memory cleaned up successfully")
-        return True
+        return cleaned
     except Exception as e:
         logger.warning(f"GPU memory cleanup failed: {e}")
         return False

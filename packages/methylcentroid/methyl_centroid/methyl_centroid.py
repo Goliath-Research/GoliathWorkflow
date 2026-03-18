@@ -79,6 +79,21 @@ def _create_centroid_builder(
     return MethylCentroidBuilder(binned_stats_bins=int(binned_stats_bins), **kwargs)
 
 
+def _is_gpu_oom_error(exc: BaseException) -> bool:
+    """Best-effort detection for CuPy/RMM CUDA OOM failures."""
+    message = str(exc).lower()
+    return any(
+        token in message
+        for token in (
+            "out_of_memory",
+            "cudaerrormemoryallocation",
+            "memoryallocation",
+            "cuda error",
+            "bad_alloc",
+        )
+    )
+
+
 from methyl_utils import (
     # Performance profiling
     get_performance_profiler,
@@ -911,16 +926,48 @@ class MethylCentroid:
                     self.logger.warning(f"Sample file missing: {sample_path}")
                     continue
                 try:
-                    builder.add_sample(sample_path)
+                    sample_added = False
+                    for attempt in range(2):
+                        try:
+                            builder.add_sample(sample_path)
+                            sample_added = True
+                            break
+                        except (RuntimeError, MemoryError) as e:
+                            if (
+                                attempt == 0
+                                and getattr(builder, "use_gpu", False)
+                                and _is_gpu_oom_error(e)
+                            ):
+                                self.logger.warning(
+                                    "GPU OOM while processing %s for %s-%s; "
+                                    "switching the streaming centroid builder to CPU and retrying.",
+                                    sample_path.name,
+                                    self.chrom,
+                                    self.ctx,
+                                )
+                                try:
+                                    builder.release_gpu()
+                                except Exception as cleanup_error:
+                                    self.logger.debug(
+                                        "GPU builder release before CPU fallback failed: %s",
+                                        cleanup_error,
+                                    )
+                                self._cleanup_gpu_after_sample()
+                                builder, rebuilt_indices = self._rebuild_streaming_builder_on_cpu(
+                                    all_samples,
+                                    sample_idx,
+                                )
+                                for rebuilt_idx in rebuilt_indices:
+                                    self.active_samples.add(
+                                        self._sample_id_for_index(rebuilt_idx)
+                                    )
+                                continue
+                            raise
 
-                    is_new_sample = sample_idx >= len(self.samples)
-                    actual_sample_idx = (
-                        sample_idx - len(self.samples)
-                        if is_new_sample
-                        else sample_idx
-                    )
-                    sample_id = (is_new_sample, actual_sample_idx)
-                    self.active_samples.add(sample_id)
+                    if not sample_added:
+                        continue
+
+                    self.active_samples.add(self._sample_id_for_index(sample_idx))
                 except Exception as e:
                     self.logger.error(
                         f"Failed to process sample {sample_path.name}: {e}"
@@ -1699,6 +1746,59 @@ class MethylCentroid:
     def _cleanup_gpu_after_sample(self) -> None:
         if self.use_gpu:
             cleanup_gpu_memory()
+
+    def _sample_id_for_index(self, sample_idx: int) -> Tuple[bool, int]:
+        """Map a flat sample index back to the active_samples identifier."""
+        is_new_sample = sample_idx >= len(self.samples)
+        actual_sample_idx = (
+            sample_idx - len(self.samples)
+            if is_new_sample
+            else sample_idx
+        )
+        return (is_new_sample, actual_sample_idx)
+
+    def _rebuild_streaming_builder_on_cpu(
+        self,
+        sample_paths: List[Path],
+        upto_index: int,
+    ):
+        """
+        Rebuild the in-flight streaming centroid on CPU from the already-seen samples.
+
+        This is used when a GPU builder hits a CUDA OOM. Replaying the successful
+        prefix keeps the centroid correct instead of silently dropping samples after
+        the failure.
+        """
+        cpu_builder = _create_centroid_builder(
+            self._min_coverage,
+            False,
+            binned_stats_bins=getattr(self, "binned_stats_bins", 20),
+            chunk_size=50_000_000,
+        )
+        rebuilt_indices: List[int] = []
+
+        for replay_idx, replay_path in enumerate(sample_paths[:upto_index]):
+            if not replay_path.is_file():
+                continue
+            try:
+                cpu_builder.add_sample(replay_path)
+                rebuilt_indices.append(replay_idx)
+            except Exception as replay_error:
+                self.logger.warning(
+                    "CPU fallback replay skipped sample %s: %s",
+                    replay_path.name,
+                    replay_error,
+                )
+            finally:
+                self._cleanup_gpu_after_sample()
+
+        self.logger.info(
+            "Rebuilt centroid builder on CPU from %d prior sample(s) for %s-%s",
+            len(rebuilt_indices),
+            self.chrom,
+            self.ctx,
+        )
+        return cpu_builder, rebuilt_indices
 
     def calculate_centroid(self, output_dir: str, extended: bool = False) -> Path:
         effective_sample_dirs = self._apply_effective_sample_set()
