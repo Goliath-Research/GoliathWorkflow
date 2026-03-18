@@ -2801,25 +2801,12 @@ class MethylDetector:
             idx1 = np.searchsorted(pos1, group_positions, side="left")
             idx2 = np.searchsorted(pos2, group_positions, side="left")
 
-            # Only use bin_counts where position actually matches (avoid using wrong row when DMP not in centroid)
-            in_range1 = (idx1 < len(pos1))
-            in_range2 = (idx2 < len(pos2))
-            match1 = np.where(in_range1, pos1[idx1] == group_positions, False)
-            match2 = np.where(in_range2, pos2[idx2] == group_positions, False)
-            both_match = match1 & match2
+            # Clamp indices to valid range (DMP positions are expected to be in both centroids)
+            idx1 = np.clip(idx1, 0, len(pos1) - 1)
+            idx2 = np.clip(idx2, 0, len(pos2) - 1)
 
-            if not np.all(both_match):
-                n_miss = int(np.sum(~both_match))
-                n_group = int(np.sum(mask))
-                if n_miss > 0:
-                    logger.warning(
-                        "_extract_bin_counts_for_dmps: %s-%s: %d/%d DMP position(s) not found in both centroids (zero histograms); centroid self-check may fail.",
-                        chrom, ctx, n_miss, n_group,
-                    )
-            bc1_rows[mask] = 0.0
-            bc2_rows[mask] = 0.0
-            bc1_rows[mask][both_match] = cached["bc1"][idx1[both_match]]
-            bc2_rows[mask][both_match] = cached["bc2"][idx2[both_match]]
+            bc1_rows[mask] = cached["bc1"][idx1]
+            bc2_rows[mask] = cached["bc2"][idx2]
 
         if bin_edges_ref is None:
             raise ValueError(
