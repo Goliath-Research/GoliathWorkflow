@@ -70,6 +70,8 @@ Centroid H5 files (must have binned_stats)
           trim finds the "elbow" of the effect_size curve (`dynamic_dmp_cutoff_enabled`),
           effectively dropping the flat "long tail" of low-importance DMPs. The threshold
           can be optionally scaled via `dynamic_dmp_cutoff_relaxation`.
+          Legacy top-k optimization code still exists in the codebase, but it is not
+          the active export path used by `_select_dmps_multicontext()`.
 ```
 
 ---
