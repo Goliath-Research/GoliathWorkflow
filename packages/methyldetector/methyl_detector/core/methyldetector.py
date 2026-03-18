@@ -1062,6 +1062,8 @@ class MethylDetector:
         Sanity check: classify each centroid's methylation profile at the DMP positions.
         Each centroid should get probability ~1.0 for its own class. If not, positions
         or sample↔DMP alignment may be wrong.
+        Optionally uses only the top K DMPs by effect_size (centroid_self_check_top_k) to
+        avoid low-information loci that can confuse the check.
         """
         if dmps_df is None or len(dmps_df) == 0:
             return
@@ -1069,28 +1071,45 @@ class MethylDetector:
             if 'mean1' not in dmps_df.columns or 'mean2' not in dmps_df.columns:
                 logger.debug("Skipping centroid self-check (no mean1/mean2 in DMP table)")
                 return
-            # Bounded weights (same as in _validate_classifier_subset)
-            if 'effect_size' in dmps_df.columns:
-                weights = dmps_df['effect_size'].values.copy()
-            elif 'importance' in dmps_df.columns:
-                weights = dmps_df['importance'].values.copy()
+            # Optionally restrict to top K by effect_size for a more stable check
+            top_k = getattr(self.config, "centroid_self_check_top_k", None)
+            if top_k is not None and top_k > 0 and "effect_size" in dmps_df.columns:
+                # Already sorted by effect_size desc from _compute_biological_importance; take first K
+                check_df = dmps_df.head(int(top_k)).copy()
+                if len(check_df) < len(dmps_df):
+                    logger.info(
+                        "Centroid self-check using top K=%s DMPs by effect_size (of %s biological), uniform weights",
+                        len(check_df), len(dmps_df),
+                    )
             else:
-                weights = np.ones(len(dmps_df))
+                check_df = dmps_df
+            # Weights for the self-check classifier. When centroid_self_check_top_k is set, use uniform
+            # weights so each of the top-K DMPs counts equally; effect_size weighting can let a few
+            # high-effect positions dominate and keep centroid2's P(class1) below 0.5.
+            use_uniform_weights = top_k is not None and top_k > 0
+            if use_uniform_weights:
+                weights = np.ones(len(check_df), dtype=np.float64)
+            elif 'effect_size' in check_df.columns:
+                weights = check_df['effect_size'].values.copy()
+            elif 'importance' in check_df.columns:
+                weights = check_df['importance'].values.copy()
+            else:
+                weights = np.ones(len(check_df))
             if np.any(~np.isfinite(weights)) or np.any(weights <= 0):
                 weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
             w_max = float(np.max(weights))
-            if w_max > 1e-6:
+            if w_max > 1e-6 and not use_uniform_weights:
                 weights = np.clip(weights / w_max, 1e-6, 1.0).astype(np.float64)
             dmpDF = pd.DataFrame({
-                'pos': dmps_df['position'].values.astype(np.int64),
+                'pos': check_df['position'].values.astype(np.int64),
                 'weight': weights,
-                'context': dmps_df['context'].values if 'context' in dmps_df.columns else None,
-                'delta_sign': dmps_df['delta_sign'].values if 'delta_sign' in dmps_df.columns else None,
-                'mean1': dmps_df['mean1'].values if 'mean1' in dmps_df.columns else None,
-                'mean2': dmps_df['mean2'].values if 'mean2' in dmps_df.columns else None,
+                'context': check_df['context'].values if 'context' in check_df.columns else None,
+                'delta_sign': check_df['delta_sign'].values if 'delta_sign' in check_df.columns else None,
+                'mean1': check_df['mean1'].values if 'mean1' in check_df.columns else None,
+                'mean2': check_df['mean2'].values if 'mean2' in check_df.columns else None,
             })
             dmpDF = dmpDF.dropna(axis=1, how='all')
-            bin_edges_sc, bc1_sc, bc2_sc = self._extract_bin_counts_for_dmps(dmps_df)
+            bin_edges_sc, bc1_sc, bc2_sc = self._extract_bin_counts_for_dmps(check_df)
             clf = ECDFClassifier.from_dataframe(
                 dmpDF,
                 bin_edges=bin_edges_sc,
@@ -1099,11 +1118,11 @@ class MethylDetector:
                 temperature=self.config.temperature,
             )
             # Centroid1 profile = mean1 at each DMP (class 0); centroid2 = mean2 (class 1)
-            profile_c1 = dmps_df['mean1'].values.astype(np.float64).reshape(1, -1)
-            profile_c2 = dmps_df['mean2'].values.astype(np.float64).reshape(1, -1)
+            profile_c1 = check_df['mean1'].values.astype(np.float64).reshape(1, -1)
+            profile_c2 = check_df['mean2'].values.astype(np.float64).reshape(1, -1)
             profile_c1 = np.clip(profile_c1, 1e-6, 1.0 - 1e-6)
             profile_c2 = np.clip(profile_c2, 1e-6, 1.0 - 1e-6)
-            avail = np.ones((1, len(dmps_df)), dtype=bool)
+            avail = np.ones((1, len(check_df)), dtype=bool)
             debug = self.config.debug
             proba_c1 = clf.predict_proba(profile_c1, avail, debug=debug)[0]
             proba_c2 = clf.predict_proba(profile_c2, avail, debug=debug)[0]
@@ -1219,10 +1238,20 @@ class MethylDetector:
             weights = np.clip(weights / w_max, 1e-6, 1.0)
         else:
             weights = np.full(weights.shape, 1e-6, dtype=np.float64)
+        # Weight concentration: raise to power so weak positions contribute less (resilient to 40K+ DMPs)
+        power = float(getattr(self.config, "effect_size_weight_power", 1.0))
+        if power != 1.0:
+            weights = np.power(weights, power)
+            weights = np.maximum(weights, 1e-6)
         return weights.astype(np.float64)
 
     def _build_ecdf_classifier(self, dmps_df: pd.DataFrame) -> Tuple[ECDFClassifier, pd.DataFrame]:
         """Build an ECDFClassifier and typed DMP frame for the given subset."""
+        # Cap DMPs so classifier is not built with 40K+ positions (assumes dmps_df sorted by effect_size desc)
+        max_dmps = getattr(self.config, "max_dmps_for_classifier", None)
+        if max_dmps is not None and len(dmps_df) > max_dmps:
+            dmps_df = dmps_df.head(max_dmps).copy()
+            logger.info("Capped classifier to top %s DMPs by effect_size (max_dmps_for_classifier)", max_dmps)
         weights = self._get_classifier_weights(dmps_df)
         dmpDF = pd.DataFrame({
             'pos': dmps_df['position'].values.astype(np.int64),

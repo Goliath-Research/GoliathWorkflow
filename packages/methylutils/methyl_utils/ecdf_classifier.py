@@ -14,6 +14,7 @@ distributions and is consistent with the DMP detection stage.
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -78,6 +79,12 @@ class ECDFClassifier:
                 f"bin_counts shape mismatch: expected {self.n_dmps} rows, "
                 f"got c1={n1}, c2={n2}"
             )
+
+        # Effective number of positions (inverse Simpson): (sum w)^2 / sum(w^2).
+        # Used to scale temperature so softmax stays well-behaved with many positions.
+        w_sum = float(np.sum(self.weights))
+        w_sq_sum = float(np.sum(self.weights ** 2))
+        self._n_effective = (w_sum ** 2) / max(w_sq_sum, 1e-300)
 
         # Pre-compute PDF lookup tables: shape (n_dmps, _PDF_GRID_SIZE).
         # Queries are answered with np.interp — no Python loop over samples.
@@ -246,8 +253,11 @@ class ECDFClassifier:
                 float(sum_ll_c2[0]),
             )
 
+        # Temperature scaled by effective number of positions so many positions don't over-sharpen
+        T_eff = self.temperature * math.sqrt(self._n_effective)
+        T_eff = min(T_eff, 10.0)  # cap to avoid numerical issues
         # Temperature-scaled softmax (log-sum-exp trick for stability)
-        log_likes = np.stack([sum_ll_c1, sum_ll_c2], axis=1) / self.temperature
+        log_likes = np.stack([sum_ll_c1, sum_ll_c2], axis=1) / T_eff
         log_likes -= log_likes.max(axis=1, keepdims=True)
         probs = np.exp(log_likes)
         probs /= probs.sum(axis=1, keepdims=True)

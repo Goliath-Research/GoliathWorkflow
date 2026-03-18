@@ -263,10 +263,23 @@ class MethylDetectorConfig(BaseModel):
         default=1000, ge=1,
         description="Minimum number of DMPs to export to CSV, even if binary search finds fewer DMPs are sufficient. Ensures enough DMPs for gene mapping and downstream analysis"
     )
-    
+    effect_size_weight_power: float = Field(
+        default=1.0, ge=0.1, le=5.0,
+        description="Power applied to normalized effect_size when building classifier weights: weight_i = (effect_size_i / max)^power. Default 1.0 (no change). Use > 1 (e.g. 2.0) for large DMP sets so weak positions contribute less and the weighted mean is more resilient to 40K+ positions."
+    )
+    max_dmps_for_classifier: Optional[int] = Field(
+        default=None, ge=1,
+        description="If set, cap the number of DMPs passed to the ECDF classifier to this many (top by effect_size). Applied after biological filter; top-k optimization still sees the full set. E.g. 10000 or 15000 to avoid distortion with 40K+ positions."
+    )
+
     # ----------------
     # Debug / Logging
     # ----------------
+    centroid_self_check_top_k: Optional[int] = Field(
+        default=None, ge=1,
+        description="If set, centroid self-check uses only the top K DMPs by effect_size (most biologically important). "
+        "Reduces noise from low-effect loci that can make both centroids classify as class0. E.g. 5000."
+    )
     debug: bool = Field(
         default=False,
         description="Enable debug output (e.g. classifier predict_proba in centroid self-check, extra validation logs)."
