@@ -1,0 +1,29 @@
+# Goal Description
+The objective is to maximize the number of retained DMPs for the classifier while intelligently dropping the "long tail" of DMPs that have very low importance ([effect_size](file:///home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/statistical_tests.py#757-795)). This will replace the legacy practice of using a hard cap (`max_dmps_for_classifier`) or arbitrary percentiles (`classifier_effect_size_min_percentile`). We will analyze the distribution of the [effect_size](file:///home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/statistical_tests.py#757-795) to dynamically find the optimal cutoff.
+
+## Proposed Changes
+
+### [MODIFY] [packages/methyldetector/methyl_detector/models/config.py](file:///home/ubuntu/MethylPipeline/packages/methyldetector/methyl_detector/models/config.py)
+- **[DELETE]** `max_dmps_for_classifier`
+- **[DELETE]** `classifier_effect_size_min_percentile`
+- **[DELETE]** `classifier_effect_size_min_relative`
+- **[NEW]** `dynamic_dmp_cutoff_enabled: bool` (default: `True`) - Enables dynamic distribution-based trimming of DMPs using an elbow/knee detection method on the [effect_size](file:///home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/statistical_tests.py#757-795) curve.
+- **[NEW]** `dynamic_dmp_cutoff_relaxation: float` (default: `1.0`) - Multiplier for the elbow threshold to optionally relax the cutoff. E.g., `1.0` uses the exact elbow threshold, `0.5` sets the threshold to half of the elbow value, keeping more tail DMPs.
+
+### [MODIFY] [packages/methyldetector/methyl_detector/core/methyldetector.py](file:///home/ubuntu/MethylPipeline/packages/methyldetector/methyl_detector/core/methyldetector.py)
+- Update [_select_dmps_multicontext()](file:///home/ubuntu/MethylPipeline/packages/methyldetector/methyl_detector/core/methyldetector.py#1766-1810) to replace the legacy percentile and relative threshold trimming with the dynamic elbow detection logic.
+- If `config.dynamic_dmp_cutoff_enabled` is true, calculate the elbow point:
+  1. Sort [effect_size](file:///home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/statistical_tests.py#757-795) descending.
+  2. Normalize the X-axis (ranks) and Y-axis ([effect_size](file:///home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/statistical_tests.py#757-795)) to a `[0, 1]` scale.
+  3. Identify the elbow as the point that minimizes the Euclidean distance to the origin `x^2 + y^2`.
+  4. The threshold is the unnormalized [effect_size](file:///home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/statistical_tests.py#757-795) at this index, optionally multiplied by `dynamic_dmp_cutoff_relaxation`.
+- Ensure we remove any reference to `max_dmps_for_classifier` in [_build_ecdf_classifier()](file:///home/ubuntu/MethylPipeline/packages/methyldetector/methyl_detector/core/methyldetector.py#1234-1259).
+- Log the number of DMPs kept versus dropped and the dynamically calculated threshold.
+
+## Verification Plan
+### Automated Tests
+- Run `pytest packages/methyldetector/tests/` to guarantee no regression on structural logic and ensuring the tests don't break with the new config fields.
+- Examine log outputs to verify that the "elbow" dynamically selects an appropriate threshold and reports it elegantly.
+
+### Manual Verification
+- We can inspect `tests` output to ensure the expected distribution-tail truncation occurs and does not error out on small datasets.

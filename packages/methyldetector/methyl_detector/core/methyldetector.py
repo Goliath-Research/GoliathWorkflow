@@ -1233,11 +1233,6 @@ class MethylDetector:
 
     def _build_ecdf_classifier(self, dmps_df: pd.DataFrame) -> Tuple[ECDFClassifier, pd.DataFrame]:
         """Build an ECDFClassifier and typed DMP frame for the given subset."""
-        # Cap DMPs so classifier is not built with 40K+ positions (assumes dmps_df sorted by effect_size desc)
-        max_dmps = getattr(self.config, "max_dmps_for_classifier", None)
-        if max_dmps is not None and len(dmps_df) > max_dmps:
-            dmps_df = dmps_df.head(max_dmps).copy()
-            logger.info("Capped classifier to top %s DMPs by effect_size (max_dmps_for_classifier)", max_dmps)
         weights = self._get_classifier_weights(dmps_df)
         dmpDF = pd.DataFrame({
             'pos': dmps_df['position'].values.astype(np.int64),
@@ -1765,14 +1760,52 @@ class MethylDetector:
     
     def _select_dmps_multicontext(self, bio_dmps_df: pd.DataFrame, sorted_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
-        Return all biological DMPs sorted by importance (no optimization).
-        Exported DMPs = funnel output only.
+        Return biological DMPs sorted by importance. Optionally trim by effect_size
+        distribution (dynamic elbow detection) to maximize count while dropping
+        the weak tail. Exported DMPs and classifier both use this set.
         """
         if len(bio_dmps_df) == 0:
             return bio_dmps_df
         if sorted_df is None:
             sorted_df = self._compute_biological_importance(bio_dmps_df)
-        logger.info("📋 Using all %s biological DMPs (funnel output; no optimization)", len(sorted_df))
+        n_before = len(sorted_df)
+
+        # Distribution-based trim using dynamic elbow detection
+        if getattr(self.config, "dynamic_dmp_cutoff_enabled", True) and "effect_size" in sorted_df.columns and n_before > 0:
+            es = sorted_df["effect_size"].values.astype(np.float64)
+            finite = np.isfinite(es)
+            if np.any(finite):
+                es_finite = es[finite]
+                if len(es_finite) > 10:
+                    es_min = float(es_finite.min())
+                    es_max = float(es_finite.max())
+                    if es_max > es_min:
+                        # Normalize Y (effect_size) and X (rank) to [0, 1]
+                        y = (es_finite - es_min) / (es_max - es_min)
+                        x = np.linspace(0, 1, len(es_finite))
+                        
+                        # Find the point minimizing distance to origin (0,0) in normalized space
+                        distances = x**2 + y**2
+                        elbow_idx = int(np.argmin(distances))
+                        base_thresh = float(es_finite[elbow_idx])
+                        
+                        relaxation = float(getattr(self.config, "dynamic_dmp_cutoff_relaxation", 1.0))
+                        thresh = base_thresh * relaxation
+                        
+                        keep = (es >= thresh) & finite
+                        n_keep = int(np.sum(keep))
+                        if n_keep < n_before:
+                            sorted_df = sorted_df.loc[keep].copy().reset_index(drop=True)
+                            logger.info(
+                                "📋 Dynamic distribution trim (elbow=%.6g, rel=%.2g): kept %s DMPs (effect_size >= %.6g), dropped %s weak tail",
+                                base_thresh, relaxation, n_keep, thresh, n_before - n_keep,
+                            )
+                        else:
+                            sorted_df = sorted_df.copy()
+            else:
+                logger.warning("effect_size has no finite values; skipping dynamic distribution trim")
+
+        logger.info("📋 Using %s biological DMPs (funnel output; no optimization)", len(sorted_df))
         self._check_centroid_self_classification(sorted_df)
         return sorted_df
     

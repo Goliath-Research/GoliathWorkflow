@@ -267,9 +267,13 @@ class MethylDetectorConfig(BaseModel):
         default=1.0, ge=0.1, le=5.0,
         description="Power applied to normalized effect_size when building classifier weights: weight_i = (effect_size_i / max)^power. Default 1.0 (no change). Use > 1 (e.g. 2.0–3.0) for large DMP sets so weak positions contribute less; higher values concentrate weight more on top positions and can improve centroid separation and class probability margins."
     )
-    max_dmps_for_classifier: Optional[int] = Field(
-        default=None, ge=1,
-        description="If set, cap the number of DMPs passed to the ECDF classifier to this many (top by effect_size). Applied after biological filter; top-k optimization still sees the full set. E.g. 10000 or 15000 to avoid distortion with 40K+ positions."
+    dynamic_dmp_cutoff_enabled: bool = Field(
+        default=True,
+        description="If True, dynamically analyze the effect_size distribution (elbow detection) to identify and drop the long tail of low-importance DMPs. Maximizes retained DMPs while removing weak signal."
+    )
+    dynamic_dmp_cutoff_relaxation: float = Field(
+        default=1.0, gt=0.0,
+        description="Multiplier for the dynamically calculated elbow threshold. 1.0 = exact elbow. <1.0 = relaxed (keeps more DMPs), >1.0 = stricter."
     )
 
     # ----------------
@@ -294,7 +298,7 @@ class MethylDetectorConfig(BaseModel):
     )
     significance_test: Literal["ks_ecdf", "mann_whitney"] = Field(
         default="ks_ecdf",
-        description="Statistical test for DMP significance: 'ks_ecdf' (Kolmogorov-Smirnov on precise ECDF, default) or 'mann_whitney' (Mann-Whitney from bin counts)."
+        description="Statistical test for DMP significance: 'ks_ecdf' (Kolmogorov-Smirnov on precise ECDF; recommended and default) or 'mann_whitney' (Mann-Whitney from bin counts; alternative)."
     )
     ecdf_grid_size: int = Field(
         default=256, ge=16, le=4096,

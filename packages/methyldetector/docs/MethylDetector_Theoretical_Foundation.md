@@ -4,7 +4,7 @@
 
 `MethylDetector` identifies differentially methylated positions (DMPs) between two methylation centroids (e.g. healthy vs disease) with:
 
-- **Statistical rigour**: Kolmogorov-Smirnov on the precise ECDF (default), or optional Mann-Whitney U from bin counts; FDR correction.
+- **Statistical rigour**: Kolmogorov-Smirnov on the precise ECDF (recommended and default; `significance_test = "ks_ecdf"`). Mann-Whitney U from bin counts remains available as an alternative (`significance_test = "mann_whitney"`). FDR correction.
 - **Biological relevance**: A single canonical score (`effect_size`) that penalises positions where the distributions overlap heavily or where within-group variance is large.
 - **Computational tractability**: A staged funnel that first reduces the aligned locus set with `delta_mean_reduction`, then evaluates non-parametric significance and ECDF overlap only on the surviving candidates before per-context effect-mass selection.
 
@@ -29,12 +29,11 @@ Centroid H5 files (must have binned_stats)
     │     every surviving position refers to the same locus in both centroids.
     │
     ├─ Stage 3 — Statistical significance test
-    │     Default (significance_test = "ks_ecdf"): build ECDFViews (PCHIP) for the
+    │     Recommended (significance_test = "ks_ecdf", default): build ECDFViews (PCHIP) for the
     │     pre-filtered set; Kolmogorov-Smirnov statistic D = sup_x |F1(x)-F2(x)| on a
     │     grid; asymptotic p-value from kstwobign; same views reused for overlap/effect_size.
     │     Alternative (significance_test = "mann_whitney"): U from centroid bin_counts
-    │     with tie correction, z_U and two-sided normal p_value. No parametric mean-difference
-    │     test is used.
+    │     with tie correction, z_U and two-sided normal p_value. Use ks_ecdf for production.
     │
     ├─ Stage 4 — FDR correction
     │     Storey's q-value on the pre-filtered position set.
@@ -46,9 +45,9 @@ Centroid H5 files (must have binned_stats)
     │     Optionally drop loci where both groups exceed max_tau2_for_dmp.
     │
     ├─ Stage 6 — ECDFView construction
-    │     When ks_ecdf: views were already built for the pre-filtered set in Stage 3 and
-    │     are reused (sliced to survivors) for overlap/effect_size. When mann_whitney:
-    │     build PchipInterpolator only for the surviving DMP positions.
+    │     With ks_ecdf (default): views were already built in Stage 3 and are reused
+    │     (sliced to survivors) for overlap/effect_size. With mann_whitney: build
+    │     PchipInterpolator only for the surviving DMP positions.
     │
     ├─ Stage 7 — Continuous ECDF overlap and effect_size
     │     For each retained position:
@@ -111,7 +110,7 @@ The variances used in `effect_size` are the **sample variances** from `(Sx2 - Sx
 
 ## Why the Pre-filter Is Before the Statistical Test
 
-The statistical stage (KS on precise ECDF or Mann-Whitney from bins) and the continuous ECDF overlap stage both become expensive at CHH scale. Positions not present in both centroids cannot be tested at all; among the aligned loci, positions with `|delta_mean| < delta_mean_reduction` will be removed by the biological filter regardless of statistical significance, so pre-filtering them before the statistical gate avoids this work without any loss of biologically strong DMPs.
+The statistical stage (KS on precise ECDF, default; or Mann-Whitney from bins if configured) and the continuous ECDF overlap stage both become expensive at CHH scale. Positions not present in both centroids cannot be tested at all; among the aligned loci, positions with `|delta_mean| < delta_mean_reduction` will be removed by the biological filter regardless of statistical significance, so pre-filtering them before the statistical gate avoids this work without any loss of biologically strong DMPs.
 
 The cost is a liberal FDR: Storey's q-value is applied to the pre-filtered subset rather than the full set. In practice, for prostate-cancer-scale data (CG context: ~2000 statistically significant positions out of 4.3 million), the effect is small.
 
