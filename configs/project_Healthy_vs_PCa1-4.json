@@ -129,6 +129,8 @@
         "random_state": 42,
         "context_weight_direction": "inverse",
         "effect_size_mean_level_k_by_context": { "CG": 0.05, "CHG": 0.10, "CHH": 0.20 },
+        "effect_size_weight_power": 2.0,
+        "max_dmps_for_classifier": 15000,
         "filter_funnel_explore": {
           "effect_size_coverage": { "min": 0.80, "max": 0.99, "step": 0.05 }
         },

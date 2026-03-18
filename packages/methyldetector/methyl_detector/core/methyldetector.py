@@ -1078,28 +1078,14 @@ class MethylDetector:
                 check_df = dmps_df.head(int(top_k)).copy()
                 if len(check_df) < len(dmps_df):
                     logger.info(
-                        "Centroid self-check using top K=%s DMPs by effect_size (of %s biological), uniform weights",
+                        "Centroid self-check using top K=%s DMPs by effect_size (of %s biological), effect_size weights",
                         len(check_df), len(dmps_df),
                     )
             else:
                 check_df = dmps_df
-            # Weights for the self-check classifier. When centroid_self_check_top_k is set, use uniform
-            # weights so each of the top-K DMPs counts equally; effect_size weighting can let a few
-            # high-effect positions dominate and keep centroid2's P(class1) below 0.5.
-            use_uniform_weights = top_k is not None and top_k > 0
-            if use_uniform_weights:
-                weights = np.ones(len(check_df), dtype=np.float64)
-            elif 'effect_size' in check_df.columns:
-                weights = check_df['effect_size'].values.copy()
-            elif 'importance' in check_df.columns:
-                weights = check_df['importance'].values.copy()
-            else:
-                weights = np.ones(len(check_df))
-            if np.any(~np.isfinite(weights)) or np.any(weights <= 0):
-                weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
-            w_max = float(np.max(weights))
-            if w_max > 1e-6 and not use_uniform_weights:
-                weights = np.clip(weights / w_max, 1e-6, 1.0).astype(np.float64)
+            # Use same effect_size-based weights as production so high-effect positions dominate;
+            # uniform weights let many weak (cap-hit) positions dilute the mean and misclassify centroid2.
+            weights = self._get_classifier_weights(check_df)
             dmpDF = pd.DataFrame({
                 'pos': check_df['position'].values.astype(np.int64),
                 'weight': weights,
