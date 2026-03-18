@@ -437,12 +437,21 @@ class MethylClassifier:
                 continue
             if p_c1 > 0.5 or p_c2 < 0.5:
                 bad.append((chrom, p_c1, p_c2))
+
+        def _fmt_p(p: float) -> str:
+            """Format probability so very small/near-one values are visible (e.g. 1e-10 not 0.000)."""
+            if p <= 0.0 or p >= 1.0:
+                return f"{p:.6g}"
+            if p < 1e-4 or p > 1.0 - 1e-4:
+                return f"{p:.4e}"
+            return f"{p:.4f}"
+
         if not bad:
             print("🔬 Centroid self-check: OK (centroid1→class0, centroid2→class1 on all chromosomes)")
             return
         print("🔬 Centroid self-check: some chromosomes show poor or inverted separation:")
         for chrom, p_c1, p_c2 in bad[:10]:
-            print(f"   Chromosome {chrom}: centroid1→P(class1)={p_c1:.3f}, centroid2→P(class1)={p_c2:.3f} (expect ~0 and ~1)")
+            print(f"   Chromosome {chrom}: centroid1→P(class1)={_fmt_p(float(p_c1))}, centroid2→P(class1)={_fmt_p(float(p_c2))} (expect ~0 and ~1)")
         if len(bad) > 10:
             print(f"   ... and {len(bad) - 10} more. Try enable_platt_calibration: false or re-train detector with better separation.")
 

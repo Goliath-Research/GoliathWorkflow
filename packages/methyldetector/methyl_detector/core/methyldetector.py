@@ -1112,31 +1112,39 @@ class MethylDetector:
                 p_c1, p_c2 = proba_c1[0], proba_c2[0]
             else:
                 p_c1, p_c2 = proba_c1[1], proba_c2[1]
+            # Format probabilities with enough precision to distinguish true zeros from underflow (e.g. 1e-10)
+            def _fmt_p(p: float) -> str:
+                if p <= 0.0 or p >= 1.0:
+                    return f"{p:.6g}"
+                if p < 1e-4 or p > 1.0 - 1e-4:
+                    return f"{p:.4e}"
+                return f"{p:.4f}"
             logger.info(
-                "Centroid self-check (DMP positions): centroid1 → P(class1)=%.4f, centroid2 → P(class1)=%.4f "
+                "Centroid self-check (DMP positions): centroid1 → P(class1)=%s, centroid2 → P(class1)=%s "
                 "(expect ~0 and ~1)",
-                p_c1, p_c2
+                _fmt_p(float(p_c1)), _fmt_p(float(p_c2))
             )
-            if p_c1 > 0.2 or p_c2 < 0.8:
-                if p_c1 > 0.8 and p_c2 > 0.8:
+            # Fail if either centroid is on the wrong side of the decision boundary (0.5)
+            if p_c1 >= 0.5 or p_c2 < 0.5:
+                if p_c1 >= 0.5 and p_c2 >= 0.5:
                     logger.warning(
-                        "Centroid self-check FAILED: both centroids classify as class1 (centroid1→%.2f, centroid2→%.2f). "
+                        "Centroid self-check FAILED: both centroids classify as class1 (centroid1→%s, centroid2→%s). "
                         "Often due to poor centroid separation on this chromosome (see earlier 'Poor separation' / small delta_mean). "
                         "Validation BA may be low or meaningless.",
-                        p_c1, p_c2
+                        _fmt_p(float(p_c1)), _fmt_p(float(p_c2))
                     )
-                elif p_c1 <= 0.2 and p_c2 <= 0.2:
+                elif p_c1 < 0.5 and p_c2 < 0.5:
                     logger.warning(
-                        "Centroid self-check FAILED: both centroids classify as class0 (centroid1→P(class1)=%.2f, centroid2→%.2f). "
+                        "Centroid self-check FAILED: both centroids classify as class0 (centroid1→P(class1)=%s, centroid2→%s). "
                         "Context/position merging matches the DMP list, so this usually indicates weak centroid separation or "
                         "a DMP set dominated by low-information loci. Check delta_mean/effect_size and held-out BA.",
-                        p_c1, p_c2
+                        _fmt_p(float(p_c1)), _fmt_p(float(p_c2))
                     )
                 else:
                     logger.warning(
-                        "Centroid self-check FAILED: centroid1 → P(class1)=%.2f, centroid2 → P(class1)=%.2f (expect ~0 and ~1). "
+                        "Centroid self-check FAILED: centroid1 → P(class1)=%s, centroid2 → P(class1)=%s (expect ~0 and ~1). "
                         "Possible position/order mismatch between samples and DMP list. Validation BA may be meaningless.",
-                        p_c1, p_c2
+                        _fmt_p(float(p_c1)), _fmt_p(float(p_c2))
                     )
         except Exception as e:
             logger.warning("Centroid self-check failed: %s", e)
@@ -2708,6 +2716,10 @@ class MethylDetector:
         """
         Load bin_counts from centroid H5 files at the positions listed in *dmps_df*.
 
+        DMPs are defined only on positions present in both centroids (after alignment and
+        restrictions). Every DMP position is therefore expected in both centroid files; a
+        mismatch raises ValueError (wrong paths or wrong files).
+
         The DMP DataFrame must have ``position``, ``context``, and ``chromosome``
         columns (or fall back to ``self.chromosome`` for the single-chromosome case).
         The method groups by chromosome × context so each H5 file is loaded at most
@@ -2801,8 +2813,9 @@ class MethylDetector:
             idx1 = np.searchsorted(pos1, group_positions, side="left")
             idx2 = np.searchsorted(pos2, group_positions, side="left")
 
-            # Only use bin_counts where position exists in that centroid (exact match).
-            # Safe comparison: avoid indexing out of bounds; non-matching rows stay 0.
+            # DMPs are defined over the intersection of valid positions on both centroids, so every
+            # DMP must be present in both centroid files. Use exact match to index; any mismatch
+            # indicates wrong centroid paths, wrong chromosome/context, or corrupted data.
             in_range1 = idx1 < len(pos1)
             in_range2 = idx2 < len(pos2)
             match1 = in_range1 & (pos1[np.minimum(idx1, len(pos1) - 1)] == group_positions)
@@ -2811,16 +2824,15 @@ class MethylDetector:
 
             n_match = int(np.sum(both_match))
             n_group = int(np.sum(mask))
-            if n_match < n_group:
-                logger.warning(
-                    "_extract_bin_counts_for_dmps: %s-%s: only %d/%d DMP positions found in both centroids; "
-                    "missing rows get zero histograms (centroid self-check may fail).",
-                    chrom, ctx, n_match, n_group,
+            if n_match != n_group:
+                raise ValueError(
+                    f"_extract_bin_counts_for_dmps: {chrom}-{ctx}: {n_match}/{n_group} DMP positions "
+                    "found in both centroids. DMPs are defined only on positions present in both centroids; "
+                    "this mismatch indicates wrong centroid1_dir/centroid2_dir, wrong chromosome/context, or "
+                    "centroid files from a different run."
                 )
-            # Assign only where both centroids have this position; leave rest as zero
-            if n_match > 0:
-                bc1_rows[mask][both_match] = cached["bc1"][idx1[both_match]]
-                bc2_rows[mask][both_match] = cached["bc2"][idx2[both_match]]
+            bc1_rows[mask] = cached["bc1"][idx1]
+            bc2_rows[mask] = cached["bc2"][idx2]
 
         if bin_edges_ref is None:
             raise ValueError(
@@ -2828,20 +2840,23 @@ class MethylDetector:
                 "Ensure centroid1_dir/centroid2_dir contain H5 files with binned_stats."
             )
 
-        # Sanity check: centroid2 histograms must be non-zero or both centroids will classify as class 0
+        # Sanity: centroid2 (class 1) histograms must be non-zero. DMPs exist only on positions in both
+        # centroids; samples may miss positions, but the centroid files used here are the same ones
+        # that produced the DMPs, so bc2 should never be all zeros unless paths or files are wrong.
         bc2_sum = float(np.sum(bc2_rows))
         if bc2_sum < 1e-6:
-            logger.warning(
-                "_extract_bin_counts_for_dmps: centroid2 (class 1) histograms are zero or missing. "
-                "Check centroid2_dir (%s) and that centroid2 H5 files have binned_stats with non-zero bin_counts. "
-                "Centroid self-check will fail (both centroids → class 0).",
-                getattr(self.config, "centroid2_dir", "?"),
+            raise ValueError(
+                "centroid2 (class 1) histograms are zero. DMPs are defined on positions present in both "
+                "centroids; check centroid2_dir and that centroid2 H5 files have binned_stats with "
+                "non-zero bin_counts (and are the same centroids used for detection)."
             )
-        c1_dir = (getattr(self.config, "centroid1_dir", None) or "").strip()
-        c2_dir = (getattr(self.config, "centroid2_dir", None) or "").strip()
+        c1_dir = getattr(self.config, "centroid1_dir", None)
+        c2_dir = getattr(self.config, "centroid2_dir", None)
+        c1_dir = str(c1_dir).strip() if c1_dir else ""
+        c2_dir = str(c2_dir).strip() if c2_dir else ""
         if c1_dir and c2_dir and Path(c1_dir).resolve() == Path(c2_dir).resolve():
-            logger.warning(
-                "centroid1_dir and centroid2_dir are the same; both classes use the same histograms (self-check will show 0.5/0.5)."
+            raise ValueError(
+                "centroid1_dir and centroid2_dir must point to different directories (class 0 vs class 1)."
             )
 
         return bin_edges_ref, bc1_rows, bc2_rows

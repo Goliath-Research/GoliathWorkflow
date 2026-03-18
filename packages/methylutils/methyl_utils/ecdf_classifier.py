@@ -208,10 +208,14 @@ class ECDFClassifier:
             availability_mask=availability_mask,
         )
 
-        # Weighted log-likelihood sum  Σ w_i · log p(x_i | class_k)
+        # Weighted log-likelihood: use weighted mean (not sum) so scale is O(1) and softmax does not underflow with many DMPs.
+        # Same decision boundary: argmax(sum w_i log p_i) = argmax(mean w_i log p_i).
         w = self.weights[np.newaxis, :]  # (1, n_dmps)
-        sum_ll_c1 = np.sum(w * log_p_c1, axis=1)  # (n_samples,)
-        sum_ll_c2 = np.sum(w * log_p_c2, axis=1)
+        w_avail = np.where(avail, w, 0.0)
+        w_sum = np.sum(w_avail, axis=1, keepdims=True)
+        w_sum = np.maximum(w_sum, 1e-12)
+        sum_ll_c1 = np.sum(w_avail * log_p_c1, axis=1) / w_sum.ravel()
+        sum_ll_c2 = np.sum(w_avail * log_p_c2, axis=1) / w_sum.ravel()
 
         # Zero out samples with no valid positions
         valid_counts = np.sum(avail, axis=1)
