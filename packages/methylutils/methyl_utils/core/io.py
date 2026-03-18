@@ -15,6 +15,31 @@ def _indices_for_positions(pos_arr: np.ndarray, positions: np.ndarray):
     return np.flatnonzero(mask)
 
 
+def _indices_for_positions_h5(pos_dset, positions: np.ndarray) -> np.ndarray:
+    """Return row indices where pos_dset values are in positions, via binary search (no full pos load).
+    Assumes pos_dset is sorted (genomic order). Returns indices in file order, unique.
+    """
+    want = np.asarray(positions, dtype=np.uint32)
+    n = pos_dset.shape[0]
+    if n == 0:
+        return np.array([], dtype=np.intp)
+    found = set()
+    for target in want:
+        target = int(target)
+        lo, hi = 0, n - 1
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            val = int(pos_dset[mid])
+            if val < target:
+                lo = mid + 1
+            elif val > target:
+                hi = mid - 1
+            else:
+                found.add(mid)
+                break
+    return np.array(sorted(found), dtype=np.intp)
+
+
 def load_pos_from_h5(path: Union[str, Path]) -> np.ndarray:
     """
     Load only the position array from an HDF5 methylation file (lightweight read for indexing).
@@ -79,8 +104,7 @@ def load_from_h5(
                         idx = np.asarray(indices, dtype=np.intp)
                         load_idx = idx
                     elif positions is not None:
-                        pos_arr = np.asarray(methyl_data["pos"][:], dtype=np.uint32)
-                        idx = _indices_for_positions(pos_arr, positions)
+                        idx = _indices_for_positions_h5(methyl_data["pos"], positions)
                         load_idx = idx
                     else:
                         idx = None
@@ -125,8 +149,7 @@ def load_from_h5(
                             "tnc": np.asarray(methyl_data["tnc"][idx], dtype=np.uint8),
                         }
                     elif positions is not None:
-                        pos_arr = np.asarray(methyl_data["pos"][:], dtype=np.uint32)
-                        idx = _indices_for_positions(pos_arr, positions)
+                        idx = _indices_for_positions_h5(methyl_data["pos"], positions)
                         load_idx = idx
                         data = {
                             "pos": np.asarray(methyl_data["pos"][idx], dtype=np.uint32),
@@ -162,8 +185,7 @@ def load_from_h5(
                         "tnc": np.asarray(f["tnc"][idx], dtype=np.uint8),
                     }
                 elif positions is not None:
-                    pos_arr = np.asarray(f["pos"][:], dtype=np.uint32)
-                    idx = _indices_for_positions(pos_arr, positions)
+                    idx = _indices_for_positions_h5(f["pos"], positions)
                     load_idx = idx
                     data = {
                         "pos": np.asarray(f["pos"][idx], dtype=np.uint32),
