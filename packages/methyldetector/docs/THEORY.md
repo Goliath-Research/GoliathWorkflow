@@ -66,10 +66,10 @@ Centroid H5 files (must have binned_stats)
     │
     └─ Stage 10 — Classifier handoff
           Export the full biological funnel output (confirmed statistical DMPs plus
-          optional rescue rows) sorted by effect_size. Optionally cap the classifier
-          input to the top `max_dmps_for_classifier` rows by effect_size.
-          Legacy top-k optimization code still exists in the codebase, but it is not
-          the active export path used by `_select_dmps_multicontext()`.
+          optional rescue rows) sorted by effect_size. A dynamic distribution-based
+          trim finds the "elbow" of the effect_size curve (`dynamic_dmp_cutoff_enabled`),
+          effectively dropping the flat "long tail" of low-importance DMPs. The threshold
+          can be optionally scaled via `dynamic_dmp_cutoff_relaxation`.
 ```
 
 ---
@@ -150,5 +150,5 @@ The ECDFClassifier stores the `bin_counts` histograms per DMP position rather th
 | Biological score | Canonical `effect_size` formula with lambda_var penalty |
 | Biological filter | Per-context `effect_size_coverage` cumulative mass selection |
 | Rescue track | Optional `biological_only_effect_size_coverage` on non-significant loci |
-| Classifier input | Full biological funnel output by default; optional `max_dmps_for_classifier` cap |
+| Classifier input | Full biological funnel output with dynamic distribution-based trim (`dynamic_dmp_cutoff_enabled`) |
 | Classifier | ECDFClassifier: PCHIP PDF log-likelihood, effect_size-weighted |
