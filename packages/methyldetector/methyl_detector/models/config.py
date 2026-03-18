@@ -265,7 +265,7 @@ class MethylDetectorConfig(BaseModel):
     )
     effect_size_weight_power: float = Field(
         default=1.0, ge=0.1, le=5.0,
-        description="Power applied to normalized effect_size when building classifier weights: weight_i = (effect_size_i / max)^power. Default 1.0 (no change). Use > 1 (e.g. 2.0) for large DMP sets so weak positions contribute less and the weighted mean is more resilient to 40K+ positions."
+        description="Power applied to normalized effect_size when building classifier weights: weight_i = (effect_size_i / max)^power. Default 1.0 (no change). Use > 1 (e.g. 2.0–3.0) for large DMP sets so weak positions contribute less; higher values concentrate weight more on top positions and can improve centroid separation and class probability margins."
     )
     max_dmps_for_classifier: Optional[int] = Field(
         default=None, ge=1,
