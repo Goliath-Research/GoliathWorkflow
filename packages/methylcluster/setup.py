@@ -10,11 +10,10 @@ long_description = readme_file.read_text() if readme_file.exists() else ""
 setup(
     name="methyl_cluster",
     version="1.0.0",
-    description="HDBSCAN clustering for methylation samples with GPU acceleration",
+    description="Project-aware methylation sample clustering for MethylPipeline",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="David Izada Rodriguez",
-    author_email="dizada@epimethyl.com",
+    author="MethylPipeline Team",
     url="https://github.com/epimethyl/MethylPipeline",
     packages=find_packages(),
     python_requires=">=3.10",
@@ -31,6 +30,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
+            'methyl-cluster=methyl_cluster.cli:main',
             'methyl_cluster=methyl_cluster.cli:main',
         ],
     },

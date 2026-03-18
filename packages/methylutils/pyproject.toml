@@ -1,14 +1,14 @@
 [tool.poetry]
 name = "methylutils"
 version = "1.0.0"
-description = "Genome-scale methylation analysis toolkit optimized for NVIDIA GH200"
-authors = ["MethylUtils Team <team@methylutils.org>"]
-maintainers = ["MethylUtils Team <team@methylutils.org>"]
+description = "Shared utilities for the MethylPipeline ECDF-based methylation workflow"
+authors = ["MethylPipeline Team"]
+maintainers = ["MethylPipeline Team"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/methylutils/methylutils"
-documentation = "https://methylutils.readthedocs.io/"
-keywords = ["methylation", "genomics", "bioinformatics", "gpu", "cuda", "nvidia", "gh200"]
+repository = "https://github.com/epimethyl/MethylPipeline"
+documentation = "https://github.com/epimethyl/MethylPipeline/tree/main/packages/methylutils"
+keywords = ["methylation", "genomics", "bioinformatics", "ecdf", "gpu", "cuda"]
 packages = [{include = "methyl_utils"}]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -73,12 +73,6 @@ mypy = ">=1.10.0,<2.0.0"
 pre-commit = ">=3.7.0,<4.0.0"
 sphinx = ">=7.0.0,<8.0.0"
 sphinx-rtd-theme = ">=2.0.0,<3.0.0"
-
-[tool.poetry.scripts]
-methyl-utils = "methyl_utils.cli:main"
-methylutils = "methyl_utils.cli:main"
-methyl-utils-deploy = "methyl_utils.deployment:main"
-methylutils-deploy = "methyl_utils.deployment:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

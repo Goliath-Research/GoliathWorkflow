@@ -6,7 +6,7 @@
 
 - **Statistical rigour**: Kolmogorov-Smirnov on the precise ECDF (default), or optional Mann-Whitney U from bin counts; FDR correction.
 - **Biological relevance**: A single canonical score (`effect_size`) that penalises positions where the distributions overlap heavily or where within-group variance is large.
-- **Computational tractability**: A staged funnel that first reduces the aligned locus set with `delta_mean_reduction`, then evaluates non-parametric significance and ECDF overlap only on the surviving candidates before top-k validation from cached ECDF log-likelihoods.
+- **Computational tractability**: A staged funnel that first reduces the aligned locus set with `delta_mean_reduction`, then evaluates non-parametric significance and ECDF overlap only on the surviving candidates before per-context effect-mass selection.
 
 All distribution comparisons use the **ECDF only** — no Beta, Normal, or Beta-Binomial models.
 
@@ -37,8 +37,7 @@ Centroid H5 files (must have binned_stats)
     │     test is used.
     │
     ├─ Stage 4 — FDR correction
-    │     Two-stage Benjamini-Hochberg (statsmodels fdr_tsbh) on the
-    │     pre-filtered position set.
+    │     Storey's q-value on the pre-filtered position set.
     │     Note: FDR is applied to the pre-filtered subset only; q-values are
     │     therefore liberal relative to testing all positions.
     │
@@ -66,9 +65,12 @@ Centroid H5 files (must have binned_stats)
     │     Select non-significant but high-effect loci separately with
     │     biological_only_effect_size_coverage and keep them explicitly flagged.
     │
-    └─ Stage 10 — Held-out top-k selection
-          Use repeated stratified validation splits, cached ECDF log-likelihoods,
-          and balanced accuracy to choose the final top-k prefix.
+    └─ Stage 10 — Classifier handoff
+          Export the full biological funnel output (confirmed statistical DMPs plus
+          optional rescue rows) sorted by effect_size. Optionally cap the classifier
+          input to the top `max_dmps_for_classifier` rows by effect_size.
+          Legacy top-k optimization code still exists in the codebase, but it is not
+          the active export path used by `_select_dmps_multicontext()`.
 ```
 
 ---
@@ -111,7 +113,7 @@ The variances used in `effect_size` are the **sample variances** from `(Sx2 - Sx
 
 The statistical stage (KS on precise ECDF or Mann-Whitney from bins) and the continuous ECDF overlap stage both become expensive at CHH scale. Positions not present in both centroids cannot be tested at all; among the aligned loci, positions with `|delta_mean| < delta_mean_reduction` will be removed by the biological filter regardless of statistical significance, so pre-filtering them before the statistical gate avoids this work without any loss of biologically strong DMPs.
 
-The cost is a liberal FDR: BH correction is applied to the pre-filtered subset rather than the full set. In practice, for prostate-cancer-scale data (CG context: ~2000 statistically significant positions out of 4.3 million), the effect is small.
+The cost is a liberal FDR: Storey's q-value is applied to the pre-filtered subset rather than the full set. In practice, for prostate-cancer-scale data (CG context: ~2000 statistically significant positions out of 4.3 million), the effect is small.
 
 ---
 
@@ -120,15 +122,17 @@ The cost is a liberal FDR: BH correction is applied to the pre-filtered subset r
 MethylDetector trains an **ECDFClassifier** on the selected biological DMPs.
 
 ```
-log L(class_k | x) = Σ_i  w_i · log F'_k_i(x_i)
-P(class_k | x) ∝ exp( log L / T )
+mean_log_L(class_k | x) = Σ_i w_i · clamp(log F'_k_i(x_i), cap) / Σ_i w_i
+P(class_k | x) = softmax(mean_log_L / T_eff)
+T_eff = temperature * sqrt(n_effective)
 ```
 
 where:
 - `x_i` is the methylation fraction at DMP position `i` for a new sample.
 - `F'_k_i(x)` is the PCHIP-derived PDF from the centroid of class `k` at position `i`.
 - `w_i = effect_size_i / max(effect_size)` — positions with larger `effect_size` contribute more.
-- `T` is the temperature parameter (default `2.0`).
+- `clamp(..., cap)` caps very small per-position log-PDF values so a small number of near-zero loci do not dominate the mean at large DMP counts.
+- `T_eff` scales the configured temperature by the effective number of weighted loci so probabilities do not become over-confident as the number of DMPs grows.
 
 The ECDFClassifier stores the `bin_counts` histograms per DMP position rather than `alpha/beta` parameters, and uses the same PCHIP PDF model as the DMP detection stage.
 
@@ -140,12 +144,12 @@ The ECDFClassifier stores the `bin_counts` histograms per DMP position rather th
 |-----------|------|
 | Distribution model | ECDF only (binned_stats; bin count configurable at centroid build) |
 | Statistical test | Kolmogorov-Smirnov on precise ECDF (default); optional Mann-Whitney from `bin_counts` |
-| Multiple testing | Two-stage Benjamini-Hochberg (statsmodels fdr_tsbh) on the pre-filtered set only |
+| Multiple testing | Storey q-value on the pre-filtered set only |
 | Pre-filter gate | `delta_mean_reduction` (before the statistical test) |
 | Grid size | Single `ecdf_grid_size` (default 256) for KS and overlap integration |
 | Overlap | Continuous ECDF overlap: ∫ min(f1, f2) |
 | Biological score | Canonical `effect_size` formula with lambda_var penalty |
 | Biological filter | Per-context `effect_size_coverage` cumulative mass selection |
 | Rescue track | Optional `biological_only_effect_size_coverage` on non-significant loci |
-| Validation | Repeated stratified holdout BA with cached ECDF log-likelihood prefixes |
+| Classifier input | Full biological funnel output by default; optional `max_dmps_for_classifier` cap |
 | Classifier | ECDFClassifier: PCHIP PDF log-likelihood, effect_size-weighted |

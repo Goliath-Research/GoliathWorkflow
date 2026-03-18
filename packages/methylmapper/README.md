@@ -1,89 +1,58 @@
 # MethylMapper
 
-**Comprehensive DMP-to-gene mapping with disease enrichment capabilities**
+MethylMapper maps detector DMP exports onto genes and genomic features, then optionally enriches those mappings with disease-association metadata.
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+The supported workflow is the local bedtools-based flow driven by the shared project config.
 
-## Overview
+## Supported Usage
 
-MethylMapper provides two complementary approaches for mapping Differentially Methylated Positions (DMPs) to genes:
-
-1. **Azure SQL Database Integration** (`methyl_mapper`) - Enterprise-scale mapping with stored procedures
-2. **Bedtools-based Local Processing** (`methyl_mapper_bedtools`) - Fast local mapping with disease enrichment
-
-Both integrate with the MethylDetector pipeline to provide gene-level interpretation of methylation analysis results.
-
-## Quick Start
-
-### For Disease Enrichment (Recommended)
+Project-driven run:
 
 ```bash
-# Install bedtools and MethylMapper
-conda install -c bioconda bedtools
-pip install -e .
-
-# Set environment variables
-export GENE_GTF="/path/to/gencode.v44.annotation.gtf"
-export GROK_API_KEY="your-grok-api-key"
-export DISGENET_API_KEY="your-disgenet-api-key"  # Optional
-
-# Basic mapping with disease enrichment
-cd /path/to/methyldetector/output
-methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
-                      --enrich-disease \
-                      --disease-term "early-stage prostate cancer"
-
-# Advanced usage with all options
-methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" \
-                      --enrich-disease \
-                      --enrich-source grok+opentargets \
-                      --grok-api-key "your-grok-key" \
-                      --enrich-profile strict \
-                      --cache-ttl-days 7 \
-                      --no-p-value-weight \
-                      --no-q-value-weight \
-                      --feature-types gene exon intron \
-                      --group-by gene_name \
-                      --min-k 20 \
-                      --max-k 1000 \
-                      --stability-threshold 5 \
-                      --output-dir /custom/output/path
+methyl-mapper --project /path/to/project.json
 ```
 
-### For Azure SQL Database (Legacy)
+Direct run:
 
 ```bash
-# Configure Azure SQL connection
-methyl_mapper --input dmps.csv --config db_config.json --sample-id 12345
+methyl_mapper_bedtools --csv-pattern "/path/to/dmps-*.csv" --gtf /path/to/gencode.gtf --output-dir /path/to/out
 ```
 
-## Tools Overview
+## Canonical Inputs And Outputs
 
-### methyl_mapper_bedtools (Primary Tool)
+With `--project`, MethylMapper reads detector exports from:
 
-**Features:**
-- ⚡ **Fast local processing** using bedtools intersect
-- 🧬 **Comprehensive feature mapping** (genes, transcripts, exons, introns, etc.)
-- 📊 **Statistical weighting** by p-value, q-value, and effect size
-- 🧪 **Gene-level aggregation** with weighted Stouffer p-values and gene importance
-- 🏥 **Disease enrichment** via Grok API + Open Targets (optional DisGeNET)
-- 🧪 **Enrichment profiles** for strict/balanced/permissive testing
-- 💾 **Disk cache** for faster repeated runs
-- 📈 **Progress indicators** for long-running operations
-- 🔧 **Flexible configuration** via environment variables and CLI options
+```text
+detections/<control_group>/<disease_group>/
+```
 
-**Best for:** Research workflows, disease association studies, interactive analysis
+and writes mapping outputs to:
 
-### methyl_mapper (Azure SQL Database)
+```text
+mapper/<control_group>/<disease_group>/
+```
 
-**Features:**
-- 🏢 **Enterprise-scale** processing with Azure SQL stored procedures
-- 🔄 **Batch processing** with database optimization
-- 📋 **Structured output** with sample tracking
-- ⚙️ **Configurable weighting** for different genomic regions
+Typical outputs include:
 
-**Best for:** Production pipelines, large-scale batch processing, enterprise environments
+- per-feature overlap tables
+- aggregated gene tables
+- `all-gene_name-combined.csv`
 
-## License
+## Key Inputs
 
-MIT License - see LICENSE file for details.
+- detector DMP CSVs, typically `dmps-*.csv`
+- a GTF annotation file
+- optional disease enrichment credentials from the environment
+
+Recommended secret handling:
+
+- `GROK_API_KEY` via environment variable
+- local override JSON for one-off runs
+
+Do not commit secrets into tracked config files.
+
+## Notes
+
+- The historical Azure SQL flow is still present in the package for backward compatibility, but it is not the primary documented workflow.
+- Project path resolution is implemented in `methyl_mapper/project_resolver.py`.
+- For the shared project schema, see `docs/UNIFIED_PROJECT_CONFIG_GUIDE.md`.

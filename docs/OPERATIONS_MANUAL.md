@@ -1,195 +1,238 @@
 # MethylPipeline Operations Manual
 
-This manual describes how to **run** the pipeline (users) and how to **extend and develop** it (developers). For theoretical foundations and package-level math, see [Theory and packages](THEORY_AND_PACKAGES.md).
+This manual describes the supported operator workflow and the repository-level contracts developers should follow when extending the pipeline.
 
----
+For package math and theory, see [Theory and packages](THEORY_AND_PACKAGES.md).
 
-## Table of Contents
+## For Users
 
-1. [For users](#for-users)
-   - [Installation](#installation)
-   - [Project configuration](#project-configuration)
-   - [Workflow order and data flow](#workflow-order-and-data-flow)
-   - [CLI reference](#cli-reference)
-   - [Key config fields per step](#key-config-fields-per-step)
-   - [Inputs and outputs](#inputs-and-outputs)
-   - [Troubleshooting](#troubleshooting)
-   - [Rendering and printing documentation](#rendering-and-printing-documentation)
-2. [For developers](#for-developers)
-   - [Repository layout](#repository-layout)
-   - [Adding or changing a pipeline step](#adding-or-changing-a-pipeline-step)
-   - [Config schema and validation](#config-schema-and-validation)
-   - [Testing](#testing)
-   - [Logging and debugging](#logging-and-debugging)
-   - [Documentation conventions](#documentation-conventions)
+### Supported install paths
 
----
+Host install:
 
-## For users
+```bash
+bash scripts/setup_host.sh --system-deps --gpu
+```
 
-### Installation
+Common variants:
 
-- **Docker (recommended):** Build and start the dev container (see [README](../README.md#option-1-docker-recommended)). Use `scripts/setup_dev.sh`; then `docker exec -it methylpipeline bash`.
-- **Host (non-Docker):** From repo root, run `bash scripts/setup_host.sh --system-deps --gpu`. Omit `--gpu` for CPU-only. Use `--venv /path/to/venv` to control the virtualenv. See [README_ENV.md](../README_ENV.md) and [ENV_SETUP.md](../ENV_SETUP.md) if you use conda or a custom env.
+- CPU-only: omit `--gpu`
+- Custom virtualenv: add `--venv /path/to/venv`
+- Conda / RAPIDS workflow: `bash scripts/setup_host_conda.sh --install-miniforge`
+- Verification: `bash scripts/verify_setup.sh`
 
-All pipeline CLIs: `methyl-centroid`, `methyl-centroid-explorer`, `methyl-detector`, `methyl-detector-explorer`, `methyl-mapper`, `methyl-enricher`, `methyl-classifier`, `methyl-predictor`, `methyl-validation`, `methyl-qc` / `methyl-alignment-qc`. Ensure the MethylPipeline packages are installed (e.g. `pip install -e .` in each package or use the repo-level setup script).
+If the environment already exists and only the local packages need installing:
 
-### Project configuration
+```bash
+bash scripts/install_all.sh --pipeline-reqs
+```
 
-Use a **single project JSON** with `--project` so each tool derives paths and sample lists from one place.
+Docker / container users should use the scripts under `scripts/` or the production image in `docker/Dockerfile.production`.
 
-- **Project root:** `{output_base}/{project_name}`
-- **Centroids:** `{project_root}/centroids/{group1.label}`, `{project_root}/centroids/{group2.label}`, etc.
-- **Detection:** `{project_root}/detection`
-- **Mapper:** `{project_root}/mapper`
-- **Enricher:** `{project_root}/enricher`
-- **Classifier:** `{project_root}/classifier`
-- **Alignment QC:** `{project_root}/alignment_qc`
+### Supported project schema
 
-Main project fields:
+Use one project JSON with:
 
-| Field | Description |
-|-------|-------------|
-| `project_name` | Project identifier. |
-| `output_base` | Global output directory; step outputs live under `{output_base}/{project_name}`. |
-| `group1` / `group2` (or more) | Each has `label` (used in centroid subdir names) and `sample_paths`. |
-| `sample_paths` | List of sample directories or path to a file (one path per line or JSON array). |
-| `chromosomes` | Optional; shared chromosome list for centroid/detector. |
-| `contexts` | Optional; e.g. `["CG"]`. |
-| `path_remap` | Optional; prefix replacement when sample paths move (e.g. NAS). |
-| `step_config` | Optional; per-step defaults (see [Key config fields per step](#key-config-fields-per-step)). |
+- `project_name`
+- `output_base`
+- `controls`
+- `diseases`
+- `comparisons`
+- optional `samples_base_path`, `chromosomes`, `contexts`, `path_remap`
+- optional `step_config`
 
-**Resolution order:** Project shared + derived paths → `step_config[step]` → `--step-override` file / CLI. So you can set defaults in the project and override per run with `--step-override step.json` or CLI flags.
+Legacy `group1` / `group2` and flat `groups` still load, but the supported workflow is `controls` / `diseases` / `comparisons`.
 
-See [configs/README.md](../configs/README.md) for an example project JSON and `step_config` layout.
+Project-aware CLIs:
 
-### Workflow order and data flow
+- `methyl-centroid`
+- `methyl-detector`
+- `methyl-mapper`
+- `methyl-enricher`
+- `methyl-classifier`
+- `methyl-predictor`
+- `methyl-qc` / `methyl-alignment-qc`
+
+Related tools:
+
+- `methyl-centroid-explorer`
+- `methyl-detector-explorer`
+- `methyl-cluster`
+
+Validation is separate:
+
+- `methyl-validation --config ...`
+
+The Monte Carlo validation config points at a `base_project`; the validation CLI does not accept `--project`.
+
+### Sample input expectations
+
+Sample directories are expected to contain chromosome/context HDF5 files such as:
+
+- `1-CG.h5`
+- `1-CHG.h5`
+- `1-CHH.h5`
+
+Project `sample_paths` entries may be:
+
+- direct sample directory paths
+- text files with one sample path per line
+- CSV files with a `sample`, `path`, or `sample_path` column
+- JSON arrays of paths
+
+If `samples_base_path` is set, entries inside those files may be sample folder names instead of absolute paths.
+
+### Output layout
+
+Given `project_root = {output_base}/{project_name}`, the canonical layout is:
+
+```text
+{project_root}/
+├── centroids/
+│   ├── controls/<control-side-label>/<group>/
+│   └── diseases/<disease-side-label>/<group>/
+├── detections/<control_group>/<disease_group>/
+├── mapper/<control_group>/<disease_group>/
+├── enricher/<control_group>/<disease_group>/
+├── classifiers/<control_group>/<disease_group>/
+├── predictors/<control_group>/<disease_group>/
+├── alignment_qc/
+└── clustering/
+```
+
+For control/disease projects with multiple comparisons, downstream tools automatically use comparison-specific directories to avoid overwriting.
+
+### Workflow order
 
 Run steps in this order:
 
-| Step | Tool | Input | Output |
-|------|------|--------|--------|
-| 1 | Centroid (per group) | Sample dirs from project | `{project_root}/centroids/{group.label}/` (HDF5 per chrom/context) |
-| 1b (optional) | MethylCentroid Explorer | Centroid H5 paths | Report/CSV for centroid build options |
-| 2 | MethylDetector | Centroid dirs (group1, group2, …) from project | `{project_root}/detection/` (DMP CSVs, classifier PKL, results JSON) |
-| 2b (optional) | MethylDetector Explorer | Centroid H5 paths | Report/CSV for refinement and effect-size options |
-| 3 | MethylMapper | DMP CSVs from detection | `{project_root}/mapper/` (gene/feature CSVs, optional disease enrichment) |
-| 4 | MethylEnricher | Mapper combined gene CSV | `{project_root}/enricher/` (enrichment results) |
-| 5 | MethylClassifier | Model from detection + centroid dirs from project | `{project_root}/classifier/` (e.g. results CSV) |
-| 6 | MethylPredictor | Classifier + test samples | Classification metrics |
-| 7 | MethylValidation | Project + validation config (e.g. Monte Carlo) | Runs centroid, detector, classifier, predictor per run |
-| 0 (optional) | MethylAlignmentQC | Sample dirs from project | `{project_root}/alignment_qc/` (one JSON per sample) |
+1. `methyl-centroid --project ... --group all`
+2. `methyl-detector --project ...`
+3. `methyl-mapper --project ...`
+4. `methyl-enricher --project ...`
+5. `methyl-classifier --project ...`
+6. `methyl-predictor --project ...`
+7. `methyl-validation --config ...` when you want Monte Carlo evaluation
 
-Classifier can be run whenever detection and centroid dirs are ready; it does not depend on mapper or enricher. Mapper reads DMP CSVs (e.g. `dmps-*-optimized.csv`) from detection. Centroid HDF5 files use only the `methylation_data` group (with optional `bins` attr and `bin_counts` dataset for binned stats); no separate `binned_stats` group.
+Optional side workflows:
+
+- `methyl-qc` / `methyl-alignment-qc`
+- `methyl-cluster`
+- explorer CLIs
 
 ### CLI reference
 
-All commands support `--project PATH` (and where noted, `--step-override PATH`). Optional `-v` / `--verbose` is common.
+| Command | Canonical mode | Notes |
+|---------|----------------|-------|
+| `methyl-centroid` | `--project PROJECT --group all` | Builds all configured centroids. |
+| `methyl-detector` | `--project PROJECT` | Auto-switches to per-comparison outputs when needed. |
+| `methyl-mapper` | `--project PROJECT` | Reads detector CSVs from `detections/<control>/<disease>/`. |
+| `methyl-enricher` | `--project PROJECT` | Reads mapper combined gene CSV from the matching comparison directory. |
+| `methyl-classifier` | `--project PROJECT` | Scores samples using classifier bundles from detector or classifier outputs. |
+| `methyl-predictor` | `--project PROJECT` | Uses `step_config.predictor` test sets by default. |
+| `methyl-validation` | `--config VALIDATION_JSON` | Monte Carlo runner; config contains `base_project`. |
+| `methyl-qc` / `methyl-alignment-qc` | `--project PROJECT` | Optional alignment QC extraction. |
 
-| Command | Required (with --project) | Key options |
-|---------|----------------------------|-------------|
-| **methyl-centroid** | `--project`, `--group` (group1, group2, all, or 0-based index) | `--step-override`, `--use-gpu` / `--no-gpu` |
-| **methyl-centroid-explorer** | Centroid H5 paths or `--centroid1` / `--centroid2` | Explore centroid build options; see package README. |
-| **methyl-detector** | `--project` *or* CONFIG path (not both) | `--step-override`, `--verbose`, `--log-file` |
-| **methyl-detector-explorer** | `--centroid1-dir`, `--centroid2-dir` (or `--centroid1`/`--centroid2`) | `--approx-overlap` (auto/discrete/normal), `--min-N`, `--sample-fraction`; see [METHYLDETECTOR_EXPLORER](../packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md). |
-| **methyl-mapper** | `--project` (bedtools flow) or config + input/output | `--step-override`, mapper-specific (e.g. `--gtf`, env `GROK_API_KEY`) |
-| **methyl-enricher** | `--project` or input + `--outdir` | `--step-override`, `--gene-column`, `--disease-only`, etc. |
-| **methyl-classifier** | Config or `--model-dir` + `--input` + `--output` | See package README for full CLI. |
-| **methyl-predictor** | Config or model + test input | Run classifier on test sets and compute metrics. |
-| **methyl-validation** | `--config` (validation config), `--project` | Runs centroid, detector, classifier, predictor per run (e.g. Monte Carlo, stratified splits). |
-| **methyl-qc** / **methyl-alignment-qc** | `--project` or `--samples` + `--output-dir` | `--step-override`, `--no-validation` |
+### Step config guidance
 
-Example (project-based):
+Use `step_config` inside the project JSON for defaults. Resolution order is:
+
+1. project-derived paths and shared project fields
+2. `step_config[step]`
+3. `--step-override`
+4. CLI flags
+
+Common step keys:
+
+- `centroid`: `base_config`, `parallel_combinations`, `min_samples`, `save_batch_summary`
+- `detection`: `alpha`, `delta_mean_reduction`, `effect_size_coverage`, `contexts`, `chromosomes`, `max_dmps_for_classifier`
+- `mapper`: `csv_pattern`, `gtf`, `disease_term`, `enrich_*`
+- `enricher`: `gene_column`, `libraries`, `disease_only`
+- `classifier`: `weight_method`, `temperature`, `enable_platt_calibration`, `chromosome_weights`
+- `predictor`: `test_control_paths`, `test_disease_paths`, `test_group_paths`, `debug`
+- `alignment_qc`: `groups`, `sample_paths`, `validate_schema`
+- `cluster`: clustering defaults for pre-centroid subgroup discovery
+
+Secrets should come from the environment or per-run override files, not from tracked configs.
+
+### Quick examples
+
+Binary or one-comparison project:
 
 ```bash
-methyl-centroid --project configs/project_PCa_vs_Healthy.json --group group1
-methyl-centroid --project configs/project_PCa_vs_Healthy.json --group group2
+methyl-centroid --project configs/project_PCa_vs_Healthy.json --group all
 methyl-detector --project configs/project_PCa_vs_Healthy.json
 methyl-mapper --project configs/project_PCa_vs_Healthy.json
 methyl-enricher --project configs/project_PCa_vs_Healthy.json
 methyl-classifier --project configs/project_PCa_vs_Healthy.json
-methyl-qc --project configs/project_PCa_vs_Healthy.json
+methyl-predictor --project configs/project_PCa_vs_Healthy.json
 ```
 
-For full option lists, see each package’s README and comprehensive documentation.
+Monte Carlo validation:
 
-### Key config fields per step
-
-- **Centroid:** `min_coverage`, `use_gpu`, `binned_stats_bins` (optional; e.g. 20 for ECDF/Explorer); batch options (e.g. `parallel_combinations`) when using batch config.
-- **Detection:** `chromosomes`, `contexts`, `fdr_threshold` (or `min_pvalue`), `min_delta_mean`, `max_overlap`, `min_effect_size`, `target_balanced_accuracy`, `validation_mode`, `output_dir` (usually derived from project). Explorer: `approx_overlap` (auto/discrete/normal), `min_N`, `min_N_pct`, `sample_fraction`.
-- **Mapper:** `csv_filename_pattern` (e.g. `dmps-*.csv`), `gtf`, `disease_term`, `enrich_*`; set `grok_api_key` via env or step-override.
-- **Enricher:** `gene_column`, `libraries`, `disease_only`, `output_dir`.
-- **Classifier:** `model_path` or `model_dir`, `input`, `output_path`; multi-chromosome and calibration options (see MethylClassifier docs).
-- **Alignment QC:** `sample_paths`, `output_dir` (derived from project when using `--project`).
-
-Full schemas live in each package (e.g. Pydantic models in `*_detector/models/config.py`, `*_classifier/models/config.py`). Use `step_config` in the project JSON to set defaults; override with `--step-override` or CLI.
-
-### Inputs and outputs
-
-| Step | Reads | Writes |
-|------|--------|--------|
-| Centroid | Sample dirs (HDF5 per sample), project or batch config | `centroids/{label}/*.h5` (methylation_data group only; optional `bins` attr + `bin_counts` for binned stats) |
-| Detector | Centroid dirs (HDF5 with methylation_data; centroids used for DMP/ECDF must have binned stats: `bins` + `bin_counts`), project or detector config | `detection/dmps-*.csv`, `detection/classifier-*.pkl`, `detection/results-*.json` |
-| Mapper | `detection/dmps-*.csv` (pattern from config), GTF | `mapper/` (gene/feature CSVs, combined CSV) |
-| Enricher | Mapper combined CSV or gene list (TXT/CSV) | `enricher/` (per-library and merged results) |
-| Classifier | Detection model (PKL), centroid dirs, sample dirs or methylation matrix | CSV/TSV of predictions and probabilities |
-| Alignment QC | Sample dirs or metrics root | `alignment_qc/{sample_basename}.json` |
-
-File naming: Detection uses patterns like `dmps-{chromosome}-{context}-3-optimized.csv`; mapper and enricher use configurable names. See package docs for exact patterns.
+```bash
+methyl-validation --config configs/monte_carlo.json
+```
 
 ### Troubleshooting
 
-- **GPU not detected:** Run `nvidia-smi`; install CuPy for your CUDA version; check `from methyl_utils import is_gpu_available; print(is_gpu_available())`.
-- **Out of memory:** Reduce batch size or chromosome parallelism; use `cleanup_gpu_memory()` (MethylUtils); or set `use_gpu: false` in config.
-- **No DMPs found:** Relax `fdr_threshold` (e.g. 0.05), lower `min_delta_mean` or `min_effect_size`; ensure centroid dirs and chromosomes/contexts match.
-- **Path / file not found:** Use `path_remap` in the project JSON if sample or output paths have moved; check `output_base` and `project_name`.
-- **Mapper/Enricher:** Ensure GTF path and (if used) `GROK_API_KEY` or other API keys are set (env or `--step-override`).
+- GPU missing: run `nvidia-smi`, then reinstall with `scripts/setup_host.sh --gpu`
+- Path mismatch after moving data: use `path_remap` in the project JSON
+- Missing detector CSVs for mapper: check `detections/<control>/<disease>/`
+- Missing predictor metrics: verify `step_config.predictor` test sets or CLI overrides
+- Grok / enrichment auth: set `GROK_API_KEY` in the environment or a step override file
 
-See individual package documentation (e.g. MethylDetector, MethylClassifier) for step-specific troubleshooting.
-
-### Rendering and printing documentation
-
-- **Formulas:** All theory and package docs use LaTeX in Markdown: block math with `$$ ... $$`, inline with `$ ... $`. The MkDocs site renders them via MathJax (see [mkdocs.yml](../mkdocs.yml) and `docs/javascripts/mathjax_config.js`).
-- **Print to PDF (browser):** Open the desired page (e.g. [Theory and packages](THEORY_AND_PACKAGES.md), this manual), use the browser’s Print dialog, and choose “Save as PDF”. Formulas will appear as rendered math if the site was built with the math extension.
-- **Building PDFs from Markdown (optional):** You can use tools such as `md-to-pdf` or Pandoc to convert `docs/THEORY_AND_PACKAGES.md` and `docs/OPERATIONS_MANUAL.md` to PDF while preserving LaTeX (e.g. Pandoc with `--mathjax` or `-t pdf` and a LaTeX engine). For a single-page printable manual, the browser “Print to PDF” from the built MkDocs site is usually sufficient.
-
----
-
-## For developers
+## For Developers
 
 ### Repository layout
 
-- **Monorepo:** All packages live under `packages/`: `methylutils`, `methylcentroid`, `methylcluster`, `methyldetector`, `methylclassifier`, `methylmapper`, `methylenricher`, `methylalignmentqc`, `methylpredictor`, `methylvalidation`.
-- **Shared config:** Repo-level project configs live under `configs/` (e.g. `project_PCa_vs_Healthy.json`). Per-package examples and configs live in `packages/<name>/configs/` or `packages/<name>/examples/`.
-- **Docs:** Pipeline-level docs in `docs/` (this manual, THEORY_AND_PACKAGES, ARCHITECTURE, DEVELOPMENT, PRODUCTION). Package-level docs in `packages/<name>/docs/` and `packages/<name>/README.md`.
+- `packages/`: installable pipeline packages
+- `configs/`: repo-level project examples
+- `docs/`: repo-level workflow and architecture docs
+- `scripts/`: install / container / verification helpers
+- `docker/`: production and development container definitions
 
-### Adding or changing a pipeline step
+### Config and path contract
 
-- **Config flow:** When using `--project`, the project JSON is loaded; then for each step a resolver (e.g. `resolve_detector_config`, `resolve_centroid_batch_config`) builds the step’s config from project paths + `step_config[step]` + optional `--step-override` file. CLI flags (e.g. `--use-gpu`) override last.
-- **Adding a new step:** Implement a CLI (e.g. `methyl-mystep`) that accepts `--project` and optionally `--step-override`. Add a project resolver that reads `output_base`, `project_name`, and `step_config.mystep`, and writes outputs under `{project_root}/mystep/`. Register the step in docs and (if desired) in any orchestration or examples.
-- **New `methyl-*` command:** Each package typically has an entry point in `pyproject.toml` (e.g. `methyl-detector = methyl_detector.cli.main:main`). Add a similar entry for your package and ensure it’s installed when the pipeline is installed.
+The code-level source of truth is `packages/methylutils/methyl_utils/pipeline_config.py`.
 
-### Config schema and validation
+Important rules:
 
-- **Schemas:** Pydantic models in each package define config (e.g. `packages/methyldetector/methyl_detector/models/config.py`, `packages/methylclassifier/methyl_classifier/models/config.py`). Validation runs when loading JSON or building config from project.
-- **Extending `step_config`:** Add a key under `step_config` in the project JSON (e.g. `step_config.mystep`) and merge it in your step’s resolver. Use the same field names as the package’s config model so that the merged object validates.
+- prefer `controls` / `diseases` / `comparisons`
+- keep shared options at the project top level
+- use comparison directories for detector / mapper / enricher / classifier / predictor outputs
+- resolve step configs through the package `project_resolver.py` module, not by duplicating path logic in each CLI
+
+### Adding or changing a step
+
+When a package supports `--project`, it should:
+
+1. load the shared project contract with `methyl_utils.load_project()`
+2. derive canonical output paths from project helpers
+3. merge `step_config[step_name]`
+4. optionally merge `--step-override`
+5. validate against that package's config model
+
+New CLI entry points should be registered in the package `pyproject.toml`.
 
 ### Testing
 
-- **From repo root:** `pytest packages/` (or `pytest packages/methylutils packages/methyldetector ...` for a subset). Test discovery uses `test_*.py` and `*_test.py` under `packages/*/tests` (see root `pyproject.toml`).
-- **Markers:** Use `@pytest.mark.slow`, `@pytest.mark.gpu`, `@pytest.mark.integration` for tests that are slow, require GPU, or are integration tests. Run with `-m "not slow"` to skip slow tests.
-- **Single package:** `cd packages/methyldetector && pytest tests/ -v`.
+From repo root:
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for more on testing and code quality.
+```bash
+pytest packages/
+```
 
-### Logging and debugging
+Or target a package:
 
-- **Log level:** Many CLIs support `-v` / `--verbose` for DEBUG. Set `log_level` in config when supported (e.g. classifier).
-- **Detector log file:** `methyl-detector --log-file path/to/detector.log ...` writes detailed logs to the file while keeping a summary on stdout.
-- **Errors:** Check stack traces in the terminal; for GPU issues, check CuPy/CUDA errors and `methyl_utils` GPU helpers. Package comprehensive docs often have a “Troubleshooting” section.
+```bash
+pytest packages/methyldetector/tests -v
+```
 
-### Documentation conventions
+Keep tests next to the active package, not in unrelated repo-level folders.
 
-- **Theory and math:** Use LaTeX in Markdown: `$$ ... $$` for display, `$ ... $` for inline. This allows the MkDocs site and PDF/print to render formulas consistently.
-- **Where to add content:** New pipeline-level theory or workflow text → `docs/THEORY_AND_PACKAGES.md` or `docs/OPERATIONS_MANUAL.md`. Package-specific theory → `packages/<name>/docs/` (e.g. `METHYL*_COMPREHENSIVE_DOCUMENTATION.md`). Update [mkdocs.yml](../mkdocs.yml) nav if you add new top-level docs.
-- **API docs:** Generate with Sphinx from a package (e.g. `packages/methylutils`); see [docs/README.md](README.md#building-api-documentation) if configured.
+### Documentation rules
+
+- pipeline workflow docs live under `docs/`
+- package-specific behavior lives under `packages/<name>/README.md` and `packages/<name>/docs/`
+- keep docs aligned to the active ECDF pipeline and the canonical project-driven CLI workflow

@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "methyl_mapper"
 version = "0.1.0"
-description = "DMP-to-gene mapping tool using Azure SQL Database and STRING-DB"
-authors = ["MethylDetector Team"]
+description = "Project-aware DMP-to-gene mapping for MethylPipeline with bedtools as the primary workflow"
+authors = ["MethylPipeline Team"]
 readme = "README.md"
 packages = [{include = "methyl_mapper"}]
 

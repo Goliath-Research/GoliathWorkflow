@@ -1,10 +1,9 @@
 """
-MethylMapper - DMP to gene mapping using Azure SQL Database
+MethylMapper maps detector DMP exports onto genes and genomic features.
 
-This package provides tools for mapping Differentially Methylated Positions (DMPs)
-to genes using STRING-DB via Azure SQL stored procedures.
-
-Also includes bedtools-based mapping for local analysis without database requirements.
+The supported workflow is the project-aware, bedtools-based mapper used by the
+main MethylPipeline run path. Legacy Azure SQL helpers are kept for backward
+compatibility but are not the primary interface.
 """
 
 from .config import MethylMapperConfig, MapperStepConfig, AzureSQLConfig, StoredProcedureConfig

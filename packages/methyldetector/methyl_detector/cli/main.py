@@ -74,17 +74,16 @@ except ImportError:
     '--per-cancer-group',
     is_flag=True,
     default=False,
-    help='With --project: run one detection per non-control group (control=group0). '
-         'Outputs to detection/cancer/{label} for each group (e.g. pca1, pca2). '
-         'Use when project has one healthy and multiple cancer groups to get separate models.'
+    help='With --project: run one detection per configured comparison. '
+         'Outputs to detections/<control_group>/<disease_group> for each comparison.'
 )
 @click.option(
     '--multi-class-model',
     is_flag=True,
     default=False,
-    help='With --project: merge DMPs from per-cancer detection dirs and build a multiclass classifier. '
+    help='Compatibility mode: merge DMPs from per-comparison detection dirs and build the legacy multiclass model bundle. '
          'If --per-cancer-group is also set, run detection first then merge and build. '
-         'If only --multi-class-model: require detection/cancer/{label} to exist for all groups, then merge and build.'
+         'If only --multi-class-model: require per-comparison detection outputs to already exist.'
 )
 @click.option(
     '--group',
@@ -111,10 +110,10 @@ def main(
     MethylDetector - Genomics sample classification using enhanced centroid-based approach.
 
     Use either CONFIG (path to detector JSON) or --project (pipeline project config).
-    With --project, paths follow {output_base}/centroids, {output_base}/detection, etc.
-    Use --per-cancer-group with --project to run detection for each cancer group vs control,
-    writing to detection/cancer/pca1, detection/cancer/pca2, etc.
-    Use --multi-class-model to merge those DMPs and build a single multiclass model (with or without --per-cancer-group).
+    With --project, paths follow the canonical project layout under {output_base}/{project_name}.
+    Use --per-cancer-group with --project to run one detection per configured comparison,
+    writing to detections/<control_group>/<disease_group>.
+    Use --multi-class-model only for the legacy multiclass builder path.
     """
     if (config is None) == (project is None):
         raise click.UsageError("Provide either CONFIG or --project (not both, not neither).")

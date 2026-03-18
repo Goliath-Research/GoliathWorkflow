@@ -78,7 +78,7 @@ On Windows: `venv\Scripts\activate`. After activation, the prompt usually shows 
 MethylPredictor depends on MethylClassifier, which depends on MethylUtils. Install MethylUtils first:
 
 ```bash
-cd /path/to/MethylPipeline/packages/methylutils/methyl_utils
+cd /path/to/MethylPipeline/packages/methylutils
 pip install -e .
 ```
 

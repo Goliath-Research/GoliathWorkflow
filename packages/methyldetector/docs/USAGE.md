@@ -55,7 +55,7 @@ docker exec -w /workspace/packages/methyldetector methylpipeline \
 - `--output-base PATH`: override project output base  
 - `--centroid1-dir` / `--centroid2-dir`: override centroid dirs (with `--project`)  
 - `--per-cancer-group`: run one detection per non-control group  
-- `--multi-class-model`: merge DMPs and build multiclass model  
+- `--multi-class-model`: compatibility mode for the legacy multiclass model builder  
 
 Example with project:
 
@@ -95,7 +95,7 @@ On Windows: `venv\Scripts\activate`. After activation, the prompt usually shows 
 MethylDetector depends on MethylUtils. Install it first:
 
 ```bash
-cd /path/to/MethylPipeline/packages/methylutils/methyl_utils
+cd /path/to/MethylPipeline/packages/methylutils
 pip install -e .
 ```
 
@@ -220,6 +220,6 @@ Exact names and structure may depend on config (e.g. multi-chromosome, per-cance
 - **GPU not used:** Set `use_gpu: false` in config or ensure CuPy is installed and CUDA is visible in the environment.
 - **Paths in Docker:** Config paths must be valid inside the container. Use `/workspace/...` if the repo is mounted at `/workspace`.
 - **Missing centroid files:** Ensure `centroid1_dir` and `centroid2_dir` contain the expected `{chrom}-{context}.h5` files (e.g. from MethylCentroid) for the chromosome(s) and contexts in your config.
-- **MethylUtils not found:** Install MethylUtils first (`pip install -e .` in `packages/methylutils/methyl_utils`), then install MethylDetector.
+- **MethylUtils not found:** Install MethylUtils first (`pip install -e .` in `packages/methylutils`), then install MethylDetector.
 
 For theory and implementation details, see [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md) and [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md).

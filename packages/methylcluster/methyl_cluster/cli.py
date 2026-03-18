@@ -16,7 +16,6 @@ from .cluster import MethylCluster
 from .project_resolver import (
     resolve_cluster_config_for_group,
     write_clustering_manifest,
-    get_groups_with_subcluster,
 )
 
 
@@ -38,21 +37,21 @@ def setup_logging(verbose: bool = False) -> None:
 def main() -> None:
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Cluster methylation samples using HDBSCAN with GPU-accelerated distance metrics",
+        description="Cluster methylation samples with the project-aware MethylCluster workflow",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run clustering with configuration file
-  python -m methyl_cluster.cli --config config.json
+  # Run clustering from a project for one group
+  methyl-cluster --project path/to/project.json --group healthy
 
-  # Run from pipeline project for a group with subcluster (writes manifest.json)
-  python -m methyl_cluster.cli --project path/to/project.json --group healthy
+  # Run clustering with a standalone configuration file
+  methyl-cluster --config config.json
 
   # Run with verbose output
-  python -m methyl_cluster.cli --config config.json --verbose
+  methyl-cluster --config config.json --verbose
 
   # Enable soft assignments with temperature
-  python -m methyl_cluster.cli --config config.json --soft --temperature 2.5
+  methyl-cluster --config config.json --soft --temperature 2.5
 
 Configuration file format:
   {
@@ -72,7 +71,7 @@ Available metrics:
   - jensen_shannon: Jensen-Shannon distance (default)
   - hellinger: Hellinger distance
 
-For more information, see the README.md file.
+The default clustering method is `centroid`; HDBSCAN and hierarchical remain optional.
         """
     )
     

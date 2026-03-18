@@ -1,8 +1,8 @@
 """
 Configuration management for MethylCluster.
 
-This module handles configuration parsing and validation for HDBSCAN
-clustering of methylation samples using Pydantic models.
+This module handles configuration parsing and validation for the supported
+MethylCluster methods (centroid, HDBSCAN, and hierarchical).
 """
 
 from pathlib import Path
@@ -39,7 +39,7 @@ class MethylClusterConfig(BaseModel):
     Pydantic configuration model for MethylCluster parameters.
     
     This configuration defines all parameters for clustering methylation
-    samples using HDBSCAN with precomputed distance matrices.
+    samples with the supported MethylCluster methods.
     """
     
     # Sample specification

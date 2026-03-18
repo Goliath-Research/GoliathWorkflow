@@ -1,64 +1,9 @@
 """
-MethylUtils - Advanced Genome-Scale Methylation Analysis
+Shared utilities for the active MethylPipeline workflow.
 
-A comprehensive Python package for high-performance methylation data analysis,
-optimized for processing human genomes with billions of positions on NVIDIA GH200 hardware.
-
-The package is organized into specialized modules:
-
-Core Analysis Modules:
-- metrics_core: Core metric computation functions for Beta distributions
-- metrics_factory: Factory pattern for metric management and dispatch
-- statistical_tests: Statistical testing functions (FDR correction, meta-analysis)
-- genomic_utils: Genomic utility functions (region grouping, position manipulation)
-
-Performance Optimization Modules:
-- memory_manager: Advanced memory management for genome-scale processing
-- chunked_processor: Intelligent chunking for large genomic datasets
-- performance_profiler: Real-time monitoring and bottleneck analysis
-
-Infrastructure Modules:
-- gpu_detection: Comprehensive GPU detection and capability assessment
-- gpu_utils: GPU/CPU backend utilities and array management
-- logging_utils: Centralized logging configuration and utilities
-- metric_validations: Input validation functions for all metric computations
-
-Integrated Components:
-- position_aligner: Genomic Position Aligner for sample alignment
-- models: Pydantic models for structured methylation analysis results
-- methyl_sample: Core methylation data structures with HDF5 support
-- probabilistic_beta_classifier: Bayesian classifier using Beta distributions for sample classification
-
-Key Features:
-- 🚀 Automatic GPU acceleration (NVIDIA GH200 optimized with 96GB memory)
-- 🧬 Genome-scale processing (handles 3B+ positions efficiently)
-- 📊 Advanced statistical metrics (7 distance measures for Beta distributions)
-- 🧠 Intelligent memory management (chunking, memory mapping, pooling)
-- ⚡ Parallel processing (multi-threaded I/O, multiprocessing)
-- 📈 Real-time performance monitoring and optimization
-- 🐳 Container-ready with dependency fallbacks
-- 🔧 Factory pattern for extensible metric computation
-- ✅ Comprehensive input validation and error handling
-- 💾 Memory-efficient operations with in-place computations
-- 🔒 Type-safe interfaces with full type hints
-
-Performance Targets:
-- Processing Speed: >1M positions/second on GH200
-- Memory Efficiency: <80% GPU memory utilization
-- I/O Throughput: >500MB/s read/write
-- Human Genome Processing: ~4 hours on GH200
-
-Usage Examples:
-    # Basic usage
-    from methyl_utils import auto_compute_distance  # PositionAligner deprecated
-
-    # Genome-scale processing
-    from methyl_utils import ChunkedGenomicProcessor, process_genome_file_chunked
-
-    # Performance monitoring
-    from methyl_utils import start_performance_monitoring, get_performance_report
-
-For detailed documentation, see documentation.html
+This package exports the shared methylation data structures, centroid-comparison
+math, ECDF classifier helpers, project-config loading, and selected
+GPU/performance utilities used across the pipeline packages.
 """
 
 from .gpu_detection import (
@@ -747,9 +692,6 @@ __all__ = [
     "DMPSample",
     "DMPExporter",
     "DMRExporter",
-    "DMPSample",
-    "DMPExporter",
-    "DMRExporter",
     # Core metric functions
     "DistanceCalculator",
     "compute_jeffreys_divergence",
@@ -772,10 +714,6 @@ __all__ = [
     "compute_beta_mean",
     "compute_beta_variance",
     "log_beta_binomial_pmf",
-    # Beta mixture utilities
-    "fit_beta_mixture",
-    "estimate_js_divergence",
-    "mixture_logpdf",
     # Factory functions
     "MetricFactory",
     "get_metric_factory",
@@ -823,7 +761,6 @@ __all__ = [
     "create_analysis_results",
     # Classifiers
     "ECDFClassifier",
-    "create_classifier_from_results",
     # MethylCentroidPair for centroid comparison
     "MethylCentroidPair",
     # Bayesian Classifier Trainer

@@ -8,14 +8,15 @@ MethylUtils is a Python package for methylation data analysis, providing efficie
 - GPU-accelerated distance metrics
 - Statistical tests; centroid comparison uses ECDF only
 - Centroid HDF5: `methylation_data` only (optional `bins` attr + `bin_counts` dataset)
-- Centroid comparison and DMP detection; Bayesian classification (Beta/BMM, multi-class)
-- **CLIs**: `methyl-utils`, `chrom-mapping`, `methyl-utils-deploy`
+- Shared centroid comparison, ECDF classifier, and project-config utilities used by the downstream pipeline packages
 
 ## Installation
 
 ```bash
 pip install -e packages/methylutils
 ```
+
+This package is a library dependency. The canonical user-facing CLIs live in the downstream packages such as `methyl-centroid`, `methyl-detector`, `methyl-classifier`, and `methyl-predictor`.
 
 ## Quick Start
 

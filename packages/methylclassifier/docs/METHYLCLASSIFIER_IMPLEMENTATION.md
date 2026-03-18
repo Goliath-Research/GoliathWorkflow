@@ -43,7 +43,7 @@ The classifier objects inside the pickle use **ECDF-based prediction** (MethylUt
 |-----------|--------------------------|
 | **Classifier (in pickle)** | ECDF-based; stored by MethylDetector. MethylClassifier loads and calls `.predict_proba()`, `.predict()`, `.predict_proba_calibrated()`, `.predict_with_threshold()`. |
 | **MethylSample / load_from_h5** | DataLoader uses these to load sample HDF5 files and extract methylation at DMP positions. |
-| **Multi-class builder** | Used by the multiclass builder ([multiclass_builder.py](packages/methylclassifier/methyl_classifier/utils/multiclass_builder.py)) for multi-class models (ECDF-based). |
+| **Multi-class builder** | The multiclass builder currently remains a legacy compatibility path and is separate from the canonical ECDF binary-comparison workflow documented here. |
 | **load_project** | Used when resolving config from a pipeline project (e.g. CLI `--project`). |
 
 ## Context Handling
@@ -63,8 +63,15 @@ This ensures that inference uses the same contexts as training.
 2. **Load classifiers**: From directory or single file; build DMP position list (and optional DataFrame) from saved metadata.
 3. **Chromosome weights**: Compute or load from config (effect_size, config, or fitted).
 4. **Load samples**: For each sample path, DataLoader loads HDF5 per chromosome and context (according to `contexts_to_load`), merges contexts when multiple, and extracts methylation at the DMP positions required by each chromosome’s classifier.
-5. **Predict**: For each chromosome, call the stored classifier’s `predict_proba` on the corresponding methylation slice; weight by chromosome weight; sum and normalize to get combined class probabilities.
-6. **Output**: Predictions and probabilities written to CSV (and optional validation report if centroid validation paths are provided).
+5. **Predict**:
+   - Single-file / single-chromosome models call the stored classifier directly.
+   - Multi-chromosome models build one feature matrix per chromosome, call each per-chromosome classifier, then combine probabilities with `_combine_chromosome_probabilities()`.
+   - Direct `MethylClassifier.predict_proba()` in multi-chromosome mode now expects a concatenated feature matrix in sorted chromosome order and slices it back into chromosome-specific blocks internally.
+6. **Output**: Predictions and probabilities written to CSV (and optional validation report if centroid validation paths are provided). For multi-chromosome runs, `dmps_used` / `dmps_total` reflect the full concatenated DMP set across all chromosomes.
+
+## Sample Skips And Validation Labels
+
+`DataLoader.load_samples_from_list()` can skip invalid samples (missing chromosomes, empty merged samples, unreadable input). The classifier CLI now keeps the original input indices for successfully loaded samples and realigns `expected_classes` to that filtered set before writing `predictions.csv`. This prevents downstream metrics from drifting when one or more inputs are skipped.
 
 ## Summary
 

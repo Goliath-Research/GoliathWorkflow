@@ -1,9 +1,10 @@
-# MethylUtils CUDA-Optimized Container
+# MethylPipeline Development Container
 FROM nvidia/cuda:13.0.0-devel-ubuntu22.04
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
+    bedtools \
     git \
     hdf5-tools \
     libhdf5-dev \
@@ -81,4 +82,4 @@ RUN mkdir -p /root && chown root:root /root
 WORKDIR /root
 
 # Default command
-CMD ["python3", "-c", "print('MethylUtils CUDA container ready - run setup_methyl_packages.sh to install packages')"]
+CMD ["python3", "-c", "print('MethylPipeline development container ready - mount the repo at /workspace and run bash scripts/install_all.sh')"]

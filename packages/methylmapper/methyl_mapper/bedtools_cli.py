@@ -2,9 +2,9 @@
 """
 Command-line entry point for MethylMapper Bedtools mapping.
 
-This script provides bedtools-based DMP-to-feature mapping without requiring
-Azure SQL Database. It maps DMPs to all genomic features (genes, transcripts,
-exons, introns, etc.) with comprehensive weighting by statistical significance.
+This script provides the supported local bedtools-based DMP-to-feature mapping
+flow. It maps DMPs to genes and other genomic features with weighting by
+statistical significance.
 """
 
 from methyl_mapper.cli import main_bedtools

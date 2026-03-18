@@ -39,7 +39,7 @@ from .validator_metrics import (
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Monte Carlo validation: stratified train/val splits, run pipeline per iteration, aggregate validator metrics.",
+        description="Monte Carlo validation: stratified train/val splits, run pipeline per iteration, aggregate predictor metrics.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(

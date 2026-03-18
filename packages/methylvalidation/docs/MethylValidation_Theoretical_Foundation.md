@@ -4,7 +4,7 @@
 
 ## Goal
 
-MethylValidation estimates the **sampling distribution** of validation metrics (balanced accuracy, sensitivity, specificity, F1, etc.) by running the full MethylPipeline many times with different stratified train/validation splits (Monte Carlo). It does not define a new probabilistic model for the metrics themselves; those are standard classification metrics computed by **MethylPredictor** (see [MethylPredictor documentation](../../methylpredictor/docs/MethylPredictor_Theoretical_Foundation.md)). The "distribution" MethylValidation provides is the **empirical distribution** over iterations: with enough iterations, the summary (mean, std, percentiles) approximates the sampling distribution of each metric.
+MethylValidation estimates the **sampling distribution** of validation metrics (balanced accuracy, sensitivity, specificity, F1, etc.) by running the full MethylPipeline many times with different stratified train/validation splits (Monte Carlo). The current implementation is **binary-only** (one control cohort and one disease cohort per run). It does not define a new probabilistic model for the metrics themselves; those are standard classification metrics computed by **MethylPredictor** (see [MethylPredictor documentation](../../methylpredictor/docs/MethylPredictor_Theoretical_Foundation.md)). The "distribution" MethylValidation provides is the **empirical distribution** over iterations: with enough iterations, the summary (mean, std, percentiles) approximates the sampling distribution of each metric.
 
 ## Stratified train/validation split
 

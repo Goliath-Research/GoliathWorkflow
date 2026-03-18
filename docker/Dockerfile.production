@@ -4,6 +4,7 @@ FROM nvidia/cuda:13.0.0-devel-ubuntu22.04
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
+    bedtools \
     git \
     hdf5-tools \
     libhdf5-dev \
@@ -62,6 +63,9 @@ RUN cd /tmp/methylpipeline-packages/methylutils && pip install . --no-deps && \
     cd /tmp/methylpipeline-packages/methylmapper && pip install . --no-deps && \
     cd /tmp/methylpipeline-packages/methylclassifier && pip install . --no-deps && \
     cd /tmp/methylpipeline-packages/methylenricher && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methylalignmentqc && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methylpredictor && pip install . --no-deps && \
+    cd /tmp/methylpipeline-packages/methylvalidation && pip install . --no-deps && \
     rm -rf /tmp/methylpipeline-packages
 
 # Create CuPy cache directory with proper permissions

@@ -9,7 +9,7 @@ Part of the [MethylPipeline](https://github.com/epimethyl/MethylPipeline) monore
 From the MethylPipeline repo root (install MethylUtils and MethylClassifier first):
 
 ```bash
-pip install -e packages/methylutils/methyl_utils
+pip install -e packages/methylutils
 pip install -e packages/methylclassifier
 pip install -e packages/methylpredictor
 ```

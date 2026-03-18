@@ -22,7 +22,7 @@ def test_resolve_alignment_qc_config_output_dir_and_sample_paths():
         project_path = f.name
     try:
         config = resolve_alignment_qc_config(project_path)
-        assert config.output_dir == "/work/output/alignment_qc"
+        assert config.output_dir == "/work/output/TestProject/alignment_qc"
         assert len(config.sample_paths) == 3
         assert "/samples/h1" in config.sample_paths
         assert "/samples/h2" in config.sample_paths
@@ -49,6 +49,41 @@ def test_resolve_alignment_qc_config_step_config_validate_schema():
     try:
         config = resolve_alignment_qc_config(project_path)
         assert config.validate_schema is False
-        assert config.output_dir == "/out/alignment_qc"
+        assert config.output_dir == "/out/Test/alignment_qc"
+    finally:
+        Path(project_path).unlink(missing_ok=True)
+
+
+def test_resolve_alignment_qc_config_supports_control_and_label_filters():
+    """Canonical control/disease projects can filter QC inputs by side or group label."""
+    from methyl_alignment_qc.project_resolver import resolve_alignment_qc_config
+
+    project = {
+        "project_name": "CanonicalQC",
+        "output_base": "/out",
+        "controls": {
+            "label": "controls",
+            "groups": [{"label": "healthy", "sample_paths": ["/samples/h1", "/samples/shared"]}],
+        },
+        "diseases": {
+            "label": "diseases",
+            "groups": [
+                {"label": "pca", "sample_paths": ["/samples/d1", "/samples/shared"]},
+                {"label": "crc", "sample_paths": ["/samples/d2"]},
+            ],
+        },
+        "comparisons": [
+            {"control_group": "healthy", "disease_group": "pca"},
+            {"control_group": "healthy", "disease_group": "crc"},
+        ],
+        "step_config": {"alignment_qc": {"groups": ["control", "pca"]}},
+    }
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(project, f)
+        project_path = f.name
+    try:
+        config = resolve_alignment_qc_config(project_path)
+        assert config.output_dir == "/out/CanonicalQC/alignment_qc"
+        assert config.sample_paths == ["/samples/h1", "/samples/shared", "/samples/d1"]
     finally:
         Path(project_path).unlink(missing_ok=True)

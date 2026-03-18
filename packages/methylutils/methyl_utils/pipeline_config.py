@@ -1,10 +1,26 @@
 """
-Shared pipeline project configuration for MethylPipeline workflows.
+Shared project configuration for MethylPipeline workflows.
 
-Defines Pydantic models for a single project config (two groups, output_base, project_name)
-and derived paths under {output_base}/{project_name}/centroids|detection|mapper|enricher|classifier|alignment_qc.
-Used by MethylCentroid, MethylDetector, MethylMapper, MethylEnricher, MethylClassifier, MethylAlignmentQC
-to avoid repeating sample paths and output layout across configs.
+This module is the code-level contract for project JSONs consumed by the main
+pipeline steps. The canonical project shape is control/disease/comparisons,
+with optional backward compatibility for group1/group2 or flat groups.
+
+Derived paths follow a single project root:
+
+    {output_base}/{project_name}/
+        centroids/
+        detections/
+        mapper/
+        enricher/
+        classifiers/
+        predictors/
+        alignment_qc/
+        clustering/
+
+Comparison-driven steps use explicit comparison folders such as
+`detections/<control_group>/<disease_group>` and
+`classifiers/<control_group>/<disease_group>` so downstream tools can resolve
+the same artifact layout consistently.
 """
 
 import json
@@ -121,11 +137,15 @@ ControlDiseaseSide.model_rebuild()
 class DerivedPaths(BaseModel):
     """
     Derived paths from a ProjectConfig.
-    Convention: project root = {output_base}/{project_name}; step dirs under that:
-    {project_root}/centroids|detections|classifiers|predictors|mapper|enricher|alignment_qc.
-    When using N groups, centroid_dirs has one entry per group; control (index 0) is
-    centroids/controls/{label}, non-control groups use centroids/diseases/cancer/{label} (same as detection/mapper/enricher).
-    centroid1_dir and centroid2_dir are the first two for backward compatibility.
+
+    Project root is `{output_base}/{project_name}`. Step-level base directories
+    live directly under that root. Comparison-specific outputs are resolved via
+    helper methods such as `get_detection_output_dir()` rather than being stored
+    here as individual fields.
+
+    `centroid_dirs` contains one centroid directory per resolved group in
+    control-then-disease order. `centroid1_dir` and `centroid2_dir` are the
+    first two entries for backward compatibility with two-group callers.
     """
 
     output_base: str = Field(..., description="Project root directory (output_base/project_name)")
@@ -150,12 +170,17 @@ class DerivedPaths(BaseModel):
 
 class ProjectConfig(BaseModel):
     """
-    Single source of truth for a MethylPipeline project (two-group or N-group).
-    Defines groups, output layout, and optional shared parameters.
-    Use group1/group2 for backward compatibility; when groups is set, N groups are used
-    (each with optional level stratification via level_labels_path).
-    Unified config: you may use "controls" and "diseases" (plural) with multiple groups
-    per side; these are normalized to "control" and "disease" at load time for all pipeline components.
+    Single source of truth for a MethylPipeline project.
+
+    Preferred schema:
+    - `controls` / `diseases` (or singular `control` / `disease`)
+    - explicit `comparisons`
+    - shared `chromosomes`, `contexts`, `path_remap`, and `step_config` at the
+      top level
+
+    Backward compatibility is retained for `group1`/`group2`, flat `groups`,
+    and a few historically nested keys that are promoted to the top level at
+    load time.
     """
 
     project_name: str = Field(
@@ -222,7 +247,7 @@ class ProjectConfig(BaseModel):
     )
     step_config: Optional[Dict[str, Dict[str, Any]]] = Field(
         default=None,
-        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc. "
+        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc, cluster. "
         "Use 'predictor' (not 'validator') for prediction/validation; validator is deprecated. "
         "Values are merged into that step's config (override file / CLI still override these).",
     )
@@ -235,9 +260,16 @@ class ProjectConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_control_disease_keys(cls, data: Any) -> Any:
-        """Unified config: accept 'controls'/'diseases' (plural) for multiple groups; default comparisons to control_vs_each_disease.
-        When chromosomes/contexts/path_remap/step_config are nested under diseases (or controls), promote them to top level
-        so ProjectConfig has them; MethylCentroid and others need project.chromosomes and project.contexts."""
+        """Normalize accepted project-schema variants.
+
+        Supported compatibility shims:
+        - `controls` / `diseases` -> `control` / `disease`
+        - string `disease` + structured `diseases` -> `disease_name` + `disease`
+        - nested project-level keys under `control` or `disease` are promoted to
+          the top level when missing there
+        - nested legacy `predictor` blocks under a side are promoted into
+          `step_config.predictor`
+        """
         if not isinstance(data, dict):
             return data
         data = dict(data)
@@ -420,6 +452,7 @@ class ProjectConfig(BaseModel):
             (self.group2.label, _resolve_sample_paths(self.group2.sample_paths, base_path=base_for(self.group2))),
         ]
 
+    # Legacy fallback for flat two-group configs that do not have a disease-side label.
     CENTROID_DISEASE_SUBDIR: ClassVar[str] = "cancer"
     CENTROID_CONTROL_SUBDIR: ClassVar[str] = "controls"
     CENTROID_DISEASE_FOLDER: ClassVar[str] = "diseases"
@@ -429,7 +462,7 @@ class ProjectConfig(BaseModel):
         return self.disease.label if self.disease is not None else self.CENTROID_DISEASE_SUBDIR
 
     def get_centroid_dir(self, side: Literal["control", "disease"], group_label: str) -> str:
-        """Return centroid output dir for a group. control → centroids/controls/{side_label}/{label}; disease → centroids/diseases/{disease_label}/{label}."""
+        """Return centroid output dir for one resolved group."""
         global_base = self.output_base.rstrip("/")
         project_root = f"{global_base}/{self.project_name}"
         disease_sub = self._get_disease_subdir()
@@ -443,7 +476,7 @@ class ProjectConfig(BaseModel):
         return f"{project_root}/centroids/{self.CENTROID_DISEASE_FOLDER}/{disease_sub}/{group_label}"
 
     def get_clustering_output_dir(self, side: Literal["control", "disease"], group_label: str) -> str:
-        """Output dir for MethylCluster for a group (assignments, manifest). control → clustering/controls/{side_label}/{label}; disease → clustering/diseases/{disease_label}/{label}."""
+        """Return MethylCluster output dir for one resolved group."""
         disease_sub = self._get_disease_subdir()
         if self.control is not None and self.disease is not None and side == "control":
             return f"{self.get_project_root()}/clustering/{self.CENTROID_CONTROL_SUBDIR}/{self.control.label}/{group_label}"

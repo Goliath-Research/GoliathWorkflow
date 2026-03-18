@@ -217,7 +217,7 @@ class MethylDetectorValidationResults(NumpyCompatibleModel):
     # Export summary
     n_dmps_exported: Optional[int] = Field(
         default=None,
-        description="Number of DMPs exported to final CSV (optimized to meet target balanced accuracy)"
+        description="Number of DMP rows exported to the final CSV (current runtime: full biological funnel output, optionally capped for classifier handoff)"
     )
     total_statistical_dmps: Optional[int] = Field(
         default=None,
@@ -225,7 +225,7 @@ class MethylDetectorValidationResults(NumpyCompatibleModel):
     )
     total_biological_dmps: Optional[int] = Field(
         default=None,
-        description="Total biologically significant DMPs (after biological filter, before optimization)"
+        description="Total biologically significant DMPs after the biological filter and optional rescue track"
     )
     biological_filter: Optional[Dict[str, Any]] = Field(
         default=None,

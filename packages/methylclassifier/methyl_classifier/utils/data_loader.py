@@ -299,7 +299,7 @@ class DataLoader:
         positions: Optional[np.ndarray] = None,
         dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None,
         contexts_to_load: Optional[List[str]] = None
-    ) -> List[Tuple[str, Dict[str, Any]]]:
+    ) -> Tuple[List[Tuple[str, Dict[str, Any]]], List[int]]:
         """
         Load multiple samples from a list of directory paths.
 
@@ -315,9 +315,12 @@ class DataLoader:
             dmp_positions_by_chrom: DMP positions organized by chromosome (chromosome-specific optimization)
 
         Returns:
-            List of (sample_name, {chrom: merged_MethylSample}) tuples
+            Tuple of:
+            - loaded samples as (sample_name, {chrom: merged_MethylSample}) tuples
+            - indices into the original sample_paths list for the successfully loaded samples
         """
         samples = []
+        loaded_indices: List[int] = []
         import time
 
         for i, sample_path in enumerate(sample_paths, 1):
@@ -341,6 +344,7 @@ class DataLoader:
                 
                 load_time = time.time() - start_time
                 samples.append((sample_name, merged_samples))
+                loaded_indices.append(i - 1)
                 if debug:
                     print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes) in {load_time:.1f}s")
             except Exception as e:
@@ -351,7 +355,7 @@ class DataLoader:
                     traceback.print_exc()
                 continue
         
-        return samples
+        return samples, loaded_indices
 
     @staticmethod
     def extract_sample_features(sample: Any,

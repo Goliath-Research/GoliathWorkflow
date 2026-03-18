@@ -56,9 +56,8 @@
       "min_N_pct": 0.1
     },
     "mapper": {
-      "csv_pattern": "dmps-*-biological-sorted.csv",
+      "csv_pattern": "dmps-*.csv",
       "gtf": "/work/genomes/human_genome/gencode.v44.annotation.gtf",
-      "grok_api_key": "xai-v4I437Ldt3tmrjZ3avp315XnwsDRdO550ZNuhMvHUVNZpyJWU8qLwsYRHMetQQ64A6WVfJzwGpAcDPkJ",
       "disease_term": "Prostate Cancer",
       "enrich_disease": true,
       "enrich_source": "grok+opentargets",
@@ -94,7 +93,7 @@
       "debug": false,
       "log_level": "INFO"
     },
-    "validator": {
+    "predictor": {
       "debug": false
     }
   }

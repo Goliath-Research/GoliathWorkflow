@@ -1,578 +1,170 @@
 # MethylPipeline
 
-**Unified Genomics Pipeline for Comprehensive Methylation Analysis**
+MethylPipeline is a project-driven methylation analysis monorepo built around four core steps:
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![CUDA 13.0+](https://img.shields.io/badge/CUDA-13.0+-green.svg)](https://developer.nvidia.com/cuda-toolkit)
+1. `MethylCentroid` builds cohort centroids from sample HDF5 directories.
+2. `MethylDetector` finds DMPs and packages ECDF-based classifiers.
+3. `MethylClassifier` scores new samples with those classifiers.
+4. `MethylPredictor` and `MethylValidation` turn those predictions into holdout metrics and Monte Carlo summaries.
 
-## Overview
+Downstream packages add interpretation and operations support: `MethylMapper`, `MethylEnricher`, `MethylAlignmentQC`, and `MethylCluster`.
 
-MethylPipeline is a comprehensive, production-ready pipeline for methylation-based biomarker discovery and classification. It combines statistical rigor, Bayesian probabilistic methods, and GPU acceleration to provide a complete workflow from raw methylation samples to validated classifiers.
+## Core Model
 
-### Key Capabilities
+The active pipeline is **ECDF-based** end to end.
 
-- 🧬 **Centroid Generation**: Representative methylation profiles with outlier detection
-- 📊 **DMP Detection**: Statistical identification of differentially methylated positions
-- 🎯 **Bayesian Classification**: Probabilistic models with true posterior probabilities (Beta/BMM)
-- 🔍 **Clustering**: Exploratory analysis, QC, and subtype discovery
-- 🚀 **GPU Acceleration**: 10-50x speedup with NVIDIA GPUs
-- 📦 **Production Ready**: Docker deployment, reproducible configurations
-- 📚 **Comprehensive Documentation**: 6,000+ lines covering theory, algorithms, and examples
+- `MethylDetector` compares centroids with KS-on-ECDF or Mann-Whitney-from-bin-counts, then applies Storey q-values on the pre-filtered locus set.
+- `MethylClassifier` uses per-position ECDF/PCHIP PDFs, weighted mean log-likelihoods, and temperature-scaled posteriors.
+- Directory / multi-chromosome classifiers combine per-chromosome probabilities with chromosome weights.
 
-## Architecture
+This repository no longer treats Beta/BMM classifiers as the canonical workflow.
 
-MethylPipeline ships **10 packages** that share the MethylUtils foundation.
+## Canonical Workflow
 
-### Foundation
+Use one project JSON with `controls`, `diseases`, `comparisons`, and `step_config`. All project-aware tools derive inputs and outputs from that file.
 
-#### 1. **MethylUtils**
-Core utilities, GPU detection, statistical functions, and data structures used everywhere.
-
-**Key Components**:
-- `MethylSample`, `PositionAligner`, `MethylCentroidPair` (single data-driven centroid type)
-- Centroid HDF5: `methylation_data` only (bins attr + bin_counts; no separate binned_stats group)
-- ECDF-based centroid comparison and DMP detection; probabilistic Beta classifier + multi-class Beta Mixture support
-- Seven GPU-aware distance metrics (Jensen-Shannon, Hellinger, Wasserstein, etc.)
-- Unified GPU/CPU memory management, logging, profiling; `MethylSample.close()` for cleanup
-
-📚 [MethylUtils README](packages/methylutils/README.md) | [Comprehensive Guide](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
-
-### Analysis & Quality Control
-
-#### 2. **MethylCentroid** – Group Representatives
-Creates extended centroids (N, Sx, Sx2) with optional binned stats (bins + bin_counts in methylation_data), adaptive outlier detection, and GPU acceleration. **CLI**: `methyl-centroid`, `methyl-centroid-explorer`.
-
-📚 [MethylCentroid README](packages/methylcentroid/README.md) | [Comprehensive Guide](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
-
-#### 3. **MethylCluster** – Exploratory Analysis
-Multi-method clustering (HDBSCAN, Hierarchical, Centroid-based) with forced groups, soft assignments, and reusable distance matrices.
-
-📚 [MethylCluster README](packages/methylcluster/README.md) | [Comprehensive Guide](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
-
-#### 4. **MethylDetector** – DMP Detection & Model Packaging
-Detects Differentially Methylated Positions (ECDF-based), applies biological filters, optimizes Balanced Accuracy, and exports classifier bundles for MethylClassifier. **CLI**: `methyl-detector`, `methyl-detector-explorer` (explore refinement and effect-size options).
-
-📚 [MethylDetector README](packages/methyldetector/README.md) | [Comprehensive Guide](packages/methyldetector/docs/MethylDetector_Comprehensive_Documentation.md) | [Explorer](packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md)
-
-### Interpretation & Reporting
-
-#### 5. **MethylClassifier** – Sample Prediction
-Loads packaged classifiers (single or multi-class), applies temperature scaling/Platt calibration, and scores samples with full posterior probabilities. Supports hybrid Beta/BMM likelihoods when BMM centroids are available.
-
-📚 [MethylClassifier README](packages/methylclassifier/README.md) | [Comprehensive Guide](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
-
-#### 6. **MethylMapper** – Gene Mapping & Disease Context
-Maps optimized DMPs to genomic features using the preferred bedtools-based mapper with optional Grok + Open Targets disease enrichment (legacy Azure SQL workflow also available).
-
-📚 [MethylMapper README](packages/methylmapper/README.md) | [Quick Start](packages/methylmapper/QUICK_START.md)
-
-#### 7. **MethylEnricher** – Functional Enrichment
-Performs ORA/Enrichr-based enrichment across KEGG, Reactome, GO, MSigDB, and WikiPathways from MethylMapper gene lists (TXT/CSV).
-
-📚 [MethylEnricher README](packages/methylenricher/README.md) | [Installation Notes](packages/methylenricher/INSTALLATION.md)
-
-#### 8. **MethylAlignmentQC** – Alignment QC
-Parses Parabricks/bwa-mem2 alignment QC metrics into per-sample JSON for database storage. Optional step. **CLI**: `methyl-qc`, `methyl-alignment-qc`.
-
-📚 [MethylAlignmentQC README](packages/methylalignmentqc/README.md)
-
-### Validation & Prediction
-
-#### 9. **MethylPredictor** – Classification Metrics
-Runs MethylClassifier on test sets and computes classification metrics. **CLI**: `methyl-predictor`.
-
-📚 [MethylPredictor README](packages/methylpredictor/README.md)
-
-#### 10. **MethylValidation** – Validation Workflows
-Runs centroid, detector, classifier, and predictor (and related steps) per run using a validation config (e.g. Monte Carlo, stratified splits). **CLI**: `methyl-validation`.
-
-📚 [MethylValidation README](packages/methylvalidation/README.md)
-
-## Complete Workflow
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    1. Sample Preparation                    │
-│  Collect raw methylation samples, store as HDF5 files       │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│              2. Centroid Generation (MethylCentroid)        │
-│  Create representative centroids, remove outliers           │
-│  Output: Centroid HDF5 files for each group                 │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│      3. Quality Control & Clustering (MethylCluster)        │
-│  Detect batch effects/outliers, force expected groupings    │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│      4. DMP Detection & Model Creation (MethylDetector)     │
-│  Compare centroids, detect DMPs with FDR correction         │
-│  Optimize Balanced Accuracy and package classifiers         │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│           5. Classification (MethylClassifier)              │
-│  Predict class for new samples with posterior probabilities │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│           6. Gene Mapping (MethylMapper)                    │
-│  Map DMPs to genes/features, optional disease enrichment    │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│        7. Functional Enrichment (MethylEnricher)            │
-│  Perform ORA/Enrichr analysis on MethylMapper gene lists    │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│        8. Alignment QC (MethylAlignmentQC, optional)        │
-│        Parse alignment QC metrics to per-sample JSON        │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Pipeline command sequence (CLI)
-
-Run the pipeline as a sequence of command-line scripts in this order:
-
-| Step | Command | Description |
-|------|---------|-------------|
-| 0 (optional) | **methyl-qc** / **methyl-alignment-qc** | Parse Parabricks/alignment QC metrics into per-sample JSON. |
-| 1 | **methyl-centroid** | Build group centroids from samples (per group). |
-| 1b (optional) | **methyl-centroid-explorer** | Explore centroid build options. |
-| 2 | **methyl-detector** | Detect DMPs and package classifiers. |
-| 2b (optional) | **methyl-detector-explorer** | Explore refinement and effect-size options. |
-| 3 | **methyl-mapper** | Map DMPs to genes and genomic features. |
-| 4 | **methyl-enricher** | Functional enrichment from MethylMapper gene lists. |
-| 5 | **methyl-classifier** | Load packaged classifiers and score samples. |
-| 6 | **methyl-predictor** | Run MethylClassifier on test sets and compute classification metrics. |
-| 7 | **methyl-validation** | Validation workflow (e.g. Monte Carlo, stratified splits); runs centroid, detector, classifier, predictor per run. |
-
-Example:
+Typical run order:
 
 ```bash
-methyl-centroid --project configs/project.json --group group1
-methyl-centroid --project configs/project.json --group group2
-methyl-detector --project configs/project.json
-methyl-mapper --project configs/project.json
-methyl-enricher --project configs/project.json
-methyl-classifier ...
-methyl-predictor ...
-# Or run the full validation workflow (most steps above are executed internally):
-methyl-validation --config configs/monte_carlo.json --project configs/project.json
-```
+# 1) Build centroids for every resolved group
+methyl-centroid --project configs/project_PCa_vs_Healthy.json --group all
 
-## Quick Start
+# 2) Detect DMPs and package classifier outputs
+methyl-detector --project configs/project_PCa_vs_Healthy.json
 
-### Installation
+# 3) Map DMPs to genes / features
+methyl-mapper --project configs/project_PCa_vs_Healthy.json
 
-#### Option 1: Docker (Recommended)
+# 4) Functional enrichment
+methyl-enricher --project configs/project_PCa_vs_Healthy.json
 
-```bash
-# Clone repository
-git clone https://github.com/yourusername/MethylPipeline.git
-cd MethylPipeline
+# 5) Score labeled or unlabeled samples
+methyl-classifier --project configs/project_PCa_vs_Healthy.json
+methyl-predictor --project configs/project_PCa_vs_Healthy.json
 
-# Build and start development container
-./scripts/setup_dev.sh
-
-# Or build production container
-./scripts/setup_prod.sh
-
-# Enter container
-docker exec -it methylpipeline bash
-```
-
-#### Option 2: Host (Non-Docker)
-
-```bash
-# Clone repository
-git clone https://github.com/yourusername/MethylPipeline.git
-cd MethylPipeline
-
-# Install on host (recommended for DGX / non-Docker)
-bash scripts/setup_host.sh --system-deps --gpu
+# 6) Monte Carlo validation
+methyl-validation --config configs/monte_carlo.json
 ```
 
 Notes:
-- Omit `--gpu` for CPU-only installs.
-- `requirements-pipeline.txt` contains shared Python deps.
-- `requirements-gpu.txt` adds CUDA 13.x requirements.
-- Add `--venv /path/to/venv` to control the virtualenv location.
-- On Ubuntu 24.04+ where `python3.10` packages are unavailable, `setup_host.sh` installs the default `python3` packages and uses the system Python (3.10+).
 
-### Basic Usage Example
+- For control/disease projects with multiple comparisons, detector, mapper, enricher, classifier, and predictor use comparison-specific output directories automatically.
+- `methyl-validation` is driven by its own validation config. That config points at a `base_project`; the CLI does **not** take `--project`.
+- Keep API keys out of tracked project JSON. Use environment variables or per-run override files instead.
 
-```python
-# 1. Create centroids
-from methyl_centroid import MethylCentroid
+## Project Layout
 
-healthy_centroid = MethylCentroid(
-    add_samples=['/data/healthy1', '/data/healthy2', '/data/healthy3'],
-    chrom='1',
-    ctx='CG',
-    centroid_output_path='/centroids/healthy'
-).build_centroid()
+For a project named `MyStudy` with `output_base=/data/out`, the canonical root is:
 
-cancer_centroid = MethylCentroid(
-    add_samples=['/data/cancer1', '/data/cancer2'],
-    chrom='1',
-    ctx='CG',
-    centroid_output_path='/centroids/cancer'
-).build_centroid()
-
-# 2. Detect DMPs and train classifier
-from methyl_detector import MethylDetector
-from methyl_detector.models.config import MethylDetectorConfig
-
-config = MethylDetectorConfig(
-    chromosome="1",
-    contexts=["CG"],
-    centroid1_dir='/centroids/healthy',
-    centroid2_dir='/centroids/cancer',
-    output_dir='/output/modeler',
-    target_balanced_accuracy=0.95
-)
-
-detector = MethylDetector(config)
-result = detector.run()
-print(f"Model trained with {result.total_biological_dmps} high-confidence DMPs")
-print(f"Classifier saved to: {result.classifier_model_path}")
-
-# 3. Classify new samples
-from methyl_classifier import MethylClassifier
-
-classifier = MethylClassifier('/output/modeler/classifier-1.pkl')
-
-for sample in ['/data/test1', '/data/test2', '/data/test3']:
-    result = classifier.predict(sample)
-    print(f"{sample}: {result['predicted_class']} "
-          f"(confidence: {result['confidence']:.3f})")
+```text
+/data/out/MyStudy/
+├── centroids/
+│   ├── controls/<control-side-label>/<group>/
+│   └── diseases/<disease-side-label>/<group>/
+├── detections/<control_group>/<disease_group>/
+├── mapper/<control_group>/<disease_group>/
+├── enricher/<control_group>/<disease_group>/
+├── classifiers/<control_group>/<disease_group>/
+├── predictors/<control_group>/<disease_group>/
+├── alignment_qc/
+└── clustering/
 ```
 
-## Key Features
+Flat `group1` / `group2` projects still load, but `controls` / `diseases` / `comparisons` is the supported schema.
 
-### Statistical Rigor
+## Installation
 
-- **Storey's q-value FDR correction**: More powerful than Benjamini-Hochberg for genomics data
-- **Balanced Accuracy**: Robust to class imbalance (e.g., 35 healthy vs 12 cancer samples)
-- **Bayesian Probabilistic Models**: Exact Beta distribution likelihoods, not ML approximations
-- **Multiple Distance Metrics**: Jensen-Shannon, Hellinger, Wasserstein, Jeffreys, Bhattacharyya
+### Host install
 
-### GPU Acceleration
+```bash
+bash scripts/setup_host.sh --system-deps --gpu
+```
 
-- **Automatic GPU Detection**: Seamless CPU fallback when GPU unavailable
-- **20-50x Speedup**: NVIDIA CUDA acceleration via CuPy
-- **Memory Efficient**: LRU caching, memory-mapped I/O, chunked processing
-- **Multi-GPU Support**: Parallel processing across chromosomes
+Common variants:
 
-### Production Ready
+- CPU-only: omit `--gpu`
+- Custom virtualenv: add `--venv /path/to/venv`
+- Pre-existing conda / RAPIDS workflow: use `scripts/setup_host_conda.sh`
+- Verify the environment: `bash scripts/verify_setup.sh`
 
-- **Docker Deployment**: Reproducible containerized environments
-- **JSON Configuration**: All parameters tracked for reproducibility
-- **Model Packaging**: Complete metadata in `.pkl` files
-- **Comprehensive Logging**: Detailed progress and diagnostics
-- **Error Handling**: Graceful degradation and informative messages
+If you already manage Python and system dependencies yourself, `scripts/install_all.sh --pipeline-reqs [--gpu-reqs]` installs the local packages into the active environment.
+
+### Docker / containers
+
+- Development container scripts live under `scripts/`
+- Production image definition lives in `docker/Dockerfile.production`
+
+The production container installs the same canonical CLI surface as the host setup.
+
+## Main CLIs
+
+Project-aware commands:
+
+- `methyl-centroid`
+- `methyl-detector`
+- `methyl-mapper`
+- `methyl-enricher`
+- `methyl-classifier`
+- `methyl-predictor`
+- `methyl-qc` / `methyl-alignment-qc`
+
+Related tools:
+
+- `methyl-centroid-explorer`
+- `methyl-detector-explorer`
+- `methyl-cluster`
+- `methyl-validation`
+
+## Packages
+
+The repository ships these primary packages:
+
+- `methylutils`: shared config, I/O, ECDF classifier, statistical utilities
+- `methylcentroid`: centroid building
+- `methyldetector`: DMP detection and classifier packaging
+- `methylclassifier`: sample classification
+- `methylpredictor`: holdout metrics from classifier predictions
+- `methylvalidation`: Monte Carlo / repeated split validation
+- `methylmapper`: DMP-to-gene mapping and optional disease enrichment
+- `methylenricher`: enrichment on mapped gene sets
+- `methylalignmentqc`: alignment QC parsing
+- `methylcluster`: sample clustering and pre-centroid subgroup discovery
 
 ## Documentation
 
-### 📚 Comprehensive Documentation
+Start here:
 
-Deep dives with algorithms, math, and advanced workflows:
+- [Operations manual](docs/OPERATIONS_MANUAL.md)
+- [Unified project config guide](docs/UNIFIED_PROJECT_CONFIG_GUIDE.md)
+- [Config examples](configs/README.md)
+- [Theory and packages](docs/THEORY_AND_PACKAGES.md)
 
-- [Theory and packages](docs/THEORY_AND_PACKAGES.md) – Project and all 10 packages with theoretical foundations (LaTeX formulas)
-- [Operations manual](docs/OPERATIONS_MANUAL.md) – User and developer workflows, CLI reference, troubleshooting
-- [MethylUtils Comprehensive Documentation](packages/methylutils/docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylCentroid Comprehensive Documentation](packages/methylcentroid/docs/METHYLCENTROID_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylCluster Comprehensive Documentation](packages/methylcluster/docs/METHYLCLUSTER_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylDetector Comprehensive Documentation](packages/methyldetector/docs/MethylDetector_Comprehensive_Documentation.md)
-- [MethylClassifier Comprehensive Documentation](packages/methylclassifier/docs/METHYLCLASSIFIER_COMPREHENSIVE_DOCUMENTATION.md)
-- [MethylPipeline Integration Documentation](docs/METHYLPIPELINE_COMPREHENSIVE_DOCUMENTATION.md)
+Package-specific docs:
 
-### 📖 Package READMEs & Guides
+- [MethylCentroid](packages/methylcentroid/README.md)
+- [MethylDetector](packages/methyldetector/README.md)
+- [MethylClassifier](packages/methylclassifier/README.md)
+- [MethylPredictor](packages/methylpredictor/README.md)
+- [MethylValidation](packages/methylvalidation/README.md)
+- [MethylMapper](packages/methylmapper/README.md)
+- [MethylEnricher](packages/methylenricher/README.md)
+- [MethylAlignmentQC](packages/methylalignmentqc/README.md)
+- [MethylCluster](packages/methylcluster/README.md)
 
-- [MethylUtils README](packages/methylutils/README.md)
-- [MethylCentroid README](packages/methylcentroid/README.md)
-- [MethylCluster README](packages/methylcluster/README.md)
-- [MethylDetector README](packages/methyldetector/README.md) | [MethylDetector Explorer](packages/methyldetector/docs/METHYLDETECTOR_EXPLORER.md)
-- [MethylClassifier README](packages/methylclassifier/README.md)
-- [MethylMapper README](packages/methylmapper/README.md) | [Bedtools Quick Start](packages/methylmapper/QUICK_START.md)
-- [MethylEnricher README](packages/methylenricher/README.md)
-- [MethylAlignmentQC README](packages/methylalignmentqc/README.md)
-- [MethylPredictor README](packages/methylpredictor/README.md)
-- [MethylValidation README](packages/methylvalidation/README.md)
+## Repository Layout
 
-### 🏗️ Architecture Documentation
-
-- [Architecture Overview](docs/ARCHITECTURE.md)
-- [Development Guide](docs/DEVELOPMENT.md)
-- [Production Deployment](docs/PRODUCTION.md)
-
-## System Requirements
-
-### Hardware Requirements
-
-#### Minimum (CPU-only)
-- **CPU**: 8 cores, 3.0 GHz+
-- **RAM**: 32 GB
-- **Storage**: 500 GB SSD
-- **Time**: ~50 hours for genome-wide analysis
-
-#### Recommended (GPU)
-- **CPU**: 16 cores, 3.5 GHz+
-- **RAM**: 64 GB
-- **GPU**: NVIDIA GPU with 16 GB+ VRAM (V100, A100, GH200)
-- **Storage**: 1 TB NVMe SSD
-- **Time**: ~4 hours for genome-wide analysis
-
-#### Production (Multi-GPU)
-- **CPU**: 32+ cores
-- **RAM**: 128 GB+
-- **GPU**: 4x NVIDIA A100 (40 GB each) or 1x GH200 (96 GB)
-- **Storage**: 2 TB NVMe SSD
-- **Time**: ~1 hour for genome-wide analysis
-
-### Software Requirements
-
-- **OS**: Linux (Ubuntu 20.04+), macOS (CPU-only)
-- **Python**: 3.10-3.12
-- **CUDA**: 13.0+ (for GPU acceleration)
-- **Docker**: 20.10+ (for containerized deployment)
-
-## Performance Benchmarks
-
-### GPU Acceleration
-
-| Operation | CPU Time | GPU Time | Speedup |
-|-----------|----------|----------|---------|
-| Centroid (35 samples, Chr1) | 15 min | 2 min | 7.5x |
-| Distance Matrix (100 samples) | 500s | 15s | 33x |
-| DMP Detection (1M positions) | 45 min | 3 min | 15x |
-| Binary Search (20 iterations) | 60 min | 5 min | 12x |
-| Classification (100 samples) | 10 min | 1 min | 10x |
-
-### Complete Pipeline (Chr1, CG context)
-
-| Configuration | Time | Speedup |
-|---------------|------|---------|
-| CPU-only | 130 min | 1x |
-| Single GPU | 11 min | 11.8x |
-| Multi-GPU (4x) | 3 min | 43x |
-
-## Examples
-
-### Example 1: Complete Binary Classification
-
-See [MethylPipeline Integration Documentation](docs/METHYLPIPELINE_COMPREHENSIVE_DOCUMENTATION.md#end-to-end-examples) for complete examples.
-
-### Example 2: Multi-Chromosome Analysis
-
-```bash
-# Process all chromosomes in parallel (one config per chromosome)
-for chrom in 1 2 3 X; do
-    CUDA_VISIBLE_DEVICES=$((chrom % 4)) \
-    python -m methyl_detector configs/chr${chrom}-CG.json &
-done
-wait
-```
-
-### Example 3: Quality Control Pipeline
-
-```python
-# 1. Cluster all samples for QC
-from methyl_cluster import MethylCluster, MethylClusterConfig
-
-config = MethylClusterConfig(
-    samples=all_sample_paths,
-    chrom='1',
-    ctx='CG',
-    clustering_method='hdbscan',
-    output_dir='/output/qc'
-)
-
-result = MethylCluster(config).run()
-
-# 2. Remove outliers
-outliers = [s for s, label in result['cluster_assignments'].items() if label == -1]
-good_samples = [s for s in all_sample_paths if s not in outliers]
-
-# 3. Create centroids without outliers
-from methyl_centroid import MethylCentroid
-
-centroid = MethylCentroid(
-    add_samples=good_samples,
-    chrom='1',
-    ctx='CG',
-    centroid_output_path='/centroids/qc_clean'
-).build_centroid()
-```
-
-## Configuration Management
-
-All analyses use JSON configuration files for reproducibility:
-
-```json
-{
-  "study_name": "Healthy vs Cancer CG Methylation",
-  "centroid1_path": "/centroids/healthy/chr1-CG.h5",
-  "centroid2_path": "/centroids/cancer/chr1-CG.h5",
-  "centroid1_name": "Healthy",
-  "centroid2_name": "Cancer",
-  "chrom": "1",
-  "ctx": "CG",
-  "fdr_threshold": 0.01,
-  "min_delta_mean": 0.1,
-  "target_balanced_accuracy": 0.95,
-  "output_dir": "/output/analysis",
-  "use_gpu": true
-}
-```
-
-Run with:
-```bash
-methyl-detector --project configs/your_project.json
-# Or with a detector config file: methyl-detector /configs/analysis.json
-```
-
-## Troubleshooting
-
-### GPU Not Detected
-
-```bash
-# Check NVIDIA driver
-nvidia-smi
-
-# Install CuPy for your CUDA version
-pip install cupy-cuda11x
-
-# Verify detection
-python -c "from methyl_utils import is_gpu_available; print(is_gpu_available())"
-```
-
-### Out of Memory
-
-```python
-# Clean up GPU memory
-from methyl_utils import cleanup_gpu_memory
-cleanup_gpu_memory()
-
-# Or disable GPU
-config.use_gpu = False
-```
-
-### No DMPs Found
-
-```python
-# Relax filtering criteria
-config.fdr_threshold = 0.05  # Instead of 0.01
-config.min_delta_mean = 0.05  # Instead of 0.1
-```
-
-See individual package documentation for detailed troubleshooting guides.
-
-## Project Structure
-
-```
+```text
 MethylPipeline/
-├── packages/                    # Python packages
-│   ├── methylutils/            # Core utilities + GPU helpers
-│   ├── methylcentroid/         # Centroid generation (+ explorer CLI)
-│   ├── methylcluster/          # Sample clustering/QC
-│   ├── methyldetector/         # DMP detection + model packaging (+ explorer CLI)
-│   ├── methylclassifier/       # Classification CLI/API
-│   ├── methylmapper/           # Gene mapping + enrichment hooks
-│   ├── methylenricher/         # Functional enrichment CLI
-│   ├── methylalignmentqc/     # Alignment QC (optional)
-│   ├── methylpredictor/        # Classification metrics on test sets
-│   └── methylvalidation/      # Validation workflows (Monte Carlo, etc.)
-├── docker/                      # Container definitions
-│   ├── Dockerfile
-│   └── docker-compose.yml
-├── scripts/                     # Setup and automation helpers
-│   ├── setup_dev.sh
-│   ├── setup_host.sh
-│   ├── setup_prod.sh
-│   ├── run_container.sh
-│   └── install_all.sh
-├── requirements-pipeline.txt    # Pipeline-level Python deps
-├── requirements-gpu.txt         # GPU/CUDA deps (CUDA 13.x)
-├── docs/                        # Pipeline-level documentation
-│   ├── ARCHITECTURE.md
-│   ├── DEVELOPMENT.md
-│   ├── PRODUCTION.md
-│   └── METHYLPIPELINE_COMPREHENSIVE_DOCUMENTATION.md
-├── mkdocs.yml                   # Documentation site navigation
-├── pyproject.toml               # Repo-level tooling config
-└── README.md                    # This file
+├── packages/
+├── configs/
+├── docs/
+├── docker/
+├── scripts/
+├── requirements-pipeline.txt
+├── requirements-gpu.txt
+└── README.md
 ```
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Update documentation
-5. Submit a pull request
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
-
-```
-MIT License
-
-Copyright (c) 2024 MethylPipeline Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
-
-## Citation
-
-```bibtex
-@software{methylpipeline2024,
-  title={MethylPipeline: Unified Genomics Pipeline for Methylation Analysis},
-  author={MethylPipeline Contributors},
-  year={2024},
-  url={https://github.com/yourusername/MethylPipeline},
-  note={Comprehensive toolkit for methylation-based biomarker discovery and classification with GPU acceleration}
-}
-```
-
-## Support
-
-- **Documentation**: See links above for comprehensive guides
-- **Issues**: [GitHub Issues](https://github.com/yourusername/MethylPipeline/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/MethylPipeline/discussions)
-
----
-
-**MethylPipeline** - Empowering genomics research with statistical rigor, Bayesian methods, and GPU acceleration.
+MIT. See `LICENSE`.

@@ -451,7 +451,7 @@ def classify_samples_from_list(
         print("📌 Model is CG-only: loading only CG context from samples (no CHG/CHH merge)", flush=True)
 
     # Load samples (merged contexts per chromosome, or single context when model is CG-only)
-    loaded_samples = DataLoader.load_samples_from_list(
+    loaded_samples, loaded_indices = DataLoader.load_samples_from_list(
         samples_list, debug=debug, required_chromosomes=required_chromosomes,
         positions=positions, dmp_positions_by_chrom=dmp_positions_by_chrom,
         contexts_to_load=contexts_to_load
@@ -459,6 +459,12 @@ def classify_samples_from_list(
     
     if not loaded_samples:
         raise ValueError("No samples loaded from provided paths")
+    if expected_classes is not None:
+        expected_classes = [
+            expected_classes[i]
+            for i in loaded_indices
+            if i < len(expected_classes)
+        ]
     
     if classifier.is_multi_chromosome:
         # Multi-chromosome mode: extract features per chromosome and combine
@@ -497,9 +503,12 @@ def classify_samples_from_list(
         
         # Convert to single-sample format
         single_samples = []
-        for sample_name, chrom_samples in loaded_samples:
+        single_expected_classes = [] if expected_classes is not None else None
+        for loaded_idx, (sample_name, chrom_samples) in enumerate(loaded_samples):
             if classifier_chrom in chrom_samples:
                 single_samples.append((sample_name, chrom_samples[classifier_chrom]))
+                if single_expected_classes is not None and loaded_idx < len(expected_classes):
+                    single_expected_classes.append(expected_classes[loaded_idx])
             else:
                 print(f"⚠️ Sample {sample_name}: chromosome {classifier_chrom} not found, skipping")
         
@@ -531,10 +540,10 @@ def classify_samples_from_list(
         _save_classification_results(
             classifier, sample_names, predictions, probabilities,
             availability_mask, dmp_positions, output_file,
-            expected_classes=expected_classes
+            expected_classes=single_expected_classes
         )
-        if expected_classes is not None and len(expected_classes) == len(sample_names):
-            _print_validation_report(classifier, sample_names, predictions, probabilities, expected_classes)
+        if single_expected_classes is not None and len(single_expected_classes) == len(sample_names):
+            _print_validation_report(classifier, sample_names, predictions, probabilities, single_expected_classes)
 
 
 def _classify_single_file_multichrom_dmps(
@@ -680,63 +689,26 @@ def _classify_multi_chromosome_samples(
             l1_ratio=l1_ratio,
         )
     
-    # Get combined predictions from multi-chromosome classifier
-    # We need to concatenate all chromosome features for the classifier
-    # But the current implementation expects concatenated data, which is complex
-    # Let's use a simpler approach: run each chromosome classifier separately and combine
-    
     print(f"\n🤖 Classifying using {len(classifier_chroms)} chromosome classifier(s)...")
     
     n_samples = len(sample_names)
-    n_classes = classifier.n_classes
-    
-    # Initialize weighted probability sum
-    weighted_probas = np.zeros((n_samples, n_classes))
+    probabilities, per_chrom_probas = classifier._combine_chromosome_probabilities(
+        chrom_features,
+        chrom_masks,
+        debug=debug,
+    )
+    predictions = np.argmax(probabilities, axis=1)
 
-    # Initialize chromosome probability matrix if requested
+    # Optional chromosome probability matrix (store class-0 probabilities for continuity with existing output)
     chrom_proba_matrix = None
     chromosome_matrix_file = None
     if classifier.config.chromosome_matrix_path is not None:
         chromosome_matrix_file = Path(classifier.config.chromosome_matrix_path)
         chrom_proba_matrix = np.zeros((n_samples, len(classifier_chroms)))
-
-    for i, chrom in enumerate(classifier_chroms):
-        weight = classifier.chromosome_weights.get(chrom, 0.0)
-
-        if weight == 0.0:
-            continue
-
-        chrom_classifier = classifier.classifiers[chrom]
-
-        # Get probabilities from this chromosome
-        try:
-            chrom_probas = chrom_classifier.predict_proba(
-                chrom_features[chrom],
-                chrom_masks[chrom],
-                debug=False
-            )
-
-            # Weight and accumulate
-            weighted_probas += weight * chrom_probas
-
-            # Store per-chromosome probabilities for matrix (using class 0 probability)
-            if chrom_proba_matrix is not None:
+        for i, chrom in enumerate(classifier_chroms):
+            chrom_probas = per_chrom_probas.get(chrom)
+            if chrom_probas is not None:
                 chrom_proba_matrix[:, i] = chrom_probas[:, 0]
-
-            if debug:
-                print(f"  Chromosome {chrom} (weight={weight:.4f}): avg probas={np.mean(chrom_probas, axis=0)}")
-        except Exception as e:
-            if debug:
-                print(f"  ⚠️ Chromosome {chrom} prediction failed: {e}")
-            continue
-    
-    # Normalize probabilities
-    proba_sums = np.sum(weighted_probas, axis=1, keepdims=True)
-    proba_sums = np.where(proba_sums == 0, 1.0, proba_sums)
-    probabilities = weighted_probas / proba_sums
-    
-    # Get predictions
-    predictions = np.argmax(probabilities, axis=1)
 
     # Diagnostic summary (helps spot collapse to one class)
     prob_c0 = probabilities[:, 0]
@@ -749,18 +721,17 @@ def _classify_multi_chromosome_samples(
         print("   ⚠️ Most predictions are near 0 or 1. If unexpected, check: DMP coverage (dmps_used in CSV), "
               "temperature in config, or run with --debug.")
 
-    # Get combined feature info for output
-    first_chrom = classifier_chroms[0]
-    feature_info = classifier.classifiers[first_chrom].get_feature_info()
-    dmp_positions = feature_info['positions']  # Just for display, actual DMPs are per-chromosome
-    
-    # Create combined availability mask (any chromosome available)
-    combined_mask = np.zeros((n_samples, len(dmp_positions)), dtype=bool)
-    for chrom in classifier_chroms:
-        if chrom in chrom_masks and len(chrom_masks[chrom]) > 0:
-            # Merge masks (simplified - just use first chromosome's mask structure)
-            if combined_mask.shape[1] == chrom_masks[chrom].shape[1]:
-                combined_mask |= chrom_masks[chrom]
+    # Flatten per-chromosome masks/positions so dmps_used and dmps_total reflect the full model.
+    dmp_positions = np.concatenate(
+        [
+            np.asarray(classifier.classifiers[chrom].get_feature_info()["positions"], dtype=np.uint32)
+            for chrom in classifier_chroms
+        ]
+    )
+    combined_mask = np.concatenate(
+        [chrom_masks[chrom] for chrom in classifier_chroms],
+        axis=1,
+    )
     
     # Save results
     _save_classification_results(
@@ -1212,7 +1183,7 @@ Config fields (in JSON):
         '--project', '-p',
         type=Path,
         metavar='JSON',
-        help='Path to pipeline project config; builds config from detection/centroid/classifier dirs'
+        help='Path to pipeline project config; resolves classifier models, inputs, and outputs from the shared project layout'
     )
     parser.add_argument(
         '--step-override',
@@ -1223,9 +1194,9 @@ Config fields (in JSON):
     parser.add_argument(
         '--per-cancer-group',
         action='store_true',
-        help='With --project: run one classifier per disease group. '
-             'Uses model from detection/<disease_label>/<group> and writes to classifier/<disease_label>/<group>/classification_results.csv '
-             '(e.g. detection/cancer/pca1-1, classifier/cancer/pca1-1). Auto-enabled when project uses controls/diseases + comparisons.'
+        help='With --project: run one classifier per comparison. '
+             'Uses models from the matching comparison directory and writes to classifiers/<control>/<disease>/classification_results.csv. '
+             'Auto-enabled when the project uses controls/diseases + comparisons.'
     )
     
     parser.add_argument(
@@ -1276,8 +1247,8 @@ Config fields (in JSON):
             raise ValueError("Use either --config or --project, not both.")
         if not args.project.exists():
             raise FileNotFoundError(f"Project config not found: {args.project}")
-        # Use per-comparison folder pattern (detection/cancer/{label}, classifier/cancer/{label}) when
-        # project uses control/disease, so classifier follows same layout as MethylDetector/MethylMapper.
+        # Use per-comparison folder pattern (detections/<control>/<disease>,
+        # classifiers/<control>/<disease>) when the project uses control/disease.
         use_per_comparison = getattr(args, 'per_cancer_group', False)
         if load_project is not None:
             project = load_project(args.project)

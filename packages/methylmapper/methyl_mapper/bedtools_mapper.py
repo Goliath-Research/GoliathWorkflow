@@ -1394,7 +1394,7 @@ class BedtoolsMapper:
         chromosome (all contexts combined), matching spMapDMP2Genes behavior.
 
         Args:
-            csv_pattern: Glob pattern for CSV files (e.g., "dmps-*-3-optimized.csv")
+            csv_pattern: Glob pattern for CSV files (e.g., "dmps-*.csv")
                         Can be absolute path or relative to current directory
             output_dir: Output directory for results. If None, uses CSV directory.
             group_by: Feature to group by ('gene_name', 'transcript_id', etc.)
@@ -1407,7 +1407,7 @@ class BedtoolsMapper:
         """
         csv_path = Path(csv_pattern)
 
-        # Support path-level wildcard (e.g. /path/to/detection/cancer/*/dmps-*.csv) for per-group detection dirs
+        # Support path-level wildcards such as /path/to/detections/*/*/dmps-*.csv for comparison dirs
         path_wildcard = "/*/"
         if path_wildcard in csv_pattern:
             base_str, _, rest = csv_pattern.partition(path_wildcard)

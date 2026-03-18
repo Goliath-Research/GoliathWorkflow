@@ -19,6 +19,7 @@ So the “theory” behind MethylPredictor is standard **supervised evaluation**
 - **test_disease_paths**: Sample directories (or paths from a CSV) for the **disease** group. These are assigned **expected class 1**.
 
 Samples should be **independent** of the data used to build centroids and train the classifier (true holdout) so that reported metrics reflect generalization.
+If one or more input samples cannot be loaded, those samples are skipped before scoring and the expected labels are realigned to the successfully scored rows only.
 
 ## Metrics Reported
 
@@ -42,4 +43,4 @@ All of these are written to **validation_metrics.json** and summarized in the co
 | Output | validation_metrics.json (all metrics), predictions.csv (per-sample predictions and expected class) |
 | Theory | Standard classification evaluation; no new probabilistic model |
 
-For how the classifier itself works (Beta likelihoods, posterior), see MethylClassifier documentation. For implementation details (MethylClassifier, metrics computation), see [METHYLPREDICTOR_IMPLEMENTATION.md](METHYLPREDICTOR_IMPLEMENTATION.md).
+For how the classifier itself works (ECDF likelihoods, posterior, chromosome weighting), see MethylClassifier documentation. For implementation details (MethylClassifier, metrics computation), see [METHYLPREDICTOR_IMPLEMENTATION.md](METHYLPREDICTOR_IMPLEMENTATION.md).

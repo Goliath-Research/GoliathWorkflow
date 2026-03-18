@@ -18,24 +18,48 @@ def resolve_alignment_qc_config(
     """
     Build AlignmentQCConfig from a project config and optional step overrides.
 
-    Sample paths are concatenated from group1 and group2 (or restricted by
-    step_config "groups"). Output directory is paths.alignment_qc_dir.
+    By default all resolved groups are included. `step_config.alignment_qc.groups`
+    may restrict the set using any mix of:
+    - `all`
+    - `control`
+    - `disease`
+    - `group1`, `group2`
+    - explicit resolved group labels
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
+    resolved = project.get_resolved_groups()
+    resolved_with_side = project._get_resolved_groups_with_side()
+    paths_by_label = {label: list(group_paths) for label, group_paths in resolved}
 
-    # Default: all samples from both groups
+    # Default: all samples from all resolved groups
     sample_paths: List[str] = []
     step_cfg = project.get_step_config("alignment_qc")
     groups = step_cfg.get("groups") if step_cfg else None
     if groups is not None:
+        seen = set()
         for g in groups:
-            if g == "group1":
-                sample_paths.extend(project.get_group1_sample_paths())
+            selected: List[str] = []
+            if g == "all":
+                for _, group_paths in resolved:
+                    selected.extend(group_paths)
+            elif g == "group1":
+                selected.extend(project.get_group1_sample_paths())
             elif g == "group2":
-                sample_paths.extend(project.get_group2_sample_paths())
+                selected.extend(project.get_group2_sample_paths())
+            elif g in {"control", "disease"}:
+                for _, group_paths, side in resolved_with_side:
+                    if side == g:
+                        selected.extend(group_paths)
+            else:
+                selected.extend(paths_by_label.get(g, []))
+            for sample_path in selected:
+                if sample_path not in seen:
+                    sample_paths.append(sample_path)
+                    seen.add(sample_path)
     else:
-        sample_paths = project.get_group1_sample_paths() + project.get_group2_sample_paths()
+        for _, group_paths in resolved:
+            sample_paths.extend(group_paths)
 
     base: Dict[str, Any] = {
         "sample_paths": sample_paths,

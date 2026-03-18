@@ -6,16 +6,16 @@ This document describes how MethylDetector is implemented on top of **MethylUtil
 
 ## Architecture
 
-- **MethylUtils** owns centroid comparison math: histogram-derived Mann-Whitney U, two-stage BH FDR correction, ECDF overlap, `effect_size`, heterogeneity (`tau2`), and `ECDFClassifier`.
-- **MethylDetector** owns the pipeline: config, per-chromosome/context orchestration, staged filtering, optional rescue track, held-out validation, classifier invocation, and exports.
+- **MethylUtils** owns centroid comparison math: KS-on-ECDF or histogram-derived Mann-Whitney U, Storey q-values, ECDF overlap, `effect_size`, heterogeneity (`tau2`), and `ECDFClassifier`.
+- **MethylDetector** owns the pipeline: config, per-chromosome/context orchestration, staged filtering, optional rescue track, optional validation helpers, classifier invocation, and exports.
 
 ```mermaid
 flowchart LR
     Config[JSON Config]
     Detector[MethylDetector]
     Pair[MethylCentroidPair]
-    MWU[Mann-Whitney U]
-    FDR[fdr_tsbh]
+    Test[KS_ECDF_or_MWU]
+    FDR[Storey_qvalue]
     ECDF[Continuous ECDF overlap]
     Effect[effect_size formula]
     Filter[Per-context effect_size_coverage]
@@ -25,8 +25,8 @@ flowchart LR
 
     Config --> Detector
     Detector --> Pair
-    Pair --> MWU
-    MWU --> FDR
+    Pair --> Test
+    Test --> FDR
     FDR --> ECDF
     ECDF --> Effect
     Effect --> Filter
@@ -44,8 +44,8 @@ flowchart LR
 The primary comparison entry point.
 
 - Aligns centroids to common positions; applies `position_subset` to restrict the comparison when a pre-filter has already reduced the candidate set.
-- Runs the histogram-derived Mann-Whitney U test on every aligned position in the MethylDetector path.
-- Applies Two-Stage Benjamini-Hochberg FDR correction.
+- Runs the configured significance test on every aligned position in the MethylDetector path: `ks_ecdf` by default, `mann_whitney` as the alternative.
+- Applies Storey q-value correction on the resulting p-values.
 - Returns a DataFrame with columns: `position`, `p_value`, `q_value`, `mean1`, `mean2`, `delta_mean`, `delta_sign`, `variance1`, `variance2`, `tau2_1`, `tau2_2`, `n1`, `n2`, `overlap_approx`, `effect_size`, `dist` (always `DIST_ECDF = 5`).
 
 ### `load_and_align(path1, path2, min_coverage=...)`
@@ -95,7 +95,12 @@ Computes `|mean1 - mean2|` from centroid means (`Sx/N`) at positions already sha
 
 ### 3. Statistical gate + FDR
 
-Run `mann_whitney_from_bin_counts` on all pre-filtered positions, then apply two-stage BH correction (`fdr_tsbh`). Retain positions with `q_value <= alpha`.
+Run the configured significance test on all pre-filtered positions:
+
+- `ks_ecdf` (default): KS statistic on the precise ECDF / PCHIP view.
+- `mann_whitney`: `mann_whitney_from_bin_counts` reconstructed from centroid histograms.
+
+Then apply Storey q-values and retain positions with `q_value <= alpha`.
 
 ### 4. Lazy ECDFView construction
 
@@ -122,9 +127,11 @@ Within each context independently, sort by `effect_size` descending and keep the
 
 Optional rescue track: after the same statistical comparison, non-significant loci can be selected separately with `biological_only_effect_size_coverage`; these rows are flagged with `statistical_dmp=False` / `biological_dmp=True` so they are never confused with confirmed statistical DMPs.
 
-### 7. Held-out validation and top-k selection
+### 7. Export handoff and optional validation helpers
 
-Real validation samples are loaded once, aligned to the DMP order, and split into repeated stratified holdouts (`validation_split_ratio`, `validation_n_repeats`). MethylDetector caches ECDF log-likelihoods for the full sorted DMP table, then evaluates prefix subsets (`top-k`) without rebuilding the classifier for each `k`.
+`_select_dmps_multicontext()` currently returns the full biological funnel output sorted by `effect_size` and does not run top-k optimization on the active export path. If `max_dmps_for_classifier` is set, the classifier is capped to the top rows by `effect_size` after the biological filter.
+
+Validation helpers and legacy optimization code still exist in the module, but they are not the default path used when exporting `dmps-*.csv` and classifier packages.
 
 ---
 
@@ -147,11 +154,12 @@ Groups DMPs by chromosome × context, loads the corresponding centroid H5 files 
 ### ECDFClassifier prediction
 
 ```
-log L(class_k | x) = Σ_i  w_i · log F'_k_i(x_i)
-P(class_k | x) ∝ exp( log L / T )
+mean_log_L(class_k | x) = Σ_i w_i · clamp(log F'_k_i(x_i), cap) / Σ_i w_i
+P(class_k | x) = softmax(mean_log_L / T_eff)
+T_eff = temperature * sqrt(n_effective)
 ```
 
-Per-position PCHIP PDF values are pre-computed into a dense lookup table at construction time; prediction uses `np.interp` (no Python loop over samples). Supports NaN positions (contribute zero to the log-likelihood sum), Platt calibration, `.save()`/`.load()` via `.npz`.
+Per-position PCHIP PDF values are pre-computed into a dense lookup table at construction time; prediction uses `np.interp` (no Python loop over samples). The classifier caps extremely small per-position log-PDF values, averages the weighted log-likelihood across available positions, and scales temperature by the effective number of weighted loci so large DMP sets remain numerically stable.
 
 ---
 
@@ -169,11 +177,11 @@ The classifier model is saved as a `.pkl` package containing:
 
 | Layer | Component | Role |
 |-------|-----------|------|
-| MethylUtils | `MethylCentroidPair` | Centroid load, align, compare (Mann-Whitney U + FDR + initial effect_size + tau2) |
-| MethylUtils | `statistical_tests` | Mann-Whitney U, ecdf_overlap_integral, effect_size_from_components |
+| MethylUtils | `MethylCentroidPair` | Centroid load, align, compare (KS or Mann-Whitney + Storey q-values + initial effect_size + tau2) |
+| MethylUtils | `statistical_tests` | KS support, Mann-Whitney U, Storey q-values, ecdf_overlap_integral, effect_size_from_components |
 | MethylUtils | `ECDFView` | Lazy PCHIP CDF/PDF for DMP positions only |
 | MethylUtils | `ECDFClassifier` | PCHIP PDF log-likelihood classifier, save/load |
 | MethylUtils | GPU/memory | Device selection, memory management |
-| MethylDetector | `MethylDetector` | Config, orchestration, pre-filter, biological filter, held-out validation, classifier invocation, export |
+| MethylDetector | `MethylDetector` | Config, orchestration, pre-filter, biological filter, optional rescue/validation helpers, classifier invocation, export |
 
 For theoretical background, see [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md).

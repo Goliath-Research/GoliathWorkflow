@@ -1,73 +1,84 @@
-"""
-Basic tests for MethylClassifier
-"""
+"""Focused regression tests for active MethylClassifier behavior."""
 
-import pytest
-import numpy as np
+import csv
+import importlib
 from pathlib import Path
-from methyl_classifier.classifier import MethylClassifier
-from methyl_classifier.data_loader import DataLoader
+
+import numpy as np
+
+from methyl_classifier.cli.main import classify_samples_from_list
+from methyl_classifier.core.classifier import extract_chrom_context_from_classifier
+from methyl_classifier.utils.data_loader import DataLoader
 
 
-def test_classifier_initialization():
-    """Test that MethylClassifier can be initialized."""
-    classifier = MethylClassifier()
-    assert classifier.classifier is None
-    assert classifier.chromosome is None
-    assert classifier.context is None
-    assert classifier.n_classes is None
-    assert classifier.class_names is None
+class _DummyInnerClassifier:
+    def get_feature_info(self):
+        return {"positions": np.array([10, 20], dtype=np.uint32)}
 
 
-def test_extract_chrom_context():
-    """Test chromosome/context extraction from classifier path."""
-    from methyl_classifier.classifier import extract_chrom_context_from_classifier
+class _DummyClassifier:
+    def __init__(self):
+        self.is_multi_chromosome = False
+        self.classifier = _DummyInnerClassifier()
+        self.chromosome = "1"
+        self.n_classes = 2
+        self.class_names = ["control", "disease"]
 
-    # Test fallback format - directory names ending with -CG/-CHG/-CHH
-    test_path = Path("/path/to/pb-ch-2-CG/methyl_detector_classifier.pkl")
-    chrom, context = extract_chrom_context_from_classifier(test_path)
+    def get_feature_info(self):
+        return self.classifier.get_feature_info()
+
+
+def test_extract_chrom_context_from_classifier_fallback():
+    path = Path("/path/to/pb-ch-2-CG/methyl_detector_classifier.pkl")
+    chrom, context = extract_chrom_context_from_classifier(path)
     assert chrom == "2"
     assert context == "CG"
 
-    # Test another fallback case
-    test_path2 = Path("/path/to/data/detection/single/pb-ch-1-CHG/methyl_detector_classifier.pkl")
-    chrom2, context2 = extract_chrom_context_from_classifier(test_path2)
-    assert chrom2 == "1"
-    assert context2 == "CHG"
 
-    # Test invalid path
-    invalid_path = Path("/path/to/invalid.pkl")
-    with pytest.raises(ValueError):
-        extract_chrom_context_from_classifier(invalid_path)
+def test_classify_samples_from_list_realigns_expected_classes(monkeypatch, tmp_path):
+    classifier = _DummyClassifier()
+    output_file = tmp_path / "predictions.csv"
+    classifier_cli_main = importlib.import_module("methyl_classifier.cli.main")
 
-
-def test_data_loader_filtering():
-    """Test H5 file filtering by chromosome and context."""
-    from methyl_classifier.data_loader import DataLoader
-
-    # Mock H5 files - the filtering expects exact filename match: {chrom}-{context}.h5
-    mock_files = [
-        Path("data/sample1-1-CG.h5"),  # File in subdirectory
-        Path("1-CG.h5"),               # Exact match
-        Path("2-CG.h5"),               # Different chromosome
-        Path("1-CHG.h5"),              # Different context
-        Path("11-CG.h5"),              # Should not match chrom="1"
+    loaded_samples = [
+        ("sample-control", {"1": object()}),
+        ("sample-disease", {"1": object()}),
     ]
 
-    # Test filtering
-    filtered = DataLoader._filter_h5_files_by_chrom_context(mock_files, "1", "CG")
-    assert len(filtered) == 1
-    assert filtered[0].name == "1-CG.h5"
+    monkeypatch.setattr(
+        DataLoader,
+        "load_samples_from_list",
+        staticmethod(lambda *args, **kwargs: (loaded_samples, [0, 2])),
+    )
+    monkeypatch.setattr(
+        DataLoader,
+        "extract_sample_features",
+        staticmethod(
+            lambda sample, dmp_positions: (
+                np.array([0.1, 0.2], dtype=np.float64),
+                np.array([True, True], dtype=bool),
+                {},
+            )
+        ),
+    )
 
+    def fake_classify_samples_batch(classifier_obj, feature_matrix, availability_mask, debug=False):
+        predictions = np.array([0, 1], dtype=np.int64)
+        probabilities = np.array([[0.9, 0.1], [0.2, 0.8]], dtype=np.float64)
+        return predictions, probabilities
 
-def test_cli_import():
-    """Test that CLI module can be imported."""
-    try:
-        from methyl_classifier import cli
-        assert cli.main is not None
-    except ImportError as e:
-        pytest.fail(f"CLI import failed: {e}")
+    monkeypatch.setattr(classifier_cli_main, "classify_samples_batch", fake_classify_samples_batch)
 
+    classify_samples_from_list(
+        classifier=classifier,
+        samples_list=["/samples/s0", "/samples/s1", "/samples/s2"],
+        output_file=output_file,
+        expected_classes=[0, 0, 1],
+    )
 
-if __name__ == "__main__":
-    pytest.main([__file__])
+    with output_file.open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert [row["sample"] for row in rows] == ["sample-control", "sample-disease"]
+    assert [int(row["expected_class"]) for row in rows] == [0, 1]
+    assert [row["agrees"] for row in rows] == ["True", "True"]

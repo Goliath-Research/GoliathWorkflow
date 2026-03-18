@@ -35,7 +35,7 @@ def load_config_from_json(config_path: Path) -> MethylMapperConfig:
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="MethylMapper - Map DMPs to genes using Azure SQL Database",
+        description="MethylMapper - Legacy Azure SQL DMP-to-gene mapping",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -182,7 +182,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
 
 
 def main():
-    """Main entry point for MethylMapper CLI. With --project, runs bedtools flow (same as methyl_mapper_bedtools)."""
+    """Main entry point for MethylMapper CLI. With --project, runs the bedtools-based flow."""
     if '--project' in sys.argv or '-P' in sys.argv:
         return main_bedtools()
     args = parse_args()
@@ -256,22 +256,19 @@ def parse_bedtools_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Map optimized DMPs from all chromosomes
-  methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf gencode.v44.annotation.gtf
-  
-  # Map with custom output directory
-  methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf gencode.v44.annotation.gtf \\
-                         --output-dir mapped_features
-  
-  # Group by transcript instead of gene
-  methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf gencode.v44.annotation.gtf \\
-                         --group-by transcript_id
-  
-  # Disable weighting by p-value
-  methyl_mapper_bedtools --csv-pattern "dmps-*-3-optimized.csv" --gtf gencode.v44.annotation.gtf \\
-                         --no-p-value-weight
+  # Project-driven run (recommended)
+  methyl-mapper --project project.json
 
-For more information, visit: https://github.com/your-org/methyl_mapper
+  # Direct run over detector CSVs
+  methyl_mapper_bedtools --csv-pattern "/path/to/dmps-*.csv" --gtf gencode.v44.annotation.gtf
+
+  # Map with custom output directory
+  methyl_mapper_bedtools --csv-pattern "/path/to/dmps-*.csv" --gtf gencode.v44.annotation.gtf \\
+                         --output-dir mapped_features
+
+  # Group by transcript instead of gene
+  methyl_mapper_bedtools --csv-pattern "/path/to/dmps-*.csv" --gtf gencode.v44.annotation.gtf \\
+                         --group-by transcript_id
         """
     )
     
@@ -565,7 +562,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         type=str,
         default=None,
         metavar='JSON',
-        help='Path to pipeline project config; sets input CSVs from detection dir and output to mapper dir'
+        help='Path to pipeline project config; resolves detector CSV inputs and mapper outputs from the shared project layout'
     )
     parser.add_argument(
         '--step-override',
@@ -592,7 +589,7 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     group_group.add_argument(
         '--group',
         type=str,
-        help='Single subtype/group to process with --project (e.g. "pca2" → detection/cancer/pca2/dmps-*.csv → mapper/cancer/pca2)'
+        help='Single disease group to process with --project (e.g. "pca2" -> detections/<control>/pca2 -> mapper/<control>/pca2)'
     )
 
     parser.add_argument(
@@ -603,13 +600,13 @@ For more information, visit: https://github.com/your-org/methyl_mapper
     
     args = parser.parse_args()
 
-    # Apply --project first (sets default csv_pattern and output_dir, or per-cancer-group list)
+    # Apply --project first (sets default csv_pattern and output_dir, or per-comparison list)
     if args.project:
         project_path = Path(args.project)
         if not project_path.exists():
             raise FileNotFoundError(f"Project config not found: {project_path}")
         step_override = Path(args.step_override) if args.step_override else None
-        # Use per-cancer-group layout (mapper/cancer/<label> per group) when project has multiple groups
+        # Use per-comparison layout (mapper/<control>/<disease> per comparison) when project has multiple groups
         per_group = resolve_mapper_paths_per_cancer_group(project_path, step_override)
         if per_group:
             # Restrict to single group when --group is set (e.g. --group pca1)
@@ -839,9 +836,9 @@ def main_bedtools():
             extend_after_stable=not getattr(args, 'no_extend_after_stable', False),
         )
         
-        # Run per cancer group (mapper/cancer/<label>) or single run
+        # Run per comparison (mapper/<control>/<disease>) or single run
         if per_group:
-            logger.info(f"Running mapper for {len(per_group)} cancer group(s) -> mapper/cancer/<group>")
+            logger.info(f"Running mapper for {len(per_group)} comparison(s)")
             all_results = {}
             for paths, label in per_group:
                 logger.info(f"\n{'='*70}")
@@ -856,7 +853,7 @@ def main_bedtools():
                 all_results[label] = group_results
             results = {k: v for sub in all_results.values() for k, v in sub.items()}
             logger.info("\n" + "="*70)
-            logger.info("✅ Bedtools mapping complete (per-cancer-group)!")
+            logger.info("✅ Bedtools mapping complete (per comparison)!")
             logger.info("="*70)
             for label, group_results in all_results.items():
                 n_files = len(group_results)

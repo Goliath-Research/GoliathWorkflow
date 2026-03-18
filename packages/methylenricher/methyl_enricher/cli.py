@@ -340,7 +340,7 @@ def main():
             enricher_config = EnricherStepConfig.model_validate(step_cfg)
             _apply_enricher_config_to_args(args, enricher_config)
         step_override = Path(args.step_override) if args.step_override else None
-        # Use per-cancer-group layout (enricher/cancer/<label> per group) when project has multiple groups
+        # Use per-comparison layout (enricher/<control>/<disease> per comparison) when project has multiple groups
         per_group = resolve_enricher_paths_per_cancer_group(project_path, step_override)
         if per_group and args.input is None and (args.outdir == "results" or args.outdir is None):
             args.enricher_per_group = per_group
@@ -377,7 +377,7 @@ def main():
     print("MethylEnricher - Gene Enrichment Analysis")
     print("=" * 70)
     if per_group:
-        print(f"Per-cancer-group: {len(per_group)} group(s) -> enricher/cancer/<group>")
+        print(f"Per comparison: {len(per_group)} run(s)")
         input_path = None
     else:
         input_path = Path(args.input)
@@ -484,7 +484,7 @@ def main():
 
     try:
         if per_group:
-            # Run enrichment once per cancer group (input from mapper/cancer/<label>, output to enricher/cancer/<label>)
+            # Run enrichment once per comparison (input from mapper/<control>/<disease>, output to enricher/<control>/<disease>)
             for paths, label in per_group:
                 inp = Path(paths.input_file)
                 if not inp.exists():
@@ -502,7 +502,7 @@ def main():
                     print(f"[WARN] No enrichment results for {label}.")
                 else:
                     print(f"[OK] {label}: results saved to {paths.output_dir}")
-            msg = "Per-cancer-group module pipeline complete!" if getattr(args, "modules", False) else "Per-cancer-group enrichment complete!"
+            msg = "Per-comparison module pipeline complete!" if getattr(args, "modules", False) else "Per-comparison enrichment complete!"
             print(f"\n[SUCCESS] {msg}")
             sys.exit(0)
         else:

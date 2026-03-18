@@ -1,8 +1,12 @@
 """
-Resolve MethylEnricher paths from a pipeline project config.
-Uses the same layout as MethylDetector/MethylMapper: when the project has multiple
-groups, mapper outputs live under mapper/cancer/<label> and enricher should write
-to enricher/cancer/<label> per group.
+Resolve MethylEnricher paths from a project config.
+
+The canonical downstream layout is comparison-based, matching mapper outputs:
+
+    mapper/<control_group>/<disease_group>/
+    enricher/<control_group>/<disease_group>/
+
+Legacy flat-group projects are normalized onto the same directory contract.
 """
 
 from pathlib import Path
@@ -11,8 +15,6 @@ from typing import List, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
-
-DISEASE_SUBDIR_DEFAULT = "cancer"
 
 
 class EnricherStepPaths(BaseModel):
@@ -32,7 +34,7 @@ def resolve_enricher_paths_per_cancer_group(
     project_path: Path,
     step_override_path: Optional[Path] = None,
     control_index: int = 0,
-    disease_subdir: str = DISEASE_SUBDIR_DEFAULT,
+    disease_subdir: str = "cancer",  # deprecated compatibility argument; comparison layout is canonical
     combined_csv_name: str = "all-gene_name-combined.csv",
 ) -> List[Tuple[EnricherStepPaths, str]]:
     """
@@ -40,8 +42,8 @@ def resolve_enricher_paths_per_cancer_group(
     When project uses control/disease + comparisons: one entry per get_comparisons().
     Otherwise: one per non-control group (flat groups).
 
-    Returns:
-        List of (EnricherStepPaths, comparison_label) for each comparison.
+    `disease_subdir` is ignored for the canonical comparison layout and is only
+    kept to avoid breaking older callers.
     """
     project = load_project(project_path)
     step_cfg = project.get_step_config("enricher") or {}
@@ -62,20 +64,17 @@ def resolve_enricher_paths_per_cancer_group(
             out.append((EnricherStepPaths(input_file=input_file, output_dir=enr_dir), comp_label))
         return out
 
-    paths = project.get_derived_paths()
     resolved = getattr(project, "get_resolved_groups", lambda: [])()
     if len(resolved) < 2:
         return []
-    mapper_dir = Path(paths.mapper_dir)
-    enricher_dir = Path(paths.enricher_dir)
-    disease_subdir = step_cfg.get("disease_subdir") or disease_subdir
+    control_label = resolved[control_index][0]
     out = []
     for i in range(len(resolved)):
         if i == control_index:
             continue
         label = resolved[i][0]
-        input_file = str(mapper_dir / disease_subdir / label / csv_name)
-        output_dir = str(enricher_dir / disease_subdir / label)
+        input_file = str(Path(project.get_mapper_output_dir(control_label, label)) / csv_name)
+        output_dir = project.get_enricher_output_dir(control_label, label)
         out.append((EnricherStepPaths(input_file=input_file, output_dir=output_dir), label))
     return out
 

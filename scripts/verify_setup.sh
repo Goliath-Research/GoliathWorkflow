@@ -1,216 +1,194 @@
 #!/bin/bash
-# Verification script to check MethylPipeline setup
-# Run this on the host machine
+# Verification script for repository structure and common local tooling.
 
-set -e
-
-echo "============================================="
-echo "MethylPipeline Setup Verification"
-echo "============================================="
-echo ""
+set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
-echo "📁 Project root: $PROJECT_ROOT"
-echo ""
-
-# Color codes
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Check functions
-check_pass() {
-    echo -e "${GREEN}✓${NC} $1"
-}
+pass() { echo -e "${GREEN}✓${NC} $1"; }
+fail() { echo -e "${RED}✗${NC} $1"; }
+warn() { echo -e "${YELLOW}!${NC} $1"; }
 
-check_fail() {
-    echo -e "${RED}✗${NC} $1"
-}
-
-check_warn() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
-echo "🔍 Checking directory structure..."
+echo "============================================="
+echo "MethylPipeline Verification"
+echo "============================================="
+echo ""
+echo "Project root: $PROJECT_ROOT"
 echo ""
 
-# Check main directories
-if [ -d "$PROJECT_ROOT/packages" ]; then
-    check_pass "packages/ directory exists"
-else
-    check_fail "packages/ directory missing"
-fi
+echo "Checking repository structure..."
 
-if [ -d "$PROJECT_ROOT/docker" ]; then
-    check_pass "docker/ directory exists"
-else
-    check_fail "docker/ directory missing"
-fi
-
-if [ -d "$PROJECT_ROOT/scripts" ]; then
-    check_pass "scripts/ directory exists"
-else
-    check_fail "scripts/ directory missing"
-fi
-
-if [ -d "$PROJECT_ROOT/docs" ]; then
-    check_pass "docs/ directory exists"
-else
-    check_fail "docs/ directory missing"
-fi
+ROOT_DIRS=("packages" "configs" "docs" "scripts" "docker")
+for dir in "${ROOT_DIRS[@]}"; do
+  if [ -d "$PROJECT_ROOT/$dir" ]; then
+    pass "$dir/"
+  else
+    fail "$dir/ missing"
+  fi
+done
 
 echo ""
-echo "🔍 Checking packages..."
-echo ""
+echo "Checking core packages..."
 
-# Check packages
-PACKAGES=("methylutils" "methylcentroid" "methylcluster" "methyldetector" "methylclassifier" "methylmapper" "methylenricher")
+PACKAGES=(
+  "methylutils"
+  "methylcentroid"
+  "methylcluster"
+  "methyldetector"
+  "methylmapper"
+  "methylclassifier"
+  "methylenricher"
+  "methylalignmentqc"
+  "methylpredictor"
+  "methylvalidation"
+)
+
 for pkg in "${PACKAGES[@]}"; do
-    if [ -d "$PROJECT_ROOT/packages/$pkg" ]; then
-        if [ -f "$PROJECT_ROOT/packages/$pkg/setup.py" ]; then
-            check_pass "$pkg (with setup.py)"
-        elif [ -f "$PROJECT_ROOT/packages/$pkg/pyproject.toml" ]; then
-            check_pass "$pkg (with pyproject.toml)"
-        else
-            check_warn "$pkg (missing setup.py or pyproject.toml)"
-        fi
+  if [ -d "$PROJECT_ROOT/packages/$pkg" ]; then
+    if [ -f "$PROJECT_ROOT/packages/$pkg/pyproject.toml" ] || [ -f "$PROJECT_ROOT/packages/$pkg/setup.py" ]; then
+      pass "packages/$pkg"
     else
-        check_fail "$pkg (missing)"
+      warn "packages/$pkg present but missing pyproject.toml/setup.py"
     fi
+  else
+    fail "packages/$pkg missing"
+  fi
 done
 
 echo ""
-echo "🔍 Checking Docker files..."
-echo ""
+echo "Checking key docs..."
 
-# Check Docker files
-if [ -f "$PROJECT_ROOT/docker/Dockerfile" ]; then
-    check_pass "Dockerfile"
-else
-    check_fail "Dockerfile missing"
-fi
+DOCS=(
+  "README.md"
+  "docs/OPERATIONS_MANUAL.md"
+  "docs/UNIFIED_PROJECT_CONFIG_GUIDE.md"
+  "docs/THEORY_AND_PACKAGES.md"
+  "configs/README.md"
+)
 
-if [ -f "$PROJECT_ROOT/docker/Dockerfile.production" ]; then
-    check_pass "Dockerfile.production"
-else
-    check_fail "Dockerfile.production missing"
-fi
-
-if [ -f "$PROJECT_ROOT/docker/docker-compose.yml" ]; then
-    check_pass "docker-compose.yml"
-else
-    check_fail "docker-compose.yml missing"
-fi
-
-if [ -f "$PROJECT_ROOT/docker/docker-compose.production.yml" ]; then
-    check_pass "docker-compose.production.yml"
-else
-    check_fail "docker-compose.production.yml missing"
-fi
-
-echo ""
-echo "🔍 Checking scripts..."
-echo ""
-
-# Check scripts
-SCRIPTS=("install_all.sh" "setup_dev.sh" "setup_prod.sh" "run_container.sh")
-for script in "${SCRIPTS[@]}"; do
-    if [ -f "$PROJECT_ROOT/scripts/$script" ]; then
-        if [ -x "$PROJECT_ROOT/scripts/$script" ]; then
-            check_pass "$script (executable)"
-        else
-            check_warn "$script (not executable)"
-        fi
-    else
-        check_fail "$script missing"
-    fi
-done
-
-echo ""
-echo "🔍 Checking documentation..."
-echo ""
-
-# Check documentation files
-DOCS=("README.md" "MIGRATION_GUIDE.md" "QUICK_REFERENCE.md" "CHANGELOG.md" "LICENSE" "pyproject.toml" ".gitignore")
 for doc in "${DOCS[@]}"; do
-    if [ -f "$PROJECT_ROOT/$doc" ]; then
-        check_pass "$doc"
-    else
-        check_fail "$doc missing"
-    fi
-done
-
-# Check docs subdirectory
-SUBDOCS=("DEVELOPMENT.md" "PRODUCTION.md" "ARCHITECTURE.md" "README.md")
-for doc in "${SUBDOCS[@]}"; do
-    if [ -f "$PROJECT_ROOT/docs/$doc" ]; then
-        check_pass "docs/$doc"
-    else
-        check_fail "docs/$doc missing"
-    fi
+  if [ -f "$PROJECT_ROOT/$doc" ]; then
+    pass "$doc"
+  else
+    fail "$doc missing"
+  fi
 done
 
 echo ""
-echo "🔍 Checking Docker availability..."
-echo ""
+echo "Checking install and container scripts..."
 
-# Check Docker
-if command -v docker &> /dev/null; then
-    check_pass "Docker installed"
-    
-    # Check if docker compose is available
-    if docker compose version &> /dev/null; then
-        check_pass "Docker Compose V2 available"
+SCRIPTS=(
+  "scripts/setup_host.sh"
+  "scripts/setup_host_conda.sh"
+  "scripts/install_all.sh"
+  "scripts/verify_setup.sh"
+  "scripts/setup_dev.sh"
+  "scripts/setup_prod.sh"
+  "scripts/run_container.sh"
+  "scripts/manage_docker.sh"
+)
+
+for script in "${SCRIPTS[@]}"; do
+  if [ -f "$PROJECT_ROOT/$script" ]; then
+    if [ -x "$PROJECT_ROOT/$script" ]; then
+      pass "$script"
     else
-        check_fail "Docker Compose V2 not available"
+      warn "$script exists but is not executable"
     fi
+  else
+    fail "$script missing"
+  fi
+done
+
+echo ""
+echo "Checking Docker assets..."
+
+DOCKER_FILES=(
+  "docker/Dockerfile"
+  "docker/Dockerfile.production"
+  "docker/docker-compose.yml"
+  "docker/docker-compose.production.yml"
+)
+
+for file in "${DOCKER_FILES[@]}"; do
+  if [ -f "$PROJECT_ROOT/$file" ]; then
+    pass "$file"
+  else
+    fail "$file missing"
+  fi
+done
+
+echo ""
+echo "Checking local tools..."
+
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_VERSION="$(python3 - <<'PY'
+import sys
+print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+PY
+)"
+  pass "python3 ($PYTHON_VERSION)"
+  python3 - <<'PY' >/dev/null 2>&1 && pass "python3 >= 3.10" || fail "python3 must be >= 3.10"
+import sys
+raise SystemExit(0 if sys.version_info >= (3, 10) else 1)
+PY
 else
-    check_fail "Docker not installed"
+  fail "python3 not found"
+fi
+
+if command -v pip >/dev/null 2>&1; then
+  pass "pip"
+else
+  warn "pip not found in PATH"
+fi
+
+if command -v bedtools >/dev/null 2>&1; then
+  pass "bedtools"
+else
+  warn "bedtools not found; required for methyl-mapper"
+fi
+
+if command -v docker >/dev/null 2>&1; then
+  pass "docker"
+  if docker compose version >/dev/null 2>&1; then
+    pass "docker compose"
+  else
+    warn "docker compose not available"
+  fi
+else
+  warn "docker not found; host workflow can still work without containers"
+fi
+
+if command -v nvidia-smi >/dev/null 2>&1; then
+  GPU_NAME="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n1 || true)"
+  if [ -n "$GPU_NAME" ]; then
+    pass "nvidia-smi ($GPU_NAME)"
+  else
+    pass "nvidia-smi"
+  fi
+else
+  warn "nvidia-smi not found; CPU-only workflow is still supported"
 fi
 
 echo ""
-echo "🔍 Checking GPU availability..."
-echo ""
+echo "Checking optional Python imports..."
 
-# Check NVIDIA driver
-if command -v nvidia-smi &> /dev/null; then
-    check_pass "NVIDIA driver installed"
-    
-    # Get GPU info
-    GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n1)
-    if [ ! -z "$GPU_NAME" ]; then
-        echo "   GPU: $GPU_NAME"
-    fi
-else
-    check_warn "nvidia-smi not available"
-fi
-
-echo ""
-echo "🔍 Checking container status..."
-echo ""
-
-# Check if containers exist
-if docker ps -a --format '{{.Names}}' | grep -q "^methylpipeline$"; then
-    if docker ps --format '{{.Names}}' | grep -q "^methylpipeline$"; then
-        check_pass "Development container running"
-    else
-        check_warn "Development container exists but not running"
-    fi
-else
-    check_warn "Development container not created (run setup_dev.sh)"
-fi
-
-if docker ps -a --format '{{.Names}}' | grep -q "^methylpipeline-prod$"; then
-    if docker ps --format '{{.Names}}' | grep -q "^methylpipeline-prod$"; then
-        check_pass "Production container running"
-    else
-        check_warn "Production container exists but not running"
-    fi
-else
-    check_warn "Production container not created (run setup_prod.sh)"
+if command -v python3 >/dev/null 2>&1; then
+  python3 - <<'PY' >/dev/null 2>&1 && pass "methyl_utils import" || warn "methyl_utils import failed; run scripts/setup_host.sh or scripts/install_all.sh"
+import methyl_utils
+PY
+  python3 - <<'PY' >/dev/null 2>&1 && pass "methyl_predictor import" || warn "methyl_predictor import failed"
+import methyl_predictor
+PY
+  python3 - <<'PY' >/dev/null 2>&1 && pass "methyl_validation import" || warn "methyl_validation import failed"
+import methyl_validation
+PY
 fi
 
 echo ""
@@ -218,32 +196,11 @@ echo "============================================="
 echo "Verification Complete"
 echo "============================================="
 echo ""
-
-echo "📋 Summary:"
-echo "   • Directory structure: Complete"
-echo "   • All 7 packages: Present"
-echo "   • Docker configuration: Complete"
-echo "   • Scripts: Ready"
-echo "   • Documentation: Complete"
+echo "Supported workflows:"
+echo "  Host:   bash scripts/setup_host.sh --system-deps --gpu"
+echo "  Conda:  bash scripts/setup_host_conda.sh --install-miniforge"
+echo "  Docker: bash scripts/setup_prod.sh"
 echo ""
-
-if ! docker ps --format '{{.Names}}' | grep -q "^methylpipeline$"; then
-    echo "🚀 Next steps:"
-    echo "   1. Build and start development container:"
-    echo "      bash $PROJECT_ROOT/scripts/setup_dev.sh"
-    echo ""
-    echo "   2. Attach to container:"
-    echo "      docker exec -it methylpipeline bash"
-    echo ""
-    echo "   3. Test imports inside container:"
-    echo "      python -c \"from methyl_utils import get_logger; print('OK')\""
-else
-    echo "✅ System is ready!"
-    echo ""
-    echo "   • Attach to container: docker exec -it methylpipeline bash"
-    echo "   • View logs: docker compose -f $PROJECT_ROOT/docker/docker-compose.yml logs"
-    echo "   • See quick reference: cat $PROJECT_ROOT/QUICK_REFERENCE.md"
-fi
-
-echo ""
-
+echo "Canonical run order:"
+echo "  methyl-centroid -> methyl-detector -> methyl-mapper -> methyl-enricher -> methyl-classifier -> methyl-predictor"
+echo "  Monte Carlo validation: methyl-validation --config <json>"

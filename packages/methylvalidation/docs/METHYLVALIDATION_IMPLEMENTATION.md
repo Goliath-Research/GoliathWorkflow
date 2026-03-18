@@ -61,6 +61,8 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 | **pipeline_runner.py** | `run_centroid`, `run_detector`, `run_classifier`, `run_predictor` — subprocess calls to CLI tools; `run_pipeline_for_iteration(...)` — run all four in order, capture stdout/stderr to logs, return step timings (step_name, duration_seconds, return_code). |
 | **validator_metrics.py** | `load_metrics_from_json`, `_scalar_metrics_from_dict` (SCALAR_KEYS), `build_metrics_table`, `write_all_metrics_csv`, `compute_summary` (mean, std, min, max, percentiles), `write_summary_json`, `write_step_timings_csv`, and optionally `compute_resource_summary` / `write_resource_summary_json`. |
 
+Current scope note: the validation package is wired for binary Monte Carlo only. Multi-class evaluation is handled by MethylPredictor itself, but Monte Carlo split/project generation in this package still assumes one control CSV and one disease CSV.
+
 ## Data flow (CLI)
 
 1. Load config; resolve `project_name` from base project via `load_project(base_project)`.

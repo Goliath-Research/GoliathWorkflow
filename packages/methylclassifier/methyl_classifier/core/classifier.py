@@ -130,7 +130,7 @@ class MethylClassifier:
                     ]
                 
                 # Display metadata
-                print(f"📍 Classifier context: {self.chromosome}-{self.context}")
+                print(f"📍 Classifier context: {self.chromosome}-{self.context_metadata}")
                 print(f"📊 Training date: {self.metadata.get('training_date', 'unknown')}")
                 print(f"📊 Classifier uses {self.metadata.get('n_dmps', 'unknown')} DMPs")
                 if self.class_names is not None and len(self.class_names) >= 2:
@@ -200,7 +200,7 @@ class MethylClassifier:
                     self.classifier = model_package
                     try:
                         self.chromosome, self.context_metadata = extract_chrom_context_from_classifier(model_path)
-                        print(f"📋 Classifier trained on chromosome {self.chromosome}, context {self.context}")
+                        print(f"📋 Classifier trained on chromosome {self.chromosome}, context {self.context_metadata}")
                     except ValueError as e:
                         print(f"⚠️ Could not extract chromosome/context: {e}")
                     self._extract_classifier_metadata()
@@ -858,6 +858,76 @@ class MethylClassifier:
                 return self.classifier.predict_proba_calibrated(methylation_data, availability_mask)
             else:
                 return self.classifier.predict_proba(methylation_data, availability_mask, debug)
+
+    def _combine_chromosome_probabilities(
+        self,
+        chrom_features: Dict[str, np.ndarray],
+        chrom_masks: Optional[Dict[str, Optional[np.ndarray]]] = None,
+        debug: bool = False,
+    ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+        """
+        Combine per-chromosome probabilities using this classifier's chromosome weights.
+
+        `chrom_features` must be keyed by chromosome and each array must already be
+        aligned to that chromosome classifier's feature order.
+        """
+        if not self.is_multi_chromosome:
+            raise RuntimeError("_combine_chromosome_probabilities is only valid for multi-chromosome classifiers")
+
+        chrom_order = sorted(self.classifiers.keys())
+        n_classes = int(self.n_classes or 2)
+        n_samples = 0
+        for chrom in chrom_order:
+            arr = chrom_features.get(chrom)
+            if arr is not None:
+                n_samples = int(arr.shape[0])
+                break
+        if n_samples == 0:
+            return np.zeros((0, n_classes), dtype=np.float64), {}
+
+        weighted_probas = np.zeros((n_samples, n_classes), dtype=np.float64)
+        per_chrom_probas: Dict[str, np.ndarray] = {}
+        active_weight = 0.0
+
+        for chrom in chrom_order:
+            weight = float(self.chromosome_weights.get(chrom, 0.0))
+            if weight == 0.0:
+                continue
+
+            chrom_classifier = self.classifiers[chrom]
+            feature_info = chrom_classifier.get_feature_info()
+            n_chrom_dmps = int(feature_info["n_features"])
+            chrom_data = chrom_features.get(chrom)
+            chrom_mask = chrom_masks.get(chrom) if chrom_masks is not None else None
+
+            if chrom_data is None:
+                chrom_data = np.zeros((n_samples, n_chrom_dmps), dtype=np.float64)
+                chrom_mask = np.zeros((n_samples, n_chrom_dmps), dtype=bool)
+
+            if chrom_data.shape[1] != n_chrom_dmps:
+                raise ValueError(
+                    f"Chromosome {chrom} feature width mismatch: got {chrom_data.shape[1]}, expected {n_chrom_dmps}"
+                )
+
+            if hasattr(chrom_classifier, "predict_proba_calibrated") and getattr(self, "_calibrated", False):
+                chrom_probas = chrom_classifier.predict_proba_calibrated(chrom_data, chrom_mask)
+            else:
+                chrom_probas = chrom_classifier.predict_proba(chrom_data, chrom_mask, debug=False)
+
+            weighted_probas += weight * chrom_probas
+            active_weight += weight
+            per_chrom_probas[chrom] = chrom_probas
+
+            if debug:
+                print(f"  Chromosome {chrom} (weight={weight:.4f}): avg probas={np.mean(chrom_probas, axis=0)}")
+
+        if active_weight <= 0.0:
+            uniform = np.full((n_samples, n_classes), 1.0 / max(1, n_classes), dtype=np.float64)
+            return uniform, per_chrom_probas
+
+        proba_sums = np.sum(weighted_probas, axis=1, keepdims=True)
+        proba_sums = np.where(proba_sums == 0, 1.0, proba_sums)
+        return weighted_probas / proba_sums, per_chrom_probas
     
     def _predict_proba_multi_chromosome(
         self,
@@ -866,82 +936,41 @@ class MethylClassifier:
         debug: bool = False
     ) -> np.ndarray:
         """
-        Predict probabilities using multiple chromosome classifiers with weighted combination.
-        
-        Args:
-            methylation_data: Array of methylation values (n_samples, n_all_positions)
-                Should contain data for all DMP positions from all chromosomes
-            availability_mask: Boolean mask indicating available positions
-            debug: Enable debug output
-            
-        Returns:
-            Weighted average of probabilities from all chromosome classifiers
+        Predict probabilities for concatenated multi-chromosome feature matrices.
+
+        The input matrix must concatenate per-chromosome features in sorted
+        chromosome order, and within each chromosome the columns must match that
+        classifier's `get_feature_info()["positions"]` order.
         """
         n_samples = methylation_data.shape[0]
-        n_classes = self.n_classes
+        n_classes = int(self.n_classes or 2)
 
         if n_samples == 0 or methylation_data.ndim < 2:
             return np.zeros((n_samples, n_classes), dtype=np.float64)
-        
-        # Initialize weighted probability sum
-        weighted_probas = np.zeros((n_samples, n_classes))
-        
-        # Collect all positions from all classifiers to create mapping
-        # This assumes methylation_data contains positions from all chromosomes in order
-        # We need to extract chromosome-specific data for each classifier
-        
-        for chrom, classifier in self.classifiers.items():
-            weight = self.chromosome_weights.get(chrom, 0.0)
-            
-            if weight == 0.0:
-                continue
-            
-            # Get feature info for this chromosome's classifier
-            feature_info = classifier.get_feature_info()
-            chrom_positions = feature_info['positions']
-            n_chrom_dmps = len(chrom_positions)
-            
-            # For now, assume methylation_data is already separated by chromosome
-            # or that we can extract the relevant positions
-            # TODO: This assumes methylation_data structure matches classifier expectations
-            # In practice, we may need to match positions from sample to classifier positions
-            
-            # Extract chromosome-specific data
-            # This is a simplified approach - in practice, we'd need to match positions
-            if n_chrom_dmps <= methylation_data.shape[1]:
-                # Try to use first n_chrom_dmps columns (this is a simplification)
-                chrom_data = methylation_data[:, :n_chrom_dmps]
-                chrom_mask = availability_mask[:, :n_chrom_dmps] if availability_mask is not None else None
-                
-                try:
-                    # Get probabilities from this chromosome's classifier
-                    if hasattr(classifier, 'predict_proba_calibrated') and hasattr(self, '_calibrated') and self._calibrated:
-                        chrom_probas = classifier.predict_proba_calibrated(chrom_data, chrom_mask)
-                    else:
-                        chrom_probas = classifier.predict_proba(chrom_data, chrom_mask, debug)
-                    
-                    # Weight and accumulate
-                    weighted_probas += weight * chrom_probas
-                    
-                    if debug:
-                        print(f"  Chromosome {chrom}: weight={weight:.4f}, avg probas={np.mean(chrom_probas, axis=0)}")
-                        
-                except Exception as e:
-                    if debug:
-                        print(f"⚠️ Chromosome {chrom} prediction failed: {e}")
-                    # Skip this chromosome
-                    continue
-            else:
-                if debug:
-                    print(f"⚠️ Chromosome {chrom}: DMP count mismatch ({n_chrom_dmps} vs {methylation_data.shape[1]})")
-                continue
-        
-        # Normalize probabilities to sum to 1
-        proba_sums = np.sum(weighted_probas, axis=1, keepdims=True)
-        proba_sums = np.where(proba_sums == 0, 1.0, proba_sums)  # Avoid division by zero
-        weighted_probas = weighted_probas / proba_sums
-        
-        return weighted_probas
+
+        chrom_features: Dict[str, np.ndarray] = {}
+        chrom_masks: Dict[str, Optional[np.ndarray]] = {}
+        offset = 0
+        for chrom in sorted(self.classifiers.keys()):
+            feature_info = self.classifiers[chrom].get_feature_info()
+            n_chrom_dmps = int(feature_info["n_features"])
+            end = offset + n_chrom_dmps
+            if end > methylation_data.shape[1]:
+                raise ValueError(
+                    f"Multi-chromosome feature matrix ended early at chromosome {chrom}: "
+                    f"need {end} columns, got {methylation_data.shape[1]}"
+                )
+            chrom_features[chrom] = methylation_data[:, offset:end]
+            chrom_masks[chrom] = availability_mask[:, offset:end] if availability_mask is not None else None
+            offset = end
+
+        if offset != methylation_data.shape[1]:
+            raise ValueError(
+                f"Multi-chromosome feature matrix has {methylation_data.shape[1]} columns but classifiers consume {offset}"
+            )
+
+        probabilities, _ = self._combine_chromosome_probabilities(chrom_features, chrom_masks, debug=debug)
+        return probabilities
     
     def predict_with_threshold(
         self,

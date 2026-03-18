@@ -13,8 +13,8 @@ long_description = readme_file.read_text() if readme_file.exists() else ""
 setup(
     name="methyl_mapper",
     version="0.1.0",
-    author="MethylDetector Team",
-    description="DMP-to-gene mapping tool using Azure SQL Database and STRING-DB",
+    author="MethylPipeline Team",
+    description="Project-aware DMP-to-gene mapping with bedtools as the primary workflow",
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(),
@@ -30,6 +30,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
+            "methyl-mapper=methyl_mapper.cli:main",
             "methyl_mapper=methyl_mapper.cli:main",
             "methyl_mapper_bedtools=methyl_mapper.cli:main_bedtools",
             "methyl_mapper_credentials=methyl_mapper.cli:main_credentials",
