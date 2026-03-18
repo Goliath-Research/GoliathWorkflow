@@ -76,7 +76,8 @@ class MethylCentroidPair:
     The runtime path is intentionally narrow:
     - centroids must provide matching `binned_stats`
     - overlap approximation comes from discrete bin-count overlap
-    - the statistical gate defaults to histogram-derived Mann-Whitney
+    - the statistical gate uses a non-parametric comparison from bin counts;
+      callers (e.g. MethylDetector) may replace p-values with KS on the precise ECDF
     - the returned `effect_size` is an approximate, pre-ECDF score
 
     MethylDetector later recomputes the final overlap/effect_size on the reduced
@@ -541,7 +542,7 @@ class MethylCentroidPair:
                 return pd.DataFrame()  # Empty DataFrame
 
             logger.info(
-                "Comparing centroids at %s common positions using histogram-derived Mann-Whitney U",
+                "Comparing centroids at %s common positions",
                 f"{len(common_positions):,}",
             )
 

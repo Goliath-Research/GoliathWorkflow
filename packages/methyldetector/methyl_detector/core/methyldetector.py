@@ -21,7 +21,7 @@ from methyl_utils.core.methyl_frame import MethylSample
 from methyl_utils import MethylCentroidPair
 
 from methyl_utils import load_from_h5
-from methyl_utils.ecdf_classifier import ECDFClassifier
+from methyl_utils.ecdf_classifier import ECDFClassifier, _LOG_PDF_CAP as LOG_PDF_CAP
 
 # Handle relative imports - try module import first, fall back to direct execution setup
 try:
@@ -1126,6 +1126,47 @@ class MethylDetector:
             )
             # Fail if either centroid is on the wrong side of the decision boundary (0.5)
             if p_c1 >= 0.5 or p_c2 < 0.5:
+                # Diagnostic: log weighted-mean log-likelihoods so we can see why class 2 loses
+                try:
+                    log_p1_c1, log_p1_c2, _ = clf.compute_log_pdf_matrices(profile_c1, avail)
+                    log_p2_c1, log_p2_c2, _ = clf.compute_log_pdf_matrices(profile_c2, avail)
+                    # Use same per-position cap as predict_proba so diagnostic matches classifier behaviour
+                    cap = float(LOG_PDF_CAP)
+                    log_p1_c1_cap = np.maximum(log_p1_c1[0], cap)
+                    log_p1_c2_cap = np.maximum(log_p1_c2[0], cap)
+                    log_p2_c1_cap = np.maximum(log_p2_c1[0], cap)
+                    log_p2_c2_cap = np.maximum(log_p2_c2[0], cap)
+                    w = clf.weights
+                    n_dmps = len(w)
+                    w_sum = np.maximum(np.sum(w), 1e-12)
+                    mean_ll_c1_prof1 = float(np.sum(w * log_p1_c1_cap) / w_sum)
+                    mean_ll_c2_prof1 = float(np.sum(w * log_p1_c2_cap) / w_sum)
+                    mean_ll_c1_prof2 = float(np.sum(w * log_p2_c1_cap) / w_sum)
+                    mean_ll_c2_prof2 = float(np.sum(w * log_p2_c2_cap) / w_sum)
+                    logger.warning(
+                        "Centroid self-check diagnostic (weighted-mean log-likelihood, %d DMPs, cap=%.1f): "
+                        "centroid1 profile: class0=%.4f class1=%.4f; centroid2 profile: class0=%.4f class1=%.4f "
+                        "(expect centroid1→class0>class1, centroid2→class1>class0).",
+                        n_dmps, cap, mean_ll_c1_prof1, mean_ll_c2_prof1, mean_ll_c1_prof2, mean_ll_c2_prof2,
+                    )
+                    # When centroid2 loses: log a few per-position log-PDFs (capped, as in classifier)
+                    if mean_ll_c1_prof2 > mean_ll_c2_prof2:
+                        try:
+                            n_show = min(3, n_dmps)
+                            idx_show = np.linspace(0, n_dmps - 1, n_show, dtype=int)
+                            for i in idx_show:
+                                m2 = float(profile_c2[0, i])
+                                lp_c1 = float(np.maximum(log_p2_c1[0, i], cap))
+                                lp_c2 = float(np.maximum(log_p2_c2[0, i], cap))
+                                logger.warning(
+                                    "  sample DMP %d: mean2=%.4f logPDF_c1(mean2)=%.4f logPDF_c2(mean2)=%.4f "
+                                    "(centroid2 should win at its own mean if histograms are correct).",
+                                    i, m2, lp_c1, lp_c2,
+                                )
+                        except Exception as _:
+                            pass
+                except Exception as diag_e:
+                    logger.debug("Centroid self-check diagnostic failed: %s", diag_e)
                 if p_c1 >= 0.5 and p_c2 >= 0.5:
                     logger.warning(
                         "Centroid self-check FAILED: both centroids classify as class1 (centroid1→%s, centroid2→%s). "
@@ -2786,8 +2827,16 @@ class MethylDetector:
                     )
                     continue
 
+                be1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
+                be2 = np.asarray(bs2["bin_edges"], dtype=np.float64) if "bin_edges" in bs2 else None
+                if be2 is not None and (be2.shape != be1.shape or not np.allclose(be2, be1)):
+                    logger.warning(
+                        "_extract_bin_counts_for_dmps: %s-%s centroid2 bin_edges differ from centroid1; "
+                        "class 2 PDFs may be wrong (centroid self-check can fail). Build both centroids with the same bins.",
+                        chrom, ctx,
+                    )
                 cached = {
-                    "bin_edges": np.asarray(bs1["bin_edges"], dtype=np.float64),
+                    "bin_edges": be1,
                     "pos1": np.asarray(c1.pos.values, dtype=np.uint32),
                     "pos2": np.asarray(c2.pos.values, dtype=np.uint32),
                     "bc1": np.asarray(bs1["bin_counts"], dtype=np.float64),

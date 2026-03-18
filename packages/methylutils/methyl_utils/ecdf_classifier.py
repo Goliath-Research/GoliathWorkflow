@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 # Number of grid points used to pre-compute the PDF lookup table per position.
 _PDF_GRID_SIZE = 1024
+# Cap per-position log PDF so a few bad positions don't dominate the mean with many DMPs (e.g. 50K+).
+# log(2e-9) ≈ -20; positions with smaller PDF are treated as this when averaging.
+_LOG_PDF_CAP = -20.0
 
 
 class ECDFClassifier:
@@ -207,6 +210,9 @@ class ECDFClassifier:
             X,
             availability_mask=availability_mask,
         )
+        # Cap per-position log PDF so a minority of floor positions don't dominate the mean with many DMPs
+        log_p_c1 = np.maximum(log_p_c1, _LOG_PDF_CAP)
+        log_p_c2 = np.maximum(log_p_c2, _LOG_PDF_CAP)
 
         # Weighted log-likelihood: use weighted mean (not sum) so scale is O(1) and softmax does not underflow with many DMPs.
         # Same decision boundary: argmax(sum w_i log p_i) = argmax(mean w_i log p_i).
