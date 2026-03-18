@@ -17,6 +17,7 @@ from .project_resolver import (
     run_centroids_for_all_groups,
     run_centroid_for_one_group,
 )
+from methyl_utils import cleanup_gpu_memory
 from methyl_utils.logging_utils import setup_logging
 
 
@@ -334,12 +335,17 @@ def run_batch_processing(batch_config: BatchProcessingConfig) -> None:
                 results = run_single_processing(combination_config, processing_config)
                 total_samples += results.total_samples_processed
 
+                # Release GPU memory after each chromosome/context so the next combination
+                # starts with a clean slate and avoids OOM on the first sample.
+                cleanup_gpu_memory()
+
             except Exception as e:
                 error_msg = f"Failed to process {chrom}-{ctx}: {e}"
                 print(f"❌ {error_msg}", file=sys.stderr)
 
                 if batch_config.continue_on_error:
                     print("Continuing with next combination...")
+                    cleanup_gpu_memory()
                     continue
                 else:
                     print("Stopping batch processing due to error.")
