@@ -2796,22 +2796,52 @@ class MethylDetector:
 
             pos1 = cached["pos1"]
             pos2 = cached["pos2"]
-            group_positions = dmp_positions[mask]
+            group_positions = np.asarray(dmp_positions[mask], dtype=np.uint32)
 
             idx1 = np.searchsorted(pos1, group_positions, side="left")
             idx2 = np.searchsorted(pos2, group_positions, side="left")
 
-            # Clamp indices to valid range (DMP positions are expected to be in both centroids)
-            idx1 = np.clip(idx1, 0, len(pos1) - 1)
-            idx2 = np.clip(idx2, 0, len(pos2) - 1)
+            # Only use bin_counts where position exists in that centroid (exact match).
+            # Safe comparison: avoid indexing out of bounds; non-matching rows stay 0.
+            in_range1 = idx1 < len(pos1)
+            in_range2 = idx2 < len(pos2)
+            match1 = in_range1 & (pos1[np.minimum(idx1, len(pos1) - 1)] == group_positions)
+            match2 = in_range2 & (pos2[np.minimum(idx2, len(pos2) - 1)] == group_positions)
+            both_match = match1 & match2
 
-            bc1_rows[mask] = cached["bc1"][idx1]
-            bc2_rows[mask] = cached["bc2"][idx2]
+            n_match = int(np.sum(both_match))
+            n_group = int(np.sum(mask))
+            if n_match < n_group:
+                logger.warning(
+                    "_extract_bin_counts_for_dmps: %s-%s: only %d/%d DMP positions found in both centroids; "
+                    "missing rows get zero histograms (centroid self-check may fail).",
+                    chrom, ctx, n_match, n_group,
+                )
+            # Assign only where both centroids have this position; leave rest as zero
+            if n_match > 0:
+                bc1_rows[mask][both_match] = cached["bc1"][idx1[both_match]]
+                bc2_rows[mask][both_match] = cached["bc2"][idx2[both_match]]
 
         if bin_edges_ref is None:
             raise ValueError(
                 "_extract_bin_counts_for_dmps: no valid centroid files found. "
                 "Ensure centroid1_dir/centroid2_dir contain H5 files with binned_stats."
+            )
+
+        # Sanity check: centroid2 histograms must be non-zero or both centroids will classify as class 0
+        bc2_sum = float(np.sum(bc2_rows))
+        if bc2_sum < 1e-6:
+            logger.warning(
+                "_extract_bin_counts_for_dmps: centroid2 (class 1) histograms are zero or missing. "
+                "Check centroid2_dir (%s) and that centroid2 H5 files have binned_stats with non-zero bin_counts. "
+                "Centroid self-check will fail (both centroids → class 0).",
+                getattr(self.config, "centroid2_dir", "?"),
+            )
+        c1_dir = (getattr(self.config, "centroid1_dir", None) or "").strip()
+        c2_dir = (getattr(self.config, "centroid2_dir", None) or "").strip()
+        if c1_dir and c2_dir and Path(c1_dir).resolve() == Path(c2_dir).resolve():
+            logger.warning(
+                "centroid1_dir and centroid2_dir are the same; both classes use the same histograms (self-check will show 0.5/0.5)."
             )
 
         return bin_edges_ref, bc1_rows, bc2_rows
