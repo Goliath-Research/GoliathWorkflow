@@ -1,0 +1,47 @@
+# Documentation Overhaul Plan
+
+## Objective
+Remove outdated or redundant documentation across the MethylPipeline repository. Standardize the documentation structure for each package to ensure consistency, keeping only four primary areas per package: 
+1. High-level description
+2. Theoretical foundation
+3. Implementation (code design)
+4. Practical usage.
+
+In addition, document how to deploy the solution on several platforms using virtual environments and Docker.
+
+---
+
+## 1. Package-Level Consistency
+For each package (`methylutils`, `methylcentroid`, `methyldetector`, `methylclassifier`, `methylcluster`, `methylalignmentqc`, `methylenricher`, `methylmapper`, `methylpredictor`, `methylvalidation`), we will enforce the following exact structure:
+
+- **[KEEP/MODIFY] `packages/<package>/README.md`**: Will serve as the **High-level description of functionality**, and link directly to the docs.
+- **[RENAME/CREATE] `packages/<package>/docs/THEORY.md`**: Will contain the theoretical foundation (formulas and references). Derived from existing `*_Theoretical_Foundation.md` files.
+- **[RENAME/CREATE] `packages/<package>/docs/IMPLEMENTATION.md`**: Will contain the code design and organization. Derived from existing `*_IMPLEMENTATION.md` files.
+- **[RENAME/CREATE] `packages/<package>/docs/USAGE.md`**: Will contain practical usage examples and config guidelines. Derived from existing [USAGE.md](file:///home/ubuntu/MethylPipeline/packages/methyldetector/docs/USAGE.md), [QUICKSTART.md](file:///home/ubuntu/MethylPipeline/packages/methyldetector/QUICKSTART.md), or Config guides.
+
+**All other [.md](file:///home/ubuntu/MethylPipeline/README.md) files in package directories will be DELETED.** This includes redundant comprehensive docs (e.g., `METHYLDETECTOR_COMPREHENSIVE_DOCUMENTATION.md`), outdated devcontainer guides, explorer docs, export stage guides, etc., unless their content belongs in [USAGE.md](file:///home/ubuntu/MethylPipeline/packages/methyldetector/docs/USAGE.md) or [IMPLEMENTATION.md](file:///home/ubuntu/MethylPipeline/packages/methylutils/docs/METHYLUTILS_IMPLEMENTATION.md).
+
+---
+
+## 2. Root-Level Consolidation
+The root directory currently has many overlapping guides and manuals.
+
+- **[KEEP/MODIFY] [README.md](file:///home/ubuntu/MethylPipeline/README.md)**: The central entry point. Will contain the high-level project overview and architecture.
+- **[NEW] `docs/DEPLOYMENT.md`**: A new, comprehensive deployment guide covering:
+  - Supported platforms (Linux, macOS).
+  - Virtual Environment setup (referencing `MethylPipeline/.venv`).
+  - Docker Containerization setup.
+  - Sharing `MethylUtils` as a core library across services.
+- **[DELETE]** All other root and `docs/` level markdown files:
+  - [PROJECT_OVERVIEW.md](file:///home/ubuntu/MethylPipeline/PROJECT_OVERVIEW.md), [QUICK_REFERENCE.md](file:///home/ubuntu/MethylPipeline/QUICK_REFERENCE.md), [ENV_SETUP.md](file:///home/ubuntu/MethylPipeline/ENV_SETUP.md), [README_ENV.md](file:///home/ubuntu/MethylPipeline/README_ENV.md) (content goes to `DEPLOYMENT.md` or [README.md](file:///home/ubuntu/MethylPipeline/README.md)).
+  - [docs/ARCHITECTURE.md](file:///home/ubuntu/MethylPipeline/docs/ARCHITECTURE.md), [docs/DEVELOPMENT.md](file:///home/ubuntu/MethylPipeline/docs/DEVELOPMENT.md), [docs/MAINTENANCE.md](file:///home/ubuntu/MethylPipeline/docs/MAINTENANCE.md), [docs/OPERATIONS_MANUAL.md](file:///home/ubuntu/MethylPipeline/docs/OPERATIONS_MANUAL.md), [docs/PRODUCTION.md](file:///home/ubuntu/MethylPipeline/docs/PRODUCTION.md), [docs/THEORY_AND_PACKAGES.md](file:///home/ubuntu/MethylPipeline/docs/THEORY_AND_PACKAGES.md), `docs/UNIFIED_*.md`, [docs/index.md](file:///home/ubuntu/MethylPipeline/docs/index.md).
+  - `configs/*.md`
+- **[DELETE]** All [.pdf](file:///home/ubuntu/MethylPipeline/MethylPipeline.pdf), [.tex](file:///home/ubuntu/MethylPipeline/packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.tex), and `.docx` documentation files. High-quality formulas will be maintained via standard Markdown Math (MathJax) in `THEORY.md` files for consistency.
+
+---
+
+## 3. Workflow Execution
+1. Run a bash script to safely move the canonical Theory, Implementation, and Usage docs to their standardized names (`THEORY.md`, [IMPLEMENTATION.md](file:///home/ubuntu/MethylPipeline/packages/methylutils/docs/METHYLUTILS_IMPLEMENTATION.md), [USAGE.md](file:///home/ubuntu/MethylPipeline/packages/methyldetector/docs/USAGE.md)).
+2. Run a bash script to delete all non-canonical [.md](file:///home/ubuntu/MethylPipeline/README.md) files.
+3. Write `docs/DEPLOYMENT.md` according to the new specifications.
+4. Update [README.md](file:///home/ubuntu/MethylPipeline/README.md) at the root and in each package to ensure they describe high-level functionality and link to the newly structured docs.

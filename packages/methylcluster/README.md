@@ -1,32 +1,16 @@
-# MethylCluster
+# methylcluster
 
-MethylCluster is the optional clustering package used to split a project group into subclusters before centroid generation.
+This package is a core component of the MethylPipeline monorepo, sharing the `MethylUtils` foundation.
 
-The active workflow is project-aware and writes clustering manifests that `methyl-centroid` can consume.
+## High-Level Functionality
+Please refer to the root [README.md](../../README.md) for the functional placement of this package in the canonical ECDF-based pipeline.
 
-## Supported Usage
+## Documentation
 
-Project-driven run:
+To ensure consistency across the MethylPipeline ecosystem, this package follows a strict documentation contract:
 
-```bash
-methyl-cluster --project /path/to/project.json --group healthy
-```
+- 📖 **[THEORY.md](docs/THEORY.md)**: Theoretical foundation, including high-quality formulas, statistical models, and references.
+- ⚙️ **[IMPLEMENTATION.md](docs/IMPLEMENTATION.md)**: Implementation details, code design, architecture, and memory organization.
+- 🚀 **[USAGE.md](docs/USAGE.md)**: Practical usage, CLI commands, Python API snippets, and configuration parameters.
 
-Standalone config run:
-
-```bash
-methyl-cluster --config /path/to/cluster.json
-```
-
-## Current Behavior
-
-- default method: `centroid`
-- optional methods: `hdbscan`, `hierarchical`
-- outputs include clustering assignments plus a manifest for downstream centroid resolution
-- project outputs live under `clustering/controls/...` or `clustering/diseases/...`
-
-## Notes
-
-- This package is an optional side workflow, not part of the mandatory main pipeline chain.
-- The older Dirichlet-process clustering module is retained only as a legacy internal surface and is not the supported CLI path.
-- The shared project schema is documented in `docs/UNIFIED_PROJECT_CONFIG_GUIDE.md`.
+For deployment instructions on supported platforms (Linux/macOS) via virtual environments or Docker, please consult the global [DEPLOYMENT.md](../../docs/DEPLOYMENT.md).

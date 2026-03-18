@@ -1,58 +1,16 @@
-# MethylMapper
+# methylmapper
 
-MethylMapper maps detector DMP exports onto genes and genomic features, then optionally enriches those mappings with disease-association metadata.
+This package is a core component of the MethylPipeline monorepo, sharing the `MethylUtils` foundation.
 
-The supported workflow is the local bedtools-based flow driven by the shared project config.
+## High-Level Functionality
+Please refer to the root [README.md](../../README.md) for the functional placement of this package in the canonical ECDF-based pipeline.
 
-## Supported Usage
+## Documentation
 
-Project-driven run:
+To ensure consistency across the MethylPipeline ecosystem, this package follows a strict documentation contract:
 
-```bash
-methyl-mapper --project /path/to/project.json
-```
+- 📖 **[THEORY.md](docs/THEORY.md)**: Theoretical foundation, including high-quality formulas, statistical models, and references.
+- ⚙️ **[IMPLEMENTATION.md](docs/IMPLEMENTATION.md)**: Implementation details, code design, architecture, and memory organization.
+- 🚀 **[USAGE.md](docs/USAGE.md)**: Practical usage, CLI commands, Python API snippets, and configuration parameters.
 
-Direct run:
-
-```bash
-methyl_mapper_bedtools --csv-pattern "/path/to/dmps-*.csv" --gtf /path/to/gencode.gtf --output-dir /path/to/out
-```
-
-## Canonical Inputs And Outputs
-
-With `--project`, MethylMapper reads detector exports from:
-
-```text
-detections/<control_group>/<disease_group>/
-```
-
-and writes mapping outputs to:
-
-```text
-mapper/<control_group>/<disease_group>/
-```
-
-Typical outputs include:
-
-- per-feature overlap tables
-- aggregated gene tables
-- `all-gene_name-combined.csv`
-
-## Key Inputs
-
-- detector DMP CSVs, typically `dmps-*.csv`
-- a GTF annotation file
-- optional disease enrichment credentials from the environment
-
-Recommended secret handling:
-
-- `GROK_API_KEY` via environment variable
-- local override JSON for one-off runs
-
-Do not commit secrets into tracked config files.
-
-## Notes
-
-- The historical Azure SQL flow is still present in the package for backward compatibility, but it is not the primary documented workflow.
-- Project path resolution is implemented in `methyl_mapper/project_resolver.py`.
-- For the shared project schema, see `docs/UNIFIED_PROJECT_CONFIG_GUIDE.md`.
+For deployment instructions on supported platforms (Linux/macOS) via virtual environments or Docker, please consult the global [DEPLOYMENT.md](../../docs/DEPLOYMENT.md).

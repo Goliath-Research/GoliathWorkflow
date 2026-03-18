@@ -1,56 +1,16 @@
-# MethylUtils
+# methylutils
 
-MethylUtils is a Python package for methylation data analysis, providing efficient data structures and statistical methods for genomic methylation analysis.
+This package is a core component of the MethylPipeline monorepo, sharing the `MethylUtils` foundation.
 
-## Key Features
-
-- Efficient MethylSample class for samples and centroids; `close()` for memory cleanup
-- GPU-accelerated distance metrics
-- Statistical tests; centroid comparison uses ECDF only
-- Centroid HDF5: `methylation_data` only (optional `bins` attr + `bin_counts` dataset)
-- Shared centroid comparison, ECDF classifier, and project-config utilities used by the downstream pipeline packages
-
-## Installation
-
-```bash
-pip install -e packages/methylutils
-```
-
-This package is a library dependency. The canonical user-facing CLIs live in the downstream packages such as `methyl-centroid`, `methyl-detector`, `methyl-classifier`, and `methyl-predictor`.
-
-## Quick Start
-
-```python
-from methyl_utils.core.methyl_frame import MethylSample, MethylCentroid
-
-# Create sample
-sample = MethylSample(
-    pos=np.array([100, 200]),
-    mC=np.array([10, 20]),
-    uC=np.array([5, 15]),
-    tnc=np.array([1, 2])
-)
-
-# Create centroid (single type: pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2 + binned_stats)
-centroid = MethylCentroid.from_centroid_data({
-    "pos": np.array([100, 200], dtype=np.uint32),
-    "tnc": np.array([1, 2], dtype=np.uint8),
-    "N": np.array([5, 5], dtype=np.uint32),
-    "Sx": np.array([2.5, 5.0], dtype=np.float32),
-    "Sx2": np.array([1.25, 5.0], dtype=np.float32),
-    "Sm": np.array([50, 100], dtype=np.uint32),
-    "Su": np.array([25, 75], dtype=np.uint32),
-    "Sc2": np.array([5625, 30625], dtype=np.uint32),
-    "Swx2": np.array([1.25, 5.0], dtype=np.float32),
-})
-# Properties: centroid.mean, centroid.variance (unweighted); centroid.weighted_mean, centroid.weighted_variance; centroid.coverage (Sm+Su)
-# Add sample to centroid
-updated_centroid = centroid.add_sample(sample)
-```
+## High-Level Functionality
+Please refer to the root [README.md](../../README.md) for the functional placement of this package in the canonical ECDF-based pipeline.
 
 ## Documentation
 
-- **[Usage Guide (Docker and venv)](docs/USAGE.md)** — Setup with Docker or a local virtual environment; install order for dependent packages.
-- [Theoretical Foundation](docs/MethylUtils_Theoretical_Foundation.md) — Role of MethylUtils, non-parametric significance, ECDF overlap, and canonical effect size.
-- [Implementation](docs/METHYLUTILS_IMPLEMENTATION.md) — Package layout and how downstream packages use MethylUtils.
-- [Comprehensive Documentation](docs/METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md) — Full math, distance formulas, data structures, and API details.
+To ensure consistency across the MethylPipeline ecosystem, this package follows a strict documentation contract:
+
+- 📖 **[THEORY.md](docs/THEORY.md)**: Theoretical foundation, including high-quality formulas, statistical models, and references.
+- ⚙️ **[IMPLEMENTATION.md](docs/IMPLEMENTATION.md)**: Implementation details, code design, architecture, and memory organization.
+- 🚀 **[USAGE.md](docs/USAGE.md)**: Practical usage, CLI commands, Python API snippets, and configuration parameters.
+
+For deployment instructions on supported platforms (Linux/macOS) via virtual environments or Docker, please consult the global [DEPLOYMENT.md](../../docs/DEPLOYMENT.md).

@@ -1,31 +1,16 @@
-# MethylPredictor
+# methylpredictor
 
-Run MethylClassifier on test sample sets (control and disease) and compute **accuracy metrics** (accuracy, balanced accuracy, sensitivity, specificity, F1, confusion matrix, etc.).
+This package is a core component of the MethylPipeline monorepo, sharing the `MethylUtils` foundation.
 
-Part of the [MethylPipeline](https://github.com/epimethyl/MethylPipeline) monorepo.
-
-## Installation
-
-From the MethylPipeline repo root (install MethylUtils and MethylClassifier first):
-
-```bash
-pip install -e packages/methylutils
-pip install -e packages/methylclassifier
-pip install -e packages/methylpredictor
-```
-
-## Usage
-
-```bash
-methyl-predictor --project configs/project.json
-methyl-predictor --model-dir /path/to/classifiers --output-dir ./out \
-  --test-control test/control.csv --test-disease test/disease.csv
-```
-
-Use `--help` for options.
+## High-Level Functionality
+Please refer to the root [README.md](../../README.md) for the functional placement of this package in the canonical ECDF-based pipeline.
 
 ## Documentation
 
-- **[Usage Guide (Docker & venv)](docs/USAGE.md)** — Setup (Docker / virtual environment), specifying test samples (healthy and disease groups), and **accuracy metrics reported**.
-- [Theoretical Foundation](docs/MethylPredictor_Theoretical_Foundation.md) — Goal, test sets, and metric definitions.
-- [Implementation](docs/METHYLPREDICTOR_IMPLEMENTATION.md) — How MethylPredictor uses MethylClassifier and computes metrics.
+To ensure consistency across the MethylPipeline ecosystem, this package follows a strict documentation contract:
+
+- 📖 **[THEORY.md](docs/THEORY.md)**: Theoretical foundation, including high-quality formulas, statistical models, and references.
+- ⚙️ **[IMPLEMENTATION.md](docs/IMPLEMENTATION.md)**: Implementation details, code design, architecture, and memory organization.
+- 🚀 **[USAGE.md](docs/USAGE.md)**: Practical usage, CLI commands, Python API snippets, and configuration parameters.
+
+For deployment instructions on supported platforms (Linux/macOS) via virtual environments or Docker, please consult the global [DEPLOYMENT.md](../../docs/DEPLOYMENT.md).
