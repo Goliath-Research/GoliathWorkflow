@@ -5,6 +5,7 @@ Command-line interface for MethylMapper
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from .config import MethylMapperConfig, MapperStepConfig, AzureSQLConfig, Stored
 from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
 from .project_resolver import resolve_mapper_paths, resolve_mapper_paths_per_cancer_group
-from .secure_credentials import SecureCredentialManager
+from .secure_credentials import SecureCredentialManager, persist_secret_if_changed
 
 
 def setup_logging(verbose: bool = False):
@@ -173,6 +174,11 @@ For more information, visit: https://github.com/your-org/methyl_mapper
         help='Enable verbose logging'
     )
     parser.add_argument(
+        '--no-persist-secrets',
+        action='store_true',
+        help='Do not write API keys or SQL password from config to encrypted local cache or Azure Key Vault'
+    )
+    parser.add_argument(
         '--version',
         action='version',
         version='MethylMapper 0.1.0'
@@ -198,8 +204,20 @@ def main():
             logger.error(f"Configuration file not found: {config_path}")
             sys.exit(1)
         
-        config = load_config_from_json(config_path)
-        
+        with open(config_path) as f:
+            raw_config = json.load(f)
+        raw_db_password = str((raw_config.get("database") or {}).get("password") or "").strip()
+        config = MethylMapperConfig(**raw_config)
+
+        if not args.no_persist_secrets and raw_db_password:
+            vault_url = (config.database.azure_key_vault_url or os.environ.get("AZURE_KEY_VAULT_URL") or "").strip()
+            sql_mgr = SecureCredentialManager(
+                credential_name="azure_sql_password",
+                env_var_name="AZURE_SQL_PASSWORD",
+                azure_key_vault_url=vault_url or None,
+            )
+            persist_secret_if_changed(sql_mgr, raw_db_password, use_azure=bool(vault_url))
+
         # Override stored procedure parameters from CLI if specified
         sp_config = config.stored_procedure
         if args.upstream_size is not None:
@@ -400,13 +418,13 @@ Examples:
         '--grok-api-key',
         type=str,
         default=None,
-        help='Grok API key. Optional: can also use config (grok_api_key), env (GROK_API_KEY), encrypted file, or Azure Key Vault (see methyl_mapper_credentials save)'
+        help='Grok API key (discouraged in JSON). Also: env GROK_API_KEY, ~/.methyl_mapper/credentials, Key Vault. When set, may be auto-saved locally and to vault unless --no-persist-secrets'
     )
     disease_group.add_argument(
         '--disgenet-api-key',
         type=str,
         default=None,
-        help='DisGeNET API key (optional, uses secure storage if not provided)'
+        help='DisGeNET API key (discouraged in JSON). Uses secure storage; may auto-persist like Grok unless --no-persist-secrets'
     )
     disease_group.add_argument(
         '--azure-key-vault-url',
@@ -418,7 +436,7 @@ Examples:
         '--azure-secret-name',
         type=str,
         default=None,
-        help='Azure Key Vault secret name (or set AZURE_SECRET_NAME env var, default: grok_api_key for Grok, disgenet_api_key for DisGeNET)'
+        help='Optional: use this Key Vault secret name for both Grok and DisGeNET (default per key: grok-api-key, disgenet-api-key)'
     )
     disease_group.add_argument(
         '--encrypted-file-path',
@@ -497,7 +515,25 @@ Examples:
         '--grok-max-workers',
         type=int,
         default=8,
-        help='Maximum concurrent Grok batch requests (default: 8)'
+        help='Maximum concurrent Grok requests for realtime API only (default: 8; ignored when xAI Batch API is on)'
+    )
+    disease_group.add_argument(
+        '--grok-batch-api',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help='Use xAI Batch API for Grok (default: on). Use --no-grok-batch-api for synchronous /v1/chat/completions'
+    )
+    disease_group.add_argument(
+        '--grok-batch-poll-interval',
+        type=float,
+        default=2.0,
+        help='Seconds between xAI batch status polls while waiting for results (default: 2)'
+    )
+    disease_group.add_argument(
+        '--grok-batch-submit-chunk',
+        type=int,
+        default=200,
+        help='Max Grok jobs per HTTP POST when adding requests to an xAI batch (default: 200)'
     )
     disease_group.add_argument(
         '--open-targets-max-workers',
@@ -511,7 +547,12 @@ Examples:
         default=8,
         help='Maximum concurrent DisGeNET gene requests (default: 8)'
     )
-    
+    disease_group.add_argument(
+        '--no-persist-secrets',
+        action='store_true',
+        help='Do not save Grok/DisGeNET keys from CLI or config to encrypted cache or Azure Key Vault'
+    )
+
     # DMP optimization options
     optimization_group = parser.add_argument_group('DMP Optimization Options')
     optimization_group.add_argument(
@@ -677,8 +718,18 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.grok_max_workers = config.grok_max_workers
     if config.grok_batch_size is not None:
         args.grok_batch_size = config.grok_batch_size
+    if config.grok_batch_api is not None:
+        args.grok_batch_api = config.grok_batch_api
+    if config.grok_batch_poll_interval is not None:
+        args.grok_batch_poll_interval = config.grok_batch_poll_interval
+    if config.grok_batch_submit_chunk_size is not None:
+        args.grok_batch_submit_chunk = config.grok_batch_submit_chunk_size
     if config.grok_api_key is not None and args.grok_api_key is None:
         args.grok_api_key = config.grok_api_key
+    if config.disgenet_api_key is not None and args.disgenet_api_key is None:
+        args.disgenet_api_key = config.disgenet_api_key
+    if config.persist_secrets is False:
+        args.no_persist_secrets = True
     if config.grok_cache_ttl_days is not None:
         args.grok_cache_ttl_days = config.grok_cache_ttl_days
     if config.azure_key_vault_url is not None and args.azure_key_vault_url is None:
@@ -716,10 +767,39 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.w_unknown = config.w_unknown
 
 
+def _maybe_persist_bedtools_enrichment_secrets(args: argparse.Namespace) -> None:
+    """Save Grok/DisGeNET keys from CLI or mapper config to encrypted file and optionally Key Vault."""
+    if getattr(args, "no_persist_secrets", False):
+        return
+    vault = (getattr(args, "azure_key_vault_url", None) or os.environ.get("AZURE_KEY_VAULT_URL") or "").strip()
+    use_azure = bool(vault)
+
+    def _manager(credential_name: str, env_var: str) -> SecureCredentialManager:
+        # Use default ~/.methyl_mapper/credentials/{credential_name}.encrypted per key (not shared --encrypted-file-path)
+        kw: dict = {
+            "credential_name": credential_name,
+            "azure_key_vault_url": vault or None,
+            "encrypted_file_path": None,
+            "env_var_name": env_var,
+        }
+        if getattr(args, "azure_secret_name", None):
+            kw["azure_secret_name"] = args.azure_secret_name
+        return SecureCredentialManager(**kw)
+
+    use_grok, _, use_disgenet = BedtoolsMapper._parse_enrich_source(getattr(args, "enrich_source", "") or "")
+
+    if getattr(args, "enrich_disease", False) and use_grok:
+        gk = (getattr(args, "grok_api_key", None) or "").strip()
+        if gk:
+            persist_secret_if_changed(_manager("grok_api_key", "GROK_API_KEY"), gk, use_azure=use_azure)
+    if getattr(args, "enrich_disease", False) and use_disgenet:
+        dk = (getattr(args, "disgenet_api_key", None) or "").strip()
+        if dk:
+            persist_secret_if_changed(_manager("disgenet_api_key", "DISGENET_API_KEY"), dk, use_azure=use_azure)
+
+
 def main_bedtools():
     """Main entry point for bedtools-based mapping CLI."""
-    import os
-    
     args = parse_bedtools_args()
     
     # Setup logging
@@ -775,7 +855,8 @@ def main_bedtools():
             if use_grok:
                 grok_key_set = bool(args.grok_api_key or os.environ.get("GROK_API_KEY"))
                 if grok_key_set:
-                    logger.info(f"Grok API: will query gene–{disease_term} associations (key configured)")
+                    mode = "xAI Batch API" if getattr(args, "grok_batch_api", True) else "realtime chat/completions"
+                    logger.info(f"Grok API ({mode}): will query gene–{disease_term} associations (key configured)")
                 else:
                     logger.warning(
                         "Grok API: no key found (set GROK_API_KEY or --grok-api-key). "
@@ -784,7 +865,9 @@ def main_bedtools():
         if not args.no_optimize_dmps and args.enrich_disease:
             logger.info(f"DMP optimization: Enabled (min_k={args.min_k}, stability_threshold={args.stability_threshold})")
         logger.info("="*70)
-        
+
+        _maybe_persist_bedtools_enrichment_secrets(args)
+
         # Create mapper
         mapper = BedtoolsMapper(
             gene_gtf=gtf_path,
@@ -822,10 +905,13 @@ def main_bedtools():
             source_max_workers=args.source_max_workers,
             grok_batch_size=args.grok_batch_size,
             grok_max_workers=args.grok_max_workers,
+            grok_use_xai_batch_api=args.grok_batch_api,
+            grok_batch_poll_interval=getattr(args, "grok_batch_poll_interval", 2.0),
+            grok_batch_submit_chunk_size=getattr(args, "grok_batch_submit_chunk", 200),
             open_targets_max_workers=args.open_targets_max_workers,
             disgenet_max_workers=args.disgenet_max_workers,
             azure_key_vault_url=args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL'),
-            azure_secret_name=args.azure_secret_name or os.environ.get('AZURE_SECRET_NAME'),
+            azure_secret_name=args.azure_secret_name,
             encrypted_file_path=Path(args.encrypted_file_path) if args.encrypted_file_path else None,
             optimize_dmps=not args.no_optimize_dmps,
             dmp_rank_columns=args.dmp_rank_columns,
@@ -910,11 +996,11 @@ Examples:
   # Save only to Azure Key Vault
   methyl_mapper_credentials save --credential-type grok --api-key "your-key" --save-to azure --azure-key-vault-url "https://vault.vault.azure.net/"
   
-  # Grok API key resolution when running mapper (first match wins):
-  # 1. Config/CLI (grok_api_key in project or --config, or --grok-api-key)
-  # 2. Encrypted local file (~/.methyl_mapper/credentials/grok_api_key.encrypted)
-  # 3. Azure Key Vault (if AZURE_KEY_VAULT_URL set)
-  # 4. Environment variable GROK_API_KEY
+  # Grok API key resolution when running methyl-mapper (explicit wins, then):
+  # 1. Encrypted local file (~/.methyl_mapper/credentials/grok_api_key.encrypted)
+  # 2. Azure Key Vault (if AZURE_KEY_VAULT_URL set)
+  # 3. Environment variable GROK_API_KEY
+  # Keys from CLI or step_config.mapper may be auto-saved (unless --no-persist-secrets).
   
   # Test credential retrieval
   methyl_mapper_credentials test --credential-type grok
@@ -966,8 +1052,6 @@ Examples:
 
 def main_credentials():
     """Main entry point for credential management CLI."""
-    import os
-    
     args = parse_credentials_args()
     setup_logging(verbose=args.verbose)
     logger = logging.getLogger(__name__)

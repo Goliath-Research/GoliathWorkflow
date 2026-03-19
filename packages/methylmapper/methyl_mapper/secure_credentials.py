@@ -48,15 +48,18 @@ class SecureCredentialManager:
         Args:
             credential_name: Name of the credential (for logging)
             azure_key_vault_url: Azure Key Vault URL (e.g., "https://{vault-name}.vault.azure.net/")
-            azure_secret_name: Name of the secret in Azure Key Vault
+            azure_secret_name: Key Vault secret name override; default is derived from credential_name (hyphenated)
             encrypted_file_path: Path to encrypted credential file
             env_var_name: Environment variable name (defaults to credential_name.upper())
         """
         self.credential_name = credential_name
         self.azure_key_vault_url = azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL')
-        # Azure Key Vault secret names must use hyphens, not underscores
+        # Azure Key Vault secret names must use hyphens, not underscores.
+        # Per-credential default only (do not use a single AZURE_SECRET_NAME for all keys).
         default_secret_name = credential_name.replace('_', '-')
-        self.azure_secret_name = azure_secret_name or os.environ.get('AZURE_SECRET_NAME', default_secret_name)
+        self.azure_secret_name = (
+            azure_secret_name.strip() if azure_secret_name else default_secret_name
+        )
         self.encrypted_file_path = encrypted_file_path or self._get_default_encrypted_path()
         self.env_var_name = env_var_name or credential_name.upper().replace('-', '_')
         
@@ -231,4 +234,24 @@ class SecureCredentialManager:
                 logger.error(f"Failed to save encrypted credential file: {e}")
         
         return success
+
+
+def persist_secret_if_changed(
+    manager: SecureCredentialManager,
+    value: str,
+    *,
+    use_azure: bool,
+) -> bool:
+    """
+    If value is non-empty and differs from stored secret (file/vault/env chain without explicit),
+    save to encrypted local file and optionally Azure Key Vault.
+    """
+    if not value or not str(value).strip():
+        return False
+    value = str(value).strip()
+    existing = manager.get_credential(explicit_key=None)
+    if existing == value:
+        logger.debug(f"No persist needed for {manager.credential_name} (unchanged)")
+        return False
+    return manager.save_credential(value, use_azure=use_azure, use_encrypted_file=True)
 

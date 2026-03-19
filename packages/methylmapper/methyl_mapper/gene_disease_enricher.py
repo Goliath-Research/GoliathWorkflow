@@ -5,6 +5,7 @@ This module enriches gene mapping results with disease associations, particularl
 focused on cancer types like early-stage prostate cancer.
 """
 
+import hashlib
 import json
 import logging
 import time
@@ -12,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock, local
 from typing import Dict, List, Optional, Tuple, Union
+from urllib.parse import urlparse, urlunparse
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
@@ -31,6 +33,13 @@ DEFAULT_CACHE_TTL_DAYS = 7
 DEFAULT_GROK_CACHE_TTL_DAYS = 7
 DEFAULT_GROK_BATCH_SIZE = 20
 DEFAULT_GROK_MAX_WORKERS = 8
+DEFAULT_GROK_USE_XAI_BATCH_API = True
+DEFAULT_GROK_BATCH_POLL_INTERVAL = 2.0
+DEFAULT_GROK_BATCH_SUBMIT_CHUNK_SIZE = 200
+GROK_COMPLETION_MODEL = "grok-4-latest"
+# xAI Batch limits include 1 batch create per second per team; HTTP 429 can still occur — retry generously.
+XAI_BATCH_HTTP_MIN_ATTEMPTS = 12
+XAI_BATCH_CREATE_MIN_INTERVAL_SEC = 1.15
 DEFAULT_OPEN_TARGETS_MAX_WORKERS = 8
 DEFAULT_DISGENET_MAX_WORKERS = 8
 DEFAULT_SOURCE_MAX_WORKERS = 3
@@ -176,7 +185,10 @@ class GeneDiseaseEnricher:
     - DisGeNET database (optional)
     - NCBI Gene database (fallback)
     """
-    
+
+    _xai_batch_create_lock = Lock()
+    _xai_last_batch_create_at = 0.0
+
     def __init__(
         self,
         grok_api_key: Optional[str] = None,
@@ -202,6 +214,9 @@ class GeneDiseaseEnricher:
         source_max_workers: int = DEFAULT_SOURCE_MAX_WORKERS,
         grok_batch_size: int = DEFAULT_GROK_BATCH_SIZE,
         grok_max_workers: int = DEFAULT_GROK_MAX_WORKERS,
+        grok_use_xai_batch_api: bool = DEFAULT_GROK_USE_XAI_BATCH_API,
+        grok_batch_poll_interval: float = DEFAULT_GROK_BATCH_POLL_INTERVAL,
+        grok_batch_submit_chunk_size: int = DEFAULT_GROK_BATCH_SUBMIT_CHUNK_SIZE,
         open_targets_max_workers: int = DEFAULT_OPEN_TARGETS_MAX_WORKERS,
         disgenet_max_workers: int = DEFAULT_DISGENET_MAX_WORKERS,
         azure_key_vault_url: Optional[str] = None,
@@ -235,18 +250,21 @@ class GeneDiseaseEnricher:
             max_retries: Maximum retry attempts for API calls
             source_max_workers: Max workers when querying multiple sources in parallel
             grok_batch_size: Number of genes per Grok batch request
-            grok_max_workers: Max concurrent Grok batch requests
+            grok_max_workers: Max concurrent Grok batch requests (realtime API only; ignored for xAI Batch API)
+            grok_use_xai_batch_api: If True (default), use xAI Batch API (async queue, avoids realtime rate limits)
+            grok_batch_poll_interval: Seconds between GET /batches/{id} polls while waiting for xAI batch
+            grok_batch_submit_chunk_size: Max requests per POST when adding to an xAI batch
             open_targets_max_workers: Max concurrent Open Targets gene requests
             disgenet_max_workers: Max concurrent DisGeNET gene requests
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
-            azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
+            azure_secret_name: Optional Key Vault secret name override (defaults: grok-api-key / disgenet-api-key)
             encrypted_file_path: Path to encrypted credential file (optional)
         """
         # Initialize secure credential managers
         self.grok_credential_manager = SecureCredentialManager(
             credential_name="grok_api_key",
             azure_key_vault_url=azure_key_vault_url,
-            azure_secret_name=azure_secret_name or "grok_api_key",
+            azure_secret_name=azure_secret_name,
             encrypted_file_path=encrypted_file_path,
             env_var_name="GROK_API_KEY"
         ) if use_grok else None
@@ -254,7 +272,7 @@ class GeneDiseaseEnricher:
         self.disgenet_credential_manager = SecureCredentialManager(
             credential_name="disgenet_api_key",
             azure_key_vault_url=azure_key_vault_url,
-            azure_secret_name=azure_secret_name or "disgenet_api_key",
+            azure_secret_name=azure_secret_name,
             encrypted_file_path=encrypted_file_path,
             env_var_name="DISGENET_API_KEY"
         ) if use_disgenet else None
@@ -288,6 +306,9 @@ class GeneDiseaseEnricher:
         self.source_max_workers = max(1, int(source_max_workers))
         self.grok_batch_size = max(1, int(grok_batch_size))
         self.grok_max_workers = max(1, int(grok_max_workers))
+        self.grok_use_xai_batch_api = bool(grok_use_xai_batch_api)
+        self.grok_batch_poll_interval = max(0.5, float(grok_batch_poll_interval))
+        self.grok_batch_submit_chunk_size = max(1, int(grok_batch_submit_chunk_size))
         self.open_targets_max_workers = max(1, int(open_targets_max_workers))
         self.disgenet_max_workers = max(1, int(disgenet_max_workers))
 
@@ -550,33 +571,338 @@ class GeneDiseaseEnricher:
             for i in range(0, len(uncached_genes), self.grok_batch_size)
         ]
         total_batches = len(batches)
-        progress = ProgressIndicator(total_batches, "Grok API batches", update_interval=1)
 
-        if self.grok_max_workers == 1 or total_batches == 1:
-            for batch_num, batch in enumerate(batches, start=1):
-                batch_results, success = self._query_grok_batch(batch, disease_term, batch_num)
-                results.update(batch_results)
-                progress.update(success=success)
-                if self.rate_limit_delay > 0 and batch_num < total_batches:
-                    time.sleep(self.rate_limit_delay)
+        if self.grok_use_xai_batch_api:
+            self._query_grok_uncached_xai_batch(batches, disease_term, results)
         else:
-            with ThreadPoolExecutor(max_workers=min(self.grok_max_workers, total_batches)) as executor:
-                future_to_batch_num = {
-                    executor.submit(self._query_grok_batch, batch, disease_term, batch_num): batch_num
-                    for batch_num, batch in enumerate(batches, start=1)
-                }
-                for future in as_completed(future_to_batch_num):
-                    try:
-                        batch_results, success = future.result()
-                    except Exception as exc:
-                        logger.warning(f"Grok API batch failed unexpectedly: {exc}")
-                        batch_results, success = {}, False
+            progress = ProgressIndicator(total_batches, "Grok API batches", update_interval=1)
+            if self.grok_max_workers == 1 or total_batches == 1:
+                for batch_num, batch in enumerate(batches, start=1):
+                    batch_results, success = self._query_grok_batch(batch, disease_term, batch_num)
                     results.update(batch_results)
                     progress.update(success=success)
+                    if self.rate_limit_delay > 0 and batch_num < total_batches:
+                        time.sleep(self.rate_limit_delay)
+            else:
+                with ThreadPoolExecutor(max_workers=min(self.grok_max_workers, total_batches)) as executor:
+                    future_to_batch_num = {
+                        executor.submit(self._query_grok_batch, batch, disease_term, batch_num): batch_num
+                        for batch_num, batch in enumerate(batches, start=1)
+                    }
+                    for future in as_completed(future_to_batch_num):
+                        try:
+                            batch_results, success = future.result()
+                        except Exception as exc:
+                            logger.warning(f"Grok API batch failed unexpectedly: {exc}")
+                            batch_results, success = {}, False
+                        results.update(batch_results)
+                        progress.update(success=success)
 
         logger.info(f"✅ Retrieved disease associations for {len(results)} genes from Grok API ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
         self._save_disk_cache()
         return results
+
+    def _grok_xai_api_base(self) -> str:
+        """Base URL for xAI v1 REST (batches, etc.) derived from chat completions URL."""
+        parsed = urlparse(self.grok_api_url)
+        if not parsed.scheme or not parsed.netloc:
+            return "https://api.x.ai/v1"
+        path = (parsed.path or "").rstrip("/")
+        if path.endswith("/chat/completions"):
+            base_path = path[: -len("/chat/completions")] or "/v1"
+        else:
+            base_path = "/v1"
+        return urlunparse((parsed.scheme, parsed.netloc, base_path, "", "", ""))
+
+    @staticmethod
+    def _xai_429_delay_seconds(response: requests.Response, attempt: int) -> float:
+        raw = response.headers.get("Retry-After")
+        if raw is not None:
+            try:
+                return float(max(1.0, int(str(raw).strip())))
+            except (ValueError, TypeError):
+                try:
+                    return float(max(1.0, float(str(raw).strip())))
+                except (ValueError, TypeError):
+                    pass
+        return float(min(300.0, 15.0 * (2 ** min(attempt, 5))))
+
+    def _pace_xai_batch_create_slot(self) -> None:
+        """Respect xAI limit: at most one batch creation per second per team."""
+        cls = type(self)
+        with cls._xai_batch_create_lock:
+            now = time.monotonic()
+            wait = cls._xai_last_batch_create_at + XAI_BATCH_CREATE_MIN_INTERVAL_SEC - now
+            if wait > 0:
+                logger.info(
+                    f"Pausing {wait:.1f}s before creating xAI batch (API limit: 1 batch create/s per team)"
+                )
+                time.sleep(wait)
+
+    def _mark_xai_batch_created(self) -> None:
+        cls = type(self)
+        with cls._xai_batch_create_lock:
+            cls._xai_last_batch_create_at = time.monotonic()
+
+    def _grok_xai_http_request(
+        self,
+        session: requests.Session,
+        method: str,
+        url: str,
+        headers: Dict[str, str],
+        *,
+        json_body: Optional[Dict] = None,
+        params: Optional[Dict[str, Union[str, int]]] = None,
+        timeout: int = 120,
+        context: str = "",
+    ) -> requests.Response:
+        """POST/GET to xAI with retries on HTTP 429."""
+        attempts = max(XAI_BATCH_HTTP_MIN_ATTEMPTS, self.max_retries, 5)
+        last: Optional[requests.Response] = None
+        for attempt in range(attempts):
+            if method.upper() == "POST":
+                last = session.post(url, headers=headers, json=json_body, timeout=timeout)
+            else:
+                last = session.get(url, headers=headers, params=params, timeout=timeout)
+            if last.status_code == 429:
+                delay = self._xai_429_delay_seconds(last, attempt)
+                lbl = context or (urlparse(url).path or "xAI")
+                logger.warning(
+                    f"xAI rate limit (429) [{lbl}]: sleeping {delay:.0f}s "
+                    f"(attempt {attempt + 1}/{attempts})"
+                )
+                time.sleep(delay)
+                continue
+            last.raise_for_status()
+            return last
+        if last is not None:
+            last.raise_for_status()
+        raise requests.HTTPError("xAI request failed after retries")
+
+    def _grok_chat_completion_payload(self, prompt: str) -> Dict:
+        """Body for realtime chat/completions and xAI Batch `chat_get_completion`."""
+        return {
+            "model": GROK_COMPLETION_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1,
+            "max_tokens": 2000,
+            "stream": False,
+        }
+
+    @staticmethod
+    def _grok_batch_request_id(batch_num: int, disease_term: str, genes: List[str]) -> str:
+        key = f"{batch_num}|{disease_term}|{','.join(g.upper() for g in genes)}"
+        digest = hashlib.sha256(key.encode()).hexdigest()[:20]
+        return f"b{batch_num}_{digest}"
+
+    def _normalize_xai_batch_result_to_chat_completion(self, item: Dict) -> Dict:
+        """Map a single xAI batch results row to the shape expected by _parse_grok_response."""
+        if not isinstance(item, dict):
+            raise TypeError("batch result item must be a dict")
+        err = item.get("error_message") or item.get("error")
+        if isinstance(err, str) and err.strip():
+            raise ValueError(err.strip())
+        if isinstance(err, dict) and err.get("message"):
+            raise ValueError(str(err["message"]))
+
+        for key in ("completion_response", "chat_completion", "chat_get_completion_response"):
+            inner = item.get(key)
+            if isinstance(inner, dict) and inner.get("choices"):
+                return inner
+
+        if item.get("choices"):
+            return item
+
+        content = item.get("content")
+        if isinstance(content, str) and content.strip():
+            return {"choices": [{"message": {"content": content}}]}
+
+        resp = item.get("response")
+        if isinstance(resp, dict):
+            return self._normalize_xai_batch_result_to_chat_completion(resp)
+
+        proto = item.get("proto")
+        if isinstance(proto, dict):
+            return self._normalize_xai_batch_result_to_chat_completion(proto)
+
+        raise ValueError(f"unrecognized batch result keys: {list(item.keys())}")
+
+    def _xai_batch_poll_until_done(self, batch_id: str) -> None:
+        base = self._grok_xai_api_base()
+        headers = {
+            "Authorization": f"Bearer {self.grok_api_key}",
+            "Content-Type": "application/json",
+        }
+        session = self._get_session()
+        short_id = batch_id[:12] + "…" if len(batch_id) > 12 else batch_id
+        while True:
+            r = self._grok_xai_http_request(
+                session,
+                "GET",
+                f"{base}/batches/{batch_id}",
+                headers,
+                timeout=120,
+                context="batch status poll",
+            )
+            data = r.json()
+            state = data.get("state") or {}
+            pending = int(state.get("num_pending", 0) or 0)
+            n_ok = int(state.get("num_success", 0) or 0)
+            n_err = int(state.get("num_error", 0) or 0)
+            n_total = int(state.get("num_requests", 0) or 0)
+            logger.info(
+                f"xAI Batch {short_id} progress: pending={pending} success={n_ok} error={n_err} total={n_total}"
+            )
+            if pending == 0:
+                break
+            time.sleep(self.grok_batch_poll_interval)
+
+    def _xai_batch_collect_result_pages(self, batch_id: str) -> Tuple[List[Dict], List[Dict]]:
+        base = self._grok_xai_api_base()
+        headers = {"Authorization": f"Bearer {self.grok_api_key}"}
+        session = self._get_session()
+        succeeded: List[Dict] = []
+        failed: List[Dict] = []
+        pagination_token: Optional[str] = None
+        while True:
+            params: Dict[str, Union[str, int]] = {"page_size": 100}
+            if pagination_token:
+                params["pagination_token"] = pagination_token
+            r = self._grok_xai_http_request(
+                session,
+                "GET",
+                f"{base}/batches/{batch_id}/results",
+                headers,
+                params=params,
+                timeout=120,
+                context="batch results page",
+            )
+            page = r.json()
+            succeeded.extend(page.get("succeeded") or [])
+            failed.extend(page.get("failed") or [])
+            pagination_token = page.get("pagination_token")
+            if not pagination_token:
+                break
+        return succeeded, failed
+
+    def _query_grok_uncached_xai_batch(
+        self,
+        batches: List[List[str]],
+        disease_term: str,
+        results: Dict[str, Dict],
+    ) -> None:
+        """Submit gene batches via xAI Batch API, poll, merge into results and disk cache."""
+        base = self._grok_xai_api_base()
+        headers = {
+            "Authorization": f"Bearer {self.grok_api_key}",
+            "Content-Type": "application/json",
+        }
+        session = self._get_session()
+        batch_name = f"methyl_mapper_grok_{int(time.time())}"
+        self._pace_xai_batch_create_slot()
+        cr = self._grok_xai_http_request(
+            session,
+            "POST",
+            f"{base}/batches",
+            headers,
+            json_body={"name": batch_name},
+            timeout=120,
+            context="create batch",
+        )
+        self._mark_xai_batch_created()
+        created = cr.json()
+        batch_id = created.get("batch_id") or created.get("id")
+        if not batch_id and isinstance(created.get("batch"), dict):
+            b = created["batch"]
+            batch_id = b.get("batch_id") or b.get("id")
+        if not batch_id:
+            raise ValueError(f"unexpected xAI create batch response keys: {list(created.keys())}")
+
+        rid_to_meta: Dict[str, Tuple[int, List[str]]] = {}
+        batch_requests: List[Dict] = []
+        for batch_num, gene_batch in enumerate(batches, start=1):
+            prompt = self._create_grok_prompt(gene_batch, disease_term)
+            rid = self._grok_batch_request_id(batch_num, disease_term, gene_batch)
+            rid_to_meta[rid] = (batch_num, gene_batch)
+            batch_requests.append(
+                {
+                    "batch_request_id": rid,
+                    "batch_request": {"chat_get_completion": self._grok_chat_completion_payload(prompt)},
+                }
+            )
+
+        chunk = max(1, self.grok_batch_submit_chunk_size)
+        for offset in range(0, len(batch_requests), chunk):
+            slice_reqs = batch_requests[offset : offset + chunk]
+            ar = self._grok_xai_http_request(
+                session,
+                "POST",
+                f"{base}/batches/{batch_id}/requests",
+                headers,
+                json_body={"batch_requests": slice_reqs},
+                timeout=300,
+                context="add batch requests",
+            )
+            if self.rate_limit_delay > 0 and offset + chunk < len(batch_requests):
+                time.sleep(self.rate_limit_delay)
+
+        logger.info(
+            f"Submitted {len(batch_requests)} Grok job(s) to xAI Batch API (batch_id={batch_id}); "
+            "polling until complete (see https://docs.x.ai/developers/advanced-api-usage/batch-api)"
+        )
+        self._xai_batch_poll_until_done(batch_id)
+        succeeded, failed = self._xai_batch_collect_result_pages(batch_id)
+
+        result_by_rid: Dict[str, Dict] = {}
+        failed_rids: set[str] = set()
+        for item in succeeded:
+            rid = item.get("batch_request_id") or item.get("custom_id")
+            if isinstance(rid, str) and rid:
+                result_by_rid[rid] = item
+        for item in failed:
+            rid = item.get("batch_request_id") or item.get("custom_id")
+            if isinstance(rid, str) and rid:
+                failed_rids.add(rid)
+                result_by_rid[rid] = item
+
+        progress = ProgressIndicator(len(rid_to_meta), "Grok xAI batch", update_interval=1)
+
+        def _merge_batch_result(gene_batch: List[str], batch_num: int, completion: Dict) -> Tuple[Dict[str, Dict], bool]:
+            batch_results, used_fallback = self._parse_grok_response(completion, gene_batch)
+            if used_fallback and len(gene_batch) > 1:
+                batch_results, ok = self._query_grok_batch(gene_batch, disease_term, batch_num)
+                return batch_results, ok
+            for gene_name, association_info in batch_results.items():
+                self._cache_set(self._cache_key("grok", gene_name, disease_term), association_info)
+            return batch_results, True
+
+        for rid, (batch_num, gene_batch) in rid_to_meta.items():
+            item = result_by_rid.get(rid)
+            if item is None:
+                logger.warning(
+                    f"xAI batch: no result for {rid}; falling back to realtime for {len(gene_batch)} genes"
+                )
+                batch_results, ok = self._query_grok_batch(gene_batch, disease_term, batch_num)
+                results.update(batch_results)
+                progress.update(success=ok)
+                continue
+            if rid in failed_rids:
+                err_txt = item.get("error_message") or item.get("error") or item
+                logger.warning(f"xAI batch request failed {rid}: {err_txt}")
+                batch_results, ok = self._query_grok_batch(gene_batch, disease_term, batch_num)
+                results.update(batch_results)
+                progress.update(success=ok)
+                continue
+            try:
+                completion = self._normalize_xai_batch_result_to_chat_completion(item)
+                batch_results, ok = _merge_batch_result(gene_batch, batch_num, completion)
+                results.update(batch_results)
+                progress.update(success=ok)
+            except Exception as exc:
+                logger.warning(f"xAI batch result failed for {rid} ({len(gene_batch)} genes): {exc}")
+                batch_results, ok = self._query_grok_batch(gene_batch, disease_term, batch_num)
+                results.update(batch_results)
+                progress.update(success=ok)
 
     def _query_grok_batch(
         self,
@@ -713,18 +1039,7 @@ Return ONLY a valid JSON array—no other text. Example:
             "Content-Type": "application/json"
         }
         
-        payload = {
-            "model": "grok-4-latest",  # Updated to latest Grok model
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "temperature": 0.1,  # Low temperature for factual responses
-            "max_tokens": 2000,
-            "stream": False
-        }
+        payload = self._grok_chat_completion_payload(prompt)
         
         # Throttle: at most one request start per rate_limit_delay (avoids 429 when using multiple workers)
         with self._grok_request_lock:

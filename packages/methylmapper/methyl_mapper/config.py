@@ -28,7 +28,11 @@ class AzureSQLConfig(BaseModel):
     )
     password: str = Field(
         default="",
-        description="Database password (set via AZURE_SQL_PASSWORD env var or secure storage)"
+        description="Database password (prefer secure storage; JSON discouraged)"
+    )
+    azure_key_vault_url: Optional[str] = Field(
+        default=None,
+        description="Azure Key Vault URL for resolving/storing the SQL password (or AZURE_KEY_VAULT_URL env)",
     )
     driver: str = Field(
         default="ODBC Driver 18 for SQL Server",
@@ -41,24 +45,19 @@ class AzureSQLConfig(BaseModel):
     
     @model_validator(mode='after')
     def resolve_password(self):
-        """Resolve password from environment variable or secure storage if not provided."""
-        if not self.password:
-            # Try environment variable first
-            self.password = os.environ.get('AZURE_SQL_PASSWORD', '')
-            
-            # If still empty, try secure credential manager
-            if not self.password:
-                try:
-                    from .secure_credentials import SecureCredentialManager
-                    credential_manager = SecureCredentialManager(
-                        credential_name="azure_sql_password",
-                        env_var_name="AZURE_SQL_PASSWORD"
-                    )
-                    self.password = credential_manager.get_credential() or ''
-                except Exception:
-                    # If secure storage fails, leave empty (will fail at connection time)
-                    pass
-        
+        """Resolve password: explicit (e.g. JSON) → encrypted file → Key Vault → env (same order as API keys)."""
+        try:
+            from .secure_credentials import SecureCredentialManager
+            vault_url = self.azure_key_vault_url or os.environ.get("AZURE_KEY_VAULT_URL")
+            explicit = (self.password or "").strip() or None
+            credential_manager = SecureCredentialManager(
+                credential_name="azure_sql_password",
+                env_var_name="AZURE_SQL_PASSWORD",
+                azure_key_vault_url=vault_url,
+            )
+            self.password = credential_manager.get_credential(explicit_key=explicit) or ""
+        except Exception:
+            self.password = (self.password or "").strip()
         return self
     
     def get_connection_string(self) -> str:
@@ -160,8 +159,13 @@ class MapperStepConfig(BaseModel):
     enrich_source: Optional[str] = None
     enrich_profile: Optional[str] = None
     grok_api_key: Optional[str] = None
+    disgenet_api_key: Optional[str] = None
+    persist_secrets: Optional[bool] = None
     grok_max_workers: Optional[int] = None
     grok_batch_size: Optional[int] = None
+    grok_batch_api: Optional[bool] = None
+    grok_batch_poll_interval: Optional[float] = None
+    grok_batch_submit_chunk_size: Optional[int] = None
     grok_cache_ttl_days: Optional[int] = None
     azure_key_vault_url: Optional[str] = None
     encrypted_file_path: Optional[str] = None

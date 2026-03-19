@@ -12,7 +12,7 @@ from .models import DMPStaging, GeneMappingResult, SampleDMP
 from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
 from .gene_disease_enricher import GeneDiseaseEnricher
-from .secure_credentials import SecureCredentialManager
+from .secure_credentials import SecureCredentialManager, persist_secret_if_changed
 
 __version__ = "0.1.0"
 __all__ = [
@@ -32,5 +32,6 @@ __all__ = [
     "BedtoolsMapper",
     "GeneDiseaseEnricher",
     "SecureCredentialManager",
+    "persist_secret_if_changed",
 ]
 

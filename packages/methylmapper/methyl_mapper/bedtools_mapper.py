@@ -111,6 +111,9 @@ class BedtoolsMapper:
         source_max_workers: int = 3,
         grok_batch_size: int = 20,
         grok_max_workers: int = 8,
+        grok_use_xai_batch_api: bool = True,
+        grok_batch_poll_interval: float = 2.0,
+        grok_batch_submit_chunk_size: int = 200,
         open_targets_max_workers: int = 8,
         disgenet_max_workers: int = 8,
         azure_key_vault_url: Optional[str] = None,
@@ -165,11 +168,14 @@ class BedtoolsMapper:
             grok_cache_ttl_days: Disk cache TTL in days for Grok lookups (default: 7)
             source_max_workers: Max workers when querying multiple enrichment sources in parallel
             grok_batch_size: Number of genes per Grok batch request
-            grok_max_workers: Max concurrent Grok batch requests
+            grok_max_workers: Max concurrent Grok requests (realtime API only)
+            grok_use_xai_batch_api: Use xAI Batch API by default; set False for synchronous chat/completions
+            grok_batch_poll_interval: Poll interval while waiting on xAI Batch API
+            grok_batch_submit_chunk_size: Chunk size when POSTing batch requests to xAI
             open_targets_max_workers: Max concurrent Open Targets gene requests
             disgenet_max_workers: Max concurrent DisGeNET gene requests
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
-            azure_secret_name: Azure Key Vault secret name (or set AZURE_SECRET_NAME env var)
+            azure_secret_name: Optional Key Vault secret name override for enrichment keys (per-credential defaults if unset)
             encrypted_file_path: Path to encrypted credential file (optional)
             optimize_dmps: Whether to optimize DMP count for stable gene sets (default: True)
             dmp_rank_columns: Optional list of columns to rank DMPs by importance
@@ -223,6 +229,9 @@ class BedtoolsMapper:
                 source_max_workers=source_max_workers,
                 grok_batch_size=grok_batch_size,
                 grok_max_workers=grok_max_workers,
+                grok_use_xai_batch_api=grok_use_xai_batch_api,
+                grok_batch_poll_interval=grok_batch_poll_interval,
+                grok_batch_submit_chunk_size=grok_batch_submit_chunk_size,
                 open_targets_max_workers=open_targets_max_workers,
                 disgenet_max_workers=disgenet_max_workers,
                 azure_key_vault_url=azure_key_vault_url,
