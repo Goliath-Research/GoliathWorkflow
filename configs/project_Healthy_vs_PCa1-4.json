@@ -214,7 +214,7 @@
         "configs/healthy.csv"
       ],
       "test_disease_paths": [
-        "configs/cancer.csv"
+        "configs/prostate_cancer.csv"
       ],
       "debug": false
     }
