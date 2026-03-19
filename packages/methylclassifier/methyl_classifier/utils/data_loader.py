@@ -203,6 +203,32 @@ class DataLoader:
             raise FileNotFoundError(f"No valid chromosome files found in {sample_dir}")
         
         merged_samples = {}
+
+        def _fallback_positions_for_chrom(chrom_key: str) -> Optional[np.ndarray]:
+            """Use flat ``positions`` only when a single chromosome is in scope (safe hyperslice)."""
+            if positions is None or len(positions) == 0:
+                return None
+            pos_arr = np.asarray(positions, dtype=np.uint32).ravel()
+            if pos_arr.size == 0:
+                return None
+            if len(pos_arr) > 1 and not np.all(np.diff(pos_arr) >= 0):
+                pos_arr = np.sort(pos_arr)
+            single_chrom_scope = False
+            if required_chromosomes is not None and len(required_chromosomes) == 1:
+                single_chrom_scope = str(chrom_key) == str(required_chromosomes[0])
+            elif chromosomes is not None and len(chromosomes) == 1:
+                single_chrom_scope = str(chrom_key) == str(chromosomes[0])
+            elif len(chrom_files) == 1:
+                single_chrom_scope = True
+            if not single_chrom_scope:
+                if debug:
+                    print(
+                        f"      ⚠️ Chromosome {chrom_key}: flat ``positions`` ignored for multi-chrom "
+                        f"load; use dmp_positions_by_chrom per chromosome.",
+                        flush=True,
+                    )
+                return None
+            return pos_arr
         
         # Merge contexts for each chromosome
         for chrom, context_files in chrom_files.items():
@@ -241,7 +267,8 @@ class DataLoader:
                             print(f"      ⚠️ Chromosome {chrom}: No DMP positions found, will load ALL positions", flush=True)
                             chrom_positions = None
                 else:
-                    if debug:
+                    chrom_positions = _fallback_positions_for_chrom(chrom)
+                    if chrom_positions is None and debug:
                         print(f"      ⚠️ Chromosome {chrom}: No DMP positions provided, will load ALL positions", flush=True)
 
                 try:
@@ -392,27 +419,25 @@ class DataLoader:
         methylation_levels = np.nan_to_num(methylation_levels, nan=0.5)
         methylation_levels = np.clip(methylation_levels, 0.0, 1.0)
 
-        # Use int keys so lookup works regardless of dmp_positions dtype (numpy vs int)
-        pos_vals = np.asarray(sample.pos)
-        meth_vals = np.asarray(methylation_levels)
-        pos_to_methylation = {int(pos_vals[i]): meth_vals[i] for i in range(len(pos_vals))}
+        pos_vals = np.asarray(sample.pos, dtype=np.uint64)
+        meth_vals = np.asarray(methylation_levels, dtype=np.float64)
+        dmp_arr = np.asarray(dmp_positions, dtype=np.uint64).ravel()
 
-        feature_vector = []
-        availability_mask = []
-        missing_positions = 0
-
-        for dmp_pos in dmp_positions:
-            key = int(dmp_pos) if hasattr(dmp_pos, "__int__") else dmp_pos
-            if key in pos_to_methylation:
-                methylation = pos_to_methylation[key]
-                methylation = np.clip(methylation, 0.0, 1.0)
-                feature_vector.append(methylation)
-                availability_mask.append(True)
-            else:
-                # Position not found in sample - use 0.5 (neutral) but mark as unavailable
-                feature_vector.append(0.5)
-                availability_mask.append(False)
-                missing_positions += 1
+        if len(pos_vals) == 0:
+            feature_vector = np.full(len(dmp_arr), 0.5, dtype=np.float64)
+            availability_mask = np.zeros(len(dmp_arr), dtype=bool)
+            missing_positions = len(dmp_arr)
+        else:
+            order = np.argsort(pos_vals, kind="mergesort")
+            sp = pos_vals[order]
+            sm = meth_vals[order]
+            idx = np.searchsorted(sp, dmp_arr, side="left")
+            match = (idx < len(sp)) & (sp[idx] == dmp_arr)
+            safe_idx = np.clip(idx, 0, len(sm) - 1)
+            feature_vector = np.where(match, sm[safe_idx], 0.5).astype(np.float64)
+            feature_vector = np.clip(feature_vector, 0.0, 1.0)
+            availability_mask = match
+            missing_positions = int(np.sum(~match))
 
         # Collect statistical information
         coverage = sample.get_coverage()
@@ -422,7 +447,9 @@ class DataLoader:
             'total_positions': len(sample.pos),
             'sample_type': sample.sample_type,
             'missing_positions': missing_positions,
-            'dmp_coverage_pct': (len(dmp_positions) - missing_positions) / len(dmp_positions) * 100
+            'dmp_coverage_pct': (
+                (len(dmp_arr) - missing_positions) / len(dmp_arr) * 100.0 if len(dmp_arr) > 0 else 0.0
+            ),
         }
 
         # Add statistical properties if available (for centroids)

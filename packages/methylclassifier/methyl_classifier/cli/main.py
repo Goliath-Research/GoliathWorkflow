@@ -403,6 +403,126 @@ def classify_samples(classifier: MethylClassifier,
         print(f"\n💾 Results saved to: {output_file}")
 
 
+def _inner_classifier_for_features(classifier: MethylClassifier):
+    """Resolve the object that holds ECDF ``positions`` / ``contexts`` (unwrap one level if needed)."""
+    inner = getattr(classifier, "classifier", None)
+    if inner is None:
+        return None
+    if hasattr(inner, "positions") and hasattr(inner, "get_feature_info"):
+        return inner
+    nested = getattr(inner, "classifier", None)
+    if nested is not None and hasattr(nested, "positions") and hasattr(nested, "get_feature_info"):
+        return nested
+    return inner if hasattr(inner, "get_feature_info") else None
+
+
+def _try_centroid_pair_single_chrom_fast_path(
+    classifier: MethylClassifier,
+    samples_list: List[str],
+    multichrom_dmp_df: bool,
+    debug: bool,
+) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, List[str], str]]:
+    """
+    Batch-load methylation fractions via MethylCentroidPair.extract_methylation_fractions
+    (same as MethylDetector validation): CG-only or multi-context using per-context
+    reference positions, then reorder columns to match ECDF DMP row order.
+
+    Returns (feature_matrix, availability_mask, dmp_positions, sample_names, chrom_str) or None.
+    """
+    if classifier.is_multi_chromosome or multichrom_dmp_df:
+        return None
+    inner = _inner_classifier_for_features(classifier)
+    if inner is None or classifier.chromosome in (None, "unknown"):
+        return None
+    raw_pos = getattr(inner, "positions", None)
+    if raw_pos is None and hasattr(inner, "get_feature_info"):
+        fi = inner.get_feature_info()
+        raw_pos = fi.get("positions") if isinstance(fi, dict) else None
+    if raw_pos is None:
+        return None
+    pos_arr = np.asarray(raw_pos, dtype=np.uint32).ravel()
+    if pos_arr.size == 0:
+        return None
+    raw_ctx = getattr(inner, "contexts", None)
+    if raw_ctx is not None:
+        ctx_arr = np.asarray(raw_ctx, dtype=str)
+        if ctx_arr.shape[0] != pos_arr.shape[0]:
+            return None
+    else:
+        ctx_arr = np.array(["CG"] * pos_arr.shape[0], dtype=str)
+
+    # Preserve training metadata order, then append any context present in dmpDF but missing from metadata
+    meta_ctx = getattr(classifier, "model_contexts", None) or []
+    ctx_order = [str(c) for c in meta_ctx]
+    seen_meta = set(ctx_order)
+    for c in np.unique(ctx_arr):
+        s = str(c)
+        if s not in seen_meta:
+            ctx_order.append(s)
+            seen_meta.add(s)
+    if not ctx_order:
+        ctx_order = sorted(np.unique(ctx_arr).tolist())
+
+    reference_positions: Dict[str, np.ndarray] = {}
+    for ctx in ctx_order:
+        mask = ctx_arr == str(ctx)
+        reference_positions[str(ctx)] = (
+            np.asarray(pos_arr[mask], dtype=np.uint32).copy() if np.any(mask) else np.array([], dtype=np.uint32)
+        )
+
+    try:
+        from methyl_utils.methyl_centroid_pair import MethylCentroidPair
+
+        chrom_str = str(classifier.chromosome)
+        X_ext, all_pos, all_ctx, _ = MethylCentroidPair.extract_methylation_fractions(
+            sample_paths=samples_list,
+            reference_positions=reference_positions,
+            chromosome=chrom_str,
+            min_coverage=1,
+        )
+        if X_ext.size == 0:
+            return None
+
+        col_map: Dict[Tuple[int, str], int] = {}
+        for j in range(int(all_pos.shape[0])):
+            key = (int(all_pos[j]), str(all_ctx[j]))
+            col_map[key] = j
+
+        n_dmps = pos_arr.shape[0]
+        col_for_row = np.empty(n_dmps, dtype=np.intp)
+        for i in range(n_dmps):
+            key = (int(pos_arr[i]), str(ctx_arr[i]))
+            if key not in col_map:
+                raise KeyError(f"No extraction column for DMP row {key}")
+            col_for_row[i] = col_map[key]
+
+        X_reord = np.ascontiguousarray(X_ext[:, col_for_row])
+        valid_rows = ~np.isnan(X_reord).all(axis=1)
+        if not valid_rows.all():
+            return None
+
+        feature_matrix = np.where(np.isnan(X_reord), 0.5, X_reord).astype(np.float64)
+        feature_matrix = np.clip(feature_matrix, 0.0, 1.0)
+        availability = ~np.isnan(X_reord)
+        sample_names = [Path(p).name for p in samples_list]
+        n_ctx = len([c for c in ctx_order if reference_positions.get(str(c), np.array([])).size > 0])
+        label = (
+            f"multi-context ({', '.join(ctx_order)})"
+            if n_ctx > 1 or (raw_ctx is not None and len(np.unique(ctx_arr)) > 1)
+            else "CG-only"
+        )
+        print(
+            f"⚡ Fast path ({label}): MethylCentroidPair.extract_methylation_fractions "
+            f"({len(samples_list)} samples × {n_dmps} DMPs), chromosome {chrom_str}",
+            flush=True,
+        )
+        return feature_matrix, availability, pos_arr, sample_names, chrom_str
+    except Exception as exc:
+        if debug:
+            print(f"⚠️ Centroid-pair fast path skipped, using standard loader: {exc}", flush=True)
+        return None
+
+
 def classify_samples_from_list(
     classifier: MethylClassifier,
     samples_list: List[str],
@@ -455,6 +575,46 @@ def classify_samples_from_list(
     contexts_to_load = getattr(classifier, 'model_contexts', None)
     if contexts_to_load == ['CG']:
         print("📌 Model is CG-only: loading only CG context from samples (no CHG/CHH merge)", flush=True)
+
+    # Fast path: single-chrom (CG-only or multi-context ECDF) — batch extraction like MethylDetector validation
+    _dmp_df = getattr(classifier, "dmp_positions_df", None)
+    multichrom_dmp_df = (
+        _dmp_df is not None
+        and len(_dmp_df) > 0
+        and hasattr(_dmp_df, "columns")
+        and "chromosome" in _dmp_df.columns
+        and _dmp_df["chromosome"].nunique() > 1
+    )
+    fast = _try_centroid_pair_single_chrom_fast_path(
+        classifier, samples_list, multichrom_dmp_df, debug
+    )
+    if fast is not None:
+        feature_matrix_fast, availability_fast, dmp_pos_fast, sample_names_fast, _chrom_fp = fast
+        predictions, probabilities = classify_samples_batch(
+            classifier, feature_matrix_fast, availability_fast, debug
+        )
+        fc_exp = None
+        if expected_classes is not None:
+            fc_exp = [
+                expected_classes[i]
+                for i in range(len(samples_list))
+                if i < len(expected_classes)
+            ]
+        _save_classification_results(
+            classifier,
+            sample_names_fast,
+            predictions,
+            probabilities,
+            availability_fast,
+            dmp_pos_fast,
+            output_file,
+            expected_classes=fc_exp,
+        )
+        if fc_exp is not None and len(fc_exp) == len(sample_names_fast):
+            _print_validation_report(
+                classifier, sample_names_fast, predictions, probabilities, fc_exp
+            )
+        return
 
     # Load samples (merged contexts per chromosome, or single context when model is CG-only)
     loaded_samples, loaded_indices = DataLoader.load_samples_from_list(
