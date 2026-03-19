@@ -432,8 +432,8 @@ class DataLoader:
             sp = pos_vals[order]
             sm = meth_vals[order]
             idx = np.searchsorted(sp, dmp_arr, side="left")
-            match = (idx < len(sp)) & (sp[idx] == dmp_arr)
             safe_idx = np.clip(idx, 0, len(sm) - 1)
+            match = (idx < len(sp)) & (sp[safe_idx] == dmp_arr)
             feature_vector = np.where(match, sm[safe_idx], 0.5).astype(np.float64)
             feature_vector = np.clip(feature_vector, 0.0, 1.0)
             availability_mask = match
