@@ -767,6 +767,25 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.w_unknown = config.w_unknown
 
 
+def _grok_api_key_available(args: argparse.Namespace) -> bool:
+    """True if Grok will resolve a key (CLI/config arg, env, encrypted file, or Key Vault)."""
+    if (getattr(args, "grok_api_key", None) or "").strip():
+        return True
+    if os.environ.get("GROK_API_KEY"):
+        return True
+    vault = (getattr(args, "azure_key_vault_url", None) or os.environ.get("AZURE_KEY_VAULT_URL") or "").strip() or None
+    enc = Path(args.encrypted_file_path) if getattr(args, "encrypted_file_path", None) else None
+    kw: dict = {
+        "credential_name": "grok_api_key",
+        "azure_key_vault_url": vault,
+        "encrypted_file_path": enc,
+        "env_var_name": "GROK_API_KEY",
+    }
+    if getattr(args, "azure_secret_name", None):
+        kw["azure_secret_name"] = args.azure_secret_name
+    return bool(SecureCredentialManager(**kw).get_credential(explicit_key=None))
+
+
 def _maybe_persist_bedtools_enrichment_secrets(args: argparse.Namespace) -> None:
     """Save Grok/DisGeNET keys from CLI or mapper config to encrypted file and optionally Key Vault."""
     if getattr(args, "no_persist_secrets", False):
@@ -853,14 +872,13 @@ def main_bedtools():
             logger.info(f"Disease enrichment: Enabled ({disease_term})")
             use_grok = "grok" in (args.enrich_source or "").lower()
             if use_grok:
-                grok_key_set = bool(args.grok_api_key or os.environ.get("GROK_API_KEY"))
-                if grok_key_set:
+                if _grok_api_key_available(args):
                     mode = "xAI Batch API" if getattr(args, "grok_batch_api", True) else "realtime chat/completions"
                     logger.info(f"Grok API ({mode}): will query gene–{disease_term} associations (key configured)")
                 else:
                     logger.warning(
-                        "Grok API: no key found (set GROK_API_KEY or --grok-api-key). "
-                        "Grok queries will be skipped; only other enrichment sources will run."
+                        "Grok API: no key found (CLI/config, GROK_API_KEY, ~/.methyl_mapper/credentials/grok_api_key.encrypted, "
+                        "or Azure Key Vault with AZURE_KEY_VAULT_URL). Grok queries will be skipped; other enrichment sources still run."
                     )
         if not args.no_optimize_dmps and args.enrich_disease:
             logger.info(f"DMP optimization: Enabled (min_k={args.min_k}, stability_threshold={args.stability_threshold})")
