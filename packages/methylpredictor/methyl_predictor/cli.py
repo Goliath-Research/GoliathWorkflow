@@ -225,7 +225,11 @@ def main() -> None:
                                 paths_raw = x.get("paths") or []
                                 if isinstance(paths_raw, str):
                                     paths_raw = [paths_raw]
-                                expanded = _expand_test_paths(paths_raw, base_path)
+                                expanded = _expand_test_paths(
+                                    paths_raw,
+                                    base_path,
+                                    project_config_path=args.project,
+                                )
                                 paths_abs = [_resolve_one_path(p, base_path) for p in expanded if p]
                                 resolved_groups.append({"label": label_name, "paths": paths_abs})
                             if resolved_groups:

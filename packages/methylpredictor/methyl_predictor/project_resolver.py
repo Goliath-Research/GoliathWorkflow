@@ -45,22 +45,88 @@ def _read_paths_from_csv_file(csv_path: Path, base_path: Optional[str]) -> List[
     return out
 
 
-def _expand_test_paths(entries: List[str], base_path: Optional[str]) -> List[str]:
+def _list_file_search_roots(
+    base_path: Optional[str],
+    project_config_path: Optional[Union[str, Path]],
+) -> List[Path]:
+    """Ordered roots to resolve relative list paths (e.g. configs/sets.csv): cwd, project parents, samples_base."""
+    roots: List[Path] = []
+    seen: set[str] = set()
+
+    def add(p: Optional[Path]) -> None:
+        if p is None:
+            return
+        try:
+            r = p.resolve()
+        except OSError:
+            return
+        key = str(r)
+        if key not in seen:
+            seen.add(key)
+            roots.append(r)
+
+    # Project file directory first so configs/foo.csv resolves next to the JSON, not cwd.
+    if project_config_path:
+        pp = Path(project_config_path)
+        if pp.is_file():
+            parent = pp.parent
+            add(parent)
+            if parent.name == "configs":
+                add(parent.parent)
+        elif pp.is_dir():
+            add(pp)
+    add(Path.cwd())
+    if base_path:
+        add(Path(base_path))
+    return roots
+
+
+def _find_relative_csv(entry: str, roots: List[Path]) -> Optional[Path]:
+    for root in roots:
+        cand = root / entry
+        if cand.is_file() and cand.suffix.lower() == ".csv":
+            return cand
+    return None
+
+
+def _expand_test_paths(
+    entries: List[str],
+    base_path: Optional[str],
+    project_config_path: Optional[Union[str, Path]] = None,
+) -> List[str]:
     """
     Expand a list of entries into full sample paths. Each entry is either a path to a .csv file
-    (expanded to the list of paths read from the CSV) or a single sample path. Relative paths
-    are resolved against base_path.
+    (expanded to the list of paths read from the CSV) or a single sample path.
+
+    Relative .csv list files are looked up under cwd, the project JSON's directory (and repo root
+    when the project lives under .../configs/), then samples_base_path — not only under samples_base_path,
+    so configs like ``test_control_paths: [\"configs/healthy.csv\"]`` resolve next to the project file.
+    Other relative paths are resolved against base_path (samples_base_path) as before.
     """
     result: List[str] = []
+    roots = _list_file_search_roots(base_path, project_config_path)
     base = Path(base_path).resolve() if base_path else None
+    csv_base_arg = str(base) if base else None
     for entry in (e.strip() for e in entries if e and str(e).strip()):
         if not entry:
             continue
         p = Path(entry)
-        if base and not p.is_absolute():
-            p = base / p
-        if p.is_file() and p.suffix.lower() == ".csv":
-            result.extend(_read_paths_from_csv_file(p, str(base) if base else None))
+        if p.is_absolute():
+            if p.is_file() and p.suffix.lower() == ".csv":
+                result.extend(_read_paths_from_csv_file(p, csv_base_arg))
+            else:
+                result.append(_resolve_one_path(entry, base_path))
+            continue
+        csv_hit = _find_relative_csv(entry, roots)
+        if csv_hit is not None:
+            result.extend(_read_paths_from_csv_file(csv_hit, csv_base_arg))
+            continue
+        if base is not None:
+            p_joined = base / entry
+            if p_joined.is_file() and p_joined.suffix.lower() == ".csv":
+                result.extend(_read_paths_from_csv_file(p_joined, csv_base_arg))
+            else:
+                result.append(_resolve_one_path(entry, base_path))
         else:
             result.append(_resolve_one_path(entry, base_path))
     return result
@@ -137,18 +203,27 @@ def resolve_predictor_config(
     out_dir = str(Path(out_dir).resolve())
 
     base_path = getattr(project, "samples_base_path", None)
+    proj_path_arg: Union[str, Path] = project_path
     # Precedence: (1) CLI/caller test paths, (2) valid config test paths, (3) training data
     if test_control_paths is not None and test_disease_paths is not None:
-        control_paths = [_resolve_one_path(p, base_path) for p in test_control_paths if p and str(p).strip()]
-        disease_paths = [_resolve_one_path(p, base_path) for p in test_disease_paths if p and str(p).strip()]
+        control_paths = _expand_test_paths(
+            test_control_paths, base_path, project_config_path=proj_path_arg
+        )
+        disease_paths = _expand_test_paths(
+            test_disease_paths, base_path, project_config_path=proj_path_arg
+        )
     else:
         base_path = getattr(project, "samples_base_path", None)
         # Canonical keys; accept legacy aliases (healthy_paths/cancer_paths)
         step_control = step_cfg.get("test_control_paths") or step_cfg.get("healthy_paths")
         step_disease = step_cfg.get("test_disease_paths") or step_cfg.get("cancer_paths")
         if step_control is not None and step_disease is not None:
-            control_paths = _expand_test_paths(step_control, base_path)
-            disease_paths = _expand_test_paths(step_disease, base_path)
+            control_paths = _expand_test_paths(
+                step_control, base_path, project_config_path=proj_path_arg
+            )
+            disease_paths = _expand_test_paths(
+                step_disease, base_path, project_config_path=proj_path_arg
+            )
             if not control_paths or not disease_paths:
                 # Config test paths invalid (empty after expansion); fall back to training data
                 resolved = project.get_resolved_groups()
@@ -240,7 +315,9 @@ def resolve_predictor_config_per_comparison(
                 paths_raw = entry.get("paths") or []
                 if isinstance(paths_raw, str):
                     paths_raw = [paths_raw]
-                expanded = _expand_test_paths(paths_raw, base_path)
+                expanded = _expand_test_paths(
+                    paths_raw, base_path, project_config_path=project_path
+                )
                 expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
                 if project.path_remap:
                     expanded = _apply_path_remap(expanded, project.path_remap)
@@ -281,8 +358,12 @@ def resolve_predictor_config_per_comparison(
     config_test_control: Optional[List[str]] = None
     config_test_disease: Optional[List[str]] = None
     if step_control is not None and step_disease is not None:
-        config_test_control = _expand_test_paths(step_control, base_path)
-        config_test_disease = _expand_test_paths(step_disease, base_path)
+        config_test_control = _expand_test_paths(
+            step_control, base_path, project_config_path=project_path
+        )
+        config_test_disease = _expand_test_paths(
+            step_disease, base_path, project_config_path=project_path
+        )
         if not config_test_control or not config_test_disease:
             config_test_control = None
             config_test_disease = None
@@ -311,8 +392,16 @@ def resolve_predictor_config_per_comparison(
         out_dir = project.get_validator_output_dir(ctrl_label, dis_label)
 
         if use_caller_test_paths:
-            control_paths = [_resolve_one_path(p, base_path) for p in test_control_paths if p and str(p).strip()]
-            disease_paths = [_resolve_one_path(p, base_path) for p in test_disease_paths if p and str(p).strip()]
+            control_paths = _expand_test_paths(
+                test_control_paths or [],
+                base_path,
+                project_config_path=project_path,
+            )
+            disease_paths = _expand_test_paths(
+                test_disease_paths or [],
+                base_path,
+                project_config_path=project_path,
+            )
         elif config_test_control is not None and config_test_disease is not None:
             control_paths = list(config_test_control)
             disease_paths = list(config_test_disease)
