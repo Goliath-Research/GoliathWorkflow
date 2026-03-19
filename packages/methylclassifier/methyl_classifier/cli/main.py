@@ -23,6 +23,12 @@ try:
 except ImportError:
     load_project = None  # type: ignore[misc, assignment]
 
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable=None, *args, **kwargs):
+        return iterable if iterable is not None else []
+
 
 def _remap_centroid_path(path: str, path_remap: Optional[Dict[str, str]], sample_root: Optional[Path]) -> str:
     """Apply path_remap (prefix replacement) or sample_root/basename. path_remap takes precedence."""
@@ -522,8 +528,10 @@ def classify_samples_from_list(
         feature_matrix = []
         availability_mask = []
         sample_names = []
-        
-        for sample_name, sample in single_samples:
+        pbar = tqdm(single_samples, desc="Extracting features", unit="sample")
+        for sample_name, sample in pbar:
+            if hasattr(pbar, "set_postfix_str"):
+                pbar.set_postfix_str(sample_name, refresh=True)
             features, mask, stats = DataLoader.extract_sample_features(sample, dmp_positions)
             feature_matrix.append(features)
             availability_mask.append(mask)
@@ -564,8 +572,10 @@ def _classify_single_file_multichrom_dmps(
     feature_matrix = np.zeros((n_samples, n_dmps), dtype=np.float64)
     availability_mask = np.zeros((n_samples, n_dmps), dtype=bool)
     sample_names = []
-
-    for sample_idx, (sample_name, chrom_samples) in enumerate(loaded_samples):
+    pbar = tqdm(enumerate(loaded_samples), total=n_samples, desc="Extracting features", unit="sample")
+    for sample_idx, (sample_name, chrom_samples) in pbar:
+        if hasattr(pbar, "set_postfix_str"):
+            pbar.set_postfix_str(sample_name, refresh=True)
         sample_names.append(sample_name)
         offset = 0
         for chrom in chrom_order:
@@ -627,7 +637,10 @@ def _classify_multi_chromosome_samples(
             feature_info = chrom_classifier.get_feature_info()
             dmp_positions_by_chrom[chrom] = feature_info['positions']
     
-    for sample_name, chrom_samples in loaded_samples:
+    pbar = tqdm(loaded_samples, desc="Extracting features", unit="sample")
+    for sample_name, chrom_samples in pbar:
+        if hasattr(pbar, "set_postfix_str"):
+            pbar.set_postfix_str(sample_name, refresh=True)
         sample_names.append(sample_name)
         
         # Extract features for each chromosome

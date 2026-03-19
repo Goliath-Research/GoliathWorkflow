@@ -2,11 +2,18 @@
 Data loading functionality for MethylClassifier
 """
 
+import time
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any, Union
 import numpy as np
 import pandas as pd
 from collections import defaultdict
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable=None, *args, **kwargs):
+        return iterable if iterable is not None else []
 
 
 class DataLoader:
@@ -321,13 +328,16 @@ class DataLoader:
         """
         samples = []
         loaded_indices: List[int] = []
-        import time
+        total = len(sample_paths)
+        pbar = tqdm(sample_paths, desc="Loading samples", unit="sample", total=total)
 
-        for i, sample_path in enumerate(sample_paths, 1):
+        for i, sample_path in enumerate(pbar, 1):
             sample_dir = Path(sample_path)
             sample_name = sample_dir.name
-
-            print(f"✅ Loading sample {i}/{len(sample_paths)}: {sample_name}", flush=True)
+            if hasattr(pbar, "set_postfix_str"):
+                pbar.set_postfix_str(sample_name, refresh=True)
+            else:
+                print(f"✅ Loading sample {i}/{total}: {sample_name}", flush=True)
             start_time = time.time()
 
             try:
@@ -339,16 +349,22 @@ class DataLoader:
                 
                 # Skip sample if no chromosomes were loaded (all were empty or missing)
                 if len(merged_samples) == 0:
-                    print(f"⚠️ Warning: Sample {sample_name} has no valid chromosomes (all empty or missing), skipping")
+                    if hasattr(pbar, "set_postfix_str"):
+                        pbar.set_postfix_str(f"skip: {sample_name}", refresh=True)
+                    else:
+                        print(f"⚠️ Warning: Sample {sample_name} has no valid chromosomes (all empty or missing), skipping")
                     continue
                 
                 load_time = time.time() - start_time
                 samples.append((sample_name, merged_samples))
                 loaded_indices.append(i - 1)
-                if debug:
+                if debug and not hasattr(pbar, "set_postfix_str"):
                     print(f"✅ Loaded sample: {sample_name} ({len(merged_samples)} chromosomes) in {load_time:.1f}s")
             except Exception as e:
-                print(f"❌ Failed to load sample {sample_name}: {e}", flush=True)
+                if hasattr(pbar, "set_postfix_str"):
+                    pbar.set_postfix_str(f"failed: {sample_name}", refresh=True)
+                else:
+                    print(f"❌ Failed to load sample {sample_name}: {e}", flush=True)
                 if debug:
                     import traceback
                     print(f"   Error type: {type(e).__name__}", flush=True)
