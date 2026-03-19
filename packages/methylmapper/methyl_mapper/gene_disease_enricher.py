@@ -309,6 +309,8 @@ class GeneDiseaseEnricher:
         
         self._thread_local = local()
         self._cache_lock = Lock()
+        self._grok_request_lock = Lock()
+        self._grok_next_start_time = 0.0
         self._association_runtime_cache: Dict[str, Dict] = {}
         self._association_disk_cache: Dict[str, Dict[str, Union[float, Dict]]] = {}
         self._disease_runtime_cache: Dict[str, Optional[str]] = {}
@@ -321,10 +323,11 @@ class GeneDiseaseEnricher:
     def _create_session(self) -> requests.Session:
         """Create a requests session configured for retryable API traffic."""
         session = requests.Session()
+        # Do not retry 429 in the session so _query_grok_batch can apply long backoff and respect Retry-After
         retry_strategy = Retry(
             total=self.max_retries,
             backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504],
+            status_forcelist=[500, 502, 503, 504],
             allowed_methods=None,
         )
         adapter = HTTPAdapter(max_retries=retry_strategy)
@@ -621,6 +624,32 @@ class GeneDiseaseEnricher:
                 for gene_name, association_info in batch_results.items():
                     self._cache_set(self._cache_key("grok", gene_name, disease_term), association_info)
                 return batch_results, True
+            except requests.HTTPError as exc:
+                last_error = exc
+                if attempt < self.max_retries - 1:
+                    # Use longer backoff for 429 (rate limit) and respect Retry-After if present
+                    if exc.response is not None and exc.response.status_code == 429:
+                        raw_retry_after = exc.response.headers.get("Retry-After")
+                        if raw_retry_after:
+                            try:
+                                delay = int(raw_retry_after)
+                            except (ValueError, TypeError):
+                                delay = 60 * (2 ** attempt)
+                        else:
+                            delay = 60 * (2 ** attempt)  # 60s, 120s, 240s
+                        if attempt == 0:
+                            logger.warning(
+                                "Grok API rate limit (429). Use --grok-max-workers 1 and/or "
+                                "--rate-limit-delay to reduce concurrency if this persists."
+                            )
+                    else:
+                        delay = (2 ** attempt) * 5
+                    logger.warning(
+                        f"Grok API query failed for batch {batch_num} "
+                        f"(attempt {attempt + 1}/{self.max_retries}): {exc}. "
+                        f"Retrying in {delay}s..."
+                    )
+                    time.sleep(delay)
             except Exception as exc:
                 last_error = exc
                 if attempt < self.max_retries - 1:
@@ -697,6 +726,13 @@ Return ONLY a valid JSON array—no other text. Example:
             "stream": False
         }
         
+        # Throttle: at most one request start per rate_limit_delay (avoids 429 when using multiple workers)
+        with self._grok_request_lock:
+            now = time.monotonic()
+            wait = max(0.0, self._grok_next_start_time - now)
+            self._grok_next_start_time = now + wait + self.rate_limit_delay
+        if wait > 0:
+            time.sleep(wait)
         logger.debug(f"Calling Grok API with timeout={timeout}s for prompt length={len(prompt)}")
         response = self._get_session().post(
             self.grok_api_url,
