@@ -8,38 +8,39 @@ This document describes how MethylValidation is implemented: it orchestrates str
 
 MethylValidation does not run centroid, detection, classification, or prediction logic itself. It:
 
-1. Loads a Monte Carlo config and resolves sample paths from healthy/disease CSVs.
-2. For each iteration: performs a stratified train/val split, generates a run-specific project and CSVs, runs the four pipeline steps via subprocess, reads `validation_metrics.json` from the predictor output, and records step timings (with n_train_samples, n_val_samples).
+1. Loads a Monte Carlo config; rejects blind-only `step_config.predictor`; infers **binary** vs **multiclass** layout from `base_project` (`infer_monte_carlo_layout`). Resolves sample paths from `cohorts` (or legacy `healthy_csv` / `disease_csv`).
+2. For each iteration: stratified split per cohort, generates run project + train/val inputs, runs centroid → detector → classifier → predictor via subprocess, reads `validation_metrics.json`, records step timings.
 3. Aggregates all collected metrics into `all_metrics.csv` and `metrics_summary.json`, and writes `step_timings.csv` (and optionally `resource_summary.json`).
 
 ```mermaid
 flowchart LR
   Config[MonteCarloConfig]
-  Split[stratified_split]
-  ProjectGen[generate_run_project]
-  Runner[run_pipeline_for_iteration]
+  Layout[infer_monte_carlo_layout]
+  Split[stratified_split / stratified_split_multiclass]
+  GenB[generate_run_project]
+  GenM[generate_run_project_multiclass]
+  RunB[run_pipeline_for_iteration]
+  RunM[run_pipeline_for_iteration_multiclass]
   Centroid[methyl-centroid]
   Detector[methyl-detector]
   Classifier[methyl-classifier]
   Predictor[methyl-predictor]
   Metrics[validation_metrics.json]
   Aggregate[validator_metrics]
-  AllMetrics[all_metrics.csv]
-  Summary[metrics_summary.json]
-  Timings[step_timings.csv]
 
-  Config --> Split
-  Split --> ProjectGen
-  ProjectGen --> Runner
-  Runner --> Centroid
+  Config --> Layout
+  Layout --> Split
+  Split --> GenB
+  Split --> GenM
+  GenB --> RunB
+  GenM --> RunM
+  RunB --> Centroid
+  RunM --> Centroid
   Centroid --> Detector
   Detector --> Classifier
   Classifier --> Predictor
   Predictor --> Metrics
   Metrics --> Aggregate
-  Aggregate --> AllMetrics
-  Aggregate --> Summary
-  Runner --> Timings
 ```
 
 ## MethylUtils usage
@@ -47,7 +48,7 @@ flowchart LR
 MethylValidation uses **MethylUtils** only for project loading:
 
 - **load_project(base_project)** — To read `project_name` and project structure so that run directories are created under `output_base/project_name/monte_carlo_runs/run_0001`, etc.
-- **load_project(project_path)** — Per run, to resolve the predictor output directory (e.g. from comparisons: `run_dir/predictors/control_group/disease_group`).
+- **load_project(project_path)** — Per run (binary), to resolve the predictor output directory from comparisons (`run_dir/predictors/<control>/<disease>`). Multiclass flat runs use `run_dir/predictors` directly.
 
 Sample path resolution is done locally in MethylValidation ([split.py](../methyl_validation/split.py): `load_and_resolve_sample_paths`). The actual validation metrics are produced by **MethylPredictor** (which uses MethylClassifier and MethylUtils internally); MethylValidation only reads the written `validation_metrics.json`.
 
@@ -55,27 +56,25 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 
 | Module | Role |
 |--------|------|
-| **config.py** | `MonteCarloConfig` — samples_base_path, healthy_csv, disease_csv, train_fraction, n_iterations, seed, base_project, output_base, path_remap, abort_on_step_failure. |
-| **split.py** | `load_and_resolve_sample_paths(csv_path, base_path)` — load sample names from CSV, resolve with base path; `stratified_split(control_paths, disease_paths, train_fraction, seed)` — stratified train/val split. |
-| **project_gen.py** | `generate_run_project(...)` — write train_control.csv, train_disease.csv, val_control.csv, val_disease.csv and run-specific project.json (override output_base, project_name, control/disease sample_paths to train CSVs, comparisons). |
-| **pipeline_runner.py** | `run_centroid`, `run_detector`, `run_classifier`, `run_predictor` — subprocess calls to CLI tools; `run_pipeline_for_iteration(...)` — run all four in order, capture stdout/stderr to logs, return step timings (step_name, duration_seconds, return_code). |
-| **validator_metrics.py** | `load_metrics_from_json`, `_scalar_metrics_from_dict` (SCALAR_KEYS), `build_metrics_table`, `write_all_metrics_csv`, `compute_summary` (mean, std, min, max, percentiles), `write_summary_json`, `write_step_timings_csv`, and optionally `compute_resource_summary` / `write_resource_summary_json`. |
-
-Current scope note: the validation package is wired for binary Monte Carlo only. Multi-class evaluation is handled by MethylPredictor itself, but Monte Carlo split/project generation in this package still assumes one control CSV and one disease CSV.
+| **config.py** | `MonteCarloConfig` — `cohorts` (preferred) or legacy `healthy_csv`/`disease_csv`, plus train_fraction, n_iterations, seed, base_project, output_base, path_remap, abort_on_step_failure. |
+| **predictor_policy.py** | `assert_monte_carlo_predictor_allowed` — reject `predictor.blind` / `test_blind_paths` for MC. |
+| **split.py** | `load_and_resolve_sample_paths`; `stratified_split` (binary); `stratified_split_multiclass` (per-label train/val). |
+| **project_gen.py** | `infer_monte_carlo_layout`; `generate_run_project` (binary); `generate_run_project_multiclass` (flat `groups`, `val_test_groups.json`). |
+| **pipeline_runner.py** | `run_pipeline_for_iteration` (binary, centroid deltas); `run_pipeline_for_iteration_multiclass` (`--group all`, `run_predictor_multiclass` / `--test-groups`). |
+| **validator_metrics.py** | Metrics aggregation (unchanged; multiclass scalars include macro/weighted F1 via existing SCALAR_KEYS). |
 
 ## Data flow (CLI)
 
-1. Load config; resolve `project_name` from base project via `load_project(base_project)`.
-2. Create `output_base/project_name/monte_carlo_runs/`.
-3. Load and resolve control and disease sample paths from CSVs.
-4. For i = 1..n_iterations:
-   - Stratified split → train_control, train_disease, val_control, val_disease.
-   - Generate run project and CSVs in `run_dir = monte_carlo_runs/run_000i`.
-   - Run pipeline (centroid → detector → classifier → predictor) with logs and step timings; append timings with run_id, run_dir, n_train_samples, n_val_samples.
-   - On success: read `predictor_output_dir/validation_metrics.json`, extract scalar metrics, append row (iteration, run_id, run_dir, …metrics).
-5. Build DataFrame from rows → write `all_metrics.csv`.
-6. Compute summary (per-metric mean, std, min, max, percentiles) → write `metrics_summary.json`.
-7. Write `step_timings.csv` from all timings; optionally compute and write `resource_summary.json`.
+1. Load config; `assert_monte_carlo_predictor_allowed`; `infer_monte_carlo_layout(base_project, len(cohorts))`.
+2. Resolve `project_name`; create `output_base/project_name/monte_carlo_runs/`.
+3. Resolve all cohort sample paths from CSVs.
+4. For each iteration:
+   - **Binary:** `stratified_split` → `generate_run_project` → `run_pipeline_for_iteration` (centroid group1/group2 overrides).
+   - **Multiclass:** `stratified_split_multiclass` → `generate_run_project_multiclass` → `run_pipeline_for_iteration_multiclass` (centroid without overrides; predictor `--test-groups`).
+   - Read `run_dir/predictors/.../validation_metrics.json` (binary: nested comparison dir when comparisons exist; multiclass: flat `run_dir/predictors/`).
+5. Aggregate → `all_metrics.csv`, `metrics_summary.json`, `step_timings.csv`, optional `resource_summary.json`.
+
+**MethylPredictor:** flat-group projects with **multiclass-classifier.pkl** resolve via `resolve_predictor_config` (shared `_build_multiclass_predictor_config`). The CLI applies `--test-groups` in both single-config and per-comparison multiclass runs (`_apply_test_groups_json_to_config`).
 
 ## Output files
 

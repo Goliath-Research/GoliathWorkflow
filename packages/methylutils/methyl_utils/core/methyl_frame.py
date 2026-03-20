@@ -410,7 +410,7 @@ class MethylFrame:
                 new_self = type(self)(self._df.loc[mask_array], self._metadata.copy())
                 binned_idx = mask_array
             else:
-                indices_array = np.asarray(mask_or_indices, dtype=np.int64)
+                indices_array = np.asarray(mask_or_indices, dtype=np.int32)
                 new_self = type(self)(self._df.iloc[indices_array], self._metadata.copy())
                 binned_idx = indices_array
             # Preserve binned_stats so ECDF/KS work after load_and_align
@@ -433,8 +433,11 @@ class MethylFrame:
             New instance aligned to reference positions
         """
         pos_values = self.pos.values if hasattr(self.pos, 'values') else np.asarray(self.pos)
-        common_pos, idx1, _ = np.intersect1d(pos_values, positions, assume_unique=True, return_indices=True)
-        return self.apply_mask(idx1)
+        want = np.asarray(positions, dtype=np.uint32)
+        common_pos, idx1, _ = np.intersect1d(
+            pos_values, want, assume_unique=True, return_indices=True
+        )
+        return self.apply_mask(np.asarray(idx1, dtype=np.int32))
 
     def get_methylation_levels(self) -> np.ndarray:
         """Get methylation levels (mC / (mC + uC))."""

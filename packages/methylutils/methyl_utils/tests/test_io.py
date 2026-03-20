@@ -62,7 +62,7 @@ def test_indices_for_positions_h5_empty_positions():
             pos_dset = f["methylation_data"]["pos"]
             idx = _indices_for_positions_h5(pos_dset, np.array([], dtype=np.uint32))
         assert idx.shape == (0,)
-        assert idx.dtype == np.intp
+        assert idx.dtype == np.int32
     finally:
         path.unlink(missing_ok=True)
 

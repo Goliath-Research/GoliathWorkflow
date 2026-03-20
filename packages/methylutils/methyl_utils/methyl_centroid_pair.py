@@ -388,7 +388,8 @@ class MethylCentroidPair:
                         all_positions.append(pos)
                         all_contexts.append(ctx)
                     ctx_indices.append(position_to_index[key])
-                context_indices_dict[ctx] = np.array(ctx_indices, dtype=np.int64)
+                # Column indices into the feature matrix (≪ 2³²); uint32 matches genomic pos dtype policy.
+                context_indices_dict[ctx] = np.array(ctx_indices, dtype=np.uint32)
         
         all_positions = np.array(all_positions, dtype=np.uint32)
         all_contexts = np.array(all_contexts, dtype=object)
@@ -445,7 +446,7 @@ class MethylCentroidPair:
                     
                     mapped_indices = np.asarray(
                         [position_to_index.get((int(pos), ctx), -1) for pos in pos_vals],
-                        dtype=np.int64,
+                        dtype=np.int32,
                     )
                     valid = mapped_indices >= 0
                     if np.any(valid):

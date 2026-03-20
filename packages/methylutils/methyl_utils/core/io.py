@@ -12,7 +12,7 @@ def _indices_for_positions(pos_arr: np.ndarray, positions: np.ndarray):
     """Return row indices where pos_arr is in positions (same as align_to_positions subset)."""
     want = np.asarray(positions, dtype=np.uint32)
     mask = np.isin(pos_arr, want)
-    return np.flatnonzero(mask)
+    return np.flatnonzero(mask).astype(np.int32, copy=False)
 
 
 def _indices_for_positions_h5(pos_dset, positions: np.ndarray) -> np.ndarray:
@@ -37,7 +37,8 @@ def _indices_for_positions_h5(pos_dset, positions: np.ndarray) -> np.ndarray:
             else:
                 found.add(mid)
                 break
-    return np.array(sorted(found), dtype=np.intp)
+    # Row indices into pos_dset; methylation rows per chrom are ≪ 2³¹.
+    return np.array(sorted(found), dtype=np.int32)
 
 
 def load_pos_from_h5(path: Union[str, Path]) -> np.ndarray:

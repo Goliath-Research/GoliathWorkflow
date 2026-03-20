@@ -334,6 +334,73 @@ def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: An
     return None
 
 
+def _build_multiclass_predictor_config(
+    *,
+    project: Any,
+    step_cfg: Dict[str, Any],
+    paths: Any,
+    base_path: Optional[str],
+    project_path: Union[str, Path],
+    out_dir: str,
+) -> PredictorConfig:
+    """Single multiclass PredictorConfig from project (training test_group_paths from config or resolved groups)."""
+    multiclass_path = _get_multiclass_model_path(project, step_cfg, paths)
+    if multiclass_path is None:
+        raise ValueError("internal: multiclass classifier path required")
+    out_resolved = str(Path(out_dir).resolve())
+    step_test_groups = step_cfg.get("test_group_paths")
+    mc_lineage: List[Dict[str, str]] = []
+    if step_test_groups and isinstance(step_test_groups, list):
+        test_group_paths: List[Dict[str, Any]] = []
+        for entry in step_test_groups:
+            if not isinstance(entry, dict):
+                continue
+            label = entry.get("label") or entry.get("class_name") or str(len(test_group_paths))
+            paths_raw = entry.get("paths") or []
+            if isinstance(paths_raw, str):
+                paths_raw = [paths_raw]
+            expanded = _expand_test_paths(
+                paths_raw, base_path, project_config_path=project_path
+            )
+            expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
+            if project.path_remap:
+                expanded = _apply_path_remap(expanded, project.path_remap)
+            test_group_paths.append({"label": label, "paths": expanded})
+            for p in expanded:
+                mc_lineage.append(
+                    {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
+                )
+    else:
+        resolved = project.get_resolved_groups()
+        test_group_paths = []
+        for label, group_paths in resolved:
+            paths_list = list(group_paths)
+            paths_list = [_resolve_one_path(p, base_path) for p in paths_list if p]
+            if project.path_remap:
+                paths_list = _apply_path_remap(paths_list, project.path_remap)
+            test_group_paths.append({"label": label, "paths": paths_list})
+            for p in paths_list:
+                mc_lineage.append(
+                    {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
+                )
+    base_dict: Dict[str, Any] = {
+        "model_path": str(multiclass_path),
+        "model_dir": None,
+        "output_dir": out_resolved,
+        "test_control_paths": [],
+        "test_disease_paths": [],
+        "test_group_paths": test_group_paths,
+        "path_remap": project.path_remap,
+        "samples_base_path": project.samples_base_path,
+        "debug": step_cfg.get("debug", False),
+        "comparison_label": "multiclass",
+        "report_controls": None,
+        "report_diseases": None,
+        "sample_lineage": mc_lineage,
+    }
+    return PredictorConfig(**base_dict)
+
+
 def resolve_predictor_config(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
@@ -417,6 +484,18 @@ def resolve_predictor_config(
             comparison_label=None,
         )
         return PredictorConfig(**blind_kwargs)
+
+    if not project.uses_control_disease():
+        multiclass_path = _get_multiclass_model_path(project, step_cfg, paths)
+        if multiclass_path is not None:
+            return _build_multiclass_predictor_config(
+                project=project,
+                step_cfg=step_cfg,
+                paths=paths,
+                base_path=base_path,
+                project_path=proj_path_arg,
+                out_dir=out_dir,
+            )
 
     controls_side = _effective_predictor_side(step_cfg, project, "controls")
     diseases_side = _effective_predictor_side(step_cfg, project, "diseases")
@@ -520,57 +599,15 @@ def resolve_predictor_config_per_comparison(
     multiclass_path = _get_multiclass_model_path(project, step_cfg, paths)
     if multiclass_path is not None:
         out_dir = str(Path(paths.validator_dir).resolve())
-        step_test_groups = step_cfg.get("test_group_paths")
-        mc_lineage: List[Dict[str, str]] = []
-        if step_test_groups and isinstance(step_test_groups, list):
-            test_group_paths: List[Dict[str, Any]] = []
-            for entry in step_test_groups:
-                if not isinstance(entry, dict):
-                    continue
-                label = entry.get("label") or entry.get("class_name") or str(len(test_group_paths))
-                paths_raw = entry.get("paths") or []
-                if isinstance(paths_raw, str):
-                    paths_raw = [paths_raw]
-                expanded = _expand_test_paths(
-                    paths_raw, base_path, project_config_path=project_path
-                )
-                expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
-                if project.path_remap:
-                    expanded = _apply_path_remap(expanded, project.path_remap)
-                test_group_paths.append({"label": label, "paths": expanded})
-                for p in expanded:
-                    mc_lineage.append(
-                        {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
-                    )
-        else:
-            resolved = project.get_resolved_groups()
-            test_group_paths = []
-            for label, group_paths in resolved:
-                paths_list = list(group_paths)
-                paths_list = [_resolve_one_path(p, base_path) for p in paths_list if p]
-                if project.path_remap:
-                    paths_list = _apply_path_remap(paths_list, project.path_remap)
-                test_group_paths.append({"label": label, "paths": paths_list})
-                for p in paths_list:
-                    mc_lineage.append(
-                        {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
-                    )
-        base_dict: Dict[str, Any] = {
-            "model_path": str(multiclass_path),
-            "model_dir": None,
-            "output_dir": out_dir,
-            "test_control_paths": [],
-            "test_disease_paths": [],
-            "test_group_paths": test_group_paths,
-            "path_remap": project.path_remap,
-            "samples_base_path": project.samples_base_path,
-            "debug": step_cfg.get("debug", False),
-            "comparison_label": "multiclass",
-            "report_controls": None,
-            "report_diseases": None,
-            "sample_lineage": mc_lineage,
-        }
-        return [(PredictorConfig(**base_dict), "multiclass")]
+        cfg = _build_multiclass_predictor_config(
+            project=project,
+            step_cfg=step_cfg,
+            paths=paths,
+            base_path=base_path,
+            project_path=project_path,
+            out_dir=out_dir,
+        )
+        return [(cfg, "multiclass")]
 
     controls_side = _effective_predictor_side(step_cfg, project, "controls")
     diseases_side = _effective_predictor_side(step_cfg, project, "diseases")

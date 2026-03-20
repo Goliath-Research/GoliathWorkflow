@@ -1950,7 +1950,7 @@ class MethylDetector:
                 dmp_key_to_idx.get((int(pos), str(ctx)), -1)
                 for pos, ctx in zip(all_positions_extracted, all_contexts_extracted)
             ],
-            dtype=np.int64,
+            dtype=np.int32,
         )
         valid_cols = extracted_to_dmp >= 0
         if np.any(valid_cols):
