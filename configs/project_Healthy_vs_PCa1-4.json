@@ -19,49 +19,37 @@
     "label": "cancer",
     "groups": [
       {
-        "label": "pca1",
-        "sample_paths": [
-          "configs/pca1.csv"
-        ]
-      },
-      {
-        "label": "pca2",
-        "sample_paths": [
-          "configs/pca2.csv"
-        ]
-      },
-      {
-        "label": "pca3",
-        "sample_paths": [
-          "configs/pca3.csv"
-        ]
-      },
-      {
-        "label": "pca4",
-        "sample_paths": [
-          "configs/pca4.csv"
+        "label": "prostate_cancer",
+        "stages": [
+          {
+            "label": "pca1",
+            "sample_paths": [
+              "configs/pca1.csv"
+            ]
+          },
+          {
+            "label": "pca2",
+            "sample_paths": [
+              "configs/pca2.csv"
+            ]
+          },
+          {
+            "label": "pca3",
+            "sample_paths": [
+              "configs/pca3.csv"
+            ]
+          },
+          {
+            "label": "pca4",
+            "sample_paths": [
+              "configs/pca4.csv"
+            ]
+          }
         ]
       }
     ]
   },
-  "comparisons": [
-    {
-      "control_group": "all",
-      "disease_group": "pca1"
-    },
-    {
-      "control_group": "all",
-      "disease_group": "pca2"
-    },
-    {
-      "control_group": "all",
-      "disease_group": "pca3"
-    },
-    {
-      "control_group": "all",
-      "disease_group": "pca4"
-    }
-  ],
+  "comparisons": "control_vs_each_disease",
   "chromosomes": [
     "1",
     "2",
@@ -226,27 +214,32 @@
         "label": "cancer",
         "groups": [
           {
-            "label": "pca1",
-            "sample_paths": [
-              "configs/pca1.csv"
-            ]
-          },
-          {
-            "label": "pca2",
-            "sample_paths": [
-              "configs/pca2.csv"
-            ]
-          },
-          {
-            "label": "pca3",
-            "sample_paths": [
-              "configs/pca3.csv"
-            ]
-          },
-          {
-            "label": "pca4",
-            "sample_paths": [
-              "configs/pca4.csv"
+            "label": "prostate_cancer",
+            "stages": [
+              {
+                "label": "1",
+                "sample_paths": [
+                  "configs/pca1.csv"
+                ]
+              },
+              {
+                "label": "2",
+                "sample_paths": [
+                  "configs/pca2.csv"
+                ]
+              },
+              {
+                "label": "3",
+                "sample_paths": [
+                  "configs/pca3.csv"
+                ]
+              },
+              {
+                "label": "4",
+                "sample_paths": [
+                  "configs/pca4.csv"
+                ]
+              }
             ]
           }
         ]
