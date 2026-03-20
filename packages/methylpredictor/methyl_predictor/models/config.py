@@ -43,10 +43,27 @@ class PredictorConfig(BaseModel):
         default_factory=list,
         description="Sample directory paths for disease/class-1 test set.",
     )
+    test_blind_paths: List[str] = Field(
+        default_factory=list,
+        description="Unlabeled / blind test samples (no expected_class); mutually exclusive with labeled cohorts.",
+    )
     test_group_paths: Optional[List[Dict[str, Any]]] = Field(
         default=None,
         description="For multi-class: list of {label: str, paths: list} or {class_index: int, paths: list}. "
         "Order must match classifier class_names. Resolved to absolute paths.",
+    )
+    controls: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Nested control cohort: {label, groups[{label, sample_paths}]}. "
+        "When test_control_paths is empty and diseases is set, run_prediction expands these.",
+    )
+    diseases: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Nested disease cohort (same shape as project diseases).",
+    )
+    blind: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description='Optional blind cohort: {"groups": [{label, sample_paths}]}. Mutually exclusive with controls/diseases.',
     )
     path_remap: Optional[Dict[str, str]] = Field(
         default=None,
@@ -60,15 +77,62 @@ class PredictorConfig(BaseModel):
         default=False,
         description="Enable debug output.",
     )
+    comparison_label: Optional[str] = Field(
+        default=None,
+        description="When running per-comparison, the comparison folder label (written to prediction_report.json).",
+    )
+    report_controls: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Controls block for prediction_report.json (label + groups with sample_paths), "
+        "same shape as step_config.predictor.controls.",
+    )
+    report_diseases: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Diseases block for prediction_report.json.",
+    )
+    report_blind: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Blind cohort block for prediction_report.json (same shape as predictor.blind).",
+    )
+    sample_lineage: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="Ordered rows parallel to classification input: absolute_path, side, group_label.",
+    )
 
     @model_validator(mode="after")
     def ensure_absolute_test_paths(self) -> "PredictorConfig":
         """Normalize test_control_paths, test_disease_paths, and test_group_paths to absolute paths."""
+        has_labeled = bool(
+            self.test_control_paths or self.test_disease_paths or self.test_group_paths
+        )
+        has_blind = bool(self.test_blind_paths)
+        if has_labeled and has_blind:
+            raise ValueError(
+                "PredictorConfig: cannot set test_blind_paths together with labeled "
+                "test_control_paths/test_disease_paths or test_group_paths."
+            )
+
+        def _nested_groups_nonempty(d: Optional[Dict[str, Any]]) -> bool:
+            if not isinstance(d, dict):
+                return False
+            g = d.get("groups")
+            return isinstance(g, list) and len(g) > 0
+
+        if _nested_groups_nonempty(self.blind) and (
+            _nested_groups_nonempty(self.controls) or _nested_groups_nonempty(self.diseases)
+        ):
+            raise ValueError(
+                "PredictorConfig: nested 'blind.groups' cannot be combined with nested "
+                "'controls' / 'diseases' in the same config."
+            )
         self.test_control_paths = _to_absolute_paths(
             self.test_control_paths, self.samples_base_path
         )
         self.test_disease_paths = _to_absolute_paths(
             self.test_disease_paths, self.samples_base_path
+        )
+        self.test_blind_paths = _to_absolute_paths(
+            self.test_blind_paths, self.samples_base_path
         )
         if self.test_group_paths:
             base = self.samples_base_path
@@ -76,6 +140,12 @@ class PredictorConfig(BaseModel):
                 paths = entry.get("paths")
                 if isinstance(paths, list):
                     entry["paths"] = _to_absolute_paths(paths, base)
+        if self.sample_lineage:
+            base = self.samples_base_path
+            for row in self.sample_lineage:
+                p = row.get("absolute_path")
+                if p:
+                    row["absolute_path"] = _to_absolute_paths([p], base)[0]
         return self
 
     class Config:

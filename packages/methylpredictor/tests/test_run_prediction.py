@@ -1,11 +1,14 @@
-"""Regression tests for predictor metrics and path normalization."""
+"""Regression tests for predictor metrics, path normalization, and prediction_report.json."""
 
 import csv
 import importlib
+import json
 from pathlib import Path
 
+import pytest
+
 from methyl_predictor.models.config import PredictorConfig
-from methyl_predictor.core.predictor import run_prediction
+from methyl_predictor.core.predictor import _expand_nested_labeled_paths, run_prediction
 
 
 class _DummyClassifier:
@@ -43,6 +46,20 @@ def test_run_prediction_metrics_follow_filtered_rows(monkeypatch, tmp_path):
         output_dir=str(output_dir),
         test_control_paths=["/samples/c0", "/samples/c1"],
         test_disease_paths=["/samples/d0"],
+        comparison_label="test_comp",
+        report_controls={
+            "label": "healthy",
+            "groups": [{"label": "all", "sample_paths": ["configs/healthy.csv"]}],
+        },
+        report_diseases={
+            "label": "cancer",
+            "groups": [{"label": "pca1", "sample_paths": ["configs/pca1.csv"]}],
+        },
+        sample_lineage=[
+            {"absolute_path": "/samples/c0", "side": "control", "group_label": "all"},
+            {"absolute_path": "/samples/c1", "side": "control", "group_label": "all"},
+            {"absolute_path": "/samples/d0", "side": "disease", "group_label": "pca1"},
+        ],
     )
 
     monkeypatch.setattr(
@@ -56,14 +73,33 @@ def test_run_prediction_metrics_follow_filtered_rows(monkeypatch, tmp_path):
         with Path(output_file).open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(
                 handle,
-                fieldnames=["sample", "prediction", "expected_class"],
+                fieldnames=[
+                    "sample",
+                    "prediction",
+                    "expected_class",
+                    "prob_class0",
+                    "prob_class1",
+                ],
             )
             writer.writeheader()
             writer.writerow(
-                {"sample": "control-loaded", "prediction": 0, "expected_class": 0}
+                {
+                    "sample": "c0",
+                    "prediction": 0,
+                    "expected_class": 0,
+                    "prob_class0": 0.9,
+                    "prob_class1": 0.1,
+                }
             )
+            # c1 skipped (unreadable) — only two scored rows, like MethylClassifier realignment
             writer.writerow(
-                {"sample": "disease-loaded", "prediction": 1, "expected_class": 1}
+                {
+                    "sample": "d0",
+                    "prediction": 1,
+                    "expected_class": 1,
+                    "prob_class0": 0.2,
+                    "prob_class1": 0.8,
+                }
             )
 
     monkeypatch.setattr(classifier_cli_main, "classify_samples_from_list", fake_classify)
@@ -76,3 +112,130 @@ def test_run_prediction_metrics_follow_filtered_rows(monkeypatch, tmp_path):
     assert metrics["specificity"] == 1.0
     assert metrics["balanced_accuracy"] == 1.0
     assert Path(output_dir / "validation_metrics.json").exists()
+    report_path = output_dir / "prediction_report.json"
+    assert report_path.exists()
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report.get("mode") == "labeled"
+    assert report["comparison_label"] == "test_comp"
+    assert report["controls"]["label"] == "healthy"
+    assert report["diseases"]["label"] == "cancer"
+    ctrl_groups = report["controls"]["groups"]
+    assert len(ctrl_groups) == 1 and ctrl_groups[0]["label"] == "all"
+    assert len(ctrl_groups[0]["samples"]) == 1
+    dis_groups = report["diseases"]["groups"]
+    assert len(dis_groups[0]["samples"]) == 1
+    assert dis_groups[0]["samples"][0]["prob_class1"] == 0.8
+
+
+def test_run_prediction_blind_mode_writes_report_without_validation_metrics(
+    monkeypatch, tmp_path
+):
+    """Blind cohort: no expected_class, no validation_metrics.json, mode=blind + probabilities."""
+    output_dir = tmp_path / "predictor_blind"
+    classifier_cli_main = importlib.import_module("methyl_classifier.cli.main")
+    config = PredictorConfig(
+        model_path=str(tmp_path / "classifier.pkl"),
+        output_dir=str(output_dir),
+        test_blind_paths=["/blind/s1", "/blind/s2"],
+        report_blind={
+            "label": "incoming",
+            "groups": [{"label": "batch_a", "sample_paths": ["x.csv"]}],
+        },
+        sample_lineage=[
+            {"absolute_path": "/blind/s1", "side": "blind", "group_label": "batch_a"},
+            {"absolute_path": "/blind/s2", "side": "blind", "group_label": "batch_a"},
+        ],
+    )
+
+    monkeypatch.setattr(
+        "methyl_classifier.core.classifier.MethylClassifier",
+        _DummyClassifier,
+    )
+
+    def fake_classify(*, classifier, samples_list, output_file, expected_classes, **_kwargs):
+        assert samples_list == ["/blind/s1", "/blind/s2"]
+        assert expected_classes is None
+        with Path(output_file).open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "sample",
+                    "prediction",
+                    "predicted_class",
+                    "prob_class0",
+                    "prob_class1",
+                ],
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "sample": "s1",
+                    "prediction": 0,
+                    "predicted_class": "control",
+                    "prob_class0": 0.7,
+                    "prob_class1": 0.3,
+                }
+            )
+            writer.writerow(
+                {
+                    "sample": "s2",
+                    "prediction": 1,
+                    "predicted_class": "disease",
+                    "prob_class0": 0.4,
+                    "prob_class1": 0.6,
+                }
+            )
+
+    monkeypatch.setattr(classifier_cli_main, "classify_samples_from_list", fake_classify)
+
+    result = run_prediction(config)
+
+    assert not Path(output_dir / "validation_metrics.json").exists()
+    assert result.get("n_samples") == 2
+    report_path = output_dir / "prediction_report.json"
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["mode"] == "blind"
+    assert report["validation_metrics"] is None
+    assert "blind_summary" in report
+    assert report["blind_summary"]["n_samples"] == 2
+    assert report["blind_summary"]["predicted_counts_by_class"]["control"] == 1
+    samples = report["blind"]["groups"][0]["samples"]
+    assert len(samples) == 2
+    assert samples[0]["probabilities"]["control"] == 0.7
+    assert samples[0]["predicted_subgroup"] == "control"
+
+
+def test_predictor_config_rejects_blind_with_nested_controls():
+    with pytest.raises(ValueError, match="blind"):
+        PredictorConfig(
+            model_path="/m.pkl",
+            output_dir="/out",
+            controls={"label": "c", "groups": [{"label": "a", "sample_paths": []}]},
+            blind={"groups": [{"label": "b", "sample_paths": []}]},
+        )
+
+
+def test_predictor_config_nested_controls_diseases_expands(tmp_path):
+    """Standalone JSON style: controls/diseases nested blocks fill flat paths after expand helper."""
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    (samples / "s1").mkdir()
+    (samples / "s2").mkdir()
+    config = PredictorConfig(
+        model_path=str(tmp_path / "m.pkl"),
+        output_dir=str(tmp_path / "out"),
+        samples_base_path=str(samples),
+        controls={
+            "label": "c",
+            "groups": [{"label": "g1", "sample_paths": [str(samples / "s1")]}],
+        },
+        diseases={
+            "label": "d",
+            "groups": [{"label": "t1", "sample_paths": [str(samples / "s2")]}],
+        },
+    )
+    _expand_nested_labeled_paths(config)
+    assert config.test_control_paths == [str((samples / "s1").resolve())]
+    assert config.test_disease_paths == [str((samples / "s2").resolve())]
+    assert config.report_controls is not None
+    assert config.sample_lineage[0]["group_label"] == "g1"

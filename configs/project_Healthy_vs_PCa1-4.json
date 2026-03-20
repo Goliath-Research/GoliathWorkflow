@@ -210,12 +210,46 @@
       "log_level": "INFO"
     },
     "predictor": {
-      "test_control_paths": [
-        "configs/healthy.csv"
-      ],
-      "test_disease_paths": [
-        "configs/prostate_cancer.csv"
-      ],
+      "controls": {
+        "label": "healthy",
+        "groups": [
+          {
+            "label": "all",
+            "sample_paths": [
+              "configs/healthy.csv"
+            ]
+          }
+        ]
+      },
+      "diseases": {
+        "label": "cancer",
+        "groups": [
+          {
+            "label": "pca1",
+            "sample_paths": [
+              "configs/pca1.csv"
+            ]
+          },
+          {
+            "label": "pca2",
+            "sample_paths": [
+              "configs/pca2.csv"
+            ]
+          },
+          {
+            "label": "pca3",
+            "sample_paths": [
+              "configs/pca3.csv"
+            ]
+          },
+          {
+            "label": "pca4",
+            "sample_paths": [
+              "configs/pca4.csv"
+            ]
+          }
+        ]
+      },
       "debug": false
     }
   }

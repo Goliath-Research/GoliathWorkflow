@@ -91,15 +91,16 @@ Examples:
         "-p",
         type=Path,
         metavar="JSON",
-        help="Path to pipeline project config. Default test set is taken from step_config.predictor "
-        "(test_control_paths, test_disease_paths) unless overridden by --test-control/--test-disease.",
+        help="Path to pipeline project config. Test cohorts use step_config.predictor.controls / "
+        ".diseases (same shape as project root); empty groups fall back to top-level controls/diseases.",
     )
     parser.add_argument(
         "--config",
         "-c",
         type=Path,
         metavar="JSON",
-        help="Path to predictor config JSON (alternative to --project; must include model_path/model_dir, output_dir, test_control_paths, test_disease_paths).",
+        help="Path to predictor config JSON (model_path/model_dir, output_dir, and nested controls/diseases "
+        "or flat test_control_paths/test_disease_paths).",
     )
     parser.add_argument(
         "--model",
