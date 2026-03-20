@@ -186,6 +186,52 @@ def test_export_ovr_pkl_helpers_match_cli_bundle(tmp_path, monkeypatch):
     assert clf2._ovr_mode and clf2.n_classes == 2
 
 
+def test_default_ovr_unified_classifier_basename_matches_project_contexts(tmp_path):
+    """CG-only project → classifier-1-CG.pkl probe; multi-context → comma-sorted join."""
+    import json
+    from methyl_utils import load_project
+
+    from methyl_classifier.project_resolver import default_ovr_unified_classifier_basename
+
+    p = tmp_path / "p.json"
+    p.write_text(
+        json.dumps(
+            {
+                "project_name": "t",
+                "output_base": str(tmp_path),
+                "samples_base_path": str(tmp_path),
+                "controls": {"label": "h", "groups": [{"label": "c", "sample_paths": []}]},
+                "diseases": {"label": "d", "groups": [{"label": "x", "sample_paths": []}]},
+                "comparisons": [{"control_group": "c", "disease_group": "x"}],
+                "chromosomes": ["1", "2"],
+                "contexts": ["CG"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    proj = load_project(p)
+    assert default_ovr_unified_classifier_basename(proj) == "classifier-1-CG.pkl"
+
+    p2 = tmp_path / "p2.json"
+    p2.write_text(
+        json.dumps(
+            {
+                "project_name": "t2",
+                "output_base": str(tmp_path),
+                "samples_base_path": str(tmp_path),
+                "controls": {"label": "h", "groups": [{"label": "c", "sample_paths": []}]},
+                "diseases": {"label": "d", "groups": [{"label": "x", "sample_paths": []}]},
+                "comparisons": [{"control_group": "c", "disease_group": "x"}],
+                "chromosomes": ["2"],
+                "contexts": ["CHH", "CG"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    proj2 = load_project(p2)
+    assert default_ovr_unified_classifier_basename(proj2) == "classifier-2-CG,CHH.pkl"
+
+
 def test_classifier_step_dict_has_ovr_sources():
     from methyl_classifier.project_resolver import classifier_step_dict_has_ovr_sources
 
@@ -222,20 +268,22 @@ def test_expand_ovr_paths_from_healthy_pca_project_comparisons():
     bn = "classifier-1-CG,CHG,CHH.pkl"
     root = Path(project.get_project_root())
     dedicated = root / "detections" / "one_vs_rest" / "all" / bn
+    resolved_labels = [x[0] for x in project.get_resolved_groups()]
+    disease_labels = [lbl for lbl in resolved_labels if lbl != "all"]
     try:
         dirs, names, agg, bip = expand_ovr_paths_from_comparisons(project, unified_basename=bn)
         assert not bip
-        assert names == ["all", "pca1", "pca2", "pca3", "pca4"]
+        assert names == resolved_labels
         if dedicated.is_file():
             assert not agg
-            assert len(dirs) == 5
+            assert len(dirs) == len(resolved_labels)
             assert Path(dirs[0]) == dedicated.parent
-            for dis in ("pca1", "pca2", "pca3", "pca4"):
+            for dis in disease_labels:
                 assert (root / "detections" / "all" / dis) == Path(dirs[names.index(dis)])
         else:
             assert agg
-            assert len(dirs) == 4
-            for dis in ("pca1", "pca2", "pca3", "pca4"):
+            assert len(dirs) == len(disease_labels)
+            for dis in disease_labels:
                 i = names.index(dis)
                 assert (root / "detections" / "all" / dis) == Path(dirs[i - 1])
 

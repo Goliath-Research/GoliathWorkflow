@@ -13,6 +13,20 @@ from .models.config_schema import ClassificationConfig
 
 CLASSIFIER_OUTPUT_FILENAME = "classification_results.csv"
 
+
+def default_ovr_unified_classifier_basename(project: ProjectConfig) -> str:
+    """
+    Basename MethylDetector writes under each comparison output dir:
+    ``classifier-{chromosome}-{comma_sorted_contexts}.pkl`` (see methyldetector ``_save_unified_model``).
+    OvR expansion probes the first project chromosome only to verify each detection dir exists.
+    """
+    chroms = project.chromosomes or ["1"]
+    ctxs = project.contexts or ["CG"]
+    ch = str(chroms[0])
+    ctx_str = ",".join(sorted(str(c) for c in ctxs))
+    return f"classifier-{ch}-{ctx_str}.pkl"
+
+
 # Merged into effective classifier step when predicting default OvR bundle save path.
 _CLASSIFIER_STEP_KEYS_FOR_BUNDLE_PATH = (
     "ovr_binary_pickles_from_comparisons",
@@ -204,7 +218,11 @@ def _consume_ovr_comparison_options_and_maybe_expand(
     from comparisons. Safe to call when base was built from resolve_classifier_config merge.
     """
     flag = bool(base.pop("ovr_binary_pickles_from_comparisons", False))
-    basename = base.pop("ovr_unified_classifier_basename", "classifier-1-CG,CHG,CHH.pkl")
+    basename = base.pop("ovr_unified_classifier_basename", None)
+    if not basename:
+        basename = default_ovr_unified_classifier_basename(project)
+    else:
+        basename = str(basename).strip() or default_ovr_unified_classifier_basename(project)
     ctrl_pkl = base.pop("ovr_control_vs_rest_pkl", None)
     if not flag:
         return

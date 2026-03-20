@@ -152,15 +152,15 @@ Example config (`configs/PCa_vs_Healthy_classifier_config.json`):
 - **weight_fit_alpha**: Regularization strength (inverse of C for logistic). Default `1.0`.
 - **weight_fit_l1_ratio**: For `elasticnet_fitted` only: balance L1/L2 (0=ridge-like, 1=lasso-like). Default `0.5`.
 - **project_name**: When set, after classification the classifier is saved as `<project_name>-classifier.pkl` and the list of sample folders as `<project_name>-samples.txt` (or .csv) in the same directory as the classification output. You can override paths with **save_classifier_path** and **samples_list_export_path**.
-- **`--project`**: When using a project JSON, merged config comes from `step_config.classifier` and project paths. If **save_classifier_path** is omitted, the resolver defaults it to **`<project_root>/classifiers/<project_name>-classifier.pkl`** (see `paths.classifier_dir` in the project file), so MethylPredictor can load a stable artifact without extra JSON.
+- **`--project`**: When using a project JSON, merged config comes from `step_config.classifier` and project paths. **Control/disease** projects run **one binary classification job per comparison**, then—if **`ovr_binary_pickles_from_comparisons`** is **true**—automatically **export the unified multiclass OvR PKL** to **`{project_root}/classifiers/<control_label>/classifier_<control>_<project_name>.pkl`** (same file **`--export-ovr-pkl`** would write). MethylPredictor loads that path via **`model_path`** / resolver defaults. Detector probe files default to **`classifier-{first_chrom}-{sorted_contexts}.pkl`** (e.g. **`classifier-1-CG.pkl`** for CG-only projects); set **`ovr_unified_classifier_basename`** only if your detector used a different naming pattern.
 
 #### Reusing one PKL for prediction (OvR and multi-chromosome)
 
 After classification, **`save_classifier_path`** stores **one** file MethylPredictor can open with **`model_path`**: OvR mode writes the portable **`ecdf_one_vs_rest`** dict (not a raw per-chromosome folder). Multi-chromosome binary mode pickles the full **`MethylClassifier`**, which already aggregates all chromosomes — you are **not** meant to re-merge detector pickles on every prediction. Prefer that PKL over pointing predictors at **`model_dir`** = detector output when a saved artifact exists. See **MethylPredictor** `USAGE.md` (“Saved classifier vs raw detector directory”).
 
-#### Export OvR PKL without re-classifying
+#### Export OvR PKL only (no per-comparison classification)
 
-If you already ran classification once (or only need the bundled predictor), you can write the same portable `ecdf_one_vs_rest` PKL without loading samples:
+Use this when detectors exist but you skip the per-comparison training loop. A normal **`--project`** run with **`ovr_binary_pickles_from_comparisons`** already performs this export at the end; **`--export-ovr-pkl`** is for export-only workflows:
 
 ```bash
 methyl_classifier --project path/to/project.json --export-ovr-pkl

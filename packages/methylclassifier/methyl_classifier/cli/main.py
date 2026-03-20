@@ -1534,11 +1534,12 @@ Config fields (in JSON):
         default=None,
         metavar="PATH",
         help=(
-            "Export multiclass OvR portable PKL only (no classification). "
+            "Export multiclass OvR portable PKL only (no per-comparison classification). "
+            "With --project + control/disease, the same bundle is also written automatically "
+            "after a normal run when step_config.classifier.ovr_binary_pickles_from_comparisons is true. "
             "Requires ovr_binary_model_paths or ovr_detection_dirs in --config or in "
-            "step_config.classifier (--project). Control/disease projects: OvR must be "
-            "defined at project scope in that step (not per-comparison binary only). "
-            "Optional PATH; if omitted, uses save_classifier_path or <cwd>/<project_name>-classifier.pkl."
+            "step_config.classifier (--project). Optional PATH; if omitted, uses save_classifier_path "
+            "or <cwd>/<project_name>-classifier.pkl."
         ),
     )
 
@@ -1626,6 +1627,22 @@ Config fields (in JSON):
             print(f"\nPer-comparison classification complete: {len(configs_and_labels)} group(s)")
             for config, label in configs_and_labels:
                 print(f"  {label}: {config.output_path}")
+            merged_step = merge_project_classifier_step(args.project, args.step_override)
+            if merged_step.get("ovr_binary_pickles_from_comparisons") and classifier_step_dict_has_ovr_sources(
+                merged_step
+            ):
+                print(f"\n{'='*60}\nExporting multiclass OvR bundle for MethylPredictor\n{'='*60}")
+                config_mc = resolve_classifier_config(args.project, args.step_override)
+                _apply_cli_path_overrides(config_mc, args)
+                out_path = _resolve_ovr_export_output_path(config_mc, None)
+                try:
+                    _export_ovr_pkl_from_config(config_mc, out_path)
+                except Exception as e:
+                    import traceback
+
+                    print(f"❌ Multiclass OvR export failed: {e}", file=sys.stderr)
+                    traceback.print_exc()
+                    sys.exit(1)
             return
         config = resolve_classifier_config(args.project, args.step_override)
         _apply_cli_path_overrides(config, args)
