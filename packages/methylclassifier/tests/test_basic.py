@@ -9,6 +9,7 @@ import numpy as np
 from methyl_classifier.cli.main import classify_samples_from_list
 from methyl_classifier.core.classifier import extract_chrom_context_from_classifier
 from methyl_classifier.utils.data_loader import DataLoader
+from methyl_utils import MethylSample
 
 
 class _DummyInnerClassifier:
@@ -26,6 +27,19 @@ class _DummyClassifier:
 
     def get_feature_info(self):
         return self.classifier.get_feature_info()
+
+
+def test_extract_sample_features_dmp_past_last_position_no_index_error():
+    """Regression: searchsorted can return len(sp); np.where evaluated sm[safe_idx] eagerly and could mis-index."""
+    n = 278
+    pos = np.arange(n, dtype=np.uint32)
+    mC = np.ones(n, dtype=np.uint32) * 3
+    uC = np.ones(n, dtype=np.uint32) * 3
+    tnc = np.zeros(n, dtype=np.uint8)
+    sample = MethylSample.from_sample_data(pos, mC, uC, tnc)
+    dmp = np.array([999_999_999], dtype=np.uint32)
+    feats, mask, _ = DataLoader.extract_sample_features(sample, dmp)
+    assert feats.shape == (1,) and mask.shape == (1,) and not bool(mask[0])
 
 
 def test_extract_chrom_context_from_classifier_fallback():
