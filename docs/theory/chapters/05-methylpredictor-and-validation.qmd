@@ -9,7 +9,7 @@
 
 ## MethylPredictor: Labeled Evaluation
 
-When labels are available, `methylpredictor` computes standard classification metrics using `sklearn.metrics`. For \(n\) labeled samples with true labels \(y_i\) and predictions \(\hat y_i\),
+When labels are available, `methylpredictor` computes standard classification metrics using `sklearn.metrics`. For $n$ labeled samples with true labels $y_i$ and predictions $\hat y_i$,
 
 $$
 \operatorname{Accuracy}
@@ -32,7 +32,7 @@ $$
 \operatorname{Specificity} = \operatorname{Recall}_{\text{negative}}.
 $$
 
-For multiclass settings it reports per-class precision, recall, \(F_1\), as well as macro and weighted \(F_1\) summaries.
+For multiclass settings it reports per-class precision, recall, $F_1$, as well as macro and weighted $F_1$ summaries.
 
 These are standard descriptive metrics. Their interpretation depends on how the evaluation cohort was assembled rather than on any special estimator inside the package.
 
@@ -44,7 +44,7 @@ In blind mode, `methylpredictor` cannot estimate discrimination performance beca
 - mean predicted probability per class, and
 - mean Shannon entropy of the per-sample class probabilities.
 
-For one sample with class probabilities \(p_1,\dots,p_K\), entropy is
+For one sample with class probabilities $p_1,\dots,p_K$, entropy is
 
 $$
 H(p) = -\sum_{k=1}^{K} p_k \log p_k.
@@ -54,13 +54,13 @@ Low entropy corresponds to confident predictions; high entropy corresponds to di
 
 ## MethylValidation: Split Strategy
 
-`methylvalidation` implements repeated train/validation splitting by cohort. For each cohort with \(n\) samples and train fraction \(\rho\), the code computes
+`methylvalidation` implements repeated train/validation splitting by cohort. For each cohort with $n$ samples and train fraction $\rho$, the code computes
 
 $$
 n_{\text{train}} = \max(1, \lfloor \rho n \rfloor),
 $$
 
-and then reduces \(n_{\text{train}}\) to \(n-1\) if necessary so that the validation set is non-empty for \(n > 1\).
+and then reduces $n_{\text{train}}$ to $n-1$ if necessary so that the validation set is non-empty for $n > 1$.
 
 This is called “stratified” in the code because each cohort is split separately, but it is not identical to the textbook `StratifiedKFold` abstraction. The package performs independent random shuffles within each cohort and then concatenates the resulting class-specific train and validation groups.
 
@@ -73,7 +73,7 @@ The validation package repeatedly:
 3. runs the full pipeline from centroid through predictor, and
 4. aggregates scalar metrics across repetitions.
 
-If \(m_r\) denotes some metric from run \(r\), the package reports descriptive summaries such as
+If $m_r$ denotes some metric from run $r$, the package reports descriptive summaries such as
 
 $$
 \bar m = \frac{1}{R}\sum_{r=1}^{R} m_r,

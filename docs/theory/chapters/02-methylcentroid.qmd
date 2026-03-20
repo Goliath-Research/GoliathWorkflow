@@ -17,8 +17,8 @@ Each persisted centroid contains:
 
 - genomic positions,
 - context metadata,
-- the sufficient statistics \(N_i\), \(S_{x,i}\), \(S_{x^2,i}\),
-- count summaries \(S_{m,i}\), \(S_{u,i}\), \(S_{c^2,i}\), \(S_{wx^2,i}\), and
+- the sufficient statistics $N_i$, $S_{x,i}$, $S_{x^2,i}$,
+- count summaries $S_{m,i}$, $S_{u,i}$, $S_{c^2,i}$, $S_{wx^2,i}$, and
 - per-locus histogram counts used to reconstruct ECDFs.
 
 That is why the centroid is more than a mean profile. It is a compressed empirical-distribution object designed to support both detector-side testing and classifier-side scoring.
@@ -51,7 +51,7 @@ S_{c^2,i} \leftarrow S_{c^2,i} + (m_{si} + u_{si})^2,\qquad
 S_{wx^2,i} \leftarrow S_{wx^2,i} + \frac{m_{si}^2}{m_{si}+u_{si}},
 $$ {#eq-centroid-count-update}
 
-and increments the appropriate methylation histogram bin for \(x_{si}\).
+and increments the appropriate methylation histogram bin for $x_{si}$.
 
 These updates make the centroid a compact empirical summary rather than a full sample-by-locus matrix.
 
@@ -59,8 +59,8 @@ These updates make the centroid a compact empirical summary rather than a full s
 
 One of the most important preprocessing choices in this package is optional coverage capping. The code implements binomial thinning:
 
-1. for any locus with coverage \(n_i = m_i + u_i > n_{\text{cap}}\),
-2. compute \(p_i = n_{\text{cap}} / n_i\),
+1. for any locus with coverage $n_i = m_i + u_i > n_{\text{cap}}$,
+2. compute $p_i = n_{\text{cap}} / n_i$,
 3. draw
 
 $$
@@ -71,7 +71,7 @@ $$ {#eq-binomial-thinning}
 
 This preserves the methylation fraction in expectation while reducing the influence of ultra-deep loci. In other words, it is a variance-control and robustness device, not a biological model.
 
-The implementation exposes both manual capping and auto-capping heuristics. The thinning itself is principled; the choice of \(n_{\text{cap}}\) is still a workflow decision.
+The implementation exposes both manual capping and auto-capping heuristics. The thinning itself is principled; the choice of $n_{\text{cap}}$ is still a workflow decision.
 
 ## Auto-Cap Heuristic
 

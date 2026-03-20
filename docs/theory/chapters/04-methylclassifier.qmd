@@ -31,7 +31,7 @@ $$
 \sum_{c \in \mathcal{C}} w_c > 0.
 $$ {#eq-chrom-fusion}
 
-The code supports several ways to determine the weights \(w_c\):
+The code supports several ways to determine the weights $w_c$:
 
 - fixed configuration weights,
 - trimmed mean effect-size weights derived from detector output,
@@ -41,7 +41,7 @@ The last family is best understood as a second-stage meta-model that uses per-ch
 
 ## One-vs-Rest (OvR) Multiclass Fusion
 
-For multiclass problems the package builds \(K\) binary heads and fuses them into a \(K\)-class probability vector. The active implementation in `multiclass_ovr.py` uses binary probabilities or logits as intermediate scores and then applies a softmax-like normalization. In symbolic form,
+For multiclass problems the package builds $K$ binary heads and fuses them into a $K$-class probability vector. The active implementation in `multiclass_ovr.py` uses binary probabilities or logits as intermediate scores and then applies a softmax-like normalization. In symbolic form,
 
 $$
 \ell_k(x) = \log \hat p_k(y = k \mid x) - \log \hat p_k(y \neq k \mid x),
@@ -70,7 +70,7 @@ $$
 \right).
 $$ {#eq-geomean-control}
 
-The complement \(1 - \hat p_{\text{ctrl}}(x)\) is then used to form a binary control-vs-rest head before final row normalization.
+The complement $1 - \hat p_{\text{ctrl}}(x)$ is then used to form a binary control-vs-rest head before final row normalization.
 
 This is a useful aggregation rule, but it is a heuristic. The geometric mean is not derived in the code from a global multiclass likelihood.
 
@@ -82,7 +82,7 @@ That construction is convenient for complex cohort hierarchies, but it should be
 
 ## Calibration
 
-When enabled, the package can apply Platt scaling [@platt1999] to the raw binary outputs. In effect, one learns parameters \(a\) and \(b\) so that a raw score \(s\) is mapped to
+When enabled, the package can apply Platt scaling [@platt1999] to the raw binary outputs. In effect, one learns parameters $a$ and $b$ so that a raw score $s$ is mapped to
 
 $$
 \hat p(y=1 \mid s) = \frac{1}{1 + \exp(as + b)}.
@@ -102,7 +102,7 @@ The strongest defensible summary is:
 
 - the binary head is an ECDF-based Naive Bayes style score with optional calibration,
 - multi-chromosome fusion is a weighted ensemble,
-- multiclass OvR is a reduction from binary heads to a normalized \(K\)-class score,
+- multiclass OvR is a reduction from binary heads to a normalized $K$-class score,
 - pairwise control aggregation is heuristic,
 - and fitted chromosome weights are second-stage discriminative models, not part of the original density model.
 

@@ -29,7 +29,7 @@ Those modules define the empirical-distribution view used by centroid comparison
 
 ## Centroid Sufficient Statistics
 
-For each locus \(i\), the builder stores per-sample methylation fractions \(x_{si}\) together with aggregate statistics:
+For each locus $i$, the builder stores per-sample methylation fractions $x_{si}$ together with aggregate statistics:
 
 $$
 \hat\mu_i = \frac{S_{x,i}}{N_i},
@@ -40,7 +40,7 @@ $$
 \right),
 $$ {#eq-centroid-moments}
 
-where \(N_i\) is the number of samples contributing to that locus and \(\varepsilon\) is a small numerical floor.
+where $N_i$ is the number of samples contributing to that locus and $\varepsilon$ is a small numerical floor.
 
 The centroid builder also stores count-level summaries:
 
@@ -51,7 +51,7 @@ S_{c^2,i} = \sum_s (m_{si}+u_{si})^2,\qquad
 S_{wx^2,i} = \sum_s \frac{m_{si}^2}{m_{si}+u_{si}},
 $$ {#eq-count-summaries}
 
-which are later reused by the heterogeneity calculation. Finally, each locus accumulates histogram counts \(c_{ib}\) over shared bin edges \(\{e_b\}\), producing the `binned_stats` object that drives both ECDF reconstruction and histogram-based testing.
+which are later reused by the heterogeneity calculation. Finally, each locus accumulates histogram counts $c_{ib}$ over shared bin edges $\{e_b\}$, producing the `binned_stats` object that drives both ECDF reconstruction and histogram-based testing.
 
 ## ECDF Reconstruction
 
@@ -65,8 +65,8 @@ $$ {#eq-ecdf-edges}
 
 `ECDFView` then interpolates these edge values with a monotone PCHIP spline [@fritsch1980]. The resulting representation supplies:
 
-- a continuous cumulative distribution \(\tilde F_i(x)\),
-- a continuous density proxy \(\tilde f_i(x) = \max(\partial_x \tilde F_i(x), \varepsilon)\), and
+- a continuous cumulative distribution $\tilde F_i(x)$,
+- a continuous density proxy $\tilde f_i(x) = \max(\partial_x \tilde F_i(x), \varepsilon)$, and
 - numerically stable means and variances via the stored sufficient statistics.
 
 This is an empirical-distribution model, not a beta or Gaussian fit. That distinction is central to the detector-classifier path.
@@ -81,7 +81,7 @@ $$
 D_i = \sup_{x \in [0,1]} \left| \tilde F_{1i}(x) - \tilde F_{2i}(x) \right|.
 $$ {#eq-ks}
 
-Implementation detail matters here: the supremum is approximated on a uniform grid rather than computed analytically, and the \(p\)-value is obtained from the large-sample Smirnov distribution [@kolmogorov1933; @feller1948] using the harmonic mean effective sample size
+Implementation detail matters here: the supremum is approximated on a uniform grid rather than computed analytically, and the $p$-value is obtained from the large-sample Smirnov distribution [@kolmogorov1933; @feller1948] using the harmonic mean effective sample size
 
 $$
 n_{\text{eff},i} =
@@ -94,7 +94,7 @@ This is a reasonable screening approximation, but it is not an exact finite-samp
 
 ### Mann-Whitney from Histogram Counts
 
-The repository also implements a vectorized Mann-Whitney calculation directly from centroid histograms. Let \(c^{(1)}_{ib}\) and \(c^{(2)}_{ib}\) be the two groups' bin counts at locus \(i\). The code reconstructs the \(U\) statistic as
+The repository also implements a vectorized Mann-Whitney calculation directly from centroid histograms. Let $c^{(1)}_{ib}$ and $c^{(2)}_{ib}$ be the two groups' bin counts at locus $i$. The code reconstructs the $U$ statistic as
 
 $$
 U_i =
@@ -102,7 +102,7 @@ U_i =
 c^{(1)}_{ib}
 \left(
 \sum_{r < b} c^{(2)}_{ir}
-\frac{1}{2} c^{(2)}_{ib}
++ \frac{1}{2} c^{(2)}_{ib}
 \right).
 $$ {#eq-mwu-bins}
 
@@ -131,7 +131,7 @@ $$
 \max\!\left(
 0,\,
 \frac{Q_i - \max(N_i - 1, 0)}
-\max\!\left((S_{m,i}+S_{u,i}) - S_{c^2,i}/(S_{m,i}+S_{u,i}), \varepsilon\right)}
+{\max\!\left((S_{m,i}+S_{u,i}) - S_{c^2,i}/(S_{m,i}+S_{u,i}), \varepsilon\right)}
 \right).
 $$ {#eq-dl}
 
@@ -149,7 +149,7 @@ Numerically, the integral is evaluated on a dense grid after each density is ren
 
 ## Multiple Testing and p-Value Aggregation
 
-For genome-wide DMP screening, `storey_qvalues()` estimates the null fraction \(\pi_0\) across a grid of \(\lambda\) values and then computes monotone q-values [@storey2003]:
+For genome-wide DMP screening, `storey_qvalues()` estimates the null fraction $\pi_0$ across a grid of $\lambda$ values and then computes monotone q-values [@storey2003]:
 
 $$
 \hat\pi_0(\lambda) =
@@ -176,13 +176,13 @@ $$
 \left(\sqrt{\sigma_{1i}^2} + \sqrt{\sigma_{2i}^2}\right)\right].
 $$ {#eq-effect-size}
 
-An optional mean-level weight \(g(\bar\mu_i)\) can be applied, with the code supporting square-root, linear, saturating, and boundary-threshold variants.
+An optional mean-level weight $g(\bar\mu_i)$ can be applied, with the code supporting square-root, linear, saturating, and boundary-threshold variants.
 
 This score is useful operationally, but it is not a test statistic, likelihood ratio, or posterior quantity. It is a deliberately engineered ranking rule. Publication text should therefore describe it as a heuristic biological prioritization score.
 
 ## ECDFClassifier
 
-The classifier in `ecdf_classifier.py` turns the centroid histograms into per-class densities and scores a sample \(x = (x_1,\dots,x_p)\) via a weighted mean log-density:
+The classifier in `ecdf_classifier.py` turns the centroid histograms into per-class densities and scores a sample $x = (x_1,\dots,x_p)$ via a weighted mean log-density:
 
 $$
 \operatorname{score}_k(x) =
@@ -200,7 +200,7 @@ P(Y = k \mid x)
 T_{\text{eff}} = T \sqrt{n_{\text{effective}}},
 $$ {#eq-ecdf-softmax}
 
-where \(n_{\text{effective}} = (\sum_i w_i)^2 / \sum_i w_i^2\) is the inverse-Simpson effective number of weighted loci.
+where $n_{\text{effective}} = (\sum_i w_i)^2 / \sum_i w_i^2$ is the inverse-Simpson effective number of weighted loci.
 
 Two stabilizers are important because they materially affect behavior:
 

@@ -21,7 +21,7 @@ The Azure SQL path calls a stored procedure (`spMapDMP2Genes`). Because the stor
 
 ## Gene-Level Combined p-Values
 
-For genes with several mapped DMPs, the package computes a signed weighted Stouffer aggregation. Given DMP p-values \(p_j\), weights \(w_j\), and direction signs \(s_j \in \{-1,+1\}\),
+For genes with several mapped DMPs, the package computes a signed weighted Stouffer aggregation. Given DMP p-values $p_j$, weights $w_j$, and direction signs $s_j \in \{-1,+1\}$,
 
 $$
 z_j = \Phi^{-1}(1 - p_j/2),
