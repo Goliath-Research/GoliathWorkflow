@@ -123,9 +123,10 @@ class GroupConfig(BaseModel):
     )
     stages: Optional[List["GroupConfig"]] = Field(
         default=None,
-        description="Optional second level (e.g. disease type → stages). When set, parent must not use "
-        "sample_paths; each stage has its own label and sample_paths. Resolved centroid labels are "
-        "{parent.label}_{stage.label}.",
+        description="Optional child strata under this disease family (JSON key is 'stages' but children "
+        "may be stage, molecular subtype, or any mutually exclusive bins—not only TNM stage). "
+        "When set, parent must not use sample_paths; each child has its own label and sample_paths. "
+        "Resolved centroid labels are {parent.label}_{child.label}. See methylutils/docs/COHORT_TREE.md.",
     )
 
     @field_validator("label")

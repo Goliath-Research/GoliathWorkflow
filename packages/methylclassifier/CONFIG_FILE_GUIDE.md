@@ -99,6 +99,8 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `no_filter` | boolean | false | Process all .h5 without chromosome/context filtering |
 | `log_level` | string | `"INFO"` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 
+**Pipeline project cohorts:** Disease **`diseases.groups[].stages`** names a list of **child cohorts** (samples live on children only). The key is historical; children can represent stage, receptor subtype, or any exclusive strata—resolved leaf labels drive detector paths and OvR order. See **[COHORT_TREE.md](../methylutils/docs/COHORT_TREE.md)** (MethylUtils) for semantics, `cohort_hierarchy`, and a **v2** design appendix (recursive trees; not implemented).
+
 **Project JSON (`step_config.classifier`) — OvR paths from `comparisons`:**  
 When the project defines `controls`, `diseases`, and `comparisons` (control/disease layout), you can avoid hard-coding absolute detector paths:
 

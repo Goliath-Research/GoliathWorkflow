@@ -1,5 +1,9 @@
 # MethylUtils Implementation
 
+## Pipeline project config (cohorts)
+
+- **`methyl_utils/pipeline_config.py`** — `ProjectConfig` / `GroupConfig` for control+disease projects, comparisons, resolved groups, optional **`cohort_hierarchy`**. Disease **`stages`** children are generic strata (not only TNM stage); see **[COHORT_TREE.md](COHORT_TREE.md)** and the v2 recursive-tree appendix there.
+
 ## Relevant modules for the ECDF effect-size pipeline
 
 - `methyl_utils/statistical_tests.py`

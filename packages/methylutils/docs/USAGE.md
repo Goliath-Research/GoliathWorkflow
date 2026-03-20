@@ -117,5 +117,6 @@ Each of those packages has its own [USAGE](../../methylcentroid/docs/USAGE.md) (
 ## Related documentation
 
 - [MethylUtils Theoretical Foundation](MethylUtils_Theoretical_Foundation.md) — Role, project config, sample/centroid model, Beta and metrics.
+- [COHORT_TREE.md](COHORT_TREE.md) — `diseases.groups[].stages` as generic strata, leaf labels, comparisons, v2 spike appendix.
 - [METHYLUTILS_IMPLEMENTATION](METHYLUTILS_IMPLEMENTATION.md) — Package layout and how downstream packages use MethylUtils.
 - [METHYLUTILS_COMPREHENSIVE_DOCUMENTATION](METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md) — Full math, distance formulas, data structures, and API details.
