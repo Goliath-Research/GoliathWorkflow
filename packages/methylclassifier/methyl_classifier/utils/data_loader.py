@@ -419,9 +419,13 @@ class DataLoader:
         methylation_levels = np.nan_to_num(methylation_levels, nan=0.5)
         methylation_levels = np.clip(methylation_levels, 0.0, 1.0)
 
-        pos_vals = np.asarray(sample.pos, dtype=np.uint64)
-        meth_vals = np.asarray(methylation_levels, dtype=np.float64)
-        dmp_arr = np.asarray(dmp_positions, dtype=np.uint64).ravel()
+        pos_vals = np.asarray(sample.pos, dtype=np.uint32).ravel()
+        meth_vals = np.asarray(methylation_levels, dtype=np.float64).ravel()
+        if pos_vals.size != meth_vals.size:
+            n_common = min(pos_vals.size, meth_vals.size)
+            pos_vals = pos_vals[:n_common]
+            meth_vals = meth_vals[:n_common]
+        dmp_arr = np.asarray(dmp_positions, dtype=np.uint32).ravel()
 
         if len(pos_vals) == 0:
             feature_vector = np.full(len(dmp_arr), 0.5, dtype=np.float64)
@@ -431,10 +435,19 @@ class DataLoader:
             order = np.argsort(pos_vals, kind="mergesort")
             sp = pos_vals[order]
             sm = meth_vals[order]
-            idx = np.searchsorted(sp, dmp_arr, side="left")
-            safe_idx = np.clip(idx, 0, len(sm) - 1)
-            match = (idx < len(sp)) & (sp[safe_idx] == dmp_arr)
-            feature_vector = np.where(match, sm[safe_idx], 0.5).astype(np.float64)
+            n = int(sp.size)
+            hi = max(n - 1, 0)
+            idx = np.searchsorted(sp, dmp_arr, side="left").astype(np.int64, copy=False)
+            safe_idx = np.minimum(np.maximum(idx, 0), hi)
+            # Avoid boolean & / np.where evaluating sm[...] for buckets where idx == n (past end of sp):
+            # NumPy evaluates both ufunc operands and both np.where branches eagerly.
+            in_range = idx < n
+            pos_hit = sp[safe_idx] == dmp_arr
+            match = in_range & pos_hit
+            feature_vector = np.full(len(dmp_arr), 0.5, dtype=np.float64)
+            if np.any(match):
+                mloc = np.flatnonzero(match)
+                feature_vector[mloc] = sm[safe_idx[mloc]]
             feature_vector = np.clip(feature_vector, 0.0, 1.0)
             availability_mask = match
             missing_positions = int(np.sum(~match))
