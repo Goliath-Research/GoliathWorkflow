@@ -319,7 +319,7 @@ class BedtoolsMapper:
             return s
 
         chrom_series = df['chromosome'].astype(str).str.strip()
-        pos_series = pd.to_numeric(df['position'], errors='raise').astype(np.int64)
+        pos_series = pd.to_numeric(df['position'], errors='raise').astype(np.uint32)
         name_series = chrom_series + ":" + pos_series.astype(str)
         if 'context' in df.columns:
             name_series = name_series + ":" + df['context'].astype(str)
@@ -580,7 +580,7 @@ class BedtoolsMapper:
         chrom = df['chromosome'].astype(str).str.strip()
         pos = pd.to_numeric(df['position'], errors='coerce')
         # Same as csv_to_bed: integer position, no decimal
-        pos_int = pos.fillna(0).astype(np.int64)
+        pos_int = pos.fillna(0).astype(np.uint32)
         name = chrom + ":" + pos_int.astype(str)
         if 'context' in df.columns:
             name = name + ":" + df['context'].astype(str)
@@ -602,7 +602,9 @@ class BedtoolsMapper:
             return intersect_df
         dmp_lookup = dmp_df.copy()
         dmp_lookup['chromosome'] = dmp_lookup['chromosome'].astype(str).str.strip()
-        dmp_lookup['position'] = pd.to_numeric(dmp_lookup['position'], errors='coerce').astype('Int64')
+        dmp_lookup['position'] = (
+            pd.to_numeric(dmp_lookup['position'], errors='coerce').fillna(0).astype(np.uint32)
+        )
         dmp_lookup['dmp_name'] = self._build_dmp_name_series(dmp_lookup)
 
         # When duplicate dmp_name exist, keep the row that has stats

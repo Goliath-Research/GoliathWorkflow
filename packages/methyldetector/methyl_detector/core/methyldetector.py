@@ -1087,7 +1087,7 @@ class MethylDetector:
             # uniform weights let many weak (cap-hit) positions dilute the mean and misclassify centroid2.
             weights = self._get_classifier_weights(check_df)
             dmpDF = pd.DataFrame({
-                'pos': check_df['position'].values.astype(np.int64),
+                'pos': check_df['position'].values.astype(np.uint32),
                 'weight': weights,
                 'context': check_df['context'].values if 'context' in check_df.columns else None,
                 'delta_sign': check_df['delta_sign'].values if 'delta_sign' in check_df.columns else None,
@@ -1235,7 +1235,7 @@ class MethylDetector:
         """Build an ECDFClassifier and typed DMP frame for the given subset."""
         weights = self._get_classifier_weights(dmps_df)
         dmpDF = pd.DataFrame({
-            'pos': dmps_df['position'].values.astype(np.int64),
+            'pos': dmps_df['position'].values.astype(np.uint32),
             'weight': weights.astype(np.float64),
             'context': dmps_df['context'].values if 'context' in dmps_df.columns else None,
             'delta_sign': dmps_df['delta_sign'].values if 'delta_sign' in dmps_df.columns else None,
