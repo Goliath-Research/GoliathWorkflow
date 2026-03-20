@@ -118,6 +118,8 @@ methyl-centroid --project /path/to/project.json --group group2
 methyl-centroid --project /path/to/project.json --group all
 ```
 
+For **hierarchical diseases** (`diseases.groups[].stages`), centroids are built per **resolved leaf** (e.g. `pca` + stage `pca1` → `pca_pca1`). Use `--group all` so every leaf runs. If you see **no samples** for a parent label like `pca` alone, the `stages` field was not loaded—install a current **methyl_utils** from this repo: `pip install -e packages/methylutils`.
+
 When validation or another orchestrator wants to pass cohort deltas explicitly,
 use a step override:
 
