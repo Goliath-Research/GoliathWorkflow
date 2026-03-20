@@ -214,7 +214,7 @@
         "label": "cancer",
         "groups": [
           {
-            "label": "pca",
+            "label": "prostate_cancer",
             "stages": [
               {
                 "label": "pca1",
