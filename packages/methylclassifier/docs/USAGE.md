@@ -152,6 +152,16 @@ Example config (`configs/PCa_vs_Healthy_classifier_config.json`):
 - **weight_fit_l1_ratio**: For `elasticnet_fitted` only: balance L1/L2 (0=ridge-like, 1=lasso-like). Default `0.5`.
 - **project_name**: When set, after classification the classifier is saved as `<project_name>-classifier.pkl` and the list of sample folders as `<project_name>-samples.txt` (or .csv) in the same directory as the classification output. You can override paths with **save_classifier_path** and **samples_list_export_path**.
 
+### Multiclass OvR (K≥2) without a separate bundle script
+
+If you have **K** MethylDetector pickles (one per one-vs-rest class), list them in the config (or under `step_config.classifier` in a project JSON) instead of `model_dir` / `model_path`:
+
+- **`ovr_binary_model_paths`**: array of K absolute paths to detector `*.pkl` files (each must contain `classifier` + `dmpDF`).
+- **`ovr_detection_dirs`**: alternative — K directories, each containing **exactly one** `classifier*.pkl` (multi-chromosome folders with several pickles are not auto-merged; list explicit paths or one pickle per class).
+- **`ovr_class_names`** or **`multiclass_class_names`** (multiclass centroid validation): length **K**, same order as the OvR sources and **`centroid_dirs`**.
+
+MethylClassifier **assembles** the `ecdf_one_vs_rest` bundle in memory. On **save** (`save_classifier_path` / `project_name`), it writes the **portable dict** PKL used by MethylPredictor, not a raw pickled `MethylClassifier`.
+
 Override paths from the command line if needed:
 
 ```bash

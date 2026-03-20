@@ -186,6 +186,8 @@ save_ecdf_ovr_pickle(
 
 Point **`model_path`** at the saved file. Classifier order must match **`class_names`** and, for labeled evaluation, **`test_group_paths`** order (class index 0 = first group). See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the fusion rule and subgroup guidance.
 
+**MethylClassifier** can also **assemble** the same bundle at runtime from **`ovr_binary_model_paths`** / **`ovr_detection_dirs`** in the classification or project `classifier` step config (see MethylClassifier `USAGE.md`); the saved **`save_classifier_path`** output is then the portable `ecdf_one_vs_rest` dict automatically.
+
 ---
 
 ## Accuracy metrics reported (labeled runs only)

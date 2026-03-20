@@ -11,7 +11,16 @@ from methyl_classifier.core.multiclass_ovr import (
     build_union_dmp_dataframe,
     fuse_ovr_binary_probas,
 )
+from methyl_classifier.core.classifier import MethylClassifier
 from methyl_classifier.models.config import ClassifierConfig
+
+
+def _write_min_detector_pkl(path: Path, position: int, chrom: str = "1") -> None:
+    ecdf = _tiny_ecdf(np.array([position], dtype=np.uint32))
+    df = pd.DataFrame({"chromosome": [chrom], "position": [int(position)]})
+    pkg = {"classifier": ecdf, "dmpDF": df, "metadata": {}}
+    with open(path, "wb") as f:
+        pickle.dump(pkg, f, protocol=pickle.HIGHEST_PROTOCOL)
 from methyl_classifier.utils.ovr_bundle import build_ecdf_ovr_package
 
 
@@ -89,8 +98,6 @@ def test_methyl_classifier_ovr_pkl_predict_proba_shape(tmp_path, monkeypatch, ca
     with open(pkl_path, "wb") as f:
         pickle.dump(pkg, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-    from methyl_classifier.core.classifier import MethylClassifier
-
     clf = MethylClassifier(ClassifierConfig(model_path=str(pkl_path)))
     assert clf._ovr_mode and clf.n_classes == 3
     assert len(clf.dmp_positions_df) == 3  # (1,10), (1,20), (2,10)
@@ -100,3 +107,49 @@ def test_methyl_classifier_ovr_pkl_predict_proba_shape(tmp_path, monkeypatch, ca
     proba = clf.predict_proba(X, m)
     assert proba.shape == (1, 3)
     np.testing.assert_allclose(proba.sum(axis=1), 1.0, rtol=1e-4)
+
+
+def test_methyl_classifier_ovr_save_writes_ecdf_one_vs_rest_dict(tmp_path, monkeypatch):
+    """Saving OvR MethylClassifier writes portable dict PKL reloadable via load_classifier."""
+    monkeypatch.setattr("methyl_classifier.core.classifier.sys.exit", lambda *_: pytest.fail("sys.exit"))
+
+    entries = [
+        {
+            "ecdf": _tiny_ecdf(np.array([10], dtype=np.uint32)),
+            "dmp_df": pd.DataFrame({"chromosome": ["1"], "position": [10]}),
+        },
+        {
+            "ecdf": _tiny_ecdf(np.array([20], dtype=np.uint32)),
+            "dmp_df": pd.DataFrame({"chromosome": ["1"], "position": [20]}),
+        },
+    ]
+    pkg = build_ecdf_ovr_package(entries, ["a", "b"])
+    pkl_path = tmp_path / "ovr_in.pkl"
+    with open(pkl_path, "wb") as f:
+        pickle.dump(pkg, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    clf = MethylClassifier(ClassifierConfig(model_path=str(pkl_path)))
+    out_path = tmp_path / "saved.pkl"
+    clf.save(out_path)
+    with open(out_path, "rb") as f:
+        dumped = pickle.load(f)
+    assert isinstance(dumped, dict)
+    assert dumped.get("classifier_type") == "ecdf_one_vs_rest"
+    clf2 = MethylClassifier(ClassifierConfig(model_path=str(out_path)))
+    assert clf2._ovr_mode and clf2.n_classes == 2
+
+
+def test_classifier_config_ovr_binary_paths_assembles_without_model_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr("methyl_classifier.core.classifier.sys.exit", lambda *_: pytest.fail("sys.exit"))
+    p1 = tmp_path / "c0.pkl"
+    p2 = tmp_path / "c1.pkl"
+    _write_min_detector_pkl(p1, 100)
+    _write_min_detector_pkl(p2, 200)
+    clf = MethylClassifier(
+        ClassifierConfig(
+            ovr_binary_model_paths=[str(p1), str(p2)],
+            ovr_class_names=["c0", "c1"],
+        )
+    )
+    assert clf._ovr_mode and clf.n_classes == 2
+    assert len(clf.dmp_positions_df) == 2

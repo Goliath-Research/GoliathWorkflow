@@ -77,13 +77,22 @@ class MethylClassifier:
         self._ovr_binary_classifiers: List[Any] = []
         self._ovr_column_indices: List[np.ndarray] = []
 
+        p_ovr = self.config.ovr_binary_model_paths or []
+        d_ovr = self.config.ovr_detection_dirs or []
+        if len(p_ovr) >= 2 or len(d_ovr) >= 2:
+            self._load_ovr_from_detector_sources()
+            for _c in self._ovr_binary_classifiers:
+                if hasattr(_c, "set_temperature"):
+                    _c.set_temperature(self.config.temperature)
+            return
+
         # Determine if we're loading a directory or single file
         model_path_str = self.config.model_dir or self.config.model_path
         if model_path_str is None:
             raise ValueError("Either model_path or model_dir must be provided")
-        
+
         model_path = Path(model_path_str)
-        
+
         if model_path.is_dir():
             # Multi-chromosome mode: load all classifiers from directory
             self.is_multi_chromosome = True
@@ -188,6 +197,76 @@ class MethylClassifier:
             print(f"💎 {chrom}: {cnt} DMPs")
         if len(chroms) > 20:
             print(f"   ... and {len(chroms) - 20} more chromosomes")
+
+    def _load_ovr_from_detector_sources(self) -> None:
+        """Build in-memory OvR from K MethylDetector pickles or K sole-pickle directories."""
+        from ..utils.ovr_bundle import (
+            binary_entry_from_detector_pickle,
+            binary_entry_from_sole_classifier_in_dir,
+            build_ecdf_ovr_package,
+        )
+
+        paths = list(self.config.ovr_binary_model_paths or [])
+        dirs = list(self.config.ovr_detection_dirs or [])
+        if len(paths) >= 2 and len(dirs) >= 2:
+            raise ValueError("Set only one of ovr_binary_model_paths or ovr_detection_dirs")
+        entries: List[Dict[str, Any]] = []
+        if len(paths) >= 2:
+            for p in paths:
+                entries.append(binary_entry_from_detector_pickle(Path(p)))
+        elif len(dirs) >= 2:
+            for d in dirs:
+                entries.append(binary_entry_from_sole_classifier_in_dir(Path(d)))
+        else:
+            raise ValueError("OvR sources require at least 2 paths or 2 directories")
+
+        names = list(self.config.ovr_class_names or [])
+        if len(names) != len(entries):
+            raise ValueError(
+                f"ovr_class_names length ({len(names)}) must match OvR sources ({len(entries)})"
+            )
+        pkg = build_ecdf_ovr_package(
+            entries, names, metadata_extra={"built_from": "detector_pickles"}
+        )
+        self._load_ovr_ecdf_package(pkg)
+        print("✅ Assembled OvR ECDF bundle from detector output (K=%d)" % len(entries))
+
+    def _export_ovr_package_dict(self) -> Dict[str, Any]:
+        """Serialize current OvR state as ``ecdf_one_vs_rest`` dict (portable PKL)."""
+        from ..utils.ovr_bundle import build_ecdf_ovr_package
+
+        if not self._ovr_binary_classifiers:
+            raise RuntimeError("Cannot export OvR package: no binary classifiers")
+        entries: List[Dict[str, Any]] = []
+        for k, clf in enumerate(self._ovr_binary_classifiers):
+            idx = np.asarray(self._ovr_column_indices[k], dtype=np.intp)
+            sub_df = self.dmp_positions_df.iloc[idx].copy()
+            entries.append({"ecdf": clf, "dmp_df": sub_df})
+        meta_extra = {
+            k: v
+            for k, v in (self.metadata or {}).items()
+            if k not in ("binary_models", "classifier")
+        }
+        return build_ecdf_ovr_package(
+            entries, list(self.class_names or []), metadata_extra=meta_extra
+        )
+
+    def _adopt_ovr_from_instance(self, other: "MethylClassifier") -> None:
+        """Copy OvR state from a pickled ``MethylClassifier``."""
+        self._ovr_mode = True
+        self.is_multi_chromosome = False
+        self.classifier = None
+        self.classifiers = {}
+        self._ovr_binary_classifiers = list(other._ovr_binary_classifiers)
+        self._ovr_column_indices = [np.asarray(x, dtype=np.int32).copy() for x in other._ovr_column_indices]
+        self.dmp_positions_df = other.dmp_positions_df.copy()
+        self.class_names = list(other.class_names) if other.class_names else None
+        self.n_classes = other.n_classes
+        self.metadata = dict(other.metadata or {})
+        self.chromosome = other.chromosome
+        self.context_metadata = other.context_metadata
+        self._calibrated = getattr(other, "_calibrated", False)
+        self._sync_dmp_cache_from_positions_df()
 
     def _predict_proba_ovr(
         self,
@@ -304,8 +383,15 @@ class MethylClassifier:
                         self.dmp_positions_df = pd.DataFrame(columns=["chromosome", "position"])
 
             else:
-                # Check if this is a saved full MethylClassifier (multi-chromosome bundle from .save())
-                if isinstance(model_package, MethylClassifier) and getattr(model_package, "classifiers", None):
+                # Pickled full MethylClassifier: OvR (ecdf_one_vs_rest) or multi-chromosome bundle
+                if isinstance(model_package, MethylClassifier) and getattr(
+                    model_package, "_ovr_mode", False
+                ):
+                    print("✅ Loaded pickled MethylClassifier (OvR ECDF bundle)")
+                    self._adopt_ovr_from_instance(model_package)
+                elif isinstance(model_package, MethylClassifier) and getattr(
+                    model_package, "classifiers", None
+                ):
                     self._ovr_mode = False
                     self._ovr_binary_classifiers = []
                     self._ovr_column_indices = []
@@ -954,13 +1040,21 @@ class MethylClassifier:
     def save(self, path: Path) -> None:
         """
         Save the classifier to a .pkl file for later use (e.g. to classify a list of samples).
-        The saved bundle includes config, per-chromosome classifiers, chromosome weights, and metadata.
+
+        In OvR mode, writes a portable ``ecdf_one_vs_rest`` dict (same schema as MethylDetector
+        assembly) so MethylPredictor and future loads do not rely on pickling ``MethylClassifier``.
+        Otherwise saves the full object (multi-chromosome bundle or legacy use).
 
         Args:
             path: Output path for the pickle file (e.g. <project_name>-classifier.pkl).
         """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        if getattr(self, "_ovr_mode", False):
+            pkg = self._export_ovr_package_dict()
+            with open(path, "wb") as f:
+                pickle.dump(pkg, f, protocol=pickle.HIGHEST_PROTOCOL)
+            return
         with open(path, "wb") as f:
             pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
     
