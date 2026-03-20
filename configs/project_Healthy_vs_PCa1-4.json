@@ -217,25 +217,25 @@
             "label": "prostate_cancer",
             "stages": [
               {
-                "label": "1",
+                "label": "pca1",
                 "sample_paths": [
                   "configs/pca1.csv"
                 ]
               },
               {
-                "label": "2",
+                "label": "pca2",
                 "sample_paths": [
                   "configs/pca2.csv"
                 ]
               },
               {
-                "label": "3",
+                "label": "pca3",
                 "sample_paths": [
                   "configs/pca3.csv"
                 ]
               },
               {
-                "label": "4",
+                "label": "pca4",
                 "sample_paths": [
                   "configs/pca4.csv"
                 ]
