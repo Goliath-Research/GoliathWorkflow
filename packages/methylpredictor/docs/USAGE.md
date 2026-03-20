@@ -59,19 +59,20 @@ Use this when you run on the host and want to activate a virtual environment bef
 
 **Prerequisites:** Python 3.8+.
 
-**1. Create a virtual environment**
+**1. Create a virtual environment** (from the **MethylPipeline repository root**; canonical name is `.venv`)
 
 ```bash
-python3 -m venv venv
+cd /path/to/MethylPipeline
+python3.12 -m venv .venv
 ```
 
 **2. Activate the virtual environment**
 
 ```bash
-source ./venv/bin/activate
+source .venv/bin/activate
 ```
 
-On Windows: `venv\Scripts\activate`. After activation, the prompt usually shows `(venv)`.
+On Windows: `.venv\Scripts\activate`. After activation, the prompt usually shows `(.venv)`.
 
 **3. Install MethylUtils (required by MethylClassifier)**
 
@@ -98,7 +99,7 @@ pip install -e .
 
 **6. Run MethylPredictor**
 
-With the virtual environment **activated** (`source ./venv/bin/activate`), use the CLI. Paths are on the **host**; you do not use a container.
+With the virtual environment **activated** (`source .venv/bin/activate` from the repo root), use the CLI. Paths are on the **host**; you do not use a container.
 
 ```bash
 methyl-predictor --project configs/project.json

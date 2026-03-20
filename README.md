@@ -25,5 +25,16 @@ To ensure consistency and clarity, all packages in `MethylPipeline` share an ide
 For details on how to deploy this repository on supported platforms (Linux/macOS) via virtual environments (`.venv`) or Docker containers, please consult our dedicated guide:
 - 📖 **[DEPLOYMENT.md](docs/DEPLOYMENT.md)**
 
+### Virtual environment (required for tests and CLIs)
+
+From the repository root, activate the canonical environment before running **pytest**, **pip**, or any **`methyl-*`** CLI:
+
+```bash
+source .venv/bin/activate
+pytest
+```
+
+If `.venv` does not exist yet, create it as described in [DEPLOYMENT.md](docs/DEPLOYMENT.md). You can also run the full test suite without manually activating using [`scripts/run_tests.sh`](scripts/run_tests.sh), which invokes `.venv/bin/python -m pytest` directly.
+
 ---
 *Powered by MethylPipeline.*

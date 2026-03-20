@@ -52,21 +52,20 @@ Use this when you run on the host (e.g. your laptop or a login node) and want to
 
 **1. Create a virtual environment**
 
-From the MethylPipeline repo root or from a package directory:
+From the **MethylPipeline repository root** (canonical directory is `.venv`):
 
 ```bash
-python3 -m venv venv
+cd /path/to/MethylPipeline
+python3.12 -m venv .venv
 ```
-
-(You can use another name, e.g. `.venv`; the rest of the doc uses `venv`.)
 
 **2. Activate the virtual environment**
 
 ```bash
-source ./venv/bin/activate
+source .venv/bin/activate
 ```
 
-On Windows: `venv\Scripts\activate`. After activation, your shell prompt usually shows `(venv)`.
+On Windows: `.venv\Scripts\activate`. After activation, your shell prompt usually shows `(.venv)`.
 
 **3. Install MethylUtils first**
 

@@ -56,19 +56,20 @@ Use this when you run on the host (e.g. laptop or login node) and want to activa
 
 **Prerequisites:** Python 3.8+.
 
-**1. Create a virtual environment**
+**1. Create a virtual environment** (from the **MethylPipeline repository root**; canonical name is `.venv`)
 
 ```bash
-python3 -m venv venv
+cd /path/to/MethylPipeline
+python3.12 -m venv .venv
 ```
 
 **2. Activate the virtual environment**
 
 ```bash
-source ./venv/bin/activate
+source .venv/bin/activate
 ```
 
-On Windows: `venv\Scripts\activate`. After activation, the prompt usually shows `(venv)`.
+On Windows: `.venv\Scripts\activate`. After activation, the prompt usually shows `(.venv)`.
 
 **3. Install MethylUtils (required dependency)**
 
@@ -89,7 +90,7 @@ pip install -e .
 
 **5. Run MethylClassifier**
 
-With the virtual environment **activated** (`source ./venv/bin/activate`), use the CLI. Paths in the config are on the **host**; you do not use a container.
+With the virtual environment **activated** (`source .venv/bin/activate` from the repo root), use the CLI. Paths in the config are on the **host**; you do not use a container.
 
 ```bash
 methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json
@@ -103,7 +104,7 @@ methyl_classifier --model-dir /path/to/classifiers/ --input /path/to/samples/ --
 After completing either setup:
 
 - **Docker:** Run via `docker exec -w /workspace/packages/methylclassifier methylpipeline methyl_classifier --config <config.json>` (paths in config must be valid inside the container).
-- **Virtual environment:** Activate the venv (`source ./venv/bin/activate`), then run `methyl_classifier --config <config.json>` (paths in config are on the host).
+- **Virtual environment:** Activate the project venv (`source .venv/bin/activate`), then run `methyl_classifier --config <config.json>` (paths in config are on the host).
 
 ---
 

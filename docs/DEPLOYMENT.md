@@ -37,6 +37,26 @@ cd packages/methyldetector
 pip install -e .
 ```
 
+### Running tests and pipeline programs
+
+**All** `pytest` runs, `python -m ...` invocations, and installed pipeline CLIs (`methyl-centroid`, `methyl-detector`, `methyl-classifier`, `methyl-predictor`, `methyl-validation`, etc.) must use this virtual environment—do not rely on system Python for project code.
+
+From the repository root, with the environment active:
+
+```bash
+source .venv/bin/activate
+pytest
+```
+
+Equivalent one-shot forms (no `activate` needed):
+
+```bash
+./.venv/bin/python -m pytest
+./.venv/bin/methyl-centroid --help
+```
+
+The repo provides [`scripts/run_tests.sh`](../scripts/run_tests.sh), which runs `pytest` via `.venv/bin/python` and errors if `.venv` is missing.
+
 ---
 
 ## 2. Docker Container Deployment

@@ -5,12 +5,14 @@ alwaysApply: true
 
 # Virtual environment
 
-This repository uses a local virtual environment at `.venv`.
+This repository uses a local virtual environment at **`.venv`** in the repo root. **Every test and pipeline program must run in that environment.**
 
-- Before running **any** `python`, `pip`, `uv`, `pytest`, or package CLIs (`methyl-*`, etc.) in the terminal, activate it from the repo root:
+- Before running **any** `python`, `pip`, `uv`, `pytest`, or package CLIs (`methyl-*`, etc.) in the terminal, activate from the repo root:
 
   `source .venv/bin/activate`
 
-- Prefer one-shot form when scripting commands: `source .venv/bin/activate && python -m pytest ...`
+- When running shell commands for the user, use either activation as above or the equivalent explicit interpreter: `.venv/bin/python -m pytest ...` / `.venv/bin/methyl-centroid ...`.
 
-- Do not assume system Python has project dependencies; tests and imports should be validated inside `.venv`.
+- Prefer one-shot form when scripting: `source .venv/bin/activate && pytest ...`
+
+- Do not assume system Python has project dependencies; validate tests and imports only inside `.venv`.
