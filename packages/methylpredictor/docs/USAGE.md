@@ -161,6 +161,31 @@ methyl-predictor --model-dir ./classifiers --output-dir ./out \
 
 Holdout samples should not overlap training when you care about generalization.
 
+### Building a multiclass OvR ECDF pickle (`ecdf_one_vs_rest`)
+
+If you have **K** MethylDetector-style binary pickles (each with `classifier` + `dmpDF`), assemble one multiclass bundle for MethylClassifier / MethylPredictor:
+
+```python
+from pathlib import Path
+from methyl_classifier.utils.ovr_bundle import (
+    binary_entry_from_detector_pickle,
+    save_ecdf_ovr_pickle,
+)
+
+entries = [
+    binary_entry_from_detector_pickle(Path("classifier-1-A.pkl")),
+    binary_entry_from_detector_pickle(Path("classifier-1-B.pkl")),
+    binary_entry_from_detector_pickle(Path("classifier-1-C.pkl")),
+]
+save_ecdf_ovr_pickle(
+    entries,
+    class_names=["A", "B", "C"],
+    output_path=Path("multiclass-ovr-ecdf.pkl"),
+)
+```
+
+Point **`model_path`** at the saved file. Classifier order must match **`class_names`** and, for labeled evaluation, **`test_group_paths`** order (class index 0 = first group). See [IMPLEMENTATION.md](IMPLEMENTATION.md) for the fusion rule and subgroup guidance.
+
 ---
 
 ## Accuracy metrics reported (labeled runs only)

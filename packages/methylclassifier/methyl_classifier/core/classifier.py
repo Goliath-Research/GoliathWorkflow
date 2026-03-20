@@ -12,6 +12,11 @@ import pandas as pd
 
 # Import from parent package
 from ..models.config import ClassifierConfig
+from .multiclass_ovr import (
+    ECDF_ONE_VS_REST_TYPE,
+    build_union_dmp_dataframe,
+    fuse_ovr_binary_probas,
+)
 
 # Mapping for pickle compatibility (ECDF-only; no legacy package names)
 MODULE_MAPPING = {
@@ -67,7 +72,11 @@ class MethylClassifier:
         self.n_classes = None
         self.class_names = None
         self.metadata = {}
-        
+        self.dmp_positions_df = pd.DataFrame(columns=["chromosome", "position"])
+        self._ovr_mode = False
+        self._ovr_binary_classifiers: List[Any] = []
+        self._ovr_column_indices: List[np.ndarray] = []
+
         # Determine if we're loading a directory or single file
         model_path_str = self.config.model_dir or self.config.model_path
         if model_path_str is None:
@@ -86,6 +95,130 @@ class MethylClassifier:
         else:
             raise FileNotFoundError(f"Model path not found: {model_path}")
 
+    def _sync_dmp_cache_from_positions_df(self) -> None:
+        """Set ``all_dmp_positions`` and ``_dmp_positions_dict_cache`` from ``dmp_positions_df``."""
+        df = self.dmp_positions_df
+        if df is None or len(df) == 0:
+            self.dmp_positions_df = pd.DataFrame(columns=["chromosome", "position"])
+            self.dmp_positions_df["chromosome"] = self.dmp_positions_df["chromosome"].astype("category")
+            self.dmp_positions_df["position"] = self.dmp_positions_df["position"].astype(np.uint32)
+            self.all_dmp_positions = np.array([], dtype=np.uint32)
+            self._dmp_positions_dict_cache = {}
+            return
+        self.dmp_positions_df = df.sort_values(["chromosome", "position"]).reset_index(drop=True)
+        self.dmp_positions_df["chromosome"] = self.dmp_positions_df["chromosome"].astype(str).astype("category")
+        self.dmp_positions_df["position"] = self.dmp_positions_df["position"].astype(np.uint32)
+        for chrom in self.dmp_positions_df["chromosome"].cat.categories:
+            chrom_positions = self.dmp_positions_df[
+                self.dmp_positions_df["chromosome"] == chrom
+            ]["position"].values
+            if len(chrom_positions) > 1:
+                assert np.all(np.diff(chrom_positions) >= 0), f"Positions for {chrom} are not sorted!"
+        self.all_dmp_positions = (
+            np.array(sorted(self.dmp_positions_df["position"].unique()), dtype=np.uint32)
+            if len(self.dmp_positions_df) > 0
+            else np.array([], dtype=np.uint32)
+        )
+        self._dmp_positions_dict_cache = {
+            str(chrom): self.dmp_positions_df[
+                self.dmp_positions_df["chromosome"] == chrom
+            ]["position"].values.astype(np.uint32)
+            for chrom in self.dmp_positions_df["chromosome"].cat.categories
+        }
+
+    def _load_ovr_ecdf_package(self, model_package: Dict[str, Any]) -> None:
+        """Load ``ecdf_one_vs_rest`` bundle: K binary ECDFs, union DMP table, column maps."""
+        self._ovr_mode = True
+        self.is_multi_chromosome = False
+        self.classifier = None
+        self.classifiers = {}
+        self._ovr_binary_classifiers = []
+        self._ovr_column_indices = []
+
+        entries = model_package.get("binary_models")
+        if not isinstance(entries, list) or len(entries) < 2:
+            raise ValueError("ecdf_one_vs_rest package requires binary_models (list, len>=2)")
+
+        for i, entry in enumerate(entries):
+            if not isinstance(entry, dict) or entry.get("ecdf") is None:
+                raise ValueError(f"binary_models[{i}] must be a dict with 'ecdf' (ECDFClassifier)")
+            self._ovr_binary_classifiers.append(entry["ecdf"])
+
+        names = list(model_package.get("class_names") or [])
+        meta_pkg = model_package.get("metadata") or {}
+        if (not names or len(names) != len(entries)) and meta_pkg.get("class_names"):
+            names = list(meta_pkg["class_names"])
+        if len(names) != len(entries):
+            raise ValueError(
+                f"class_names length ({len(names)}) must match binary_models ({len(entries)})"
+            )
+
+        self.class_names = names
+        self.n_classes = len(names)
+        self.metadata = dict(model_package.get("metadata") or {})
+        self.metadata.setdefault("classifier_type", ECDF_ONE_VS_REST_TYPE)
+        self.metadata["n_classes"] = self.n_classes
+        self.metadata["class_names"] = list(self.class_names)
+
+        union_df, col_idx = build_union_dmp_dataframe(entries)
+        self.dmp_positions_df = union_df
+        self._ovr_column_indices = col_idx
+        self._sync_dmp_cache_from_positions_df()
+
+        chroms = sorted(self.dmp_positions_df["chromosome"].astype(str).unique().tolist())
+        self.chromosome = chroms[0] if chroms else "unknown"
+        self.context_metadata = meta_pkg.get("context")
+        if not self.context_metadata and self._ovr_binary_classifiers:
+            fi = None
+            try:
+                fi = self._ovr_binary_classifiers[0].contexts
+            except Exception:
+                fi = None
+            if fi is not None and len(fi) > 0:
+                uniq = sorted({str(x) for x in np.asarray(fi).ravel()})
+                self.context_metadata = ",".join(uniq) if uniq else "unknown"
+            else:
+                self.context_metadata = "unknown"
+
+        self._calibrated = False
+        print(f"📍 OvR: {self.n_classes} classes — {', '.join(str(x) for x in self.class_names)}")
+        print(f"📊 Union DMPs: {len(self.dmp_positions_df):,} (HDF5 read only during sample loading)")
+        for chrom in chroms[:20]:
+            cnt = int((self.dmp_positions_df["chromosome"].astype(str) == chrom).sum())
+            print(f"💎 {chrom}: {cnt} DMPs")
+        if len(chroms) > 20:
+            print(f"   ... and {len(chroms) - 20} more chromosomes")
+
+    def _predict_proba_ovr(
+        self,
+        methylation_data: np.ndarray,
+        availability_mask: Optional[np.ndarray] = None,
+        debug: bool = False,
+    ) -> np.ndarray:
+        """Stack K binary ``(n,2)`` probas and fuse to ``(n,K)`` via logit softmax."""
+        if not self._ovr_binary_classifiers:
+            raise RuntimeError("OvR mode but no binary classifiers loaded")
+        n_samples = int(methylation_data.shape[0])
+        if n_samples == 0:
+            return np.zeros((0, self.n_classes or 0), dtype=np.float64)
+
+        binary_probas: List[np.ndarray] = []
+        for k, clf in enumerate(self._ovr_binary_classifiers):
+            idx = self._ovr_column_indices[k]
+            Xk = np.ascontiguousarray(methylation_data[:, idx], dtype=np.float64)
+            Mk = availability_mask[:, idx] if availability_mask is not None else None
+            use_cal = (
+                getattr(self, "_calibrated", False)
+                and hasattr(clf, "predict_proba_calibrated")
+                and getattr(clf, "calibrator", None) is not None
+            )
+            if use_cal:
+                pk = clf.predict_proba_calibrated(Xk, Mk)
+            else:
+                pk = clf.predict_proba(Xk, Mk, debug=debug)
+            binary_probas.append(pk)
+        return fuse_ovr_binary_probas(binary_probas)
+
     def load_classifier(self, model_path: Path) -> None:
         """
         Load a trained classifier from a pickle file.
@@ -102,8 +235,14 @@ class MethylClassifier:
                 model_package = CustomUnpickler(f).load()
             
             # Handle both old and new formats
-            if isinstance(model_package, dict) and 'classifier' in model_package:
+            if isinstance(model_package, dict) and model_package.get("classifier_type") == ECDF_ONE_VS_REST_TYPE:
+                print(f"✅ Loaded OvR ECDF model package (v{model_package.get('package_version', 'unknown')})")
+                self._load_ovr_ecdf_package(model_package)
+            elif isinstance(model_package, dict) and 'classifier' in model_package:
                 # New enhanced PKL format
+                self._ovr_mode = False
+                self._ovr_binary_classifiers = []
+                self._ovr_column_indices = []
                 print(f"✅ Loaded enhanced model package (v{model_package.get('package_version', 'unknown')})")
                 self.classifier = model_package['classifier']
                 # Note: comparison_config removed (no longer used), kept for backward compatibility
@@ -167,6 +306,9 @@ class MethylClassifier:
             else:
                 # Check if this is a saved full MethylClassifier (multi-chromosome bundle from .save())
                 if isinstance(model_package, MethylClassifier) and getattr(model_package, "classifiers", None):
+                    self._ovr_mode = False
+                    self._ovr_binary_classifiers = []
+                    self._ovr_column_indices = []
                     # Adopt the saved bundle so we use all chromosomes and correct context
                     print(f"✅ Loaded multi-chromosome classifier bundle ({len(model_package.classifiers)} chromosomes)")
                     self.is_multi_chromosome = True
@@ -196,6 +338,9 @@ class MethylClassifier:
                     print(f"📋 Context: {self.context_metadata or 'unknown'}; chromosomes: {list(sorted(self.classifiers.keys()))}")
                 else:
                     # Legacy format: raw classifier (single chromosome)
+                    self._ovr_mode = False
+                    self._ovr_binary_classifiers = []
+                    self._ovr_column_indices = []
                     print("✅ Loaded classifier (legacy format)")
                     self.classifier = model_package
                     try:
@@ -209,8 +354,12 @@ class MethylClassifier:
             print(f"❌ Failed to load classifier from {model_path}: {e}")
             sys.exit(1)
         
-        # Set temperature on the actual classifier (handle both raw classifier and saved MethylClassifier wrapper)
-        if self.classifier is not None:
+        # Set temperature on the actual classifier(s)
+        if getattr(self, "_ovr_mode", False):
+            for _c in self._ovr_binary_classifiers:
+                if hasattr(_c, "set_temperature"):
+                    _c.set_temperature(self.config.temperature)
+        elif self.classifier is not None:
             _target = self.classifier
             if hasattr(_target, "classifier") and hasattr(getattr(_target, "classifier", None), "set_temperature"):
                 _target = _target.classifier
@@ -783,6 +932,14 @@ class MethylClassifier:
 
     def get_feature_info(self) -> Dict[str, Any]:
         """Get information about the classifier's features."""
+        if getattr(self, "_ovr_mode", False):
+            if self.dmp_positions_df is None or len(self.dmp_positions_df) == 0:
+                raise RuntimeError("OvR mode: empty dmp_positions_df")
+            pos = self.dmp_positions_df["position"].values.astype(np.uint32)
+            return {
+                "positions": pos,
+                "n_features": int(len(pos)),
+            }
         if self.is_multi_chromosome:
             # Return feature info from first classifier (or combine info from all)
             if not self.classifiers:
@@ -821,6 +978,9 @@ class MethylClassifier:
         Returns:
             Array of class predictions
         """
+        if getattr(self, "_ovr_mode", False):
+            probas = self.predict_proba(methylation_data, availability_mask, debug)
+            return np.argmax(probas, axis=1)
         if self.is_multi_chromosome:
             # Multi-chromosome mode: combine predictions from all chromosomes
             probas = self.predict_proba(methylation_data, availability_mask, debug)
@@ -848,6 +1008,8 @@ class MethylClassifier:
         Returns:
             Array of class probabilities (n_samples, n_classes)
         """
+        if getattr(self, "_ovr_mode", False):
+            return self._predict_proba_ovr(methylation_data, availability_mask, debug)
         if self.is_multi_chromosome:
             return self._predict_proba_multi_chromosome(methylation_data, availability_mask, debug)
         else:
@@ -1066,6 +1228,17 @@ class MethylClassifier:
         Returns:
             Dictionary with predictions, probabilities, and diagnostic info
         """
+        if getattr(self, "_ovr_mode", False):
+            proba = self.predict_proba(methylation_data, availability_mask, debug=debug)
+            predictions = np.argmax(proba, axis=1)
+            n_c = proba.shape[1]
+            out: Dict[str, Any] = {"predictions": predictions, "probabilities": proba}
+            if n_c == 2:
+                out["P_C"] = proba[:, 1]
+                out["P_H"] = proba[:, 0]
+                out["decision"] = np.where(predictions == 1, "Cancer", "Healthy")
+            return out
+
         if self.classifier is None:
             raise RuntimeError("No classifier loaded")
         

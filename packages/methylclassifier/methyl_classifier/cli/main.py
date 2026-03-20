@@ -565,7 +565,9 @@ def classify_samples_from_list(
                     feature_info = chrom_classifier.get_feature_info()
                     dmp_positions_by_chrom[chrom] = feature_info['positions']
             else:
-                if classifier.classifier is not None:
+                if getattr(classifier, "_ovr_mode", False):
+                    dmp_positions_by_chrom = classifier.dmp_positions_df
+                elif classifier.classifier is not None:
                     feature_info = classifier.classifier.get_feature_info()
                     # For single chromosome, use classifier's chromosome
                     chrom = classifier.chromosome if classifier.chromosome != 'unknown' else '1'
@@ -643,9 +645,12 @@ def classify_samples_from_list(
         and len(classifier.dmp_positions_df) > 0
         and hasattr(classifier.dmp_positions_df, "columns")
         and "chromosome" in classifier.dmp_positions_df.columns
-        and classifier.dmp_positions_df["chromosome"].nunique() > 1
+        and (
+            getattr(classifier, "_ovr_mode", False)
+            or classifier.dmp_positions_df["chromosome"].nunique() > 1
+        )
     ):
-        # Single-file multiclass with DMPs spanning multiple chromosomes: build flat feature matrix in dmp_df order
+        # OvR union DMPs or single-file multiclass with DMPs spanning multiple chromosomes
         _classify_single_file_multichrom_dmps(
             classifier, loaded_samples, output_file, debug,
             expected_classes=expected_classes,
@@ -749,9 +754,25 @@ def _classify_single_file_multichrom_dmps(
                 availability_mask[sample_idx, offset : offset + len(pos_arr)] = False
             offset += len(pos_arr)
 
-    predictions, probabilities = classify_samples_batch(
-        classifier, feature_matrix, availability_mask, debug
-    )
+    if getattr(classifier, "_ovr_mode", False):
+        print(f"\n🤖 OvR ECDF: scoring {n_samples} sample(s) (one fused predict per sample)...", flush=True)
+        probs_list: List[np.ndarray] = []
+        pbar_pred = tqdm(range(n_samples), desc="OvR prediction", unit="sample")
+        for i in pbar_pred:
+            if hasattr(pbar_pred, "set_postfix_str"):
+                pbar_pred.set_postfix_str(sample_names[i], refresh=True)
+            row_p = classifier.predict_proba(
+                feature_matrix[i : i + 1],
+                availability_mask[i : i + 1],
+                debug,
+            )[0]
+            probs_list.append(row_p)
+        probabilities = np.asarray(probs_list, dtype=np.float64)
+        predictions = np.argmax(probabilities, axis=1)
+    else:
+        predictions, probabilities = classify_samples_batch(
+            classifier, feature_matrix, availability_mask, debug
+        )
     dmp_positions_flat = dmp_df["position"].values.astype(np.uint32)
     _save_classification_results(
         classifier, sample_names, predictions, probabilities,
