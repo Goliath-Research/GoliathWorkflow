@@ -35,7 +35,8 @@ Examples:
   methyl_enricher --config enricher_config.json
   methyl_enricher --config enricher_config.json --top 100 --outdir other_dir
 
-For more information, visit: https://github.com/your-org/methyl_enricher
+For theory and package documentation, see:
+  packages/methylenricher/docs/ and docs/theory/
         """
     )
     

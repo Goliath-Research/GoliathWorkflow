@@ -216,6 +216,6 @@ Storage is **not** recorded automatically. To estimate:
 
 ## Related documentation
 
-- [MethylValidation Theoretical Foundation](MethylValidation_Theoretical_Foundation.md) — Goal, stratified split, empirical metric distribution, processing/storage.
-- [METHYLVALIDATION_IMPLEMENTATION](METHYLVALIDATION_IMPLEMENTATION.md) — Modules, data flow, MethylUtils usage.
+- [THEORY.md](THEORY.md) — Code-backed theoretical summary and pointer to the canonical Quarto theory book.
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — Modules, data flow, and pipeline orchestration notes.
 - [MethylPredictor USAGE](../../methylpredictor/docs/USAGE.md) — Metric definitions (BA, sensitivity, specificity, F1, etc.).

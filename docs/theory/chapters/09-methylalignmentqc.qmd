@@ -1,0 +1,45 @@
+# MethylAlignmentQC {#sec-methylalignmentqc}
+
+## Role
+
+`methylalignmentqc` is the least inferential package in the repository. It parses alignment and duplication metrics produced by external tools such as Picard and Parabricks, then rewrites them into structured JSON for downstream inspection.
+
+The package therefore belongs in the theory book only so that readers do not over-interpret it. Its main functions are deterministic parsing, normalization, and reporting.
+
+## Deterministic Metric Extraction
+
+The parser reads tabular metrics files, histograms, and summary blocks and maps selected fields into a fixed schema. Typical examples include:
+
+- total reads,
+- duplicate counts,
+- duplication rate,
+- related read-group or library statistics.
+
+There is no new statistical estimator here beyond whatever upstream alignment tool already computed.
+
+## Summary Statistics
+
+When the package computes summaries such as duplication rate, it is applying straightforward algebra:
+
+$$
+\operatorname{duplication\ rate}
+=
+\frac{\text{duplicate reads}}{\text{total reads}}.
+$$ {#eq-dup-rate}
+
+These are useful QC diagnostics, but they do not form a novel methylation model.
+
+## Log Monitoring
+
+The package also contains log-monitoring utilities that infer progress and estimated remaining time by regular-expression matching against subprocess output. Those values are operational heuristics and may change if the upstream log format changes.
+
+## Publication Guidance
+
+In a publication, `methylalignmentqc` should be described as:
+
+- a QC ingestion and normalization layer,
+- dependent on upstream Picard or Parabricks metrics,
+- deterministic in its parsing logic, and
+- not responsible for new statistical inference.
+
+That framing keeps the package in scope without attributing more theory to it than the code actually implements.

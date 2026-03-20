@@ -184,4 +184,4 @@ The classifier model is saved as a `.pkl` package containing:
 | MethylUtils | GPU/memory | Device selection, memory management |
 | MethylDetector | `MethylDetector` | Config, orchestration, pre-filter, biological filter, optional rescue/validation helpers, classifier invocation, export |
 
-For theoretical background, see [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md).
+For theoretical background, see [THEORY.md](THEORY.md) and the canonical theory book at [../../../docs/theory/README.md](../../../docs/theory/README.md).

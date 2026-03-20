@@ -1,38 +1,29 @@
 # MethylUtils Theoretical Foundation
 
-## Role
+The canonical mathematical and statistical reference for this package is the Quarto chapter [`docs/theory/chapters/01-methylutils.qmd`](../../../docs/theory/chapters/01-methylutils.qmd).
 
-`MethylUtils` is the shared mathematical layer for centroid comparison, ECDF overlap, significance testing, and the canonical biological `effect_size`.
+## Scope
 
-## Canonical statistical and biological pipeline
+`methylutils` is the shared mathematical layer for:
 
-For centroid-to-centroid DMP analysis, MethylUtils now exposes four core pieces:
+- centroid sufficient statistics,
+- ECDF reconstruction from histogram counts,
+- KS and histogram-based Mann-Whitney testing,
+- Storey q-values and p-value aggregation,
+- ECDF overlap and canonical effect-size ranking,
+- ECDF-based classification scores.
 
-1. Histogram-derived Mann-Whitney U testing from centroid `bin_counts`.
-2. Storey q-value correction.
-3. Continuous ECDF overlap from centroid `binned_stats`.
-4. The canonical biological score:
+## Method Status
 
-   `effect_size = |delta_mean| * (1 - overlap) * exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))`
+- **Principled**: centroid moment calculations, Storey q-values, standard asymptotic testing, weighted ECDF log-likelihood scoring.
+- **Approximate**: grid-based KS, overlap integration, histogram-reconstructed Mann-Whitney.
+- **Heuristic**: biological effect-size ranking and some numerical stabilizers.
+- **Auxiliary**: beta-based metrics remain available for downstream consumers such as clustering, but they are not the canonical detector-classifier path.
 
-## Continuous ECDF overlap
+## Key Code Paths
 
-Centroids store binned methylation values. `ECDFView` reconstructs a continuous ECDF over `[0, 1]` with PCHIP interpolation and derives a PDF by differentiating that spline.
-
-Overlap is defined as:
-
-`overlap = integral_0^1 min(f1(x), f2(x)) dx`
-
-This is different from the previous KS-style `1 - D` interpretation. The new overlap directly measures shared support between the two methylation distributions.
-
-## Variance penalty
-
-The reliability term is:
-
-`exp(-lambda_var * (sqrt(variance1) + sqrt(variance2)))`
-
-This keeps the two-group variances separate and penalizes diffuse loci symmetrically without assuming equal variance. These variances are part of the biological reliability term only; the significance test itself remains non-parametric.
-
-## Practical implication
-
-`MethylDetector` and `MethylDetectorExplorer` both delegate their final overlap/effect-size computation to these shared MethylUtils helpers so the score definition is consistent across the pipeline.
+- `methyl_utils/core/distribution_views.py`
+- `methyl_utils/core/centroid_builder.py`
+- `methyl_utils/statistical_tests.py`
+- `methyl_utils/methyl_centroid_pair.py`
+- `methyl_utils/ecdf_classifier.py`

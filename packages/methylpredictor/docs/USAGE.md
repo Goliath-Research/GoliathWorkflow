@@ -271,5 +271,5 @@ All are written under `--output-dir` / `output_dir`.
 
 ## Related documentation
 
-- [MethylPredictor Theoretical Foundation](MethylPredictor_Theoretical_Foundation.md) — Goal, test sets, and metric definitions.
-- [METHYLPREDICTOR_IMPLEMENTATION](METHYLPREDICTOR_IMPLEMENTATION.md) — How MethylPredictor uses MethylClassifier and computes metrics.
+- [THEORY.md](THEORY.md) — Code-backed theoretical summary and pointer to the canonical Quarto theory book.
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — How MethylPredictor uses MethylClassifier and computes metrics.

@@ -7,7 +7,7 @@ Please refer to the root [README.md](../../README.md) for the functional placeme
 
 ## Documentation
 
-To ensure consistency across the MethylPipeline ecosystem, this package follows a strict documentation contract:
+The canonical mathematical and statistical reference is the Quarto theory book at [../../docs/theory/README.md](../../docs/theory/README.md). This package also keeps local docs for quick navigation:
 
 - 📖 **[THEORY.md](docs/THEORY.md)**: Theoretical foundation, including high-quality formulas, statistical models, and references.
 - ⚙️ **[IMPLEMENTATION.md](docs/IMPLEMENTATION.md)**: Implementation details, code design, architecture, and memory organization.

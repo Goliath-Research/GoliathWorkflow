@@ -2,7 +2,7 @@
 
 ## Overview
 
-MethylDetector detects differentially methylated positions (DMPs) between two methylation centroids (e.g. healthy vs disease), applies FDR correction and biological filtering, and can train a classifier on the selected DMPs. It is built on **MethylUtils** for centroid comparison and statistics (see [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md)).
+MethylDetector detects differentially methylated positions (DMPs) between two methylation centroids (e.g. healthy vs disease), applies FDR correction and biological filtering, and can train a classifier on the selected DMPs. It is built on **MethylUtils** for centroid comparison and statistics (see [IMPLEMENTATION.md](IMPLEMENTATION.md)).
 
 There are **two ways to run MethylDetector**:
 
@@ -221,4 +221,4 @@ Exact names and structure may depend on config (e.g. multi-chromosome, per-cance
 - **Missing centroid files:** Ensure `centroid1_dir` and `centroid2_dir` contain the expected `{chrom}-{context}.h5` files (e.g. from MethylCentroid) for the chromosome(s) and contexts in your config.
 - **MethylUtils not found:** Install MethylUtils first (`pip install -e .` in `packages/methylutils`), then install MethylDetector.
 
-For theory and implementation details, see [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md) and [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md).
+For theory and implementation details, see [THEORY.md](THEORY.md), [IMPLEMENTATION.md](IMPLEMENTATION.md), and the canonical theory book at [../../../docs/theory/README.md](../../../docs/theory/README.md).

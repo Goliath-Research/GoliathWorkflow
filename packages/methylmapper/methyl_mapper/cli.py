@@ -55,7 +55,8 @@ Examples:
   methyl_mapper --input dmps.csv --config db_config.json --sample-id 12345 \\
                --upstream-size 10000 --w-promoter 3.0
 
-For more information, visit: https://github.com/your-org/methyl_mapper
+For theory and package documentation, see:
+  packages/methylmapper/docs/ and docs/theory/
         """
     )
     

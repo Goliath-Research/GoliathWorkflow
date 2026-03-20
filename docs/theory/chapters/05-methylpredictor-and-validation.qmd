@@ -1,0 +1,108 @@
+# MethylPredictor and MethylValidation {#sec-methylpredictor-validation}
+
+## Role
+
+`methylpredictor` and `methylvalidation` do not introduce a new generative methylation model. Instead they evaluate and operationalize the models exported by the detector and classifier packages.
+
+- `methylpredictor` applies trained classifier artifacts to new cohorts and computes prediction summaries.
+- `methylvalidation` creates repeated train/validation splits and aggregates run-level metrics across Monte Carlo style repetitions.
+
+## MethylPredictor: Labeled Evaluation
+
+When labels are available, `methylpredictor` computes standard classification metrics using `sklearn.metrics`. For \(n\) labeled samples with true labels \(y_i\) and predictions \(\hat y_i\),
+
+$$
+\operatorname{Accuracy}
+=
+\frac{1}{n}\sum_{i=1}^{n}\mathbf{1}\{\hat y_i = y_i\},
+$$
+
+$$
+\operatorname{BalancedAccuracy}
+=
+\frac{1}{K}\sum_{k=1}^{K}
+\operatorname{Recall}_k.
+$$ {#eq-predictor-metrics}
+
+For binary classification the package also reports:
+
+$$
+\operatorname{Sensitivity} = \operatorname{Recall}_{\text{positive}},
+\qquad
+\operatorname{Specificity} = \operatorname{Recall}_{\text{negative}}.
+$$
+
+For multiclass settings it reports per-class precision, recall, \(F_1\), as well as macro and weighted \(F_1\) summaries.
+
+These are standard descriptive metrics. Their interpretation depends on how the evaluation cohort was assembled rather than on any special estimator inside the package.
+
+## Blind Prediction Summaries
+
+In blind mode, `methylpredictor` cannot estimate discrimination performance because no truth labels are available. Instead it reports:
+
+- predicted class counts,
+- mean predicted probability per class, and
+- mean Shannon entropy of the per-sample class probabilities.
+
+For one sample with class probabilities \(p_1,\dots,p_K\), entropy is
+
+$$
+H(p) = -\sum_{k=1}^{K} p_k \log p_k.
+$$ {#eq-entropy}
+
+Low entropy corresponds to confident predictions; high entropy corresponds to diffuse class assignments. This is an uncertainty summary, not an accuracy estimate.
+
+## MethylValidation: Split Strategy
+
+`methylvalidation` implements repeated train/validation splitting by cohort. For each cohort with \(n\) samples and train fraction \(\rho\), the code computes
+
+$$
+n_{\text{train}} = \max(1, \lfloor \rho n \rfloor),
+$$
+
+and then reduces \(n_{\text{train}}\) to \(n-1\) if necessary so that the validation set is non-empty for \(n > 1\).
+
+This is called “stratified” in the code because each cohort is split separately, but it is not identical to the textbook `StratifiedKFold` abstraction. The package performs independent random shuffles within each cohort and then concatenates the resulting class-specific train and validation groups.
+
+## Monte Carlo Evaluation
+
+The validation package repeatedly:
+
+1. generates train and validation cohorts,
+2. writes run-specific project files,
+3. runs the full pipeline from centroid through predictor, and
+4. aggregates scalar metrics across repetitions.
+
+If \(m_r\) denotes some metric from run \(r\), the package reports descriptive summaries such as
+
+$$
+\bar m = \frac{1}{R}\sum_{r=1}^{R} m_r,
+\qquad
+s_m^2 = \frac{1}{R-1}\sum_{r=1}^{R}(m_r - \bar m)^2,
+$$
+
+along with empirical percentiles.
+
+This is best interpreted as repeated internal validation of the **whole pipeline**, not as a formal confidence interval for an external deployment population.
+
+## What The Validation Layer Does Not Do
+
+The current implementation does not attempt:
+
+- nested hyperparameter tuning,
+- exact sampling-theory confidence intervals for each metric,
+- dependence-aware aggregation across repeated splits, or
+- external-cohort transportability analysis.
+
+Those omissions are not flaws in themselves, but they matter for publication wording. The package measures empirical variation across repeated pipeline runs; it does not prove generalization bounds.
+
+## Publication Guidance
+
+For publication text:
+
+- describe `methylpredictor` as the evaluation and application layer for trained classifiers,
+- reserve discrimination claims for labeled validation cohorts,
+- treat blind-mode entropy as an uncertainty diagnostic only, and
+- describe `methylvalidation` as repeated split-sample internal validation of the end-to-end workflow.
+
+That is both accurate to the code and defensible statistically.

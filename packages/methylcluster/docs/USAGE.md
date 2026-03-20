@@ -1,0 +1,36 @@
+# MethylCluster Usage
+
+## Canonical References
+
+- Theory: [`docs/theory/chapters/06-methylcluster.qmd`](../../../docs/theory/chapters/06-methylcluster.qmd)
+- Implementation notes: [`IMPLEMENTATION.md`](IMPLEMENTATION.md)
+
+## CLI Entry Points
+
+The package exposes:
+
+- `methyl-cluster`
+- `methyl_cluster`
+
+Both resolve to `methyl_cluster.cli:main`.
+
+## Inputs
+
+Typical runs require:
+
+- sample directories or HDF5 methylation files,
+- a chromosome and context selection strategy,
+- clustering configuration such as algorithm choice, minimum cluster size, and optional fallback settings.
+
+## Outputs
+
+Depending on configuration, the package can emit:
+
+- cluster assignments,
+- pairwise distance matrices,
+- centroid summaries,
+- diagnostic plots and cluster visualizations.
+
+## Interpretation
+
+This package is best used for exploratory cohort structure analysis. Its outputs should not be interpreted as the result of a single calibrated probabilistic model.

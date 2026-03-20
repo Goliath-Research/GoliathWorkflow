@@ -1,40 +1,51 @@
 # MethylPipeline
 
-MethylPipeline is a comprehensive, monorepo-based suite for high-performance DNA methylation analysis. It utilizes an **ECDF-only pipeline** (Empirical Cumulative Distribution Functions) to avoid arbitrary parametric models (Beta/Normal), instead operating directly on raw bin count histograms with mathematically rigorous metrics.
+MethylPipeline is a monorepo for DNA methylation analysis. Its core supervised path is built around empirical distributions rather than a single parametric family, but the repository as a whole also includes clustering, mapping, enrichment, and QC packages that use additional statistical machinery, heuristics, and external services.
 
-## Functionality
+## Package Overview
 
-The pipeline is split into focused, decoupled packages that operate strictly sequentially, sharing `MethylUtils` as their core dependency.
+The pipeline is organized into focused packages that share `methylutils` where appropriate:
 
-- **`methylutils`**: The mathematical core for memory management, sufficient statistics, ECDF processing, and PCHIP splines.
-- **`methylcentroid`**: Generates class-level representations (Centroids) holding $N, S_x, S_{x^2}$ and `binned_stats`.
-- **`methyldetector`**: Performs statistically rigorous testing (Kolmogorov-Smirnov) and canonical overlap to identify Differentially Methylated Positions (DMPs).
-- **`methylclassifier`**: Leverages an `ECDFClassifier` (Naive Bayes + Temperature scaling) trained on the detector's funnel output to predict new samples.
-- **`methylcluster`** / **`methylmapper`** / **`methylpredictor`** / **`methylvalidation`**: Downstream utilities for module clustering, gene mapping, and robust cross-validation.
+- **`methylutils`**: shared mathematical layer for centroid summaries, ECDF views, testing, overlap, and classification scores.
+- **`methylcentroid`**: builds cohort centroids with sufficient statistics and histogram summaries.
+- **`methyldetector`**: performs locus-wise differential methylation screening and exports classifier-ready DMP sets.
+- **`methylclassifier`**: applies ECDF-based binary, multi-chromosome, and OvR classification logic.
+- **`methylpredictor`**: runs trained classifiers on holdout or blind cohorts and reports prediction metrics.
+- **`methylvalidation`**: performs repeated split-sample validation of the full pipeline.
+- **`methylcluster`**: exploratory clustering utilities over methylation samples and derived distances.
+- **`methylmapper`**: maps DMPs to genes and genomic features, then aggregates gene-level evidence.
+- **`methylenricher`**: performs downstream enrichment, pathway graph clustering, and module ranking.
+- **`methylalignmentqc`**: parses and normalizes alignment QC metrics from external tools.
 
 ## Documentation Structure
 
-To ensure consistency and clarity, all packages in `MethylPipeline` share an identical documentation contract located in their respective `docs/` directories:
-1. **`THEORY.md`**: Theoretical foundations, complete with mathematical formulas and rationale.
-2. **`IMPLEMENTATION.md`**: Code design, architectural constraints, and organization.
-3. **`USAGE.md`**: Practical instructions, inputs, and outputs.
-4. **`README.md`**: High-level functionality and component overview.
+MethylPipeline now has two documentation layers:
+
+1. **Canonical theory book**: [`docs/theory/README.md`](docs/theory/README.md) and the Quarto sources under `docs/theory/`. This is the publication-grade mathematical and statistical reference for the repository, written from the code as the source of truth.
+2. **Package-local docs**: each package keeps `README.md`, `docs/THEORY.md`, `docs/IMPLEMENTATION.md`, and `docs/USAGE.md` as local entry points. The local `THEORY.md` files are concise summaries that defer to the canonical theory book.
+
+## Source Of Truth
+
+For theory, the source of truth is the code. The documentation explicitly distinguishes among:
+
+- principled statistical or numerical methods,
+- approximations,
+- heuristics, and
+- external-service-backed steps.
+
+That distinction matters because the core centroid-detector-classifier path is ECDF-centered, while downstream packages also use beta-based clustering, p-value aggregation, graph heuristics, and external knowledge services.
 
 ## Deployment
 
-For details on how to deploy this repository on supported platforms (Linux/macOS) via virtual environments (`.venv`) or Docker containers, please consult our dedicated guide:
-- 📖 **[DEPLOYMENT.md](docs/DEPLOYMENT.md)**
+For details on how to deploy this repository on supported platforms via virtual environments or containers, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-### Virtual environment (required for tests and CLIs)
+### Virtual environment
 
-From the repository root, activate the canonical environment before running **pytest**, **pip**, or any **`methyl-*`** CLI:
+From the repository root, activate the canonical environment before running `pytest`, `pip`, or any `methyl-*` CLI:
 
 ```bash
 source .venv/bin/activate
 pytest
 ```
 
-If `.venv` does not exist yet, create it as described in [DEPLOYMENT.md](docs/DEPLOYMENT.md). You can also run the full test suite without manually activating using [`scripts/run_tests.sh`](scripts/run_tests.sh), which invokes `.venv/bin/python -m pytest` directly.
-
----
-*Powered by MethylPipeline.*
+If `.venv` does not exist yet, create it as described in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). You can also run the full test suite without manually activating using [`scripts/run_tests.sh`](scripts/run_tests.sh), which invokes `.venv/bin/python -m pytest` directly.

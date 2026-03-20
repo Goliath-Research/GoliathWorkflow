@@ -82,4 +82,4 @@ This ensures that inference uses the same contexts as training.
 | MethylUtils | MethylSample, load_from_h5 | DataLoader loads sample data at DMP positions. |
 | MethylClassifier | MethylClassifier (class) | Loads models, manages chromosome weights, orchestrates DataLoader and per-chromosome prediction, combines and writes results. |
 
-For theoretical background, see [MethylClassifier_Theoretical_Foundation.md](MethylClassifier_Theoretical_Foundation.md). For running with Docker/venv, contexts, and improving balanced accuracy, see [USAGE.md](USAGE.md).
+For theoretical background, see [THEORY.md](THEORY.md) and the canonical theory book at [../../../docs/theory/README.md](../../../docs/theory/README.md). For running with Docker/venv, contexts, and improving balanced accuracy, see [USAGE.md](USAGE.md).
