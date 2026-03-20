@@ -39,15 +39,15 @@ That taxonomy is used throughout the book so the reader can tell where the pipel
 
 ## Shared Data Model
 
-At the lowest level the code works with per-position methylated and unmethylated counts. For a sample \(s\) at genomic position \(i\),
+At the lowest level the code works with per-position methylated and unmethylated counts. For a sample $s$ at genomic position $i$,
 
 $$
 x_{si} = \frac{m_{si}}{m_{si} + u_{si}},
 $$
 
-where \(m_{si}\) is the methylated count and \(u_{si}\) is the unmethylated count. The code clips or guards zero-coverage positions instead of leaving them undefined.
+where $m_{si}$ is the methylated count and $u_{si}$ is the unmethylated count. The code clips or guards zero-coverage positions instead of leaving them undefined.
 
-For a centroid with \(N_i\) contributing samples at locus \(i\), the shared sufficient statistics are
+For a centroid with $N_i$ contributing samples at locus $i$, the shared sufficient statistics are
 
 $$
 N_i = \sum_s 1,\qquad
@@ -66,7 +66,7 @@ $$
 \right),
 $$
 
-with a small numerical floor \(\varepsilon\) used throughout the code to avoid degenerate densities or divisions by zero.
+with a small numerical floor $\varepsilon$ used throughout the code to avoid degenerate densities or divisions by zero.
 
 In the ECDF-centered path, each locus also stores a binned histogram
 
@@ -74,23 +74,23 @@ $$
 \{c_{ib}\}_{b=1}^B
 $$
 
-over shared methylation bin edges \(0 = e_0 < e_1 < \cdots < e_B = 1\). Those histograms drive both empirical distribution reconstruction and approximate rank-based testing.
+over shared methylation bin edges $0 = e_0 < e_1 < \cdots < e_B = 1$. Those histograms drive both empirical distribution reconstruction and approximate rank-based testing.
 
 ## Shared Notation
 
 | Symbol | Meaning |
 |---|---|
-| \(x_{si}\) | methylation fraction for sample \(s\) at locus \(i\) |
-| \(m_{si}, u_{si}\) | methylated and unmethylated counts |
-| \(N_i, S_{x,i}, S_{x^2,i}\) | centroid sufficient statistics |
-| \(c_{ib}\) | count in histogram bin \(b\) for locus \(i\) |
-| \(F_i(x)\) | reconstructed cumulative distribution function at locus \(i\) |
-| \(f_i(x)\) | reconstructed density, usually the derivative of a monotone spline |
-| \(D_i\) | two-sample KS statistic at locus \(i\) |
-| \(U_i\) | Mann-Whitney \(U\) statistic at locus \(i\) |
-| \(q_i\) | Storey-adjusted q-value |
-| \(O_i\) | continuous overlap \(\int_0^1 \min(f_{1i}, f_{2i})\,dx\) |
-| \(w_i\) | feature weight used by the classifier, usually derived from detector output |
+| $x_{si}$ | methylation fraction for sample $s$ at locus $i$ |
+| $m_{si}, u_{si}$ | methylated and unmethylated counts |
+| $N_i, S_{x,i}, S_{x^2,i}$ | centroid sufficient statistics |
+| $c_{ib}$ | count in histogram bin $b$ for locus $i$ |
+| $F_i(x)$ | reconstructed cumulative distribution function at locus $i$ |
+| $f_i(x)$ | reconstructed density, usually the derivative of a monotone spline |
+| $D_i$ | two-sample KS statistic at locus $i$ |
+| $U_i$ | Mann-Whitney $U$ statistic at locus $i$ |
+| $q_i$ | Storey-adjusted q-value |
+| $O_i$ | continuous overlap $\int_0^1 \min(f_{1i}, f_{2i})\,dx$ |
+| $w_i$ | feature weight used by the classifier, usually derived from detector output |
 
 ## Cross-Cutting Assumptions
 

@@ -15,7 +15,7 @@ That split is important. The code does not rely on a single monolithic significa
 
 The detector starts from aligned centroid pairs, typically one control centroid and one disease centroid for a given chromosome and context. The alignment step reduces both centroids to the common set of genomic positions and propagates the empirical summaries described in @sec-methylutils and @sec-methylcentroid.
 
-Let \(\mathcal{I}\) denote the set of aligned loci under consideration for one comparison.
+Let $\mathcal{I}$ denote the set of aligned loci under consideration for one comparison.
 
 ## Statistical Screening
 
@@ -26,7 +26,7 @@ The detector supports two closely related statistical paths:
 
 In both cases the active workflow is:
 
-1. compute one p-value \(p_i\) per locus \(i \in \mathcal{I}\),
+1. compute one p-value $p_i$ per locus $i \in \mathcal{I}$,
 2. adjust all p-values to q-values using Storey q-values,
 3. keep loci satisfying the configured q-value threshold and any minimum effect thresholds.
 
@@ -37,7 +37,7 @@ $$
 \left\{ i \in \mathcal{I} : q_i \le \alpha,\ |\Delta\mu_i| \ge \delta_{\min} \right\},
 $$ {#eq-detector-statset}
 
-with the exact choice of \(\alpha\) and \(\delta_{\min}\) coming from configuration rather than mathematical derivation.
+with the exact choice of $\alpha$ and $\delta_{\min}$ coming from configuration rather than mathematical derivation.
 
 ## Biological Ranking
 
@@ -53,7 +53,7 @@ The detector keeps these notions separate instead of compressing them into one s
 
 ## Cumulative Effect Coverage
 
-One of the package's characteristic filters is cumulative effect-mass selection. After sorting retained loci by decreasing effect size, the detector may keep only the smallest prefix whose cumulative effect mass reaches a specified fraction \(\gamma\) of the total:
+One of the package's characteristic filters is cumulative effect-mass selection. After sorting retained loci by decreasing effect size, the detector may keep only the smallest prefix whose cumulative effect mass reaches a specified fraction $\gamma$ of the total:
 
 $$
 \sum_{i \in S_\gamma} e_i
@@ -61,7 +61,7 @@ $$
 \gamma \sum_{i \in \mathcal{D}_{\text{stat}}} e_i,
 $$ {#eq-effect-coverage}
 
-where \(e_i\) is the per-locus effect score.
+where $e_i$ is the per-locus effect score.
 
 This is a useful way to compress large DMP sets, but it is a heuristic summarization rule rather than a statistical decision boundary with a formal optimality guarantee.
 

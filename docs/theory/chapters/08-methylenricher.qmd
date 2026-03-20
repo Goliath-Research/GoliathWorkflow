@@ -39,7 +39,7 @@ This is a standard graph heuristic for organizing pathways, but the resulting mo
 
 `compute_module_enrichment_score()` converts a module into a scalar ranking score by combining:
 
-- mean \(-\log_{10}(q)\) across pathways,
+- mean $-\log_{10}(q)$ across pathways,
 - number of pathways,
 - number of genes,
 - mean gene weight.
@@ -55,7 +55,7 @@ $$
 + 0.2\,\tilde m_{\text{gene-weight}},
 $$ {#eq-module-score}
 
-where each tilded quantity is clipped to \([0,1]\) after dividing by a hand-chosen scale such as \(10\), \(50\), or \(200\).
+where each tilded quantity is clipped to $[0,1]$ after dividing by a hand-chosen scale such as $10$, $50$, or $200$.
 
 This is explicitly heuristic. It is a ranking function, not an enrichment test.
 
@@ -70,7 +70,7 @@ $$
 {|G_{\text{module}}|}.
 $$ {#eq-disease-prior}
 
-When no disease set is available the package returns a neutral value of \(0.5\). By default the code ships with a prostate-cancer-oriented prior gene set, so that default must not be described as disease-agnostic.
+When no disease set is available the package returns a neutral value of $0.5$. By default the code ships with a prostate-cancer-oriented prior gene set, so that default must not be described as disease-agnostic.
 
 The final module score is then
 

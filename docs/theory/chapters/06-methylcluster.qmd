@@ -12,7 +12,7 @@ That makes it useful, but it also means it should not be described as a direct c
 
 ## Pairwise Distance Matrix
 
-The first main workflow computes a sample-by-sample dissimilarity matrix. For samples \(a\) and \(b\), the code:
+The first main workflow computes a sample-by-sample dissimilarity matrix. For samples $a$ and $b$, the code:
 
 1. aligns them on the intersection of available loci,
 2. computes a per-locus distance using `methylutils`,
@@ -26,9 +26,9 @@ d(a,b) =
 \sum_{i \in \mathcal{I}_{ab}} d_i(a,b),
 $$ {#eq-cluster-distance}
 
-where \(\mathcal{I}_{ab}\) is the pair-specific overlap of available loci.
+where $\mathcal{I}_{ab}$ is the pair-specific overlap of available loci.
 
-This is a pragmatic composite distance. Because the support set \(\mathcal{I}_{ab}\) varies across pairs, the resulting matrix should be treated as an empirical dissimilarity matrix rather than assumed to satisfy all metric axioms globally.
+This is a pragmatic composite distance. Because the support set $\mathcal{I}_{ab}$ varies across pairs, the resulting matrix should be treated as an empirical dissimilarity matrix rather than assumed to satisfy all metric axioms globally.
 
 ## Library-Backed Clustering Paths
 
@@ -43,7 +43,7 @@ These algorithms are principled and well-known, but the overall workflow remains
 
 ## Centroid-Based Clustering
 
-The package also implements a custom centroid-based clustering procedure. The internal centroids are represented as `MethylCentroid` objects, but sample assignment uses beta log-densities rather than the ECDF classifier. For a sample methylation fraction \(x_i\) and cluster-specific beta parameters \((\alpha_i,\beta_i)\),
+The package also implements a custom centroid-based clustering procedure. The internal centroids are represented as `MethylCentroid` objects, but sample assignment uses beta log-densities rather than the ECDF classifier. For a sample methylation fraction $x_i$ and cluster-specific beta parameters $(\alpha_i,\beta_i)$,
 
 $$
 \log p(x_i \mid \alpha_i,\beta_i)
