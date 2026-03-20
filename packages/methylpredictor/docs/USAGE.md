@@ -110,6 +110,20 @@ methyl-predictor --model-dir /path/to/classifiers/PCa_vs_Healthy \
 
 ---
 
+## Saved classifier vs raw detector directory
+
+You **do not** need to “build” a new aggregated classifier every time you predict.
+
+- **After MethylClassifier** (training/validation run), **`save_classifier_path`** (or `project_name` defaults) writes **one** artifact:
+  - **Multiclass OvR**: a portable **`ecdf_one_vs_rest`** dict PKL — the K binary experts and union DMP layout are **fixed at save/export time** (`--export-ovr-pkl` does the same without classifying).
+  - **Multi-chromosome binary**: a pickled **`MethylClassifier`** that already contains **all** chromosome sub-classifiers and (when fitted) chromosome weights.
+
+**MethylPredictor** should use **`model_path`** to that file. The project resolver prefers **`classifier.save_classifier_path`**, per-comparison **`…/classifiers/<control>/<disease>/<project>-classifier.pkl`**, or the multiclass bundle under **`classifiers/<control>/`** when those files exist.
+
+**`model_dir`** (a folder of `classifier-{chrom}*.pkl`) is still valid — typically MethylDetector output — but each predictor process **reloads every chromosome pickle** and wires multi-chromosome mode again. That is **more I/O and setup** than loading a **single saved PKL**; use **`model_path`** once the classifier step has produced it.
+
+---
+
 ## Specifying test samples (healthy and disease groups)
 
 MethylPredictor needs two sets of sample paths: **control** (expected class 0) and **disease** (expected class 1). Each sample is a directory that MethylClassifier can load.

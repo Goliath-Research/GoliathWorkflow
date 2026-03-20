@@ -4,7 +4,6 @@ Supports binary (centroid1/centroid2) and N-group multiclass (centroid_dirs + mu
 """
 
 import json
-import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -92,26 +91,34 @@ def expand_ovr_paths_from_comparisons(
     control_vs_rest_pkl: Optional[str] = None,
 ) -> Tuple[List[str], List[str]]:
     """
-    Build OvR pickle paths from pipeline layout: ``controls`` / ``diseases`` / ``comparisons``.
+    Build OvR **detection directory** paths from ``controls`` / ``diseases`` / ``comparisons``.
 
     Requires ``uses_control_disease()`` and **exactly one** control group in ``controls.groups``.
-    Resolved group order is control label(s) then disease labels (same as ``get_resolved_groups()``).
-    For each disease label (after the first resolved entry), there must be a comparison with
-    that ``disease_group``; the path is
-    ``<project_root>/detections/<control_group>/<disease_group>/<unified_basename>``.
-    Default ``unified_basename`` is ``classifier-1-CG,CHG,CHH.pkl``: MethylDetector writes **one
-    pickle per chromosome** (name pattern ``classifier-<chr>-<contexts>.pkl``) in each
-    comparison folder. This resolver picks **one** file per disease (and the control slot);
-    the default points at **chromosome 1** only. That is **not** the same as loading **all**
-    chromosomes like ``model_dir`` multi-chromosome mode. For genome-wide OvR, supply per-class
-    pickles that already aggregate chromosomes, or set ``ovr_unified_classifier_basename`` /
-    explicit ``ovr_binary_model_paths`` accordingly.
+    Resolved group order is control then diseases (same as ``get_resolved_groups()``). For each
+    disease label there must be a comparison with that ``disease_group``; the directory is
+    ``<project_root>/detections/<control_group>/<disease_group>/``. MethylClassifier loads **all**
+    ``classifier*.pkl`` files in each directory and builds one multi-chromosome OvR expert per
+    class (same weighting as ``model_dir`` mode).
 
-    The first path (control class, one-vs-rest) defaults to
-    ``<project_root>/detections/one_vs_rest/<control_label>/<unified_basename>`` unless
-    ``control_vs_rest_pkl`` is set. If that file is missing, falls back to the pickle under
-    the **first** comparison in ``get_comparisons()`` (pairwise control vs that disease), with
-    a warning — not statistically identical to a true control one-vs-rest model.
+    Canonical layout matches classifier outputs: ``detections/<control_group>/<disease_group>/``
+    for each comparison (e.g. ``all/pca1``, ``all/pca2``, …). There is **no** required
+    ``detections/one_vs_rest/`` tree.
+
+    The **first** OvR class (control label) uses the **first comparison** in
+    ``get_comparisons()``: ``get_detection_output_dir(control_group, disease_group)`` — the same
+    folder as the pairwise detector for that row (typically ``all/pca1`` if pca1 is first). That
+    pairwise model is an imperfect stand-in for a true “control vs all cancers” head; use
+    ``ovr_control_vs_rest_pkl`` if you train a dedicated artifact.
+
+    If ``<project_root>/detections/one_vs_rest/<control_label>/<unified_basename>`` exists as a
+    **file**, its parent directory overrides the first-comparison directory for the control slot.
+
+    ``unified_basename`` (default ``classifier-1-CG,CHG,CHH.pkl``) is used only to verify that a
+    detector artifact exists under the chosen control directory (or under ``one_vs_rest`` when
+    present).
+
+    ``control_vs_rest_pkl``, if set, must point to an existing file or directory; a file path
+    uses its parent directory as the control OvR source.
     """
     if not project.uses_control_disease():
         raise ValueError(
@@ -130,38 +137,35 @@ def expand_ovr_paths_from_comparisons(
     names = [label for label, _ in resolved]
 
     if control_vs_rest_pkl:
-        first_path = str(Path(control_vs_rest_pkl).expanduser())
+        p = Path(control_vs_rest_pkl).expanduser()
+        if not p.exists():
+            raise FileNotFoundError(f"ovr_control_vs_rest_pkl not found: {p}")
+        first_dir = str(p.parent if p.is_file() else p)
     else:
         root = Path(project.get_project_root())
         dedicated = root / "detections" / "one_vs_rest" / control_label / unified_basename
         if dedicated.is_file():
-            first_path = str(dedicated)
+            first_dir = str(dedicated.parent)
         elif not comparisons:
             raise ValueError(
-                "Cannot resolve OvR control pickle: no comparisons and no one_vs_rest artifact"
+                "Cannot resolve OvR control directory: project has no comparisons "
+                "(need at least one detection output dir for the control class)."
             )
         else:
             spec0 = comparisons[0]
-            candidate = Path(
-                project.get_detection_output_dir(spec0.control_group, spec0.disease_group)
-            ) / unified_basename
+            det0 = Path(project.get_detection_output_dir(spec0.control_group, spec0.disease_group))
+            candidate = det0 / unified_basename
             if not candidate.is_file():
                 raise FileNotFoundError(
-                    f"OvR control pickle not found at {dedicated} (one-vs-rest) "
-                    f"nor at {candidate} (first comparison pairwise). "
-                    "Run MethylDetector for those outputs, set ovr_control_vs_rest_pkl to an "
-                    "existing .pkl, or add a dedicated one-vs-rest control run under detections/one_vs_rest/."
+                    f"OvR control directory expected at {det0} (first comparison: "
+                    f"{spec0.control_group!r} vs {spec0.disease_group!r}), but "
+                    f"detector artifact not found at {candidate}. "
+                    "Run MethylDetector for that comparison, adjust ovr_unified_classifier_basename, "
+                    "or set ovr_control_vs_rest_pkl to an existing detector .pkl or directory."
                 )
-            first_path = str(candidate)
-            warnings.warn(
-                f"OvR: using pairwise detector at {first_path} as proxy for the control "
-                f"(healthy) expert; dedicated file missing: {dedicated}. "
-                "Prefer training a true control one-vs-rest model or set ovr_control_vs_rest_pkl.",
-                UserWarning,
-                stacklevel=2,
-            )
+            first_dir = str(det0)
 
-    out_paths = [first_path]
+    out_dirs = [first_dir]
     for label, _ in resolved[1:]:
         if label not in comp_by_disease:
             raise ValueError(
@@ -172,18 +176,18 @@ def expand_ovr_paths_from_comparisons(
         det_dir = Path(
             project.get_detection_output_dir(spec.control_group, spec.disease_group)
         )
-        out_paths.append(str(det_dir / unified_basename))
+        out_dirs.append(str(det_dir))
 
-    if len(names) != len(out_paths):
-        raise RuntimeError("internal: names and paths length mismatch")
-    return out_paths, names
+    if len(names) != len(out_dirs):
+        raise RuntimeError("internal: names and dirs length mismatch")
+    return out_dirs, names
 
 
 def _consume_ovr_comparison_options_and_maybe_expand(
     project: ProjectConfig, base: Dict[str, Any]
 ) -> None:
     """
-    Pop resolver-only classifier keys and, if requested, set ovr_binary_model_paths (+ names)
+    Pop resolver-only classifier keys and, if requested, set ovr_detection_dirs (+ names)
     from comparisons. Safe to call when base was built from resolve_classifier_config merge.
     """
     flag = bool(base.pop("ovr_binary_pickles_from_comparisons", False))
@@ -191,12 +195,12 @@ def _consume_ovr_comparison_options_and_maybe_expand(
     ctrl_pkl = base.pop("ovr_control_vs_rest_pkl", None)
     if not flag:
         return
-    paths, default_names = expand_ovr_paths_from_comparisons(
+    dirs, default_names = expand_ovr_paths_from_comparisons(
         project,
         unified_basename=str(basename),
         control_vs_rest_pkl=ctrl_pkl,
     )
-    base["ovr_binary_model_paths"] = paths
+    base["ovr_detection_dirs"] = dirs
     if not base.get("ovr_class_names"):
         base["ovr_class_names"] = default_names
 
@@ -421,7 +425,8 @@ def resolve_classifier_config(
                 merged_cls[k] = base[k]
         p_bundle = predicted_multiclass_ovr_bundle_path(project, merged_cls)
         ovr_paths = base.get("ovr_binary_model_paths") or []
-        if p_bundle is not None and len(ovr_paths) >= 2:
+        ovr_dirs = base.get("ovr_detection_dirs") or []
+        if p_bundle is not None and (len(ovr_paths) >= 2 or len(ovr_dirs) >= 2):
             base["save_classifier_path"] = str(p_bundle)
         else:
             base["save_classifier_path"] = str(

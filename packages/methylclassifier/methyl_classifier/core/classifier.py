@@ -14,6 +14,7 @@ import pandas as pd
 from ..models.config import ClassifierConfig
 from .multiclass_ovr import (
     ECDF_ONE_VS_REST_TYPE,
+    OvrMultiChromBinaryExpert,
     build_union_dmp_dataframe,
     fuse_ovr_binary_probas,
 )
@@ -149,9 +150,22 @@ class MethylClassifier:
             raise ValueError("ecdf_one_vs_rest package requires binary_models (list, len>=2)")
 
         for i, entry in enumerate(entries):
-            if not isinstance(entry, dict) or entry.get("ecdf") is None:
-                raise ValueError(f"binary_models[{i}] must be a dict with 'ecdf' (ECDFClassifier)")
-            self._ovr_binary_classifiers.append(entry["ecdf"])
+            if not isinstance(entry, dict):
+                raise ValueError(f"binary_models[{i}] must be a dict")
+            cc = entry.get("chrom_classifiers")
+            if cc is not None:
+                if not isinstance(cc, dict) or not cc:
+                    raise ValueError(
+                        f"binary_models[{i}]: chrom_classifiers must be a non-empty dict"
+                    )
+                weights = entry.get("chromosome_weights") or {}
+                self._ovr_binary_classifiers.append(OvrMultiChromBinaryExpert(cc, weights))
+            elif entry.get("ecdf") is not None:
+                self._ovr_binary_classifiers.append(entry["ecdf"])
+            else:
+                raise ValueError(
+                    f"binary_models[{i}] must have 'ecdf' or 'chrom_classifiers'"
+                )
 
         names = list(model_package.get("class_names") or [])
         meta_pkg = model_package.get("metadata") or {}
@@ -178,9 +192,14 @@ class MethylClassifier:
         self.chromosome = chroms[0] if chroms else "unknown"
         self.context_metadata = meta_pkg.get("context")
         if not self.context_metadata and self._ovr_binary_classifiers:
+            first = self._ovr_binary_classifiers[0]
             fi = None
             try:
-                fi = self._ovr_binary_classifiers[0].contexts
+                if isinstance(first, OvrMultiChromBinaryExpert):
+                    k0 = sorted(first.classifiers.keys(), key=lambda x: (len(str(x)), str(x)))[0]
+                    fi = first.classifiers[k0].contexts
+                else:
+                    fi = first.contexts
             except Exception:
                 fi = None
             if fi is not None and len(fi) > 0:
@@ -211,12 +230,22 @@ class MethylClassifier:
         if len(paths) >= 2 and len(dirs) >= 2:
             raise ValueError("Set only one of ovr_binary_model_paths or ovr_detection_dirs")
         entries: List[Dict[str, Any]] = []
+        multichrom_cal_any = False
         if len(paths) >= 2:
             for p in paths:
                 entries.append(binary_entry_from_detector_pickle(Path(p)))
         elif len(dirs) >= 2:
             for d in dirs:
-                entries.append(binary_entry_from_sole_classifier_in_dir(Path(d)))
+                dpath = Path(d)
+                pkls = sorted(dpath.glob("classifier*.pkl"))
+                if len(pkls) == 0:
+                    raise ValueError(f"No classifier*.pkl under {dpath}")
+                if len(pkls) == 1:
+                    entries.append(binary_entry_from_sole_classifier_in_dir(dpath))
+                else:
+                    entry, cflag = _build_ovr_multichrom_binary_entry(dpath, self.config)
+                    entries.append(entry)
+                    multichrom_cal_any = multichrom_cal_any or cflag
         else:
             raise ValueError("OvR sources require at least 2 paths or 2 directories")
 
@@ -229,6 +258,8 @@ class MethylClassifier:
             entries, names, metadata_extra={"built_from": "detector_pickles"}
         )
         self._load_ovr_ecdf_package(pkg)
+        if multichrom_cal_any:
+            self._calibrated = True
         print("✅ Assembled OvR ECDF bundle from detector output (K=%d)" % len(entries))
 
     def _export_ovr_package_dict(self) -> Dict[str, Any]:
@@ -240,8 +271,17 @@ class MethylClassifier:
         entries: List[Dict[str, Any]] = []
         for k, clf in enumerate(self._ovr_binary_classifiers):
             idx = np.asarray(self._ovr_column_indices[k], dtype=np.intp)
-            sub_df = self.dmp_positions_df.iloc[idx].copy()
-            entries.append({"ecdf": clf, "dmp_df": sub_df})
+            if isinstance(clf, OvrMultiChromBinaryExpert):
+                entries.append(
+                    {
+                        "chrom_classifiers": dict(clf.classifiers),
+                        "chromosome_weights": dict(clf.chromosome_weights),
+                        "dmp_df": self.dmp_positions_df.iloc[idx].copy(),
+                    }
+                )
+            else:
+                sub_df = self.dmp_positions_df.iloc[idx].copy()
+                entries.append({"ecdf": clf, "dmp_df": sub_df})
         meta_extra = {
             k: v
             for k, v in (self.metadata or {}).items()
@@ -284,17 +324,28 @@ class MethylClassifier:
         binary_probas: List[np.ndarray] = []
         for k, clf in enumerate(self._ovr_binary_classifiers):
             idx = self._ovr_column_indices[k]
-            Xk = np.ascontiguousarray(methylation_data[:, idx], dtype=np.float64)
-            Mk = availability_mask[:, idx] if availability_mask is not None else None
-            use_cal = (
-                getattr(self, "_calibrated", False)
-                and hasattr(clf, "predict_proba_calibrated")
-                and getattr(clf, "calibrator", None) is not None
-            )
-            if use_cal:
-                pk = clf.predict_proba_calibrated(Xk, Mk)
+            if isinstance(clf, OvrMultiChromBinaryExpert):
+                use_cal = bool(getattr(self, "_calibrated", False))
+                pk = clf.predict_proba_binary(
+                    methylation_data,
+                    availability_mask,
+                    np.asarray(idx, dtype=np.intp),
+                    self.dmp_positions_df,
+                    calibrated=use_cal,
+                    debug=debug,
+                )
             else:
-                pk = clf.predict_proba(Xk, Mk, debug=debug)
+                Xk = np.ascontiguousarray(methylation_data[:, idx], dtype=np.float64)
+                Mk = availability_mask[:, idx] if availability_mask is not None else None
+                use_cal = (
+                    getattr(self, "_calibrated", False)
+                    and hasattr(clf, "predict_proba_calibrated")
+                    and getattr(clf, "calibrator", None) is not None
+                )
+                if use_cal:
+                    pk = clf.predict_proba_calibrated(Xk, Mk)
+                else:
+                    pk = clf.predict_proba(Xk, Mk, debug=debug)
             binary_probas.append(pk)
         return fuse_ovr_binary_probas(binary_probas)
 
@@ -443,7 +494,9 @@ class MethylClassifier:
         # Set temperature on the actual classifier(s)
         if getattr(self, "_ovr_mode", False):
             for _c in self._ovr_binary_classifiers:
-                if hasattr(_c, "set_temperature"):
+                if isinstance(_c, OvrMultiChromBinaryExpert):
+                    _c.set_temperature(self.config.temperature)
+                elif hasattr(_c, "set_temperature"):
                     _c.set_temperature(self.config.temperature)
         elif self.classifier is not None:
             _target = self.classifier
@@ -1361,6 +1414,66 @@ class MethylClassifier:
             adjust_for_missing=adjust_for_missing,
             availability_mask=availability_mask
         )
+
+
+def _build_ovr_multichrom_binary_entry(
+    directory: Path, config: ClassifierConfig
+) -> Tuple[Dict[str, Any], bool]:
+    """
+    Load every ``classifier-*.pkl`` in a MethylDetector output directory as one OvR binary
+    head (multi-chromosome weighted fusion).
+    """
+    sub_cfg = ClassifierConfig(
+        model_dir=str(directory.resolve()),
+        model_path=None,
+        ovr_binary_model_paths=None,
+        ovr_detection_dirs=None,
+        temperature=config.temperature,
+        enable_platt_calibration=config.enable_platt_calibration,
+        trimmed_percentile_low=config.trimmed_percentile_low,
+        trimmed_percentile_high=config.trimmed_percentile_high,
+        chromosome_weights=config.chromosome_weights,
+        weight_method=config.weight_method,
+        weight_fit_regularization=config.weight_fit_regularization,
+        weight_fit_alpha=config.weight_fit_alpha,
+        weight_fit_l1_ratio=config.weight_fit_l1_ratio,
+    )
+    temp = MethylClassifier(sub_cfg)
+
+    parts: List[pd.DataFrame] = []
+    for chrom in sorted(temp.classifiers.keys(), key=lambda x: (len(str(x)), str(x))):
+        pkg = temp.model_packages.get(chrom, {})
+        dmp = pkg.get("dmpDF")
+        if dmp is None or not isinstance(dmp, pd.DataFrame):
+            fi = temp.classifiers[chrom].get_feature_info()
+            pos = np.asarray(fi["positions"], dtype=np.uint32)
+            df = pd.DataFrame(
+                {"chromosome": [str(chrom)] * len(pos), "position": pos.astype(np.int64)}
+            )
+            parts.append(df)
+            continue
+        df = dmp.copy()
+        if "chromosome" not in df.columns:
+            df["chromosome"] = str(chrom)
+        if "position" not in df.columns and "pos" in df.columns:
+            df = df.rename(columns={"pos": "position"})
+        df = df[["chromosome", "position"]].copy()
+        df["chromosome"] = df["chromosome"].astype(str)
+        df["position"] = df["position"].astype(np.int64)
+        df = df.sort_values("position")
+        parts.append(df)
+
+    combined = (
+        pd.concat(parts, ignore_index=True)
+        if parts
+        else pd.DataFrame(columns=["chromosome", "position"])
+    )
+    entry: Dict[str, Any] = {
+        "chrom_classifiers": dict(temp.classifiers),
+        "chromosome_weights": dict(temp.chromosome_weights),
+        "dmp_df": combined,
+    }
+    return entry, bool(getattr(temp, "_calibrated", False))
 
 
 def _extract_context_from_classifier_filename(filename: str) -> Optional[str]:

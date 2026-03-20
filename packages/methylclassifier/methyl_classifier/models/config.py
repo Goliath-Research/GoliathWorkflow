@@ -24,7 +24,7 @@ class ClassifierConfig(BaseModel):
     )
     ovr_detection_dirs: Optional[List[str]] = Field(
         default=None,
-        description="K>=2 directories, each containing exactly one classifier*.pkl for that class (OvR order). Alternative to ovr_binary_model_paths.",
+        description="K>=2 MethylDetector output directories (OvR order). One classifier*.pkl → single-chrom ECDF head; multiple classifier-*.pkl → multi-chromosome weighted expert per class. Alternative to ovr_binary_model_paths.",
     )
     ovr_class_names: Optional[List[str]] = Field(
         default=None,

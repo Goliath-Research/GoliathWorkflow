@@ -7,13 +7,13 @@ binary (n, 2) probability matrices into (n, K). Orchestration lives on MethylCla
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 
 ECDF_ONE_VS_REST_TYPE = "ecdf_one_vs_rest"
-OV_R_PACKAGE_VERSION = 1
+OV_R_PACKAGE_VERSION = 2
 
 
 def _normalize_chrom(c: Any) -> str:
@@ -32,6 +32,99 @@ def _normalize_dmp_columns(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+class OvrMultiChromBinaryExpert:
+    """
+    One OvR class head: per-chromosome binary ECDFs + weights, fused to (n_samples, 2)
+    like MethylClassifier multi-chromosome mode.
+    """
+
+    def __init__(
+        self,
+        classifiers: Dict[str, Any],
+        chromosome_weights: Dict[str, float],
+    ) -> None:
+        self.classifiers = {str(k): v for k, v in classifiers.items()}
+        self.chromosome_weights = {str(k): float(v) for k, v in chromosome_weights.items()}
+
+    def set_temperature(self, temperature: float) -> None:
+        for clf in self.classifiers.values():
+            _t = (
+                clf.classifier
+                if (
+                    hasattr(clf, "classifier")
+                    and hasattr(getattr(clf, "classifier", None), "set_temperature")
+                )
+                else clf
+            )
+            if hasattr(_t, "set_temperature"):
+                _t.set_temperature(temperature)
+
+    def predict_proba_binary(
+        self,
+        methylation_data: np.ndarray,
+        availability_mask: Optional[np.ndarray],
+        idx: np.ndarray,
+        positions_df: pd.DataFrame,
+        *,
+        calibrated: bool,
+        debug: bool = False,
+    ) -> np.ndarray:
+        n_samples = int(methylation_data.shape[0])
+        idx = np.asarray(idx, dtype=np.intp)
+        sub_df = positions_df.iloc[idx].reset_index(drop=True)
+        sub_df["__slot"] = np.arange(len(sub_df), dtype=np.intp)
+
+        chrom_order = sorted(self.classifiers.keys(), key=lambda x: (len(str(x)), str(x)))
+        n_classes = 2
+        weighted = np.zeros((n_samples, n_classes), dtype=np.float64)
+        active_w = 0.0
+
+        for chrom in chrom_order:
+            w = float(self.chromosome_weights.get(chrom, 0.0))
+            if w == 0.0:
+                continue
+            clf = self.classifiers[chrom]
+            fi = clf.get_feature_info()
+            n_feat = int(fi["n_features"])
+            pos_expected = np.asarray(fi["positions"], dtype=np.uint32)
+
+            sel = sub_df.loc[sub_df["chromosome"].astype(str).values == str(chrom)]
+            if len(sel) == 0:
+                continue
+            sel = sel.sort_values("position")
+            slots = sel["__slot"].values.astype(np.intp)
+            if len(slots) != n_feat:
+                raise ValueError(
+                    f"OvR multichrom expert chr{chrom}: classifier expects {n_feat} features, "
+                    f"union slice has {len(slots)} rows for this chromosome"
+                )
+            got_pos = sel["position"].astype(np.uint32).values
+            if not np.array_equal(got_pos, pos_expected):
+                raise ValueError(
+                    f"OvR multichrom expert chr{chrom}: union positions do not match classifier order"
+                )
+
+            Xc = np.ascontiguousarray(methylation_data[:, idx[slots]], dtype=np.float64)
+            Mc = availability_mask[:, idx[slots]] if availability_mask is not None else None
+
+            if (
+                calibrated
+                and hasattr(clf, "predict_proba_calibrated")
+                and getattr(clf, "calibrator", None) is not None
+            ):
+                pc = clf.predict_proba_calibrated(Xc, Mc)
+            else:
+                pc = clf.predict_proba(Xc, Mc, debug=debug)
+            weighted += w * pc
+            active_w += w
+
+        if active_w <= 0.0:
+            return np.full((n_samples, n_classes), 0.5, dtype=np.float64)
+        s = np.sum(weighted, axis=1, keepdims=True)
+        s = np.where(s == 0, 1.0, s)
+        return weighted / s
+
+
 def dmp_rows_from_binary_entry(
     entry: Dict[str, Any],
     default_chromosome: str = "1",
@@ -42,6 +135,16 @@ def dmp_rows_from_binary_entry(
     Prefer entry['dmp_df'] with chromosome + position (or pos).
     Else use entry['chromosome'] + ECDF positions.
     """
+    if entry.get("chrom_classifiers"):
+        if entry.get("dmp_df") is None:
+            raise ValueError("Multichrom OvR binary entry requires dmp_df")
+        df = _normalize_dmp_columns(entry["dmp_df"])
+        if "chromosome" not in df.columns or "position" not in df.columns:
+            raise ValueError("Multichrom OvR dmp_df must have chromosome and position columns")
+        chrom_col = df["chromosome"].map(_normalize_chrom)
+        pos_col = df["position"].astype(np.uint64).astype(np.int64)
+        return list(zip(chrom_col.tolist(), pos_col.tolist()))
+
     if "dmp_df" in entry and entry["dmp_df"] is not None:
         df = _normalize_dmp_columns(entry["dmp_df"])
         if "chromosome" not in df.columns or "position" not in df.columns:

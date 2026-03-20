@@ -93,7 +93,7 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `centroid_dirs` | array or null | null | K centroid output dirs (multiclass). Use with `multiclass_class_names` (length K). |
 | `multiclass_class_names` | array or null | null | Names for each class (same order as `centroid_dirs`). |
 | `ovr_binary_model_paths` | array or null | null | K≥2 MethylDetector PKL paths (OvR order). **Do not** set `model_path`/`model_dir` when using this; MethylClassifier assembles `ecdf_one_vs_rest` in memory. |
-| `ovr_detection_dirs` | array or null | null | K≥2 dirs, each with exactly one `classifier*.pkl`. Alternative to `ovr_binary_model_paths`. |
+| `ovr_detection_dirs` | array or null | null | K≥2 MethylDetector output dirs (OvR order). All `classifier*.pkl` in each dir are fused per class (multi-chrom weights like `model_dir`). Alternative to `ovr_binary_model_paths`. |
 | `ovr_class_names` | array or null | null | Optional; defaults to `multiclass_class_names` when multiclass. Length must be K. |
 | `debug` | boolean | false | Enable debug output |
 | `no_filter` | boolean | false | Process all .h5 without chromosome/context filtering |
@@ -102,14 +102,12 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 **Project JSON (`step_config.classifier`) — OvR paths from `comparisons`:**  
 When the project defines `controls`, `diseases`, and `comparisons` (control/disease layout), you can avoid hard-coding absolute detector paths:
 
-- **`ovr_binary_pickles_from_comparisons`**: `true` — resolver builds `ovr_binary_model_paths` in **`get_resolved_groups()`** order (control group label, then each disease label). For each disease label, the path is  
-  `<project_root>/detections/<control_group>/<disease_group>/<basename>`  
-  using the matching **`comparisons`** entry’s `control_group` / `disease_group`.  
+- **`ovr_binary_pickles_from_comparisons`**: `true` — resolver builds **`ovr_detection_dirs`** in **`get_resolved_groups()`** order (control label, then each disease label). Each entry is the **directory**  
+  `<project_root>/detections/<control_group>/<disease_group>/`  
+  (matching **`comparisons`**). MethylClassifier loads **all** `classifier*.pkl` files in each directory and builds one multi-chromosome OvR expert per class (same idea as **`model_dir`**).  
   Requires **exactly one** control group in `controls.groups`.  
-  **`basename`** defaults to **`classifier-1-CG,CHG,CHH.pkl`**. MethylDetector stores **separate** pickles per chromosome in each folder (`classifier-1-…`, `classifier-2-…`, …); this default selects **only chromosome 1** for each OvR source. Full-genome classification uses **all** of those files (e.g. via **`model_dir`**); this comparison-driven OvR shortcut does **not** merge them unless you point it at a multi-chromosome bundle or change **`ovr_unified_classifier_basename`** / **`ovr_binary_model_paths`**.
-- **`ovr_control_vs_rest_pkl`**: optional explicit PKL for the first (control) OvR class. If omitted, the resolver uses  
-  `<project_root>/detections/one_vs_rest/<control_group_label>/<basename>` when that file **exists**.  
-  If it does **not** exist, it **falls back** to the pickle under the **first** entry in **`comparisons`** (pairwise control vs that disease) and emits a **warning** — not the same as a true control one-vs-rest model. Set **`ovr_control_vs_rest_pkl`** when you have a dedicated artifact.
+  **`ovr_unified_classifier_basename`** (default **`classifier-1-CG,CHG,CHH.pkl`**) checks that a detector artifact exists: under the **first comparison** folder (e.g. `detections/all/pca1/<basename>`) for the control OvR slot, and similarly for other classes. If **`detections/one_vs_rest/<control>/<basename>`** exists as a file, its **parent directory** is used for the control slot instead (optional layout).
+- **`ovr_control_vs_rest_pkl`**: optional path to a **file** or **directory** for the first (control) OvR class (overrides the default above). A file uses its **parent directory** as the control source.
 - **`ovr_bundle_filename`**: optional; only if you want a custom export name. Default: **`classifier_<control_group_label>_<project_name>.pkl`** under **`<project_root>/classifiers/<control_group_label>/`** (e.g. `classifiers/all/classifier_all_Healthy_vs_PCa1-4.pkl`). Per-comparison outputs stay under `classifiers/all/pca1/`, etc.
 
 **Export OvR PKL only (no classification):** with `ovr_binary_model_paths` or `ovr_detection_dirs` set, you can write the portable multiclass PKL without `input_path` using:
