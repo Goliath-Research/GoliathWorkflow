@@ -20,6 +20,8 @@ _CLASSIFIER_STEP_KEYS_FOR_BUNDLE_PATH = (
     "ovr_binary_model_paths",
     "ovr_detection_dirs",
     "ovr_pairwise_aggregate_control",
+    "ovr_bipartite_aggregate",
+    "ovr_n_control_classes",
 )
 
 
@@ -51,7 +53,7 @@ def predicted_multiclass_ovr_bundle_path(
     ) >= 2 or len(ovr_dirs) >= 2 or (
         step.get("ovr_pairwise_aggregate_control")
         and len(ovr_dirs) >= 1
-    )
+    ) or (bool(step.get("ovr_bipartite_aggregate")) and len(ovr_dirs) >= 2)
     if not has_ovr:
         return None
     ctrl_label = resolved[0][0]
@@ -86,6 +88,10 @@ def classifier_step_dict_has_ovr_sources(step_cfg: Dict[str, Any]) -> bool:
         return True
     p = step_cfg.get("ovr_binary_model_paths") or []
     d = step_cfg.get("ovr_detection_dirs") or []
+    M = int(step_cfg.get("ovr_n_control_classes") or 0)
+    bip = bool(step_cfg.get("ovr_bipartite_aggregate"))
+    if bip and M >= 1 and len(d) >= M:
+        return True
     return (
         len(p) >= 2
         or len(d) >= 2
@@ -98,65 +104,79 @@ def expand_ovr_paths_from_comparisons(
     *,
     unified_basename: str,
     control_vs_rest_pkl: Optional[str] = None,
-) -> Tuple[List[str], List[str], bool]:
+) -> Tuple[List[str], List[str], bool, bool]:
     """
     Build OvR **detection directory** paths from ``comparisons`` (and optional control override).
 
-    Returns ``(dirs, class_names, pairwise_aggregate_control)``.
+    Returns ``(dirs, class_names, pairwise_aggregate_control, ovr_bipartite_aggregate)``.
 
-    **Default (``pairwise_aggregate_control=True``):** one directory per **disease** in
-    ``get_resolved_groups()`` order — ``detections/<control_group>/<disease_group>/`` for each
-    comparison (e.g. ``all/pca1``, ``all/pca2``, …). There are **K-1** dirs for **K** class
-    names (control label first, then each disease). The control OvR head **aggregates** P(control)
-    across those pairwise detectors (no duplicate reuse of ``all/pca1`` for both control and
-    pca1).
+    **Single control (``pairwise_aggregate_control=True``):** one directory per **disease** —
+    ``detections/<control>/<disease>/`` (**K-1** dirs for **K** names). Control head aggregates
+    P(control) across those pairwises.
 
-    **Explicit control directory** (``pairwise_aggregate_control=False``): when
-    ``ovr_control_vs_rest_pkl`` is set, or when
-    ``detections/one_vs_rest/<control>/<unified_basename>`` exists, the first path is that control
-    directory and the following paths are the same per-disease directories as above (**K** dirs
-    for **K** names). Ensure the explicit control dir is not identical to a disease dir unless
-    intended.
+    **Multiple controls:** **bipartite** row-major order: for each control label, for each disease
+    leaf, one directory (**M×N** dirs for **M+N** class names). Set ``ovr_bipartite_aggregate`` and
+    ``ovr_n_control_classes=M`` in merged classifier config.
 
-    ``unified_basename`` verifies a detector artifact exists in each directory used.
-
-    ``control_vs_rest_pkl``: existing file (parent dir used) or directory.
+    **Explicit control directory** (``pairwise_aggregate_control=False``, single control only):
+    ``ovr_control_vs_rest_pkl`` or ``detections/one_vs_rest/...`` adds a dedicated control dir
+    (**K** dirs for **K** names).
     """
     if not project.uses_control_disease():
         raise ValueError(
             "ovr_binary_pickles_from_comparisons requires a project with controls, diseases, and comparisons"
         )
-    if project.control is None or len(project.control.groups) != 1:
-        raise ValueError(
-            "ovr_binary_pickles_from_comparisons currently supports exactly one control group"
-        )
+    if project.control is None:
+        raise ValueError("project.control is required")
     resolved = project.get_resolved_groups()
     if len(resolved) < 2:
         raise ValueError("Project must have at least one control and one disease group")
     comparisons = project.get_comparisons()
-    comp_by_disease = {spec.disease_group: spec for spec in comparisons}
-    control_label = resolved[0][0]
-    names = [label for label, _ in resolved]
+    comp_by_pair = {(spec.control_group, spec.disease_group): spec for spec in comparisons}
 
+    with_side = project._get_resolved_groups_with_side(expand_subclusters=False)
+    control_labels = [lbl for lbl, _, side in with_side if side == "control"]
+    disease_labels = [lbl for lbl, _, side in with_side if side == "disease"]
+    names = control_labels + disease_labels
+    M, N = len(control_labels), len(disease_labels)
+    if M < 1 or N < 1:
+        raise ValueError("OvR expansion requires at least one control and one disease group")
+
+    def _verify_det_dir(ctrl: str, dis: str) -> str:
+        det_dir = Path(project.get_detection_output_dir(ctrl, dis))
+        candidate = det_dir / unified_basename
+        if not candidate.is_file():
+            raise FileNotFoundError(
+                f"OvR: detector artifact not found at {candidate} "
+                f"(comparison {ctrl!r} vs {dis!r}). "
+                "Run MethylDetector or adjust ovr_unified_classifier_basename."
+            )
+        return str(det_dir)
+
+    if M > 1:
+        out_dirs: List[str] = []
+        for c in control_labels:
+            for d in disease_labels:
+                if (c, d) not in comp_by_pair:
+                    raise ValueError(
+                        f"No comparison for control_group={c!r}, disease_group={d!r}; "
+                        f"need full bipartite (have {len(comp_by_pair)} specs)"
+                    )
+                out_dirs.append(_verify_det_dir(c, d))
+        return out_dirs, names, False, True
+
+    # M == 1: legacy single-control path
+    control_label = control_labels[0]
+    comp_by_disease = {spec.disease_group: spec for spec in comparisons}
     disease_dirs: List[str] = []
-    for label, _ in resolved[1:]:
+    for label in disease_labels:
         if label not in comp_by_disease:
             raise ValueError(
                 f"No comparison with disease_group={label!r} for OvR path; "
                 f"check comparisons vs disease groups (have: {sorted(comp_by_disease.keys())})"
             )
         spec = comp_by_disease[label]
-        det_dir = Path(
-            project.get_detection_output_dir(spec.control_group, spec.disease_group)
-        )
-        candidate = det_dir / unified_basename
-        if not candidate.is_file():
-            raise FileNotFoundError(
-                f"OvR: detector artifact not found at {candidate} "
-                f"(comparison {spec.control_group!r} vs {spec.disease_group!r}). "
-                "Run MethylDetector or adjust ovr_unified_classifier_basename."
-            )
-        disease_dirs.append(str(det_dir))
+        disease_dirs.append(_verify_det_dir(spec.control_group, spec.disease_group))
 
     if control_vs_rest_pkl:
         p = Path(control_vs_rest_pkl).expanduser()
@@ -164,17 +184,16 @@ def expand_ovr_paths_from_comparisons(
             raise FileNotFoundError(f"ovr_control_vs_rest_pkl not found: {p}")
         ctrl_dir = str(p.parent if p.is_file() else p)
         out_dirs = [ctrl_dir] + disease_dirs
-        return out_dirs, names, False
+        return out_dirs, names, False, False
 
     root = Path(project.get_project_root())
     dedicated = root / "detections" / "one_vs_rest" / control_label / unified_basename
     if dedicated.is_file():
         ctrl_dir = str(dedicated.parent)
         out_dirs = [ctrl_dir] + disease_dirs
-        return out_dirs, names, False
+        return out_dirs, names, False, False
 
-    # Canonical: K-1 pairwise dirs + synthetic control head from all pairwises
-    return disease_dirs, names, True
+    return disease_dirs, names, True, False
 
 
 def _consume_ovr_comparison_options_and_maybe_expand(
@@ -189,13 +208,17 @@ def _consume_ovr_comparison_options_and_maybe_expand(
     ctrl_pkl = base.pop("ovr_control_vs_rest_pkl", None)
     if not flag:
         return
-    dirs, default_names, agg_ctrl = expand_ovr_paths_from_comparisons(
+    dirs, default_names, agg_ctrl, bip = expand_ovr_paths_from_comparisons(
         project,
         unified_basename=str(basename),
         control_vs_rest_pkl=ctrl_pkl,
     )
     base["ovr_detection_dirs"] = dirs
     base["ovr_pairwise_aggregate_control"] = agg_ctrl
+    base["ovr_bipartite_aggregate"] = bip
+    if bip:
+        ws = project._get_resolved_groups_with_side(expand_subclusters=False)
+        base["ovr_n_control_classes"] = sum(1 for _, _, s in ws if s == "control")
     if not base.get("ovr_class_names"):
         base["ovr_class_names"] = default_names
 
@@ -422,10 +445,12 @@ def resolve_classifier_config(
         ovr_paths = base.get("ovr_binary_model_paths") or []
         ovr_dirs = base.get("ovr_detection_dirs") or []
         agg_ovr = bool(base.get("ovr_pairwise_aggregate_control"))
+        bip_ovr = bool(base.get("ovr_bipartite_aggregate"))
         if p_bundle is not None and (
             len(ovr_paths) >= 2
             or len(ovr_dirs) >= 2
             or (agg_ovr and len(ovr_dirs) >= 1)
+            or (bip_ovr and len(ovr_dirs) >= 2)
         ):
             base["save_classifier_path"] = str(p_bundle)
         else:

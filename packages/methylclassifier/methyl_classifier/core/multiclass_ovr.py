@@ -220,6 +220,104 @@ class OvrPairwiseControlAggregateExpert:
         return out
 
 
+class OvrPairwiseColumnAggregateExpert:
+    """
+    Geometric-mean aggregate over several **pairwise** binary experts, taking one probability column
+    from each (column 0 = first centroid / “control side” of that pairwise, column 1 = second).
+
+    Used for **multi-control × multi-disease** bipartite graphs: each control class aggregates
+    column 0 over all pairwises for that control; each disease class aggregates column 1 over all
+    pairwises for that disease.
+    """
+
+    def __init__(
+        self,
+        pairwise_experts: List[Any],
+        column_indices: List[np.ndarray],
+        *,
+        probability_column: int,
+    ) -> None:
+        self.pairwise_experts = list(pairwise_experts)
+        self.column_indices = [np.asarray(x, dtype=np.intp) for x in column_indices]
+        self.probability_column = int(probability_column)
+        if self.probability_column not in (0, 1):
+            raise ValueError("probability_column must be 0 or 1")
+
+    def set_temperature(self, temperature: float) -> None:
+        for ex in self.pairwise_experts:
+            if isinstance(ex, OvrMultiChromBinaryExpert):
+                ex.set_temperature(temperature)
+            elif hasattr(ex, "set_temperature"):
+                ex.set_temperature(temperature)
+
+    def _pairwise_p_column(
+        self,
+        expert: Any,
+        methylation_data: np.ndarray,
+        availability_mask: Optional[np.ndarray],
+        idx: np.ndarray,
+        positions_df: pd.DataFrame,
+        *,
+        calibrated: bool,
+        debug: bool,
+    ) -> np.ndarray:
+        if isinstance(expert, OvrMultiChromBinaryExpert):
+            pk = expert.predict_proba_binary(
+                methylation_data,
+                availability_mask,
+                idx,
+                positions_df,
+                calibrated=calibrated,
+                debug=debug,
+            )
+        else:
+            Xk = np.ascontiguousarray(methylation_data[:, idx], dtype=np.float64)
+            Mk = availability_mask[:, idx] if availability_mask is not None else None
+            use_cal = (
+                calibrated
+                and hasattr(expert, "predict_proba_calibrated")
+                and getattr(expert, "calibrator", None) is not None
+            )
+            if use_cal:
+                pk = expert.predict_proba_calibrated(Xk, Mk)
+            else:
+                pk = expert.predict_proba(Xk, Mk, debug=debug)
+        c = self.probability_column
+        return np.clip(pk[:, c], 1e-15, 1.0)
+
+    def predict_proba_binary(
+        self,
+        methylation_data: np.ndarray,
+        availability_mask: Optional[np.ndarray],
+        idx: np.ndarray,
+        positions_df: pd.DataFrame,
+        *,
+        calibrated: bool,
+        debug: bool = False,
+    ) -> np.ndarray:
+        n_samples = int(methylation_data.shape[0])
+        cols: List[np.ndarray] = []
+        for expert, col_idx in zip(self.pairwise_experts, self.column_indices):
+            pc = self._pairwise_p_column(
+                expert,
+                methylation_data,
+                availability_mask,
+                col_idx,
+                positions_df,
+                calibrated=calibrated,
+                debug=debug,
+            )
+            cols.append(pc)
+        stack = np.stack(cols, axis=1)
+        log_m = np.mean(np.log(stack), axis=1)
+        p_pos = np.clip(np.exp(log_m), 1e-15, 1.0 - 1e-15)
+        p_neg = np.clip(1.0 - p_pos, 1e-15, 1.0 - 1e-15)
+        out = np.stack([p_neg, p_pos], axis=1)
+        row_sums = np.sum(out, axis=1, keepdims=True)
+        out = out / np.where(row_sums <= 0, 1.0, row_sums)
+        return out
+
+
 def dmp_rows_from_binary_entry(
     entry: Dict[str, Any],
     default_chromosome: str = "1",
@@ -303,6 +401,40 @@ def build_union_dmp_dataframe(
     if prefix_geo:
         full = np.arange(len(df), dtype=np.int32)
         column_indices = [full] + column_indices
+
+    return df, column_indices
+
+
+def build_union_dmp_dataframe_flat(
+    binary_entries: Sequence[Dict[str, Any]],
+    default_chromosome: str = "1",
+) -> Tuple[pd.DataFrame, List[np.ndarray]]:
+    """
+    Union DMP table over a flat list of binary model entries (no ``control_pairwise_geometric`` marker).
+    Used for bipartite multi-control × multi-disease OvR (M×N pairwises).
+    """
+    entries_list = list(binary_entries)
+    if not entries_list:
+        raise ValueError("OvR union needs at least one binary model")
+    all_rows: List[Tuple[str, int]] = []
+    per_entry_rows: List[List[Tuple[str, int]]] = []
+    for entry in entries_list:
+        if entry.get("control_pairwise_geometric") or entry.get("bipartite_pairwise_geometric"):
+            raise ValueError("flat union does not accept aggregate marker entries")
+        rows = dmp_rows_from_binary_entry(entry, default_chromosome=default_chromosome)
+        per_entry_rows.append(rows)
+        all_rows.extend(rows)
+
+    unique_sorted = sorted(set(all_rows), key=lambda t: (t[0], t[1]))
+    df = pd.DataFrame(unique_sorted, columns=["chromosome", "position"])
+    df["chromosome"] = df["chromosome"].astype(str).astype("category")
+    df["position"] = df["position"].astype(np.uint32)
+
+    key_to_idx = {(c, int(p)): i for i, (c, p) in enumerate(unique_sorted)}
+    column_indices: List[np.ndarray] = []
+    for rows in per_entry_rows:
+        idx = np.array([key_to_idx[(c, int(p))] for c, p in rows], dtype=np.int32)
+        column_indices.append(idx)
 
     return df, column_indices
 

@@ -203,7 +203,9 @@ def _safe_cohort_filename_label(label: str) -> str:
 
 def infer_monte_carlo_layout(base_project_path: str | Path, n_cohorts: int) -> str:
     """
-    Return ``\"binary\"`` for control/disease templates (exactly two MC cohorts).
+    Return ``\"binary\"`` for control/disease templates with exactly two MC cohorts (legacy).
+    Return ``\"hierarchical_multiclass\"`` when the base project uses ``controls``/``diseases`` and
+    the number of resolved centroid groups equals ``n_cohorts`` and ``n_cohorts`` ≥ 3.
     Return ``\"multiclass\"`` when the base project uses flat ``groups`` whose length matches ``n_cohorts``.
     """
     with open(base_project_path, encoding="utf-8") as f:
@@ -215,9 +217,21 @@ def infer_monte_carlo_layout(base_project_path: str | Path, n_cohorts: int) -> s
                 f"Base project flat groups count ({len(groups)}) must match Monte Carlo cohorts ({n_cohorts})."
             )
         return "multiclass"
+    try:
+        from methyl_utils import load_project
+
+        proj = load_project(base_project_path)
+        if proj.uses_control_disease():
+            resolved = proj.get_resolved_groups()
+            if n_cohorts >= 3 and len(resolved) == n_cohorts:
+                return "hierarchical_multiclass"
+    except Exception:
+        pass
     if n_cohorts != 2:
         raise ValueError(
-            "Control/disease Monte Carlo template requires exactly two cohorts (healthy_csv/disease_csv or two cohorts entries)."
+            "For control/disease projects: use exactly two Monte Carlo cohorts (binary), or "
+            "K cohorts matching K resolved groups (multiclass hierarchical, K>=3), "
+            "or a flat ``groups`` base project."
         )
     return "binary"
 
@@ -306,6 +320,122 @@ def generate_run_project_multiclass(
         gg["sample_paths"] = [str(train_csv_by_label[lbl].resolve())]
         new_groups.append(gg)
     project["groups"] = new_groups
+
+    project_path = run_dir / "project.json"
+    with open(project_path, "w", encoding="utf-8") as f:
+        json.dump(project, f, indent=2)
+
+    return project_path, val_groups_json
+
+
+def _patch_side_groups_for_mc(
+    groups: Any,
+    train_csv_by_label: Dict[str, Path],
+) -> List[Dict[str, Any]]:
+    """Replace sample_paths with per-run train CSVs; supports disease ``stages`` (leaf = parent_child)."""
+    if not isinstance(groups, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in groups:
+        if not isinstance(item, dict):
+            continue
+        if item.get("stages"):
+            parent = dict(item)
+            new_stages: List[Dict[str, Any]] = []
+            for st in item.get("stages") or []:
+                if not isinstance(st, dict) or not st.get("label"):
+                    continue
+                plab = str(item.get("label", ""))
+                leaf = f"{plab}_{st['label']}"
+                if leaf not in train_csv_by_label:
+                    raise ValueError(
+                        f"Monte Carlo train CSV missing for disease leaf {leaf!r} "
+                        f"(expected cohort label in config)."
+                    )
+                s2 = dict(st)
+                s2["sample_paths"] = [str(train_csv_by_label[leaf].resolve())]
+                new_stages.append(s2)
+            parent["stages"] = new_stages
+            out.append(parent)
+        else:
+            g2 = dict(item)
+            lab = str(g2.get("label", ""))
+            if lab not in train_csv_by_label:
+                raise ValueError(f"Monte Carlo train CSV missing for group label {lab!r}")
+            g2["sample_paths"] = [str(train_csv_by_label[lab].resolve())]
+            out.append(g2)
+    return out
+
+
+def generate_run_project_hierarchical_multiclass(
+    base_project_path: str | Path,
+    run_dir: Path,
+    run_id: str,
+    output_base: str,
+    train_by_label: Dict[str, List[str]],
+    val_by_label: Dict[str, List[str]],
+    cohort_labels: List[str],
+    samples_base_path: str,
+) -> Tuple[Path, Path]:
+    """
+    Same outputs as ``generate_run_project_multiclass`` but keeps ``controls`` / ``diseases``
+    (and optional nested ``stages``) in ``project.json`` for full centroid/detector layout.
+    """
+    from methyl_utils import load_project
+
+    proj = load_project(base_project_path)
+    resolved_order = [x[0] for x in proj.get_resolved_groups()]
+    if list(cohort_labels) != list(resolved_order):
+        raise ValueError(
+            "Monte Carlo cohorts order and labels must match project resolved groups "
+            f"(expected {resolved_order!r}, got {list(cohort_labels)!r})."
+        )
+
+    with open(base_project_path, encoding="utf-8") as f:
+        base = json.load(f)
+
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    train_csv_by_label: Dict[str, Path] = {}
+    for lbl in cohort_labels:
+        if lbl not in train_by_label or lbl not in val_by_label:
+            raise ValueError(f"Missing train/val paths for cohort label {lbl!r}")
+        safe = _safe_cohort_filename_label(lbl)
+        p = run_dir / f"train_{safe}.csv"
+        write_train_csv(p, train_by_label[lbl], samples_base_path)
+        train_csv_by_label[lbl] = p
+
+    val_payload: List[Dict[str, Any]] = []
+    for lbl in cohort_labels:
+        val_payload.append(
+            {
+                "label": lbl,
+                "paths": [str(Path(p).resolve()) for p in val_by_label[lbl]],
+            }
+        )
+    val_groups_json = run_dir / "val_test_groups.json"
+    val_groups_json.parent.mkdir(parents=True, exist_ok=True)
+    with open(val_groups_json, "w", encoding="utf-8") as f:
+        json.dump(val_payload, f, indent=2)
+
+    project = dict(base)
+    project["output_base"] = output_base.rstrip("/")
+    project["project_name"] = run_id
+    project["samples_base_path"] = samples_base_path
+
+    for key in ("controls", "control"):
+        side = project.get(key)
+        if isinstance(side, dict) and side.get("groups"):
+            side = dict(side)
+            side["groups"] = _patch_side_groups_for_mc(side["groups"], train_csv_by_label)
+            project[key] = side
+    for key in ("diseases", "disease"):
+        side = project.get(key)
+        if isinstance(side, dict) and side.get("groups"):
+            side = dict(side)
+            side["groups"] = _patch_side_groups_for_mc(side["groups"], train_csv_by_label)
+            project[key] = side
 
     project_path = run_dir / "project.json"
     with open(project_path, "w", encoding="utf-8") as f:

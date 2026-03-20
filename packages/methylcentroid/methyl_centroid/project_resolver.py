@@ -27,10 +27,18 @@ def _get_group_config_for_label(project: Any, side: str, label: str) -> Optional
         for g in project.control.groups:
             if g.label == label:
                 return g
+            if g.stages:
+                for st in g.stages:
+                    if f"{g.label}_{st.label}" == label:
+                        return st
     if side == "disease" and project.disease:
         for g in project.disease.groups:
             if g.label == label:
                 return g
+            if g.stages:
+                for st in g.stages:
+                    if f"{g.label}_{st.label}" == label:
+                        return st
     return None
 
 

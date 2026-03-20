@@ -223,7 +223,8 @@ def test_expand_ovr_paths_from_healthy_pca_project_comparisons():
     root = Path(project.get_project_root())
     dedicated = root / "detections" / "one_vs_rest" / "all" / bn
     try:
-        dirs, names, agg = expand_ovr_paths_from_comparisons(project, unified_basename=bn)
+        dirs, names, agg, bip = expand_ovr_paths_from_comparisons(project, unified_basename=bn)
+        assert not bip
         assert names == ["all", "pca1", "pca2", "pca3", "pca4"]
         if dedicated.is_file():
             assert not agg
@@ -276,6 +277,34 @@ def test_ovr_pairwise_aggregate_control_head(tmp_path, monkeypatch):
     m = np.ones((1, u), dtype=bool)
     proba = clf.predict_proba(X, m)
     assert proba.shape == (1, 3)
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0, rtol=1e-4)
+
+
+def test_ovr_bipartite_two_controls_two_diseases(tmp_path, monkeypatch):
+    """2×2 detection dirs + bipartite aggregate → K=4 OvR heads."""
+    monkeypatch.setattr("methyl_classifier.core.classifier.sys.exit", lambda *_: pytest.fail("sys.exit"))
+    dirs = []
+    for c in ("c1", "c2"):
+        for d in ("d1", "d2"):
+            p = tmp_path / c / d
+            p.mkdir(parents=True)
+            _write_min_detector_pkl(p / "classifier-1-CG.pkl", 50, "1")
+            dirs.append(str(p))
+    clf = MethylClassifier(
+        ClassifierConfig(
+            ovr_detection_dirs=dirs,
+            ovr_class_names=["c1", "c2", "d1", "d2"],
+            ovr_bipartite_aggregate=True,
+            ovr_n_control_classes=2,
+        )
+    )
+    assert clf.n_classes == 4
+    assert len(clf._ovr_binary_classifiers) == 4
+    u = len(clf.dmp_positions_df)
+    X = np.full((1, u), 0.5, dtype=np.float64)
+    m = np.ones((1, u), dtype=bool)
+    proba = clf.predict_proba(X, m)
+    assert proba.shape == (1, 4)
     np.testing.assert_allclose(proba.sum(axis=1), 1.0, rtol=1e-4)
 
 

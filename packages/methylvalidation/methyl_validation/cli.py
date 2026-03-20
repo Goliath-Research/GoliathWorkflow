@@ -25,6 +25,7 @@ from .predictor_policy import assert_monte_carlo_predictor_allowed
 from .pipeline_runner import run_pipeline_for_iteration, run_pipeline_for_iteration_multiclass
 from .project_gen import (
     generate_run_project,
+    generate_run_project_hierarchical_multiclass,
     generate_run_project_multiclass,
     infer_monte_carlo_layout,
 )
@@ -203,12 +204,14 @@ def main() -> None:
                         config.train_fraction,
                         seed=seed_i,
                     )
-                else:
+                elif layout in ("multiclass", "hierarchical_multiclass"):
                     train_m, val_m = stratified_split_multiclass(
                         cohort_paths_list,
                         config.train_fraction,
                         seed=seed_i,
                     )
+                else:
+                    raise RuntimeError(f"unknown Monte Carlo layout: {layout}")
             except ValueError as e:
                 print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
                 if progress is not None:
@@ -263,7 +266,7 @@ def main() -> None:
                         "group2": centroid_group2_override,
                     },
                 )
-            else:
+            elif layout == "multiclass":
                 project_path, val_groups_json = generate_run_project_multiclass(
                     base_project,
                     run_dir,
@@ -282,6 +285,28 @@ def main() -> None:
                     val_groups_json,
                     predictor_output_dir,
                     per_cancer_group=per_cancer_group,
+                    logs_dir=run_dir / "logs",
+                    progress_callback=progress_callback,
+                )
+            else:
+                project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
+                    base_project,
+                    run_dir,
+                    run_id,
+                    str(monte_carlo_runs_root),
+                    train_m,
+                    val_m,
+                    cohort_labels,
+                    config.samples_base_path,
+                )
+                predictor_output_dir = run_dir / "predictors"
+                n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
+                n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
+                success, errors, step_timings = run_pipeline_for_iteration_multiclass(
+                    project_path,
+                    val_groups_json,
+                    predictor_output_dir,
+                    per_cancer_group=True,
                     logs_dir=run_dir / "logs",
                     progress_callback=progress_callback,
                 )

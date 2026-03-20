@@ -6,7 +6,7 @@ import pickle
 import sys
 import re
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Any
+from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import pandas as pd
 
@@ -14,9 +14,12 @@ import pandas as pd
 from ..models.config import ClassifierConfig
 from .multiclass_ovr import (
     ECDF_ONE_VS_REST_TYPE,
+    OV_R_PACKAGE_VERSION,
     OvrMultiChromBinaryExpert,
+    OvrPairwiseColumnAggregateExpert,
     OvrPairwiseControlAggregateExpert,
     build_union_dmp_dataframe,
+    build_union_dmp_dataframe_flat,
     fuse_ovr_binary_probas,
 )
 
@@ -91,7 +94,14 @@ class MethylClassifier:
         if len(p_ovr) >= 2 or ovr_dirs_ok:
             self._load_ovr_from_detector_sources()
             for _c in self._ovr_binary_classifiers:
-                if isinstance(_c, (OvrMultiChromBinaryExpert, OvrPairwiseControlAggregateExpert)):
+                if isinstance(
+                    _c,
+                    (
+                        OvrMultiChromBinaryExpert,
+                        OvrPairwiseControlAggregateExpert,
+                        OvrPairwiseColumnAggregateExpert,
+                    ),
+                ):
                     _c.set_temperature(self.config.temperature)
                 elif hasattr(_c, "set_temperature"):
                     _c.set_temperature(self.config.temperature)
@@ -154,16 +164,116 @@ class MethylClassifier:
         self.classifiers = {}
         self._ovr_binary_classifiers = []
         self._ovr_column_indices = []
+        self._ovr_bipartite_layout: Optional[Tuple[int, int]] = None
 
         entries = model_package.get("binary_models")
         if not isinstance(entries, list) or len(entries) < 2:
             raise ValueError("ecdf_one_vs_rest package requires binary_models (list, len>=2)")
 
+        names = list(model_package.get("class_names") or [])
+        meta_pkg = model_package.get("metadata") or {}
+        if (not names or len(names) < 2) and meta_pkg.get("class_names"):
+            names = list(meta_pkg["class_names"])
+
+        self.metadata = dict(model_package.get("metadata") or {})
+        self.metadata.setdefault("classifier_type", ECDF_ONE_VS_REST_TYPE)
+
+        if isinstance(entries[0], dict) and entries[0].get("bipartite_pairwise_geometric"):
+            M = int(entries[0]["n_control_classes"])
+            N = int(entries[0]["n_disease_classes"])
+            body = entries[1:]
+            if M < 1 or N < 1:
+                raise ValueError("bipartite OvR requires n_control_classes>=1 and n_disease_classes>=1")
+            if len(body) != M * N:
+                raise ValueError(
+                    f"bipartite OvR expects {M * N} pairwise binary_models after marker, got {len(body)}"
+                )
+            if len(names) != M + N:
+                raise ValueError(
+                    f"bipartite OvR: class_names length must be M+N={M + N}, got {len(names)}"
+                )
+            self.class_names = names
+            self.n_classes = len(names)
+            self.metadata["n_classes"] = self.n_classes
+            self.metadata["class_names"] = list(self.class_names)
+
+            pairwise_experts: List[Any] = []
+            for j, entry in enumerate(body):
+                if not isinstance(entry, dict):
+                    raise ValueError(f"bipartite binary_models[{j + 1}] must be a dict")
+                cc = entry.get("chrom_classifiers")
+                if cc is not None:
+                    if not isinstance(cc, dict) or not cc:
+                        raise ValueError(
+                            f"bipartite binary_models[{j + 1}]: chrom_classifiers must be non-empty dict"
+                        )
+                    weights = entry.get("chromosome_weights") or {}
+                    pairwise_experts.append(OvrMultiChromBinaryExpert(cc, weights))
+                elif entry.get("ecdf") is not None:
+                    pairwise_experts.append(entry["ecdf"])
+                else:
+                    raise ValueError(
+                        f"bipartite binary_models[{j + 1}] must have 'ecdf' or 'chrom_classifiers'"
+                    )
+
+            union_df, pair_col_idx = build_union_dmp_dataframe_flat(body)
+            full = np.arange(len(union_df), dtype=np.int32)
+            ovr_clfs: List[Any] = []
+            ovr_cols: List[np.ndarray] = []
+            for i in range(M):
+                lo, hi = i * N, (i + 1) * N
+                ovr_clfs.append(
+                    OvrPairwiseColumnAggregateExpert(
+                        pairwise_experts[lo:hi],
+                        pair_col_idx[lo:hi],
+                        probability_column=0,
+                    )
+                )
+                ovr_cols.append(full)
+            for j in range(N):
+                exs = [pairwise_experts[i * N + j] for i in range(M)]
+                cols = [pair_col_idx[i * N + j] for i in range(M)]
+                ovr_clfs.append(OvrPairwiseColumnAggregateExpert(exs, cols, probability_column=1))
+                ovr_cols.append(full)
+
+            self.dmp_positions_df = union_df
+            self._ovr_column_indices = ovr_cols
+            self._sync_dmp_cache_from_positions_df()
+            self._ovr_binary_classifiers = ovr_clfs
+            self._ovr_bipartite_layout = (M, N)
+
+            chroms = sorted(self.dmp_positions_df["chromosome"].astype(str).unique().tolist())
+            self.chromosome = chroms[0] if chroms else "unknown"
+            self.context_metadata = meta_pkg.get("context")
+            if not self.context_metadata and ovr_clfs:
+                fm = ovr_clfs[0].pairwise_experts[0]
+                fi = None
+                try:
+                    if isinstance(fm, OvrMultiChromBinaryExpert):
+                        k0 = sorted(fm.classifiers.keys(), key=lambda x: (len(str(x)), str(x)))[0]
+                        fi = fm.classifiers[k0].contexts
+                    else:
+                        fi = fm.contexts
+                except Exception:
+                    fi = None
+                if fi is not None and len(fi) > 0:
+                    uniq = sorted({str(x) for x in np.asarray(fi).ravel()})
+                    self.context_metadata = ",".join(uniq) if uniq else "unknown"
+                else:
+                    self.context_metadata = "unknown"
+            self._calibrated = False
+            print(f"📍 OvR (bipartite): {self.n_classes} classes — {', '.join(str(x) for x in self.class_names)}")
+            print(f"📊 Union DMPs: {len(self.dmp_positions_df):,} (HDF5 read only during sample loading)")
+            for chrom in chroms[:20]:
+                cnt = int((self.dmp_positions_df["chromosome"].astype(str) == chrom).sum())
+                print(f"💎 {chrom}: {cnt} DMPs")
+            if len(chroms) > 20:
+                print(f"   ... and {len(chroms) - 20} more chromosomes")
+            return
+
         prefix_geo = bool(entries[0].get("control_pairwise_geometric")) if entries else False
         disease_entries = entries[1:] if prefix_geo else entries
 
-        names = list(model_package.get("class_names") or [])
-        meta_pkg = model_package.get("metadata") or {}
         if (not names or len(names) != len(entries)) and meta_pkg.get("class_names"):
             names = list(meta_pkg["class_names"])
         if len(names) != len(entries):
@@ -173,8 +283,6 @@ class MethylClassifier:
 
         self.class_names = names
         self.n_classes = len(names)
-        self.metadata = dict(model_package.get("metadata") or {})
-        self.metadata.setdefault("classifier_type", ECDF_ONE_VS_REST_TYPE)
         self.metadata["n_classes"] = self.n_classes
         self.metadata["class_names"] = list(self.class_names)
 
@@ -209,16 +317,19 @@ class MethylClassifier:
             ] + disease_experts
         else:
             self._ovr_binary_classifiers = disease_experts
+        self._ovr_bipartite_layout = None
 
         chroms = sorted(self.dmp_positions_df["chromosome"].astype(str).unique().tolist())
         self.chromosome = chroms[0] if chroms else "unknown"
         self.context_metadata = meta_pkg.get("context")
         if not self.context_metadata and self._ovr_binary_classifiers:
-            first_model = (
-                self._ovr_binary_classifiers[1]
-                if isinstance(self._ovr_binary_classifiers[0], OvrPairwiseControlAggregateExpert)
-                else self._ovr_binary_classifiers[0]
-            )
+            head0 = self._ovr_binary_classifiers[0]
+            if isinstance(head0, OvrPairwiseControlAggregateExpert):
+                first_model = self._ovr_binary_classifiers[1]
+            elif isinstance(head0, OvrPairwiseColumnAggregateExpert):
+                first_model = head0.pairwise_experts[0]
+            else:
+                first_model = head0
             fi = None
             try:
                 if isinstance(first_model, OvrMultiChromBinaryExpert):
@@ -254,6 +365,7 @@ class MethylClassifier:
         paths = list(self.config.ovr_binary_model_paths or [])
         dirs = list(self.config.ovr_detection_dirs or [])
         agg = bool(getattr(self.config, "ovr_pairwise_aggregate_control", False))
+        bip = bool(getattr(self.config, "ovr_bipartite_aggregate", False))
         names = list(self.config.ovr_class_names or [])
         if len(paths) >= 2 and len(dirs) >= 2:
             raise ValueError("Set only one of ovr_binary_model_paths or ovr_detection_dirs")
@@ -262,6 +374,52 @@ class MethylClassifier:
         if len(paths) >= 2:
             for p in paths:
                 entries.append(binary_entry_from_detector_pickle(Path(p)))
+        elif bip:
+            M = int(getattr(self.config, "ovr_n_control_classes", 0) or 0)
+            N = len(names) - M
+            if M < 1 or N < 1:
+                raise ValueError(
+                    "ovr_bipartite_aggregate requires ovr_n_control_classes>=1 and "
+                    "len(ovr_class_names) > ovr_n_control_classes"
+                )
+            if len(dirs) != M * N:
+                raise ValueError(
+                    f"ovr_bipartite_aggregate: expected {M * N} detection dirs (M={M}, N={N}), got {len(dirs)}"
+                )
+            pairwise_entries: List[Dict[str, Any]] = []
+            for d in dirs:
+                dpath = Path(d)
+                pkls = sorted(dpath.glob("classifier*.pkl"))
+                if len(pkls) == 0:
+                    raise ValueError(f"No classifier*.pkl under {dpath}")
+                if len(pkls) == 1:
+                    pairwise_entries.append(binary_entry_from_sole_classifier_in_dir(dpath))
+                else:
+                    entry, cflag = _build_ovr_multichrom_binary_entry(dpath, self.config)
+                    pairwise_entries.append(entry)
+                    multichrom_cal_any = multichrom_cal_any or cflag
+            marker: Dict[str, Any] = {
+                "bipartite_pairwise_geometric": True,
+                "n_control_classes": M,
+                "n_disease_classes": N,
+            }
+            pkg = {
+                "classifier_type": ECDF_ONE_VS_REST_TYPE,
+                "package_version": OV_R_PACKAGE_VERSION,
+                "class_names": list(names),
+                "binary_models": [marker] + pairwise_entries,
+                "metadata": {
+                    "classifier_type": ECDF_ONE_VS_REST_TYPE,
+                    "n_classes": len(names),
+                    "class_names": list(names),
+                    "built_from": "detector_pickles_bipartite",
+                },
+            }
+            self._load_ovr_ecdf_package(pkg)
+            if multichrom_cal_any:
+                self._calibrated = True
+            print("✅ Assembled bipartite OvR ECDF bundle from detector output (K=%d)" % len(names))
+            return
         elif agg:
             if len(names) != len(dirs) + 1:
                 raise ValueError(
@@ -297,7 +455,7 @@ class MethylClassifier:
         else:
             raise ValueError(
                 "OvR sources require ovr_binary_model_paths (>=2), ovr_detection_dirs (>=2), "
-                "or ovr_pairwise_aggregate_control with ovr_detection_dirs and K-1 dirs for K class names"
+                "ovr_pairwise_aggregate_control with K-1 dirs, or ovr_bipartite_aggregate with M×N dirs"
             )
 
         if len(names) != len(entries):
@@ -318,6 +476,55 @@ class MethylClassifier:
 
         if not self._ovr_binary_classifiers:
             raise RuntimeError("Cannot export OvR package: no binary classifiers")
+        bip_layout = getattr(self, "_ovr_bipartite_layout", None)
+        if bip_layout is not None:
+            M, N = bip_layout
+            entries_bip: List[Dict[str, Any]] = [
+                {
+                    "bipartite_pairwise_geometric": True,
+                    "n_control_classes": M,
+                    "n_disease_classes": N,
+                }
+            ]
+            for i in range(M):
+                head = self._ovr_binary_classifiers[i]
+                if not isinstance(head, OvrPairwiseColumnAggregateExpert):
+                    raise TypeError(
+                        "Bipartite export: expected OvrPairwiseColumnAggregateExpert control heads"
+                    )
+                for j, sub in enumerate(head.pairwise_experts):
+                    col_idx = np.asarray(head.column_indices[j], dtype=np.intp)
+                    if isinstance(sub, OvrMultiChromBinaryExpert):
+                        entries_bip.append(
+                            {
+                                "chrom_classifiers": dict(sub.classifiers),
+                                "chromosome_weights": dict(sub.chromosome_weights),
+                                "dmp_df": self.dmp_positions_df.iloc[col_idx].copy(),
+                            }
+                        )
+                    else:
+                        sub_df = self.dmp_positions_df.iloc[col_idx].copy()
+                        entries_bip.append({"ecdf": sub, "dmp_df": sub_df})
+            meta_extra = {
+                k: v
+                for k, v in (self.metadata or {}).items()
+                if k not in ("binary_models", "classifier")
+            }
+            names = list(self.class_names or [])
+            meta = {
+                "n_classes": len(names),
+                "class_names": names,
+                "classifier_type": ECDF_ONE_VS_REST_TYPE,
+                **meta_extra,
+            }
+            return {
+                "classifier_type": ECDF_ONE_VS_REST_TYPE,
+                "package_version": OV_R_PACKAGE_VERSION,
+                "class_names": names,
+                "binary_models": entries_bip,
+                "metadata": meta,
+            }
+
         entries: List[Dict[str, Any]] = []
         for k, clf in enumerate(self._ovr_binary_classifiers):
             idx = np.asarray(self._ovr_column_indices[k], dtype=np.intp)
@@ -376,7 +583,14 @@ class MethylClassifier:
         binary_probas: List[np.ndarray] = []
         for k, clf in enumerate(self._ovr_binary_classifiers):
             idx = self._ovr_column_indices[k]
-            if isinstance(clf, (OvrMultiChromBinaryExpert, OvrPairwiseControlAggregateExpert)):
+            if isinstance(
+                clf,
+                (
+                    OvrMultiChromBinaryExpert,
+                    OvrPairwiseControlAggregateExpert,
+                    OvrPairwiseColumnAggregateExpert,
+                ),
+            ):
                 use_cal = bool(getattr(self, "_calibrated", False))
                 pk = clf.predict_proba_binary(
                     methylation_data,
@@ -546,7 +760,14 @@ class MethylClassifier:
         # Set temperature on the actual classifier(s)
         if getattr(self, "_ovr_mode", False):
             for _c in self._ovr_binary_classifiers:
-                if isinstance(_c, (OvrMultiChromBinaryExpert, OvrPairwiseControlAggregateExpert)):
+                if isinstance(
+                    _c,
+                    (
+                        OvrMultiChromBinaryExpert,
+                        OvrPairwiseControlAggregateExpert,
+                        OvrPairwiseColumnAggregateExpert,
+                    ),
+                ):
                     _c.set_temperature(self.config.temperature)
                 elif hasattr(_c, "set_temperature"):
                     _c.set_temperature(self.config.temperature)

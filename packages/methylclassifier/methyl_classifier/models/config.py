@@ -34,6 +34,17 @@ class ClassifierConfig(BaseModel):
         default=False,
         description="When true with ovr_detection_dirs: first class is control; dirs are K-1 pairwise control-vs-disease folders; control OvR head aggregates P(control) across those pairwises.",
     )
+    ovr_bipartite_aggregate: bool = Field(
+        default=False,
+        description="When true with ovr_detection_dirs: multi-control × multi-disease bipartite. "
+        "Dirs must be M×N in row-major order (each control × each disease). class_names = M controls + N diseases. "
+        "Requires ovr_n_control_classes=M.",
+    )
+    ovr_n_control_classes: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="With ovr_bipartite_aggregate: number of control strata (M); disease count N = len(ovr_class_names) - M.",
+    )
     trimmed_percentile_low: float = Field(
         default=0.10,
         ge=0.0,
@@ -145,6 +156,16 @@ class ClassifierConfig(BaseModel):
                 "Use either ovr_binary_model_paths or ovr_detection_dirs, not both."
             )
         agg = self.ovr_pairwise_aggregate_control
+        bip = self.ovr_bipartite_aggregate
+        if agg and bip:
+            raise ValueError(
+                "Use only one of ovr_pairwise_aggregate_control and ovr_bipartite_aggregate"
+            )
+        M = int(self.ovr_n_control_classes or 0)
+        names_list = self.ovr_class_names or []
+        bip_ok = False
+        if bip and M >= 1 and names_list and len(ovr_dirs) == M * (len(names_list) - M):
+            bip_ok = True
         has_ovr = (
             len(ovr_pkls) >= 2
             or len(ovr_dirs) >= 2
@@ -154,6 +175,7 @@ class ClassifierConfig(BaseModel):
                 and self.ovr_class_names
                 and len(self.ovr_class_names) == len(ovr_dirs) + 1
             )
+            or bip_ok
         )
         has_path = bool(self.model_path or self.model_dir)
         if has_ovr and has_path:
@@ -164,8 +186,9 @@ class ClassifierConfig(BaseModel):
         if not has_ovr and not has_path:
             raise ValueError(
                 "Provide model_path, model_dir, ovr_binary_model_paths (>=2), "
-                "ovr_detection_dirs (>=2), or ovr_pairwise_aggregate_control with "
-                "ovr_detection_dirs and ovr_class_names of length len(dirs)+1."
+                "ovr_detection_dirs (>=2), ovr_pairwise_aggregate_control with "
+                "ovr_detection_dirs and ovr_class_names of length len(dirs)+1, or "
+                "ovr_bipartite_aggregate with ovr_n_control_classes and M×N detection dirs."
             )
         if has_ovr:
             names = self.ovr_class_names
@@ -174,6 +197,18 @@ class ClassifierConfig(BaseModel):
                 if not names or len(names) != k:
                     raise ValueError(
                         f"ovr_class_names must be a list of length {k} when using OvR auto-build"
+                    )
+            elif bip:
+                if M < 1:
+                    raise ValueError("ovr_bipartite_aggregate requires ovr_n_control_classes>=1")
+                elif not names or len(names) <= M:
+                    raise ValueError(
+                        "ovr_bipartite_aggregate requires ovr_class_names with M+N names (N>=1 disease)"
+                    )
+                elif len(ovr_dirs) != M * (len(names) - M):
+                    raise ValueError(
+                        "ovr_bipartite_aggregate requires len(ovr_detection_dirs) == M * N "
+                        f"(M={M}, N={len(names) - M}, dirs={len(ovr_dirs)})"
                     )
             elif agg:
                 if (

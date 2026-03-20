@@ -98,6 +98,10 @@ class PredictorConfig(BaseModel):
         default_factory=list,
         description="Ordered rows parallel to classification input: absolute_path, side, group_label.",
     )
+    cohort_hierarchy: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional tree metadata from project (disease families / stages); used for hierarchy summaries in reports.",
+    )
 
     @model_validator(mode="after")
     def ensure_absolute_test_paths(self) -> "PredictorConfig":

@@ -112,7 +112,7 @@ Create a JSON config with the following fields:
 | `path_remap` | Optional path remap dict (or reuse from base_project). |
 | `abort_on_step_failure` | If `true`, abort all iterations when a pipeline step fails; if `false`, skip the iteration and continue. |
 
-**Layout selection:** If `base_project` defines **`groups`** (length ≥ 2), the run uses the **multiclass** path (`infer_monte_carlo_layout`); `cohorts` length must equal `len(groups)`. Otherwise the **binary** path is used and the MC config must define exactly two cohorts (via `healthy_csv`/`disease_csv` or two `cohorts` entries).
+**Layout selection:** If `base_project` defines **`groups`** (length ≥ 2), the run uses the **multiclass** path (`infer_monte_carlo_layout`); `cohorts` length must equal `len(groups)`. If the project uses **nested disease `stages`** (and/or multiple control groups) so that **`get_resolved_groups()`** returns **K ≥ 3** leaves in a fixed order, the layout may be **`hierarchical_multiclass`**: each iteration patches **`controls.groups`** / **`diseases.groups`** with train/val CSVs per resolved leaf, keeps **stratified splits per cohort**, and runs the multiclass pipeline with **`per_cancer_group=true`**. `cohorts[].label` must match that resolved order. Otherwise the **binary** path is used when the template is control/disease only and the MC config defines exactly two cohorts (via `healthy_csv`/`disease_csv` or two `cohorts` entries).
 
 The base template for multiclass must train a single **multiclass-classifier.pkl** under the project `classifiers/` directory (same contract as MethylPredictor). **Do not** set `step_config.predictor.blind` for MC configs — startup will error.
 

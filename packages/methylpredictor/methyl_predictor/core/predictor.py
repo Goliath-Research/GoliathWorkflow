@@ -81,11 +81,16 @@ def _expand_nested_labeled_paths(config: PredictorConfig) -> None:
         for g in (config.controls.get("groups") or [])
         if isinstance(g, dict) and g.get("label")
     ]
-    dis_labels = [
-        str(g.get("label"))
-        for g in (config.diseases.get("groups") or [])
-        if isinstance(g, dict) and g.get("label")
-    ]
+    dis_labels: List[str] = []
+    for g in config.diseases.get("groups") or []:
+        if not isinstance(g, dict) or not g.get("label"):
+            continue
+        if g.get("stages"):
+            for st in g.get("stages") or []:
+                if isinstance(st, dict) and st.get("label"):
+                    dis_labels.append(f"{g['label']}_{st['label']}")
+        else:
+            dis_labels.append(str(g["label"]))
     c_paths, lin_c = _collect_paths_and_lineage("control", ctrl_labels, ctrl_map)
     d_paths, lin_d = _collect_paths_and_lineage("disease", dis_labels, dis_map)
     config.test_control_paths = c_paths
@@ -218,6 +223,44 @@ def _print_blind_summary(df: pd.DataFrame, n_classes: int, class_names: List[str
     print(f"   Mean entropy: {summary['mean_entropy']:.4f}")
 
 
+def _hierarchy_probability_summary(
+    df: pd.DataFrame,
+    n_classes: int,
+    class_names: List[str],
+    hierarchy: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Mean class probabilities plus pooled control / disease-family marginals when metadata allows."""
+    if not hierarchy or n_classes < 2:
+        return None
+    prob_cols = [f"prob_class{i}" for i in range(n_classes)]
+    if not all(c in df.columns for c in prob_cols):
+        return None
+    mat = df[prob_cols].values.astype(float)
+    mean_p = mat.mean(axis=0)
+    name_to_i = {n: i for i, n in enumerate(class_names)}
+    out: Dict[str, Any] = {
+        "mean_probability_by_class": {class_names[i]: float(mean_p[i]) for i in range(n_classes)}
+    }
+    ctrl = hierarchy.get("control_strata") or []
+    ci = [name_to_i[c] for c in ctrl if c in name_to_i]
+    if ci:
+        out["mean_probability_controls_pooled"] = float(mean_p[ci].sum())
+    fams = hierarchy.get("disease_families")
+    if isinstance(fams, list):
+        fam_m: Dict[str, float] = {}
+        for fam in fams:
+            if not isinstance(fam, dict):
+                continue
+            flabel = str(fam.get("label", ""))
+            leaves = fam.get("leaves") or []
+            idxs = [name_to_i[l] for l in leaves if l in name_to_i]
+            if idxs and flabel:
+                fam_m[flabel] = float(mean_p[idxs].sum())
+        if fam_m:
+            out["mean_probability_by_disease_family"] = fam_m
+    return out
+
+
 def _build_prediction_report(
     config: PredictorConfig,
     df: pd.DataFrame,
@@ -242,6 +285,11 @@ def _build_prediction_report(
             "n_classes": n_classes,
             "blind_summary": _compute_blind_summary(df, n_classes, class_names),
         }
+        hs = _hierarchy_probability_summary(
+            df, n_classes, class_names, config.cohort_hierarchy
+        )
+        if hs:
+            report["hierarchy_summary"] = hs
         rb = copy.deepcopy(config.report_blind or {"label": "", "groups": []})
         report["blind"] = rb
         groups = rb.get("groups") or []
@@ -268,6 +316,9 @@ def _build_prediction_report(
         "class_names": class_names,
         "n_classes": n_classes,
     }
+    hs = _hierarchy_probability_summary(df, n_classes, class_names, config.cohort_hierarchy)
+    if hs:
+        report["hierarchy_summary"] = hs
 
     if config.report_controls is not None and config.report_diseases is not None:
         report["controls"] = copy.deepcopy(config.report_controls)
