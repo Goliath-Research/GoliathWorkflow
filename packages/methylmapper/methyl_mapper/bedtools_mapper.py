@@ -1317,6 +1317,10 @@ class BedtoolsMapper:
         combined = pd.concat(all_dmps, ignore_index=True)
         if 'chromosome' not in combined.columns:
             raise ValueError("DMP DataFrames must have a 'chromosome' column to process by chromosome")
+        if "position" in combined.columns:
+            combined["position"] = (
+                pd.to_numeric(combined["position"], errors="coerce").fillna(0).astype(np.uint32)
+            )
         combined['chromosome'] = combined['chromosome'].astype(str).str.strip()
         chromosomes = sorted(combined['chromosome'].unique(), key=lambda c: (c.replace('chr', '').isdigit(), c.replace('chr', '') or '0', c))
         logger.info(f"Processing {len(chromosomes)} chromosome(s) with all contexts combined: {chromosomes}")

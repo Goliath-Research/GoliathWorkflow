@@ -65,7 +65,7 @@ This ensures that inference uses the same contexts as training.
 4. **Load samples**: For each sample path, DataLoader loads HDF5 per chromosome and context (according to `contexts_to_load`), merges contexts when multiple, and extracts methylation at the DMP positions required by each chromosome’s classifier.
 5. **Predict**:
    - Single-file / single-chromosome models call the stored classifier directly.
-   - Multi-chromosome models build one feature matrix per chromosome, call each per-chromosome classifier, then combine probabilities with `_combine_chromosome_probabilities()`.
+   - Multi-chromosome models build one feature matrix per chromosome, run `predict_proba` once per chromosome (`_compute_per_chromosome_probas`, tqdm when >1 chromosome), then combine with `_combine_chromosome_probabilities(..., cached_per_chrom_probas=...)` so weight-fitting does not re-run ECDF. Sample HDF5 data is loaded once in `load_samples_from_list`; only inference was previously duplicated.
    - Direct `MethylClassifier.predict_proba()` in multi-chromosome mode now expects a concatenated feature matrix in sorted chromosome order and slices it back into chromosome-specific blocks internally.
 6. **Output**: Predictions and probabilities written to CSV (and optional validation report if centroid validation paths are provided). For multi-chromosome runs, `dmps_used` / `dmps_total` reflect the full concatenated DMP set across all chromosomes.
 

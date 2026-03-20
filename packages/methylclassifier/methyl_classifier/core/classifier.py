@@ -487,8 +487,9 @@ class MethylClassifier:
                         
                         # Log context distribution if available (for debugging)
                         if 'context' in dmpDF.columns:
-                            context_counts = dmpDF['context'].value_counts()
-                            context_info = f" (contexts: {dict(context_counts)})"
+                            context_counts = dmpDF["context"].value_counts()
+                            ctx_map = {str(k): int(v) for k, v in context_counts.items()}
+                            context_info = f" (contexts: {ctx_map})"
                 
                 # Fallback: get from classifier feature_info
                 if positions is None or len(positions) == 0:
@@ -859,11 +860,74 @@ class MethylClassifier:
             else:
                 return self.classifier.predict_proba(methylation_data, availability_mask, debug)
 
+    def _compute_per_chromosome_probas(
+        self,
+        chrom_features: Dict[str, np.ndarray],
+        chrom_masks: Optional[Dict[str, Optional[np.ndarray]]] = None,
+        *,
+        progress_bar: bool = False,
+    ) -> Dict[str, np.ndarray]:
+        """
+        Run predict_proba once per chromosome (batched over all samples).
+
+        Call this a single time per classification run, then pass the result to
+        `_combine_chromosome_probabilities(..., cached_per_chrom_probas=...)` to avoid
+        duplicate ECDF work when fitting chromosome weights and combining.
+        """
+        try:
+            from tqdm import tqdm as _tqdm
+        except ImportError:
+
+            def _tqdm(x, **kwargs):
+                return x
+
+        chrom_order = sorted(self.classifiers.keys())
+        n_samples = 0
+        for chrom in chrom_order:
+            arr = chrom_features.get(chrom)
+            if arr is not None:
+                n_samples = int(arr.shape[0])
+                break
+
+        out: Dict[str, np.ndarray] = {}
+        iterator = chrom_order
+        if progress_bar and len(chrom_order) > 1:
+            iterator = _tqdm(
+                chrom_order,
+                desc="Chromosome classifiers",
+                unit="chr",
+                total=len(chrom_order),
+            )
+
+        for chrom in iterator:
+            chrom_classifier = self.classifiers[chrom]
+            feature_info = chrom_classifier.get_feature_info()
+            n_chrom_dmps = int(feature_info["n_features"])
+            chrom_data = chrom_features.get(chrom)
+            chrom_mask = chrom_masks.get(chrom) if chrom_masks is not None else None
+
+            if chrom_data is None:
+                chrom_data = np.zeros((n_samples, n_chrom_dmps), dtype=np.float64)
+                chrom_mask = np.zeros((n_samples, n_chrom_dmps), dtype=bool)
+
+            if chrom_data.shape[1] != n_chrom_dmps:
+                raise ValueError(
+                    f"Chromosome {chrom} feature width mismatch: got {chrom_data.shape[1]}, expected {n_chrom_dmps}"
+                )
+
+            if hasattr(chrom_classifier, "predict_proba_calibrated") and getattr(self, "_calibrated", False):
+                out[chrom] = chrom_classifier.predict_proba_calibrated(chrom_data, chrom_mask)
+            else:
+                out[chrom] = chrom_classifier.predict_proba(chrom_data, chrom_mask, debug=False)
+
+        return out
+
     def _combine_chromosome_probabilities(
         self,
         chrom_features: Dict[str, np.ndarray],
         chrom_masks: Optional[Dict[str, Optional[np.ndarray]]] = None,
         debug: bool = False,
+        cached_per_chrom_probas: Optional[Dict[str, np.ndarray]] = None,
     ) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
         """
         Combine per-chromosome probabilities using this classifier's chromosome weights.
@@ -909,7 +973,14 @@ class MethylClassifier:
                     f"Chromosome {chrom} feature width mismatch: got {chrom_data.shape[1]}, expected {n_chrom_dmps}"
                 )
 
-            if hasattr(chrom_classifier, "predict_proba_calibrated") and getattr(self, "_calibrated", False):
+            if cached_per_chrom_probas is not None:
+                if chrom not in cached_per_chrom_probas:
+                    raise KeyError(
+                        f"cached_per_chrom_probas missing chromosome {chrom!r}; "
+                        "expected keys from _compute_per_chromosome_probas"
+                    )
+                chrom_probas = cached_per_chrom_probas[chrom]
+            elif hasattr(chrom_classifier, "predict_proba_calibrated") and getattr(self, "_calibrated", False):
                 chrom_probas = chrom_classifier.predict_proba_calibrated(chrom_data, chrom_mask)
             else:
                 chrom_probas = chrom_classifier.predict_proba(chrom_data, chrom_mask, debug=False)

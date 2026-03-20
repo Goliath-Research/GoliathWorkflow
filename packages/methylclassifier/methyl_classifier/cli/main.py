@@ -489,7 +489,7 @@ def _try_centroid_pair_single_chrom_fast_path(
             col_map[key] = j
 
         n_dmps = pos_arr.shape[0]
-        col_for_row = np.empty(n_dmps, dtype=np.intp)
+        col_for_row = np.empty(n_dmps, dtype=np.uint32)
         for i in range(n_dmps):
             key = (int(pos_arr[i]), str(ctx_arr[i]))
             if key not in col_map:
@@ -831,6 +831,15 @@ def _classify_multi_chromosome_samples(
         chrom_features[chrom] = np.array(chrom_features[chrom])
         chrom_masks[chrom] = np.array(chrom_masks[chrom])
     
+    # One predict_proba pass per chromosome (all samples batched); reuse for weight fitting and combine.
+    print(
+        f"\n🤖 Running {len(classifier_chroms)} chromosome classifier(s) on {len(loaded_samples)} loaded samples...",
+        flush=True,
+    )
+    cached_chrom_probas = classifier._compute_per_chromosome_probas(
+        chrom_features, chrom_masks, progress_bar=len(classifier_chroms) > 1
+    )
+
     # If weight_method is a fitted method and we have validation labels, fit weights from per-chromosome probas
     weight_method = classifier.config.weight_method
     fitted_methods = ("linear_fitted", "logistic_fitted", "elasticnet_fitted")
@@ -843,10 +852,7 @@ def _classify_multi_chromosome_samples(
         n_samples = len(loaded_samples)
         chrom_proba_matrix = np.zeros((n_samples, len(classifier_chroms)), dtype=np.float64)
         for i, chrom in enumerate(classifier_chroms):
-            chrom_classifier = classifier.classifiers[chrom]
-            chrom_probas = chrom_classifier.predict_proba(
-                chrom_features[chrom], chrom_masks[chrom], debug=False
-            )
+            chrom_probas = cached_chrom_probas[chrom]
             # P(class1) for binary; column index 1
             chrom_proba_matrix[:, i] = chrom_probas[:, 1] if chrom_probas.shape[1] > 1 else chrom_probas[:, 0]
         reg = classifier.config.weight_fit_regularization or "none"
@@ -861,14 +867,13 @@ def _classify_multi_chromosome_samples(
             alpha=alpha,
             l1_ratio=l1_ratio,
         )
-    
-    print(f"\n🤖 Classifying using {len(classifier_chroms)} chromosome classifier(s)...")
-    
+
     n_samples = len(sample_names)
     probabilities, per_chrom_probas = classifier._combine_chromosome_probabilities(
         chrom_features,
         chrom_masks,
         debug=debug,
+        cached_per_chrom_probas=cached_chrom_probas,
     )
     predictions = np.argmax(probabilities, axis=1)
 
@@ -1194,9 +1199,9 @@ def classify_samples_batch(classifier: MethylClassifier,
         predictions: Array of class predictions (0 or 1)
         probabilities: Array of posterior probabilities for each class
     """
-    # Get predictions and probabilities
-    predictions = classifier.predict(methylation_data, availability_mask, debug)
+    # Single predict_proba pass (predict() would call predict_proba again for multi-chromosome).
     probabilities = classifier.predict_proba(methylation_data, availability_mask, debug)
+    predictions = np.argmax(np.asarray(probabilities), axis=1)
 
     return predictions, probabilities
 
