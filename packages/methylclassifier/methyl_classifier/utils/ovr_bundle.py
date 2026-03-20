@@ -49,6 +49,30 @@ def binary_entry_from_detector_pickle(
     return entry
 
 
+def binary_entry_from_sole_classifier_in_dir(
+    directory: Union[str, Path],
+) -> Dict[str, Any]:
+    """
+    Load the only ``classifier*.pkl`` in a directory (typical MethylDetector output).
+
+    If zero or multiple matches exist, raises with a message to use explicit
+    ``ovr_binary_model_paths`` or reduce to one pickle per class directory.
+    """
+    d = Path(directory)
+    if not d.is_dir():
+        raise ValueError(f"Not a directory: {d}")
+    pkls = sorted(d.glob("classifier*.pkl"))
+    if len(pkls) == 0:
+        raise ValueError(f"No classifier*.pkl under {d}")
+    if len(pkls) > 1:
+        raise ValueError(
+            f"{d} contains {len(pkls)} classifier*.pkl files; OvR needs exactly one "
+            "per class directory (e.g. single-chrom or pre-merged bundle), or set "
+            "ovr_binary_model_paths to an explicit list of K detector PKLs."
+        )
+    return binary_entry_from_detector_pickle(pkls[0])
+
+
 def build_ecdf_ovr_package(
     binary_entries: List[Dict[str, Any]],
     class_names: List[str],

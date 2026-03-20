@@ -1229,9 +1229,13 @@ def classify_samples_batch(classifier: MethylClassifier,
 
 def _run_one_classification(config: ClassificationConfig, label: Optional[str] = None) -> None:
     """Run classification once with the given config (used for single run and per-cancer-group loop)."""
+    ovr_names = config.ovr_class_names or config.multiclass_class_names
     classifier_config = ClassifierConfig(
         model_path=config.model_path,
         model_dir=config.model_dir,
+        ovr_binary_model_paths=config.ovr_binary_model_paths,
+        ovr_detection_dirs=config.ovr_detection_dirs,
+        ovr_class_names=ovr_names,
         temperature=config.temperature,
         enable_platt_calibration=config.enable_platt_calibration,
         trimmed_percentile_low=config.trimmed_percentile_low,

@@ -1,5 +1,5 @@
 from pydantic import Field, field_validator, model_validator
-from typing import Optional, Dict, Literal
+from typing import Optional, Dict, Literal, List
 from pathlib import Path
 from pydantic import BaseModel
 
@@ -17,6 +17,18 @@ class ClassifierConfig(BaseModel):
     model_dir: Optional[str] = Field(
         default=None,
         description="Path to directory containing classifier-{chrom}.pkl files (alternative to model_path)"
+    )
+    ovr_binary_model_paths: Optional[List[str]] = Field(
+        default=None,
+        description="K>=2 MethylDetector pickle paths (one per class, OvR order). Builds ecdf_one_vs_rest in memory; no model_path/model_dir needed when set.",
+    )
+    ovr_detection_dirs: Optional[List[str]] = Field(
+        default=None,
+        description="K>=2 directories, each containing exactly one classifier*.pkl for that class (OvR order). Alternative to ovr_binary_model_paths.",
+    )
+    ovr_class_names: Optional[List[str]] = Field(
+        default=None,
+        description="Class names matching OvR order (length K). Required when using ovr_binary_model_paths or ovr_detection_dirs unless passed via ClassificationConfig.multiclass_class_names.",
     )
     trimmed_percentile_low: float = Field(
         default=0.10,
@@ -118,6 +130,34 @@ class ClassifierConfig(BaseModel):
         # Check that the sum doesn't exceed 1.0 (would trim everything)
         if self.trimmed_percentile_low + self.trimmed_percentile_high >= 1.0:
             raise ValueError(f"Sum of trimmed_percentile_low ({self.trimmed_percentile_low}) and trimmed_percentile_high ({self.trimmed_percentile_high}) must be less than 1.0")
+        return self
+
+    @model_validator(mode="after")
+    def validate_model_source(self) -> "ClassifierConfig":
+        ovr_pkls = self.ovr_binary_model_paths or []
+        ovr_dirs = self.ovr_detection_dirs or []
+        if len(ovr_pkls) >= 2 and len(ovr_dirs) >= 2:
+            raise ValueError(
+                "Use either ovr_binary_model_paths or ovr_detection_dirs, not both."
+            )
+        has_ovr = len(ovr_pkls) >= 2 or len(ovr_dirs) >= 2
+        has_path = bool(self.model_path or self.model_dir)
+        if has_ovr and has_path:
+            raise ValueError(
+                "Use either (model_path or model_dir) or OvR sources "
+                "(ovr_binary_model_paths / ovr_detection_dirs), not both."
+            )
+        if not has_ovr and not has_path:
+            raise ValueError(
+                "Provide model_path, model_dir, ovr_binary_model_paths (>=2), or ovr_detection_dirs (>=2)."
+            )
+        if has_ovr:
+            k = len(ovr_pkls) if len(ovr_pkls) >= 2 else len(ovr_dirs)
+            names = self.ovr_class_names
+            if not names or len(names) != k:
+                raise ValueError(
+                    f"ovr_class_names must be a list of length {k} when using OvR auto-build"
+                )
         return self
     
     class Config:

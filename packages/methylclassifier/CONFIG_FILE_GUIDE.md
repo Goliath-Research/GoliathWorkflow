@@ -90,6 +90,11 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `centroid_path_remap` | object or null | null | Prefix replacement: `{"old_prefix": "new_prefix", ...}`. Longest matching key is replaced so relative paths are preserved. Use when metadata has multiple old bases (e.g. healthy vs cancer). Overrides `centroid_sample_root`. |
 | `centroid1_sample_paths` | array or null | null | Explicit list of sample dirs for centroid1 (class 0). Overrides `centroid1_dir` if set. Use with `centroid2_sample_paths`. |
 | `centroid2_sample_paths` | array or null | null | Explicit list of sample dirs for centroid2 (class 1). Overrides `centroid2_dir` if set. Use with `centroid1_sample_paths`. |
+| `centroid_dirs` | array or null | null | K centroid output dirs (multiclass). Use with `multiclass_class_names` (length K). |
+| `multiclass_class_names` | array or null | null | Names for each class (same order as `centroid_dirs`). |
+| `ovr_binary_model_paths` | array or null | null | K≥2 MethylDetector PKL paths (OvR order). **Do not** set `model_path`/`model_dir` when using this; MethylClassifier assembles `ecdf_one_vs_rest` in memory. |
+| `ovr_detection_dirs` | array or null | null | K≥2 dirs, each with exactly one `classifier*.pkl`. Alternative to `ovr_binary_model_paths`. |
+| `ovr_class_names` | array or null | null | Optional; defaults to `multiclass_class_names` when multiclass. Length must be K. |
 | `debug` | boolean | false | Enable debug output |
 | `no_filter` | boolean | false | Process all .h5 without chromosome/context filtering |
 | `log_level` | string | `"INFO"` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |

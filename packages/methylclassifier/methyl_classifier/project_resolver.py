@@ -216,4 +216,9 @@ def resolve_classifier_config(
             for k, v in overrides.items():
                 base[k] = v
 
+    # OvR assembly from detector outputs replaces a single shared detection_dir model.
+    if base.get("ovr_binary_model_paths") or base.get("ovr_detection_dirs"):
+        base["model_dir"] = None
+        base["model_path"] = None
+
     return ClassificationConfig(**base)
