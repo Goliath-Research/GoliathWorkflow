@@ -14,6 +14,116 @@ from .models.config_schema import ClassificationConfig
 CLASSIFIER_OUTPUT_FILENAME = "classification_results.csv"
 
 
+def merge_project_classifier_step(
+    project_path: Union[str, Path],
+    step_override_path: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Merged ``step_config.classifier`` dict, including optional JSON overrides."""
+    project = load_project(project_path)
+    step_cfg = dict(project.get_step_config("classifier") or {})
+    if step_override_path is not None:
+        override_path = Path(step_override_path)
+        if override_path.exists():
+            with open(override_path) as f:
+                step_cfg.update(json.load(f))
+    return step_cfg
+
+
+def classifier_step_dict_has_ovr_sources(step_cfg: Dict[str, Any]) -> bool:
+    """True if merged classifier step defines K>=2 OvR detector sources."""
+    if step_cfg.get("ovr_binary_pickles_from_comparisons"):
+        return True
+    p = step_cfg.get("ovr_binary_model_paths") or []
+    d = step_cfg.get("ovr_detection_dirs") or []
+    return len(p) >= 2 or len(d) >= 2
+
+
+def expand_ovr_paths_from_comparisons(
+    project: ProjectConfig,
+    *,
+    unified_basename: str,
+    control_vs_rest_pkl: Optional[str] = None,
+) -> Tuple[List[str], List[str]]:
+    """
+    Build OvR pickle paths from pipeline layout: ``controls`` / ``diseases`` / ``comparisons``.
+
+    Requires ``uses_control_disease()`` and **exactly one** control group in ``controls.groups``.
+    Resolved group order is control label(s) then disease labels (same as ``get_resolved_groups()``).
+    For each disease label (after the first resolved entry), there must be a comparison with
+    that ``disease_group``; the path is
+    ``<project_root>/detections/<control_group>/<disease_group>/<unified_basename>``.
+
+    The first path (control class, one-vs-rest) defaults to
+    ``<project_root>/detections/one_vs_rest/<control_label>/<unified_basename>`` unless
+    ``control_vs_rest_pkl`` is set.
+    """
+    if not project.uses_control_disease():
+        raise ValueError(
+            "ovr_binary_pickles_from_comparisons requires a project with controls, diseases, and comparisons"
+        )
+    if project.control is None or len(project.control.groups) != 1:
+        raise ValueError(
+            "ovr_binary_pickles_from_comparisons currently supports exactly one control group"
+        )
+    resolved = project.get_resolved_groups()
+    if len(resolved) < 2:
+        raise ValueError("Project must have at least one control and one disease group")
+    comparisons = project.get_comparisons()
+    comp_by_disease = {spec.disease_group: spec for spec in comparisons}
+    control_label = resolved[0][0]
+    names = [label for label, _ in resolved]
+
+    if control_vs_rest_pkl:
+        first_path = str(Path(control_vs_rest_pkl).expanduser())
+    else:
+        first_path = str(
+            Path(project.get_project_root())
+            / "detections"
+            / "one_vs_rest"
+            / control_label
+            / unified_basename
+        )
+
+    out_paths = [first_path]
+    for label, _ in resolved[1:]:
+        if label not in comp_by_disease:
+            raise ValueError(
+                f"No comparison with disease_group={label!r} for OvR path; "
+                f"check comparisons vs disease groups (have: {sorted(comp_by_disease.keys())})"
+            )
+        spec = comp_by_disease[label]
+        det_dir = Path(
+            project.get_detection_output_dir(spec.control_group, spec.disease_group)
+        )
+        out_paths.append(str(det_dir / unified_basename))
+
+    if len(names) != len(out_paths):
+        raise RuntimeError("internal: names and paths length mismatch")
+    return out_paths, names
+
+
+def _consume_ovr_comparison_options_and_maybe_expand(
+    project: ProjectConfig, base: Dict[str, Any]
+) -> None:
+    """
+    Pop resolver-only classifier keys and, if requested, set ovr_binary_model_paths (+ names)
+    from comparisons. Safe to call when base was built from resolve_classifier_config merge.
+    """
+    flag = bool(base.pop("ovr_binary_pickles_from_comparisons", False))
+    basename = base.pop("ovr_unified_classifier_basename", "classifier-1-CG,CHG,CHH.pkl")
+    ctrl_pkl = base.pop("ovr_control_vs_rest_pkl", None)
+    if not flag:
+        return
+    paths, default_names = expand_ovr_paths_from_comparisons(
+        project,
+        unified_basename=str(basename),
+        control_vs_rest_pkl=ctrl_pkl,
+    )
+    base["ovr_binary_model_paths"] = paths
+    if not base.get("ovr_class_names"):
+        base["ovr_class_names"] = default_names
+
+
 def _disease_subdir(project: ProjectConfig) -> str:
     """Middle path segment for step dirs: <step>/<disease_label>/<disease_group>. Uses project.disease.label when set."""
     if project.disease is not None:
@@ -218,6 +328,8 @@ def resolve_classifier_config(
                 overrides = json.load(f)
             for k, v in overrides.items():
                 base[k] = v
+
+    _consume_ovr_comparison_options_and_maybe_expand(project, base)
 
     # OvR assembly from detector outputs replaces a single shared detection_dir model.
     if base.get("ovr_binary_model_paths") or base.get("ovr_detection_dirs"):

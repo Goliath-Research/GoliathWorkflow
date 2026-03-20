@@ -16,7 +16,12 @@ from ..utils.data_loader import DataLoader
 from ..utils.utils import extract_chrom_context_from_classifier, setup_logging
 from ..models.config_schema import ClassificationConfig
 from ..models.config import ClassifierConfig
-from ..project_resolver import resolve_classifier_config, resolve_classifier_config_per_cancer_group
+from ..project_resolver import (
+    classifier_step_dict_has_ovr_sources,
+    merge_project_classifier_step,
+    resolve_classifier_config,
+    resolve_classifier_config_per_cancer_group,
+)
 
 try:
     from methyl_utils import load_project
@@ -1525,7 +1530,9 @@ Config fields (in JSON):
         metavar="PATH",
         help=(
             "Export multiclass OvR portable PKL only (no classification). "
-            "Requires --config or --project with ovr_binary_model_paths or ovr_detection_dirs. "
+            "Requires ovr_binary_model_paths or ovr_detection_dirs in --config or in "
+            "step_config.classifier (--project). Control/disease projects: OvR must be "
+            "defined at project scope in that step (not per-comparison binary only). "
             "Optional PATH; if omitted, uses save_classifier_path or <cwd>/<project_name>-classifier.pkl."
         ),
     )
@@ -1545,10 +1552,17 @@ Config fields (in JSON):
                 if project.uses_control_disease():
                     use_per_comparison = True
             if use_per_comparison:
-                raise ValueError(
-                    "--export-ovr-pkl does not support per-comparison mode (control/disease layout or "
-                    "--per-cancer-group). Use --config, or a single merged OvR project step_config."
+                merged_step = merge_project_classifier_step(
+                    args.project, args.step_override
                 )
+                if not classifier_step_dict_has_ovr_sources(merged_step):
+                    raise ValueError(
+                        "--export-ovr-pkl with a control/disease (or --per-cancer-group) project "
+                        "needs project-wide OvR sources: set ovr_binary_model_paths or "
+                        "ovr_detection_dirs (K>=2) in step_config.classifier or --step-override. "
+                        "Pairwise per-comparison models are not a single multiclass PKL."
+                    )
+                # Single bundle from resolve_classifier_config (multiclass paths + merged step).
             config = resolve_classifier_config(args.project, args.step_override)
             _apply_cli_path_overrides(config, args)
         elif args.config is not None:

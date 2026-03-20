@@ -164,7 +164,7 @@ methyl_classifier --config ovr_only.json --export-ovr-pkl /custom/out.pkl
 
 - **Optional path**: If omitted, uses **save_classifier_path** from the resolved config, then **`<cwd>/<project_name>-classifier.pkl`** if **project_name** is set.
 - **Requires** **ovr_binary_model_paths** or **ovr_detection_dirs** (K≥2) in the config / `step_config.classifier`.
-- **Not supported** with per-comparison control/disease layout (`--per-cancer-group`); use a single multiclass OvR project or a standalone JSON config.
+- **Control/disease projects** are supported when **`step_config.classifier`** (or **`--step-override`**) defines **project-wide** `ovr_binary_model_paths` or `ovr_detection_dirs` (K≥2), or sets **`ovr_binary_pickles_from_comparisons`: true** so paths are built from **`comparisons`** and `{project_root}/detections/<control_group>/<disease_group>/` (see `CONFIG_FILE_GUIDE.md`). That uses the same flat `resolve_classifier_config` as multiclass classification, not the per-comparison pairwise loop.
 
 ### Multiclass OvR (K≥2) without a separate bundle script
 

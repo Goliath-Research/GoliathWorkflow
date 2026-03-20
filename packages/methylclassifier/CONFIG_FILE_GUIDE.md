@@ -99,10 +99,22 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `no_filter` | boolean | false | Process all .h5 without chromosome/context filtering |
 | `log_level` | string | `"INFO"` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 
+**Project JSON (`step_config.classifier`) — OvR paths from `comparisons`:**  
+When the project defines `controls`, `diseases`, and `comparisons` (control/disease layout), you can avoid hard-coding absolute detector paths:
+
+- **`ovr_binary_pickles_from_comparisons`**: `true` — resolver builds `ovr_binary_model_paths` in **`get_resolved_groups()`** order (control group label, then each disease label). For each disease label, the path is  
+  `<project_root>/detections/<control_group>/<disease_group>/<ovr_unified_classifier_basename>`  
+  using the matching **`comparisons`** entry’s `control_group` / `disease_group`.  
+  Requires **exactly one** control group in `controls.groups`.
+- **`ovr_unified_classifier_basename`**: filename in each detection dir (default `classifier-1-CG,CHG,CHH.pkl`).
+- **`ovr_control_vs_rest_pkl`**: optional explicit PKL for the first (control) OvR class; if omitted, defaults to  
+  `<project_root>/detections/one_vs_rest/<control_group_label>/<basename>`  
+  (you must train or place that artifact separately from pairwise comparisons).
+
 **Export OvR PKL only (no classification):** with `ovr_binary_model_paths` or `ovr_detection_dirs` set, you can write the portable multiclass PKL without `input_path` using:
 
 `methyl_classifier --config your.json --export-ovr-pkl`  
-Optional path: `--export-ovr-pkl /path/out.pkl`; otherwise uses `save_classifier_path` or `--project` defaults. Not available for per-comparison control/disease projects. See `docs/USAGE.md`.
+Optional path: `--export-ovr-pkl /path/out.pkl`; otherwise uses `save_classifier_path` or `--project` defaults. For **control/disease** pipeline projects, put **project-wide** `ovr_binary_model_paths` / `ovr_detection_dirs` in `step_config.classifier` (or `--step-override`); pairwise-only configs cannot export one multiclass PKL. See `docs/USAGE.md`.
 
 ### Centroid validation (sanity check)
 

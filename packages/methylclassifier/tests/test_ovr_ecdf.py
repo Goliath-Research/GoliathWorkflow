@@ -184,3 +184,46 @@ def test_export_ovr_pkl_helpers_match_cli_bundle(tmp_path, monkeypatch):
     assert dumped.get("classifier_type") == "ecdf_one_vs_rest"
     clf2 = MethylClassifier(ClassifierConfig(model_path=str(tmp_path / "from_config.pkl")))
     assert clf2._ovr_mode and clf2.n_classes == 2
+
+
+def test_classifier_step_dict_has_ovr_sources():
+    from methyl_classifier.project_resolver import classifier_step_dict_has_ovr_sources
+
+    assert not classifier_step_dict_has_ovr_sources({})
+    assert not classifier_step_dict_has_ovr_sources({"ovr_binary_model_paths": ["only_one"]})
+    assert classifier_step_dict_has_ovr_sources({"ovr_binary_model_paths": ["a", "b"]})
+    assert classifier_step_dict_has_ovr_sources(
+        {"ovr_detection_dirs": ["/x", "/y"]}
+    )
+    assert classifier_step_dict_has_ovr_sources(
+        {"ovr_binary_pickles_from_comparisons": True}
+    )
+
+
+def test_expand_ovr_paths_from_healthy_pca_project_comparisons():
+    """Paths follow detections/<control>/<disease>/basename from project comparisons."""
+    from pathlib import Path
+
+    from methyl_utils import load_project
+
+    from methyl_classifier.project_resolver import (
+        expand_ovr_paths_from_comparisons,
+        resolve_classifier_config,
+    )
+
+    repo = Path(__file__).resolve().parents[3]
+    proj_path = repo / "configs" / "project_Healthy_vs_PCa1-4.json"
+    if not proj_path.exists():
+        pytest.skip("repo configs/project_Healthy_vs_PCa1-4.json not present")
+    project = load_project(proj_path)
+    bn = "classifier-1-CG,CHG,CHH.pkl"
+    paths, names = expand_ovr_paths_from_comparisons(project, unified_basename=bn)
+    assert names == ["all", "pca1", "pca2", "pca3", "pca4"]
+    root = project.get_project_root().replace("\\", "/")
+    assert paths[0] == f"{root}/detections/one_vs_rest/all/{bn}"
+    for dis in ("pca1", "pca2", "pca3", "pca4"):
+        assert f"/detections/all/{dis}/{bn}" in paths[names.index(dis)].replace("\\", "/")
+
+    cfg = resolve_classifier_config(proj_path)
+    assert cfg.ovr_binary_model_paths == paths
+    assert cfg.ovr_class_names == names
