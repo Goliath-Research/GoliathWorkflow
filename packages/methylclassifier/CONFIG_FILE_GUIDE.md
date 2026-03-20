@@ -102,11 +102,10 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 **Project JSON (`step_config.classifier`) — OvR paths from `comparisons`:**  
 When the project defines `controls`, `diseases`, and `comparisons` (control/disease layout), you can avoid hard-coding absolute detector paths:
 
-- **`ovr_binary_pickles_from_comparisons`**: `true` — resolver builds **`ovr_detection_dirs`** in **`get_resolved_groups()`** order (control label, then each disease label). Each entry is the **directory**  
-  `<project_root>/detections/<control_group>/<disease_group>/`  
-  (matching **`comparisons`**). MethylClassifier loads **all** `classifier*.pkl` files in each directory and builds one multi-chromosome OvR expert per class (same idea as **`model_dir`**).  
+- **`ovr_binary_pickles_from_comparisons`**: `true` — resolver sets **`ovr_pairwise_aggregate_control`: true** (default path) and **`ovr_detection_dirs`** to **one folder per disease** in **`get_resolved_groups()`** order:  
+  `<project_root>/detections/<control_group>/<disease_group>/` for each comparison (e.g. `all/pca1`, `all/pca2`, …). Class order remains **[control, disease₁, …]**. There are **K−1** directories for **K** names: each pairwise control-vs-disease model is used **once** as the OvR head for that disease; the **control** OvR head **aggregates** P(control) across those pairwises (geometric mean) so it is not duplicated as the same pickle as the first disease.  
   Requires **exactly one** control group in `controls.groups`.  
-  **`ovr_unified_classifier_basename`** (default **`classifier-1-CG,CHG,CHH.pkl`**) checks that a detector artifact exists: under the **first comparison** folder (e.g. `detections/all/pca1/<basename>`) for the control OvR slot, and similarly for other classes. If **`detections/one_vs_rest/<control>/<basename>`** exists as a file, its **parent directory** is used for the control slot instead (optional layout).
+  **`ovr_unified_classifier_basename`** checks that `<basename>` exists in each chosen detection folder. If **`detections/one_vs_rest/<control>/<basename>`** exists as a file, **`ovr_pairwise_aggregate_control`** is **false** and that directory plus all per-disease dirs are listed (**K** paths).
 - **`ovr_control_vs_rest_pkl`**: optional path to a **file** or **directory** for the first (control) OvR class (overrides the default above). A file uses its **parent directory** as the control source.
 - **`ovr_bundle_filename`**: optional; only if you want a custom export name. Default: **`classifier_<control_group_label>_<project_name>.pkl`** under **`<project_root>/classifiers/<control_group_label>/`** (e.g. `classifiers/all/classifier_all_Healthy_vs_PCa1-4.pkl`). Per-comparison outputs stay under `classifiers/all/pca1/`, etc.
 

@@ -125,6 +125,101 @@ class OvrMultiChromBinaryExpert:
         return weighted / s
 
 
+class OvrPairwiseControlAggregateExpert:
+    """
+    OvR head for the **control** class when only pairwise control-vs-disease_i detectors exist.
+
+    Each pairwise model outputs ``(n, 2)`` with column 0 = P(control / centroid1) and column 1 =
+    P(that disease), matching MethylDetector's binary packages. This head combines those into a
+    single ``(n, 2)`` of ``[P(\\neg control), P(control)]`` via the **geometric mean** of the
+    per-pairwise P(control), then row-normalizes. Disease OvR heads use each pairwise model once
+    (no duplicate path for control vs first disease).
+    """
+
+    def __init__(
+        self,
+        disease_experts: List[Any],
+        disease_column_indices: List[np.ndarray],
+    ) -> None:
+        self.disease_experts = list(disease_experts)
+        self.disease_column_indices = [
+            np.asarray(x, dtype=np.intp) for x in disease_column_indices
+        ]
+
+    def set_temperature(self, temperature: float) -> None:
+        for ex in self.disease_experts:
+            if isinstance(ex, OvrMultiChromBinaryExpert):
+                ex.set_temperature(temperature)
+            elif hasattr(ex, "set_temperature"):
+                ex.set_temperature(temperature)
+
+    def _pairwise_p_control_column0(
+        self,
+        expert: Any,
+        methylation_data: np.ndarray,
+        availability_mask: Optional[np.ndarray],
+        idx: np.ndarray,
+        positions_df: pd.DataFrame,
+        *,
+        calibrated: bool,
+        debug: bool,
+    ) -> np.ndarray:
+        if isinstance(expert, OvrMultiChromBinaryExpert):
+            pk = expert.predict_proba_binary(
+                methylation_data,
+                availability_mask,
+                idx,
+                positions_df,
+                calibrated=calibrated,
+                debug=debug,
+            )
+        else:
+            Xk = np.ascontiguousarray(methylation_data[:, idx], dtype=np.float64)
+            Mk = availability_mask[:, idx] if availability_mask is not None else None
+            use_cal = (
+                calibrated
+                and hasattr(expert, "predict_proba_calibrated")
+                and getattr(expert, "calibrator", None) is not None
+            )
+            if use_cal:
+                pk = expert.predict_proba_calibrated(Xk, Mk)
+            else:
+                pk = expert.predict_proba(Xk, Mk, debug=debug)
+        return np.clip(pk[:, 0], 1e-15, 1.0)
+
+    def predict_proba_binary(
+        self,
+        methylation_data: np.ndarray,
+        availability_mask: Optional[np.ndarray],
+        idx: np.ndarray,
+        positions_df: pd.DataFrame,
+        *,
+        calibrated: bool,
+        debug: bool = False,
+    ) -> np.ndarray:
+        n_samples = int(methylation_data.shape[0])
+        p_controls: List[np.ndarray] = []
+        for expert, col_idx in zip(self.disease_experts, self.disease_column_indices):
+            pc0 = self._pairwise_p_control_column0(
+                expert,
+                methylation_data,
+                availability_mask,
+                col_idx,
+                positions_df,
+                calibrated=calibrated,
+                debug=debug,
+            )
+            p_controls.append(pc0)
+        stack = np.stack(p_controls, axis=1)
+        log_m = np.mean(np.log(stack), axis=1)
+        p_ctrl = np.clip(np.exp(log_m), 1e-15, 1.0 - 1e-15)
+        p_not = np.clip(1.0 - p_ctrl, 1e-15, 1.0 - 1e-15)
+        out = np.stack([p_not, p_ctrl], axis=1)
+        row_sums = np.sum(out, axis=1, keepdims=True)
+        out = out / np.where(row_sums <= 0, 1.0, row_sums)
+        return out
+
+
 def dmp_rows_from_binary_entry(
     entry: Dict[str, Any],
     default_chromosome: str = "1",
@@ -135,6 +230,9 @@ def dmp_rows_from_binary_entry(
     Prefer entry['dmp_df'] with chromosome + position (or pos).
     Else use entry['chromosome'] + ECDF positions.
     """
+    if entry.get("control_pairwise_geometric"):
+        return []
+
     if entry.get("chrom_classifiers"):
         if entry.get("dmp_df") is None:
             raise ValueError("Multichrom OvR binary entry requires dmp_df")
@@ -175,9 +273,18 @@ def build_union_dmp_dataframe(
     dmp_positions_df : DataFrame with columns chromosome (category), position (uint32)
     column_indices : list of length K; column_indices[k] maps binary model k columns -> union columns
     """
+    entries_list = list(binary_entries)
+    prefix_geo = bool(entries_list and entries_list[0].get("control_pairwise_geometric"))
+    body = entries_list[1:] if prefix_geo else entries_list
+    if not body:
+        raise ValueError(
+            "OvR union needs at least one disease binary model "
+            "(entries after control_pairwise_geometric, if present)"
+        )
+
     all_rows: List[Tuple[str, int]] = []
     per_entry_rows: List[List[Tuple[str, int]]] = []
-    for entry in binary_entries:
+    for entry in body:
         rows = dmp_rows_from_binary_entry(entry, default_chromosome=default_chromosome)
         per_entry_rows.append(rows)
         all_rows.extend(rows)
@@ -192,6 +299,10 @@ def build_union_dmp_dataframe(
     for rows in per_entry_rows:
         idx = np.array([key_to_idx[(c, int(p))] for c, p in rows], dtype=np.int32)
         column_indices.append(idx)
+
+    if prefix_geo:
+        full = np.arange(len(df), dtype=np.int32)
+        column_indices = [full] + column_indices
 
     return df, column_indices
 

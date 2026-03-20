@@ -30,6 +30,10 @@ class ClassifierConfig(BaseModel):
         default=None,
         description="Class names matching OvR order (length K). Required when using ovr_binary_model_paths or ovr_detection_dirs unless passed via ClassificationConfig.multiclass_class_names.",
     )
+    ovr_pairwise_aggregate_control: bool = Field(
+        default=False,
+        description="When true with ovr_detection_dirs: first class is control; dirs are K-1 pairwise control-vs-disease folders; control OvR head aggregates P(control) across those pairwises.",
+    )
     trimmed_percentile_low: float = Field(
         default=0.10,
         ge=0.0,
@@ -140,7 +144,17 @@ class ClassifierConfig(BaseModel):
             raise ValueError(
                 "Use either ovr_binary_model_paths or ovr_detection_dirs, not both."
             )
-        has_ovr = len(ovr_pkls) >= 2 or len(ovr_dirs) >= 2
+        agg = self.ovr_pairwise_aggregate_control
+        has_ovr = (
+            len(ovr_pkls) >= 2
+            or len(ovr_dirs) >= 2
+            or (
+                agg
+                and len(ovr_dirs) >= 1
+                and self.ovr_class_names
+                and len(self.ovr_class_names) == len(ovr_dirs) + 1
+            )
+        )
         has_path = bool(self.model_path or self.model_dir)
         if has_ovr and has_path:
             raise ValueError(
@@ -149,15 +163,35 @@ class ClassifierConfig(BaseModel):
             )
         if not has_ovr and not has_path:
             raise ValueError(
-                "Provide model_path, model_dir, ovr_binary_model_paths (>=2), or ovr_detection_dirs (>=2)."
+                "Provide model_path, model_dir, ovr_binary_model_paths (>=2), "
+                "ovr_detection_dirs (>=2), or ovr_pairwise_aggregate_control with "
+                "ovr_detection_dirs and ovr_class_names of length len(dirs)+1."
             )
         if has_ovr:
-            k = len(ovr_pkls) if len(ovr_pkls) >= 2 else len(ovr_dirs)
             names = self.ovr_class_names
-            if not names or len(names) != k:
-                raise ValueError(
-                    f"ovr_class_names must be a list of length {k} when using OvR auto-build"
-                )
+            if len(ovr_pkls) >= 2:
+                k = len(ovr_pkls)
+                if not names or len(names) != k:
+                    raise ValueError(
+                        f"ovr_class_names must be a list of length {k} when using OvR auto-build"
+                    )
+            elif agg:
+                if (
+                    len(ovr_dirs) < 1
+                    or not names
+                    or len(names) != len(ovr_dirs) + 1
+                    or len(names) < 2
+                ):
+                    raise ValueError(
+                        "ovr_pairwise_aggregate_control requires ovr_class_names of length "
+                        "len(ovr_detection_dirs)+1 (>=2)"
+                    )
+            else:
+                k = len(ovr_dirs)
+                if not names or len(names) != k:
+                    raise ValueError(
+                        f"ovr_class_names must be a list of length {k} when using OvR auto-build"
+                    )
         return self
     
     class Config:

@@ -73,6 +73,10 @@ class ClassificationConfig(BaseModel):
         default=None,
         description="Optional override for OvR class names; defaults to multiclass_class_names when multiclass.",
     )
+    ovr_pairwise_aggregate_control: bool = Field(
+        default=False,
+        description="True when ovr_detection_dirs lists K-1 pairwise folders and first OvR class is control (geometric-mean aggregate head).",
+    )
     expected_classes: Optional[List[int]] = Field(
         default=None,
         description="Optional list of expected class index per sample (for validation report). Set when samples are built from centroid_dirs."
@@ -202,6 +206,13 @@ class ClassificationConfig(BaseModel):
         has_ovr_sources = bool(
             (self.ovr_binary_model_paths and len(self.ovr_binary_model_paths) >= 2)
             or (self.ovr_detection_dirs and len(self.ovr_detection_dirs) >= 2)
+            or (
+                self.ovr_pairwise_aggregate_control
+                and self.ovr_detection_dirs
+                and len(self.ovr_detection_dirs) >= 1
+                and self.ovr_class_names
+                and len(self.ovr_class_names) == len(self.ovr_detection_dirs) + 1
+            )
         )
         if (
             not self.input_path
@@ -227,12 +238,20 @@ class ClassificationConfig(BaseModel):
             if has_ovr_sources:
                 n_p = len(self.ovr_binary_model_paths or [])
                 n_d = len(self.ovr_detection_dirs or [])
-                k_ovr = n_p if n_p >= 2 else n_d
                 names = self.ovr_class_names or self.multiclass_class_names
-                if not names or len(names) != k_ovr:
-                    raise ValueError(
-                        f"OvR class list must have length {k_ovr} (use ovr_class_names or multiclass_class_names)"
-                    )
+                if self.ovr_pairwise_aggregate_control and n_p == 0 and n_d >= 1:
+                    k_ovr = n_d + 1
+                    if not names or len(names) != k_ovr:
+                        raise ValueError(
+                            f"OvR class list must have length {k_ovr} (K-1 dirs + control) when "
+                            "ovr_pairwise_aggregate_control is true"
+                        )
+                else:
+                    k_ovr = n_p if n_p >= 2 else n_d
+                    if not names or len(names) != k_ovr:
+                        raise ValueError(
+                            f"OvR class list must have length {k_ovr} (use ovr_class_names or multiclass_class_names)"
+                        )
                 if len(self.centroid_dirs or []) != k_ovr:
                     raise ValueError(
                         "centroid_dirs length must match OvR source count (K) when using OvR auto-build"

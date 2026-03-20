@@ -198,6 +198,9 @@ def test_classifier_step_dict_has_ovr_sources():
     assert classifier_step_dict_has_ovr_sources(
         {"ovr_binary_pickles_from_comparisons": True}
     )
+    assert classifier_step_dict_has_ovr_sources(
+        {"ovr_pairwise_aggregate_control": True, "ovr_detection_dirs": ["/one"]}
+    )
 
 
 def test_expand_ovr_paths_from_healthy_pca_project_comparisons():
@@ -220,17 +223,24 @@ def test_expand_ovr_paths_from_healthy_pca_project_comparisons():
     root = Path(project.get_project_root())
     dedicated = root / "detections" / "one_vs_rest" / "all" / bn
     try:
-        dirs, names = expand_ovr_paths_from_comparisons(project, unified_basename=bn)
+        dirs, names, agg = expand_ovr_paths_from_comparisons(project, unified_basename=bn)
         assert names == ["all", "pca1", "pca2", "pca3", "pca4"]
         if dedicated.is_file():
+            assert not agg
+            assert len(dirs) == 5
             assert Path(dirs[0]) == dedicated.parent
+            for dis in ("pca1", "pca2", "pca3", "pca4"):
+                assert (root / "detections" / "all" / dis) == Path(dirs[names.index(dis)])
         else:
-            assert Path(dirs[0]) == root / "detections" / "all" / "pca1"
-        for dis in ("pca1", "pca2", "pca3", "pca4"):
-            assert (root / "detections" / "all" / dis) == Path(dirs[names.index(dis)])
+            assert agg
+            assert len(dirs) == 4
+            for dis in ("pca1", "pca2", "pca3", "pca4"):
+                i = names.index(dis)
+                assert (root / "detections" / "all" / dis) == Path(dirs[i - 1])
 
         cfg = resolve_classifier_config(proj_path)
         assert cfg.ovr_detection_dirs == dirs
+        assert cfg.ovr_pairwise_aggregate_control == agg
         assert not (cfg.ovr_binary_model_paths or [])
         assert cfg.ovr_class_names == names
         assert cfg.save_classifier_path.replace("\\", "/").endswith(
@@ -238,6 +248,35 @@ def test_expand_ovr_paths_from_healthy_pca_project_comparisons():
         )
     except FileNotFoundError as e:
         pytest.skip(f"project sample paths or detector layout not available: {e}")
+
+
+def test_ovr_pairwise_aggregate_control_head(tmp_path, monkeypatch):
+    """K-1 pairwise dirs + aggregate control: K distinct OvR heads, (n, K) probas."""
+    monkeypatch.setattr("methyl_classifier.core.classifier.sys.exit", lambda *_: pytest.fail("sys.exit"))
+    d1 = tmp_path / "all" / "d1"
+    d2 = tmp_path / "all" / "d2"
+    d1.mkdir(parents=True)
+    d2.mkdir(parents=True)
+    _write_min_detector_pkl(d1 / "classifier-1-CG.pkl", 100, "1")
+    _write_min_detector_pkl(d2 / "classifier-1-CG.pkl", 200, "1")
+    clf = MethylClassifier(
+        ClassifierConfig(
+            ovr_detection_dirs=[str(d1), str(d2)],
+            ovr_class_names=["ctrl", "d1", "d2"],
+            ovr_pairwise_aggregate_control=True,
+        )
+    )
+    assert clf._ovr_mode and clf.n_classes == 3
+    assert len(clf._ovr_binary_classifiers) == 3
+    from methyl_classifier.core.multiclass_ovr import OvrPairwiseControlAggregateExpert
+
+    assert isinstance(clf._ovr_binary_classifiers[0], OvrPairwiseControlAggregateExpert)
+    u = len(clf.dmp_positions_df)
+    X = np.full((1, u), 0.5, dtype=np.float64)
+    m = np.ones((1, u), dtype=bool)
+    proba = clf.predict_proba(X, m)
+    assert proba.shape == (1, 3)
+    np.testing.assert_allclose(proba.sum(axis=1), 1.0, rtol=1e-4)
 
 
 def test_ovr_detection_dirs_multichrom_two_chromosomes(tmp_path, monkeypatch):

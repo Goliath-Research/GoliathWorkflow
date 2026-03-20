@@ -15,6 +15,7 @@ from ..models.config import ClassifierConfig
 from .multiclass_ovr import (
     ECDF_ONE_VS_REST_TYPE,
     OvrMultiChromBinaryExpert,
+    OvrPairwiseControlAggregateExpert,
     build_union_dmp_dataframe,
     fuse_ovr_binary_probas,
 )
@@ -80,10 +81,19 @@ class MethylClassifier:
 
         p_ovr = self.config.ovr_binary_model_paths or []
         d_ovr = self.config.ovr_detection_dirs or []
-        if len(p_ovr) >= 2 or len(d_ovr) >= 2:
+        agg = bool(getattr(self.config, "ovr_pairwise_aggregate_control", False))
+        ovr_dirs_ok = len(d_ovr) >= 2 or (
+            agg
+            and len(d_ovr) >= 1
+            and self.config.ovr_class_names
+            and len(self.config.ovr_class_names) == len(d_ovr) + 1
+        )
+        if len(p_ovr) >= 2 or ovr_dirs_ok:
             self._load_ovr_from_detector_sources()
             for _c in self._ovr_binary_classifiers:
-                if hasattr(_c, "set_temperature"):
+                if isinstance(_c, (OvrMultiChromBinaryExpert, OvrPairwiseControlAggregateExpert)):
+                    _c.set_temperature(self.config.temperature)
+                elif hasattr(_c, "set_temperature"):
                     _c.set_temperature(self.config.temperature)
             return
 
@@ -149,23 +159,8 @@ class MethylClassifier:
         if not isinstance(entries, list) or len(entries) < 2:
             raise ValueError("ecdf_one_vs_rest package requires binary_models (list, len>=2)")
 
-        for i, entry in enumerate(entries):
-            if not isinstance(entry, dict):
-                raise ValueError(f"binary_models[{i}] must be a dict")
-            cc = entry.get("chrom_classifiers")
-            if cc is not None:
-                if not isinstance(cc, dict) or not cc:
-                    raise ValueError(
-                        f"binary_models[{i}]: chrom_classifiers must be a non-empty dict"
-                    )
-                weights = entry.get("chromosome_weights") or {}
-                self._ovr_binary_classifiers.append(OvrMultiChromBinaryExpert(cc, weights))
-            elif entry.get("ecdf") is not None:
-                self._ovr_binary_classifiers.append(entry["ecdf"])
-            else:
-                raise ValueError(
-                    f"binary_models[{i}] must have 'ecdf' or 'chrom_classifiers'"
-                )
+        prefix_geo = bool(entries[0].get("control_pairwise_geometric")) if entries else False
+        disease_entries = entries[1:] if prefix_geo else entries
 
         names = list(model_package.get("class_names") or [])
         meta_pkg = model_package.get("metadata") or {}
@@ -188,18 +183,49 @@ class MethylClassifier:
         self._ovr_column_indices = col_idx
         self._sync_dmp_cache_from_positions_df()
 
+        disease_experts: List[Any] = []
+        for j, entry in enumerate(disease_entries):
+            i = j + 1 if prefix_geo else j
+            if not isinstance(entry, dict):
+                raise ValueError(f"binary_models[{i}] must be a dict")
+            cc = entry.get("chrom_classifiers")
+            if cc is not None:
+                if not isinstance(cc, dict) or not cc:
+                    raise ValueError(
+                        f"binary_models[{i}]: chrom_classifiers must be a non-empty dict"
+                    )
+                weights = entry.get("chromosome_weights") or {}
+                disease_experts.append(OvrMultiChromBinaryExpert(cc, weights))
+            elif entry.get("ecdf") is not None:
+                disease_experts.append(entry["ecdf"])
+            else:
+                raise ValueError(
+                    f"binary_models[{i}] must have 'ecdf' or 'chrom_classifiers'"
+                )
+
+        if prefix_geo:
+            self._ovr_binary_classifiers = [
+                OvrPairwiseControlAggregateExpert(disease_experts, col_idx[1:])
+            ] + disease_experts
+        else:
+            self._ovr_binary_classifiers = disease_experts
+
         chroms = sorted(self.dmp_positions_df["chromosome"].astype(str).unique().tolist())
         self.chromosome = chroms[0] if chroms else "unknown"
         self.context_metadata = meta_pkg.get("context")
         if not self.context_metadata and self._ovr_binary_classifiers:
-            first = self._ovr_binary_classifiers[0]
+            first_model = (
+                self._ovr_binary_classifiers[1]
+                if isinstance(self._ovr_binary_classifiers[0], OvrPairwiseControlAggregateExpert)
+                else self._ovr_binary_classifiers[0]
+            )
             fi = None
             try:
-                if isinstance(first, OvrMultiChromBinaryExpert):
-                    k0 = sorted(first.classifiers.keys(), key=lambda x: (len(str(x)), str(x)))[0]
-                    fi = first.classifiers[k0].contexts
+                if isinstance(first_model, OvrMultiChromBinaryExpert):
+                    k0 = sorted(first_model.classifiers.keys(), key=lambda x: (len(str(x)), str(x)))[0]
+                    fi = first_model.classifiers[k0].contexts
                 else:
-                    fi = first.contexts
+                    fi = first_model.contexts
             except Exception:
                 fi = None
             if fi is not None and len(fi) > 0:
@@ -227,6 +253,8 @@ class MethylClassifier:
 
         paths = list(self.config.ovr_binary_model_paths or [])
         dirs = list(self.config.ovr_detection_dirs or [])
+        agg = bool(getattr(self.config, "ovr_pairwise_aggregate_control", False))
+        names = list(self.config.ovr_class_names or [])
         if len(paths) >= 2 and len(dirs) >= 2:
             raise ValueError("Set only one of ovr_binary_model_paths or ovr_detection_dirs")
         entries: List[Dict[str, Any]] = []
@@ -234,6 +262,26 @@ class MethylClassifier:
         if len(paths) >= 2:
             for p in paths:
                 entries.append(binary_entry_from_detector_pickle(Path(p)))
+        elif agg:
+            if len(names) != len(dirs) + 1:
+                raise ValueError(
+                    "ovr_pairwise_aggregate_control requires ovr_class_names length "
+                    f"len(ovr_detection_dirs)+1 ({len(dirs) + 1}), got {len(names)}"
+                )
+            if len(dirs) < 1:
+                raise ValueError("ovr_pairwise_aggregate_control requires at least one detection directory")
+            for d in dirs:
+                dpath = Path(d)
+                pkls = sorted(dpath.glob("classifier*.pkl"))
+                if len(pkls) == 0:
+                    raise ValueError(f"No classifier*.pkl under {dpath}")
+                if len(pkls) == 1:
+                    entries.append(binary_entry_from_sole_classifier_in_dir(dpath))
+                else:
+                    entry, cflag = _build_ovr_multichrom_binary_entry(dpath, self.config)
+                    entries.append(entry)
+                    multichrom_cal_any = multichrom_cal_any or cflag
+            entries = [{"control_pairwise_geometric": True}] + entries
         elif len(dirs) >= 2:
             for d in dirs:
                 dpath = Path(d)
@@ -247,12 +295,14 @@ class MethylClassifier:
                     entries.append(entry)
                     multichrom_cal_any = multichrom_cal_any or cflag
         else:
-            raise ValueError("OvR sources require at least 2 paths or 2 directories")
+            raise ValueError(
+                "OvR sources require ovr_binary_model_paths (>=2), ovr_detection_dirs (>=2), "
+                "or ovr_pairwise_aggregate_control with ovr_detection_dirs and K-1 dirs for K class names"
+            )
 
-        names = list(self.config.ovr_class_names or [])
         if len(names) != len(entries):
             raise ValueError(
-                f"ovr_class_names length ({len(names)}) must match OvR sources ({len(entries)})"
+                f"ovr_class_names length ({len(names)}) must match OvR bundle entries ({len(entries)})"
             )
         pkg = build_ecdf_ovr_package(
             entries, names, metadata_extra={"built_from": "detector_pickles"}
@@ -271,7 +321,9 @@ class MethylClassifier:
         entries: List[Dict[str, Any]] = []
         for k, clf in enumerate(self._ovr_binary_classifiers):
             idx = np.asarray(self._ovr_column_indices[k], dtype=np.intp)
-            if isinstance(clf, OvrMultiChromBinaryExpert):
+            if isinstance(clf, OvrPairwiseControlAggregateExpert):
+                entries.append({"control_pairwise_geometric": True})
+            elif isinstance(clf, OvrMultiChromBinaryExpert):
                 entries.append(
                     {
                         "chrom_classifiers": dict(clf.classifiers),
@@ -324,7 +376,7 @@ class MethylClassifier:
         binary_probas: List[np.ndarray] = []
         for k, clf in enumerate(self._ovr_binary_classifiers):
             idx = self._ovr_column_indices[k]
-            if isinstance(clf, OvrMultiChromBinaryExpert):
+            if isinstance(clf, (OvrMultiChromBinaryExpert, OvrPairwiseControlAggregateExpert)):
                 use_cal = bool(getattr(self, "_calibrated", False))
                 pk = clf.predict_proba_binary(
                     methylation_data,
@@ -494,7 +546,7 @@ class MethylClassifier:
         # Set temperature on the actual classifier(s)
         if getattr(self, "_ovr_mode", False):
             for _c in self._ovr_binary_classifiers:
-                if isinstance(_c, OvrMultiChromBinaryExpert):
+                if isinstance(_c, (OvrMultiChromBinaryExpert, OvrPairwiseControlAggregateExpert)):
                     _c.set_temperature(self.config.temperature)
                 elif hasattr(_c, "set_temperature"):
                     _c.set_temperature(self.config.temperature)
