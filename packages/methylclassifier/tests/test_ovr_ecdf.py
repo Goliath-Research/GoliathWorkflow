@@ -217,13 +217,24 @@ def test_expand_ovr_paths_from_healthy_pca_project_comparisons():
         pytest.skip("repo configs/project_Healthy_vs_PCa1-4.json not present")
     project = load_project(proj_path)
     bn = "classifier-1-CG,CHG,CHH.pkl"
-    paths, names = expand_ovr_paths_from_comparisons(project, unified_basename=bn)
+    root = Path(project.get_project_root())
+    dedicated = root / "detections" / "one_vs_rest" / "all" / bn
+    if dedicated.is_file():
+        paths, names = expand_ovr_paths_from_comparisons(project, unified_basename=bn)
+    else:
+        with pytest.warns(UserWarning, match="pairwise detector"):
+            paths, names = expand_ovr_paths_from_comparisons(project, unified_basename=bn)
     assert names == ["all", "pca1", "pca2", "pca3", "pca4"]
-    root = project.get_project_root().replace("\\", "/")
-    assert paths[0] == f"{root}/detections/one_vs_rest/all/{bn}"
+    if dedicated.is_file():
+        assert Path(paths[0]) == dedicated
+    else:
+        assert Path(paths[0]) == root / "detections" / "all" / "pca1" / bn
     for dis in ("pca1", "pca2", "pca3", "pca4"):
-        assert f"/detections/all/{dis}/{bn}" in paths[names.index(dis)].replace("\\", "/")
+        assert (root / "detections" / "all" / dis / bn) == Path(paths[names.index(dis)])
 
     cfg = resolve_classifier_config(proj_path)
     assert cfg.ovr_binary_model_paths == paths
     assert cfg.ovr_class_names == names
+    assert cfg.save_classifier_path.replace("\\", "/").endswith(
+        "/classifiers/all/classifier_all_Healthy_vs_PCa1-4.pkl"
+    )

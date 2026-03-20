@@ -326,11 +326,28 @@ def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: An
         p = Path(explicit)
         if p.is_file():
             return p
+    classifier_step = project.get_step_config("classifier") or {}
+    scp = classifier_step.get("save_classifier_path")
+    if scp and Path(scp).is_file():
+        return Path(scp)
+    try:
+        from methyl_classifier.project_resolver import predicted_multiclass_ovr_bundle_path
+
+        bundled = predicted_multiclass_ovr_bundle_path(project, classifier_step)
+        if bundled is not None and bundled.is_file():
+            return bundled
+    except ImportError:
+        pass
     classifier_dir = getattr(paths, "classifier_dir", None)
     if classifier_dir:
         candidate = Path(classifier_dir) / MULTICLASS_CLASSIFIER_FILENAME
         if candidate.is_file():
             return candidate
+        project_name = getattr(project, "project_name", None)
+        if project_name:
+            legacy = Path(classifier_dir) / f"{project_name}-classifier.pkl"
+            if legacy.is_file():
+                return legacy
     return None
 
 

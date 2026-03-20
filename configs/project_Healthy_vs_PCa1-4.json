@@ -198,7 +198,6 @@
     },
     "classifier": {
       "ovr_binary_pickles_from_comparisons": true,
-      "ovr_unified_classifier_basename": "classifier-1-CG,CHG,CHH.pkl",
       "weight_method": "linear_fitted",
       "weight_fit_regularization": "lasso",
       "weight_fit_alpha": 1,

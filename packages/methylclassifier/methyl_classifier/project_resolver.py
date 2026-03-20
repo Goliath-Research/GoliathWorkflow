@@ -4,6 +4,7 @@ Supports binary (centroid1/centroid2) and N-group multiclass (centroid_dirs + mu
 """
 
 import json
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -12,6 +13,52 @@ from methyl_utils import ProjectConfig, load_project
 from .models.config_schema import ClassificationConfig
 
 CLASSIFIER_OUTPUT_FILENAME = "classification_results.csv"
+
+# Merged into effective classifier step when predicting default OvR bundle save path.
+_CLASSIFIER_STEP_KEYS_FOR_BUNDLE_PATH = (
+    "ovr_binary_pickles_from_comparisons",
+    "ovr_bundle_filename",
+    "ovr_binary_model_paths",
+    "ovr_detection_dirs",
+)
+
+
+def predicted_multiclass_ovr_bundle_path(
+    project: ProjectConfig,
+    classifier_step: Optional[Dict[str, Any]] = None,
+) -> Optional[Path]:
+    """
+    Default ``save_classifier_path`` location for control/disease multiclass OvR:
+    ``<project_root>/classifiers/<control_group>/<bundle>.pkl``.
+
+    Applies when the project has ≥3 resolved groups and the classifier step requests
+    OvR (``ovr_binary_pickles_from_comparisons`` or explicit ``ovr_binary_model_paths`` /
+    ``ovr_detection_dirs`` with length ≥2). Does not check that the file exists.
+    """
+    step = dict(
+        classifier_step
+        if classifier_step is not None
+        else (project.get_step_config("classifier") or {})
+    )
+    if not project.uses_control_disease():
+        return None
+    resolved = project.get_resolved_groups()
+    if len(resolved) < 3:
+        return None
+    has_ovr = bool(step.get("ovr_binary_pickles_from_comparisons")) or len(
+        step.get("ovr_binary_model_paths") or []
+    ) >= 2 or len(step.get("ovr_detection_dirs") or []) >= 2
+    if not has_ovr:
+        return None
+    ctrl_label = resolved[0][0]
+    bundle_fn = step.get("ovr_bundle_filename")
+    if bundle_fn:
+        fn = str(bundle_fn)
+        if not fn.endswith(".pkl"):
+            fn = f"{fn}.pkl"
+    else:
+        fn = f"classifier_{ctrl_label}_{project.project_name}.pkl"
+    return Path(project.get_project_root()) / "classifiers" / ctrl_label / fn
 
 
 def merge_project_classifier_step(
@@ -52,10 +99,19 @@ def expand_ovr_paths_from_comparisons(
     For each disease label (after the first resolved entry), there must be a comparison with
     that ``disease_group``; the path is
     ``<project_root>/detections/<control_group>/<disease_group>/<unified_basename>``.
+    Default ``unified_basename`` is ``classifier-1-CG,CHG,CHH.pkl``: MethylDetector writes **one
+    pickle per chromosome** (name pattern ``classifier-<chr>-<contexts>.pkl``) in each
+    comparison folder. This resolver picks **one** file per disease (and the control slot);
+    the default points at **chromosome 1** only. That is **not** the same as loading **all**
+    chromosomes like ``model_dir`` multi-chromosome mode. For genome-wide OvR, supply per-class
+    pickles that already aggregate chromosomes, or set ``ovr_unified_classifier_basename`` /
+    explicit ``ovr_binary_model_paths`` accordingly.
 
     The first path (control class, one-vs-rest) defaults to
     ``<project_root>/detections/one_vs_rest/<control_label>/<unified_basename>`` unless
-    ``control_vs_rest_pkl`` is set.
+    ``control_vs_rest_pkl`` is set. If that file is missing, falls back to the pickle under
+    the **first** comparison in ``get_comparisons()`` (pairwise control vs that disease), with
+    a warning — not statistically identical to a true control one-vs-rest model.
     """
     if not project.uses_control_disease():
         raise ValueError(
@@ -76,13 +132,34 @@ def expand_ovr_paths_from_comparisons(
     if control_vs_rest_pkl:
         first_path = str(Path(control_vs_rest_pkl).expanduser())
     else:
-        first_path = str(
-            Path(project.get_project_root())
-            / "detections"
-            / "one_vs_rest"
-            / control_label
-            / unified_basename
-        )
+        root = Path(project.get_project_root())
+        dedicated = root / "detections" / "one_vs_rest" / control_label / unified_basename
+        if dedicated.is_file():
+            first_path = str(dedicated)
+        elif not comparisons:
+            raise ValueError(
+                "Cannot resolve OvR control pickle: no comparisons and no one_vs_rest artifact"
+            )
+        else:
+            spec0 = comparisons[0]
+            candidate = Path(
+                project.get_detection_output_dir(spec0.control_group, spec0.disease_group)
+            ) / unified_basename
+            if not candidate.is_file():
+                raise FileNotFoundError(
+                    f"OvR control pickle not found at {dedicated} (one-vs-rest) "
+                    f"nor at {candidate} (first comparison pairwise). "
+                    "Run MethylDetector for those outputs, set ovr_control_vs_rest_pkl to an "
+                    "existing .pkl, or add a dedicated one-vs-rest control run under detections/one_vs_rest/."
+                )
+            first_path = str(candidate)
+            warnings.warn(
+                f"OvR: using pairwise detector at {first_path} as proxy for the control "
+                f"(healthy) expert; dedicated file missing: {dedicated}. "
+                "Prefer training a true control one-vs-rest model or set ovr_control_vs_rest_pkl.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     out_paths = [first_path]
     for label, _ in resolved[1:]:
@@ -336,10 +413,21 @@ def resolve_classifier_config(
         base["model_dir"] = None
         base["model_path"] = None
 
-    # Default: write combined classifier next to classification CSV under <project>/classifiers/
+    # Default save path: multiclass OvR → classifiers/<control>/<bundle>.pkl; else classifiers root.
     if not base.get("save_classifier_path"):
-        base["save_classifier_path"] = str(
-            Path(paths.classifier_dir) / f"{project.project_name}-classifier.pkl"
-        )
+        merged_cls = dict(project.get_step_config("classifier") or {})
+        for k in _CLASSIFIER_STEP_KEYS_FOR_BUNDLE_PATH:
+            if k in base:
+                merged_cls[k] = base[k]
+        p_bundle = predicted_multiclass_ovr_bundle_path(project, merged_cls)
+        ovr_paths = base.get("ovr_binary_model_paths") or []
+        if p_bundle is not None and len(ovr_paths) >= 2:
+            base["save_classifier_path"] = str(p_bundle)
+        else:
+            base["save_classifier_path"] = str(
+                Path(paths.classifier_dir) / f"{project.project_name}-classifier.pkl"
+            )
+
+    base.pop("ovr_bundle_filename", None)
 
     return ClassificationConfig(**base)
