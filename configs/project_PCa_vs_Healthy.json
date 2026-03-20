@@ -88,8 +88,24 @@
       "log_level": "INFO"
     },
     "predictor": {
-      "test_control_paths": ["configs/test_healthy.csv"],
-      "test_disease_paths": ["configs/test_cancer.csv"],
+      "controls": {
+        "label": "healthy",
+        "groups": [
+          {
+            "label": "healthy",
+            "sample_paths": ["configs/test_healthy.csv"]
+          }
+        ]
+      },
+      "diseases": {
+        "label": "cancer",
+        "groups": [
+          {
+            "label": "cancer",
+            "sample_paths": ["configs/test_cancer.csv"]
+          }
+        ]
+      },
       "debug": false
     }
   }

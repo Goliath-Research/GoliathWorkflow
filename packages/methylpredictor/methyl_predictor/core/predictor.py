@@ -2,9 +2,10 @@
 Core prediction: load MethylClassifier, run prediction on test sets, compute metrics, write JSON + CSV.
 """
 
+import copy
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import numpy as np
 import pandas as pd
@@ -16,6 +17,298 @@ from sklearn.metrics import (
 )
 
 from ..models.config import PredictorConfig
+
+
+def _expand_nested_blind_paths(config: PredictorConfig) -> None:
+    """Expand config.blind groups into test_blind_paths and lineage (standalone JSON)."""
+    if config.test_blind_paths:
+        return
+    if not config.blind or not isinstance(config.blind, dict):
+        return
+    groups = config.blind.get("groups")
+    if not isinstance(groups, list) or len(groups) == 0:
+        return
+
+    from ..project_resolver import (
+        _collect_paths_and_lineage,
+        _expand_side_group_paths,
+    )
+
+    proj_stub = Path.cwd()
+    wrap = {
+        "label": config.blind.get("label") or "",
+        "groups": groups,
+    }
+    bmap = _expand_side_group_paths(
+        wrap, config.samples_base_path, proj_stub, config.path_remap
+    )
+    labels = [
+        str(g.get("label"))
+        for g in groups
+        if isinstance(g, dict) and g.get("label")
+    ]
+    paths, lin = _collect_paths_and_lineage("blind", labels, bmap)
+    config.test_blind_paths = paths
+    config.sample_lineage = lin
+    config.report_blind = copy.deepcopy(config.blind)
+
+
+def _expand_nested_labeled_paths(config: PredictorConfig) -> None:
+    """Expand optional config.controls / config.diseases into flat paths and report blocks."""
+    if config.test_blind_paths:
+        return
+    if config.test_group_paths:
+        return
+    if config.test_control_paths or config.test_disease_paths:
+        return
+    if not config.controls or not config.diseases:
+        return
+
+    from ..project_resolver import (
+        _collect_paths_and_lineage,
+        _expand_side_group_paths,
+    )
+
+    proj_stub = Path.cwd()
+    ctrl_map = _expand_side_group_paths(
+        config.controls, config.samples_base_path, proj_stub, config.path_remap
+    )
+    dis_map = _expand_side_group_paths(
+        config.diseases, config.samples_base_path, proj_stub, config.path_remap
+    )
+    ctrl_labels = [
+        str(g.get("label"))
+        for g in (config.controls.get("groups") or [])
+        if isinstance(g, dict) and g.get("label")
+    ]
+    dis_labels = [
+        str(g.get("label"))
+        for g in (config.diseases.get("groups") or [])
+        if isinstance(g, dict) and g.get("label")
+    ]
+    c_paths, lin_c = _collect_paths_and_lineage("control", ctrl_labels, ctrl_map)
+    d_paths, lin_d = _collect_paths_and_lineage("disease", dis_labels, dis_map)
+    config.test_control_paths = c_paths
+    config.test_disease_paths = d_paths
+    config.sample_lineage = lin_c + lin_d
+    config.report_controls = copy.deepcopy(config.controls)
+    config.report_diseases = copy.deepcopy(config.diseases)
+
+
+def _prepare_predictor_paths_and_mode(
+    config: PredictorConfig,
+) -> Literal["labeled", "blind"]:
+    """
+    Resolve cohort paths once from config: either blind (test_blind_paths + lineage)
+    or labeled (controls/diseases / test_group_paths / flat paths). Does not load H5;
+    downstream runs a single classify_samples_from_list pass; metrics vs blind report
+    depend only on this mode and expected_classes.
+    """
+    if not config.test_blind_paths:
+        _expand_nested_blind_paths(config)
+    if config.test_blind_paths:
+        if (
+            config.test_control_paths
+            or config.test_disease_paths
+            or config.test_group_paths
+        ):
+            raise ValueError(
+                "Blind cohort (test_blind_paths) cannot be combined with labeled "
+                "control/disease paths or test_group_paths."
+            )
+        return "blind"
+    _expand_nested_labeled_paths(config)
+    return "labeled"
+
+
+def _row_to_sample_dict(row: pd.Series) -> Dict[str, Any]:
+    """Serialize a CSV row to JSON-friendly dict (numpy scalars -> Python)."""
+    out: Dict[str, Any] = {}
+    for k, v in row.items():
+        if isinstance(v, (np.floating, np.integer)):
+            out[k] = float(v) if isinstance(v, np.floating) else int(v)
+        elif pd.isna(v):
+            out[k] = None
+        else:
+            out[k] = v
+    return out
+
+
+def _probability_map_from_row(
+    row: pd.Series, n_classes: int, class_names: List[str]
+) -> Dict[str, float]:
+    """Build {class_name: probability} from prob_class0.. columns."""
+    out: Dict[str, float] = {}
+    for i in range(n_classes):
+        col = f"prob_class{i}"
+        if col not in row.index:
+            continue
+        v = row[col]
+        name = class_names[i] if i < len(class_names) else f"Class_{i}"
+        if pd.isna(v):
+            out[str(name)] = float("nan")
+        else:
+            out[str(name)] = float(v)
+    return out
+
+
+def _blind_sample_record(
+    row: pd.Series, n_classes: int, class_names: List[str]
+) -> Dict[str, Any]:
+    """One sample dict for blind mode: probabilities + predicted subgroup."""
+    base = _row_to_sample_dict(row)
+    probs = _probability_map_from_row(row, n_classes, class_names)
+    pred_idx = int(row.get("prediction", 0))
+    pred_name = (
+        str(class_names[pred_idx])
+        if pred_idx < len(class_names)
+        else f"Class_{pred_idx}"
+    )
+    pvals = [probs.get(str(class_names[i] if i < len(class_names) else f"Class_{i}"), 0.0) for i in range(n_classes)]
+    pvals = [0.0 if (isinstance(x, float) and np.isnan(x)) else float(x) for x in pvals]
+    max_p = max(pvals) if pvals else 0.0
+    ent = 0.0
+    for p in pvals:
+        if p > 0:
+            ent -= p * np.log(p + 1e-300)
+    base["probabilities"] = probs
+    base["predicted_subgroup"] = pred_name
+    base["max_probability"] = float(max_p)
+    base["entropy"] = float(ent)
+    return base
+
+
+def _compute_blind_summary(
+    df: pd.DataFrame, n_classes: int, class_names: List[str]
+) -> Dict[str, Any]:
+    """Aggregate stats for blind runs (no ground-truth metrics)."""
+    counts: Dict[str, int] = {}
+    for i in range(n_classes):
+        name = str(class_names[i] if i < len(class_names) else f"Class_{i}")
+        counts[name] = 0
+    mean_probs: Dict[str, float] = {k: 0.0 for k in counts}
+    n = len(df)
+    entropies: List[float] = []
+    for _, row in df.iterrows():
+        pi = int(row.get("prediction", 0))
+        pname = str(class_names[pi] if pi < len(class_names) else f"Class_{pi}")
+        counts[pname] = counts.get(pname, 0) + 1
+        rec = _blind_sample_record(row, n_classes, class_names)
+        entropies.append(rec["entropy"])
+        for k, v in rec["probabilities"].items():
+            mean_probs[k] = mean_probs.get(k, 0.0) + (v if not np.isnan(v) else 0.0)
+    if n > 0:
+        for k in list(mean_probs.keys()):
+            mean_probs[k] = float(mean_probs[k] / n)
+    return {
+        "n_samples": n,
+        "predicted_counts_by_class": counts,
+        "mean_probability_by_class": mean_probs,
+        "mean_entropy": float(np.mean(entropies)) if entropies else 0.0,
+    }
+
+
+def _print_blind_summary(df: pd.DataFrame, n_classes: int, class_names: List[str]) -> None:
+    summary = _compute_blind_summary(df, n_classes, class_names)
+    print("\n🔬 Blind prediction summary (no ground-truth labels):")
+    print(f"   Samples scored: {summary['n_samples']}")
+    print("   Predicted class counts:")
+    for k, v in summary["predicted_counts_by_class"].items():
+        print(f"      {k}: {v}")
+    print(f"   Mean entropy: {summary['mean_entropy']:.4f}")
+
+
+def _build_prediction_report(
+    config: PredictorConfig,
+    df: pd.DataFrame,
+    metrics: Optional[Dict[str, Any]],
+    n_classes: int,
+    class_names: List[str],
+    prediction_mode: Literal["labeled", "blind"],
+) -> Dict[str, Any]:
+    """
+    Build prediction_report.json body: labeled mode mirrors controls/diseases;
+    blind mode adds probabilities per class name and blind_summary.
+    """
+    lineage = config.sample_lineage or []
+    name_to_meta = {Path(entry["absolute_path"]).name: entry for entry in lineage}
+
+    if prediction_mode == "blind":
+        report: Dict[str, Any] = {
+            "mode": "blind",
+            "comparison_label": config.comparison_label,
+            "validation_metrics": None,
+            "class_names": class_names,
+            "n_classes": n_classes,
+            "blind_summary": _compute_blind_summary(df, n_classes, class_names),
+        }
+        rb = copy.deepcopy(config.report_blind or {"label": "", "groups": []})
+        report["blind"] = rb
+        groups = rb.get("groups") or []
+        for g in groups:
+            if not isinstance(g, dict):
+                continue
+            glabel = str(g.get("label", ""))
+            samples: List[Dict[str, Any]] = []
+            for _, row in df.iterrows():
+                sn = str(row.get("sample", ""))
+                meta = name_to_meta.get(sn)
+                if meta is None:
+                    continue
+                if meta.get("side") != "blind" or meta.get("group_label") != glabel:
+                    continue
+                samples.append(_blind_sample_record(row, n_classes, class_names))
+            g["samples"] = samples
+        return report
+
+    report = {
+        "mode": "labeled",
+        "comparison_label": config.comparison_label,
+        "validation_metrics": metrics,
+        "class_names": class_names,
+        "n_classes": n_classes,
+    }
+
+    if config.report_controls is not None and config.report_diseases is not None:
+        report["controls"] = copy.deepcopy(config.report_controls)
+        report["diseases"] = copy.deepcopy(config.report_diseases)
+        for side_key, side_name in (("controls", "control"), ("diseases", "disease")):
+            side = report.get(side_key) or {}
+            groups = side.get("groups") or []
+            for g in groups:
+                if not isinstance(g, dict):
+                    continue
+                glabel = str(g.get("label", ""))
+                samples: List[Dict[str, Any]] = []
+                for _, row in df.iterrows():
+                    sn = str(row.get("sample", ""))
+                    meta = name_to_meta.get(sn)
+                    if meta is None:
+                        continue
+                    if meta.get("side") != side_name or meta.get("group_label") != glabel:
+                        continue
+                    samples.append(_row_to_sample_dict(row))
+                g["samples"] = samples
+        return report
+
+    report["multiclass_groups"] = []
+    if not config.test_group_paths:
+        return report
+    for entry in config.test_group_paths:
+        if not isinstance(entry, dict):
+            continue
+        glabel = str(entry.get("label", ""))
+        samples = []
+        for _, row in df.iterrows():
+            sn = str(row.get("sample", ""))
+            meta = name_to_meta.get(sn)
+            if meta is None or meta.get("group_label") != glabel:
+                continue
+            samples.append(_row_to_sample_dict(row))
+        report["multiclass_groups"].append(
+            {"label": glabel, "paths": entry.get("paths"), "samples": samples}
+        )
+    return report
 
 
 def _compute_metrics(
@@ -92,13 +385,18 @@ def _print_metrics(metrics: Dict[str, Any]) -> None:
 def _build_samples_and_expected(
     config: PredictorConfig,
     n_classes: int,
+    prediction_mode: Literal["labeled", "blind"],
 ) -> tuple[List[str], Optional[List[int]]]:
     """
-    Build samples_list and expected_classes from config.
-    Returns (samples_list, expected_classes). expected_classes is None for inference-only (no labels).
+    Build samples_list and expected_classes from already-resolved config paths.
+    Returns (samples_list, expected_classes). expected_classes is None for blind or inference-only.
     """
     n_classes = n_classes or 2
     is_multiclass = n_classes > 2
+
+    if prediction_mode == "blind":
+        blind_list = [p for p in config.test_blind_paths if p and str(p).strip()]
+        return blind_list, None if blind_list else None
 
     # Multi-class with labeled groups
     if is_multiclass and config.test_group_paths:
@@ -135,6 +433,8 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     from methyl_classifier.models.config import ClassifierConfig
     from methyl_classifier.cli.main import classify_samples_from_list
 
+    prediction_mode = _prepare_predictor_paths_and_mode(config)
+
     # Build classifier config and load model
     classifier_config = ClassifierConfig(
         model_path=config.model_path,
@@ -154,10 +454,13 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     if is_multiclass:
         print(f"Multi-class classifier ({n_classes} classes: {class_names})")
 
-    samples_list, expected_classes = _build_samples_and_expected(config, n_classes)
+    samples_list, expected_classes = _build_samples_and_expected(
+        config, n_classes, prediction_mode
+    )
     if not samples_list:
         raise ValueError(
-            "No test samples: provide test_control_paths + test_disease_paths (binary) "
+            "No test samples: set predictor.blind, or config.controls and config.diseases, "
+            "or test_control_paths + test_disease_paths (binary), "
             "or test_group_paths (multi-class)."
         )
 
@@ -212,6 +515,7 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     if "prediction" not in df.columns:
         raise RuntimeError("predictions CSV must contain prediction column")
 
+    metrics: Optional[Dict[str, Any]] = None
     # Metrics only when we have labels
     if expected_classes is not None and "expected_class" in df.columns:
         y_true = df["expected_class"].values.astype(int)
@@ -223,7 +527,19 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
             json.dump(metrics, f, indent=2)
         print(f"\n💾 Metrics saved to {metrics_path}")
         print(f"💾 Predictions CSV: {predictions_csv}")
+    else:
+        print(f"\n💾 Predictions CSV: {predictions_csv} (no labels; metrics skipped)")
+        if prediction_mode == "blind":
+            _print_blind_summary(df, n_classes, class_names)
+
+    report_path = output_dir / "prediction_report.json"
+    report_body = _build_prediction_report(
+        config, df, metrics, n_classes, class_names, prediction_mode
+    )
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(report_body, f, indent=2)
+    print(f"💾 Prediction report: {report_path}")
+
+    if metrics is not None:
         return metrics
-    # Inference-only: no validation_metrics.json
-    print(f"\n💾 Predictions CSV: {predictions_csv} (no labels; metrics skipped)")
     return {"n_samples": len(df), "n_classes": n_classes, "class_names": class_names}

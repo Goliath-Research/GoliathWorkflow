@@ -15,8 +15,8 @@ So the “theory” behind MethylPredictor is standard **supervised evaluation**
 
 ## Test Sets and Labels
 
-- **test_control_paths**: Sample directories (or paths from a CSV) for the **control** group. These are assigned **expected class 0**.
-- **test_disease_paths**: Sample directories (or paths from a CSV) for the **disease** group. These are assigned **expected class 1**.
+- **controls** / **diseases** under `step_config.predictor`: same nested structure as the project (`groups[].label`, `groups[].sample_paths`). Omitted sides inherit the top-level training cohorts. Each sample is still expected class **0** on the control side and **1** on the disease side.
+- **blind** under `step_config.predictor`: unlabeled batches (`groups[].label` is metadata only). No expected class; output is class probabilities and blind summary statistics, not accuracy vs truth.
 
 Samples should be **independent** of the data used to build centroids and train the classifier (true holdout) so that reported metrics reflect generalization.
 If one or more input samples cannot be loaded, those samples are skipped before scoring and the expected labels are realigned to the successfully scored rows only.
@@ -38,7 +38,7 @@ All of these are written to **validation_metrics.json** and summarized in the co
 
 | Aspect | Role |
 |--------|------|
-| Input | Trained classifier (model_dir or model_path), test_control_paths, test_disease_paths |
+| Input | Trained classifier (model_dir or model_path), nested predictor cohorts (or flat test path lists) |
 | Labels | Control → 0, disease → 1 (fixed by group membership) |
 | Output | validation_metrics.json (all metrics), predictions.csv (per-sample predictions and expected class) |
 | Theory | Standard classification evaluation; no new probabilistic model |

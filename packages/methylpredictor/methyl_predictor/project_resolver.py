@@ -1,12 +1,17 @@
 """
 Resolve MethylPredictor config from a pipeline project config.
 Supports control/disease (per-comparison) and flat groups (single run).
+
+Predictor test cohorts use the same JSON shape as the project root: ``controls`` and ``diseases``
+each with ``label`` and ``groups[{label, sample_paths}]``. Omitted predictor sides fall back to
+the top-level project ``controls`` / ``diseases``.
 """
 
+import copy
 import csv
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from methyl_utils import load_project
 
@@ -150,6 +155,167 @@ def _apply_path_remap(paths: List[str], path_remap: Optional[Dict[str, str]]) ->
     return out
 
 
+def _control_disease_side_to_dict(side: Any) -> Dict[str, Any]:
+    """Serialize ControlDiseaseSide (or dict) to JSON-friendly dict."""
+    if side is None:
+        return {"label": "", "groups": []}
+    if isinstance(side, dict):
+        return copy.deepcopy(side)
+    if hasattr(side, "model_dump"):
+        return side.model_dump(mode="json")
+    return {"label": getattr(side, "label", ""), "groups": []}
+
+
+def _effective_predictor_side(
+    step_cfg: Dict[str, Any],
+    project: Any,
+    side_key: Literal["controls", "diseases"],
+) -> Dict[str, Any]:
+    """
+    Merge predictor step with project root: use step_config.predictor.<side> if it has
+    non-empty ``groups``; otherwise use project.control / project.disease.
+    """
+    raw = step_cfg.get(side_key)
+    if isinstance(raw, dict):
+        groups = raw.get("groups")
+        if isinstance(groups, list) and len(groups) > 0:
+            return copy.deepcopy(raw)
+    proj_side = project.control if side_key == "controls" else project.disease
+    if proj_side is not None:
+        return _control_disease_side_to_dict(proj_side)
+    proj_key = "controls" if side_key == "controls" else "diseases"
+    raise ValueError(
+        f'step_config.predictor.{side_key} must define non-empty "groups", '
+        f"or set top-level project {proj_key}."
+    )
+
+
+def _expand_side_group_paths(
+    side: Dict[str, Any],
+    base_path: Optional[str],
+    project_path: Union[str, Path],
+    path_remap: Optional[Dict[str, str]],
+) -> Dict[str, List[str]]:
+    """Map group label -> expanded absolute sample paths."""
+    out: Dict[str, List[str]] = {}
+    for g in side.get("groups") or []:
+        if not isinstance(g, dict):
+            continue
+        label = g.get("label")
+        if not label:
+            continue
+        raw = g.get("sample_paths") or []
+        if isinstance(raw, str):
+            raw = [raw]
+        expanded = _expand_test_paths(list(raw), base_path, project_config_path=project_path)
+        expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
+        if path_remap:
+            expanded = _apply_path_remap(expanded, path_remap)
+        out[str(label)] = expanded
+    return out
+
+
+def _filter_side_report(side: Dict[str, Any], group_labels: List[str]) -> Dict[str, Any]:
+    """Keep only listed group labels (order = group_labels order)."""
+    by_label = {g.get("label"): g for g in (side.get("groups") or []) if isinstance(g, dict)}
+    groups = []
+    for lab in group_labels:
+        if lab in by_label:
+            groups.append(copy.deepcopy(by_label[lab]))
+    return {"label": side.get("label", ""), "groups": groups}
+
+
+def _collect_paths_and_lineage(
+    side_name: Literal["control", "disease", "blind"],
+    group_labels_in_order: List[str],
+    label_to_paths: Dict[str, List[str]],
+) -> Tuple[List[str], List[Dict[str, str]]]:
+    paths_out: List[str] = []
+    lineage: List[Dict[str, str]] = []
+    for glabel in group_labels_in_order:
+        if glabel not in label_to_paths:
+            avail = sorted(label_to_paths.keys())
+            raise ValueError(
+                f"Predictor {side_name} group {glabel!r} not found. Available labels: {avail}"
+            )
+        for p in label_to_paths[glabel]:
+            paths_out.append(p)
+            lineage.append(
+                {
+                    "absolute_path": p,
+                    "side": side_name,
+                    "group_label": glabel,
+                }
+            )
+    return paths_out, lineage
+
+
+def _predictor_blind_has_groups(step_cfg: Dict[str, Any]) -> bool:
+    b = step_cfg.get("blind")
+    if not isinstance(b, dict):
+        return False
+    g = b.get("groups")
+    return isinstance(g, list) and len(g) > 0
+
+
+def _assert_predictor_blind_exclusive(step_cfg: Dict[str, Any]) -> None:
+    """Blind cohort cannot be combined with explicit labeled predictor.controls / .diseases."""
+    for key in ("controls", "diseases"):
+        side = step_cfg.get(key)
+        if isinstance(side, dict):
+            grp = side.get("groups")
+            if isinstance(grp, list) and len(grp) > 0:
+                raise ValueError(
+                    f'step_config.predictor.{key} has non-empty "groups" while "blind" is also set; '
+                    "use either labeled (controls+diseases) or blind, not both."
+                )
+
+
+def _build_blind_predictor_dict(
+    *,
+    step_cfg: Dict[str, Any],
+    project: Any,
+    project_path: Union[str, Path],
+    base_path: Optional[str],
+    output_dir: str,
+    model_path: Optional[str],
+    model_dir: Optional[str],
+    comparison_label: Optional[str],
+) -> Dict[str, Any]:
+    """Shared PredictorConfig kwargs for a blind-only run."""
+    blind_side = copy.deepcopy(step_cfg["blind"])
+    if not isinstance(blind_side, dict):
+        raise ValueError('step_config.predictor.blind must be an object with "groups".')
+    wrap = {
+        "label": blind_side.get("label") or "",
+        "groups": blind_side.get("groups") or [],
+    }
+    bmap = _expand_side_group_paths(wrap, base_path, project_path, project.path_remap)
+    labels = [
+        str(g.get("label"))
+        for g in (wrap.get("groups") or [])
+        if isinstance(g, dict) and g.get("label")
+    ]
+    blind_paths, lineage = _collect_paths_and_lineage("blind", labels, bmap)
+    return {
+        "model_path": model_path,
+        "model_dir": model_dir,
+        "output_dir": output_dir,
+        "test_control_paths": [],
+        "test_disease_paths": [],
+        "test_blind_paths": blind_paths,
+        "path_remap": project.path_remap,
+        "samples_base_path": project.samples_base_path,
+        "debug": step_cfg.get("debug", False),
+        "comparison_label": comparison_label,
+        "report_controls": None,
+        "report_diseases": None,
+        "report_blind": blind_side,
+        "blind": blind_side,
+        "sample_lineage": lineage,
+    }
+
+
 MULTICLASS_CLASSIFIER_FILENAME = "multiclass-classifier.pkl"
 
 
@@ -176,12 +342,13 @@ def resolve_predictor_config(
     test_disease_paths: Optional[List[str]] = None,
 ) -> PredictorConfig:
     """
-    Build a single PredictorConfig from project (flat groups: group0 = control, group1 = disease).
-    Test sample precedence: (1) Caller test_control_paths/test_disease_paths (e.g. CLI) supersede all.
-    (2) If step_config.predictor has valid test_control_paths and test_disease_paths (non-empty after expansion), use them.
-    (3) Otherwise use training data (project resolved groups).
-    When project uses control/disease + comparisons, consider using
-    resolve_predictor_config_per_comparison for one run per comparison.
+    Build a single PredictorConfig from project (non-comparison / flat layout).
+
+    Test cohorts come from ``step_config.predictor.controls`` / ``.diseases`` (same shape as project
+    root), merged with top-level ``controls``/``diseases`` when predictor omits a side.
+
+    Optional CLI override: when both ``test_control_paths`` and ``test_disease_paths`` are passed,
+    they are expanded as flat lists (no nested report shape).
     """
     project = load_project(project_path)
     step_cfg = (project.get_step_config("predictor") or project.get_step_config("validator") or {}).copy()
@@ -204,7 +371,7 @@ def resolve_predictor_config(
 
     base_path = getattr(project, "samples_base_path", None)
     proj_path_arg: Union[str, Path] = project_path
-    # Precedence: (1) CLI/caller test paths, (2) valid config test paths, (3) training data
+
     if test_control_paths is not None and test_disease_paths is not None:
         control_paths = _expand_test_paths(
             test_control_paths, base_path, project_config_path=proj_path_arg
@@ -212,44 +379,54 @@ def resolve_predictor_config(
         disease_paths = _expand_test_paths(
             test_disease_paths, base_path, project_config_path=proj_path_arg
         )
-    else:
-        base_path = getattr(project, "samples_base_path", None)
-        # Canonical keys; accept legacy aliases (healthy_paths/cancer_paths)
-        step_control = step_cfg.get("test_control_paths") or step_cfg.get("healthy_paths")
-        step_disease = step_cfg.get("test_disease_paths") or step_cfg.get("cancer_paths")
-        if step_control is not None and step_disease is not None:
-            control_paths = _expand_test_paths(
-                step_control, base_path, project_config_path=proj_path_arg
-            )
-            disease_paths = _expand_test_paths(
-                step_disease, base_path, project_config_path=proj_path_arg
-            )
-            if not control_paths or not disease_paths:
-                # Config test paths invalid (empty after expansion); fall back to training data
-                resolved = project.get_resolved_groups()
-                if len(resolved) >= 2:
-                    control_paths = list(resolved[0][1])
-                    disease_paths = list(resolved[1][1])
-        else:
-            control_paths = None
-            disease_paths = None
-        if control_paths is None or disease_paths is None:
-            resolved = project.get_resolved_groups()
-            if len(resolved) < 2:
-                raise ValueError(
-                    "Project has fewer than 2 groups; provide test_control_paths and test_disease_paths "
-                    "in step_config.predictor or via CLI, or use a project with at least 2 groups."
-                )
-            control_paths = list(resolved[0][1])
-            disease_paths = list(resolved[1][1])
+        control_paths = [_resolve_one_path(p, base_path) for p in control_paths if p]
+        disease_paths = [_resolve_one_path(p, base_path) for p in disease_paths if p]
+        if project.path_remap:
+            control_paths = _apply_path_remap(control_paths, project.path_remap)
+            disease_paths = _apply_path_remap(disease_paths, project.path_remap)
+        lineage: List[Dict[str, str]] = []
+        for p in control_paths:
+            lineage.append({"absolute_path": p, "side": "control", "group_label": "cli"})
+        for p in disease_paths:
+            lineage.append({"absolute_path": p, "side": "disease", "group_label": "cli"})
+        return PredictorConfig(
+            model_path=model_path,
+            model_dir=model_dir,
+            output_dir=out_dir,
+            test_control_paths=control_paths,
+            test_disease_paths=disease_paths,
+            path_remap=project.path_remap,
+            samples_base_path=project.samples_base_path,
+            debug=step_cfg.get("debug", False),
+            comparison_label=None,
+            report_controls={"label": "control", "groups": [{"label": "cli", "sample_paths": []}]},
+            report_diseases={"label": "disease", "groups": [{"label": "cli", "sample_paths": []}]},
+            sample_lineage=lineage,
+        )
 
-    # Ensure all paths are absolute before path_remap
-    control_paths = [_resolve_one_path(p, base_path) for p in control_paths if p]
-    disease_paths = [_resolve_one_path(p, base_path) for p in disease_paths if p]
+    if _predictor_blind_has_groups(step_cfg):
+        _assert_predictor_blind_exclusive(step_cfg)
+        blind_kwargs = _build_blind_predictor_dict(
+            step_cfg=step_cfg,
+            project=project,
+            project_path=proj_path_arg,
+            base_path=base_path,
+            output_dir=out_dir,
+            model_path=model_path,
+            model_dir=model_dir,
+            comparison_label=None,
+        )
+        return PredictorConfig(**blind_kwargs)
 
-    if project.path_remap:
-        control_paths = _apply_path_remap(control_paths, project.path_remap)
-        disease_paths = _apply_path_remap(disease_paths, project.path_remap)
+    controls_side = _effective_predictor_side(step_cfg, project, "controls")
+    diseases_side = _effective_predictor_side(step_cfg, project, "diseases")
+    ctrl_map = _expand_side_group_paths(controls_side, base_path, proj_path_arg, project.path_remap)
+    dis_map = _expand_side_group_paths(diseases_side, base_path, proj_path_arg, project.path_remap)
+    ctrl_labels = [str(g.get("label")) for g in controls_side.get("groups") or [] if g.get("label")]
+    dis_labels = [str(g.get("label")) for g in diseases_side.get("groups") or [] if g.get("label")]
+    control_paths, lin_c = _collect_paths_and_lineage("control", ctrl_labels, ctrl_map)
+    disease_paths, lin_d = _collect_paths_and_lineage("disease", dis_labels, dis_map)
+    lineage = lin_c + lin_d
 
     base: Dict[str, Any] = {
         "model_path": model_path,
@@ -260,6 +437,10 @@ def resolve_predictor_config(
         "path_remap": project.path_remap,
         "samples_base_path": project.samples_base_path,
         "debug": step_cfg.get("debug", False),
+        "comparison_label": None,
+        "report_controls": controls_side,
+        "report_diseases": diseases_side,
+        "sample_lineage": lineage,
     }
     return PredictorConfig(**base)
 
@@ -301,11 +482,46 @@ def resolve_predictor_config_per_comparison(
     paths = project.get_derived_paths()
     base_path = getattr(project, "samples_base_path", None)
 
+    if _predictor_blind_has_groups(step_cfg):
+        if test_control_paths is not None or test_disease_paths is not None:
+            raise ValueError(
+                "Do not combine --test-control/--test-disease with step_config.predictor.blind."
+            )
+        _assert_predictor_blind_exclusive(step_cfg)
+        mp = step_cfg.get("model_path") or classifier_step.get("save_classifier_path")
+        md = step_cfg.get("model_dir")
+        multiclass_path = _get_multiclass_model_path(project, step_cfg, paths)
+        if mp:
+            md = None
+        elif md:
+            mp = None
+        elif multiclass_path is not None:
+            mp = str(multiclass_path)
+            md = None
+        else:
+            raise ValueError(
+                "predictor.blind on a comparison project requires step_config.predictor.model_path, "
+                "model_dir, multiclass-classifier.pkl under classifier_dir, or classifier.save_classifier_path."
+            )
+        out_blind = str(Path(project.get_project_root()) / "predictors" / "blind")
+        blind_kwargs = _build_blind_predictor_dict(
+            step_cfg=step_cfg,
+            project=project,
+            project_path=project_path,
+            base_path=base_path,
+            output_dir=out_blind,
+            model_path=mp,
+            model_dir=md,
+            comparison_label="blind",
+        )
+        return [(PredictorConfig(**blind_kwargs), "blind")]
+
     # Prefer multiclass model when present: one config with test_group_paths
     multiclass_path = _get_multiclass_model_path(project, step_cfg, paths)
     if multiclass_path is not None:
         out_dir = str(Path(paths.validator_dir).resolve())
         step_test_groups = step_cfg.get("test_group_paths")
+        mc_lineage: List[Dict[str, str]] = []
         if step_test_groups and isinstance(step_test_groups, list):
             test_group_paths: List[Dict[str, Any]] = []
             for entry in step_test_groups:
@@ -322,6 +538,10 @@ def resolve_predictor_config_per_comparison(
                 if project.path_remap:
                     expanded = _apply_path_remap(expanded, project.path_remap)
                 test_group_paths.append({"label": label, "paths": expanded})
+                for p in expanded:
+                    mc_lineage.append(
+                        {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
+                    )
         else:
             resolved = project.get_resolved_groups()
             test_group_paths = []
@@ -331,6 +551,10 @@ def resolve_predictor_config_per_comparison(
                 if project.path_remap:
                     paths_list = _apply_path_remap(paths_list, project.path_remap)
                 test_group_paths.append({"label": label, "paths": paths_list})
+                for p in paths_list:
+                    mc_lineage.append(
+                        {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
+                    )
         base_dict: Dict[str, Any] = {
             "model_path": str(multiclass_path),
             "model_dir": None,
@@ -341,33 +565,23 @@ def resolve_predictor_config_per_comparison(
             "path_remap": project.path_remap,
             "samples_base_path": project.samples_base_path,
             "debug": step_cfg.get("debug", False),
+            "comparison_label": "multiclass",
+            "report_controls": None,
+            "report_diseases": None,
+            "sample_lineage": mc_lineage,
         }
         return [(PredictorConfig(**base_dict), "multiclass")]
 
-    comparisons = project.get_comparisons()
-    # Precedence: (1) CLI/caller test paths, (2) valid config test paths, (3) training data
+    controls_side = _effective_predictor_side(step_cfg, project, "controls")
+    diseases_side = _effective_predictor_side(step_cfg, project, "diseases")
+    ctrl_map = _expand_side_group_paths(controls_side, base_path, project_path, project.path_remap)
+    dis_map = _expand_side_group_paths(diseases_side, base_path, project_path, project.path_remap)
+
     use_caller_test_paths = (
         test_control_paths is not None and test_disease_paths is not None
     )
-    if not use_caller_test_paths:
-        step_control = step_cfg.get("test_control_paths") or step_cfg.get("healthy_paths")
-        step_disease = step_cfg.get("test_disease_paths") or step_cfg.get("cancer_paths")
-    else:
-        step_control = None
-        step_disease = None
-    config_test_control: Optional[List[str]] = None
-    config_test_disease: Optional[List[str]] = None
-    if step_control is not None and step_disease is not None:
-        config_test_control = _expand_test_paths(
-            step_control, base_path, project_config_path=project_path
-        )
-        config_test_disease = _expand_test_paths(
-            step_disease, base_path, project_config_path=project_path
-        )
-        if not config_test_control or not config_test_disease:
-            config_test_control = None
-            config_test_disease = None
 
+    comparisons = project.get_comparisons()
     result: List[Tuple[PredictorConfig, str]] = []
     for spec in comparisons:
         comp_label = spec.comparison_label or spec.disease_group
@@ -402,18 +616,28 @@ def resolve_predictor_config_per_comparison(
                 base_path,
                 project_config_path=project_path,
             )
-        elif config_test_control is not None and config_test_disease is not None:
-            control_paths = list(config_test_control)
-            disease_paths = list(config_test_disease)
+            control_paths = [_resolve_one_path(p, base_path) for p in control_paths if p]
+            disease_paths = [_resolve_one_path(p, base_path) for p in disease_paths if p]
+            if project.path_remap:
+                control_paths = _apply_path_remap(control_paths, project.path_remap)
+                disease_paths = _apply_path_remap(disease_paths, project.path_remap)
+            lineage: List[Dict[str, str]] = []
+            for p in control_paths:
+                lineage.append({"absolute_path": p, "side": "control", "group_label": "cli"})
+            for p in disease_paths:
+                lineage.append({"absolute_path": p, "side": "disease", "group_label": "cli"})
+            rep_c = {"label": controls_side.get("label", ""), "groups": [{"label": "cli", "sample_paths": []}]}
+            rep_d = {"label": diseases_side.get("label", ""), "groups": [{"label": "cli", "sample_paths": []}]}
         else:
-            control_paths = list(project.get_group_sample_paths_by_label(spec.control_group))
-            disease_paths = list(project.get_group_sample_paths_by_label(spec.disease_group))
-        # Ensure all paths are absolute before path_remap
-        control_paths = [_resolve_one_path(p, base_path) for p in control_paths if p]
-        disease_paths = [_resolve_one_path(p, base_path) for p in disease_paths if p]
-        if project.path_remap:
-            control_paths = _apply_path_remap(control_paths, project.path_remap)
-            disease_paths = _apply_path_remap(disease_paths, project.path_remap)
+            control_paths, lin_c = _collect_paths_and_lineage(
+                "control", [ctrl_label], ctrl_map
+            )
+            disease_paths, lin_d = _collect_paths_and_lineage(
+                "disease", [dis_label], dis_map
+            )
+            lineage = lin_c + lin_d
+            rep_c = _filter_side_report(controls_side, [ctrl_label])
+            rep_d = _filter_side_report(diseases_side, [dis_label])
 
         base: Dict[str, Any] = {
             "model_path": model_path,
@@ -424,6 +648,10 @@ def resolve_predictor_config_per_comparison(
             "path_remap": project.path_remap,
             "samples_base_path": project.samples_base_path,
             "debug": step_cfg.get("debug", False),
+            "comparison_label": comp_label,
+            "report_controls": rep_c,
+            "report_diseases": rep_d,
+            "sample_lineage": lineage,
         }
         result.append((PredictorConfig(**base), comp_label))
     return result

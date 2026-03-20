@@ -1,10 +1,10 @@
 # MethylPredictor Implementation (MethylClassifier and MethylUtils)
 
-This document describes how MethylPredictor is implemented: it uses **MethylClassifier** to run prediction on test sample sets and then computes metrics from the predictions and known labels.
+This document describes how MethylPredictor is implemented: it uses **MethylClassifier** to run prediction on test sample sets, then either **evaluates** predictions against known labels (**labeled** mode) or reports **blind** probabilities and summaries when no labels are provided (**blind** mode via `predictor.blind` / `test_blind_paths`).
 
 ## Architecture Overview
 
-- **MethylPredictor** does not train or implement a classifier. It loads a **MethylClassifier** (from model_dir or model_path), runs it on two lists of sample paths (control and disease), and compares predictions to the expected labels (control → 0, disease → 1).
+- **MethylPredictor** does not train or implement a classifier. It loads a **MethylClassifier**, runs it on labeled cohorts (control + disease, multiclass groups, or CLI lists) or on **blind** paths only, then writes **prediction_report.json** with **`mode": "labeled"`** or **`"blind"`**.
 - **MethylClassifier** (and its dependency MethylUtils) handles model loading, DMP-based feature extraction, and prediction. MethylPredictor only orchestrates the run and post-processes the results.
 
 ```mermaid
@@ -29,12 +29,13 @@ flowchart LR
 
 ## Data Flow
 
-1. **Config**: PredictorConfig with `model_path` or `model_dir`, `output_dir`, `test_control_paths`, `test_disease_paths` (and optional path_remap, debug). Config can come from CLI, a JSON config file, or project resolution (step_config.predictor).
-2. **Load classifier**: MethylPredictor builds a ClassifierConfig (model_path/model_dir, temperature, calibration, etc.) and instantiates **MethylClassifier**. So the same multi-chromosome or single-file model loading as in MethylClassifier is used.
-3. **Test sample list**: `samples_list = test_control_paths + test_disease_paths`, with `expected_classes = [0]*len(test_control_paths) + [1]*len(test_disease_paths)`.
-4. **Classification**: MethylPredictor calls MethylClassifier’s **classify_samples_from_list** with that list and `expected_classes`, using the same DMP-based loading (`required_chromosomes`, `dmp_positions_by_chrom`) so only classifier chromosomes and DMP positions are read. If some sample directories are unreadable or produce no valid chromosomes, MethylClassifier skips them and realigns `expected_classes` to the successfully scored rows before writing **predictions.csv**.
-5. **Metrics**: Read `predictions.csv`, extract `y_true` (`expected_class`) and `y_pred` (`prediction`) from the filtered scored rows. Compute metrics via **sklearn.metrics**: `accuracy_score`, `balanced_accuracy_score`, `confusion_matrix`, `precision_recall_fscore_support`. Build a dict with accuracy, balanced_accuracy, confusion_matrix, per_class (precision, recall, f1, support), macro_precision/recall/f1, weighted_f1, and for binary: sensitivity, specificity, precision_binary, recall_binary, f1_binary.
-6. **Output**: Print a short summary to console, write **validation_metrics.json** and keep **predictions.csv** in output_dir. Return the metrics dict for programmatic use (e.g. Monte Carlo aggregation).
+1. **Config**: PredictorConfig with `model_path` or `model_dir`, `output_dir`, and either **labeled** cohorts (nested **`controls` / `diseases`**, flat paths, or `test_group_paths`) or **`blind`** / **`test_blind_paths`** only (mutually exclusive). Project resolution merges predictor sides with top-level project cohorts when groups are empty; **`predictor.blind`** is handled before labeled paths and, on comparison projects, yields a single run under **`predictors/blind/`** with an explicit model path or multiclass PKL.
+2. **Path resolution once**: **`_prepare_predictor_paths_and_mode`** expands either blind nested JSON into **`test_blind_paths`** + lineage, or labeled nested/flat paths—never both in one run—and returns **`labeled`** vs **`blind`**. That mode threads through sample-list construction, reporting, and console output; it does not trigger a second classification pass.
+3. **Load classifier**: MethylPredictor builds a ClassifierConfig (model_path/model_dir, temperature, calibration, etc.) and instantiates **MethylClassifier**. So the same multi-chromosome or single-file model loading as in MethylClassifier is used.
+4. **Test sample list**: From resolved paths: labeled binary: `samples_list = test_control_paths + test_disease_paths`, `expected_classes = [0]*n_control + [1]*n_disease`. **Blind**: `samples_list = test_blind_paths`, `expected_classes = None`. Multiclass labeled: paths from `test_group_paths` with class index expectations. **`sample_lineage`** uses `side` ∈ `{control, disease, blind, multiclass}` for **`prediction_report.json`** grouping.
+5. **Classification** (single pass): **classify_samples_from_list** with `expected_classes` or `None`, same DMP-based loading as elsewhere. Skipped samples are dropped from the CSV; labeled runs realign expected classes to loaded rows.
+6. **Post-process by mode**: If `expected_class` is in the CSV, compute sklearn metrics and write **validation_metrics.json**. **Blind** runs skip metrics and build **`blind_summary`** (predicted class counts, mean probability per class, mean entropy) for **prediction_report.json**.
+7. **Output**: **prediction_report.json** always includes **`mode`**, **`class_names`**, and cohort-specific blocks; blind runs add per-sample **`probabilities`**, **`predicted_subgroup`**, **`max_probability`**, **`entropy`**. Return the metrics dict when labeled, else a small summary dict.
 
 ## MethylClassifier and MethylUtils Usage
 
@@ -43,14 +44,15 @@ flowchart LR
 | **MethylClassifier** | Loaded from model_dir or model_path; used only for prediction on the test sample list. |
 | **ClassifierConfig** | Built with model_path/model_dir, temperature, calibration, trimmed percentiles; no input_path (samples come from test_control_paths + test_disease_paths). |
 | **classify_samples_from_list** | Called with classifier, samples_list, output_file=predictions_csv, required_chromosomes, dmp_positions_by_chrom, expected_classes. This is the same entry point MethylClassifier CLI uses for batch classification. |
-| **methyl_utils.load_project** | Used when running with --project to resolve project and step_config.predictor (test_control_paths, test_disease_paths, model_dir, output_dir). |
+| **methyl_utils.load_project** | Used with --project to resolve `step_config.predictor.controls` / `.diseases` / `.blind`, merge labeled sides with root cohorts, and resolve blind-only comparison runs. |
 
 MethylPredictor does not call MethylUtils for metrics; it uses **sklearn.metrics** for all classification metrics.
 
 ## Output Files
 
-- **validation_metrics.json**: JSON-serializable dict with all metrics (accuracy, balanced_accuracy, confusion_matrix, n_samples, n_classes, class_names, per_class, macro_*, weighted_f1, and for binary sensitivity, specificity, etc.).
-- **predictions.csv**: One row per test sample; columns include sample identifier, expected_class (0 or 1), prediction, probabilities, and any other columns produced by MethylClassifier’s classification output.
+- **validation_metrics.json**: Present only for **labeled** runs; same schema as before (sklearn-based).
+- **predictions.csv**: One row per scored sample; **`expected_class`** only when labels were passed to the classifier helper.
+- **prediction_report.json**: **`mode": "labeled"`** or **`"blind"`**; blind branch includes **`blind_summary`** and rich per-sample probability fields under **`blind.groups[].samples`**.
 
 ## Accuracy Metrics (Summary)
 

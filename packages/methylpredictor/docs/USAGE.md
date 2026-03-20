@@ -112,41 +112,60 @@ methyl-predictor --model-dir /path/to/classifiers/PCa_vs_Healthy \
 
 ## Specifying test samples (healthy and disease groups)
 
-MethylPredictor needs two sets of sample paths: **control** (expected class 0, e.g. healthy) and **disease** (expected class 1, e.g. sick). Each sample is a directory (or path) that MethylClassifier can load (same format as for MethylClassifier input).
+MethylPredictor needs two sets of sample paths: **control** (expected class 0) and **disease** (expected class 1). Each sample is a directory that MethylClassifier can load.
 
-**Ways to specify test sets:**
+### Project JSON (`step_config.predictor`)
 
-| Source | Control paths | Disease paths |
-|--------|----------------|---------------|
-| **Project** | `step_config.predictor.test_control_paths` | `step_config.predictor.test_disease_paths` |
-| **Config JSON** | `test_control_paths` (array of strings) | `test_disease_paths` (array of strings) |
-| **CLI** | `--test-control` | `--test-disease` |
+Use the **same shape** as top-level `controls` / `diseases`: each side has optional `label` and a **`groups`** array. Each group has **`label`** and **`sample_paths`** (CSV list files and/or directories, same as training).
 
-**`--test-control` and `--test-disease`** accept either:
+- If **`predictor.controls`** or **`predictor.diseases`** is missing, or has an empty **`groups`** list, that side is taken from the **root** project `controls` / `diseases` (so you can use `"predictor": {}` to validate on the **same cohorts** as training).
+- For **per-comparison** projects, each run uses the comparison’s **`control_group`** / **`disease_group`** labels to pick the matching subgroup from those nested groups (see [`configs/project_Healthy_vs_PCa1-4.json`](../../configs/project_Healthy_vs_PCa1-4.json)).
 
-- A **CSV file path**: CSV must have a column named `path`, `sample`, or `sample_path` (or the first column is used). Each row is one sample path.
-- **Comma-separated paths**: e.g. `--test-control /data/s1,/data/s2,/data/s3`.
+### Blind samples (no known class)
 
-Examples:
+Use **`predictor.blind`** when you only want **probabilities per class/subgroup** and **no** accuracy metrics (new or unlabeled samples):
 
-```bash
-# CSV files listing sample directories
-methyl-predictor --model-dir ./classifiers --output-dir ./out \
-  --test-control ./test_lists/healthy.csv --test-disease ./test_lists/sick.csv
-
-# Inline paths
-methyl-predictor --model-dir ./classifiers --output-dir ./out \
-  --test-control /data/healthy1,/data/healthy2 \
-  --test-disease /data/sick1,/data/sick2
+```json
+"predictor": {
+  "blind": {
+    "groups": [
+      { "label": "incoming_batch_a", "sample_paths": ["configs/new_samples.csv"] }
+    ]
+  }
+}
 ```
 
-Samples should be **holdout** (not used for training) so that reported metrics reflect generalization.
+- **`groups[].label`** is metadata (batch name), not a ground-truth class.
+- **Do not** set **`predictor.controls`** / **`predictor.diseases`** (or nested `controls`/`diseases` on `PredictorConfig`) in the same run as **`blind`**.
+- **Output**: `prediction_report.json` has **`mode": "blind"`**, **`blind_summary`** (counts per predicted class, mean probabilities, mean entropy), and per-sample **`probabilities`**, **`predicted_subgroup`**, **`max_probability`**, **`entropy`**. **`validation_metrics.json`** is **not** written.
+- **Per-comparison projects**: a blind run produces **one** output under **`{project_root}/predictors/blind/`**. You must set **`predictor.model_path`**, **`model_dir`**, **`multiclass-classifier.pkl`**, or **`classifier.save_classifier_path`** so the model is unambiguous (binary per-comparison PKLs are not auto-picked for blind).
+
+### Standalone `--config` JSON
+
+You may either:
+
+- Set **`controls`** and **`diseases`** nested objects (same shape as above), or  
+- Pass flat **`test_control_paths`** / **`test_disease_paths`** (resolved to absolute paths), or  
+- Set **`blind`** only (same `groups` / `sample_paths` shape) for unlabeled inference.
+
+### CLI overrides (`--project` mode)
+
+**`--test-control`** and **`--test-disease`** still override the project test set (CSV or comma-separated paths). The structured **`prediction_report.json`** then uses placeholder group labels for the CLI override.
+
+### CLI examples
+
+```bash
+methyl-predictor --model-dir ./classifiers --output-dir ./out \
+  --test-control ./test_lists/healthy.csv --test-disease ./test_lists/sick.csv
+```
+
+Holdout samples should not overlap training when you care about generalization.
 
 ---
 
-## Accuracy metrics reported
+## Accuracy metrics reported (labeled runs only)
 
-MethylPredictor computes several accuracy metrics for the test samples (healthy and disease groups) and writes them to **validation_metrics.json** and prints a short summary to the console.
+When samples have **known** expected classes (control vs disease, or multiclass `test_group_paths`), MethylPredictor computes accuracy-style metrics and writes **validation_metrics.json**. **Blind** runs skip these and only emit descriptive **`blind_summary`** statistics in **prediction_report.json**.
 
 ### Global metrics
 
@@ -200,10 +219,11 @@ When the classifier is binary (control vs disease), MethylPredictor also reports
 
 | File | Description |
 |------|-------------|
-| **validation_metrics.json** | All metrics (accuracy, balanced_accuracy, confusion_matrix, per_class, sensitivity, specificity, etc.). |
-| **predictions.csv** | One row per test sample: sample identifier, expected_class (0 or 1), prediction, and any probability columns produced by MethylClassifier. |
+| **validation_metrics.json** | Written only for **labeled** runs (accuracy, balanced_accuracy, confusion_matrix, etc.). |
+| **predictions.csv** | One row per scored sample: `expected_class` when labeled; prediction, `prob_class*`, `predicted_class`. |
+| **prediction_report.json** | **`mode`**: `"labeled"` or `"blind"`. Labeled: nested **`controls` / `diseases`** (or **`multiclass_groups`**) + **`samples`** + **`validation_metrics`**. Blind: **`blind`** block + **`blind_summary`**; **`validation_metrics`** is `null`. |
 
-Both are written to the directory given by `--output-dir` or `output_dir` in config/project.
+All are written under `--output-dir` / `output_dir`.
 
 ---
 

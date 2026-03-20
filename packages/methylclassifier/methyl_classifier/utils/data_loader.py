@@ -437,7 +437,7 @@ class DataLoader:
             sm = meth_vals[order]
             n = int(sp.size)
             hi = max(n - 1, 0)
-            idx = np.searchsorted(sp, dmp_arr, side="left").astype(np.int64, copy=False)
+            idx = np.searchsorted(sp, dmp_arr, side="left").astype(np.int32, copy=False)
             safe_idx = np.minimum(np.maximum(idx, 0), hi)
             # Avoid boolean & / np.where evaluating sm[...] for buckets where idx == n (past end of sp):
             # NumPy evaluates both ufunc operands and both np.where branches eagerly.

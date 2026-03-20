@@ -1,0 +1,16 @@
+---
+description: Use the project virtualenv for all shell/Python commands in this repo
+alwaysApply: true
+---
+
+# Virtual environment
+
+This repository uses a local virtual environment at `.venv`.
+
+- Before running **any** `python`, `pip`, `uv`, `pytest`, or package CLIs (`methyl-*`, etc.) in the terminal, activate it from the repo root:
+
+  `source .venv/bin/activate`
+
+- Prefer one-shot form when scripting commands: `source .venv/bin/activate && python -m pytest ...`
+
+- Do not assume system Python has project dependencies; tests and imports should be validated inside `.venv`.
