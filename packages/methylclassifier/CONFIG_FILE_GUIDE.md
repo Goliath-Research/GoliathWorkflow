@@ -99,6 +99,11 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `no_filter` | boolean | false | Process all .h5 without chromosome/context filtering |
 | `log_level` | string | `"INFO"` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 
+**Export OvR PKL only (no classification):** with `ovr_binary_model_paths` or `ovr_detection_dirs` set, you can write the portable multiclass PKL without `input_path` using:
+
+`methyl_classifier --config your.json --export-ovr-pkl`  
+Optional path: `--export-ovr-pkl /path/out.pkl`; otherwise uses `save_classifier_path` or `--project` defaults. Not available for per-comparison control/disease projects. See `docs/USAGE.md`.
+
 ### Centroid validation (sanity check)
 
 Run the classifier on the **same samples** used to build the centroids. You should see centroid1 samples mostly with low P(class1) and centroid2 samples mostly with high P(class1), and predictions that agree with the expected class.

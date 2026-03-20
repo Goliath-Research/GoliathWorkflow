@@ -203,11 +203,19 @@ class ClassificationConfig(BaseModel):
             (self.ovr_binary_model_paths and len(self.ovr_binary_model_paths) >= 2)
             or (self.ovr_detection_dirs and len(self.ovr_detection_dirs) >= 2)
         )
-        if not self.input_path and not self.samples and not has_centroid_dirs and not has_centroid_lists and not has_multiclass:
+        if (
+            not self.input_path
+            and not self.samples
+            and not has_centroid_dirs
+            and not has_centroid_lists
+            and not has_multiclass
+            and not has_ovr_sources
+        ):
             raise ValueError(
                 "Provide one of: 'input_path', 'samples', "
                 "both 'centroid1_dir' and 'centroid2_dir', both 'centroid1_sample_paths' and 'centroid2_sample_paths', "
-                "or 'centroid_dirs' with 'multiclass_class_names' (same length)"
+                "'centroid_dirs' with 'multiclass_class_names' (same length), "
+                "or ovr_binary_model_paths / ovr_detection_dirs (each length >= 2)."
             )
         if has_multiclass:
             has_model = bool(self.model_dir or self.model_path) or has_ovr_sources

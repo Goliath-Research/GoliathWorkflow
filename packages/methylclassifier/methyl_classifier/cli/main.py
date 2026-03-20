@@ -1228,6 +1228,76 @@ def classify_samples_batch(classifier: MethylClassifier,
     return predictions, probabilities
 
 
+def _apply_cli_path_overrides(config: ClassificationConfig, args: argparse.Namespace) -> None:
+    """Apply --model, --model-dir, --input, --output from argparse onto an existing config."""
+    if args.model:
+        config.model_path = str(args.model)
+    if args.model_dir:
+        config.model_dir = str(args.model_dir)
+    if args.input:
+        config.input_path = str(args.input)
+    if args.output:
+        config.output_path = str(args.output)
+
+
+def _resolve_ovr_export_output_path(
+    config: ClassificationConfig,
+    explicit: Optional[str],
+) -> Path:
+    """
+    Output path for --export-ovr-pkl: CLI path wins, else save_classifier_path, else project_name in cwd.
+    """
+    if explicit:
+        return Path(explicit).expanduser()
+    if config.save_classifier_path:
+        return Path(config.save_classifier_path).expanduser()
+    if config.project_name:
+        return Path.cwd() / f"{config.project_name}-classifier.pkl"
+    raise ValueError(
+        "Could not determine export path: pass a path after --export-ovr-pkl, or set "
+        "save_classifier_path or project_name in the config / project resolver."
+    )
+
+
+def _export_ovr_pkl_from_config(config: ClassificationConfig, out_path: Path) -> None:
+    """Load OvR sources from config and write the portable ecdf_one_vs_rest PKL (no classification)."""
+    ovr_p = config.ovr_binary_model_paths or []
+    ovr_d = config.ovr_detection_dirs or []
+    if len(ovr_p) < 2 and len(ovr_d) < 2:
+        raise ValueError(
+            "--export-ovr-pkl requires ovr_binary_model_paths or ovr_detection_dirs (length >= 2) "
+            "in the resolved config."
+        )
+    ovr_names = config.ovr_class_names or config.multiclass_class_names
+    classifier_config = ClassifierConfig(
+        model_path=config.model_path,
+        model_dir=config.model_dir,
+        ovr_binary_model_paths=config.ovr_binary_model_paths,
+        ovr_detection_dirs=config.ovr_detection_dirs,
+        ovr_class_names=ovr_names,
+        temperature=config.temperature,
+        enable_platt_calibration=config.enable_platt_calibration,
+        trimmed_percentile_low=config.trimmed_percentile_low,
+        trimmed_percentile_high=config.trimmed_percentile_high,
+        chromosome_weights=config.chromosome_weights,
+        chromosome_matrix_path=config.chromosome_matrix_path,
+        weight_method=config.weight_method,
+        weight_fit_regularization=config.weight_fit_regularization,
+        weight_fit_alpha=config.weight_fit_alpha,
+        weight_fit_l1_ratio=config.weight_fit_l1_ratio,
+        project_name=config.project_name,
+        save_classifier_path=config.save_classifier_path,
+        samples_list_export_path=config.samples_list_export_path,
+    )
+    classifier = MethylClassifier(classifier_config)
+    if not getattr(classifier, "_ovr_mode", False):
+        raise RuntimeError("Internal error: expected OvR mode after loading OvR sources.")
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    classifier.save(out_path)
+    print(f"\n💾 OvR multiclass bundle exported to: {out_path}")
+
+
 def _run_one_classification(config: ClassificationConfig, label: Optional[str] = None) -> None:
     """Run classification once with the given config (used for single run and per-cancer-group loop)."""
     ovr_names = config.ovr_class_names or config.multiclass_class_names
@@ -1359,6 +1429,10 @@ Examples:
   # Direct arguments
   methyl_classifier --model classifier.pkl --input samples/ --output results.csv
 
+  # Export multiclass OvR PKL only (no samples / no CSV)
+  methyl_classifier --project myproject.json --export-ovr-pkl
+  methyl_classifier --config ovr_config.json --export-ovr-pkl /path/to/bundle.pkl
+
 Config fields (in JSON):
   {
     "model_path": "models/classifier-1-CG.pkl",
@@ -1442,8 +1516,64 @@ Config fields (in JSON):
     )
     
     # No new args for temperature/calibration - handled in config
-    
+
+    parser.add_argument(
+        "--export-ovr-pkl",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Export multiclass OvR portable PKL only (no classification). "
+            "Requires --config or --project with ovr_binary_model_paths or ovr_detection_dirs. "
+            "Optional PATH; if omitted, uses save_classifier_path or <cwd>/<project_name>-classifier.pkl."
+        ),
+    )
+
     args = parser.parse_args()
+
+    # Export-only: single multiclass OvR bundle (not per-comparison control/disease loops)
+    if args.export_ovr_pkl is not None:
+        if args.project is not None and args.config is not None:
+            raise ValueError("Use either --config or --project, not both.")
+        if args.project is not None:
+            if not args.project.exists():
+                raise FileNotFoundError(f"Project config not found: {args.project}")
+            use_per_comparison = args.per_cancer_group
+            if load_project is not None:
+                project = load_project(args.project)
+                if project.uses_control_disease():
+                    use_per_comparison = True
+            if use_per_comparison:
+                raise ValueError(
+                    "--export-ovr-pkl does not support per-comparison mode (control/disease layout or "
+                    "--per-cancer-group). Use --config, or a single merged OvR project step_config."
+                )
+            config = resolve_classifier_config(args.project, args.step_override)
+            _apply_cli_path_overrides(config, args)
+        elif args.config is not None:
+            with open(args.config, "r") as f:
+                config = ClassificationConfig(**json.load(f))
+            _apply_cli_path_overrides(config, args)
+        else:
+            raise ValueError(
+                "--export-ovr-pkl requires --config or --project with OvR sources in JSON / step_config."
+            )
+        setup_logging(config.log_level)
+        explicit = (args.export_ovr_pkl or "").strip()
+        out_path = _resolve_ovr_export_output_path(
+            config, explicit if explicit else None
+        )
+        try:
+            _export_ovr_pkl_from_config(config, out_path)
+        except Exception as e:
+            import traceback
+
+            print(f"❌ --export-ovr-pkl failed: {e}")
+            print(f"   Error type: {type(e).__name__}")
+            traceback.print_exc()
+            sys.exit(1)
+        return
 
     # Exactly one of --config or --project or (model + input) for config source
     if args.project is not None:
@@ -1479,26 +1609,12 @@ Config fields (in JSON):
                 print(f"  {label}: {config.output_path}")
             return
         config = resolve_classifier_config(args.project, args.step_override)
-        if args.model:
-            config.model_path = str(args.model)
-        if args.model_dir:
-            config.model_dir = str(args.model_dir)
-        if args.input:
-            config.input_path = str(args.input)
-        if args.output:
-            config.output_path = str(args.output)
+        _apply_cli_path_overrides(config, args)
     elif args.config:
         with open(args.config, 'r') as f:
             config_data = json.load(f)
         config = ClassificationConfig(**config_data)
-        if args.model:
-            config.model_path = str(args.model)
-        if args.model_dir:
-            config.model_dir = str(args.model_dir)
-        if args.input:
-            config.input_path = str(args.input)
-        if args.output:
-            config.output_path = str(args.output)
+        _apply_cli_path_overrides(config, args)
     else:
         # Construct config from CLI args (existing logic)
         config = ClassificationConfig(

@@ -153,3 +153,34 @@ def test_classifier_config_ovr_binary_paths_assembles_without_model_dir(tmp_path
     )
     assert clf._ovr_mode and clf.n_classes == 2
     assert len(clf.dmp_positions_df) == 2
+
+
+def test_export_ovr_pkl_helpers_match_cli_bundle(tmp_path, monkeypatch):
+    """CLI export path helpers produce the same portable PKL as an OvR save."""
+    monkeypatch.setattr("methyl_classifier.core.classifier.sys.exit", lambda *_: pytest.fail("sys.exit"))
+    from methyl_classifier.cli.main import (
+        _export_ovr_pkl_from_config,
+        _resolve_ovr_export_output_path,
+    )
+    from methyl_classifier.models.config_schema import ClassificationConfig
+
+    p0 = tmp_path / "b0.pkl"
+    p1 = tmp_path / "b1.pkl"
+    _write_min_detector_pkl(p0, 100)
+    _write_min_detector_pkl(p1, 200)
+
+    cfg = ClassificationConfig(
+        ovr_binary_model_paths=[str(p0), str(p1)],
+        ovr_class_names=["c0", "c1"],
+        save_classifier_path=str(tmp_path / "from_config.pkl"),
+    )
+    assert _resolve_ovr_export_output_path(cfg, None) == tmp_path / "from_config.pkl"
+    assert _resolve_ovr_export_output_path(cfg, str(tmp_path / "explicit.pkl")) == tmp_path / "explicit.pkl"
+
+    _export_ovr_pkl_from_config(cfg, tmp_path / "from_config.pkl")
+    with open(tmp_path / "from_config.pkl", "rb") as f:
+        dumped = pickle.load(f)
+    assert isinstance(dumped, dict)
+    assert dumped.get("classifier_type") == "ecdf_one_vs_rest"
+    clf2 = MethylClassifier(ClassifierConfig(model_path=str(tmp_path / "from_config.pkl")))
+    assert clf2._ovr_mode and clf2.n_classes == 2

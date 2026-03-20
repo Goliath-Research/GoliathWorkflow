@@ -153,6 +153,19 @@ Example config (`configs/PCa_vs_Healthy_classifier_config.json`):
 - **project_name**: When set, after classification the classifier is saved as `<project_name>-classifier.pkl` and the list of sample folders as `<project_name>-samples.txt` (or .csv) in the same directory as the classification output. You can override paths with **save_classifier_path** and **samples_list_export_path**.
 - **`--project`**: When using a project JSON, merged config comes from `step_config.classifier` and project paths. If **save_classifier_path** is omitted, the resolver defaults it to **`<project_root>/classifiers/<project_name>-classifier.pkl`** (see `paths.classifier_dir` in the project file), so MethylPredictor can load a stable artifact without extra JSON.
 
+#### Export OvR PKL without re-classifying
+
+If you already ran classification once (or only need the bundled predictor), you can write the same portable `ecdf_one_vs_rest` PKL without loading samples:
+
+```bash
+methyl_classifier --project path/to/project.json --export-ovr-pkl
+methyl_classifier --config ovr_only.json --export-ovr-pkl /custom/out.pkl
+```
+
+- **Optional path**: If omitted, uses **save_classifier_path** from the resolved config, then **`<cwd>/<project_name>-classifier.pkl`** if **project_name** is set.
+- **Requires** **ovr_binary_model_paths** or **ovr_detection_dirs** (K≥2) in the config / `step_config.classifier`.
+- **Not supported** with per-comparison control/disease layout (`--per-cancer-group`); use a single multiclass OvR project or a standalone JSON config.
+
 ### Multiclass OvR (K≥2) without a separate bundle script
 
 If you have **K** MethylDetector pickles (one per one-vs-rest class), list them in the config (or under `step_config.classifier` in a project JSON) instead of `model_dir` / `model_path`:
