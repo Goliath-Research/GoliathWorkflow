@@ -54,19 +54,20 @@ Use this when you run on the host and want to activate a virtual environment.
 
 **Prerequisites:** Python 3.10+. The pipeline CLIs must be available after installation.
 
-**1. Create a virtual environment**
+**1. Create a virtual environment** (from the **MethylPipeline repository root**; canonical name is `.venv`)
 
 ```bash
-python3 -m venv venv
+cd /path/to/MethylPipeline
+python3.12 -m venv .venv
 ```
 
 **2. Activate the virtual environment**
 
 ```bash
-source ./venv/bin/activate
+source .venv/bin/activate
 ```
 
-On Windows: `venv\Scripts\activate`. After activation, the prompt usually shows `(venv)`.
+On Windows: `.venv\Scripts\activate`. After activation, the prompt usually shows `(.venv)`.
 
 **3. Install dependencies**
 
@@ -112,7 +113,7 @@ Create a JSON config with the following fields:
 | `path_remap` | Optional path remap dict (or reuse from base_project). |
 | `abort_on_step_failure` | If `true`, abort all iterations when a pipeline step fails; if `false`, skip the iteration and continue. |
 
-**Layout selection:** If `base_project` defines **`groups`** (length ≥ 2), the run uses the **multiclass** path (`infer_monte_carlo_layout`); `cohorts` length must equal `len(groups)`. Otherwise the **binary** path is used and the MC config must define exactly two cohorts (via `healthy_csv`/`disease_csv` or two `cohorts` entries).
+**Layout selection:** If `base_project` defines **`groups`** (length ≥ 2), the run uses the **multiclass** path (`infer_monte_carlo_layout`); `cohorts` length must equal `len(groups)`. If the project uses **nested disease `stages`** (and/or multiple control groups) so that **`get_resolved_groups()`** returns **K ≥ 3** leaves in a fixed order, the layout may be **`hierarchical_multiclass`**: each iteration patches **`controls.groups`** / **`diseases.groups`** with train/val CSVs per resolved leaf, keeps **stratified splits per cohort**, and runs the multiclass pipeline with **`per_cancer_group=true`**. `cohorts[].label` must match that resolved order. Otherwise the **binary** path is used when the template is control/disease only and the MC config defines exactly two cohorts (via `healthy_csv`/`disease_csv` or two `cohorts` entries).
 
 The base template for multiclass must train a single **multiclass-classifier.pkl** under the project `classifiers/` directory (same contract as MethylPredictor). **Do not** set `step_config.predictor.blind` for MC configs — startup will error.
 
@@ -215,6 +216,6 @@ Storage is **not** recorded automatically. To estimate:
 
 ## Related documentation
 
-- [MethylValidation Theoretical Foundation](MethylValidation_Theoretical_Foundation.md) — Goal, stratified split, empirical metric distribution, processing/storage.
-- [METHYLVALIDATION_IMPLEMENTATION](METHYLVALIDATION_IMPLEMENTATION.md) — Modules, data flow, MethylUtils usage.
+- [THEORY.md](THEORY.md) — Code-backed theoretical summary and pointer to the canonical Quarto theory book.
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — Modules, data flow, and pipeline orchestration notes.
 - [MethylPredictor USAGE](../../methylpredictor/docs/USAGE.md) — Metric definitions (BA, sensitivity, specificity, F1, etc.).

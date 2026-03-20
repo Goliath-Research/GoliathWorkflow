@@ -1,9 +1,9 @@
 {
-  "project_name": "Healthy_vs_PCa1-4_CG",
+  "project_name": "Healthy_vs_PCa1-4-CG",
   "laboratory": "psomagen",
   "batch": "Second batch of prostate cancer samples",
-  "output_base": "/home/ubuntu/Work/prostate-cancer",
-  "samples_base_path": "/home/ubuntu/Work/prostate-cancer/samples",
+  "output_base": "/work/prostate-cancer",
+  "samples_base_path": "/work/prostate-cancer/samples",
   "controls": {
     "label": "healthy",
     "groups": [
@@ -19,49 +19,37 @@
     "label": "cancer",
     "groups": [
       {
-        "label": "pca1",
-        "sample_paths": [
-          "configs/pca1.csv"
-        ]
-      },
-      {
-        "label": "pca2",
-        "sample_paths": [
-          "configs/pca2.csv"
-        ]
-      },
-      {
-        "label": "pca3",
-        "sample_paths": [
-          "configs/pca3.csv"
-        ]
-      },
-      {
-        "label": "pca4",
-        "sample_paths": [
-          "configs/pca4.csv"
+        "label": "pca",
+        "stages": [
+          {
+            "label": "pca1",
+            "sample_paths": [
+              "configs/pca1.csv"
+            ]
+          },
+          {
+            "label": "pca2",
+            "sample_paths": [
+              "configs/pca2.csv"
+            ]
+          },
+          {
+            "label": "pca3",
+            "sample_paths": [
+              "configs/pca3.csv"
+            ]
+          },
+          {
+            "label": "pca4",
+            "sample_paths": [
+              "configs/pca4.csv"
+            ]
+          }
         ]
       }
     ]
   },
-  "comparisons": [
-    {
-      "control_group": "all",
-      "disease_group": "pca1"
-    },
-    {
-      "control_group": "all",
-      "disease_group": "pca2"
-    },
-    {
-      "control_group": "all",
-      "disease_group": "pca3"
-    },
-    {
-      "control_group": "all",
-      "disease_group": "pca4"
-    }
-  ],
+  "comparisons": "control_vs_each_disease",
   "chromosomes": [
     "1",
     "2",
@@ -195,6 +183,7 @@
       "network_plot": "plotly"
     },
     "classifier": {
+      "ovr_binary_pickles_from_comparisons": true,
       "weight_method": "linear_fitted",
       "weight_fit_regularization": "lasso",
       "weight_fit_alpha": 1,
@@ -208,12 +197,51 @@
       "log_level": "INFO"
     },
     "predictor": {
-      "test_control_paths": [
-        "configs/healthy.csv"
-      ],
-      "test_disease_paths": [
-        "configs/cancer.csv"
-      ],
+      "controls": {
+        "label": "healthy",
+        "groups": [
+          {
+            "label": "all",
+            "sample_paths": [
+              "configs/healthy.csv"
+            ]
+          }
+        ]
+      },
+      "diseases": {
+        "label": "cancer",
+        "groups": [
+          {
+            "label": "prostate_cancer",
+            "stages": [
+              {
+                "label": "pca1",
+                "sample_paths": [
+                  "configs/pca1.csv"
+                ]
+              },
+              {
+                "label": "pca2",
+                "sample_paths": [
+                  "configs/pca2.csv"
+                ]
+              },
+              {
+                "label": "pca3",
+                "sample_paths": [
+                  "configs/pca3.csv"
+                ]
+              },
+              {
+                "label": "pca4",
+                "sample_paths": [
+                  "configs/pca4.csv"
+                ]
+              }
+            ]
+          }
+        ]
+      },
       "debug": false
     }
   }

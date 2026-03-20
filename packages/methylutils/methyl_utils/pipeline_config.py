@@ -121,6 +121,13 @@ class GroupConfig(BaseModel):
         default=None,
         description="When set, run MethylCluster on this group's samples; if persist_centroids, expand to one centroid per cluster.",
     )
+    stages: Optional[List["GroupConfig"]] = Field(
+        default=None,
+        description="Optional child strata under this disease family (JSON key is 'stages' but children "
+        "may be stage, molecular subtype, or any mutually exclusive bins—not only TNM stage). "
+        "When set, parent must not use sample_paths; each child has its own label and sample_paths. "
+        "Resolved centroid labels are {parent.label}_{child.label}. See methylutils/docs/COHORT_TREE.md.",
+    )
 
     @field_validator("label")
     @classmethod
@@ -129,8 +136,29 @@ class GroupConfig(BaseModel):
             raise ValueError("label must be non-empty")
         return v.strip()
 
+    @model_validator(mode="after")
+    def stages_mutually_exclusive_with_parent_samples(self) -> "GroupConfig":
+        if self.stages:
+            if len(self.sample_paths) > 0:
+                raise ValueError(
+                    f"group {self.label!r}: use either sample_paths or stages, not both"
+                )
+            if len(self.stages) == 0:
+                raise ValueError(f"group {self.label!r}: stages must be a non-empty list when set")
+            for s in self.stages:
+                if not s.sample_paths:
+                    raise ValueError(
+                        f"group {self.label!r}: stage {s.label!r} must define sample_paths"
+                    )
+                if s.stages is not None:
+                    raise ValueError(
+                        f"group {self.label!r}: nested stages under stage {s.label!r} are not supported in v1"
+                    )
+        return self
 
-# Resolve forward reference in ControlDiseaseSide.groups
+
+# Resolve forward references for nested GroupConfig.stages
+GroupConfig.model_rebuild()
 ControlDiseaseSide.model_rebuild()
 
 
@@ -214,7 +242,12 @@ class ProjectConfig(BaseModel):
     comparisons: Optional[Union[List[ComparisonSpec], str]] = Field(
         default=None,
         description="When control+disease: list of {control_group, disease_group, comparison_label?} or shorthand: "
-        '"control_vs_each_disease" (first control vs each disease), "all_pairs" (all control x disease).',
+        '"control_vs_each_disease" (first control vs each disease), "all_pairs" (every control group × every disease leaf).',
+    )
+    cohort_hierarchy: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional reporting tree: e.g. disease_families[{label, stage_labels[]}], control_strata[]. "
+        "Filled automatically when using disease groups with stages if omitted.",
     )
     disease_name: Optional[str] = Field(
         default=None,
@@ -286,7 +319,14 @@ class ProjectConfig(BaseModel):
             and data.get("disease") is not None
             and data.get("comparisons") is None
         ):
-            data["comparisons"] = "control_vs_each_disease"
+            ctrl = data["control"]
+            nctrl = 0
+            if isinstance(ctrl, dict):
+                gr = ctrl.get("groups")
+                if isinstance(gr, list):
+                    nctrl = len(gr)
+            # Multiple control strata → full bipartite vs every disease leaf; single control keeps legacy default.
+            data["comparisons"] = "all_pairs" if nctrl > 1 else "control_vs_each_disease"
         # Promote project-level keys from control/disease side to top level when missing at root
         for side_key in ("control", "disease"):
             side = data.get(side_key)
@@ -337,6 +377,36 @@ class ProjectConfig(BaseModel):
             raise ValueError("Do not set both flat groups (or group1/group2) and control/disease")
         return self
 
+    @model_validator(mode="after")
+    def autofill_cohort_hierarchy(self) -> "ProjectConfig":
+        """When diseases use nested stages and cohort_hierarchy is unset, derive metadata for reporting."""
+        if self.cohort_hierarchy is not None:
+            return self
+        if self.control is None or self.disease is None:
+            return self
+        families: List[Dict[str, Any]] = []
+        for g in self.disease.groups:
+            if g.stages:
+                families.append(
+                    {
+                        "label": g.label,
+                        "stage_labels": [s.label for s in g.stages],
+                        "leaves": [f"{g.label}_{s.label}" for s in g.stages],
+                    }
+                )
+        if not families:
+            return self
+        ctr = [g.label for g in self.control.groups]
+        return self.model_copy(
+            update={
+                "cohort_hierarchy": {
+                    "version": 1,
+                    "control_strata": ctr,
+                    "disease_families": families,
+                }
+            }
+        )
+
     def _base_for(self, g: Any) -> Optional[str]:
         return getattr(g, "samples_base_path", None) or getattr(self, "samples_base_path", None)
 
@@ -347,9 +417,36 @@ class ProjectConfig(BaseModel):
         When resolve_paths=False, returns [(g.label, []) for each g] (no file I/O; for label validation).
         """
         if not resolve_paths:
-            return [(g.label, []) for g in side_groups]
-        out: List[Tuple[str, List[str]]] = []
+            out: List[Tuple[str, List[str]]] = []
+            for g in side_groups:
+                if g.stages:
+                    for st in g.stages:
+                        out.append((f"{g.label}_{st.label}", []))
+                else:
+                    out.append((g.label, []))
+            return out
+        out = []
         for g in side_groups:
+            if g.stages:
+                for st in g.stages:
+                    paths = _resolve_sample_paths(st.sample_paths, base_path=base_for_fn(st))
+                    if st.level_labels_path:
+                        path_to_level = _load_level_labels(st.level_labels_path)
+                        by_level: Dict[str, List[str]] = {}
+                        for p in paths:
+                            level = (
+                                path_to_level.get(p)
+                                or path_to_level.get(str(Path(p).resolve()))
+                                or path_to_level.get(Path(p).name)
+                            )
+                            if level is None:
+                                level = "default"
+                            by_level.setdefault(level, []).append(p)
+                        for level, level_paths in sorted(by_level.items()):
+                            out.append((f"{g.label}_{st.label}_{level}", level_paths))
+                    else:
+                        out.append((f"{g.label}_{st.label}", paths))
+                continue
             paths = _resolve_sample_paths(g.sample_paths, base_path=base_for_fn(g))
             if g.level_labels_path:
                 path_to_level = _load_level_labels(g.level_labels_path)
@@ -493,9 +590,31 @@ class ProjectConfig(BaseModel):
             if g.subcluster and g.subcluster.enabled:
                 out.append(("control", g.label, g))
         for g in self.disease.groups:
-            if g.subcluster and g.subcluster.enabled:
+            if g.stages:
+                for st in g.stages:
+                    if st.subcluster and st.subcluster.enabled:
+                        out.append(("disease", f"{g.label}_{st.label}", st))
+            elif g.subcluster and g.subcluster.enabled:
                 out.append(("disease", g.label, g))
         return out
+
+    def cohort_tree_dict(self) -> Dict[str, Any]:
+        """
+        Cohort tree / hierarchy metadata for reporting and tooling (v1).
+
+        Returns ``cohort_hierarchy`` when set or autofill from nested disease ``stages``;
+        otherwise a minimal summary with ``resolved_leaves`` for control/disease projects.
+        """
+        if self.cohort_hierarchy is not None:
+            return dict(self.cohort_hierarchy)
+        if self.control is not None and self.disease is not None:
+            return {
+                "version": 1,
+                "control_strata": [g.label for g in self.control.groups],
+                "disease_parent_labels": [g.label for g in self.disease.groups],
+                "resolved_leaves": [x[0] for x in self.get_resolved_groups()],
+            }
+        return {}
 
     def get_comparisons(self, expand_subclusters: bool = False) -> List[ComparisonSpec]:
         """

@@ -1,0 +1,86 @@
+# MethylCluster {#sec-methylcluster}
+
+## Role
+
+`methylcluster` is an exploratory clustering package. Unlike the core detector-classifier path, it is not purely ECDF-based. It combines:
+
+- pairwise distances built from per-locus divergences,
+- standard clustering algorithms from external libraries, and
+- custom centroid-based reassignment heuristics that score samples against beta distributions.
+
+That makes it useful, but it also means it should not be described as a direct continuation of the ECDF-only statistical core.
+
+## Pairwise Distance Matrix
+
+The first main workflow computes a sample-by-sample dissimilarity matrix. For samples \(a\) and \(b\), the code:
+
+1. aligns them on the intersection of available loci,
+2. computes a per-locus distance using `methylutils`,
+3. averages those per-locus distances.
+
+In abstract form,
+
+$$
+d(a,b) =
+\frac{1}{|\mathcal{I}_{ab}|}
+\sum_{i \in \mathcal{I}_{ab}} d_i(a,b),
+$$ {#eq-cluster-distance}
+
+where \(\mathcal{I}_{ab}\) is the pair-specific overlap of available loci.
+
+This is a pragmatic composite distance. Because the support set \(\mathcal{I}_{ab}\) varies across pairs, the resulting matrix should be treated as an empirical dissimilarity matrix rather than assumed to satisfy all metric axioms globally.
+
+## Library-Backed Clustering Paths
+
+Once a distance matrix exists, the package can call several standard methods:
+
+- HDBSCAN [@campello2015] with `metric="precomputed"`,
+- hierarchical agglomerative clustering with Lance-Williams style linkage [@lance1967],
+- silhouette-based selection of the number of clusters [@rousseeuw1987],
+- MDS followed by k-means [@macqueen1967] as a fallback path.
+
+These algorithms are principled and well-known, but the overall workflow remains only as principled as the input distance matrix.
+
+## Centroid-Based Clustering
+
+The package also implements a custom centroid-based clustering procedure. The internal centroids are represented as `MethylCentroid` objects, but sample assignment uses beta log-densities rather than the ECDF classifier. For a sample methylation fraction \(x_i\) and cluster-specific beta parameters \((\alpha_i,\beta_i)\),
+
+$$
+\log p(x_i \mid \alpha_i,\beta_i)
+=
+(\alpha_i - 1)\log x_i + (\beta_i - 1)\log(1-x_i) - \log B(\alpha_i,\beta_i),
+$$
+
+and the code averages those terms across valid loci:
+
+$$
+\operatorname{score}(x \mid k)
+=
+\frac{1}{|\mathcal{I}_{xk}|}
+\sum_{i \in \mathcal{I}_{xk}}
+\log p(x_i \mid \alpha_{ki},\beta_{ki}).
+$$ {#eq-cluster-beta-score}
+
+This resembles a mixture-model assignment score, but the surrounding procedure is not a textbook EM algorithm. The implementation uses:
+
+- farthest-point style initialization,
+- repeated reassignment,
+- cluster rescue rules for tiny clusters, and
+- optional forced healthy/diseased initializations.
+
+Those are useful engineering choices, yet they are heuristic rather than convergence-guaranteed inference.
+
+## Incomplete Dirichlet-Process Branch
+
+The repository also contains `methyl_cluster_dp.py`, which sketches a Dirichlet-process-like clustering path. The key prior/predictive component is stubbed out, and the module is not wired into the main CLI flow. It should therefore be treated as incomplete experimental code, not as an implemented method for publication.
+
+## Publication Guidance
+
+The most accurate description is:
+
+- `methylcluster` provides exploratory clustering utilities,
+- it supports standard library algorithms over custom methylation dissimilarities,
+- it also includes a beta-scored centroid reassignment procedure,
+- and several parts of the workflow are heuristic or experimental.
+
+The package should **not** be described as the natural ECDF-based unsupervised counterpart to the main classifier. The mathematical viewpoint is different.

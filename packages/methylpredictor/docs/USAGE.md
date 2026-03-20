@@ -59,19 +59,20 @@ Use this when you run on the host and want to activate a virtual environment bef
 
 **Prerequisites:** Python 3.8+.
 
-**1. Create a virtual environment**
+**1. Create a virtual environment** (from the **MethylPipeline repository root**; canonical name is `.venv`)
 
 ```bash
-python3 -m venv venv
+cd /path/to/MethylPipeline
+python3.12 -m venv .venv
 ```
 
 **2. Activate the virtual environment**
 
 ```bash
-source ./venv/bin/activate
+source .venv/bin/activate
 ```
 
-On Windows: `venv\Scripts\activate`. After activation, the prompt usually shows `(venv)`.
+On Windows: `.venv\Scripts\activate`. After activation, the prompt usually shows `(.venv)`.
 
 **3. Install MethylUtils (required by MethylClassifier)**
 
@@ -98,7 +99,7 @@ pip install -e .
 
 **6. Run MethylPredictor**
 
-With the virtual environment **activated** (`source ./venv/bin/activate`), use the CLI. Paths are on the **host**; you do not use a container.
+With the virtual environment **activated** (`source .venv/bin/activate` from the repo root), use the CLI. Paths are on the **host**; you do not use a container.
 
 ```bash
 methyl-predictor --project configs/project.json
@@ -107,6 +108,20 @@ methyl-predictor --model-dir /path/to/classifiers/PCa_vs_Healthy \
   --test-control test/control.csv \
   --test-disease test/disease.csv
 ```
+
+---
+
+## Saved classifier vs raw detector directory
+
+You **do not** need to “build” a new aggregated classifier every time you predict.
+
+- **After MethylClassifier** (training/validation run), **`save_classifier_path`** (or `project_name` defaults) writes **one** artifact:
+  - **Multiclass OvR**: a portable **`ecdf_one_vs_rest`** dict PKL — the K binary experts and union DMP layout are **fixed at save/export time** (`--export-ovr-pkl` does the same without classifying).
+  - **Multi-chromosome binary**: a pickled **`MethylClassifier`** that already contains **all** chromosome sub-classifiers and (when fitted) chromosome weights.
+
+**MethylPredictor** should use **`model_path`** to that file. The project resolver prefers **`classifier.save_classifier_path`**, per-comparison **`…/classifiers/<control>/<disease>/<project>-classifier.pkl`**, or the multiclass bundle under **`classifiers/<control>/`** when those files exist.
+
+**`model_dir`** (a folder of `classifier-{chrom}*.pkl`) is still valid — typically MethylDetector output — but each predictor process **reloads every chromosome pickle** and wires multi-chromosome mode again. That is **more I/O and setup** than loading a **single saved PKL**; use **`model_path`** once the classifier step has produced it.
 
 ---
 
@@ -256,5 +271,5 @@ All are written under `--output-dir` / `output_dir`.
 
 ## Related documentation
 
-- [MethylPredictor Theoretical Foundation](MethylPredictor_Theoretical_Foundation.md) — Goal, test sets, and metric definitions.
-- [METHYLPREDICTOR_IMPLEMENTATION](METHYLPREDICTOR_IMPLEMENTATION.md) — How MethylPredictor uses MethylClassifier and computes metrics.
+- [THEORY.md](THEORY.md) — Code-backed theoretical summary and pointer to the canonical Quarto theory book.
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — How MethylPredictor uses MethylClassifier and computes metrics.

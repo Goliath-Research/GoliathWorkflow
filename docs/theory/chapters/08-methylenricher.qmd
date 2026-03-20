@@ -1,0 +1,99 @@
+# MethylEnricher {#sec-methylenricher}
+
+## Role
+
+`methylenricher` is a downstream interpretation layer. It takes mapped genes or weighted gene lists and organizes them into pathway-level and module-level summaries. The package mixes three kinds of methodology:
+
+- external enrichment analysis through Enrichr [@chen2013],
+- graph-based pathway grouping,
+- heuristic module ranking and disease-prior labeling.
+
+Because of that mixture, this package should be described as a discovery and prioritization layer, not as a single statistical model.
+
+## Over-Representation Analysis
+
+The enrichment step is delegated to Enrichr through `gseapy.enrichr`. In practice this means the repository submits a gene list to an external enrichment engine and then reads back adjusted p-values, odds ratios, and gene memberships for the selected libraries.
+
+The statistical test itself therefore lives outside the repository. The in-repo code is responsible for:
+
+- choosing the input genes,
+- selecting the enrichment libraries,
+- filtering the returned tables, and
+- carrying forward the adjusted p-values into later scoring steps.
+
+Publication text should cite Enrichr [@chen2013] and record the exact library set used in the analysis.
+
+## Pathway Graph Construction
+
+The package builds a pathway graph in which nodes are pathways and edges represent gene-set overlap. In the simplest case the edge weight is based on Jaccard similarity:
+
+$$
+J(A,B) = \frac{|A \cap B|}{|A \cup B|},
+$$ {#eq-jaccard}
+
+or a closely related overlap score. Community detection is then performed with the Louvain method [@blondel2008], with connected-components fallbacks if the required package is unavailable.
+
+This is a standard graph heuristic for organizing pathways, but the resulting modules depend materially on the chosen threshold, graph construction rule, and Louvain resolution behavior.
+
+## Module Enrichment Score
+
+`compute_module_enrichment_score()` converts a module into a scalar ranking score by combining:
+
+- mean \(-\log_{10}(q)\) across pathways,
+- number of pathways,
+- number of genes,
+- mean gene weight.
+
+In normalized form the score is
+
+$$
+\operatorname{score}_{\text{enrich}}
+=
+0.4\,\tilde m_{-\log_{10} q}
++ 0.2\,\tilde n_{\text{pathways}}
++ 0.2\,\tilde n_{\text{genes}}
++ 0.2\,\tilde m_{\text{gene-weight}},
+$$ {#eq-module-score}
+
+where each tilded quantity is clipped to \([0,1]\) after dividing by a hand-chosen scale such as \(10\), \(50\), or \(200\).
+
+This is explicitly heuristic. It is a ranking function, not an enrichment test.
+
+## Disease Relevance Prior
+
+The package also computes a disease-relevance score by overlap with a curated gene set:
+
+$$
+\operatorname{score}_{\text{disease}}
+=
+\frac{|G_{\text{module}} \cap G_{\text{disease}}|}
+{|G_{\text{module}}|}.
+$$ {#eq-disease-prior}
+
+When no disease set is available the package returns a neutral value of \(0.5\). By default the code ships with a prostate-cancer-oriented prior gene set, so that default must not be described as disease-agnostic.
+
+The final module score is then
+
+$$
+\operatorname{score}_{\text{final}}
+=
+0.7\,\operatorname{score}_{\text{enrich}}
++ 0.3\,\operatorname{score}_{\text{disease}}.
+$$ {#eq-final-module-score}
+
+This is again a heuristic prioritization rule.
+
+## Theme Normalization And Labels
+
+The package includes theme normalization based on substring matching against a JSON mapping file, plus discrete labels such as `High`, `Medium`, and `Low` relevance. Those labels are workflow conveniences. They should not be presented as probabilistic classifications.
+
+## Publication Guidance
+
+The most accurate description is:
+
+- enrichment significance comes from an external ORA engine,
+- pathway modules come from graph clustering over pathway overlap,
+- module ranking is heuristic,
+- and disease relevance is a curated prior overlap rather than a learned posterior.
+
+That combination can be highly useful for interpretation, but it should be framed as an annotation and prioritization pipeline rather than as formal inference.

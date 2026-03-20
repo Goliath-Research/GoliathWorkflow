@@ -82,7 +82,7 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `weight_fit_alpha` | number | 1.0 | Regularization strength (inverse of C for logistic). |
 | `weight_fit_l1_ratio` | number | 0.5 | For `elasticnet_fitted`: L1/L2 balance (0=ridge-like, 1=lasso-like). |
 | `project_name` | string or null | null | After classification, save classifier as `<project_name>-classifier.pkl` and sample list as `<project_name>-samples.txt` in the output directory. |
-| `save_classifier_path` | string or null | null | Explicit path for the classifier .pkl. If null and `project_name` set, uses `<output_dir>/<project_name>-classifier.pkl`. |
+| `save_classifier_path` | string or null | null | Explicit path for the classifier .pkl. With `--project`, the resolver defaults to `<project_root>/classifiers/<project_name>-classifier.pkl` (see `paths.classifier_dir`) when unset. Otherwise, if null and `project_name` is set, uses `<output_dir>/<project_name>-classifier.pkl`. |
 | `samples_list_export_path` | string or null | null | Path to export sample folders (.txt or .csv). If null and `project_name` set, uses `<output_dir>/<project_name>-samples.txt`. |
 | `centroid1_dir` | string or null | null | Path to centroid1 output directory (H5 files). Sample list is read from each file’s **samples_used** metadata (union across files). Use with `centroid2_dir`. |
 | `centroid2_dir` | string or null | null | Path to centroid2 output directory (H5 files). Sample list is read from each file’s **samples_used** metadata (union across files). Use with `centroid1_dir`. |
@@ -93,11 +93,30 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `centroid_dirs` | array or null | null | K centroid output dirs (multiclass). Use with `multiclass_class_names` (length K). |
 | `multiclass_class_names` | array or null | null | Names for each class (same order as `centroid_dirs`). |
 | `ovr_binary_model_paths` | array or null | null | K≥2 MethylDetector PKL paths (OvR order). **Do not** set `model_path`/`model_dir` when using this; MethylClassifier assembles `ecdf_one_vs_rest` in memory. |
-| `ovr_detection_dirs` | array or null | null | K≥2 dirs, each with exactly one `classifier*.pkl`. Alternative to `ovr_binary_model_paths`. |
+| `ovr_detection_dirs` | array or null | null | K≥2 MethylDetector output dirs (OvR order). All `classifier*.pkl` in each dir are fused per class (multi-chrom weights like `model_dir`). Alternative to `ovr_binary_model_paths`. |
 | `ovr_class_names` | array or null | null | Optional; defaults to `multiclass_class_names` when multiclass. Length must be K. |
 | `debug` | boolean | false | Enable debug output |
 | `no_filter` | boolean | false | Process all .h5 without chromosome/context filtering |
 | `log_level` | string | `"INFO"` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+
+**Pipeline project cohorts:** Disease **`diseases.groups[].stages`** names a list of **child cohorts** (samples live on children only). The key is historical; children can represent stage, receptor subtype, or any exclusive strata—resolved leaf labels drive detector paths and OvR order. See **[COHORT_TREE.md](../methylutils/docs/COHORT_TREE.md)** (MethylUtils) for semantics, `cohort_hierarchy`, and a **v2** design appendix (recursive trees; not implemented).
+
+**Project JSON (`step_config.classifier`) — OvR paths from `comparisons`:**  
+When the project defines `controls`, `diseases`, and `comparisons` (control/disease layout), you can avoid hard-coding absolute detector paths:
+
+- **`ovr_binary_pickles_from_comparisons`**: `true` — resolver sets **`ovr_pairwise_aggregate_control`: true** (default path) and **`ovr_detection_dirs`** to **one folder per disease** in **`get_resolved_groups()`** order:  
+  `<project_root>/detections/<control_group>/<disease_group>/` for each comparison (e.g. `all/pca1`, `all/pca2`, …). Class order remains **[control, disease₁, …]**. There are **K−1** directories for **K** names: each pairwise control-vs-disease model is used **once** as the OvR head for that disease; the **control** OvR head **aggregates** P(control) across those pairwises (geometric mean) so it is not duplicated as the same pickle as the first disease.  
+  Requires **exactly one** control group in `controls.groups`.  
+  **`ovr_unified_classifier_basename`**: optional probe file in each detection folder (MethylDetector writes `classifier-{chrom}-{contexts}.pkl` with contexts comma-sorted, e.g. `classifier-1-CG.pkl` for CG-only projects). **If omitted**, the resolver uses the project’s first **`chromosomes`** entry and **`contexts`** to match your detector outputs—no need to hard-code `classifier-1-CG,CHG,CHH.pkl` for CG-only runs. If **`detections/one_vs_rest/<control>/<basename>`** exists as a file, **`ovr_pairwise_aggregate_control`** is **false** and that directory plus all per-disease dirs are listed (**K** paths).
+  **Automatic multiclass export:** `methyl_classifier --project …` (control/disease) still runs one binary job per comparison, then **writes the unified OvR PKL** to **`classifiers/<control>/classifier_<control>_<project_name>.pkl`** when **`ovr_binary_pickles_from_comparisons`** is **true** (same artifact as `methyl_classifier --project … --export-ovr-pkl`). MethylPredictor loads that file via **`model_path`** / **`predicted_multiclass_ovr_bundle_path`**.
+- **Multiple control strata × disease leaves:** when `controls.groups` has **more than one** entry and `comparisons` is omitted, the project default is **`all_pairs`** (full bipartite). With **`ovr_binary_pickles_from_comparisons`**: `true`, the resolver sets **`ovr_bipartite_aggregate`**: `true`, **`ovr_n_control_classes`**: M, and **`ovr_detection_dirs`** in **row-major** order (each control × each disease leaf). Class order is **[all controls…, all diseases…]**; pairwise heads aggregate geometrically per class. Explicit **`ovr_bipartite_aggregate`** / **`ovr_n_control_classes`** may be set when building configs without the resolver shortcut.
+- **`ovr_control_vs_rest_pkl`**: optional path to a **file** or **directory** for the first (control) OvR class (overrides the default above). A file uses its **parent directory** as the control source.
+- **`ovr_bundle_filename`**: optional; only if you want a custom export name. Default: **`classifier_<control_group_label>_<project_name>.pkl`** under **`<project_root>/classifiers/<control_group_label>/`** (e.g. `classifiers/all/classifier_all_Healthy_vs_PCa1-4.pkl`). Per-comparison outputs stay under `classifiers/all/pca1/`, etc.
+
+**Export OvR PKL only (no classification):** with `ovr_binary_model_paths` or `ovr_detection_dirs` set, you can write the portable multiclass PKL without `input_path` using:
+
+`methyl_classifier --config your.json --export-ovr-pkl`  
+Optional path: `--export-ovr-pkl /path/out.pkl`; otherwise uses `save_classifier_path` or `--project` defaults. For **control/disease** pipeline projects, put **project-wide** `ovr_binary_model_paths` / `ovr_detection_dirs` in `step_config.classifier` (or `--step-override`); pairwise-only configs cannot export one multiclass PKL. See `docs/USAGE.md`.
 
 ### Centroid validation (sanity check)
 

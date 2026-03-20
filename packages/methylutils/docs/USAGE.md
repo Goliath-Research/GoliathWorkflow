@@ -52,21 +52,20 @@ Use this when you run on the host (e.g. your laptop or a login node) and want to
 
 **1. Create a virtual environment**
 
-From the MethylPipeline repo root or from a package directory:
+From the **MethylPipeline repository root** (canonical directory is `.venv`):
 
 ```bash
-python3 -m venv venv
+cd /path/to/MethylPipeline
+python3.12 -m venv .venv
 ```
-
-(You can use another name, e.g. `.venv`; the rest of the doc uses `venv`.)
 
 **2. Activate the virtual environment**
 
 ```bash
-source ./venv/bin/activate
+source .venv/bin/activate
 ```
 
-On Windows: `venv\Scripts\activate`. After activation, your shell prompt usually shows `(venv)`.
+On Windows: `.venv\Scripts\activate`. After activation, your shell prompt usually shows `(.venv)`.
 
 **3. Install MethylUtils first**
 
@@ -117,6 +116,7 @@ Each of those packages has its own [USAGE](../../methylcentroid/docs/USAGE.md) (
 
 ## Related documentation
 
-- [MethylUtils Theoretical Foundation](MethylUtils_Theoretical_Foundation.md) — Role, project config, sample/centroid model, Beta and metrics.
-- [METHYLUTILS_IMPLEMENTATION](METHYLUTILS_IMPLEMENTATION.md) — Package layout and how downstream packages use MethylUtils.
-- [METHYLUTILS_COMPREHENSIVE_DOCUMENTATION](METHYLUTILS_COMPREHENSIVE_DOCUMENTATION.md) — Full math, distance formulas, data structures, and API details.
+- [THEORY.md](THEORY.md) — Code-backed theoretical summary and pointer to the canonical Quarto theory book.
+- [COHORT_TREE.md](COHORT_TREE.md) — `diseases.groups[].stages` as generic strata, leaf labels, comparisons, v2 spike appendix.
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — Package layout and how downstream packages use MethylUtils.
+- [../../../docs/theory/README.md](../../../docs/theory/README.md) — Canonical publication-grade theory book for the repository.

@@ -1,0 +1,96 @@
+# Limitations and Open Questions {#sec-limitations}
+
+## Why This Chapter Exists
+
+The repository is scientifically useful, but it is not served well by a perfectly tidy story. The code mixes exact formulas, approximations, heuristics, and external-service calls. This chapter records the main caveats that should be understood before publishing claims based on the pipeline.
+
+## The “ECDF-Only Pipeline” Claim Is Too Broad
+
+The centroid-detector-classifier path is indeed ECDF-centered. However:
+
+- `methylcluster` uses beta-based likelihoods and distance geometry,
+- `methylmapper` uses weighted Stouffer aggregation and heuristic importance scores,
+- `methylenricher` uses external enrichment plus heuristic module scoring,
+- `methylalignmentqc` is deterministic QC parsing, not ECDF inference.
+
+Therefore the monorepo as a whole should not be marketed as purely ECDF-only. The safer statement is that the **core supervised detection and classification path** is ECDF-centered.
+
+## Dependence Is Real
+
+Several methods rely on assumptions that are standard but imperfect for methylation data:
+
+- loci within one chromosome are correlated,
+- mapped DMPs within one gene are correlated,
+- binary OvR heads are not guaranteed to be jointly compatible,
+- repeated validation splits are not independent external studies.
+
+This does not invalidate the workflow, but it does change how literally one should interpret p-values, q-values, and meta-analytic combinations.
+
+## Approximation Layers
+
+The code intentionally trades exact raw-data procedures for scalable summaries:
+
+- KS statistics are evaluated on a grid and calibrated asymptotically,
+- Mann-Whitney is reconstructed from histograms rather than raw ranks,
+- ECDF overlap is integrated numerically after spline reconstruction,
+- some distance calculations average only over pairwise-overlapping loci.
+
+These approximations should be reported as approximations, not hidden behind textbook method names alone.
+
+## Heuristic Layers
+
+The following components are best described as engineering decisions:
+
+- the canonical effect-size ranking,
+- cumulative effect-mass selection,
+- geometric-mean control aggregation for pairwise OvR bundles,
+- module scoring constants in `methylenricher`,
+- stability thresholds for choosing top DMP counts in `methylmapper`,
+- auto-cap rules for coverage trimming.
+
+These are often useful, but their outputs are not calibrated probabilities or test statistics.
+
+## External Dependencies
+
+Some results depend on systems whose internal logic is not fully versioned inside this repository:
+
+- Enrichr,
+- DisGeNET,
+- Open Targets,
+- Azure SQL stored procedures,
+- optional Grok/xAI-assisted evidence synthesis.
+
+Any publication using those layers should record service versions, access dates, and cache policies. Otherwise the results are reproducible only in a weak operational sense.
+
+## Legacy Or Experimental Remnants
+
+Several code paths look incomplete or partially superseded:
+
+- `packages/methylutils/comparison.py` still advertises beta-based comparison logic that does not match the active ECDF-first production path.
+- `packages/methylcluster/methyl_cluster/methyl_cluster_dp.py` contains a Dirichlet-process-like branch with an unimplemented prior component.
+- Some older package docs still describe a stricter or cleaner theory story than the code currently supports.
+
+These remnants do not have to be deleted immediately, but they should not be cited as active method descriptions.
+
+## Publication-Ready Positioning
+
+The strongest defensible manuscript framing is:
+
+1. the core pipeline summarizes methylation into centroids with empirical distributions,
+2. it detects DMPs with nonparametric, ECDF-based screening and FDR adjustment,
+3. it classifies samples with weighted empirical-distribution likelihoods,
+4. and it layers exploratory clustering plus biological annotation on top.
+
+Anything stronger than that risks overstating what the code actually does.
+
+## What Would Strengthen The Theory Further
+
+The current implementation could support stronger future papers if the repository adds:
+
+- finite-sample benchmarking of histogram-based Mann-Whitney against raw-rank Mann-Whitney,
+- calibration studies for the effective-temperature ECDF classifier,
+- dependence-aware gene aggregation,
+- more explicit modeling of multiclass consistency,
+- and clearer retirement or isolation of experimental clustering branches.
+
+Those are natural next steps, but they are not yet the state of the codebase.

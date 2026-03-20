@@ -1,8 +1,8 @@
 """
 Build and load ``ecdf_one_vs_rest`` pickle bundles for MethylClassifier OvR mode.
 
-Each binary entry is typically produced from a MethylDetector ``classifier-{chrom}-*.pkl``
-package (``classifier`` + ``dmpDF`` + optional ``chromosome``).
+Each binary entry is either a single-chrom detector package (``classifier`` + ``dmpDF``) or a
+multi-chromosome dict (``chrom_classifiers`` + ``chromosome_weights`` + ``dmp_df``).
 """
 
 from __future__ import annotations
@@ -66,9 +66,9 @@ def binary_entry_from_sole_classifier_in_dir(
         raise ValueError(f"No classifier*.pkl under {d}")
     if len(pkls) > 1:
         raise ValueError(
-            f"{d} contains {len(pkls)} classifier*.pkl files; OvR needs exactly one "
-            "per class directory (e.g. single-chrom or pre-merged bundle), or set "
-            "ovr_binary_model_paths to an explicit list of K detector PKLs."
+            f"{d} contains {len(pkls)} classifier*.pkl files; expected exactly one for "
+            "this helper. (When building OvR from directories with multiple chromosomes, "
+            "MethylClassifier loads all ``classifier*.pkl`` per class without using this helper.)"
         )
     return binary_entry_from_detector_pickle(pkls[0])
 

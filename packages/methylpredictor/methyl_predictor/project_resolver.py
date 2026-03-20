@@ -196,13 +196,28 @@ def _expand_side_group_paths(
     project_path: Union[str, Path],
     path_remap: Optional[Dict[str, str]],
 ) -> Dict[str, List[str]]:
-    """Map group label -> expanded absolute sample paths."""
+    """Map group label -> expanded absolute sample paths (disease ``stages`` → leaf ``type_stage``)."""
     out: Dict[str, List[str]] = {}
     for g in side.get("groups") or []:
         if not isinstance(g, dict):
             continue
-        label = g.get("label")
-        if not label:
+        parent = g.get("label")
+        if not parent:
+            continue
+        stages = g.get("stages")
+        if isinstance(stages, list) and stages:
+            for st in stages:
+                if not isinstance(st, dict) or not st.get("label"):
+                    continue
+                leaf = f"{parent}_{st['label']}"
+                raw = st.get("sample_paths") or []
+                if isinstance(raw, str):
+                    raw = [raw]
+                expanded = _expand_test_paths(list(raw), base_path, project_config_path=project_path)
+                expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
+                if path_remap:
+                    expanded = _apply_path_remap(expanded, path_remap)
+                out[str(leaf)] = expanded
             continue
         raw = g.get("sample_paths") or []
         if isinstance(raw, str):
@@ -211,13 +226,42 @@ def _expand_side_group_paths(
         expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
         if path_remap:
             expanded = _apply_path_remap(expanded, path_remap)
-        out[str(label)] = expanded
+        out[str(parent)] = expanded
+    return out
+
+
+def _resolved_leaf_labels_from_side(side: Dict[str, Any]) -> List[str]:
+    """Flatten ``groups`` to centroid leaf labels (``stages`` → ``parent_child``)."""
+    out: List[str] = []
+    for g in side.get("groups") or []:
+        if not isinstance(g, dict) or not g.get("label"):
+            continue
+        plab = str(g["label"])
+        if g.get("stages"):
+            for st in g.get("stages") or []:
+                if isinstance(st, dict) and st.get("label"):
+                    out.append(f"{plab}_{st['label']}")
+        else:
+            out.append(plab)
     return out
 
 
 def _filter_side_report(side: Dict[str, Any], group_labels: List[str]) -> Dict[str, Any]:
-    """Keep only listed group labels (order = group_labels order)."""
-    by_label = {g.get("label"): g for g in (side.get("groups") or []) if isinstance(g, dict)}
+    """Keep only listed group labels (order = group_labels order); supports nested ``stages`` leaves."""
+    by_label: Dict[str, Any] = {}
+    for g in side.get("groups") or []:
+        if not isinstance(g, dict):
+            continue
+        plab = g.get("label")
+        if not plab:
+            continue
+        if g.get("stages"):
+            for st in g.get("stages") or []:
+                if isinstance(st, dict) and st.get("label"):
+                    leaf = f"{plab}_{st['label']}"
+                    by_label[leaf] = {"label": leaf, "sample_paths": list(st.get("sample_paths") or [])}
+        else:
+            by_label[plab] = copy.deepcopy(g)
     groups = []
     for lab in group_labels:
         if lab in by_label:
@@ -297,6 +341,7 @@ def _build_blind_predictor_dict(
         if isinstance(g, dict) and g.get("label")
     ]
     blind_paths, lineage = _collect_paths_and_lineage("blind", labels, bmap)
+    tree = project.cohort_tree_dict() if hasattr(project, "cohort_tree_dict") else {}
     return {
         "model_path": model_path,
         "model_dir": model_dir,
@@ -313,6 +358,7 @@ def _build_blind_predictor_dict(
         "report_blind": blind_side,
         "blind": blind_side,
         "sample_lineage": lineage,
+        "cohort_hierarchy": tree or None,
     }
 
 
@@ -326,11 +372,28 @@ def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: An
         p = Path(explicit)
         if p.is_file():
             return p
+    classifier_step = project.get_step_config("classifier") or {}
+    scp = classifier_step.get("save_classifier_path")
+    if scp and Path(scp).is_file():
+        return Path(scp)
+    try:
+        from methyl_classifier.project_resolver import predicted_multiclass_ovr_bundle_path
+
+        bundled = predicted_multiclass_ovr_bundle_path(project, classifier_step)
+        if bundled is not None and bundled.is_file():
+            return bundled
+    except ImportError:
+        pass
     classifier_dir = getattr(paths, "classifier_dir", None)
     if classifier_dir:
         candidate = Path(classifier_dir) / MULTICLASS_CLASSIFIER_FILENAME
         if candidate.is_file():
             return candidate
+        project_name = getattr(project, "project_name", None)
+        if project_name:
+            legacy = Path(classifier_dir) / f"{project_name}-classifier.pkl"
+            if legacy.is_file():
+                return legacy
     return None
 
 
@@ -383,6 +446,7 @@ def _build_multiclass_predictor_config(
                 mc_lineage.append(
                     {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
                 )
+    tree = project.cohort_tree_dict() if hasattr(project, "cohort_tree_dict") else {}
     base_dict: Dict[str, Any] = {
         "model_path": str(multiclass_path),
         "model_dir": None,
@@ -397,6 +461,7 @@ def _build_multiclass_predictor_config(
         "report_controls": None,
         "report_diseases": None,
         "sample_lineage": mc_lineage,
+        "cohort_hierarchy": tree or None,
     }
     return PredictorConfig(**base_dict)
 
@@ -501,12 +566,13 @@ def resolve_predictor_config(
     diseases_side = _effective_predictor_side(step_cfg, project, "diseases")
     ctrl_map = _expand_side_group_paths(controls_side, base_path, proj_path_arg, project.path_remap)
     dis_map = _expand_side_group_paths(diseases_side, base_path, proj_path_arg, project.path_remap)
-    ctrl_labels = [str(g.get("label")) for g in controls_side.get("groups") or [] if g.get("label")]
-    dis_labels = [str(g.get("label")) for g in diseases_side.get("groups") or [] if g.get("label")]
+    ctrl_labels = _resolved_leaf_labels_from_side(controls_side)
+    dis_labels = _resolved_leaf_labels_from_side(diseases_side)
     control_paths, lin_c = _collect_paths_and_lineage("control", ctrl_labels, ctrl_map)
     disease_paths, lin_d = _collect_paths_and_lineage("disease", dis_labels, dis_map)
     lineage = lin_c + lin_d
 
+    tree = project.cohort_tree_dict() if hasattr(project, "cohort_tree_dict") else {}
     base: Dict[str, Any] = {
         "model_path": model_path,
         "model_dir": model_dir,
@@ -520,6 +586,7 @@ def resolve_predictor_config(
         "report_controls": controls_side,
         "report_diseases": diseases_side,
         "sample_lineage": lineage,
+        "cohort_hierarchy": tree or None,
     }
     return PredictorConfig(**base)
 

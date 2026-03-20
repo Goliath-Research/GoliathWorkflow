@@ -48,6 +48,19 @@ use_parentheses = true
 ensure_newline_before_comments = true
 
 [tool.pytest.ini_options]
+# Prefer monorepo source trees over any older pip-installed copies (editable installs can drift).
+pythonpath = [
+    "packages/methylutils",
+    "packages/methylcentroid",
+    "packages/methyldetector",
+    "packages/methylclassifier",
+    "packages/methylpredictor",
+    "packages/methylvalidation",
+    "packages/methylmapper",
+    "packages/methylcluster",
+    "packages/methylenricher",
+    "packages/methylalignmentqc",
+]
 testpaths = ["packages/*/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]

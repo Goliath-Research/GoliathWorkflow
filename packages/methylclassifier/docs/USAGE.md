@@ -56,19 +56,20 @@ Use this when you run on the host (e.g. laptop or login node) and want to activa
 
 **Prerequisites:** Python 3.8+.
 
-**1. Create a virtual environment**
+**1. Create a virtual environment** (from the **MethylPipeline repository root**; canonical name is `.venv`)
 
 ```bash
-python3 -m venv venv
+cd /path/to/MethylPipeline
+python3.12 -m venv .venv
 ```
 
 **2. Activate the virtual environment**
 
 ```bash
-source ./venv/bin/activate
+source .venv/bin/activate
 ```
 
-On Windows: `venv\Scripts\activate`. After activation, the prompt usually shows `(venv)`.
+On Windows: `.venv\Scripts\activate`. After activation, the prompt usually shows `(.venv)`.
 
 **3. Install MethylUtils (required dependency)**
 
@@ -89,7 +90,7 @@ pip install -e .
 
 **5. Run MethylClassifier**
 
-With the virtual environment **activated** (`source ./venv/bin/activate`), use the CLI. Paths in the config are on the **host**; you do not use a container.
+With the virtual environment **activated** (`source .venv/bin/activate` from the repo root), use the CLI. Paths in the config are on the **host**; you do not use a container.
 
 ```bash
 methyl_classifier --config configs/PCa_vs_Healthy_classifier_config.json
@@ -103,7 +104,7 @@ methyl_classifier --model-dir /path/to/classifiers/ --input /path/to/samples/ --
 After completing either setup:
 
 - **Docker:** Run via `docker exec -w /workspace/packages/methylclassifier methylpipeline methyl_classifier --config <config.json>` (paths in config must be valid inside the container).
-- **Virtual environment:** Activate the venv (`source ./venv/bin/activate`), then run `methyl_classifier --config <config.json>` (paths in config are on the host).
+- **Virtual environment:** Activate the project venv (`source .venv/bin/activate`), then run `methyl_classifier --config <config.json>` (paths in config are on the host).
 
 ---
 
@@ -151,13 +152,32 @@ Example config (`configs/PCa_vs_Healthy_classifier_config.json`):
 - **weight_fit_alpha**: Regularization strength (inverse of C for logistic). Default `1.0`.
 - **weight_fit_l1_ratio**: For `elasticnet_fitted` only: balance L1/L2 (0=ridge-like, 1=lasso-like). Default `0.5`.
 - **project_name**: When set, after classification the classifier is saved as `<project_name>-classifier.pkl` and the list of sample folders as `<project_name>-samples.txt` (or .csv) in the same directory as the classification output. You can override paths with **save_classifier_path** and **samples_list_export_path**.
+- **`--project`**: When using a project JSON, merged config comes from `step_config.classifier` and project paths. **Control/disease** projects run **one binary classification job per comparison**, then—if **`ovr_binary_pickles_from_comparisons`** is **true**—automatically **export the unified multiclass OvR PKL** to **`{project_root}/classifiers/<control_label>/classifier_<control>_<project_name>.pkl`** (same file **`--export-ovr-pkl`** would write). MethylPredictor loads that path via **`model_path`** / resolver defaults. Detector probe files default to **`classifier-{first_chrom}-{sorted_contexts}.pkl`** (e.g. **`classifier-1-CG.pkl`** for CG-only projects); set **`ovr_unified_classifier_basename`** only if your detector used a different naming pattern.
+
+#### Reusing one PKL for prediction (OvR and multi-chromosome)
+
+After classification, **`save_classifier_path`** stores **one** file MethylPredictor can open with **`model_path`**: OvR mode writes the portable **`ecdf_one_vs_rest`** dict (not a raw per-chromosome folder). Multi-chromosome binary mode pickles the full **`MethylClassifier`**, which already aggregates all chromosomes — you are **not** meant to re-merge detector pickles on every prediction. Prefer that PKL over pointing predictors at **`model_dir`** = detector output when a saved artifact exists. See **MethylPredictor** `USAGE.md` (“Saved classifier vs raw detector directory”).
+
+#### Export OvR PKL only (no per-comparison classification)
+
+Use this when detectors exist but you skip the per-comparison training loop. A normal **`--project`** run with **`ovr_binary_pickles_from_comparisons`** already performs this export at the end; **`--export-ovr-pkl`** is for export-only workflows:
+
+```bash
+methyl_classifier --project path/to/project.json --export-ovr-pkl
+methyl_classifier --config ovr_only.json --export-ovr-pkl /custom/out.pkl
+```
+
+- **Optional path**: If omitted, uses **save_classifier_path** from the resolved config, then **`<cwd>/<project_name>-classifier.pkl`** if **project_name** is set.
+- **Requires** **ovr_binary_model_paths** or **ovr_detection_dirs** (K≥2) in the config / `step_config.classifier`.
+- **Control/disease projects** are supported when **`step_config.classifier`** (or **`--step-override`**) defines **project-wide** `ovr_binary_model_paths` or `ovr_detection_dirs`, or sets **`ovr_binary_pickles_from_comparisons`: true**. That resolver fills **`ovr_detection_dirs`** with **one directory per disease comparison** and sets **`ovr_pairwise_aggregate_control`: true** unless an explicit control artifact exists (`ovr_control_vs_rest_pkl` or `detections/one_vs_rest/...`). With aggregation, you get **K** class probabilities (control + each subgroup) from **K−1** pairwise detectors plus a **synthetic control head** (geometric mean of each pairwise’s P(control)); each pairwise folder is still merged across chromosomes via **all** `classifier*.pkl` there.  
+  The **exported** multiclass OvR PKL defaults to **`{project_root}/classifiers/<control_group_label>/classifier_<control>_<project_name>.pkl`**. **MethylPredictor** should use that single saved PKL (`model_path`) so prediction stays one load for the full union of DMPs across chromosomes and classes.
 
 ### Multiclass OvR (K≥2) without a separate bundle script
 
 If you have **K** MethylDetector pickles (one per one-vs-rest class), list them in the config (or under `step_config.classifier` in a project JSON) instead of `model_dir` / `model_path`:
 
 - **`ovr_binary_model_paths`**: array of K absolute paths to detector `*.pkl` files (each must contain `classifier` + `dmpDF`).
-- **`ovr_detection_dirs`**: alternative — K directories, each containing **exactly one** `classifier*.pkl` (multi-chromosome folders with several pickles are not auto-merged; list explicit paths or one pickle per class).
+- **`ovr_detection_dirs`**: K directories (OvR order). **One** `classifier*.pkl` → single-chrom ECDF head; **several** `classifier-*.pkl` → weighted multi-chromosome expert for that class (same as loading that folder as **`model_dir`**).
 - **`ovr_class_names`** or **`multiclass_class_names`** (multiclass centroid validation): length **K**, same order as the OvR sources and **`centroid_dirs`**.
 
 MethylClassifier **assembles** the `ecdf_one_vs_rest` bundle in memory. On **save** (`save_classifier_path` / `project_name`), it writes the **portable dict** PKL used by MethylPredictor, not a raw pickled `MethylClassifier`.

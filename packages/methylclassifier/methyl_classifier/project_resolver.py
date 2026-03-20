@@ -7,16 +7,245 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from methyl_utils import load_project
+from methyl_utils import ProjectConfig, load_project
 
 from .models.config_schema import ClassificationConfig
 
 CLASSIFIER_OUTPUT_FILENAME = "classification_results.csv"
 
 
-def _disease_subdir(project: Any) -> str:
+def default_ovr_unified_classifier_basename(project: ProjectConfig) -> str:
+    """
+    Basename MethylDetector writes under each comparison output dir:
+    ``classifier-{chromosome}-{comma_sorted_contexts}.pkl`` (see methyldetector ``_save_unified_model``).
+    OvR expansion probes the first project chromosome only to verify each detection dir exists.
+    """
+    chroms = project.chromosomes or ["1"]
+    ctxs = project.contexts or ["CG"]
+    ch = str(chroms[0])
+    ctx_str = ",".join(sorted(str(c) for c in ctxs))
+    return f"classifier-{ch}-{ctx_str}.pkl"
+
+
+# Merged into effective classifier step when predicting default OvR bundle save path.
+_CLASSIFIER_STEP_KEYS_FOR_BUNDLE_PATH = (
+    "ovr_binary_pickles_from_comparisons",
+    "ovr_bundle_filename",
+    "ovr_binary_model_paths",
+    "ovr_detection_dirs",
+    "ovr_pairwise_aggregate_control",
+    "ovr_bipartite_aggregate",
+    "ovr_n_control_classes",
+)
+
+
+def predicted_multiclass_ovr_bundle_path(
+    project: ProjectConfig,
+    classifier_step: Optional[Dict[str, Any]] = None,
+) -> Optional[Path]:
+    """
+    Default ``save_classifier_path`` location for control/disease multiclass OvR:
+    ``<project_root>/classifiers/<control_group>/<bundle>.pkl``.
+
+    Applies when the project has ≥3 resolved groups and the classifier step requests
+    OvR (``ovr_binary_pickles_from_comparisons`` or explicit ``ovr_binary_model_paths`` /
+    ``ovr_detection_dirs`` with length ≥2). Does not check that the file exists.
+    """
+    step = dict(
+        classifier_step
+        if classifier_step is not None
+        else (project.get_step_config("classifier") or {})
+    )
+    if not project.uses_control_disease():
+        return None
+    resolved = project.get_resolved_groups()
+    if len(resolved) < 3:
+        return None
+    ovr_dirs = step.get("ovr_detection_dirs") or []
+    has_ovr = bool(step.get("ovr_binary_pickles_from_comparisons")) or len(
+        step.get("ovr_binary_model_paths") or []
+    ) >= 2 or len(ovr_dirs) >= 2 or (
+        step.get("ovr_pairwise_aggregate_control")
+        and len(ovr_dirs) >= 1
+    ) or (bool(step.get("ovr_bipartite_aggregate")) and len(ovr_dirs) >= 2)
+    if not has_ovr:
+        return None
+    ctrl_label = resolved[0][0]
+    bundle_fn = step.get("ovr_bundle_filename")
+    if bundle_fn:
+        fn = str(bundle_fn)
+        if not fn.endswith(".pkl"):
+            fn = f"{fn}.pkl"
+    else:
+        fn = f"classifier_{ctrl_label}_{project.project_name}.pkl"
+    return Path(project.get_project_root()) / "classifiers" / ctrl_label / fn
+
+
+def merge_project_classifier_step(
+    project_path: Union[str, Path],
+    step_override_path: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """Merged ``step_config.classifier`` dict, including optional JSON overrides."""
+    project = load_project(project_path)
+    step_cfg = dict(project.get_step_config("classifier") or {})
+    if step_override_path is not None:
+        override_path = Path(step_override_path)
+        if override_path.exists():
+            with open(override_path) as f:
+                step_cfg.update(json.load(f))
+    return step_cfg
+
+
+def classifier_step_dict_has_ovr_sources(step_cfg: Dict[str, Any]) -> bool:
+    """True if merged classifier step defines K>=2 OvR detector sources."""
+    if step_cfg.get("ovr_binary_pickles_from_comparisons"):
+        return True
+    p = step_cfg.get("ovr_binary_model_paths") or []
+    d = step_cfg.get("ovr_detection_dirs") or []
+    M = int(step_cfg.get("ovr_n_control_classes") or 0)
+    bip = bool(step_cfg.get("ovr_bipartite_aggregate"))
+    if bip and M >= 1 and len(d) >= M:
+        return True
+    return (
+        len(p) >= 2
+        or len(d) >= 2
+        or (bool(step_cfg.get("ovr_pairwise_aggregate_control")) and len(d) >= 1)
+    )
+
+
+def expand_ovr_paths_from_comparisons(
+    project: ProjectConfig,
+    *,
+    unified_basename: str,
+    control_vs_rest_pkl: Optional[str] = None,
+) -> Tuple[List[str], List[str], bool, bool]:
+    """
+    Build OvR **detection directory** paths from ``comparisons`` (and optional control override).
+
+    Returns ``(dirs, class_names, pairwise_aggregate_control, ovr_bipartite_aggregate)``.
+
+    **Single control (``pairwise_aggregate_control=True``):** one directory per **disease** —
+    ``detections/<control>/<disease>/`` (**K-1** dirs for **K** names). Control head aggregates
+    P(control) across those pairwises.
+
+    **Multiple controls:** **bipartite** row-major order: for each control label, for each disease
+    leaf, one directory (**M×N** dirs for **M+N** class names). Set ``ovr_bipartite_aggregate`` and
+    ``ovr_n_control_classes=M`` in merged classifier config.
+
+    **Explicit control directory** (``pairwise_aggregate_control=False``, single control only):
+    ``ovr_control_vs_rest_pkl`` or ``detections/one_vs_rest/...`` adds a dedicated control dir
+    (**K** dirs for **K** names).
+    """
+    if not project.uses_control_disease():
+        raise ValueError(
+            "ovr_binary_pickles_from_comparisons requires a project with controls, diseases, and comparisons"
+        )
+    if project.control is None:
+        raise ValueError("project.control is required")
+    resolved = project.get_resolved_groups()
+    if len(resolved) < 2:
+        raise ValueError("Project must have at least one control and one disease group")
+    comparisons = project.get_comparisons()
+    comp_by_pair = {(spec.control_group, spec.disease_group): spec for spec in comparisons}
+
+    with_side = project._get_resolved_groups_with_side(expand_subclusters=False)
+    control_labels = [lbl for lbl, _, side in with_side if side == "control"]
+    disease_labels = [lbl for lbl, _, side in with_side if side == "disease"]
+    names = control_labels + disease_labels
+    M, N = len(control_labels), len(disease_labels)
+    if M < 1 or N < 1:
+        raise ValueError("OvR expansion requires at least one control and one disease group")
+
+    def _verify_det_dir(ctrl: str, dis: str) -> str:
+        det_dir = Path(project.get_detection_output_dir(ctrl, dis))
+        candidate = det_dir / unified_basename
+        if not candidate.is_file():
+            raise FileNotFoundError(
+                f"OvR: detector artifact not found at {candidate} "
+                f"(comparison {ctrl!r} vs {dis!r}). "
+                "Run MethylDetector or adjust ovr_unified_classifier_basename."
+            )
+        return str(det_dir)
+
+    if M > 1:
+        out_dirs: List[str] = []
+        for c in control_labels:
+            for d in disease_labels:
+                if (c, d) not in comp_by_pair:
+                    raise ValueError(
+                        f"No comparison for control_group={c!r}, disease_group={d!r}; "
+                        f"need full bipartite (have {len(comp_by_pair)} specs)"
+                    )
+                out_dirs.append(_verify_det_dir(c, d))
+        return out_dirs, names, False, True
+
+    # M == 1: legacy single-control path
+    control_label = control_labels[0]
+    comp_by_disease = {spec.disease_group: spec for spec in comparisons}
+    disease_dirs: List[str] = []
+    for label in disease_labels:
+        if label not in comp_by_disease:
+            raise ValueError(
+                f"No comparison with disease_group={label!r} for OvR path; "
+                f"check comparisons vs disease groups (have: {sorted(comp_by_disease.keys())})"
+            )
+        spec = comp_by_disease[label]
+        disease_dirs.append(_verify_det_dir(spec.control_group, spec.disease_group))
+
+    if control_vs_rest_pkl:
+        p = Path(control_vs_rest_pkl).expanduser()
+        if not p.exists():
+            raise FileNotFoundError(f"ovr_control_vs_rest_pkl not found: {p}")
+        ctrl_dir = str(p.parent if p.is_file() else p)
+        out_dirs = [ctrl_dir] + disease_dirs
+        return out_dirs, names, False, False
+
+    root = Path(project.get_project_root())
+    dedicated = root / "detections" / "one_vs_rest" / control_label / unified_basename
+    if dedicated.is_file():
+        ctrl_dir = str(dedicated.parent)
+        out_dirs = [ctrl_dir] + disease_dirs
+        return out_dirs, names, False, False
+
+    return disease_dirs, names, True, False
+
+
+def _consume_ovr_comparison_options_and_maybe_expand(
+    project: ProjectConfig, base: Dict[str, Any]
+) -> None:
+    """
+    Pop resolver-only classifier keys and, if requested, set ovr_detection_dirs (+ names)
+    from comparisons. Safe to call when base was built from resolve_classifier_config merge.
+    """
+    flag = bool(base.pop("ovr_binary_pickles_from_comparisons", False))
+    basename = base.pop("ovr_unified_classifier_basename", None)
+    if not basename:
+        basename = default_ovr_unified_classifier_basename(project)
+    else:
+        basename = str(basename).strip() or default_ovr_unified_classifier_basename(project)
+    ctrl_pkl = base.pop("ovr_control_vs_rest_pkl", None)
+    if not flag:
+        return
+    dirs, default_names, agg_ctrl, bip = expand_ovr_paths_from_comparisons(
+        project,
+        unified_basename=str(basename),
+        control_vs_rest_pkl=ctrl_pkl,
+    )
+    base["ovr_detection_dirs"] = dirs
+    base["ovr_pairwise_aggregate_control"] = agg_ctrl
+    base["ovr_bipartite_aggregate"] = bip
+    if bip:
+        ws = project._get_resolved_groups_with_side(expand_subclusters=False)
+        base["ovr_n_control_classes"] = sum(1 for _, _, s in ws if s == "control")
+    if not base.get("ovr_class_names"):
+        base["ovr_class_names"] = default_names
+
+
+def _disease_subdir(project: ProjectConfig) -> str:
     """Middle path segment for step dirs: <step>/<disease_label>/<disease_group>. Uses project.disease.label when set."""
-    return project.disease.label if getattr(project, "disease", None) is not None else "cancer"
+    if project.disease is not None:
+        return project.disease.label
+    return "cancer"
 
 
 def resolve_classifier_config_per_cancer_group(
@@ -44,7 +273,7 @@ def resolve_classifier_config_per_cancer_group(
 
     disease_label = disease_subdir if disease_subdir is not None else _disease_subdir(project)
 
-    if getattr(project, "uses_control_disease", lambda: False)():
+    if project.uses_control_disease():
         comparisons = project.get_comparisons()
         paths = project.get_derived_paths()
         out: List[Tuple[ClassificationConfig, str]] = []
@@ -65,11 +294,11 @@ def resolve_classifier_config_per_cancer_group(
                 base["centroid_path_remap"] = project.path_remap
             for k, v in step_cfg.items():
                 base[k] = v
-            # Save the combined classifier (with fitted chromosome weights) into the run's classifier
-            # output dir so MethylValidator/MethylPredictor finds it.
-            project_name = getattr(project, "project_name", "classifier")
-            classifier_out_dir = Path(project.get_classifier_output_dir(ctrl_label, dis_label))
-            base["save_classifier_path"] = str(classifier_out_dir / f"{project_name}-classifier.pkl")
+            if not base.get("save_classifier_path"):
+                classifier_out_dir = Path(project.get_classifier_output_dir(ctrl_label, dis_label))
+                base["save_classifier_path"] = str(
+                    classifier_out_dir / f"{project.project_name}-classifier.pkl"
+                )
             out.append((ClassificationConfig(**base), comp_label))
         return out
 
@@ -77,7 +306,7 @@ def resolve_classifier_config_per_cancer_group(
     resolved = project.get_resolved_groups()
     if len(resolved) < 2:
         return []
-    centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
+    centroid_dirs = paths.centroid_dirs or [paths.centroid1_dir, paths.centroid2_dir]
     if len(centroid_dirs) != len(resolved):
         centroid_dirs = []
         for i, (label, _) in enumerate(resolved):
@@ -103,6 +332,11 @@ def resolve_classifier_config_per_cancer_group(
             base["centroid_path_remap"] = project.path_remap
         for k, v in step_cfg.items():
             base[k] = v
+        if not base.get("save_classifier_path"):
+            classifier_out_dir = Path(project.get_classifier_output_dir(control_label, label))
+            base["save_classifier_path"] = str(
+                classifier_out_dir / f"{project.project_name}-classifier.pkl"
+            )
         out.append((ClassificationConfig(**base), label))
     return out
 
@@ -127,13 +361,10 @@ def build_multiclass_config_from_project(
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    get_resolved = getattr(project, "get_resolved_groups", None)
-    if get_resolved is None:
-        raise ValueError("multiclass from project requires methyl_utils with get_resolved_groups (upgrade methylutils)")
-    resolved = get_resolved()
+    resolved = project.get_resolved_groups()
     if len(resolved) < 2:
         raise ValueError("Project must have at least 2 groups for multiclass")
-    centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
+    centroid_dirs = paths.centroid_dirs or [paths.centroid1_dir, paths.centroid2_dir]
     if len(centroid_dirs) != len(resolved):
         centroid_dirs = []
         for i, (label, _) in enumerate(resolved):
@@ -186,9 +417,8 @@ def resolve_classifier_config(
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    get_resolved = getattr(project, "get_resolved_groups", None)
-    resolved = get_resolved() if get_resolved is not None else None
-    centroid_dirs = getattr(paths, "centroid_dirs", None)
+    resolved = project.get_resolved_groups()
+    centroid_dirs = paths.centroid_dirs
 
     base = {
         "model_dir": paths.detection_dir,
@@ -196,7 +426,7 @@ def resolve_classifier_config(
         "centroid2_dir": paths.centroid2_dir,
         "output_path": str(Path(paths.classifier_dir) / output_filename),
     }
-    if resolved is not None and centroid_dirs and len(centroid_dirs) > 2:
+    if len(centroid_dirs) > 2:
         base["centroid_dirs"] = list(centroid_dirs)
         base["multiclass_class_names"] = [resolved[i][0] for i in range(len(resolved))]
     if project.path_remap:
@@ -216,9 +446,36 @@ def resolve_classifier_config(
             for k, v in overrides.items():
                 base[k] = v
 
+    _consume_ovr_comparison_options_and_maybe_expand(project, base)
+
     # OvR assembly from detector outputs replaces a single shared detection_dir model.
     if base.get("ovr_binary_model_paths") or base.get("ovr_detection_dirs"):
         base["model_dir"] = None
         base["model_path"] = None
+
+    # Default save path: multiclass OvR → classifiers/<control>/<bundle>.pkl; else classifiers root.
+    if not base.get("save_classifier_path"):
+        merged_cls = dict(project.get_step_config("classifier") or {})
+        for k in _CLASSIFIER_STEP_KEYS_FOR_BUNDLE_PATH:
+            if k in base:
+                merged_cls[k] = base[k]
+        p_bundle = predicted_multiclass_ovr_bundle_path(project, merged_cls)
+        ovr_paths = base.get("ovr_binary_model_paths") or []
+        ovr_dirs = base.get("ovr_detection_dirs") or []
+        agg_ovr = bool(base.get("ovr_pairwise_aggregate_control"))
+        bip_ovr = bool(base.get("ovr_bipartite_aggregate"))
+        if p_bundle is not None and (
+            len(ovr_paths) >= 2
+            or len(ovr_dirs) >= 2
+            or (agg_ovr and len(ovr_dirs) >= 1)
+            or (bip_ovr and len(ovr_dirs) >= 2)
+        ):
+            base["save_classifier_path"] = str(p_bundle)
+        else:
+            base["save_classifier_path"] = str(
+                Path(paths.classifier_dir) / f"{project.project_name}-classifier.pkl"
+            )
+
+    base.pop("ovr_bundle_filename", None)
 
     return ClassificationConfig(**base)

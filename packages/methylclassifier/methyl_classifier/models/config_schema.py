@@ -67,11 +67,23 @@ class ClassificationConfig(BaseModel):
     )
     ovr_detection_dirs: Optional[List[str]] = Field(
         default=None,
-        description="K>=2 directories with exactly one classifier*.pkl each (OvR order). Alternative to ovr_binary_model_paths.",
+        description="K>=2 MethylDetector output dirs (OvR order). One pickle per dir = single-chrom head; multiple classifier-*.pkl = multi-chrom expert per class. Alternative to ovr_binary_model_paths.",
     )
     ovr_class_names: Optional[List[str]] = Field(
         default=None,
         description="Optional override for OvR class names; defaults to multiclass_class_names when multiclass.",
+    )
+    ovr_pairwise_aggregate_control: bool = Field(
+        default=False,
+        description="True when ovr_detection_dirs lists K-1 pairwise folders and first OvR class is control (geometric-mean aggregate head).",
+    )
+    ovr_bipartite_aggregate: bool = Field(
+        default=False,
+        description="True when ovr_detection_dirs lists M×N bipartite pairwises (multi-control × multi-disease).",
+    )
+    ovr_n_control_classes: Optional[int] = Field(
+        default=None,
+        description="M for ovr_bipartite_aggregate; N = len(ovr_class_names) - M.",
     )
     expected_classes: Optional[List[int]] = Field(
         default=None,
@@ -199,15 +211,45 @@ class ClassificationConfig(BaseModel):
             self.centroid_dirs and len(self.centroid_dirs) >= 2
             and self.multiclass_class_names and len(self.multiclass_class_names) == len(self.centroid_dirs)
         )
+        if self.ovr_pairwise_aggregate_control and self.ovr_bipartite_aggregate:
+            raise ValueError(
+                "Use only one of ovr_pairwise_aggregate_control and ovr_bipartite_aggregate"
+            )
+        M_bip = int(self.ovr_n_control_classes or 0)
+        names_ovr = self.ovr_class_names or []
+        bip_ok = bool(
+            self.ovr_bipartite_aggregate
+            and self.ovr_detection_dirs
+            and M_bip >= 1
+            and names_ovr
+            and len(names_ovr) > M_bip
+            and len(self.ovr_detection_dirs) == M_bip * (len(names_ovr) - M_bip)
+        )
         has_ovr_sources = bool(
             (self.ovr_binary_model_paths and len(self.ovr_binary_model_paths) >= 2)
             or (self.ovr_detection_dirs and len(self.ovr_detection_dirs) >= 2)
+            or (
+                self.ovr_pairwise_aggregate_control
+                and self.ovr_detection_dirs
+                and len(self.ovr_detection_dirs) >= 1
+                and self.ovr_class_names
+                and len(self.ovr_class_names) == len(self.ovr_detection_dirs) + 1
+            )
+            or bip_ok
         )
-        if not self.input_path and not self.samples and not has_centroid_dirs and not has_centroid_lists and not has_multiclass:
+        if (
+            not self.input_path
+            and not self.samples
+            and not has_centroid_dirs
+            and not has_centroid_lists
+            and not has_multiclass
+            and not has_ovr_sources
+        ):
             raise ValueError(
                 "Provide one of: 'input_path', 'samples', "
                 "both 'centroid1_dir' and 'centroid2_dir', both 'centroid1_sample_paths' and 'centroid2_sample_paths', "
-                "or 'centroid_dirs' with 'multiclass_class_names' (same length)"
+                "'centroid_dirs' with 'multiclass_class_names' (same length), "
+                "or ovr_binary_model_paths / ovr_detection_dirs (each length >= 2), or ovr_bipartite_aggregate."
             )
         if has_multiclass:
             has_model = bool(self.model_dir or self.model_path) or has_ovr_sources
@@ -219,12 +261,32 @@ class ClassificationConfig(BaseModel):
             if has_ovr_sources:
                 n_p = len(self.ovr_binary_model_paths or [])
                 n_d = len(self.ovr_detection_dirs or [])
-                k_ovr = n_p if n_p >= 2 else n_d
                 names = self.ovr_class_names or self.multiclass_class_names
-                if not names or len(names) != k_ovr:
-                    raise ValueError(
-                        f"OvR class list must have length {k_ovr} (use ovr_class_names or multiclass_class_names)"
-                    )
+                if self.ovr_bipartite_aggregate and n_p == 0:
+                    M = int(self.ovr_n_control_classes or 0)
+                    if M < 1 or not names or len(names) <= M:
+                        raise ValueError(
+                            "ovr_bipartite_aggregate requires ovr_n_control_classes>=1 and "
+                            "ovr_class_names with M+N entries (N>=1)"
+                        )
+                    if n_d != M * (len(names) - M):
+                        raise ValueError(
+                            f"ovr_bipartite_aggregate: expected {M * (len(names) - M)} dirs, got {n_d}"
+                        )
+                    k_ovr = len(names)
+                elif self.ovr_pairwise_aggregate_control and n_p == 0 and n_d >= 1:
+                    k_ovr = n_d + 1
+                    if not names or len(names) != k_ovr:
+                        raise ValueError(
+                            f"OvR class list must have length {k_ovr} (K-1 dirs + control) when "
+                            "ovr_pairwise_aggregate_control is true"
+                        )
+                else:
+                    k_ovr = n_p if n_p >= 2 else n_d
+                    if not names or len(names) != k_ovr:
+                        raise ValueError(
+                            f"OvR class list must have length {k_ovr} (use ovr_class_names or multiclass_class_names)"
+                        )
                 if len(self.centroid_dirs or []) != k_ovr:
                     raise ValueError(
                         "centroid_dirs length must match OvR source count (K) when using OvR auto-build"

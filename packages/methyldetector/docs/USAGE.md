@@ -2,7 +2,7 @@
 
 ## Overview
 
-MethylDetector detects differentially methylated positions (DMPs) between two methylation centroids (e.g. healthy vs disease), applies FDR correction and biological filtering, and can train a classifier on the selected DMPs. It is built on **MethylUtils** for centroid comparison and statistics (see [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md)).
+MethylDetector detects differentially methylated positions (DMPs) between two methylation centroids (e.g. healthy vs disease), applies FDR correction and biological filtering, and can train a classifier on the selected DMPs. It is built on **MethylUtils** for centroid comparison and statistics (see [IMPLEMENTATION.md](IMPLEMENTATION.md)).
 
 There are **two ways to run MethylDetector**:
 
@@ -74,21 +74,20 @@ Use this when you run on the host (e.g. laptop or login node) and want to activa
 
 **1. Create a virtual environment**
 
-From the repo root or from `packages/methyldetector`:
+From the **MethylPipeline repository root** (canonical environment directory is `.venv`):
 
 ```bash
-python3 -m venv venv
+cd /path/to/MethylPipeline
+python3.12 -m venv .venv
 ```
-
-(You can use another name, e.g. `.venv`; below we use `venv`.)
 
 **2. Activate the virtual environment**
 
 ```bash
-source ./venv/bin/activate
+source .venv/bin/activate
 ```
 
-On Windows: `venv\Scripts\activate`. After activation, the prompt usually shows `(venv)`.
+On Windows: `.venv\Scripts\activate`. After activation, the prompt usually shows `(.venv)`.
 
 **3. Install MethylUtils (required dependency)**
 
@@ -116,7 +115,7 @@ pip install cupy-cuda12x   # adjust to your CUDA version (e.g. cupy-cuda11x)
 
 **6. Run MethylDetector**
 
-With the virtual environment **activated** (`source ./venv/bin/activate`), use the CLI from any directory. Paths in the config are on the **host**; you do not use a container.
+With the virtual environment **activated** (`source .venv/bin/activate` from the repo root), use the CLI from any directory. Paths in the config are on the **host**; you do not use a container.
 
 ```bash
 methyl-detector /path/to/config.json
@@ -138,7 +137,7 @@ methyl-detector --project project.json --per-cancer-group
 After completing either setup:
 
 - **Docker:** Run via `docker exec -w /workspace/packages/methyldetector methylpipeline methyl-detector <config.json>` (paths in config must be valid inside the container).
-- **Virtual environment:** Activate the venv (`source ./venv/bin/activate`), then run `methyl-detector <config.json>` (paths in config are on the host).
+- **Virtual environment:** Activate the project venv (`source .venv/bin/activate`), then run `methyl-detector <config.json>` (paths in config are on the host).
 
 ---
 
@@ -222,4 +221,4 @@ Exact names and structure may depend on config (e.g. multi-chromosome, per-cance
 - **Missing centroid files:** Ensure `centroid1_dir` and `centroid2_dir` contain the expected `{chrom}-{context}.h5` files (e.g. from MethylCentroid) for the chromosome(s) and contexts in your config.
 - **MethylUtils not found:** Install MethylUtils first (`pip install -e .` in `packages/methylutils`), then install MethylDetector.
 
-For theory and implementation details, see [MethylDetector_Theoretical_Foundation.md](MethylDetector_Theoretical_Foundation.md) and [METHYLDETECTOR_IMPLEMENTATION.md](METHYLDETECTOR_IMPLEMENTATION.md).
+For theory and implementation details, see [THEORY.md](THEORY.md), [IMPLEMENTATION.md](IMPLEMENTATION.md), and the canonical theory book at [../../../docs/theory/README.md](../../../docs/theory/README.md).

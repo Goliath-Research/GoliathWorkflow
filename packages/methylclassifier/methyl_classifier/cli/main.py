@@ -16,7 +16,12 @@ from ..utils.data_loader import DataLoader
 from ..utils.utils import extract_chrom_context_from_classifier, setup_logging
 from ..models.config_schema import ClassificationConfig
 from ..models.config import ClassifierConfig
-from ..project_resolver import resolve_classifier_config, resolve_classifier_config_per_cancer_group
+from ..project_resolver import (
+    classifier_step_dict_has_ovr_sources,
+    merge_project_classifier_step,
+    resolve_classifier_config,
+    resolve_classifier_config_per_cancer_group,
+)
 
 try:
     from methyl_utils import load_project
@@ -1122,10 +1127,11 @@ def _save_classifier_and_sample_list(
     output_dir: Optional[Path] = None,
 ) -> None:
     """
-    After classification, save the classifier to <project_name>-classifier.pkl and/or
-    export the list of sample folders to .txt or .csv when project_name or explicit paths are set.
+    After classification, save the classifier when ``save_classifier_path`` and/or ``project_name``
+    is set. ``save_classifier_path`` is typically defaulted by ``resolve_classifier_config`` to
+    ``<project>/classifiers/<project_name>-classifier.pkl``.
 
-    output_dir: Used when deriving paths from project_name (e.g. same dir as classification output).
+    output_dir: Parent of classification CSV; used with ``project_name`` when ``save_classifier_path`` is unset.
     """
     project_name = classifier_config.project_name
     save_classifier_path = classifier_config.save_classifier_path
@@ -1227,6 +1233,78 @@ def classify_samples_batch(classifier: MethylClassifier,
     return predictions, probabilities
 
 
+def _apply_cli_path_overrides(config: ClassificationConfig, args: argparse.Namespace) -> None:
+    """Apply --model, --model-dir, --input, --output from argparse onto an existing config."""
+    if args.model:
+        config.model_path = str(args.model)
+    if args.model_dir:
+        config.model_dir = str(args.model_dir)
+    if args.input:
+        config.input_path = str(args.input)
+    if args.output:
+        config.output_path = str(args.output)
+
+
+def _resolve_ovr_export_output_path(
+    config: ClassificationConfig,
+    explicit: Optional[str],
+) -> Path:
+    """
+    Output path for --export-ovr-pkl: CLI path wins, else save_classifier_path, else project_name in cwd.
+    """
+    if explicit:
+        return Path(explicit).expanduser()
+    if config.save_classifier_path:
+        return Path(config.save_classifier_path).expanduser()
+    if config.project_name:
+        return Path.cwd() / f"{config.project_name}-classifier.pkl"
+    raise ValueError(
+        "Could not determine export path: pass a path after --export-ovr-pkl, or set "
+        "save_classifier_path or project_name in the config / project resolver."
+    )
+
+
+def _export_ovr_pkl_from_config(config: ClassificationConfig, out_path: Path) -> None:
+    """Load OvR sources from config and write the portable ecdf_one_vs_rest PKL (no classification)."""
+    ovr_p = config.ovr_binary_model_paths or []
+    ovr_d = config.ovr_detection_dirs or []
+    agg = bool(getattr(config, "ovr_pairwise_aggregate_control", False))
+    if len(ovr_p) < 2 and len(ovr_d) < 2 and not (agg and len(ovr_d) >= 1):
+        raise ValueError(
+            "--export-ovr-pkl requires ovr_binary_model_paths or ovr_detection_dirs (length >= 2), "
+            "or ovr_pairwise_aggregate_control with at least one ovr_detection_dir, in the resolved config."
+        )
+    ovr_names = config.ovr_class_names or config.multiclass_class_names
+    classifier_config = ClassifierConfig(
+        model_path=config.model_path,
+        model_dir=config.model_dir,
+        ovr_binary_model_paths=config.ovr_binary_model_paths,
+        ovr_detection_dirs=config.ovr_detection_dirs,
+        ovr_class_names=ovr_names,
+        ovr_pairwise_aggregate_control=agg,
+        temperature=config.temperature,
+        enable_platt_calibration=config.enable_platt_calibration,
+        trimmed_percentile_low=config.trimmed_percentile_low,
+        trimmed_percentile_high=config.trimmed_percentile_high,
+        chromosome_weights=config.chromosome_weights,
+        chromosome_matrix_path=config.chromosome_matrix_path,
+        weight_method=config.weight_method,
+        weight_fit_regularization=config.weight_fit_regularization,
+        weight_fit_alpha=config.weight_fit_alpha,
+        weight_fit_l1_ratio=config.weight_fit_l1_ratio,
+        project_name=config.project_name,
+        save_classifier_path=config.save_classifier_path,
+        samples_list_export_path=config.samples_list_export_path,
+    )
+    classifier = MethylClassifier(classifier_config)
+    if not getattr(classifier, "_ovr_mode", False):
+        raise RuntimeError("Internal error: expected OvR mode after loading OvR sources.")
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    classifier.save(out_path)
+    print(f"\n💾 OvR multiclass bundle exported to: {out_path}")
+
+
 def _run_one_classification(config: ClassificationConfig, label: Optional[str] = None) -> None:
     """Run classification once with the given config (used for single run and per-cancer-group loop)."""
     ovr_names = config.ovr_class_names or config.multiclass_class_names
@@ -1236,6 +1314,9 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
         ovr_binary_model_paths=config.ovr_binary_model_paths,
         ovr_detection_dirs=config.ovr_detection_dirs,
         ovr_class_names=ovr_names,
+        ovr_pairwise_aggregate_control=bool(
+            getattr(config, "ovr_pairwise_aggregate_control", False)
+        ),
         temperature=config.temperature,
         enable_platt_calibration=config.enable_platt_calibration,
         trimmed_percentile_low=config.trimmed_percentile_low,
@@ -1358,6 +1439,10 @@ Examples:
   # Direct arguments
   methyl_classifier --model classifier.pkl --input samples/ --output results.csv
 
+  # Export multiclass OvR PKL only (no samples / no CSV)
+  methyl_classifier --project myproject.json --export-ovr-pkl
+  methyl_classifier --config ovr_config.json --export-ovr-pkl /path/to/bundle.pkl
+
 Config fields (in JSON):
   {
     "model_path": "models/classifier-1-CG.pkl",
@@ -1441,8 +1526,74 @@ Config fields (in JSON):
     )
     
     # No new args for temperature/calibration - handled in config
-    
+
+    parser.add_argument(
+        "--export-ovr-pkl",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Export multiclass OvR portable PKL only (no per-comparison classification). "
+            "With --project + control/disease, the same bundle is also written automatically "
+            "after a normal run when step_config.classifier.ovr_binary_pickles_from_comparisons is true. "
+            "Requires ovr_binary_model_paths or ovr_detection_dirs in --config or in "
+            "step_config.classifier (--project). Optional PATH; if omitted, uses save_classifier_path "
+            "or <cwd>/<project_name>-classifier.pkl."
+        ),
+    )
+
     args = parser.parse_args()
+
+    # Export-only: single multiclass OvR bundle (not per-comparison control/disease loops)
+    if args.export_ovr_pkl is not None:
+        if args.project is not None and args.config is not None:
+            raise ValueError("Use either --config or --project, not both.")
+        if args.project is not None:
+            if not args.project.exists():
+                raise FileNotFoundError(f"Project config not found: {args.project}")
+            use_per_comparison = args.per_cancer_group
+            if load_project is not None:
+                project = load_project(args.project)
+                if project.uses_control_disease():
+                    use_per_comparison = True
+            if use_per_comparison:
+                merged_step = merge_project_classifier_step(
+                    args.project, args.step_override
+                )
+                if not classifier_step_dict_has_ovr_sources(merged_step):
+                    raise ValueError(
+                        "--export-ovr-pkl with a control/disease (or --per-cancer-group) project "
+                        "needs project-wide OvR sources: set ovr_binary_model_paths or "
+                        "ovr_detection_dirs (K>=2) in step_config.classifier or --step-override. "
+                        "Pairwise per-comparison models are not a single multiclass PKL."
+                    )
+                # Single bundle from resolve_classifier_config (multiclass paths + merged step).
+            config = resolve_classifier_config(args.project, args.step_override)
+            _apply_cli_path_overrides(config, args)
+        elif args.config is not None:
+            with open(args.config, "r") as f:
+                config = ClassificationConfig(**json.load(f))
+            _apply_cli_path_overrides(config, args)
+        else:
+            raise ValueError(
+                "--export-ovr-pkl requires --config or --project with OvR sources in JSON / step_config."
+            )
+        setup_logging(config.log_level)
+        explicit = (args.export_ovr_pkl or "").strip()
+        out_path = _resolve_ovr_export_output_path(
+            config, explicit if explicit else None
+        )
+        try:
+            _export_ovr_pkl_from_config(config, out_path)
+        except Exception as e:
+            import traceback
+
+            print(f"❌ --export-ovr-pkl failed: {e}")
+            print(f"   Error type: {type(e).__name__}")
+            traceback.print_exc()
+            sys.exit(1)
+        return
 
     # Exactly one of --config or --project or (model + input) for config source
     if args.project is not None:
@@ -1452,10 +1603,10 @@ Config fields (in JSON):
             raise FileNotFoundError(f"Project config not found: {args.project}")
         # Use per-comparison folder pattern (detections/<control>/<disease>,
         # classifiers/<control>/<disease>) when the project uses control/disease.
-        use_per_comparison = getattr(args, 'per_cancer_group', False)
+        use_per_comparison = args.per_cancer_group
         if load_project is not None:
             project = load_project(args.project)
-            if getattr(project, "uses_control_disease", lambda: False)():
+            if project.uses_control_disease():
                 use_per_comparison = True
         if use_per_comparison:
             configs_and_labels = resolve_classifier_config_per_cancer_group(args.project, args.step_override)
@@ -1476,28 +1627,30 @@ Config fields (in JSON):
             print(f"\nPer-comparison classification complete: {len(configs_and_labels)} group(s)")
             for config, label in configs_and_labels:
                 print(f"  {label}: {config.output_path}")
+            merged_step = merge_project_classifier_step(args.project, args.step_override)
+            if merged_step.get("ovr_binary_pickles_from_comparisons") and classifier_step_dict_has_ovr_sources(
+                merged_step
+            ):
+                print(f"\n{'='*60}\nExporting multiclass OvR bundle for MethylPredictor\n{'='*60}")
+                config_mc = resolve_classifier_config(args.project, args.step_override)
+                _apply_cli_path_overrides(config_mc, args)
+                out_path = _resolve_ovr_export_output_path(config_mc, None)
+                try:
+                    _export_ovr_pkl_from_config(config_mc, out_path)
+                except Exception as e:
+                    import traceback
+
+                    print(f"❌ Multiclass OvR export failed: {e}", file=sys.stderr)
+                    traceback.print_exc()
+                    sys.exit(1)
             return
         config = resolve_classifier_config(args.project, args.step_override)
-        if args.model:
-            config.model_path = str(args.model)
-        if args.model_dir:
-            config.model_dir = str(args.model_dir)
-        if args.input:
-            config.input_path = str(args.input)
-        if args.output:
-            config.output_path = str(args.output)
+        _apply_cli_path_overrides(config, args)
     elif args.config:
         with open(args.config, 'r') as f:
             config_data = json.load(f)
         config = ClassificationConfig(**config_data)
-        if args.model:
-            config.model_path = str(args.model)
-        if args.model_dir:
-            config.model_dir = str(args.model_dir)
-        if args.input:
-            config.input_path = str(args.input)
-        if args.output:
-            config.output_path = str(args.output)
+        _apply_cli_path_overrides(config, args)
     else:
         # Construct config from CLI args (existing logic)
         config = ClassificationConfig(

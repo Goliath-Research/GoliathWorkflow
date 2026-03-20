@@ -84,6 +84,39 @@ def test_infer_monte_carlo_layout_binary(tmp_path: Path):
     assert infer_monte_carlo_layout(p, 2) == "binary"
 
 
+def test_infer_monte_carlo_layout_hierarchical_multiclass(tmp_path: Path):
+    """K>=3 resolved groups under controls/diseases → hierarchical_multiclass layout."""
+    paths = []
+    for name in ("a.csv", "b.csv", "c.csv"):
+        fp = tmp_path / name
+        fp.write_text("sample\ns1\n", encoding="utf-8")
+        paths.append(str(fp.resolve()))
+    p = tmp_path / "proj.json"
+    p.write_text(
+        json.dumps(
+            {
+                "project_name": "x",
+                "output_base": str((tmp_path / "out").resolve()),
+                "samples_base_path": str(tmp_path.resolve()),
+                "controls": {
+                    "label": "c",
+                    "groups": [
+                        {"label": "h1", "sample_paths": [paths[0]]},
+                        {"label": "h2", "sample_paths": [paths[1]]},
+                    ],
+                },
+                "diseases": {
+                    "label": "d",
+                    "groups": [{"label": "d1", "sample_paths": [paths[2]]}],
+                },
+                "comparisons": "all_pairs",
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert infer_monte_carlo_layout(p, 3) == "hierarchical_multiclass"
+
+
 def test_infer_monte_carlo_layout_multiclass(tmp_path: Path):
     p = tmp_path / "proj.json"
     p.write_text(

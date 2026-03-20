@@ -1,4 +1,5 @@
 site_name: MethylPipeline Documentation
+
 theme:
   name: material
   features:
@@ -8,34 +9,5 @@ theme:
 
 nav:
   - Home: index.md
-  - Project Overview: ../PROJECT_OVERVIEW.md
-  - README: ../README.md
-  - Theory and packages: THEORY_AND_PACKAGES.md
-  - Operations manual: OPERATIONS_MANUAL.md
-  - Architecture: ../docs/ARCHITECTURE.md
-  - Development: ../docs/DEVELOPMENT.md
-  - Production: ../docs/PRODUCTION.md
-  - Maintenance: ../docs/MAINTENANCE.md
-  - Packages:
-    - MethylUtils: ../packages/methylutils/README.md
-    - MethylCentroid: ../packages/methylcentroid/README.md
-    - MethylCluster: ../packages/methylcluster/README.md
-    - MethylDetector: ../packages/methyldetector/README.md
-    - MethylClassifier: ../packages/methylclassifier/README.md
-    - MethylMapper: ../packages/methylmapper/README.md
-    - MethylEnricher: ../packages/methylenricher/README.md
-    - MethylAlignmentQC: ../packages/methylalignmentqc/README.md
-
-markdown_extensions:
-  - admonition
-  - pymdownx.details
-  - pymdownx.superfences
-  - pymdownx.tabbed:
-      alternate_style: true
-  - pymdownx.arithmatex:
-      generic: true
-
-extra_javascript:
-  - https://polyfill.io/v3/polyfill.min.js?features=es6
-  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
-  - javascripts/mathjax_config.js
+  - Deployment: DEPLOYMENT.md
+  - Theory Book Source: theory/README.md

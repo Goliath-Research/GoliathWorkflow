@@ -27,10 +27,18 @@ def _get_group_config_for_label(project: Any, side: str, label: str) -> Optional
         for g in project.control.groups:
             if g.label == label:
                 return g
+            if g.stages:
+                for st in g.stages:
+                    if f"{g.label}_{st.label}" == label:
+                        return st
     if side == "disease" and project.disease:
         for g in project.disease.groups:
             if g.label == label:
                 return g
+            if g.stages:
+                for st in g.stages:
+                    if f"{g.label}_{st.label}" == label:
+                        return st
     return None
 
 
@@ -200,6 +208,13 @@ def resolve_centroid_batch_config(
             raise ValueError(f"group index {group} out of range (have {len(resolved)} groups)")
         label = resolved[group][0]
         sample_paths = list(resolved[group][1])
+        if not sample_paths:
+            raise ValueError(
+                f"No samples resolved for group index {group} (label {label!r}). "
+                "If this label is a disease type parent with nested 'stages', the installed "
+                "methyl_utils may be too old to expand stages (parent groups have no sample_paths). "
+                "From the repo root: pip install -e packages/methylutils"
+            )
         centroid_dirs = paths.centroid_dirs or [paths.centroid1_dir, paths.centroid2_dir]
         if group < len(centroid_dirs):
             output_dir = centroid_dirs[group]
@@ -210,12 +225,24 @@ def resolve_centroid_batch_config(
         label = resolved[0][0]
         sample_paths = list(resolved[0][1])
         output_dir = paths.centroid1_dir
+        if not sample_paths:
+            raise ValueError(
+                f"No samples resolved for group1 (label {label!r}). "
+                "For disease groups with nested 'stages', upgrade methyl_utils "
+                "(pip install -e packages/methylutils)."
+            )
     elif group == "group2":
         if len(resolved) < 2:
             raise ValueError("project has only one group; use group1 or index 0")
         label = resolved[1][0]
         sample_paths = list(resolved[1][1])
         output_dir = paths.centroid2_dir
+        if not sample_paths:
+            raise ValueError(
+                f"No samples resolved for group2 (label {label!r}). "
+                "For disease groups with nested 'stages', upgrade methyl_utils "
+                "(pip install -e packages/methylutils)."
+            )
     else:
         raise ValueError("group must be 'group1', 'group2', or an integer index")
 

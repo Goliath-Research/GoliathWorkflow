@@ -4,6 +4,7 @@ Load sample CSVs, resolve paths with samples_base_path, and perform stratified t
 
 import csv
 import random
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -95,6 +96,9 @@ def stratified_split_multiclass(
     cohorts: List[Tuple[str, List[str]]],
     train_fraction: float,
     seed: Optional[int] = None,
+    *,
+    warn_min_train: int = 2,
+    warn_min_val: int = 1,
 ) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
     """
     Split each cohort independently with the same train_fraction (stratified across classes).
@@ -112,10 +116,20 @@ def stratified_split_multiclass(
     rng = random.Random(seed)
     train_out: Dict[str, List[str]] = {}
     val_out: Dict[str, List[str]] = {}
+    sparse: List[str] = []
     for label, paths in cohorts:
         tr, va = _split_one_cohort(paths, train_fraction, rng, label)
         train_out[label] = tr
         val_out[label] = va
+        if len(tr) < warn_min_train or len(va) < warn_min_val:
+            sparse.append(f"{label}: train_n={len(tr)} val_n={len(va)}")
+    if sparse:
+        warnings.warn(
+            "Monte Carlo: small train/val counts for some cohorts (every label still split; "
+            "metrics may be high-variance): " + "; ".join(sparse),
+            UserWarning,
+            stacklevel=2,
+        )
     return train_out, val_out
 
 
