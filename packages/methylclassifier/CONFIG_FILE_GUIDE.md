@@ -82,7 +82,7 @@ methyl_classifier --config packages/methylclassifier/configs/PCa_vs_Healthy_clas
 | `weight_fit_alpha` | number | 1.0 | Regularization strength (inverse of C for logistic). |
 | `weight_fit_l1_ratio` | number | 0.5 | For `elasticnet_fitted`: L1/L2 balance (0=ridge-like, 1=lasso-like). |
 | `project_name` | string or null | null | After classification, save classifier as `<project_name>-classifier.pkl` and sample list as `<project_name>-samples.txt` in the output directory. |
-| `save_classifier_path` | string or null | null | Explicit path for the classifier .pkl. If null and `project_name` set, uses `<output_dir>/<project_name>-classifier.pkl`. |
+| `save_classifier_path` | string or null | null | Explicit path for the classifier .pkl. With `--project`, the resolver defaults to `<project_root>/classifiers/<project_name>-classifier.pkl` (see `paths.classifier_dir`) when unset. Otherwise, if null and `project_name` is set, uses `<output_dir>/<project_name>-classifier.pkl`. |
 | `samples_list_export_path` | string or null | null | Path to export sample folders (.txt or .csv). If null and `project_name` set, uses `<output_dir>/<project_name>-samples.txt`. |
 | `centroid1_dir` | string or null | null | Path to centroid1 output directory (H5 files). Sample list is read from each file’s **samples_used** metadata (union across files). Use with `centroid2_dir`. |
 | `centroid2_dir` | string or null | null | Path to centroid2 output directory (H5 files). Sample list is read from each file’s **samples_used** metadata (union across files). Use with `centroid1_dir`. |

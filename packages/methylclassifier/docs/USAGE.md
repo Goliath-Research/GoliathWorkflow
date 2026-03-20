@@ -151,6 +151,7 @@ Example config (`configs/PCa_vs_Healthy_classifier_config.json`):
 - **weight_fit_alpha**: Regularization strength (inverse of C for logistic). Default `1.0`.
 - **weight_fit_l1_ratio**: For `elasticnet_fitted` only: balance L1/L2 (0=ridge-like, 1=lasso-like). Default `0.5`.
 - **project_name**: When set, after classification the classifier is saved as `<project_name>-classifier.pkl` and the list of sample folders as `<project_name>-samples.txt` (or .csv) in the same directory as the classification output. You can override paths with **save_classifier_path** and **samples_list_export_path**.
+- **`--project`**: When using a project JSON, merged config comes from `step_config.classifier` and project paths. If **save_classifier_path** is omitted, the resolver defaults it to **`<project_root>/classifiers/<project_name>-classifier.pkl`** (see `paths.classifier_dir` in the project file), so MethylPredictor can load a stable artifact without extra JSON.
 
 ### Multiclass OvR (K≥2) without a separate bundle script
 

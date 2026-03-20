@@ -7,16 +7,18 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from methyl_utils import load_project
+from methyl_utils import ProjectConfig, load_project
 
 from .models.config_schema import ClassificationConfig
 
 CLASSIFIER_OUTPUT_FILENAME = "classification_results.csv"
 
 
-def _disease_subdir(project: Any) -> str:
+def _disease_subdir(project: ProjectConfig) -> str:
     """Middle path segment for step dirs: <step>/<disease_label>/<disease_group>. Uses project.disease.label when set."""
-    return project.disease.label if getattr(project, "disease", None) is not None else "cancer"
+    if project.disease is not None:
+        return project.disease.label
+    return "cancer"
 
 
 def resolve_classifier_config_per_cancer_group(
@@ -44,7 +46,7 @@ def resolve_classifier_config_per_cancer_group(
 
     disease_label = disease_subdir if disease_subdir is not None else _disease_subdir(project)
 
-    if getattr(project, "uses_control_disease", lambda: False)():
+    if project.uses_control_disease():
         comparisons = project.get_comparisons()
         paths = project.get_derived_paths()
         out: List[Tuple[ClassificationConfig, str]] = []
@@ -65,11 +67,11 @@ def resolve_classifier_config_per_cancer_group(
                 base["centroid_path_remap"] = project.path_remap
             for k, v in step_cfg.items():
                 base[k] = v
-            # Save the combined classifier (with fitted chromosome weights) into the run's classifier
-            # output dir so MethylValidator/MethylPredictor finds it.
-            project_name = getattr(project, "project_name", "classifier")
-            classifier_out_dir = Path(project.get_classifier_output_dir(ctrl_label, dis_label))
-            base["save_classifier_path"] = str(classifier_out_dir / f"{project_name}-classifier.pkl")
+            if not base.get("save_classifier_path"):
+                classifier_out_dir = Path(project.get_classifier_output_dir(ctrl_label, dis_label))
+                base["save_classifier_path"] = str(
+                    classifier_out_dir / f"{project.project_name}-classifier.pkl"
+                )
             out.append((ClassificationConfig(**base), comp_label))
         return out
 
@@ -77,7 +79,7 @@ def resolve_classifier_config_per_cancer_group(
     resolved = project.get_resolved_groups()
     if len(resolved) < 2:
         return []
-    centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
+    centroid_dirs = paths.centroid_dirs or [paths.centroid1_dir, paths.centroid2_dir]
     if len(centroid_dirs) != len(resolved):
         centroid_dirs = []
         for i, (label, _) in enumerate(resolved):
@@ -103,6 +105,11 @@ def resolve_classifier_config_per_cancer_group(
             base["centroid_path_remap"] = project.path_remap
         for k, v in step_cfg.items():
             base[k] = v
+        if not base.get("save_classifier_path"):
+            classifier_out_dir = Path(project.get_classifier_output_dir(control_label, label))
+            base["save_classifier_path"] = str(
+                classifier_out_dir / f"{project.project_name}-classifier.pkl"
+            )
         out.append((ClassificationConfig(**base), label))
     return out
 
@@ -127,13 +134,10 @@ def build_multiclass_config_from_project(
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    get_resolved = getattr(project, "get_resolved_groups", None)
-    if get_resolved is None:
-        raise ValueError("multiclass from project requires methyl_utils with get_resolved_groups (upgrade methylutils)")
-    resolved = get_resolved()
+    resolved = project.get_resolved_groups()
     if len(resolved) < 2:
         raise ValueError("Project must have at least 2 groups for multiclass")
-    centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
+    centroid_dirs = paths.centroid_dirs or [paths.centroid1_dir, paths.centroid2_dir]
     if len(centroid_dirs) != len(resolved):
         centroid_dirs = []
         for i, (label, _) in enumerate(resolved):
@@ -186,9 +190,8 @@ def resolve_classifier_config(
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    get_resolved = getattr(project, "get_resolved_groups", None)
-    resolved = get_resolved() if get_resolved is not None else None
-    centroid_dirs = getattr(paths, "centroid_dirs", None)
+    resolved = project.get_resolved_groups()
+    centroid_dirs = paths.centroid_dirs
 
     base = {
         "model_dir": paths.detection_dir,
@@ -196,7 +199,7 @@ def resolve_classifier_config(
         "centroid2_dir": paths.centroid2_dir,
         "output_path": str(Path(paths.classifier_dir) / output_filename),
     }
-    if resolved is not None and centroid_dirs and len(centroid_dirs) > 2:
+    if len(centroid_dirs) > 2:
         base["centroid_dirs"] = list(centroid_dirs)
         base["multiclass_class_names"] = [resolved[i][0] for i in range(len(resolved))]
     if project.path_remap:
@@ -220,5 +223,11 @@ def resolve_classifier_config(
     if base.get("ovr_binary_model_paths") or base.get("ovr_detection_dirs"):
         base["model_dir"] = None
         base["model_path"] = None
+
+    # Default: write combined classifier next to classification CSV under <project>/classifiers/
+    if not base.get("save_classifier_path"):
+        base["save_classifier_path"] = str(
+            Path(paths.classifier_dir) / f"{project.project_name}-classifier.pkl"
+        )
 
     return ClassificationConfig(**base)

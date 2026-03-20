@@ -1122,10 +1122,11 @@ def _save_classifier_and_sample_list(
     output_dir: Optional[Path] = None,
 ) -> None:
     """
-    After classification, save the classifier to <project_name>-classifier.pkl and/or
-    export the list of sample folders to .txt or .csv when project_name or explicit paths are set.
+    After classification, save the classifier when ``save_classifier_path`` and/or ``project_name``
+    is set. ``save_classifier_path`` is typically defaulted by ``resolve_classifier_config`` to
+    ``<project>/classifiers/<project_name>-classifier.pkl``.
 
-    output_dir: Used when deriving paths from project_name (e.g. same dir as classification output).
+    output_dir: Parent of classification CSV; used with ``project_name`` when ``save_classifier_path`` is unset.
     """
     project_name = classifier_config.project_name
     save_classifier_path = classifier_config.save_classifier_path
@@ -1452,10 +1453,10 @@ Config fields (in JSON):
             raise FileNotFoundError(f"Project config not found: {args.project}")
         # Use per-comparison folder pattern (detections/<control>/<disease>,
         # classifiers/<control>/<disease>) when the project uses control/disease.
-        use_per_comparison = getattr(args, 'per_cancer_group', False)
+        use_per_comparison = args.per_cancer_group
         if load_project is not None:
             project = load_project(args.project)
-            if getattr(project, "uses_control_disease", lambda: False)():
+            if project.uses_control_disease():
                 use_per_comparison = True
         if use_per_comparison:
             configs_and_labels = resolve_classifier_config_per_cancer_group(args.project, args.step_override)
