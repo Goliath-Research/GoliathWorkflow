@@ -5,6 +5,7 @@ import importlib
 import json
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from methyl_predictor.models.config import PredictorConfig
@@ -20,6 +21,93 @@ class _DummyClassifier:
 
     def get_feature_info(self):
         return {"positions": [10, 20]}
+
+
+class _DummyOvRClassifier:
+    """Minimal stand-in for OvR-loaded MethylClassifier (no real ECDF)."""
+
+    def __init__(self, *_args, **_kwargs):
+        self.n_classes = 3
+        self.class_names = ["g0", "g1", "g2"]
+        self.is_multi_chromosome = False
+        self.classifier = None
+        self._ovr_mode = True
+        self._ovr_binary_classifiers = [object(), object(), object()]
+        self.dmp_positions_df = pd.DataFrame(
+            {"chromosome": ["1", "1"], "position": [10, 20]}
+        )
+
+    def get_feature_info(self):
+        return {"positions": np.array([10, 20], dtype=np.uint32), "n_features": 2}
+
+
+def test_run_prediction_multiclass_ovr_k3_writes_validation_metrics(monkeypatch, tmp_path):
+    """Labeled K=3 run with OvR-style classifier stub writes validation_metrics.json."""
+    output_dir = tmp_path / "pred_ovr"
+    classifier_cli_main = importlib.import_module("methyl_classifier.cli.main")
+    s1 = str(tmp_path / "s1")
+    s2 = str(tmp_path / "s2")
+    s3 = str(tmp_path / "s3")
+    config = PredictorConfig(
+        model_path=str(tmp_path / "ovr.pkl"),
+        output_dir=str(output_dir),
+        test_group_paths=[
+            {"label": "g0", "paths": [s1]},
+            {"label": "g1", "paths": [s2]},
+            {"label": "g2", "paths": [s3]},
+        ],
+        sample_lineage=[
+            {"absolute_path": s1, "side": "multiclass", "group_label": "g0"},
+            {"absolute_path": s2, "side": "multiclass", "group_label": "g1"},
+            {"absolute_path": s3, "side": "multiclass", "group_label": "g2"},
+        ],
+    )
+
+    monkeypatch.setattr(
+        "methyl_classifier.core.classifier.MethylClassifier",
+        _DummyOvRClassifier,
+    )
+
+    def fake_classify(*, classifier, samples_list, output_file, expected_classes, **_kwargs):
+        assert samples_list == [s1, s2, s3]
+        assert expected_classes == [0, 1, 2]
+        with Path(output_file).open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "sample",
+                    "prediction",
+                    "expected_class",
+                    "prob_class0",
+                    "prob_class1",
+                    "prob_class2",
+                ],
+            )
+            writer.writeheader()
+            for i, name in enumerate(["s1", "s2", "s3"]):
+                p = [0.1, 0.1, 0.1]
+                p[i] = 0.8
+                writer.writerow(
+                    {
+                        "sample": name,
+                        "prediction": i,
+                        "expected_class": i,
+                        "prob_class0": p[0],
+                        "prob_class1": p[1],
+                        "prob_class2": p[2],
+                    }
+                )
+
+    monkeypatch.setattr(classifier_cli_main, "classify_samples_from_list", fake_classify)
+
+    metrics = run_prediction(config)
+
+    assert metrics["n_classes"] == 3
+    assert metrics["accuracy"] == 1.0
+    assert Path(output_dir / "validation_metrics.json").exists()
+    vm = json.loads((output_dir / "validation_metrics.json").read_text(encoding="utf-8"))
+    assert vm["n_classes"] == 3
+    assert len(vm["per_class"]) == 3
 
 
 def test_predictor_config_resolves_relative_test_paths(tmp_path):

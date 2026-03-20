@@ -67,4 +67,10 @@ For **binary** (control vs disease):
 
 For **multiclass**, the same structure with more classes; sensitivity/specificity are not defined; macro and weighted F1 are reported.
 
+### Multiclass OvR ECDF (`classifier_type: ecdf_one_vs_rest`)
+
+Some multiclass models are stored as **K binary ECDF** sub-models (one-vs-rest), not as a single K-way softmax head. **MethylClassifier** loads these bundles, builds a **union DMP table** (unique `(chromosome, position)` rows, stable sort), loads each sample **once** against that union, slices columns per binary model, runs each `ECDFClassifier.predict_proba` → `(n, 2)`, then fuses to `(n, K)` with **logits** `log P(class‑k positive) − log P(class‑k negative)` and a **softmax** over the K logits (see `methyl_classifier.core.multiclass_ovr.fuse_ovr_binary_probas`). MethylPredictor behavior is unchanged aside from console messaging (sub-model count, union DMP count, note that HDF5 is touched only during sample loading).
+
+**Evaluation with distinct control arms:** for K > 2 with multiple labeled cohorts, use **`test_group_paths`** (list of `{label, paths}`) so each subgroup gets a distinct `expected_class` index aligned with training class order / `class_names`. Flat `test_control_paths` + `test_disease_paths` is a **binary** contract and does not encode more than two buckets.
+
 For the full list and how to run MethylPredictor (Docker, venv, test sets), see [USAGE.md](USAGE.md).

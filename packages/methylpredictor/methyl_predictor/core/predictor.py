@@ -453,6 +453,14 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     is_multiclass = n_classes > 2
     if is_multiclass:
         print(f"Multi-class classifier ({n_classes} classes: {class_names})")
+    if getattr(classifier, "_ovr_mode", False):
+        n_sub = len(getattr(classifier, "_ovr_binary_classifiers", []) or [])
+        _df = getattr(classifier, "dmp_positions_df", None)
+        n_union = len(_df) if _df is not None else 0
+        print(
+            f"OvR ECDF: {n_sub} binary sub-model(s), {n_union} union DMPs — "
+            "HDF5 is read only during the sample-loading phase."
+        )
 
     samples_list, expected_classes = _build_samples_and_expected(
         config, n_classes, prediction_mode
