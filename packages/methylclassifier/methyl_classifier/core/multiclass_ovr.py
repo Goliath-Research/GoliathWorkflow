@@ -99,13 +99,31 @@ class OvrMultiChromBinaryExpert:
                     f"union slice has {len(slots)} rows for this chromosome"
                 )
             got_pos = sel["position"].astype(np.uint32).values
-            if not np.array_equal(got_pos, pos_expected):
-                raise ValueError(
-                    f"OvR multichrom expert chr{chrom}: union positions do not match classifier order"
-                )
+            # Union DMP rows are globally sorted by (chrom, position); each chrom ECDF may keep
+            # feature order from training (dmpDF row order). Same multiset of positions is enough;
+            # reorder columns to match get_feature_info()["positions"].
+            if np.array_equal(got_pos, pos_expected):
+                ordered_slots = slots
+            else:
+                exp_set = {int(p) for p in pos_expected.tolist()}
+                got_set = {int(p) for p in got_pos.tolist()}
+                if exp_set != got_set:
+                    raise ValueError(
+                        f"OvR multichrom expert chr{chrom}: union positions do not match classifier "
+                        f"(expected {n_feat} sites; set mismatch vs union slice)"
+                    )
+                pos_to_slot = {int(got_pos[i]): int(slots[i]) for i in range(len(slots))}
+                try:
+                    ordered_slots = np.array(
+                        [pos_to_slot[int(p)] for p in pos_expected], dtype=np.intp
+                    )
+                except KeyError as err:
+                    raise ValueError(
+                        f"OvR multichrom expert chr{chrom}: union positions do not match classifier order"
+                    ) from err
 
-            Xc = np.ascontiguousarray(methylation_data[:, idx[slots]], dtype=np.float64)
-            Mc = availability_mask[:, idx[slots]] if availability_mask is not None else None
+            Xc = np.ascontiguousarray(methylation_data[:, idx[ordered_slots]], dtype=np.float64)
+            Mc = availability_mask[:, idx[ordered_slots]] if availability_mask is not None else None
 
             if (
                 calibrated

@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from methyl_classifier.core.multiclass_ovr import (
+    OvrMultiChromBinaryExpert,
     build_union_dmp_dataframe,
     fuse_ovr_binary_probas,
 )
@@ -297,6 +298,37 @@ def test_expand_ovr_paths_from_healthy_pca_project_comparisons():
         )
     except FileNotFoundError as e:
         pytest.skip(f"project sample paths or detector layout not available: {e}")
+
+
+def test_ovr_multichrom_expert_reorders_columns_when_positions_differ_from_union_sort(
+    monkeypatch,
+):
+    """Union DMP table is globally sorted; per-chrom ECDF may keep training row order."""
+    monkeypatch.setattr("methyl_classifier.core.classifier.sys.exit", lambda *_: pytest.fail("sys.exit"))
+    # Same three sites as ECDF, but dmp_df row order (and union slice order) is sorted;
+    # ECDF positions follow unsorted training order [300, 100, 200].
+    positions_train_order = np.array([300, 100, 200], dtype=np.uint32)
+    ecdf = _tiny_ecdf(positions_train_order)
+    union_df = pd.DataFrame(
+        {
+            "chromosome": pd.Categorical(["1", "1", "1"], categories=["1"]),
+            "position": np.array([100, 200, 300], dtype=np.uint32),
+        }
+    )
+    idx = np.array([0, 1, 2], dtype=np.intp)
+    expert = OvrMultiChromBinaryExpert(
+        {"1": ecdf},
+        {"1": 1.0},
+    )
+    n = 2
+    u = 3
+    X = np.random.default_rng(0).random((n, u), dtype=np.float64)
+    M = np.ones((n, u), dtype=bool)
+    out = expert.predict_proba_binary(
+        X, M, idx, union_df, calibrated=False, debug=False
+    )
+    assert out.shape == (n, 2)
+    np.testing.assert_allclose(out.sum(axis=1), 1.0, rtol=1e-5)
 
 
 def test_ovr_pairwise_aggregate_control_head(tmp_path, monkeypatch):
