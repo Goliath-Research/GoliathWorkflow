@@ -5,7 +5,7 @@ Load sample CSVs, resolve paths with samples_base_path, and perform stratified t
 import csv
 import random
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 def _resolve_entry(entry: str, base: Path) -> str:
@@ -65,6 +65,60 @@ def load_and_resolve_sample_paths(csv_path: str | Path, base_path: str | Path) -
     return out
 
 
+def _split_one_cohort(
+    paths: List[str],
+    train_fraction: float,
+    rng: random.Random,
+    label: str,
+) -> Tuple[List[str], List[str]]:
+    n = len(paths)
+    if n == 0:
+        raise ValueError(f"Need at least one sample in cohort {label!r}")
+    shuffled = list(paths)
+    rng.shuffle(shuffled)
+    n_train = max(1, int(n * train_fraction))
+    if n_train >= n and n > 1:
+        n_train = n - 1
+    train = shuffled[:n_train]
+    val = shuffled[n_train:]
+    if not train:
+        raise ValueError(f"Stratified split produced empty train set for cohort {label!r}")
+    if not val:
+        raise ValueError(
+            f"Stratified split produced empty validation set for cohort {label!r}: "
+            "need enough samples per class for train and validation"
+        )
+    return train, val
+
+
+def stratified_split_multiclass(
+    cohorts: List[Tuple[str, List[str]]],
+    train_fraction: float,
+    seed: Optional[int] = None,
+) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+    """
+    Split each cohort independently with the same train_fraction (stratified across classes).
+
+    ``cohorts`` is an ordered list of (label, paths). Labels must be unique.
+
+    Returns:
+        (train_by_label, val_by_label)
+    """
+    if len(cohorts) < 2:
+        raise ValueError("stratified_split_multiclass requires at least two cohorts")
+    labels = [c[0] for c in cohorts]
+    if len(set(labels)) != len(labels):
+        raise ValueError("Cohort labels must be unique")
+    rng = random.Random(seed)
+    train_out: Dict[str, List[str]] = {}
+    val_out: Dict[str, List[str]] = {}
+    for label, paths in cohorts:
+        tr, va = _split_one_cohort(paths, train_fraction, rng, label)
+        train_out[label] = tr
+        val_out[label] = va
+    return train_out, val_out
+
+
 def stratified_split(
     control_paths: List[str],
     disease_paths: List[str],
@@ -72,43 +126,19 @@ def stratified_split(
     seed: int | None = None,
 ) -> Tuple[List[str], List[str], List[str], List[str]]:
     """
-    Split control and disease samples into train and validation sets, keeping the same
-    class proportion (stratified). Uses the same train_fraction for both classes.
+    Binary split: same semantics as stratified_split_multiclass with two cohorts.
 
     Returns:
         (train_control, train_disease, val_control, val_disease)
     """
-    rng = random.Random(seed)
-    n_control = len(control_paths)
-    n_disease = len(disease_paths)
-    if n_control == 0 or n_disease == 0:
-        raise ValueError("Need at least one control and one disease sample for stratified split")
-
-    control_shuffled = list(control_paths)
-    disease_shuffled = list(disease_paths)
-    rng.shuffle(control_shuffled)
-    rng.shuffle(disease_shuffled)
-
-    n_train_control = max(1, int(n_control * train_fraction))
-    n_train_disease = max(1, int(n_disease * train_fraction))
-    # Ensure we leave at least one for validation if possible
-    if n_train_control >= n_control and n_control > 1:
-        n_train_control = n_control - 1
-    if n_train_disease >= n_disease and n_disease > 1:
-        n_train_disease = n_disease - 1
-
-    train_control = control_shuffled[:n_train_control]
-    val_control = control_shuffled[n_train_control:]
-    train_disease = disease_shuffled[:n_train_disease]
-    val_disease = disease_shuffled[n_train_disease:]
-
-    if not train_control or not train_disease:
-        raise ValueError(
-            "Stratified split produced empty train set: need at least one control and one disease for training"
-        )
-    if not val_control or not val_disease:
-        raise ValueError(
-            "Stratified split produced empty validation set: need at least one control and one disease for validation"
-        )
-
-    return train_control, train_disease, val_control, val_disease
+    train_m, val_m = stratified_split_multiclass(
+        [("__control__", control_paths), ("__disease__", disease_paths)],
+        train_fraction,
+        seed=seed,
+    )
+    return (
+        train_m["__control__"],
+        train_m["__disease__"],
+        val_m["__control__"],
+        val_m["__disease__"],
+    )

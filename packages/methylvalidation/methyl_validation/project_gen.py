@@ -4,8 +4,9 @@ Generate per-iteration project JSON and train/val CSVs for Monte Carlo runs.
 
 import csv
 import json
+import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 
 def _sample_name_from_path(full_path: str, base_path: str) -> str:
@@ -193,3 +194,121 @@ def generate_run_project(
         group1_override,
         group2_override,
     )
+
+
+def _safe_cohort_filename_label(label: str) -> str:
+    s = re.sub(r"[^\w.\-]+", "_", label.strip())
+    return s or "cohort"
+
+
+def infer_monte_carlo_layout(base_project_path: str | Path, n_cohorts: int) -> str:
+    """
+    Return ``\"binary\"`` for control/disease templates (exactly two MC cohorts).
+    Return ``\"multiclass\"`` when the base project uses flat ``groups`` whose length matches ``n_cohorts``.
+    """
+    with open(base_project_path, encoding="utf-8") as f:
+        raw = json.load(f)
+    groups = raw.get("groups")
+    if isinstance(groups, list) and len(groups) >= 2:
+        if len(groups) != n_cohorts:
+            raise ValueError(
+                f"Base project flat groups count ({len(groups)}) must match Monte Carlo cohorts ({n_cohorts})."
+            )
+        return "multiclass"
+    if n_cohorts != 2:
+        raise ValueError(
+            "Control/disease Monte Carlo template requires exactly two cohorts (healthy_csv/disease_csv or two cohorts entries)."
+        )
+    return "binary"
+
+
+def _assert_flat_multiclass_template(base: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Ensure base JSON is a flat ``groups`` template (no control/disease). Return groups list."""
+    for key in ("control", "disease", "controls", "diseases"):
+        if base.get(key) is not None:
+            raise ValueError(
+                "Multiclass Monte Carlo requires a base project with top-level ``groups`` only "
+                f"(found {key!r}). For two-cohort control/disease templates, use the binary validation path."
+            )
+    groups = base.get("groups")
+    if not isinstance(groups, list) or len(groups) < 2:
+        raise ValueError("Multiclass Monte Carlo base project must define at least two top-level ``groups``.")
+    return groups
+
+
+def generate_run_project_multiclass(
+    base_project_path: str | Path,
+    run_dir: Path,
+    run_id: str,
+    output_base: str,
+    train_by_label: Dict[str, List[str]],
+    val_by_label: Dict[str, List[str]],
+    cohort_labels: List[str],
+    samples_base_path: str,
+) -> Tuple[Path, Path]:
+    """
+    Write per-cohort train CSVs, validation JSON for ``methyl-predictor --test-groups``,
+    and a run ``project.json`` with flat ``groups`` sample_paths pointing at train CSVs only.
+
+    ``cohort_labels`` order must match ``base`` template ``groups[i].label``.
+    """
+    with open(base_project_path, encoding="utf-8") as f:
+        base = json.load(f)
+
+    groups_template = _assert_flat_multiclass_template(base)
+    if len(groups_template) != len(cohort_labels):
+        raise ValueError(
+            f"Base project has {len(groups_template)} groups but Monte Carlo config has "
+            f"{len(cohort_labels)} cohorts; counts must match."
+        )
+    for i, lbl in enumerate(cohort_labels):
+        gl = groups_template[i].get("label")
+        if gl != lbl:
+            raise ValueError(
+                f"Monte Carlo cohorts[{i}].label {lbl!r} != base project groups[{i}].label {gl!r}."
+            )
+
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    train_csv_by_label: Dict[str, Path] = {}
+    for lbl in cohort_labels:
+        if lbl not in train_by_label or lbl not in val_by_label:
+            raise ValueError(f"Missing train/val paths for cohort label {lbl!r}")
+        safe = _safe_cohort_filename_label(lbl)
+        p = run_dir / f"train_{safe}.csv"
+        write_train_csv(p, train_by_label[lbl], samples_base_path)
+        train_csv_by_label[lbl] = p
+
+    val_payload: List[Dict[str, Any]] = []
+    for lbl in cohort_labels:
+        val_payload.append(
+            {
+                "label": lbl,
+                "paths": [str(Path(p).resolve()) for p in val_by_label[lbl]],
+            }
+        )
+    val_groups_json = run_dir / "val_test_groups.json"
+    val_groups_json.parent.mkdir(parents=True, exist_ok=True)
+    with open(val_groups_json, "w", encoding="utf-8") as f:
+        json.dump(val_payload, f, indent=2)
+
+    project = dict(base)
+    project["output_base"] = output_base.rstrip("/")
+    project["project_name"] = run_id
+    project["samples_base_path"] = samples_base_path
+    new_groups: List[Dict[str, Any]] = []
+    for i, g in enumerate(groups_template):
+        if not isinstance(g, dict):
+            raise ValueError(f"groups[{i}] must be an object")
+        gg = dict(g)
+        lbl = cohort_labels[i]
+        gg["sample_paths"] = [str(train_csv_by_label[lbl].resolve())]
+        new_groups.append(gg)
+    project["groups"] = new_groups
+
+    project_path = run_dir / "project.json"
+    with open(project_path, "w", encoding="utf-8") as f:
+        json.dump(project, f, indent=2)
+
+    return project_path, val_groups_json

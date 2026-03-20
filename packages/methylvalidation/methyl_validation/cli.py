@@ -6,7 +6,7 @@ import argparse
 import sys
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from rich.console import Console
 from rich.progress import (
@@ -21,9 +21,14 @@ from rich.progress import (
 from methyl_utils import load_project
 
 from .config import MonteCarloConfig
-from .pipeline_runner import run_pipeline_for_iteration
-from .project_gen import generate_run_project
-from .split import load_and_resolve_sample_paths, stratified_split
+from .predictor_policy import assert_monte_carlo_predictor_allowed
+from .pipeline_runner import run_pipeline_for_iteration, run_pipeline_for_iteration_multiclass
+from .project_gen import (
+    generate_run_project,
+    generate_run_project_multiclass,
+    infer_monte_carlo_layout,
+)
+from .split import load_and_resolve_sample_paths, stratified_split, stratified_split_multiclass
 from .validator_metrics import (
     _scalar_metrics_from_dict,
     build_metrics_table,
@@ -39,7 +44,12 @@ from .validator_metrics import (
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Monte Carlo validation: stratified train/val splits, run pipeline per iteration, aggregate predictor metrics.",
+        description=(
+            "Monte Carlo validation: stratified train/val splits, full pipeline per iteration, "
+            "aggregate predictor metrics. Supports binary (control/disease template) and "
+            "multiclass (flat groups template + multiclass-classifier.pkl). "
+            "Blind-only predictor configs are rejected."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -81,26 +91,47 @@ def main() -> None:
     if args.output_base is not None:
         config.output_base = str(args.output_base)
 
-    output_base = Path(config.output_base)
-    output_base.mkdir(parents=True, exist_ok=True)
-
-    # Resolve project_name from base project so runs go under output_base/project_name/monte_carlo_runs/run_id
-    base_project_config = load_project(config.base_project)
-    project_name = base_project_config.project_name
-    monte_carlo_runs_root = output_base / project_name / "monte_carlo_runs"
-    monte_carlo_runs_root.mkdir(parents=True, exist_ok=True)
-
-    # Load and resolve sample paths once
-    control_paths = load_and_resolve_sample_paths(config.healthy_csv, config.samples_base_path)
-    disease_paths = load_and_resolve_sample_paths(config.disease_csv, config.samples_base_path)
-    if not control_paths or not disease_paths:
-        print("Error: healthy_csv and disease_csv must each contain at least one sample.", file=sys.stderr)
-        sys.exit(1)
-
     base_project = Path(config.base_project)
     if not base_project.is_file():
         print(f"Error: base_project not found: {base_project}", file=sys.stderr)
         sys.exit(1)
+
+    base_project_config = load_project(config.base_project)
+    try:
+        assert_monte_carlo_predictor_allowed(
+            base_project_config.get_step_config("predictor") or {}
+        )
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        layout = infer_monte_carlo_layout(base_project, len(config.cohorts))
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    cohort_paths_list: List[Tuple[str, List[str]]] = []
+    for c in config.cohorts:
+        paths = load_and_resolve_sample_paths(c.csv, config.samples_base_path)
+        if not paths:
+            print(f"Error: cohort {c.label!r} ({c.csv}) must list at least one sample.", file=sys.stderr)
+            sys.exit(1)
+        cohort_paths_list.append((c.label, paths))
+
+    cohort_labels = [c.label for c in config.cohorts]
+    control_paths: List[str] = []
+    disease_paths: List[str] = []
+    if layout == "binary":
+        control_paths = cohort_paths_list[0][1]
+        disease_paths = cohort_paths_list[1][1]
+
+    output_base = Path(config.output_base)
+    output_base.mkdir(parents=True, exist_ok=True)
+
+    project_name = base_project_config.project_name
+    monte_carlo_runs_root = output_base / project_name / "monte_carlo_runs"
+    monte_carlo_runs_root.mkdir(parents=True, exist_ok=True)
 
     # Optional: base project has multiple disease groups -> use --per-cancer-group (we generate single comparison, so no)
     per_cancer_group = False
@@ -156,13 +187,28 @@ def main() -> None:
                 task_steps = task_current = None
                 progress_callback = None
 
+            train_m: Dict[str, List[str]] = {}
+            val_m: Dict[str, List[str]] = {}
+            val_control_csv: Path | None = None
+            val_disease_csv: Path | None = None
+            val_groups_json: Path | None = None
+            centroid_group1_override: Path | None = None
+            centroid_group2_override: Path | None = None
+
             try:
-                train_control, train_disease, val_control, val_disease = stratified_split(
-                    control_paths,
-                    disease_paths,
-                    config.train_fraction,
-                    seed=seed_i,
-                )
+                if layout == "binary":
+                    train_control, train_disease, val_control, val_disease = stratified_split(
+                        control_paths,
+                        disease_paths,
+                        config.train_fraction,
+                        seed=seed_i,
+                    )
+                else:
+                    train_m, val_m = stratified_split_multiclass(
+                        cohort_paths_list,
+                        config.train_fraction,
+                        seed=seed_i,
+                    )
             except ValueError as e:
                 print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
                 if progress is not None:
@@ -171,54 +217,74 @@ def main() -> None:
                     progress.advance(task_iter, 1)
                 continue
 
-            (
-                project_path,
-                _,
-                _,
-                val_control_csv,
-                val_disease_csv,
-                centroid_group1_override,
-                centroid_group2_override,
-            ) = generate_run_project(
-                base_project,
-                run_dir,
-                run_id,
-                str(monte_carlo_runs_root),
-                train_control,
-                train_disease,
-                val_control,
-                val_disease,
-                config.samples_base_path,
-                previous_train_control_paths=previous_train_control,
-                previous_train_disease_paths=previous_train_disease,
-            )
-            previous_train_control = list(train_control)
-            previous_train_disease = list(train_disease)
-            # Predictor output follows structure predictors/<control_group>/<disease_group>
-            run_project = load_project(project_path)
-            comparisons = run_project.get_comparisons() if getattr(run_project, "get_comparisons", None) else []
-            if comparisons:
-                spec = comparisons[0]
-                predictor_output_dir = run_dir / "predictors" / spec.control_group / spec.disease_group
+            if layout == "binary":
+                (
+                    project_path,
+                    _,
+                    _,
+                    val_control_csv,
+                    val_disease_csv,
+                    centroid_group1_override,
+                    centroid_group2_override,
+                ) = generate_run_project(
+                    base_project,
+                    run_dir,
+                    run_id,
+                    str(monte_carlo_runs_root),
+                    train_control,
+                    train_disease,
+                    val_control,
+                    val_disease,
+                    config.samples_base_path,
+                    previous_train_control_paths=previous_train_control,
+                    previous_train_disease_paths=previous_train_disease,
+                )
+                previous_train_control = list(train_control)
+                previous_train_disease = list(train_disease)
+                run_project = load_project(project_path)
+                comparisons = run_project.get_comparisons() if getattr(run_project, "get_comparisons", None) else []
+                if comparisons:
+                    spec = comparisons[0]
+                    predictor_output_dir = run_dir / "predictors" / spec.control_group / spec.disease_group
+                else:
+                    predictor_output_dir = run_dir / "predictors"
+                n_train_samples = len(train_control) + len(train_disease)
+                n_val_samples = len(val_control) + len(val_disease)
+                success, errors, step_timings = run_pipeline_for_iteration(
+                    project_path,
+                    val_control_csv,
+                    val_disease_csv,
+                    predictor_output_dir,
+                    per_cancer_group=per_cancer_group,
+                    logs_dir=run_dir / "logs",
+                    progress_callback=progress_callback,
+                    centroid_step_overrides={
+                        "group1": centroid_group1_override,
+                        "group2": centroid_group2_override,
+                    },
+                )
             else:
+                project_path, val_groups_json = generate_run_project_multiclass(
+                    base_project,
+                    run_dir,
+                    run_id,
+                    str(monte_carlo_runs_root),
+                    train_m,
+                    val_m,
+                    cohort_labels,
+                    config.samples_base_path,
+                )
                 predictor_output_dir = run_dir / "predictors"
-            logs_dir = run_dir / "logs"
-            n_train_samples = len(train_control) + len(train_disease)
-            n_val_samples = len(val_control) + len(val_disease)
-
-            success, errors, step_timings = run_pipeline_for_iteration(
-                project_path,
-                val_control_csv,
-                val_disease_csv,
-                predictor_output_dir,
-                per_cancer_group=per_cancer_group,
-                logs_dir=logs_dir,
-                progress_callback=progress_callback,
-                centroid_step_overrides={
-                    "group1": centroid_group1_override,
-                    "group2": centroid_group2_override,
-                },
-            )
+                n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
+                n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
+                success, errors, step_timings = run_pipeline_for_iteration_multiclass(
+                    project_path,
+                    val_groups_json,
+                    predictor_output_dir,
+                    per_cancer_group=per_cancer_group,
+                    logs_dir=run_dir / "logs",
+                    progress_callback=progress_callback,
+                )
             if progress is not None:
                 progress.remove_task(task_steps)
                 progress.remove_task(task_current)

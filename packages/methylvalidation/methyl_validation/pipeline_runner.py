@@ -100,6 +100,21 @@ def run_predictor(
     return run_cmd(cmd)
 
 
+def run_predictor_multiclass(
+    project_json: str | Path,
+    test_groups_json: str | Path,
+    output_dir: str | Path,
+) -> tuple[int, str, str]:
+    """Run methyl-predictor for flat multiclass: ``--test-groups`` JSON (list of {label, paths})."""
+    cmd = [
+        "methyl-predictor",
+        "--project", str(project_json),
+        "--test-groups", str(test_groups_json),
+        "--output-dir", str(output_dir),
+    ]
+    return run_cmd(cmd)
+
+
 def _write_step_log(log_path: Path, stdout: str, stderr: str) -> None:
     """Write combined stdout and stderr to a single log file with delimiters."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,6 +164,61 @@ def run_pipeline_for_iteration(
                 project_json,
                 val_control_csv,
                 val_disease_csv,
+                predictor_output_dir,
+            ),
+        ),
+    ]
+    for step_index, (step_name, run_fn) in enumerate(steps):
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "start")
+        t0 = time.perf_counter()
+        rc, out, err = run_fn()
+        duration_seconds = time.perf_counter() - t0
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "end")
+        step_timings.append({
+            "step_name": step_name,
+            "duration_seconds": round(duration_seconds, 6),
+            "return_code": rc,
+        })
+        if logs_dir is not None:
+            log_path = logs_dir / f"{step_name}.log"
+            _write_step_log(log_path, out, err)
+        if rc != 0:
+            msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
+            errors.append(msg)
+            if logs_dir is not None:
+                write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+            return False, errors, step_timings
+    if logs_dir is not None:
+        write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+    return True, [], step_timings
+
+
+def run_pipeline_for_iteration_multiclass(
+    project_json: Path,
+    test_groups_json: Path,
+    predictor_output_dir: Path,
+    per_cancer_group: bool = False,
+    logs_dir: Optional[Path] = None,
+    progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
+) -> tuple[bool, List[str], List[Dict[str, Any]]]:
+    """
+    Centroid (``--group all``, no deltas) → detector → classifier → multiclass predictor.
+    """
+    from .validator_metrics import write_step_timings_csv
+
+    errors: List[str] = []
+    step_timings: List[Dict[str, Any]] = []
+    steps = [
+        ("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)),
+        ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=per_cancer_group)),
+        ("methyl-classifier", lambda: run_classifier(project_json, per_cancer_group=per_cancer_group)),
+        (
+            "methyl-predictor",
+            lambda: run_predictor_multiclass(
+                project_json,
+                test_groups_json,
                 predictor_output_dir,
             ),
         ),

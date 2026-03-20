@@ -4,23 +4,25 @@
 
 ## Goal
 
-MethylValidation estimates the **sampling distribution** of validation metrics (balanced accuracy, sensitivity, specificity, F1, etc.) by running the full MethylPipeline many times with different stratified train/validation splits (Monte Carlo). The current implementation is **binary-only** (one control cohort and one disease cohort per run). It does not define a new probabilistic model for the metrics themselves; those are standard classification metrics computed by **MethylPredictor** (see [MethylPredictor documentation](../../methylpredictor/docs/MethylPredictor_Theoretical_Foundation.md)). The "distribution" MethylValidation provides is the **empirical distribution** over iterations: with enough iterations, the summary (mean, std, percentiles) approximates the sampling distribution of each metric.
+MethylValidation estimates the **sampling distribution** of validation metrics (balanced accuracy, sensitivity, specificity, F1, macro/weighted F1 for multi-class, etc.) by running the full MethylPipeline many times with different stratified train/validation splits (Monte Carlo). The primary workflow is **K-class / multiclass**: one **multiclass-classifier.pkl** and a **flat `groups`** project template with **K** cohorts (see [USAGE](USAGE.md)). A **legacy binary** path remains: two cohorts and a control/disease base project (one control vs one disease group per run). It does not define a new probabilistic model for the metrics themselves; those are standard classification metrics computed by **MethylPredictor** (see [MethylPredictor documentation](../../methylpredictor/docs/MethylPredictor_Theoretical_Foundation.md)). The "distribution" MethylValidation provides is the **empirical distribution** over iterations: with enough iterations, the summary (mean, std, percentiles) approximates the sampling distribution of each metric.
+
+**Blind-only** predictor runs (`step_config.predictor.blind`) are **not** supported here; use **methyl-predictor** directly for blind scoring outside Monte Carlo.
 
 ## Stratified train/validation split
 
-For two groups — **control** (e.g. healthy) and **disease** — MethylValidation splits each group independently using the same **train_fraction** (e.g. 0.8). The training set is used for MethylCentroid → MethylDetector → MethylClassifier; the validation set is held out and used only by **methyl-predictor**. This ensures:
+For each cohort (binary: control vs disease; multiclass: one list per class label), MethylValidation splits samples **independently** using the same **train_fraction** (e.g. 0.8). The training set is used for MethylCentroid → MethylDetector → MethylClassifier; the validation set is held out and used only by **methyl-predictor**. This ensures:
 
-- Both train and validation contain both classes (stratified).
+- Train and validation each contain every class (stratified).
 - Each iteration gets a different random split (with optional fixed seed for reproducibility).
 - Validation metrics are computed on unseen samples, so they reflect generalization.
 
 ## Per iteration
 
-1. **Split**: Stratified split of control and disease samples into train and validation.
-2. **Project**: Generate a run-specific project JSON and train/val CSVs (train samples only for pipeline; val samples only for predictor).
-3. **Pipeline**: Run methyl-centroid → methyl-detector → methyl-classifier (on train data).
-4. **Validation**: Run methyl-predictor with the validation set (control and disease holdout).
-5. **Collect**: Read `validation_metrics.json` from the predictor output; record scalar metrics (accuracy, balanced_accuracy, sensitivity, specificity, F1, etc.) and step timings (duration per step, n_train_samples, n_val_samples).
+1. **Split**: Stratified split per cohort into train and validation.
+2. **Project**: Generate a run-specific project JSON and train/val inputs (train samples only for pipeline; validation only for predictor — binary: two val CSVs; multiclass: `val_test_groups.json` for `--test-groups`).
+3. **Pipeline**: Run methyl-centroid → methyl-detector → methyl-classifier (on train data). Multiclass uses `methyl-centroid --group all` without centroid deltas; binary keeps optional group1/group2 delta overrides.
+4. **Validation**: Run methyl-predictor on the holdout set (binary: `--test-control` / `--test-disease`; multiclass: `--test-groups`).
+5. **Collect**: Read `validation_metrics.json` from the predictor output; record scalar metrics and step timings (duration per step, n_train_samples, n_val_samples).
 
 After **N** iterations, all collected metrics are aggregated into:
 

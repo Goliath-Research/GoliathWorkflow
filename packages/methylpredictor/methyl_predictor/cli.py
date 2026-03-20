@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from .core.predictor import run_prediction
 from .models.config import PredictorConfig
 from .project_resolver import (
+    _apply_path_remap,
     _expand_test_paths,
     _resolve_one_path,
     resolve_predictor_config,
@@ -49,6 +50,45 @@ def _read_paths_from_csv(csv_path: Path) -> List[str]:
                         paths.append(v.strip())
                         break
     return paths
+
+
+def _apply_test_groups_json_to_config(
+    cfg: PredictorConfig,
+    test_groups_path: Path,
+    project_path: Path,
+    base_path: Optional[str],
+    path_remap: Optional[Dict[str, str]],
+) -> None:
+    """Override cfg.test_group_paths and sample_lineage from a JSON list of {label, paths}."""
+    with open(test_groups_path, encoding="utf-8") as f:
+        raw = json.load(f)
+    if not isinstance(raw, list):
+        return
+    resolved_groups: List[Dict[str, Any]] = []
+    mc_lineage: List[Dict[str, str]] = []
+    for x in raw:
+        if not isinstance(x, dict):
+            continue
+        label_name = x.get("label") or x.get("class_name") or str(len(resolved_groups))
+        paths_raw = x.get("paths") or []
+        if isinstance(paths_raw, str):
+            paths_raw = [paths_raw]
+        expanded = _expand_test_paths(
+            paths_raw,
+            base_path,
+            project_config_path=project_path,
+        )
+        paths_abs = [_resolve_one_path(p, base_path) for p in expanded if p]
+        if path_remap:
+            paths_abs = _apply_path_remap(paths_abs, path_remap)
+        resolved_groups.append({"label": label_name, "paths": paths_abs})
+        for p in paths_abs:
+            mc_lineage.append(
+                {"absolute_path": p, "side": "multiclass", "group_label": str(label_name)}
+            )
+    if resolved_groups:
+        cfg.test_group_paths = resolved_groups
+        cfg.sample_lineage = mc_lineage
 
 
 def _parse_test_paths_arg(arg: Optional[str]) -> Optional[List[str]]:
@@ -212,29 +252,15 @@ def main() -> None:
                     cfg.model_path = None
                 cfg.debug = cfg.debug or args.debug
                 if label == "multiclass" and getattr(args, "test_groups", None) is not None:
-                    path = Path(args.test_groups)
-                    if path.is_file():
-                        with open(path) as f:
-                            raw = json.load(f)
-                        if isinstance(raw, list):
-                            base_path = getattr(project, "samples_base_path", None)
-                            resolved_groups: List[Dict[str, Any]] = []
-                            for x in raw:
-                                if not isinstance(x, dict):
-                                    continue
-                                label_name = x.get("label") or x.get("class_name") or str(len(resolved_groups))
-                                paths_raw = x.get("paths") or []
-                                if isinstance(paths_raw, str):
-                                    paths_raw = [paths_raw]
-                                expanded = _expand_test_paths(
-                                    paths_raw,
-                                    base_path,
-                                    project_config_path=args.project,
-                                )
-                                paths_abs = [_resolve_one_path(p, base_path) for p in expanded if p]
-                                resolved_groups.append({"label": label_name, "paths": paths_abs})
-                            if resolved_groups:
-                                cfg.test_group_paths = resolved_groups
+                    tg = Path(args.test_groups)
+                    if tg.is_file():
+                        _apply_test_groups_json_to_config(
+                            cfg,
+                            tg,
+                            args.project,
+                            getattr(project, "samples_base_path", None),
+                            getattr(project, "path_remap", None),
+                        )
                 print(f"\n🔬 Prediction run: {label}")
                 run_prediction(cfg)
             return
@@ -246,6 +272,17 @@ def main() -> None:
             test_control_paths=test_control,
             test_disease_paths=test_disease,
         )
+        if load_project is not None and getattr(args, "test_groups", None) is not None:
+            tg = Path(args.test_groups)
+            if tg.is_file():
+                proj = load_project(args.project)
+                _apply_test_groups_json_to_config(
+                    config,
+                    tg,
+                    args.project,
+                    getattr(proj, "samples_base_path", None),
+                    getattr(proj, "path_remap", None),
+                )
         if args.model is not None:
             config.model_path = str(args.model)
             config.model_dir = None
