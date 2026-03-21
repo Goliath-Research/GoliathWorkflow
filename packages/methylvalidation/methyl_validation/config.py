@@ -11,7 +11,11 @@ from pydantic import BaseModel, Field, model_validator
 class CohortCsv(BaseModel):
     """One cohort: display label (must match base project flat ``groups`` labels for K>2) and sample list CSV."""
 
-    label: str = Field(..., min_length=1, description="Cohort label (e.g. healthy, pca1).")
+    label: str = Field(
+        ...,
+        min_length=1,
+        description="Cohort label: for hierarchical MC must match get_resolved_groups() (e.g. all, pca_pca1).",
+    )
     csv: str = Field(..., min_length=1, description="Path to CSV of samples (same format as healthy_csv).")
 
 

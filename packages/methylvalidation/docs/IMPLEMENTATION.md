@@ -59,7 +59,7 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 | **config.py** | `MonteCarloConfig` — `cohorts` (preferred) or legacy `healthy_csv`/`disease_csv`, plus train_fraction, n_iterations, seed, base_project, output_base, path_remap, abort_on_step_failure. |
 | **predictor_policy.py** | `assert_monte_carlo_predictor_allowed` — reject `predictor.blind` / `test_blind_paths` for MC. |
 | **split.py** | `load_and_resolve_sample_paths`; `stratified_split` (binary); `stratified_split_multiclass` (per-label train/val). |
-| **project_gen.py** | `infer_monte_carlo_layout`; `generate_run_project` (binary); `generate_run_project_multiclass` (flat `groups`, `val_test_groups.json`). |
+| **project_gen.py** | `infer_monte_carlo_layout` (rejects 2 cohorts when project resolves to >2 leaves); `generate_run_project` (binary CSV names unchanged); `generate_run_project_multiclass` / `generate_run_project_hierarchical_multiclass` (`training_<label>.csv`, `testing_<label>.csv`, `val_test_groups.json`). |
 | **pipeline_runner.py** | `run_pipeline_for_iteration` (binary, centroid deltas); `run_pipeline_for_iteration_multiclass` (`--group all`, `run_predictor_multiclass` / `--test-groups`). |
 | **validator_metrics.py** | Metrics aggregation (unchanged; multiclass scalars include macro/weighted F1 via existing SCALAR_KEYS). |
 
@@ -76,7 +76,7 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 
 **MethylPredictor:** flat-group projects with **multiclass-classifier.pkl** resolve via `resolve_predictor_config` (shared `_build_multiclass_predictor_config`). The CLI applies `--test-groups` in both single-config and per-comparison multiclass runs (`_apply_test_groups_json_to_config`).
 
-**Binary Monte Carlo + multiclass PKL:** `run_pipeline_for_iteration` calls `methyl-predictor` with `--test-control` / `--test-disease` only (no `--test-groups`). On comparison projects, `resolve_predictor_config_per_comparison` must merge those paths into `test_group_paths` as class 0 and 1 (`_apply_binary_cli_paths_to_multiclass_config`); otherwise the predictor would keep training cohort paths from the run `project.json` and validation metrics would be wrong.
+**Binary Monte Carlo + unified OvR PKL:** `run_pipeline_for_iteration` calls `methyl-predictor` with `--test-control` / `--test-disease` only (no `--test-groups`). On comparison projects, `resolve_predictor_config_per_comparison` merges those paths into `test_group_paths` as class 0 and 1 (`_apply_binary_cli_paths_to_multiclass_config`). **Hierarchical** Monte Carlo (K cohorts = resolved leaves) uses `--test-groups` and the same **K-class** unified OvR artifact produced by **methyl-classifier** with `ovr_binary_pickles_from_comparisons` (pairwise **all vs each disease leaf**, not a separate predictor-only model).
 
 ## Output files
 

@@ -203,7 +203,8 @@ def _safe_cohort_filename_label(label: str) -> str:
 
 def infer_monte_carlo_layout(base_project_path: str | Path, n_cohorts: int) -> str:
     """
-    Return ``\"binary\"`` for control/disease templates with exactly two MC cohorts (legacy).
+    Return ``\"binary\"`` for control/disease templates with exactly two MC cohorts (legacy),
+    only when the project also resolves to exactly two centroid groups (no staged subcohorts).
     Return ``\"hierarchical_multiclass\"`` when the base project uses ``controls``/``diseases`` and
     the number of resolved centroid groups equals ``n_cohorts`` and ``n_cohorts`` ≥ 3.
     Return ``\"multiclass\"`` when the base project uses flat ``groups`` whose length matches ``n_cohorts``.
@@ -223,8 +224,18 @@ def infer_monte_carlo_layout(base_project_path: str | Path, n_cohorts: int) -> s
         proj = load_project(base_project_path)
         if proj.uses_control_disease():
             resolved = proj.get_resolved_groups()
+            resolved_labels = [x[0] for x in resolved]
             if n_cohorts >= 3 and len(resolved) == n_cohorts:
                 return "hierarchical_multiclass"
+            if n_cohorts == 2 and len(resolved) > 2:
+                raise ValueError(
+                    f"Monte Carlo config has 2 cohorts (e.g. legacy healthy_csv + disease_csv) but "
+                    f"base project resolves to {len(resolved)} centroid groups {resolved_labels!r}. "
+                    "Use one `cohorts` entry per resolved leaf in that exact order (labels must match), "
+                    "e.g. `all` plus `pca_pca1`..`pca_pca4` with separate CSVs — not one merged disease CSV."
+                )
+    except ValueError:
+        raise
     except Exception:
         pass
     if n_cohorts != 2:
@@ -261,8 +272,9 @@ def generate_run_project_multiclass(
     samples_base_path: str,
 ) -> Tuple[Path, Path]:
     """
-    Write per-cohort train CSVs, validation JSON for ``methyl-predictor --test-groups``,
-    and a run ``project.json`` with flat ``groups`` sample_paths pointing at train CSVs only.
+    Write per-cohort ``training_<label>.csv`` (sample names), ``testing_<label>.csv`` (absolute paths),
+    ``val_test_groups.json`` for ``methyl-predictor --test-groups``, and a run ``project.json`` with flat
+    ``groups`` sample_paths pointing at training CSVs only.
 
     ``cohort_labels`` order must match ``base`` template ``groups[i].label``.
     """
@@ -290,9 +302,10 @@ def generate_run_project_multiclass(
         if lbl not in train_by_label or lbl not in val_by_label:
             raise ValueError(f"Missing train/val paths for cohort label {lbl!r}")
         safe = _safe_cohort_filename_label(lbl)
-        p = run_dir / f"train_{safe}.csv"
+        p = run_dir / f"training_{safe}.csv"
         write_train_csv(p, train_by_label[lbl], samples_base_path)
         train_csv_by_label[lbl] = p
+        write_val_csv(run_dir / f"testing_{safe}.csv", val_by_label[lbl])
 
     val_payload: List[Dict[str, Any]] = []
     for lbl in cohort_labels:
@@ -378,8 +391,9 @@ def generate_run_project_hierarchical_multiclass(
     samples_base_path: str,
 ) -> Tuple[Path, Path]:
     """
-    Same outputs as ``generate_run_project_multiclass`` but keeps ``controls`` / ``diseases``
-    (and optional nested ``stages``) in ``project.json`` for full centroid/detector layout.
+    Same artifacts as ``generate_run_project_multiclass`` (``training_<label>.csv``, ``testing_<label>.csv``,
+    ``val_test_groups.json``) but keeps ``controls`` / ``diseases`` (and optional nested ``stages``) in
+    ``project.json`` for full centroid/detector layout.
     """
     from methyl_utils import load_project
 
@@ -402,9 +416,11 @@ def generate_run_project_hierarchical_multiclass(
         if lbl not in train_by_label or lbl not in val_by_label:
             raise ValueError(f"Missing train/val paths for cohort label {lbl!r}")
         safe = _safe_cohort_filename_label(lbl)
-        p = run_dir / f"train_{safe}.csv"
+        p = run_dir / f"training_{safe}.csv"
         write_train_csv(p, train_by_label[lbl], samples_base_path)
         train_csv_by_label[lbl] = p
+        testing_csv = run_dir / f"testing_{safe}.csv"
+        write_val_csv(testing_csv, val_by_label[lbl])
 
     val_payload: List[Dict[str, Any]] = []
     for lbl in cohort_labels:

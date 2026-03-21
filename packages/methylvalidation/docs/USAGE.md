@@ -113,9 +113,11 @@ Create a JSON config with the following fields:
 | `path_remap` | Optional path remap dict (or reuse from base_project). |
 | `abort_on_step_failure` | If `true`, abort all iterations when a pipeline step fails; if `false`, skip the iteration and continue. |
 
-**Layout selection:** If `base_project` defines **`groups`** (length ≥ 2), the run uses the **multiclass** path (`infer_monte_carlo_layout`); `cohorts` length must equal `len(groups)`. If the project uses **nested disease `stages`** (and/or multiple control groups) so that **`get_resolved_groups()`** returns **K ≥ 3** leaves in a fixed order, the layout may be **`hierarchical_multiclass`**: each iteration patches **`controls.groups`** / **`diseases.groups`** with train/val CSVs per resolved leaf, keeps **stratified splits per cohort**, and runs the multiclass pipeline with **`per_cancer_group=true`**. `cohorts[].label` must match that resolved order. Otherwise the **binary** path is used when the template is control/disease only and the MC config defines exactly two cohorts (via `healthy_csv`/`disease_csv` or two `cohorts` entries).
+**Layout selection:** If `base_project` defines **`groups`** (length ≥ 2), the run uses the **multiclass** path (`infer_monte_carlo_layout`); `cohorts` length must equal `len(groups)`. If the project uses **nested disease `stages`** (and/or multiple control groups) so that **`get_resolved_groups()`** returns **K ≥ 3** leaves in a fixed order, the layout is **`hierarchical_multiclass`** when **`len(cohorts) == K`**: each iteration patches **`controls.groups`** / **`diseases.groups`** with per-leaf train CSVs, writes **`training_<label>.csv`** and **`testing_<label>.csv`** per cohort, keeps **stratified splits per cohort**, and runs the multiclass pipeline with **`per_cancer_group=true`**. `cohorts[].label` must match **`get_resolved_groups()`** order exactly (e.g. `all`, `pca_pca1`, … for parent `pca` + stage `pca1`). **Do not** use legacy **`healthy_csv` + one merged `disease_csv`** for that case: startup will error, because binary MC only matches projects that resolve to **two** groups. Otherwise the **binary** path applies when the template resolves to exactly two centroid groups and the MC config has two cohorts.
 
 The base template for multiclass must train a single **multiclass-classifier.pkl** under the project `classifiers/` directory (same contract as MethylPredictor). **Do not** set `step_config.predictor.blind` for MC configs — startup will error.
+
+**Classifier vs cohort count (OvR):** With **`step_config.classifier.ovr_binary_pickles_from_comparisons`: true** on a control/disease project, **methyl-classifier** builds one **unified OvR ECDF** PKL (same file **methyl-predictor** loads): **K−1** pairwise detectors (e.g. **all vs pca_pca1**, …, **all vs pca_pca4**) plus the **aggregated control** head, fused to **K** class probabilities and **`class_names`** in **`get_resolved_groups()`** order (`all`, `pca_pca1`, …). **methyl-validation** hierarchical runs must use **K** `cohorts` with **those same labels** so `val_test_groups.json` / expected classes align with the bundle. A **2-class** bundle appears only if comparisons/training collapsed disease (e.g. one merged cohort); that is a different project layout than **control vs each stage**. See [CONFIG_FILE_GUIDE](../../methylclassifier/CONFIG_FILE_GUIDE.md) (OvR from comparisons).
 
 CSV format: single column or header `sample` / `path` / `sample_path` with sample folder names (resolved with `samples_base_path`).
 
@@ -153,6 +155,26 @@ CSV format: single column or header `sample` / `path` / `sample_path` with sampl
 }
 ```
 
+**Example (hierarchical: one healthy + four disease stages — labels = resolved leaves, see repo `configs/validate_Healthy_vs_PCa1-4_CG_5cohort.json`):**
+
+```json
+{
+  "samples_base_path": "/work/prostate-cancer/samples",
+  "cohorts": [
+    { "label": "all", "csv": "configs/healthy.csv" },
+    { "label": "pca_pca1", "csv": "configs/pca1.csv" },
+    { "label": "pca_pca2", "csv": "configs/pca2.csv" },
+    { "label": "pca_pca3", "csv": "configs/pca3.csv" },
+    { "label": "pca_pca4", "csv": "configs/pca4.csv" }
+  ],
+  "train_fraction": 0.8,
+  "n_iterations": 10,
+  "base_project": "configs/project_Healthy_vs_PCa1-4_CG.json",
+  "output_base": "/work/prostate-cancer",
+  "abort_on_step_failure": false
+}
+```
+
 ---
 
 ## Outputs
@@ -165,7 +187,7 @@ All outputs under **`output_base/project_name/monte_carlo_runs/`**:
 | **metrics_summary.json** | Per-metric empirical distribution: `mean`, `std`, `min`, `max`, `count`, and percentiles `p5`, `p25`, `p50`, `p75`, `p95`. This is the **probability distribution summary** of the quality metrics. |
 | **step_timings.csv** | Per step per run: `step_name`, `duration_seconds`, `return_code`, `run_id`, `run_dir`, `n_train_samples`, `n_val_samples`. |
 | **resource_summary.json** | (If generated) Mean and std of duration per step, mean total time per iteration, and min/max/mean of `n_train_samples` and `n_val_samples`. |
-| **run_0001/**, **run_0002/**, ... | Per-iteration directory: `project.json`, train/val artifacts (binary: four CSVs; multiclass: `train_<label>.csv` + `val_test_groups.json`), pipeline outputs, `logs/`, per-run `step_timings.csv`. Multiclass predictor output: `run_*/predictors/validation_metrics.json`. |
+| **run_0001/**, **run_0002/**, ... | Per-iteration directory: `project.json`, train/val artifacts (binary: `train_control.csv`, `train_disease.csv`, `val_control.csv`, `val_disease.csv`; hierarchical/flat multiclass: `training_<label>.csv`, `testing_<label>.csv`, and `val_test_groups.json` for `methyl-predictor --test-groups`), pipeline outputs, `logs/`, per-run `step_timings.csv`. Multiclass predictor output: `run_*/predictors/validation_metrics.json`. |
 
 ---
 

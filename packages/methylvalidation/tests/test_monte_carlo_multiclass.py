@@ -117,6 +117,48 @@ def test_infer_monte_carlo_layout_hierarchical_multiclass(tmp_path: Path):
     assert infer_monte_carlo_layout(p, 3) == "hierarchical_multiclass"
 
 
+def test_infer_monte_carlo_layout_rejects_two_cohorts_when_disease_has_stages(tmp_path: Path):
+    """Legacy binary MC (2 cohorts) is invalid when the project resolves to >2 centroid leaves."""
+    csv_paths = []
+    for name in ("h.csv", "p1.csv", "p2.csv", "p3.csv", "p4.csv"):
+        fp = tmp_path / name
+        fp.write_text("sample\ns1\n", encoding="utf-8")
+        csv_paths.append(str(fp.resolve()))
+    p = tmp_path / "proj.json"
+    p.write_text(
+        json.dumps(
+            {
+                "project_name": "staged",
+                "output_base": str((tmp_path / "out").resolve()),
+                "samples_base_path": str(tmp_path.resolve()),
+                "controls": {
+                    "label": "healthy",
+                    "groups": [{"label": "all", "sample_paths": [csv_paths[0]]}],
+                },
+                "diseases": {
+                    "label": "cancer",
+                    "groups": [
+                        {
+                            "label": "pca",
+                            "stages": [
+                                {"label": "pca1", "sample_paths": [csv_paths[1]]},
+                                {"label": "pca2", "sample_paths": [csv_paths[2]]},
+                                {"label": "pca3", "sample_paths": [csv_paths[3]]},
+                                {"label": "pca4", "sample_paths": [csv_paths[4]]},
+                            ],
+                        }
+                    ],
+                },
+                "comparisons": [{"control_group": "all", "disease_group": "pca"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert infer_monte_carlo_layout(p, 5) == "hierarchical_multiclass"
+    with pytest.raises(ValueError, match="2 cohorts"):
+        infer_monte_carlo_layout(p, 2)
+
+
 def test_infer_monte_carlo_layout_multiclass(tmp_path: Path):
     p = tmp_path / "proj.json"
     p.write_text(
