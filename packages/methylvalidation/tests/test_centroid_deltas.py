@@ -17,6 +17,18 @@ def write_base_project(path: Path) -> None:
             "label": "disease",
             "groups": [{"label": "disease", "sample_paths": ["ignored.csv"]}],
         },
+        "step_config": {
+            "predictor": {
+                "controls": {
+                    "label": "healthy",
+                    "groups": [{"label": "healthy", "sample_paths": ["configs/wrong_control.csv"]}],
+                },
+                "diseases": {
+                    "label": "disease",
+                    "groups": [{"label": "disease", "sample_paths": ["configs/wrong_disease.csv"]}],
+                },
+            }
+        },
     }
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -68,6 +80,12 @@ def test_generate_run_project_writes_group_specific_centroid_deltas():
         assert group2_payload["base_config"]["samples"] == previous_disease
         assert group2_payload["base_config"]["add_samples"] == ["/samples/disease_z"]
         assert group2_payload["base_config"]["remove_samples"] == ["/samples/disease_x"]
+
+        run_proj = json.loads(project_path.read_text(encoding="utf-8"))
+        pred = run_proj["step_config"]["predictor"]
+        assert pred["controls"]["groups"][0]["sample_paths"] == [str(_val_control_csv.resolve())]
+        assert pred["diseases"]["groups"][0]["sample_paths"] == [str(_val_disease_csv.resolve())]
+        assert "wrong_control" not in json.dumps(pred)
 
 
 def test_run_centroid_executes_group_specific_step_overrides(monkeypatch):

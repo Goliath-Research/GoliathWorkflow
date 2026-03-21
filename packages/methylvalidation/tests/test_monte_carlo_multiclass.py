@@ -7,7 +7,10 @@ import pytest
 
 from methyl_validation.config import MonteCarloConfig
 from methyl_validation.predictor_policy import assert_monte_carlo_predictor_allowed, monte_carlo_rejects_blind_predictor
-from methyl_validation.project_gen import infer_monte_carlo_layout
+from methyl_validation.project_gen import (
+    generate_run_project_hierarchical_multiclass,
+    infer_monte_carlo_layout,
+)
 from methyl_validation.split import stratified_split_multiclass
 
 
@@ -181,3 +184,126 @@ def test_predictor_policy_blind():
     assert not monte_carlo_rejects_blind_predictor({})
     with pytest.raises(ValueError, match="blind"):
         assert_monte_carlo_predictor_allowed({"blind": {"groups": [{"label": "x"}]}})
+
+
+def test_hierarchical_mc_run_project_predictor_points_at_testing_csvs(tmp_path: Path):
+    """Per-run project.json must not leave base template paths under step_config.predictor."""
+    list_files = []
+    for name in ("h.csv", "p1.csv", "p2.csv", "p3.csv", "p4.csv"):
+        fp = tmp_path / name
+        fp.write_text("sample\ns0\ns1\ns2\n", encoding="utf-8")
+        list_files.append(str(fp.resolve()))
+
+    def three_samples(prefix: str) -> list[str]:
+        out = []
+        for i in range(3):
+            d = tmp_path / f"{prefix}_{i}"
+            d.mkdir()
+            out.append(str(d.resolve()))
+        return out
+
+    cohort_labels = ["all", "pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"]
+    train_by_label = {}
+    val_by_label = {}
+    for lbl, prefix in zip(
+        cohort_labels,
+        ["ctrl", "d1", "d2", "d3", "d4"],
+        strict=True,
+    ):
+        paths = three_samples(prefix)
+        train_by_label[lbl] = paths[:2]
+        val_by_label[lbl] = paths[2:]
+
+    out_base = tmp_path / "out"
+    base = tmp_path / "proj.json"
+    base.write_text(
+        json.dumps(
+            {
+                "project_name": "template",
+                "output_base": str(out_base.resolve()),
+                "samples_base_path": str(tmp_path.resolve()),
+                "controls": {
+                    "label": "healthy",
+                    "groups": [{"label": "all", "sample_paths": [list_files[0]]}],
+                },
+                "diseases": {
+                    "label": "cancer",
+                    "groups": [
+                        {
+                            "label": "pca",
+                            "stages": [
+                                {"label": "pca1", "sample_paths": [list_files[1]]},
+                                {"label": "pca2", "sample_paths": [list_files[2]]},
+                                {"label": "pca3", "sample_paths": [list_files[3]]},
+                                {"label": "pca4", "sample_paths": [list_files[4]]},
+                            ],
+                        }
+                    ],
+                },
+                "comparisons": "control_vs_each_disease",
+                "step_config": {
+                    "predictor": {
+                        "controls": {
+                            "label": "healthy",
+                            "groups": [
+                                {"label": "all", "sample_paths": ["configs/should_not_remain.csv"]}
+                            ],
+                        },
+                        "diseases": {
+                            "label": "cancer",
+                            "groups": [
+                                {
+                                    "label": "prostate_cancer",
+                                    "stages": [
+                                        {
+                                            "label": "pca1",
+                                            "sample_paths": ["configs/pca1.csv"],
+                                        },
+                                        {
+                                            "label": "pca2",
+                                            "sample_paths": ["configs/pca2.csv"],
+                                        },
+                                        {
+                                            "label": "pca3",
+                                            "sample_paths": ["configs/pca3.csv"],
+                                        },
+                                        {
+                                            "label": "pca4",
+                                            "sample_paths": ["configs/pca4.csv"],
+                                        },
+                                    ],
+                                }
+                            ],
+                        },
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run_dir = tmp_path / "monte_carlo_runs" / "run_0001"
+    mc_root = str((tmp_path / "monte_carlo_runs").resolve())
+    project_path, _ = generate_run_project_hierarchical_multiclass(
+        base,
+        run_dir,
+        "run_0001",
+        mc_root,
+        train_by_label,
+        val_by_label,
+        cohort_labels,
+        str(tmp_path.resolve()),
+    )
+
+    run_proj = json.loads(project_path.read_text(encoding="utf-8"))
+    pred = run_proj["step_config"]["predictor"]
+    assert "should_not_remain" not in json.dumps(pred)
+    assert "test_group_paths" not in pred
+
+    pc = pred["controls"]["groups"][0]["sample_paths"][0]
+    assert Path(pc).name.startswith("testing_")
+    assert pred["diseases"]["groups"][0]["label"] == "prostate_cancer"
+    st = pred["diseases"]["groups"][0]["stages"]
+    assert len(st) == 4
+    for row in st:
+        assert Path(row["sample_paths"][0]).name.startswith("testing_")

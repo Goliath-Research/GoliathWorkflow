@@ -2,6 +2,7 @@
 Generate per-iteration project JSON and train/val CSVs for Monte Carlo runs.
 """
 
+import copy
 import csv
 import json
 import re
@@ -183,6 +184,10 @@ def generate_run_project(
         {"control_group": control_label, "disease_group": disease_label}
     ]
 
+    _patch_step_config_predictor_binary_holdouts(
+        project, val_control_csv, val_disease_csv, control_label, disease_label
+    )
+
     project_path = run_dir / "project.json"
     with open(project_path, "w", encoding="utf-8") as f:
         json.dump(project, f, indent=2)
@@ -311,6 +316,7 @@ def generate_run_project_multiclass(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     train_csv_by_label: Dict[str, Path] = {}
+    testing_csv_by_label: Dict[str, Path] = {}
     for lbl in cohort_labels:
         if lbl not in train_by_label or lbl not in val_by_label:
             raise ValueError(f"Missing train/val paths for cohort label {lbl!r}")
@@ -318,7 +324,9 @@ def generate_run_project_multiclass(
         p = run_dir / f"training_{safe}.csv"
         write_train_csv(p, train_by_label[lbl], samples_base_path)
         train_csv_by_label[lbl] = p
-        write_val_csv(run_dir / f"testing_{safe}.csv", val_by_label[lbl])
+        testing_csv = run_dir / f"testing_{safe}.csv"
+        write_val_csv(testing_csv, val_by_label[lbl])
+        testing_csv_by_label[lbl] = testing_csv
 
     val_payload: List[Dict[str, Any]] = []
     for lbl in cohort_labels:
@@ -347,6 +355,10 @@ def generate_run_project_multiclass(
         new_groups.append(gg)
     project["groups"] = new_groups
 
+    _patch_step_config_predictor_multiclass_holdouts(
+        project, testing_csv_by_label, cohort_labels, embed_test_group_paths=True
+    )
+
     project_path = run_dir / "project.json"
     with open(project_path, "w", encoding="utf-8") as f:
         json.dump(project, f, indent=2)
@@ -354,11 +366,11 @@ def generate_run_project_multiclass(
     return project_path, val_groups_json
 
 
-def _patch_side_groups_for_mc(
+def _patch_side_groups_with_label_csvs(
     groups: Any,
-    train_csv_by_label: Dict[str, Path],
+    csv_by_label: Dict[str, Path],
 ) -> List[Dict[str, Any]]:
-    """Replace sample_paths with per-run train CSVs; supports disease ``stages`` (leaf = parent_child)."""
+    """Replace sample_paths with per-run CSVs; supports disease ``stages`` (leaf = parent_child)."""
     if not isinstance(groups, list):
         return []
     out: List[Dict[str, Any]] = []
@@ -373,24 +385,226 @@ def _patch_side_groups_for_mc(
                     continue
                 plab = str(item.get("label", ""))
                 leaf = f"{plab}_{st['label']}"
-                if leaf not in train_csv_by_label:
+                if leaf not in csv_by_label:
                     raise ValueError(
-                        f"Monte Carlo train CSV missing for disease leaf {leaf!r} "
+                        f"Monte Carlo CSV missing for disease leaf {leaf!r} "
                         f"(expected cohort label in config)."
                     )
                 s2 = dict(st)
-                s2["sample_paths"] = [str(train_csv_by_label[leaf].resolve())]
+                s2["sample_paths"] = [str(csv_by_label[leaf].resolve())]
                 new_stages.append(s2)
             parent["stages"] = new_stages
             out.append(parent)
         else:
             g2 = dict(item)
             lab = str(g2.get("label", ""))
-            if lab not in train_csv_by_label:
-                raise ValueError(f"Monte Carlo train CSV missing for group label {lab!r}")
-            g2["sample_paths"] = [str(train_csv_by_label[lab].resolve())]
+            if lab not in csv_by_label:
+                raise ValueError(f"Monte Carlo CSV missing for group label {lab!r}")
+            g2["sample_paths"] = [str(csv_by_label[lab].resolve())]
             out.append(g2)
     return out
+
+
+def _patch_side_groups_for_mc(
+    groups: Any,
+    train_csv_by_label: Dict[str, Path],
+) -> List[Dict[str, Any]]:
+    """Replace sample_paths with per-run train CSVs; supports disease ``stages`` (leaf = parent_child)."""
+    return _patch_side_groups_with_label_csvs(groups, train_csv_by_label)
+
+
+def _n_leaves_in_side_groups(groups: Any) -> int:
+    """Count centroid leaves under control/disease ``groups`` (stages = one leaf each)."""
+    if not isinstance(groups, list):
+        return 0
+    n = 0
+    for item in groups:
+        if not isinstance(item, dict):
+            continue
+        if item.get("stages"):
+            for st in item.get("stages") or []:
+                if isinstance(st, dict) and st.get("label"):
+                    n += 1
+        else:
+            n += 1
+    return n
+
+
+def _control_leaf_count_from_project_dict(project: Dict[str, Any]) -> int:
+    for key in ("controls", "control"):
+        side = project.get(key)
+        if isinstance(side, dict) and side.get("groups"):
+            return _n_leaves_in_side_groups(side["groups"])
+    return 0
+
+
+def _patch_predictor_side_holdouts_ordered(
+    side: Dict[str, Any],
+    label_queue: List[str],
+    testing_csv_by_label: Dict[str, Path],
+) -> Dict[str, Any]:
+    """
+    Assign ``testing_*.csv`` paths by matching **project resolved leaf order** to predictor layout.
+
+    Predictor JSON may use different parent labels than top-level cohorts (e.g. ``prostate_cancer``
+    vs ``pca``); composite keys would not match Monte Carlo cohort labels (``pca_pca1``, …).
+    """
+    qi = 0
+    side = dict(side)
+    new_groups: List[Dict[str, Any]] = []
+    for item in side.get("groups") or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("stages"):
+            parent = dict(item)
+            new_stages: List[Dict[str, Any]] = []
+            for st in item.get("stages") or []:
+                if not isinstance(st, dict) or not st.get("label"):
+                    continue
+                if qi >= len(label_queue):
+                    raise ValueError(
+                        "Monte Carlo: not enough cohort labels for predictor disease stages "
+                        f"(need more than {qi} on this side)."
+                    )
+                lbl = label_queue[qi]
+                qi += 1
+                if lbl not in testing_csv_by_label:
+                    raise ValueError(f"Missing testing CSV for cohort {lbl!r}")
+                s2 = dict(st)
+                s2["sample_paths"] = [str(testing_csv_by_label[lbl].resolve())]
+                new_stages.append(s2)
+            parent["stages"] = new_stages
+            new_groups.append(parent)
+        else:
+            g2 = dict(item)
+            if qi >= len(label_queue):
+                raise ValueError(
+                    "Monte Carlo: not enough cohort labels for predictor control groups "
+                    f"(need more than {qi} on this side)."
+                )
+            lbl = label_queue[qi]
+            qi += 1
+            if lbl not in testing_csv_by_label:
+                raise ValueError(f"Missing testing CSV for cohort {lbl!r}")
+            g2["sample_paths"] = [str(testing_csv_by_label[lbl].resolve())]
+            new_groups.append(g2)
+    if qi != len(label_queue):
+        raise ValueError(
+            f"Monte Carlo: predictor side leaf count ({qi}) != labels provided ({len(label_queue)}): "
+            f"{label_queue!r}"
+        )
+    side["groups"] = new_groups
+    return side
+
+
+def _patch_step_config_predictor_multiclass_holdouts(
+    project: Dict[str, Any],
+    testing_csv_by_label: Dict[str, Path],
+    cohort_labels: List[str],
+    *,
+    embed_test_group_paths: bool,
+) -> None:
+    """
+    Point ``step_config.predictor`` at this run's holdout list files (``testing_*.csv``).
+
+    Top-level ``controls``/``diseases`` already reference training CSVs; the predictor step must not
+    keep the base template paths or ``methyl-predictor --project`` would expand the wrong lists.
+
+    **Hierarchical** (``embed_test_group_paths=False``): only nested ``controls`` / ``diseases``,
+    preserving template shapes (including parent labels). MethylPredictor resolves multiclass test
+    lists by walking those sides in leaf order and zipping with ``get_resolved_groups`` labels.
+
+    **Flat** ``groups`` projects (``embed_test_group_paths=True``): also set ``test_group_paths``
+    so multiclass resolution works when predictor sides are absent.
+    """
+    sc = project.get("step_config")
+    if not isinstance(sc, dict):
+        return
+    project["step_config"] = copy.deepcopy(sc)
+    raw_pred = project["step_config"].get("predictor")
+    if isinstance(raw_pred, dict):
+        pred = copy.deepcopy(raw_pred)
+    else:
+        pred = {}
+    project["step_config"]["predictor"] = pred
+
+    if embed_test_group_paths:
+        test_group_paths: List[Dict[str, Any]] = []
+        for lbl in cohort_labels:
+            if lbl not in testing_csv_by_label:
+                raise ValueError(f"Missing testing CSV for cohort {lbl!r}")
+            test_group_paths.append(
+                {"label": lbl, "paths": [str(testing_csv_by_label[lbl].resolve())]}
+            )
+        pred["test_group_paths"] = test_group_paths
+    else:
+        pred.pop("test_group_paths", None)
+        n_ctrl = _control_leaf_count_from_project_dict(project)
+        ctrl_labs = cohort_labels[:n_ctrl]
+        dis_labs = cohort_labels[n_ctrl:]
+        if isinstance(pred.get("controls"), dict) and pred["controls"].get("groups"):
+            pred["controls"] = _patch_predictor_side_holdouts_ordered(
+                pred["controls"], ctrl_labs, testing_csv_by_label
+            )
+        if "control" in pred:
+            pred["control"] = (
+                copy.deepcopy(pred["controls"])
+                if isinstance(pred.get("controls"), dict)
+                else pred.get("control")
+            )
+        if isinstance(pred.get("diseases"), dict) and pred["diseases"].get("groups"):
+            pred["diseases"] = _patch_predictor_side_holdouts_ordered(
+                pred["diseases"], dis_labs, testing_csv_by_label
+            )
+        if "disease" in pred:
+            pred["disease"] = (
+                copy.deepcopy(pred["diseases"])
+                if isinstance(pred.get("diseases"), dict)
+                else pred.get("disease")
+            )
+        return
+
+    for key in ("controls", "control"):
+        side = pred.get(key)
+        if isinstance(side, dict) and side.get("groups"):
+            side = dict(side)
+            side["groups"] = _patch_side_groups_with_label_csvs(side["groups"], testing_csv_by_label)
+            pred[key] = side
+    for key in ("diseases", "disease"):
+        side = pred.get(key)
+        if isinstance(side, dict) and side.get("groups"):
+            side = dict(side)
+            side["groups"] = _patch_side_groups_with_label_csvs(side["groups"], testing_csv_by_label)
+            pred[key] = side
+
+
+def _patch_step_config_predictor_binary_holdouts(
+    project: Dict[str, Any],
+    val_control_csv: Path,
+    val_disease_csv: Path,
+    control_label: str,
+    disease_label: str,
+) -> None:
+    """Set ``step_config.predictor`` control/disease sides to this run's validation CSVs."""
+    sc = project.get("step_config")
+    if not isinstance(sc, dict):
+        return
+    project["step_config"] = copy.deepcopy(sc)
+    pred = project["step_config"].get("predictor")
+    if not isinstance(pred, dict):
+        return
+    pred = copy.deepcopy(pred)
+    project["step_config"]["predictor"] = pred
+    v_c = str(val_control_csv.resolve())
+    v_d = str(val_disease_csv.resolve())
+    ctrl = {"label": control_label, "groups": [{"label": control_label, "sample_paths": [v_c]}]}
+    dis = {"label": disease_label, "groups": [{"label": disease_label, "sample_paths": [v_d]}]}
+    pred["controls"] = ctrl
+    pred["diseases"] = dis
+    if "control" in pred:
+        pred["control"] = copy.deepcopy(ctrl)
+    if "disease" in pred:
+        pred["disease"] = copy.deepcopy(dis)
 
 
 def generate_run_project_hierarchical_multiclass(
@@ -425,6 +639,7 @@ def generate_run_project_hierarchical_multiclass(
     run_dir.mkdir(parents=True, exist_ok=True)
 
     train_csv_by_label: Dict[str, Path] = {}
+    testing_csv_by_label: Dict[str, Path] = {}
     for lbl in cohort_labels:
         if lbl not in train_by_label or lbl not in val_by_label:
             raise ValueError(f"Missing train/val paths for cohort label {lbl!r}")
@@ -434,6 +649,7 @@ def generate_run_project_hierarchical_multiclass(
         train_csv_by_label[lbl] = p
         testing_csv = run_dir / f"testing_{safe}.csv"
         write_val_csv(testing_csv, val_by_label[lbl])
+        testing_csv_by_label[lbl] = testing_csv
 
     val_payload: List[Dict[str, Any]] = []
     for lbl in cohort_labels:
@@ -465,6 +681,10 @@ def generate_run_project_hierarchical_multiclass(
             side = dict(side)
             side["groups"] = _patch_side_groups_for_mc(side["groups"], train_csv_by_label)
             project[key] = side
+
+    _patch_step_config_predictor_multiclass_holdouts(
+        project, testing_csv_by_label, cohort_labels, embed_test_group_paths=False
+    )
 
     project_path = run_dir / "project.json"
     with open(project_path, "w", encoding="utf-8") as f:

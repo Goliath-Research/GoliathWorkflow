@@ -282,6 +282,48 @@ def _expand_side_group_paths(
     return out
 
 
+def _expand_side_group_paths_in_order(
+    side: Dict[str, Any],
+    base_path: Optional[str],
+    project_path: Union[str, Path],
+    path_remap: Optional[Dict[str, str]],
+) -> List[List[str]]:
+    """
+    Same expansion as :func:`_expand_side_group_paths`, but return one path list per leaf in
+    walk order (control/disease groups, then stages) without using composite leaf keys. Used to
+    align predictor list files with :func:`ProjectConfig._get_resolved_groups_with_side` labels
+    when predictor parent labels differ from top-level cohort JSON (e.g. ``pca`` vs ``prostate_cancer``).
+    Order matches ``ProjectConfig._get_resolved_groups_with_side`` (control leaves, then disease).
+    """
+    out: List[List[str]] = []
+    for g in side.get("groups") or []:
+        if not isinstance(g, dict) or not g.get("label"):
+            continue
+        stages = g.get("stages")
+        if isinstance(stages, list) and stages:
+            for st in stages:
+                if not isinstance(st, dict) or not st.get("label"):
+                    continue
+                raw = st.get("sample_paths") or []
+                if isinstance(raw, str):
+                    raw = [raw]
+                expanded = _expand_test_paths(list(raw), base_path, project_config_path=project_path)
+                expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
+                if path_remap:
+                    expanded = _apply_path_remap(expanded, path_remap)
+                out.append(expanded)
+            continue
+        raw = g.get("sample_paths") or []
+        if isinstance(raw, str):
+            raw = [raw]
+        expanded = _expand_test_paths(list(raw), base_path, project_config_path=project_path)
+        expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
+        if path_remap:
+            expanded = _apply_path_remap(expanded, path_remap)
+        out.append(expanded)
+    return out
+
+
 def _resolved_leaf_labels_from_side(side: Dict[str, Any]) -> List[str]:
     """Flatten ``groups`` to centroid leaf labels (``stages`` → ``parent_child``)."""
     out: List[str] = []
@@ -486,19 +528,60 @@ def _build_multiclass_predictor_config(
                     {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
                 )
     else:
-        resolved = project.get_resolved_groups()
         test_group_paths = []
-        for label, group_paths in resolved:
-            raw = [str(p).strip() for p in group_paths if p and str(p).strip()]
-            expanded = _expand_test_paths(raw, base_path, project_config_path=project_path)
-            paths_list = [_resolve_one_path(p, base_path) for p in expanded if p]
-            if project.path_remap:
-                paths_list = _apply_path_remap(paths_list, project.path_remap)
-            test_group_paths.append({"label": label, "paths": paths_list})
-            for p in paths_list:
-                mc_lineage.append(
-                    {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
-                )
+        pr = getattr(project, "path_remap", None)
+        used_predictor_sides = False
+        if getattr(project, "uses_control_disease", lambda: False)():
+            ctrl_side = _effective_predictor_side(step_cfg, project, "controls")
+            dis_side = _effective_predictor_side(step_cfg, project, "diseases")
+            c_order = _expand_side_group_paths_in_order(
+                ctrl_side, base_path, project_path, pr
+            )
+            d_order = _expand_side_group_paths_in_order(
+                dis_side, base_path, project_path, pr
+            )
+            with_side = project._get_resolved_groups_with_side()
+            ctrl_res = [(l, p) for l, p, s in with_side if s == "control"]
+            dis_res = [(l, p) for l, p, s in with_side if s == "disease"]
+            if (
+                len(c_order) == len(ctrl_res)
+                and len(d_order) == len(dis_res)
+                and (c_order or d_order)
+            ):
+                used_predictor_sides = True
+                for (label, _), paths_list in zip(ctrl_res, c_order):
+                    test_group_paths.append({"label": label, "paths": paths_list})
+                    for p in paths_list:
+                        mc_lineage.append(
+                            {
+                                "absolute_path": p,
+                                "side": "multiclass",
+                                "group_label": str(label),
+                            }
+                        )
+                for (label, _), paths_list in zip(dis_res, d_order):
+                    test_group_paths.append({"label": label, "paths": paths_list})
+                    for p in paths_list:
+                        mc_lineage.append(
+                            {
+                                "absolute_path": p,
+                                "side": "multiclass",
+                                "group_label": str(label),
+                            }
+                        )
+        if not used_predictor_sides:
+            resolved = project.get_resolved_groups()
+            for label, group_paths in resolved:
+                raw = [str(p).strip() for p in group_paths if p and str(p).strip()]
+                expanded = _expand_test_paths(raw, base_path, project_config_path=project_path)
+                paths_list = [_resolve_one_path(p, base_path) for p in expanded if p]
+                if project.path_remap:
+                    paths_list = _apply_path_remap(paths_list, project.path_remap)
+                test_group_paths.append({"label": label, "paths": paths_list})
+                for p in paths_list:
+                    mc_lineage.append(
+                        {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
+                    )
     tree = project.cohort_tree_dict() if hasattr(project, "cohort_tree_dict") else {}
     base_dict: Dict[str, Any] = {
         "model_path": str(multiclass_path),
