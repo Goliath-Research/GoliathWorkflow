@@ -17,6 +17,13 @@ OV_R_PACKAGE_VERSION = 2
 
 
 def _normalize_chrom(c: Any) -> str:
+    """
+    Human chromosomes are **symbolic IDs**, not integers: ``"1"``…``"22"``, ``"X"``, ``"Y"``
+    (optional ``"chr"`` prefix stripped). Code must not use Python ``int`` for autosomes in
+    dict keys or DataFrame equality — ``1`` and ``"1"`` must not diverge — and ``X``/``Y``
+    are never numeric. Always normalize to ``str`` for joins with sample H5 layout
+    (``{chrom}-{context}.h5``).
+    """
     s = str(c).strip()
     if s.lower().startswith("chr"):
         s = s[3:]
@@ -402,8 +409,9 @@ def build_union_dmp_dataframe(
     per_entry_rows: List[List[Tuple[str, int]]] = []
     for entry in body:
         rows = dmp_rows_from_binary_entry(entry, default_chromosome=default_chromosome)
-        per_entry_rows.append(rows)
-        all_rows.extend(rows)
+        rows_n = [(_normalize_chrom(c), int(p)) for c, p in rows]
+        per_entry_rows.append(rows_n)
+        all_rows.extend(rows_n)
 
     unique_sorted = sorted(set(all_rows), key=lambda t: (t[0], t[1]))
     df = pd.DataFrame(unique_sorted, columns=["chromosome", "position"])
@@ -440,8 +448,9 @@ def build_union_dmp_dataframe_flat(
         if entry.get("control_pairwise_geometric") or entry.get("bipartite_pairwise_geometric"):
             raise ValueError("flat union does not accept aggregate marker entries")
         rows = dmp_rows_from_binary_entry(entry, default_chromosome=default_chromosome)
-        per_entry_rows.append(rows)
-        all_rows.extend(rows)
+        rows_n = [(_normalize_chrom(c), int(p)) for c, p in rows]
+        per_entry_rows.append(rows_n)
+        all_rows.extend(rows_n)
 
     unique_sorted = sorted(set(all_rows), key=lambda t: (t[0], t[1]))
     df = pd.DataFrame(unique_sorted, columns=["chromosome", "position"])
