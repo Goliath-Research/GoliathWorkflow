@@ -348,6 +348,12 @@ class MethylClassifier:
 
         self._calibrated = False
         print(f"📍 OvR: {self.n_classes} classes — {', '.join(str(x) for x in self.class_names)}")
+        if prefix_geo:
+            fuse = self.metadata.get("ovr_fuse_mode", "pairwise_max_contrast")
+            print(
+                f"🔗 OvR fusion: {fuse} "
+                "(aggregate-control bundle; use metadata ovr_fuse_mode=flat for legacy softmax)"
+            )
         print(f"📊 Union DMPs: {len(self.dmp_positions_df):,} (HDF5 read only during sample loading)")
         for chrom in chroms[:20]:
             cnt = int((self.dmp_positions_df["chromosome"].astype(str) == chrom).sum())
