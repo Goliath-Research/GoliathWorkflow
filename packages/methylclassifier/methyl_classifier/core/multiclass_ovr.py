@@ -144,7 +144,11 @@ class OvrMultiChromBinaryExpert:
             active_w += w
 
         if active_w <= 0.0:
-            return np.full((n_samples, n_classes), 0.5, dtype=np.float64)
+            # No chromosome contributed features for this head (wrong paths, missing H5, etc.).
+            # Do **not** return (0.5, 0.5): that yields logit 0 in fusion, identical to a genuinely
+            # ambiguous ECDF and forces uniform softmax + spurious argmax→0 across heads. NaN signals
+            # "no evidence" to :func:`fuse_ovr_binary_probas`.
+            return np.full((n_samples, n_classes), np.nan, dtype=np.float64)
         s = np.sum(weighted, axis=1, keepdims=True)
         s = np.where(s == 0, 1.0, s)
         return weighted / s
@@ -474,20 +478,42 @@ def fuse_ovr_binary_probas(
     Fuse K matrices of shape (n_samples, 2) into (n_samples, K) probabilities.
 
     Uses logit_k = log(P_k+) - log(P_k-) with log-sum-exp normalization (temperature 1).
+
+    Rows with **NaN** in either column of a head are treated as **no evidence** from that head:
+    they are omitted from the softmax (zero mass after exp). If **all** heads are missing for a
+    row, returns the discrete uniform ``1/K`` (total ignorance — do not pick an arbitrary class).
+    This distinguishes "no data" from a true (0.5, 0.5) ambiguous ECDF output, which still yields
+    logit 0 and can tie other heads.
     """
     if not binary_probas:
         raise ValueError("binary_probas must be non-empty")
     n = int(binary_probas[0].shape[0])
     K = len(binary_probas)
-    logits = np.zeros((n, K), dtype=np.float64)
+    logits = np.full((n, K), -np.inf, dtype=np.float64)
     for k, p in enumerate(binary_probas):
         if p.shape != (n, 2):
             raise ValueError(f"Expected proba shape ({n}, 2), got {p.shape}")
-        p0 = np.clip(p[:, 0], eps, 1.0)
-        p1 = np.clip(p[:, 1], eps, 1.0)
-        logits[:, k] = np.log(p1) - np.log(p0)
-    logits -= np.max(logits, axis=1, keepdims=True)
-    ex = np.exp(logits)
+        p0 = p[:, 0]
+        p1 = p[:, 1]
+        ok = np.isfinite(p0) & np.isfinite(p1) & (p0 > 0.0) & (p1 > 0.0)
+        p0c = np.clip(p0, eps, 1.0)
+        p1c = np.clip(p1, eps, 1.0)
+        logit_k = np.full(n, -np.inf, dtype=np.float64)
+        logit_k[ok] = np.log(p1c[ok]) - np.log(p0c[ok])
+        logits[:, k] = logit_k
+
+    finite = np.isfinite(logits) & (logits > -np.inf)
+    has_any = np.any(finite, axis=1, keepdims=True)
+    row_max = np.max(np.where(finite, logits, -np.inf), axis=1, keepdims=True)
+    row_max_safe = np.where(has_any, row_max, 0.0)
+    shifted = np.where(finite, logits - row_max_safe, -np.inf)
+    shifted = np.clip(shifted, -700.0, 700.0)
+    ex = np.exp(shifted)
+    ex = np.where(finite, ex, 0.0)
     denom = np.sum(ex, axis=1, keepdims=True)
-    denom = np.where(denom == 0, 1.0, denom)
-    return ex / denom
+    no_signal = (~np.squeeze(has_any, axis=1)) | (np.squeeze(denom, axis=1) <= 0.0)
+    out = ex / np.where(denom > 0.0, denom, 1.0)
+    if np.any(no_signal):
+        out = out.copy()
+        out[no_signal, :] = 1.0 / float(K)
+    return out

@@ -7,9 +7,9 @@
     { "label": "pca_pca3", "csv": "configs/pca3.csv" },
     { "label": "pca_pca4", "csv": "configs/pca4.csv" }
   ],
-  "train_fraction": 0.8,
+  "train_fraction": 0.9,
   "n_iterations": 10,
-  "seed": 42,
+  "seed": 0,
   "base_project": "configs/project_Healthy_vs_PCa1-4_CG.json",
   "output_base": "/work/prostate-cancer",
   "abort_on_step_failure": false

@@ -76,6 +76,28 @@ def test_fuse_ovr_binary_probas_rows_sum_to_one():
     np.testing.assert_allclose(out.sum(axis=1), 1.0, rtol=1e-5)
 
 
+def test_fuse_ovr_binary_probas_all_nan_heads_yields_uniform():
+    """No evidence from any head → discrete 1/K (not arbitrary argmax on fake 0.5 logits)."""
+    n = 4
+    bad = np.full((n, 2), np.nan, dtype=np.float64)
+    out = fuse_ovr_binary_probas([bad, bad, bad])
+    assert out.shape == (n, 3)
+    np.testing.assert_allclose(out, 1.0 / 3.0, rtol=1e-10)
+    np.testing.assert_allclose(out.sum(axis=1), 1.0, rtol=1e-10)
+
+
+def test_fuse_ovr_binary_probas_nan_head_reweights_remaining():
+    """Missing head is dropped from softmax; mass split among heads with finite logits."""
+    n = 2
+    p0 = np.tile([0.2, 0.8], (n, 1))
+    p_missing = np.full((n, 2), np.nan, dtype=np.float64)
+    p2 = np.tile([0.2, 0.8], (n, 1))
+    out = fuse_ovr_binary_probas([p0, p_missing, p2])
+    np.testing.assert_allclose(out[:, 1], 0.0, atol=1e-10)
+    np.testing.assert_allclose(out[:, 0], 0.5, rtol=1e-10)
+    np.testing.assert_allclose(out[:, 2], 0.5, rtol=1e-10)
+
+
 def test_methyl_classifier_ovr_pkl_predict_proba_shape(tmp_path, monkeypatch, capsys):
     """Load ecdf_one_vs_rest PKL: (n, K) probas, approximately stochastic rows."""
     monkeypatch.setattr("methyl_classifier.core.classifier.sys.exit", lambda *_: pytest.fail("sys.exit"))

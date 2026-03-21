@@ -1059,6 +1059,28 @@ def _print_validation_report(
                 count = int(np.sum((expected_arr == k) & (predictions == j)))
                 row.append(str(count))
             print("     " + " ".join(f"{x:>4}" for x in row))
+        if n_classes > 2 and int(np.sum(predictions == 0)) == n_samples:
+            print(
+                "\n   ⚠️ All samples predicted as class 0. Causes to check: (1) **Low DMP coverage** "
+                "on holdouts — missing chroms used to yield fake (0.5,0.5) per head (now NaN → "
+                "uniform fusion if all heads lack data; partial missing reweights surviving heads). "
+                "(2) **Ambiguous fusion** — near-flat probabilities or control head dominating. "
+                "(3) **Batch/cohort shift** vs training."
+            )
+        if n_classes > 2 and probabilities.shape[0] == n_samples:
+            print("   Diagnostic — mean fused P(class) by **expected** cohort (rows in confusion matrix):")
+            for k in range(n_classes):
+                mask = expected_arr == k
+                if not np.any(mask):
+                    continue
+                sub = probabilities[mask]
+                means = np.mean(sub, axis=0)
+                label_k = class_names[k] if k < len(class_names) else f"class_{k}"
+                parts = [
+                    f"{class_names[j] if j < len(class_names) else j}={means[j]:.3f}"
+                    for j in range(n_classes)
+                ]
+                print(f"      expected {label_k} (n={int(np.sum(mask))}): " + " ".join(parts))
 
 
 def _save_classification_results(
