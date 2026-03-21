@@ -470,27 +470,16 @@ def build_union_dmp_dataframe_flat(
     return df, column_indices
 
 
-def fuse_ovr_binary_probas(
+def _logits_from_binary_columns(
     binary_probas: Sequence[np.ndarray],
-    eps: float = 1e-12,
+    head_indices: Sequence[int],
+    n: int,
+    eps: float,
 ) -> np.ndarray:
-    """
-    Fuse K matrices of shape (n_samples, 2) into (n_samples, K) probabilities.
-
-    Uses logit_k = log(P_k+) - log(P_k-) with log-sum-exp normalization (temperature 1).
-
-    Rows with **NaN** in either column of a head are treated as **no evidence** from that head:
-    they are omitted from the softmax (zero mass after exp). If **all** heads are missing for a
-    row, returns the discrete uniform ``1/K`` (total ignorance — do not pick an arbitrary class).
-    This distinguishes "no data" from a true (0.5, 0.5) ambiguous ECDF output, which still yields
-    logit 0 and can tie other heads.
-    """
-    if not binary_probas:
-        raise ValueError("binary_probas must be non-empty")
-    n = int(binary_probas[0].shape[0])
-    K = len(binary_probas)
-    logits = np.full((n, K), -np.inf, dtype=np.float64)
-    for k, p in enumerate(binary_probas):
+    """Extract log(P1/P0) per row for selected heads; shape (n, len(head_indices))."""
+    out = np.full((n, len(head_indices)), -np.inf, dtype=np.float64)
+    for j, k in enumerate(head_indices):
+        p = binary_probas[k]
         if p.shape != (n, 2):
             raise ValueError(f"Expected proba shape ({n}, 2), got {p.shape}")
         p0 = p[:, 0]
@@ -498,10 +487,14 @@ def fuse_ovr_binary_probas(
         ok = np.isfinite(p0) & np.isfinite(p1) & (p0 > 0.0) & (p1 > 0.0)
         p0c = np.clip(p0, eps, 1.0)
         p1c = np.clip(p1, eps, 1.0)
-        logit_k = np.full(n, -np.inf, dtype=np.float64)
-        logit_k[ok] = np.log(p1c[ok]) - np.log(p0c[ok])
-        logits[:, k] = logit_k
+        col = np.full(n, -np.inf, dtype=np.float64)
+        col[ok] = np.log(p1c[ok]) - np.log(p0c[ok])
+        out[:, j] = col
+    return out
 
+
+def _softmax_ovr_logits(logits: np.ndarray, K: int) -> np.ndarray:
+    """Stable softmax over rows; all-missing rows → uniform ``1/K``."""
     finite = np.isfinite(logits) & (logits > -np.inf)
     has_any = np.any(finite, axis=1, keepdims=True)
     row_max = np.max(np.where(finite, logits, -np.inf), axis=1, keepdims=True)
@@ -517,3 +510,48 @@ def fuse_ovr_binary_probas(
         out = out.copy()
         out[no_signal, :] = 1.0 / float(K)
     return out
+
+
+def fuse_ovr_binary_probas(
+    binary_probas: Sequence[np.ndarray],
+    eps: float = 1e-12,
+    *,
+    pairwise_max_contrast_control: bool = False,
+) -> np.ndarray:
+    """
+    Fuse K matrices of shape (n_samples, 2) into (n_samples, K) probabilities.
+
+    **Flat fusion** (default): logit_k = log(P_k+) - log(P_k-) for every head, then softmax.
+
+    **Pairwise max-contrast** (``pairwise_max_contrast_control=True``): for ``control_pairwise_geometric``
+    bundles, the first head is a geometric aggregate of the **same** pairwise P(control) values that
+    define heads ``1..K-1``. Softmaxing that aggregate logit **together** with pairwise logits
+    double-counts control evidence and inflates class 0. This mode **drops** the aggregate from the
+    softmax and sets
+
+    ``logit_control = -max(logit_disease_1, …, logit_disease_{K-1})``,
+
+    so control wins only when **no** pairwise head claims strong disease-vs-control log-odds.
+
+    **NaN** binary columns mean no evidence for that head. All-missing rows → uniform ``1/K``.
+    """
+    if not binary_probas:
+        raise ValueError("binary_probas must be non-empty")
+    n = int(binary_probas[0].shape[0])
+    K = len(binary_probas)
+
+    if pairwise_max_contrast_control and K >= 2:
+        logits = np.full((n, K), -np.inf, dtype=np.float64)
+        if K > 1:
+            logits[:, 1:K] = _logits_from_binary_columns(
+                binary_probas, list(range(1, K)), n, eps
+            )
+            d_slice = logits[:, 1:K]
+            finite_d = np.isfinite(d_slice)
+            has_any_d = np.any(finite_d, axis=1)
+            row_max_d = np.max(np.where(finite_d, d_slice, -np.inf), axis=1)
+            logits[:, 0] = np.where(has_any_d, -row_max_d, -np.inf)
+        return _softmax_ovr_logits(logits, K)
+
+    logits = _logits_from_binary_columns(binary_probas, list(range(K)), n, eps)
+    return _softmax_ovr_logits(logits, K)

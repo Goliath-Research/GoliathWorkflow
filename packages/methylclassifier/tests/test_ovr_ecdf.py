@@ -98,6 +98,23 @@ def test_fuse_ovr_binary_probas_nan_head_reweights_remaining():
     np.testing.assert_allclose(out[:, 2], 0.5, rtol=1e-10)
 
 
+def test_fuse_pairwise_max_contrast_avoids_aggregate_softmax_with_pairwises():
+    """
+    With ``control_pairwise_geometric``, the aggregate head repeats the same P(control) signal
+    already in each pairwise; flat softmax inflates class 0. Max-contrast derives the control
+    logit from the strongest pairwise disease-vs-control log-odds only.
+    """
+    n = 2
+    agg = np.tile([0.2, 0.8], (n, 1))  # [P_not, P_ctrl] as emitted by OvrPairwiseControlAggregateExpert
+    dis = np.tile([0.3, 0.7], (n, 1))  # [P_ctrl, P_dis] per pairwise detector
+    flat = fuse_ovr_binary_probas([agg, dis, dis], pairwise_max_contrast_control=False)
+    pmc = fuse_ovr_binary_probas([agg, dis, dis], pairwise_max_contrast_control=True)
+    assert int(np.argmax(flat[0])) == 0
+    assert int(np.argmax(pmc[0])) in (1, 2)
+    np.testing.assert_allclose(flat.sum(axis=1), 1.0, rtol=1e-6)
+    np.testing.assert_allclose(pmc.sum(axis=1), 1.0, rtol=1e-6)
+
+
 def test_methyl_classifier_ovr_pkl_predict_proba_shape(tmp_path, monkeypatch, capsys):
     """Load ecdf_one_vs_rest PKL: (n, K) probas, approximately stochastic rows."""
     monkeypatch.setattr("methyl_classifier.core.classifier.sys.exit", lambda *_: pytest.fail("sys.exit"))

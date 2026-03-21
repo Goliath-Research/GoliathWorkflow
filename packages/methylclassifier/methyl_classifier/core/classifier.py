@@ -315,6 +315,7 @@ class MethylClassifier:
             self._ovr_binary_classifiers = [
                 OvrPairwiseControlAggregateExpert(disease_experts, col_idx[1:])
             ] + disease_experts
+            self.metadata.setdefault("ovr_fuse_mode", "pairwise_max_contrast")
         else:
             self._ovr_binary_classifiers = disease_experts
         self._ovr_bipartite_layout = None
@@ -613,7 +614,22 @@ class MethylClassifier:
                 else:
                     pk = clf.predict_proba(Xk, Mk, debug=debug)
             binary_probas.append(pk)
-        return fuse_ovr_binary_probas(binary_probas)
+        fuse_mode = (self.metadata or {}).get("ovr_fuse_mode")
+        if fuse_mode == "flat":
+            use_pmc = False
+        elif fuse_mode == "pairwise_max_contrast":
+            use_pmc = True
+        else:
+            use_pmc = bool(
+                self._ovr_binary_classifiers
+                and isinstance(
+                    self._ovr_binary_classifiers[0],
+                    OvrPairwiseControlAggregateExpert,
+                )
+            )
+        return fuse_ovr_binary_probas(
+            binary_probas, pairwise_max_contrast_control=use_pmc
+        )
 
     def load_classifier(self, model_path: Path) -> None:
         """
