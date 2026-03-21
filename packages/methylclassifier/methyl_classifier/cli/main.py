@@ -35,6 +35,16 @@ except ImportError:
         return iterable if iterable is not None else []
 
 
+def _chromosome_keys_to_str(chrom_samples: Dict[Any, Any]) -> Dict[str, Any]:
+    """
+    Merged H5 samples use chromosome keys from filenames (str '1', 'X', ...).
+    Union ``dmp_positions_df`` may use int or str in the chromosome column; normalize so
+    ``chrom in chrom_samples`` cannot fail spuriously (otherwise every DMP is filled with 0.5 /
+    unavailable and OvR fusion ties break to class 0).
+    """
+    return {str(k): v for k, v in chrom_samples.items()}
+
+
 def _remap_centroid_path(path: str, path_remap: Optional[Dict[str, str]], sample_root: Optional[Path]) -> str:
     """Apply path_remap (prefix replacement) or sample_root/basename. path_remap takes precedence."""
     if path_remap:
@@ -736,7 +746,8 @@ def _classify_single_file_multichrom_dmps(
     (e.g. multiclass-classifier.pkl). Builds a flat feature matrix in dmp_positions_df row order.
     """
     dmp_df = classifier.dmp_positions_df
-    chrom_order = dmp_df["chromosome"].drop_duplicates().tolist()
+    chrom_series = dmp_df["chromosome"].astype(str)
+    chrom_order = chrom_series.drop_duplicates().tolist()
     n_dmps = len(dmp_df)
     n_samples = len(loaded_samples)
     feature_matrix = np.zeros((n_samples, n_dmps), dtype=np.float64)
@@ -747,11 +758,12 @@ def _classify_single_file_multichrom_dmps(
         if hasattr(pbar, "set_postfix_str"):
             pbar.set_postfix_str(sample_name, refresh=True)
         sample_names.append(sample_name)
+        norm_cs = _chromosome_keys_to_str(chrom_samples)
         offset = 0
         for chrom in chrom_order:
-            pos_arr = dmp_df.loc[dmp_df["chromosome"] == chrom, "position"].values.astype(np.uint32)
-            if chrom in chrom_samples and len(pos_arr) > 0:
-                feats, mask, _ = DataLoader.extract_sample_features(chrom_samples[chrom], pos_arr)
+            pos_arr = dmp_df.loc[chrom_series == chrom, "position"].values.astype(np.uint32)
+            if chrom in norm_cs and len(pos_arr) > 0:
+                feats, mask, _ = DataLoader.extract_sample_features(norm_cs[chrom], pos_arr)
                 feature_matrix[sample_idx, offset : offset + len(pos_arr)] = feats
                 availability_mask[sample_idx, offset : offset + len(pos_arr)] = mask
             else:
@@ -828,17 +840,19 @@ def _classify_multi_chromosome_samples(
         if hasattr(pbar, "set_postfix_str"):
             pbar.set_postfix_str(sample_name, refresh=True)
         sample_names.append(sample_name)
-        
+        norm_cs = _chromosome_keys_to_str(chrom_samples)
+
         # Extract features for each chromosome
         for chrom in classifier_chroms:
-            if chrom in chrom_samples:
+            sk = str(chrom)
+            if sk in norm_cs:
                 # Get this chromosome's classifier feature info
                 chrom_classifier = classifier.classifiers[chrom]
                 feature_info = chrom_classifier.get_feature_info()
                 dmp_positions = feature_info['positions']
-                
+
                 # Extract features from merged sample for this chromosome
-                sample = chrom_samples[chrom]
+                sample = norm_cs[sk]
                 features, mask, _ = DataLoader.extract_sample_features(sample, dmp_positions)
                 
                 chrom_features[chrom].append(features)

@@ -188,6 +188,7 @@ All outputs under **`output_base/project_name/monte_carlo_runs/`**:
 | **step_timings.csv** | Per step per run: `step_name`, `duration_seconds`, `return_code`, `run_id`, `run_dir`, `n_train_samples`, `n_val_samples`. |
 | **resource_summary.json** | (If generated) Mean and std of duration per step, mean total time per iteration, and min/max/mean of `n_train_samples` and `n_val_samples`. |
 | **run_0001/**, **run_0002/**, ... | Per-iteration directory: `project.json`, train/val artifacts (binary: `train_control.csv`, `train_disease.csv`, `val_control.csv`, `val_disease.csv`; hierarchical/flat multiclass: `training_<label>.csv`, `testing_<label>.csv`, and `val_test_groups.json` for `methyl-predictor --test-groups`), pipeline outputs, `logs/`, per-run `step_timings.csv`. Multiclass predictor output: `run_*/predictors/validation_metrics.json`. |
+| **training_*.csv vs testing_*.csv** | **Training** lists use a `sample` column (folder names under `samples_base_path`), same convention as project cohort CSVs consumed by centroid/detector/classifier. **Testing** lists use a `path` column of **absolute** sample-directory paths so MethylPredictor is unambiguous regardless of process cwd. |
 
 ---
 

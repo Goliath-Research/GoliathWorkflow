@@ -42,6 +42,16 @@ def test_extract_sample_features_dmp_past_last_position_no_index_error():
     assert feats.shape == (1,) and mask.shape == (1,) and not bool(mask[0])
 
 
+def test_chromosome_keys_to_str_unifies_int_and_str_keys():
+    from methyl_classifier.cli.main import _chromosome_keys_to_str
+
+    d = {1: "a", "2": "b", 22: "c"}
+    out = _chromosome_keys_to_str(d)
+    assert out["1"] == "a"
+    assert out["2"] == "b"
+    assert out["22"] == "c"
+
+
 def test_extract_chrom_context_from_classifier_fallback():
     path = Path("/path/to/pb-ch-2-CG/methyl_detector_classifier.pkl")
     chrom, context = extract_chrom_context_from_classifier(path)

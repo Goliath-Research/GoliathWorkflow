@@ -23,7 +23,13 @@ def _sample_name_from_path(full_path: str, base_path: str) -> str:
 
 
 def write_train_csv(path: Path, full_paths: List[str], base_path: str) -> None:
-    """Write a train CSV with header 'sample' and one column of sample names (resolvable with base_path)."""
+    """
+    Write a train CSV with header ``sample`` and one column of folder names under ``samples_base_path``.
+
+    Matches pipeline project cohort list files (e.g. ``configs/healthy.csv``): MethylCentroid /
+    detector / classifier resolve names with the run ``project.json`` ``samples_base_path``.
+    Holdout lists use :func:`write_val_csv` instead (absolute paths) — see its docstring.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     names = [_sample_name_from_path(p, base_path) for p in full_paths]
     with open(path, "w", newline="", encoding="utf-8") as f:
@@ -34,7 +40,14 @@ def write_train_csv(path: Path, full_paths: List[str], base_path: str) -> None:
 
 
 def write_val_csv(path: Path, full_paths: List[str]) -> None:
-    """Write a validation CSV with header 'path' and one column of absolute paths for MethylPredictor."""
+    """
+    Write a validation CSV with header ``path`` and one column of **absolute** directory paths.
+
+    MethylPredictor (and ``--test-groups`` expansion) may run with a different cwd than the
+    Monte Carlo subprocess; absolute paths avoid relying on ``samples_base_path`` alone.
+    Training cohorts use :func:`write_train_csv` (sample names) so the generated ``project.json``
+    matches the rest of the pipeline’s list-file convention.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
