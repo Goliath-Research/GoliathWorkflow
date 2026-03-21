@@ -76,6 +76,8 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 
 **MethylPredictor:** flat-group projects with **multiclass-classifier.pkl** resolve via `resolve_predictor_config` (shared `_build_multiclass_predictor_config`). The CLI applies `--test-groups` in both single-config and per-comparison multiclass runs (`_apply_test_groups_json_to_config`).
 
+**Binary Monte Carlo + multiclass PKL:** `run_pipeline_for_iteration` calls `methyl-predictor` with `--test-control` / `--test-disease` only (no `--test-groups`). On comparison projects, `resolve_predictor_config_per_comparison` must merge those paths into `test_group_paths` as class 0 and 1 (`_apply_binary_cli_paths_to_multiclass_config`); otherwise the predictor would keep training cohort paths from the run `project.json` and validation metrics would be wrong.
+
 ## Output files
 
 | File | Description |

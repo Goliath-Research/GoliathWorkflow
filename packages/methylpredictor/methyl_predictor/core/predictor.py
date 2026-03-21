@@ -449,16 +449,35 @@ def _build_samples_and_expected(
         blind_list = [p for p in config.test_blind_paths if p and str(p).strip()]
         return blind_list, None if blind_list else None
 
-    # Multi-class with labeled groups
-    if is_multiclass and config.test_group_paths:
-        samples_list: List[str] = []
+    # Labeled runs: test_group_paths (K ≥ 2, including binary OvR where n_classes == 2).
+    # Project-resolved multiclass configs set only test_group_paths, not test_control_paths /
+    # test_disease_paths; previously K=2 models skipped this branch and saw an empty sample list.
+    def _test_group_paths_have_samples() -> bool:
+        if not config.test_group_paths:
+            return False
+        for entry in config.test_group_paths:
+            if not isinstance(entry, dict):
+                continue
+            paths = entry.get("paths") or []
+            if any(p and str(p).strip() for p in paths):
+                return True
+        return False
+
+    if _test_group_paths_have_samples():
+        samples_list = []
         expected_classes: List[int] = []
-        for i, entry in enumerate(config.test_group_paths):
+        for j, entry in enumerate(config.test_group_paths):
+            if not isinstance(entry, dict):
+                continue
             paths = entry.get("paths") or []
             paths = [p for p in paths if p and str(p).strip()]
+            if not paths:
+                continue
+            cls_idx = int(entry.get("class_index", j))
             samples_list.extend(paths)
-            expected_classes.extend([i] * len(paths))
-        return samples_list, expected_classes if samples_list else None
+            expected_classes.extend([cls_idx] * len(paths))
+        if samples_list:
+            return samples_list, expected_classes
 
     # Multi-class inference-only: use binary-style paths as single unlabeled list
     if is_multiclass:
@@ -520,7 +539,7 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
         raise ValueError(
             "No test samples: set predictor.blind, or config.controls and config.diseases, "
             "or test_control_paths + test_disease_paths (binary), "
-            "or test_group_paths (multi-class)."
+            "or test_group_paths (K-class / OvR, including K=2)."
         )
 
     output_dir = Path(config.output_dir)

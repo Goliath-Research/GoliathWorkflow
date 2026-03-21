@@ -155,6 +155,58 @@ def _apply_path_remap(paths: List[str], path_remap: Optional[Dict[str, str]]) ->
     return out
 
 
+def _apply_binary_cli_paths_to_multiclass_config(
+    cfg: PredictorConfig,
+    project: Any,
+    test_control_paths: List[str],
+    test_disease_paths: List[str],
+    base_path: Optional[str],
+    project_path: Union[str, Path],
+    path_remap: Optional[Dict[str, str]],
+) -> None:
+    """
+    Methyl-validation (and ``--test-control`` / ``--test-disease``) pass binary validation CSVs even when
+    the on-disk model is multiclass/OvR. Without this merge, ``resolve_predictor_config_per_comparison``
+    would keep ``test_group_paths`` from the project (training cohorts) and ignore CLI paths.
+    """
+    expanded_c = _expand_test_paths(
+        list(test_control_paths), base_path, project_config_path=project_path
+    )
+    expanded_c = [_resolve_one_path(p, base_path) for p in expanded_c if p]
+    expanded_d = _expand_test_paths(
+        list(test_disease_paths), base_path, project_config_path=project_path
+    )
+    expanded_d = [_resolve_one_path(p, base_path) for p in expanded_d if p]
+    if path_remap:
+        expanded_c = _apply_path_remap(expanded_c, path_remap)
+        expanded_d = _apply_path_remap(expanded_d, path_remap)
+    if not expanded_c or not expanded_d:
+        return
+
+    comparisons = project.get_comparisons() if getattr(project, "get_comparisons", None) else []
+    if comparisons:
+        spec = comparisons[0]
+        ctrl_label = getattr(spec, "control_group", None) or "control"
+        dis_label = getattr(spec, "disease_group", None) or "disease"
+    else:
+        ctrl_label, dis_label = "control", "disease"
+
+    cfg.test_group_paths = [
+        {"label": str(ctrl_label), "paths": expanded_c, "class_index": 0},
+        {"label": str(dis_label), "paths": expanded_d, "class_index": 1},
+    ]
+    mc_lineage: List[Dict[str, str]] = []
+    for p in expanded_c:
+        mc_lineage.append(
+            {"absolute_path": p, "side": "multiclass", "group_label": str(ctrl_label)}
+        )
+    for p in expanded_d:
+        mc_lineage.append(
+            {"absolute_path": p, "side": "multiclass", "group_label": str(dis_label)}
+        )
+    cfg.sample_lineage = mc_lineage
+
+
 def _control_disease_side_to_dict(side: Any) -> Dict[str, Any]:
     """Serialize ControlDiseaseSide (or dict) to JSON-friendly dict."""
     if side is None:
@@ -437,8 +489,9 @@ def _build_multiclass_predictor_config(
         resolved = project.get_resolved_groups()
         test_group_paths = []
         for label, group_paths in resolved:
-            paths_list = list(group_paths)
-            paths_list = [_resolve_one_path(p, base_path) for p in paths_list if p]
+            raw = [str(p).strip() for p in group_paths if p and str(p).strip()]
+            expanded = _expand_test_paths(raw, base_path, project_config_path=project_path)
+            paths_list = [_resolve_one_path(p, base_path) for p in expanded if p]
             if project.path_remap:
                 paths_list = _apply_path_remap(paths_list, project.path_remap)
             test_group_paths.append({"label": label, "paths": paths_list})
@@ -600,9 +653,10 @@ def resolve_predictor_config_per_comparison(
     """
     Build one PredictorConfig per comparison (control/disease projects), or a single
     multi-class config if multiclass-classifier.pkl exists.
-    Test sample precedence: (1) Caller test paths (e.g. CLI) supersede all.
-    (2) If step_config.predictor has valid test paths (non-empty after expansion), use them.
-    (3) Otherwise use training data (project group sample paths).
+    Test sample precedence: (1) Caller test paths (e.g. CLI) supersede all — for multiclass
+    PKL, ``--test-control`` + ``--test-disease`` replace default ``test_group_paths`` with two
+    cohorts (class indices 0 and 1). (2) Else step_config.predictor test paths when set.
+    (3) Else training cohorts from the project.
     Returns list of (PredictorConfig, comparison_label) or [(config, "multiclass")] when multiclass model is used.
     """
     project = load_project(project_path)
@@ -674,6 +728,16 @@ def resolve_predictor_config_per_comparison(
             project_path=project_path,
             out_dir=out_dir,
         )
+        if test_control_paths is not None and test_disease_paths is not None:
+            _apply_binary_cli_paths_to_multiclass_config(
+                cfg,
+                project,
+                test_control_paths,
+                test_disease_paths,
+                base_path,
+                project_path,
+                project.path_remap,
+            )
         return [(cfg, "multiclass")]
 
     controls_side = _effective_predictor_side(step_cfg, project, "controls")

@@ -110,6 +110,63 @@ def test_run_prediction_multiclass_ovr_k3_writes_validation_metrics(monkeypatch,
     assert len(vm["per_class"]) == 3
 
 
+def test_run_prediction_ovr_k2_uses_test_group_paths_only(monkeypatch, tmp_path):
+    """Binary OvR (n_classes=2) with only test_group_paths must not fall back to empty control/disease lists."""
+    output_dir = tmp_path / "pred_ovr_k2"
+    classifier_cli_main = importlib.import_module("methyl_classifier.cli.main")
+    s0 = str(tmp_path / "c0")
+    s1 = str(tmp_path / "c1")
+    config = PredictorConfig(
+        model_path=str(tmp_path / "ovr2.pkl"),
+        output_dir=str(output_dir),
+        test_control_paths=[],
+        test_disease_paths=[],
+        test_group_paths=[
+            {"label": "all", "paths": [s0]},
+            {"label": "pca", "paths": [s1]},
+        ],
+        sample_lineage=[],
+    )
+
+    monkeypatch.setattr(
+        "methyl_classifier.core.classifier.MethylClassifier",
+        _DummyClassifier,
+    )
+
+    def fake_classify(*, classifier, samples_list, output_file, expected_classes, **_kwargs):
+        assert samples_list == [s0, s1]
+        assert expected_classes == [0, 1]
+        with Path(output_file).open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "sample",
+                    "prediction",
+                    "expected_class",
+                    "prob_class0",
+                    "prob_class1",
+                ],
+            )
+            writer.writeheader()
+            for i, name in enumerate(["c0", "c1"]):
+                p0, p1 = (0.8, 0.2) if i == 0 else (0.2, 0.8)
+                writer.writerow(
+                    {
+                        "sample": name,
+                        "prediction": i,
+                        "expected_class": i,
+                        "prob_class0": p0,
+                        "prob_class1": p1,
+                    }
+                )
+
+    monkeypatch.setattr(classifier_cli_main, "classify_samples_from_list", fake_classify)
+
+    metrics = run_prediction(config)
+    assert metrics["n_classes"] == 2
+    assert metrics["accuracy"] == 1.0
+
+
 def test_predictor_config_resolves_relative_test_paths(tmp_path):
     config = PredictorConfig(
         model_path=str(tmp_path / "classifier.pkl"),

@@ -1,7 +1,7 @@
 {
   "samples_base_path": "/work/prostate-cancer/samples",
   "healthy_csv": "configs/healthy.csv",
-  "disease_csv": "configs/cancer.csv",
+  "disease_csv": "configs/prostate_cancer.csv",
   "train_fraction": 0.8,
   "n_iterations": 20,
   "seed": 42,
