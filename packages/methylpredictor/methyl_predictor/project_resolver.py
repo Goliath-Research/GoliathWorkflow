@@ -467,6 +467,12 @@ def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: An
         if p.is_file():
             return p
     classifier_step = project.get_step_config("classifier") or {}
+    classifier_dir = getattr(paths, "classifier_dir", None)
+    # Prefer native merged multiclass PKL (detector export) over OvR bundle when both exist.
+    if classifier_dir:
+        native_mc = Path(classifier_dir) / MULTICLASS_CLASSIFIER_FILENAME
+        if native_mc.is_file():
+            return native_mc
     scp = classifier_step.get("save_classifier_path")
     if scp and Path(scp).is_file():
         return Path(scp)
@@ -478,11 +484,7 @@ def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: An
             return bundled
     except ImportError:
         pass
-    classifier_dir = getattr(paths, "classifier_dir", None)
     if classifier_dir:
-        candidate = Path(classifier_dir) / MULTICLASS_CLASSIFIER_FILENAME
-        if candidate.is_file():
-            return candidate
         project_name = getattr(project, "project_name", None)
         if project_name:
             legacy = Path(classifier_dir) / f"{project_name}-classifier.pkl"
