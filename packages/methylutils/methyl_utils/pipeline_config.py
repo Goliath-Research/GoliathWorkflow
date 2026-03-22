@@ -286,7 +286,9 @@ class ProjectConfig(BaseModel):
         "Under 'detection', native multiclass PKL export (not MethylDetector runtime) may set: "
         "multiclass_train_learned_head, multiclass_learned_logistic_C, multiclass_learned_max_iter, "
         "multiclass_learned_standardize, multiclass_learned_random_state. "
-        "Under 'predictor', optional multiclass_model_path forces a specific PKL for multiclass runs.",
+        "Under 'predictor', optional multiclass_model_path forces a specific PKL for multiclass runs; "
+        "optional 'panel' adds hierarchical OvR readout during prediction. "
+        "Under 'classifier', optional 'panel' (same shape) applies during classification when using samples_list / centroid validation (OvR pairwise max-contrast only).",
     )
 
     @field_validator("output_base")

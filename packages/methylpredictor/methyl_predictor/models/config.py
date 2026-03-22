@@ -102,6 +102,11 @@ class PredictorConfig(BaseModel):
         default=None,
         description="Optional tree metadata from project (disease families / stages); used for hierarchy summaries in reports.",
     )
+    panel: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional hierarchical panel readout for OvR ECDF bundles (pairwise max-contrast). "
+        "Set under step_config.predictor.panel in the project JSON. See methyl_classifier.core.panel_fusion.",
+    )
 
     @model_validator(mode="after")
     def ensure_absolute_test_paths(self) -> "PredictorConfig":

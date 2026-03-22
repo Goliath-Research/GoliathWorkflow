@@ -584,6 +584,7 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
         positions=None,
         dmp_positions_by_chrom=dmp_positions_by_chrom,
         expected_classes=expected_classes,
+        panel_spec=config.panel,
     )
 
     if not predictions_csv.exists():

@@ -136,6 +136,29 @@ Use the **same shape** as top-level `controls` / `diseases`: each side has optio
 - If **`predictor.controls`** or **`predictor.diseases`** is missing, or has an empty **`groups`** list, that side is taken from the **root** project `controls` / `diseases` (so you can use `"predictor": {}` to validate on the **same cohorts** as training).
 - For **per-comparison** projects, each run uses the comparison’s **`control_group`** / **`disease_group`** labels to pick the matching subgroup from those nested groups (see [`configs/project_Healthy_vs_PCa1-4.json`](../../configs/project_Healthy_vs_PCa1-4.json)).
 
+### Hierarchical panel readout (`predictor.panel`)
+
+For **multiclass OvR ECDF bundles** fused with **pairwise max-contrast** (the default when the control head is an aggregate over pairwise detectors), you can attach a **panel spec** so each sample gets an interpretable readout: **`healthy`**, **`primary_disease`** (top disease class belongs to your primary family), **`alternative_panel_disease`** (top disease is in another named family on the same panel), or **`indeterminate`** (no usable logits or top-two margin below a threshold).
+
+Add under **`step_config.predictor`** (or the equivalent field on a standalone predictor config):
+
+```json
+"panel": {
+  "primary_family": "prostate",
+  "families": {
+    "prostate": ["pca_stage1", "pca_stage2"],
+    "colorectal": ["crc_a"]
+  },
+  "indeterminate_delta": 0.25
+}
+```
+
+- **`families`** must **partition** every **disease** `class_name` from the model (all entries in `class_names[1:]`, each exactly once). Keys are arbitrary family labels; **`primary_family`** must be one of those keys.
+- **`indeterminate_delta`** is optional (default **0.25**): when the winning column is a disease head, if **(best logit − second logit) < delta**, the sample is **`indeterminate`**.
+- **Not supported** for native multiclass PKLs, non-OvR mode, or legacy **multi-chromosome `model_dir`** layouts in the classifier (the predictor passes the spec through; unsupported paths log a warning and skip panel columns).
+
+When supported, prediction outputs gain **CSV columns** such as **`panel_label`**, **`panel_code`**, **`panel_logit_control`**, **`panel_logit_family_<name>`**, and a sidecar **`panel_report.json`** next to the predictions table. Implementation: `methyl_classifier.core.panel_fusion`.
+
 ### Blind samples (no known class)
 
 Use **`predictor.blind`** when you only want **probabilities per class/subgroup** and **no** accuracy metrics (new or unlabeled samples):

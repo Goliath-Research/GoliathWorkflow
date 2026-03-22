@@ -173,6 +173,30 @@ methyl_classifier --config ovr_only.json --export-ovr-pkl /custom/out.pkl
   The **exported** multiclass OvR PKL defaults to **`{project_root}/classifiers/<control_group_label>/classifier_<control>_<project_name>.pkl`**. **MethylPredictor** should use that single saved PKL (`model_path`) so prediction stays one load for the full union of DMPs across chromosomes and classes.
   **Fusion:** aggregated-control bundles record **`metadata.ovr_fuse_mode`**: **`pairwise_max_contrast`** by default (see `fuse_ovr_binary_probas` in `multiclass_ovr.py`). Use **`flat`** in the PKL metadata only if you need the legacy softmax over all K heads.
 
+### Hierarchical panel readout (OvR, pairwise max-contrast)
+
+On top of the same fused OvR logits, you can define **disease families** (e.g. prostate stages vs colorectal) and label samples as **healthy**, **primary_disease**, **alternative_panel_disease**, or **indeterminate**. This requires **`pairwise_max_contrast`** fusion (not **`flat`**).
+
+Configure it in either place:
+
+- **Standalone classifier JSON** (`ClassificationConfig`): top-level **`panel`** object (same keys as below).
+- **Pipeline project**: **`step_config.classifier.panel`** — merged into the resolved classifier config the same way as other classifier step keys.
+
+Shape (example):
+
+```json
+"panel": {
+  "primary_family": "prostate",
+  "families": {
+    "prostate": ["pca_stage1", "pca_stage2"],
+    "colorectal": ["crc_a"]
+  },
+  "indeterminate_delta": 0.25
+}
+```
+
+**MethylPredictor** can use the same object under **`step_config.predictor.panel`** for prediction-only runs (see MethylPredictor `USAGE.md`). Implementation: **`methyl_classifier.core.panel_fusion`**; classification with **`samples_list`** or centroid-derived sample lists writes extra CSV columns and **`panel_report.json`** next to the results CSV when **`output_path`** is set.
+
 ### Multiclass OvR (K≥2) without a separate bundle script
 
 If you have **K** MethylDetector pickles (one per one-vs-rest class), list them in the config (or under `step_config.classifier` in a project JSON) instead of `model_dir` / `model_path`:

@@ -637,6 +637,73 @@ class MethylClassifier:
             binary_probas, pairwise_max_contrast_control=use_pmc
         )
 
+    def ovr_pairwise_max_contrast_enabled(self) -> bool:
+        """True when OvR fusion uses pairwise max-contrast control (typical pairwise detector bundles)."""
+        if not getattr(self, "_ovr_mode", False):
+            return False
+        fuse_mode = (self.metadata or {}).get("ovr_fuse_mode")
+        if fuse_mode == "flat":
+            return False
+        if fuse_mode == "pairwise_max_contrast":
+            return True
+        return bool(
+            self._ovr_binary_classifiers
+            and isinstance(
+                self._ovr_binary_classifiers[0],
+                OvrPairwiseControlAggregateExpert,
+            )
+        )
+
+    def collect_ovr_binary_probas(
+        self,
+        methylation_data: np.ndarray,
+        availability_mask: Optional[np.ndarray] = None,
+        debug: bool = False,
+    ) -> List[np.ndarray]:
+        """
+        Run each OvR binary head on the full batch (same inputs as ``predict_proba`` in OvR mode).
+        Returns K matrices of shape ``(n_samples, 2)``.
+        """
+        if not getattr(self, "_ovr_mode", False) or not self._ovr_binary_classifiers:
+            raise RuntimeError("collect_ovr_binary_probas requires OvR mode with binary classifiers")
+        n_samples = int(methylation_data.shape[0])
+        if n_samples == 0:
+            return []
+        binary_probas: List[np.ndarray] = []
+        for k, clf in enumerate(self._ovr_binary_classifiers):
+            idx = self._ovr_column_indices[k]
+            if isinstance(
+                clf,
+                (
+                    OvrMultiChromBinaryExpert,
+                    OvrPairwiseControlAggregateExpert,
+                    OvrPairwiseColumnAggregateExpert,
+                ),
+            ):
+                use_cal = bool(getattr(self, "_calibrated", False))
+                pk = clf.predict_proba_binary(
+                    methylation_data,
+                    availability_mask,
+                    np.asarray(idx, dtype=np.intp),
+                    self.dmp_positions_df,
+                    calibrated=use_cal,
+                    debug=debug,
+                )
+            else:
+                Xk = np.ascontiguousarray(methylation_data[:, idx], dtype=np.float64)
+                Mk = availability_mask[:, idx] if availability_mask is not None else None
+                use_cal = (
+                    getattr(self, "_calibrated", False)
+                    and hasattr(clf, "predict_proba_calibrated")
+                    and getattr(clf, "calibrator", None) is not None
+                )
+                if use_cal:
+                    pk = clf.predict_proba_calibrated(Xk, Mk)
+                else:
+                    pk = clf.predict_proba(Xk, Mk, debug=debug)
+            binary_probas.append(pk)
+        return binary_probas
+
     def load_classifier(self, model_path: Path) -> None:
         """
         Load a trained classifier from a pickle file.

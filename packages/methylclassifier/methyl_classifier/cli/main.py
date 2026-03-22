@@ -106,7 +106,8 @@ def classify_samples(classifier: MethylClassifier,
                     chrom: str = None,
                     context: str = None,
                     output_file: Optional[Path] = None,
-                    debug: bool = False) -> None:
+                    debug: bool = False,
+                    panel_spec: Optional[Dict[str, Any]] = None) -> None:
     """
     Load samples from .h5 files and classify them using the trained classifier.
     
@@ -117,11 +118,19 @@ def classify_samples(classifier: MethylClassifier,
     """
     # Handle samples list (multi-chromosome with merged contexts)
     if samples_list:
-        return classify_samples_from_list(classifier, samples_list, output_file, debug)
+        return classify_samples_from_list(
+            classifier, samples_list, output_file, debug, panel_spec=panel_spec
+        )
     
     # Legacy: single file or directory
     if h5_path is None:
         raise ValueError("Either h5_path or samples_list must be provided")
+    if panel_spec:
+        print(
+            "⚠️ panel is ignored for legacy input_path / single-directory .h5 classification; "
+            "use samples_list (e.g. centroid validation) for panel CSV columns.",
+            flush=True,
+        )
     
     filter_info = f" ({chrom}-{context})" if chrom and context else ""
     print(f"\n🔍 Loading samples from: {h5_path}{filter_info}")
@@ -546,7 +555,8 @@ def classify_samples_from_list(
     required_chromosomes: Optional[List[str]] = None,
     positions: Optional[np.ndarray] = None,
     dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None,
-    expected_classes: Optional[List[int]] = None
+    expected_classes: Optional[List[int]] = None,
+    panel_spec: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Classify samples from a list of directories, merging CG, CHG, CHH contexts.
@@ -563,6 +573,7 @@ def classify_samples_from_list(
         positions: Only load these positions (ultra-performance optimization)
         dmp_positions_by_chrom: DMP positions organized by chromosome (chromosome-specific optimization)
         expected_classes: Optional list of expected class (0/1) per sample; when set, CSV gets expected_class column and a summary is printed (centroid validation).
+        panel_spec: Optional hierarchical panel readout (OvR + pairwise max-contrast only). Adds columns to CSV and writes ``panel_report.json`` next to the CSV when ``output_file`` is set. See ``methyl_classifier.core.panel_fusion``.
     """
     print(f"\n🔍 Loading {len(samples_list)} samples from directories...")
     
@@ -617,6 +628,20 @@ def classify_samples_from_list(
                 for i in range(len(samples_list))
                 if i < len(expected_classes)
             ]
+        extra_cols = None
+        if panel_spec and getattr(classifier, "_ovr_mode", False):
+            extra_cols, panel_json = _panel_spec_to_csv_columns(
+                classifier,
+                feature_matrix_fast,
+                availability_fast,
+                panel_spec,
+                debug=debug,
+            )
+            if output_file is not None:
+                pr = Path(output_file).parent / "panel_report.json"
+                with open(pr, "w", encoding="utf-8") as f:
+                    json.dump(panel_json, f, indent=2)
+                print(f"📋 Panel report saved to: {pr}", flush=True)
         _save_classification_results(
             classifier,
             sample_names_fast,
@@ -626,6 +651,7 @@ def classify_samples_from_list(
             dmp_pos_fast,
             output_file,
             expected_classes=fc_exp,
+            extra_columns=extra_cols,
         )
         if fc_exp is not None and len(fc_exp) == len(sample_names_fast):
             _print_validation_report(
@@ -653,7 +679,8 @@ def classify_samples_from_list(
         # Multi-chromosome mode: extract features per chromosome and combine
         _classify_multi_chromosome_samples(
             classifier, loaded_samples, output_file, debug,
-            expected_classes=expected_classes
+            expected_classes=expected_classes,
+            panel_spec=panel_spec,
         )
     elif (
         getattr(classifier, "dmp_positions_df", None) is not None
@@ -669,6 +696,7 @@ def classify_samples_from_list(
         _classify_single_file_multichrom_dmps(
             classifier, loaded_samples, output_file, debug,
             expected_classes=expected_classes,
+            panel_spec=panel_spec,
         )
     else:
         # Single chromosome mode: use first chromosome from merged samples
@@ -725,10 +753,21 @@ def classify_samples_from_list(
         )
         
         # Save results
+        extra_cols = None
+        if panel_spec and getattr(classifier, "_ovr_mode", False):
+            extra_cols, panel_json = _panel_spec_to_csv_columns(
+                classifier, feature_matrix, availability_mask, panel_spec, debug=debug
+            )
+            if output_file is not None:
+                pr = Path(output_file).parent / "panel_report.json"
+                with open(pr, "w", encoding="utf-8") as f:
+                    json.dump(panel_json, f, indent=2)
+                print(f"📋 Panel report saved to: {pr}", flush=True)
         _save_classification_results(
             classifier, sample_names, predictions, probabilities,
             availability_mask, dmp_positions, output_file,
-            expected_classes=single_expected_classes
+            expected_classes=single_expected_classes,
+            extra_columns=extra_cols,
         )
         if single_expected_classes is not None and len(single_expected_classes) == len(sample_names):
             _print_validation_report(classifier, sample_names, predictions, probabilities, single_expected_classes)
@@ -740,6 +779,7 @@ def _classify_single_file_multichrom_dmps(
     output_file: Optional[Path] = None,
     debug: bool = False,
     expected_classes: Optional[List[int]] = None,
+    panel_spec: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Classify samples using a single-file classifier whose DMPs span multiple chromosomes
@@ -772,29 +812,37 @@ def _classify_single_file_multichrom_dmps(
             offset += len(pos_arr)
 
     if getattr(classifier, "_ovr_mode", False):
-        print(f"\n🤖 OvR ECDF: scoring {n_samples} sample(s) (one fused predict per sample)...", flush=True)
-        probs_list: List[np.ndarray] = []
-        pbar_pred = tqdm(range(n_samples), desc="OvR prediction", unit="sample")
-        for i in pbar_pred:
-            if hasattr(pbar_pred, "set_postfix_str"):
-                pbar_pred.set_postfix_str(sample_names[i], refresh=True)
-            row_p = classifier.predict_proba(
-                feature_matrix[i : i + 1],
-                availability_mask[i : i + 1],
-                debug,
-            )[0]
-            probs_list.append(row_p)
-        probabilities = np.asarray(probs_list, dtype=np.float64)
+        print(f"\n🤖 OvR ECDF: scoring {n_samples} sample(s) (batched fused predict)...", flush=True)
+        probabilities = classifier.predict_proba(
+            feature_matrix, availability_mask, debug
+        )
         predictions = np.argmax(probabilities, axis=1)
     else:
         predictions, probabilities = classify_samples_batch(
             classifier, feature_matrix, availability_mask, debug
         )
     dmp_positions_flat = dmp_df["position"].values.astype(np.uint32)
+    extra_cols = None
+    if panel_spec:
+        if not getattr(classifier, "_ovr_mode", False):
+            print(
+                "⚠️ panel_spec ignored: hierarchical panel readout requires OvR mode.",
+                flush=True,
+            )
+        else:
+            extra_cols, panel_json = _panel_spec_to_csv_columns(
+                classifier, feature_matrix, availability_mask, panel_spec, debug=debug
+            )
+            if output_file is not None:
+                pr = Path(output_file).parent / "panel_report.json"
+                with open(pr, "w", encoding="utf-8") as f:
+                    json.dump(panel_json, f, indent=2)
+                print(f"📋 Panel report saved to: {pr}", flush=True)
     _save_classification_results(
         classifier, sample_names, predictions, probabilities,
         availability_mask, dmp_positions_flat, output_file,
         expected_classes=expected_classes,
+        extra_columns=extra_cols,
     )
     if expected_classes is not None and len(expected_classes) == len(sample_names):
         _print_validation_report(classifier, sample_names, predictions, probabilities, expected_classes)
@@ -805,7 +853,8 @@ def _classify_multi_chromosome_samples(
     loaded_samples: List[Tuple[str, Dict[str, Any]]],
     output_file: Optional[Path] = None,
     debug: bool = False,
-    expected_classes: Optional[List[int]] = None
+    expected_classes: Optional[List[int]] = None,
+    panel_spec: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Classify samples using multi-chromosome classifier.
@@ -814,6 +863,12 @@ def _classify_multi_chromosome_samples(
     Optionally saves per-chromosome probabilities to a matrix file.
     When expected_classes is provided (centroid validation), adds expected_class column and prints summary.
     """
+    if panel_spec:
+        print(
+            "⚠️ panel_spec is not supported for legacy multi-chromosome model_dir layout; "
+            "use an OvR union PKL (single pass over dmp_positions_df).",
+            flush=True,
+        )
     print(f"\n📊 Extracting features per chromosome for {len(loaded_samples)} samples...")
     
     # Get all chromosomes from classifier
@@ -1083,6 +1138,56 @@ def _print_validation_report(
                 print(f"      expected {label_k} (n={int(np.sum(mask))}): " + " ".join(parts))
 
 
+def _panel_spec_to_csv_columns(
+    classifier: MethylClassifier,
+    feature_matrix: np.ndarray,
+    availability_mask: np.ndarray,
+    panel_spec: Dict[str, Any],
+    debug: bool = False,
+) -> Tuple[Dict[str, List[Any]], Dict[str, Any]]:
+    """
+    Build extra CSV columns and a JSON-serializable panel payload from OvR binary heads.
+    """
+    import re
+
+    from ..core.panel_fusion import compute_panel_outputs
+
+    names = list(classifier.class_names or [])
+    bp = classifier.collect_ovr_binary_probas(feature_matrix, availability_mask, debug)
+    pmc = classifier.ovr_pairwise_max_contrast_enabled()
+    out = compute_panel_outputs(
+        bp, names, pairwise_max_contrast=pmc, spec=panel_spec
+    )
+    fam_keys = list(out["family_keys_order"])
+    extra: Dict[str, List[Any]] = {
+        "panel_label": [str(x) for x in out["panel_label"].tolist()],
+        "panel_code": [int(x) for x in out["panel_code"].tolist()],
+        "panel_logit_control": [float(x) for x in out["logit_control"].tolist()],
+    }
+    for fk in fam_keys:
+        safe = re.sub(r"[^0-9a-zA-Z_]+", "_", fk).strip("_") or "family"
+        extra[f"panel_logit_family_{safe}"] = [
+            float(x) for x in out["family_max_logit"][fk].tolist()
+        ]
+    json_payload = {
+        "spec": dict(panel_spec),
+        "primary_family": out["primary_family"],
+        "families": out["families"],
+        "per_sample": [
+            {
+                "panel_label": str(out["panel_label"][i]),
+                "panel_code": int(out["panel_code"][i]),
+                "logit_control": float(out["logit_control"][i]),
+                "family_max_logit": {
+                    fk: float(out["family_max_logit"][fk][i]) for fk in fam_keys
+                },
+            }
+            for i in range(len(out["panel_label"]))
+        ],
+    }
+    return extra, json_payload
+
+
 def _save_classification_results(
     classifier: MethylClassifier,
     sample_names: List[str],
@@ -1093,7 +1198,8 @@ def _save_classification_results(
     output_file: Optional[Path],
     multi_chromosome: bool = False,
     chromosomes: Optional[List[str]] = None,
-    expected_classes: Optional[List[int]] = None
+    expected_classes: Optional[List[int]] = None,
+    extra_columns: Optional[Dict[str, List[Any]]] = None,
 ) -> None:
     """Helper to save classification results to CSV."""
     if output_file is None:
@@ -1102,6 +1208,13 @@ def _save_classification_results(
     import csv
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
+
+    extra_columns = extra_columns or {}
+    for col, vals in extra_columns.items():
+        if len(vals) != len(sample_names):
+            raise ValueError(
+                f"extra_columns[{col!r}] length {len(vals)} != sample count {len(sample_names)}"
+            )
 
     # Prepare results data
     results_data = []
@@ -1136,6 +1249,9 @@ def _save_classification_results(
             result_entry['expected_class'] = int(exp)
             result_entry['agrees'] = bool(pred == exp)
 
+        for col, vals in extra_columns.items():
+            result_entry[col] = vals[i]
+
         results_data.append(result_entry)
 
     # Write CSV
@@ -1147,6 +1263,7 @@ def _save_classification_results(
         fieldnames.append('chromosomes')
     if expected_classes is not None:
         fieldnames.extend(['expected_class', 'agrees'])
+    fieldnames.extend(sorted(extra_columns.keys()))
 
     with open(output_file, 'w', newline='') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -1331,6 +1448,7 @@ def _export_ovr_pkl_from_config(config: ClassificationConfig, out_path: Path) ->
         project_name=config.project_name,
         save_classifier_path=config.save_classifier_path,
         samples_list_export_path=config.samples_list_export_path,
+        panel=config.panel,
     )
     classifier = MethylClassifier(classifier_config)
     if not getattr(classifier, "_ovr_mode", False):
@@ -1366,6 +1484,7 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
         project_name=config.project_name,
         save_classifier_path=config.save_classifier_path,
         samples_list_export_path=config.samples_list_export_path,
+        panel=config.panel,
     )
     classifier = MethylClassifier(classifier_config)
     chrom, context = None, None
@@ -1445,7 +1564,8 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
             required_chromosomes=required_chromosomes,
             positions=positions,
             dmp_positions_by_chrom=dmp_positions_by_chrom,
-            expected_classes=expected_classes
+            expected_classes=expected_classes,
+            panel_spec=config.panel,
         )
     else:
         classify_samples(
@@ -1454,7 +1574,8 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
             chrom=chrom,
             context=context,
             output_file=Path(config.output_path) if config.output_path else None,
-            debug=config.debug
+            debug=config.debug,
+            panel_spec=config.panel,
         )
     output_dir = Path(config.output_path).parent if config.output_path else Path.cwd()
     _save_classifier_and_sample_list(

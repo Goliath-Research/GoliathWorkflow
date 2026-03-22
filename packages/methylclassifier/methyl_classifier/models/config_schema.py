@@ -3,7 +3,7 @@ Configuration schema for MethylClassifier CLI
 """
 
 from pathlib import Path
-from typing import Optional, Dict, List, Union
+from typing import Any, Optional, Dict, List, Union
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -88,6 +88,10 @@ class ClassificationConfig(BaseModel):
     expected_classes: Optional[List[int]] = Field(
         default=None,
         description="Optional list of expected class index per sample (for validation report). Set when samples are built from centroid_dirs."
+    )
+    panel: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="OvR pairwise max-contrast only: panel spec (primary_family, families, optional indeterminate_delta). Adds panel columns and panel_report.json when classifying with samples_list / centroid validation.",
     )
 
     # Optional

@@ -194,7 +194,14 @@
       "trimmed_percentile_high": 0.01,
       "chromosome_weights": null,
       "debug": false,
-      "log_level": "INFO"
+      "log_level": "INFO",
+      "panel": {
+        "primary_family": "prostate",
+        "families": {
+          "prostate": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"]
+        },
+        "indeterminate_delta": 0.25
+      }    
     },
     "predictor": {
       "controls": {
@@ -242,7 +249,14 @@
           }
         ]
       },
-      "debug": false
+      "panel": {
+        "primary_family": "prostate",
+        "families": {
+          "prostate": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"]
+        },
+        "indeterminate_delta": 0.25
+      },    
+     "debug": false
     }
   }
 }

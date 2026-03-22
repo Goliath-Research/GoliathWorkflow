@@ -453,6 +453,7 @@ def _build_blind_predictor_dict(
         "blind": blind_side,
         "sample_lineage": lineage,
         "cohort_hierarchy": tree or None,
+        "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
     }
 
 
@@ -600,6 +601,7 @@ def _build_multiclass_predictor_config(
         "report_diseases": None,
         "sample_lineage": mc_lineage,
         "cohort_hierarchy": tree or None,
+        "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
     }
     return PredictorConfig(**base_dict)
 
@@ -672,6 +674,7 @@ def resolve_predictor_config(
             report_controls={"label": "control", "groups": [{"label": "cli", "sample_paths": []}]},
             report_diseases={"label": "disease", "groups": [{"label": "cli", "sample_paths": []}]},
             sample_lineage=lineage,
+            panel=step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
         )
 
     if _predictor_blind_has_groups(step_cfg):
@@ -725,6 +728,7 @@ def resolve_predictor_config(
         "report_diseases": diseases_side,
         "sample_lineage": lineage,
         "cohort_hierarchy": tree or None,
+        "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
     }
     return PredictorConfig(**base)
 
@@ -905,6 +909,7 @@ def resolve_predictor_config_per_comparison(
             "report_controls": rep_c,
             "report_diseases": rep_d,
             "sample_lineage": lineage,
+            "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
         }
         result.append((PredictorConfig(**base), comp_label))
     return result

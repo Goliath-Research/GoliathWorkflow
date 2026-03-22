@@ -1,5 +1,5 @@
 from pydantic import Field, field_validator, model_validator
-from typing import Optional, Dict, Literal, List
+from typing import Any, Optional, Dict, Literal, List
 from pathlib import Path
 from pydantic import BaseModel
 
@@ -108,6 +108,10 @@ class ClassifierConfig(BaseModel):
     samples_list_export_path: Optional[str] = Field(
         default=None,
         description="Path to export the list of sample folders (.txt or .csv). If null and project_name is set, exports to <output_dir>/<project_name>-samples.txt."
+    )
+    panel: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Hierarchical panel readout for OvR + pairwise max-contrast: primary_family, families (partition of disease class names), optional indeterminate_delta. Passed through to classification CSV / panel_report.json.",
     )
 
     @field_validator('temperature')
