@@ -50,15 +50,22 @@ class NativeMulticlassHistogramClassifier:
         weights: np.ndarray,
         class_names: list[str],
         temperature: float = 1.0,
+        contrast_reference_class_index: Optional[int] = None,
+        score_mode: str = "generative",
     ) -> None:
         self.positions = np.asarray(positions, dtype=np.uint32)
         self.bin_edges = np.asarray(bin_edges, dtype=np.float64)
         self.bin_probabilities = np.asarray(bin_probabilities, dtype=np.float64)
-        self.weights = np.asarray(weights, dtype=np.float64)
         self.class_names = list(class_names)
         self.n_classes = len(self.class_names)
         self.classes_ = np.arange(self.n_classes, dtype=np.int32)
         self.temperature = max(float(temperature), 0.1)
+        self.score_mode = str(score_mode or "generative")
+        self.contrast_reference_class_index = (
+            None
+            if contrast_reference_class_index is None
+            else int(contrast_reference_class_index)
+        )
         self.calibrator = None
 
         if self.positions.ndim != 1:
@@ -81,12 +88,28 @@ class NativeMulticlassHistogramClassifier:
             raise ValueError(
                 "bin_probabilities third dimension must match len(bin_edges) - 1"
             )
-        if self.weights.shape != self.positions.shape:
-            raise ValueError("weights must match positions shape")
+        raw_weights = np.asarray(weights, dtype=np.float64)
+        if raw_weights.ndim == 1:
+            if raw_weights.shape != self.positions.shape:
+                raise ValueError("1D weights must match positions shape")
+            class_weights = np.tile(raw_weights[np.newaxis, :], (self.n_classes, 1))
+        elif raw_weights.ndim == 2:
+            if raw_weights.shape != (self.n_classes, len(self.positions)):
+                raise ValueError(
+                    "2D weights must have shape (n_classes, n_positions)"
+                )
+            class_weights = raw_weights
+        else:
+            raise ValueError("weights must be 1D or 2D")
 
         self.n_dmps = int(len(self.positions))
         self.n_bins = int(self.bin_probabilities.shape[2])
-        self.weights = np.where(np.isfinite(self.weights) & (self.weights > 0.0), self.weights, 1e-6)
+        self.class_weights = np.where(
+            np.isfinite(class_weights) & (class_weights > 0.0),
+            class_weights,
+            1e-6,
+        )
+        self.weights = np.mean(self.class_weights, axis=0)
         row_sums = np.sum(self.bin_probabilities, axis=2, keepdims=True)
         row_sums = np.where(row_sums > 0.0, row_sums, 1.0)
         self.bin_probabilities = np.clip(self.bin_probabilities / row_sums, 1e-300, 1.0)
@@ -94,6 +117,11 @@ class NativeMulticlassHistogramClassifier:
         w_sum = float(np.sum(self.weights))
         w_sq_sum = float(np.sum(self.weights ** 2))
         self._n_effective = (w_sum ** 2) / max(w_sq_sum, 1e-300)
+        if self.contrast_reference_class_index is not None:
+            if not (0 <= self.contrast_reference_class_index < self.n_classes):
+                raise ValueError("contrast_reference_class_index out of range")
+            if self.score_mode != "contrast_vs_control":
+                self.score_mode = "contrast_vs_control"
 
     def set_temperature(self, temperature: float) -> None:
         self.temperature = max(float(temperature), 0.1)
@@ -139,14 +167,8 @@ class NativeMulticlassHistogramClassifier:
         bin_idx = np.searchsorted(self.bin_edges, X_clean, side="right") - 1
         bin_idx = np.clip(bin_idx, 0, self.n_bins - 1).astype(np.intp, copy=False)
 
-        w = self.weights[np.newaxis, :]
-        w_avail = np.where(avail, w, 0.0)
-        w_sum = np.sum(w_avail, axis=1)
-        denom = np.maximum(w_sum, 1e-12)
-        no_signal = w_sum <= 0.0
-
-        scores = np.zeros((n_samples, self.n_classes), dtype=np.float64)
         lookup_idx = bin_idx[:, :, np.newaxis]
+        log_prob_tables = []
         for class_idx in range(self.n_classes):
             probs = np.take_along_axis(
                 self.bin_probabilities[class_idx][np.newaxis, :, :],
@@ -156,8 +178,45 @@ class NativeMulticlassHistogramClassifier:
             log_probs = np.log(np.maximum(probs, 1e-300))
             log_probs = np.maximum(log_probs, _LOG_BIN_PROB_CAP)
             log_probs = np.where(avail, log_probs, 0.0)
-            scores[:, class_idx] = np.sum(w_avail * log_probs, axis=1) / denom
+            log_prob_tables.append(log_probs)
 
+        scores = np.zeros((n_samples, self.n_classes), dtype=np.float64)
+        score_has_signal = np.zeros((n_samples, self.n_classes), dtype=bool)
+        if (
+            self.score_mode == "contrast_vs_control"
+            and self.contrast_reference_class_index is not None
+            and self.n_classes >= 2
+        ):
+            ref_idx = self.contrast_reference_class_index
+            ref_log_probs = log_prob_tables[ref_idx]
+            disease_scores = []
+            for class_idx in range(self.n_classes):
+                if class_idx == ref_idx:
+                    continue
+                w = self.class_weights[class_idx][np.newaxis, :]
+                w_avail = np.where(avail, w, 0.0)
+                w_sum = np.sum(w_avail, axis=1)
+                denom = np.maximum(w_sum, 1e-12)
+                contrast_log_probs = log_prob_tables[class_idx] - ref_log_probs
+                scores[:, class_idx] = np.sum(w_avail * contrast_log_probs, axis=1) / denom
+                score_has_signal[:, class_idx] = w_sum > 0.0
+                disease_scores.append(scores[:, class_idx])
+            if disease_scores:
+                disease_scores_arr = np.stack(disease_scores, axis=1)
+                scores[:, ref_idx] = -np.max(disease_scores_arr, axis=1)
+                score_has_signal[:, ref_idx] = np.any(
+                    score_has_signal[:, np.arange(self.n_classes) != ref_idx], axis=1
+                )
+        else:
+            for class_idx in range(self.n_classes):
+                w = self.class_weights[class_idx][np.newaxis, :]
+                w_avail = np.where(avail, w, 0.0)
+                w_sum = np.sum(w_avail, axis=1)
+                denom = np.maximum(w_sum, 1e-12)
+                scores[:, class_idx] = np.sum(w_avail * log_prob_tables[class_idx], axis=1) / denom
+                score_has_signal[:, class_idx] = w_sum > 0.0
+
+        no_signal = ~np.any(score_has_signal, axis=1)
         if np.any(no_signal):
             scores = scores.copy()
             scores[no_signal, :] = 0.0
@@ -170,6 +229,7 @@ class NativeMulticlassHistogramClassifier:
                 self.n_dmps,
                 self.n_classes,
             )
+            logger.debug("  score_mode: %s", self.score_mode)
             logger.debug(
                 "  valid positions range: %d - %d",
                 int(valid_counts.min()) if valid_counts.size else 0,

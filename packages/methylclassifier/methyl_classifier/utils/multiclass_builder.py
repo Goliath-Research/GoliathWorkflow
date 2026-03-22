@@ -17,7 +17,7 @@ from methyl_utils import load_from_h5
 from ..core.native_multiclass import NativeMulticlassHistogramClassifier
 
 NATIVE_MULTICLASS_TYPE = "native_multiclass_histogram"
-NATIVE_MULTICLASS_VERSION = 1
+NATIVE_MULTICLASS_VERSION = 2
 _REQUIRED_DMP_COLS = {"chromosome", "context", "position"}
 _DEFAULT_WEIGHT_COLS = (
     "classifier_weight",
@@ -38,6 +38,27 @@ def _prepare_feature_table(dmps_df: pd.DataFrame) -> pd.DataFrame:
     out["context"] = out["context"].astype(str)
     out["position"] = out["position"].astype(np.uint32)
     return out
+
+
+def _normalize_weight_array(
+    raw_weights: np.ndarray,
+    *,
+    weight_power: float,
+) -> np.ndarray:
+    weights = np.asarray(raw_weights, dtype=np.float64)
+    if weights.size == 0:
+        return weights
+    if np.any(~np.isfinite(weights)) or np.any(weights <= 0.0):
+        weights = np.where(np.isfinite(weights) & (weights > 0.0), weights, 1.0)
+    w_max = float(np.max(weights))
+    if w_max > 1e-6:
+        weights = np.clip(weights / w_max, 1e-6, 1.0)
+    else:
+        weights = np.full(weights.shape, 1e-6, dtype=np.float64)
+    if float(weight_power) != 1.0:
+        weights = np.power(weights, float(weight_power))
+        weights = np.maximum(weights, 1e-6)
+    return weights.astype(np.float64)
 
 
 def _resolve_weights(
@@ -62,21 +83,44 @@ def _resolve_weights(
             break
     if raw is None:
         raw = np.ones(len(dmps_df), dtype=np.float64)
+    return _normalize_weight_array(raw, weight_power=weight_power), used_col
 
-    weights = np.asarray(raw, dtype=np.float64)
-    if weights.size == 0:
-        return weights, used_col
-    if np.any(~np.isfinite(weights)) or np.any(weights <= 0.0):
-        weights = np.where(np.isfinite(weights) & (weights > 0.0), weights, 1.0)
-    w_max = float(np.max(weights))
-    if w_max > 1e-6:
-        weights = np.clip(weights / w_max, 1e-6, 1.0)
-    else:
-        weights = np.full(weights.shape, 1e-6, dtype=np.float64)
-    if float(weight_power) != 1.0:
-        weights = np.power(weights, float(weight_power))
-        weights = np.maximum(weights, 1e-6)
-    return weights.astype(np.float64), used_col
+
+def _resolve_class_weight_matrix(
+    dmps_df: pd.DataFrame,
+    class_names: List[str],
+    *,
+    control_label: Optional[str],
+    fallback_weights: np.ndarray,
+    fallback_label: str,
+    weight_power: float,
+) -> Tuple[np.ndarray, Dict[str, str]]:
+    class_weight_rows: List[np.ndarray] = []
+    used_cols: Dict[str, str] = {}
+    for class_name in class_names:
+        if control_label is not None and str(class_name) == str(control_label):
+            class_weight_rows.append(np.asarray(fallback_weights, dtype=np.float64))
+            used_cols[str(class_name)] = fallback_label
+            continue
+        candidates = [
+            f"effect_size__{class_name}",
+            f"weight__{class_name}",
+            f"importance__{class_name}",
+        ]
+        raw: Optional[np.ndarray] = None
+        used = fallback_label
+        for col in candidates:
+            if col in dmps_df.columns:
+                raw = dmps_df[col].astype(float).to_numpy()
+                used = col
+                break
+        if raw is None:
+            raw = np.asarray(fallback_weights, dtype=np.float64)
+        else:
+            raw = _normalize_weight_array(raw, weight_power=weight_power)
+        class_weight_rows.append(np.asarray(raw, dtype=np.float64))
+        used_cols[str(class_name)] = used
+    return np.stack(class_weight_rows, axis=0), used_cols
 
 
 def _load_aligned_histogram_probabilities(
@@ -166,6 +210,9 @@ def build_multiclass_model(config: Dict[str, Any]) -> Path:
     weight_power = float(config.get("weight_power", 1.0))
     temperature = float(config.get("temperature", 1.0))
     histogram_smoothing = float(config.get("histogram_smoothing", 0.5))
+    control_label = config.get("control_label")
+    control_name = str(control_label) if control_label is not None else None
+    score_mode = str(config.get("score_mode") or "auto")
 
     dmps_df = _prepare_feature_table(pd.read_csv(dmps_csv))
     classifier_weights, used_weight_col = _resolve_weights(
@@ -190,18 +237,46 @@ def build_multiclass_model(config: Dict[str, Any]) -> Path:
         bin_prob_tables.append(probs)
         missing_by_class[name] = int(missing_count)
 
+    class_weight_matrix, class_weight_columns = _resolve_class_weight_matrix(
+        dmps_df,
+        class_names,
+        control_label=control_name,
+        fallback_weights=classifier_weights,
+        fallback_label=used_weight_col,
+        weight_power=weight_power,
+    )
+
+    reference_class_index: Optional[int] = None
+    if control_name is not None and control_name in class_names:
+        reference_class_index = class_names.index(control_name)
+    class_specific_cols_present = any(
+        used != used_weight_col for name, used in class_weight_columns.items() if name != control_name
+    )
+    if score_mode == "auto":
+        score_mode = (
+            "contrast_vs_control"
+            if reference_class_index is not None and class_specific_cols_present
+            else "generative"
+        )
+
     assert bin_edges_ref is not None
     classifier = NativeMulticlassHistogramClassifier(
         positions=dmps_df["position"].to_numpy(dtype=np.uint32),
         bin_edges=bin_edges_ref,
         bin_probabilities=np.stack(bin_prob_tables, axis=0),
-        weights=classifier_weights,
+        weights=class_weight_matrix if score_mode == "contrast_vs_control" else classifier_weights,
         class_names=class_names,
         temperature=temperature,
+        contrast_reference_class_index=reference_class_index if score_mode == "contrast_vs_control" else None,
+        score_mode=score_mode,
     )
 
     feature_table = dmps_df.copy()
     feature_table["classifier_weight"] = classifier_weights.astype(np.float64)
+    for class_idx, class_name in enumerate(class_names):
+        feature_table[f"classifier_weight__{class_name}"] = class_weight_matrix[
+            class_idx
+        ].astype(np.float64)
 
     metadata = {
         "classifier_type": NATIVE_MULTICLASS_TYPE,
@@ -217,10 +292,13 @@ def build_multiclass_model(config: Dict[str, Any]) -> Path:
         "context": ",".join(str(x) for x in (config.get("contexts") or [])) or "unknown",
         "weights_column_requested": weights_column,
         "weights_column_used": used_weight_col,
+        "class_weight_columns": class_weight_columns,
         "weight_power": weight_power,
         "histogram_smoothing": histogram_smoothing,
         "n_bins": len(bin_edges_ref) - 1,
         "control_label": config.get("control_label"),
+        "score_mode": score_mode,
+        "contrast_reference_class_index": reference_class_index,
         "comparison_labels": list(config.get("comparison_labels") or []),
         "missing_positions_by_class": missing_by_class,
         "config": dict(config),

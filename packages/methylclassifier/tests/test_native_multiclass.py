@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from methyl_classifier.core.classifier import MethylClassifier
+from methyl_classifier.core.native_multiclass import NativeMulticlassHistogramClassifier
 from methyl_classifier.models.config import ClassifierConfig
 from methyl_classifier.utils.multiclass_builder import (
     NATIVE_MULTICLASS_TYPE,
@@ -133,6 +134,37 @@ def test_merge_dmp_csvs_preserves_per_comparison_feature_columns(tmp_path: Path)
     assert row100["weight"] == 0.70
 
 
+def test_native_multiclass_contrast_mode_prefers_matching_disease_class() -> None:
+    classifier = NativeMulticlassHistogramClassifier(
+        positions=np.array([100, 200], dtype=np.uint32),
+        bin_edges=np.array([0.0, 0.5, 1.0], dtype=np.float64),
+        bin_probabilities=np.array(
+            [
+                [[0.9, 0.1], [0.9, 0.1]],  # control
+                [[0.1, 0.9], [0.9, 0.1]],  # disease 1
+                [[0.9, 0.1], [0.1, 0.9]],  # disease 2
+            ],
+            dtype=np.float64,
+        ),
+        weights=np.array(
+            [
+                [1.0, 1.0],
+                [1.0, 1e-3],
+                [1e-3, 1.0],
+            ],
+            dtype=np.float64,
+        ),
+        class_names=["control", "d1", "d2"],
+        contrast_reference_class_index=0,
+        score_mode="contrast_vs_control",
+    )
+    X = np.array([[0.1, 0.9]], dtype=np.float64)
+    proba = classifier.predict_proba(X, np.ones_like(X, dtype=bool))
+    assert int(np.argmax(proba[0])) == 2
+    assert proba[0, 2] > proba[0, 0]
+    assert proba[0, 2] > proba[0, 1]
+
+
 def test_build_native_multiclass_model_loads_and_scores(tmp_path: Path) -> None:
     detection_d1 = tmp_path / "detections" / "all" / "d1"
     detection_d2 = tmp_path / "detections" / "all" / "d2"
@@ -233,7 +265,10 @@ def test_build_native_multiclass_model_loads_and_scores(tmp_path: Path) -> None:
     with open(out_pkl, "rb") as handle:
         pkg = pickle.load(handle)
     assert pkg["metadata"]["classifier_type"] == NATIVE_MULTICLASS_TYPE
+    assert pkg["metadata"]["score_mode"] == "contrast_vs_control"
     assert "classifier_weight" in pkg["dmp_df"].columns
+    assert "classifier_weight__d1" in pkg["dmp_df"].columns
+    assert "classifier_weight__d2" in pkg["dmp_df"].columns
     assert "effect_size__d1" in pkg["dmp_df"].columns
     assert "effect_size__d2" in pkg["dmp_df"].columns
 
