@@ -81,7 +81,7 @@ except ImportError:
     '--multi-class-model',
     is_flag=True,
     default=False,
-    help='Compatibility mode: merge DMPs from per-comparison detection dirs and build the legacy multiclass model bundle. '
+    help='Build a native multiclass classifier from per-comparison detection DMP CSVs and class centroids. '
          'If --per-cancer-group is also set, run detection first then merge and build. '
          'If only --multi-class-model: require per-comparison detection outputs to already exist.'
 )
@@ -113,7 +113,7 @@ def main(
     With --project, paths follow the canonical project layout under {output_base}/{project_name}.
     Use --per-cancer-group with --project to run one detection per configured comparison,
     writing to detections/<control_group>/<disease_group>.
-    Use --multi-class-model only for the legacy multiclass builder path.
+    Use --multi-class-model to build a native multiclass model from existing per-comparison DMPs.
     """
     if (config is None) == (project is None):
         raise click.UsageError("Provide either CONFIG or --project (not both, not neither).")
@@ -191,13 +191,14 @@ def main(
                 [Path(c.output_dir) for c, _ in configs_and_labels],
                 merged_path,
                 weights_column="effect_size",
+                detection_labels=[label for _, label in configs_and_labels],
             )
             try:
                 from methyl_classifier.project_resolver import build_multiclass_config_from_project
                 from methyl_classifier.utils.multiclass_builder import build_multiclass_model
             except ImportError as e:
                 click.echo(
-                    "Building the multiclass model requires methylclassifier. Install it and run:\n"
+                    "Building the native multiclass model requires methylclassifier. Install it and run:\n"
                     f"  python -c \"from methyl_classifier.project_resolver import build_multiclass_config_from_project; "
                     f"from methyl_classifier.utils.multiclass_builder import build_multiclass_model; "
                     f"import json; cfg = build_multiclass_config_from_project('{project}', dmps_csv='{merged_path}'); "
@@ -209,7 +210,7 @@ def main(
                 str(project),
                 dmps_csv=str(merged_path),
                 output_model=str(Path(paths.classifier_dir) / "multiclass-classifier.pkl"),
-                weights_column="effect_size",
+                weights_column="weight",
             )
             out_pkl = build_multiclass_model(cfg)
             logger.info(f"Multiclass model saved to {out_pkl}")

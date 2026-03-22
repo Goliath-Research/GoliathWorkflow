@@ -661,7 +661,12 @@ class MethylClassifier:
                 self._ovr_mode = False
                 self._ovr_binary_classifiers = []
                 self._ovr_column_indices = []
-                print(f"✅ Loaded enhanced model package (v{model_package.get('package_version', 'unknown')})")
+                pkg_ver = model_package.get("package_version", "unknown")
+                pkg_type = model_package.get("classifier_type") or model_package.get("metadata", {}).get("classifier_type")
+                if pkg_type:
+                    print(f"✅ Loaded enhanced model package (v{pkg_ver}, type={pkg_type})")
+                else:
+                    print(f"✅ Loaded enhanced model package (v{pkg_ver})")
                 self.classifier = model_package['classifier']
                 # Note: comparison_config removed (no longer used), kept for backward compatibility
                 self.metadata = model_package.get('metadata', {})
@@ -690,7 +695,7 @@ class MethylClassifier:
                 print(f"📍 Classifier context: {self.chromosome}-{self.context_metadata}")
                 print(f"📊 Training date: {self.metadata.get('training_date', 'unknown')}")
                 print(f"📊 Classifier uses {self.metadata.get('n_dmps', 'unknown')} DMPs")
-                if self.class_names is not None and len(self.class_names) >= 2:
+                if self.class_names is not None and len(self.class_names) == 2:
                     print(f"📊 Class names: {self.class_names[0]} vs {self.class_names[1]}")
                 else:
                     print(f"📊 Class names: {self.class_names}")
@@ -1145,6 +1150,11 @@ class MethylClassifier:
         Used to load only those contexts when classifying (e.g. CG-only to match MethylDetector).
         """
         if not hasattr(self, 'model_packages') or not self.model_packages:
+            meta = getattr(self, "metadata", {}) or {}
+            config = meta.get("config") or {}
+            ctx = config.get("contexts")
+            if ctx is not None and isinstance(ctx, (list, tuple)) and len(ctx) > 0:
+                return list(ctx)
             return None
         for _chrom, pkg in sorted(self.model_packages.items()):
             meta = pkg.get('metadata') or {}

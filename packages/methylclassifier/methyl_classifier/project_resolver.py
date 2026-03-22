@@ -345,7 +345,7 @@ def build_multiclass_config_from_project(
     project_path: Union[str, Path],
     dmps_csv: Optional[Union[str, Path]] = None,
     output_model: Optional[Union[str, Path]] = None,
-    weights_column: Optional[str] = "importance",
+    weights_column: Optional[str] = "weight",
     detection_dmps_glob: str = "dmps-*.csv",
 ) -> Dict[str, Any]:
     """
@@ -393,12 +393,26 @@ def build_multiclass_config_from_project(
     for (label, _), cdir in zip(resolved, centroid_dirs):
         classes.append({"name": label, "centroid_dir": str(Path(cdir).resolve())})
 
+    control_label: Optional[str] = None
+    comparison_labels: List[str] = []
+    if getattr(project, "uses_control_disease", lambda: False)():
+        with_side = project._get_resolved_groups_with_side(expand_subclusters=False)
+        controls = [str(lbl) for lbl, _, side in with_side if side == "control"]
+        diseases = [str(lbl) for lbl, _, side in with_side if side == "disease"]
+        control_label = controls[0] if controls else None
+        comparison_labels = diseases
+
     return {
         "dmps_csv": dmps_csv,
         "output_model": output_model,
         "weights_column": weights_column,
-        "min_sample_coverage": 10,
-        "coverage_weighting": True,
+        "temperature": 1.0,
+        "histogram_smoothing": 0.5,
+        "weight_power": 1.0,
+        "control_label": control_label,
+        "comparison_labels": comparison_labels,
+        "contexts": list(project.contexts or []),
+        "chromosomes": [str(c) for c in (project.chromosomes or [])],
         "classes": classes,
     }
 

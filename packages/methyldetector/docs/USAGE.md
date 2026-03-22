@@ -55,7 +55,7 @@ docker exec -w /workspace/packages/methyldetector methylpipeline \
 - `--output-base PATH`: override project output base  
 - `--centroid1-dir` / `--centroid2-dir`: override centroid dirs (with `--project`)  
 - `--per-cancer-group`: run one detection per non-control group  
-- `--multi-class-model`: compatibility mode for the legacy multiclass model builder  
+- `--multi-class-model`: build a native multiclass classifier from the per-comparison `dmps-*.csv` outputs and class centroids  
 
 Example with project:
 

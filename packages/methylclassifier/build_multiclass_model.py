@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build a multi-class classifier from centroids and a DMP list.
+Build a native multiclass histogram classifier from centroids and a merged DMP table.
 """
 
 import argparse
@@ -11,7 +11,7 @@ from methyl_classifier.utils.multiclass_builder import build_multiclass_model_fr
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build a multi-class classifier model package"
+        description="Build a native multiclass histogram classifier model package"
     )
     parser.add_argument(
         "config",

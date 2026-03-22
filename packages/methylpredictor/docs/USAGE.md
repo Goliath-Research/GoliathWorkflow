@@ -153,7 +153,7 @@ Use **`predictor.blind`** when you only want **probabilities per class/subgroup*
 - **`groups[].label`** is metadata (batch name), not a ground-truth class.
 - **Do not** set **`predictor.controls`** / **`predictor.diseases`** (or nested `controls`/`diseases` on `PredictorConfig`) in the same run as **`blind`**.
 - **Output**: `prediction_report.json` has **`mode": "blind"`**, **`blind_summary`** (counts per predicted class, mean probabilities, mean entropy), and per-sample **`probabilities`**, **`predicted_subgroup`**, **`max_probability`**, **`entropy`**. **`validation_metrics.json`** is **not** written. For multiclass OvR, if a sample has **no evidence** for any head, fused probabilities are **uniform** `1/K`; use **`entropy`** and the full **`probabilities`** vector — **`predicted_subgroup`** from argmax is **not** decisive when **`max_probability` ≈ 1/K**.
-- **Per-comparison projects**: a blind run produces **one** output under **`{project_root}/predictors/blind/`**. You must set **`predictor.model_path`**, **`model_dir`**, **`multiclass-classifier.pkl`**, or **`classifier.save_classifier_path`** so the model is unambiguous (binary per-comparison PKLs are not auto-picked for blind).
+- **Per-comparison projects**: a blind run produces **one** output under **`{project_root}/predictors/blind/`**. You must set **`predictor.model_path`**, **`model_dir`**, **`multiclass-classifier.pkl`** (native multiclass), or **`classifier.save_classifier_path`** (often the unified OvR bundle) so the model is unambiguous; binary per-comparison PKLs are not auto-picked for blind.
 
 ### Standalone `--config` JSON
 

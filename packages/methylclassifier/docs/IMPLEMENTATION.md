@@ -43,7 +43,7 @@ The classifier objects inside the pickle use **ECDF-based prediction** (MethylUt
 |-----------|--------------------------|
 | **Classifier (in pickle)** | ECDF-based; stored by MethylDetector. MethylClassifier loads and calls `.predict_proba()`, `.predict()`, `.predict_proba_calibrated()`, `.predict_with_threshold()`. |
 | **MethylSample / load_from_h5** | DataLoader uses these to load sample HDF5 files and extract methylation at DMP positions. |
-| **Multi-class builder** | The multiclass builder currently remains a legacy compatibility path and is separate from the canonical ECDF binary-comparison workflow documented here. |
+| **Multi-class builder** | The native multiclass builder merges per-comparison DMP CSVs into one feature table, preserves comparison-specific effect sizes, aligns centroid histograms for every class on that union, and packages a single-file multiclass histogram classifier (`multiclass-classifier.pkl`). |
 | **load_project** | Used when resolving config from a pipeline project (e.g. CLI `--project`). |
 
 ## Context Handling

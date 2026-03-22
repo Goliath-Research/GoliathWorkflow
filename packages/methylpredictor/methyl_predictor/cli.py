@@ -250,6 +250,11 @@ def main() -> None:
                 if args.model_dir is not None:
                     cfg.model_dir = str(args.model_dir)
                     cfg.model_path = None
+                if output_dir is not None:
+                    if len(configs) == 1:
+                        cfg.output_dir = output_dir
+                    else:
+                        cfg.output_dir = str(Path(output_dir) / str(label))
                 cfg.debug = cfg.debug or args.debug
                 if label == "multiclass" and getattr(args, "test_groups", None) is not None:
                     tg = Path(args.test_groups)
