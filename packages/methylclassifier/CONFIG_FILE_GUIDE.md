@@ -177,7 +177,7 @@ methyl_classifier --config classification_config.json
 
 ### Multi-class Model Build
 
-Build a multi-class model (centroids with binned_stats for ECDF) using:
+Build a native multiclass histogram model from a merged DMP feature table and class centroids:
 
 ```bash
 python build_multiclass_model.py configs/example_multiclass_model.json

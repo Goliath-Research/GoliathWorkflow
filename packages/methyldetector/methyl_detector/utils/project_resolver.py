@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from methyl_utils import load_project
 
 from ..models.config import MethylDetectorConfig
+from .multiclass_export_config import filter_detection_config_for_detector
 
 
 def resolve_detector_config_per_cancer_group(
@@ -37,6 +38,7 @@ def resolve_detector_config_per_cancer_group(
         with open(step_override_path) as f:
             overrides = json.load(f)
         step_cfg = {**step_cfg, **overrides}
+    step_cfg = filter_detection_config_for_detector(step_cfg)
 
     if getattr(project, "uses_control_disease", lambda: False)():
         comparisons = project.get_comparisons()
@@ -145,7 +147,7 @@ def resolve_detector_config(
         base["centroid2_validation_samples"] = project.get_group2_sample_paths()
 
     # Apply project-level step config (detection) if present
-    step_cfg = project.get_step_config("detection")
+    step_cfg = filter_detection_config_for_detector(project.get_step_config("detection") or {})
     if step_cfg:
         for k, v in step_cfg.items():
             base[k] = v
@@ -157,6 +159,7 @@ def resolve_detector_config(
     if step_override_path is not None:
         with open(step_override_path) as f:
             overrides = json.load(f)
+        overrides = filter_detection_config_for_detector(overrides)
         for k, v in overrides.items():
             base[k] = v
         # Keep comparison-based structure: detections/<control_group>/<disease_group>

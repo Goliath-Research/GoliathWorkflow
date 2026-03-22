@@ -282,7 +282,11 @@ class ProjectConfig(BaseModel):
         default=None,
         description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc, cluster. "
         "Use 'predictor' (not 'validator') for prediction/validation; validator is deprecated. "
-        "Values are merged into that step's config (override file / CLI still override these).",
+        "Values are merged into that step's config (override file / CLI still override these). "
+        "Under 'detection', native multiclass PKL export (not MethylDetector runtime) may set: "
+        "multiclass_train_learned_head, multiclass_learned_logistic_C, multiclass_learned_max_iter, "
+        "multiclass_learned_standardize, multiclass_learned_random_state. "
+        "Under 'predictor', optional multiclass_model_path forces a specific PKL for multiclass runs.",
     )
 
     @field_validator("output_base")

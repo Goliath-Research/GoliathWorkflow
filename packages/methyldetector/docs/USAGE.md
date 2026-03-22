@@ -55,7 +55,18 @@ docker exec -w /workspace/packages/methyldetector methylpipeline \
 - `--output-base PATH`: override project output base  
 - `--centroid1-dir` / `--centroid2-dir`: override centroid dirs (with `--project`)  
 - `--per-cancer-group`: run one detection per non-control group  
-- `--multi-class-model`: compatibility mode for the legacy multiclass model builder  
+- `--multi-class-model`: build a native multiclass classifier from the per-comparison `dmps-*.csv` outputs and class centroids  
+- `--learned-multiclass-head`: with `--multi-class-model`, fit a multinomial logistic layer on native histogram scores using the project’s training cohort lists  
+
+In `step_config.detection` (same effect as the CLI flag / hyperparameters; multiclass keys are **not** passed to MethylDetector itself):
+
+- `multiclass_train_learned_head` (bool): enable learned multinomial head when building the multiclass PKL  
+- `multiclass_learned_logistic_C` (float, optional): sklearn `C` for the logistic head  
+- `multiclass_learned_max_iter` (int, optional): LBFGS max iterations  
+- `multiclass_learned_standardize` (bool, optional): standard-scale pre-softmax features before logistic regression  
+- `multiclass_learned_random_state` (int, optional): random seed for the logistic fit  
+
+Passing `--learned-multiclass-head` forces the learned head on even if the project flag is false.
 
 Example with project:
 

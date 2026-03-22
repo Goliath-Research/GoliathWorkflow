@@ -81,9 +81,16 @@ except ImportError:
     '--multi-class-model',
     is_flag=True,
     default=False,
-    help='Compatibility mode: merge DMPs from per-comparison detection dirs and build the legacy multiclass model bundle. '
+    help='Build a native multiclass classifier from per-comparison detection DMP CSVs and class centroids. '
          'If --per-cancer-group is also set, run detection first then merge and build. '
          'If only --multi-class-model: require per-comparison detection outputs to already exist.'
+)
+@click.option(
+    '--learned-multiclass-head',
+    is_flag=True,
+    default=False,
+    help='With --multi-class-model: fit a multinomial logistic layer on native histogram pre-softmax scores '
+         'using training cohorts from the project (same sample lists as centroid training).',
 )
 @click.option(
     '--group',
@@ -104,6 +111,7 @@ def main(
     centroid2_dir: Optional[Path],
     per_cancer_group: bool,
     multi_class_model: bool,
+    learned_multiclass_head: bool,
     group: Optional[str],
 ) -> None:
     """
@@ -113,7 +121,7 @@ def main(
     With --project, paths follow the canonical project layout under {output_base}/{project_name}.
     Use --per-cancer-group with --project to run one detection per configured comparison,
     writing to detections/<control_group>/<disease_group>.
-    Use --multi-class-model only for the legacy multiclass builder path.
+    Use --multi-class-model to build a native multiclass model from existing per-comparison DMPs.
     """
     if (config is None) == (project is None):
         raise click.UsageError("Provide either CONFIG or --project (not both, not neither).")
@@ -128,6 +136,7 @@ def main(
             per_cancer_group = True  # --group runs one comparison via the per-group path
     if project is not None and (per_cancer_group or multi_class_model):
         from methyl_utils import load_project
+        from ..utils.multiclass_export_config import multiclass_build_overrides_from_detection_step
         from ..utils.multiclass_merge import (
             check_detection_dirs_have_dmps,
             merge_dmp_csvs_from_detection_dirs,
@@ -182,7 +191,10 @@ def main(
                 for out_dir, label in missing:
                     click.echo(f"  {label}: {out_dir}", err=True)
                 sys.exit(1)
-            proj = load_project(project)
+            proj = load_project(
+                project,
+                output_base_override=str(output_base) if output_base else None,
+            )
             paths = proj.get_derived_paths()
             detection_dir = Path(paths.detection_dir)
             merged_path = detection_dir / "dmps-merged-multiclass.csv"
@@ -191,13 +203,14 @@ def main(
                 [Path(c.output_dir) for c, _ in configs_and_labels],
                 merged_path,
                 weights_column="effect_size",
+                detection_labels=[label for _, label in configs_and_labels],
             )
             try:
                 from methyl_classifier.project_resolver import build_multiclass_config_from_project
                 from methyl_classifier.utils.multiclass_builder import build_multiclass_model
             except ImportError as e:
                 click.echo(
-                    "Building the multiclass model requires methylclassifier. Install it and run:\n"
+                    "Building the native multiclass model requires methylclassifier. Install it and run:\n"
                     f"  python -c \"from methyl_classifier.project_resolver import build_multiclass_config_from_project; "
                     f"from methyl_classifier.utils.multiclass_builder import build_multiclass_model; "
                     f"import json; cfg = build_multiclass_config_from_project('{project}', dmps_csv='{merged_path}'); "
@@ -209,8 +222,13 @@ def main(
                 str(project),
                 dmps_csv=str(merged_path),
                 output_model=str(Path(paths.classifier_dir) / "multiclass-classifier.pkl"),
-                weights_column="effect_size",
+                weights_column="weight",
+                output_base_override=str(output_base) if output_base else None,
             )
+            det_step = proj.get_step_config("detection") or {}
+            cfg.update(multiclass_build_overrides_from_detection_step(det_step))
+            if learned_multiclass_head:
+                cfg["train_learned_multiclass"] = True
             out_pkl = build_multiclass_model(cfg)
             logger.info(f"Multiclass model saved to {out_pkl}")
             click.echo(f"Multiclass model saved to {out_pkl}")

@@ -119,7 +119,7 @@ You **do not** need to “build” a new aggregated classifier every time you pr
   - **Multiclass OvR**: a portable **`ecdf_one_vs_rest`** dict PKL — the K binary experts and union DMP layout are **fixed at save/export time** (`--export-ovr-pkl` does the same without classifying).
   - **Multi-chromosome binary**: a pickled **`MethylClassifier`** that already contains **all** chromosome sub-classifiers and (when fitted) chromosome weights.
 
-**MethylPredictor** should use **`model_path`** to that file. The project resolver prefers **`classifier.save_classifier_path`**, per-comparison **`…/classifiers/<control>/<disease>/<project>-classifier.pkl`**, or the multiclass bundle under **`classifiers/<control>/`** when those files exist.
+**MethylPredictor** should use **`model_path`** to that file. For comparison projects, the resolver picks **`step_config.predictor.multiclass_model_path`** or **`model_path`** if set; otherwise **`classifiers/multiclass-classifier.pkl`** (native histogram / learned multiclass from MethylDetector) **if that file exists**; otherwise **`classifier.save_classifier_path`**, then the **OvR ECDF bundle** under **`classifiers/<control>/`**, then **`{project_name}-classifier.pkl`**. Native **`multiclass-classifier.pkl`** wins over the OvR bundle when both are present so detector-built models are not shadowed.
 
 **`model_dir`** (a folder of `classifier-{chrom}*.pkl`) is still valid — typically MethylDetector output — but each predictor process **reloads every chromosome pickle** and wires multi-chromosome mode again. That is **more I/O and setup** than loading a **single saved PKL**; use **`model_path`** once the classifier step has produced it.
 
@@ -153,7 +153,7 @@ Use **`predictor.blind`** when you only want **probabilities per class/subgroup*
 - **`groups[].label`** is metadata (batch name), not a ground-truth class.
 - **Do not** set **`predictor.controls`** / **`predictor.diseases`** (or nested `controls`/`diseases` on `PredictorConfig`) in the same run as **`blind`**.
 - **Output**: `prediction_report.json` has **`mode": "blind"`**, **`blind_summary`** (counts per predicted class, mean probabilities, mean entropy), and per-sample **`probabilities`**, **`predicted_subgroup`**, **`max_probability`**, **`entropy`**. **`validation_metrics.json`** is **not** written. For multiclass OvR, if a sample has **no evidence** for any head, fused probabilities are **uniform** `1/K`; use **`entropy`** and the full **`probabilities`** vector — **`predicted_subgroup`** from argmax is **not** decisive when **`max_probability` ≈ 1/K**.
-- **Per-comparison projects**: a blind run produces **one** output under **`{project_root}/predictors/blind/`**. You must set **`predictor.model_path`**, **`model_dir`**, **`multiclass-classifier.pkl`**, or **`classifier.save_classifier_path`** so the model is unambiguous (binary per-comparison PKLs are not auto-picked for blind).
+- **Per-comparison projects**: a blind run produces **one** output under **`{project_root}/predictors/blind/`**. You must set **`predictor.model_path`**, **`model_dir`**, **`multiclass-classifier.pkl`** (native multiclass), or **`classifier.save_classifier_path`** (often the unified OvR bundle) so the model is unambiguous; binary per-comparison PKLs are not auto-picked for blind.
 
 ### Standalone `--config` JSON
 
