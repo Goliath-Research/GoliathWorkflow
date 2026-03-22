@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -135,14 +135,18 @@ class NativeMulticlassHistogramClassifier:
     def _effective_temperature(self) -> float:
         return min(self.temperature * math.sqrt(self._n_effective), 10.0)
 
-    def predict_proba(
+    def compute_pre_softmax_scores(
         self,
         X: np.ndarray,
         availability_mask: Optional[np.ndarray] = None,
+        *,
         debug: bool = False,
-        use_gpu: bool = True,
-    ) -> np.ndarray:
-        del use_gpu
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Weighted log-likelihood scores per class (same tensor softmaxed in ``predict_proba``),
+        before temperature and softmax. Second return value is a boolean mask (n_samples,) True
+        where no class had usable weighted signal.
+        """
         X = np.asarray(X, dtype=np.float64)
         if X.ndim != 2 or X.shape[1] != self.n_dmps:
             raise ValueError(
@@ -160,7 +164,10 @@ class NativeMulticlassHistogramClassifier:
 
         n_samples = int(X.shape[0])
         if n_samples == 0:
-            return np.zeros((0, self.n_classes), dtype=np.float64)
+            return (
+                np.zeros((0, self.n_classes), dtype=np.float64),
+                np.zeros((0,), dtype=bool),
+            )
 
         X_clean = np.where(avail, X, 0.5)
         X_clean = np.clip(X_clean, 0.0, 1.0)
@@ -224,7 +231,8 @@ class NativeMulticlassHistogramClassifier:
         if debug:
             valid_counts = np.sum(avail, axis=1)
             logger.debug(
-                "NativeMulticlassHistogramClassifier.predict_proba: %d samples, %d DMPs, %d classes",
+                "NativeMulticlassHistogramClassifier.compute_pre_softmax_scores: "
+                "%d samples, %d DMPs, %d classes",
                 n_samples,
                 self.n_dmps,
                 self.n_classes,
@@ -244,6 +252,23 @@ class NativeMulticlassHistogramClassifier:
                 if n_samples > 0
                 else {},
             )
+
+        return scores, no_signal
+
+    def predict_proba(
+        self,
+        X: np.ndarray,
+        availability_mask: Optional[np.ndarray] = None,
+        debug: bool = False,
+        use_gpu: bool = True,
+    ) -> np.ndarray:
+        del use_gpu
+        scores, no_signal = self.compute_pre_softmax_scores(
+            X, availability_mask, debug=debug
+        )
+        n_samples = int(scores.shape[0])
+        if n_samples == 0:
+            return np.zeros((0, self.n_classes), dtype=np.float64)
 
         T_eff = max(self._effective_temperature(), 0.1)
         logits = scores / T_eff

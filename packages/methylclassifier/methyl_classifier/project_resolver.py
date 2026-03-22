@@ -347,6 +347,7 @@ def build_multiclass_config_from_project(
     output_model: Optional[Union[str, Path]] = None,
     weights_column: Optional[str] = "weight",
     detection_dmps_glob: str = "dmps-*.csv",
+    output_base_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Build a multiclass model config dict from a project (for use with build_multiclass_model).
@@ -355,11 +356,16 @@ def build_multiclass_config_from_project(
     looks under the project's detection_dir for a DMP CSV (first file matching detection_dmps_glob).
     For N-class detection you typically run MethylDetector one-vs-rest or merge pairwise DMPs
     and place the merged CSV in detection_dir, or pass dmps_csv explicitly.
+    When ``output_base_override`` is set, it is passed to ``load_project`` (same as MethylDetector
+    ``--output-base``) so centroid and classifier paths resolve consistently.
 
     Returns:
         Config dict with keys: dmps_csv, output_model, weights_column, classes (list of {name, centroid_dir}).
     """
-    project = load_project(project_path)
+    project = load_project(
+        project_path,
+        output_base_override=output_base_override,
+    )
     paths = project.get_derived_paths()
     resolved = project.get_resolved_groups()
     if len(resolved) < 2:
@@ -414,6 +420,8 @@ def build_multiclass_config_from_project(
         "contexts": list(project.contexts or []),
         "chromosomes": [str(c) for c in (project.chromosomes or [])],
         "classes": classes,
+        "project_path": str(Path(project_path).resolve()),
+        "train_learned_multiclass": False,
     }
 
 

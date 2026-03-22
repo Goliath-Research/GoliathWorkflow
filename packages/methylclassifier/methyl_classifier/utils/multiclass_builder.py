@@ -7,17 +7,21 @@ from __future__ import annotations
 import json
 import pickle
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 
-from methyl_utils import load_from_h5
+from methyl_utils import load_from_h5, load_project
 
 from ..core.native_multiclass import NativeMulticlassHistogramClassifier
+from ..core.native_multiclass_learned import NativeMulticlassLearnedClassifier
+from .data_loader import DataLoader
 
 NATIVE_MULTICLASS_TYPE = "native_multiclass_histogram"
 NATIVE_MULTICLASS_VERSION = 2
+NATIVE_MULTICLASS_LEARNED_TYPE = "native_multiclass_learned"
+NATIVE_MULTICLASS_LEARNED_VERSION = 3
 _REQUIRED_DMP_COLS = {"chromosome", "context", "position"}
 _DEFAULT_WEIGHT_COLS = (
     "classifier_weight",
@@ -202,6 +206,140 @@ def _load_aligned_histogram_probabilities(
     return bin_edges_ref, probs_out, int(np.sum(missing_mask))
 
 
+def _chromosome_keys_to_str(chrom_samples: Dict[Any, Any]) -> Dict[str, Any]:
+    return {str(k): v for k, v in chrom_samples.items()}
+
+
+def _flat_feature_matrix_from_loaded(
+    loaded_samples: List[Tuple[str, Dict[str, Any]]],
+    dmps_df: pd.DataFrame,
+) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    chrom_series = dmps_df["chromosome"].astype(str)
+    chrom_order = chrom_series.drop_duplicates().tolist()
+    n_dmps = len(dmps_df)
+    n_samples = len(loaded_samples)
+    feature_matrix = np.zeros((n_samples, n_dmps), dtype=np.float64)
+    availability_mask = np.zeros((n_samples, n_dmps), dtype=bool)
+    sample_names: List[str] = []
+    for sample_idx, (sample_name, chrom_samples) in enumerate(loaded_samples):
+        sample_names.append(sample_name)
+        norm_cs = _chromosome_keys_to_str(chrom_samples)
+        offset = 0
+        for chrom in chrom_order:
+            pos_arr = dmps_df.loc[chrom_series == chrom, "position"].values.astype(np.uint32)
+            if chrom in norm_cs and len(pos_arr) > 0:
+                feats, mask, _ = DataLoader.extract_sample_features(norm_cs[chrom], pos_arr)
+                feature_matrix[sample_idx, offset : offset + len(pos_arr)] = feats
+                availability_mask[sample_idx, offset : offset + len(pos_arr)] = mask
+            else:
+                feature_matrix[sample_idx, offset : offset + len(pos_arr)] = 0.5
+                availability_mask[sample_idx, offset : offset + len(pos_arr)] = False
+            offset += len(pos_arr)
+    return feature_matrix, availability_mask, sample_names
+
+
+def _collect_training_score_matrix(
+    project_path: Union[str, Path],
+    class_names: List[str],
+    dmps_df: pd.DataFrame,
+    chromosomes: List[str],
+    contexts_to_load: List[str],
+    base: NativeMulticlassHistogramClassifier,
+) -> Tuple[np.ndarray, np.ndarray]:
+    project = load_project(project_path)
+    label_to_idx = {str(name): i for i, name in enumerate(class_names)}
+    all_loaded: List[Tuple[str, Dict[str, Any]]] = []
+    y_list: List[int] = []
+    req_chroms = [str(c) for c in chromosomes] if chromosomes else None
+    ctx = contexts_to_load if contexts_to_load else None
+    for label in class_names:
+        paths = project.get_group_sample_paths_by_label(str(label))
+        if not paths:
+            raise ValueError(f"No training sample paths for group {label!r}")
+        loaded, _ = DataLoader.load_samples_from_list(
+            paths,
+            chromosomes=None,
+            debug=False,
+            required_chromosomes=req_chroms,
+            positions=None,
+            dmp_positions_by_chrom=dmps_df,
+            contexts_to_load=ctx,
+        )
+        if not loaded:
+            raise ValueError(f"Could not load any samples for group {label!r}")
+        yi = label_to_idx[str(label)]
+        for item in loaded:
+            all_loaded.append(item)
+            y_list.append(yi)
+    Xm, Am, _ = _flat_feature_matrix_from_loaded(all_loaded, dmps_df)
+    scores, _ = base.compute_pre_softmax_scores(Xm, Am)
+    y = np.asarray(y_list, dtype=np.int64)
+    return scores, y
+
+
+def _fit_learned_multiclass_head(
+    config: Dict[str, Any],
+    base: NativeMulticlassHistogramClassifier,
+    dmps_df: pd.DataFrame,
+    class_names: List[str],
+) -> Tuple[NativeMulticlassLearnedClassifier, Dict[str, Any]]:
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.preprocessing import StandardScaler
+
+    project_path = config.get("project_path")
+    if not project_path:
+        raise ValueError(
+            "train_learned_multiclass requires project_path in the build config "
+            "(path to project.json) to resolve training sample directories"
+        )
+    chromosomes = [str(c) for c in (config.get("chromosomes") or [])]
+    if not chromosomes:
+        chromosomes = sorted(dmps_df["chromosome"].astype(str).unique().tolist())
+    contexts = [str(c) for c in (config.get("contexts") or [])]
+    X_train, y_train = _collect_training_score_matrix(
+        project_path,
+        class_names,
+        dmps_df,
+        chromosomes,
+        contexts,
+        base,
+    )
+    if X_train.shape[0] < 2:
+        raise ValueError("Need at least 2 training samples for learned multiclass head")
+    for ci in range(len(class_names)):
+        if int(np.sum(y_train == ci)) < 1:
+            raise ValueError(
+                f"Need at least one training sample per class; missing label index {ci} "
+                f"({class_names[ci]!r})"
+            )
+    use_scale = bool(config.get("learned_standardize", True))
+    scaler: Optional[StandardScaler] = StandardScaler() if use_scale else None
+    X_fit = scaler.fit_transform(X_train) if scaler is not None else X_train
+    C = float(config.get("learned_logistic_C", 1.0))
+    max_iter = int(config.get("learned_max_iter", 2000))
+    rs = int(config.get("learned_random_state", 0))
+    clf = LogisticRegression(
+        multi_class="multinomial",
+        solver="lbfgs",
+        max_iter=max_iter,
+        C=C,
+        random_state=rs,
+    )
+    clf.fit(X_fit, y_train)
+    learned = NativeMulticlassLearnedClassifier(base, clf, scaler)
+    info = {
+        "trained_learned_multiclass": True,
+        "learned_logistic_C": C,
+        "learned_max_iter": max_iter,
+        "learned_standardize": use_scale,
+        "n_training_samples": int(X_train.shape[0]),
+        "learned_class_counts": {
+            class_names[i]: int(np.sum(y_train == i)) for i in range(len(class_names))
+        },
+    }
+    return learned, info
+
+
 def build_multiclass_model(config: Dict[str, Any]) -> Path:
     dmps_csv = Path(config["dmps_csv"])
     output_model = Path(config["output_model"])
@@ -260,7 +398,7 @@ def build_multiclass_model(config: Dict[str, Any]) -> Path:
         )
 
     assert bin_edges_ref is not None
-    classifier = NativeMulticlassHistogramClassifier(
+    base_histogram = NativeMulticlassHistogramClassifier(
         positions=dmps_df["position"].to_numpy(dtype=np.uint32),
         bin_edges=bin_edges_ref,
         bin_probabilities=np.stack(bin_prob_tables, axis=0),
@@ -271,6 +409,19 @@ def build_multiclass_model(config: Dict[str, Any]) -> Path:
         score_mode=score_mode,
     )
 
+    train_learned = bool(config.get("train_learned_multiclass", False))
+    learned_info: Dict[str, Any] = {}
+    if train_learned:
+        classifier, learned_info = _fit_learned_multiclass_head(
+            config, base_histogram, dmps_df, class_names
+        )
+        pkg_type = NATIVE_MULTICLASS_LEARNED_TYPE
+        pkg_ver = NATIVE_MULTICLASS_LEARNED_VERSION
+    else:
+        classifier = base_histogram
+        pkg_type = NATIVE_MULTICLASS_TYPE
+        pkg_ver = NATIVE_MULTICLASS_VERSION
+
     feature_table = dmps_df.copy()
     feature_table["classifier_weight"] = classifier_weights.astype(np.float64)
     for class_idx, class_name in enumerate(class_names):
@@ -279,8 +430,8 @@ def build_multiclass_model(config: Dict[str, Any]) -> Path:
         ].astype(np.float64)
 
     metadata = {
-        "classifier_type": NATIVE_MULTICLASS_TYPE,
-        "package_version": NATIVE_MULTICLASS_VERSION,
+        "classifier_type": pkg_type,
+        "package_version": pkg_ver,
         "n_classes": len(class_names),
         "class_names": class_names,
         "n_dmps": len(feature_table),
@@ -302,10 +453,11 @@ def build_multiclass_model(config: Dict[str, Any]) -> Path:
         "comparison_labels": list(config.get("comparison_labels") or []),
         "missing_positions_by_class": missing_by_class,
         "config": dict(config),
+        **learned_info,
     }
     model_package = {
-        "classifier_type": NATIVE_MULTICLASS_TYPE,
-        "package_version": NATIVE_MULTICLASS_VERSION,
+        "classifier_type": pkg_type,
+        "package_version": pkg_ver,
         "classifier": classifier,
         "dmp_df": feature_table,
         "metadata": metadata,

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import math
 import pickle
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from methyl_classifier.core.classifier import MethylClassifier
 from methyl_classifier.core.native_multiclass import NativeMulticlassHistogramClassifier
+from methyl_classifier.core.native_multiclass_learned import NativeMulticlassLearnedClassifier
 from methyl_classifier.models.config import ClassifierConfig
 from methyl_classifier.utils.multiclass_builder import (
     NATIVE_MULTICLASS_TYPE,
@@ -289,3 +292,153 @@ def test_build_native_multiclass_model_loads_and_scores(tmp_path: Path) -> None:
     assert clf.class_names == ["control", "d1", "d2"]
     assert clf.model_contexts == ["CG"]
     assert preds.tolist() == [0, 1, 2]
+
+
+def test_compute_pre_softmax_scores_softmax_matches_predict_proba() -> None:
+    clf = NativeMulticlassHistogramClassifier(
+        positions=np.array([100], dtype=np.uint32),
+        bin_edges=np.array([0.0, 0.5, 1.0], dtype=np.float64),
+        bin_probabilities=np.array([[[0.8, 0.2]], [[0.2, 0.8]]], dtype=np.float64),
+        weights=np.array([1.0]),
+        class_names=["a", "b"],
+        score_mode="generative",
+    )
+    X = np.array([[0.1], [0.9]], dtype=np.float64)
+    m = np.ones_like(X, dtype=bool)
+    scores, _ = clf.compute_pre_softmax_scores(X, m)
+    T_eff = max(clf.temperature * math.sqrt(clf._n_effective), 0.1)
+    logits = scores / T_eff
+    logits -= logits.max(axis=1, keepdims=True)
+    manual = np.exp(logits)
+    manual /= np.maximum(manual.sum(axis=1, keepdims=True), 1e-12)
+    from_clf = clf.predict_proba(X, m)
+    np.testing.assert_allclose(manual, from_clf, rtol=1e-5, atol=1e-5)
+
+
+def test_native_multiclass_learned_head_smoke() -> None:
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.preprocessing import StandardScaler
+
+    base = NativeMulticlassHistogramClassifier(
+        positions=np.array([100, 200], dtype=np.uint32),
+        bin_edges=np.array([0.0, 0.5, 1.0], dtype=np.float64),
+        bin_probabilities=np.array(
+            [
+                [[0.9, 0.1], [0.9, 0.1]],
+                [[0.1, 0.9], [0.9, 0.1]],
+                [[0.9, 0.1], [0.1, 0.9]],
+            ],
+            dtype=np.float64,
+        ),
+        weights=np.array(
+            [
+                [1.0, 1.0],
+                [1.0, 1e-3],
+                [1e-3, 1.0],
+            ],
+            dtype=np.float64,
+        ),
+        class_names=["control", "d1", "d2"],
+        contrast_reference_class_index=0,
+        score_mode="contrast_vs_control",
+    )
+    X = np.array(
+        [
+            [0.1, 0.9],
+            [0.9, 0.1],
+            [0.5, 0.55],
+        ],
+        dtype=np.float64,
+    )
+    m = np.ones_like(X, dtype=bool)
+    F, _ = base.compute_pre_softmax_scores(X, m)
+    y = np.array([0, 1, 2])
+    scaler = StandardScaler().fit(F)
+    lr = LogisticRegression(
+        multi_class="multinomial", solver="lbfgs", max_iter=2000, random_state=0
+    )
+    lr.fit(scaler.transform(F), y)
+    learned = NativeMulticlassLearnedClassifier(base, lr, scaler)
+    p = learned.predict_proba(X, m)
+    assert p.shape == (3, 3)
+    assert learned.n_classes == 3
+    assert learned.class_names == ["control", "d1", "d2"]
+
+
+def test_build_learned_multiclass_requires_project_path(tmp_path: Path) -> None:
+    detection_d1 = tmp_path / "detections" / "all" / "d1"
+    detection_d2 = tmp_path / "detections" / "all" / "d2"
+    _write_dmp_csv(
+        detection_d1 / "dmps-1.csv",
+        [
+            {
+                "chromosome": "1",
+                "context": "CG",
+                "position": 100,
+                "mean1": 0.10,
+                "mean2": 0.85,
+                "delta_mean": 0.75,
+                "effect_size": 0.90,
+            },
+        ],
+    )
+    _write_dmp_csv(
+        detection_d2 / "dmps-1.csv",
+        [
+            {
+                "chromosome": "1",
+                "context": "CG",
+                "position": 100,
+                "mean1": 0.10,
+                "mean2": 0.35,
+                "delta_mean": 0.25,
+                "effect_size": 0.55,
+            },
+        ],
+    )
+    merged_path = tmp_path / "dmps-merged-multiclass.csv"
+    merge_dmp_csvs_from_detection_dirs(
+        [detection_d1, detection_d2],
+        merged_path,
+        weights_column="effect_size",
+        detection_labels=["d1", "d2"],
+    )
+    control_dir = tmp_path / "centroids" / "control"
+    d1_dir = tmp_path / "centroids" / "d1"
+    d2_dir = tmp_path / "centroids" / "d2"
+    _write_centroid_h5(
+        control_dir / "1-CG.h5",
+        positions=[100],
+        means=[0.10],
+        bin_counts=np.array([[50, 1, 1, 1]], dtype=np.float64),
+    )
+    _write_centroid_h5(
+        d1_dir / "1-CG.h5",
+        positions=[100],
+        means=[0.85],
+        bin_counts=np.array([[1, 1, 1, 50]], dtype=np.float64),
+    )
+    _write_centroid_h5(
+        d2_dir / "1-CG.h5",
+        positions=[100],
+        means=[0.35],
+        bin_counts=np.array([[1, 50, 1, 1]], dtype=np.float64),
+    )
+    out_pkl = tmp_path / "classifiers" / "multiclass-classifier.pkl"
+    with pytest.raises(ValueError, match="project_path"):
+        build_multiclass_model(
+            {
+                "dmps_csv": str(merged_path),
+                "output_model": str(out_pkl),
+                "weights_column": "weight",
+                "control_label": "control",
+                "comparison_labels": ["d1", "d2"],
+                "contexts": ["CG"],
+                "train_learned_multiclass": True,
+                "classes": [
+                    {"name": "control", "centroid_dir": str(control_dir)},
+                    {"name": "d1", "centroid_dir": str(d1_dir)},
+                    {"name": "d2", "centroid_dir": str(d2_dir)},
+                ],
+            }
+        )
