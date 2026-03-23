@@ -159,6 +159,41 @@ def build_sp_regions_bed(
     return output_bed
 
 
+def build_gene_bodies_bed(gtf_path: Path, output_bed: Path) -> Path:
+    """
+    Write a 6-column BED of GTF gene features only (chrom, start, end, name, score, strand).
+    Name column is \"gene_id|gene_name\" for downstream closest / overlap.
+    """
+    rows: List[Tuple[str, int, int, str, int, str]] = []
+    with open(gtf_path) as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            parts = line.strip().split("\t")
+            if len(parts) < 9:
+                continue
+            seqname, _source, feature, start_s, end_s, _score, strand, _frame, attrs = parts[:9]
+            if feature != "gene":
+                continue
+            start = int(start_s)
+            end = int(end_s)
+            a = _parse_gtf_attrs(attrs)
+            gene_id = a.get("gene_id") or a.get("gene_name") or ""
+            gene_name = a.get("gene_name") or gene_id
+            if not gene_id:
+                continue
+            bstart, bend = _gtf_to_bed_start_end(start, end)
+            st = strand if strand in ("+", "-") else "+"
+            name = f"{gene_id}|{gene_name}"
+            rows.append((seqname, bstart, bend, name, 0, st))
+    output_bed.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_bed, "w") as out:
+        for chrom, bstart, bend, name, score, st in sorted(rows, key=lambda r: (r[0], r[1], r[2])):
+            out.write(f"{chrom}\t{bstart}\t{bend}\t{name}\t{score}\t{st}\n")
+    logger.info(f"Wrote {len(rows)} gene bodies to {output_bed}")
+    return output_bed
+
+
 def parse_region_name(bed_name: str) -> Tuple[str, str, str]:
     """Parse BED 4th column into gene_id, gene_name, feature_type."""
     parts = bed_name.split("|", 2)

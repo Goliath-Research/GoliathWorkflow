@@ -357,7 +357,27 @@ Examples:
         type=str,
         nargs='+',
         default=None,
-        help='Feature types to include (e.g., gene exon intron). If not specified, defaults to gene only.'
+        help='Restrict GTF rows to these feature types (e.g. gene exon CDS). If omitted, all GTF feature types are kept.'
+    )
+    feature_group.add_argument(
+        '--auxiliary-bed',
+        type=str,
+        action='append',
+        default=None,
+        metavar='PATH',
+        help='Additional BED to intersect with DMPs (repeatable); e.g. enhancers, ChIP peaks, CpG islands.',
+    )
+    feature_group.add_argument(
+        '--closest-gene',
+        action='store_true',
+        help='Annotate each DMP with nearest gene body via bedtools closest (gene BED built from GTF unless --closest-gene-bed).',
+    )
+    feature_group.add_argument(
+        '--closest-gene-bed',
+        type=str,
+        default=None,
+        metavar='PATH',
+        help='BED of gene intervals for --closest-gene (default: build from GTF gene rows).',
     )
     feature_group.add_argument(
         '--use-sp-regions',
@@ -402,7 +422,8 @@ Examples:
         type=str,
         choices=['grok', 'disgenet', 'both', 'opentargets', 'grok+opentargets', 'grok+disgenet', 'all'],
         default='grok+opentargets',
-        help='Source(s) for disease enrichment (default: grok+opentargets)'
+        help='Enrichment sources: grok+opentargets = Grok annotation + Open Targets evidence/scores; '
+             'disgenet/grok+disgenet require a DisGeNET key; all = Grok + Open Targets (no DisGeNET).'
     )
     disease_group.add_argument(
         '--separate-enrichment-sources',
@@ -515,14 +536,14 @@ Examples:
     disease_group.add_argument(
         '--grok-max-workers',
         type=int,
-        default=8,
-        help='Maximum concurrent Grok requests for realtime API only (default: 8; ignored when xAI Batch API is on)'
+        default=1,
+        help='Grok concurrent requests (default: 1 synchronous pipeline). Ignored when xAI Batch API is on.'
     )
     disease_group.add_argument(
         '--grok-batch-api',
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help='Use xAI Batch API for Grok (default: on). Use --no-grok-batch-api for synchronous /v1/chat/completions'
+        default=False,
+        help='Use xAI async Batch API for Grok (default: off; use synchronous chat/completions).'
     )
     disease_group.add_argument(
         '--grok-batch-poll-interval',
@@ -743,6 +764,12 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.no_extend_after_stable = True
     if config.feature_types is not None and args.feature_types is None:
         args.feature_types = config.feature_types
+    if getattr(config, "auxiliary_bed_paths", None) and not getattr(args, "auxiliary_bed", None):
+        args.auxiliary_bed = list(config.auxiliary_bed_paths)
+    if config.run_bedtools_closest is True:
+        args.closest_gene = True
+    if getattr(config, "closest_gene_bed", None) and not getattr(args, "closest_gene_bed", None):
+        args.closest_gene_bed = config.closest_gene_bed
     # SP-equivalent / bedtools parity (from step_config.mapper)
     if config.use_sp_regions is not None:
         args.use_sp_regions = config.use_sp_regions
@@ -874,8 +901,8 @@ def main_bedtools():
             use_grok = "grok" in (args.enrich_source or "").lower()
             if use_grok:
                 if _grok_api_key_available(args):
-                    mode = "xAI Batch API" if getattr(args, "grok_batch_api", True) else "realtime chat/completions"
-                    logger.info(f"Grok API ({mode}): will query gene–{disease_term} associations (key configured)")
+                    mode = "xAI Batch API" if getattr(args, "grok_batch_api", False) else "synchronous chat/completions"
+                    logger.info(f"Grok API ({mode}): biological annotation for genes (key configured); disease evidence from Open Targets.")
                 else:
                     logger.warning(
                         "Grok API: no key found (CLI/config, GROK_API_KEY, ~/.methyl_mapper/credentials/grok_api_key.encrypted, "
@@ -888,9 +915,13 @@ def main_bedtools():
         _maybe_persist_bedtools_enrichment_secrets(args)
 
         # Create mapper
+        aux_beds = [Path(p).expanduser() for p in (getattr(args, "auxiliary_bed", None) or []) if p]
         mapper = BedtoolsMapper(
             gene_gtf=gtf_path,
             feature_types=args.feature_types,
+            auxiliary_bed_paths=aux_beds if aux_beds else None,
+            run_bedtools_closest=bool(getattr(args, "closest_gene", False)),
+            closest_gene_bed=Path(args.closest_gene_bed).expanduser() if getattr(args, "closest_gene_bed", None) else None,
             use_sp_regions=getattr(args, 'use_sp_regions', False),
             upstream_size=getattr(args, 'upstream_size', 5000),
             downstream_size=getattr(args, 'downstream_size', 2000),

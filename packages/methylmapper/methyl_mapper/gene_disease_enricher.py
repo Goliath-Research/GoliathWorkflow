@@ -32,8 +32,8 @@ TARGET_CACHE_COLUMNS = ["gene_name", "ts", "target_id"]
 DEFAULT_CACHE_TTL_DAYS = 7
 DEFAULT_GROK_CACHE_TTL_DAYS = 7
 DEFAULT_GROK_BATCH_SIZE = 20
-DEFAULT_GROK_MAX_WORKERS = 8
-DEFAULT_GROK_USE_XAI_BATCH_API = True
+DEFAULT_GROK_MAX_WORKERS = 1
+DEFAULT_GROK_USE_XAI_BATCH_API = False
 DEFAULT_GROK_BATCH_POLL_INTERVAL = 2.0
 DEFAULT_GROK_BATCH_SUBMIT_CHUNK_SIZE = 200
 GROK_COMPLETION_MODEL = "grok-4-latest"
@@ -197,7 +197,7 @@ class GeneDiseaseEnricher:
         open_targets_api_url: str = "https://api.platform.opentargets.org/api/v4/graphql",
         disease_term: str = "early-stage prostate cancer",
         use_grok: bool = True,
-        use_disgenet: bool = True,
+        use_disgenet: bool = False,
         use_open_targets: bool = True,
         enrichment_profile: Optional[str] = None,
         min_evidence_level: Optional[str] = None,
@@ -304,7 +304,7 @@ class GeneDiseaseEnricher:
         self.rate_limit_delay = rate_limit_delay
         self.max_retries = max_retries
         self.source_max_workers = max(1, int(source_max_workers))
-        self.grok_batch_size = max(1, int(grok_batch_size))
+        self.grok_batch_size = min(20, max(1, int(grok_batch_size)))
         self.grok_max_workers = max(1, int(grok_max_workers))
         self.grok_use_xai_batch_api = bool(grok_use_xai_batch_api)
         self.grok_batch_poll_interval = max(0.5, float(grok_batch_poll_interval))
@@ -993,35 +993,25 @@ class GeneDiseaseEnricher:
         return {}, False
     
     def _create_grok_prompt(self, gene_names: List[str], disease_term: str) -> str:
-        """Create a prompt for Grok API."""
+        """Create a prompt for Grok: biological annotation (not primary disease-evidence scoring)."""
         genes_str = ", ".join(gene_names)
-        disease_lower = disease_term.lower()
-        cancer_instruction = ""
-        if "cancer" in disease_lower or "carcinoma" in disease_lower or "tumor" in disease_lower:
-            cancer_instruction = (
-                " For cancer (e.g. prostate cancer): mark associated: true for genes that are biomarkers, "
-                "in relevant pathways (e.g. androgen signaling, cell cycle, DNA repair), therapeutic targets, "
-                "or that appear in cancer literature—most cancer-related gene sets will have many associations."
-            )
-        
-        prompt = f"""You are a biomedical expert. For each of the following genes: {genes_str}
+        prompt = f"""You are a biomedical curator. For each gene symbol below, provide concise **annotation** useful for interpreting differential DNA methylation in the context of "{disease_term}".
 
-Provide their association with "{disease_term}" in JSON format. Use a PERMISSIVE interpretation: mark a gene as associated (associated: true) if there is ANY reported or suspected link in the literature—including direct, indirect, predicted, or emerging evidence. Do not mark genes as unrelated (associated: false) when they have known or plausible roles in {disease_term}; when in doubt, prefer associated: true with an appropriate evidence_level.{cancer_instruction}
+Genes: {genes_str}
 
-For each gene provide:
-1. "gene_name": The gene symbol (exactly as in the list above)
-2. "associated": true or false (boolean). Use true if any reported/suspected association exists; prefer true when evidence exists.
-3. "association_type": One of ["direct", "indirect", "predicted", "none"]
-4. "evidence_level": One of ["high", "medium", "low", "none"]
-5. "description": A brief description of the association (or null if none)
-6. "publications": Number of publications mentioning this association (or 0)
-7. "functional_role": Brief description of the gene's role in {disease_term} (or null)
-8. "gene_basic_description": One-sentence summary of the gene's general biological function (or null)
+Return ONLY a valid JSON array. For each gene include:
+1. "gene_name": symbol exactly as listed
+2. "gene_basic_description": one-sentence molecular/cellular function (required when known)
+3. "functional_role": short note on plausible relevance to {disease_term} or methylation regulation (or null)
+4. "description": optional extra context (pathways, tissue, regulatory role) (or null)
+5. "associated": boolean — true if you judge any plausible link to {disease_term} worth flagging for a human reviewer; false otherwise (this is secondary to external evidence databases)
+6. "association_type": one of ["direct","indirect","predicted","none"]
+7. "evidence_level": one of ["high","medium","low","none"] for your qualitative judgment only
+8. "publications": integer estimate or 0
 
-Return ONLY a valid JSON array—no other text. Example:
+Example:
 [
-  {{"gene_name": "GENE1", "associated": true, "association_type": "direct", "evidence_level": "high", "description": "...", "publications": 15, "functional_role": "...", "gene_basic_description": "Encodes a tumor suppressor protein involved in DNA repair."}},
-  {{"gene_name": "GENE2", "associated": false, "association_type": "none", "evidence_level": "none", "description": null, "publications": 0, "functional_role": null, "gene_basic_description": null}}
+  {{"gene_name": "GENE1", "gene_basic_description": "DNA methyltransferase maintaining CpG methylation.", "functional_role": "May shape tumor epigenome.", "description": null, "associated": true, "association_type": "indirect", "evidence_level": "medium", "publications": 0}}
 ]
 """
         return prompt
@@ -1555,6 +1545,15 @@ Return ONLY a valid JSON array—no other text. Example:
 
         return enriched_df
 
+    @staticmethod
+    def _compose_grok_annotation(grok_entry: Dict) -> Optional[str]:
+        parts = []
+        for key in ("gene_basic_description", "functional_role", "description"):
+            val = grok_entry.get(key)
+            if val is not None and str(val).strip():
+                parts.append(str(val).strip())
+        return " | ".join(parts) if parts else None
+
     def _merge_results(
         self,
         grok_results: Dict[str, Dict],
@@ -1563,12 +1562,48 @@ Return ONLY a valid JSON array—no other text. Example:
         unique_genes: List[str]
     ) -> Dict[str, Dict]:
         """Merge results from multiple sources with priority logic."""
-        merged_results = {}
+        merged_results: Dict[str, Dict] = {}
+
+        if self.use_grok and self.use_open_targets:
+            for gene in unique_genes:
+                gene_upper = gene.upper()
+                ot = open_targets_results.get(gene_upper, {})
+                gr = grok_results.get(gene_upper, {})
+                dg = disgenet_results.get(gene_upper, {})
+                base = {
+                    "associated": bool(ot.get("associated", False)),
+                    "association_type": str(ot.get("association_type", "none") or "none").lower(),
+                    "evidence_level": str(ot.get("evidence_level", "none") or "none").lower(),
+                    "description": ot.get("description"),
+                    "publications": int(ot.get("publications", 0) or 0),
+                    "functional_role": ot.get("functional_role"),
+                    "score": float(ot.get("score", 0.0) or 0.0),
+                    "source": ot.get("source") or "open_targets",
+                    "gene_basic_description": gr.get("gene_basic_description"),
+                    "grok_annotation_summary": self._compose_grok_annotation(gr),
+                }
+                if (
+                    not base["associated"]
+                    and self.use_disgenet
+                    and self._association_meets_thresholds(dg)
+                ):
+                    base.update({
+                        "associated": bool(dg.get("associated", False)),
+                        "association_type": str(dg.get("association_type", "none") or "none").lower(),
+                        "evidence_level": str(dg.get("evidence_level", "none") or "none").lower(),
+                        "description": dg.get("description", base["description"]),
+                        "publications": int(dg.get("publications", 0) or 0),
+                        "functional_role": dg.get("functional_role", base["functional_role"]),
+                        "score": float(dg.get("score", 0.0) or 0.0),
+                        "source": dg.get("source", "disgenet"),
+                    })
+                merged_results[gene_upper] = base
+            return merged_results
+
         for gene in unique_genes:
             gene_upper = gene.upper()
             grok_entry = grok_results.get(gene_upper, {})
 
-            # Priority: Associated results first, then any available results
             if gene_upper in grok_results and self._association_meets_thresholds(grok_results[gene_upper]):
                 merged_results[gene_upper] = dict(grok_results[gene_upper])
             elif gene_upper in open_targets_results and self._association_meets_thresholds(open_targets_results[gene_upper]):
@@ -1594,11 +1629,9 @@ Return ONLY a valid JSON array—no other text. Example:
                     'score': 0.0,
                 }
 
-            # gene_basic_description only comes from Grok; inject when we chose another source
             if merged_results[gene_upper].get('gene_basic_description') is None and grok_entry.get('gene_basic_description'):
                 merged_results[gene_upper]['gene_basic_description'] = grok_entry['gene_basic_description']
 
-            # score comes from Open Targets (or DisGeNET); Grok does not return it — inject when missing
             if merged_results[gene_upper].get('score') is None or merged_results[gene_upper].get('score') == 0:
                 ot_score = open_targets_results.get(gene_upper, {}).get('score')
                 if ot_score is not None and float(ot_score) != 0:
@@ -1684,11 +1717,18 @@ Return ONLY a valid JSON array—no other text. Example:
         df['gene_basic_description'] = df[gene_column].str.upper().map(
             lambda x: (results.get(x, {}).get('gene_basic_description') or '') if pd.notna(x) else ''
         )
+        df['grok_annotation_summary'] = df[gene_column].str.upper().map(
+            lambda x: (results.get(x, {}).get('grok_annotation_summary') or '') if pd.notna(x) else ''
+        )
         # If no gene has a description (all empty or NaN), remove the column from export
         if 'gene_basic_description' in df.columns:
             filled = df['gene_basic_description'].fillna('').astype(str).str.strip()
             if (filled == '').all():
                 df.drop(columns=['gene_basic_description'], inplace=True)
+        if 'grok_annotation_summary' in df.columns:
+            filled_g = df['grok_annotation_summary'].fillna('').astype(str).str.strip()
+            if (filled_g == '').all():
+                df.drop(columns=['grok_annotation_summary'], inplace=True)
 
         return df
 

@@ -21,7 +21,7 @@ except ImportError:
     from methyl_utils.statistical_tests import storey_qvalues
 
 from .gene_disease_enricher import GeneDiseaseEnricher
-from .gtf_regions import build_sp_regions_bed, parse_region_name
+from .gtf_regions import build_gene_bodies_bed, build_sp_regions_bed, parse_region_name
 
 logger = logging.getLogger(__name__)
 
@@ -79,16 +79,19 @@ class BedtoolsMapper:
     Map DMPs to genomic features using bedtools intersect.
 
     Features:
-    - Maps to all GTF features (genes, transcripts, exons, introns, etc.)
-    - Weighting by p-value, q-value, and effect_size
-    - DMP counts per feature
-    - Comprehensive summary statistics
+    - By default intersects every GTF feature type; optional `feature_types` filter
+    - Optional auxiliary BED overlaps and bedtools closest to nearest gene body
+    - Weighting by p-value, q-value, and effect_size; gene-level Stouffer + Storey
+    - Per-gene feature mix summaries when aggregating by gene_name / gene_id
     """
     
     def __init__(
         self,
         gene_gtf: Path,
         feature_types: Optional[List[str]] = None,
+        auxiliary_bed_paths: Optional[List[Path]] = None,
+        run_bedtools_closest: bool = False,
+        closest_gene_bed: Optional[Path] = None,
         use_p_value_weight: bool = True,
         use_q_value_weight: bool = True,
         use_effect_size_weight: bool = True,
@@ -110,8 +113,8 @@ class BedtoolsMapper:
         grok_cache_ttl_days: Optional[int] = 7,
         source_max_workers: int = 3,
         grok_batch_size: int = 20,
-        grok_max_workers: int = 8,
-        grok_use_xai_batch_api: bool = True,
+        grok_max_workers: int = 1,
+        grok_use_xai_batch_api: bool = False,
         grok_batch_poll_interval: float = 2.0,
         grok_batch_submit_chunk_size: int = 200,
         open_targets_max_workers: int = 8,
@@ -144,8 +147,11 @@ class BedtoolsMapper:
 
         Args:
             gene_gtf: Path to GTF/GFF annotation file
-            feature_types: List of feature types to extract (e.g., ['gene', 'exon', 'intron']).
-                          If None, defaults to ['gene'].
+            feature_types: GTF feature column values to keep (e.g. ['gene', 'exon']). If None or empty,
+                          keep all feature types present in the GTF (default).
+            auxiliary_bed_paths: Optional extra BED files (enhancers, ChIP peaks, etc.); overlaps merged into outputs.
+            run_bedtools_closest: If True, run bedtools closest from each DMP to gene bodies (see closest_gene_bed).
+            closest_gene_bed: BED of gene intervals for closest; if None and run_bedtools_closest, built from GTF gene rows.
             use_p_value_weight: Whether to weight by p-value
             use_q_value_weight: Whether to weight by q-value
             use_effect_size_weight: Whether to weight by effect_size
@@ -196,7 +202,11 @@ class BedtoolsMapper:
         if not self.gene_gtf.exists():
             raise FileNotFoundError(f"GTF file not found: {self.gene_gtf}")
         
-        self.feature_types = feature_types or ['gene']
+        # None or [] = intersect all GTF feature types (no post-filter)
+        self.feature_types = feature_types if feature_types else None
+        self.auxiliary_bed_paths = [Path(p).expanduser() for p in (auxiliary_bed_paths or []) if p]
+        self.run_bedtools_closest = bool(run_bedtools_closest)
+        self.closest_gene_bed = Path(closest_gene_bed).expanduser() if closest_gene_bed else None
         self.use_p_value_weight = use_p_value_weight
         self.use_q_value_weight = use_q_value_weight
         self.use_effect_size_weight = use_effect_size_weight
@@ -209,6 +219,7 @@ class BedtoolsMapper:
         self.disease_enricher = None
         if enrich_disease:
             use_grok, use_open_targets, use_disgenet = self._parse_enrich_source(enrich_source)
+            _grok_bs = min(20, max(1, int(grok_batch_size)))
             try:
                 self.disease_enricher = GeneDiseaseEnricher(
                 grok_api_key=grok_api_key if use_grok else None,
@@ -227,8 +238,8 @@ class BedtoolsMapper:
                 cache_ttl_days=cache_ttl_days,
                 grok_cache_ttl_days=grok_cache_ttl_days,
                 source_max_workers=source_max_workers,
-                grok_batch_size=grok_batch_size,
-                grok_max_workers=grok_max_workers,
+                grok_batch_size=_grok_bs,
+                grok_max_workers=max(1, int(grok_max_workers)),
                 grok_use_xai_batch_api=grok_use_xai_batch_api,
                 grok_batch_poll_interval=grok_batch_poll_interval,
                 grok_batch_submit_chunk_size=grok_batch_submit_chunk_size,
@@ -265,15 +276,7 @@ class BedtoolsMapper:
         self.w_unknown = w_unknown
         self.storey_lambda = storey_lambda
         self._sp_regions_bed_path: Optional[Path] = None
-
-        # When optimize_dmps + enrich_disease: recommend both Grok and Open Targets for gene identification
-        if optimize_dmps and enrich_disease:
-            use_grok, use_ot, _ = self._parse_enrich_source(enrich_source)
-            if not (use_grok and use_ot):
-                logger.warning(
-                    "DMP optimization with enrichment works best with both Grok and Open Targets (enrich_source grok+opentargets). "
-                    "Using configured sources only."
-                )
+        self._genes_closest_bed_path: Optional[Path] = None
 
         # Check bedtools availability
         try:
@@ -404,7 +407,7 @@ class BedtoolsMapper:
         lines = result.stdout.strip().split('\n')
         if not lines or lines == ['']:
             logger.warning("No intersections found!")
-            return pd.DataFrame()
+            return self._finalize_intersection_table(pd.DataFrame(), bed_path, dmp_df, output_file)
 
         intersections = []
         for line in lines:
@@ -445,10 +448,7 @@ class BedtoolsMapper:
             intersect_df = intersect_df[intersect_df['feature_type'].isin(self.feature_types)]
         logger.info(f"Found {len(intersect_df)} DMP-feature intersections")
         intersect_df = self._join_with_dmp_weights(intersect_df, dmp_df)
-        if output_file:
-            intersect_df.to_csv(output_file, index=False)
-            logger.info(f"Saved intersections to {output_file}")
-        return intersect_df
+        return self._finalize_intersection_table(intersect_df, bed_path, dmp_df, output_file)
 
     def _intersect_with_sp_regions(
         self,
@@ -504,9 +504,163 @@ class BedtoolsMapper:
         intersect_df = self._join_with_dmp_weights(intersect_df, dmp_df)
         if 'region_weight' in intersect_df.columns and 'weight' in intersect_df.columns:
             intersect_df['combined_weight'] = intersect_df['weight'] * intersect_df['region_weight']
+        return self._finalize_intersection_table(intersect_df, bed_path, dmp_df, output_file)
+
+    def _sanitize_aux_bed_label(self, path: Path) -> str:
+        s = re.sub(r"[^0-9a-zA-Z]+", "_", path.stem).strip("_").lower()
+        return (s or "aux")[:56]
+
+    def _get_or_build_genes_closest_bed(self, work_dir: Path) -> Path:
+        if self.closest_gene_bed is not None and self.closest_gene_bed.exists():
+            return self.closest_gene_bed
+        if self._genes_closest_bed_path is not None and self._genes_closest_bed_path.exists():
+            return self._genes_closest_bed_path
+        out = Path(work_dir) / "_methylmapper_genes_closest.bed"
+        build_gene_bodies_bed(self.gene_gtf, out)
+        self._genes_closest_bed_path = out
+        return out
+
+    def _per_dmp_auxiliary_overlaps(self, dmp_bed: Path) -> pd.DataFrame:
+        """One row per dmp_name with aux_<label>_regions and aux_<label>_n_hits columns."""
+        if not self.auxiliary_bed_paths:
+            return pd.DataFrame()
+        from collections import defaultdict
+
+        region_keys = [
+            f"aux_{self._sanitize_aux_bed_label(aux)}_regions"
+            for aux in self.auxiliary_bed_paths
+            if aux.exists()
+        ]
+        if not region_keys:
+            return pd.DataFrame(columns=["dmp_name"])
+
+        hits: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+        for aux in self.auxiliary_bed_paths:
+            if not aux.exists():
+                logger.warning("Auxiliary BED not found, skipping: %s", aux)
+                continue
+            label = self._sanitize_aux_bed_label(aux)
+            rkey = f"aux_{label}_regions"
+            cmd = ["bedtools", "intersect", "-a", str(dmp_bed), "-b", str(aux), "-wa", "-wb"]
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            except subprocess.CalledProcessError as e:
+                logger.error("bedtools intersect auxiliary failed (%s): %s", aux, e.stderr)
+                raise
+            for line in result.stdout.strip().split("\n"):
+                if not line:
+                    continue
+                parts = line.split("\t")
+                if len(parts) < 7:
+                    continue
+                dmp_name = parts[3]
+                b_off = 4
+                bn = len(parts) - b_off
+                if bn >= 4:
+                    hit_label = parts[b_off + 3]
+                else:
+                    hit_label = f"{parts[b_off]}:{parts[b_off + 1]}-{parts[b_off + 2]}"
+                hits[dmp_name][rkey].append(hit_label)
+
+        rows = []
+        for dmp_name, colmap in hits.items():
+            row: Dict = {"dmp_name": dmp_name}
+            for lbl in region_keys:
+                vs = colmap.get(lbl, [])
+                row[lbl] = "|".join(dict.fromkeys(vs))
+                row[lbl.replace("_regions", "_n_hits")] = len(vs)
+            rows.append(row)
+        return pd.DataFrame(rows)
+
+    def _per_dmp_closest_genes(self, dmp_bed: Path, work_dir: Path) -> pd.DataFrame:
+        """bedtools closest: nearest gene body per DMP (distance in bp)."""
+        gene_bed = self._get_or_build_genes_closest_bed(work_dir)
+        cmd = [
+            "bedtools", "closest",
+            "-a", str(dmp_bed),
+            "-b", str(gene_bed),
+            "-D", "b",
+            "-t", "first",
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        except subprocess.CalledProcessError as e:
+            logger.error("bedtools closest failed: %s", e.stderr)
+            raise
+        rows = []
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) < 11:
+                continue
+            dmp_name = parts[3]
+            b_name = parts[7]
+            dist_raw = parts[-1]
+            try:
+                dist_bp = int(dist_raw)
+            except ValueError:
+                dist_bp = None
+            gid, gname, _ = parse_region_name(b_name) if "|" in b_name else (b_name, b_name, "")
+            rows.append({
+                "dmp_name": dmp_name,
+                "closest_gene_id": gid,
+                "closest_gene_name": gname or gid,
+                "closest_gene_distance_bp": dist_bp,
+            })
+        if not rows:
+            return pd.DataFrame(
+                columns=["dmp_name", "closest_gene_id", "closest_gene_name", "closest_gene_distance_bp"]
+            )
+        return pd.DataFrame(rows).drop_duplicates(subset=["dmp_name"], keep="first")
+
+    def _dmp_names_from_bed(self, dmp_bed: Path) -> pd.DataFrame:
+        raw = pd.read_csv(dmp_bed, sep="\t", header=None, usecols=[0, 1, 2, 3], names=["_c", "_s", "_e", "dmp_name"])
+        return raw[["dmp_name"]].drop_duplicates()
+
+    def _finalize_intersection_table(
+        self,
+        intersect_df: pd.DataFrame,
+        bed_path: Path,
+        dmp_df: pd.DataFrame,
+        output_file: Optional[Path],
+    ) -> pd.DataFrame:
+        """Merge auxiliary BED and closest-gene annotations; handle empty GTF intersect."""
+        work_dir = bed_path.parent
+        extra_dfs: List[pd.DataFrame] = []
+        if self.auxiliary_bed_paths:
+            aux_df = self._per_dmp_auxiliary_overlaps(bed_path)
+            if not aux_df.empty:
+                extra_dfs.append(aux_df)
+        if self.run_bedtools_closest:
+            clo_df = self._per_dmp_closest_genes(bed_path, work_dir)
+            if not clo_df.empty:
+                extra_dfs.append(clo_df)
+
+        if intersect_df.empty and not extra_dfs:
+            if output_file:
+                intersect_df.to_csv(output_file, index=False)
+            return intersect_df
+
+        if intersect_df.empty and extra_dfs:
+            base = self._dmp_names_from_bed(bed_path)
+            base = self._join_with_dmp_weights(base, dmp_df)
+            for edf in extra_dfs:
+                base = base.merge(edf, on="dmp_name", how="left")
+            logger.info("No GTF intersections; exported DMP rows with auxiliary/closest annotations only")
+            if output_file:
+                base.to_csv(output_file, index=False)
+                logger.info("Saved intersections to %s", output_file)
+            return base
+
+        out = intersect_df
+        for edf in extra_dfs:
+            if not edf.empty:
+                out = out.merge(edf, on="dmp_name", how="left")
         if output_file:
-            intersect_df.to_csv(output_file, index=False)
-        return intersect_df
+            out.to_csv(output_file, index=False)
+            logger.info("Saved intersections to %s", output_file)
+        return out
     
     def _parse_gtf_attributes(self, attr_string: str) -> Dict[str, str]:
         """Parse GTF attributes string into dictionary."""
@@ -723,10 +877,10 @@ class BedtoolsMapper:
         normalized = (enrich_source or "").lower().strip()
 
         if normalized == "all":
-            return True, True, True
+            # Grok + Open Targets only (DisGeNET must be requested explicitly)
+            return True, True, False
         if normalized == "both":
-            # Backward-compatible: grok + disgenet
-            return True, False, True
+            return True, True, False
 
         tokens = [t for t in re.split(r"[+/,\\s]+", normalized) if t]
         use_grok = "grok" in tokens
@@ -813,6 +967,13 @@ class BedtoolsMapper:
 
         if 'importance' in intersect_df.columns:
             agg_dict['importance'] = ['sum', 'mean', 'max']
+
+        for c in intersect_df.columns:
+            cs = str(c)
+            if cs.startswith("aux_") and cs.endswith("_n_hits"):
+                agg_dict[c] = "sum"
+        if "closest_gene_distance_bp" in intersect_df.columns:
+            agg_dict["closest_gene_distance_bp"] = "min"
         
         # Perform aggregation
         grouped = intersect_df.groupby(group_by).agg(agg_dict).reset_index()
@@ -868,6 +1029,23 @@ class BedtoolsMapper:
         else:
             # Already flattened
             grouped.columns = [col[0] if isinstance(col, tuple) and len(col) == 2 else col for col in grouped.columns]
+
+        if group_by in ("gene_name", "gene_id") and "feature_type" in intersect_df.columns:
+            def _feat_mix(g: pd.DataFrame) -> pd.Series:
+                vc = g["feature_type"].astype(str).value_counts()
+                return pd.Series({
+                    "feature_types_hit": "|".join(sorted(vc.index.tolist())),
+                    "n_distinct_feature_types": int(len(vc)),
+                    "feature_type_counts": "|".join(f"{k}:{int(v)}" for k, v in vc.items()),
+                })
+
+            try:
+                mix = intersect_df.groupby(group_by, observed=False).apply(
+                    _feat_mix, include_groups=False
+                ).reset_index()
+            except TypeError:
+                mix = intersect_df.groupby(group_by).apply(_feat_mix).reset_index()
+            grouped = grouped.merge(mix, on=group_by, how="left")
         
         # Add Stouffer aggregated gene p-values (weighted, signed by delta_mean)
         if 'p_value' in intersect_df.columns:
@@ -942,7 +1120,7 @@ class BedtoolsMapper:
                 if getattr(self, 'storey_lambda', None) is not None:
                     kwargs['lambdas'] = np.array([self.storey_lambda], dtype=float)
                 _qvals, _ = storey_qvalues(gene_pvals[finite_mask], **kwargs)
-            gene_qvals[finite_mask] = _qvals
+                gene_qvals[finite_mask] = _qvals
             grouped["gene_q_value"] = gene_qvals
 
         if 'total_importance' in grouped.columns:
@@ -1164,7 +1342,8 @@ class BedtoolsMapper:
         max_k: Optional[int] = None
     ) -> Tuple[int, pd.DataFrame, Dict]:
         """
-        Three-phase DMP optimization: (1) stabilize on gene count (no API), (2) enrich once (Grok+Open Targets),
+        Three-phase DMP optimization: (1) stabilize on gene count (no API),
+        (2) enrich once (Grok annotation + Open Targets evidence),
         (3) optional extension loop adding DMPs and enriching only new genes until no new disease gene.
         """
         if group_by not in ['gene_name', 'gene_id']:
@@ -1193,7 +1372,7 @@ class BedtoolsMapper:
             return k_stable, aggregated_stable, optimization_log
 
         # Phase 2: enrich once (both Grok and Open Targets via enrich_gene_dataframe)
-        logger.info("Phase 2: Enriching stabilized gene set once (Grok + Open Targets)...")
+        logger.info("Phase 2: Enriching stabilized gene set (Grok annotation + Open Targets evidence)...")
         optimal_gene_df = self.disease_enricher.enrich_gene_dataframe(
             aggregated_stable.copy(),
             gene_column=group_by

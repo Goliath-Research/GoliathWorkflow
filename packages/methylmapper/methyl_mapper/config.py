@@ -6,7 +6,7 @@ For database models, see models.py which uses SQLModel.
 """
 
 import os
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -172,6 +172,9 @@ class MapperStepConfig(BaseModel):
     optimize_dmps: Optional[bool] = None
     extend_after_stable: Optional[bool] = None
     feature_types: Optional[list] = None
+    auxiliary_bed_paths: Optional[List[str]] = None
+    run_bedtools_closest: Optional[bool] = None
+    closest_gene_bed: Optional[str] = None
     # SP-equivalent / bedtools parity (step_config.mapper in project JSON)
     use_sp_regions: Optional[bool] = None
     storey_lambda: Optional[float] = None

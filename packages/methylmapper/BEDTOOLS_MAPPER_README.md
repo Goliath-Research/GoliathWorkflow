@@ -33,3 +33,6 @@ methyl_mapper_bedtools \
 
 - Comparison-aware project runs resolve input/output directories automatically.
 - Disease enrichment credentials should come from environment variables or local override files.
+- **Default GTF mapping** uses all feature types in the file (gene, transcript, exon, CDS, UTR, …). Pass `--feature-types gene exon` (for example) to restrict.
+- **Grok** runs synchronously (one request at a time, ≤20 genes per batch) unless you opt in to the xAI Batch API (`--grok-batch-api`). **Open Targets** supplies disease evidence and scores in merged tables.
+- Optional: `--auxiliary-bed path.bed` (repeatable) for regulatory overlaps; `--closest-gene` for nearest gene body per DMP.
