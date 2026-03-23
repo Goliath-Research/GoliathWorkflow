@@ -153,8 +153,9 @@
       "enrich_source": "grok+opentargets",
       "enrich_profile": "permissive",
       "optimize_dmps": false,
-      "grok_max_workers": 16,
-      "grok_batch_size": 20
+      "grok_max_workers": 1,
+      "grok_batch_size": 20,
+      "rate_limit_delay": 1.0
     },
     "enricher": {
       "gene_column": "gene_name",

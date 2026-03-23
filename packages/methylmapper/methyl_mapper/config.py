@@ -163,6 +163,9 @@ class MapperStepConfig(BaseModel):
     persist_secrets: Optional[bool] = None
     grok_max_workers: Optional[int] = None
     grok_batch_size: Optional[int] = None
+    grok_rate_limit_delay: Optional[float] = None
+    grok_max_retries: Optional[int] = None
+    grok_429_cooldown: Optional[float] = None
     grok_batch_api: Optional[bool] = None
     grok_batch_poll_interval: Optional[float] = None
     grok_batch_submit_chunk_size: Optional[int] = None

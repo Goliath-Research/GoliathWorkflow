@@ -540,6 +540,26 @@ Examples:
         help='Grok concurrent requests (default: 1 synchronous pipeline). Ignored when xAI Batch API is on.'
     )
     disease_group.add_argument(
+        '--grok-rate-limit-delay',
+        type=float,
+        default=5.0,
+        metavar='SEC',
+        help='Minimum seconds between starting consecutive Grok batches when sequential (default: 5)',
+    )
+    disease_group.add_argument(
+        '--grok-max-retries',
+        type=int,
+        default=6,
+        help='Retries per Grok batch on errors including 429 (default: 6)',
+    )
+    disease_group.add_argument(
+        '--grok-429-cooldown',
+        type=float,
+        default=180.0,
+        metavar='SEC',
+        help='After a failed Grok batch, wait this many seconds before the next batch (default: 180)',
+    )
+    disease_group.add_argument(
         '--grok-batch-api',
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -740,6 +760,12 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.grok_max_workers = config.grok_max_workers
     if config.grok_batch_size is not None:
         args.grok_batch_size = config.grok_batch_size
+    if getattr(config, "grok_rate_limit_delay", None) is not None:
+        args.grok_rate_limit_delay = config.grok_rate_limit_delay
+    if getattr(config, "grok_max_retries", None) is not None:
+        args.grok_max_retries = config.grok_max_retries
+    if getattr(config, "grok_429_cooldown", None) is not None:
+        args.grok_429_cooldown = config.grok_429_cooldown
     if config.grok_batch_api is not None:
         args.grok_batch_api = config.grok_batch_api
     if config.grok_batch_poll_interval is not None:
@@ -958,6 +984,9 @@ def main_bedtools():
             grok_use_xai_batch_api=args.grok_batch_api,
             grok_batch_poll_interval=getattr(args, "grok_batch_poll_interval", 2.0),
             grok_batch_submit_chunk_size=getattr(args, "grok_batch_submit_chunk", 200),
+            grok_rate_limit_delay=getattr(args, "grok_rate_limit_delay", 5.0),
+            grok_max_retries=getattr(args, "grok_max_retries", 6),
+            grok_429_inter_batch_sleep=getattr(args, "grok_429_cooldown", 180.0),
             open_targets_max_workers=args.open_targets_max_workers,
             disgenet_max_workers=args.disgenet_max_workers,
             azure_key_vault_url=args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL'),

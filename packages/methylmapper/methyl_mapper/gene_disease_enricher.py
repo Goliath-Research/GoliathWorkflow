@@ -209,8 +209,9 @@ class GeneDiseaseEnricher:
         cache_dir: Optional[Path] = None,
         cache_ttl_days: Optional[int] = DEFAULT_CACHE_TTL_DAYS,
         grok_cache_ttl_days: Optional[int] = DEFAULT_GROK_CACHE_TTL_DAYS,
-        rate_limit_delay: float = 1.0,
-        max_retries: int = 3,
+        rate_limit_delay: float = 5.0,
+        max_retries: int = 6,
+        grok_429_inter_batch_sleep: float = 180.0,
         source_max_workers: int = DEFAULT_SOURCE_MAX_WORKERS,
         grok_batch_size: int = DEFAULT_GROK_BATCH_SIZE,
         grok_max_workers: int = DEFAULT_GROK_MAX_WORKERS,
@@ -246,8 +247,9 @@ class GeneDiseaseEnricher:
             cache_dir: Directory for disk cache (default: ~/.methyl_mapper/cache)
             cache_ttl_days: Disk cache TTL in days for Open Targets / DisGeNET and metadata caches
             grok_cache_ttl_days: Disk cache TTL in days for Grok results (default: 7; set 0 to refresh each run)
-            rate_limit_delay: Delay between Grok batch requests (seconds)
-            max_retries: Maximum retry attempts for API calls
+            rate_limit_delay: Minimum delay between starting consecutive Grok batch requests (seconds)
+            max_retries: Maximum retry attempts per Grok batch (429 uses long backoff)
+            grok_429_inter_batch_sleep: Extra sleep after a batch exhausts retries (often 429) before the next batch
             source_max_workers: Max workers when querying multiple sources in parallel
             grok_batch_size: Number of genes per Grok batch request
             grok_max_workers: Max concurrent Grok batch requests (realtime API only; ignored for xAI Batch API)
@@ -301,8 +303,9 @@ class GeneDiseaseEnricher:
         self.min_disgenet_score = float(thresholds["min_disgenet_score"])
         self.min_open_targets_score = float(thresholds["min_open_targets_score"])
         self.allow_predicted = bool(thresholds["allow_predicted"])
-        self.rate_limit_delay = rate_limit_delay
-        self.max_retries = max_retries
+        self.rate_limit_delay = max(0.0, float(rate_limit_delay))
+        self.max_retries = max(1, int(max_retries))
+        self.grok_429_inter_batch_sleep = max(0.0, float(grok_429_inter_batch_sleep))
         self.source_max_workers = max(1, int(source_max_workers))
         self.grok_batch_size = min(20, max(1, int(grok_batch_size)))
         self.grok_max_workers = max(1, int(grok_max_workers))
@@ -581,7 +584,16 @@ class GeneDiseaseEnricher:
                     batch_results, success = self._query_grok_batch(batch, disease_term, batch_num)
                     results.update(batch_results)
                     progress.update(success=success)
-                    if self.rate_limit_delay > 0 and batch_num < total_batches:
+                    if batch_num >= total_batches:
+                        break
+                    if not success and self.grok_429_inter_batch_sleep > 0:
+                        logger.warning(
+                            "Grok batch failed (often rate limit). Waiting %.0fs before next batch; "
+                            "raise --grok-429-cooldown / --grok-rate-limit-delay if 429s continue.",
+                            self.grok_429_inter_batch_sleep,
+                        )
+                        time.sleep(self.grok_429_inter_batch_sleep)
+                    elif self.rate_limit_delay > 0:
                         time.sleep(self.rate_limit_delay)
             else:
                 with ThreadPoolExecutor(max_workers=min(self.grok_max_workers, total_batches)) as executor:
@@ -958,15 +970,17 @@ class GeneDiseaseEnricher:
                         raw_retry_after = exc.response.headers.get("Retry-After")
                         if raw_retry_after:
                             try:
-                                delay = int(raw_retry_after)
+                                delay = float(raw_retry_after)
                             except (ValueError, TypeError):
-                                delay = 60 * (2 ** attempt)
+                                delay = 120.0 * (2 ** attempt)
                         else:
-                            delay = 60 * (2 ** attempt)  # 60s, 120s, 240s
+                            # xAI limits often need multi-minute recovery; grow quickly
+                            delay = float(min(900.0, 120.0 * (2 ** attempt)))
+                        delay = max(60.0, delay)
                         if attempt == 0:
                             logger.warning(
-                                "Grok API rate limit (429). Use --grok-max-workers 1 and/or "
-                                "--rate-limit-delay to reduce concurrency if this persists."
+                                "Grok API rate limit (429). Use --grok-max-workers 1, "
+                                "--grok-rate-limit-delay, and/or check xAI quota/tier."
                             )
                     else:
                         delay = (2 ** attempt) * 5
