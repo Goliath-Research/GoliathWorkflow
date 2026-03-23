@@ -587,9 +587,8 @@ class GeneDiseaseEnricher:
                     if batch_num >= total_batches:
                         break
                     if not success and self.grok_429_inter_batch_sleep > 0:
-                        logger.warning(
-                            "Grok batch failed (often rate limit). Waiting %.0fs before next batch; "
-                            "raise --grok-429-cooldown / --grok-rate-limit-delay if 429s continue.",
+                        logger.info(
+                            "Waiting %.0fs after failed Grok batch before next batch.",
                             self.grok_429_inter_batch_sleep,
                         )
                         time.sleep(self.grok_429_inter_batch_sleep)
@@ -679,9 +678,12 @@ class GeneDiseaseEnricher:
             if last.status_code == 429:
                 delay = self._xai_429_delay_seconds(last, attempt)
                 lbl = context or (urlparse(url).path or "xAI")
-                logger.warning(
-                    f"xAI rate limit (429) [{lbl}]: sleeping {delay:.0f}s "
-                    f"(attempt {attempt + 1}/{attempts})"
+                logger.debug(
+                    "xAI 429 [%s]: sleeping %.0fs (attempt %d/%d)",
+                    lbl,
+                    delay,
+                    attempt + 1,
+                    attempts,
                 )
                 time.sleep(delay)
                 continue
@@ -979,25 +981,31 @@ class GeneDiseaseEnricher:
                         delay = max(60.0, delay)
                         if attempt == 0:
                             logger.warning(
-                                "Grok API rate limit (429). Use --grok-max-workers 1, "
-                                "--grok-rate-limit-delay, and/or check xAI quota/tier."
+                                "Grok API: 429 Too Many Requests (batch %d)",
+                                batch_num,
                             )
                     else:
                         delay = (2 ** attempt) * 5
-                    logger.warning(
-                        f"Grok API query failed for batch {batch_num} "
-                        f"(attempt {attempt + 1}/{self.max_retries}): {exc}. "
-                        f"Retrying in {delay}s..."
+                    logger.debug(
+                        "Grok batch %d: %s (attempt %d/%d); retry in %.0fs",
+                        batch_num,
+                        exc,
+                        attempt + 1,
+                        self.max_retries,
+                        delay,
                     )
                     time.sleep(delay)
             except Exception as exc:
                 last_error = exc
                 if attempt < self.max_retries - 1:
                     delay = (2 ** attempt) * 5
-                    logger.warning(
-                        f"Grok API query failed for batch {batch_num} "
-                        f"(attempt {attempt + 1}/{self.max_retries}): {exc}. "
-                        f"Retrying in {delay}s..."
+                    logger.debug(
+                        "Grok batch %d: %s (attempt %d/%d); retry in %.0fs",
+                        batch_num,
+                        exc,
+                        attempt + 1,
+                        self.max_retries,
+                        delay,
                     )
                     time.sleep(delay)
 
