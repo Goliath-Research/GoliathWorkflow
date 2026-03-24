@@ -11,7 +11,7 @@ import pandas as pd
 
 from .enricher import EnrichmentAnalyzer
 from .pathway_normalizer import PathwayNormalizer, load_theme_extras
-from .pathway_graph import run_pathway_clustering
+from .pathway_graph import canonical_pathway_key, run_pathway_clustering
 from .module_scorer import score_and_rank_modules, DEFAULT_PCA_RELEVANT_GENES
 from . import module_network_plot
 
@@ -63,10 +63,43 @@ def _main_pathways_for_module(
     """Top pathway names in module by adjusted p-value (most significant first)."""
     if not module_pathways or "Term" not in merged_df.columns or "Adjusted P-value" not in merged_df.columns:
         return ""
-    sub = merged_df[merged_df["Term"].isin(module_pathways)].copy()
-    sub = sub.sort_values("Adjusted P-value", ascending=True)
-    terms = sub["Term"].head(top_k).tolist()
-    return "; ".join(str(t) for t in terms)
+    key_set = set(module_pathways)
+    ck = merged_df["Term"].map(canonical_pathway_key)
+    sub = merged_df[ck.isin(key_set)].copy()
+    sub["_q"] = pd.to_numeric(sub["Adjusted P-value"], errors="coerce").fillna(1.0)
+    sub = sub.sort_values("_q", ascending=True)
+    # One representative Term per canonical key (best q), then top_k keys
+    seen_keys: Set[str] = set()
+    terms: List[str] = []
+    for t in sub["Term"].astype(str):
+        k = canonical_pathway_key(t)
+        if not k or k in seen_keys:
+            continue
+        seen_keys.add(k)
+        terms.append(t)
+        if len(terms) >= top_k:
+            break
+    return "; ".join(terms)
+
+
+def _display_term_by_canonical_key(merged_df: pd.DataFrame) -> Dict[str, str]:
+    """Map canonical_pathway_key -> best (lowest q) original Term for exports."""
+    if "Term" not in merged_df.columns:
+        return {}
+    df = merged_df.copy()
+    df["_pk"] = df["Term"].map(canonical_pathway_key)
+    df = df[df["_pk"].astype(str).str.len() > 0]
+    if df.empty:
+        return {}
+    if "Adjusted P-value" in df.columns:
+        df["_q"] = pd.to_numeric(df["Adjusted P-value"], errors="coerce").fillna(1.0)
+        df = df.sort_values("_q", ascending=True)
+    out: Dict[str, str] = {}
+    for _, row in df.iterrows():
+        pk = row["_pk"]
+        if pk not in out:
+            out[str(pk)] = str(row["Term"])
+    return out
 
 
 def run_module_pipeline(
@@ -197,9 +230,14 @@ def run_module_pipeline(
 
     # Per-pathway overlap genes (which genes drive each pathway)
     if pathway_to_genes:
+        display_by_key = _display_term_by_canonical_key(merged_df)
         pathway_overlap = [
-            {"Pathway": term, "Overlap_genes": ", ".join(sorted(genes))}
-            for term, genes in pathway_to_genes.items()
+            {
+                "Pathway": display_by_key.get(term, term),
+                "Pathway_key": term,
+                "Overlap_genes": ", ".join(sorted(genes)),
+            }
+            for term, genes in sorted(pathway_to_genes.items())
         ]
         if pathway_overlap:
             pathway_df = pd.DataFrame(pathway_overlap)

@@ -4,11 +4,28 @@ Pathway similarity graph and clustering: build a graph from pathway gene-set ove
 """
 
 import logging
+import unicodedata
 from typing import Dict, List, Set, Tuple
 
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+def canonical_pathway_key(term) -> str:
+    """
+    Stable key so the same pathway name from different Enrichr libraries (or minor
+    spelling/casing differences) is always one graph node and one Louvain community unit.
+
+    Normalization: NFKC, strip, collapse internal whitespace, casefold.
+    """
+    if term is None or (isinstance(term, float) and pd.isna(term)):
+        return ""
+    s = unicodedata.normalize("NFKC", str(term)).strip()
+    if not s:
+        return ""
+    s = " ".join(s.split())
+    return s.casefold()
 
 
 def _parse_genes_cell(cell) -> Set[str]:
@@ -43,16 +60,19 @@ def pathway_gene_sets_from_merged(merged_df: pd.DataFrame) -> Dict[str, Set[str]
     if not genes_col:
         logger.warning("No 'Genes' column in merged enrichment; cannot build pathway graph.")
         return {}
-    out = {}
+    out: Dict[str, Set[str]] = {}
     for _, row in merged_df.iterrows():
         term = str(row[term_col]).strip()
         if not term:
             continue
+        key = canonical_pathway_key(term)
+        if not key:
+            continue
         genes = _parse_genes_cell(row[genes_col])
-        if term in out:
-            out[term] = out[term] | genes
+        if key in out:
+            out[key] = out[key] | genes
         else:
-            out[term] = genes
+            out[key] = genes
     return out
 
 
@@ -127,8 +147,10 @@ def run_pathway_clustering(
     """
     From merged enrichment DataFrame, build pathway graph and cluster into modules.
     Returns (pathway_to_module_id, pathway_to_genes).
-    pathway_to_module_id: each pathway -> integer module id.
-    pathway_to_genes: pathway -> set of gene symbols (for module scoring).
+    Keys are canonical pathway names (see canonical_pathway_key): duplicate Term strings
+    across libraries or differing only by case/whitespace share one node and stay in
+    the same module.
+    pathway_to_genes: canonical key -> union of overlapping gene symbols.
     Lower similarity_threshold or lower cluster_resolution yields fewer, larger modules.
     """
     pathway_genes = pathway_gene_sets_from_merged(merged_df)

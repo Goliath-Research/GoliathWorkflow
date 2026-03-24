@@ -9,6 +9,8 @@ from typing import Dict, List, Optional, Set, Tuple
 import numpy as np
 import pandas as pd
 
+from .pathway_graph import canonical_pathway_key
+
 logger = logging.getLogger(__name__)
 
 # Minimal set of prostate-cancer-relevant gene symbols for disease prior (overlap scoring).
@@ -43,7 +45,9 @@ def compute_module_enrichment_score(
     """
     if not module_pathways:
         return 0.0
-    sub = merged_df[merged_df["Term"].isin(module_pathways)]
+    key_set = set(module_pathways)
+    term_keys = merged_df["Term"].map(canonical_pathway_key)
+    sub = merged_df[term_keys.isin(key_set)]
     if sub.empty:
         return 0.0
     q = pd.to_numeric(sub["Adjusted P-value"], errors="coerce").fillna(1.0)
