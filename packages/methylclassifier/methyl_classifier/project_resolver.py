@@ -8,7 +8,25 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from methyl_utils import ProjectConfig, load_project
-from methyl_utils.dmp_export_paths import first_classifier_dmps_csv
+
+try:
+    from methyl_utils.dmp_export_paths import first_classifier_dmps_csv
+except ImportError:
+    try:
+        from methyl_detector.utils.dmp_export_paths import first_classifier_dmps_csv
+    except ImportError:
+
+        def first_classifier_dmps_csv(detection_dir: Path) -> Optional[Path]:
+            if not detection_dir.exists():
+                return None
+            classifier = sorted(detection_dir.glob("dmps-*-classifier.csv"))
+            if classifier:
+                return classifier[0]
+            for p in sorted(detection_dir.glob("dmps-*.csv")):
+                if p.stem.endswith("-discovery"):
+                    continue
+                return p
+            return None
 
 from .models.config_schema import ClassificationConfig
 

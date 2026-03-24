@@ -15,10 +15,10 @@ Examples (repo root, venv active)::
     python scripts/phase_a_cg_chr1_smoke.py \\
         --output-base /data/my_run/Healthy_vs_PCa1-4-CG
 
-    # Centroids already built; only detector for one stage
-    python scripts/phase_a_cg_chr1_smoke.py --output-base ... --skip-centroid --detector-group pca2
+    # Centroids already built; only detector for one stage (label must match project comparisons, e.g. pca_pca2)
+    python scripts/phase_a_cg_chr1_smoke.py --output-base ... --skip-centroid --detector-group pca_pca2
 
-    # All disease stages (healthy vs pca1 … pca4)
+    # All disease stages (healthy vs pca_pca1 … pca_pca4)
     python scripts/phase_a_cg_chr1_smoke.py --output-base ... --all-disease-stages
 """
 
@@ -31,6 +31,8 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from methyl_utils import load_project
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -97,8 +99,6 @@ def verify_dual_exports(
     chromosome: str,
 ) -> List[str]:
     """Return list of warnings (empty if checks pass)."""
-    from methyl_utils import load_project
-
     proj = load_project(project_json, output_base_override=output_base)
     det_dir = Path(proj.get_detection_output_dir(control_label, disease_label))
     warnings: List[str] = []
@@ -151,8 +151,10 @@ def main() -> int:
     p.add_argument(
         "--detector-group",
         type=str,
-        default="pca1",
-        help="With --per-cancer-group: run only this disease label (default: pca1)",
+        default=None,
+        metavar="LABEL",
+        help="methyl-detector --group disease label (must match project comparisons, e.g. pca_pca1). "
+        "Default: first comparison from the project JSON.",
     )
     p.add_argument(
         "--all-disease-stages",
@@ -196,6 +198,17 @@ def main() -> int:
     phase_project_path = work_dir / "phase_a_project_CG_chr1.json"
     write_json(phase_project_path, data)
 
+    resolved_detector_group: Optional[str] = None
+    if not args.all_disease_stages:
+        if args.detector_group is not None:
+            resolved_detector_group = args.detector_group.strip()
+        else:
+            comps = load_project(phase_project_path, output_base_override=args.output_base).get_comparisons()
+            if not comps:
+                print("No comparisons in project; pass --detector-group explicitly.", file=sys.stderr)
+                return 2
+            resolved_detector_group = comps[0].disease_group
+
     centroid_override_path: Optional[Path] = None
     if centroid_ov:
         centroid_override_path = work_dir / "phase_a_centroid_override.json"
@@ -219,7 +232,7 @@ def main() -> int:
     if args.all_disease_stages:
         detector_cmd.append("--per-cancer-group")
     else:
-        detector_cmd += ["--group", args.detector_group]
+        detector_cmd += ["--group", resolved_detector_group]
 
     print("Phase A project written:", phase_project_path)
     print("  chromosomes:", data.get("chromosomes"))
@@ -227,6 +240,8 @@ def main() -> int:
     print("  output_base:", data.get("output_base"))
     if centroid_override_path:
         print("  centroid override:", centroid_override_path)
+    if resolved_detector_group is not None:
+        print("  methyl-detector --group:", resolved_detector_group)
 
     if args.dry_run:
         print("\n[dry-run] Would run:")
@@ -255,11 +270,13 @@ def main() -> int:
         return e.returncode or 1
 
     if not args.skip_detector:
-        from methyl_utils import load_project
-
         proj = load_project(phase_project_path, output_base_override=args.output_base)
         comparisons = proj.get_comparisons()
-        stages = [args.detector_group] if not args.all_disease_stages else [spec.disease_group for spec in comparisons]
+        stages = (
+            [resolved_detector_group]
+            if not args.all_disease_stages and resolved_detector_group is not None
+            else [spec.disease_group for spec in comparisons]
+        )
         print("\nDual-export checks:")
         for stage in stages:
             spec = next((c for c in comparisons if c.disease_group == stage), None)

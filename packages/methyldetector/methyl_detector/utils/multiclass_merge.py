@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from methyl_utils.dmp_export_paths import find_classifier_dmps_csvs
+from .dmp_export_paths import find_classifier_dmps_csvs
 
 DMP_GLOB = "dmps-*.csv"
 REQUIRED_COLS = {"chromosome", "context", "position"}
