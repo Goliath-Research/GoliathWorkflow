@@ -217,11 +217,12 @@ else:
 
 Typical outputs under `output_dir`:
 
-- **dmps-{chrom}-biological-sorted.csv** (or similar): DMP table with position, p_value, q_value, effect_size, overlap, mean1, mean2, etc., sorted by biological importance (effect_size).
-- **Summary / JSON**: Run summary and optional metadata.
-- **Classifier**: If classifier training is enabled, a serialized model path is available (e.g. on the result object or in the summary).
+- **Dual export** (`dmp_export_mode=dual`, default): `dmps-{chrom}-discovery.csv` (broad list for mapper/enricher), `dmps-{chrom}-classifier.csv` (prediction panel), `dmp-export-{chrom}.meta.json` (branch metadata), and `classifier-{chrom}-{contexts}.pkl`.
+- **Unified export** (`dmp_export_mode=unified`): single `dmps-{chrom}.csv` aligned with the classifier panel (optionally widened to `min_dmps_for_export` rows for mapping).
+- **Summary / JSON**: `results-{chrom}.json` and optional validation blocks.
+- **Classifier**: ECDF pickle as above.
 
-Exact names and structure may depend on config (e.g. multi-chromosome, per-cancer-group). See the comprehensive documentation and code for details.
+Exact names depend on chromosome list, contexts, and per-cancer-group layout. See [IMPLEMENTATION.md](IMPLEMENTATION.md) and the theory chapter on MethylDetector.
 
 ---
 

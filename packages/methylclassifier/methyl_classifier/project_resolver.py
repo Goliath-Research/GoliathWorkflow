@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from methyl_utils import ProjectConfig, load_project
+from methyl_utils.dmp_export_paths import first_classifier_dmps_csv
 
 from .models.config_schema import ClassificationConfig
 
@@ -346,7 +347,7 @@ def build_multiclass_config_from_project(
     dmps_csv: Optional[Union[str, Path]] = None,
     output_model: Optional[Union[str, Path]] = None,
     weights_column: Optional[str] = "weight",
-    detection_dmps_glob: str = "dmps-*.csv",
+    detection_dmps_glob: str = "dmps-*-classifier.csv",
     output_base_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
@@ -380,11 +381,15 @@ def build_multiclass_config_from_project(
     if dmps_csv is None:
         det_dir = Path(paths.detection_dir)
         if det_dir.exists():
-            candidates = sorted(det_dir.glob(detection_dmps_glob))
-            if candidates:
-                dmps_csv = str(candidates[0])
+            picked = first_classifier_dmps_csv(det_dir)
+            if picked is not None:
+                dmps_csv = str(picked)
             else:
-                dmps_csv = str(det_dir / "dmps-all-biological.csv")
+                candidates = sorted(det_dir.glob(detection_dmps_glob))
+                if candidates:
+                    dmps_csv = str(candidates[0])
+                else:
+                    dmps_csv = str(det_dir / "dmps-all-biological.csv")
         else:
             dmps_csv = str(Path(paths.detection_dir) / "dmps-all-biological.csv")
     else:

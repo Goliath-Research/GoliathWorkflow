@@ -287,15 +287,47 @@ class MethylDetector:
         # Compute biological importance and sort (funnel output = all biological DMPs; no optimization)
         logger.info("📋 Sorting DMPs by biological importance...")
         sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
-        selected_dmps_df = self._select_dmps_multicontext(bio_dmps_df, sorted_df=sorted_by_importance_df)
+        self._featurecuts_last_result = None
+        export_mode = getattr(self.config, "dmp_export_mode", "unified")
+        classifier_dmps_df = self._classifier_dmps_from_sorted(sorted_by_importance_df)
+        selected_dmps_df = classifier_dmps_df
 
-        # Export: single DMP CSV + Classifier
+        # Export: discovery vs classifier branches (dual) or unified CSV + classifier
         if self.config.output_dir:
-            logger.info("💾 Exporting DMPs and classifier...")
-            self._export_unified_csv(selected_dmps_df, suffix="")
-            self._save_unified_model(None, selected_dmps_df)
+            logger.info("💾 Exporting DMPs and classifier (mode=%s)...", export_mode)
+            if export_mode == "dual":
+                discovery_dmps_df = self._discovery_dmps_from_sorted(sorted_by_importance_df)
+                if len(discovery_dmps_df) < int(self.config.min_dmps_for_export):
+                    logger.warning(
+                        "Discovery DMP count %s is below min_dmps_for_export=%s (mapper/enricher may be sparse)",
+                        len(discovery_dmps_df),
+                        self.config.min_dmps_for_export,
+                    )
+                self._export_unified_csv(discovery_dmps_df, suffix="-discovery")
+                self._export_unified_csv(classifier_dmps_df, suffix="-classifier")
+                self._write_dmp_branch_metadata(discovery_dmps_df, classifier_dmps_df)
+            else:
+                export_df = classifier_dmps_df
+                if (
+                    len(export_df) < int(self.config.min_dmps_for_export)
+                    and len(sorted_by_importance_df) >= int(self.config.min_dmps_for_export)
+                ):
+                    export_df = sorted_by_importance_df.iloc[: int(self.config.min_dmps_for_export)].copy()
+                    logger.info(
+                        "Unified export: CSV has %s rows (min_dmps_for_export) while classifier uses %s DMPs",
+                        len(export_df),
+                        len(classifier_dmps_df),
+                    )
+                elif len(export_df) < int(self.config.min_dmps_for_export):
+                    logger.warning(
+                        "Fewer biological DMPs (%s) than min_dmps_for_export=%s",
+                        len(export_df),
+                        self.config.min_dmps_for_export,
+                    )
+                self._export_unified_csv(export_df, suffix="")
+            self._save_unified_model(None, classifier_dmps_df)
             self._save_validation_results(
-                n_dmps_exported=len(selected_dmps_df),
+                n_dmps_exported=len(classifier_dmps_df),
                 total_statistical_dmps=total_confirmed,
                 total_biological_dmps=len(bio_dmps_df),
             )
@@ -1758,56 +1790,167 @@ class MethylDetector:
             traceback.print_exc()
             return None
     
+    def _effect_size_elbow_trim(self, sorted_df: pd.DataFrame, enabled: Optional[bool] = None) -> pd.DataFrame:
+        """
+        Trim sorted DMPs by effect_size distribution (dynamic elbow). Operates on a copy of rows.
+        """
+        if len(sorted_df) == 0:
+            return sorted_df.copy()
+        if enabled is None:
+            enabled = bool(getattr(self.config, "dynamic_dmp_cutoff_enabled", True))
+        sorted_df = sorted_df.copy()
+        n_before = len(sorted_df)
+        if not enabled or "effect_size" not in sorted_df.columns or n_before == 0:
+            return sorted_df.reset_index(drop=True)
+
+        es = sorted_df["effect_size"].values.astype(np.float64)
+        finite = np.isfinite(es)
+        if not np.any(finite):
+            logger.warning("effect_size has no finite values; skipping dynamic distribution trim")
+            return sorted_df.reset_index(drop=True)
+        es_finite = es[finite]
+        if len(es_finite) <= 10:
+            return sorted_df.reset_index(drop=True)
+        es_min = float(es_finite.min())
+        es_max = float(es_finite.max())
+        if es_max <= es_min:
+            return sorted_df.reset_index(drop=True)
+        y = (es_finite - es_min) / (es_max - es_min)
+        x = np.linspace(0, 1, len(es_finite))
+        distances = x**2 + y**2
+        elbow_idx = int(np.argmin(distances))
+        base_thresh = float(es_finite[elbow_idx])
+        relaxation = float(getattr(self.config, "dynamic_dmp_cutoff_relaxation", 1.0))
+        thresh = base_thresh * relaxation
+        keep = (es >= thresh) & finite
+        n_keep = int(np.sum(keep))
+        if n_keep < n_before:
+            sorted_df = sorted_df.loc[keep].copy().reset_index(drop=True)
+            logger.info(
+                "📋 Dynamic distribution trim (elbow=%.6g, rel=%.2g): kept %s DMPs (effect_size >= %.6g), dropped %s weak tail",
+                base_thresh, relaxation, n_keep, thresh, n_before - n_keep,
+            )
+        else:
+            sorted_df = sorted_df.copy().reset_index(drop=True)
+        return sorted_df
+
+    def _featurecuts_select_k(self, sorted_pool: pd.DataFrame) -> Tuple[Optional[pd.DataFrame], Optional[dict]]:
+        """Pick top-k DMPs by validation balanced accuracy. Returns (subset_df, best_result) or (None, None)."""
+        if sorted_pool is None or len(sorted_pool) == 0:
+            return None, None
+        try:
+            validation_data = self._load_validation_samples_multicontext(sorted_pool)
+            if validation_data is None:
+                logger.warning("FeatureCuts: no validation samples; cannot optimize k by balanced accuracy")
+                return None, None
+            X_val, y_val, _val_positions, _val_contexts = validation_data
+            splits = self._prepare_validation_splits(y_val, require_holdout=True)
+            if not splits:
+                logger.warning("FeatureCuts: no validation splits; cannot optimize k")
+                return None, None
+            cache = self._build_validation_prefix_cache(sorted_pool, X_val, y_val, splits)
+            best_k, best_result = self._optimize_dmps_featurecuts(sorted_pool, len(sorted_pool), cache)
+            if best_k <= 0:
+                return None, None
+            sel = sorted_pool.iloc[:best_k].copy().reset_index(drop=True)
+            return sel, best_result
+        except Exception as e:
+            logger.warning("FeatureCuts error: %s", e)
+            return None, None
+
+    def _classifier_dmps_from_sorted(self, sorted_by_importance_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Build the prediction-panel DMP table: elbow trim and/or FeatureCuts on validation BA.
+        """
+        selection = getattr(self.config, "classifier_dmp_selection", "elbow")
+        if selection == "featurecuts_validation":
+            pool = sorted_by_importance_df.copy().reset_index(drop=True)
+            cap = getattr(self.config, "featurecuts_max_k_cap", None)
+            if cap is not None and len(pool) > int(cap):
+                pool = pool.iloc[: int(cap)].copy().reset_index(drop=True)
+            if bool(getattr(self.config, "dynamic_dmp_cutoff_enabled", True)) and len(pool) > 0:
+                pool = self._effect_size_elbow_trim(pool, enabled=True)
+            selected, res = self._featurecuts_select_k(pool)
+            if selected is not None and len(selected) > 0:
+                self._featurecuts_last_result = res
+                logger.info("📋 Classifier panel: FeatureCuts selected k=%s DMPs", len(selected))
+                self._check_centroid_self_classification(selected)
+                return selected
+            logger.warning("FeatureCuts failed or empty; falling back to elbow-only classifier panel")
+
+        out = self._effect_size_elbow_trim(sorted_by_importance_df.copy(), enabled=True)
+        logger.info("📋 Classifier panel: %s DMPs after elbow trim", len(out))
+        self._check_centroid_self_classification(out)
+        return out
+
+    def _discovery_dmps_from_sorted(self, sorted_by_importance_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Discovery branch: broad list for mapper/enricher (no centroid self-check on full set).
+        """
+        use_elbow = bool(getattr(self.config, "discovery_dynamic_dmp_cutoff_enabled", False))
+        out = self._effect_size_elbow_trim(sorted_by_importance_df.copy(), enabled=use_elbow)
+        logger.info("📋 Discovery export: %s DMPs (elbow=%s)", len(out), use_elbow)
+        return out
+
+    def _write_dmp_branch_metadata(
+        self,
+        discovery_dmps_df: pd.DataFrame,
+        classifier_dmps_df: pd.DataFrame,
+    ) -> None:
+        """Sidecar JSON describing dual-branch exports (methods / reproducibility)."""
+        import json
+        from datetime import datetime
+
+        output_dir = Path(self.config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        meta_path = output_dir / f"dmp-export-{self.chromosome}.meta.json"
+        ctx_str = ",".join(sorted(self.config.contexts)) if self.config.contexts else "unknown"
+        fc_summary = None
+        if getattr(self, "_featurecuts_last_result", None) is not None:
+            r = self._featurecuts_last_result
+            try:
+                fc_summary = {
+                    "balanced_accuracy": float(r.get("balanced_accuracy", 0.0)),
+                    "split_balanced_accuracy_std": float(r.get("split_balanced_accuracy_std", 0.0)),
+                }
+            except (TypeError, ValueError):
+                fc_summary = {"note": "featurecuts ran; see results-{chrom}.json for full metrics"}
+
+        payload = {
+            "chromosome": self.chromosome,
+            "contexts": ctx_str,
+            "timestamp": datetime.now().isoformat(),
+            "dmp_export_mode": getattr(self.config, "dmp_export_mode", "dual"),
+            "classifier_dmp_selection": getattr(self.config, "classifier_dmp_selection", "elbow"),
+            "n_dmps_discovery": int(len(discovery_dmps_df)),
+            "n_dmps_classifier": int(len(classifier_dmps_df)),
+            "min_dmps_for_export": int(self.config.min_dmps_for_export),
+            "discovery_dynamic_dmp_cutoff_enabled": bool(
+                getattr(self.config, "discovery_dynamic_dmp_cutoff_enabled", False)
+            ),
+            "classifier_dynamic_dmp_cutoff_enabled": bool(getattr(self.config, "dynamic_dmp_cutoff_enabled", True)),
+            "files": {
+                "discovery_csv": f"dmps-{self.chromosome}-discovery.csv",
+                "classifier_csv": f"dmps-{self.chromosome}-classifier.csv",
+                "classifier_pickle": f"classifier-{self.chromosome}-{ctx_str}.pkl",
+            },
+            "featurecuts_validation_summary": fc_summary,
+            "note": "Use discovery CSV for MethylMapper/MethylEnricher; classifier CSV + pickle for prediction.",
+        }
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        logger.info("💾 Wrote DMP branch metadata to %s", meta_path)
+
     def _select_dmps_multicontext(self, bio_dmps_df: pd.DataFrame, sorted_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """
-        Return biological DMPs sorted by importance. Optionally trim by effect_size
-        distribution (dynamic elbow detection) to maximize count while dropping
-        the weak tail. Exported DMPs and classifier both use this set.
+        Return the classifier (prediction) DMP panel: elbow and/or FeatureCuts.
+        For dual exports, use _discovery_dmps_from_sorted on the same sorted table for mapper input.
         """
         if len(bio_dmps_df) == 0:
             return bio_dmps_df
         if sorted_df is None:
             sorted_df = self._compute_biological_importance(bio_dmps_df)
-        n_before = len(sorted_df)
-
-        # Distribution-based trim using dynamic elbow detection
-        if getattr(self.config, "dynamic_dmp_cutoff_enabled", True) and "effect_size" in sorted_df.columns and n_before > 0:
-            es = sorted_df["effect_size"].values.astype(np.float64)
-            finite = np.isfinite(es)
-            if np.any(finite):
-                es_finite = es[finite]
-                if len(es_finite) > 10:
-                    es_min = float(es_finite.min())
-                    es_max = float(es_finite.max())
-                    if es_max > es_min:
-                        # Normalize Y (effect_size) and X (rank) to [0, 1]
-                        y = (es_finite - es_min) / (es_max - es_min)
-                        x = np.linspace(0, 1, len(es_finite))
-                        
-                        # Find the point minimizing distance to origin (0,0) in normalized space
-                        distances = x**2 + y**2
-                        elbow_idx = int(np.argmin(distances))
-                        base_thresh = float(es_finite[elbow_idx])
-                        
-                        relaxation = float(getattr(self.config, "dynamic_dmp_cutoff_relaxation", 1.0))
-                        thresh = base_thresh * relaxation
-                        
-                        keep = (es >= thresh) & finite
-                        n_keep = int(np.sum(keep))
-                        if n_keep < n_before:
-                            sorted_df = sorted_df.loc[keep].copy().reset_index(drop=True)
-                            logger.info(
-                                "📋 Dynamic distribution trim (elbow=%.6g, rel=%.2g): kept %s DMPs (effect_size >= %.6g), dropped %s weak tail",
-                                base_thresh, relaxation, n_keep, thresh, n_before - n_keep,
-                            )
-                        else:
-                            sorted_df = sorted_df.copy()
-            else:
-                logger.warning("effect_size has no finite values; skipping dynamic distribution trim")
-
-        logger.info("📋 Using %s biological DMPs (funnel output; no optimization)", len(sorted_df))
-        self._check_centroid_self_classification(sorted_df)
-        return sorted_df
+        return self._classifier_dmps_from_sorted(sorted_df)
     
     def _validate_on_real_samples(self, selected_dmps_df: pd.DataFrame) -> Optional[dict]:
         """

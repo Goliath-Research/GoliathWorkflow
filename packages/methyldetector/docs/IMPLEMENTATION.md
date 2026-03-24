@@ -127,11 +127,15 @@ Within each context independently, sort by `effect_size` descending and keep the
 
 Optional rescue track: after the same statistical comparison, non-significant loci can be selected separately with `biological_only_effect_size_coverage`; these rows are flagged with `statistical_dmp=False` / `biological_dmp=True` so they are never confused with confirmed statistical DMPs.
 
-### 7. Export handoff and optional validation helpers
+### 7. Export handoff: discovery vs classifier panels
 
-`_select_dmps_multicontext()` currently returns the full biological funnel output sorted by `effect_size` and does not run top-k optimization on the active export path. If `max_dmps_for_classifier` is set, the classifier is capped to the top rows by `effect_size` after the biological filter.
+After biological filtering and `_compute_biological_importance`, the pipeline builds:
 
-Validation helpers and legacy optimization code still exist in the module, but they are not the default path used when exporting `dmps-*.csv` and classifier packages.
+- **Classifier panel** (`_classifier_dmps_from_sorted`): effect-size elbow trim by default; optional `classifier_dmp_selection=featurecuts_validation` runs `_optimize_dmps_featurecuts` on configured validation samples to pick top-*k* by balanced accuracy.
+- **Discovery export** (`dmp_export_mode=dual`): `dmps-{chrom}-discovery.csv` is the full biologically filtered, importance-sorted table (no elbow unless `discovery_dynamic_dmp_cutoff_enabled=true`). `dmps-{chrom}-classifier.csv` mirrors the classifier panel. `dmp-export-{chrom}.meta.json` records counts and options.
+- **Unified mode** (`dmp_export_mode=unified`): single `dmps-{chrom}.csv` for the classifier panel; if fewer rows remain than `min_dmps_for_export` but more biological DMPs exist, the CSV is widened to that minimum while the pickle still uses the elbow subset.
+
+See also `docs/theory/chapters/03-methyldetector.qmd` (Discovery versus prediction exports).
 
 ---
 

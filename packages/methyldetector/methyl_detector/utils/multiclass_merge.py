@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from methyl_utils.dmp_export_paths import find_classifier_dmps_csvs
 
 DMP_GLOB = "dmps-*.csv"
 REQUIRED_COLS = {"chromosome", "context", "position"}
@@ -15,10 +16,8 @@ WEIGHT_COLS = ["weight", "effect_size", "importance"]
 
 
 def _find_dmp_csvs(detection_dir: Path) -> List[Path]:
-    """Return list of dmps-*.csv paths in detection_dir (empty if dir missing)."""
-    if not detection_dir.exists():
-        return []
-    return sorted(detection_dir.glob(DMP_GLOB))
+    """Return classifier/prediction DMP CSV paths (dual-branch aware)."""
+    return find_classifier_dmps_csvs(detection_dir)
 
 
 def _resolve_weight_column(df: pd.DataFrame, weights_column: Optional[str]) -> str:

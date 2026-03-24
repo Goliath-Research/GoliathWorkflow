@@ -1,5 +1,8 @@
 from pathlib import Path
 from typing import List, Literal, Optional, Union, Dict, Any  # noqa: F401
+
+DmpExportMode = Literal["unified", "dual"]
+ClassifierDmpSelection = Literal["elbow", "featurecuts_validation"]
 from math import ceil
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -255,13 +258,43 @@ class MethylDetectorConfig(BaseModel):
     # ----------------
     # DMP Selection
     # ----------------
+    dmp_export_mode: DmpExportMode = Field(
+        default="dual",
+        description="unified: single dmps-{chrom}.csv (classifier subset; may expand rows to min_dmps_for_export for mapper). "
+        "dual: dmps-{chrom}-discovery.csv (broad, mapper/enricher) + dmps-{chrom}-classifier.csv (prediction panel) + metadata JSON.",
+    )
+    discovery_dynamic_dmp_cutoff_enabled: bool = Field(
+        default=False,
+        description="If True, apply the same effect_size elbow trim to the discovery export in dual mode. Default False: discovery keeps all biologically filtered DMPs sorted by importance.",
+    )
+    classifier_dmp_selection: ClassifierDmpSelection = Field(
+        default="elbow",
+        description="How to build the prediction DMP panel: elbow = effect_size distribution trim only; "
+        "featurecuts_validation = choose top-k by balanced accuracy on configured validation samples (requires real validation data).",
+    )
+    featurecuts_exhaustive_search: bool = Field(
+        default=False,
+        description="When classifier_dmp_selection=featurecuts_validation: search more k candidates (slower, more thorough).",
+    )
+    featurecuts_max_candidates: Optional[int] = Field(
+        default=50,
+        ge=1,
+        description="Cap on candidate k values evaluated in featurecuts mode (None = auto).",
+    )
+    featurecuts_max_k_cap: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Optional upper bound on k when running featurecuts (speed). None = use all rows after elbow prefilter.",
+    )
     min_selected_dmps: Optional[int] = Field(
         default=None, ge=1,
         description="Minimum number of DMPs to select via binary search (None = auto-determine)"
     )
     min_dmps_for_export: int = Field(
         default=1000, ge=1,
-        description="Minimum number of DMPs to export to CSV, even if binary search finds fewer DMPs are sufficient. Ensures enough DMPs for gene mapping and downstream analysis"
+        description="Unified mode: if the classifier/elbow subset is smaller than this but more biological DMPs exist, "
+        "the exported dmps-{chrom}.csv is widened to this many top-importance rows while the saved classifier still uses the elbow subset. "
+        "Dual mode: warn when the discovery table has fewer than this many rows."
     )
     effect_size_weight_power: float = Field(
         default=1.0, ge=0.1, le=5.0,

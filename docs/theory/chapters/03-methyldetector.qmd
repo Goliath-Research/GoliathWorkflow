@@ -86,6 +86,19 @@ The detector does more than report DMPs. It also packages the information needed
 
 Mathematically, this means the detector defines the feature space and the feature weighting scheme for the classifier. The classifier is therefore downstream of detector choices even when its own scoring rule is fixed.
 
+## Discovery versus prediction exports
+
+Interpretation workflows (mapping DMPs to genes, pathway enrichment, comparing stages) benefit from **broader, biologically coherent** DMP lists. Predictive modeling benefits from **smaller, stable** feature sets chosen without conflating biological narrative with classification utility.
+
+The implementation therefore supports two coordinated outputs when `dmp_export_mode=dual` (default in project configs):
+
+- `dmps-{chrom}-discovery.csv`: all biologically filtered loci after importance ranking, **without** the effect-size elbow used to trim the classifier panel (unless `discovery_dynamic_dmp_cutoff_enabled` is turned on).
+- `dmps-{chrom}-classifier.csv`: the **prediction panel** after the same elbow heuristic as before, or after optional validation balanced-accuracy optimization (`classifier_dmp_selection=featurecuts_validation`) when validation samples are configured.
+
+The saved ECDF classifier pickle always uses the **classifier** panel, not the discovery table. MethylMapper and MethylEnricher should read the **discovery** glob (for example `dmps-*-discovery.csv`). Multiclass merge utilities resolve `dmps-*-classifier.csv` automatically when present.
+
+For strict evaluation of a deployed classifier, feature selection must be performed **inside** each outer training fold (for example by running detection on fold-specific centroids, as in Monte Carlo train splits); discovery lists built on all samples may still be reported for mechanism, but they must not be the sole basis for performance claims unless that design is stated explicitly.
+
 ## Publication Guidance
 
 The most accurate publication description is:

@@ -239,7 +239,8 @@ window.Quarto = {
   <li><a href="#cumulative-effect-coverage" id="toc-cumulative-effect-coverage" class="nav-link" data-scroll-target="#cumulative-effect-coverage"><span class="header-section-number">4.5</span> Cumulative Effect Coverage</a></li>
   <li><a href="#context-and-chromosome-granularity" id="toc-context-and-chromosome-granularity" class="nav-link" data-scroll-target="#context-and-chromosome-granularity"><span class="header-section-number">4.6</span> Context And Chromosome Granularity</a></li>
   <li><a href="#exported-classifier-artifacts" id="toc-exported-classifier-artifacts" class="nav-link" data-scroll-target="#exported-classifier-artifacts"><span class="header-section-number">4.7</span> Exported Classifier Artifacts</a></li>
-  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">4.8</span> Publication Guidance</a></li>
+  <li><a href="#discovery-versus-prediction-exports" id="toc-discovery-versus-prediction-exports" class="nav-link" data-scroll-target="#discovery-versus-prediction-exports"><span class="header-section-number">4.8</span> Discovery versus prediction exports</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">4.9</span> Publication Guidance</a></li>
   </ul>
 </nav>
     </div>
@@ -343,8 +344,19 @@ window.Quarto = {
 </ul>
 <p>Mathematically, this means the detector defines the feature space and the feature weighting scheme for the classifier. The classifier is therefore downstream of detector choices even when its own scoring rule is fixed.</p>
 </section>
-<section id="publication-guidance" class="level2" data-number="4.8">
-<h2 data-number="4.8" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">4.8</span> Publication Guidance</h2>
+<section id="discovery-versus-prediction-exports" class="level2" data-number="4.8">
+<h2 data-number="4.8" class="anchored" data-anchor-id="discovery-versus-prediction-exports"><span class="header-section-number">4.8</span> Discovery versus prediction exports</h2>
+<p>Interpretation workflows (mapping DMPs to genes, pathway enrichment, comparing stages) benefit from <strong>broader, biologically coherent</strong> DMP lists. Predictive modeling benefits from <strong>smaller, stable</strong> feature sets chosen without conflating biological narrative with classification utility.</p>
+<p>The implementation therefore supports two coordinated outputs when <code>dmp_export_mode=dual</code> (default in project configs):</p>
+<ul>
+<li><code>dmps-{chrom}-discovery.csv</code>: all biologically filtered loci after importance ranking, <strong>without</strong> the effect-size elbow used to trim the classifier panel (unless <code>discovery_dynamic_dmp_cutoff_enabled</code> is turned on).</li>
+<li><code>dmps-{chrom}-classifier.csv</code>: the <strong>prediction panel</strong> after the same elbow heuristic as before, or after optional validation balanced-accuracy optimization (<code>classifier_dmp_selection=featurecuts_validation</code>) when validation samples are configured.</li>
+</ul>
+<p>The saved ECDF classifier pickle always uses the <strong>classifier</strong> panel, not the discovery table. MethylMapper and MethylEnricher should read the <strong>discovery</strong> glob (for example <code>dmps-*-discovery.csv</code>). Multiclass merge utilities resolve <code>dmps-*-classifier.csv</code> automatically when present.</p>
+<p>For strict evaluation of a deployed classifier, feature selection must be performed <strong>inside</strong> each outer training fold (for example by running detection on fold-specific centroids, as in Monte Carlo train splits); discovery lists built on all samples may still be reported for mechanism, but they must not be the sole basis for performance claims unless that design is stated explicitly.</p>
+</section>
+<section id="publication-guidance" class="level2" data-number="4.9">
+<h2 data-number="4.9" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">4.9</span> Publication Guidance</h2>
 <p>The most accurate publication description is:</p>
 <ul>
 <li><code>methyldetector</code> performs nonparametric locus-wise screening,</li>

@@ -112,14 +112,14 @@
       "effect_size_use_mean_level": true,
       "effect_size_mean_level_use_max": true,
       "effect_size_mean_level_weight": "boundary",
-      "effect_size_mean_level_k": 0.10,
+      "effect_size_mean_level_k": 0.1,
       "min_validation_coverage_per_position": 5,
       "random_state": 42,
       "context_weight_direction": "inverse",
       "effect_size_mean_level_k_by_context": {
         "CG": 0.05,
-        "CHG": 0.10,
-        "CHH": 0.20
+        "CHG": 0.1,
+        "CHH": 0.2
       },
       "effect_size_weight_power": 3.0,
       "dynamic_dmp_cutoff_enabled": true,
@@ -127,7 +127,7 @@
       "max_dmps_for_classifier": 15000,
       "filter_funnel_explore": {
         "effect_size_coverage": {
-          "min": 0.80,
+          "min": 0.8,
           "max": 0.99,
           "step": 0.05
         }
@@ -136,7 +136,7 @@
       "debug": true
     },
     "mapper": {
-      "csv_pattern": "dmps-*.csv",
+      "csv_pattern": "dmps-*-discovery.csv",
       "gtf": "/work/genomes/human_genome/gencode.v44.annotation.gtf",
       "use_sp_regions": true,
       "storey_lambda": 0.4,
@@ -165,7 +165,7 @@
         "indirect"
       ],
       "min_disease_evidence_level": "medium",
-      "min_disease_score": 0.00,
+      "min_disease_score": 0.0,
       "min_dmp_count": 2,
       "max_gene_q_value": 0.05,
       "sort_by": "total_weight",

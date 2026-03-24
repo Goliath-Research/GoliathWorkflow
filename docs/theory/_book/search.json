@@ -353,8 +353,8 @@
     "objectID": "chapters/03-methyldetector.html#publication-guidance",
     "href": "chapters/03-methyldetector.html#publication-guidance",
     "title": "4  MethylDetector",
-    "section": "4.8 Publication Guidance",
-    "text": "4.8 Publication Guidance\nThe most accurate publication description is:\n\nmethyldetector performs nonparametric locus-wise screening,\napplies FDR control through Storey q-values,\nsupplements significance with heuristic biological ranking,\nand exports a reduced, weighted empirical-distribution feature set.\n\nThe package should not be described as a pure hypothesis-testing engine if the effect-coverage filters are active, because those filters are explicitly post-test prioritization rules.",
+    "section": "4.9 Publication Guidance",
+    "text": "4.9 Publication Guidance\nThe most accurate publication description is:\n\nmethyldetector performs nonparametric locus-wise screening,\napplies FDR control through Storey q-values,\nsupplements significance with heuristic biological ranking,\nand exports a reduced, weighted empirical-distribution feature set.\n\nThe package should not be described as a pure hypothesis-testing engine if the effect-coverage filters are active, because those filters are explicitly post-test prioritization rules.",
     "crumbs": [
       "<span class='chapter-number'>4</span>  <span class='chapter-title'>MethylDetector</span>"
     ]
@@ -973,6 +973,16 @@
     "crumbs": [
       "Appendices",
       "<span class='chapter-number'>A</span>  <span class='chapter-title'>MethylPipeline Theory Book</span>"
+    ]
+  },
+  {
+    "objectID": "chapters/03-methyldetector.html#discovery-versus-prediction-exports",
+    "href": "chapters/03-methyldetector.html#discovery-versus-prediction-exports",
+    "title": "4  MethylDetector",
+    "section": "4.8 Discovery versus prediction exports",
+    "text": "4.8 Discovery versus prediction exports\nInterpretation workflows (mapping DMPs to genes, pathway enrichment, comparing stages) benefit from broader, biologically coherent DMP lists. Predictive modeling benefits from smaller, stable feature sets chosen without conflating biological narrative with classification utility.\nThe implementation therefore supports two coordinated outputs when dmp_export_mode=dual (default in project configs):\n\ndmps-{chrom}-discovery.csv: all biologically filtered loci after importance ranking, without the effect-size elbow used to trim the classifier panel (unless discovery_dynamic_dmp_cutoff_enabled is turned on).\ndmps-{chrom}-classifier.csv: the prediction panel after the same elbow heuristic as before, or after optional validation balanced-accuracy optimization (classifier_dmp_selection=featurecuts_validation) when validation samples are configured.\n\nThe saved ECDF classifier pickle always uses the classifier panel, not the discovery table. MethylMapper and MethylEnricher should read the discovery glob (for example dmps-*-discovery.csv). Multiclass merge utilities resolve dmps-*-classifier.csv automatically when present.\nFor strict evaluation of a deployed classifier, feature selection must be performed inside each outer training fold (for example by running detection on fold-specific centroids, as in Monte Carlo train splits); discovery lists built on all samples may still be reported for mechanism, but they must not be the sole basis for performance claims unless that design is stated explicitly.",
+    "crumbs": [
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>MethylDetector</span>"
     ]
   }
 ]

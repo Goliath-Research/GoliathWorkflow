@@ -10,7 +10,9 @@
     "groups": [
       {
         "label": "healthy",
-        "sample_paths":  ["configs/healthy.csv"]
+        "sample_paths": [
+          "configs/healthy.csv"
+        ]
       }
     ]
   },
@@ -19,18 +21,57 @@
     "groups": [
       {
         "label": "cancer",
-        "sample_paths": ["configs/cancer.csv"]
+        "sample_paths": [
+          "configs/cancer.csv"
+        ]
       }
     ]
   },
   "comparisons": [
-    { "control_group": "healthy", "disease_group": "cancer" }
+    {
+      "control_group": "healthy",
+      "disease_group": "cancer"
+    }
   ],
-  "chromosomes": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
-  "contexts": ["CG","CHG","CHH"],
+  "chromosomes": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "X",
+    "Y"
+  ],
+  "contexts": [
+    "CG",
+    "CHG",
+    "CHH"
+  ],
   "step_config": {
     "centroid": {
-      "base_config": { "min_coverage": 4, "use_gpu": true, "max_sample_workers": null, "verbose": true },
+      "base_config": {
+        "min_coverage": 4,
+        "use_gpu": true,
+        "max_sample_workers": null,
+        "verbose": true
+      },
       "parallel_combinations": 1,
       "min_samples": 3,
       "continue_on_error": true,
@@ -51,7 +92,7 @@
       "min_N_pct": 0.1
     },
     "mapper": {
-      "csv_pattern": "dmps-*.csv",
+      "csv_pattern": "dmps-*-discovery.csv",
       "gtf": "/work/genomes/human_genome/gencode.v44.annotation.gtf",
       "disease_term": "Prostate Cancer",
       "enrich_disease": true,
@@ -62,7 +103,10 @@
     "enricher": {
       "gene_column": "gene_name",
       "disease_only": true,
-      "disease_association_type": ["direct", "indirect"],
+      "disease_association_type": [
+        "direct",
+        "indirect"
+      ],
       "min_disease_evidence_level": "medium",
       "min_disease_score": 0.2,
       "min_dmp_count": 2,
@@ -71,7 +115,12 @@
       "top": 150,
       "cutoff": 0.05,
       "organism": "Human",
-      "libraries": ["KEGG_2021_Human", "Reactome_2022", "GO_Biological_Process_2023", "MSigDB_Hallmark_2020"]
+      "libraries": [
+        "KEGG_2021_Human",
+        "Reactome_2022",
+        "GO_Biological_Process_2023",
+        "MSigDB_Hallmark_2020"
+      ]
     },
     "classifier": {
       "weight_method": "linear_fitted",
@@ -93,7 +142,9 @@
         "groups": [
           {
             "label": "healthy",
-            "sample_paths": ["configs/test_healthy.csv"]
+            "sample_paths": [
+              "configs/test_healthy.csv"
+            ]
           }
         ]
       },
@@ -102,7 +153,9 @@
         "groups": [
           {
             "label": "cancer",
-            "sample_paths": ["configs/test_cancer.csv"]
+            "sample_paths": [
+              "configs/test_cancer.csv"
+            ]
           }
         ]
       },
