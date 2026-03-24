@@ -2179,10 +2179,13 @@ Example:
 
     def _fetch_open_targets_association(self, target_id: str, disease_id: str) -> Optional[Dict]:
         """Fetch Open Targets association score for target-disease pair."""
+        # Open Targets Platform v4+ requires ensemblId (ENSG…), not target(id: …).
+        # Bs restricts to the resolved disease id so we do not miss it when it ranks
+        # below the default paginated window (scores are ordered globally per target).
         query = """
-        query TargetDiseases($targetId: String!) {
-          target(id: $targetId) {
-            associatedDiseases(page: {index: 0, size: 100}) {
+        query TargetDiseases($ensemblId: String!, $diseaseIds: [String!]!) {
+          target(ensemblId: $ensemblId) {
+            associatedDiseases(Bs: $diseaseIds, page: {index: 0, size: 5}) {
               rows {
                 disease {
                   id
@@ -2194,7 +2197,10 @@ Example:
           }
         }
         """
-        result = self._open_targets_request(query, {"targetId": target_id})
+        result = self._open_targets_request(
+            query,
+            {"ensemblId": target_id, "diseaseIds": [disease_id]},
+        )
         rows = (
             result.get("data", {})
             .get("target", {})
