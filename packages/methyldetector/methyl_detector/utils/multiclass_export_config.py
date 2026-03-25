@@ -15,6 +15,7 @@ DETECTION_MULTICLASS_EXPORT_KEYS = frozenset(
         "multiclass_learned_max_iter",
         "multiclass_learned_standardize",
         "multiclass_learned_random_state",
+        "multiclass_learned_class_weight",
     }
 )
 
@@ -46,4 +47,6 @@ def multiclass_build_overrides_from_detection_step(
         out["learned_standardize"] = bool(detection_step["multiclass_learned_standardize"])
     if "multiclass_learned_random_state" in detection_step:
         out["learned_random_state"] = int(detection_step["multiclass_learned_random_state"])
+    if "multiclass_learned_class_weight" in detection_step:
+        out["learned_class_weight"] = detection_step["multiclass_learned_class_weight"]
     return out

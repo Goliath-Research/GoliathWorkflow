@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
+import sklearn
 
 from methyl_utils import load_from_h5, load_project
 
@@ -318,12 +319,14 @@ def _fit_learned_multiclass_head(
     C = float(config.get("learned_logistic_C", 1.0))
     max_iter = int(config.get("learned_max_iter", 2000))
     rs = int(config.get("learned_random_state", 0))
+    class_weight = config.get("learned_class_weight", None)
     clf = LogisticRegression(
         multi_class="multinomial",
         solver="lbfgs",
         max_iter=max_iter,
         C=C,
         random_state=rs,
+        class_weight=class_weight,
     )
     clf.fit(X_fit, y_train)
     learned = NativeMulticlassLearnedClassifier(base, clf, scaler)
@@ -332,6 +335,8 @@ def _fit_learned_multiclass_head(
         "learned_logistic_C": C,
         "learned_max_iter": max_iter,
         "learned_standardize": use_scale,
+        "learned_class_weight": class_weight,
+        "sklearn_version": sklearn.__version__,
         "n_training_samples": int(X_train.shape[0]),
         "learned_class_counts": {
             class_names[i]: int(np.sum(y_train == i)) for i in range(len(class_names))

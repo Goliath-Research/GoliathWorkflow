@@ -132,6 +132,9 @@
         }
       },
       "centroid_self_check_top_k": 5000,
+      "min_sample_coverage": 4,
+      "multiclass_train_learned_head": true,
+      "multiclass_learned_class_weight": "balanced",
       "debug": true
     },
     "mapper": {
