@@ -4,39 +4,54 @@
 
 This document describes how MethylValidation is implemented: it orchestrates stratified splits, per-iteration project generation, subprocess pipeline runs, and aggregation of MethylPredictor metrics and step timings.
 
-## Two Workflows
+## Configuration Philosophy: Single Source of Truth
 
-MethylValidation supports two main workflows. Both can use a **single unified project config** with settings in `step_config.validation`.
+Project configurations should follow a **single source of truth** principle:
 
-### 1. Model Creation (Monte Carlo + Stability + Freeze)
+- **Global level**: Define `controls`, `diseases`, `samples_base_path`, etc.
+- **Step-specific sections**: Only override settings that are different for that step
+- **Avoid duplication**: Do not repeat global data structures in step configs
 
-This builds a stable production model:
-
-- Run Monte Carlo validation with `--stability` to evaluate many random splits and identify consistently recurring DMPs.
-- Run `--freeze` to create a final production model using the stable DMP panel on the full dataset.
-- `freeze_production_model` merges stable DMP CSVs, creates a `project.json` with `fixed_dmp_panel`, and runs the full production pipeline.
-
-**Example `step_config.validation` in project config:**
+### Example of Clean Structure:
 
 ```json
-"step_config": {
-  "validation": {
-    "train_fraction": 0.8,
-    "n_iterations": 5,
-    "seed": 42,
-    "run_stability": true,
-    "stability_dmp_freq": 0.6
+{
+  "project_name": "Healthy_vs_PCa1-4-CG",
+  "samples_base_path": "/work/prostate-cancer/samples",
+  "controls": { ... },           // Define once
+  "diseases": { ... },           // Define once
+  "step_config": {
+    "centroid": { ... },
+    "detection": { ... },
+    "predictor": {
+      "debug": false,
+      "panel": { ... }           // Only step-specific overrides
+    },
+    "validation": { ... }        // MC-specific settings
   }
 }
 ```
 
+### 1. Model Creation (Monte Carlo + Stability + Freeze)
+
+- Run with `--stability` to evaluate many random splits
+- Run with `--freeze` to create final production model
+- Uses `step_config.validation` settings from the project
+
 ### 2. Model Use for Prediction (Predictor-only)
 
-This evaluates the frozen production model:
+- Uses same splits as Model Creation but only runs predictor
+- Evaluates the frozen production model
 
-- Uses the same stratified splits as Model Creation.
-- Runs only `methyl-predictor` against the frozen model (`--predictor-only`).
-- Provides performance metrics for the final production model.
+**Command examples:**
+```bash
+# Model Creation
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --stability
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --freeze
+
+# Model Use for Prediction  
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --predictor-only
+```
 
 ---
 

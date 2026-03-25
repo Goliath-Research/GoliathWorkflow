@@ -210,51 +210,7 @@
       }
     },
     "predictor": {
-      "controls": {
-        "label": "healthy",
-        "groups": [
-          {
-            "label": "all",
-            "sample_paths": [
-              "configs/healthy.csv"
-            ]
-          }
-        ]
-      },
-      "diseases": {
-        "label": "cancer",
-        "groups": [
-          {
-            "label": "prostate_cancer",
-            "stages": [
-              {
-                "label": "pca1",
-                "sample_paths": [
-                  "configs/pca1.csv"
-                ]
-              },
-              {
-                "label": "pca2",
-                "sample_paths": [
-                  "configs/pca2.csv"
-                ]
-              },
-              {
-                "label": "pca3",
-                "sample_paths": [
-                  "configs/pca3.csv"
-                ]
-              },
-              {
-                "label": "pca4",
-                "sample_paths": [
-                  "configs/pca4.csv"
-                ]
-              }
-            ]
-          }
-        ]
-      },
+      "debug": false,
       "panel": {
         "primary_family": "prostate",
         "families": {
@@ -266,8 +222,7 @@
           ]
         },
         "indeterminate_delta": 0.25
-      },
-      "debug": false
+      }
     },
     "validation": {
       "train_fraction": 0.8,
