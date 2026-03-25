@@ -22,8 +22,14 @@ from methyl_utils import load_project
 
 from .config import MonteCarloConfig
 from .predictor_policy import assert_monte_carlo_predictor_allowed
-from .pipeline_runner import run_pipeline_for_iteration, run_pipeline_for_iteration_multiclass
+from .pipeline_runner import (
+    run_pipeline_for_iteration,
+    run_pipeline_for_iteration_multiclass,
+    run_predictor_only_binary,
+    run_predictor_only_multiclass,
+)
 from .project_gen import (
+    apply_frozen_pipeline_artifacts_to_run_project,
     generate_run_project,
     generate_run_project_hierarchical_multiclass,
     generate_run_project_multiclass,
@@ -86,7 +92,7 @@ def main() -> None:
     parser.add_argument(
         "--stability",
         action="store_true",
-        help="After main analysis, run stability analysis on discovery DMPs and enricher genes.",
+        help="After main analysis, run stability on discovery DMPs (centroid→detector→classifier→predictor only per iteration; no mapper/enricher).",
     )
     parser.add_argument(
         "--skip-enricher",
@@ -96,7 +102,12 @@ def main() -> None:
     parser.add_argument(
         "--freeze",
         action="store_true",
-        help="Run final production freeze using the stable DMP panel (bypasses MC loop; uses freeze_stable_dmp_csv from config or latest stability output).",
+        help="Run production freeze: centroid→detector(fixed panel)→classifier→mapper→enricher (no predictor).",
+    )
+    parser.add_argument(
+        "--predictor-only",
+        action="store_true",
+        help="Each iteration runs only methyl-predictor on MC holdouts; use frozen_project_path or monte_carlo_runs/production/project.json.",
     )
     args = parser.parse_args()
 
@@ -109,17 +120,10 @@ def main() -> None:
         config.output_base = str(args.output_base)
     if args.stability:
         config.run_stability = True
-        config.run_mapper_and_enricher = True
     if getattr(args, "skip_enricher", False):
         config.skip_enricher = True
-    if getattr(args, "freeze", False):
-        if not config.freeze_stable_dmp_csv:
-            config.freeze_stable_dmp_csv = str(
-                Path(config.output_base) / "monte_carlo_runs" / "stability" / "stable_dmps_production.csv"
-            )
-        if not Path(config.freeze_stable_dmp_csv).exists():
-            print(f"Error: --freeze requires freeze_stable_dmp_csv or stable_dmps_production.csv at {config.freeze_stable_dmp_csv}", file=sys.stderr)
-            sys.exit(1)
+    if getattr(args, "predictor_only", False):
+        config.predictor_only = True
 
     base_project = Path(config.base_project)
     if not base_project.is_file():
@@ -127,6 +131,38 @@ def main() -> None:
         sys.exit(1)
 
     base_project_config = load_project(config.base_project)
+    output_base = Path(config.output_base)
+    output_base.mkdir(parents=True, exist_ok=True)
+    project_name = base_project_config.project_name
+    monte_carlo_runs_root = output_base / project_name / "monte_carlo_runs"
+    monte_carlo_runs_root.mkdir(parents=True, exist_ok=True)
+
+    if getattr(args, "freeze", False):
+        if not config.freeze_stable_dmp_csv:
+            config.freeze_stable_dmp_csv = str(monte_carlo_runs_root / "stability" / "stable_dmps_production.csv")
+        if not Path(config.freeze_stable_dmp_csv).exists():
+            print(
+                f"Error: --freeze needs stable DMP CSV at {config.freeze_stable_dmp_csv} "
+                "(run MC with --stability first, or set freeze_stable_dmp_csv).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    if config.predictor_only and not config.frozen_project_path:
+        default_frozen = monte_carlo_runs_root / "production" / "project.json"
+        if default_frozen.is_file():
+            config.frozen_project_path = str(default_frozen)
+    if config.predictor_only and not config.frozen_project_path:
+        print(
+            "Error: predictor_only requires frozen_project_path in config or an existing "
+            f"{monte_carlo_runs_root / 'production' / 'project.json'} from --freeze.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if config.predictor_only and not Path(config.frozen_project_path).is_file():
+        print(f"Error: frozen_project_path not found: {config.frozen_project_path}", file=sys.stderr)
+        sys.exit(1)
+
     try:
         assert_monte_carlo_predictor_allowed(
             base_project_config.get_step_config("predictor") or {}
@@ -135,14 +171,8 @@ def main() -> None:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Handle freeze/production mode - bypass MC loop and run final production on full dataset
-    if getattr(args, "freeze", False) or config.freeze_stable_dmp_csv:
-        from .stability import freeze_production_model
+    if getattr(args, "freeze", False):
         stable_path = Path(config.freeze_stable_dmp_csv)
-        if not stable_path.exists():
-            print(f"Error: Stable DMP panel not found: {stable_path}")
-            print("Run with --stability first, or set freeze_stable_dmp_csv to an existing dmps-*.csv file.")
-            sys.exit(1)
         print(f"Running production freeze using stable DMP panel: {stable_path}")
         production_summary = freeze_production_model(
             base_project=base_project,
@@ -175,13 +205,6 @@ def main() -> None:
         control_paths = cohort_paths_list[0][1]
         disease_paths = cohort_paths_list[1][1]
 
-    output_base = Path(config.output_base)
-    output_base.mkdir(parents=True, exist_ok=True)
-
-    project_name = base_project_config.project_name
-    monte_carlo_runs_root = output_base / project_name / "monte_carlo_runs"
-    monte_carlo_runs_root.mkdir(parents=True, exist_ok=True)
-
     # Optional: base project has multiple disease groups -> use --per-cancer-group (we generate single comparison, so no)
     per_cancer_group = False
 
@@ -192,6 +215,10 @@ def main() -> None:
     all_timings: List[Dict[str, Any]] = []
     previous_train_control: List[str] | None = None
     previous_train_disease: List[str] | None = None
+
+    n_step_tasks = 1 if config.predictor_only else (
+        (5 if config.skip_enricher else 6) if config.run_mapper_and_enricher else 4
+    )
 
     if use_rich and console is not None:
         progress = Progress(
@@ -218,7 +245,7 @@ def main() -> None:
             seed_i = (config.seed + i) if config.seed is not None else None
 
             if progress is not None:
-                task_steps = progress.add_task("Steps", total=4, completed=0)
+                task_steps = progress.add_task("Steps", total=n_step_tasks, completed=0)
                 task_current = progress.add_task("Running…", total=None, visible=False)
 
                 def make_progress_cb(prog: Progress, t_steps: Any, t_cur: Any):
@@ -292,6 +319,10 @@ def main() -> None:
                 )
                 previous_train_control = list(train_control)
                 previous_train_disease = list(train_disease)
+                if config.predictor_only:
+                    apply_frozen_pipeline_artifacts_to_run_project(
+                        project_path, Path(config.frozen_project_path)
+                    )
                 run_project = load_project(project_path)
                 comparisons = run_project.get_comparisons() if getattr(run_project, "get_comparisons", None) else []
                 if comparisons:
@@ -301,20 +332,30 @@ def main() -> None:
                     predictor_output_dir = run_dir / "predictors"
                 n_train_samples = len(train_control) + len(train_disease)
                 n_val_samples = len(val_control) + len(val_disease)
-                success, errors, step_timings = run_pipeline_for_iteration(
-                    project_path,
-                    val_control_csv,
-                    val_disease_csv,
-                    predictor_output_dir,
-                    per_cancer_group=per_cancer_group,
-                    logs_dir=run_dir / "logs",
-                    progress_callback=progress_callback,
-                    centroid_step_overrides={
-                        "group1": centroid_group1_override,
-                        "group2": centroid_group2_override,
-                    },
-                    config=config,
-                )
+                if config.predictor_only:
+                    success, errors, step_timings = run_predictor_only_binary(
+                        project_path,
+                        val_control_csv,
+                        val_disease_csv,
+                        predictor_output_dir,
+                        logs_dir=run_dir / "logs",
+                        progress_callback=progress_callback,
+                    )
+                else:
+                    success, errors, step_timings = run_pipeline_for_iteration(
+                        project_path,
+                        val_control_csv,
+                        val_disease_csv,
+                        predictor_output_dir,
+                        per_cancer_group=per_cancer_group,
+                        logs_dir=run_dir / "logs",
+                        progress_callback=progress_callback,
+                        centroid_step_overrides={
+                            "group1": centroid_group1_override,
+                            "group2": centroid_group2_override,
+                        },
+                        config=config,
+                    )
             elif layout == "multiclass":
                 project_path, val_groups_json = generate_run_project_multiclass(
                     base_project,
@@ -329,15 +370,27 @@ def main() -> None:
                 predictor_output_dir = run_dir / "predictors"
                 n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
                 n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
-                success, errors, step_timings = run_pipeline_for_iteration_multiclass(
-                    project_path,
-                    val_groups_json,
-                    predictor_output_dir,
-                    per_cancer_group=per_cancer_group,
-                    logs_dir=run_dir / "logs",
-                    progress_callback=progress_callback,
-                    config=config,
-                )
+                if config.predictor_only:
+                    apply_frozen_pipeline_artifacts_to_run_project(
+                        project_path, Path(config.frozen_project_path)
+                    )
+                    success, errors, step_timings = run_predictor_only_multiclass(
+                        project_path,
+                        val_groups_json,
+                        predictor_output_dir,
+                        logs_dir=run_dir / "logs",
+                        progress_callback=progress_callback,
+                    )
+                else:
+                    success, errors, step_timings = run_pipeline_for_iteration_multiclass(
+                        project_path,
+                        val_groups_json,
+                        predictor_output_dir,
+                        per_cancer_group=per_cancer_group,
+                        logs_dir=run_dir / "logs",
+                        progress_callback=progress_callback,
+                        config=config,
+                    )
             else:
                 project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
                     base_project,
@@ -352,15 +405,27 @@ def main() -> None:
                 predictor_output_dir = run_dir / "predictors"
                 n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
                 n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
-                success, errors, step_timings = run_pipeline_for_iteration_multiclass(
-                    project_path,
-                    val_groups_json,
-                    predictor_output_dir,
-                    per_cancer_group=True,
-                    logs_dir=run_dir / "logs",
-                    progress_callback=progress_callback,
-                    config=config,
-                )
+                if config.predictor_only:
+                    apply_frozen_pipeline_artifacts_to_run_project(
+                        project_path, Path(config.frozen_project_path)
+                    )
+                    success, errors, step_timings = run_predictor_only_multiclass(
+                        project_path,
+                        val_groups_json,
+                        predictor_output_dir,
+                        logs_dir=run_dir / "logs",
+                        progress_callback=progress_callback,
+                    )
+                else:
+                    success, errors, step_timings = run_pipeline_for_iteration_multiclass(
+                        project_path,
+                        val_groups_json,
+                        predictor_output_dir,
+                        per_cancer_group=True,
+                        logs_dir=run_dir / "logs",
+                        progress_callback=progress_callback,
+                        config=config,
+                    )
             if progress is not None:
                 progress.remove_task(task_steps)
                 progress.remove_task(task_current)
@@ -407,10 +472,12 @@ def main() -> None:
             monte_carlo_runs_root=monte_carlo_runs_root,
             dmp_min_freq=config.stability_dmp_freq,
             gene_min_freq=config.stability_gene_freq,
+            min_balanced_accuracy=config.stability_min_balanced_accuracy,
         )
         print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
         print(f"  Stable DMPs: {stability_summary['dmp_stability'].get('stable_dmps_at_threshold', 0)}")
-        print(f"  Stable genes: {stability_summary['gene_stability'].get('stable_genes_at_threshold', 0)}")
+        gs = stability_summary.get("gene_stability") or {}
+        print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (non-zero only if enricher ran in iterations)")
 
     df = build_metrics_table(rows)
     all_metrics_csv = monte_carlo_runs_root / "all_metrics.csv"

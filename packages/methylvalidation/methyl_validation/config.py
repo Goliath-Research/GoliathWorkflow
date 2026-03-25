@@ -71,7 +71,7 @@ class MonteCarloConfig(BaseModel):
     )
     run_stability: bool = Field(
         default=False,
-        description="If True, run stability analysis on discovery DMPs and enricher genes after the main loop.",
+        description="If True, run stability analysis on discovery DMPs after the main loop (gene stability only if enricher ran).",
     )
     stability_dmp_freq: float = Field(
         default=0.7,
@@ -79,15 +79,24 @@ class MonteCarloConfig(BaseModel):
         le=1.0,
         description="Minimum frequency (across runs) for a DMP to be considered stable.",
     )
+    stability_min_balanced_accuracy: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "If set, stability counts DMPs only from iterations whose validation_metrics.json "
+            "balanced_accuracy is >= this value. Frequencies are over those qualifying runs only."
+        ),
+    )
     stability_gene_freq: float = Field(
         default=0.5,
         ge=0.0,
         le=1.0,
-        description="Minimum frequency for a gene to be considered stable.",
+        description="Minimum frequency for a gene to be considered stable (only when enricher outputs exist).",
     )
     run_mapper_and_enricher: bool = Field(
         default=False,
-        description="Whether to execute methyl-mapper and methyl-enricher in each iteration (required for stability analysis).",
+        description="If True, run methyl-mapper and methyl-enricher inside each MC iteration (optional; not used for --stability).",
     )
     skip_enricher: bool = Field(
         default=False,
@@ -95,11 +104,23 @@ class MonteCarloConfig(BaseModel):
     )
     freeze_stable_dmp_csv: Optional[str] = Field(
         default=None,
-        description="Path to stable_dmps_production.csv from a previous stability run. When set, a final production retrain is performed using this fixed panel.",
+        description="Path to stable_dmps_production.csv for --freeze (default: monte_carlo_runs/stability/stable_dmps_production.csv).",
     )
     production_output_dir: Optional[str] = Field(
         default=None,
         description="Output directory for the final production run (defaults to monte_carlo_runs/production).",
+    )
+    predictor_only: bool = Field(
+        default=False,
+        description=(
+            "If True, each iteration only runs methyl-predictor (no centroid/detector/classifier). "
+            "Requires frozen_project_path (or default monte_carlo_runs/production/project.json) "
+            "so model paths resolve to the frozen build."
+        ),
+    )
+    frozen_project_path: Optional[str] = Field(
+        default=None,
+        description="project.json from --freeze production build; merged into each run for predictor_only mode.",
     )
 
     @model_validator(mode="before")

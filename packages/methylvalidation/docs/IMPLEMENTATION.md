@@ -9,9 +9,11 @@ This document describes how MethylValidation is implemented: it orchestrates str
 MethylValidation does not run centroid, detection, classification, or prediction logic itself. It:
 
 1. Loads a Monte Carlo config; rejects blind-only `step_config.predictor`; infers **binary** vs **multiclass** layout from `base_project` (`infer_monte_carlo_layout`). Resolves sample paths from `cohorts` (or legacy `healthy_csv` / `disease_csv`).
-2. For each iteration: stratified split per cohort, generates run project + train/val inputs, runs centroid → detector → classifier → predictor via subprocess, reads `validation_metrics.json`, records step timings.
-3. **Production freeze** (`--freeze` or `freeze_stable_dmp_csv` in config): bypasses MC loop, uses `freeze_production_model` to merge stable DMP panel, patches `step_config.detection.fixed_dmp_panel`, runs full pipeline on full dataset (centroid + detector with fixed panel + classifier + mapper/enricher).
-4. Aggregates all collected metrics into `all_metrics.csv` and `metrics_summary.json`, and writes `step_timings.csv` (and optionally `resource_summary.json`).
+2. For each iteration: stratified split, run project + holdouts; default pipeline is centroid → detector → classifier → predictor. Optional `run_mapper_and_enricher` adds mapper/enricher inside iterations (not used for `--stability`).
+3. **`--stability`**: After the loop, `run_stability_analysis` scores DMP recurrence from discovery CSVs; optional `stability_min_balanced_accuracy` gates which iterations count.
+4. **`--freeze`**: `freeze_production_model` writes a production `project.json` with `fixed_dmp_panel` and runs centroid → detector → classifier → mapper → enricher (no predictor).
+5. **`predictor_only` / `--predictor-only`**: Same splits and `project.json` holdouts, then `apply_frozen_pipeline_artifacts_to_run_project` merges frozen step_config + `output_base`/`project_name` so only `methyl-predictor` runs.
+6. Aggregates metrics into `all_metrics.csv`, `metrics_summary.json`, `step_timings.csv` (optional `resource_summary.json`).
 
 ```mermaid
 flowchart LR

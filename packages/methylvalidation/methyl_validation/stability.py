@@ -1,8 +1,10 @@
 """
-Stability analysis for discovery pipeline outputs across Monte Carlo runs.
+Stability analysis across Monte Carlo runs.
 
-Computes frequency of DMPs and genes across runs, produces stable panels
-that can be used for production MethylClassifier / MethylPredictor.
+Counts DMPs in detector discovery exports per iteration; optionally restricts
+to iterations with ``balanced_accuracy`` above a threshold. Gene stability is
+computed only when enricher outputs exist (not expected in the default
+stability path, which skips mapper/enricher during MC).
 """
 
 from __future__ import annotations
@@ -18,6 +20,37 @@ from methyl_utils import load_project
 from methyl_utils.logging_utils import setup_module_logging
 
 logger = setup_module_logging(__name__)
+
+
+def find_validation_metrics_json(run_dir: Path) -> Optional[Path]:
+    """Locate validation_metrics.json under run_dir/predictors (binary nested or flat)."""
+    predictors = run_dir / "predictors"
+    if not predictors.is_dir():
+        for p in run_dir.glob("**/predictors"):
+            if p.is_dir():
+                predictors = p
+                break
+        else:
+            return None
+    for path in predictors.rglob("validation_metrics.json"):
+        return path
+    return None
+
+
+def run_balanced_accuracy(run_dir: Path) -> Optional[float]:
+    """Return balanced_accuracy from this run's validation_metrics.json, or None if missing."""
+    p = find_validation_metrics_json(run_dir)
+    if p is None:
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+        ba = data.get("balanced_accuracy")
+        if ba is None:
+            return None
+        return float(ba)
+    except Exception:
+        return None
 
 
 def load_discovery_dmps(run_dir: Path) -> Optional[pd.DataFrame]:
@@ -48,31 +81,58 @@ def load_enricher_genes(run_dir: Path) -> Optional[pd.DataFrame]:
     return None
 
 
+def _dmp_key_from_row(row: Any) -> Tuple[Any, int]:
+    chrom = row["chromosome"]
+    try:
+        chrom_n = int(chrom)
+    except (TypeError, ValueError):
+        chrom_n = str(chrom).strip()
+    return (chrom_n, int(row["position"]))
+
+
 def compute_dmp_stability(
-    monte_carlo_runs_root: Path, min_frequency: float = 0.7
+    monte_carlo_runs_root: Path,
+    min_frequency: float = 0.7,
+    min_balanced_accuracy: Optional[float] = None,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
     Count how often each DMP appears in discovery CSVs across runs.
-    Returns (frequency_df, summary).
+
+    If ``min_balanced_accuracy`` is set, only iterations whose ``validation_metrics.json``
+    reports ``balanced_accuracy >= min_balanced_accuracy`` contribute DMPs and define the
+    frequency denominator.
     """
     runs = sorted(monte_carlo_runs_root.glob("run_*"))
     if not runs:
         runs = sorted(monte_carlo_runs_root.glob("run_0*"))
 
-    dmp_counts: Dict[Tuple[int, str], int] = defaultdict(int)
+    dmp_counts: Dict[Tuple[Any, int], int] = defaultdict(int)
     run_count = 0
+    skipped_no_discovery = 0
+    skipped_low_ba = 0
 
     for run_dir in runs:
         df = load_discovery_dmps(run_dir)
         if df is None or "position" not in df.columns or "chromosome" not in df.columns:
+            skipped_no_discovery += 1
             continue
+        if min_balanced_accuracy is not None:
+            ba = run_balanced_accuracy(run_dir)
+            if ba is None or ba < float(min_balanced_accuracy):
+                skipped_low_ba += 1
+                continue
         run_count += 1
         for _, row in df.iterrows():
-            key = (int(row["chromosome"]), int(row["position"]))
+            key = _dmp_key_from_row(row)
             dmp_counts[key] += 1
 
     if run_count == 0:
-        return pd.DataFrame(), {}
+        return pd.DataFrame(), {
+            "n_runs_analyzed": 0,
+            "skipped_no_discovery": skipped_no_discovery,
+            "skipped_low_balanced_accuracy": skipped_low_ba,
+            "min_balanced_accuracy": min_balanced_accuracy,
+        }
 
     data = []
     for (chrom, pos), count in dmp_counts.items():
@@ -92,6 +152,9 @@ def compute_dmp_stability(
     stable = df[df["frequency"] >= min_frequency] if not df.empty else pd.DataFrame()
     summary = {
         "n_runs_analyzed": run_count,
+        "skipped_no_discovery": skipped_no_discovery,
+        "skipped_low_balanced_accuracy": skipped_low_ba,
+        "min_balanced_accuracy": min_balanced_accuracy,
         "total_unique_dmps": len(dmp_counts),
         "stable_dmps_at_threshold": len(stable),
         "min_frequency": min_frequency,
@@ -162,12 +225,15 @@ def run_stability_analysis(
     dmp_min_freq: float = 0.7,
     gene_min_freq: float = 0.5,
     top_n_dmps: Optional[int] = None,
+    min_balanced_accuracy: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Main entry point for stability analysis."""
     if output_dir is None:
         output_dir = monte_carlo_runs_root / "stability"
 
-    dmp_df, dmp_summary = compute_dmp_stability(monte_carlo_runs_root, dmp_min_freq)
+    dmp_df, dmp_summary = compute_dmp_stability(
+        monte_carlo_runs_root, dmp_min_freq, min_balanced_accuracy=min_balanced_accuracy
+    )
     gene_df, gene_summary = compute_gene_stability(monte_carlo_runs_root, gene_min_freq)
 
     stable_dmp_path = None

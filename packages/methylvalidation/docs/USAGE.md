@@ -4,12 +4,17 @@
 
 MethylValidation runs Monte Carlo validation: repeated stratified train/validation splits, full pipeline (MethylCentroid → MethylDetector → MethylClassifier → MethylPredictor) per iteration, and aggregation of validation metrics and step timings. It targets **multiclass** pipelines (flat **`groups`** template, **K ≥ 2** cohorts, **multiclass-classifier.pkl**) and still supports **legacy binary** runs (control/disease template, two cohorts). It provides the **empirical distribution** of quality metrics (balanced accuracy, sensitivity, specificity, F1, macro/weighted F1, etc.) and data to **estimate processing time and storage**. **Blind-only** predictor configs are rejected (use **methyl-predictor** alone for blind runs).
 
-**Stability analysis** (`--stability`): After the main run, aggregates discovery DMPs (`dmps-*-discovery.csv`) and enricher genes across iterations to produce stable panels for production use. See **Stability analysis** section below.
+**Recommended workflow**
 
-**New flags:**
-- `--stability` — enable stability analysis (also forces mapper + enricher unless `--skip-enricher` is used)
-- `--skip-enricher` — skip the methyl-enricher step (useful when Grok API calls are too slow)
-- `--freeze` — run final production freeze using the stable DMP panel from stability (bypasses MC iterations; uses `fixed_dmp_panel` in detector to produce production classifier + full gene report on full dataset)
+1. **Monte Carlo + stability** (`--stability`): Each iteration runs **MethylCentroid → MethylDetector → MethylClassifier → MethylPredictor** only (no MethylMapper / MethylEnricher). After all iterations, stability aggregates discovery DMPs (`dmps-*-discovery.csv`) across runs. Optionally set **`stability_min_balanced_accuracy`** in the config so only iterations with at least that validation **balanced_accuracy** contribute to DMP frequencies.
+2. **`--freeze`**: One production build with the stable DMP panel: **centroid → detector (fixed panel) → classifier → mapper → enricher** (no predictor). Writes under `output_base/<project_name>/monte_carlo_runs/production/`.
+3. **Predictor-only MC** (`--predictor-only`): Same stratified holdouts as normal MC, but each iteration runs **only methyl-predictor**, using artifact paths from the frozen project. Set **`frozen_project_path`** in config to `.../monte_carlo_runs/production/project.json`, or rely on that default path if it exists.
+
+**Flags**
+- `--stability` — run DMP (and optional gene) stability after the main MC loop
+- `--skip-enricher` — when `run_mapper_and_enricher` is true, skip enricher inside iterations
+- `--freeze` — production freeze build (mapper + enricher once; no predictor)
+- `--predictor-only` — MC iterations that only run methyl-predictor against a frozen model
 
 There are **two ways** to run MethylValidation:
 
@@ -119,6 +124,16 @@ Create a JSON config with the following fields:
 | `output_base` | Root directory for all runs. Runs are created under `output_base/project_name/monte_carlo_runs/run_0001`, etc. |
 | `path_remap` | Optional path remap dict (or reuse from base_project). |
 | `abort_on_step_failure` | If `true`, abort all iterations when a pipeline step fails; if `false`, skip the iteration and continue. |
+| `run_stability` | If `true` (or CLI `--stability`), after MC, write DMP stability under `monte_carlo_runs/stability/`. |
+| `stability_dmp_freq` | Minimum cross-run frequency (0–1) for a DMP to appear in `stable_dmps_production.csv`. |
+| `stability_min_balanced_accuracy` | Optional: only iterations with `validation_metrics.json` `balanced_accuracy` ≥ this value contribute DMPs to stability. |
+| `stability_gene_freq` | Gene stability threshold when enricher outputs exist (usually unused without per-iteration enricher). |
+| `run_mapper_and_enricher` | If `true`, run mapper (+ enricher unless `skip_enricher`) inside each MC iteration (off by default; not required for `--stability`). |
+| `skip_enricher` | Skip enricher when `run_mapper_and_enricher` is true. |
+| `freeze_stable_dmp_csv` | Path to stable DMP CSV for `--freeze` (default: `monte_carlo_runs/stability/stable_dmps_production.csv`). |
+| `production_output_dir` | Override directory for `--freeze` output (default: `monte_carlo_runs/production`). |
+| `predictor_only` | If `true` (or CLI `--predictor-only`), iterations run only `methyl-predictor` using `frozen_project_path`. |
+| `frozen_project_path` | `project.json` from `--freeze` (default tries `monte_carlo_runs/production/project.json`). |
 
 **Layout selection:** If `base_project` defines **`groups`** (length ≥ 2), the run uses the **multiclass** path (`infer_monte_carlo_layout`); `cohorts` length must equal `len(groups)`. If the project uses **nested disease `stages`** (and/or multiple control groups) so that **`get_resolved_groups()`** returns **K ≥ 3** leaves in a fixed order, the layout is **`hierarchical_multiclass`** when **`len(cohorts) == K`**: each iteration patches **`controls.groups`** / **`diseases.groups`** with per-leaf train CSVs, writes **`training_<label>.csv`** and **`testing_<label>.csv`** per cohort, keeps **stratified splits per cohort**, and runs the multiclass pipeline with **`per_cancer_group=true`**. `cohorts[].label` must match **`get_resolved_groups()`** order exactly (e.g. `all`, `pca_pca1`, … for parent `pca` + stage `pca1`). **Do not** use legacy **`healthy_csv` + one merged `disease_csv`** for that case: startup will error, because binary MC only matches projects that resolve to **two** groups. Otherwise the **binary** path applies when the template resolves to exactly two centroid groups and the MC config has two cohorts.
 

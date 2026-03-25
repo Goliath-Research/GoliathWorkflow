@@ -23,6 +23,34 @@ def _sample_name_from_path(full_path: str, base_path: str) -> str:
     return p.name
 
 
+def apply_frozen_pipeline_artifacts_to_run_project(
+    run_project_path: str | Path,
+    frozen_project_path: str | Path,
+) -> None:
+    """
+    After a normal MC ``project.json`` is written (train samples + predictor holdouts), copy
+    pipeline step configs and output routing from the frozen production project so
+    ``methyl-predictor`` resolves centroids/classifiers built by ``--freeze`` without retraining.
+    """
+    run_project_path = Path(run_project_path)
+    frozen_project_path = Path(frozen_project_path)
+    with open(run_project_path, encoding="utf-8") as f:
+        run_p = json.load(f)
+    with open(frozen_project_path, encoding="utf-8") as f:
+        fr = json.load(f)
+    fr_sc = fr.get("step_config") or {}
+    sc = run_p.setdefault("step_config", {})
+    for key in ("centroid", "detection", "classifier", "mapper", "enricher"):
+        if key in fr_sc:
+            sc[key] = copy.deepcopy(fr_sc[key])
+    if "output_base" in fr:
+        run_p["output_base"] = fr["output_base"]
+    if "project_name" in fr:
+        run_p["project_name"] = fr["project_name"]
+    with open(run_project_path, "w", encoding="utf-8") as f:
+        json.dump(run_p, f, indent=2)
+
+
 def write_train_csv(path: Path, full_paths: List[str], base_path: str) -> None:
     """
     Write a train CSV with header ``sample`` and one column of folder names under ``samples_base_path``.
