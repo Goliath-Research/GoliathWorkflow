@@ -138,10 +138,15 @@ def main() -> None:
     # Handle freeze/production mode - bypass MC loop and run final production on full dataset
     if getattr(args, "freeze", False) or config.freeze_stable_dmp_csv:
         from .stability import freeze_production_model
-        print(f"Running production freeze using stable DMP panel: {config.freeze_stable_dmp_csv}")
+        stable_path = Path(config.freeze_stable_dmp_csv)
+        if not stable_path.exists():
+            print(f"Error: Stable DMP panel not found: {stable_path}")
+            print("Run with --stability first, or set freeze_stable_dmp_csv to an existing dmps-*.csv file.")
+            sys.exit(1)
+        print(f"Running production freeze using stable DMP panel: {stable_path}")
         production_summary = freeze_production_model(
             base_project=base_project,
-            stable_dmp_csv=config.freeze_stable_dmp_csv,
+            stable_dmp_csv=str(stable_path),
             monte_carlo_runs_root=monte_carlo_runs_root,
             production_output_dir=config.production_output_dir,
             config=config,

@@ -216,6 +216,8 @@ def freeze_production_model(
     prod_dir = Path(production_output_dir)
     prod_dir.mkdir(parents=True, exist_ok=True)
 
+    logger.info(f"Production output dir: {prod_dir}")
+
     # If stable DMP is per-chromosome or multiple CSVs, merge into one genome-wide panel
     # For now, assume single genome-wide stable_dmps_production.csv from stability (as written by write_stable_panel)
     # Future: support glob of per-chrom stable_*.csv and merge using methyl_detector's merge utilities
