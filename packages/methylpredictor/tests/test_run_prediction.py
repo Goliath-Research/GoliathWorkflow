@@ -361,6 +361,73 @@ def test_predictor_config_rejects_blind_with_nested_controls():
         )
 
 
+def test_run_prediction_degenerate_class_and_dmp_coverage_in_metrics(
+    monkeypatch, tmp_path, capsys
+):
+    """Labeled run with constant y_pred warns; DMP coverage columns flow into validation_metrics.json."""
+    output_dir = tmp_path / "pred_deg"
+    classifier_cli_main = importlib.import_module("methyl_classifier.cli.main")
+    s0 = str(tmp_path / "c0")
+    s1 = str(tmp_path / "c1")
+    config = PredictorConfig(
+        model_path=str(tmp_path / "clf.pkl"),
+        output_dir=str(output_dir),
+        test_control_paths=[s0],
+        test_disease_paths=[s1],
+    )
+
+    monkeypatch.setattr(
+        "methyl_classifier.core.classifier.MethylClassifier",
+        _DummyClassifier,
+    )
+
+    def fake_classify(*, classifier, samples_list, output_file, expected_classes, **_kwargs):
+        assert expected_classes == [0, 1]
+        with Path(output_file).open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "sample",
+                    "prediction",
+                    "expected_class",
+                    "prob_class0",
+                    "prob_class1",
+                    "dmps_used",
+                    "dmps_total",
+                    "dmp_coverage_pct",
+                ],
+            )
+            writer.writeheader()
+            for name, exp in (("c0", 0), ("c1", 1)):
+                writer.writerow(
+                    {
+                        "sample": name,
+                        "prediction": 0,
+                        "expected_class": exp,
+                        "prob_class0": 0.75,
+                        "prob_class1": 0.25,
+                        "dmps_used": 1000,
+                        "dmps_total": 2000,
+                        "dmp_coverage_pct": 50.0,
+                    }
+                )
+
+    monkeypatch.setattr(classifier_cli_main, "classify_samples_from_list", fake_classify)
+
+    metrics = run_prediction(config)
+    err = capsys.readouterr().out
+    assert "Degenerate predictions" in err
+
+    assert metrics["balanced_accuracy"] == 0.5
+    assert "sample_dmp_coverage" in metrics
+    cov = metrics["sample_dmp_coverage"]
+    assert cov["dmp_coverage_pct_median"] == 50.0
+    assert cov["dmps_used_fraction_median"] == 0.5
+
+    vm = json.loads((output_dir / "validation_metrics.json").read_text(encoding="utf-8"))
+    assert vm["sample_dmp_coverage"]["dmp_coverage_pct_median"] == 50.0
+
+
 def test_predictor_config_nested_controls_diseases_expands(tmp_path):
     """Standalone JSON style: controls/diseases nested blocks fill flat paths after expand helper."""
     samples = tmp_path / "samples"

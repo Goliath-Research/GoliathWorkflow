@@ -415,6 +415,49 @@ def _compute_metrics(
     return metrics
 
 
+def _dmp_coverage_stats_from_predictions_df(df: pd.DataFrame) -> Optional[Dict[str, Any]]:
+    """Aggregate DMP coverage columns from classify_samples_from_list CSV when present."""
+    out: Dict[str, Any] = {}
+    if "dmp_coverage_pct" in df.columns:
+        s = pd.to_numeric(df["dmp_coverage_pct"], errors="coerce").dropna()
+        if len(s) > 0:
+            out["dmp_coverage_pct_min"] = float(s.min())
+            out["dmp_coverage_pct_median"] = float(s.median())
+            out["dmp_coverage_pct_mean"] = float(s.mean())
+    if "dmps_used" in df.columns and "dmps_total" in df.columns:
+        u = pd.to_numeric(df["dmps_used"], errors="coerce")
+        t = pd.to_numeric(df["dmps_total"], errors="coerce").replace(0, np.nan)
+        ratio = (u / t).replace([np.inf, -np.inf], np.nan).dropna()
+        if len(ratio) > 0:
+            out["dmps_used_fraction_median"] = float(ratio.median())
+            out["dmps_used_fraction_min"] = float(ratio.min())
+    return out if out else None
+
+
+def _warn_if_degenerate_predictions(
+    y_pred: np.ndarray, n_classes: int, class_names: List[str]
+) -> None:
+    """Warn when labeled evaluation uses fewer predicted classes than the model has."""
+    uniq = np.unique(y_pred)
+    if len(uniq) >= n_classes:
+        return
+    shown = []
+    for i in uniq:
+        idx = int(i)
+        name = (
+            str(class_names[idx])
+            if 0 <= idx < len(class_names)
+            else f"Class_{idx}"
+        )
+        shown.append(name)
+    print(
+        f"\n⚠️ Degenerate predictions: only {len(uniq)} distinct predicted class(es) "
+        f"({', '.join(shown)}) for a {n_classes}-class model — "
+        "metrics (e.g. balanced accuracy) may be uninformative.",
+        flush=True,
+    )
+
+
 def _print_metrics(metrics: Dict[str, Any]) -> None:
     """Print a concise summary to console."""
     n_classes = metrics.get("n_classes", 2)
@@ -431,6 +474,15 @@ def _print_metrics(metrics: Dict[str, Any]) -> None:
     print("   Confusion matrix (rows=expected, cols=predicted):")
     for row in metrics["confusion_matrix"]:
         print("     " + " ".join(f"{x:>4}" for x in row))
+    cov = metrics.get("sample_dmp_coverage")
+    if isinstance(cov, dict) and cov:
+        parts = []
+        if "dmp_coverage_pct_median" in cov:
+            parts.append(f"median dmp_coverage_pct={cov['dmp_coverage_pct_median']:.2f}")
+        if "dmps_used_fraction_median" in cov:
+            parts.append(f"median dmps_used/total={cov['dmps_used_fraction_median']:.4f}")
+        if parts:
+            print("   " + "; ".join(parts))
 
 
 def _build_samples_and_expected(
@@ -600,6 +652,10 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
         y_true = df["expected_class"].values.astype(int)
         y_pred = df["prediction"].values.astype(int)
         metrics = _compute_metrics(y_true, y_pred, n_classes, class_names)
+        _warn_if_degenerate_predictions(y_pred, n_classes, class_names)
+        cov_stats = _dmp_coverage_stats_from_predictions_df(df)
+        if cov_stats:
+            metrics["sample_dmp_coverage"] = cov_stats
         _print_metrics(metrics)
         metrics_path = output_dir / "validation_metrics.json"
         with open(metrics_path, "w") as f:
