@@ -69,6 +69,30 @@ class MonteCarloConfig(BaseModel):
         default=False,
         description="If True, abort all iterations when a pipeline step fails; if False, skip the iteration.",
     )
+    run_stability: bool = Field(
+        default=False,
+        description="If True, run stability analysis on discovery DMPs and enricher genes after the main loop.",
+    )
+    stability_dmp_freq: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum frequency (across runs) for a DMP to be considered stable.",
+    )
+    stability_gene_freq: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum frequency for a gene to be considered stable.",
+    )
+    run_mapper_and_enricher: bool = Field(
+        default=False,
+        description="Whether to execute methyl-mapper and methyl-enricher in each iteration (required for stability analysis).",
+    )
+    skip_enricher: bool = Field(
+        default=False,
+        description="Skip methyl-enricher step even when run_mapper_and_enricher is true (useful when Grok API calls are too slow).",
+    )
 
     @model_validator(mode="before")
     @classmethod

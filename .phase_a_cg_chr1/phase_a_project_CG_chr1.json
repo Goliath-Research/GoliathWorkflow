@@ -1,8 +1,8 @@
 {
-  "project_name": "Healthy_vs_PCa1-4-CG",
+  "project_name": "Healthy_vs_PCa1-only-CG",
   "laboratory": "psomagen",
   "batch": "Second batch of prostate cancer samples",
-  "output_base": "/work/prostate-cancer/Healthy_vs_PCa1-4-1-CG",
+  "output_base": "/work/prostate-cancer",
   "samples_base_path": "/work/prostate-cancer/samples",
   "controls": {
     "label": "healthy",
@@ -25,24 +25,6 @@
             "label": "pca1",
             "sample_paths": [
               "configs/pca1.csv"
-            ]
-          },
-          {
-            "label": "pca2",
-            "sample_paths": [
-              "configs/pca2.csv"
-            ]
-          },
-          {
-            "label": "pca3",
-            "sample_paths": [
-              "configs/pca3.csv"
-            ]
-          },
-          {
-            "label": "pca4",
-            "sample_paths": [
-              "configs/pca4.csv"
             ]
           }
         ]
@@ -101,6 +83,11 @@
       "dynamic_dmp_cutoff_enabled": true,
       "dynamic_dmp_cutoff_relaxation": 1.0,
       "max_dmps_for_classifier": 15000,
+      "classifier_dmp_selection": "featurecuts_validation",
+      "featurecuts_exhaustive_search": false,
+      "featurecuts_max_candidates": 40,
+      "featurecuts_max_k_cap": 8000,
+      "min_selected_dmps": 5000,
       "centroid_self_check_top_k": 5000,
       "debug": true
     },
@@ -154,7 +141,7 @@
       "network_plot": "plotly"
     },
     "classifier": {
-      "ovr_binary_pickles_from_comparisons": true,
+      "ovr_binary_pickles_from_comparisons": false,
       "weight_method": "linear_fitted",
       "weight_fit_regularization": "lasso",
       "weight_fit_alpha": 1,
@@ -170,10 +157,7 @@
         "primary_family": "prostate",
         "families": {
           "prostate": [
-            "pca_pca1",
-            "pca_pca2",
-            "pca_pca3",
-            "pca_pca4"
+            "pca_pca1"
           ]
         },
         "indeterminate_delta": 0.25
@@ -202,24 +186,6 @@
                 "sample_paths": [
                   "configs/pca1.csv"
                 ]
-              },
-              {
-                "label": "pca2",
-                "sample_paths": [
-                  "configs/pca2.csv"
-                ]
-              },
-              {
-                "label": "pca3",
-                "sample_paths": [
-                  "configs/pca3.csv"
-                ]
-              },
-              {
-                "label": "pca4",
-                "sample_paths": [
-                  "configs/pca4.csv"
-                ]
               }
             ]
           }
@@ -229,15 +195,16 @@
         "primary_family": "prostate",
         "families": {
           "prostate": [
-            "pca_pca1",
-            "pca_pca2",
-            "pca_pca3",
-            "pca_pca4"
+            "pca_pca1"
           ]
         },
         "indeterminate_delta": 0.25
       },
       "debug": false
+    },
+    "validation": {
+      "validation_fraction": 0.2,
+      "random_state": 42
     }
   }
 }

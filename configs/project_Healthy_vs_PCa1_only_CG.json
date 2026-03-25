@@ -106,6 +106,11 @@
       "dynamic_dmp_cutoff_enabled": true,
       "dynamic_dmp_cutoff_relaxation": 1.0,
       "max_dmps_for_classifier": 15000,
+      "classifier_dmp_selection": "featurecuts_validation",
+      "featurecuts_exhaustive_search": false,
+      "featurecuts_max_candidates": 40,
+      "featurecuts_max_k_cap": 8000,
+      "min_selected_dmps": 5000,
       "filter_funnel_explore": {
         "effect_size_coverage": {
           "min": 0.8,
@@ -226,6 +231,10 @@
         "indeterminate_delta": 0.25
       },
       "debug": false
+    },
+    "validation": {
+      "validation_fraction": 0.2,
+      "random_state": 42
     }
   }
 }

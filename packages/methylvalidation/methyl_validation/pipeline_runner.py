@@ -83,6 +83,22 @@ def run_classifier(project_json: str | Path, per_cancer_group: bool = False) -> 
     return run_cmd(cmd)
 
 
+def run_mapper(project_json: str | Path, per_cancer_group: bool = False) -> tuple[int, str, str]:
+    """Run methyl-mapper --project <project_json> [--per-cancer-group]."""
+    cmd = ["methyl-mapper", "--project", str(project_json)]
+    if per_cancer_group:
+        cmd.append("--per-cancer-group")
+    return run_cmd(cmd)
+
+
+def run_enricher(project_json: str | Path, per_cancer_group: bool = False) -> tuple[int, str, str]:
+    """Run methyl-enricher --project <project_json> [--per-cancer-group]."""
+    cmd = ["methyl-enricher", "--project", str(project_json)]
+    if per_cancer_group:
+        cmd.append("--per-cancer-group")
+    return run_cmd(cmd)
+
+
 def run_predictor(
     project_json: str | Path,
     test_control_csv: str | Path,
@@ -138,6 +154,7 @@ def run_pipeline_for_iteration(
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     centroid_step_overrides: Optional[Dict[str, Path]] = None,
+    config: Optional[Any] = None,  # for run_mapper_and_enricher flag
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Run centroid -> detector -> classifier -> predictor in order.
@@ -168,6 +185,13 @@ def run_pipeline_for_iteration(
             ),
         ),
     ]
+
+    # When --stability is requested, also run mapper + enricher so discovery outputs exist
+    # This is a simple heuristic; in production a config flag would be cleaner.
+    import sys
+    if "--stability" in sys.argv:
+        steps.insert(2, ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=per_cancer_group)))
+        steps.insert(3, ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=per_cancer_group)))
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")
@@ -202,6 +226,7 @@ def run_pipeline_for_iteration_multiclass(
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
+    config: Optional[Any] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Centroid (``--group all``, no deltas) → detector → classifier → multiclass predictor.
@@ -223,6 +248,12 @@ def run_pipeline_for_iteration_multiclass(
             ),
         ),
     ]
+
+    # When stability analysis is requested, run mapper (+ optionally enricher)
+    if config is not None and getattr(config, "run_mapper_and_enricher", False):
+        steps.insert(2, ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=per_cancer_group)))
+        if not getattr(config, "skip_enricher", False):
+            steps.insert(3, ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=per_cancer_group)))
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")

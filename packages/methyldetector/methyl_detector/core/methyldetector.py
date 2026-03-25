@@ -1874,6 +1874,16 @@ class MethylDetector:
             if selected is not None and len(selected) > 0:
                 self._featurecuts_last_result = res
                 logger.info("📋 Classifier panel: FeatureCuts selected k=%s DMPs", len(selected))
+
+                # Enforce minimum DMP count for robustness on new samples
+                min_dmps = getattr(self.config, "min_selected_dmps", None)
+                if min_dmps is not None and len(selected) < int(min_dmps):
+                    logger.info(
+                        "FeatureCuts selected %s but min_selected_dmps=%s — expanding classifier panel to minimum",
+                        len(selected), min_dmps
+                    )
+                    selected = sorted_by_importance_df.iloc[: int(min_dmps)].copy().reset_index(drop=True)
+
                 self._check_centroid_self_classification(selected)
                 return selected
             logger.warning("FeatureCuts failed or empty; falling back to elbow-only classifier panel")

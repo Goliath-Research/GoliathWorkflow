@@ -4,6 +4,12 @@
 
 MethylValidation runs Monte Carlo validation: repeated stratified train/validation splits, full pipeline (MethylCentroid → MethylDetector → MethylClassifier → MethylPredictor) per iteration, and aggregation of validation metrics and step timings. It targets **multiclass** pipelines (flat **`groups`** template, **K ≥ 2** cohorts, **multiclass-classifier.pkl**) and still supports **legacy binary** runs (control/disease template, two cohorts). It provides the **empirical distribution** of quality metrics (balanced accuracy, sensitivity, specificity, F1, macro/weighted F1, etc.) and data to **estimate processing time and storage**. **Blind-only** predictor configs are rejected (use **methyl-predictor** alone for blind runs).
 
+**Stability analysis** (`--stability`): After the main run, aggregates discovery DMPs (`dmps-*-discovery.csv`) and enricher genes across iterations to produce stable panels for production use. See **Stability analysis** section below.
+
+**New flags:**
+- `--stability` — enable stability analysis (also forces mapper + enricher unless `--skip-enricher` is used)
+- `--skip-enricher` — skip the methyl-enricher step (useful when Grok API calls are too slow)
+
 There are **two ways** to run MethylValidation:
 
 1. **Docker container** — Run inside the MethylPipeline image; all CLIs (methyl-centroid, methyl-detector, methyl-classifier, methyl-predictor) must be on PATH in the container.

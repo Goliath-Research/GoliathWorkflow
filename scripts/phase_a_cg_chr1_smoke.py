@@ -233,6 +233,8 @@ def main() -> int:
         detector_cmd.append("--per-cancer-group")
     else:
         detector_cmd += ["--group", resolved_detector_group]
+    # FeatureCuts is enabled via classifier_dmp_selection=featurecuts_validation in the project JSON.
+    # It automatically uses holdout/validation data from the MC run or centroid self-check.
 
     print("Phase A project written:", phase_project_path)
     print("  chromosomes:", data.get("chromosomes"))

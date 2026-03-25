@@ -41,6 +41,7 @@ from .validator_metrics import (
     write_step_timings_csv,
     write_summary_json,
 )
+from .stability import run_stability_analysis
 
 
 def main() -> None:
@@ -82,6 +83,16 @@ def main() -> None:
         metavar="DIR",
         help="Override output_base from config.",
     )
+    parser.add_argument(
+        "--stability",
+        action="store_true",
+        help="After main analysis, run stability analysis on discovery DMPs and enricher genes.",
+    )
+    parser.add_argument(
+        "--skip-enricher",
+        action="store_true",
+        help="Skip methyl-enricher step (useful when Grok API calls are slow).",
+    )
     args = parser.parse_args()
 
     config = MonteCarloConfig.from_json_file(args.config)
@@ -91,6 +102,11 @@ def main() -> None:
         config.seed = args.seed
     if args.output_base is not None:
         config.output_base = str(args.output_base)
+    if args.stability:
+        config.run_stability = True
+        config.run_mapper_and_enricher = True
+    if getattr(args, "skip_enricher", False):
+        config.skip_enricher = True
 
     base_project = Path(config.base_project)
     if not base_project.is_file():
@@ -265,6 +281,7 @@ def main() -> None:
                         "group1": centroid_group1_override,
                         "group2": centroid_group2_override,
                     },
+                    config=config,
                 )
             elif layout == "multiclass":
                 project_path, val_groups_json = generate_run_project_multiclass(
@@ -287,6 +304,7 @@ def main() -> None:
                     per_cancer_group=per_cancer_group,
                     logs_dir=run_dir / "logs",
                     progress_callback=progress_callback,
+                    config=config,
                 )
             else:
                 project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
@@ -309,6 +327,7 @@ def main() -> None:
                     per_cancer_group=True,
                     logs_dir=run_dir / "logs",
                     progress_callback=progress_callback,
+                    config=config,
                 )
             if progress is not None:
                 progress.remove_task(task_steps)
@@ -349,6 +368,17 @@ def main() -> None:
     if not rows:
         print("No successful iterations; nothing to aggregate.", file=sys.stderr)
         sys.exit(1)
+
+    if args.stability or config.run_stability:
+        print("\nRunning stability analysis on discovery outputs...")
+        stability_summary = run_stability_analysis(
+            monte_carlo_runs_root=monte_carlo_runs_root,
+            dmp_min_freq=config.stability_dmp_freq,
+            gene_min_freq=config.stability_gene_freq,
+        )
+        print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
+        print(f"  Stable DMPs: {stability_summary['dmp_stability'].get('stable_dmps_at_threshold', 0)}")
+        print(f"  Stable genes: {stability_summary['gene_stability'].get('stable_genes_at_threshold', 0)}")
 
     df = build_metrics_table(rows)
     all_metrics_csv = monte_carlo_runs_root / "all_metrics.csv"
