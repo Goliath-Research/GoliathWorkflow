@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 
 def _find_cmd(name: str) -> Optional[str]:
@@ -192,6 +192,65 @@ def run_pipeline_for_iteration(
     if "--stability" in sys.argv:
         steps.insert(2, ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=per_cancer_group)))
         steps.insert(3, ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=per_cancer_group)))
+    for step_index, (step_name, run_fn) in enumerate(steps):
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "start")
+        t0 = time.perf_counter()
+        rc, out, err = run_fn()
+        duration_seconds = time.perf_counter() - t0
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "end")
+        step_timings.append({
+            "step_name": step_name,
+            "duration_seconds": round(duration_seconds, 6),
+            "return_code": rc,
+        })
+        if logs_dir is not None:
+            log_path = logs_dir / f"{step_name}.log"
+            _write_step_log(log_path, out, err)
+        if rc != 0:
+            msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
+            errors.append(msg)
+            if logs_dir is not None:
+                write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+            return False, errors, step_timings
+    if logs_dir is not None:
+        write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+    return True, [], step_timings
+
+
+def run_pipeline_for_production(
+    project_json: Path,
+    logs_dir: Optional[Path] = None,
+    progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
+    config: Optional[Any] = None,
+) -> Tuple[bool, List[str], List[Dict[str, Any]]]:
+    """
+    Run full pipeline for production freeze: centroid (full data) -> detector (with fixed_dmp_panel) -> classifier -> mapper/enricher -> predictor.
+    Uses full dataset (no MC splits).
+    """
+    from .validator_metrics import write_step_timings_csv
+
+    errors: List[str] = []
+    step_timings: List[Dict[str, Any]] = []
+    steps = [
+        ("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)),
+        ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=False)),
+        ("methyl-classifier", lambda: run_classifier(project_json, per_cancer_group=False)),
+        ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=False)),
+        ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=False)),
+        # Predictor uses project config; dummy CSVs to satisfy signature (production may not need test set)
+        (
+            "methyl-predictor",
+            lambda: run_predictor(
+                project_json,
+                str(project_json.parent / "dummy_control.csv"),
+                str(project_json.parent / "dummy_disease.csv"),
+                str(project_json.parent / "predictors"),
+            ),
+        ),
+    ]
+
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")

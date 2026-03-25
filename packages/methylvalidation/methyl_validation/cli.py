@@ -41,7 +41,7 @@ from .validator_metrics import (
     write_step_timings_csv,
     write_summary_json,
 )
-from .stability import run_stability_analysis
+from .stability import run_stability_analysis, freeze_production_model
 
 
 def main() -> None:
@@ -93,6 +93,11 @@ def main() -> None:
         action="store_true",
         help="Skip methyl-enricher step (useful when Grok API calls are slow).",
     )
+    parser.add_argument(
+        "--freeze",
+        action="store_true",
+        help="Run final production freeze using the stable DMP panel (bypasses MC loop; uses freeze_stable_dmp_csv from config or latest stability output).",
+    )
     args = parser.parse_args()
 
     config = MonteCarloConfig.from_json_file(args.config)
@@ -107,6 +112,14 @@ def main() -> None:
         config.run_mapper_and_enricher = True
     if getattr(args, "skip_enricher", False):
         config.skip_enricher = True
+    if getattr(args, "freeze", False):
+        if not config.freeze_stable_dmp_csv:
+            config.freeze_stable_dmp_csv = str(
+                Path(config.output_base) / "monte_carlo_runs" / "stability" / "stable_dmps_production.csv"
+            )
+        if not Path(config.freeze_stable_dmp_csv).exists():
+            print(f"Error: --freeze requires freeze_stable_dmp_csv or stable_dmps_production.csv at {config.freeze_stable_dmp_csv}", file=sys.stderr)
+            sys.exit(1)
 
     base_project = Path(config.base_project)
     if not base_project.is_file():
@@ -122,6 +135,20 @@ def main() -> None:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Handle freeze/production mode - bypass MC loop and run final production on full dataset
+    if getattr(args, "freeze", False) or config.freeze_stable_dmp_csv:
+        from .stability import freeze_production_model
+        print(f"Running production freeze using stable DMP panel: {config.freeze_stable_dmp_csv}")
+        production_summary = freeze_production_model(
+            base_project=base_project,
+            stable_dmp_csv=config.freeze_stable_dmp_csv,
+            monte_carlo_runs_root=monte_carlo_runs_root,
+            production_output_dir=config.production_output_dir,
+            config=config,
+        )
+        print(f"Production freeze complete. See: {production_summary.get('output_dir', 'unknown')}")
+        print("Done.")
+        return
     try:
         layout = infer_monte_carlo_layout(base_project, len(config.cohorts))
     except ValueError as e:

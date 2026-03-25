@@ -10,7 +10,8 @@ MethylValidation does not run centroid, detection, classification, or prediction
 
 1. Loads a Monte Carlo config; rejects blind-only `step_config.predictor`; infers **binary** vs **multiclass** layout from `base_project` (`infer_monte_carlo_layout`). Resolves sample paths from `cohorts` (or legacy `healthy_csv` / `disease_csv`).
 2. For each iteration: stratified split per cohort, generates run project + train/val inputs, runs centroid → detector → classifier → predictor via subprocess, reads `validation_metrics.json`, records step timings.
-3. Aggregates all collected metrics into `all_metrics.csv` and `metrics_summary.json`, and writes `step_timings.csv` (and optionally `resource_summary.json`).
+3. **Production freeze** (`--freeze` or `freeze_stable_dmp_csv` in config): bypasses MC loop, uses `freeze_production_model` to merge stable DMP panel, patches `step_config.detection.fixed_dmp_panel`, runs full pipeline on full dataset (centroid + detector with fixed panel + classifier + mapper/enricher).
+4. Aggregates all collected metrics into `all_metrics.csv` and `metrics_summary.json`, and writes `step_timings.csv` (and optionally `resource_summary.json`).
 
 ```mermaid
 flowchart LR

@@ -93,6 +93,14 @@ class MonteCarloConfig(BaseModel):
         default=False,
         description="Skip methyl-enricher step even when run_mapper_and_enricher is true (useful when Grok API calls are too slow).",
     )
+    freeze_stable_dmp_csv: Optional[str] = Field(
+        default=None,
+        description="Path to stable_dmps_production.csv from a previous stability run. When set, a final production retrain is performed using this fixed panel.",
+    )
+    production_output_dir: Optional[str] = Field(
+        default=None,
+        description="Output directory for the final production run (defaults to monte_carlo_runs/production).",
+    )
 
     @model_validator(mode="before")
     @classmethod

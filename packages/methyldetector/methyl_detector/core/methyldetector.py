@@ -182,6 +182,35 @@ class MethylDetector:
         logger.info(f"🧬 Starting multi-context analysis for chromosome {self.chromosome}")
         logger.info(f"📍 Contexts: {', '.join(self.config.contexts)}")
 
+        # Check for fixed_dmp_panel to bypass discovery (for production freeze)
+        if getattr(self.config, "fixed_dmp_panel", None):
+            logger.info(f"🔒 Using fixed DMP panel: {self.config.fixed_dmp_panel} (bypassing statistical/biological discovery)")
+            fixed_path = Path(str(self.config.fixed_dmp_panel))
+            if not fixed_path.exists():
+                raise FileNotFoundError(f"fixed_dmp_panel not found: {fixed_path}")
+            # Load the fixed panel and short-circuit to export/classifier phase
+            df_fixed = pd.read_csv(fixed_path)
+            if not {"chromosome", "position"}.issubset(df_fixed.columns):
+                raise ValueError("fixed_dmp_panel CSV must contain 'chromosome' and 'position' columns")
+            # Minimal result for fixed panel
+            result = MethylDetectorResult(
+                chromosome=str(self.chromosome),
+                n_statistical_dmps=len(df_fixed),
+                n_biological_dmps=len(df_fixed),
+                n_classifier_dmps=len(df_fixed),
+                total_dmps=len(df_fixed),
+                effect_size_coverage=1.0,
+                alpha=getattr(self.config, "alpha", 0.05),
+                contexts=getattr(self.config, "contexts", ["CG"]),
+                dmp_df=df_fixed,
+                summary={"fixed_panel_mode": True, "n_dmps": len(df_fixed)},
+            )
+            if getattr(self.config, "output_dir", None):
+                self._export_unified_csv(df_fixed, suffix="")
+                self._save_unified_model(None, df_fixed)
+            logger.info(f"✅ Fixed panel mode complete: {len(df_fixed)} DMPs")
+            return result
+
         # Require binned_stats on centroids (ECDF-based metrics); fail fast before any context
         self._require_binned_stats_available()
 

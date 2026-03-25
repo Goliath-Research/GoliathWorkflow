@@ -104,6 +104,11 @@ class MethylDetectorConfig(BaseModel):
         default=None, description="Output directory for results"
     )
 
+    fixed_dmp_panel: Optional[Union[str, Path]] = Field(
+        default=None,
+        description="Path to a fixed DMP panel CSV (chromosome,position,context,...). If provided, bypasses statistical/biological discovery and uses only these positions (for production freeze).",
+    )
+
     # ----------------
     # Statistical Filter
     # ----------------

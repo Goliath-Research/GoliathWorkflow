@@ -9,6 +9,7 @@ MethylValidation runs Monte Carlo validation: repeated stratified train/validati
 **New flags:**
 - `--stability` — enable stability analysis (also forces mapper + enricher unless `--skip-enricher` is used)
 - `--skip-enricher` — skip the methyl-enricher step (useful when Grok API calls are too slow)
+- `--freeze` — run final production freeze using the stable DMP panel from stability (bypasses MC iterations; uses `fixed_dmp_panel` in detector to produce production classifier + full gene report on full dataset)
 
 There are **two ways** to run MethylValidation:
 

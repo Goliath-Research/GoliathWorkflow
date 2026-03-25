@@ -8,11 +8,16 @@ that can be used for production MethylClassifier / MethylPredictor.
 from __future__ import annotations
 
 import json
+import shutil
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
+from methyl_utils import load_project
+from methyl_utils.logging_utils import setup_module_logging
+
+logger = setup_module_logging(__name__)
 
 
 def load_discovery_dmps(run_dir: Path) -> Optional[pd.DataFrame]:
@@ -185,5 +190,81 @@ def run_stability_analysis(
         dmp_df.to_csv(output_dir / "dmp_frequency.csv", index=False)
     if not gene_df.empty:
         gene_df.to_csv(output_dir / "gene_frequency.csv", index=False)
+
+    return summary
+
+
+def freeze_production_model(
+    base_project: Path,
+    stable_dmp_csv: str,
+    monte_carlo_runs_root: Path,
+    production_output_dir: Optional[str] = None,
+    config: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    Merge per-chromosome stable DMPs (if multiple) into one genome-wide panel,
+    generate a production project JSON with fixed_dmp_panel pointing to it,
+    and run the full pipeline (centroid on full data + detector with fixed panel
+    + classifier + mapper/enricher + predictor).
+    """
+    stable_path = Path(stable_dmp_csv)
+    if not stable_path.exists():
+        raise FileNotFoundError(f"Stable DMP CSV not found: {stable_path}")
+
+    if production_output_dir is None:
+        production_output_dir = str(monte_carlo_runs_root / "production")
+    prod_dir = Path(production_output_dir)
+    prod_dir.mkdir(parents=True, exist_ok=True)
+
+    # If stable DMP is per-chromosome or multiple CSVs, merge into one genome-wide panel
+    # For now, assume single genome-wide stable_dmps_production.csv from stability (as written by write_stable_panel)
+    # Future: support glob of per-chrom stable_*.csv and merge using methyl_detector's merge utilities
+    merged_panel = prod_dir / "stable_dmps_genomewide.csv"
+    if stable_path.suffix.lower() == ".csv":
+        shutil.copy2(stable_path, merged_panel)
+    else:
+        # Placeholder for multi-chrom merge
+        merged_panel = stable_path
+
+    logger.info(f"Using fixed DMP panel: {merged_panel} for production run")
+
+    # Load base project and create production project with fixed_dmp_panel
+    proj = load_project(base_project)
+    project_dict = json.loads(open(base_project).read()) if isinstance(base_project, (str, Path)) else dict(base_project)
+
+    # Set fixed_dmp_panel in detection step config
+    if "step_config" not in project_dict:
+        project_dict["step_config"] = {}
+    if "detection" not in project_dict["step_config"]:
+        project_dict["step_config"]["detection"] = {}
+    project_dict["step_config"]["detection"]["fixed_dmp_panel"] = str(merged_panel.resolve())
+
+    # Use full dataset for production (no train/val split)
+    project_dict["project_name"] = "production"
+    project_dict["output_base"] = str(prod_dir.parent) if prod_dir.parent.name == "monte_carlo_runs" else str(prod_dir)
+
+    prod_project_path = prod_dir / "project.json"
+    with open(prod_project_path, "w", encoding="utf-8") as f:
+        json.dump(project_dict, f, indent=2)
+
+    # Run full pipeline on production project (uses pipeline_runner support for fixed panel)
+    from .pipeline_runner import run_pipeline_for_production
+    success, errors, timings = run_pipeline_for_production(
+        prod_project_path,
+        logs_dir=prod_dir / "logs",
+        config=config,
+    )
+
+    summary = {
+        "output_dir": str(prod_dir),
+        "fixed_dmp_panel": str(merged_panel),
+        "production_project": str(prod_project_path),
+        "success": success,
+        "errors": errors,
+        "timings": timings,
+    }
+    summary_path = prod_dir / "production_summary.json"
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2, default=str)
 
     return summary
