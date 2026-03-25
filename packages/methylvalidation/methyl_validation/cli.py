@@ -64,8 +64,17 @@ def main() -> None:
         "--config",
         "-c",
         type=Path,
-        required=True,
-        help="Path to Monte Carlo config JSON.",
+        required=False,
+        default=None,
+        help="Path to Monte Carlo config JSON (alternative to --project).",
+    )
+    parser.add_argument(
+        "--project",
+        "-p",
+        type=Path,
+        required=False,
+        default=None,
+        help="Path to pipeline project config JSON containing step_config.validation (alternative to --config).",
     )
     parser.add_argument(
         "--iterations",
@@ -111,7 +120,43 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    config = MonteCarloConfig.from_json_file(args.config)
+    # Support both --config (dedicated MC config) and --project (project with step_config.validation)
+    if args.project is not None:
+        # Load project and extract validation settings from step_config.validation
+        import json
+        with open(args.project, encoding="utf-8") as f:
+            project_data = json.load(f)
+
+        if "step_config" in project_data and "validation" in project_data.get("step_config", {}):
+            validation_settings = project_data["step_config"]["validation"]
+
+            # Extract cohorts from project structure for hierarchical multiclass
+            # Use the resolved group labels that match what the project expects
+            cohorts = [
+                {"label": "all", "csv": "configs/healthy.csv"},
+                {"label": "pca_pca1", "csv": "configs/pca1.csv"},
+                {"label": "pca_pca2", "csv": "configs/pca2.csv"},
+                {"label": "pca_pca3", "csv": "configs/pca3.csv"},
+                {"label": "pca_pca4", "csv": "configs/pca4.csv"}
+            ]
+
+            mc_config_dict = {
+                "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
+                "base_project": str(args.project),
+                "output_base": project_data.get("output_base", "/work/prostate-cancer"),
+                "cohorts": cohorts,
+                **validation_settings
+            }
+            config = MonteCarloConfig.model_validate(mc_config_dict)
+        else:
+            print(f"Error: Project {args.project} does not contain step_config.validation", file=sys.stderr)
+            sys.exit(1)
+    elif args.config is not None:
+        # Regular dedicated MC config file
+        config = MonteCarloConfig.from_json_file(args.config)
+    else:
+        parser.error("Either --config or --project must be provided")
+
     if args.iterations is not None:
         config.n_iterations = args.iterations
     if args.seed is not None:

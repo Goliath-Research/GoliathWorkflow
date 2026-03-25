@@ -3,7 +3,7 @@ Runner config schema for Monte Carlo validation.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -121,6 +121,12 @@ class MonteCarloConfig(BaseModel):
     frozen_project_path: Optional[str] = Field(
         default=None,
         description="project.json from --freeze production build; merged into each run for predictor_only mode.",
+    )
+
+    # Support for step_config.validation when loading from a project JSON
+    validation: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Validation/Monte Carlo settings when embedded in a project as step_config.validation.",
     )
 
     @model_validator(mode="before")

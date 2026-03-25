@@ -13,17 +13,43 @@ MethylValidation supports **two distinct workflows**:
 
 **Purpose**: Create a robust production model by identifying stable DMPs across many random splits and building a final model on the full dataset.
 
-### Steps
+### Correct Usage: Separate MC Config (Recommended)
 
-1. Create a `monte_carlo_config.json` (see [Config](#config) section below).
-2. Run full Monte Carlo with stability analysis:
-   ```bash
-   methyl-validation --config monte_carlo_config.json --stability
-   ```
-3. Run the production freeze to build the final model:
-   ```bash
-   methyl-validation --config monte_carlo_config.json --freeze
-   ```
+Use a **minimal MC config** that references your main project:
+
+**Command:**
+```bash
+# Use the test MC config that references the project
+methyl-validation --config configs/test_mc_config.json --stability
+```
+
+**The MC config (`test_mc_config.json`) contains:**
+- Monte Carlo specific settings (`train_fraction`, `n_iterations`, etc.)
+- Reference to your main project (`base_project`)
+
+**The Project config (`project_Healthy_vs_PCa1-4_CG.json`) contains:**
+- Pipeline settings (`step_config.centroid`, `step_config.detection`, etc.)
+- The `step_config.validation` section (for documentation/reference)
+
+This separation keeps concerns distinct while maintaining a clean structure.
+
+### Alternative: Separate MC Config
+
+You can also use a separate Monte Carlo config that references the project (as shown in the original examples).
+
+**Example `step_config.validation` in project config:**
+
+```json
+"step_config": {
+  "validation": {
+    "train_fraction": 0.8,
+    "n_iterations": 5,
+    "seed": 42,
+    "run_stability": true,
+    "stability_dmp_freq": 0.6
+  }
+}
+```
 
 ### Why this workflow?
 

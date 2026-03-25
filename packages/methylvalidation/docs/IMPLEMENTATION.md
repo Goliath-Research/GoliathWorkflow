@@ -6,7 +6,7 @@ This document describes how MethylValidation is implemented: it orchestrates str
 
 ## Two Workflows
 
-MethylValidation supports two main workflows:
+MethylValidation supports two main workflows. Both can use a **single unified project config** with settings in `step_config.validation`.
 
 ### 1. Model Creation (Monte Carlo + Stability + Freeze)
 
@@ -15,6 +15,20 @@ This builds a stable production model:
 - Run Monte Carlo validation with `--stability` to evaluate many random splits and identify consistently recurring DMPs.
 - Run `--freeze` to create a final production model using the stable DMP panel on the full dataset.
 - `freeze_production_model` merges stable DMP CSVs, creates a `project.json` with `fixed_dmp_panel`, and runs the full production pipeline.
+
+**Example `step_config.validation` in project config:**
+
+```json
+"step_config": {
+  "validation": {
+    "train_fraction": 0.8,
+    "n_iterations": 5,
+    "seed": 42,
+    "run_stability": true,
+    "stability_dmp_freq": 0.6
+  }
+}
+```
 
 ### 2. Model Use for Prediction (Predictor-only)
 
