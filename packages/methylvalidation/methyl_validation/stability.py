@@ -260,6 +260,70 @@ def run_stability_analysis(
     return summary
 
 
+def _merge_stable_dmp_panels(
+    stable_dmp_csv: str | Path,
+    output_dir: Path,
+) -> Path:
+    """Merge one or more per-chromosome (or single genome-wide) stable DMP CSVs into a unified panel.
+
+    The fixed_dmp_panel only requires 'chromosome' and 'position' columns (others are preserved).
+    Deduplicates by (chromosome, position) keeping the highest-frequency entry if available.
+    """
+    stable_path = Path(stable_dmp_csv)
+    if not stable_path.exists():
+        raise FileNotFoundError(f"Stable DMP path not found: {stable_path}")
+
+    merged_path = output_dir / "stable_dmps_genomewide.csv"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if stable_path.is_dir():
+        # Support per-chromosome stable files (e.g. in stability/ dir or custom)
+        csv_files = sorted(stable_path.glob("**/*stable*.csv")) or sorted(
+            stable_path.glob("**/*.csv")
+        )
+        if not csv_files:
+            csv_files = [stable_path / "stable_dmps_production.csv"]
+        frames: List[pd.DataFrame] = []
+        for csv_f in csv_files:
+            if csv_f.exists() and csv_f.suffix.lower() == ".csv":
+                try:
+                    df = pd.read_csv(csv_f)
+                    if {"chromosome", "position"}.issubset(df.columns):
+                        frames.append(df)
+                except Exception as e:
+                    logger.warning(f"Skipping unreadable CSV {csv_f}: {e}")
+        if frames:
+            merged_df = pd.concat(frames, ignore_index=True)
+            # Deduplicate, preferring higher frequency if column present
+            if "frequency" in merged_df.columns:
+                merged_df = merged_df.sort_values("frequency", ascending=False)
+            merged_df = merged_df.drop_duplicates(
+                subset=["chromosome", "position"], keep="first"
+            ).reset_index(drop=True)
+            merged_df.to_csv(merged_path, index=False)
+            logger.info(
+                f"Merged {len(frames)} stable DMP CSVs → {len(merged_df):,} unique DMPs "
+                f"(genome-wide panel at {merged_path})"
+            )
+            return merged_path
+        else:
+            # Fallback to single file in dir
+            fallback = stable_path / "stable_dmps_production.csv"
+            if fallback.exists():
+                stable_path = fallback
+            else:
+                raise ValueError(f"No valid stable DMP CSVs found in directory: {stable_path}")
+
+    # Single CSV case (default from write_stable_panel)
+    if stable_path.suffix.lower() == ".csv":
+        shutil.copy2(stable_path, merged_path)
+        logger.info(f"Copied stable DMP panel to {merged_path}")
+    else:
+        merged_path = stable_path
+
+    return merged_path
+
+
 def freeze_production_model(
     base_project: Path,
     stable_dmp_csv: str,
@@ -268,54 +332,47 @@ def freeze_production_model(
     config: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
-    Merge per-chromosome stable DMPs (if multiple) into one genome-wide panel,
-    generate a production project JSON with fixed_dmp_panel pointing to it,
-    and run the full pipeline (centroid on full data + detector with fixed panel
-    + classifier + mapper/enricher + predictor).
+    Merge per-chromosome stable DMPs (if multiple files/dir provided) into one
+    genome-wide panel, generate production project.json with fixed_dmp_panel,
+    and run the full production pipeline: centroid → detector(fixed panel)
+    → classifier → mapper → enricher (no predictor).
     """
-    stable_path = Path(stable_dmp_csv)
-    if not stable_path.exists():
-        raise FileNotFoundError(f"Stable DMP CSV not found: {stable_path}")
-
     if production_output_dir is None:
         production_output_dir = str(monte_carlo_runs_root / "production")
     prod_dir = Path(production_output_dir)
     prod_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Production output dir: {prod_dir}")
+    logger.info(f"Production freeze output dir: {prod_dir}")
 
-    # If stable DMP is per-chromosome or multiple CSVs, merge into one genome-wide panel
-    # For now, assume single genome-wide stable_dmps_production.csv from stability (as written by write_stable_panel)
-    # Future: support glob of per-chrom stable_*.csv and merge using methyl_detector's merge utilities
-    merged_panel = prod_dir / "stable_dmps_genomewide.csv"
-    if stable_path.suffix.lower() == ".csv":
-        shutil.copy2(stable_path, merged_panel)
-    else:
-        # Placeholder for multi-chrom merge
-        merged_panel = stable_path
+    # Merge stable DMPs (handles single CSV from stability or per-chrom CSVs)
+    merged_panel = _merge_stable_dmp_panels(stable_dmp_csv, prod_dir)
 
     logger.info(f"Using fixed DMP panel: {merged_panel} for production run")
 
-    # Load base project and create production project with fixed_dmp_panel
-    proj = load_project(base_project)
-    project_dict = json.loads(open(base_project).read()) if isinstance(base_project, (str, Path)) else dict(base_project)
+    # Load base project JSON and modify for production
+    with open(base_project, encoding="utf-8") as f:
+        project_dict = json.load(f)
 
-    # Set fixed_dmp_panel in detection step config
+    # Set fixed_dmp_panel in detection step config (bypasses discovery in MethylDetector)
     if "step_config" not in project_dict:
         project_dict["step_config"] = {}
     if "detection" not in project_dict["step_config"]:
         project_dict["step_config"]["detection"] = {}
     project_dict["step_config"]["detection"]["fixed_dmp_panel"] = str(merged_panel.resolve())
 
-    # Use full dataset for production (no train/val split)
+    # Production run uses full dataset (no MC train/val split), unique project name
     project_dict["project_name"] = "production"
-    project_dict["output_base"] = str(prod_dir.parent) if prod_dir.parent.name == "monte_carlo_runs" else str(prod_dir)
+    # Set output_base so outputs land under .../monte_carlo_runs/production/...
+    if prod_dir.parent.name == "monte_carlo_runs":
+        project_dict["output_base"] = str(prod_dir.parent)
+    else:
+        project_dict["output_base"] = str(prod_dir)
 
     prod_project_path = prod_dir / "project.json"
     with open(prod_project_path, "w", encoding="utf-8") as f:
         json.dump(project_dict, f, indent=2)
 
-    # Run full pipeline on production project (uses pipeline_runner support for fixed panel)
+    # Run production pipeline (centroid on full data + fixed-panel detector etc.)
     from .pipeline_runner import run_pipeline_for_production
     success, errors, timings = run_pipeline_for_production(
         prod_project_path,
@@ -335,4 +392,5 @@ def freeze_production_model(
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, default=str)
 
+    logger.info(f"Production freeze complete: {summary_path}")
     return summary

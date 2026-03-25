@@ -7,7 +7,7 @@ MethylValidation runs Monte Carlo validation: repeated stratified train/validati
 **Recommended workflow**
 
 1. **Monte Carlo + stability** (`--stability`): Each iteration runs **MethylCentroid → MethylDetector → MethylClassifier → MethylPredictor** only (no MethylMapper / MethylEnricher). After all iterations, stability aggregates discovery DMPs (`dmps-*-discovery.csv`) across runs. Optionally set **`stability_min_balanced_accuracy`** in the config so only iterations with at least that validation **balanced_accuracy** contribute to DMP frequencies.
-2. **`--freeze`**: One production build with the stable DMP panel: **centroid → detector (fixed panel) → classifier → mapper → enricher** (no predictor). Writes under `output_base/<project_name>/monte_carlo_runs/production/`.
+2. **`--freeze`**: One production build with the stable DMP panel: **centroid → detector (fixed panel) → classifier → mapper → enricher** (no predictor). Writes under `output_base/<project_name>/monte_carlo_runs/production/`. Uses the `fixed_dmp_panel` option (bypasses statistical/biological discovery in MethylDetector).
 3. **Predictor-only MC** (`--predictor-only`): Same stratified holdouts as normal MC, but each iteration runs **only methyl-predictor**, using artifact paths from the frozen project. Set **`frozen_project_path`** in config to `.../monte_carlo_runs/production/project.json`, or rely on that default path if it exists.
 
 **Flags**

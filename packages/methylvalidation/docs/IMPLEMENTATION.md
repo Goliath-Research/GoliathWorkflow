@@ -11,7 +11,7 @@ MethylValidation does not run centroid, detection, classification, or prediction
 1. Loads a Monte Carlo config; rejects blind-only `step_config.predictor`; infers **binary** vs **multiclass** layout from `base_project` (`infer_monte_carlo_layout`). Resolves sample paths from `cohorts` (or legacy `healthy_csv` / `disease_csv`).
 2. For each iteration: stratified split, run project + holdouts; default pipeline is centroid → detector → classifier → predictor. Optional `run_mapper_and_enricher` adds mapper/enricher inside iterations (not used for `--stability`).
 3. **`--stability`**: After the loop, `run_stability_analysis` scores DMP recurrence from discovery CSVs; optional `stability_min_balanced_accuracy` gates which iterations count.
-4. **`--freeze`**: `freeze_production_model` writes a production `project.json` with `fixed_dmp_panel` and runs centroid → detector → classifier → mapper → enricher (no predictor).
+4. **`--freeze`**: `freeze_production_model` merges stable DMPs (per-chromosome or single CSV) into a genome-wide panel, writes a production `project.json` with `fixed_dmp_panel` in the detection step (bypasses discovery in MethylDetector), and runs centroid → detector(fixed panel) → classifier → mapper → enricher (no predictor).
 5. **`predictor_only` / `--predictor-only`**: Same splits and `project.json` holdouts, then `apply_frozen_pipeline_artifacts_to_run_project` merges frozen step_config + `output_base`/`project_name` so only `methyl-predictor` runs.
 6. Aggregates metrics into `all_metrics.csv`, `metrics_summary.json`, `step_timings.csv` (optional `resource_summary.json`).
 
@@ -24,8 +24,10 @@ flowchart LR
   GenM[generate_run_project_multiclass]
   RunB[run_pipeline_for_iteration]
   RunM[run_pipeline_for_iteration_multiclass]
+  Freeze[freeze_production_model]
+  ProdRun[run_pipeline_for_production]
   Centroid[methyl-centroid]
-  Detector[methyl-detector]
+  Detector[methyl-detector\n(fixed_dmp_panel)]
   Classifier[methyl-classifier]
   Predictor[methyl-predictor]
   Metrics[validation_metrics.json]
@@ -44,6 +46,10 @@ flowchart LR
   Classifier --> Predictor
   Predictor --> Metrics
   Metrics --> Aggregate
+  Config --> Freeze
+  Freeze --> ProdRun
+  ProdRun --> Centroid
+  Centroid --> Detector
 ```
 
 ## MethylUtils usage

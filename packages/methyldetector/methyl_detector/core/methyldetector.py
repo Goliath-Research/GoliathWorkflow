@@ -192,23 +192,51 @@ class MethylDetector:
             df_fixed = pd.read_csv(fixed_path)
             if not {"chromosome", "position"}.issubset(df_fixed.columns):
                 raise ValueError("fixed_dmp_panel CSV must contain 'chromosome' and 'position' columns")
-            # Minimal result for fixed panel
-            result = MethylDetectorResult(
-                chromosome=str(self.chromosome),
-                n_statistical_dmps=len(df_fixed),
-                n_biological_dmps=len(df_fixed),
-                n_classifier_dmps=len(df_fixed),
-                total_dmps=len(df_fixed),
-                effect_size_coverage=1.0,
-                alpha=getattr(self.config, "alpha", 0.05),
-                contexts=getattr(self.config, "contexts", ["CG"]),
-                dmp_df=df_fixed,
-                summary={"fixed_panel_mode": True, "n_dmps": len(df_fixed)},
+
+            # Ensure required columns for classifier, export, and result compatibility
+            df_fixed = df_fixed.copy()
+            if "context" not in df_fixed.columns:
+                ctx = self.config.contexts[0] if self.config.contexts else "CG"
+                df_fixed["context"] = ctx
+            if "effect_size" not in df_fixed.columns:
+                df_fixed["effect_size"] = 1.0
+            if "statistical_dmp" not in df_fixed.columns:
+                df_fixed["statistical_dmp"] = True
+            if "biological_dmp" not in df_fixed.columns:
+                df_fixed["biological_dmp"] = True
+
+            n_dmps = len(df_fixed)
+            logger.info(f"Loaded fixed panel with {n_dmps:,} DMPs")
+
+            # Build minimal comparison stats for result
+            ctx = self.config.contexts[0] if self.config.contexts else "CG"
+            stats = ComparisonStats(
+                comparison_name=f"{self.chromosome}-{ctx}",
+                total_positions=n_dmps,
+                statistical_dmps=n_dmps,
+                biological_dmps=n_dmps,
+                processing_time_seconds=0.0,
+                gpu_used=self.gpu_config.GPU_AVAILABLE,
             )
+            comparison_stats = [stats]
+
+            config_summary = getattr(self.config, "model_dump", lambda: {"fixed_panel_mode": True})()
+
+            result = MethylDetectorResult(
+                biologically_significant_dmps_df=df_fixed,
+                total_statistical_dmps=n_dmps,
+                total_biological_dmps=n_dmps,
+                biological_retention_rate=1.0,
+                comparison_stats=comparison_stats,
+                timestamp=datetime.now().isoformat(),
+                version="2.0.0-fixed-panel",
+                config_summary=config_summary,
+            )
+
             if getattr(self.config, "output_dir", None):
                 self._export_unified_csv(df_fixed, suffix="")
                 self._save_unified_model(None, df_fixed)
-            logger.info(f"✅ Fixed panel mode complete: {len(df_fixed)} DMPs")
+            logger.info(f"✅ Fixed panel mode complete: {n_dmps} DMPs")
             return result
 
         # Require binned_stats on centroids (ECDF-based metrics); fail fast before any context
