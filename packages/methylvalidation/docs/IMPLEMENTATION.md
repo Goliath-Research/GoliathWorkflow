@@ -4,16 +4,41 @@
 
 This document describes how MethylValidation is implemented: it orchestrates stratified splits, per-iteration project generation, subprocess pipeline runs, and aggregation of MethylPredictor metrics and step timings.
 
+## Two Workflows
+
+MethylValidation supports two main workflows:
+
+### 1. Model Creation (Monte Carlo + Stability + Freeze)
+
+This builds a stable production model:
+
+- Run Monte Carlo validation with `--stability` to evaluate many random splits and identify consistently recurring DMPs.
+- Run `--freeze` to create a final production model using the stable DMP panel on the full dataset.
+- `freeze_production_model` merges stable DMP CSVs, creates a `project.json` with `fixed_dmp_panel`, and runs the full production pipeline.
+
+### 2. Model Use for Prediction (Predictor-only)
+
+This evaluates the frozen production model:
+
+- Uses the same stratified splits as Model Creation.
+- Runs only `methyl-predictor` against the frozen model (`--predictor-only`).
+- Provides performance metrics for the final production model.
+
+---
+
 ## Architecture overview
 
-MethylValidation does not run centroid, detection, classification, or prediction logic itself. It:
+MethylValidation orchestrates stratified splits, project generation, and pipeline execution via subprocess calls. It supports both workflows described above.
 
-1. Loads a Monte Carlo config; rejects blind-only `step_config.predictor`; infers **binary** vs **multiclass** layout from `base_project` (`infer_monte_carlo_layout`). Resolves sample paths from `cohorts` (or legacy `healthy_csv` / `disease_csv`).
-2. For each iteration: stratified split, run project + holdouts; default pipeline is centroid → detector → classifier → predictor. Optional `run_mapper_and_enricher` adds mapper/enricher inside iterations (not used for `--stability`).
-3. **`--stability`**: After the loop, `run_stability_analysis` scores DMP recurrence from discovery CSVs; optional `stability_min_balanced_accuracy` gates which iterations count.
-4. **`--freeze`**: `freeze_production_model` merges stable DMPs (per-chromosome or single CSV) into a genome-wide panel, writes a production `project.json` with `fixed_dmp_panel` in the detection step (bypasses discovery in MethylDetector), and runs centroid → detector(fixed panel) → classifier → mapper → enricher (no predictor).
-5. **`predictor_only` / `--predictor-only`**: Same splits and `project.json` holdouts, then `apply_frozen_pipeline_artifacts_to_run_project` merges frozen step_config + `output_base`/`project_name` so only `methyl-predictor` runs.
-6. Aggregates metrics into `all_metrics.csv`, `metrics_summary.json`, `step_timings.csv` (optional `resource_summary.json`).
+The main components are:
+
+1. **Config & Layout**: Loads `MonteCarloConfig`, rejects blind predictors, and infers binary vs multiclass layout.
+2. **Data Splitting**: `stratified_split*` functions create train/validation splits.
+3. **Project Generation**: Creates per-run `project.json` files with appropriate sample paths.
+4. **Pipeline Execution**: Uses `pipeline_runner.py` to run the appropriate steps.
+5. **Aggregation**: Collects metrics and timings from all runs.
+
+The `--freeze` path uses `run_pipeline_for_production()` which runs: centroid → detector(with `fixed_dmp_panel`) → classifier → mapper → enricher.
 
 ```mermaid
 flowchart LR
