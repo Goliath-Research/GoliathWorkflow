@@ -84,30 +84,31 @@ This calls `freeze_production_model()` which:
 
 ### Workflow 1 Diagram
 
-```{mermaid}
-flowchart TD
-    ProjectConfig["project.json\n(single unified config)"]
-    MC["methyl-validation --project … --stability\n(n_iterations × full pipeline)"]
-    SplitIter["Per iteration:\ncentroid → detector → classifier → predictor"]
-    Metrics["validation_metrics.json\n(per iteration)"]
-    Stability["Stability analysis:\ncompute f(d) across iterations"]
-    StablePanel["stability/stable_dmps_production.csv\n(DMPs with f(d) >= stability_dmp_freq)"]
-    Freeze["methyl-validation --project … --freeze"]
-    Merge["Merge stable DMPs\nstable_dmps_genomewide.csv"]
-    ProdProject["production/project.json\n(with fixed_dmp_panel)"]
-    FullPipeline["Full pipeline on ALL samples:\ncentroid → detector(fixed) → classifier → mapper → enricher"]
-    FinalModel["production/ directory\nFinal classifier + gene report"]
-
-    ProjectConfig --> MC
-    MC --> SplitIter
-    SplitIter --> Metrics
-    Metrics --> Stability
-    Stability --> StablePanel
-    StablePanel --> Freeze
-    Freeze --> Merge
-    Merge --> ProdProject
-    ProdProject --> FullPipeline
-    FullPipeline --> FinalModel
+```{tikz}
+%%| fig-cap: "Workflow 1: Model Creation — from Monte Carlo splits to production freeze."
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\begin{tikzpicture}[
+  node distance=0.55cm and 0cm,
+  box/.style={draw, rectangle, rounded corners=2pt, text width=6.5cm,
+              align=center, font=\small, minimum height=0.65cm, fill=gray!8},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box] (A) {\texttt{project.json} (single unified config)};
+\node[box, below=of A] (B) {\texttt{--stability}: $R$ full-pipeline iterations};
+\node[box, below=of B] (C) {Per iteration: centroid $\to$ detector $\to$ classifier $\to$ predictor};
+\node[box, below=of C] (D) {\texttt{validation\_metrics.json} per iteration};
+\node[box, below=of D] (E) {Stability: compute $\hat{f}(d)$ across runs};
+\node[box, below=of E] (F) {\texttt{stable\_dmps\_production.csv}};
+\node[box, below=of F] (G) {\texttt{--freeze}};
+\node[box, below=of G] (H) {Merge $\to$ \texttt{stable\_dmps\_genomewide.csv}};
+\node[box, below=of H] (I) {\texttt{production/project.json} with \texttt{fixed\_dmp\_panel}};
+\node[box, below=of I] (J) {Full pipeline on \emph{all} samples (no predictor)};
+\node[box, below=of J] (K) {Final classifier + mapper + enricher outputs};
+\draw[arr] (A)--(B); \draw[arr] (B)--(C); \draw[arr] (C)--(D);
+\draw[arr] (D)--(E); \draw[arr] (E)--(F); \draw[arr] (F)--(G);
+\draw[arr] (G)--(H); \draw[arr] (H)--(I); \draw[arr] (I)--(J);
+\draw[arr] (J)--(K);
+\end{tikzpicture}
 ```
 
 ### Expected Outputs
@@ -168,20 +169,24 @@ After all iterations, the same aggregation as Workflow 1 produces `all_metrics.c
 
 ### Workflow 2 Diagram
 
-```{mermaid}
-flowchart TD
-    FrozenProject["production/project.json\n(frozen production model)"]
-    ProjectConfig["project.json\n(defines cohorts + validation settings)"]
-    PO["methyl-validation --project … --predictor-only\n(n_iterations × predictor only)"]
-    SplitIter["Per iteration:\nstratified split → merge frozen paths → methyl-predictor"]
-    Metrics["validation_metrics.json\n(per iteration)"]
-    Aggregate["Aggregate:\nall_metrics.csv + metrics_summary.json"]
-
-    FrozenProject --> PO
-    ProjectConfig --> PO
-    PO --> SplitIter
-    SplitIter --> Metrics
-    Metrics --> Aggregate
+```{tikz}
+%%| fig-cap: "Workflow 2: Model Use for Prediction — predictor-only evaluation of the frozen model."
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\begin{tikzpicture}[
+  node distance=0.55cm and 2cm,
+  box/.style={draw, rectangle, rounded corners=2pt, text width=6.5cm,
+              align=center, font=\small, minimum height=0.65cm, fill=gray!8},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box] (A) {\texttt{production/project.json} (frozen model)};
+\node[box, below=of A] (B) {\texttt{project.json} (cohorts + validation settings)};
+\node[box, below=of B] (C) {\texttt{--predictor-only}: $R$ iterations, predictor only};
+\node[box, below=of C] (D) {Per iteration: split $\to$ merge frozen paths $\to$ predictor};
+\node[box, below=of D] (E) {\texttt{validation\_metrics.json} per iteration};
+\node[box, below=of E] (F) {\texttt{all\_metrics.csv} + \texttt{metrics\_summary.json}};
+\draw[arr] (A)--(B); \draw[arr] (B)--(C); \draw[arr] (C)--(D);
+\draw[arr] (D)--(E); \draw[arr] (E)--(F);
+\end{tikzpicture}
 ```
 
 ---

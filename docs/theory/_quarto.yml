@@ -56,10 +56,9 @@ format:
     toc: true
     number-sections: true
     colorlinks: true
-    pdf-engine: pdflatex
+    pdf-engine: lualatex
     geometry:
       - margin=1in
-    mermaid-format: png
 
 execute:
   enabled: false
