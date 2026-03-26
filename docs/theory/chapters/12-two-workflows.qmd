@@ -1,0 +1,265 @@
+# The Two Workflows {#sec-two-workflows}
+
+## Overview
+
+MethylPipeline supports two primary end-to-end operational workflows. They are designed to be run sequentially: Workflow 1 produces the final production model; Workflow 2 evaluates that model on random holdouts.
+
+| | Workflow 1 | Workflow 2 |
+|---|---|---|
+| **Goal** | Build a stable, production-ready model | Evaluate the frozen production model |
+| **Flag** | `--stability` then `--freeze` | `--predictor-only` |
+| **Steps run per iteration** | centroid → detector → classifier → predictor | predictor only |
+| **Steps run once (at freeze)** | centroid → detector(fixed) → classifier → mapper → enricher | — |
+| **Output** | production classifier + full gene report | `all_metrics.csv`, `metrics_summary.json` |
+| **Answers** | Which positions and model best separate the classes on all data? | What performance distribution does the frozen model achieve? |
+
+Both workflows are controlled entirely by the project configuration file and the `step_config.validation` embedded settings (see @sec-project-configuration).
+
+---
+
+## Workflow 1: Model Creation {#sec-workflow-model-creation}
+
+### Theoretical Motivation
+
+A naive approach to building a classifier would be to detect DMPs on all available samples, then evaluate the same classifier on held-out subsets. This conflates feature selection with performance estimation: the DMP panel was implicitly chosen to fit all samples, making any leave-out evaluation optimistic.
+
+MethylValidation addresses this by repeating the entire pipeline — from centroid construction through prediction — on random train/validation splits. Each iteration detects DMPs on the training cohort only, builds a classifier from those DMPs, and evaluates it on the held-out validation cohort. The resulting balanced accuracy estimates are honest internal measures of generalization.
+
+After many such iterations, a DMP that appears consistently in the discovery sets of most runs is more likely to reflect a true biological signal than one that appears in only a few. This motivates the stability analysis: the stable panel is a consensus over repeated random partitions of the data.
+
+The production freeze then trains a final classifier on **all available data** restricted to the stable panel. Because the panel itself was selected using the full sample set (via the MC iterations), this is still an internal analysis; it is not a substitute for external validation on an independent cohort.
+
+### Steps
+
+**Step 1: Prepare the project configuration**
+
+Ensure the project file has `step_config.validation` with at least `train_fraction`, `n_iterations`, `seed`, and `run_stability: true`:
+
+```json
+"validation": {
+  "train_fraction": 0.8,
+  "n_iterations": 50,
+  "seed": 42,
+  "run_stability": true,
+  "stability_dmp_freq": 0.7,
+  "stability_min_balanced_accuracy": null,
+  "abort_on_step_failure": false
+}
+```
+
+**Step 2: Run Monte Carlo with stability**
+
+```bash
+source .venv/bin/activate
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --stability
+```
+
+This runs `n_iterations` stratified train/validation splits. Per iteration:
+
+1. `methyl-centroid --group group1` and `--group group2` build separate centroid H5 files for the training split.
+2. `methyl-detector --project` detects DMPs between the training centroids.
+3. `methyl-classifier --project` builds binary OvR classifiers.
+4. `methyl-predictor --project` evaluates on the validation split and writes `validation_metrics.json`.
+
+After all iterations, stability analysis counts DMP recurrence across the discovery sets:
+
+$$
+\hat{f}(d) = \frac{1}{R^*} \sum_{r=1}^{R^*} \mathbf{1}[d \in \mathcal{D}_{\text{disc},r}]
+$$
+
+and writes `monte_carlo_runs/stability/stable_dmps_production.csv`.
+
+**Step 3: Run the production freeze**
+
+```bash
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --freeze
+```
+
+This calls `freeze_production_model()` which:
+
+1. Merges stable DMP CSVs into `monte_carlo_runs/production/stable_dmps_genomewide.csv`.
+2. Creates `monte_carlo_runs/production/project.json` with `fixed_dmp_panel` injected into `step_config.detection`.
+3. Runs the full production pipeline on **all samples**: centroid → detector(fixed panel) → classifier → mapper → enricher.
+4. Writes `monte_carlo_runs/production/production_summary.json`.
+
+### Workflow 1 Diagram
+
+```{mermaid}
+flowchart TD
+    ProjectConfig["project.json\n(single unified config)"]
+    MC["methyl-validation --project … --stability\n(n_iterations × full pipeline)"]
+    SplitIter["Per iteration:\ncentroid → detector → classifier → predictor"]
+    Metrics["validation_metrics.json\n(per iteration)"]
+    Stability["Stability analysis:\ncompute f(d) across iterations"]
+    StablePanel["stability/stable_dmps_production.csv\n(DMPs with f(d) >= stability_dmp_freq)"]
+    Freeze["methyl-validation --project … --freeze"]
+    Merge["Merge stable DMPs\nstable_dmps_genomewide.csv"]
+    ProdProject["production/project.json\n(with fixed_dmp_panel)"]
+    FullPipeline["Full pipeline on ALL samples:\ncentroid → detector(fixed) → classifier → mapper → enricher"]
+    FinalModel["production/ directory\nFinal classifier + gene report"]
+
+    ProjectConfig --> MC
+    MC --> SplitIter
+    SplitIter --> Metrics
+    Metrics --> Stability
+    Stability --> StablePanel
+    StablePanel --> Freeze
+    Freeze --> Merge
+    Merge --> ProdProject
+    ProdProject --> FullPipeline
+    FullPipeline --> FinalModel
+```
+
+### Expected Outputs
+
+After Workflow 1 completes:
+
+```
+monte_carlo_runs/
+├── run_0001/ … run_000N/          ← per-iteration outputs
+│   └── predictors/validation_metrics.json
+├── all_metrics.csv                ← one row per iteration
+├── metrics_summary.json           ← mean, std, percentiles per metric
+├── stability/
+│   ├── stable_dmps_production.csv
+│   └── stability_summary.json
+└── production/
+    ├── project.json               ← frozen project with fixed_dmp_panel
+    ├── centroids/                 ← built on all samples
+    ├── detections/                ← using fixed DMP panel
+    ├── classifiers/
+    │   └── multiclass-classifier.pkl   ← the final production model
+    ├── mappings/
+    └── enrichments/
+```
+
+---
+
+## Workflow 2: Model Use for Prediction {#sec-workflow-prediction}
+
+### Theoretical Motivation
+
+Once a production model exists, a natural question is: what balanced accuracy does it achieve on random holdouts drawn from the available cohort? This is not the same as the BA measured in Workflow 1, because Workflow 1 re-trained the model on each split while Workflow 2 applies the frozen model.
+
+Workflow 2 provides the empirical distribution of the frozen model's performance under random sampling. It is faster than Workflow 1 (only the predictor runs per iteration), and it answers the question: *is the production model's accuracy stable across different random splits, or does it depend heavily on which specific samples are held out?*
+
+**Important caveat.** The available cohort used in Workflow 2 overlaps with the training data for the production model (the production model was trained on all samples). This means Workflow 2 is not a hold-out evaluation in the classical sense; the test samples may also be in the training centroid. A truly external validation cohort would be needed to measure generalization to unseen data.
+
+### Steps
+
+**Step 1: Confirm the production model exists**
+
+The file `monte_carlo_runs/production/project.json` must exist (created by Workflow 1's `--freeze` step).
+
+**Step 2: Run predictor-only evaluation**
+
+```bash
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --predictor-only
+```
+
+Per iteration, this:
+
+1. Creates a new split-specific `project.json` with train/validation CSVs.
+2. Merges the production model paths from `production/project.json` into the run-specific project (via `apply_frozen_pipeline_artifacts_to_run_project()`).
+3. Runs only `methyl-predictor` on the validation split.
+4. Writes `validation_metrics.json`.
+
+After all iterations, the same aggregation as Workflow 1 produces `all_metrics.csv` and `metrics_summary.json`.
+
+### Workflow 2 Diagram
+
+```{mermaid}
+flowchart TD
+    FrozenProject["production/project.json\n(frozen production model)"]
+    ProjectConfig["project.json\n(defines cohorts + validation settings)"]
+    PO["methyl-validation --project … --predictor-only\n(n_iterations × predictor only)"]
+    SplitIter["Per iteration:\nstratified split → merge frozen paths → methyl-predictor"]
+    Metrics["validation_metrics.json\n(per iteration)"]
+    Aggregate["Aggregate:\nall_metrics.csv + metrics_summary.json"]
+
+    FrozenProject --> PO
+    ProjectConfig --> PO
+    PO --> SplitIter
+    SplitIter --> Metrics
+    Metrics --> Aggregate
+```
+
+---
+
+## Diagnostic: DMP Coverage {#sec-diag-dmp-coverage}
+
+**Symptom.** `sample_dmp_coverage.dmps_used_fraction_median < 0.5` in `validation_metrics.json`. Values below 0.3 indicate severe degradation.
+
+**Cause.** The centroid `min_coverage` (e.g. 4) and the detector `min_sample_coverage` (default 10) are mismatched. DMP positions that were detectable in training centroids at 4× coverage become invisible in test samples when the classifier requires 10× coverage.
+
+**Fix.** In `step_config.detection`, add:
+
+```json
+"min_sample_coverage": 4
+```
+
+This aligns the coverage requirement for classification with the centroid build threshold.
+
+**Verification.** Re-run Workflow 2. `dmps_used_fraction_median` should rise to 0.6–0.9 for typical WGBS data.
+
+---
+
+## Diagnostic: Class Imbalance {#sec-diag-class-imbalance}
+
+**Symptom.** The confusion matrix shows near-perfect recall for the majority class (e.g. healthy/control) and near-zero recall for minority classes (disease stages). Balanced accuracy is close to `1/K` (random chance).
+
+**Cause.** The training cohort has substantially more samples in one class. For example, 86 healthy vs 25–36 disease samples per stage (41% healthy in the example project). The multinomial logistic regression learned head defaults to the majority class when the histogram scores are ambiguous (which is common when DMP coverage is low).
+
+**Fix.** In `step_config.detection`, add:
+
+```json
+"multiclass_train_learned_head": true,
+"multiclass_learned_class_weight": "balanced"
+```
+
+The `balanced` setting computes $w_k = n_{\text{total}} / (K \cdot n_k)$, penalizing majority-class errors proportionally less than minority-class errors. See @sec-classifier-class-weight for the full derivation.
+
+---
+
+## Diagnostic: Sklearn Version Mismatch {#sec-diag-sklearn-version}
+
+**Symptom.** Warning messages during prediction: `InconsistentVersionWarning: Trying to unpickle estimator LogisticRegression from version X.Y.Z when using version A.B.C`.
+
+**Cause.** The `multiclass-classifier.pkl` was serialized with a different version of scikit-learn than the one currently installed.
+
+**Diagnosis.** Check the `sklearn_version` field in the model PKL metadata:
+
+```python
+import pickle
+with open("monte_carlo_runs/production/classifiers/multiclass-classifier.pkl", "rb") as f:
+    model = pickle.load(f)
+print(model["metadata"].get("sklearn_version"))  # version used at training time
+```
+
+Compare to the current installed version:
+
+```python
+import sklearn; print(sklearn.__version__)
+```
+
+**Fix.** Re-run the `--freeze` step with the current sklearn version. The logistic regression head will be retrained and the new PKL will record the correct version. New model PKLs produced after the fix always record `sklearn_version` in their metadata.
+
+---
+
+## Choosing Workflow Parameters {#sec-workflow-parameters}
+
+### `train_fraction`
+
+Higher values (0.8–0.9) leave less data for validation but produce more powerful centroids in training. For small cohorts (total $n < 50$ per class), prefer 0.8. For large cohorts, 0.9 is reasonable.
+
+### `n_iterations`
+
+More iterations reduce the variance of the empirical performance summaries. 20–50 iterations is typically sufficient to characterize the mean and standard deviation of balanced accuracy. 100+ iterations are useful for stable percentile estimates (e.g. p5, p95).
+
+### `stability_dmp_freq`
+
+Higher values (0.8–1.0) produce smaller, more reproducible panels but may miss positions that are biologically informative but variable across splits. Lower values (0.5–0.7) retain more positions at the cost of including split-sensitive noise. A good starting point is 0.7.
+
+### `stability_min_balanced_accuracy`
+
+Setting this parameter (e.g. to 0.6) excludes iterations with poor validation performance from the DMP frequency count. This can improve panel quality by excluding outlier runs where the centroid construction or detection failed to find informative DMPs. It also reduces the effective `R*` and thus increases the variance of $\hat{f}(d)$. Use with caution for small `n_iterations`.

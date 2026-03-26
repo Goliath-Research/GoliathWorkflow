@@ -1,0 +1,242 @@
+# The Project Configuration File {#sec-project-configuration}
+
+## Role and Design Principle
+
+MethylPipeline is controlled by a single JSON configuration file called the **project configuration file** (usually named `project_<name>.json`). Every pipeline step — centroid construction, DMP detection, classification, mapping, enrichment, prediction, and Monte Carlo validation — derives its inputs, outputs, and parameters from this one file.
+
+The governing design principle is **single source of truth**: no piece of information that is already in the project file should be repeated inside any step-specific configuration. Specifically:
+
+- Sample paths are defined once in the top-level `controls`/`diseases` block and never duplicated in `step_config.predictor`.
+- `output_base` and `samples_base_path` are top-level fields inherited by all steps.
+- Monte Carlo validation settings are embedded under `step_config.validation`, not in a separate file.
+
+The Pydantic model that validates the project file is `ProjectConfig` in `packages/methylutils/methyl_utils/pipeline_config.py`.
+
+## Top-Level Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `project_name` | string | Used as the output directory name under `output_base`. |
+| `laboratory` | string | Metadata; appears in centroid H5 attributes. |
+| `batch` | string | Metadata; appears in centroid H5 attributes. |
+| `output_base` | string (path) | Root directory for all pipeline outputs. |
+| `samples_base_path` | string (path) | Base directory for resolving relative sample paths in cohort CSVs. |
+| `chromosomes` | list of strings | Chromosomes to process (e.g. `["1", "2", ..., "22", "X", "Y"]`). |
+| `contexts` | list of strings | Methylation contexts: `"CG"`, `"CHG"`, `"CHH"`. |
+| `comparisons` | string or list | Comparison layout: `"control_vs_each_disease"` or a list of explicit comparison pairs. |
+
+## The Cohort Hierarchy
+
+The `controls` and `diseases` blocks define the study cohort structure. Each block has a `label` (used in output directory naming) and a `groups` list. For hierarchical multiclass designs, disease groups can have `stages`:
+
+```json
+{
+  "controls": {
+    "label": "healthy",
+    "groups": [
+      { "label": "all", "sample_paths": ["configs/healthy.csv"] }
+    ]
+  },
+  "diseases": {
+    "label": "cancer",
+    "groups": [
+      {
+        "label": "pca",
+        "stages": [
+          { "label": "pca1", "sample_paths": ["configs/pca1.csv"] },
+          { "label": "pca2", "sample_paths": ["configs/pca2.csv"] }
+        ]
+      }
+    ]
+  }
+}
+```
+
+In this layout, `methyl-centroid` builds one centroid per leaf group (`all`, `pca1`, `pca2`), and `methyl-detector` compares `all` versus each disease stage. The resolved group labels used by the Monte Carlo and predictor subsystems are the concatenated parent-and-leaf names: `pca_pca1`, `pca_pca2`, etc.
+
+For flat two-class binary projects (one control group, one disease group, no stages), the structure simplifies to:
+
+```json
+{
+  "controls": { "label": "healthy", "groups": [{ "label": "all", "sample_paths": ["..."] }] },
+  "diseases": { "label": "cancer", "groups": [{ "label": "all", "sample_paths": ["..."] }] }
+}
+```
+
+## The `step_config` Dictionary
+
+`step_config` is a JSON object whose keys correspond to pipeline steps. Each value is a free-form dictionary of parameters that override the step's defaults. The recognized keys are:
+
+| Key | Handled by | Description |
+|---|---|---|
+| `centroid` | `methyl-centroid` | Coverage thresholds, histogram bins, GPU, parallelism. |
+| `detection` | `methyl-detector` | Statistical test, effect size, DMP selection, classifier export. |
+| `mapper` | `methyl-mapper` | GTF, gene window sizes, enrichment source. |
+| `enricher` | `methyl-enricher` | Library selection, disease filters, module scoring. |
+| `classifier` | `methyl-classifier` | Chromosome weighting, OvR layout, panel definition. |
+| `predictor` | `methyl-predictor` | Panel definition, debug mode. |
+| `validation` | `methyl-validation` | Monte Carlo settings embedded in the project. |
+| `cluster` | `methyl-cluster` | Clustering method, distance metric, k selection. |
+| `alignment_qc` | `methyl-alignment-qc` | Schema validation, group filtering. |
+
+The exhaustive list of parameters for each key is in @sec-configuration-reference.
+
+## The `step_config.predictor` Anti-Pattern
+
+A common mistake when creating project configurations is to copy the `controls`/`diseases` block from the top level into `step_config.predictor`. This creates duplication: the sample paths are now defined in two places. If the top-level cohort CSVs change, the predictor block must also be updated, creating a maintenance burden and a potential source of inconsistency.
+
+**Correct pattern:** `step_config.predictor` should contain only predictor-specific overrides — typically `debug`, `panel`, and optionally `multiclass_model_path`. The sample paths are resolved automatically from the top-level `controls`/`diseases` block during project loading.
+
+**Anti-pattern (avoid):**
+
+```json
+"predictor": {
+  "controls": { ... },   ← duplicates top-level controls
+  "diseases": { ... },   ← duplicates top-level diseases
+  "panel": { ... }
+}
+```
+
+**Correct pattern:**
+
+```json
+"predictor": {
+  "debug": false,
+  "panel": { "primary_family": "prostate", "families": { ... }, "indeterminate_delta": 0.25 }
+}
+```
+
+## Embedding Monte Carlo Settings: `step_config.validation`
+
+Rather than maintaining a separate `monte_carlo_config.json` file, the Monte Carlo validation settings can be embedded directly inside the project file under `step_config.validation`. When `methyl-validation` is invoked with `--project <path>`, it reads the `step_config.validation` block and constructs a `MonteCarloConfig` from it, inheriting `samples_base_path`, `output_base`, and the cohort structure from the top-level project fields.
+
+The fields that are appropriate for `step_config.validation` are only the Monte Carlo-specific ones:
+
+```json
+"validation": {
+  "train_fraction": 0.8,
+  "n_iterations": 50,
+  "seed": 42,
+  "run_stability": true,
+  "stability_dmp_freq": 0.7,
+  "stability_min_balanced_accuracy": 0.6,
+  "abort_on_step_failure": false
+}
+```
+
+Fields that are **not** needed here (because they are inherited from the project): `samples_base_path`, `output_base`, `base_project`, `cohorts`, `healthy_csv`, `disease_csv`.
+
+## Annotated Example
+
+The following is an annotated excerpt from `configs/project_Healthy_vs_PCa1-4-CG.json`, the reference project for prostate cancer staging:
+
+```json
+{
+  "project_name": "Healthy_vs_PCa1-4-CG",      ← output under output_base/Healthy_vs_PCa1-4-CG/
+  "laboratory": "psomagen",
+  "batch": "Second batch of prostate cancer samples",
+  "output_base": "/work/prostate-cancer",        ← all outputs go here
+  "samples_base_path": "/work/prostate-cancer/samples",
+  "chromosomes": ["1", "2", ..., "22", "X", "Y"],
+  "contexts": ["CG"],
+  "comparisons": "control_vs_each_disease",      ← healthy vs each pca stage
+
+  "controls": {
+    "label": "healthy",
+    "groups": [{ "label": "all", "sample_paths": ["configs/healthy.csv"] }]
+  },
+  "diseases": {
+    "label": "cancer",
+    "groups": [{
+      "label": "pca",
+      "stages": [
+        { "label": "pca1", "sample_paths": ["configs/pca1.csv"] },
+        { "label": "pca2", "sample_paths": ["configs/pca2.csv"] },
+        { "label": "pca3", "sample_paths": ["configs/pca3.csv"] },
+        { "label": "pca4", "sample_paths": ["configs/pca4.csv"] }
+      ]
+    }]
+  },
+
+  "step_config": {
+    "centroid": {
+      "base_config": {
+        "min_coverage": 4,           ← positions with < 4 reads excluded from centroid
+        "binned_stats_bins": 20,     ← 20-bin ECDF histogram stored per locus
+        "use_gpu": true
+      }
+    },
+    "detection": {
+      "alpha": 0.05,                 ← q-value threshold for statistical DMPs
+      "min_coverage": 4,             ← same as centroid min_coverage (critical: must match)
+      "min_sample_coverage": 4,      ← coverage required in new samples (must match centroid)
+      "effect_size_coverage": 0.95,  ← retain top 95% effect mass
+      "multiclass_train_learned_head": true,
+      "multiclass_learned_class_weight": "balanced"   ← corrects class imbalance
+    },
+    "classifier": {
+      "ovr_binary_pickles_from_comparisons": true,
+      "panel": {
+        "primary_family": "prostate",
+        "families": { "prostate": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"] },
+        "indeterminate_delta": 0.25
+      }
+    },
+    "predictor": {
+      "debug": false,
+      "panel": {           ← same panel as classifier; only override is debug flag
+        "primary_family": "prostate",
+        "families": { "prostate": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"] },
+        "indeterminate_delta": 0.25
+      }
+    },
+    "validation": {        ← embedded MC settings; no separate config file needed
+      "train_fraction": 0.8,
+      "n_iterations": 5,
+      "seed": 42,
+      "run_stability": true,
+      "stability_dmp_freq": 0.6
+    }
+  }
+}
+```
+
+## Output Directory Layout
+
+Given `output_base = "/work/prostate-cancer"` and `project_name = "Healthy_vs_PCa1-4-CG"`, the top-level output structure is:
+
+```
+/work/prostate-cancer/
+└── Healthy_vs_PCa1-4-CG/
+    ├── centroids/
+    │   ├── controls/healthy/all/<chrom>-CG.h5
+    │   └── diseases/cancer/pca_pca1/<chrom>-CG.h5   (and pca2, pca3, pca4)
+    ├── detections/
+    │   └── all/<comparison>/dmps-<chrom>-discovery.csv
+    │                        dmps-<chrom>-classifier.csv
+    │                        classifier-<chrom>-CG.pkl
+    ├── classifiers/
+    │   ├── all/
+    │   │   ├── pca_pca1/run_0001-classifier.pkl
+    │   │   └── multiclass-classifier.pkl
+    │   └── classifier_all_run_0001.pkl
+    ├── mappings/
+    ├── enrichments/
+    └── monte_carlo_runs/
+        ├── run_0001/
+        │   ├── project.json
+        │   ├── centroids/
+        │   ├── detections/
+        │   ├── classifiers/
+        │   └── predictors/validation_metrics.json
+        ├── stability/
+        │   └── stable_dmps_production.csv
+        └── production/
+            ├── project.json          ← contains fixed_dmp_panel
+            ├── centroids/
+            ├── detections/
+            ├── classifiers/
+            │   └── multiclass-classifier.pkl    ← final production model
+            ├── mappings/
+            └── enrichments/
+```

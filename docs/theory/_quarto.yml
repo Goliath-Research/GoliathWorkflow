@@ -3,24 +3,37 @@ project:
   output-dir: _book
 
 book:
-  title: "MethylPipeline: Mathematical and Statistical Foundations"
-  subtitle: "A code-backed theory reference"
+  title: "MethylPipeline: Theory, Workflows, and Reference"
+  subtitle: "Mathematical foundations, operational workflows, and complete configuration reference"
   author: "MethylPipeline Team"
   date: last-modified
   chapters:
     - index.qmd
-    - chapters/01-methylutils.qmd
-    - chapters/02-methylcentroid.qmd
-    - chapters/03-methyldetector.qmd
-    - chapters/04-methylclassifier.qmd
-    - chapters/05-methylpredictor-and-validation.qmd
-    - chapters/06-methylcluster.qmd
-    - chapters/07-methylmapper.qmd
-    - chapters/08-methylenricher.qmd
-    - chapters/09-methylalignmentqc.qmd
-    - chapters/10-limitations-and-open-questions.qmd
+    - part: "Part I: Mathematical and Statistical Foundations"
+      chapters:
+        - chapters/01-methylutils.qmd
+        - chapters/02-methylcentroid.qmd
+        - chapters/03-methyldetector.qmd
+        - chapters/04-methylclassifier.qmd
+        - chapters/05-methylpredictor-and-validation.qmd
+        - chapters/06-methylcluster.qmd
+        - chapters/07-methylmapper.qmd
+        - chapters/08-methylenricher.qmd
+        - chapters/09-methylalignmentqc.qmd
+        - chapters/10-limitations-and-open-questions.qmd
+    - part: "Part II: Workflows and Production"
+      chapters:
+        - chapters/11-project-configuration.qmd
+        - chapters/12-two-workflows.qmd
+    - part: "Part III: Configuration Reference"
+      chapters:
+        - chapters/13-configuration-reference.qmd
+    - part: "Part IV: User Guide"
+      chapters:
+        - chapters/14-user-guide.qmd
   appendices:
     - README.md
+    - DOCUMENTATION_PLAN.md
 
 bibliography: references.bib
 link-citations: true
@@ -29,6 +42,7 @@ crossref:
   eq-prefix: Eq.
   fig-prefix: Fig.
   tbl-prefix: Tbl.
+  sec-prefix: §
 
 format:
   html:

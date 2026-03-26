@@ -90,6 +90,24 @@ $$ {#eq-platt}
 
 This improves probability calibration under distribution shift or class imbalance, but it should not be confused with changing the underlying classifier likelihood.
 
+## Multiclass Learned Head: Class Weighting {#sec-classifier-class-weight}
+
+When the native multiclass histogram classifier is extended with a learned logistic head (`multiclass_train_learned_head: true`), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a `class_weight` parameter (exposed as `multiclass_learned_class_weight` in `step_config.detection`; see @sec-configuration-reference).
+
+With `multiclass_learned_class_weight: "balanced"`, sklearn computes inverse-frequency weights:
+
+$$
+w_k = \frac{n_{\text{total}}}{K \cdot n_k},
+$$ {#eq-class-weight-balanced}
+
+where $n_k$ is the number of training samples in class $k$, $K$ is the number of classes, and $n_{\text{total}} = \sum_k n_k$. These weights are passed to the loss function of the multinomial logistic regression, penalizing errors on minority classes more heavily.
+
+This is particularly important for the prostate cancer staging problem where the healthy control cohort may be two to four times larger than any individual disease stage cohort. Without balancing, the logistic head learns to predict the healthy class as the default when the pre-softmax histogram scores do not provide strong class separation (for example, when only 20% of DMP positions are covered in a test sample; see @sec-detector-coverage).
+
+**Theoretical note.** Class weighting corrects for imbalance in the empirical class frequencies of the training set. It does not correct for population prevalence differences between training and deployment contexts. If the intended clinical population has very different disease prevalence from the training cohort, additional calibration against the target distribution is required.
+
+**Reproducibility.** Since sklearn 1.4, the version of sklearn used to train the logistic head is saved in the model PKL metadata under the key `sklearn_version`. This allows detection of version mismatches between training and inference environments. The key is written by `_fit_learned_multiclass_head` in `packages/methylclassifier/methyl_classifier/utils/multiclass_builder.py`.
+
 ## Missing Data Semantics
 
 A practical but important detail is how the classifier handles unavailable loci. The implementation masks those loci out of the weighted average rather than imputing them with a full modeled distribution. As a result, the effective evidence for a sample depends on how many DMPs are observed for that sample.

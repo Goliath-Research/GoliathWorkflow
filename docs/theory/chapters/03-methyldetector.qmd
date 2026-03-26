@@ -99,6 +99,53 @@ The saved ECDF classifier pickle always uses the **classifier** panel, not the d
 
 For strict evaluation of a deployed classifier, feature selection must be performed **inside** each outer training fold (for example by running detection on fold-specific centroids, as in Monte Carlo train splits); discovery lists built on all samples may still be reported for mechanism, but they must not be the sole basis for performance claims unless that design is stated explicitly.
 
+## Production Freeze Panel {#sec-detector-fixed-panel}
+
+In the production workflow (@sec-two-workflows), the detector can bypass statistical and biological discovery entirely and instead operate from a fixed list of pre-selected loci. This is configured via the `fixed_dmp_panel` parameter in `step_config.detection`.
+
+When `fixed_dmp_panel` is set to a path pointing at a CSV file that contains at minimum the columns `chromosome` and `position`, the `_run_multi_context` method short-circuits the entire discovery pipeline. No centroids are compared, no KS statistics are computed, and no biological filtering is applied. The columns `context`, `effect_size`, `statistical_dmp`, and `biological_dmp` are inferred or set to unit defaults for any that are missing from the file. The result object is constructed directly from the loaded rows, with `biological_retention_rate = 1.0` and `n_statistical_dmps = n_biological_dmps = n_classifier_dmps` all equal to the CSV row count.
+
+This mechanism serves the production workflow where:
+
+1. DMP positions were already validated across many Monte Carlo splits (stability analysis),
+2. only the most reliably recurring positions are retained in the stable panel, and
+3. the final model must use exactly those positions on the full dataset without re-running discovery.
+
+The code path is:
+
+```
+MethylDetector._run_multi_context()
+  ↓ if config.fixed_dmp_panel is not None
+  ↓ pd.read_csv(fixed_path)
+  ↓ validate columns {"chromosome", "position"} ⊆ columns
+  ↓ infer missing context / effect_size / flags
+  ↓ export CSV + save classifier model
+  ↓ return MethylDetectorResult (no discovery performed)
+```
+
+The exported classifier model (PKL) is identical in structure to one built through normal discovery; downstream tools (`methylclassifier`, `methylpredictor`) are unaware of whether the positions came from live detection or a fixed panel.
+
+**Theoretical note.** Using a fixed panel from a previous analysis is a form of transfer. The panel was selected on a different (possibly overlapping) set of samples. The validity of downstream statistical claims depends on whether the panel samples and the inference samples are from the same population. This is an operational design choice, not a statistical guarantee; it should be stated explicitly in any publication that uses the freeze workflow.
+
+## DMP Coverage in New Samples {#sec-detector-coverage}
+
+A frequently encountered diagnostic problem is low DMP coverage in validation or prediction samples: the classifier reports that only 10–30% of DMP positions have usable observations in a given sample. The root cause is almost always a mismatch between two coverage thresholds:
+
+- `min_coverage` in `step_config.centroid.base_config` — the minimum coverage required for a locus to be considered by centroid construction and DMP detection during training.
+- `min_sample_coverage` in `step_config.detection` — the minimum coverage required for a locus to be usable in a new sample during classification.
+
+If centroid construction required `min_coverage = 4` but `min_sample_coverage` is left at its default of `10`, any locus with between 4 and 9 reads in a test sample will be dropped. Since typical WGBS data is sequenced at moderate depth and coverage varies across the genome, a large fraction of the 60 000 – 200 000 DMP positions selected during training may fall in this 4–9 read range in test samples, causing the effective feature matrix to collapse to 20% of its intended size.
+
+The observable symptom is:
+
+```
+sample_dmp_coverage.dmps_used_fraction_median < 0.5
+```
+
+in `validation_metrics.json`. Values below 0.3 indicate severe coverage mismatch and nearly always lead to prediction dominated by the majority class.
+
+**Recommended practice:** Set `min_sample_coverage` equal to the centroid `min_coverage` used during training. In most projects this means `min_sample_coverage: 4` when `base_config.min_coverage: 4`. A higher `min_sample_coverage` is appropriate only when test samples are known to be sequenced at substantially higher depth than training centroids and locus-level precision is paramount.
+
 ## Publication Guidance
 
 The most accurate publication description is:
@@ -107,5 +154,7 @@ The most accurate publication description is:
 - applies FDR control through Storey q-values,
 - supplements significance with heuristic biological ranking,
 - and exports a reduced, weighted empirical-distribution feature set.
+
+When the `fixed_dmp_panel` path is used, the package should be described as applying a pre-specified position set rather than performing novel discovery.
 
 The package should **not** be described as a pure hypothesis-testing engine if the effect-coverage filters are active, because those filters are explicitly post-test prioritization rules.
