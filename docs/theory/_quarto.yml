@@ -59,6 +59,7 @@ format:
     pdf-engine: pdflatex
     geometry:
       - margin=1in
+    mermaid-format: png
 
 execute:
   enabled: false

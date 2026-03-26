@@ -371,7 +371,7 @@ window.Quarto = {
 </section>
 <section id="binary-classification" class="level2" data-number="5.2">
 <h2 data-number="5.2" class="anchored" data-anchor-id="binary-classification"><span class="header-section-number">5.2</span> Binary Classification</h2>
-<p>For a single binary model, the underlying score is the ECDF log-density average described in <a href="#eq-ecdf-score" class="quarto-xref">Eq.&nbsp;<span class="quarto-unresolved-ref">eq-ecdf-score</span></a> and <a href="#eq-ecdf-softmax" class="quarto-xref">Eq.&nbsp;<span class="quarto-unresolved-ref">eq-ecdf-softmax</span></a>. From the perspective of <code>methylclassifier</code>, the main practical issues are:</p>
+<p>For a single binary model, the underlying score is the ECDF log-density average described in <a href="01-methylutils.html#eq-ecdf-score" class="quarto-xref">Eq.&nbsp;<span>2.11</span></a> and <a href="01-methylutils.html#eq-ecdf-softmax" class="quarto-xref">Eq.&nbsp;<span>2.12</span></a>. From the perspective of <code>methylclassifier</code>, the main practical issues are:</p>
 <ul>
 <li>aligning the input sample to the stored DMP order,</li>
 <li>constructing an availability mask for missing loci, and</li>
@@ -428,7 +428,7 @@ window.Quarto = {
 </section>
 <section id="bipartite-multi-control-multi-disease-aggregation" class="level2" data-number="5.6">
 <h2 data-number="5.6" class="anchored" data-anchor-id="bipartite-multi-control-multi-disease-aggregation"><span class="header-section-number">5.6</span> Bipartite Multi-Control × Multi-Disease Aggregation</h2>
-<p>The package also supports bipartite layouts with several control strata and several disease strata. Here it aggregates one probability column across several pairwise experts, again using geometric means. The logic is similar to <a href="#eq-geomean-control" class="quarto-xref">Eq.&nbsp;<span class="quarto-unresolved-ref">eq-geomean-control</span></a> but now applied to either the control column or the disease column depending on which class head is being built.</p>
+<p>The package also supports bipartite layouts with several control strata and several disease strata. Here it aggregates one probability column across several pairwise experts, again using geometric means. The logic is similar to <a href="#eq-geomean-control" class="quarto-xref">Eq.&nbsp;<span>5.3</span></a> but now applied to either the control column or the disease column depending on which class head is being built.</p>
 <p>That construction is convenient for complex cohort hierarchies, but it should be presented as a carefully engineered reduction strategy rather than a textbook probabilistic model.</p>
 </section>
 <section id="calibration" class="level2" data-number="5.7">
@@ -441,13 +441,13 @@ window.Quarto = {
 </section>
 <section id="sec-classifier-class-weight" class="level2" data-number="5.8">
 <h2 data-number="5.8" class="anchored" data-anchor-id="sec-classifier-class-weight"><span class="header-section-number">5.8</span> Multiclass Learned Head: Class Weighting</h2>
-<p>When the native multiclass histogram classifier is extended with a learned logistic head (<code>multiclass_train_learned_head: true</code>), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a <code>class_weight</code> parameter (exposed as <code>multiclass_learned_class_weight</code> in <code>step_config.detection</code>; see <a href="#sec-configuration-reference" class="quarto-xref"><span class="quarto-unresolved-ref">sec-configuration-reference</span></a>).</p>
+<p>When the native multiclass histogram classifier is extended with a learned logistic head (<code>multiclass_train_learned_head: true</code>), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a <code>class_weight</code> parameter (exposed as <code>multiclass_learned_class_weight</code> in <code>step_config.detection</code>; see <a href="13-configuration-reference.html" class="quarto-xref"><span>Chapter 14</span></a>).</p>
 <p>With <code>multiclass_learned_class_weight: "balanced"</code>, sklearn computes inverse-frequency weights:</p>
 <p><span id="eq-class-weight-balanced"><span class="math display">\[
 w_k = \frac{n_{\text{total}}}{K \cdot n_k},
 \tag{5.5}\]</span></span></p>
 <p>where <span class="math inline">\(n_k\)</span> is the number of training samples in class <span class="math inline">\(k\)</span>, <span class="math inline">\(K\)</span> is the number of classes, and <span class="math inline">\(n_{\text{total}} = \sum_k n_k\)</span>. These weights are passed to the loss function of the multinomial logistic regression, penalizing errors on minority classes more heavily.</p>
-<p>This is particularly important for the prostate cancer staging problem where the healthy control cohort may be two to four times larger than any individual disease stage cohort. Without balancing, the logistic head learns to predict the healthy class as the default when the pre-softmax histogram scores do not provide strong class separation (for example, when only 20% of DMP positions are covered in a test sample; see <a href="#sec-detector-coverage" class="quarto-xref"><span class="quarto-unresolved-ref">sec-detector-coverage</span></a>).</p>
+<p>This is particularly important for the prostate cancer staging problem where the healthy control cohort may be two to four times larger than any individual disease stage cohort. Without balancing, the logistic head learns to predict the healthy class as the default when the pre-softmax histogram scores do not provide strong class separation (for example, when only 20% of DMP positions are covered in a test sample; see <a href="03-methyldetector.html#sec-detector-coverage" class="quarto-xref"><span>Section 4.10</span></a>).</p>
 <p><strong>Theoretical note.</strong> Class weighting corrects for imbalance in the empirical class frequencies of the training set. It does not correct for population prevalence differences between training and deployment contexts. If the intended clinical population has very different disease prevalence from the training cohort, additional calibration against the target distribution is required.</p>
 <p><strong>Reproducibility.</strong> Since sklearn 1.4, the version of sklearn used to train the logistic head is saved in the model PKL metadata under the key <code>sklearn_version</code>. This allows detection of version mismatches between training and inference environments. The key is written by <code>_fit_learned_multiclass_head</code> in <code>packages/methylclassifier/methyl_classifier/utils/multiclass_builder.py</code>.</p>
 </section>

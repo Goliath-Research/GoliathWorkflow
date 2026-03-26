@@ -354,7 +354,7 @@ window.Quarto = {
 </section>
 <section id="alignment-and-candidate-set" class="level2" data-number="4.2">
 <h2 data-number="4.2" class="anchored" data-anchor-id="alignment-and-candidate-set"><span class="header-section-number">4.2</span> Alignment And Candidate Set</h2>
-<p>The detector starts from aligned centroid pairs, typically one control centroid and one disease centroid for a given chromosome and context. The alignment step reduces both centroids to the common set of genomic positions and propagates the empirical summaries described in <a href="#sec-methylutils" class="quarto-xref"><span class="quarto-unresolved-ref">sec-methylutils</span></a> and <a href="#sec-methylcentroid" class="quarto-xref"><span class="quarto-unresolved-ref">sec-methylcentroid</span></a>.</p>
+<p>The detector starts from aligned centroid pairs, typically one control centroid and one disease centroid for a given chromosome and context. The alignment step reduces both centroids to the common set of genomic positions and propagates the empirical summaries described in <a href="01-methylutils.html" class="quarto-xref"><span>Chapter 2</span></a> and <a href="02-methylcentroid.html" class="quarto-xref"><span>Chapter 3</span></a>.</p>
 <p>Let <span class="math inline">\(\mathcal{I}\)</span> denote the set of aligned loci under consideration for one comparison.</p>
 </section>
 <section id="statistical-screening" class="level2" data-number="4.3">
@@ -379,7 +379,7 @@ window.Quarto = {
 </section>
 <section id="biological-ranking" class="level2" data-number="4.4">
 <h2 data-number="4.4" class="anchored" data-anchor-id="biological-ranking"><span class="header-section-number">4.4</span> Biological Ranking</h2>
-<p>Once a statistically filtered set exists, the detector ranks loci using the canonical effect score introduced in <a href="#eq-effect-size" class="quarto-xref">Eq.&nbsp;<span class="quarto-unresolved-ref">eq-effect-size</span></a>. This gives a second set of priorities that is explicitly biological or practical rather than inferential.</p>
+<p>Once a statistically filtered set exists, the detector ranks loci using the canonical effect score introduced in <a href="01-methylutils.html#eq-effect-size" class="quarto-xref">Eq.&nbsp;<span>2.10</span></a>. This gives a second set of priorities that is explicitly biological or practical rather than inferential.</p>
 <p>The central design choice is that a locus can be:</p>
 <ul>
 <li>statistically strong but biologically modest,</li>
@@ -433,7 +433,7 @@ window.Quarto = {
 </section>
 <section id="sec-detector-fixed-panel" class="level2" data-number="4.9">
 <h2 data-number="4.9" class="anchored" data-anchor-id="sec-detector-fixed-panel"><span class="header-section-number">4.9</span> Production Freeze Panel</h2>
-<p>In the production workflow (<a href="#sec-two-workflows" class="quarto-xref"><span class="quarto-unresolved-ref">sec-two-workflows</span></a>), the detector can bypass statistical and biological discovery entirely and instead operate from a fixed list of pre-selected loci. This is configured via the <code>fixed_dmp_panel</code> parameter in <code>step_config.detection</code>.</p>
+<p>In the production workflow (<a href="12-two-workflows.html" class="quarto-xref"><span>Chapter 13</span></a>), the detector can bypass statistical and biological discovery entirely and instead operate from a fixed list of pre-selected loci. This is configured via the <code>fixed_dmp_panel</code> parameter in <code>step_config.detection</code>.</p>
 <p>When <code>fixed_dmp_panel</code> is set to a path pointing at a CSV file that contains at minimum the columns <code>chromosome</code> and <code>position</code>, the <code>_run_multi_context</code> method short-circuits the entire discovery pipeline. No centroids are compared, no KS statistics are computed, and no biological filtering is applied. The columns <code>context</code>, <code>effect_size</code>, <code>statistical_dmp</code>, and <code>biological_dmp</code> are inferred or set to unit defaults for any that are missing from the file. The result object is constructed directly from the loaded rows, with <code>biological_retention_rate = 1.0</code> and <code>n_statistical_dmps = n_biological_dmps = n_classifier_dmps</code> all equal to the CSV row count.</p>
 <p>This mechanism serves the production workflow where:</p>
 <ol type="1">

@@ -1,15 +1,13 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
-<head>
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.36">
 
-<meta charset="utf-8" />
-<meta name="generator" content="quarto-1.9.36" />
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>13  The Two Workflows – MethylPipeline: Theory, Workflows, and Reference</title>
+<title>13&nbsp; The Two Workflows – MethylPipeline: Theory, Workflows, and Reference</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -62,7 +60,26 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 }
 </style>
 
-<!-- htmldependencies:E3FAD763 -->
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../chapters/13-configuration-reference.html" rel="next">
+<link href="../chapters/11-project-configuration.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-dc6ca2cd4fc154dd9d00f02dacb9d42f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "sidebar",
   "copy-button": false,
@@ -90,9 +107,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     "search-label": "Search"
   }
 }</script>
-<script  src="../site_libs/quarto-diagram/mermaid.min.js"></script>
-<script  src="../site_libs/quarto-diagram/mermaid-init.js"></script>
-<link  href="../site_libs/quarto-diagram/mermaid.css" rel="stylesheet" />
+<script src="../site_libs/quarto-diagram/mermaid.min.js"></script>
+<script src="../site_libs/quarto-diagram/mermaid-init.js"></script>
+<link href="../site_libs/quarto-diagram/mermaid.css" rel="stylesheet">
 
   <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
   <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
@@ -126,22 +143,17 @@ window.Quarto = {
 
 </head>
 
-<body>
+<body class="nav-sidebar floating quarto-light">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
   <nav class="quarto-secondary-nav">
     <div class="container-fluid d-flex">
-      <button type="button" class="quarto-btn-toggle btn"
-      data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" 
-      aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation"
-      onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <h1 class="quarto-secondary-nav-title no-breadcrumbs"></h1>
-        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" role="link"
-        aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation"
-        onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/11-project-configuration.html">Part II: Workflows and Production</a></li><li class="breadcrumb-item"><a href="../chapters/12-two-workflows.html"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">The Two Workflows</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
         <i class="bi bi-search"></i>
@@ -155,9 +167,7 @@ window.Quarto = {
   <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
     <div class="pt-lg-2 mt-2 text-left sidebar-header">
     <div class="sidebar-title mb-0 py-0">
-      <a href="/">
-      MethylPipeline: Theory, Workflows, and Reference
-      </a> 
+      <a href="../">MethylPipeline: Theory, Workflows, and Reference</a> 
     </div>
       </div>
         <div class="mt-2 flex-shrink-0 align-items-center">
@@ -169,13 +179,13 @@ window.Quarto = {
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/index.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>1</span>  <span class='chapter-title'>Scope, Traceability, and Notation</span></span></a>
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Scope, Traceability, and Notation</span></span></a>
   </div>
 </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1"  role="navigation" aria-expanded="true">
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
  <span class="menu-text">Part I: Mathematical and Statistical Foundations</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
@@ -184,69 +194,69 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>2</span>  <span class='chapter-title'>MethylUtils</span></span></a>
+  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>3</span>  <span class='chapter-title'>MethylCentroid</span></span></a>
+  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>4</span>  <span class='chapter-title'>MethylDetector</span></span></a>
+  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>5</span>  <span class='chapter-title'>MethylClassifier</span></span></a>
+  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>6</span>  <span class='chapter-title'>MethylPredictor and MethylValidation</span></span></a>
+  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/06-methylcluster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>7</span>  <span class='chapter-title'>MethylCluster</span></span></a>
+  <a href="../chapters/06-methylcluster.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylCluster</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>8</span>  <span class='chapter-title'>MethylMapper</span></span></a>
+  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>9</span>  <span class='chapter-title'>MethylEnricher</span></span></a>
+  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>10</span>  <span class='chapter-title'>MethylAlignmentQC</span></span></a>
+  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>11</span>  <span class='chapter-title'>Limitations and Open Questions</span></span></a>
+  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
   </div>
 </li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2"  role="navigation" aria-expanded="true">
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
  <span class="menu-text">Part II: Workflows and Production</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
@@ -255,21 +265,21 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/11-project-configuration.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>12</span>  <span class='chapter-title'>The Project Configuration File</span></span></a>
+  <a href="../chapters/11-project-configuration.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Project Configuration File</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/12-two-workflows.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class='chapter-number'>13</span>  <span class='chapter-title'>The Two Workflows</span></span></a>
+  <a href="../chapters/12-two-workflows.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">The Two Workflows</span></span></a>
   </div>
 </li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3"  role="navigation" aria-expanded="true">
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
  <span class="menu-text">Part III: Configuration Reference</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
@@ -278,15 +288,15 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/13-configuration-reference.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>14</span>  <span class='chapter-title'>Configuration Reference</span></span></a>
+  <a href="../chapters/13-configuration-reference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Configuration Reference</span></span></a>
   </div>
 </li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4"  role="navigation" aria-expanded="true">
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
  <span class="menu-text">Part IV: User Guide</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
@@ -295,15 +305,15 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/chapters/14-user-guide.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>15</span>  <span class='chapter-title'>User Guide</span></span></a>
+  <a href="../chapters/14-user-guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">User Guide</span></span></a>
   </div>
 </li>
       </ul>
   </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5"  role="navigation" aria-expanded="true">
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
  <span class="menu-text">Appendices</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
@@ -312,14 +322,14 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/README.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>A</span>  <span class='chapter-title'>MethylPipeline Theory Book</span></span></a>
+  <a href="../README.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">MethylPipeline Theory Book</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="/DOCUMENTATION_PLAN.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class='chapter-number'>B</span>  <span class='chapter-title'>MethylPipeline Documentation Plan</span></span></a>
+  <a href="../DOCUMENTATION_PLAN.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">MethylPipeline Documentation Plan</span></span></a>
   </div>
 </li>
       </ul>
@@ -327,17 +337,46 @@ window.Quarto = {
     </ul>
     </div>
 </nav>
-<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" ></div>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
     <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
-        <div id="quarto-toc-target"></div>
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview"><span class="header-section-number">13.1</span> Overview</a></li>
+  <li><a href="#sec-workflow-model-creation" id="toc-sec-workflow-model-creation" class="nav-link" data-scroll-target="#sec-workflow-model-creation"><span class="header-section-number">13.2</span> Workflow 1: Model Creation</a>
+  <ul class="collapse">
+  <li><a href="#theoretical-motivation" id="toc-theoretical-motivation" class="nav-link" data-scroll-target="#theoretical-motivation"><span class="header-section-number">13.2.1</span> Theoretical Motivation</a></li>
+  <li><a href="#steps" id="toc-steps" class="nav-link" data-scroll-target="#steps"><span class="header-section-number">13.2.2</span> Steps</a></li>
+  <li><a href="#workflow-1-diagram" id="toc-workflow-1-diagram" class="nav-link" data-scroll-target="#workflow-1-diagram"><span class="header-section-number">13.2.3</span> Workflow 1 Diagram</a></li>
+  <li><a href="#expected-outputs" id="toc-expected-outputs" class="nav-link" data-scroll-target="#expected-outputs"><span class="header-section-number">13.2.4</span> Expected Outputs</a></li>
+  </ul></li>
+  <li><a href="#sec-workflow-prediction" id="toc-sec-workflow-prediction" class="nav-link" data-scroll-target="#sec-workflow-prediction"><span class="header-section-number">13.3</span> Workflow 2: Model Use for Prediction</a>
+  <ul class="collapse">
+  <li><a href="#theoretical-motivation-1" id="toc-theoretical-motivation-1" class="nav-link" data-scroll-target="#theoretical-motivation-1"><span class="header-section-number">13.3.1</span> Theoretical Motivation</a></li>
+  <li><a href="#steps-1" id="toc-steps-1" class="nav-link" data-scroll-target="#steps-1"><span class="header-section-number">13.3.2</span> Steps</a></li>
+  <li><a href="#workflow-2-diagram" id="toc-workflow-2-diagram" class="nav-link" data-scroll-target="#workflow-2-diagram"><span class="header-section-number">13.3.3</span> Workflow 2 Diagram</a></li>
+  </ul></li>
+  <li><a href="#sec-diag-dmp-coverage" id="toc-sec-diag-dmp-coverage" class="nav-link" data-scroll-target="#sec-diag-dmp-coverage"><span class="header-section-number">13.4</span> Diagnostic: DMP Coverage</a></li>
+  <li><a href="#sec-diag-class-imbalance" id="toc-sec-diag-class-imbalance" class="nav-link" data-scroll-target="#sec-diag-class-imbalance"><span class="header-section-number">13.5</span> Diagnostic: Class Imbalance</a></li>
+  <li><a href="#sec-diag-sklearn-version" id="toc-sec-diag-sklearn-version" class="nav-link" data-scroll-target="#sec-diag-sklearn-version"><span class="header-section-number">13.6</span> Diagnostic: Sklearn Version Mismatch</a></li>
+  <li><a href="#sec-workflow-parameters" id="toc-sec-workflow-parameters" class="nav-link" data-scroll-target="#sec-workflow-parameters"><span class="header-section-number">13.7</span> Choosing Workflow Parameters</a>
+  <ul class="collapse">
+  <li><a href="#train_fraction" id="toc-train_fraction" class="nav-link" data-scroll-target="#train_fraction"><span class="header-section-number">13.7.1</span> <code>train_fraction</code></a></li>
+  <li><a href="#n_iterations" id="toc-n_iterations" class="nav-link" data-scroll-target="#n_iterations"><span class="header-section-number">13.7.2</span> <code>n_iterations</code></a></li>
+  <li><a href="#stability_dmp_freq" id="toc-stability_dmp_freq" class="nav-link" data-scroll-target="#stability_dmp_freq"><span class="header-section-number">13.7.3</span> <code>stability_dmp_freq</code></a></li>
+  <li><a href="#stability_min_balanced_accuracy" id="toc-stability_min_balanced_accuracy" class="nav-link" data-scroll-target="#stability_min_balanced_accuracy"><span class="header-section-number">13.7.4</span> <code>stability_min_balanced_accuracy</code></a></li>
+  </ul></li>
+  </ul>
+</nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default">
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/11-project-configuration.html">Part II: Workflows and Production</a></li><li class="breadcrumb-item"><a href="../chapters/12-two-workflows.html"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">The Two Workflows</span></a></li></ol></nav>
 <div class="quarto-title">
-<h1 class="title"><span id="sec-two-workflows" class="quarto-section-identifier"><span class="chapter-number">13</span>  <span class="chapter-title">The Two Workflows</span></span></h1>
+<h1 class="title"><span id="sec-two-workflows" class="quarto-section-identifier"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">The Two Workflows</span></span></h1>
 </div>
 
 
@@ -353,44 +392,15 @@ window.Quarto = {
 
 </header>
 
-<nav id="TOC" role="doc-toc">
-    <h2 id="toc-title">Table of contents</h2>
-   
-  <ul>
-  <li><a href="#overview" id="toc-overview"><span class="header-section-number">13.1</span> Overview</a></li>
-  <li><a href="#sec-workflow-model-creation" id="toc-sec-workflow-model-creation"><span class="header-section-number">13.2</span> Workflow 1: Model Creation</a>
-  <ul>
-  <li><a href="#theoretical-motivation" id="toc-theoretical-motivation"><span class="header-section-number">13.2.1</span> Theoretical Motivation</a></li>
-  <li><a href="#steps" id="toc-steps"><span class="header-section-number">13.2.2</span> Steps</a></li>
-  <li><a href="#workflow-1-diagram" id="toc-workflow-1-diagram"><span class="header-section-number">13.2.3</span> Workflow 1 Diagram</a></li>
-  <li><a href="#expected-outputs" id="toc-expected-outputs"><span class="header-section-number">13.2.4</span> Expected Outputs</a></li>
-  </ul></li>
-  <li><a href="#sec-workflow-prediction" id="toc-sec-workflow-prediction"><span class="header-section-number">13.3</span> Workflow 2: Model Use for Prediction</a>
-  <ul>
-  <li><a href="#theoretical-motivation-1" id="toc-theoretical-motivation-1"><span class="header-section-number">13.3.1</span> Theoretical Motivation</a></li>
-  <li><a href="#steps-1" id="toc-steps-1"><span class="header-section-number">13.3.2</span> Steps</a></li>
-  <li><a href="#workflow-2-diagram" id="toc-workflow-2-diagram"><span class="header-section-number">13.3.3</span> Workflow 2 Diagram</a></li>
-  </ul></li>
-  <li><a href="#sec-diag-dmp-coverage" id="toc-sec-diag-dmp-coverage"><span class="header-section-number">13.4</span> Diagnostic: DMP Coverage</a></li>
-  <li><a href="#sec-diag-class-imbalance" id="toc-sec-diag-class-imbalance"><span class="header-section-number">13.5</span> Diagnostic: Class Imbalance</a></li>
-  <li><a href="#sec-diag-sklearn-version" id="toc-sec-diag-sklearn-version"><span class="header-section-number">13.6</span> Diagnostic: Sklearn Version Mismatch</a></li>
-  <li><a href="#sec-workflow-parameters" id="toc-sec-workflow-parameters"><span class="header-section-number">13.7</span> Choosing Workflow Parameters</a>
-  <ul>
-  <li><a href="#train_fraction" id="toc-train_fraction"><span class="header-section-number">13.7.1</span> <code>train_fraction</code></a></li>
-  <li><a href="#n_iterations" id="toc-n_iterations"><span class="header-section-number">13.7.2</span> <code>n_iterations</code></a></li>
-  <li><a href="#stability_dmp_freq" id="toc-stability_dmp_freq"><span class="header-section-number">13.7.3</span> <code>stability_dmp_freq</code></a></li>
-  <li><a href="#stability_min_balanced_accuracy" id="toc-stability_min_balanced_accuracy"><span class="header-section-number">13.7.4</span> <code>stability_min_balanced_accuracy</code></a></li>
-  </ul></li>
-  </ul>
-</nav>
+
 <section id="overview" class="level2" data-number="13.1">
-<h2 data-number="13.1"><span class="header-section-number">13.1</span> Overview</h2>
+<h2 data-number="13.1" class="anchored" data-anchor-id="overview"><span class="header-section-number">13.1</span> Overview</h2>
 <p>MethylPipeline supports two primary end-to-end operational workflows. They are designed to be run sequentially: Workflow 1 produces the final production model; Workflow 2 evaluates that model on random holdouts.</p>
-<table class="caption-top">
+<table class="caption-top table">
 <colgroup>
-<col style="width: 33%" />
-<col style="width: 33%" />
-<col style="width: 33%" />
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -432,34 +442,34 @@ window.Quarto = {
 </tr>
 </tbody>
 </table>
-<p>Both workflows are controlled entirely by the project configuration file and the <code>step_config.validation</code> embedded settings (see <a href="#sec-project-configuration" class="quarto-xref"><span class="quarto-unresolved-ref">sec-project-configuration</span></a>).</p>
-<hr />
+<p>Both workflows are controlled entirely by the project configuration file and the <code>step_config.validation</code> embedded settings (see <a href="11-project-configuration.html" class="quarto-xref"><span>Chapter 12</span></a>).</p>
+<hr>
 </section>
 <section id="sec-workflow-model-creation" class="level2" data-number="13.2">
-<h2 data-number="13.2"><span class="header-section-number">13.2</span> Workflow 1: Model Creation</h2>
+<h2 data-number="13.2" class="anchored" data-anchor-id="sec-workflow-model-creation"><span class="header-section-number">13.2</span> Workflow 1: Model Creation</h2>
 <section id="theoretical-motivation" class="level3" data-number="13.2.1">
-<h3 data-number="13.2.1"><span class="header-section-number">13.2.1</span> Theoretical Motivation</h3>
+<h3 data-number="13.2.1" class="anchored" data-anchor-id="theoretical-motivation"><span class="header-section-number">13.2.1</span> Theoretical Motivation</h3>
 <p>A naive approach to building a classifier would be to detect DMPs on all available samples, then evaluate the same classifier on held-out subsets. This conflates feature selection with performance estimation: the DMP panel was implicitly chosen to fit all samples, making any leave-out evaluation optimistic.</p>
 <p>MethylValidation addresses this by repeating the entire pipeline — from centroid construction through prediction — on random train/validation splits. Each iteration detects DMPs on the training cohort only, builds a classifier from those DMPs, and evaluates it on the held-out validation cohort. The resulting balanced accuracy estimates are honest internal measures of generalization.</p>
 <p>After many such iterations, a DMP that appears consistently in the discovery sets of most runs is more likely to reflect a true biological signal than one that appears in only a few. This motivates the stability analysis: the stable panel is a consensus over repeated random partitions of the data.</p>
 <p>The production freeze then trains a final classifier on <strong>all available data</strong> restricted to the stable panel. Because the panel itself was selected using the full sample set (via the MC iterations), this is still an internal analysis; it is not a substitute for external validation on an independent cohort.</p>
 </section>
 <section id="steps" class="level3" data-number="13.2.2">
-<h3 data-number="13.2.2"><span class="header-section-number">13.2.2</span> Steps</h3>
+<h3 data-number="13.2.2" class="anchored" data-anchor-id="steps"><span class="header-section-number">13.2.2</span> Steps</h3>
 <p><strong>Step 1: Prepare the project configuration</strong></p>
 <p>Ensure the project file has <code>step_config.validation</code> with at least <code>train_fraction</code>, <code>n_iterations</code>, <code>seed</code>, and <code>run_stability: true</code>:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;validation&quot;</span><span class="er">:</span> <span class="fu">{</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;train_fraction&quot;</span><span class="fu">:</span> <span class="fl">0.8</span><span class="fu">,</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;n_iterations&quot;</span><span class="fu">:</span> <span class="dv">50</span><span class="fu">,</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;seed&quot;</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;run_stability&quot;</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;stability_dmp_freq&quot;</span><span class="fu">:</span> <span class="fl">0.7</span><span class="fu">,</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;stability_min_balanced_accuracy&quot;</span><span class="fu">:</span> <span class="kw">null</span><span class="fu">,</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">&quot;abort_on_step_failure&quot;</span><span class="fu">:</span> <span class="kw">false</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="st">"validation"</span><span class="er">:</span> <span class="fu">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"train_fraction"</span><span class="fu">:</span> <span class="fl">0.8</span><span class="fu">,</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"n_iterations"</span><span class="fu">:</span> <span class="dv">50</span><span class="fu">,</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"run_stability"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"stability_dmp_freq"</span><span class="fu">:</span> <span class="fl">0.7</span><span class="fu">,</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"stability_min_balanced_accuracy"</span><span class="fu">:</span> <span class="kw">null</span><span class="fu">,</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"abort_on_step_failure"</span><span class="fu">:</span> <span class="kw">false</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Step 2: Run Monte Carlo with stability</strong></p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--stability</span></span></code></pre></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--stability</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>This runs <code>n_iterations</code> stratified train/validation splits. Per iteration:</p>
 <ol type="1">
 <li><code>methyl-centroid --group group1</code> and <code>--group group2</code> build separate centroid H5 files for the training split.</li>
@@ -473,7 +483,7 @@ window.Quarto = {
 \]</span></p>
 <p>and writes <code>monte_carlo_runs/stability/stable_dmps_production.csv</code>.</p>
 <p><strong>Step 3: Run the production freeze</strong></p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--freeze</span></span></code></pre></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--freeze</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>This calls <code>freeze_production_model()</code> which:</p>
 <ol type="1">
 <li>Merges stable DMP CSVs into <code>monte_carlo_runs/production/stable_dmps_genomewide.csv</code>.</li>
@@ -483,24 +493,24 @@ window.Quarto = {
 </ol>
 </section>
 <section id="workflow-1-diagram" class="level3" data-number="13.2.3">
-<h3 data-number="13.2.3"><span class="header-section-number">13.2.3</span> Workflow 1 Diagram</h3>
+<h3 data-number="13.2.3" class="anchored" data-anchor-id="workflow-1-diagram"><span class="header-section-number">13.2.3</span> Workflow 1 Diagram</h3>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div>
-<p><figure class=''></p>
+<p></p><figure class="figure"><p></p>
 <div>
 <pre class="mermaid mermaid-js">flowchart TD
-    ProjectConfig[&quot;project.json\n(single unified config)&quot;]
-    MC[&quot;methyl-validation --project … --stability\n(n_iterations × full pipeline)&quot;]
-    SplitIter[&quot;Per iteration:\ncentroid → detector → classifier → predictor&quot;]
-    Metrics[&quot;validation_metrics.json\n(per iteration)&quot;]
-    Stability[&quot;Stability analysis:\ncompute f(d) across iterations&quot;]
-    StablePanel[&quot;stability/stable_dmps_production.csv\n(DMPs with f(d) &gt;= stability_dmp_freq)&quot;]
-    Freeze[&quot;methyl-validation --project … --freeze&quot;]
-    Merge[&quot;Merge stable DMPs\nstable_dmps_genomewide.csv&quot;]
-    ProdProject[&quot;production/project.json\n(with fixed_dmp_panel)&quot;]
-    FullPipeline[&quot;Full pipeline on ALL samples:\ncentroid → detector(fixed) → classifier → mapper → enricher&quot;]
-    FinalModel[&quot;production/ directory\nFinal classifier + gene report&quot;]
+    ProjectConfig["project.json\n(single unified config)"]
+    MC["methyl-validation --project … --stability\n(n_iterations × full pipeline)"]
+    SplitIter["Per iteration:\ncentroid → detector → classifier → predictor"]
+    Metrics["validation_metrics.json\n(per iteration)"]
+    Stability["Stability analysis:\ncompute f(d) across iterations"]
+    StablePanel["stability/stable_dmps_production.csv\n(DMPs with f(d) &gt;= stability_dmp_freq)"]
+    Freeze["methyl-validation --project … --freeze"]
+    Merge["Merge stable DMPs\nstable_dmps_genomewide.csv"]
+    ProdProject["production/project.json\n(with fixed_dmp_panel)"]
+    FullPipeline["Full pipeline on ALL samples:\ncentroid → detector(fixed) → classifier → mapper → enricher"]
+    FinalModel["production/ directory\nFinal classifier + gene report"]
 
     ProjectConfig --&gt; MC
     MC --&gt; SplitIter
@@ -514,13 +524,13 @@ window.Quarto = {
     FullPipeline --&gt; FinalModel
 </pre>
 </div>
-<p></figure></p>
+<p></p></figure><p></p>
 </div>
 </div>
 </div>
 </section>
 <section id="expected-outputs" class="level3" data-number="13.2.4">
-<h3 data-number="13.2.4"><span class="header-section-number">13.2.4</span> Expected Outputs</h3>
+<h3 data-number="13.2.4" class="anchored" data-anchor-id="expected-outputs"><span class="header-section-number">13.2.4</span> Expected Outputs</h3>
 <p>After Workflow 1 completes:</p>
 <pre><code>monte_carlo_runs/
 ├── run_0001/ … run_000N/          ← per-iteration outputs
@@ -538,23 +548,23 @@ window.Quarto = {
     │   └── multiclass-classifier.pkl   ← the final production model
     ├── mappings/
     └── enrichments/</code></pre>
-<hr />
+<hr>
 </section>
 </section>
 <section id="sec-workflow-prediction" class="level2" data-number="13.3">
-<h2 data-number="13.3"><span class="header-section-number">13.3</span> Workflow 2: Model Use for Prediction</h2>
+<h2 data-number="13.3" class="anchored" data-anchor-id="sec-workflow-prediction"><span class="header-section-number">13.3</span> Workflow 2: Model Use for Prediction</h2>
 <section id="theoretical-motivation-1" class="level3" data-number="13.3.1">
-<h3 data-number="13.3.1"><span class="header-section-number">13.3.1</span> Theoretical Motivation</h3>
+<h3 data-number="13.3.1" class="anchored" data-anchor-id="theoretical-motivation-1"><span class="header-section-number">13.3.1</span> Theoretical Motivation</h3>
 <p>Once a production model exists, a natural question is: what balanced accuracy does it achieve on random holdouts drawn from the available cohort? This is not the same as the BA measured in Workflow 1, because Workflow 1 re-trained the model on each split while Workflow 2 applies the frozen model.</p>
 <p>Workflow 2 provides the empirical distribution of the frozen model’s performance under random sampling. It is faster than Workflow 1 (only the predictor runs per iteration), and it answers the question: <em>is the production model’s accuracy stable across different random splits, or does it depend heavily on which specific samples are held out?</em></p>
 <p><strong>Important caveat.</strong> The available cohort used in Workflow 2 overlaps with the training data for the production model (the production model was trained on all samples). This means Workflow 2 is not a hold-out evaluation in the classical sense; the test samples may also be in the training centroid. A truly external validation cohort would be needed to measure generalization to unseen data.</p>
 </section>
 <section id="steps-1" class="level3" data-number="13.3.2">
-<h3 data-number="13.3.2"><span class="header-section-number">13.3.2</span> Steps</h3>
+<h3 data-number="13.3.2" class="anchored" data-anchor-id="steps-1"><span class="header-section-number">13.3.2</span> Steps</h3>
 <p><strong>Step 1: Confirm the production model exists</strong></p>
 <p>The file <code>monte_carlo_runs/production/project.json</code> must exist (created by Workflow 1’s <code>--freeze</code> step).</p>
 <p><strong>Step 2: Run predictor-only evaluation</strong></p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--predictor-only</span></span></code></pre></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--predictor-only</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Per iteration, this:</p>
 <ol type="1">
 <li>Creates a new split-specific <code>project.json</code> with train/validation CSVs.</li>
@@ -565,19 +575,19 @@ window.Quarto = {
 <p>After all iterations, the same aggregation as Workflow 1 produces <code>all_metrics.csv</code> and <code>metrics_summary.json</code>.</p>
 </section>
 <section id="workflow-2-diagram" class="level3" data-number="13.3.3">
-<h3 data-number="13.3.3"><span class="header-section-number">13.3.3</span> Workflow 2 Diagram</h3>
+<h3 data-number="13.3.3" class="anchored" data-anchor-id="workflow-2-diagram"><span class="header-section-number">13.3.3</span> Workflow 2 Diagram</h3>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div>
-<p><figure class=''></p>
+<p></p><figure class="figure"><p></p>
 <div>
 <pre class="mermaid mermaid-js">flowchart TD
-    FrozenProject[&quot;production/project.json\n(frozen production model)&quot;]
-    ProjectConfig[&quot;project.json\n(defines cohorts + validation settings)&quot;]
-    PO[&quot;methyl-validation --project … --predictor-only\n(n_iterations × predictor only)&quot;]
-    SplitIter[&quot;Per iteration:\nstratified split → merge frozen paths → methyl-predictor&quot;]
-    Metrics[&quot;validation_metrics.json\n(per iteration)&quot;]
-    Aggregate[&quot;Aggregate:\nall_metrics.csv + metrics_summary.json&quot;]
+    FrozenProject["production/project.json\n(frozen production model)"]
+    ProjectConfig["project.json\n(defines cohorts + validation settings)"]
+    PO["methyl-validation --project … --predictor-only\n(n_iterations × predictor only)"]
+    SplitIter["Per iteration:\nstratified split → merge frozen paths → methyl-predictor"]
+    Metrics["validation_metrics.json\n(per iteration)"]
+    Aggregate["Aggregate:\nall_metrics.csv + metrics_summary.json"]
 
     FrozenProject --&gt; PO
     ProjectConfig --&gt; PO
@@ -586,75 +596,71 @@ window.Quarto = {
     Metrics --&gt; Aggregate
 </pre>
 </div>
-<p></figure></p>
+<p></p></figure><p></p>
 </div>
 </div>
 </div>
-<hr />
+<hr>
 </section>
 </section>
 <section id="sec-diag-dmp-coverage" class="level2" data-number="13.4">
-<h2 data-number="13.4"><span class="header-section-number">13.4</span> Diagnostic: DMP Coverage</h2>
+<h2 data-number="13.4" class="anchored" data-anchor-id="sec-diag-dmp-coverage"><span class="header-section-number">13.4</span> Diagnostic: DMP Coverage</h2>
 <p><strong>Symptom.</strong> <code>sample_dmp_coverage.dmps_used_fraction_median &lt; 0.5</code> in <code>validation_metrics.json</code>. Values below 0.3 indicate severe degradation.</p>
-<p><strong>Cause.</strong> The centroid <code>min_coverage</code> (e.g. 4) and the detector <code>min_sample_coverage</code> (default 10) are mismatched. DMP positions that were detectable in training centroids at 4× coverage become invisible in test samples when the classifier requires 10× coverage.</p>
+<p><strong>Cause.</strong> The centroid <code>min_coverage</code> (e.g.&nbsp;4) and the detector <code>min_sample_coverage</code> (default 10) are mismatched. DMP positions that were detectable in training centroids at 4× coverage become invisible in test samples when the classifier requires 10× coverage.</p>
 <p><strong>Fix.</strong> In <code>step_config.detection</code>, add:</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;min_sample_coverage&quot;</span><span class="er">:</span> <span class="dv">4</span></span></code></pre></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="st">"min_sample_coverage"</span><span class="er">:</span> <span class="dv">4</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>This aligns the coverage requirement for classification with the centroid build threshold.</p>
 <p><strong>Verification.</strong> Re-run Workflow 2. <code>dmps_used_fraction_median</code> should rise to 0.6–0.9 for typical WGBS data.</p>
-<hr />
+<hr>
 </section>
 <section id="sec-diag-class-imbalance" class="level2" data-number="13.5">
-<h2 data-number="13.5"><span class="header-section-number">13.5</span> Diagnostic: Class Imbalance</h2>
-<p><strong>Symptom.</strong> The confusion matrix shows near-perfect recall for the majority class (e.g. healthy/control) and near-zero recall for minority classes (disease stages). Balanced accuracy is close to <code>1/K</code> (random chance).</p>
+<h2 data-number="13.5" class="anchored" data-anchor-id="sec-diag-class-imbalance"><span class="header-section-number">13.5</span> Diagnostic: Class Imbalance</h2>
+<p><strong>Symptom.</strong> The confusion matrix shows near-perfect recall for the majority class (e.g.&nbsp;healthy/control) and near-zero recall for minority classes (disease stages). Balanced accuracy is close to <code>1/K</code> (random chance).</p>
 <p><strong>Cause.</strong> The training cohort has substantially more samples in one class. For example, 86 healthy vs 25–36 disease samples per stage (41% healthy in the example project). The multinomial logistic regression learned head defaults to the majority class when the histogram scores are ambiguous (which is common when DMP coverage is low).</p>
 <p><strong>Fix.</strong> In <code>step_config.detection</code>, add:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode json"><code class="sourceCode json"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;multiclass_train_learned_head&quot;</span><span class="er">:</span> <span class="kw">true</span><span class="er">,</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="st">&quot;multiclass_learned_class_weight&quot;</span><span class="er">:</span> <span class="st">&quot;balanced&quot;</span></span></code></pre></div>
-<p>The <code>balanced</code> setting computes <span class="math inline">\(w_k = n_{\text{total}} / (K \cdot n_k)\)</span>, penalizing majority-class errors proportionally less than minority-class errors. See <a href="#sec-classifier-class-weight" class="quarto-xref"><span class="quarto-unresolved-ref">sec-classifier-class-weight</span></a> for the full derivation.</p>
-<hr />
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_train_learned_head"</span><span class="er">:</span> <span class="kw">true</span><span class="er">,</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_learned_class_weight"</span><span class="er">:</span> <span class="st">"balanced"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The <code>balanced</code> setting computes <span class="math inline">\(w_k = n_{\text{total}} / (K \cdot n_k)\)</span>, penalizing majority-class errors proportionally less than minority-class errors. See <a href="04-methylclassifier.html#sec-classifier-class-weight" class="quarto-xref"><span>Section 5.8</span></a> for the full derivation.</p>
+<hr>
 </section>
 <section id="sec-diag-sklearn-version" class="level2" data-number="13.6">
-<h2 data-number="13.6"><span class="header-section-number">13.6</span> Diagnostic: Sklearn Version Mismatch</h2>
+<h2 data-number="13.6" class="anchored" data-anchor-id="sec-diag-sklearn-version"><span class="header-section-number">13.6</span> Diagnostic: Sklearn Version Mismatch</h2>
 <p><strong>Symptom.</strong> Warning messages during prediction: <code>InconsistentVersionWarning: Trying to unpickle estimator LogisticRegression from version X.Y.Z when using version A.B.C</code>.</p>
 <p><strong>Cause.</strong> The <code>multiclass-classifier.pkl</code> was serialized with a different version of scikit-learn than the one currently installed.</p>
 <p><strong>Diagnosis.</strong> Check the <code>sklearn_version</code> field in the model PKL metadata:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pickle</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> <span class="bu">open</span>(<span class="st">&quot;monte_carlo_runs/production/classifiers/multiclass-classifier.pkl&quot;</span>, <span class="st">&quot;rb&quot;</span>) <span class="im">as</span> f:</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pickle</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> <span class="bu">open</span>(<span class="st">"monte_carlo_runs/production/classifiers/multiclass-classifier.pkl"</span>, <span class="st">"rb"</span>) <span class="im">as</span> f:</span>
 <span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> pickle.load(f)</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(model[<span class="st">&quot;metadata&quot;</span>].get(<span class="st">&quot;sklearn_version&quot;</span>))  <span class="co"># version used at training time</span></span></code></pre></div>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(model[<span class="st">"metadata"</span>].get(<span class="st">"sklearn_version"</span>))  <span class="co"># version used at training time</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Compare to the current installed version:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sklearn<span class="op">;</span> <span class="bu">print</span>(sklearn.__version__)</span></code></pre></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sklearn<span class="op">;</span> <span class="bu">print</span>(sklearn.__version__)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Fix.</strong> Re-run the <code>--freeze</code> step with the current sklearn version. The logistic regression head will be retrained and the new PKL will record the correct version. New model PKLs produced after the fix always record <code>sklearn_version</code> in their metadata.</p>
-<hr />
+<hr>
 </section>
 <section id="sec-workflow-parameters" class="level2" data-number="13.7">
-<h2 data-number="13.7"><span class="header-section-number">13.7</span> Choosing Workflow Parameters</h2>
+<h2 data-number="13.7" class="anchored" data-anchor-id="sec-workflow-parameters"><span class="header-section-number">13.7</span> Choosing Workflow Parameters</h2>
 <section id="train_fraction" class="level3" data-number="13.7.1">
-<h3 data-number="13.7.1"><span class="header-section-number">13.7.1</span> <code>train_fraction</code></h3>
+<h3 data-number="13.7.1" class="anchored" data-anchor-id="train_fraction"><span class="header-section-number">13.7.1</span> <code>train_fraction</code></h3>
 <p>Higher values (0.8–0.9) leave less data for validation but produce more powerful centroids in training. For small cohorts (total <span class="math inline">\(n &lt; 50\)</span> per class), prefer 0.8. For large cohorts, 0.9 is reasonable.</p>
 </section>
 <section id="n_iterations" class="level3" data-number="13.7.2">
-<h3 data-number="13.7.2"><span class="header-section-number">13.7.2</span> <code>n_iterations</code></h3>
-<p>More iterations reduce the variance of the empirical performance summaries. 20–50 iterations is typically sufficient to characterize the mean and standard deviation of balanced accuracy. 100+ iterations are useful for stable percentile estimates (e.g. p5, p95).</p>
+<h3 data-number="13.7.2" class="anchored" data-anchor-id="n_iterations"><span class="header-section-number">13.7.2</span> <code>n_iterations</code></h3>
+<p>More iterations reduce the variance of the empirical performance summaries. 20–50 iterations is typically sufficient to characterize the mean and standard deviation of balanced accuracy. 100+ iterations are useful for stable percentile estimates (e.g.&nbsp;p5, p95).</p>
 </section>
 <section id="stability_dmp_freq" class="level3" data-number="13.7.3">
-<h3 data-number="13.7.3"><span class="header-section-number">13.7.3</span> <code>stability_dmp_freq</code></h3>
+<h3 data-number="13.7.3" class="anchored" data-anchor-id="stability_dmp_freq"><span class="header-section-number">13.7.3</span> <code>stability_dmp_freq</code></h3>
 <p>Higher values (0.8–1.0) produce smaller, more reproducible panels but may miss positions that are biologically informative but variable across splits. Lower values (0.5–0.7) retain more positions at the cost of including split-sensitive noise. A good starting point is 0.7.</p>
 </section>
 <section id="stability_min_balanced_accuracy" class="level3" data-number="13.7.4">
-<h3 data-number="13.7.4"><span class="header-section-number">13.7.4</span> <code>stability_min_balanced_accuracy</code></h3>
-<p>Setting this parameter (e.g. to 0.6) excludes iterations with poor validation performance from the DMP frequency count. This can improve panel quality by excluding outlier runs where the centroid construction or detection failed to find informative DMPs. It also reduces the effective <code>R*</code> and thus increases the variance of <span class="math inline">\(\hat{f}(d)\)</span>. Use with caution for small <code>n_iterations</code>.</p>
-<div id="quarto-navigation-envelope" class="hidden">
-<p><span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyLXRpdGxl">MethylPipeline: Theory, Workflows, and Reference</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1uYXZiYXItdGl0bGU=">MethylPipeline: Theory, Workflows, and Reference</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1uZXh0"><span class="chapter-number">14</span>  <span class="chapter-title">Configuration Reference</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1wcmV2"><span class="chapter-number">12</span>  <span class="chapter-title">The Project Configuration File</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9pbmRleC5odG1sPHNwYW4tY2xhc3M9J2NoYXB0ZXItbnVtYmVyJz4xPC9zcGFuPi0tPHNwYW4tY2xhc3M9J2NoYXB0ZXItdGl0bGUnPlNjb3BlLC1UcmFjZWFiaWxpdHksLWFuZC1Ob3RhdGlvbjwvc3Bhbj4="><span class="chapter-number">1</span>  <span class="chapter-title">Scope, Traceability, and Notation</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOnF1YXJ0by1zaWRlYmFyLXNlY3Rpb24tMQ==">Part I: Mathematical and Statistical Foundations</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8wMS1tZXRoeWx1dGlscy5odG1sPHNwYW4tY2xhc3M9J2NoYXB0ZXItbnVtYmVyJz4yPC9zcGFuPi0tPHNwYW4tY2xhc3M9J2NoYXB0ZXItdGl0bGUnPk1ldGh5bFV0aWxzPC9zcGFuPg=="><span class="chapter-number">2</span>  <span class="chapter-title">MethylUtils</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8wMi1tZXRoeWxjZW50cm9pZC5odG1sPHNwYW4tY2xhc3M9J2NoYXB0ZXItbnVtYmVyJz4zPC9zcGFuPi0tPHNwYW4tY2xhc3M9J2NoYXB0ZXItdGl0bGUnPk1ldGh5bENlbnRyb2lkPC9zcGFuPg=="><span class="chapter-number">3</span>  <span class="chapter-title">MethylCentroid</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8wMy1tZXRoeWxkZXRlY3Rvci5odG1sPHNwYW4tY2xhc3M9J2NoYXB0ZXItbnVtYmVyJz40PC9zcGFuPi0tPHNwYW4tY2xhc3M9J2NoYXB0ZXItdGl0bGUnPk1ldGh5bERldGVjdG9yPC9zcGFuPg=="><span class="chapter-number">4</span>  <span class="chapter-title">MethylDetector</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8wNC1tZXRoeWxjbGFzc2lmaWVyLmh0bWw8c3Bhbi1jbGFzcz0nY2hhcHRlci1udW1iZXInPjU8L3NwYW4+LS08c3Bhbi1jbGFzcz0nY2hhcHRlci10aXRsZSc+TWV0aHlsQ2xhc3NpZmllcjwvc3Bhbj4="><span class="chapter-number">5</span>  <span class="chapter-title">MethylClassifier</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8wNS1tZXRoeWxwcmVkaWN0b3ItYW5kLXZhbGlkYXRpb24uaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+Njwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5NZXRoeWxQcmVkaWN0b3ItYW5kLU1ldGh5bFZhbGlkYXRpb248L3NwYW4+"><span class="chapter-number">6</span>  <span class="chapter-title">MethylPredictor and MethylValidation</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8wNi1tZXRoeWxjbHVzdGVyLmh0bWw8c3Bhbi1jbGFzcz0nY2hhcHRlci1udW1iZXInPjc8L3NwYW4+LS08c3Bhbi1jbGFzcz0nY2hhcHRlci10aXRsZSc+TWV0aHlsQ2x1c3Rlcjwvc3Bhbj4="><span class="chapter-number">7</span>  <span class="chapter-title">MethylCluster</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8wNy1tZXRoeWxtYXBwZXIuaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+ODwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5NZXRoeWxNYXBwZXI8L3NwYW4+"><span class="chapter-number">8</span>  <span class="chapter-title">MethylMapper</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8wOC1tZXRoeWxlbnJpY2hlci5odG1sPHNwYW4tY2xhc3M9J2NoYXB0ZXItbnVtYmVyJz45PC9zcGFuPi0tPHNwYW4tY2xhc3M9J2NoYXB0ZXItdGl0bGUnPk1ldGh5bEVucmljaGVyPC9zcGFuPg=="><span class="chapter-number">9</span>  <span class="chapter-title">MethylEnricher</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8wOS1tZXRoeWxhbGlnbm1lbnRxYy5odG1sPHNwYW4tY2xhc3M9J2NoYXB0ZXItbnVtYmVyJz4xMDwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5NZXRoeWxBbGlnbm1lbnRRQzwvc3Bhbj4="><span class="chapter-number">10</span>  <span class="chapter-title">MethylAlignmentQC</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8xMC1saW1pdGF0aW9ucy1hbmQtb3Blbi1xdWVzdGlvbnMuaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+MTE8L3NwYW4+LS08c3Bhbi1jbGFzcz0nY2hhcHRlci10aXRsZSc+TGltaXRhdGlvbnMtYW5kLU9wZW4tUXVlc3Rpb25zPC9zcGFuPg=="><span class="chapter-number">11</span>  <span class="chapter-title">Limitations and Open Questions</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOnF1YXJ0by1zaWRlYmFyLXNlY3Rpb24tMg==">Part II: Workflows and Production</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8xMS1wcm9qZWN0LWNvbmZpZ3VyYXRpb24uaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+MTI8L3NwYW4+LS08c3Bhbi1jbGFzcz0nY2hhcHRlci10aXRsZSc+VGhlLVByb2plY3QtQ29uZmlndXJhdGlvbi1GaWxlPC9zcGFuPg=="><span class="chapter-number">12</span>  <span class="chapter-title">The Project Configuration File</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8xMi10d28td29ya2Zsb3dzLmh0bWw8c3Bhbi1jbGFzcz0nY2hhcHRlci1udW1iZXInPjEzPC9zcGFuPi0tPHNwYW4tY2xhc3M9J2NoYXB0ZXItdGl0bGUnPlRoZS1Ud28tV29ya2Zsb3dzPC9zcGFuPg=="><span class="chapter-number">13</span>  <span class="chapter-title">The Two Workflows</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOnF1YXJ0by1zaWRlYmFyLXNlY3Rpb24tMw==">Part III: Configuration Reference</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8xMy1jb25maWd1cmF0aW9uLXJlZmVyZW5jZS5odG1sPHNwYW4tY2xhc3M9J2NoYXB0ZXItbnVtYmVyJz4xNDwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5Db25maWd1cmF0aW9uLVJlZmVyZW5jZTwvc3Bhbj4="><span class="chapter-number">14</span>  <span class="chapter-title">Configuration Reference</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOnF1YXJ0by1zaWRlYmFyLXNlY3Rpb24tNA==">Part IV: User Guide</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9jaGFwdGVycy8xNC11c2VyLWd1aWRlLmh0bWw8c3Bhbi1jbGFzcz0nY2hhcHRlci1udW1iZXInPjE1PC9zcGFuPi0tPHNwYW4tY2xhc3M9J2NoYXB0ZXItdGl0bGUnPlVzZXItR3VpZGU8L3NwYW4+"><span class="chapter-number">15</span>  <span class="chapter-title">User Guide</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOnF1YXJ0by1zaWRlYmFyLXNlY3Rpb24tNQ==">Appendices</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9SRUFETUUuaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+QTwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5NZXRoeWxQaXBlbGluZS1UaGVvcnktQm9vazwvc3Bhbj4="><span class="chapter-number">A</span>  <span class="chapter-title">MethylPipeline Theory Book</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWludC1zaWRlYmFyOi9ET0NVTUVOVEFUSU9OX1BMQU4uaHRtbDxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+Qjwvc3Bhbj4tLTxzcGFuLWNsYXNzPSdjaGFwdGVyLXRpdGxlJz5NZXRoeWxQaXBlbGluZS1Eb2N1bWVudGF0aW9uLVBsYW48L3NwYW4+"><span class="chapter-number">B</span>  <span class="chapter-title">MethylPipeline Documentation Plan</span></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWJyZWFkY3J1bWJzLVBhcnQtSUk6LVdvcmtmbG93cy1hbmQtUHJvZHVjdGlvbg==">Part II: Workflows and Production</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLWJyZWFkY3J1bWJzLTxzcGFuLWNsYXNzPSdjaGFwdGVyLW51bWJlcic+MTM8L3NwYW4+LS08c3Bhbi1jbGFzcz0nY2hhcHRlci10aXRsZSc+VGhlLVR3by1Xb3JrZmxvd3M8L3NwYW4+"><span class="chapter-number">13</span>  <span class="chapter-title">The Two Workflows</span></span></p>
-</div>
-<div id="quarto-meta-markdown" class="hidden">
-<p><span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLW1ldGF0aXRsZQ=="><span id="sec-two-workflows" class="quarto-section-identifier"><span class="chapter-number">13</span>  <span class="chapter-title">The Two Workflows</span></span> – MethylPipeline: Theory, Workflows, and Reference</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLXR3aXR0ZXJjYXJkdGl0bGU="><span id="sec-two-workflows" class="quarto-section-identifier"><span class="chapter-number">13</span>  <span class="chapter-title">The Two Workflows</span></span> – MethylPipeline: Theory, Workflows, and Reference</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLW9nY2FyZHRpdGxl"><span id="sec-two-workflows" class="quarto-section-identifier"><span class="chapter-number">13</span>  <span class="chapter-title">The Two Workflows</span></span> – MethylPipeline: Theory, Workflows, and Reference</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLW1ldGFzaXRlbmFtZQ==">MethylPipeline: Theory, Workflows, and Reference</span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLXR3aXR0ZXJjYXJkZGVzYw=="></span> <span class="hidden quarto-markdown-envelope-contents" data-render-id="cXVhcnRvLW9nY2FyZGRkZXNj"></span></p>
-</div>
+<h3 data-number="13.7.4" class="anchored" data-anchor-id="stability_min_balanced_accuracy"><span class="header-section-number">13.7.4</span> <code>stability_min_balanced_accuracy</code></h3>
+<p>Setting this parameter (e.g.&nbsp;to 0.6) excludes iterations with poor validation performance from the DMP frequency count. This can improve panel quality by excluding outlier runs where the centroid construction or detection failed to find informative DMPs. It also reduces the effective <code>R*</code> and thus increases the variance of <span class="math inline">\(\hat{f}(d)\)</span>. Use with caution for small <code>n_iterations</code>.</p>
+
+
 </section>
 </section>
 
 </main> <!-- /main -->
-<script id = "quarto-html-after-body" type="application/javascript">
+<script id="quarto-html-after-body" type="application/javascript">
   window.document.addEventListener("DOMContentLoaded", function (event) {
     const icon = "";
     const anchorJS = new window.AnchorJS();
@@ -1056,18 +1062,19 @@ window.Quarto = {
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
-      <a  href="/chapters/11-project-configuration.html" class="pagination-link" aria-label="The Project Configuration File">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class='chapter-number'>12</span>  <span class='chapter-title'>The Project Configuration File</span></span>
+      <a href="../chapters/11-project-configuration.html" class="pagination-link" aria-label="The Project Configuration File">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Project Configuration File</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a  href="/chapters/13-configuration-reference.html" class="pagination-link" aria-label="Configuration Reference">
-        <span class="nav-page-text"><span class='chapter-number'>14</span>  <span class='chapter-title'>Configuration Reference</span></span> <i class="bi bi-arrow-right-short"></i>
+      <a href="../chapters/13-configuration-reference.html" class="pagination-link" aria-label="Configuration Reference">
+        <span class="nav-page-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Configuration Reference</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>
 </div> <!-- /content -->
 
-</body>
 
-</html>
+
+
+</body></html>
