@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>5&nbsp; MethylClassifier – MethylPipeline: Mathematical and Statistical Foundations</title>
+<title>5&nbsp; MethylClassifier – MethylPipeline: Theory, Workflows, and Reference</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -133,7 +133,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/04-methylclassifier.html"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/04-methylclassifier.html"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -148,7 +148,7 @@ window.Quarto = {
   <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
     <div class="pt-lg-2 mt-2 text-left sidebar-header">
     <div class="sidebar-title mb-0 py-0">
-      <a href="../">MethylPipeline: Mathematical and Statistical Foundations</a> 
+      <a href="../">MethylPipeline: Theory, Workflows, and Reference</a> 
     </div>
       </div>
         <div class="mt-2 flex-shrink-0 align-items-center">
@@ -164,70 +164,10 @@ window.Quarto = {
  <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Scope, Traceability, and Notation</span></span></a>
   </div>
 </li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/06-methylcluster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylCluster</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
-  </div>
-</li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
- <span class="menu-text">Appendices</span></a>
+ <span class="menu-text">Part I: Mathematical and Statistical Foundations</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
           </a> 
@@ -235,8 +175,142 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/06-methylcluster.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylCluster</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II: Workflows and Production</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-project-configuration.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Project Configuration File</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-two-workflows.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">The Two Workflows</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III: Configuration Reference</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/13-configuration-reference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Configuration Reference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV: User Guide</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/14-user-guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">User Guide</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../README.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">MethylPipeline Theory Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../DOCUMENTATION_PLAN.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">MethylPipeline Documentation Plan</span></span></a>
   </div>
 </li>
       </ul>
@@ -258,15 +332,16 @@ window.Quarto = {
   <li><a href="#pairwise-control-aggregation" id="toc-pairwise-control-aggregation" class="nav-link" data-scroll-target="#pairwise-control-aggregation"><span class="header-section-number">5.5</span> Pairwise Control Aggregation</a></li>
   <li><a href="#bipartite-multi-control-multi-disease-aggregation" id="toc-bipartite-multi-control-multi-disease-aggregation" class="nav-link" data-scroll-target="#bipartite-multi-control-multi-disease-aggregation"><span class="header-section-number">5.6</span> Bipartite Multi-Control × Multi-Disease Aggregation</a></li>
   <li><a href="#calibration" id="toc-calibration" class="nav-link" data-scroll-target="#calibration"><span class="header-section-number">5.7</span> Calibration</a></li>
-  <li><a href="#missing-data-semantics" id="toc-missing-data-semantics" class="nav-link" data-scroll-target="#missing-data-semantics"><span class="header-section-number">5.8</span> Missing Data Semantics</a></li>
-  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">5.9</span> Publication Guidance</a></li>
+  <li><a href="#sec-classifier-class-weight" id="toc-sec-classifier-class-weight" class="nav-link" data-scroll-target="#sec-classifier-class-weight"><span class="header-section-number">5.8</span> Multiclass Learned Head: Class Weighting</a></li>
+  <li><a href="#missing-data-semantics" id="toc-missing-data-semantics" class="nav-link" data-scroll-target="#missing-data-semantics"><span class="header-section-number">5.9</span> Missing Data Semantics</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">5.10</span> Publication Guidance</a></li>
   </ul>
 </nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default">
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/04-methylclassifier.html"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></a></li></ol></nav>
 <div class="quarto-title">
 <h1 class="title"><span id="sec-methylclassifier" class="quarto-section-identifier"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></h1>
 </div>
@@ -296,7 +371,7 @@ window.Quarto = {
 </section>
 <section id="binary-classification" class="level2" data-number="5.2">
 <h2 data-number="5.2" class="anchored" data-anchor-id="binary-classification"><span class="header-section-number">5.2</span> Binary Classification</h2>
-<p>For a single binary model, the underlying score is the ECDF log-density average described in <a href="01-methylutils.html#eq-ecdf-score" class="quarto-xref">Eq.&nbsp;<span>2.11</span></a> and <a href="01-methylutils.html#eq-ecdf-softmax" class="quarto-xref">Eq.&nbsp;<span>2.12</span></a>. From the perspective of <code>methylclassifier</code>, the main practical issues are:</p>
+<p>For a single binary model, the underlying score is the ECDF log-density average described in <a href="#eq-ecdf-score" class="quarto-xref">Eq.&nbsp;<span class="quarto-unresolved-ref">eq-ecdf-score</span></a> and <a href="#eq-ecdf-softmax" class="quarto-xref">Eq.&nbsp;<span class="quarto-unresolved-ref">eq-ecdf-softmax</span></a>. From the perspective of <code>methylclassifier</code>, the main practical issues are:</p>
 <ul>
 <li>aligning the input sample to the stored DMP order,</li>
 <li>constructing an availability mask for missing loci, and</li>
@@ -353,7 +428,7 @@ window.Quarto = {
 </section>
 <section id="bipartite-multi-control-multi-disease-aggregation" class="level2" data-number="5.6">
 <h2 data-number="5.6" class="anchored" data-anchor-id="bipartite-multi-control-multi-disease-aggregation"><span class="header-section-number">5.6</span> Bipartite Multi-Control × Multi-Disease Aggregation</h2>
-<p>The package also supports bipartite layouts with several control strata and several disease strata. Here it aggregates one probability column across several pairwise experts, again using geometric means. The logic is similar to <a href="#eq-geomean-control" class="quarto-xref">Eq.&nbsp;<span>5.3</span></a> but now applied to either the control column or the disease column depending on which class head is being built.</p>
+<p>The package also supports bipartite layouts with several control strata and several disease strata. Here it aggregates one probability column across several pairwise experts, again using geometric means. The logic is similar to <a href="#eq-geomean-control" class="quarto-xref">Eq.&nbsp;<span class="quarto-unresolved-ref">eq-geomean-control</span></a> but now applied to either the control column or the disease column depending on which class head is being built.</p>
 <p>That construction is convenient for complex cohort hierarchies, but it should be presented as a carefully engineered reduction strategy rather than a textbook probabilistic model.</p>
 </section>
 <section id="calibration" class="level2" data-number="5.7">
@@ -364,13 +439,25 @@ window.Quarto = {
 \tag{5.4}\]</span></span></p>
 <p>This improves probability calibration under distribution shift or class imbalance, but it should not be confused with changing the underlying classifier likelihood.</p>
 </section>
-<section id="missing-data-semantics" class="level2" data-number="5.8">
-<h2 data-number="5.8" class="anchored" data-anchor-id="missing-data-semantics"><span class="header-section-number">5.8</span> Missing Data Semantics</h2>
+<section id="sec-classifier-class-weight" class="level2" data-number="5.8">
+<h2 data-number="5.8" class="anchored" data-anchor-id="sec-classifier-class-weight"><span class="header-section-number">5.8</span> Multiclass Learned Head: Class Weighting</h2>
+<p>When the native multiclass histogram classifier is extended with a learned logistic head (<code>multiclass_train_learned_head: true</code>), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a <code>class_weight</code> parameter (exposed as <code>multiclass_learned_class_weight</code> in <code>step_config.detection</code>; see <a href="#sec-configuration-reference" class="quarto-xref"><span class="quarto-unresolved-ref">sec-configuration-reference</span></a>).</p>
+<p>With <code>multiclass_learned_class_weight: "balanced"</code>, sklearn computes inverse-frequency weights:</p>
+<p><span id="eq-class-weight-balanced"><span class="math display">\[
+w_k = \frac{n_{\text{total}}}{K \cdot n_k},
+\tag{5.5}\]</span></span></p>
+<p>where <span class="math inline">\(n_k\)</span> is the number of training samples in class <span class="math inline">\(k\)</span>, <span class="math inline">\(K\)</span> is the number of classes, and <span class="math inline">\(n_{\text{total}} = \sum_k n_k\)</span>. These weights are passed to the loss function of the multinomial logistic regression, penalizing errors on minority classes more heavily.</p>
+<p>This is particularly important for the prostate cancer staging problem where the healthy control cohort may be two to four times larger than any individual disease stage cohort. Without balancing, the logistic head learns to predict the healthy class as the default when the pre-softmax histogram scores do not provide strong class separation (for example, when only 20% of DMP positions are covered in a test sample; see <a href="#sec-detector-coverage" class="quarto-xref"><span class="quarto-unresolved-ref">sec-detector-coverage</span></a>).</p>
+<p><strong>Theoretical note.</strong> Class weighting corrects for imbalance in the empirical class frequencies of the training set. It does not correct for population prevalence differences between training and deployment contexts. If the intended clinical population has very different disease prevalence from the training cohort, additional calibration against the target distribution is required.</p>
+<p><strong>Reproducibility.</strong> Since sklearn 1.4, the version of sklearn used to train the logistic head is saved in the model PKL metadata under the key <code>sklearn_version</code>. This allows detection of version mismatches between training and inference environments. The key is written by <code>_fit_learned_multiclass_head</code> in <code>packages/methylclassifier/methyl_classifier/utils/multiclass_builder.py</code>.</p>
+</section>
+<section id="missing-data-semantics" class="level2" data-number="5.9">
+<h2 data-number="5.9" class="anchored" data-anchor-id="missing-data-semantics"><span class="header-section-number">5.9</span> Missing Data Semantics</h2>
 <p>A practical but important detail is how the classifier handles unavailable loci. The implementation masks those loci out of the weighted average rather than imputing them with a full modeled distribution. As a result, the effective evidence for a sample depends on how many DMPs are observed for that sample.</p>
 <p>This is a sensible engineering choice, but it means that the posterior confidence is partly a function of data availability as well as class separation.</p>
 </section>
-<section id="publication-guidance" class="level2" data-number="5.9">
-<h2 data-number="5.9" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">5.9</span> Publication Guidance</h2>
+<section id="publication-guidance" class="level2" data-number="5.10">
+<h2 data-number="5.10" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">5.10</span> Publication Guidance</h2>
 <p>The strongest defensible summary is:</p>
 <ul>
 <li>the binary head is an ECDF-based Naive Bayes style score with optional calibration,</li>

@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>4&nbsp; MethylDetector – MethylPipeline: Mathematical and Statistical Foundations</title>
+<title>4&nbsp; MethylDetector – MethylPipeline: Theory, Workflows, and Reference</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -114,7 +114,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/03-methyldetector.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/03-methyldetector.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -129,7 +129,7 @@ window.Quarto = {
   <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
     <div class="pt-lg-2 mt-2 text-left sidebar-header">
     <div class="sidebar-title mb-0 py-0">
-      <a href="../">MethylPipeline: Mathematical and Statistical Foundations</a> 
+      <a href="../">MethylPipeline: Theory, Workflows, and Reference</a> 
     </div>
       </div>
         <div class="mt-2 flex-shrink-0 align-items-center">
@@ -145,70 +145,10 @@ window.Quarto = {
  <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Scope, Traceability, and Notation</span></span></a>
   </div>
 </li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/06-methylcluster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylCluster</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
-  </div>
-</li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
- <span class="menu-text">Appendices</span></a>
+ <span class="menu-text">Part I: Mathematical and Statistical Foundations</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
           </a> 
@@ -216,8 +156,142 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/06-methylcluster.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylCluster</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II: Workflows and Production</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-project-configuration.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Project Configuration File</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-two-workflows.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">The Two Workflows</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III: Configuration Reference</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/13-configuration-reference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Configuration Reference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV: User Guide</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/14-user-guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">User Guide</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../README.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">MethylPipeline Theory Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../DOCUMENTATION_PLAN.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">MethylPipeline Documentation Plan</span></span></a>
   </div>
 </li>
       </ul>
@@ -240,14 +314,16 @@ window.Quarto = {
   <li><a href="#context-and-chromosome-granularity" id="toc-context-and-chromosome-granularity" class="nav-link" data-scroll-target="#context-and-chromosome-granularity"><span class="header-section-number">4.6</span> Context And Chromosome Granularity</a></li>
   <li><a href="#exported-classifier-artifacts" id="toc-exported-classifier-artifacts" class="nav-link" data-scroll-target="#exported-classifier-artifacts"><span class="header-section-number">4.7</span> Exported Classifier Artifacts</a></li>
   <li><a href="#discovery-versus-prediction-exports" id="toc-discovery-versus-prediction-exports" class="nav-link" data-scroll-target="#discovery-versus-prediction-exports"><span class="header-section-number">4.8</span> Discovery versus prediction exports</a></li>
-  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">4.9</span> Publication Guidance</a></li>
+  <li><a href="#sec-detector-fixed-panel" id="toc-sec-detector-fixed-panel" class="nav-link" data-scroll-target="#sec-detector-fixed-panel"><span class="header-section-number">4.9</span> Production Freeze Panel</a></li>
+  <li><a href="#sec-detector-coverage" id="toc-sec-detector-coverage" class="nav-link" data-scroll-target="#sec-detector-coverage"><span class="header-section-number">4.10</span> DMP Coverage in New Samples</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">4.11</span> Publication Guidance</a></li>
   </ul>
 </nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default">
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/03-methyldetector.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></a></li></ol></nav>
 <div class="quarto-title">
 <h1 class="title"><span id="sec-methyldetector" class="quarto-section-identifier"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></h1>
 </div>
@@ -278,7 +354,7 @@ window.Quarto = {
 </section>
 <section id="alignment-and-candidate-set" class="level2" data-number="4.2">
 <h2 data-number="4.2" class="anchored" data-anchor-id="alignment-and-candidate-set"><span class="header-section-number">4.2</span> Alignment And Candidate Set</h2>
-<p>The detector starts from aligned centroid pairs, typically one control centroid and one disease centroid for a given chromosome and context. The alignment step reduces both centroids to the common set of genomic positions and propagates the empirical summaries described in <a href="01-methylutils.html" class="quarto-xref"><span>Chapter 2</span></a> and <a href="02-methylcentroid.html" class="quarto-xref"><span>Chapter 3</span></a>.</p>
+<p>The detector starts from aligned centroid pairs, typically one control centroid and one disease centroid for a given chromosome and context. The alignment step reduces both centroids to the common set of genomic positions and propagates the empirical summaries described in <a href="#sec-methylutils" class="quarto-xref"><span class="quarto-unresolved-ref">sec-methylutils</span></a> and <a href="#sec-methylcentroid" class="quarto-xref"><span class="quarto-unresolved-ref">sec-methylcentroid</span></a>.</p>
 <p>Let <span class="math inline">\(\mathcal{I}\)</span> denote the set of aligned loci under consideration for one comparison.</p>
 </section>
 <section id="statistical-screening" class="level2" data-number="4.3">
@@ -303,7 +379,7 @@ window.Quarto = {
 </section>
 <section id="biological-ranking" class="level2" data-number="4.4">
 <h2 data-number="4.4" class="anchored" data-anchor-id="biological-ranking"><span class="header-section-number">4.4</span> Biological Ranking</h2>
-<p>Once a statistically filtered set exists, the detector ranks loci using the canonical effect score introduced in <a href="01-methylutils.html#eq-effect-size" class="quarto-xref">Eq.&nbsp;<span>2.10</span></a>. This gives a second set of priorities that is explicitly biological or practical rather than inferential.</p>
+<p>Once a statistically filtered set exists, the detector ranks loci using the canonical effect score introduced in <a href="#eq-effect-size" class="quarto-xref">Eq.&nbsp;<span class="quarto-unresolved-ref">eq-effect-size</span></a>. This gives a second set of priorities that is explicitly biological or practical rather than inferential.</p>
 <p>The central design choice is that a locus can be:</p>
 <ul>
 <li>statistically strong but biologically modest,</li>
@@ -355,8 +431,42 @@ window.Quarto = {
 <p>The saved ECDF classifier pickle always uses the <strong>classifier</strong> panel, not the discovery table. MethylMapper and MethylEnricher should read the <strong>discovery</strong> glob (for example <code>dmps-*-discovery.csv</code>). Multiclass merge utilities resolve <code>dmps-*-classifier.csv</code> automatically when present.</p>
 <p>For strict evaluation of a deployed classifier, feature selection must be performed <strong>inside</strong> each outer training fold (for example by running detection on fold-specific centroids, as in Monte Carlo train splits); discovery lists built on all samples may still be reported for mechanism, but they must not be the sole basis for performance claims unless that design is stated explicitly.</p>
 </section>
-<section id="publication-guidance" class="level2" data-number="4.9">
-<h2 data-number="4.9" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">4.9</span> Publication Guidance</h2>
+<section id="sec-detector-fixed-panel" class="level2" data-number="4.9">
+<h2 data-number="4.9" class="anchored" data-anchor-id="sec-detector-fixed-panel"><span class="header-section-number">4.9</span> Production Freeze Panel</h2>
+<p>In the production workflow (<a href="#sec-two-workflows" class="quarto-xref"><span class="quarto-unresolved-ref">sec-two-workflows</span></a>), the detector can bypass statistical and biological discovery entirely and instead operate from a fixed list of pre-selected loci. This is configured via the <code>fixed_dmp_panel</code> parameter in <code>step_config.detection</code>.</p>
+<p>When <code>fixed_dmp_panel</code> is set to a path pointing at a CSV file that contains at minimum the columns <code>chromosome</code> and <code>position</code>, the <code>_run_multi_context</code> method short-circuits the entire discovery pipeline. No centroids are compared, no KS statistics are computed, and no biological filtering is applied. The columns <code>context</code>, <code>effect_size</code>, <code>statistical_dmp</code>, and <code>biological_dmp</code> are inferred or set to unit defaults for any that are missing from the file. The result object is constructed directly from the loaded rows, with <code>biological_retention_rate = 1.0</code> and <code>n_statistical_dmps = n_biological_dmps = n_classifier_dmps</code> all equal to the CSV row count.</p>
+<p>This mechanism serves the production workflow where:</p>
+<ol type="1">
+<li>DMP positions were already validated across many Monte Carlo splits (stability analysis),</li>
+<li>only the most reliably recurring positions are retained in the stable panel, and</li>
+<li>the final model must use exactly those positions on the full dataset without re-running discovery.</li>
+</ol>
+<p>The code path is:</p>
+<pre><code>MethylDetector._run_multi_context()
+  ↓ if config.fixed_dmp_panel is not None
+  ↓ pd.read_csv(fixed_path)
+  ↓ validate columns {"chromosome", "position"} ⊆ columns
+  ↓ infer missing context / effect_size / flags
+  ↓ export CSV + save classifier model
+  ↓ return MethylDetectorResult (no discovery performed)</code></pre>
+<p>The exported classifier model (PKL) is identical in structure to one built through normal discovery; downstream tools (<code>methylclassifier</code>, <code>methylpredictor</code>) are unaware of whether the positions came from live detection or a fixed panel.</p>
+<p><strong>Theoretical note.</strong> Using a fixed panel from a previous analysis is a form of transfer. The panel was selected on a different (possibly overlapping) set of samples. The validity of downstream statistical claims depends on whether the panel samples and the inference samples are from the same population. This is an operational design choice, not a statistical guarantee; it should be stated explicitly in any publication that uses the freeze workflow.</p>
+</section>
+<section id="sec-detector-coverage" class="level2" data-number="4.10">
+<h2 data-number="4.10" class="anchored" data-anchor-id="sec-detector-coverage"><span class="header-section-number">4.10</span> DMP Coverage in New Samples</h2>
+<p>A frequently encountered diagnostic problem is low DMP coverage in validation or prediction samples: the classifier reports that only 10–30% of DMP positions have usable observations in a given sample. The root cause is almost always a mismatch between two coverage thresholds:</p>
+<ul>
+<li><code>min_coverage</code> in <code>step_config.centroid.base_config</code> — the minimum coverage required for a locus to be considered by centroid construction and DMP detection during training.</li>
+<li><code>min_sample_coverage</code> in <code>step_config.detection</code> — the minimum coverage required for a locus to be usable in a new sample during classification.</li>
+</ul>
+<p>If centroid construction required <code>min_coverage = 4</code> but <code>min_sample_coverage</code> is left at its default of <code>10</code>, any locus with between 4 and 9 reads in a test sample will be dropped. Since typical WGBS data is sequenced at moderate depth and coverage varies across the genome, a large fraction of the 60 000 – 200 000 DMP positions selected during training may fall in this 4–9 read range in test samples, causing the effective feature matrix to collapse to 20% of its intended size.</p>
+<p>The observable symptom is:</p>
+<pre><code>sample_dmp_coverage.dmps_used_fraction_median &lt; 0.5</code></pre>
+<p>in <code>validation_metrics.json</code>. Values below 0.3 indicate severe coverage mismatch and nearly always lead to prediction dominated by the majority class.</p>
+<p><strong>Recommended practice:</strong> Set <code>min_sample_coverage</code> equal to the centroid <code>min_coverage</code> used during training. In most projects this means <code>min_sample_coverage: 4</code> when <code>base_config.min_coverage: 4</code>. A higher <code>min_sample_coverage</code> is appropriate only when test samples are known to be sequenced at substantially higher depth than training centroids and locus-level precision is paramount.</p>
+</section>
+<section id="publication-guidance" class="level2" data-number="4.11">
+<h2 data-number="4.11" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">4.11</span> Publication Guidance</h2>
 <p>The most accurate publication description is:</p>
 <ul>
 <li><code>methyldetector</code> performs nonparametric locus-wise screening,</li>
@@ -364,6 +474,7 @@ window.Quarto = {
 <li>supplements significance with heuristic biological ranking,</li>
 <li>and exports a reduced, weighted empirical-distribution feature set.</li>
 </ul>
+<p>When the <code>fixed_dmp_panel</code> path is used, the package should be described as applying a pre-specified position set rather than performing novel discovery.</p>
 <p>The package should <strong>not</strong> be described as a pure hypothesis-testing engine if the effect-coverage filters are active, because those filters are explicitly post-test prioritization rules.</p>
 
 

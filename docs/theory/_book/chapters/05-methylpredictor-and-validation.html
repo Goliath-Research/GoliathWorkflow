@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>6&nbsp; MethylPredictor and MethylValidation – MethylPipeline: Mathematical and Statistical Foundations</title>
+<title>6&nbsp; MethylPredictor and MethylValidation – MethylPipeline: Theory, Workflows, and Reference</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -114,7 +114,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/05-methylpredictor-and-validation.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/05-methylpredictor-and-validation.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -129,7 +129,7 @@ window.Quarto = {
   <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
     <div class="pt-lg-2 mt-2 text-left sidebar-header">
     <div class="sidebar-title mb-0 py-0">
-      <a href="../">MethylPipeline: Mathematical and Statistical Foundations</a> 
+      <a href="../">MethylPipeline: Theory, Workflows, and Reference</a> 
     </div>
       </div>
         <div class="mt-2 flex-shrink-0 align-items-center">
@@ -145,70 +145,10 @@ window.Quarto = {
  <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Scope, Traceability, and Notation</span></span></a>
   </div>
 </li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/06-methylcluster.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylCluster</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
-  </div>
-</li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
             <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
- <span class="menu-text">Appendices</span></a>
+ <span class="menu-text">Part I: Mathematical and Statistical Foundations</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
           </a> 
@@ -216,8 +156,142 @@ window.Quarto = {
       <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/06-methylcluster.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylCluster</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II: Workflows and Production</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-project-configuration.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Project Configuration File</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-two-workflows.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">The Two Workflows</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III: Configuration Reference</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/13-configuration-reference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Configuration Reference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV: User Guide</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/14-user-guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">User Guide</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="../README.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">MethylPipeline Theory Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../DOCUMENTATION_PLAN.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">MethylPipeline Documentation Plan</span></span></a>
   </div>
 </li>
       </ul>
@@ -238,14 +312,17 @@ window.Quarto = {
   <li><a href="#methylvalidation-split-strategy" id="toc-methylvalidation-split-strategy" class="nav-link" data-scroll-target="#methylvalidation-split-strategy"><span class="header-section-number">6.4</span> MethylValidation: Split Strategy</a></li>
   <li><a href="#monte-carlo-evaluation" id="toc-monte-carlo-evaluation" class="nav-link" data-scroll-target="#monte-carlo-evaluation"><span class="header-section-number">6.5</span> Monte Carlo Evaluation</a></li>
   <li><a href="#what-the-validation-layer-does-not-do" id="toc-what-the-validation-layer-does-not-do" class="nav-link" data-scroll-target="#what-the-validation-layer-does-not-do"><span class="header-section-number">6.6</span> What The Validation Layer Does Not Do</a></li>
-  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">6.7</span> Publication Guidance</a></li>
+  <li><a href="#sec-stability-analysis" id="toc-sec-stability-analysis" class="nav-link" data-scroll-target="#sec-stability-analysis"><span class="header-section-number">6.7</span> Stability Analysis</a></li>
+  <li><a href="#sec-production-freeze" id="toc-sec-production-freeze" class="nav-link" data-scroll-target="#sec-production-freeze"><span class="header-section-number">6.8</span> Production Freeze</a></li>
+  <li><a href="#sec-two-workflows-summary" id="toc-sec-two-workflows-summary" class="nav-link" data-scroll-target="#sec-two-workflows-summary"><span class="header-section-number">6.9</span> Two Workflows Summary</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">6.10</span> Publication Guidance</a></li>
   </ul>
 </nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default">
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/05-methylpredictor-and-validation.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></a></li></ol></nav>
 <div class="quarto-title">
 <h1 class="title"><span id="sec-methylpredictor-validation" class="quarto-section-identifier"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></h1>
 </div>
@@ -347,14 +424,54 @@ s_m^2 = \frac{1}{R-1}\sum_{r=1}^{R}(m_r - \bar m)^2,
 </ul>
 <p>Those omissions are not flaws in themselves, but they matter for publication wording. The package measures empirical variation across repeated pipeline runs; it does not prove generalization bounds.</p>
 </section>
-<section id="publication-guidance" class="level2" data-number="6.7">
-<h2 data-number="6.7" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">6.7</span> Publication Guidance</h2>
+<section id="sec-stability-analysis" class="level2" data-number="6.7">
+<h2 data-number="6.7" class="anchored" data-anchor-id="sec-stability-analysis"><span class="header-section-number">6.7</span> Stability Analysis</h2>
+<p>After completing a set of Monte Carlo runs, the <code>--stability</code> mode aggregates DMP recurrence across runs. For each discovery DMP <span class="math inline">\(d\)</span> (a <code>(chromosome, position)</code> pair), define the recurrence indicator</p>
+<p><span class="math display">\[
+\mathbf{1}_r(d) =
+\begin{cases}
+1 &amp; \text{if } d \in \mathcal{D}_{\text{disc},r} \\
+0 &amp; \text{otherwise}
+\end{cases}
+\]</span></p>
+<p>where <span class="math inline">\(\mathcal{D}_{\text{disc},r}\)</span> is the set of discovery DMPs from run <span class="math inline">\(r\)</span>. When a minimum balanced accuracy threshold <span class="math inline">\(\beta_{\min}\)</span> is configured, only qualifying runs (those with <span class="math inline">\(\widehat{\text{BA}}_r \ge \beta_{\min}\)</span>) contribute to the count. Let <span class="math inline">\(R^*\)</span> denote the number of qualifying runs. The estimated recurrence frequency is</p>
+<p><span id="eq-stability-frequency"><span class="math display">\[
+\hat{f}(d) = \frac{1}{R^*} \sum_{r=1}^{R^*} \mathbf{1}_r(d).
+\tag{6.3}\]</span></span></p>
+<p>A DMP is declared <strong>stable</strong> if <span class="math inline">\(\hat{f}(d) \ge \tau\)</span> for a user-specified threshold <span class="math inline">\(\tau\)</span> (default 0.7, <code>stability_dmp_freq</code>). The output is a CSV file <code>stable_dmps_production.csv</code> containing all stable DMPs with their frequencies, sorted by decreasing frequency.</p>
+<p>Gene stability is an analogous measure over enricher gene lists: the frequency at which each gene appears in enrichment results across qualifying runs.</p>
+<p><strong>Theoretical note.</strong> <span class="math inline">\(\hat{f}(d)\)</span> is an empirical frequency, not a formal probability. It depends on the train fraction <span class="math inline">\(\rho\)</span>, the random seed, and the number of iterations <span class="math inline">\(R\)</span>. With small <span class="math inline">\(R\)</span> the estimate is noisy. The threshold <span class="math inline">\(\tau\)</span> is a heuristic engineering choice, not derived from any optimality criterion. Higher <span class="math inline">\(\tau\)</span> produces smaller, more reproducible panels; lower <span class="math inline">\(\tau\)</span> retains more positions at the cost of including split-dependent noise.</p>
+</section>
+<section id="sec-production-freeze" class="level2" data-number="6.8">
+<h2 data-number="6.8" class="anchored" data-anchor-id="sec-production-freeze"><span class="header-section-number">6.8</span> Production Freeze</h2>
+<p>The production freeze converts the stable DMP panel into a final production model trained on the full dataset. The <code>--freeze</code> flag calls <code>freeze_production_model()</code> in <code>packages/methylvalidation/methyl_validation/stability.py</code>, which:</p>
+<ol type="1">
+<li>Merges one or more per-chromosome stable DMP CSVs into a single genome-wide panel (<code>stable_dmps_genomewide.csv</code>).</li>
+<li>Loads the base project JSON and injects <code>fixed_dmp_panel</code> into <code>step_config.detection</code> (pointing at the merged CSV).</li>
+<li>Writes a <code>production/project.json</code> with <code>project_name = "production"</code> and <code>output_base</code> routed to the production directory.</li>
+<li>Executes <code>run_pipeline_for_production()</code>, which runs the full pipeline in order: <code>methyl-centroid → methyl-detector(fixed panel) → methyl-classifier → methyl-mapper → methyl-enricher</code>. The predictor is intentionally excluded; the production build is for model construction only.</li>
+<li>Writes a <code>production_summary.json</code> summarizing the run.</li>
+</ol>
+<p>The resulting <code>production/classifiers/</code> directory contains the final classifier PKL that can be used for deployment or evaluated via the predictor-only workflow below.</p>
+<p>The production project JSON (<code>production/project.json</code>) is the artifact that links the frozen model to the <code>--predictor-only</code> workflow: it encodes the centroid directories, detection output paths, and classifier paths so that <code>methyl-predictor</code> can resolve them without re-running any upstream steps.</p>
+</section>
+<section id="sec-two-workflows-summary" class="level2" data-number="6.9">
+<h2 data-number="6.9" class="anchored" data-anchor-id="sec-two-workflows-summary"><span class="header-section-number">6.9</span> Two Workflows Summary</h2>
+<p>MethylValidation supports two primary operational modes, described in full in <a href="#sec-two-workflows" class="quarto-xref"><span class="quarto-unresolved-ref">sec-two-workflows</span></a>. A brief summary for theory readers:</p>
+<p><strong>Workflow 1 — Model Creation.</strong> Repeated Monte Carlo runs with <code>--stability</code> estimate DMP recurrence frequencies. The <code>--freeze</code> step then trains a single final model on the full dataset restricted to the stable DMP panel (via <code>fixed_dmp_panel</code>). This workflow answers the question: <em>which positions are robustly differentially methylated across random data partitions, and what classifier do they produce on all available data?</em></p>
+<p><strong>Workflow 2 — Model Use for Prediction.</strong> The <code>--predictor-only</code> flag evaluates the frozen production model on repeated random holdouts without retraining. This workflow answers the question: <em>what is the empirical distribution of classification performance for the frozen production classifier under random sampling from the available cohort?</em></p>
+<p>The two workflows share the same split-and-aggregate infrastructure (<code>split.py</code>, <code>project_gen.py</code>, <code>pipeline_runner.py</code>) but differ in which pipeline steps execute per iteration. Workflow 1 runs centroid through predictor; Workflow 2 runs only the predictor.</p>
+</section>
+<section id="publication-guidance" class="level2" data-number="6.10">
+<h2 data-number="6.10" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">6.10</span> Publication Guidance</h2>
 <p>For publication text:</p>
 <ul>
 <li>describe <code>methylpredictor</code> as the evaluation and application layer for trained classifiers,</li>
 <li>reserve discrimination claims for labeled validation cohorts,</li>
-<li>treat blind-mode entropy as an uncertainty diagnostic only, and</li>
-<li>describe <code>methylvalidation</code> as repeated split-sample internal validation of the end-to-end workflow.</li>
+<li>treat blind-mode entropy as an uncertainty diagnostic only,</li>
+<li>describe <code>methylvalidation</code> as repeated split-sample internal validation of the end-to-end workflow,</li>
+<li>report the stability threshold <span class="math inline">\(\tau\)</span> and the number of qualifying runs <span class="math inline">\(R^*\)</span> when using <code>--stability</code>, and</li>
+<li>state explicitly whether the production model was trained on all samples or on a split-specific subset.</li>
 </ul>
 <p>That is both accurate to the code and defensible statistically.</p>
 
