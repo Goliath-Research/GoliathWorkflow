@@ -102,6 +102,36 @@ def run_enricher(project_json: str | Path, per_cancer_group: bool = False) -> tu
     return run_cmd(cmd)
 
 
+def _progression_settings(project_json: str | Path) -> Dict[str, Any]:
+    """Read progression step settings from project.json."""
+    try:
+        from methyl_utils import load_project
+    except Exception:
+        return {}
+    try:
+        project = load_project(project_json)
+        return project.get_step_config("progression") or {}
+    except Exception:
+        return {}
+
+
+def run_progression(project_json: str | Path) -> tuple[int, str, str]:
+    """Run methyl-disease-progression --project <project_json> with optional step_config args."""
+    cfg = _progression_settings(project_json)
+    cmd = ["methyl-disease-progression", "--project", str(project_json)]
+    out_dir = cfg.get("output_dir")
+    if out_dir:
+        cmd.extend(["--output-dir", str(out_dir)])
+    ordered = cfg.get("ordered_comparison_labels") or cfg.get("ordered_disease_groups")
+    if isinstance(ordered, list) and ordered:
+        cmd.extend(["--ordered-comparison-labels", ",".join(str(x) for x in ordered)])
+    if bool(cfg.get("strict_missing", False)):
+        cmd.append("--strict-missing")
+    if bool(cfg.get("report_md", False)):
+        cmd.append("--report-md")
+    return run_cmd(cmd)
+
+
 def run_predictor(
     project_json: str | Path,
     test_control_csv: str | Path,
@@ -324,10 +354,16 @@ def run_pipeline_for_production(
         ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=False)),
     ]
     skip_enricher = config is not None and getattr(config, "skip_enricher", False)
+    progression_cfg = _progression_settings(project_json)
+    progression_enabled = bool(progression_cfg.get("enabled", False))
     if not skip_enricher:
         steps.append(
             ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=False)),
         )
+        if progression_enabled:
+            steps.append(
+                ("methyl-disease-progression", lambda: run_progression(project_json)),
+            )
 
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:

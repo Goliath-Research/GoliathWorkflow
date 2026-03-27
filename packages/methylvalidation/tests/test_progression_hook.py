@@ -1,0 +1,60 @@
+from pathlib import Path
+from types import SimpleNamespace
+
+from methyl_validation import pipeline_runner
+
+
+def test_run_pipeline_for_production_includes_progression_when_enabled(monkeypatch):
+    calls = []
+
+    def _ok(name):
+        def _f(*args, **kwargs):
+            calls.append(name)
+            return 0, "ok", ""
+
+        return _f
+
+    monkeypatch.setattr(pipeline_runner, "run_centroid", _ok("methyl-centroid"))
+    monkeypatch.setattr(pipeline_runner, "run_detector", _ok("methyl-detector"))
+    monkeypatch.setattr(pipeline_runner, "run_mapper", _ok("methyl-mapper"))
+    monkeypatch.setattr(pipeline_runner, "run_enricher", _ok("methyl-enricher"))
+    monkeypatch.setattr(pipeline_runner, "run_progression", _ok("methyl-disease-progression"))
+    monkeypatch.setattr(pipeline_runner, "_progression_settings", lambda _p: {"enabled": True})
+
+    ok, errors, timings = pipeline_runner.run_pipeline_for_production(
+        Path("/tmp/project.json"),
+        config=SimpleNamespace(skip_enricher=False),
+    )
+    assert ok
+    assert not errors
+    assert [t["step_name"] for t in timings] == calls
+    assert calls[-1] == "methyl-disease-progression"
+
+
+def test_run_pipeline_for_production_skips_progression_when_skip_enricher(monkeypatch):
+    calls = []
+
+    def _ok(name):
+        def _f(*args, **kwargs):
+            calls.append(name)
+            return 0, "ok", ""
+
+        return _f
+
+    monkeypatch.setattr(pipeline_runner, "run_centroid", _ok("methyl-centroid"))
+    monkeypatch.setattr(pipeline_runner, "run_detector", _ok("methyl-detector"))
+    monkeypatch.setattr(pipeline_runner, "run_mapper", _ok("methyl-mapper"))
+    monkeypatch.setattr(pipeline_runner, "run_enricher", _ok("methyl-enricher"))
+    monkeypatch.setattr(pipeline_runner, "run_progression", _ok("methyl-disease-progression"))
+    monkeypatch.setattr(pipeline_runner, "_progression_settings", lambda _p: {"enabled": True})
+
+    ok, errors, timings = pipeline_runner.run_pipeline_for_production(
+        Path("/tmp/project.json"),
+        config=SimpleNamespace(skip_enricher=True),
+    )
+    assert ok
+    assert not errors
+    assert "methyl-enricher" not in calls
+    assert "methyl-disease-progression" not in calls
+    assert [t["step_name"] for t in timings] == calls
+

@@ -6,6 +6,7 @@ MethylValidation orchestrates repeated train/validation splits, **methyl-centroi
 
 1. **Model Creation** (`--stability` + `--freeze` + `--model`) — Identify stable DMPs across many random splits, extract pathways, and then build a final production model on all data.
 2. **Model Use for Prediction** (`--predictor-only`) — Evaluate a frozen production model on random holdouts without retraining.
+3. **Disease Progression Synthesis** (`step_config.progression.enabled`) — After freeze, aggregate per-stage mapper/enricher outputs into cross-stage progression tables.
 
 Both workflows are controlled by the project configuration file. See the full Quarto documentation at `docs/theory/` for theoretical background and the complete configuration reference.
 
@@ -64,7 +65,7 @@ methyl-validation --project configs/my_project.json --predictor-only
 | `--project PATH` | Path to the project JSON (preferred; reads `step_config.validation` from the project). |
 | `--config PATH` | Path to a standalone Monte Carlo config JSON (alternative to `--project`). |
 | `--stability` | Run stability analysis after the MC loop (Workflow 1, Step 1). |
-| `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). |
+| `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If `step_config.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. |
 | `--model` | Run production model builder after freeze (Workflow 1, Step 3). |
 | `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). |
 | `--skip-enricher` | Skip the enricher inside MC iterations even when `run_mapper_and_enricher: true`. |
@@ -117,6 +118,26 @@ Rather than a separate Monte Carlo config file, embed the validation settings di
 
 All `step_config.validation` fields are documented in the configuration reference (see `docs/theory/chapters/13-configuration-reference.qmd` or the Quarto book at `docs/theory/`).
 
+### Optional: `step_config.progression`
+
+`methyl-validation` reads progression settings from `step_config.progression` in the project JSON when running `--freeze`:
+
+```json
+"step_config": {
+  "progression": {
+    "enabled": true,
+    "ordered_comparison_labels": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"],
+    "strict_missing": false,
+    "report_md": true
+  }
+}
+```
+
+- `enabled`: run `methyl-disease-progression` after `methyl-enricher` in freeze.
+- `ordered_comparison_labels`: explicit stage order (optional; defaults to project comparison order).
+- `strict_missing`: fail progression if any expected stage file is missing.
+- `report_md`: emit `progression/report.md` in addition to CSV/JSON outputs.
+
 ---
 
 ## Outputs
@@ -133,6 +154,7 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `stability/stable_dmps_production.csv` | Stable DMP panel (created by `--stability`). |
 | `stability/stability_summary.json` | Stability run summary: `n_runs_analyzed`, `stable_dmps_at_threshold`, `min_frequency`. |
 | `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |
+| `production/progression/` | Disease progression synthesis outputs (`genes_long.csv`, `pathways_long.csv`, `modules_long.csv`, `entities_progression_labels.csv`, `summary.json`, optional `report.md`). |
 | `production/classifiers/multiclass-classifier.pkl` | **Final production model.** |
 | `production/production_summary.json` | Production freeze summary. |
 
