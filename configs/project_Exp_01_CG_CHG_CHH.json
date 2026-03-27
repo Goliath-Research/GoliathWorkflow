@@ -138,7 +138,7 @@
       "enrich_profile": "permissive",
       "optimize_dmps": false,
       "grok_max_workers": 16,
-      "grok_batch_size": 20
+      "grok_batch_size": 16
     },
     "enricher": {
       "gene_column": "gene_name",

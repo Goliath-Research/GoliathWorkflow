@@ -157,7 +157,7 @@
       "enrich_profile": "permissive",
       "optimize_dmps": false,
       "grok_max_workers": 1,
-      "grok_batch_size": 20,
+      "grok_batch_size": 16,
       "rate_limit_delay": 5.0
     },
     "enricher": {

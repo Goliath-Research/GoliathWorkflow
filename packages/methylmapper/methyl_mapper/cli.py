@@ -530,8 +530,8 @@ Examples:
     disease_group.add_argument(
         '--grok-batch-size',
         type=int,
-        default=20,
-        help='Number of genes per Grok batch request (default: 20; reduce if Grok returns truncated JSON)'
+        default=16,
+        help='Number of genes per Grok batch request (default: 16; reduce if Grok returns truncated JSON)'
     )
     disease_group.add_argument(
         '--grok-max-workers',
@@ -837,7 +837,22 @@ def _grok_api_key_available(args: argparse.Namespace) -> bool:
     }
     if getattr(args, "azure_secret_name", None):
         kw["azure_secret_name"] = args.azure_secret_name
-    return bool(SecureCredentialManager(**kw).get_credential(explicit_key=None))
+    mgr = SecureCredentialManager(**kw)
+    key = mgr.get_credential(explicit_key=None)
+    if key:
+        return True
+    if vault:
+        secret_name = getattr(args, "azure_secret_name", None) or "grok-api-key"
+        detail = (
+            mgr.last_resolution_error
+            or f"No key resolved from Azure Key Vault '{vault}' secret '{secret_name}'."
+        )
+        logger.warning(
+            "Grok API key resolution failed via Key Vault. %s "
+            "If running on Azure, ensure managed identity has 'get' permission for this secret.",
+            detail,
+        )
+    return False
 
 
 def _maybe_persist_bedtools_enrichment_secrets(args: argparse.Namespace) -> None:

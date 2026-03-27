@@ -62,6 +62,7 @@ class SecureCredentialManager:
         )
         self.encrypted_file_path = encrypted_file_path or self._get_default_encrypted_path()
         self.env_var_name = env_var_name or credential_name.upper().replace('-', '_')
+        self.last_resolution_error: Optional[str] = None
         
         # Lazy initialization of Azure client
         self._azure_client = None
@@ -151,6 +152,7 @@ class SecureCredentialManager:
         Returns:
             API key or None if not found
         """
+        self.last_resolution_error = None
         # 1. Explicitly provided key
         if explicit_key:
             return explicit_key
@@ -175,13 +177,23 @@ class SecureCredentialManager:
                     logger.debug(f"✅ Retrieved {self.credential_name} from Azure Key Vault")
                     return secret.value
             except Exception as e:
-                logger.debug(f"Azure Key Vault retrieval failed: {e}")
+                self.last_resolution_error = (
+                    f"Azure Key Vault retrieval failed for secret '{self.azure_secret_name}' "
+                    f"at '{self.azure_key_vault_url}': {e}"
+                )
+                logger.warning(self.last_resolution_error)
         
         # 4. Environment variable (last resort)
         env_value = os.environ.get(self.env_var_name)
         if env_value:
             logger.debug(f"✅ Retrieved {self.credential_name} from environment variable")
             return env_value
+
+        if self.azure_key_vault_url and self.last_resolution_error is None:
+            self.last_resolution_error = (
+                f"No credential found in Azure Key Vault (secret '{self.azure_secret_name}' "
+                f"at '{self.azure_key_vault_url}') and environment variable '{self.env_var_name}' is empty."
+            )
         
         return None
     

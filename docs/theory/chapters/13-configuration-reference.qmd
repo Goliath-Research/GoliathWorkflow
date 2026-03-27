@@ -172,7 +172,7 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `enrich_source` | str | `"opentargets"` | Enrichment source: `"opentargets"`, `"grok"`, or `"grok+opentargets"`. |
 | `enrich_profile` | str | `"permissive"` | Enrichment stringency profile. |
 | `grok_max_workers` | int | `1` | Parallel workers for Grok API calls. |
-| `grok_batch_size` | int | `20` | Gene batch size per Grok API request. |
+| `grok_batch_size` | int | `16` | Gene batch size per Grok API request. |
 | `rate_limit_delay` | float | `5.0` | Seconds to wait between Grok API calls. |
 | `grok_max_retries` | int | `3` | Maximum Grok API retries per request. |
 | `grok_429_cooldown` | int | `60` | Seconds to wait after a 429 rate-limit response. |

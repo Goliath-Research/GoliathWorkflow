@@ -31,7 +31,7 @@ TARGET_CACHE_COLUMNS = ["gene_name", "ts", "target_id"]
 
 DEFAULT_CACHE_TTL_DAYS = 7
 DEFAULT_GROK_CACHE_TTL_DAYS = 7
-DEFAULT_GROK_BATCH_SIZE = 20
+DEFAULT_GROK_BATCH_SIZE = 16
 DEFAULT_GROK_MAX_WORKERS = 1
 DEFAULT_GROK_USE_XAI_BATCH_API = False
 DEFAULT_GROK_BATCH_POLL_INTERVAL = 2.0
@@ -569,6 +569,7 @@ class GeneDiseaseEnricher:
         logger.info(f"Querying Grok API for {len(uncached_genes)} genes associated with '{disease_term}'...")
 
         results = cached_results.copy()
+        starting_batch_size = int(self.grok_batch_size)
         batches = [
             uncached_genes[i:i + self.grok_batch_size]
             for i in range(0, len(uncached_genes), self.grok_batch_size)
@@ -580,12 +581,38 @@ class GeneDiseaseEnricher:
         else:
             progress = ProgressIndicator(total_batches, "Grok API batches", update_interval=1)
             if self.grok_max_workers == 1 or total_batches == 1:
-                for batch_num, batch in enumerate(batches, start=1):
-                    batch_results, success = self._query_grok_batch(batch, disease_term, batch_num)
+                remaining_genes = list(uncached_genes)
+                batch_num = 0
+                current_batch_size = max(1, int(self.grok_batch_size))
+                while remaining_genes:
+                    batch = remaining_genes[:current_batch_size]
+                    remaining_genes = remaining_genes[current_batch_size:]
+                    batch_num += 1
+
+                    batch_results, success, used_split_fallback = self._query_grok_batch(
+                        batch, disease_term, batch_num
+                    )
                     results.update(batch_results)
                     progress.update(success=success)
-                    if batch_num >= total_batches:
-                        break
+                    if used_split_fallback and current_batch_size > 1:
+                        # Adaptive sizing for the rest of the run: step down gradually to reduce
+                        # repeated paid calls that return truncated/invalid JSON.
+                        new_batch_size = max(1, current_batch_size - 2)
+                        if new_batch_size < current_batch_size:
+                            logger.info(
+                                "Grok adaptive batching: reducing batch size from %d to %d "
+                                "after parse fallback; keeping new size for remaining requests.",
+                                current_batch_size,
+                                new_batch_size,
+                            )
+                            current_batch_size = new_batch_size
+                            self.grok_batch_size = new_batch_size
+                            remaining_batches = (
+                                (len(remaining_genes) + current_batch_size - 1) // current_batch_size
+                                if remaining_genes
+                                else 0
+                            )
+                            progress.total = progress.current + remaining_batches
                     if not success and self.grok_429_inter_batch_sleep > 0:
                         logger.info(
                             "Waiting %.0fs after failed Grok batch before next batch.",
@@ -602,13 +629,19 @@ class GeneDiseaseEnricher:
                     }
                     for future in as_completed(future_to_batch_num):
                         try:
-                            batch_results, success = future.result()
+                            batch_results, success, _used_split_fallback = future.result()
                         except Exception as exc:
                             logger.warning(f"Grok API batch failed unexpectedly: {exc}")
                             batch_results, success = {}, False
                         results.update(batch_results)
                         progress.update(success=success)
 
+        settled_batch_size = int(self.grok_batch_size)
+        logger.info(
+            "Grok adaptive batch size settled at %d (start: %d)",
+            settled_batch_size,
+            starting_batch_size,
+        )
         logger.info(f"✅ Retrieved disease associations for {len(results)} genes from Grok API ({len(cached_results)} cached, {len(results) - len(cached_results)} new)")
         self._save_disk_cache()
         return results
@@ -884,7 +917,7 @@ class GeneDiseaseEnricher:
         def _merge_batch_result(gene_batch: List[str], batch_num: int, completion: Dict) -> Tuple[Dict[str, Dict], bool]:
             batch_results, used_fallback = self._parse_grok_response(completion, gene_batch)
             if used_fallback and len(gene_batch) > 1:
-                batch_results, ok = self._query_grok_batch(gene_batch, disease_term, batch_num)
+                batch_results, ok, _ = self._query_grok_batch(gene_batch, disease_term, batch_num)
                 return batch_results, ok
             for gene_name, association_info in batch_results.items():
                 self._cache_set(self._cache_key("grok", gene_name, disease_term), association_info)
@@ -896,14 +929,14 @@ class GeneDiseaseEnricher:
                 logger.warning(
                     f"xAI batch: no result for {rid}; falling back to realtime for {len(gene_batch)} genes"
                 )
-                batch_results, ok = self._query_grok_batch(gene_batch, disease_term, batch_num)
+                batch_results, ok, _ = self._query_grok_batch(gene_batch, disease_term, batch_num)
                 results.update(batch_results)
                 progress.update(success=ok)
                 continue
             if rid in failed_rids:
                 err_txt = item.get("error_message") or item.get("error") or item
                 logger.warning(f"xAI batch request failed {rid}: {err_txt}")
-                batch_results, ok = self._query_grok_batch(gene_batch, disease_term, batch_num)
+                batch_results, ok, _ = self._query_grok_batch(gene_batch, disease_term, batch_num)
                 results.update(batch_results)
                 progress.update(success=ok)
                 continue
@@ -914,7 +947,7 @@ class GeneDiseaseEnricher:
                 progress.update(success=ok)
             except Exception as exc:
                 logger.warning(f"xAI batch result failed for {rid} ({len(gene_batch)} genes): {exc}")
-                batch_results, ok = self._query_grok_batch(gene_batch, disease_term, batch_num)
+                batch_results, ok, _ = self._query_grok_batch(gene_batch, disease_term, batch_num)
                 results.update(batch_results)
                 progress.update(success=ok)
 
@@ -923,10 +956,10 @@ class GeneDiseaseEnricher:
         batch: List[str],
         disease_term: str,
         batch_num: int,
-        _allow_smaller_retry: bool = True,
-    ) -> Tuple[Dict[str, Dict], bool]:
+    ) -> Tuple[Dict[str, Dict], bool, bool]:
         """Query one Grok batch with retries and batch-local caching.
-        On JSON parse failure (e.g. response too large), retries once with half-sized batches if allowed.
+        On JSON parse fallback (e.g. truncated/invalid JSON), recursively split into
+        smaller batches until parsing succeeds or the batch size reaches one gene.
         """
         prompt = self._create_grok_prompt(batch, disease_term)
         last_error = None
@@ -945,25 +978,21 @@ class GeneDiseaseEnricher:
                 response = self._call_grok_api(prompt, timeout=timeout)
                 batch_results, used_fallback = self._parse_grok_response(response, batch)
 
-                if used_fallback and len(batch) > 1 and _allow_smaller_retry:
+                if used_fallback and len(batch) > 1:
                     mid = len(batch) // 2
                     sub_batch_a, sub_batch_b = batch[:mid], batch[mid:]
                     logger.info(
                         f"Grok batch {batch_num}: JSON parse failed (response likely too large). "
-                        f"Retrying once with smaller batches: {len(sub_batch_a)} + {len(sub_batch_b)} genes"
+                        f"Retrying with smaller batches: {len(sub_batch_a)} + {len(sub_batch_b)} genes"
                     )
-                    results_a, ok_a = self._query_grok_batch(
-                        sub_batch_a, disease_term, batch_num, _allow_smaller_retry=False
-                    )
-                    results_b, ok_b = self._query_grok_batch(
-                        sub_batch_b, disease_term, batch_num, _allow_smaller_retry=False
-                    )
+                    results_a, ok_a, _ = self._query_grok_batch(sub_batch_a, disease_term, batch_num)
+                    results_b, ok_b, _ = self._query_grok_batch(sub_batch_b, disease_term, batch_num)
                     merged = {**results_a, **results_b}
-                    return merged, ok_a and ok_b
+                    return merged, ok_a and ok_b, True
 
                 for gene_name, association_info in batch_results.items():
                     self._cache_set(self._cache_key("grok", gene_name, disease_term), association_info)
-                return batch_results, True
+                return batch_results, True, False
             except requests.HTTPError as exc:
                 last_error = exc
                 if attempt < self.max_retries - 1:
@@ -1012,7 +1041,7 @@ class GeneDiseaseEnricher:
         logger.warning(
             f"Grok API query failed for batch {batch_num} after {self.max_retries} attempts: {last_error}"
         )
-        return {}, False
+        return {}, False, False
     
     def _create_grok_prompt(self, gene_names: List[str], disease_term: str) -> str:
         """Create a prompt for Grok: biological annotation (not primary disease-evidence scoring)."""
@@ -1030,6 +1059,11 @@ Return ONLY a valid JSON array. For each gene include:
 6. "association_type": one of ["direct","indirect","predicted","none"]
 7. "evidence_level": one of ["high","medium","low","none"] for your qualitative judgment only
 8. "publications": integer estimate or 0
+
+Keep each text field concise:
+- gene_basic_description: <= 20 words
+- functional_role: <= 20 words
+- description: <= 25 words
 
 Example:
 [
