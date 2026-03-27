@@ -180,9 +180,6 @@ def _write_step_log(log_path: Path, stdout: str, stderr: str) -> None:
 
 def run_pipeline_for_iteration(
     project_json: Path,
-    val_control_csv: Path,
-    val_disease_csv: Path,
-    predictor_output_dir: Path,
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
@@ -193,8 +190,6 @@ def run_pipeline_for_iteration(
     Monte Carlo stability iteration: methyl-centroid → methyl-detector only.
 
     Omits methyl-classifier and methyl-predictor (final model is ``--model`` after freeze).
-    ``val_*`` and ``predictor_output_dir`` are kept for API compatibility with the CLI loop;
-    they are not used by this runner.
     """
     from .validator_metrics import write_step_timings_csv
 
@@ -394,8 +389,6 @@ def run_pipeline_for_production(
 
 def run_pipeline_for_iteration_multiclass(
     project_json: Path,
-    test_groups_json: Path,
-    predictor_output_dir: Path,
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
@@ -404,7 +397,6 @@ def run_pipeline_for_iteration_multiclass(
     """
     Monte Carlo stability iteration (multiclass template): methyl-centroid → methyl-detector only.
 
-    ``test_groups_json`` / ``predictor_output_dir`` are unused (kept for CLI compatibility).
     """
     from .validator_metrics import write_step_timings_csv
 

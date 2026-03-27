@@ -126,6 +126,8 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 | **pipeline_runner.py** | `run_pipeline_for_iteration` / `run_pipeline_for_iteration_multiclass`: **methyl-centroid → methyl-detector** only. `run_pipeline_for_production`: freeze (centroid→detector→mapper→enricher) and optional `methyl-disease-progression` from `step_config.progression`. `run_pipeline_for_model`: classifier→predictor. `run_predictor_only_*`: predictor-only. |
 | **validator_metrics.py** | `iteration_scalar_metrics_from_run_dir`: predictor `validation_metrics.json` if present, else mean detector `balanced_accuracy` from `detections/**/result*.json`. |
 
+Config-contract audit and redundancy classification are tracked in [../../../docs/config_parameter_matrix.md](../../../docs/config_parameter_matrix.md). Use canonical keys (`predictor`, `input_file`, `output_dir`, `ecdf_grid_size`) in new project files; legacy aliases are compatibility-only.
+
 ## Data flow (CLI)
 
 1. Load config; `assert_monte_carlo_predictor_allowed`; `infer_monte_carlo_layout(base_project, len(cohorts))`.

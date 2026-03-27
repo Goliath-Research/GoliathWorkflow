@@ -88,7 +88,7 @@
       "min_samples_pct": 0.1,
       "delta_mean_reduction": 0.15,
       "lambda_var": 2.0,
-      "ecdf_overlap_grid_size": 512,
+      "ecdf_grid_size": 512,
       "effect_size_coverage": 0.95,
       "effect_size_use_mean_level": true,
       "effect_size_mean_level_use_max": true,

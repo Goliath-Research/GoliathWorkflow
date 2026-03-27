@@ -408,9 +408,6 @@ def main() -> None:
                 else:
                     success, errors, step_timings = run_pipeline_for_iteration(
                         project_path,
-                        val_control_csv,
-                        val_disease_csv,
-                        predictor_output_dir,
                         per_cancer_group=per_cancer_group,
                         logs_dir=run_dir / "logs",
                         progress_callback=progress_callback,
@@ -448,8 +445,6 @@ def main() -> None:
                 else:
                     success, errors, step_timings = run_pipeline_for_iteration_multiclass(
                         project_path,
-                        val_groups_json,
-                        predictor_output_dir,
                         per_cancer_group=per_cancer_group,
                         logs_dir=run_dir / "logs",
                         progress_callback=progress_callback,
@@ -483,8 +478,6 @@ def main() -> None:
                 else:
                     success, errors, step_timings = run_pipeline_for_iteration_multiclass(
                         project_path,
-                        val_groups_json,
-                        predictor_output_dir,
                         per_cancer_group=True,
                         logs_dir=run_dir / "logs",
                         progress_callback=progress_callback,

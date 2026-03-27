@@ -138,6 +138,14 @@ All `step_config.validation` fields are documented in the configuration referenc
 - `strict_missing`: fail progression if any expected stage file is missing.
 - `report_md`: emit `progression/report.md` in addition to CSV/JSON outputs.
 
+### Canonical vs legacy config keys
+
+Prefer these canonical keys in project files:
+
+- `step_config.predictor` (legacy alias `step_config.validator` is deprecated)
+- `step_config.enricher.input_file` / `step_config.enricher.output_dir` (legacy `input` / `outdir` are deprecated)
+- `step_config.detection.ecdf_grid_size` (legacy aliases `ecdf_overlap_grid_size`, `ecdf_ks_grid_size` are deprecated)
+
 ---
 
 ## Outputs

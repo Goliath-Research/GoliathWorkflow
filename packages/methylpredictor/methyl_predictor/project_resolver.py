@@ -10,6 +10,7 @@ the top-level project ``controls`` / ``diseases``.
 import copy
 import csv
 import json
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
@@ -647,7 +648,16 @@ def resolve_predictor_config(
     they are expanded as flat lists (no nested report shape).
     """
     project = load_project(project_path)
-    step_cfg = (project.get_step_config("predictor") or project.get_step_config("validator") or {}).copy()
+    step_cfg = (project.get_step_config("predictor") or {}).copy()
+    if not step_cfg:
+        legacy_validator = (project.get_step_config("validator") or {}).copy()
+        if legacy_validator:
+            warnings.warn(
+                "step_config.validator is deprecated; use step_config.predictor instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            step_cfg = legacy_validator
     classifier_step = project.get_step_config("classifier") or {}
     if step_override_path is not None:
         override_path = Path(step_override_path)
@@ -785,7 +795,16 @@ def resolve_predictor_config_per_comparison(
         )
         return [(config, "validation")]
 
-    step_cfg = (project.get_step_config("predictor") or project.get_step_config("validator") or {}).copy()
+    step_cfg = (project.get_step_config("predictor") or {}).copy()
+    if not step_cfg:
+        legacy_validator = (project.get_step_config("validator") or {}).copy()
+        if legacy_validator:
+            warnings.warn(
+                "step_config.validator is deprecated; use step_config.predictor instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            step_cfg = legacy_validator
     classifier_step = project.get_step_config("classifier") or {}
     if step_override_path is not None:
         override_path = Path(step_override_path)

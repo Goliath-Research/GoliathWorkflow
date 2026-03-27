@@ -324,3 +324,13 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `groups` | list[str] \| null | Cohort group labels to include (e.g. `["control", "disease"]`). `null` = all groups. |
 | `output_dir` | str \| null | Override output directory. |
 | `validate_schema` | bool | Validate per-sample QC JSON against the canonical schema. |
+
+---
+
+## Configuration Audit Matrix {#sec-config-audit-matrix}
+
+The active-steps configuration audit (declared vs consumed vs inherited keys, alias/legacy status, evidence paths, and redundancy dispositions) is maintained in:
+
+- [docs/config_parameter_matrix.md](../../config_parameter_matrix.md)
+
+Use that matrix as the practical source for cleanup/deprecation planning. This chapter remains the canonical reference for currently supported keys.

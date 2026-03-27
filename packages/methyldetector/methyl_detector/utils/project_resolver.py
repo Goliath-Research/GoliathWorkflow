@@ -20,7 +20,6 @@ def resolve_detector_config_per_cancer_group(
     step_override_path: Optional[Union[str, Path]] = None,
     output_base_override: Optional[Union[str, Path]] = None,
     control_index: int = 0,
-    disease_subdir: str = "cancer",
 ) -> List[Tuple[MethylDetectorConfig, str]]:
     """
     Build one MethylDetectorConfig per comparison (control vs disease pair).

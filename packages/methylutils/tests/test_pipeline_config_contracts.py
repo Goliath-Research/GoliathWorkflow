@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from methyl_utils.pipeline_config import load_project
 
 
@@ -30,7 +32,8 @@ def test_project_config_normalizes_comparisons_and_predictor_alias(tmp_path):
         encoding="utf-8",
     )
 
-    project = load_project(str(config_path))
+    with pytest.warns(DeprecationWarning, match="step_config.validator"):
+        project = load_project(str(config_path))
 
     comparison = project.get_comparisons()[0]
     assert comparison.control_group == "healthy"

@@ -6,6 +6,7 @@ This `docs/` tree is intentionally thin. The canonical mathematical and statisti
 
 - [`theory/README.md`](theory/README.md): build instructions and authoring guide for the Quarto theory book.
 - [`theory/index.qmd`](theory/index.qmd): code-backed overview of the statistical pipeline, notation, and traceability rules.
+- [`config_parameter_matrix.md`](config_parameter_matrix.md): active-component config audit matrix (declared/consumed/inherited/legacy keys).
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): environment setup for the monorepo and command-line tools.
 - `packages/*/docs/`: package-local summaries, usage notes, and implementation details.
 
