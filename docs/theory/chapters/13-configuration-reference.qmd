@@ -227,6 +227,10 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `weight_fit_l1_ratio` | float | `0.5` | L1 ratio for elastic-net weight fitting. |
 | `temperature` | float | `1.0` | Softmax temperature applied to classifier outputs. |
 | `enable_platt_calibration` | bool | `false` | Apply Platt scaling calibration to binary classifier outputs. |
+| `use_isotonic_calibration` | bool | `false` | Enable isotonic probability calibration. During labeled runs, calibrators are fit and then applied; during inference, saved calibrators are reused when present. |
+| `use_elasticnet_stacking` | bool | `false` | Fit chromosome weights with ElasticNet stacking on labeled data. |
+| `calibration_train_fraction` | float \| null | `null` | If set in `(0,1]`, fit isotonic/stacking on a stratified per-class fraction (MC-style holdout mask). `null` means use full labeled set. |
+| `calibration_seed` | int \| null | `null` | Seed for stratified calibration/stacking fit mask. |
 | `trimmed_percentile_low` | float | `0.10` | Lower percentile for trimmed-mean effect-size weights. |
 | `trimmed_percentile_high` | float | `0.01` | Upper percentile for trimmed-mean effect-size weights. |
 | `chromosome_weights` | dict \| null | `null` | Fixed per-chromosome weights dict (bypasses trimmed-mean computation). |
@@ -261,13 +265,30 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `stability_dmp_freq` | float | `0.7` | [0, 1] | Minimum recurrence frequency $\tau$ for a DMP to be declared stable. |
 | `stability_min_balanced_accuracy` | float \| null | `null` | [0, 1] or null | Only runs with `balanced_accuracy ≥` this value contribute to DMP frequency counts. |
 | `stability_gene_freq` | float | `0.5` | [0, 1] | Minimum recurrence frequency for a gene (enricher output) to be declared stable. |
-| `run_mapper_and_enricher` | bool | `false` | — | Run mapper and enricher inside each MC iteration. Adds significant runtime; usually not needed for `--stability`. |
+| `run_mapper_and_enricher` | bool | `false` | — | Legacy field; MC iterations now run centroid+detector only. Mapper/enricher are part of `--freeze`. |
 | `skip_enricher` | bool | `false` | — | Skip the enricher step even when `run_mapper_and_enricher` is `true`. |
 | `freeze_stable_dmp_csv` | str \| null | `null` | — | Path to the stable DMP CSV for `--freeze`. Defaults to `monte_carlo_runs/stability/stable_dmps_production.csv`. |
 | `production_output_dir` | str \| null | `null` | — | Override directory for the production freeze output. Defaults to `monte_carlo_runs/production`. |
 | `predictor_only` | bool | `false` | — | If `true`, only run `methyl-predictor` per iteration (Workflow 2). |
 | `frozen_project_path` | str \| null | `null` | — | Path to `production/project.json` for predictor-only mode. Defaults to `monte_carlo_runs/production/project.json` if it exists. |
+| `require_biological_review_for_model` | bool | `false` | — | If `true`, `methyl-validation --model` is blocked unless `biological_review_confirmed=true`. |
+| `biological_review_confirmed` | bool | `false` | — | Explicit confirmation flag that unlocks `--model` when biological review is required. |
 | `abort_on_step_failure` | bool | `false` | — | If `true`, abort all iterations when any pipeline step fails. If `false`, log the error and skip the iteration. |
+
+---
+
+## `step_config.progression` {#sec-ref-progression}
+
+*See @sec-two-workflows for workflow placement after freeze.*
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `enabled` | bool | `false` | Run `methyl-disease-progression` after enricher during `--freeze`. |
+| `output_dir` | str \| null | `null` | Optional output directory override. Default: `<project_root>/progression`. |
+| `ordered_comparison_labels` | list[str] \| null | `null` | Explicit stage order using comparison labels and/or disease groups. |
+| `ordered_disease_groups` | list[str] \| null | `null` | Alias for stage order override. |
+| `strict_missing` | bool | `false` | If `true`, progression fails when expected stage files are missing. |
+| `report_md` | bool | `false` | Emit `progression/report.md` in addition to CSV/JSON outputs. |
 
 ---
 

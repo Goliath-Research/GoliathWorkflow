@@ -414,22 +414,22 @@ window.Quarto = {
 </tr>
 <tr class="even">
 <td><strong>Flag</strong></td>
-<td><code>--stability</code> then <code>--freeze</code></td>
+<td><code>--stability</code>, then <code>--freeze</code>, then <code>--model</code></td>
 <td><code>--predictor-only</code></td>
 </tr>
 <tr class="odd">
 <td><strong>Steps run per iteration</strong></td>
-<td>centroid → detector → classifier → predictor</td>
+<td>centroid → detector</td>
 <td>predictor only</td>
 </tr>
 <tr class="even">
-<td><strong>Steps run once (at freeze)</strong></td>
-<td>centroid → detector(fixed) → classifier → mapper → enricher</td>
+<td><strong>Steps run once (freeze/model)</strong></td>
+<td>freeze: centroid → detector(fixed) → mapper → enricher (optional progression); model: classifier → predictor</td>
 <td>—</td>
 </tr>
 <tr class="odd">
 <td><strong>Output</strong></td>
-<td>production classifier + full gene report</td>
+<td>stable panel, production biological outputs, final classifier/predictor outputs</td>
 <td><code>all_metrics.csv</code>, <code>metrics_summary.json</code></td>
 </tr>
 <tr class="even">
@@ -447,7 +447,7 @@ window.Quarto = {
 <section id="theoretical-motivation" class="level3" data-number="13.2.1">
 <h3 data-number="13.2.1" class="anchored" data-anchor-id="theoretical-motivation"><span class="header-section-number">13.2.1</span> Theoretical Motivation</h3>
 <p>A naive approach to building a classifier would be to detect DMPs on all available samples, then evaluate the same classifier on held-out subsets. This conflates feature selection with performance estimation: the DMP panel was implicitly chosen to fit all samples, making any leave-out evaluation optimistic.</p>
-<p>MethylValidation addresses this by repeating the entire pipeline — from centroid construction through prediction — on random train/validation splits. Each iteration detects DMPs on the training cohort only, builds a classifier from those DMPs, and evaluates it on the held-out validation cohort. The resulting balanced accuracy estimates are honest internal measures of generalization.</p>
+<p>MethylValidation addresses this by repeating only the discovery portion of the pipeline on random train/validation splits. Each iteration rebuilds centroids and re-runs detection on the training cohort only. The resulting detector-side balanced accuracy summaries are used as internal estimates of discovery robustness and to filter stability runs when requested.</p>
 <p>After many such iterations, a DMP that appears consistently in the discovery sets of most runs is more likely to reflect a true biological signal than one that appears in only a few. This motivates the stability analysis: the stable panel is a consensus over repeated random partitions of the data.</p>
 <p>The production freeze then trains a final classifier on <strong>all available data</strong> restricted to the stable panel. Because the panel itself was selected using the full sample set (via the MC iterations), this is still an internal analysis; it is not a substitute for external validation on an independent cohort.</p>
 </section>
@@ -471,8 +471,6 @@ window.Quarto = {
 <ol type="1">
 <li><code>methyl-centroid --group group1</code> and <code>--group group2</code> build separate centroid H5 files for the training split.</li>
 <li><code>methyl-detector --project</code> detects DMPs between the training centroids.</li>
-<li><code>methyl-classifier --project</code> builds binary OvR classifiers.</li>
-<li><code>methyl-predictor --project</code> evaluates on the validation split and writes <code>validation_metrics.json</code>.</li>
 </ol>
 <p>After all iterations, stability analysis counts DMP recurrence across the discovery sets:</p>
 <p><span class="math display">\[
@@ -481,13 +479,22 @@ window.Quarto = {
 <p>and writes <code>monte_carlo_runs/stability/stable_dmps_production.csv</code>.</p>
 <p><strong>Step 3: Run the production freeze</strong></p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--freeze</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>This calls <code>freeze_production_model()</code> which:</p>
+<p>This calls <code>freeze_production_model()</code> and then (optionally) progression synthesis which:</p>
 <ol type="1">
 <li>Merges stable DMP CSVs into <code>monte_carlo_runs/production/stable_dmps_genomewide.csv</code>.</li>
 <li>Creates <code>monte_carlo_runs/production/project.json</code> with <code>fixed_dmp_panel</code> injected into <code>step_config.detection</code>.</li>
-<li>Runs the full production pipeline on <strong>all samples</strong>: centroid → detector(fixed panel) → classifier → mapper → enricher.</li>
+<li>Runs production freeze on <strong>all samples</strong>: centroid → detector(fixed panel) → mapper → enricher.</li>
+<li>If <code>step_config.progression.enabled=true</code>, runs <code>methyl-disease-progression</code> to aggregate cross-stage mapper/enricher outputs.</li>
 <li>Writes <code>monte_carlo_runs/production/production_summary.json</code>.</li>
 </ol>
+<p><strong>Step 4: Run final model build</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--model</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>This runs <code>run_pipeline_for_model()</code>:</p>
+<ol type="1">
+<li><code>methyl-classifier --project production/project.json</code></li>
+<li><code>methyl-predictor --project production/project.json</code></li>
+</ol>
+<p>If <code>step_config.validation.require_biological_review_for_model=true</code>, <code>--model</code> is blocked until <code>biological_review_confirmed=true</code>.</p>
 </section>
 <section id="workflow-1-diagram" class="level3" data-number="13.2.3">
 <h3 data-number="13.2.3" class="anchored" data-anchor-id="workflow-1-diagram"><span class="header-section-number">13.2.3</span> Workflow 1 Diagram</h3>
@@ -501,19 +508,20 @@ window.Quarto = {
 ]
 \node[box] (A) {\texttt{project.json} (single unified config)};
 \node[box, below=of A] (B) {\texttt{--stability}: $R$ full-pipeline iterations};
-\node[box, below=of B] (C) {Per iteration: centroid $\to$ detector $\to$ classifier $\to$ predictor};
-\node[box, below=of C] (D) {\texttt{validation\_metrics.json} per iteration};
+\node[box, below=of B] (C) {Per iteration: centroid $\to$ detector};
+\node[box, below=of C] (D) {Detector metrics per iteration};
 \node[box, below=of D] (E) {Stability: compute $\hat{f}(d)$ across runs};
 \node[box, below=of E] (F) {\texttt{stable\_dmps\_production.csv}};
 \node[box, below=of F] (G) {\texttt{--freeze}};
 \node[box, below=of G] (H) {Merge $\to$ \texttt{stable\_dmps\_genomewide.csv}};
 \node[box, below=of H] (I) {\texttt{production/project.json} with \texttt{fixed\_dmp\_panel}};
-\node[box, below=of I] (J) {Full pipeline on \emph{all} samples (no predictor)};
-\node[box, below=of J] (K) {Final classifier + mapper + enricher outputs};
+\node[box, below=of I] (J) {Freeze on \emph{all} samples: centroid $\to$ detector(fixed) $\to$ mapper $\to$ enricher};
+\node[box, below=of J] (K) {Optional: disease progression synthesis};
+\node[box, below=of K] (L) {\texttt{--model}: classifier $\to$ predictor (biological gate optional)};
 \draw[arr] (A)--(B); \draw[arr] (B)--(C); \draw[arr] (C)--(D);
 \draw[arr] (D)--(E); \draw[arr] (E)--(F); \draw[arr] (F)--(G);
 \draw[arr] (G)--(H); \draw[arr] (H)--(I); \draw[arr] (I)--(J);
-\draw[arr] (J)--(K);
+\draw[arr] (J)--(K); \draw[arr] (K)--(L);
 \end{tikzpicture}</code></pre>
 </section>
 <section id="expected-outputs" class="level3" data-number="13.2.4">
@@ -521,7 +529,7 @@ window.Quarto = {
 <p>After Workflow 1 completes:</p>
 <pre><code>monte_carlo_runs/
 ├── run_0001/ … run_000N/          ← per-iteration outputs
-│   └── predictors/validation_metrics.json
+│   └── detections/**/result*.json
 ├── all_metrics.csv                ← one row per iteration
 ├── metrics_summary.json           ← mean, std, percentiles per metric
 ├── stability/
@@ -531,10 +539,11 @@ window.Quarto = {
     ├── project.json               ← frozen project with fixed_dmp_panel
     ├── centroids/                 ← built on all samples
     ├── detections/                ← using fixed DMP panel
-    ├── classifiers/
-    │   └── multiclass-classifier.pkl   ← the final production model
-    ├── mappings/
-    └── enrichments/</code></pre>
+    ├── mapper/
+    ├── enricher/
+    ├── progression/                    ← optional (when enabled)
+    ├── classifiers/                    ← created by --model
+    └── predictors/                     ← created by --model</code></pre>
 <hr>
 </section>
 </section>
@@ -551,7 +560,7 @@ window.Quarto = {
 <p><strong>Step 1: Confirm the production model exists</strong></p>
 <p>The file <code>monte_carlo_runs/production/project.json</code> must exist (created by Workflow 1’s <code>--freeze</code> step).</p>
 <p><strong>Step 2: Run predictor-only evaluation</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--predictor-only</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--predictor-only</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Per iteration, this:</p>
 <ol type="1">
 <li>Creates a new split-specific <code>project.json</code> with train/validation CSVs.</li>
@@ -588,7 +597,7 @@ window.Quarto = {
 <p><strong>Symptom.</strong> <code>sample_dmp_coverage.dmps_used_fraction_median &lt; 0.5</code> in <code>validation_metrics.json</code>. Values below 0.3 indicate severe degradation.</p>
 <p><strong>Cause.</strong> The centroid <code>min_coverage</code> (e.g.&nbsp;4) and the detector <code>min_sample_coverage</code> (default 10) are mismatched. DMP positions that were detectable in training centroids at 4× coverage become invisible in test samples when the classifier requires 10× coverage.</p>
 <p><strong>Fix.</strong> In <code>step_config.detection</code>, add:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="st">"min_sample_coverage"</span><span class="er">:</span> <span class="dv">4</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="st">"min_sample_coverage"</span><span class="er">:</span> <span class="dv">4</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>This aligns the coverage requirement for classification with the centroid build threshold.</p>
 <p><strong>Verification.</strong> Re-run Workflow 2. <code>dmps_used_fraction_median</code> should rise to 0.6–0.9 for typical WGBS data.</p>
 <hr>
@@ -598,8 +607,8 @@ window.Quarto = {
 <p><strong>Symptom.</strong> The confusion matrix shows near-perfect recall for the majority class (e.g.&nbsp;healthy/control) and near-zero recall for minority classes (disease stages). Balanced accuracy is close to <code>1/K</code> (random chance).</p>
 <p><strong>Cause.</strong> The training cohort has substantially more samples in one class. For example, 86 healthy vs 25–36 disease samples per stage (41% healthy in the example project). The multinomial logistic regression learned head defaults to the majority class when the histogram scores are ambiguous (which is common when DMP coverage is low).</p>
 <p><strong>Fix.</strong> In <code>step_config.detection</code>, add:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_train_learned_head"</span><span class="er">:</span> <span class="kw">true</span><span class="er">,</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_learned_class_weight"</span><span class="er">:</span> <span class="st">"balanced"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_train_learned_head"</span><span class="er">:</span> <span class="kw">true</span><span class="er">,</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_learned_class_weight"</span><span class="er">:</span> <span class="st">"balanced"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>The <code>balanced</code> setting computes <span class="math inline">\(w_k = n_{\text{total}} / (K \cdot n_k)\)</span>, penalizing majority-class errors proportionally less than minority-class errors. See <a href="04-methylclassifier.html#sec-classifier-class-weight" class="quarto-xref"><span>Section 5.8</span></a> for the full derivation.</p>
 <hr>
 </section>
@@ -608,12 +617,12 @@ window.Quarto = {
 <p><strong>Symptom.</strong> Warning messages during prediction: <code>InconsistentVersionWarning: Trying to unpickle estimator LogisticRegression from version X.Y.Z when using version A.B.C</code>.</p>
 <p><strong>Cause.</strong> The <code>multiclass-classifier.pkl</code> was serialized with a different version of scikit-learn than the one currently installed.</p>
 <p><strong>Diagnosis.</strong> Check the <code>sklearn_version</code> field in the model PKL metadata:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pickle</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> <span class="bu">open</span>(<span class="st">"monte_carlo_runs/production/classifiers/multiclass-classifier.pkl"</span>, <span class="st">"rb"</span>) <span class="im">as</span> f:</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> pickle.load(f)</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(model[<span class="st">"metadata"</span>].get(<span class="st">"sklearn_version"</span>))  <span class="co"># version used at training time</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pickle</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> <span class="bu">open</span>(<span class="st">"monte_carlo_runs/production/classifiers/multiclass-classifier.pkl"</span>, <span class="st">"rb"</span>) <span class="im">as</span> f:</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> pickle.load(f)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(model[<span class="st">"metadata"</span>].get(<span class="st">"sklearn_version"</span>))  <span class="co"># version used at training time</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Compare to the current installed version:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sklearn<span class="op">;</span> <span class="bu">print</span>(sklearn.__version__)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sklearn<span class="op">;</span> <span class="bu">print</span>(sklearn.__version__)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Fix.</strong> Re-run the <code>--freeze</code> step with the current sklearn version. The logistic regression head will be retrained and the new PKL will record the correct version. New model PKLs produced after the fix always record <code>sklearn_version</code> in their metadata.</p>
 <hr>
 </section>

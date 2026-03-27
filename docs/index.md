@@ -9,6 +9,13 @@ This `docs/` tree is intentionally thin. The canonical mathematical and statisti
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): environment setup for the monorepo and command-line tools.
 - `packages/*/docs/`: package-local summaries, usage notes, and implementation details.
 
+Latest workflow additions reflected in code and docs:
+
+- Monte Carlo (`methyl-validation --stability`) runs **centroid + detector only** per iteration.
+- Production freeze (`--freeze`) runs **centroid -> detector -> mapper -> enricher**, and can optionally run `methyl-disease-progression` when `step_config.progression.enabled=true`.
+- Final model build (`--model`) runs **classifier -> predictor** after freeze and can be gated by biological review (`step_config.validation.require_biological_review_for_model` + `biological_review_confirmed`).
+- New package: `packages/methyldiseaseprogression` (`methyl-disease-progression`) for cross-stage progression synthesis.
+
 ## Source Of Truth
 
 For theory, the source of truth is the code. The Quarto book documents the mathematics and statistics that are actually implemented, and it labels each method as one of:

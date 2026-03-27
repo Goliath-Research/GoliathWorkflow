@@ -17,6 +17,7 @@ This chapter is a practical end-to-end guide. For theoretical background, see Pa
   - `methyl-predictor`
   - `methyl-mapper`
   - `methyl-enricher`
+  - `methyl-disease-progression`
   - `methyl-validation`
 
 ### Environment setup
@@ -36,6 +37,7 @@ pip install -e packages/methylclassifier
 pip install -e packages/methylpredictor
 pip install -e packages/methylmapper
 pip install -e packages/methylenricher
+pip install -e packages/methyldiseaseprogression
 pip install -e packages/methylvalidation
 ```
 
@@ -144,14 +146,14 @@ source .venv/bin/activate
 methyl-validation --project configs/my_project.json --stability
 ```
 
-This runs `n_iterations` complete pipeline cycles (centroid → detector → classifier → predictor), then aggregates DMP recurrence frequencies.
+This runs `n_iterations` Monte Carlo discovery cycles (centroid → detector), then aggregates DMP recurrence frequencies.
 
 **Monitoring progress.** Progress is shown via a Rich progress bar in interactive terminals. Iteration logs are written to `monte_carlo_runs/run_000N/logs/`.
 
 **Useful flags:**
 - `--iterations N` — override `n_iterations` from config for a quick test run
 - `--seed S` — override the seed
-- `--skip-enricher` — skip the enricher inside iterations (ignored by default since `run_mapper_and_enricher` defaults to `false`)
+- `--skip-enricher` — skip enricher during `--freeze` (and progression, if enabled)
 
 ### Step 2: Check stability results
 
@@ -175,9 +177,23 @@ If `stable_dmps_at_threshold` is very low (< 1000), consider reducing `stability
 methyl-validation --project configs/my_project.json --freeze
 ```
 
-This runs the full production pipeline on all samples using the stable DMP panel. Output is in `monte_carlo_runs/production/`.
+This runs the production freeze pipeline on all samples using the stable DMP panel (centroid → detector(fixed panel) → mapper → enricher). Output is in `monte_carlo_runs/production/`.
 
-**The production freeze does not run the predictor.** The final model is in `monte_carlo_runs/production/classifiers/multiclass-classifier.pkl`.
+If `step_config.progression.enabled=true`, freeze also runs `methyl-disease-progression` and writes `production/progression/`.
+
+### Step 4: Run the final model stage
+
+```bash
+methyl-validation --project configs/my_project.json --model
+```
+
+This runs classifier → predictor on the frozen production project.
+
+If `step_config.validation.require_biological_review_for_model=true`, `--model` requires:
+
+```json
+"biological_review_confirmed": true
+```
 
 ---
 
@@ -253,19 +269,16 @@ Given `output_base = "/work/prostate-cancer"` and `project_name = "Healthy_vs_PC
 │   │   ├── pca_pca1/run_0001-classifier.pkl
 │   │   └── multiclass-classifier.pkl
 │   └── classifier_all_run_0001.pkl
-├── mappings/
-│   └── all/pca_pca1/mapped_genes.csv
-├── enrichments/
-│   └── enrichment_results.csv
+├── mapper/
+│   └── all/pca_pca1/all-gene_name-combined.csv
+├── enricher/
+│   └── all/pca_pca1/enrichment_merged.csv
 └── monte_carlo_runs/
     ├── run_0001/ … run_000N/
     │   ├── project.json
-    │   ├── training_all.csv / testing_all.csv
+    │   ├── training_all.csv / testing_all.csv  (or per-group CSVs in multiclass)
     │   ├── centroids/
     │   ├── detections/
-    │   ├── classifiers/
-    │   ├── predictors/
-    │   │   └── validation_metrics.json
     │   └── logs/
     ├── all_metrics.csv           ← one row per iteration
     ├── metrics_summary.json      ← mean, std, percentiles
@@ -277,10 +290,11 @@ Given `output_base = "/work/prostate-cancer"` and `project_name = "Healthy_vs_PC
         ├── project.json          ← frozen project with fixed_dmp_panel
         ├── centroids/
         ├── detections/
+        ├── mapper/
+        ├── enricher/
+        ├── progression/          ← optional when step_config.progression.enabled=true
         ├── classifiers/
-        │   └── multiclass-classifier.pkl   ← FINAL PRODUCTION MODEL
-        ├── mappings/
-        ├── enrichments/
+        ├── predictors/
         └── production_summary.json
 ```
 

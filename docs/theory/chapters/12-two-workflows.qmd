@@ -7,10 +7,10 @@ MethylPipeline supports two primary end-to-end operational workflows. They are d
 | | Workflow 1 | Workflow 2 |
 |---|---|---|
 | **Goal** | Build a stable, production-ready model | Evaluate the frozen production model |
-| **Flag** | `--stability` then `--freeze` | `--predictor-only` |
-| **Steps run per iteration** | centroid → detector → classifier → predictor | predictor only |
-| **Steps run once (at freeze)** | centroid → detector(fixed) → classifier → mapper → enricher | — |
-| **Output** | production classifier + full gene report | `all_metrics.csv`, `metrics_summary.json` |
+| **Flag** | `--stability`, then `--freeze`, then `--model` | `--predictor-only` |
+| **Steps run per iteration** | centroid → detector | predictor only |
+| **Steps run once (freeze/model)** | freeze: centroid → detector(fixed) → mapper → enricher (optional progression); model: classifier → predictor | — |
+| **Output** | stable panel, production biological outputs, final classifier/predictor outputs | `all_metrics.csv`, `metrics_summary.json` |
 | **Answers** | Which positions and model best separate the classes on all data? | What performance distribution does the frozen model achieve? |
 
 Both workflows are controlled entirely by the project configuration file and the `step_config.validation` embedded settings (see @sec-project-configuration).
@@ -23,7 +23,7 @@ Both workflows are controlled entirely by the project configuration file and the
 
 A naive approach to building a classifier would be to detect DMPs on all available samples, then evaluate the same classifier on held-out subsets. This conflates feature selection with performance estimation: the DMP panel was implicitly chosen to fit all samples, making any leave-out evaluation optimistic.
 
-MethylValidation addresses this by repeating the entire pipeline — from centroid construction through prediction — on random train/validation splits. Each iteration detects DMPs on the training cohort only, builds a classifier from those DMPs, and evaluates it on the held-out validation cohort. The resulting balanced accuracy estimates are honest internal measures of generalization.
+MethylValidation addresses this by repeating only the discovery portion of the pipeline on random train/validation splits. Each iteration rebuilds centroids and re-runs detection on the training cohort only. The resulting detector-side balanced accuracy summaries are used as internal estimates of discovery robustness and to filter stability runs when requested.
 
 After many such iterations, a DMP that appears consistently in the discovery sets of most runs is more likely to reflect a true biological signal than one that appears in only a few. This motivates the stability analysis: the stable panel is a consensus over repeated random partitions of the data.
 
@@ -58,8 +58,6 @@ This runs `n_iterations` stratified train/validation splits. Per iteration:
 
 1. `methyl-centroid --group group1` and `--group group2` build separate centroid H5 files for the training split.
 2. `methyl-detector --project` detects DMPs between the training centroids.
-3. `methyl-classifier --project` builds binary OvR classifiers.
-4. `methyl-predictor --project` evaluates on the validation split and writes `validation_metrics.json`.
 
 After all iterations, stability analysis counts DMP recurrence across the discovery sets:
 
@@ -75,12 +73,26 @@ and writes `monte_carlo_runs/stability/stable_dmps_production.csv`.
 methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --freeze
 ```
 
-This calls `freeze_production_model()` which:
+This calls `freeze_production_model()` and then (optionally) progression synthesis which:
 
 1. Merges stable DMP CSVs into `monte_carlo_runs/production/stable_dmps_genomewide.csv`.
 2. Creates `monte_carlo_runs/production/project.json` with `fixed_dmp_panel` injected into `step_config.detection`.
-3. Runs the full production pipeline on **all samples**: centroid → detector(fixed panel) → classifier → mapper → enricher.
-4. Writes `monte_carlo_runs/production/production_summary.json`.
+3. Runs production freeze on **all samples**: centroid → detector(fixed panel) → mapper → enricher.
+4. If `step_config.progression.enabled=true`, runs `methyl-disease-progression` to aggregate cross-stage mapper/enricher outputs.
+5. Writes `monte_carlo_runs/production/production_summary.json`.
+
+**Step 4: Run final model build**
+
+```bash
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --model
+```
+
+This runs `run_pipeline_for_model()`:
+
+1. `methyl-classifier --project production/project.json`
+2. `methyl-predictor --project production/project.json`
+
+If `step_config.validation.require_biological_review_for_model=true`, `--model` is blocked until `biological_review_confirmed=true`.
 
 ### Workflow 1 Diagram
 
@@ -95,19 +107,20 @@ This calls `freeze_production_model()` which:
 ]
 \node[box] (A) {\texttt{project.json} (single unified config)};
 \node[box, below=of A] (B) {\texttt{--stability}: $R$ full-pipeline iterations};
-\node[box, below=of B] (C) {Per iteration: centroid $\to$ detector $\to$ classifier $\to$ predictor};
-\node[box, below=of C] (D) {\texttt{validation\_metrics.json} per iteration};
+\node[box, below=of B] (C) {Per iteration: centroid $\to$ detector};
+\node[box, below=of C] (D) {Detector metrics per iteration};
 \node[box, below=of D] (E) {Stability: compute $\hat{f}(d)$ across runs};
 \node[box, below=of E] (F) {\texttt{stable\_dmps\_production.csv}};
 \node[box, below=of F] (G) {\texttt{--freeze}};
 \node[box, below=of G] (H) {Merge $\to$ \texttt{stable\_dmps\_genomewide.csv}};
 \node[box, below=of H] (I) {\texttt{production/project.json} with \texttt{fixed\_dmp\_panel}};
-\node[box, below=of I] (J) {Full pipeline on \emph{all} samples (no predictor)};
-\node[box, below=of J] (K) {Final classifier + mapper + enricher outputs};
+\node[box, below=of I] (J) {Freeze on \emph{all} samples: centroid $\to$ detector(fixed) $\to$ mapper $\to$ enricher};
+\node[box, below=of J] (K) {Optional: disease progression synthesis};
+\node[box, below=of K] (L) {\texttt{--model}: classifier $\to$ predictor (biological gate optional)};
 \draw[arr] (A)--(B); \draw[arr] (B)--(C); \draw[arr] (C)--(D);
 \draw[arr] (D)--(E); \draw[arr] (E)--(F); \draw[arr] (F)--(G);
 \draw[arr] (G)--(H); \draw[arr] (H)--(I); \draw[arr] (I)--(J);
-\draw[arr] (J)--(K);
+\draw[arr] (J)--(K); \draw[arr] (K)--(L);
 \end{tikzpicture}
 ```
 
@@ -118,7 +131,7 @@ After Workflow 1 completes:
 ```
 monte_carlo_runs/
 ├── run_0001/ … run_000N/          ← per-iteration outputs
-│   └── predictors/validation_metrics.json
+│   └── detections/**/result*.json
 ├── all_metrics.csv                ← one row per iteration
 ├── metrics_summary.json           ← mean, std, percentiles per metric
 ├── stability/
@@ -128,10 +141,11 @@ monte_carlo_runs/
     ├── project.json               ← frozen project with fixed_dmp_panel
     ├── centroids/                 ← built on all samples
     ├── detections/                ← using fixed DMP panel
-    ├── classifiers/
-    │   └── multiclass-classifier.pkl   ← the final production model
-    ├── mappings/
-    └── enrichments/
+    ├── mapper/
+    ├── enricher/
+    ├── progression/                    ← optional (when enabled)
+    ├── classifiers/                    ← created by --model
+    └── predictors/                     ← created by --model
 ```
 
 ---

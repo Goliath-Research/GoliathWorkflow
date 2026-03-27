@@ -32,7 +32,7 @@ The complete package map with all four parts is in the "Reading This Book" secti
 | @sec-methylcentroid | `methylcentroid` | centroid construction and coverage preprocessing |
 | @sec-methyldetector | `methyldetector` | DMP testing, filtering, classifier export, and production panel bypass |
 | @sec-methylclassifier | `methylclassifier` | binary, multi-chromosome, OvR, and multiclass learned-head classification |
-| @sec-methylpredictor-validation | `methylpredictor`, `methylvalidation` | prediction metrics, Monte Carlo validation, stability analysis, production freeze |
+| @sec-methylpredictor-validation | `methylpredictor`, `methylvalidation`, `methyldiseaseprogression` | prediction metrics, Monte Carlo validation, stability analysis, production freeze, progression synthesis |
 | @sec-methylcluster | `methylcluster` | beta-based and distance-based clustering workflows |
 | @sec-methylmapper | `methylmapper` | DMP-to-gene mapping and gene-level aggregation |
 | @sec-methylenricher | `methylenricher` | over-representation analysis, pathway graph clustering, and module scoring |
@@ -109,7 +109,7 @@ This book is organized into four parts.
 
 **Part I: Mathematical and Statistical Foundations** covers the algorithms and estimators in order from the lowest shared layer to the downstream applications. Readers interested in the production classifier should start with @sec-methylutils, then continue through @sec-methylcentroid, @sec-methyldetector, and @sec-methylclassifier. Readers interested in biological interpretation should continue to @sec-methylmapper and @sec-methylenricher. @sec-limitations is intentionally blunt and should be read before any publication claim is finalized.
 
-**Part II: Workflows and Production** describes the two end-to-end operational workflows supported by MethylPipeline: Model Creation (repeated validation, stability analysis, production freeze) and Model Use for Prediction (predictor-only evaluation of a frozen model). It also documents the project configuration file as the single source of truth for the entire pipeline.
+**Part II: Workflows and Production** describes the two end-to-end operational workflows supported by MethylPipeline: Model Creation (repeated validation, stability analysis, production freeze, optional progression synthesis, and final `--model` step) and Model Use for Prediction (predictor-only evaluation of a frozen model). It also documents the project configuration file as the single source of truth for the entire pipeline.
 
 **Part III: Configuration Reference** provides exhaustive tables of every parameter in every `step_config` section, with types, defaults, constraints, and descriptions. It is a reference, not a tutorial.
 

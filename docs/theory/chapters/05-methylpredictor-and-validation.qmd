@@ -122,15 +122,18 @@ Gene stability is an analogous measure over enricher gene lists: the frequency a
 
 ## Production Freeze {#sec-production-freeze}
 
-The production freeze converts the stable DMP panel into a final production model trained on the full dataset. The `--freeze` flag calls `freeze_production_model()` in `packages/methylvalidation/methyl_validation/stability.py`, which:
+The production freeze converts the stable DMP panel into a fixed discovery/interpretable production run on the full dataset. The `--freeze` flag calls `freeze_production_model()` in `packages/methylvalidation/methyl_validation/stability.py`, which:
 
 1. Merges one or more per-chromosome stable DMP CSVs into a single genome-wide panel (`stable_dmps_genomewide.csv`).
 2. Loads the base project JSON and injects `fixed_dmp_panel` into `step_config.detection` (pointing at the merged CSV).
 3. Writes a `production/project.json` with `project_name = "production"` and `output_base` routed to the production directory.
-4. Executes `run_pipeline_for_production()`, which runs the full pipeline in order: `methyl-centroid → methyl-detector(fixed panel) → methyl-classifier → methyl-mapper → methyl-enricher`. The predictor is intentionally excluded; the production build is for model construction only.
-5. Writes a `production_summary.json` summarizing the run.
+4. Executes `run_pipeline_for_production()`, which runs: `methyl-centroid → methyl-detector(fixed panel) → methyl-mapper → methyl-enricher`.
+5. Optionally runs `methyl-disease-progression` when `step_config.progression.enabled=true`.
+6. Writes a `production_summary.json` summarizing the run.
 
-The resulting `production/classifiers/` directory contains the final classifier PKL that can be used for deployment or evaluated via the predictor-only workflow below.
+Final model fitting is a separate explicit step: `methyl-validation --model` runs `methyl-classifier → methyl-predictor` on `production/project.json`.
+
+If configured (`step_config.validation.require_biological_review_for_model=true`), `--model` is blocked until `biological_review_confirmed=true`.
 
 The production project JSON (`production/project.json`) is the artifact that links the frozen model to the `--predictor-only` workflow: it encodes the centroid directories, detection output paths, and classifier paths so that `methyl-predictor` can resolve them without re-running any upstream steps.
 
@@ -138,11 +141,11 @@ The production project JSON (`production/project.json`) is the artifact that lin
 
 MethylValidation supports two primary operational modes, described in full in @sec-two-workflows. A brief summary for theory readers:
 
-**Workflow 1 — Model Creation.** Repeated Monte Carlo runs with `--stability` estimate DMP recurrence frequencies. The `--freeze` step then trains a single final model on the full dataset restricted to the stable DMP panel (via `fixed_dmp_panel`). This workflow answers the question: *which positions are robustly differentially methylated across random data partitions, and what classifier do they produce on all available data?*
+**Workflow 1 — Model Creation.** Repeated Monte Carlo runs with `--stability` estimate DMP recurrence frequencies from centroid+detector iterations. The `--freeze` step then builds production biological outputs on the stable panel (`fixed_dmp_panel`) and may run progression synthesis. The `--model` step then performs final classifier/predictor execution after optional biological gate checks.
 
 **Workflow 2 — Model Use for Prediction.** The `--predictor-only` flag evaluates the frozen production model on repeated random holdouts without retraining. This workflow answers the question: *what is the empirical distribution of classification performance for the frozen production classifier under random sampling from the available cohort?*
 
-The two workflows share the same split-and-aggregate infrastructure (`split.py`, `project_gen.py`, `pipeline_runner.py`) but differ in which pipeline steps execute per iteration. Workflow 1 runs centroid through predictor; Workflow 2 runs only the predictor.
+The two workflows share the same split-and-aggregate infrastructure (`split.py`, `project_gen.py`, `pipeline_runner.py`) but differ in which pipeline steps execute per iteration. Workflow 1 iterations run centroid+detector; Workflow 2 iterations run predictor only.
 
 ## Publication Guidance
 

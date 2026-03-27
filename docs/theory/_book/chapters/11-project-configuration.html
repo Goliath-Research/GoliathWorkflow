@@ -631,25 +631,25 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     │   │   ├── pca_pca1/run_0001-classifier.pkl
     │   │   └── multiclass-classifier.pkl
     │   └── classifier_all_run_0001.pkl
-    ├── mappings/
-    ├── enrichments/
+    ├── mapper/
+    ├── enricher/
     └── monte_carlo_runs/
         ├── run_0001/
         │   ├── project.json
         │   ├── centroids/
         │   ├── detections/
-        │   ├── classifiers/
-        │   └── predictors/validation_metrics.json
+        │   └── logs/
         ├── stability/
         │   └── stable_dmps_production.csv
         └── production/
             ├── project.json          ← contains fixed_dmp_panel
             ├── centroids/
             ├── detections/
-            ├── classifiers/
-            │   └── multiclass-classifier.pkl    ← final production model
-            ├── mappings/
-            └── enrichments/</code></pre>
+            ├── mapper/
+            ├── enricher/
+            ├── progression/          ← optional when step_config.progression.enabled=true
+            ├── classifiers/          ← created by --model
+            └── predictors/           ← created by --model</code></pre>
 
 
 </section>

@@ -444,23 +444,25 @@ s_m^2 = \frac{1}{R-1}\sum_{r=1}^{R}(m_r - \bar m)^2,
 </section>
 <section id="sec-production-freeze" class="level2" data-number="6.8">
 <h2 data-number="6.8" class="anchored" data-anchor-id="sec-production-freeze"><span class="header-section-number">6.8</span> Production Freeze</h2>
-<p>The production freeze converts the stable DMP panel into a final production model trained on the full dataset. The <code>--freeze</code> flag calls <code>freeze_production_model()</code> in <code>packages/methylvalidation/methyl_validation/stability.py</code>, which:</p>
+<p>The production freeze converts the stable DMP panel into a fixed discovery/interpretable production run on the full dataset. The <code>--freeze</code> flag calls <code>freeze_production_model()</code> in <code>packages/methylvalidation/methyl_validation/stability.py</code>, which:</p>
 <ol type="1">
 <li>Merges one or more per-chromosome stable DMP CSVs into a single genome-wide panel (<code>stable_dmps_genomewide.csv</code>).</li>
 <li>Loads the base project JSON and injects <code>fixed_dmp_panel</code> into <code>step_config.detection</code> (pointing at the merged CSV).</li>
 <li>Writes a <code>production/project.json</code> with <code>project_name = "production"</code> and <code>output_base</code> routed to the production directory.</li>
-<li>Executes <code>run_pipeline_for_production()</code>, which runs the full pipeline in order: <code>methyl-centroid → methyl-detector(fixed panel) → methyl-classifier → methyl-mapper → methyl-enricher</code>. The predictor is intentionally excluded; the production build is for model construction only.</li>
+<li>Executes <code>run_pipeline_for_production()</code>, which runs: <code>methyl-centroid → methyl-detector(fixed panel) → methyl-mapper → methyl-enricher</code>.</li>
+<li>Optionally runs <code>methyl-disease-progression</code> when <code>step_config.progression.enabled=true</code>.</li>
 <li>Writes a <code>production_summary.json</code> summarizing the run.</li>
 </ol>
-<p>The resulting <code>production/classifiers/</code> directory contains the final classifier PKL that can be used for deployment or evaluated via the predictor-only workflow below.</p>
+<p>Final model fitting is a separate explicit step: <code>methyl-validation --model</code> runs <code>methyl-classifier → methyl-predictor</code> on <code>production/project.json</code>.</p>
+<p>If configured (<code>step_config.validation.require_biological_review_for_model=true</code>), <code>--model</code> is blocked until <code>biological_review_confirmed=true</code>.</p>
 <p>The production project JSON (<code>production/project.json</code>) is the artifact that links the frozen model to the <code>--predictor-only</code> workflow: it encodes the centroid directories, detection output paths, and classifier paths so that <code>methyl-predictor</code> can resolve them without re-running any upstream steps.</p>
 </section>
 <section id="sec-two-workflows-summary" class="level2" data-number="6.9">
 <h2 data-number="6.9" class="anchored" data-anchor-id="sec-two-workflows-summary"><span class="header-section-number">6.9</span> Two Workflows Summary</h2>
 <p>MethylValidation supports two primary operational modes, described in full in <a href="12-two-workflows.html" class="quarto-xref"><span>Chapter 13</span></a>. A brief summary for theory readers:</p>
-<p><strong>Workflow 1 — Model Creation.</strong> Repeated Monte Carlo runs with <code>--stability</code> estimate DMP recurrence frequencies. The <code>--freeze</code> step then trains a single final model on the full dataset restricted to the stable DMP panel (via <code>fixed_dmp_panel</code>). This workflow answers the question: <em>which positions are robustly differentially methylated across random data partitions, and what classifier do they produce on all available data?</em></p>
+<p><strong>Workflow 1 — Model Creation.</strong> Repeated Monte Carlo runs with <code>--stability</code> estimate DMP recurrence frequencies from centroid+detector iterations. The <code>--freeze</code> step then builds production biological outputs on the stable panel (<code>fixed_dmp_panel</code>) and may run progression synthesis. The <code>--model</code> step then performs final classifier/predictor execution after optional biological gate checks.</p>
 <p><strong>Workflow 2 — Model Use for Prediction.</strong> The <code>--predictor-only</code> flag evaluates the frozen production model on repeated random holdouts without retraining. This workflow answers the question: <em>what is the empirical distribution of classification performance for the frozen production classifier under random sampling from the available cohort?</em></p>
-<p>The two workflows share the same split-and-aggregate infrastructure (<code>split.py</code>, <code>project_gen.py</code>, <code>pipeline_runner.py</code>) but differ in which pipeline steps execute per iteration. Workflow 1 runs centroid through predictor; Workflow 2 runs only the predictor.</p>
+<p>The two workflows share the same split-and-aggregate infrastructure (<code>split.py</code>, <code>project_gen.py</code>, <code>pipeline_runner.py</code>) but differ in which pipeline steps execute per iteration. Workflow 1 iterations run centroid+detector; Workflow 2 iterations run predictor only.</p>
 </section>
 <section id="publication-guidance" class="level2" data-number="6.10">
 <h2 data-number="6.10" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">6.10</span> Publication Guidance</h2>

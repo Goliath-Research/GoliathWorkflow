@@ -327,8 +327,9 @@ window.Quarto = {
   <li><a href="#sec-ref-classifier" id="toc-sec-ref-classifier" class="nav-link" data-scroll-target="#sec-ref-classifier"><span class="header-section-number">14.6</span> <code>step_config.classifier</code></a></li>
   <li><a href="#sec-ref-predictor" id="toc-sec-ref-predictor" class="nav-link" data-scroll-target="#sec-ref-predictor"><span class="header-section-number">14.7</span> <code>step_config.predictor</code></a></li>
   <li><a href="#sec-ref-validation" id="toc-sec-ref-validation" class="nav-link" data-scroll-target="#sec-ref-validation"><span class="header-section-number">14.8</span> <code>step_config.validation</code></a></li>
-  <li><a href="#sec-ref-cluster" id="toc-sec-ref-cluster" class="nav-link" data-scroll-target="#sec-ref-cluster"><span class="header-section-number">14.9</span> <code>step_config.cluster</code></a></li>
-  <li><a href="#sec-ref-alignment-qc" id="toc-sec-ref-alignment-qc" class="nav-link" data-scroll-target="#sec-ref-alignment-qc"><span class="header-section-number">14.10</span> <code>step_config.alignment_qc</code></a></li>
+  <li><a href="#sec-ref-progression" id="toc-sec-ref-progression" class="nav-link" data-scroll-target="#sec-ref-progression"><span class="header-section-number">14.9</span> <code>step_config.progression</code></a></li>
+  <li><a href="#sec-ref-cluster" id="toc-sec-ref-cluster" class="nav-link" data-scroll-target="#sec-ref-cluster"><span class="header-section-number">14.10</span> <code>step_config.cluster</code></a></li>
+  <li><a href="#sec-ref-alignment-qc" id="toc-sec-ref-alignment-qc" class="nav-link" data-scroll-target="#sec-ref-alignment-qc"><span class="header-section-number">14.11</span> <code>step_config.alignment_qc</code></a></li>
   </ul>
 </nav>
     </div>
@@ -1527,6 +1528,30 @@ window.Quarto = {
 <td>Apply Platt scaling calibration to binary classifier outputs.</td>
 </tr>
 <tr class="even">
+<td><code>use_isotonic_calibration</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Enable isotonic probability calibration. During labeled runs, calibrators are fit and then applied; during inference, saved calibrators are reused when present.</td>
+</tr>
+<tr class="odd">
+<td><code>use_elasticnet_stacking</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Fit chromosome weights with ElasticNet stacking on labeled data.</td>
+</tr>
+<tr class="even">
+<td><code>calibration_train_fraction</code></td>
+<td>float | null</td>
+<td><code>null</code></td>
+<td>If set in <code>(0,1]</code>, fit isotonic/stacking on a stratified per-class fraction (MC-style holdout mask). <code>null</code> means use full labeled set.</td>
+</tr>
+<tr class="odd">
+<td><code>calibration_seed</code></td>
+<td>int | null</td>
+<td><code>null</code></td>
+<td>Seed for stratified calibration/stacking fit mask.</td>
+</tr>
+<tr class="even">
 <td><code>trimmed_percentile_low</code></td>
 <td>float</td>
 <td><code>0.10</code></td>
@@ -1682,7 +1707,7 @@ window.Quarto = {
 <td>bool</td>
 <td><code>false</code></td>
 <td>—</td>
-<td>Run mapper and enricher inside each MC iteration. Adds significant runtime; usually not needed for <code>--stability</code>.</td>
+<td>Legacy field; MC iterations now run centroid+detector only. Mapper/enricher are part of <code>--freeze</code>.</td>
 </tr>
 <tr class="odd">
 <td><code>skip_enricher</code></td>
@@ -1720,6 +1745,20 @@ window.Quarto = {
 <td>Path to <code>production/project.json</code> for predictor-only mode. Defaults to <code>monte_carlo_runs/production/project.json</code> if it exists.</td>
 </tr>
 <tr class="even">
+<td><code>require_biological_review_for_model</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>—</td>
+<td>If <code>true</code>, <code>methyl-validation --model</code> is blocked unless <code>biological_review_confirmed=true</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>biological_review_confirmed</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>—</td>
+<td>Explicit confirmation flag that unlocks <code>--model</code> when biological review is required.</td>
+</tr>
+<tr class="even">
 <td><code>abort_on_step_failure</code></td>
 <td>bool</td>
 <td><code>false</code></td>
@@ -1730,8 +1769,67 @@ window.Quarto = {
 </table>
 <hr>
 </section>
-<section id="sec-ref-cluster" class="level2" data-number="14.9">
-<h2 data-number="14.9" class="anchored" data-anchor-id="sec-ref-cluster"><span class="header-section-number">14.9</span> <code>step_config.cluster</code></h2>
+<section id="sec-ref-progression" class="level2" data-number="14.9">
+<h2 data-number="14.9" class="anchored" data-anchor-id="sec-ref-progression"><span class="header-section-number">14.9</span> <code>step_config.progression</code></h2>
+<p><em>See <a href="12-two-workflows.html" class="quarto-xref"><span>Chapter 13</span></a> for workflow placement after freeze.</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>enabled</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Run <code>methyl-disease-progression</code> after enricher during <code>--freeze</code>.</td>
+</tr>
+<tr class="even">
+<td><code>output_dir</code></td>
+<td>str | null</td>
+<td><code>null</code></td>
+<td>Optional output directory override. Default: <code>&lt;project_root&gt;/progression</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>ordered_comparison_labels</code></td>
+<td>list[str] | null</td>
+<td><code>null</code></td>
+<td>Explicit stage order using comparison labels and/or disease groups.</td>
+</tr>
+<tr class="even">
+<td><code>ordered_disease_groups</code></td>
+<td>list[str] | null</td>
+<td><code>null</code></td>
+<td>Alias for stage order override.</td>
+</tr>
+<tr class="odd">
+<td><code>strict_missing</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>If <code>true</code>, progression fails when expected stage files are missing.</td>
+</tr>
+<tr class="even">
+<td><code>report_md</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Emit <code>progression/report.md</code> in addition to CSV/JSON outputs.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="sec-ref-cluster" class="level2" data-number="14.10">
+<h2 data-number="14.10" class="anchored" data-anchor-id="sec-ref-cluster"><span class="header-section-number">14.10</span> <code>step_config.cluster</code></h2>
 <p><em>See <a href="06-methylcluster.html" class="quarto-xref"><span>Chapter 7</span></a> for theoretical background.</em></p>
 <table class="caption-top table">
 <colgroup>
@@ -1821,8 +1919,8 @@ window.Quarto = {
 </table>
 <hr>
 </section>
-<section id="sec-ref-alignment-qc" class="level2" data-number="14.10">
-<h2 data-number="14.10" class="anchored" data-anchor-id="sec-ref-alignment-qc"><span class="header-section-number">14.10</span> <code>step_config.alignment_qc</code></h2>
+<section id="sec-ref-alignment-qc" class="level2" data-number="14.11">
+<h2 data-number="14.11" class="anchored" data-anchor-id="sec-ref-alignment-qc"><span class="header-section-number">14.11</span> <code>step_config.alignment_qc</code></h2>
 <p><em>See <a href="09-methylalignmentqc.html" class="quarto-xref"><span>Chapter 10</span></a> for theoretical background.</em></p>
 <table class="caption-top table">
 <colgroup>
