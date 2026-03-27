@@ -24,3 +24,4 @@ methyl_mapper_bedtools \
 - Install `bedtools` on the host or use the repository setup scripts.
 - Use `GROK_API_KEY` from the environment if disease enrichment is enabled.
 - The project-aware bedtools flow is the supported path; legacy Azure SQL mode is compatibility-only.
+- For custom non-detector DMP files, minimum schema is `chromosome` + `position`; see [`BEDTOOLS_MAPPER_README.md`](BEDTOOLS_MAPPER_README.md) for accepted aliases and full examples.

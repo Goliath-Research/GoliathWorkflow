@@ -709,6 +709,30 @@ class BedtoolsMapper:
         return context_series.astype(str).str.strip().str.upper()
 
     @staticmethod
+    def _direction_to_sign(direction_series: pd.Series) -> pd.Series:
+        """Map textual/encoded direction to sign (-1, +1), NaN when unknown."""
+        raw = direction_series.astype(str).str.strip().str.lower()
+        out = pd.Series(np.nan, index=direction_series.index, dtype=float)
+
+        pos_tokens = {
+            "hyper", "up", "increase", "increased", "higher",
+            "positive", "pos", "plus", "+", "1", "1.0",
+        }
+        neg_tokens = {
+            "hypo", "down", "decrease", "decreased", "lower",
+            "negative", "neg", "minus", "-", "-1", "-1.0",
+        }
+        out[raw.isin(pos_tokens)] = 1.0
+        out[raw.isin(neg_tokens)] = -1.0
+
+        unresolved = out.isna()
+        if unresolved.any():
+            numeric = pd.to_numeric(raw[unresolved], errors="coerce")
+            out.loc[unresolved & numeric.notna()] = np.sign(numeric[numeric.notna()]).astype(float)
+
+        return out
+
+    @staticmethod
     def _normalize_dmp_columns(df: pd.DataFrame) -> pd.DataFrame:
         """Normalize DMP CSV column names so variants (p-value, Effect Size, etc.) map to expected names."""
         if df.empty:
@@ -730,6 +754,8 @@ class BedtoolsMapper:
                 rename[c] = 'position'
             elif canonical == 'context':
                 rename[c] = 'context'
+            elif canonical in ('direction', 'delta_direction', 'methylation_direction', 'sign'):
+                rename[c] = 'direction'
         if rename:
             df = df.rename(columns=rename)
         return df
@@ -1065,10 +1091,15 @@ class BedtoolsMapper:
                     weights = group['weight'].astype(float).to_numpy()
                 else:
                     weights = np.ones_like(pvals)
-                signs = np.sign(group['delta_mean'].astype(float).to_numpy()) if 'delta_mean' in group.columns else np.ones_like(pvals)
+                if 'delta_mean' in group.columns:
+                    signs = np.sign(group['delta_mean'].astype(float).to_numpy())
+                elif 'direction' in group.columns:
+                    signs = self._direction_to_sign(group['direction']).to_numpy(dtype=float)
+                else:
+                    signs = np.ones_like(pvals)
 
                 valid = np.isfinite(pvals) & np.isfinite(weights)
-                if 'delta_mean' in group.columns:
+                if 'delta_mean' in group.columns or 'direction' in group.columns:
                     valid &= np.isfinite(signs)
 
                 pvals = pvals[valid]
