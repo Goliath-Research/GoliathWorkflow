@@ -91,6 +91,14 @@ class ClassifierConfig(BaseModel):
         default=False,
         description="Enable Platt scaling calibration on validation data"
     )
+    use_elasticnet_stacking: bool = Field(
+        default=False,
+        description="Enable ElasticNet regression to learn optimal chromosome weights during training. When True, bypasses other weight methods."
+    )
+    use_isotonic_calibration: bool = Field(
+        default=False,
+        description="Enable Isotonic Regression calibration to map raw scores to calibrated probabilities."
+    )
 
     # Output configuration
     chromosome_matrix_path: Optional[str] = Field(

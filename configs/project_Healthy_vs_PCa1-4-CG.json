@@ -196,6 +196,8 @@
       "enable_platt_calibration": false,
       "trimmed_percentile_low": 0.1,
       "trimmed_percentile_high": 0.01,
+      "use_elasticnet_stacking": true,
+      "use_isotonic_calibration": true,
       "chromosome_weights": null,
       "debug": false,
       "log_level": "INFO",
@@ -229,7 +231,7 @@
     },
     "validation": {
       "train_fraction": 0.8,
-      "n_iterations": 5,
+      "n_iterations": 50,
       "seed": 42,
       "run_stability": true,
       "stability_dmp_freq": 0.6,

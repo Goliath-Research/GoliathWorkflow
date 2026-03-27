@@ -1462,6 +1462,51 @@ class MethylClassifier:
                 raise RuntimeError("No classifier loaded")
             return self.classifier.get_feature_info()
 
+    def calibrate_probabilities(self, probas: np.ndarray, expected_classes: Optional[np.ndarray] = None) -> np.ndarray:
+        """Apply Isotonic Regression calibration to probabilities."""
+        if not getattr(self.config, 'use_isotonic_calibration', False):
+            return probas
+
+        if expected_classes is not None:
+            # We are fitting
+            from sklearn.isotonic import IsotonicRegression
+            calibrators = []
+            calibrated_probas = np.zeros_like(probas)
+            
+            for c in range(probas.shape[1]):
+                iso = IsotonicRegression(out_of_bounds='clip')
+                y_binary = (expected_classes == c).astype(float)
+                # Fit on the raw probability for this class
+                calibrated_probas[:, c] = iso.fit_transform(probas[:, c], y_binary)
+                calibrators.append(iso)
+                
+            # Normalize to sum to 1
+            row_sums = calibrated_probas.sum(axis=1, keepdims=True)
+            row_sums[row_sums == 0] = 1.0
+            calibrated_probas /= row_sums
+            
+            if not hasattr(self, 'metadata') or self.metadata is None:
+                self.metadata = {}
+            self.metadata['isotonic_calibrators_'] = calibrators
+            return calibrated_probas
+            
+        else:
+            # We are transforming
+            calibrators = getattr(self, 'metadata', {}).get('isotonic_calibrators_') if hasattr(self, 'metadata') else None
+            if not calibrators:
+                print("⚠️ Isotonic calibration enabled but model has no fitted calibrators. Returning uncalibrated.")
+                return probas
+                
+            calibrated_probas = np.zeros_like(probas)
+            for c, iso in enumerate(calibrators):
+                calibrated_probas[:, c] = iso.predict(probas[:, c])
+                
+            # Normalize to sum to 1
+            row_sums = calibrated_probas.sum(axis=1, keepdims=True)
+            row_sums[row_sums == 0] = 1.0
+            calibrated_probas /= row_sums
+            return calibrated_probas
+
     def save(self, path: Path) -> None:
         """
         Save the classifier to a .pkl file for later use (e.g. to classify a list of samples).

@@ -617,10 +617,6 @@ def classify_samples_from_list(
         classifier, samples_list, multichrom_dmp_df, debug
     )
     if fast is not None:
-        feature_matrix_fast, availability_fast, dmp_pos_fast, sample_names_fast, _chrom_fp = fast
-        predictions, probabilities = classify_samples_batch(
-            classifier, feature_matrix_fast, availability_fast, debug
-        )
         fc_exp = None
         if expected_classes is not None:
             fc_exp = [
@@ -628,6 +624,9 @@ def classify_samples_from_list(
                 for i in range(len(samples_list))
                 if i < len(expected_classes)
             ]
+        predictions, probabilities = classify_samples_batch(
+            classifier, feature_matrix_fast, availability_fast, debug, expected_classes=fc_exp
+        )
         extra_cols = None
         if panel_spec and getattr(classifier, "_ovr_mode", False):
             extra_cols, panel_json = _panel_spec_to_csv_columns(
@@ -747,11 +746,9 @@ def classify_samples_from_list(
         
         feature_matrix = np.array(feature_matrix)
         availability_mask = np.array(availability_mask)
-        
         predictions, probabilities = classify_samples_batch(
-            classifier, feature_matrix, availability_mask, debug
+            classifier, feature_matrix, availability_mask, debug, expected_classes=single_expected_classes
         )
-        
         # Save results
         extra_cols = None
         if panel_spec and getattr(classifier, "_ovr_mode", False):
@@ -816,10 +813,14 @@ def _classify_single_file_multichrom_dmps(
         probabilities = classifier.predict_proba(
             feature_matrix, availability_mask, debug
         )
+        if expected_classes is not None and len(expected_classes) == n_samples and n_samples >= 2:
+            probabilities = classifier.calibrate_probabilities(probabilities, np.array(expected_classes, dtype=np.float64))
+        else:
+            probabilities = classifier.calibrate_probabilities(probabilities)
         predictions = np.argmax(probabilities, axis=1)
     else:
         predictions, probabilities = classify_samples_batch(
-            classifier, feature_matrix, availability_mask, debug
+            classifier, feature_matrix, availability_mask, debug, expected_classes=expected_classes
         )
     dmp_positions_flat = dmp_df["position"].values.astype(np.uint32)
     extra_cols = None
@@ -939,7 +940,7 @@ def _classify_multi_chromosome_samples(
     weight_method = classifier.config.weight_method
     fitted_methods = ("linear_fitted", "logistic_fitted", "elasticnet_fitted")
     if (
-        weight_method in fitted_methods
+        (weight_method in fitted_methods or classifier.config.use_elasticnet_stacking)
         and expected_classes is not None
         and len(expected_classes) == len(loaded_samples)
         and len(loaded_samples) >= 2
@@ -950,10 +951,16 @@ def _classify_multi_chromosome_samples(
             chrom_probas = cached_chrom_probas[chrom]
             # P(class1) for binary; column index 1
             chrom_proba_matrix[:, i] = chrom_probas[:, 1] if chrom_probas.shape[1] > 1 else chrom_probas[:, 0]
+        
+        if classifier.config.use_elasticnet_stacking:
+            method = "elasticnet"
+        else:
+            method = "linear" if weight_method == "linear_fitted" else ("logistic" if weight_method == "logistic_fitted" else "elasticnet")
+            
         reg = classifier.config.weight_fit_regularization or "none"
         alpha = classifier.config.weight_fit_alpha
         l1_ratio = classifier.config.weight_fit_l1_ratio
-        method = "linear" if weight_method == "linear_fitted" else ("logistic" if weight_method == "logistic_fitted" else "elasticnet")
+        
         classifier.fit_chromosome_weights(
             chrom_proba_matrix,
             np.array(expected_classes, dtype=np.float64),
@@ -1364,7 +1371,8 @@ def _save_chromosome_probability_matrix(
 def classify_samples_batch(classifier: MethylClassifier,
                           methylation_data: np.ndarray,
                           availability_mask: Optional[np.ndarray] = None,
-                          debug: bool = False):
+                          debug: bool = False,
+                          expected_classes: Optional[List[int]] = None):
     """
     Classify a batch of samples using the trained classifier.
 
@@ -1374,6 +1382,7 @@ def classify_samples_batch(classifier: MethylClassifier,
                          Shape should be (n_samples, n_features)
         availability_mask: Boolean mask indicating which positions are available
         debug: If True, enable debug output
+        expected_classes: Ground truth labels (used for fitting Isotonic calibration if requested via config)
 
     Returns:
         predictions: Array of class predictions (0 or 1)
@@ -1381,6 +1390,12 @@ def classify_samples_batch(classifier: MethylClassifier,
     """
     # Single predict_proba pass (predict() would call predict_proba again for multi-chromosome).
     probabilities = classifier.predict_proba(methylation_data, availability_mask, debug)
+    
+    if expected_classes is not None and len(expected_classes) == methylation_data.shape[0] and len(methylation_data) >= 2:
+        probabilities = classifier.calibrate_probabilities(probabilities, np.array(expected_classes, dtype=np.float64))
+    else:
+        probabilities = classifier.calibrate_probabilities(probabilities)
+
     predictions = np.argmax(np.asarray(probabilities), axis=1)
 
     return predictions, probabilities
