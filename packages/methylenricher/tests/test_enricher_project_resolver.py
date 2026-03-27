@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from methyl_enricher.project_resolver import (
     resolve_enricher_paths,
     resolve_enricher_paths_per_cancer_group,
@@ -54,3 +56,18 @@ def test_resolve_enricher_paths_per_comparison_uses_canonical_layout(tmp_path):
         == "/work/output/EnricherProject/mapper/healthy/pca/all-gene_name-combined.csv"
     )
     assert paths.output_dir == "/work/output/EnricherProject/enricher/healthy/pca"
+
+
+def test_resolve_enricher_paths_warns_on_legacy_alias_keys(tmp_path):
+    project_path = _write_project(tmp_path)
+    override_path = tmp_path / "override.json"
+    override_path.write_text(
+        json.dumps({"input": "/tmp/legacy.csv", "outdir": "/tmp/legacy-out"}),
+        encoding="utf-8",
+    )
+
+    with pytest.warns(DeprecationWarning):
+        paths = resolve_enricher_paths(project_path, step_override_path=override_path)
+
+    assert paths.input_file == "/tmp/legacy.csv"
+    assert paths.output_dir == "/tmp/legacy-out"

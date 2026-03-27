@@ -1061,14 +1061,45 @@ Example:
         if wait > 0:
             time.sleep(wait)
         logger.debug(f"Calling Grok API with timeout={timeout}s for prompt length={len(prompt)}")
-        response = self._get_session().post(
+        session = self._get_session()
+        response = session.post(
             self.grok_api_url,
             headers=headers,
             json=payload,
             timeout=timeout
         )
-        response.raise_for_status()
-        
+        if response.status_code == 400 and "max_tokens" in payload:
+            # Compatibility fallback: some xAI model revisions prefer max_output_tokens.
+            fallback_payload = dict(payload)
+            fallback_payload.pop("max_tokens", None)
+            fallback_payload["max_output_tokens"] = payload["max_tokens"]
+            logger.debug("Grok API 400 on primary payload; retrying with max_output_tokens fallback")
+            response = session.post(
+                self.grok_api_url,
+                headers=headers,
+                json=fallback_payload,
+                timeout=timeout,
+            )
+
+        if response.status_code >= 400:
+            detail = ""
+            try:
+                body = response.json()
+                if isinstance(body, dict):
+                    err = body.get("error")
+                    if isinstance(err, dict):
+                        detail = str(err.get("message") or err)
+                    elif err is not None:
+                        detail = str(err)
+                    else:
+                        detail = str(body)
+                else:
+                    detail = str(body)
+            except Exception:
+                detail = (response.text or "").strip()
+            msg = f"xAI error {response.status_code}: {detail or 'no response body'}"
+            raise requests.HTTPError(msg, response=response)
+
         return response.json()
     
     def _normalize_associated(self, value: Union[bool, str, int, None]) -> bool:

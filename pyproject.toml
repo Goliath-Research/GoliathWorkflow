@@ -60,6 +60,7 @@ pythonpath = [
     "packages/methylcluster",
     "packages/methylenricher",
     "packages/methylalignmentqc",
+    "packages/methyldiseaseprogression",
 ]
 testpaths = ["packages/*/tests"]
 python_files = ["test_*.py", "*_test.py"]

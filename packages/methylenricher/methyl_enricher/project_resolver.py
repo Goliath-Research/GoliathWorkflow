@@ -11,10 +11,26 @@ Legacy flat-group projects are normalized onto the same directory contract.
 
 from pathlib import Path
 from typing import List, Optional, Tuple
+import warnings
 
 from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
+
+
+def _warn_enricher_alias_keys(cfg: dict) -> None:
+    if "input" in cfg:
+        warnings.warn(
+            "step_config.enricher.input is deprecated; use step_config.enricher.input_file.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    if "outdir" in cfg:
+        warnings.warn(
+            "step_config.enricher.outdir is deprecated; use step_config.enricher.output_dir.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
 
 class EnricherStepPaths(BaseModel):
@@ -52,6 +68,7 @@ def resolve_enricher_paths_per_cancer_group(
         with open(step_override_path) as f:
             overrides = json.load(f)
         step_cfg = {**step_cfg, **overrides}
+    _warn_enricher_alias_keys(step_cfg)
     csv_name = step_cfg.get("combined_csv_name") or combined_csv_name
 
     if getattr(project, "uses_control_disease", lambda: False)():
@@ -98,6 +115,7 @@ def resolve_enricher_paths(
     # Apply project-level step config (enricher) if present
     step_cfg = project.get_step_config("enricher")
     if step_cfg:
+        _warn_enricher_alias_keys(step_cfg)
         if step_cfg.get("input_file") is not None:
             input_file = step_cfg["input_file"]
         if step_cfg.get("input") is not None:
@@ -112,6 +130,7 @@ def resolve_enricher_paths(
         import json
         with open(step_override_path) as f:
             overrides = json.load(f)
+    _warn_enricher_alias_keys(overrides)
 
     if overrides.get("input") is not None:
         input_file = overrides["input"]

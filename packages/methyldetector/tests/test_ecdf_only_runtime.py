@@ -89,6 +89,26 @@ def test_methyl_detector_config_rejects_removed_statistical_test_option():
             )
 
 
+def test_methyl_detector_config_warns_on_legacy_ecdf_grid_alias():
+    with TemporaryDirectory() as temp_dir:
+        centroid1_dir = Path(temp_dir) / "c1"
+        centroid2_dir = Path(temp_dir) / "c2"
+        centroid1_dir.mkdir()
+        centroid2_dir.mkdir()
+
+        with pytest.warns(DeprecationWarning, match="ecdf_overlap_grid_size"):
+            cfg = MethylDetectorConfig.model_validate(
+                {
+                    "chromosome": "1",
+                    "contexts": ["CG"],
+                    "centroid1_dir": str(centroid1_dir),
+                    "centroid2_dir": str(centroid2_dir),
+                    "ecdf_overlap_grid_size": 512,
+                }
+            )
+        assert cfg.ecdf_grid_size == 512
+
+
 def test_methyl_centroid_pair_is_ecdf_only():
     with TemporaryDirectory() as temp_dir:
         temp_root = Path(temp_dir)

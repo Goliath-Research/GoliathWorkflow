@@ -102,6 +102,11 @@ class PredictorConfig(BaseModel):
         default=None,
         description="Optional tree metadata from project (disease families / stages); used for hierarchy summaries in reports.",
     )
+    classifier_step_snapshot: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional copy of step_config.classifier fields merged into ClassifierConfig during "
+        "run_prediction (temperature, use_isotonic_calibration, weight_method, etc.).",
+    )
     panel: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Optional hierarchical panel readout for OvR ECDF bundles (pairwise max-contrast). "

@@ -1,5 +1,8 @@
 """
-Run pipeline steps (methyl-centroid, methyl-detector, methyl-classifier, methyl-predictor) via subprocess.
+Orchestrate pipeline CLIs via subprocess.
+
+Monte Carlo iterations run **methyl-centroid** and **methyl-detector** only; **--freeze** runs
+mapper/enricher; **--model** runs classifier then predictor.
 """
 
 import shutil
@@ -99,6 +102,36 @@ def run_enricher(project_json: str | Path, per_cancer_group: bool = False) -> tu
     return run_cmd(cmd)
 
 
+def _progression_settings(project_json: str | Path) -> Dict[str, Any]:
+    """Read progression step settings from project.json."""
+    try:
+        from methyl_utils import load_project
+    except Exception:
+        return {}
+    try:
+        project = load_project(project_json)
+        return project.get_step_config("progression") or {}
+    except Exception:
+        return {}
+
+
+def run_progression(project_json: str | Path) -> tuple[int, str, str]:
+    """Run methyl-disease-progression --project <project_json> with optional step_config args."""
+    cfg = _progression_settings(project_json)
+    cmd = ["methyl-disease-progression", "--project", str(project_json)]
+    out_dir = cfg.get("output_dir")
+    if out_dir:
+        cmd.extend(["--output-dir", str(out_dir)])
+    ordered = cfg.get("ordered_comparison_labels") or cfg.get("ordered_disease_groups")
+    if isinstance(ordered, list) and ordered:
+        cmd.extend(["--ordered-comparison-labels", ",".join(str(x) for x in ordered)])
+    if bool(cfg.get("strict_missing", False)):
+        cmd.append("--strict-missing")
+    if bool(cfg.get("report_md", False)):
+        cmd.append("--report-md")
+    return run_cmd(cmd)
+
+
 def run_predictor(
     project_json: str | Path,
     test_control_csv: str | Path,
@@ -147,22 +180,16 @@ def _write_step_log(log_path: Path, stdout: str, stderr: str) -> None:
 
 def run_pipeline_for_iteration(
     project_json: Path,
-    val_control_csv: Path,
-    val_disease_csv: Path,
-    predictor_output_dir: Path,
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     centroid_step_overrides: Optional[Dict[str, Path]] = None,
-    config: Optional[Any] = None,  # for run_mapper_and_enricher flag
+    config: Optional[Any] = None,  # reserved; mapper/enricher belong to --freeze, not MC
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
-    Run centroid -> detector -> classifier -> predictor in order.
-    If logs_dir is set, create it and write each step's stdout+stderr to logs_dir/<step_name>.log,
-    and write step_timings.csv to logs_dir.parent (run_dir).
-    If progress_callback is set, call it with (step_index, step_name, "start") before each step
-    and (step_index, step_name, "end") after each step.
-    Returns (success, list of error messages, list of step timing dicts with step_name, duration_seconds, return_code).
+    Monte Carlo stability iteration: methyl-centroid → methyl-detector only.
+
+    Omits methyl-classifier and methyl-predictor (final model is ``--model`` after freeze).
     """
     from .validator_metrics import write_step_timings_csv
 
@@ -174,22 +201,7 @@ def run_pipeline_for_iteration(
             lambda: run_centroid(project_json, centroid_step_overrides=centroid_step_overrides),
         ),
         ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=per_cancer_group)),
-        ("methyl-classifier", lambda: run_classifier(project_json, per_cancer_group=per_cancer_group)),
-        (
-            "methyl-predictor",
-            lambda: run_predictor(
-                project_json,
-                val_control_csv,
-                val_disease_csv,
-                predictor_output_dir,
-            ),
-        ),
     ]
-
-    if config is not None and getattr(config, "run_mapper_and_enricher", False):
-        steps.insert(2, ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=per_cancer_group)))
-        if not getattr(config, "skip_enricher", False):
-            steps.insert(3, ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=per_cancer_group)))
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")
@@ -335,8 +347,18 @@ def run_pipeline_for_production(
         ("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)),
         ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=False)),
         ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=False)),
-        ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=False)),
     ]
+    skip_enricher = config is not None and getattr(config, "skip_enricher", False)
+    progression_cfg = _progression_settings(project_json)
+    progression_enabled = bool(progression_cfg.get("enabled", False))
+    if not skip_enricher:
+        steps.append(
+            ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=False)),
+        )
+        if progression_enabled:
+            steps.append(
+                ("methyl-disease-progression", lambda: run_progression(project_json)),
+            )
 
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:
@@ -367,15 +389,14 @@ def run_pipeline_for_production(
 
 def run_pipeline_for_iteration_multiclass(
     project_json: Path,
-    test_groups_json: Path,
-    predictor_output_dir: Path,
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     config: Optional[Any] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
-    Centroid (``--group all``, no deltas) → detector → classifier → multiclass predictor.
+    Monte Carlo stability iteration (multiclass template): methyl-centroid → methyl-detector only.
+
     """
     from .validator_metrics import write_step_timings_csv
 
@@ -384,22 +405,73 @@ def run_pipeline_for_iteration_multiclass(
     steps = [
         ("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)),
         ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=per_cancer_group)),
+    ]
+    for step_index, (step_name, run_fn) in enumerate(steps):
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "start")
+        t0 = time.perf_counter()
+        rc, out, err = run_fn()
+        duration_seconds = time.perf_counter() - t0
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "end")
+        step_timings.append({
+            "step_name": step_name,
+            "duration_seconds": round(duration_seconds, 6),
+            "return_code": rc,
+        })
+        if logs_dir is not None:
+            log_path = logs_dir / f"{step_name}.log"
+            _write_step_log(log_path, out, err)
+        if rc != 0:
+            msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
+            errors.append(msg)
+            if logs_dir is not None:
+                write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+            return False, errors, step_timings
+    if logs_dir is not None:
+        write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+    return True, [], step_timings
+
+
+def run_predictor_from_project(
+    project_json: str | Path,
+    output_dir: Optional[str | Path] = None,
+) -> tuple[int, str, str]:
+    """
+    Run ``methyl-predictor --project`` using cohorts from ``step_config.predictor``.
+    With control/disease comparisons, the predictor CLI auto-enables per-comparison runs.
+    """
+    cmd = ["methyl-predictor", "--project", str(project_json)]
+    if output_dir is not None:
+        cmd.extend(["--output-dir", str(output_dir)])
+    return run_cmd(cmd)
+
+
+def run_pipeline_for_model(
+    project_json: Path,
+    logs_dir: Optional[Path] = None,
+    predictor_output_dir: Optional[Path] = None,
+    progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
+    per_cancer_group: bool = False,
+) -> Tuple[bool, List[str], List[Dict[str, Any]]]:
+    """
+    Production model step after freeze: methyl-classifier → methyl-predictor.
+
+    Predictor resolves test sets from the production ``project.json`` (and optional
+    ``--output-dir`` when ``predictor_output_dir`` is set).
+    """
+    from .validator_metrics import write_step_timings_csv
+
+    errors: List[str] = []
+    step_timings: List[Dict[str, Any]] = []
+    steps: List[Tuple[str, Callable[[], tuple[int, str, str]]]] = [
         ("methyl-classifier", lambda: run_classifier(project_json, per_cancer_group=per_cancer_group)),
         (
             "methyl-predictor",
-            lambda: run_predictor_multiclass(
-                project_json,
-                test_groups_json,
-                predictor_output_dir,
-            ),
+            lambda: run_predictor_from_project(project_json, predictor_output_dir),
         ),
     ]
 
-    # When stability analysis is requested, run mapper (+ optionally enricher)
-    if config is not None and getattr(config, "run_mapper_and_enricher", False):
-        steps.insert(2, ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=per_cancer_group)))
-        if not getattr(config, "skip_enricher", False):
-            steps.insert(3, ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=per_cancer_group)))
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")

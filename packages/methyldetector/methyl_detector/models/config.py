@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import List, Literal, Optional, Union, Dict, Any  # noqa: F401
+import warnings
 
 DmpExportMode = Literal["unified", "dual"]
 ClassifierDmpSelection = Literal["elbow", "featurecuts_validation"]
@@ -70,8 +71,18 @@ class MethylDetectorConfig(BaseModel):
             # Alias legacy grid keys to ecdf_grid_size for backward compatibility
             if "ecdf_grid_size" not in data:
                 if "ecdf_overlap_grid_size" in data:
+                    warnings.warn(
+                        "ecdf_overlap_grid_size is deprecated; use ecdf_grid_size instead.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
                     data = {**data, "ecdf_grid_size": data["ecdf_overlap_grid_size"]}
                 elif "ecdf_ks_grid_size" in data:
+                    warnings.warn(
+                        "ecdf_ks_grid_size is deprecated; use ecdf_grid_size instead.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
                     data = {**data, "ecdf_grid_size": data["ecdf_ks_grid_size"]}
         return data
 

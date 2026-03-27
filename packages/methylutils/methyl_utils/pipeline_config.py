@@ -24,6 +24,7 @@ the same artifact layout consistently.
 """
 
 import json
+import warnings
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union
 
@@ -280,7 +281,7 @@ class ProjectConfig(BaseModel):
     )
     step_config: Optional[Dict[str, Dict[str, Any]]] = Field(
         default=None,
-        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc, cluster. "
+        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc, validation, progression, cluster. "
         "Use 'predictor' (not 'validator') for prediction/validation; validator is deprecated. "
         "Values are merged into that step's config (override file / CLI still override these). "
         "Under 'detection', native multiclass PKL export (not MethylDetector runtime) may set: "
@@ -361,6 +362,12 @@ class ProjectConfig(BaseModel):
             return data
         sc = dict(sc)
         if "predictor" not in sc and "validator" in sc:
+            warnings.warn(
+                "step_config.validator is deprecated and will be removed in a future release. "
+                "Use step_config.predictor instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
             sc["predictor"] = sc["validator"]
         data["step_config"] = sc
         return data
@@ -736,7 +743,8 @@ class ProjectConfig(BaseModel):
     def get_step_config(self, step_name: str) -> Dict[str, Any]:
         """
         Return the config dict for a step, or empty dict if not defined.
-        Step names: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc.
+        Step names: centroid, detection, mapper, enricher, classifier, predictor,
+        alignment_qc, validation, progression, cluster.
         Use 'predictor' (canonical); 'validator' is deprecated but still accepted for backward compatibility.
         """
         if not self.step_config:

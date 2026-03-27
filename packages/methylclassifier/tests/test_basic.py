@@ -86,7 +86,7 @@ def test_classify_samples_from_list_realigns_expected_classes(monkeypatch, tmp_p
         ),
     )
 
-    def fake_classify_samples_batch(classifier_obj, feature_matrix, availability_mask, debug=False):
+    def fake_classify_samples_batch(classifier_obj, feature_matrix, availability_mask, debug=False, expected_classes=None):
         predictions = np.array([0, 1], dtype=np.int64)
         probabilities = np.array([[0.9, 0.1], [0.2, 0.8]], dtype=np.float64)
         return predictions, probabilities

@@ -6,8 +6,16 @@ This `docs/` tree is intentionally thin. The canonical mathematical and statisti
 
 - [`theory/README.md`](theory/README.md): build instructions and authoring guide for the Quarto theory book.
 - [`theory/index.qmd`](theory/index.qmd): code-backed overview of the statistical pipeline, notation, and traceability rules.
+- [`config_parameter_matrix.md`](config_parameter_matrix.md): active-component config audit matrix (declared/consumed/inherited/legacy keys).
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): environment setup for the monorepo and command-line tools.
 - `packages/*/docs/`: package-local summaries, usage notes, and implementation details.
+
+Latest workflow additions reflected in code and docs:
+
+- Monte Carlo (`methyl-validation --stability`) runs **centroid + detector only** per iteration.
+- Production freeze (`--freeze`) runs **centroid -> detector -> mapper -> enricher**, and can optionally run `methyl-disease-progression` when `step_config.progression.enabled=true`.
+- Final model build (`--model`) runs **classifier -> predictor** after freeze and can be gated by biological review (`step_config.validation.require_biological_review_for_model` + `biological_review_confirmed`).
+- New package: `packages/methyldiseaseprogression` (`methyl-disease-progression`) for cross-stage progression synthesis.
 
 ## Source Of Truth
 

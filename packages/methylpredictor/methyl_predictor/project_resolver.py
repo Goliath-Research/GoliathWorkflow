@@ -10,12 +10,35 @@ the top-level project ``controls`` / ``diseases``.
 import copy
 import csv
 import json
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from methyl_utils import load_project
 
 from .models.config import PredictorConfig
+
+
+_CLASSIFIER_SNAPSHOT_KEYS = (
+    "temperature",
+    "enable_platt_calibration",
+    "use_isotonic_calibration",
+    "trimmed_percentile_low",
+    "trimmed_percentile_high",
+    "weight_method",
+    "weight_fit_regularization",
+    "weight_fit_alpha",
+    "weight_fit_l1_ratio",
+    "use_elasticnet_stacking",
+    "chromosome_weights",
+)
+
+
+def _classifier_step_snapshot(classifier_step: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not classifier_step:
+        return None
+    out = {k: classifier_step[k] for k in _CLASSIFIER_SNAPSHOT_KEYS if k in classifier_step}
+    return out or None
 
 
 def _resolve_one_path(entry: str, base_path: Optional[str]) -> str:
@@ -454,6 +477,7 @@ def _build_blind_predictor_dict(
         "sample_lineage": lineage,
         "cohort_hierarchy": tree or None,
         "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+        "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
     }
 
 
@@ -602,6 +626,7 @@ def _build_multiclass_predictor_config(
         "sample_lineage": mc_lineage,
         "cohort_hierarchy": tree or None,
         "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+        "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
     }
     return PredictorConfig(**base_dict)
 
@@ -623,7 +648,16 @@ def resolve_predictor_config(
     they are expanded as flat lists (no nested report shape).
     """
     project = load_project(project_path)
-    step_cfg = (project.get_step_config("predictor") or project.get_step_config("validator") or {}).copy()
+    step_cfg = (project.get_step_config("predictor") or {}).copy()
+    if not step_cfg:
+        legacy_validator = (project.get_step_config("validator") or {}).copy()
+        if legacy_validator:
+            warnings.warn(
+                "step_config.validator is deprecated; use step_config.predictor instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            step_cfg = legacy_validator
     classifier_step = project.get_step_config("classifier") or {}
     if step_override_path is not None:
         override_path = Path(step_override_path)
@@ -675,6 +709,7 @@ def resolve_predictor_config(
             report_diseases={"label": "disease", "groups": [{"label": "cli", "sample_paths": []}]},
             sample_lineage=lineage,
             panel=step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            classifier_step_snapshot=_classifier_step_snapshot(classifier_step),
         )
 
     if _predictor_blind_has_groups(step_cfg):
@@ -729,6 +764,7 @@ def resolve_predictor_config(
         "sample_lineage": lineage,
         "cohort_hierarchy": tree or None,
         "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+        "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
     }
     return PredictorConfig(**base)
 
@@ -759,7 +795,16 @@ def resolve_predictor_config_per_comparison(
         )
         return [(config, "validation")]
 
-    step_cfg = (project.get_step_config("predictor") or project.get_step_config("validator") or {}).copy()
+    step_cfg = (project.get_step_config("predictor") or {}).copy()
+    if not step_cfg:
+        legacy_validator = (project.get_step_config("validator") or {}).copy()
+        if legacy_validator:
+            warnings.warn(
+                "step_config.validator is deprecated; use step_config.predictor instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            step_cfg = legacy_validator
     classifier_step = project.get_step_config("classifier") or {}
     if step_override_path is not None:
         override_path = Path(step_override_path)
@@ -910,6 +955,7 @@ def resolve_predictor_config_per_comparison(
             "report_diseases": rep_d,
             "sample_lineage": lineage,
             "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
         }
         result.append((PredictorConfig(**base), comp_label))
     return result

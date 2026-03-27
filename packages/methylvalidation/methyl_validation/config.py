@@ -122,6 +122,17 @@ class MonteCarloConfig(BaseModel):
         default=None,
         description="project.json from --freeze production build; merged into each run for predictor_only mode.",
     )
+    require_biological_review_for_model: bool = Field(
+        default=False,
+        description=(
+            "If True, methyl-validation --model exits unless biological_review_confirmed is true "
+            "(set in step_config.validation after expert review)."
+        ),
+    )
+    biological_review_confirmed: bool = Field(
+        default=False,
+        description="After review, set True in step_config.validation to allow --model (classifier + predictor).",
+    )
 
     # Support for step_config.validation when loading from a project JSON
     validation: Optional[Dict[str, Any]] = Field(
@@ -173,3 +184,13 @@ class MonteCarloConfig(BaseModel):
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return cls.model_validate(data)
+
+
+def assert_production_model_build_allowed(config: MonteCarloConfig) -> None:
+    """Raise ValueError if --model is blocked pending biological review."""
+    if config.require_biological_review_for_model and not config.biological_review_confirmed:
+        raise ValueError(
+            "Production model build is blocked: set step_config.validation.biological_review_confirmed "
+            "to true after biological review, or set require_biological_review_for_model to false."
+        )
+
