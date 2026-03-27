@@ -47,7 +47,7 @@ from .validator_metrics import (
     write_step_timings_csv,
     write_summary_json,
 )
-from .stability import run_stability_analysis, freeze_production_model
+from .stability import run_stability_analysis, freeze_production_model, build_production_model
 
 
 def main() -> None:
@@ -111,7 +111,12 @@ def main() -> None:
     parser.add_argument(
         "--freeze",
         action="store_true",
-        help="Run production freeze: centroid→detector(fixed panel)→classifier→mapper→enricher (no predictor).",
+        help="Run production freeze: centroid→detector(fixed panel)→mapper→enricher (no classifier/predictor).",
+    )
+    parser.add_argument(
+        "--model",
+        action="store_true",
+        help="Build production model and predict: runs classifier and predictor on the production project (after --freeze).",
     )
     parser.add_argument(
         "--predictor-only",
@@ -227,6 +232,16 @@ def main() -> None:
             config=config,
         )
         print(f"Production freeze complete. See: {production_summary.get('output_dir', 'unknown')}")
+        print("Done.")
+        return
+    elif getattr(args, "model", False):
+        print(f"Running production model build using project: {monte_carlo_runs_root / 'production' / 'project.json'}")
+        production_summary = build_production_model(
+            monte_carlo_runs_root=monte_carlo_runs_root,
+            production_output_dir=config.production_output_dir,
+            config=config,
+        )
+        print(f"Production model build complete. See: {production_summary.get('output_dir', 'unknown')}")
         print("Done.")
         return
     try:

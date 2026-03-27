@@ -342,7 +342,7 @@ def freeze_production_model(
     Merge per-chromosome stable DMPs (if multiple files/dir provided) into one
     genome-wide panel, generate production project.json with fixed_dmp_panel,
     and run the full production pipeline: centroid → detector(fixed panel)
-    → classifier → mapper → enricher (no predictor).
+    → mapper → enricher (no classifier or predictor).
     """
     if production_output_dir is None:
         production_output_dir = str(monte_carlo_runs_root / "production")
@@ -401,3 +401,46 @@ def freeze_production_model(
 
     logger.info(f"Production freeze complete: {summary_path}")
     return summary
+
+
+def build_production_model(
+    monte_carlo_runs_root: Path,
+    production_output_dir: Optional[str] = None,
+    config: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """
+    Run the model building and evaluation steps on the production project:
+    classifier → predictor.
+    Assumes --freeze has already generated the production project.json.
+    """
+    if production_output_dir is None:
+        production_output_dir = str(monte_carlo_runs_root / "production")
+    prod_dir = Path(production_output_dir)
+    prod_project_path = prod_dir / "project.json"
+
+    if not prod_project_path.exists():
+        raise FileNotFoundError(f"Production project not found: {prod_project_path}. Run --freeze first.")
+
+    logger.info(f"Production model output dir: {prod_dir}")
+
+    from .pipeline_runner import run_pipeline_for_model
+    success, errors, timings = run_pipeline_for_model(
+        prod_project_path,
+        logs_dir=prod_dir / "logs",
+        config=config,
+    )
+
+    summary = {
+        "output_dir": str(prod_dir),
+        "production_project": str(prod_project_path),
+        "success": success,
+        "errors": errors,
+        "timings": timings,
+    }
+    summary_path = prod_dir / "model_summary.json"
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2, default=str)
+
+    logger.info(f"Production model build complete: {summary_path}")
+    return summary
+

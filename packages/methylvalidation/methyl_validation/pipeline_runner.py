@@ -324,8 +324,8 @@ def run_pipeline_for_production(
     config: Optional[Any] = None,
 ) -> Tuple[bool, List[str], List[Dict[str, Any]]]:
     """
-    Production freeze build: centroid -> detector (fixed_dmp_panel) -> classifier -> mapper -> enricher.
-    Does not run methyl-predictor; use a separate MC run with predictor_only to evaluate on holdouts.
+    Production freeze build: centroid -> detector (fixed_dmp_panel) -> mapper -> enricher.
+    Does not run methyl-classifier or methyl-predictor; use --model to run classifier and predictor sequentially.
     """
     from .validator_metrics import write_step_timings_csv
 
@@ -334,7 +334,6 @@ def run_pipeline_for_production(
     steps = [
         ("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)),
         ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=False)),
-        ("methyl-classifier", lambda: run_classifier(project_json, per_cancer_group=False)),
         ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=False)),
         ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=False)),
     ]

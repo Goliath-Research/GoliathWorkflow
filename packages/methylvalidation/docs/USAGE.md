@@ -4,7 +4,7 @@
 
 MethylValidation orchestrates repeated train/validation splits, full pipeline runs, and aggregation of predictor metrics. It supports two primary workflows:
 
-1. **Model Creation** (`--stability` + `--freeze`) — Identify stable DMPs across many random splits, then build a final production model on all data.
+1. **Model Creation** (`--stability` + `--freeze` + `--model`) — Identify stable DMPs across many random splits, extract pathways, and then build a final production model on all data.
 2. **Model Use for Prediction** (`--predictor-only`) — Evaluate a frozen production model on random holdouts without retraining.
 
 Both workflows are controlled by the project configuration file. See the full Quarto documentation at `docs/theory/` for theoretical background and the complete configuration reference.
@@ -23,17 +23,21 @@ Both workflows are controlled by the project configuration file. See the full Qu
 # Step 1: Monte Carlo + stability (n_iterations full pipeline runs)
 methyl-validation --project configs/my_project.json --stability
 
-# Step 2: Production freeze (full pipeline on all data with stable panel)
+# Step 2: Production freeze (full pipeline on all data up to mapper/enricher)
 methyl-validation --project configs/my_project.json --freeze
+
+# Step 3: Production model (after reviewing pathways, train the classifier and validate)
+methyl-validation --project configs/my_project.json --model
 ```
 
 **Why this workflow?**
 
 - Monte Carlo splits give honest performance estimates (feature selection inside folds).
 - Stability analysis identifies DMPs that recur in ≥ `stability_dmp_freq` fraction of runs.
-- The freeze step trains the final model on all data using only the stable positions (`fixed_dmp_panel`), bypassing re-discovery.
+- The freeze step prepares the final data using only the stable positions (`fixed_dmp_panel`), bypassing re-discovery, and extracting the valid pathway families (genes).
+- The model step builds the final model from the verified DMPs and predicts on the test set.
 
-**Output:** `monte_carlo_runs/production/classifiers/multiclass-classifier.pkl` is the final production model.
+**Output:** `monte_carlo_runs/production/classifiers/multiclass-classifier.pkl` is the final production model (created after `--model`).
 
 ### Workflow 2: Model Use for Prediction
 
@@ -60,7 +64,8 @@ methyl-validation --project configs/my_project.json --predictor-only
 | `--project PATH` | Path to the project JSON (preferred; reads `step_config.validation` from the project). |
 | `--config PATH` | Path to a standalone Monte Carlo config JSON (alternative to `--project`). |
 | `--stability` | Run stability analysis after the MC loop (Workflow 1, Step 1). |
-| `--freeze` | Run production freeze using the stable DMP panel (Workflow 1, Step 2). |
+| `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). |
+| `--model` | Run production model builder after freeze (Workflow 1, Step 3). |
 | `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). |
 | `--skip-enricher` | Skip the enricher inside MC iterations even when `run_mapper_and_enricher: true`. |
 | `--iterations N` | Override `n_iterations` from config. |
