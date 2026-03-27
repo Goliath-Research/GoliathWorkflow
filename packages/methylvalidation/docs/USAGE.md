@@ -2,7 +2,7 @@
 
 ## Overview
 
-MethylValidation orchestrates repeated train/validation splits, full pipeline runs, and aggregation of predictor metrics. It supports two primary workflows:
+MethylValidation orchestrates repeated train/validation splits, **methyl-centroid + methyl-detector** per iteration, aggregation of **detector** (or **predictor** when using `--predictor-only`) metrics, then optional **--freeze** (mapper/enricher) and **--model** (classifier→predictor). It supports two primary workflows:
 
 1. **Model Creation** (`--stability` + `--freeze` + `--model`) — Identify stable DMPs across many random splits, extract pathways, and then build a final production model on all data.
 2. **Model Use for Prediction** (`--predictor-only`) — Evaluate a frozen production model on random holdouts without retraining.
@@ -20,7 +20,7 @@ Both workflows are controlled by the project configuration file. See the full Qu
 **Steps:**
 
 ```bash
-# Step 1: Monte Carlo + stability (n_iterations full pipeline runs)
+# Step 1: Monte Carlo + stability (n_iterations: centroid + detector per split)
 methyl-validation --project configs/my_project.json --stability
 
 # Step 2: Production freeze (full pipeline on all data up to mapper/enricher)
@@ -32,7 +32,7 @@ methyl-validation --project configs/my_project.json --model
 
 **Why this workflow?**
 
-- Monte Carlo splits give honest performance estimates (feature selection inside folds).
+- Monte Carlo splits refit centroids and detection on training fractions; **balanced_accuracy** in `all_metrics.csv` comes from **MethylDetector** validation (mean over `result*.json`) unless you use **`--predictor-only`** with a frozen model.
 - Stability analysis identifies DMPs that recur in ≥ `stability_dmp_freq` fraction of runs.
 - The freeze step prepares the final data using only the stable positions (`fixed_dmp_panel`), bypassing re-discovery, and extracting the valid pathway families (genes).
 - The model step builds the final model from the verified DMPs and predicts on the test set.

@@ -2,9 +2,9 @@
 Stability analysis across Monte Carlo runs.
 
 Counts DMPs in detector discovery exports per iteration; optionally restricts
-to iterations with ``balanced_accuracy`` above a threshold. Gene stability is
-computed only when enricher outputs exist (not expected in the default
-stability path, which skips mapper/enricher during MC).
+to iterations with ``balanced_accuracy`` above a threshold (from detector
+validation or, when present, predictor metrics). Gene stability is computed
+only when enricher outputs exist (e.g. after ``--freeze``, not during MC).
 """
 
 from __future__ import annotations
@@ -38,18 +38,19 @@ def find_validation_metrics_json(run_dir: Path) -> Optional[Path]:
 
 
 def run_balanced_accuracy(run_dir: Path) -> Optional[float]:
-    """Return balanced_accuracy from this run's validation_metrics.json, or None if missing."""
-    p = find_validation_metrics_json(run_dir)
-    if p is None:
+    """
+    Return balanced_accuracy for this run: prefer MethylPredictor validation_metrics.json,
+    else mean balanced_accuracy from MethylDetector result*.json under detections/.
+    """
+    from .validator_metrics import iteration_scalar_metrics_from_run_dir
+
+    row = iteration_scalar_metrics_from_run_dir(run_dir)
+    ba = row.get("balanced_accuracy")
+    if ba is None:
         return None
     try:
-        with open(p, encoding="utf-8") as f:
-            data = json.load(f)
-        ba = data.get("balanced_accuracy")
-        if ba is None:
-            return None
         return float(ba)
-    except Exception:
+    except (TypeError, ValueError):
         return None
 
 
@@ -424,10 +425,13 @@ def build_production_model(
     logger.info(f"Production model output dir: {prod_dir}")
 
     from .pipeline_runner import run_pipeline_for_model
+
+    predictor_out = prod_dir / "predictors"
+    predictor_out.mkdir(parents=True, exist_ok=True)
     success, errors, timings = run_pipeline_for_model(
         prod_project_path,
         logs_dir=prod_dir / "logs",
-        config=config,
+        predictor_output_dir=predictor_out,
     )
 
     summary = {

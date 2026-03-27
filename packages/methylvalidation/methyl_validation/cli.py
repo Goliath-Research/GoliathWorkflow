@@ -20,7 +20,7 @@ from rich.progress import (
 
 from methyl_utils import load_project
 
-from .config import MonteCarloConfig
+from .config import MonteCarloConfig, assert_production_model_build_allowed
 from .predictor_policy import assert_monte_carlo_predictor_allowed
 from .pipeline_runner import (
     run_pipeline_for_iteration,
@@ -37,11 +37,10 @@ from .project_gen import (
 )
 from .split import load_and_resolve_sample_paths, stratified_split, stratified_split_multiclass
 from .validator_metrics import (
-    _scalar_metrics_from_dict,
     build_metrics_table,
     compute_resource_summary,
     compute_summary,
-    load_metrics_from_json,
+    iteration_scalar_metrics_from_run_dir,
     write_all_metrics_csv,
     write_resource_summary_json,
     write_step_timings_csv,
@@ -53,9 +52,9 @@ from .stability import run_stability_analysis, freeze_production_model, build_pr
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Monte Carlo validation: stratified train/val splits, full pipeline per iteration, "
-            "aggregate predictor metrics. Supports binary (control/disease template) and "
-            "multiclass (flat groups template + multiclass-classifier.pkl). "
+            "Monte Carlo validation: stratified train/val splits, methyl-centroid + methyl-detector per "
+            "iteration; optional --predictor-only uses a frozen model. Supports binary and multiclass "
+            "templates. Use --freeze then --model for mapper/enricher and classifier→predictor. "
             "Blind-only predictor configs are rejected."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -101,7 +100,7 @@ def main() -> None:
     parser.add_argument(
         "--stability",
         action="store_true",
-        help="After main analysis, run stability on discovery DMPs (centroid→detector→classifier→predictor only per iteration; no mapper/enricher).",
+        help="After main analysis, run stability on discovery DMPs from centroid+detector iterations (classifier/predictor via --model).",
     )
     parser.add_argument(
         "--skip-enricher",
@@ -235,6 +234,11 @@ def main() -> None:
         print("Done.")
         return
     elif getattr(args, "model", False):
+        try:
+            assert_production_model_build_allowed(config)
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
         print(f"Running production model build using project: {monte_carlo_runs_root / 'production' / 'project.json'}")
         production_summary = build_production_model(
             monte_carlo_runs_root=monte_carlo_runs_root,
@@ -507,14 +511,13 @@ def main() -> None:
                     progress.advance(task_iter, 1)
                 continue
 
-            metrics_path = predictor_output_dir / "validation_metrics.json"
-            if not metrics_path.exists():
-                print(f"Warning: {metrics_path} not found after predictor run; skipping metrics for {run_id}.", file=sys.stderr)
-                if progress is not None:
-                    progress.advance(task_iter, 1)
-                continue
-            metrics = load_metrics_from_json(metrics_path)
-            scalar = _scalar_metrics_from_dict(metrics)
+            scalar = iteration_scalar_metrics_from_run_dir(run_dir)
+            if not scalar:
+                print(
+                    f"Warning: no predictor or detector balanced_accuracy metrics for {run_id}; "
+                    "iteration still recorded with empty metric columns.",
+                    file=sys.stderr,
+                )
             row = {"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), **scalar}
             rows.append(row)
             if progress is None:

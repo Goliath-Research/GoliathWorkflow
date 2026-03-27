@@ -99,6 +99,18 @@ class ClassifierConfig(BaseModel):
         default=False,
         description="Enable Isotonic Regression calibration to map raw scores to calibrated probabilities."
     )
+    calibration_train_fraction: Optional[float] = Field(
+        default=None,
+        description=(
+            "If set in (0, 1), fit isotonic calibration and fitted chromosome weights on a stratified "
+            "per-class fraction of samples (like MC train_fraction); calibrators apply to all rows. "
+            "None or 1.0 uses the full labeled batch for fitting."
+        ),
+    )
+    calibration_seed: Optional[int] = Field(
+        default=None,
+        description="RNG seed for the stratified calibration/stacking fit mask.",
+    )
 
     # Output configuration
     chromosome_matrix_path: Optional[str] = Field(
@@ -150,6 +162,15 @@ class ClassifierConfig(BaseModel):
     def validate_weight_fit_regularization(cls, v):
         if v is not None and v not in ("none", "ridge", "lasso", "l1", "l2"):
             raise ValueError("weight_fit_regularization must be one of: none, ridge, lasso, l1, l2")
+        return v
+
+    @field_validator("calibration_train_fraction")
+    @classmethod
+    def validate_calibration_train_fraction(cls, v):
+        if v is None:
+            return v
+        if v <= 0 or v > 1:
+            raise ValueError("calibration_train_fraction must be None or in (0, 1]")
         return v
 
     @model_validator(mode='after')

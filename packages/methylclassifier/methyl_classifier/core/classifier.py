@@ -1328,6 +1328,7 @@ class MethylClassifier:
         regularization: str = "none",
         alpha: float = 1.0,
         l1_ratio: float = 0.5,
+        fit_row_mask: Optional[np.ndarray] = None,
         **kwargs: Any,
     ) -> Dict[str, float]:
         """
@@ -1344,6 +1345,8 @@ class MethylClassifier:
                 For elasticnet: ignored (uses alpha and l1_ratio).
             alpha: Regularization strength (inverse of C for logistic).
             l1_ratio: For method="elasticnet": balance L1/L2 (0=ridge, 1=lasso). Default 0.5.
+            fit_row_mask: If set, fit the regressor only on rows where this is True (stratified
+                holdout for stacking); weights still apply to all rows at combine time.
             **kwargs: Passed to the underlying estimator (e.g. fit_intercept=False).
 
         Returns:
@@ -1362,6 +1365,19 @@ class MethylClassifier:
         if len(y) != X.shape[0]:
             raise ValueError(f"labels length {len(y)} does not match matrix rows {X.shape[0]}")
 
+        if fit_row_mask is not None:
+            fm = np.asarray(fit_row_mask, dtype=bool).ravel()
+            if fm.shape[0] != X.shape[0]:
+                raise ValueError(
+                    f"fit_row_mask length {fm.shape[0]} does not match matrix rows {X.shape[0]}"
+                )
+            if int(fm.sum()) >= 2:
+                X_fit, y_fit = X[fm], y[fm]
+            else:
+                X_fit, y_fit = X, y
+        else:
+            X_fit, y_fit = X, y
+
         fit_intercept = kwargs.pop("fit_intercept", False)
 
         if method == "linear":
@@ -1374,7 +1390,7 @@ class MethylClassifier:
                 reg = Lasso(alpha=alpha, fit_intercept=fit_intercept, **kwargs)
             else:
                 raise ValueError(f"regularization must be 'none', 'ridge', or 'lasso', got {regularization!r}")
-            reg.fit(X, y)
+            reg.fit(X_fit, y_fit)
             coef = np.asarray(reg.coef_.ravel(), dtype=np.float64)
         elif method == "logistic":
             from sklearn.linear_model import LogisticRegression
@@ -1388,14 +1404,14 @@ class MethylClassifier:
                 reg = LogisticRegression(
                     penalty=penalty, C=C, fit_intercept=fit_intercept, solver="saga", max_iter=1000, **kwargs
                 )
-            reg.fit(X, y.astype(np.intp))
+            reg.fit(X_fit, y_fit.astype(np.intp))
             coef = np.asarray(reg.coef_.ravel(), dtype=np.float64)
         elif method == "elasticnet":
             from sklearn.linear_model import ElasticNet
             reg = ElasticNet(
                 alpha=alpha, l1_ratio=l1_ratio, fit_intercept=fit_intercept, max_iter=10000, **kwargs
             )
-            reg.fit(X, y)
+            reg.fit(X_fit, y_fit)
             coef = np.asarray(reg.coef_.ravel(), dtype=np.float64)
         else:
             raise ValueError(f"method must be 'linear', 'logistic', or 'elasticnet', got {method!r}")
@@ -1462,8 +1478,18 @@ class MethylClassifier:
                 raise RuntimeError("No classifier loaded")
             return self.classifier.get_feature_info()
 
-    def calibrate_probabilities(self, probas: np.ndarray, expected_classes: Optional[np.ndarray] = None) -> np.ndarray:
-        """Apply Isotonic Regression calibration to probabilities."""
+    def calibrate_probabilities(
+        self,
+        probas: np.ndarray,
+        expected_classes: Optional[np.ndarray] = None,
+        fit_mask: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
+        """Apply Isotonic Regression calibration to probabilities.
+
+        When ``expected_classes`` is set (training / validation with labels), calibrators are
+        fit on rows where ``fit_mask`` is True (or all rows if ``fit_mask`` is None), then
+        applied to every row via ``predict``. This matches a stratified holdout for calibration.
+        """
         if not getattr(self.config, 'use_isotonic_calibration', False):
             return probas
 
@@ -1472,12 +1498,28 @@ class MethylClassifier:
             from sklearn.isotonic import IsotonicRegression
             calibrators = []
             calibrated_probas = np.zeros_like(probas)
-            
+            n = probas.shape[0]
+            y_all = np.asarray(expected_classes).astype(int).ravel()
+            if len(y_all) != n:
+                raise ValueError(
+                    f"expected_classes length {len(y_all)} does not match probas rows {n}"
+                )
+            if fit_mask is None:
+                fit_m = np.ones(n, dtype=bool)
+            else:
+                fit_m = np.asarray(fit_mask, dtype=bool).reshape(n)
+                if fit_m.shape[0] != n:
+                    raise ValueError(
+                        f"fit_mask length {fit_m.shape[0]} does not match probas rows {n}"
+                    )
+            if int(fit_m.sum()) < 2:
+                fit_m = np.ones(n, dtype=bool)
+
             for c in range(probas.shape[1]):
                 iso = IsotonicRegression(out_of_bounds='clip')
-                y_binary = (expected_classes == c).astype(float)
-                # Fit on the raw probability for this class
-                calibrated_probas[:, c] = iso.fit_transform(probas[:, c], y_binary)
+                y_binary = (y_all == c).astype(float)
+                iso.fit(probas[fit_m, c], y_binary[fit_m])
+                calibrated_probas[:, c] = iso.predict(probas[:, c])
                 calibrators.append(iso)
                 
             # Normalize to sum to 1

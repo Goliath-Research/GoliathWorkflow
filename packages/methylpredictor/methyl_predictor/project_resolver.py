@@ -18,6 +18,28 @@ from methyl_utils import load_project
 from .models.config import PredictorConfig
 
 
+_CLASSIFIER_SNAPSHOT_KEYS = (
+    "temperature",
+    "enable_platt_calibration",
+    "use_isotonic_calibration",
+    "trimmed_percentile_low",
+    "trimmed_percentile_high",
+    "weight_method",
+    "weight_fit_regularization",
+    "weight_fit_alpha",
+    "weight_fit_l1_ratio",
+    "use_elasticnet_stacking",
+    "chromosome_weights",
+)
+
+
+def _classifier_step_snapshot(classifier_step: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not classifier_step:
+        return None
+    out = {k: classifier_step[k] for k in _CLASSIFIER_SNAPSHOT_KEYS if k in classifier_step}
+    return out or None
+
+
 def _resolve_one_path(entry: str, base_path: Optional[str]) -> str:
     """Resolve a single path to absolute; relative paths are resolved against base_path or cwd."""
     entry = entry.strip()
@@ -454,6 +476,7 @@ def _build_blind_predictor_dict(
         "sample_lineage": lineage,
         "cohort_hierarchy": tree or None,
         "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+        "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
     }
 
 
@@ -602,6 +625,7 @@ def _build_multiclass_predictor_config(
         "sample_lineage": mc_lineage,
         "cohort_hierarchy": tree or None,
         "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+        "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
     }
     return PredictorConfig(**base_dict)
 
@@ -675,6 +699,7 @@ def resolve_predictor_config(
             report_diseases={"label": "disease", "groups": [{"label": "cli", "sample_paths": []}]},
             sample_lineage=lineage,
             panel=step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            classifier_step_snapshot=_classifier_step_snapshot(classifier_step),
         )
 
     if _predictor_blind_has_groups(step_cfg):
@@ -729,6 +754,7 @@ def resolve_predictor_config(
         "sample_lineage": lineage,
         "cohort_hierarchy": tree or None,
         "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+        "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
     }
     return PredictorConfig(**base)
 
@@ -910,6 +936,7 @@ def resolve_predictor_config_per_comparison(
             "report_diseases": rep_d,
             "sample_lineage": lineage,
             "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
         }
         result.append((PredictorConfig(**base), comp_label))
     return result

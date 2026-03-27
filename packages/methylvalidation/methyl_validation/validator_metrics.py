@@ -4,7 +4,7 @@ Read validation_metrics.json, flatten to one row per run, and compute empirical 
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -126,7 +126,7 @@ def compute_resource_summary(timings: List[Dict[str, Any]]) -> Dict[str, Any]:
             "std_seconds": float(np.std(arr)) if len(arr) > 1 else 0.0,
             "count": int(len(arr)),
         }
-    # Total duration per iteration (sum of four steps per run_id)
+    # Total duration per iteration (sum of steps per run_id)
     by_run: Dict[str, float] = {}
     for row in timings:
         run_id = row.get("run_id")
@@ -180,3 +180,58 @@ def write_resource_summary_json(summary: Dict[str, Any], path: str | Path) -> No
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
+
+
+def _find_validation_metrics_json_under_run(run_dir: Path) -> Optional[Path]:
+    predictors = run_dir / "predictors"
+    if predictors.is_dir():
+        for path in predictors.rglob("validation_metrics.json"):
+            return path
+    for p in run_dir.glob("**/predictors"):
+        if p.is_dir():
+            for path in p.rglob("validation_metrics.json"):
+                return path
+    return None
+
+
+def _detector_mean_balanced_accuracy(run_dir: Path) -> Optional[float]:
+    values: List[float] = []
+    for det_root in run_dir.rglob("detections"):
+        if not det_root.is_dir():
+            continue
+        for p in det_root.rglob("result*.json"):
+            try:
+                with open(p, encoding="utf-8") as f:
+                    d = json.load(f)
+            except Exception:
+                continue
+            ba = d.get("balanced_accuracy")
+            if ba is not None and isinstance(ba, (int, float)):
+                fv = float(ba)
+                if fv == fv:
+                    values.append(fv)
+    return sum(values) / len(values) if values else None
+
+
+def iteration_scalar_metrics_from_run_dir(run_dir: Path) -> Dict[str, Any]:
+    """
+    Scalar metrics for one Monte Carlo run directory.
+
+    Prefer ``predictors/**/validation_metrics.json`` (after ``--predictor-only`` or ``--model``).
+    Otherwise use the mean of ``balanced_accuracy`` from MethylDetector ``result*.json``
+    files under ``detections/`` (centroid+detector iterations).
+    """
+    run_dir = Path(run_dir)
+    vm = _find_validation_metrics_json_under_run(run_dir)
+    if vm is not None:
+        try:
+            out = dict(_scalar_metrics_from_dict(load_metrics_from_json(vm)))
+            if out:
+                out["metrics_source"] = "predictor"
+            return out
+        except Exception:
+            pass
+    ba = _detector_mean_balanced_accuracy(run_dir)
+    if ba is not None:
+        return {"balanced_accuracy": ba, "metrics_source": "detector"}
+    return {}

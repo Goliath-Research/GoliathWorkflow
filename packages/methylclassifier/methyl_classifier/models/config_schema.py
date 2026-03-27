@@ -142,6 +142,25 @@ class ClassificationConfig(BaseModel):
         default=False,
         description="Enable Platt scaling calibration on validation data"
     )
+    use_isotonic_calibration: bool = Field(
+        default=False,
+        description="Enable isotonic calibration when labels are available (centroid validation / training export).",
+    )
+    use_elasticnet_stacking: bool = Field(
+        default=False,
+        description="Enable ElasticNet chromosome stacking when fitting weights from labeled data.",
+    )
+    calibration_train_fraction: Optional[float] = Field(
+        default=None,
+        description=(
+            "Stratified per-class fraction for fitting isotonic calibrators and fitted chromosome weights; "
+            "None or omitted uses the full labeled set."
+        ),
+    )
+    calibration_seed: Optional[int] = Field(
+        default=None,
+        description="Seed for stratified calibration/stacking mask (e.g. align with MC validation seed).",
+    )
     
     # Multi-chromosome parameters
     trimmed_percentile_low: float = Field(
@@ -202,6 +221,15 @@ class ClassificationConfig(BaseModel):
     def validate_weight_fit_regularization(cls, v):
         if v is not None and v not in ("none", "ridge", "lasso", "l1", "l2"):
             raise ValueError("weight_fit_regularization must be one of: none, ridge, lasso, l1, l2")
+        return v
+
+    @field_validator("calibration_train_fraction")
+    @classmethod
+    def validate_calibration_train_fraction(cls, v):
+        if v is None:
+            return v
+        if v <= 0 or v > 1:
+            raise ValueError("calibration_train_fraction must be None or in (0, 1]")
         return v
     
     def model_post_init(self, __context):

@@ -282,13 +282,19 @@ def resolve_classifier_config_per_cancer_group(
         List of (config, comparison_label) for each comparison.
     """
     project = load_project(project_path)
-    step_cfg = project.get_step_config("classifier") or {}
+    step_cfg = dict(project.get_step_config("classifier") or {})
     if step_override_path is not None:
         override_path = Path(step_override_path)
         if override_path.exists():
             with open(override_path) as f:
                 overrides = json.load(f)
             step_cfg = {**step_cfg, **overrides}
+
+    val_cfg_mc = project.get_step_config("validation") or {}
+    if step_cfg.get("calibration_train_fraction") is None and val_cfg_mc.get("train_fraction") is not None:
+        step_cfg["calibration_train_fraction"] = float(val_cfg_mc["train_fraction"])
+    if step_cfg.get("calibration_seed") is None and val_cfg_mc.get("seed") is not None:
+        step_cfg["calibration_seed"] = int(val_cfg_mc["seed"])
 
     disease_label = disease_subdir if disease_subdir is not None else _disease_subdir(project)
 
@@ -482,6 +488,13 @@ def resolve_classifier_config(
     if step_cfg:
         for k, v in step_cfg.items():
             base[k] = v
+
+    # Default calibration holdout to MC validation train_fraction/seed when classifier omits them
+    val_cfg = project.get_step_config("validation") or {}
+    if base.get("calibration_train_fraction") is None and val_cfg.get("train_fraction") is not None:
+        base["calibration_train_fraction"] = float(val_cfg["train_fraction"])
+    if base.get("calibration_seed") is None and val_cfg.get("seed") is not None:
+        base["calibration_seed"] = int(val_cfg["seed"])
 
     if step_override_path is not None:
         override_path = Path(step_override_path)

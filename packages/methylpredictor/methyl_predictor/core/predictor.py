@@ -557,15 +557,34 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
 
     prediction_mode = _prepare_predictor_paths_and_mode(config)
 
-    # Build classifier config and load model
-    classifier_config = ClassifierConfig(
-        model_path=config.model_path,
-        model_dir=config.model_dir,
-        temperature=1.0,
-        enable_platt_calibration=False,
-        trimmed_percentile_low=0.10,
-        trimmed_percentile_high=0.01,
+    # Build classifier config and load model (merge step_config.classifier snapshot from project resolver)
+    snap = getattr(config, "classifier_step_snapshot", None) or {}
+    merge_keys = (
+        "temperature",
+        "enable_platt_calibration",
+        "use_isotonic_calibration",
+        "trimmed_percentile_low",
+        "trimmed_percentile_high",
+        "weight_method",
+        "weight_fit_regularization",
+        "weight_fit_alpha",
+        "weight_fit_l1_ratio",
+        "use_elasticnet_stacking",
+        "chromosome_weights",
     )
+    cc_kwargs: Dict[str, Any] = {
+        "model_path": config.model_path,
+        "model_dir": config.model_dir,
+        "temperature": 1.0,
+        "enable_platt_calibration": False,
+        "trimmed_percentile_low": 0.10,
+        "trimmed_percentile_high": 0.01,
+        "use_isotonic_calibration": False,
+    }
+    for k in merge_keys:
+        if k in snap and snap[k] is not None:
+            cc_kwargs[k] = snap[k]
+    classifier_config = ClassifierConfig(**cc_kwargs)
     classifier = MethylClassifier(classifier_config)
 
     n_classes = getattr(classifier, "n_classes", None) or 2

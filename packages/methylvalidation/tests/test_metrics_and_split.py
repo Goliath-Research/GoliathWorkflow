@@ -3,7 +3,12 @@
 import math
 
 from methyl_validation.split import stratified_split
-from methyl_validation.validator_metrics import build_metrics_table, compute_resource_summary, compute_summary
+from methyl_validation.validator_metrics import (
+    build_metrics_table,
+    compute_resource_summary,
+    compute_summary,
+    iteration_scalar_metrics_from_run_dir,
+)
 
 
 def test_stratified_split_is_reproducible_and_exhaustive():
@@ -67,3 +72,24 @@ def test_validation_metric_summaries_aggregate_runs():
     assert resource_summary["per_iteration_total_seconds"]["n_iterations"] == 2
     assert math.isclose(resource_summary["sample_sizes"]["n_train_samples"]["mean"], 11.0)
     assert math.isclose(resource_summary["sample_sizes"]["n_val_samples"]["mean"], 4.0)
+
+
+def test_iteration_scalar_metrics_prefers_predictor_then_detector(tmp_path):
+    import json
+    run_dir = tmp_path / "run_0001"
+    pred = run_dir / "predictors" / "x"
+    pred.mkdir(parents=True)
+    vm = pred / "validation_metrics.json"
+    vm.write_text(json.dumps({"balanced_accuracy": 0.88, "accuracy": 0.9}), encoding="utf-8")
+    m = iteration_scalar_metrics_from_run_dir(run_dir)
+    assert m.get("balanced_accuracy") == 0.88
+    assert m.get("metrics_source") == "predictor"
+
+    run2 = tmp_path / "run_0002"
+    det = run2 / "detections" / "healthy" / "cancer"
+    det.mkdir(parents=True)
+    (det / "result-1-CG.json").write_text(json.dumps({"balanced_accuracy": 0.77}), encoding="utf-8")
+    (det / "result-2-CG.json").write_text(json.dumps({"balanced_accuracy": 0.73}), encoding="utf-8")
+    m2 = iteration_scalar_metrics_from_run_dir(run2)
+    assert abs(m2.get("balanced_accuracy", 0) - 0.75) < 1e-9
+    assert m2.get("metrics_source") == "detector"

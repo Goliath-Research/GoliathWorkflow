@@ -113,7 +113,7 @@ MethylValidation uses **MethylUtils** only for project loading:
 - **load_project(base_project)** — To read `project_name` and project structure so that run directories are created under `output_base/project_name/monte_carlo_runs/run_0001`, etc.
 - **load_project(project_path)** — Per run (binary), to resolve the predictor output directory from comparisons (`run_dir/predictors/<control>/<disease>`). Multiclass flat runs use `run_dir/predictors` directly.
 
-Sample path resolution is done locally in MethylValidation ([split.py](../methyl_validation/split.py): `load_and_resolve_sample_paths`). The actual validation metrics are produced by **MethylPredictor** (which uses MethylClassifier and MethylUtils internally); MethylValidation only reads the written `validation_metrics.json`.
+Sample path resolution is done locally in MethylValidation ([split.py](../methyl_validation/split.py): `load_and_resolve_sample_paths`). Iteration metrics are produced by **MethylDetector** (balanced accuracy in `result*.json`) during the default MC loop, or by **MethylPredictor** when using **`--predictor-only`** or after **`--model`**; MethylValidation aggregates via `iteration_scalar_metrics_from_run_dir`.
 
 ## Modules
 
@@ -123,8 +123,8 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 | **predictor_policy.py** | `assert_monte_carlo_predictor_allowed` — reject `predictor.blind` / `test_blind_paths` for MC. |
 | **split.py** | `load_and_resolve_sample_paths`; `stratified_split` (binary); `stratified_split_multiclass` (per-label train/val). |
 | **project_gen.py** | `infer_monte_carlo_layout` (rejects 2 cohorts when project resolves to >2 leaves); `generate_run_project` (binary CSV names unchanged); `generate_run_project_multiclass` / `generate_run_project_hierarchical_multiclass` (`training_<label>.csv`, `testing_<label>.csv`, `val_test_groups.json`). Each run’s `project.json` rewrites `step_config.predictor` to the holdout CSVs: **flat** MC also sets `test_group_paths`; **hierarchical** MC only updates nested `controls`/`diseases` (keeps template parent labels, e.g. `prostate_cancer` vs top-level `pca`). MethylPredictor zips predictor list expansion with resolved centroid labels when `test_group_paths` is absent. |
-| **pipeline_runner.py** | `run_pipeline_for_iteration` (binary, centroid deltas); `run_pipeline_for_iteration_multiclass` (`--group all`, `run_predictor_multiclass` / `--test-groups`). |
-| **validator_metrics.py** | Metrics aggregation (unchanged; multiclass scalars include macro/weighted F1 via existing SCALAR_KEYS). |
+| **pipeline_runner.py** | `run_pipeline_for_iteration` / `run_pipeline_for_iteration_multiclass`: **methyl-centroid → methyl-detector** only. `run_pipeline_for_production`: freeze (centroid→detector→mapper→enricher). `run_pipeline_for_model`: classifier→predictor. `run_predictor_only_*`: predictor-only. |
+| **validator_metrics.py** | `iteration_scalar_metrics_from_run_dir`: predictor `validation_metrics.json` if present, else mean detector `balanced_accuracy` from `detections/**/result*.json`. |
 
 ## Data flow (CLI)
 
@@ -133,13 +133,13 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 3. Resolve all cohort sample paths from CSVs.
 4. For each iteration:
    - **Binary:** `stratified_split` → `generate_run_project` → `run_pipeline_for_iteration` (centroid group1/group2 overrides).
-   - **Multiclass:** `stratified_split_multiclass` → `generate_run_project_multiclass` → `run_pipeline_for_iteration_multiclass` (centroid without overrides; predictor `--test-groups`).
-   - Read `run_dir/predictors/.../validation_metrics.json` (binary: nested comparison dir when comparisons exist; multiclass: flat `run_dir/predictors/`).
+   - **Multiclass:** `stratified_split_multiclass` → `generate_run_project_multiclass` → `run_pipeline_for_iteration_multiclass` (centroid + detector only).
+   - Read metrics via `iteration_scalar_metrics_from_run_dir(run_dir)` (predictor JSON if present, else detector `result*.json`).
 5. Aggregate → `all_metrics.csv`, `metrics_summary.json`, `step_timings.csv`, optional `resource_summary.json`.
 
 **MethylPredictor:** flat-group projects with **multiclass-classifier.pkl** resolve via `resolve_predictor_config` (shared `_build_multiclass_predictor_config`). The CLI applies `--test-groups` in both single-config and per-comparison multiclass runs (`_apply_test_groups_json_to_config`).
 
-**Binary Monte Carlo + unified OvR PKL:** `run_pipeline_for_iteration` calls `methyl-predictor` with `--test-control` / `--test-disease` only (no `--test-groups`). On comparison projects, `resolve_predictor_config_per_comparison` merges those paths into `test_group_paths` as class 0 and 1 (`_apply_binary_cli_paths_to_multiclass_config`). **Hierarchical** Monte Carlo (K cohorts = resolved leaves) uses `--test-groups` and the same **K-class** unified OvR artifact produced by **methyl-classifier** with `ovr_binary_pickles_from_comparisons` (pairwise **all vs each disease leaf**, not a separate predictor-only model).
+**After a frozen production build:** `--model` runs **methyl-classifier** then **methyl-predictor** (`run_pipeline_for_model`). **`--predictor-only`** still runs holdout **methyl-predictor** iterations using `frozen_project_path` (same stratified splits as MC); it expects predictor `validation_metrics.json` per run.
 
 ## Output files
 
