@@ -506,8 +506,14 @@ def main() -> None:
 
             scalar = iteration_scalar_metrics_from_run_dir(run_dir)
             if not scalar:
+                if config.predictor_only:
+                    expected_metrics = "predictor"
+                elif args.stability or config.run_stability:
+                    expected_metrics = "detector"
+                else:
+                    expected_metrics = "predictor or detector"
                 print(
-                    f"Warning: no predictor or detector balanced_accuracy metrics for {run_id}; "
+                    f"Warning: no {expected_metrics} balanced_accuracy metrics for {run_id}; "
                     "iteration still recorded with empty metric columns.",
                     file=sys.stderr,
                 )
