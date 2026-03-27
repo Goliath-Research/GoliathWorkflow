@@ -189,12 +189,22 @@ class MethylDetector:
             if not fixed_path.exists():
                 raise FileNotFoundError(f"fixed_dmp_panel not found: {fixed_path}")
             # Load the fixed panel and short-circuit to export/classifier phase
-            df_fixed = pd.read_csv(fixed_path)
-            if not {"chromosome", "position"}.issubset(df_fixed.columns):
+            df_all = pd.read_csv(fixed_path)
+            if not {"chromosome", "position"}.issubset(df_all.columns):
                 raise ValueError("fixed_dmp_panel CSV must contain 'chromosome' and 'position' columns")
 
+            # Filter to the current chromosome — the panel may cover the whole genome
+            # but each _run_multi_context call handles exactly one chromosome.
+            df_fixed = df_all[
+                df_all["chromosome"].astype(str) == str(self.chromosome)
+            ].copy()
+            if len(df_fixed) == 0:
+                logger.warning(
+                    f"fixed_dmp_panel has no entries for chromosome {self.chromosome}; "
+                    "producing empty result for this chromosome."
+                )
+
             # Ensure required columns for classifier, export, and result compatibility
-            df_fixed = df_fixed.copy()
             if "context" not in df_fixed.columns:
                 ctx = self.config.contexts[0] if self.config.contexts else "CG"
                 df_fixed["context"] = ctx
@@ -206,7 +216,10 @@ class MethylDetector:
                 df_fixed["biological_dmp"] = True
 
             n_dmps = len(df_fixed)
-            logger.info(f"Loaded fixed panel with {n_dmps:,} DMPs")
+            logger.info(
+                f"Loaded fixed panel for chromosome {self.chromosome}: "
+                f"{n_dmps:,} DMPs (panel total: {len(df_all):,})"
+            )
 
             # Build minimal comparison stats for result
             ctx = self.config.contexts[0] if self.config.contexts else "CG"

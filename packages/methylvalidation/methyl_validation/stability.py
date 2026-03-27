@@ -54,17 +54,24 @@ def run_balanced_accuracy(run_dir: Path) -> Optional[float]:
 
 
 def load_discovery_dmps(run_dir: Path) -> Optional[pd.DataFrame]:
-    """Load dmps-*-discovery.csv from a MC run directory."""
+    """Load and concatenate all dmps-*-discovery.csv files from a MC run directory.
+
+    Searches all detection subdirectories so that multi-chromosome runs are
+    correctly aggregated into a single DataFrame before stability counting.
+    """
     detection_dirs = list(run_dir.glob("**/detections/*/*"))
     if not detection_dirs:
         detection_dirs = list(run_dir.glob("detections/*/*"))
+    frames: list = []
     for d in detection_dirs:
-        for csv in d.glob("dmps-*-discovery.csv"):
+        for csv in sorted(d.glob("dmps-*-discovery.csv")):
             try:
-                return pd.read_csv(csv)
+                frames.append(pd.read_csv(csv))
             except Exception:
                 continue
-    return None
+    if not frames:
+        return None
+    return pd.concat(frames, ignore_index=True)
 
 
 def load_enricher_genes(run_dir: Path) -> Optional[pd.DataFrame]:
