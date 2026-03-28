@@ -287,6 +287,120 @@ def _dmp_key_from_row(row: Any) -> Tuple[Any, int]:
     return (chrom_n, int(row["position"]))
 
 
+def _curve_elbow_point(x_vals: List[float], y_vals: List[float]) -> Optional[Dict[str, float]]:
+    """
+    Return elbow point using max distance to line between first/last points.
+
+    Expects x and y as aligned lists with at least 3 points.
+    """
+    if len(x_vals) < 3 or len(y_vals) < 3 or len(x_vals) != len(y_vals):
+        return None
+
+    x0, y0 = float(x_vals[0]), float(y_vals[0])
+    x1, y1 = float(x_vals[-1]), float(y_vals[-1])
+    line_dx = x1 - x0
+    line_dy = y1 - y0
+    denom = (line_dx**2 + line_dy**2) ** 0.5
+    if denom <= 0:
+        return None
+
+    best_idx = None
+    best_dist = -1.0
+    for i in range(1, len(x_vals) - 1):
+        px, py = float(x_vals[i]), float(y_vals[i])
+        # Perpendicular distance from point to segment-defining line
+        dist = abs(line_dy * px - line_dx * py + x1 * y0 - y1 * x0) / denom
+        if dist > best_dist:
+            best_dist = dist
+            best_idx = i
+
+    if best_idx is None:
+        return None
+    return {
+        "frequency_pct": float(x_vals[best_idx]),
+        "dmps_pct": float(y_vals[best_idx]),
+        "distance_to_baseline": float(best_dist),
+    }
+
+
+def write_dmp_frequency_plot(
+    dmp_freq_df: pd.DataFrame,
+    output_dir: Path,
+) -> tuple[Optional[Path], Optional[Dict[str, float]]]:
+    """
+    Write Plotly HTML chart: X=frequency (%), Y=number of DMPs (%), with elbow marker.
+    """
+    if dmp_freq_df.empty or "frequency" not in dmp_freq_df.columns:
+        return None, None
+    try:
+        import plotly.graph_objects as go
+    except Exception as e:
+        logger.warning(f"Plotly not available; skipping DMP frequency chart: {e}")
+        return None, None
+
+    dist = (
+        dmp_freq_df["frequency"]
+        .dropna()
+        .astype(float)
+        .value_counts()
+        .sort_index()
+        .reset_index()
+    )
+    if dist.empty:
+        return None, None
+    dist.columns = ["frequency", "n_dmps"]
+    total_dmps = float(dist["n_dmps"].sum())
+    if total_dmps <= 0:
+        return None, None
+
+    dist["frequency_pct"] = dist["frequency"] * 100.0
+    dist["dmps_pct"] = (dist["n_dmps"] / total_dmps) * 100.0
+
+    x_vals = dist["frequency_pct"].tolist()
+    y_vals = dist["dmps_pct"].tolist()
+    elbow = _curve_elbow_point(x_vals, y_vals)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x_vals,
+            y=y_vals,
+            mode="lines+markers",
+            name="DMP frequency distribution",
+            hovertemplate="Frequency: %{x:.2f}%<br>DMPs: %{y:.2f}%<extra></extra>",
+        )
+    )
+    if elbow is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=[elbow["frequency_pct"]],
+                y=[elbow["dmps_pct"]],
+                mode="markers",
+                marker={"size": 11, "symbol": "diamond"},
+                name="Elbow",
+                hovertemplate="Elbow<br>Frequency: %{x:.2f}%<br>DMPs: %{y:.2f}%<extra></extra>",
+            )
+        )
+        fig.add_vline(
+            x=float(elbow["frequency_pct"]),
+            line_dash="dash",
+            annotation_text=f"Elbow ≈ {elbow['frequency_pct']:.2f}%",
+            annotation_position="top right",
+        )
+
+    fig.update_layout(
+        title="DMP Frequency Distribution Across Stability Runs",
+        xaxis_title="Frequency across runs (%)",
+        yaxis_title="DMPs at frequency (%)",
+        template="plotly_white",
+    )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    html_path = output_dir / "dmp_frequency_distribution.html"
+    fig.write_html(str(html_path), include_plotlyjs="cdn", full_html=True)
+    return html_path, elbow
+
+
 def compute_dmp_stability(
     monte_carlo_runs_root: Path,
     min_frequency: float = 0.7,
@@ -435,14 +549,19 @@ def run_stability_analysis(
     detector_param_summary = compute_detector_parameter_stability(monte_carlo_runs_root)
 
     stable_dmp_path = None
+    dmp_frequency_plot_path = None
+    dmp_frequency_elbow = None
     if not dmp_df.empty:
         stable_dmp_path = write_stable_panel(dmp_df, output_dir, dmp_min_freq, top_n_dmps)
+        dmp_frequency_plot_path, dmp_frequency_elbow = write_dmp_frequency_plot(dmp_df, output_dir)
 
     summary = {
         "dmp_stability": dmp_summary,
         "gene_stability": gene_summary,
         "detector_parameters": detector_param_summary,
         "stable_dmp_csv": str(stable_dmp_path) if stable_dmp_path else None,
+        "dmp_frequency_plot_html": str(dmp_frequency_plot_path) if dmp_frequency_plot_path else None,
+        "dmp_frequency_elbow": dmp_frequency_elbow,
         "output_dir": str(output_dir),
     }
 

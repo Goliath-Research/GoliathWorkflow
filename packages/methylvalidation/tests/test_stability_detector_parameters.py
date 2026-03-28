@@ -12,6 +12,13 @@ def _write_results_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _write_discovery_csv(path: Path, rows: list[dict]) -> None:
+    import pandas as pd
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows).to_csv(path, index=False)
+
+
 def test_extract_detector_parameters_for_run_summarizes_multichromosome_results(tmp_path):
     run_dir = tmp_path / "run_0001"
     base_cfg = {
@@ -132,3 +139,37 @@ def test_run_stability_analysis_includes_detector_parameters_and_missing_runs(tm
     summary_json = monte_root / "stability" / "stability_summary.json"
     payload = json.loads(summary_json.read_text(encoding="utf-8"))
     assert "detector_parameters" in payload
+
+
+def test_run_stability_analysis_writes_frequency_plot_html(tmp_path):
+    monte_root = tmp_path / "monte_carlo_runs"
+    # Create 4 runs with discovery DMPs so we get varied frequencies:
+    # (1,100) in 4/4, (1,200) in 3/4, (1,300) in 2/4, (1,400) in 1/4
+    run_rows = {
+        "run_0001": [100, 200, 300, 400],
+        "run_0002": [100, 200, 300],
+        "run_0003": [100, 200],
+        "run_0004": [100],
+    }
+    for run_id, positions in run_rows.items():
+        _write_discovery_csv(
+            monte_root / run_id / "detections" / "all" / "pca_pca1" / "dmps-1-discovery.csv",
+            [{"chromosome": 1, "position": p} for p in positions],
+        )
+
+    summary = run_stability_analysis(
+        monte_carlo_runs_root=monte_root,
+        output_dir=monte_root / "stability",
+    )
+    assert "dmp_frequency_plot_html" in summary
+    assert "dmp_frequency_elbow" in summary
+
+    html_path = summary.get("dmp_frequency_plot_html")
+    if html_path:
+        plot_path = Path(html_path)
+        assert plot_path.is_file()
+        # With four unique frequency points, elbow detection should be present
+        elbow = summary.get("dmp_frequency_elbow")
+        assert isinstance(elbow, dict)
+        assert "frequency_pct" in elbow
+        assert "dmps_pct" in elbow
