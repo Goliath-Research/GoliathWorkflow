@@ -575,18 +575,6 @@ def main() -> None:
                 continue
 
             scalar = iteration_scalar_metrics_from_run_dir(run_dir)
-            if not scalar:
-                if config.predictor_only:
-                    expected_metrics = "predictor"
-                elif args.stability or config.run_stability:
-                    expected_metrics = "detector"
-                else:
-                    expected_metrics = "predictor or detector"
-                print(
-                    f"Warning: no {expected_metrics} balanced_accuracy metrics for {run_id}; "
-                    "iteration still recorded with empty metric columns.",
-                    file=sys.stderr,
-                )
             row = {"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), **scalar}
             rows.append(row)
             if progress is None:

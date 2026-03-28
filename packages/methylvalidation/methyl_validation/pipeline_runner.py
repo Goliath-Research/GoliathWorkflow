@@ -70,6 +70,74 @@ def run_centroid(
     return 0, "\n".join(stdout_parts), "\n".join(stderr_parts)
 
 
+def run_centroid_group(
+    project_json: str | Path,
+    group: str,
+    step_override: Optional[str | Path] = None,
+) -> tuple[int, str, str]:
+    """Run methyl-centroid for one specific group with optional step override."""
+    cmd = ["methyl-centroid", "--project", str(project_json), "--group", str(group)]
+    if step_override is not None:
+        cmd.extend(["--step-override", str(step_override)])
+    return run_cmd(cmd)
+
+
+def _resolve_centroid_output_dir(
+    project_json: str | Path,
+    group: str,
+    step_override: Optional[str | Path] = None,
+) -> Optional[Path]:
+    """
+    Resolve centroid output directory for a project/group combination.
+
+    Uses methyl-centroid's project resolver to match exactly where artifacts were written.
+    """
+    try:
+        from methyl_centroid.project_resolver import resolve_centroid_batch_config
+
+        batch = resolve_centroid_batch_config(project_json, group, step_override)
+        output_dir = getattr(batch.base_config, "output_dir", None)
+        if output_dir:
+            return Path(output_dir)
+    except Exception:
+        return None
+    return None
+
+
+def _read_centroid_processed_samples(
+    project_json: str | Path,
+    group: str,
+    step_override: Optional[str | Path] = None,
+) -> Optional[int]:
+    """
+    Read actual processed sample count from centroid output metadata.
+
+    Returns max(len(metadata.samples_used)) across produced centroid H5 files for the group.
+    """
+    output_dir = _resolve_centroid_output_dir(project_json, group, step_override)
+    if output_dir is None or not output_dir.is_dir():
+        return None
+    try:
+        from methyl_utils import MethylSample
+    except Exception:
+        return None
+
+    samples_used_counts: List[int] = []
+    for centroid_h5 in sorted(output_dir.glob("*.h5")):
+        try:
+            sample = MethylSample.load_from_h5(centroid_h5)
+            metadata = getattr(sample, "metadata", None) or {}
+            samples_used = metadata.get("samples_used")
+            if isinstance(samples_used, list):
+                samples_used_counts.append(len(samples_used))
+        except Exception:
+            continue
+
+    if not samples_used_counts:
+        return None
+    return max(samples_used_counts)
+
+
 def run_detector(project_json: str | Path, per_cancer_group: bool = False) -> tuple[int, str, str]:
     """Run methyl-detector --project <project_json> [--per-cancer-group]. For binary single comparison, --per-cancer-group is optional."""
     cmd = ["methyl-detector", "--project", str(project_json)]
@@ -195,14 +263,50 @@ def run_pipeline_for_iteration(
 
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []
-    steps = [
+    steps: List[Tuple[str, Callable[[], tuple[int, str, str]], Optional[str], Optional[str | Path]]] = []
+    if centroid_step_overrides:
+        steps.extend(
+            [
+                (
+                    "methyl-centroid-group1",
+                    lambda: run_centroid_group(
+                        project_json,
+                        "group1",
+                        step_override=centroid_step_overrides.get("group1"),
+                    ),
+                    "group1",
+                    centroid_step_overrides.get("group1"),
+                ),
+                (
+                    "methyl-centroid-group2",
+                    lambda: run_centroid_group(
+                        project_json,
+                        "group2",
+                        step_override=centroid_step_overrides.get("group2"),
+                    ),
+                    "group2",
+                    centroid_step_overrides.get("group2"),
+                ),
+            ]
+        )
+    else:
+        steps.append(
+            (
+                "methyl-centroid",
+                lambda: run_centroid(project_json, centroid_step_overrides=centroid_step_overrides),
+                None,
+                None,
+            )
+        )
+    steps.append(
         (
-            "methyl-centroid",
-            lambda: run_centroid(project_json, centroid_step_overrides=centroid_step_overrides),
-        ),
-        ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=per_cancer_group)),
-    ]
-    for step_index, (step_name, run_fn) in enumerate(steps):
+            "methyl-detector",
+            lambda: run_detector(project_json, per_cancer_group=per_cancer_group),
+            None,
+            None,
+        )
+    )
+    for step_index, (step_name, run_fn, centroid_group, centroid_override) in enumerate(steps):
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")
         t0 = time.perf_counter()
@@ -210,11 +314,20 @@ def run_pipeline_for_iteration(
         duration_seconds = time.perf_counter() - t0
         if progress_callback is not None:
             progress_callback(step_index, step_name, "end")
-        step_timings.append({
+        row: Dict[str, Any] = {
             "step_name": step_name,
             "duration_seconds": round(duration_seconds, 6),
             "return_code": rc,
-        })
+        }
+        if centroid_group is not None:
+            n_processed = _read_centroid_processed_samples(
+                project_json,
+                centroid_group,
+                step_override=centroid_override,
+            )
+            if n_processed is not None:
+                row["n_processed_samples"] = int(n_processed)
+        step_timings.append(row)
         if logs_dir is not None:
             log_path = logs_dir / f"{step_name}.log"
             _write_step_log(log_path, out, err)

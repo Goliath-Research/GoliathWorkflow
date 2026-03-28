@@ -154,11 +154,11 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 
 | File / Directory | Description |
 |-----------------|-------------|
-| `run_000N/` | Per-iteration directory: `project.json`, train/val CSVs, pipeline outputs, `logs/`, `predictors/validation_metrics.json`. |
+| `run_000N/` | Per-iteration directory: `project.json`, train/val CSVs, pipeline outputs, `logs/` (binary centroid runs write `methyl-centroid-group1.log` and `methyl-centroid-group2.log`), `predictors/validation_metrics.json`. |
 | `all_metrics.csv` | One row per successful iteration: `iteration`, `run_id`, `accuracy`, `balanced_accuracy`, `macro_f1`, `n_samples`, `n_classes`, etc. |
 | `metrics_summary.json` | Per-metric empirical distribution: `mean`, `std`, `min`, `max`, `count`, `p5`, `p25`, `p50`, `p75`, `p95`. |
-| `step_timings.csv` | Per step per run: `step_name`, `duration_seconds`, `return_code`, `run_id`, `n_train_samples`, `n_val_samples`. |
-| `resource_summary.json` | Mean/std duration per step and range of train/val sizes. |
+| `step_timings.csv` | Per step per run: `step_name`, `duration_seconds`, `return_code`, `run_id`, `n_train_samples`, `n_val_samples`, optional `n_processed_samples` for centroid rows. Binary MC runs include separate `methyl-centroid-group1` and `methyl-centroid-group2` rows. |
+| `resource_summary.json` | Mean/std duration per step and range summaries for train/val sizes; includes `n_processed_samples` when present. |
 | `stability/stable_dmps_production.csv` | Stable DMP panel (created by `--stability`). |
 | `stability/stability_summary.json` | Stability run summary: `n_runs_analyzed`, `stable_dmps_at_threshold`, `min_frequency`. |
 | `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |
