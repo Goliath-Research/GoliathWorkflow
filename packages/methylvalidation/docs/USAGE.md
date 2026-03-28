@@ -154,13 +154,14 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 
 | File / Directory | Description |
 |-----------------|-------------|
-| `run_000N/` | Per-iteration directory: `project.json`, train/val CSVs, pipeline outputs, `logs/`, `predictors/validation_metrics.json`. |
+| `run_000N/` | Per-iteration directory: `project.json`, train/val CSVs, pipeline outputs, `logs/` (binary centroid runs write `methyl-centroid-group1.log` and `methyl-centroid-group2.log`), `predictors/validation_metrics.json`. |
 | `all_metrics.csv` | One row per successful iteration: `iteration`, `run_id`, `accuracy`, `balanced_accuracy`, `macro_f1`, `n_samples`, `n_classes`, etc. |
 | `metrics_summary.json` | Per-metric empirical distribution: `mean`, `std`, `min`, `max`, `count`, `p5`, `p25`, `p50`, `p75`, `p95`. |
-| `step_timings.csv` | Per step per run: `step_name`, `duration_seconds`, `return_code`, `run_id`, `n_train_samples`, `n_val_samples`. |
-| `resource_summary.json` | Mean/std duration per step and range of train/val sizes. |
+| `step_timings.csv` | Per step per run: `step_name`, `duration_seconds`, `return_code`, `run_id`, `n_train_samples`, `n_val_samples`, optional `n_processed_samples` for centroid rows. Binary MC runs include separate `methyl-centroid-group1` and `methyl-centroid-group2` rows. |
+| `resource_summary.json` | Mean/std duration per step and range summaries for train/val sizes; includes `n_processed_samples` when present. |
 | `stability/stable_dmps_production.csv` | Stable DMP panel (created by `--stability`). |
-| `stability/stability_summary.json` | Stability run summary: `n_runs_analyzed`, `stable_dmps_at_threshold`, `min_frequency`. |
+| `stability/dmp_frequency_distribution.html` | Plotly chart of stability distribution: X = DMP frequency across runs (%), Y = fraction of DMPs at that frequency (%), with an elbow marker when detectable. |
+| `stability/stability_summary.json` | Stability run summary for DMP/gene frequency plus detector parameter extraction. Includes `detector_parameters.per_run` and `detector_parameters.aggregates` built from `detections/**/results-*.json` (minimal fields: exported/statistical/biological DMP totals, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). |
 | `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |
 | `production/progression/` | Disease progression synthesis outputs (`genes_long.csv`, `pathways_long.csv`, `modules_long.csv`, `entities_progression_labels.csv`, `summary.json`, optional `report.md`). |
 | `production/classifiers/multiclass-classifier.pkl` | **Final production model.** |

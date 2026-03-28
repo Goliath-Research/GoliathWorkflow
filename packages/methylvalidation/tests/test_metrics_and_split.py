@@ -47,31 +47,31 @@ def test_validation_metric_summaries_aggregate_runs():
         [
             {
                 "run_id": "run-1",
-                "step_name": "predictor",
+                "step_name": "methyl-centroid-group1",
                 "duration_seconds": 4.0,
                 "n_train_samples": 10,
                 "n_val_samples": 4,
+                "n_processed_samples": 9,
                 "max_rss_mb": 512.0,
             },
             {
                 "run_id": "run-2",
-                "step_name": "predictor",
+                "step_name": "methyl-centroid-group2",
                 "duration_seconds": 6.0,
                 "n_train_samples": 12,
                 "n_val_samples": 4,
+                "n_processed_samples": 11,
                 "max_rss_mb": 768.0,
             },
         ]
     )
 
-    assert resource_summary["per_step_duration_seconds"]["predictor"]["count"] == 2
-    assert math.isclose(
-        resource_summary["per_step_duration_seconds"]["predictor"]["mean_seconds"],
-        5.0,
-    )
+    assert resource_summary["per_step_duration_seconds"]["methyl-centroid-group1"]["count"] == 1
+    assert resource_summary["per_step_duration_seconds"]["methyl-centroid-group2"]["count"] == 1
     assert resource_summary["per_iteration_total_seconds"]["n_iterations"] == 2
     assert math.isclose(resource_summary["sample_sizes"]["n_train_samples"]["mean"], 11.0)
     assert math.isclose(resource_summary["sample_sizes"]["n_val_samples"]["mean"], 4.0)
+    assert math.isclose(resource_summary["sample_sizes"]["n_processed_samples"]["mean"], 10.0)
 
 
 def test_iteration_scalar_metrics_prefers_predictor_then_detector(tmp_path):

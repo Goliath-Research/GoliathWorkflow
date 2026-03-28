@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from methyl_validation import pipeline_runner
 from methyl_validation.pipeline_runner import run_centroid
 from methyl_validation.project_gen import generate_run_project
 
@@ -128,3 +129,53 @@ def test_run_centroid_executes_group_specific_step_overrides(monkeypatch):
             "/tmp/group2.json",
         ],
     ]
+
+
+def test_run_pipeline_for_iteration_splits_centroid_logs_and_counts(monkeypatch):
+    calls = []
+
+    def fake_run_centroid_group(project_json, group, step_override=None):
+        calls.append(("centroid", str(group), str(step_override) if step_override is not None else None))
+        return 0, f"{group}-stdout", ""
+
+    def fake_run_detector(project_json, per_cancer_group=False):
+        calls.append(("detector", per_cancer_group))
+        return 0, "detector-stdout", ""
+
+    def fake_processed_samples(project_json, group, step_override=None):
+        return 11 if str(group) == "group1" else 9
+
+    monkeypatch.setattr(pipeline_runner, "run_centroid_group", fake_run_centroid_group)
+    monkeypatch.setattr(pipeline_runner, "run_detector", fake_run_detector)
+    monkeypatch.setattr(
+        pipeline_runner,
+        "_read_centroid_processed_samples",
+        fake_processed_samples,
+    )
+
+    with TemporaryDirectory() as temp_dir:
+        logs_dir = Path(temp_dir) / "run_0001" / "logs"
+        ok, errors, timings = pipeline_runner.run_pipeline_for_iteration(
+            Path("/tmp/project.json"),
+            per_cancer_group=False,
+            logs_dir=logs_dir,
+            centroid_step_overrides={
+                "group1": Path("/tmp/group1.json"),
+                "group2": Path("/tmp/group2.json"),
+            },
+        )
+
+        assert ok
+        assert errors == []
+        assert [t["step_name"] for t in timings] == [
+            "methyl-centroid-group1",
+            "methyl-centroid-group2",
+            "methyl-detector",
+        ]
+        assert timings[0]["n_processed_samples"] == 11
+        assert timings[1]["n_processed_samples"] == 9
+        assert "n_processed_samples" not in timings[2]
+
+        assert (logs_dir / "methyl-centroid-group1.log").is_file()
+        assert (logs_dir / "methyl-centroid-group2.log").is_file()
+        assert (logs_dir / "methyl-detector.log").is_file()

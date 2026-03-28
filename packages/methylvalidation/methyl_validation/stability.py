@@ -89,6 +89,195 @@ def load_enricher_genes(run_dir: Path) -> Optional[pd.DataFrame]:
     return None
 
 
+def _numeric_summary(values: List[float]) -> Dict[str, Any]:
+    """Compact numeric summary helper."""
+    if not values:
+        return {}
+    vals = [float(v) for v in values]
+    return {
+        "count": int(len(vals)),
+        "mean": float(sum(vals) / len(vals)),
+        "min": float(min(vals)),
+        "max": float(max(vals)),
+    }
+
+
+def _consistent_value(values: List[Any]) -> tuple[Optional[Any], bool]:
+    """
+    Return a value only when all non-null entries are identical.
+
+    Returns (value, is_consistent). If no usable values exist, returns (None, True).
+    """
+    clean = [v for v in values if v is not None]
+    if not clean:
+        return None, True
+    first = clean[0]
+    if all(v == first for v in clean[1:]):
+        return first, True
+    return None, False
+
+
+def _detector_results_files_for_run(run_dir: Path) -> List[Path]:
+    """Locate detector run summary files under run_dir detections."""
+    result_files: List[Path] = []
+    detections_roots = [p for p in run_dir.rglob("detections") if p.is_dir()]
+    for det_root in detections_roots:
+        result_files.extend(sorted(det_root.rglob("results-*.json")))
+    return result_files
+
+
+def extract_detector_parameters_for_run(run_dir: Path) -> Optional[Dict[str, Any]]:
+    """
+    Extract minimal detector/filter parameters from one MC run.
+
+    Uses detector ``results-*.json`` files (typically one per chromosome).
+    """
+    result_files = _detector_results_files_for_run(run_dir)
+    if not result_files:
+        return None
+
+    n_dmps_exported_vals: List[float] = []
+    total_statistical_dmps_vals: List[float] = []
+    total_biological_dmps_vals: List[float] = []
+    effect_size_coverage_vals: List[Any] = []
+    delta_mean_reduction_vals: List[Any] = []
+    classifier_dmp_selection_vals: List[Any] = []
+    dynamic_dmp_cutoff_enabled_vals: List[Any] = []
+
+    for path in result_files:
+        try:
+            with open(path, encoding="utf-8") as f:
+                payload = json.load(f)
+        except Exception:
+            continue
+
+        if isinstance(payload.get("n_dmps_exported"), (int, float)):
+            n_dmps_exported_vals.append(float(payload["n_dmps_exported"]))
+        if isinstance(payload.get("total_statistical_dmps"), (int, float)):
+            total_statistical_dmps_vals.append(float(payload["total_statistical_dmps"]))
+        if isinstance(payload.get("total_biological_dmps"), (int, float)):
+            total_biological_dmps_vals.append(float(payload["total_biological_dmps"]))
+
+        cfg = payload.get("config") if isinstance(payload.get("config"), dict) else {}
+        effect_size_coverage_vals.append(cfg.get("effect_size_coverage"))
+        delta_mean_reduction_vals.append(cfg.get("delta_mean_reduction"))
+        classifier_dmp_selection_vals.append(cfg.get("classifier_dmp_selection"))
+        dynamic_dmp_cutoff_enabled_vals.append(cfg.get("dynamic_dmp_cutoff_enabled"))
+
+    if not (
+        n_dmps_exported_vals
+        or total_statistical_dmps_vals
+        or total_biological_dmps_vals
+        or any(v is not None for v in effect_size_coverage_vals)
+        or any(v is not None for v in delta_mean_reduction_vals)
+        or any(v is not None for v in classifier_dmp_selection_vals)
+        or any(v is not None for v in dynamic_dmp_cutoff_enabled_vals)
+    ):
+        return None
+
+    effect_size_coverage, esc_ok = _consistent_value(effect_size_coverage_vals)
+    delta_mean_reduction, dmr_ok = _consistent_value(delta_mean_reduction_vals)
+    classifier_dmp_selection, cds_ok = _consistent_value(classifier_dmp_selection_vals)
+    dynamic_dmp_cutoff_enabled, ddc_ok = _consistent_value(dynamic_dmp_cutoff_enabled_vals)
+
+    inconsistent_fields: List[str] = []
+    if not esc_ok:
+        inconsistent_fields.append("effect_size_coverage")
+    if not dmr_ok:
+        inconsistent_fields.append("delta_mean_reduction")
+    if not cds_ok:
+        inconsistent_fields.append("classifier_dmp_selection")
+    if not ddc_ok:
+        inconsistent_fields.append("dynamic_dmp_cutoff_enabled")
+
+    return {
+        "run_id": run_dir.name,
+        "run_dir": str(run_dir),
+        "n_result_files": int(len(result_files)),
+        "n_dmps_exported": _numeric_summary(n_dmps_exported_vals),
+        "total_statistical_dmps": _numeric_summary(total_statistical_dmps_vals),
+        "total_biological_dmps": _numeric_summary(total_biological_dmps_vals),
+        "effect_size_coverage": effect_size_coverage,
+        "delta_mean_reduction": delta_mean_reduction,
+        "classifier_dmp_selection": classifier_dmp_selection,
+        "dynamic_dmp_cutoff_enabled": dynamic_dmp_cutoff_enabled,
+        "inconsistent_fields": inconsistent_fields,
+    }
+
+
+def compute_detector_parameter_stability(monte_carlo_runs_root: Path) -> Dict[str, Any]:
+    """Aggregate minimal detector/filter parameter summaries across Monte Carlo runs."""
+    runs = sorted(monte_carlo_runs_root.glob("run_*"))
+    per_run: List[Dict[str, Any]] = []
+    n_runs_without_results = 0
+
+    for run_dir in runs:
+        row = extract_detector_parameters_for_run(run_dir)
+        if row is None:
+            n_runs_without_results += 1
+            continue
+        per_run.append(row)
+
+    if not per_run:
+        return {
+            "per_run": [],
+            "aggregates": {
+                "n_runs_with_results": 0,
+                "n_runs_without_results": n_runs_without_results,
+            },
+        }
+
+    numeric_values: Dict[str, List[float]] = defaultdict(list)
+    categorical_values: Dict[str, Counter] = defaultdict(Counter)
+    numeric_scalar_keys = [
+        "n_result_files",
+        "effect_size_coverage",
+        "delta_mean_reduction",
+    ]
+    categorical_keys = [
+        "classifier_dmp_selection",
+        "dynamic_dmp_cutoff_enabled",
+    ]
+    nested_numeric_keys = [
+        "n_dmps_exported",
+        "total_statistical_dmps",
+        "total_biological_dmps",
+    ]
+
+    for row in per_run:
+        for key in numeric_scalar_keys:
+            val = row.get(key)
+            if isinstance(val, (int, float)):
+                numeric_values[key].append(float(val))
+        for key in categorical_keys:
+            val = row.get(key)
+            if val is not None:
+                categorical_values[key][str(val)] += 1
+        for key in nested_numeric_keys:
+            node = row.get(key)
+            if isinstance(node, dict):
+                for suffix in ("mean", "min", "max"):
+                    val = node.get(suffix)
+                    if isinstance(val, (int, float)):
+                        numeric_values[f"{key}_{suffix}"].append(float(val))
+
+    aggregates = {
+        "n_runs_with_results": int(len(per_run)),
+        "n_runs_without_results": int(n_runs_without_results),
+        "numeric": {
+            key: _numeric_summary(vals)
+            for key, vals in numeric_values.items()
+            if vals
+        },
+        "categorical": {
+            key: dict(counter)
+            for key, counter in categorical_values.items()
+            if counter
+        },
+    }
+    return {"per_run": per_run, "aggregates": aggregates}
+
+
 def _dmp_key_from_row(row: Any) -> Tuple[Any, int]:
     chrom = row["chromosome"]
     try:
@@ -96,6 +285,120 @@ def _dmp_key_from_row(row: Any) -> Tuple[Any, int]:
     except (TypeError, ValueError):
         chrom_n = str(chrom).strip()
     return (chrom_n, int(row["position"]))
+
+
+def _curve_elbow_point(x_vals: List[float], y_vals: List[float]) -> Optional[Dict[str, float]]:
+    """
+    Return elbow point using max distance to line between first/last points.
+
+    Expects x and y as aligned lists with at least 3 points.
+    """
+    if len(x_vals) < 3 or len(y_vals) < 3 or len(x_vals) != len(y_vals):
+        return None
+
+    x0, y0 = float(x_vals[0]), float(y_vals[0])
+    x1, y1 = float(x_vals[-1]), float(y_vals[-1])
+    line_dx = x1 - x0
+    line_dy = y1 - y0
+    denom = (line_dx**2 + line_dy**2) ** 0.5
+    if denom <= 0:
+        return None
+
+    best_idx = None
+    best_dist = -1.0
+    for i in range(1, len(x_vals) - 1):
+        px, py = float(x_vals[i]), float(y_vals[i])
+        # Perpendicular distance from point to segment-defining line
+        dist = abs(line_dy * px - line_dx * py + x1 * y0 - y1 * x0) / denom
+        if dist > best_dist:
+            best_dist = dist
+            best_idx = i
+
+    if best_idx is None:
+        return None
+    return {
+        "frequency_pct": float(x_vals[best_idx]),
+        "dmps_pct": float(y_vals[best_idx]),
+        "distance_to_baseline": float(best_dist),
+    }
+
+
+def write_dmp_frequency_plot(
+    dmp_freq_df: pd.DataFrame,
+    output_dir: Path,
+) -> tuple[Optional[Path], Optional[Dict[str, float]]]:
+    """
+    Write Plotly HTML chart: X=frequency (%), Y=number of DMPs (%), with elbow marker.
+    """
+    if dmp_freq_df.empty or "frequency" not in dmp_freq_df.columns:
+        return None, None
+    try:
+        import plotly.graph_objects as go
+    except Exception as e:
+        logger.warning(f"Plotly not available; skipping DMP frequency chart: {e}")
+        return None, None
+
+    dist = (
+        dmp_freq_df["frequency"]
+        .dropna()
+        .astype(float)
+        .value_counts()
+        .sort_index()
+        .reset_index()
+    )
+    if dist.empty:
+        return None, None
+    dist.columns = ["frequency", "n_dmps"]
+    total_dmps = float(dist["n_dmps"].sum())
+    if total_dmps <= 0:
+        return None, None
+
+    dist["frequency_pct"] = dist["frequency"] * 100.0
+    dist["dmps_pct"] = (dist["n_dmps"] / total_dmps) * 100.0
+
+    x_vals = dist["frequency_pct"].tolist()
+    y_vals = dist["dmps_pct"].tolist()
+    elbow = _curve_elbow_point(x_vals, y_vals)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=x_vals,
+            y=y_vals,
+            mode="lines+markers",
+            name="DMP frequency distribution",
+            hovertemplate="Frequency: %{x:.2f}%<br>DMPs: %{y:.2f}%<extra></extra>",
+        )
+    )
+    if elbow is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=[elbow["frequency_pct"]],
+                y=[elbow["dmps_pct"]],
+                mode="markers",
+                marker={"size": 11, "symbol": "diamond"},
+                name="Elbow",
+                hovertemplate="Elbow<br>Frequency: %{x:.2f}%<br>DMPs: %{y:.2f}%<extra></extra>",
+            )
+        )
+        fig.add_vline(
+            x=float(elbow["frequency_pct"]),
+            line_dash="dash",
+            annotation_text=f"Elbow ≈ {elbow['frequency_pct']:.2f}%",
+            annotation_position="top right",
+        )
+
+    fig.update_layout(
+        title="DMP Frequency Distribution Across Stability Runs",
+        xaxis_title="Frequency across runs (%)",
+        yaxis_title="DMPs at frequency (%)",
+        template="plotly_white",
+    )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    html_path = output_dir / "dmp_frequency_distribution.html"
+    fig.write_html(str(html_path), include_plotlyjs="cdn", full_html=True)
+    return html_path, elbow
 
 
 def compute_dmp_stability(
@@ -243,15 +546,22 @@ def run_stability_analysis(
         monte_carlo_runs_root, dmp_min_freq, min_balanced_accuracy=min_balanced_accuracy
     )
     gene_df, gene_summary = compute_gene_stability(monte_carlo_runs_root, gene_min_freq)
+    detector_param_summary = compute_detector_parameter_stability(monte_carlo_runs_root)
 
     stable_dmp_path = None
+    dmp_frequency_plot_path = None
+    dmp_frequency_elbow = None
     if not dmp_df.empty:
         stable_dmp_path = write_stable_panel(dmp_df, output_dir, dmp_min_freq, top_n_dmps)
+        dmp_frequency_plot_path, dmp_frequency_elbow = write_dmp_frequency_plot(dmp_df, output_dir)
 
     summary = {
         "dmp_stability": dmp_summary,
         "gene_stability": gene_summary,
+        "detector_parameters": detector_param_summary,
         "stable_dmp_csv": str(stable_dmp_path) if stable_dmp_path else None,
+        "dmp_frequency_plot_html": str(dmp_frequency_plot_path) if dmp_frequency_plot_path else None,
+        "dmp_frequency_elbow": dmp_frequency_elbow,
         "output_dir": str(output_dir),
     }
 

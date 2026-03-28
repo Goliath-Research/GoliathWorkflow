@@ -56,7 +56,7 @@ def write_all_metrics_csv(df: pd.DataFrame, path: str | Path) -> None:
 
 
 def build_step_timings_table(rows: List[Dict[str, Any]]) -> pd.DataFrame:
-    """Build a DataFrame from step timing rows (step_name, duration_seconds, return_code, optional run_id, run_dir, n_train_samples, n_val_samples)."""
+    """Build a DataFrame from step timing rows (step_name, duration_seconds, return_code, optional run_id, run_dir, n_train_samples, n_val_samples, n_processed_samples)."""
     if not rows:
         return pd.DataFrame()
     return pd.DataFrame(rows)
@@ -107,7 +107,8 @@ def write_summary_json(summary: Dict[str, Any], path: str | Path) -> None:
 def compute_resource_summary(timings: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Compute resource summary from step timings: mean/std duration per step, mean total
-    duration per iteration, and min/max/mean of n_train_samples and n_val_samples.
+    duration per iteration, and min/max/mean of n_train_samples, n_val_samples, and
+    n_processed_samples (when present in rows).
     """
     if not timings:
         return {}
@@ -167,6 +168,20 @@ def compute_resource_summary(timings: List[Dict[str, Any]]) -> Dict[str, Any]:
             "min": int(min(vals)),
             "max": int(max(vals)),
             "mean": float(np.mean(vals)),
+        }
+    processed_vals: List[int] = []
+    for row in timings:
+        val = row.get("n_processed_samples")
+        if val is not None:
+            try:
+                processed_vals.append(int(val))
+            except (TypeError, ValueError):
+                continue
+    if processed_vals:
+        sample_summary["n_processed_samples"] = {
+            "min": int(min(processed_vals)),
+            "max": int(max(processed_vals)),
+            "mean": float(np.mean(processed_vals)),
         }
     return {
         "per_step_duration_seconds": steps_summary,
