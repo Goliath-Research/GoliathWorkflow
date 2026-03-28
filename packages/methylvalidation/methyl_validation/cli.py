@@ -49,6 +49,78 @@ from .validator_metrics import (
 from .stability import run_stability_analysis, freeze_production_model, build_production_model
 
 
+def _infer_monte_carlo_cohorts_from_project(
+    project_data: Dict[str, Any],
+    project_path: Path,
+) -> List[Dict[str, str]]:
+    """
+    Build MC cohorts from a project JSON using resolved leaf labels.
+
+    For control/disease projects this yields:
+      - control group labels (e.g. all)
+      - disease leaf labels (e.g. pca_pca1, pca_pca2, ...)
+    For flat groups it yields group labels as-is.
+    """
+    def _norm_csv_path(p: str) -> str:
+        # Keep relative paths as authored in the project (typically relative to repo root),
+        # only normalize explicit absolute paths.
+        pp = Path(str(p))
+        return str(pp) if pp.is_absolute() else str(p)
+
+    cohorts: List[Dict[str, str]] = []
+
+    # Flat multiclass template
+    groups = project_data.get("groups")
+    if isinstance(groups, list) and groups:
+        for g in groups:
+            if not isinstance(g, dict):
+                continue
+            label = str(g.get("label") or "").strip()
+            paths = g.get("sample_paths") or []
+            if label and isinstance(paths, list) and len(paths) > 0:
+                cohorts.append({"label": label, "csv": _norm_csv_path(str(paths[0]))})
+        return cohorts
+
+    # control/disease template (accept plural keys used in many project JSONs)
+    controls = project_data.get("controls") or project_data.get("control") or {}
+    diseases = project_data.get("diseases") or project_data.get("disease") or {}
+
+    ctrl_groups = controls.get("groups") if isinstance(controls, dict) else None
+    if isinstance(ctrl_groups, list):
+        for g in ctrl_groups:
+            if not isinstance(g, dict):
+                continue
+            label = str(g.get("label") or "").strip()
+            paths = g.get("sample_paths") or []
+            if label and isinstance(paths, list) and len(paths) > 0:
+                cohorts.append({"label": label, "csv": _norm_csv_path(str(paths[0]))})
+
+    dis_groups = diseases.get("groups") if isinstance(diseases, dict) else None
+    if isinstance(dis_groups, list):
+        for g in dis_groups:
+            if not isinstance(g, dict):
+                continue
+            parent = str(g.get("label") or "").strip()
+            stages = g.get("stages")
+            if isinstance(stages, list) and stages:
+                for st in stages:
+                    if not isinstance(st, dict):
+                        continue
+                    stage_label = str(st.get("label") or "").strip()
+                    paths = st.get("sample_paths") or []
+                    if parent and stage_label and isinstance(paths, list) and len(paths) > 0:
+                        cohorts.append(
+                            {"label": f"{parent}_{stage_label}", "csv": _norm_csv_path(str(paths[0]))}
+                        )
+            else:
+                label = parent
+                paths = g.get("sample_paths") or []
+                if label and isinstance(paths, list) and len(paths) > 0:
+                    cohorts.append({"label": label, "csv": _norm_csv_path(str(paths[0]))})
+
+    return cohorts
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -133,16 +205,14 @@ def main() -> None:
 
         if "step_config" in project_data and "validation" in project_data.get("step_config", {}):
             validation_settings = project_data["step_config"]["validation"]
-
-            # Extract cohorts from project structure for hierarchical multiclass
-            # Use the resolved group labels that match what the project expects
-            cohorts = [
-                {"label": "all", "csv": "configs/healthy.csv"},
-                {"label": "pca_pca1", "csv": "configs/pca1.csv"},
-                {"label": "pca_pca2", "csv": "configs/pca2.csv"},
-                {"label": "pca_pca3", "csv": "configs/pca3.csv"},
-                {"label": "pca_pca4", "csv": "configs/pca4.csv"}
-            ]
+            cohorts = _infer_monte_carlo_cohorts_from_project(project_data, args.project)
+            if len(cohorts) < 2:
+                print(
+                    "Error: Could not infer >=2 Monte Carlo cohorts from project. "
+                    "Define project controls/diseases sample_paths (or flat groups) with CSVs.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
 
             mc_config_dict = {
                 "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
