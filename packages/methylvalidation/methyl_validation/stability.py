@@ -318,28 +318,25 @@ def _curve_elbow_point(x_vals: List[float], y_vals: List[float]) -> Optional[Dic
         return None
     return {
         "frequency_pct": float(x_vals[best_idx]),
-        "dmps_pct": float(y_vals[best_idx]),
+        "dmps_count": float(y_vals[best_idx]),
         "distance_to_baseline": float(best_dist),
     }
 
 
-def write_dmp_frequency_plot(
+def _frequency_count_distribution(
     dmp_freq_df: pd.DataFrame,
-    output_dir: Path,
-) -> tuple[Optional[Path], Optional[Dict[str, float]]]:
+    chromosome: Any,
+) -> pd.DataFrame:
     """
-    Write Plotly HTML chart: X=frequency (%), Y=number of DMPs (%), with elbow marker.
-    """
-    if dmp_freq_df.empty or "frequency" not in dmp_freq_df.columns:
-        return None, None
-    try:
-        import plotly.graph_objects as go
-    except Exception as e:
-        logger.warning(f"Plotly not available; skipping DMP frequency chart: {e}")
-        return None, None
+    Frequency histogram for one chromosome with count-based Y axis.
 
+    Returns columns: frequency_pct, dmps_count.
+    """
+    subset = dmp_freq_df[dmp_freq_df["chromosome"].astype(str) == str(chromosome)].copy()
+    if subset.empty:
+        return pd.DataFrame(columns=["frequency_pct", "dmps_count"])
     dist = (
-        dmp_freq_df["frequency"]
+        subset["frequency"]
         .dropna()
         .astype(float)
         .value_counts()
@@ -347,58 +344,165 @@ def write_dmp_frequency_plot(
         .reset_index()
     )
     if dist.empty:
-        return None, None
-    dist.columns = ["frequency", "n_dmps"]
-    total_dmps = float(dist["n_dmps"].sum())
-    if total_dmps <= 0:
-        return None, None
-
+        return pd.DataFrame(columns=["frequency_pct", "dmps_count"])
+    dist.columns = ["frequency", "dmps_count"]
     dist["frequency_pct"] = dist["frequency"] * 100.0
-    dist["dmps_pct"] = (dist["n_dmps"] / total_dmps) * 100.0
+    return dist[["frequency_pct", "dmps_count"]]
 
-    x_vals = dist["frequency_pct"].tolist()
-    y_vals = dist["dmps_pct"].tolist()
-    elbow = _curve_elbow_point(x_vals, y_vals)
 
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=x_vals,
-            y=y_vals,
-            mode="lines+markers",
-            name="DMP frequency distribution",
-            hovertemplate="Frequency: %{x:.2f}%<br>DMPs: %{y:.2f}%<extra></extra>",
-        )
-    )
-    if elbow is not None:
-        fig.add_trace(
-            go.Scatter(
-                x=[elbow["frequency_pct"]],
-                y=[elbow["dmps_pct"]],
-                mode="markers",
-                marker={"size": 11, "symbol": "diamond"},
-                name="Elbow",
-                hovertemplate="Elbow<br>Frequency: %{x:.2f}%<br>DMPs: %{y:.2f}%<extra></extra>",
-            )
-        )
-        fig.add_vline(
-            x=float(elbow["frequency_pct"]),
-            line_dash="dash",
-            annotation_text=f"Elbow ≈ {elbow['frequency_pct']:.2f}%",
-            annotation_position="top right",
-        )
+def _select_stable_dmps_df(
+    dmp_freq_df: pd.DataFrame,
+    min_frequency: float = 0.7,
+    top_n: Optional[int] = None,
+) -> pd.DataFrame:
+    """Build selected stable DMP table from full frequency table."""
+    selected = dmp_freq_df[dmp_freq_df["frequency"] >= min_frequency].copy()
+    if top_n is not None and len(selected) > top_n:
+        selected = selected.head(top_n)
+    return selected
 
-    fig.update_layout(
-        title="DMP Frequency Distribution Across Stability Runs",
-        xaxis_title="Frequency across runs (%)",
-        yaxis_title="DMPs at frequency (%)",
-        template="plotly_white",
-    )
+
+def write_dmp_frequency_plot_by_chromosome(
+    dmp_freq_df: pd.DataFrame,
+    selected_dmp_df: pd.DataFrame,
+    output_dir: Path,
+) -> tuple[Optional[Path], Dict[str, str], Dict[str, Dict[str, float]], Dict[str, Dict[str, int]]]:
+    """
+    Write Plotly frequency charts with one series per chromosome and all-vs-selected traces.
+
+    Returns:
+      - combined chart path
+      - per chromosome chart paths
+      - elbow by chromosome
+      - count summaries by chromosome
+    """
+    if dmp_freq_df.empty or "frequency" not in dmp_freq_df.columns:
+        return None, {}, {}, {}
+    try:
+        import plotly.graph_objects as go
+    except Exception as e:
+        logger.warning(f"Plotly not available; skipping DMP frequency chart: {e}")
+        return None, {}, {}, {}
+
+    if "chromosome" not in dmp_freq_df.columns:
+        return None, {}, {}, {}
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    html_path = output_dir / "dmp_frequency_distribution.html"
-    fig.write_html(str(html_path), include_plotlyjs="cdn", full_html=True)
-    return html_path, elbow
+    chromosomes = [str(c) for c in sorted(dmp_freq_df["chromosome"].dropna().unique(), key=str)]
+    if not chromosomes:
+        return None, {}, {}, {}
+
+    combined = go.Figure()
+    per_chrom_paths: Dict[str, str] = {}
+    elbow_by_chrom: Dict[str, Dict[str, float]] = {}
+    count_summary_by_chrom: Dict[str, Dict[str, int]] = {}
+
+    for chrom in chromosomes:
+        all_dist = _frequency_count_distribution(dmp_freq_df, chrom)
+        sel_dist = _frequency_count_distribution(selected_dmp_df, chrom)
+        if all_dist.empty:
+            continue
+
+        # Combined chart traces
+        combined.add_trace(
+            go.Scatter(
+                x=all_dist["frequency_pct"],
+                y=all_dist["dmps_count"],
+                mode="lines+markers",
+                name=f"chr{chrom} all",
+                hovertemplate=f"chr{chrom} all<br>Frequency: %{{x:.2f}}%<br>DMPs: %{{y:.0f}}<extra></extra>",
+            )
+        )
+        if not sel_dist.empty:
+            combined.add_trace(
+                go.Scatter(
+                    x=sel_dist["frequency_pct"],
+                    y=sel_dist["dmps_count"],
+                    mode="lines+markers",
+                    name=f"chr{chrom} selected",
+                    hovertemplate=f"chr{chrom} selected<br>Frequency: %{{x:.2f}}%<br>DMPs: %{{y:.0f}}<extra></extra>",
+                )
+            )
+
+        # Per chromosome chart with all-vs-selected
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=all_dist["frequency_pct"],
+                y=all_dist["dmps_count"],
+                mode="lines+markers",
+                name="all",
+                hovertemplate="All DMPs<br>Frequency: %{x:.2f}%<br>DMPs: %{y:.0f}<extra></extra>",
+            )
+        )
+        if not sel_dist.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=sel_dist["frequency_pct"],
+                    y=sel_dist["dmps_count"],
+                    mode="lines+markers",
+                    name="selected",
+                    hovertemplate="Selected DMPs<br>Frequency: %{x:.2f}%<br>DMPs: %{y:.0f}<extra></extra>",
+                )
+            )
+
+        elbow_source = sel_dist if len(sel_dist) >= 3 else all_dist
+        elbow = _curve_elbow_point(
+            elbow_source["frequency_pct"].tolist(),
+            elbow_source["dmps_count"].tolist(),
+        )
+        if elbow is not None:
+            elbow_by_chrom[str(chrom)] = elbow
+            fig.add_trace(
+                go.Scatter(
+                    x=[elbow["frequency_pct"]],
+                    y=[elbow["dmps_count"]],
+                    mode="markers",
+                    marker={"size": 11, "symbol": "diamond"},
+                    name="elbow",
+                    hovertemplate="Elbow<br>Frequency: %{x:.2f}%<br>DMPs: %{y:.0f}<extra></extra>",
+                )
+            )
+            fig.add_vline(
+                x=float(elbow["frequency_pct"]),
+                line_dash="dash",
+                annotation_text=f"Elbow ≈ {elbow['frequency_pct']:.2f}%",
+                annotation_position="top right",
+            )
+
+        fig.update_layout(
+            title=f"DMP Frequency Distribution (chr{chrom})",
+            xaxis_title="Frequency across runs (%)",
+            yaxis_title="DMP count",
+            template="plotly_white",
+        )
+        chrom_path = output_dir / f"dmp_frequency_chr_{chrom}.html"
+        fig.write_html(str(chrom_path), include_plotlyjs="cdn", full_html=True)
+        per_chrom_paths[str(chrom)] = str(chrom_path)
+
+        all_total = int(
+            len(dmp_freq_df[dmp_freq_df["chromosome"].astype(str) == str(chrom)])
+        )
+        sel_total = int(
+            len(selected_dmp_df[selected_dmp_df["chromosome"].astype(str) == str(chrom)])
+        )
+        count_summary_by_chrom[str(chrom)] = {
+            "all_dmps": all_total,
+            "selected_dmps": sel_total,
+        }
+
+    if not per_chrom_paths:
+        return None, {}, {}, {}
+
+    combined.update_layout(
+        title="DMP Frequency Distribution by Chromosome",
+        xaxis_title="Frequency across runs (%)",
+        yaxis_title="DMP count",
+        template="plotly_white",
+    )
+    combined_path = output_dir / "dmp_frequency_by_chromosome.html"
+    combined.write_html(str(combined_path), include_plotlyjs="cdn", full_html=True)
+    return combined_path, per_chrom_paths, elbow_by_chrom, count_summary_by_chrom
 
 
 def compute_dmp_stability(
@@ -520,10 +624,7 @@ def write_stable_panel(
 ) -> Path:
     """Write stable DMPs as a production classifier panel."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    stable = dmp_freq_df[dmp_freq_df["frequency"] >= min_frequency].copy()
-
-    if top_n is not None and len(stable) > top_n:
-        stable = stable.head(top_n)
+    stable = _select_stable_dmps_df(dmp_freq_df, min_frequency=min_frequency, top_n=top_n)
 
     out_path = output_dir / "stable_dmps_production.csv"
     stable.to_csv(out_path, index=False)
@@ -549,11 +650,27 @@ def run_stability_analysis(
     detector_param_summary = compute_detector_parameter_stability(monte_carlo_runs_root)
 
     stable_dmp_path = None
+    selected_dmp_df = pd.DataFrame()
     dmp_frequency_plot_path = None
+    dmp_frequency_plot_by_chrom = {}
+    dmp_frequency_elbow_by_chrom = {}
+    dmp_frequency_counts_by_chrom = {}
     dmp_frequency_elbow = None
     if not dmp_df.empty:
+        selected_dmp_df = _select_stable_dmps_df(
+            dmp_df, min_frequency=dmp_min_freq, top_n=top_n_dmps
+        )
         stable_dmp_path = write_stable_panel(dmp_df, output_dir, dmp_min_freq, top_n_dmps)
-        dmp_frequency_plot_path, dmp_frequency_elbow = write_dmp_frequency_plot(dmp_df, output_dir)
+        (
+            dmp_frequency_plot_path,
+            dmp_frequency_plot_by_chrom,
+            dmp_frequency_elbow_by_chrom,
+            dmp_frequency_counts_by_chrom,
+        ) = write_dmp_frequency_plot_by_chromosome(
+            dmp_df, selected_dmp_df, output_dir
+        )
+        if len(dmp_frequency_elbow_by_chrom) == 1:
+            dmp_frequency_elbow = next(iter(dmp_frequency_elbow_by_chrom.values()))
 
     summary = {
         "dmp_stability": dmp_summary,
@@ -561,6 +678,9 @@ def run_stability_analysis(
         "detector_parameters": detector_param_summary,
         "stable_dmp_csv": str(stable_dmp_path) if stable_dmp_path else None,
         "dmp_frequency_plot_html": str(dmp_frequency_plot_path) if dmp_frequency_plot_path else None,
+        "dmp_frequency_charts_by_chromosome": dmp_frequency_plot_by_chrom,
+        "dmp_frequency_elbow_by_chromosome": dmp_frequency_elbow_by_chrom,
+        "dmp_frequency_counts_by_chromosome": dmp_frequency_counts_by_chrom,
         "dmp_frequency_elbow": dmp_frequency_elbow,
         "output_dir": str(output_dir),
     }
