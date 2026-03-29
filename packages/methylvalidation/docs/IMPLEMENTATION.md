@@ -154,7 +154,7 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 | **step_timings.csv** | Per step per run: `step_name`, `duration_seconds`, `return_code`, `run_id`, `run_dir`, `n_train_samples`, `n_val_samples`, and optional `n_processed_samples` (centroid rows). Binary centroid runs emit `methyl-centroid-group1` and `methyl-centroid-group2` rows. |
 | **resource_summary.json** | (Optional) Mean/std duration per step, mean total time per iteration, min/max/mean `n_train_samples`, `n_val_samples`, and `n_processed_samples` when present. |
 | **stability/dmp_frequency_by_chromosome.html** | Combined Plotly stability chart with per-chromosome traces for both candidate (`all`) and final (`selected`) DMPs. X=frequency (% of runs), Y=DMP count. |
-| **stability/dmp_frequency_chr_<chrom>.html** | Per-chromosome Plotly charts with `all` vs `selected` count curves and elbow marker (max distance-to-baseline) when curve geometry supports detection. |
+| **stability/dmp_frequency_chr_<chrom>.html** | Per-chromosome Plotly charts with `all` vs `selected` count curves over frequency (%). |
 | **stability/stability_summary.json** | Stability summary now includes `detector_parameters` extracted from `detections/**/results-*.json`: per-run records plus aggregated numeric/categorical distributions for minimal detector/filter fields (`n_dmps_exported`, `total_statistical_dmps`, `total_biological_dmps`, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). |
 
 For setup (Docker, venv), config reference, and how to use these outputs for metric distributions and processing/storage estimation, see [USAGE.md](USAGE.md).
