@@ -393,11 +393,28 @@ def write_dmp_frequency_plot_by_chromosome(
         return None, {}, {}, {}
 
     combined = go.Figure()
+    # 26 unique colors: 24 chromosome series + selected/elbow marker colors
+    palette_26 = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b",
+        "#e377c2", "#7f7f7f", "#bcbd22", "#17becf", "#393b79", "#637939",
+        "#8c6d31", "#843c39", "#7b4173", "#3182bd", "#31a354", "#756bb1",
+        "#636363", "#e6550d", "#969696", "#6baed6", "#fd8d3c", "#74c476",
+        "#000000", "#e41a1c",
+    ]
+    selected_color = palette_26[24]
+    elbow_color = palette_26[25]
+
     per_chrom_paths: Dict[str, str] = {}
     elbow_by_chrom: Dict[str, Dict[str, float]] = {}
     count_summary_by_chrom: Dict[str, Dict[str, int]] = {}
+    selected_points_x: List[float] = []
+    selected_points_y: List[float] = []
+    selected_points_text: List[str] = []
+    elbow_points_x: List[float] = []
+    elbow_points_y: List[float] = []
+    elbow_points_text: List[str] = []
 
-    for chrom in chromosomes:
+    for i, chrom in enumerate(chromosomes):
         all_dist = _frequency_count_distribution(dmp_freq_df, chrom)
         sel_dist = _frequency_count_distribution(selected_dmp_df, chrom)
         if all_dist.empty:
@@ -409,20 +426,19 @@ def write_dmp_frequency_plot_by_chromosome(
                 x=all_dist["frequency_pct"],
                 y=all_dist["dmps_count"],
                 mode="lines+markers",
-                name=f"chr{chrom} all",
+                name=f"chr{chrom}",
+                line={"color": palette_26[i % 24]},
+                marker={"color": palette_26[i % 24]},
                 hovertemplate=f"chr{chrom} all<br>Frequency: %{{x:.2f}}%<br>DMPs: %{{y:.0f}}<extra></extra>",
             )
         )
+        selected_threshold = None
         if not sel_dist.empty:
-            combined.add_trace(
-                go.Scatter(
-                    x=sel_dist["frequency_pct"],
-                    y=sel_dist["dmps_count"],
-                    mode="lines+markers",
-                    name=f"chr{chrom} selected",
-                    hovertemplate=f"chr{chrom} selected<br>Frequency: %{{x:.2f}}%<br>DMPs: %{{y:.0f}}<extra></extra>",
-                )
-            )
+            # Selection point: left-most selected frequency on X axis
+            selected_threshold = float(sel_dist["frequency_pct"].min())
+            selected_points_x.append(selected_threshold)
+            selected_points_y.append(0.0)
+            selected_points_text.append(f"chr{chrom} selected@{selected_threshold:.2f}%")
 
         # Per chromosome chart with all-vs-selected
         fig = go.Figure()
@@ -435,15 +451,22 @@ def write_dmp_frequency_plot_by_chromosome(
                 hovertemplate="All DMPs<br>Frequency: %{x:.2f}%<br>DMPs: %{y:.0f}<extra></extra>",
             )
         )
-        if not sel_dist.empty:
+        if selected_threshold is not None:
             fig.add_trace(
                 go.Scatter(
-                    x=sel_dist["frequency_pct"],
-                    y=sel_dist["dmps_count"],
-                    mode="lines+markers",
+                    x=[selected_threshold],
+                    y=[0.0],
+                    mode="markers",
+                    marker={"size": 10, "symbol": "circle", "color": selected_color},
                     name="selected",
-                    hovertemplate="Selected DMPs<br>Frequency: %{x:.2f}%<br>DMPs: %{y:.0f}<extra></extra>",
+                    hovertemplate="Selected threshold<br>Frequency: %{x:.2f}%<extra></extra>",
                 )
+            )
+            fig.add_vline(
+                x=selected_threshold,
+                line_dash="dot",
+                annotation_text=f"Selected ≈ {selected_threshold:.2f}%",
+                annotation_position="top left",
             )
 
         elbow_source = sel_dist if len(sel_dist) >= 3 else all_dist
@@ -453,12 +476,15 @@ def write_dmp_frequency_plot_by_chromosome(
         )
         if elbow is not None:
             elbow_by_chrom[str(chrom)] = elbow
+            elbow_points_x.append(float(elbow["frequency_pct"]))
+            elbow_points_y.append(float(elbow["dmps_count"]))
+            elbow_points_text.append(f"chr{chrom} elbow@{elbow['frequency_pct']:.2f}%")
             fig.add_trace(
                 go.Scatter(
                     x=[elbow["frequency_pct"]],
                     y=[elbow["dmps_count"]],
                     mode="markers",
-                    marker={"size": 11, "symbol": "diamond"},
+                    marker={"size": 11, "symbol": "diamond", "color": elbow_color},
                     name="elbow",
                     hovertemplate="Elbow<br>Frequency: %{x:.2f}%<br>DMPs: %{y:.0f}<extra></extra>",
                 )
@@ -493,6 +519,31 @@ def write_dmp_frequency_plot_by_chromosome(
 
     if not per_chrom_paths:
         return None, {}, {}, {}
+
+    if selected_points_x:
+        combined.add_trace(
+            go.Scatter(
+                x=selected_points_x,
+                y=selected_points_y,
+                mode="markers",
+                marker={"size": 9, "symbol": "circle", "color": selected_color},
+                name="selected",
+                text=selected_points_text,
+                hovertemplate="%{text}<extra></extra>",
+            )
+        )
+    if elbow_points_x:
+        combined.add_trace(
+            go.Scatter(
+                x=elbow_points_x,
+                y=elbow_points_y,
+                mode="markers",
+                marker={"size": 10, "symbol": "diamond", "color": elbow_color},
+                name="elbow",
+                text=elbow_points_text,
+                hovertemplate="%{text}<br>DMPs: %{y:.0f}<extra></extra>",
+            )
+        )
 
     combined.update_layout(
         title="DMP Frequency Distribution by Chromosome",
