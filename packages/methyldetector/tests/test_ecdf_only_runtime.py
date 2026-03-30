@@ -250,6 +250,8 @@ def test_prefix_cache_matches_direct_validation(monkeypatch):
         bin_edges = np.array([0.0, 0.5, 1.0], dtype=np.float64)
         bc1 = np.array([[0.0, 10.0], [10.0, 0.0]], dtype=np.float64)
         bc2 = np.array([[10.0, 0.0], [0.0, 10.0]], dtype=np.float64)
+        # No real centroid H5 in temp_dir; skip intersection (production uses real centroids).
+        monkeypatch.setattr(detector, "_subset_dmps_to_both_centroids", lambda df, log_drops=True: df)
         monkeypatch.setattr(
             detector,
             "_extract_bin_counts_for_dmps",

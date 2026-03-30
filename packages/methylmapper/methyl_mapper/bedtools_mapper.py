@@ -20,6 +20,8 @@ try:
 except ImportError:
     from methyl_utils.statistical_tests import storey_qvalues
 
+from methyl_utils.dmp_export_paths import glob_discovery_dmps_with_unified_fallback
+
 from .gene_disease_enricher import GeneDiseaseEnricher
 from .gtf_regions import build_gene_bodies_bed, build_sp_regions_bed, parse_region_name
 
@@ -1657,6 +1659,14 @@ class BedtoolsMapper:
 
         # Find matching CSV files
         csv_files = sorted(search_dir.glob(pattern))
+        if not csv_files:
+            csv_files = glob_discovery_dmps_with_unified_fallback(search_dir, pattern)
+            if csv_files:
+                logger.info(
+                    "No files matched %r; using unified / non-suffixed DMP exports (%d file(s))",
+                    pattern,
+                    len(csv_files),
+                )
 
         if not csv_files:
             raise FileNotFoundError(f"No CSV files found matching pattern: {csv_pattern} (searched in {search_dir})")

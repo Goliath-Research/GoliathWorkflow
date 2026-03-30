@@ -215,11 +215,30 @@ class MethylDetector:
             if "biological_dmp" not in df_fixed.columns:
                 df_fixed["biological_dmp"] = True
 
-            n_dmps = len(df_fixed)
+            n_loaded = len(df_fixed)
             logger.info(
                 f"Loaded fixed panel for chromosome {self.chromosome}: "
-                f"{n_dmps:,} DMPs (panel total: {len(df_all):,})"
+                f"{n_loaded:,} DMPs (panel total: {len(df_all):,})"
             )
+
+            # Stable / genomewide panels may include CpGs absent from these centroid H5s; classifier
+            # needs the intersection only (same as discovery-defined DMPs).
+            df_fixed = self._subset_dmps_to_both_centroids(df_fixed, log_drops=False)
+            n_dmps = len(df_fixed)
+            if n_loaded and n_dmps < n_loaded:
+                logger.info(
+                    "Fixed panel: omitted %s loci not in both centroids; exporting %s of %s loaded for chr %s",
+                    f"{n_loaded - n_dmps:,}",
+                    f"{n_dmps:,}",
+                    f"{n_loaded:,}",
+                    self.chromosome,
+                )
+            if n_dmps == 0 and n_loaded > 0:
+                logger.error(
+                    "Fixed DMP panel: no positions intersect current centroid1_dir/centroid2_dir "
+                    "for chromosome %s; check centroid paths or panel provenance.",
+                    self.chromosome,
+                )
 
             # Build minimal comparison stats for result
             ctx = self.config.contexts[0] if self.config.contexts else "CG"
@@ -1048,6 +1067,10 @@ class MethylDetector:
         """
         try:
             n_samples_per_class = self.config.n_validation_samples
+            dmps_df = self._subset_dmps_to_both_centroids(dmps_df)
+            if dmps_df.empty:
+                logger.warning("Synthetic validation: no DMPs after centroid intersection; skipping")
+                return None
             positions = dmps_df['position'].values
             contexts = dmps_df['context'].values
             n_positions = len(positions)
@@ -1185,6 +1208,10 @@ class MethylDetector:
                     )
             else:
                 check_df = dmps_df
+            check_df = self._subset_dmps_to_both_centroids(check_df)
+            if check_df.empty:
+                logger.debug("Skipping centroid self-check (no DMPs after centroid intersection)")
+                return
             # Use same effect_size-based weights as production so high-effect positions dominate;
             # uniform weights let many weak (cap-hit) positions dilute the mean and misclassify centroid2.
             weights = self._get_classifier_weights(check_df)
@@ -1335,6 +1362,12 @@ class MethylDetector:
 
     def _build_ecdf_classifier(self, dmps_df: pd.DataFrame) -> Tuple[ECDFClassifier, pd.DataFrame]:
         """Build an ECDFClassifier and typed DMP frame for the given subset."""
+        dmps_df = self._subset_dmps_to_both_centroids(dmps_df)
+        if dmps_df.empty:
+            raise ValueError(
+                "No DMP rows remain after intersecting with centroid positions; "
+                "check centroid1_dir/centroid2_dir and DMP coordinates."
+            )
         weights = self._get_classifier_weights(dmps_df)
         dmpDF = pd.DataFrame({
             'pos': dmps_df['position'].values.astype(np.uint32),
@@ -3020,7 +3053,123 @@ class MethylDetector:
         logger.info(f"  - DMPs per context: {model_package['n_dmps_per_context']}")
         if 'effect_size' in selected_dmps_df.columns:
             logger.info(f"  - Effect size range: {selected_dmps_df['effect_size'].min():.4f} to {selected_dmps_df['effect_size'].max():.4f}")
-    
+
+    def _get_or_load_centroid_bin_cache(self, chrom: Any, ctx: Any) -> Optional[dict]:
+        """Load and cache binned_stats + positions for one chromosome×context pair, or return None."""
+        cache_key = (str(chrom), str(ctx))
+        cached = self._centroid_bin_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        c1_path = Path(self.config.centroid1_dir) / f"{chrom}-{ctx}.h5"
+        c2_path = Path(self.config.centroid2_dir) / f"{chrom}-{ctx}.h5"
+
+        if not c1_path.exists() or not c2_path.exists():
+            logger.warning(
+                "_get_or_load_centroid_bin_cache: centroid files not found for %s-%s",
+                chrom,
+                ctx,
+            )
+            return None
+
+        c1 = load_from_h5(c1_path)
+        c2 = load_from_h5(c2_path)
+
+        bs1 = c1.binned_stats if c1 else None
+        bs2 = c2.binned_stats if c2 else None
+        if not bs1 or "bin_counts" not in bs1 or not bs2 or "bin_counts" not in bs2:
+            logger.warning(
+                "_get_or_load_centroid_bin_cache: binned_stats missing for %s-%s",
+                chrom,
+                ctx,
+            )
+            return None
+
+        be1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
+        be2 = np.asarray(bs2["bin_edges"], dtype=np.float64) if "bin_edges" in bs2 else None
+        if be2 is not None and (be2.shape != be1.shape or not np.allclose(be2, be1)):
+            logger.warning(
+                "_get_or_load_centroid_bin_cache: %s-%s centroid2 bin_edges differ from centroid1; "
+                "class 2 PDFs may be wrong (centroid self-check can fail). Build both centroids with the same bins.",
+                chrom,
+                ctx,
+            )
+        cached = {
+            "bin_edges": be1,
+            "pos1": np.asarray(c1.pos.values, dtype=np.uint32),
+            "pos2": np.asarray(c2.pos.values, dtype=np.uint32),
+            "bc1": np.asarray(bs1["bin_counts"], dtype=np.float64),
+            "bc2": np.asarray(bs2["bin_counts"], dtype=np.float64),
+        }
+        self._centroid_bin_cache[cache_key] = cached
+        return cached
+
+    def _subset_dmps_to_both_centroids(
+        self,
+        dmps_df: pd.DataFrame,
+        *,
+        log_drops: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Keep rows whose (chromosome, context, position) exists in both centroid H5 position arrays.
+
+        External fixed panels (e.g. stability union) can include CpGs that were masked or absent
+        when the current centroids were built; the ECDF classifier is only defined on the
+        intersection.
+        """
+        if dmps_df is None or dmps_df.empty:
+            return dmps_df
+
+        work = dmps_df.copy()
+        dmp_positions = np.asarray(work["position"].values, dtype=np.uint32)
+        chroms = (
+            work["chromosome"].values
+            if "chromosome" in work.columns
+            else np.full(len(work), self.chromosome, dtype=object)
+        )
+        contexts = (
+            work["context"].values
+            if "context" in work.columns
+            else np.full(len(work), self.config.contexts[0], dtype=object)
+        )
+
+        keep = np.zeros(len(work), dtype=bool)
+        unique_pairs = list(dict.fromkeys(zip(chroms, contexts)))
+        for chrom, ctx in unique_pairs:
+            mask = (chroms == chrom) & (contexts == ctx)
+            if not np.any(mask):
+                continue
+            cached = self._get_or_load_centroid_bin_cache(chrom, ctx)
+            if cached is None:
+                continue
+
+            pos1 = cached["pos1"]
+            pos2 = cached["pos2"]
+            gp = np.asarray(dmp_positions[mask], dtype=np.uint32)
+
+            idx1 = np.searchsorted(pos1, gp, side="left")
+            idx2 = np.searchsorted(pos2, gp, side="left")
+            in_range1 = idx1 < len(pos1)
+            in_range2 = idx2 < len(pos2)
+            match1 = in_range1 & (pos1[np.minimum(idx1, len(pos1) - 1)] == gp)
+            match2 = in_range2 & (pos2[np.minimum(idx2, len(pos2) - 1)] == gp)
+            both_match = match1 & match2
+
+            global_idx = np.where(mask)[0]
+            keep[global_idx[both_match]] = True
+
+        n_before = len(work)
+        out = work.loc[keep].reset_index(drop=True)
+        n_drop = n_before - len(out)
+        if n_drop and log_drops:
+            logger.warning(
+                "Dropped %s / %s DMP rows not present in both centroids (fixed panel or centroid coverage mismatch). "
+                "Classifier uses the intersecting subset only.",
+                n_drop,
+                n_before,
+            )
+        return out
+
     def _extract_bin_counts_for_dmps(
         self,
         dmps_df: pd.DataFrame,
@@ -3028,9 +3177,9 @@ class MethylDetector:
         """
         Load bin_counts from centroid H5 files at the positions listed in *dmps_df*.
 
-        DMPs are defined only on positions present in both centroids (after alignment and
-        restrictions). Every DMP position is therefore expected in both centroid files; a
-        mismatch raises ValueError (wrong paths or wrong files).
+        DMP rows should already lie on the intersection of both centroids (see
+        :meth:`_subset_dmps_to_both_centroids`). A remaining mismatch raises ValueError
+        (wrong paths, wrong files, or inconsistent inputs).
 
         The DMP DataFrame must have ``position``, ``context``, and ``chromosome``
         columns (or fall back to ``self.chromosome`` for the single-chromosome case).
@@ -3071,49 +3220,14 @@ class MethylDetector:
             if not np.any(mask):
                 continue
 
-            cache_key = (str(chrom), str(ctx))
-            cached = self._centroid_bin_cache.get(cache_key)
+            cached = self._get_or_load_centroid_bin_cache(chrom, ctx)
             if cached is None:
-                c1_path = Path(self.config.centroid1_dir) / f"{chrom}-{ctx}.h5"
-                c2_path = Path(self.config.centroid2_dir) / f"{chrom}-{ctx}.h5"
-
-                if not c1_path.exists() or not c2_path.exists():
-                    logger.warning(
-                        "_extract_bin_counts_for_dmps: centroid files not found for %s-%s; rows will use zero histograms",
-                        chrom,
-                        ctx,
-                    )
-                    continue
-
-                c1 = load_from_h5(c1_path)
-                c2 = load_from_h5(c2_path)
-
-                bs1 = c1.binned_stats if c1 else None
-                bs2 = c2.binned_stats if c2 else None
-                if not bs1 or "bin_counts" not in bs1 or not bs2 or "bin_counts" not in bs2:
-                    logger.warning(
-                        "_extract_bin_counts_for_dmps: binned_stats missing for %s-%s",
-                        chrom,
-                        ctx,
-                    )
-                    continue
-
-                be1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
-                be2 = np.asarray(bs2["bin_edges"], dtype=np.float64) if "bin_edges" in bs2 else None
-                if be2 is not None and (be2.shape != be1.shape or not np.allclose(be2, be1)):
-                    logger.warning(
-                        "_extract_bin_counts_for_dmps: %s-%s centroid2 bin_edges differ from centroid1; "
-                        "class 2 PDFs may be wrong (centroid self-check can fail). Build both centroids with the same bins.",
-                        chrom, ctx,
-                    )
-                cached = {
-                    "bin_edges": be1,
-                    "pos1": np.asarray(c1.pos.values, dtype=np.uint32),
-                    "pos2": np.asarray(c2.pos.values, dtype=np.uint32),
-                    "bc1": np.asarray(bs1["bin_counts"], dtype=np.float64),
-                    "bc2": np.asarray(bs2["bin_counts"], dtype=np.float64),
-                }
-                self._centroid_bin_cache[cache_key] = cached
+                logger.warning(
+                    "_extract_bin_counts_for_dmps: skipping %s-%s (no centroid cache); rows will use zero histograms",
+                    chrom,
+                    ctx,
+                )
+                continue
 
             be1 = cached["bin_edges"]
             if bin_edges_ref is None:
