@@ -3016,10 +3016,21 @@ class MethylDetector:
 
         # Create model package
         import pickle
+        context_weights_summary: Dict[str, float] = {}
+        if "context" in selected_dmps_df.columns:
+            if "context_weight" in selected_dmps_df.columns:
+                context_weights_summary = (
+                    selected_dmps_df.groupby("context")["context_weight"].first().to_dict()
+                )
+            else:
+                unique_contexts = [str(c) for c in selected_dmps_df["context"].dropna().unique()]
+                if unique_contexts:
+                    default_w = 1.0 / float(len(unique_contexts))
+                    context_weights_summary = {ctx: default_w for ctx in unique_contexts}
         model_package = {
             'classifier': the_classifier,
             'dmpDF': dmpDF,  # Strongly typed DataFrame
-            'context_weights_summary': selected_dmps_df.groupby('context')['context_weight'].first().to_dict() if 'context' in selected_dmps_df.columns else {},
+            'context_weights_summary': context_weights_summary,
             'chromosome': self.chromosome,
             'n_dmps': len(selected_dmps_df),
             'n_dmps_per_context': selected_dmps_df.groupby('context').size().to_dict() if 'context' in selected_dmps_df.columns else {},
