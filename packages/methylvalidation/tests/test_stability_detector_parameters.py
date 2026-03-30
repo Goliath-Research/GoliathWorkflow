@@ -162,9 +162,7 @@ def test_run_stability_analysis_writes_frequency_plot_html(tmp_path):
         output_dir=monte_root / "stability",
     )
     assert "dmp_frequency_plot_html" in summary
-    assert "dmp_frequency_elbow" in summary
     assert "dmp_frequency_charts_by_chromosome" in summary
-    assert "dmp_frequency_elbow_by_chromosome" in summary
     assert "dmp_frequency_counts_by_chromosome" in summary
 
     html_path = summary.get("dmp_frequency_plot_html")
@@ -174,13 +172,6 @@ def test_run_stability_analysis_writes_frequency_plot_html(tmp_path):
         per_chrom = summary.get("dmp_frequency_charts_by_chromosome") or {}
         assert "1" in per_chrom
         assert Path(per_chrom["1"]).is_file()
-
-        # With four unique frequency points, elbow detection should be present for chr1
-        elbow_by_chrom = summary.get("dmp_frequency_elbow_by_chromosome") or {}
-        assert "1" in elbow_by_chrom
-        elbow = elbow_by_chrom["1"]
-        assert "frequency_pct" in elbow
-        assert "dmps_count" in elbow
 
         counts_by_chrom = summary.get("dmp_frequency_counts_by_chromosome") or {}
         assert counts_by_chrom["1"]["all_dmps"] == 4
