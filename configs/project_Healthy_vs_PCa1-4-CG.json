@@ -234,6 +234,8 @@
       "n_iterations": 50,
       "seed": 42,
       "run_stability": true,
+      "require_biological_review_for_model": true,
+      "biological_review_confirmed": true,
       "stability_dmp_freq": 0.6,
       "stability_min_balanced_accuracy": null,
       "abort_on_step_failure": false
