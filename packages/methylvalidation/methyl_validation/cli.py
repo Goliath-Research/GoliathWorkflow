@@ -282,9 +282,9 @@ def main() -> None:
         config.seed = args.seed
     if args.output_base is not None:
         config.output_base = str(args.output_base)
-    if getattr(args, "samples_base_path", None) is not None:
+    if args.samples_base_path is not None:
         config = config.model_copy(update={"samples_base_path": str(args.samples_base_path)})
-    if getattr(args, "path_remap", None):
+    if args.path_remap:
         merged = dict(config.path_remap or {})
         for item in args.path_remap:
             if "=" not in item:
@@ -301,17 +301,17 @@ def main() -> None:
         config = config.model_copy(update={"path_remap": merged})
     if args.stability:
         config.run_stability = True
-    if getattr(args, "skip_enricher", False):
+    if args.skip_enricher:
         config.skip_enricher = True
-    if getattr(args, "predictor_only", False):
+    if args.predictor_only:
         config.predictor_only = True
-    if getattr(args, "model_backend", None):
+    if args.model_backend:
         config = config.model_copy(update={"model_backend": args.model_backend})
-    if getattr(args, "covariates_path", None) is not None:
+    if args.covariates_path is not None:
         config = config.model_copy(update={"covariates_path": str(args.covariates_path)})
-    if getattr(args, "tabular_max_dmps", None) is not None:
+    if args.tabular_max_dmps is not None:
         config = config.model_copy(update={"tabular_max_dmps": int(args.tabular_max_dmps)})
-    if getattr(args, "tabular_model_type", None):
+    if args.tabular_model_type:
         config = config.model_copy(update={"tabular_model_type": str(args.tabular_model_type)})
 
     base_project = Path(config.base_project)
@@ -326,7 +326,7 @@ def main() -> None:
     monte_carlo_runs_root = output_base / project_name / "monte_carlo_runs"
     monte_carlo_runs_root.mkdir(parents=True, exist_ok=True)
 
-    if getattr(args, "freeze", False):
+    if args.freeze:
         if not config.freeze_stable_dmp_csv:
             config.freeze_stable_dmp_csv = str(monte_carlo_runs_root / "stability" / "stable_dmps_production.csv")
         if not Path(config.freeze_stable_dmp_csv).exists():
@@ -360,7 +360,7 @@ def main() -> None:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    if getattr(args, "freeze", False):
+    if args.freeze:
         stable_path = Path(config.freeze_stable_dmp_csv)
         print(f"Running production freeze using stable DMP panel: {stable_path}")
         production_summary = freeze_production_model(
@@ -382,7 +382,7 @@ def main() -> None:
         print(f"Production freeze complete. See: {out}")
         print("Done.")
         return
-    elif getattr(args, "model", False):
+    elif args.model:
         try:
             assert_production_model_build_allowed(config)
         except ValueError as e:
@@ -546,7 +546,7 @@ def main() -> None:
                         project_path, Path(config.frozen_project_path)
                     )
                 run_project = load_project(project_path)
-                comparisons = run_project.get_comparisons() if getattr(run_project, "get_comparisons", None) else []
+                comparisons = run_project.get_comparisons()
                 if comparisons:
                     spec = comparisons[0]
                     predictor_output_dir = run_dir / "predictors" / spec.control_group / spec.disease_group

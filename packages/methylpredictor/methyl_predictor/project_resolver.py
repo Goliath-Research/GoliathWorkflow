@@ -14,7 +14,8 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
-from methyl_utils import load_project
+from methyl_utils import DerivedPaths, ProjectConfig, load_project
+from pydantic import BaseModel
 
 from .models.config import PredictorConfig
 
@@ -180,7 +181,7 @@ def _apply_path_remap(paths: List[str], path_remap: Optional[Dict[str, str]]) ->
 
 def _apply_binary_cli_paths_to_multiclass_config(
     cfg: PredictorConfig,
-    project: Any,
+    project: ProjectConfig,
     test_control_paths: List[str],
     test_disease_paths: List[str],
     base_path: Optional[str],
@@ -206,11 +207,11 @@ def _apply_binary_cli_paths_to_multiclass_config(
     if not expanded_c or not expanded_d:
         return
 
-    comparisons = project.get_comparisons() if getattr(project, "get_comparisons", None) else []
+    comparisons = project.get_comparisons()
     if comparisons:
         spec = comparisons[0]
-        ctrl_label = getattr(spec, "control_group", None) or "control"
-        dis_label = getattr(spec, "disease_group", None) or "disease"
+        ctrl_label = spec.control_group or "control"
+        dis_label = spec.disease_group or "disease"
     else:
         ctrl_label, dis_label = "control", "disease"
 
@@ -236,14 +237,16 @@ def _control_disease_side_to_dict(side: Any) -> Dict[str, Any]:
         return {"label": "", "groups": []}
     if isinstance(side, dict):
         return copy.deepcopy(side)
-    if hasattr(side, "model_dump"):
+    if isinstance(side, BaseModel):
         return side.model_dump(mode="json")
-    return {"label": getattr(side, "label", ""), "groups": []}
+    raise TypeError(
+        f"Expected control/disease side to be dict-like or Pydantic model, got {type(side)!r}"
+    )
 
 
 def _effective_predictor_side(
     step_cfg: Dict[str, Any],
-    project: Any,
+    project: ProjectConfig,
     side_key: Literal["controls", "diseases"],
 ) -> Dict[str, Any]:
     """
@@ -435,7 +438,7 @@ def _assert_predictor_blind_exclusive(step_cfg: Dict[str, Any]) -> None:
 def _build_blind_predictor_dict(
     *,
     step_cfg: Dict[str, Any],
-    project: Any,
+    project: ProjectConfig,
     project_path: Union[str, Path],
     base_path: Optional[str],
     output_dir: str,
@@ -458,7 +461,7 @@ def _build_blind_predictor_dict(
         if isinstance(g, dict) and g.get("label")
     ]
     blind_paths, lineage = _collect_paths_and_lineage("blind", labels, bmap)
-    tree = project.cohort_tree_dict() if hasattr(project, "cohort_tree_dict") else {}
+    tree = project.cohort_tree_dict()
     return {
         "model_path": model_path,
         "model_dir": model_dir,
@@ -484,7 +487,11 @@ def _build_blind_predictor_dict(
 MULTICLASS_CLASSIFIER_FILENAME = "multiclass-classifier.pkl"
 
 
-def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: Any) -> Optional[Path]:
+def _get_multiclass_model_path(
+    project: ProjectConfig,
+    step_cfg: Dict[str, Any],
+    paths: DerivedPaths,
+) -> Optional[Path]:
     """Return path to multiclass classifier pkl if it exists, else None."""
     explicit = step_cfg.get("multiclass_model_path") or step_cfg.get("model_path")
     if explicit:
@@ -492,7 +499,7 @@ def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: An
         if p.is_file():
             return p
     classifier_step = project.get_step_config("classifier") or {}
-    classifier_dir = getattr(paths, "classifier_dir", None)
+    classifier_dir = paths.classifier_dir
     # Prefer native merged multiclass PKL (detector export) over OvR bundle when both exist.
     if classifier_dir:
         native_mc = Path(classifier_dir) / MULTICLASS_CLASSIFIER_FILENAME
@@ -510,7 +517,7 @@ def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: An
     except ImportError:
         pass
     if classifier_dir:
-        project_name = getattr(project, "project_name", None)
+        project_name = project.project_name
         if project_name:
             legacy = Path(classifier_dir) / f"{project_name}-classifier.pkl"
             if legacy.is_file():
@@ -520,9 +527,9 @@ def _get_multiclass_model_path(project: Any, step_cfg: Dict[str, Any], paths: An
 
 def _build_multiclass_predictor_config(
     *,
-    project: Any,
+    project: ProjectConfig,
     step_cfg: Dict[str, Any],
-    paths: Any,
+    paths: DerivedPaths,
     base_path: Optional[str],
     project_path: Union[str, Path],
     out_dir: str,
@@ -556,9 +563,9 @@ def _build_multiclass_predictor_config(
                 )
     else:
         test_group_paths = []
-        pr = getattr(project, "path_remap", None)
+        pr = project.path_remap
         used_predictor_sides = False
-        if getattr(project, "uses_control_disease", lambda: False)():
+        if project.uses_control_disease():
             ctrl_side = _effective_predictor_side(step_cfg, project, "controls")
             dis_side = _effective_predictor_side(step_cfg, project, "diseases")
             c_order = _expand_side_group_paths_in_order(
@@ -609,7 +616,7 @@ def _build_multiclass_predictor_config(
                     mc_lineage.append(
                         {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
                     )
-    tree = project.cohort_tree_dict() if hasattr(project, "cohort_tree_dict") else {}
+    tree = project.cohort_tree_dict()
     base_dict: Dict[str, Any] = {
         "model_path": str(multiclass_path),
         "model_dir": None,
@@ -675,7 +682,7 @@ def resolve_predictor_config(
     out_dir = output_dir if output_dir is not None else paths.validator_dir
     out_dir = str(Path(out_dir).resolve())
 
-    base_path = getattr(project, "samples_base_path", None)
+    base_path = project.samples_base_path
     proj_path_arg: Union[str, Path] = project_path
 
     if test_control_paths is not None and test_disease_paths is not None:
@@ -748,7 +755,7 @@ def resolve_predictor_config(
     disease_paths, lin_d = _collect_paths_and_lineage("disease", dis_labels, dis_map)
     lineage = lin_c + lin_d
 
-    tree = project.cohort_tree_dict() if hasattr(project, "cohort_tree_dict") else {}
+    tree = project.cohort_tree_dict()
     base: Dict[str, Any] = {
         "model_path": model_path,
         "model_dir": model_dir,
@@ -785,7 +792,7 @@ def resolve_predictor_config_per_comparison(
     Returns list of (PredictorConfig, comparison_label) or [(config, "multiclass")] when multiclass model is used.
     """
     project = load_project(project_path)
-    if not getattr(project, "uses_control_disease", lambda: False)():
+    if not project.uses_control_disease():
         # Flat groups: single config
         config = resolve_predictor_config(
             project_path,
@@ -814,7 +821,7 @@ def resolve_predictor_config_per_comparison(
             step_cfg = {**step_cfg, **overrides}
 
     paths = project.get_derived_paths()
-    base_path = getattr(project, "samples_base_path", None)
+    base_path = project.samples_base_path
 
     if _predictor_blind_has_groups(step_cfg):
         if test_control_paths is not None or test_disease_paths is not None:
@@ -891,7 +898,7 @@ def resolve_predictor_config_per_comparison(
         dis_label = spec.disease_group
         classifier_output_dir = project.get_classifier_output_dir(ctrl_label, dis_label)
         detection_dir = project.get_detection_output_dir(ctrl_label, dis_label)
-        project_name = getattr(project, "project_name", "classifier")
+        project_name = project.project_name or "classifier"
         full_classifier_pkl = f"{classifier_output_dir}/{project_name}-classifier.pkl"
         if step_cfg.get("model_path") is not None:
             model_path = step_cfg.get("model_path")

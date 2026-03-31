@@ -110,8 +110,9 @@ def resolve_cluster_config_for_group(
     step_cfg = project.get_step_config("cluster") or {}
     if step_override:
         step_cfg = {**step_cfg, **step_override}
+    valid_fields = set(MethylClusterConfig.model_fields.keys())
     for key, value in step_cfg.items():
-        if hasattr(config, key):
+        if key in valid_fields:
             setattr(config, key, value)
 
     return config, side

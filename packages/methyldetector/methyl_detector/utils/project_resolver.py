@@ -7,17 +7,17 @@ with the classifier multiclass builder (see build_multiclass_config_from_project
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
-from methyl_utils import load_project
+from methyl_utils import ProjectConfig, load_project
 
 from ..models.config import MethylDetectorConfig
 from .multiclass_export_config import filter_detection_config_for_detector
 
 
-def _attach_samples_base(cfg: Dict[str, Any], project: Any) -> None:
+def _attach_samples_base(cfg: Dict[str, object], project: ProjectConfig) -> None:
     """Propagate project-level samples_base_path into detector validation config."""
-    sb = getattr(project, "samples_base_path", None)
+    sb = project.samples_base_path
     if sb:
         cfg["validation_samples_base_path"] = str(sb).rstrip("/")
 
@@ -46,14 +46,14 @@ def resolve_detector_config_per_cancer_group(
         step_cfg = {**step_cfg, **overrides}
     step_cfg = filter_detection_config_for_detector(step_cfg)
 
-    if getattr(project, "uses_control_disease", lambda: False)():
+    if project.uses_control_disease():
         comparisons = project.get_comparisons()
         out: List[Tuple[MethylDetectorConfig, str]] = []
         for spec in comparisons:
             ctrl_label = spec.control_group
             dis_label = spec.disease_group
             comp_label = spec.comparison_label or spec.disease_group
-            base: Dict[str, Any] = {
+            base: Dict[str, object] = {
                 "chromosome": project.chromosomes or ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
                     "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
                 "contexts": project.contexts or ["CG"],
@@ -83,7 +83,7 @@ def resolve_detector_config_per_cancer_group(
     resolved = project.get_resolved_groups()
     if len(resolved) < 2:
         return []
-    centroid_dirs = getattr(paths, "centroid_dirs", None) or [paths.centroid1_dir, paths.centroid2_dir]
+    centroid_dirs = paths.centroid_dirs or [paths.centroid1_dir, paths.centroid2_dir]
     if len(centroid_dirs) != len(resolved):
         centroid_dirs = []
         for i, (label, _) in enumerate(resolved):
@@ -134,13 +134,13 @@ def resolve_detector_config(
         project = project.model_copy(update={"output_base": str(output_base_override)})
     paths = project.get_derived_paths()
 
-    if getattr(project, "uses_control_disease", lambda: False)() and len(project.get_comparisons()) == 1:
+    if project.uses_control_disease() and len(project.get_comparisons()) == 1:
         spec = project.get_comparisons()[0]
         output_dir = project.get_detection_output_dir(spec.control_group, spec.disease_group)
     else:
         output_dir = paths.detection_dir
 
-    base: Dict[str, Any] = {
+    base: Dict[str, object] = {
         "chromosome": project.chromosomes or ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
             "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"],
         "contexts": project.contexts or ["CG"],
@@ -162,7 +162,7 @@ def resolve_detector_config(
         for k, v in step_cfg.items():
             base[k] = v
         # Restore comparison-based structure so step_config cannot override it
-        if getattr(project, "uses_control_disease", lambda: False)() and len(project.get_comparisons()) == 1:
+        if project.uses_control_disease() and len(project.get_comparisons()) == 1:
             spec = project.get_comparisons()[0]
             base["output_dir"] = project.get_detection_output_dir(spec.control_group, spec.disease_group)
 
@@ -173,7 +173,7 @@ def resolve_detector_config(
         for k, v in overrides.items():
             base[k] = v
         # Keep comparison-based structure: detections/<control_group>/<disease_group>
-        if getattr(project, "uses_control_disease", lambda: False)() and len(project.get_comparisons()) == 1:
+        if project.uses_control_disease() and len(project.get_comparisons()) == 1:
             spec = project.get_comparisons()[0]
             base["output_dir"] = project.get_detection_output_dir(spec.control_group, spec.disease_group)
 

@@ -7,6 +7,7 @@ from typing import Any, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
 
 from .dmp_export_paths import find_classifier_dmps_csvs
 
@@ -42,11 +43,21 @@ def check_detection_dirs_have_dmps(
     for config, label in configs_and_labels:
         if isinstance(config, (str, Path)):
             out_dir = Path(config)
-        elif hasattr(config, "model_dump"):
+        elif isinstance(config, BaseModel):
             cfg_map = config.model_dump(mode="python")
-            out_dir = Path(cfg_map.get(output_dir_attr, ""))
+            out_val = cfg_map.get(output_dir_attr)
+            if not out_val:
+                raise ValueError(
+                    f"Config {type(config).__name__} is missing required field {output_dir_attr!r}"
+                )
+            out_dir = Path(out_val)
         elif isinstance(config, dict):
-            out_dir = Path(config.get(output_dir_attr, ""))
+            out_val = config.get(output_dir_attr)
+            if not out_val:
+                raise ValueError(
+                    f"Config dict is missing required key {output_dir_attr!r}"
+                )
+            out_dir = Path(out_val)
         else:
             raise TypeError(
                 f"Unsupported config type for detection dir resolution: {type(config)!r}"

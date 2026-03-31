@@ -256,7 +256,7 @@ def run_pipeline_for_iteration(
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     centroid_step_overrides: Optional[Dict[str, Path]] = None,
-    config: Optional[Any] = None,  # reserved; mapper/enricher belong to --freeze, not MC
+    config: Optional["MonteCarloConfig"] = None,  # reserved; mapper/enricher belong to --freeze, not MC
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Monte Carlo stability iteration: methyl-centroid → methyl-detector only.
@@ -509,7 +509,7 @@ def run_pipeline_for_iteration_multiclass(
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
-    config: Optional[Any] = None,
+    config: Optional["MonteCarloConfig"] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Monte Carlo stability iteration (multiclass template): methyl-centroid → methyl-detector only.

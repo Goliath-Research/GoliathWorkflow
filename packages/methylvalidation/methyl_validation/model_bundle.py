@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
 
+if TYPE_CHECKING:
+    from methyl_utils import ComparisonSpec, ProjectConfig
 
 BUNDLE_SCHEMA_VERSION = 1
 BUNDLE_MANIFEST_NAME = "model_feature_bundle.json"
@@ -179,8 +181,8 @@ def build_model_feature_bundle(
     out_dir = Path(output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    project = load_project(project_json)
-    comparisons = project.get_comparisons() if hasattr(project, "get_comparisons") else []
+    project: "ProjectConfig" = load_project(project_json)
+    comparisons: List["ComparisonSpec"] = project.get_comparisons()
     paths = project.get_derived_paths()
     classes = [str(label) for label, _paths in project.get_resolved_groups()]
 
@@ -189,7 +191,7 @@ def build_model_feature_bundle(
     detector_pointer: Dict[str, Any] = {"comparisons": []}
 
     for spec in comparisons:
-        cmp_label = getattr(spec, "comparison_label", None) or getattr(spec, "disease_group", "comparison")
+        cmp_label = spec.comparison_label or spec.disease_group
         det_dir = Path(project.get_detection_dir(spec.control_group, spec.disease_group))
         csvs = _choose_detector_csvs(det_dir)
         classifier_csv = csvs["classifier"]
