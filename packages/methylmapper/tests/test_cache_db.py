@@ -160,3 +160,35 @@ def test_enricher_partial_source_cache_behavior(tmp_path: Path):
     assert "TP53" in from_grok
     assert "TP53" not in from_ot
 
+
+def test_empty_cached_payload_is_treated_as_miss(tmp_path: Path):
+    cache_dir = tmp_path / "cache"
+    enricher = GeneDiseaseEnricher(
+        use_grok=False,
+        use_open_targets=False,
+        use_disgenet=False,
+        cache_enabled=True,
+        cache_dir=cache_dir,
+        cache_backend="sqlite",
+    )
+    assert enricher.cache_store is not None
+    # Simulate bad migrated Open Targets row with only empty defaults.
+    enricher.cache_store.upsert_association(
+        source="open_targets",
+        gene="TP53",
+        disease_term="prostate cancer",
+        ts=time.time(),
+        value={
+            "associated": False,
+            "association_type": "none",
+            "evidence_level": "none",
+            "description": None,
+            "publications": 0,
+            "functional_role": None,
+            "score": 0.0,
+            "source": "open_targets",
+        },
+    )
+    rows = enricher._cache_get_batch("open_targets", ["TP53"], "prostate cancer")
+    assert "TP53" not in rows
+

@@ -1893,8 +1893,11 @@ Example:
 
                 runtime_value = self._association_runtime_cache.get(key)
                 if isinstance(runtime_value, dict):
-                    result[gene_upper] = runtime_value
-                    continue
+                    if self._is_empty_association_payload(runtime_value):
+                        self._association_runtime_cache.pop(key, None)
+                    else:
+                        result[gene_upper] = runtime_value
+                        continue
                 missing_for_disk.append(gene_upper)
 
             if self.cache_enabled and self.cache_store is not None and missing_for_disk:
@@ -1909,10 +1912,56 @@ Example:
                         continue
                     value = disk_entry.get("value")
                     if isinstance(value, dict):
+                        if self._is_empty_association_payload(value):
+                            continue
                         key = self._cache_key(source, gene_upper, disease_term)
                         result[gene_upper] = value
                         self._association_runtime_cache[key] = value
         return result
+
+    @staticmethod
+    def _is_empty_association_payload(value: Dict) -> bool:
+        """
+        Treat placeholder/failed payloads as cache-miss candidates.
+
+        This handles historical entries where a source row exists but contains only
+        empty defaults (None/0/false/'none'), which should be refreshed from source.
+        """
+        if not isinstance(value, dict) or not value:
+            return True
+
+        ignored_keys = {"source", "gene", "gene_name", "disease_term", "ts"}
+        has_signal = False
+
+        for key, v in value.items():
+            if str(key) in ignored_keys:
+                continue
+            if isinstance(v, bool):
+                if v:
+                    has_signal = True
+                    break
+                continue
+            if isinstance(v, (int, float)):
+                if float(v) != 0.0:
+                    has_signal = True
+                    break
+                continue
+            if isinstance(v, str):
+                norm = v.strip().lower()
+                if norm not in ("", "none", "null", "nan", "__null__"):
+                    has_signal = True
+                    break
+                continue
+            if isinstance(v, (list, dict)):
+                if len(v) > 0:
+                    has_signal = True
+                    break
+                continue
+            if v is not None:
+                has_signal = True
+                break
+
+        return not has_signal
 
     def _cache_set(self, key: str, value: Dict) -> None:
         """Store a cached association in runtime cache and, when enabled, on disk."""
