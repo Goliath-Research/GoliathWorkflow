@@ -754,6 +754,14 @@ def freeze_production_model(
     with open(base_project, encoding="utf-8") as f:
         project_dict = json.load(f)
 
+    pr = getattr(config, "path_remap", None) if config is not None else None
+    if pr:
+        from .path_remap import apply_path_remap_to_nested
+
+        apply_path_remap_to_nested(project_dict, dict(pr))
+    if config is not None and getattr(config, "samples_base_path", None):
+        project_dict["samples_base_path"] = str(config.samples_base_path).rstrip("/")
+
     # Set fixed_dmp_panel in detection step config (bypasses discovery in MethylDetector)
     if "step_config" not in project_dict:
         project_dict["step_config"] = {}

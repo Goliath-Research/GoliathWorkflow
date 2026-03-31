@@ -63,7 +63,11 @@ class MonteCarloConfig(BaseModel):
     )
     path_remap: Optional[Dict[str, str]] = Field(
         default=None,
-        description="Optional path remap dict (from -> to) for resolving sample paths; or reuse from base_project.",
+        description=(
+            "Optional prefix remap (old -> new) for sample paths. "
+            "Also applied to the copied production project.json during --freeze when set here or via CLI --path-remap. "
+            "Put under step_config.validation in the project JSON, or pass --path-remap OLD=NEW."
+        ),
     )
     abort_on_step_failure: bool = Field(
         default=False,

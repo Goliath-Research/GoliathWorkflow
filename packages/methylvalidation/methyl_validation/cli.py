@@ -170,6 +170,23 @@ def main() -> None:
         help="Override output_base from config.",
     )
     parser.add_argument(
+        "--samples-base-path",
+        type=Path,
+        default=None,
+        metavar="DIR",
+        help="Override samples_base_path (and write it into production project.json for --freeze).",
+    )
+    parser.add_argument(
+        "--path-remap",
+        action="append",
+        default=None,
+        metavar="OLD=NEW",
+        help=(
+            "Prefix remap for sample paths and other path strings in the production project (repeatable). "
+            "Example: --path-remap /lambda/nfs/Work/prostate-cancer=/work/prostate-cancer"
+        ),
+    )
+    parser.add_argument(
         "--stability",
         action="store_true",
         help="After main analysis, run stability on discovery DMPs from centroid+detector iterations (classifier/predictor via --model).",
@@ -237,6 +254,23 @@ def main() -> None:
         config.seed = args.seed
     if args.output_base is not None:
         config.output_base = str(args.output_base)
+    if getattr(args, "samples_base_path", None) is not None:
+        config = config.model_copy(update={"samples_base_path": str(args.samples_base_path)})
+    if getattr(args, "path_remap", None):
+        merged = dict(config.path_remap or {})
+        for item in args.path_remap:
+            if "=" not in item:
+                print(
+                    f"Error: --path-remap must be OLD=NEW, got: {item!r}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            old_p, new_p = item.split("=", 1)
+            if not old_p.strip():
+                print(f"Error: empty OLD prefix in --path-remap: {item!r}", file=sys.stderr)
+                sys.exit(1)
+            merged[old_p] = new_p
+        config = config.model_copy(update={"path_remap": merged})
     if args.stability:
         config.run_stability = True
     if getattr(args, "skip_enricher", False):
