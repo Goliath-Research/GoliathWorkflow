@@ -1050,6 +1050,9 @@ class MethylDetector:
             self.chromosome,
             contexts=contexts,
             centroid_name=centroid_name,
+            fallback_samples_base_path=getattr(
+                self.config, "validation_samples_base_path", None
+            ),
         )
     
     def _generate_synthetic_validation_samples(

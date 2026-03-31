@@ -39,6 +39,11 @@ def resolve_detector_config_per_cancer_group(
         step_cfg = {**step_cfg, **overrides}
     step_cfg = filter_detection_config_for_detector(step_cfg)
 
+    def _attach_samples_base(cfg: Dict[str, Any]) -> None:
+        sb = getattr(project, "samples_base_path", None)
+        if sb:
+            cfg["validation_samples_base_path"] = str(sb).rstrip("/")
+
     if getattr(project, "uses_control_disease", lambda: False)():
         comparisons = project.get_comparisons()
         out: List[Tuple[MethylDetectorConfig, str]] = []
@@ -68,6 +73,7 @@ def resolve_detector_config_per_cancer_group(
             base["output_dir"] = project.get_detection_output_dir(ctrl_label, dis_label)
             base["centroid1_dir"] = project.get_centroid_dir("control", ctrl_label)
             base["centroid2_dir"] = project.get_centroid_dir("disease", dis_label)
+            _attach_samples_base(base)
             out.append((MethylDetectorConfig.model_validate(base), comp_label))
         return out
 
@@ -101,6 +107,7 @@ def resolve_detector_config_per_cancer_group(
             base["centroid2_validation_samples"] = project.get_group_sample_paths(i)
         for k, v in step_cfg.items():
             base[k] = v
+        _attach_samples_base(base)
         out.append((MethylDetectorConfig.model_validate(base), label))
     return out
 
@@ -144,6 +151,8 @@ def resolve_detector_config(
         base["centroid1_validation_samples"] = project.get_group1_sample_paths()
     if project.get_group2_sample_paths():
         base["centroid2_validation_samples"] = project.get_group2_sample_paths()
+
+    _attach_samples_base(base)
 
     # Apply project-level step config (detection) if present
     step_cfg = filter_detection_config_for_detector(project.get_step_config("detection") or {})

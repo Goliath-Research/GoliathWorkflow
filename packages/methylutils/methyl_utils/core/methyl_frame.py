@@ -341,13 +341,65 @@ class MethylFrame:
             self._metadata = {}
         self._metadata["context"] = value
 
+    @classmethod
+    def resolve_samples_used_paths(
+        cls,
+        raw: List[str],
+        metadata_base: Optional[str] = None,
+        fallback_base: Optional[str] = None,
+    ) -> List[str]:
+        """
+        Turn centroid metadata sample entries into absolute sample-directory paths.
+
+        Supports:
+        - Legacy rows: full paths to sample directories (used as-is when they exist).
+        - Compact rows: directory basenames with ``samples_base_path`` in the same H5 metadata,
+          or ``fallback_base`` (e.g. project ``samples_base_path``) when metadata has no base.
+        """
+        if not raw:
+            return []
+        bases = [b for b in (metadata_base, fallback_base) if b]
+        out: List[str] = []
+        for item in raw:
+            if item is None:
+                continue
+            s = str(item).strip()
+            if not s:
+                continue
+            p = Path(s)
+            if p.exists():
+                out.append(str(p.resolve()))
+                continue
+            resolved = False
+            for base in bases:
+                joined = Path(base).expanduser() / s
+                if joined.exists():
+                    out.append(str(joined.resolve()))
+                    resolved = True
+                    break
+            if resolved:
+                continue
+            if p.is_absolute():
+                out.append(str(p))
+            elif bases:
+                out.append(str(Path(bases[0]).expanduser() / s))
+            else:
+                out.append(s)
+        return out
+
     @property
     def samples(self) -> List[str]:
-        """List of sample file paths that form this centroid (from metadata)."""
+        """Resolved list of sample directory paths for this centroid (from metadata)."""
         if not self._metadata:
             return []
-        # Check for 'sample_paths' first, fall back to 'samples_used'
-        return self._metadata.get('sample_paths') or self._metadata.get('samples_used', [])
+        raw = self._metadata.get("sample_paths") or self._metadata.get("samples_used", [])
+        if not raw:
+            return []
+        return type(self).resolve_samples_used_paths(
+            [str(x) for x in raw],
+            self._metadata.get("samples_base_path"),
+            None,
+        )
 
     @property
     def group_name(self) -> str:

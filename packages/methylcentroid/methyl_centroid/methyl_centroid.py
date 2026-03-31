@@ -79,6 +79,20 @@ def _create_centroid_builder(
     return MethylCentroidBuilder(binned_stats_bins=int(binned_stats_bins), **kwargs)
 
 
+def _common_parent_directory(dir_paths: List[str]) -> Optional[Path]:
+    """If all paths resolve to directories sharing the same parent, return that parent."""
+    if not dir_paths:
+        return None
+    try:
+        resolved = [Path(p).resolve() for p in dir_paths]
+    except OSError:
+        return None
+    parents = {p.parent for p in resolved}
+    if len(parents) == 1:
+        return parents.pop()
+    return None
+
+
 def _is_gpu_oom_error(exc: BaseException) -> bool:
     """Best-effort detection for CuPy/RMM CUDA OOM failures."""
     message = str(exc).lower()
@@ -1528,6 +1542,8 @@ class MethylCentroid:
 
         # Get active sample paths (those currently in the centroid)
         active_sample_paths = self._get_active_sample_paths()
+        samples_basenames = [Path(p).name for p in active_sample_paths]
+        common_parent = _common_parent_directory(active_sample_paths)
 
         # Prepare metadata for H5 file
         from datetime import datetime
@@ -1539,10 +1555,12 @@ class MethylCentroid:
             "batch": self.batch,
             "chromosome": self.chrom,
             "context": self.ctx,
-            "samples_used": active_sample_paths,  # NEW: Active samples in centroid
+            "samples_used": samples_basenames,
             "creation_date": datetime.now().isoformat(),  # NEW: Creation timestamp
             "min_coverage": self.min_coverage,
         }
+        if common_parent is not None:
+            metadata["samples_base_path"] = str(common_parent)
         if self._binned_stats is None:
             raise ValueError(
                 "ECDF centroids require binned_stats before saving. "
@@ -3031,7 +3049,12 @@ def attach_binned_stats_to_centroid(
         )
 
     if sample_dirs is None:
-        sample_dirs = meta.get("samples_used", [])
+        raw = meta.get("sample_paths") or meta.get("samples_used", [])
+        sample_dirs = MethylSample.resolve_samples_used_paths(
+            [str(x) for x in raw],
+            meta.get("samples_base_path"),
+            None,
+        )
     if not sample_dirs:
         raise ValueError("No sample directories available to rebuild binned stats")
 

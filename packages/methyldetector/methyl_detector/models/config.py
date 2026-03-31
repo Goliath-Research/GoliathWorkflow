@@ -120,6 +120,19 @@ class MethylDetectorConfig(BaseModel):
         description="Path to a fixed DMP panel CSV (chromosome,position,context,...). If provided, bypasses statistical/biological discovery and uses only these positions (for production freeze).",
     )
 
+    centroid1_validation_samples: Optional[Union[str, List[str]]] = Field(
+        default=None,
+        description="Validation cohort paths for centroid1, or the string 'use_metadata' to read from centroid H5 (default when omitted: use_metadata).",
+    )
+    centroid2_validation_samples: Optional[Union[str, List[str]]] = Field(
+        default=None,
+        description="Validation cohort paths for centroid2, or 'use_metadata'.",
+    )
+    validation_samples_base_path: Optional[str] = Field(
+        default=None,
+        description="When centroid H5 stores sample directory basenames without samples_base_path, prepend this directory (typically project samples_base_path).",
+    )
+
     # ----------------
     # Statistical Filter
     # ----------------

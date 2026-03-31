@@ -101,7 +101,8 @@ def test_build_centroid_applies_add_and_remove_samples_and_persists_final_cohort
             assert data["N"][pos_2000_idx] == 2
             assert f.attrs["binned_stats_bins"] == 20
             samples_used = read_json_attr(f.attrs["samples_used"])
-            assert samples_used == [str(sample2_dir), str(sample3_dir)]
+            assert samples_used == ["sample2", "sample3"]
+            assert f.attrs.get("samples_base_path") == str(root)
 
         saved_config = json.loads(config_path.read_text(encoding="utf-8"))
         assert saved_config["samples"] == [str(sample2_dir), str(sample3_dir)]

@@ -940,6 +940,7 @@ class MethylCentroidPair:
         chromosome: str,
         contexts: Optional[List[str]] = None,
         centroid_name: str = "centroid",
+        fallback_samples_base_path: Optional[str] = None,
     ) -> List[str]:
         """
         Resolve validation sample paths from config or centroid metadata.
@@ -950,7 +951,12 @@ class MethylCentroidPair:
             chromosome: Chromosome identifier
             contexts: List of contexts (uses first if provided)
             centroid_name: Name for logging
+            fallback_samples_base_path: If centroid metadata lists basenames only and omits
+                samples_base_path, join with this directory (e.g. project samples_base_path).
         """
+        if config_samples is None:
+            config_samples = "use_metadata"
+
         if isinstance(config_samples, list):
             logger.debug(f"Using {len(config_samples)} validation samples from config for {centroid_name}")
             return config_samples
@@ -971,7 +977,13 @@ class MethylCentroidPair:
 
             centroid = MethylSample.load_from_h5(str(centroid_path))
             if centroid.metadata:
-                samples = centroid.samples
+                meta = centroid.metadata
+                raw = meta.get("sample_paths") or meta.get("samples_used", [])
+                samples = MethylSample.resolve_samples_used_paths(
+                    [str(x) for x in raw],
+                    meta.get("samples_base_path"),
+                    fallback_samples_base_path,
+                )
                 if samples:
                     logger.info(f"✅ Loaded {len(samples)} validation samples from {centroid_name} metadata")
                     return samples
