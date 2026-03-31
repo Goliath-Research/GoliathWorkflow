@@ -300,7 +300,16 @@ def main() -> None:
             production_output_dir=config.production_output_dir,
             config=config,
         )
-        print(f"Production freeze complete. See: {production_summary.get('output_dir', 'unknown')}")
+        out = production_summary.get("output_dir", "unknown")
+        if not production_summary.get("success", False):
+            for err in production_summary.get("errors") or []:
+                print(err, file=sys.stderr)
+            print(
+                f"Production freeze failed (see production_summary.json and logs under {out}).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Production freeze complete. See: {out}")
         print("Done.")
         return
     elif getattr(args, "model", False):
@@ -315,7 +324,16 @@ def main() -> None:
             production_output_dir=config.production_output_dir,
             config=config,
         )
-        print(f"Production model build complete. See: {production_summary.get('output_dir', 'unknown')}")
+        out = production_summary.get("output_dir", "unknown")
+        if not production_summary.get("success", False):
+            for err in production_summary.get("errors") or []:
+                print(err, file=sys.stderr)
+            print(
+                f"Production model build failed (see model_summary.json and logs under {out}).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Production model build complete. See: {out}")
         print("Done.")
         return
     try:
