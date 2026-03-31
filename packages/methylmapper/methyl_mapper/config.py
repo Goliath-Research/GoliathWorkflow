@@ -170,6 +170,8 @@ class MapperStepConfig(BaseModel):
     grok_batch_poll_interval: Optional[float] = None
     grok_batch_submit_chunk_size: Optional[int] = None
     grok_cache_ttl_days: Optional[int] = None
+    cache_dir: Optional[str] = None
+    cache_ttl_days: Optional[int] = None
     azure_key_vault_url: Optional[str] = None
     encrypted_file_path: Optional[str] = None
     optimize_dmps: Optional[bool] = None

@@ -156,6 +156,9 @@
       "enrich_source": "grok+opentargets",
       "enrich_profile": "permissive",
       "optimize_dmps": false,
+      "cache_dir": "/work/prostate-cancer/cache/methyl_mapper_enrich",
+      "cache_ttl_days": 21,
+      "grok_cache_ttl_days": 21,
       "grok_max_workers": 1,
       "grok_batch_size": 16,
       "rate_limit_delay": 5.0
@@ -179,8 +182,8 @@
         "KEGG_2021_Human",
         "Reactome_2022",
         "GO_Biological_Process_2023",
-        "MSigDB_Hallmark_2020"
-      ],
+        "MSigDB_Hallmark_2020",
+        "WikiPathway_2023_Human"      ],
       "modules": true,
       "similarity_threshold": 0.15,
       "cluster_resolution": 0.8,
@@ -236,7 +239,7 @@
       "run_stability": true,
       "require_biological_review_for_model": true,
       "biological_review_confirmed": true,
-      "stability_dmp_freq": 0.6,
+      "stability_dmp_freq": 0.8,
       "stability_min_balanced_accuracy": null,
       "abort_on_step_failure": false
     }

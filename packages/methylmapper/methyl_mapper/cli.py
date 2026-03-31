@@ -780,6 +780,10 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.no_persist_secrets = True
     if config.grok_cache_ttl_days is not None:
         args.grok_cache_ttl_days = config.grok_cache_ttl_days
+    if config.cache_dir is not None and args.cache_dir is None:
+        args.cache_dir = config.cache_dir
+    if config.cache_ttl_days is not None:
+        args.cache_ttl_days = config.cache_ttl_days
     if config.azure_key_vault_url is not None and args.azure_key_vault_url is None:
         args.azure_key_vault_url = config.azure_key_vault_url
     if config.encrypted_file_path is not None and args.encrypted_file_path is None:
