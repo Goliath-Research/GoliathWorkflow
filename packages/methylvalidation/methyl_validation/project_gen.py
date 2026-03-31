@@ -76,6 +76,10 @@ def write_val_csv(path: Path, full_paths: List[str]) -> None:
     Monte Carlo subprocess; absolute paths avoid relying on ``samples_base_path`` alone.
     Training cohorts use :func:`write_train_csv` (sample names) so the generated ``project.json``
     matches the rest of the pipeline’s list-file convention.
+
+    When copying a project to another machine or mount, use ``--path-remap`` on
+    ``methyl-validation --freeze`` (or equivalent): production freeze remaps these paths in
+    copied list files; see :func:`methyl_validation.path_remap.remap_cohort_list_files_in_project`.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:

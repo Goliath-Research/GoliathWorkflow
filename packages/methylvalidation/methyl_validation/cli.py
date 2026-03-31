@@ -182,7 +182,9 @@ def main() -> None:
         default=None,
         metavar="OLD=NEW",
         help=(
-            "Prefix remap for sample paths and other path strings in the production project (repeatable). "
+            "Prefix remap for path strings in the production project JSON (repeatable), e.g. samples_base_path. "
+            "User cohort lists and MV training_*.csv use basenames; MV testing_*.csv uses absolute paths and is "
+            "rewritten when referenced. Use --samples-base-path to set the sample root explicitly. "
             "Example: --path-remap /lambda/nfs/Work/prostate-cancer=/work/prostate-cancer"
         ),
     )

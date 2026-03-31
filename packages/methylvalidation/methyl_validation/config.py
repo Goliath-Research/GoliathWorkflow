@@ -64,8 +64,10 @@ class MonteCarloConfig(BaseModel):
     path_remap: Optional[Dict[str, str]] = Field(
         default=None,
         description=(
-            "Optional prefix remap (old -> new) for sample paths. "
-            "Also applied to the copied production project.json during --freeze when set here or via CLI --path-remap. "
+            "Optional prefix remap (old -> new) for path strings in project JSON (e.g. samples_base_path, "
+            "paths to cohort list files). User cohort CSVs and MV training_*.csv use basenames only; "
+            "MV testing_*.csv uses absolute paths in a path column and is rewritten during --freeze when needed. "
+            "Bases like samples_base_path must match the machine. "
             "Put under step_config.validation in the project JSON, or pass --path-remap OLD=NEW."
         ),
     )

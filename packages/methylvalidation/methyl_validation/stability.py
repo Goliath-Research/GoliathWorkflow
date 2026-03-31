@@ -755,12 +755,25 @@ def freeze_production_model(
         project_dict = json.load(f)
 
     pr = getattr(config, "path_remap", None) if config is not None else None
-    if pr:
-        from .path_remap import apply_path_remap_to_nested
+    pr_dict = dict(pr) if pr else None
+    if pr_dict is not None:
+        from .path_remap import (
+            apply_path_remap_to_nested,
+            remap_cohort_list_files_in_project,
+            remap_path_string,
+        )
 
-        apply_path_remap_to_nested(project_dict, dict(pr))
+        apply_path_remap_to_nested(project_dict, pr_dict)
     if config is not None and getattr(config, "samples_base_path", None):
-        project_dict["samples_base_path"] = str(config.samples_base_path).rstrip("/")
+        # MonteCarloConfig.samples_base_path is copied from the template project at CLI load time.
+        # Without remapping here it would overwrite apply_path_remap_to_nested's samples_base_path
+        # with a stale OLD-prefix value.
+        sbp = str(config.samples_base_path).rstrip("/")
+        if pr_dict is not None:
+            sbp = remap_path_string(sbp, pr_dict)
+        project_dict["samples_base_path"] = sbp
+    if pr_dict is not None:
+        remap_cohort_list_files_in_project(project_dict, pr_dict, prod_dir)
 
     # Set fixed_dmp_panel in detection step config (bypasses discovery in MethylDetector)
     if "step_config" not in project_dict:
