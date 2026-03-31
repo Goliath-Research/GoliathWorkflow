@@ -1,0 +1,284 @@
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from methyl_validation import generative_backend, model_bundle, pipeline_runner
+from methyl_validation.config import MonteCarloConfig
+
+
+class _StubProjectMulti:
+    def __init__(self, detection_dir: Path):
+        self.project_name = "stubproj"
+        self._det = detection_dir
+
+    def get_comparisons(self):
+        return [
+            SimpleNamespace(
+                control_group="healthy",
+                disease_group="pca1",
+                comparison_label="healthy_vs_pca1",
+            )
+        ]
+
+    def get_detection_dir(self, control_group: str, disease_group: str) -> str:
+        assert control_group == "healthy"
+        assert disease_group == "pca1"
+        return str(self._det)
+
+    def get_derived_paths(self):
+        return SimpleNamespace(detection_dir=str(self._det))
+
+    def get_resolved_groups(self):
+        return [
+            ("healthy", ["/tmp/S1", "/tmp/S2"]),
+            ("pca1", ["/tmp/S3", "/tmp/S4"]),
+            ("pca2", ["/tmp/S5", "/tmp/S6"]),
+        ]
+
+
+class _StubProjectBinary:
+    def __init__(self, detection_dir: Path):
+        self.project_name = "stubproj"
+        self._det = detection_dir
+
+    def get_comparisons(self):
+        return [
+            SimpleNamespace(
+                control_group="healthy",
+                disease_group="pca1",
+                comparison_label="healthy_vs_pca1",
+            )
+        ]
+
+    def get_detection_dir(self, control_group: str, disease_group: str) -> str:
+        assert control_group == "healthy"
+        assert disease_group == "pca1"
+        return str(self._det)
+
+    def get_derived_paths(self):
+        return SimpleNamespace(detection_dir=str(self._det))
+
+    def get_resolved_groups(self):
+        return [
+            ("healthy", ["/tmp/S1", "/tmp/S2"]),
+            ("pca1", ["/tmp/S3", "/tmp/S4"]),
+        ]
+
+
+def _write_detector_dmps(det: Path) -> None:
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1", "1"],
+            "position": [100, 120, 200],
+            "context": ["CG", "CG", "CG"],
+            "effect_size": [0.7, 0.4, 0.9],
+            "weight": [0.8, 0.3, 1.0],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+
+
+def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
+    del chromosome, min_coverage
+    positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
+    n = len(sample_paths)
+    X = np.zeros((n, len(positions)), dtype=np.float32)
+    for i, p in enumerate(sample_paths):
+        sid = Path(str(p)).name
+        if sid in {"S1", "S2"}:
+            base = 0.1
+        elif sid in {"S3", "S4"}:
+            base = 0.6
+        else:
+            base = 0.9
+        X[i, :] = base
+    ctx = np.asarray(["CG"] * len(positions), dtype=object)
+    return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
+
+
+def test_generative_backend_multiclass_train_predict(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    _write_detector_dmps(det)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProjectMulti(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+
+    monkeypatch.setattr(generative_backend, "load_project", lambda _p: _StubProjectMulti(det))
+    monkeypatch.setattr(
+        generative_backend.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract,
+    )
+    model_dir = tmp_path / "model"
+    generative_backend.train_generative_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        latent_dim=4,
+    )
+    assert (model_dir / "generative-model.npz").is_file()
+    assert (model_dir / "generative-model-metadata.json").is_file()
+
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=[
+            {"label": "healthy", "class_index": 0, "paths": ["/tmp/S1", "/tmp/S2"]},
+            {"label": "pca1", "class_index": 1, "paths": ["/tmp/S3", "/tmp/S4"]},
+            {"label": "pca2", "class_index": 2, "paths": ["/tmp/S5", "/tmp/S6"]},
+        ],
+        test_control_paths=[],
+        test_disease_paths=[],
+    )
+    monkeypatch.setattr(generative_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+    metrics = generative_backend.predict_generative_model_from_project(
+        project_json=tmp_path / "project.json",
+        model_dir=model_dir,
+        output_dir=tmp_path / "predict",
+    )
+    assert metrics["n_classes"] == 3
+    pred_df = pd.read_csv(tmp_path / "predict" / "predictions.csv")
+    assert {"prob_class0", "prob_class1", "prob_class2"}.issubset(set(pred_df.columns))
+
+
+def test_generative_backend_binary_predict_shape(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    _write_detector_dmps(det)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProjectBinary(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+
+    monkeypatch.setattr(generative_backend, "load_project", lambda _p: _StubProjectBinary(det))
+    monkeypatch.setattr(
+        generative_backend.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract,
+    )
+    model_dir = tmp_path / "model"
+    generative_backend.train_generative_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        latent_dim=3,
+    )
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=None,
+        test_control_paths=["/tmp/S1", "/tmp/S2"],
+        test_disease_paths=["/tmp/S3", "/tmp/S4"],
+    )
+    monkeypatch.setattr(generative_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+    metrics = generative_backend.predict_generative_model_from_project(
+        project_json=tmp_path / "project.json",
+        model_dir=model_dir,
+        output_dir=tmp_path / "predict",
+    )
+    assert "balanced_accuracy" in metrics
+    pred_df = pd.read_csv(tmp_path / "predict" / "predictions.csv")
+    assert {"prob_class0", "prob_class1"}.issubset(set(pred_df.columns))
+
+
+def test_generative_covariates_strict_join(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    _write_detector_dmps(det)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProjectBinary(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+
+    monkeypatch.setattr(generative_backend, "load_project", lambda _p: _StubProjectBinary(det))
+    monkeypatch.setattr(
+        generative_backend.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract,
+    )
+    cov_csv = tmp_path / "cov.csv"
+    pd.DataFrame(
+        {
+            "sample_id": ["S1", "S3"],
+            "age": [50, 62],
+        }
+    ).to_csv(cov_csv, index=False)
+    with pytest.raises(ValueError, match="Missing covariate rows"):
+        generative_backend.train_generative_model(
+            project_json=tmp_path / "project.json",
+            bundle_h5=bundle_dir / "model_feature_bundle.h5",
+            output_dir=tmp_path / "model",
+            covariates_path=str(cov_csv),
+            covariates_strict_join=True,
+        )
+
+
+def test_pipeline_runner_generative_backend_dispatch(tmp_path: Path, monkeypatch):
+    def _fake_bundle(**kwargs):
+        out_dir = Path(kwargs["output_dir"])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return out_dir / "model_feature_bundle.json"
+
+    def _fake_train(**kwargs):
+        out_dir = Path(kwargs["output_dir"])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "generative-model.npz").write_bytes(b"test")
+        (out_dir / "generative-model-metadata.json").write_text("{}", encoding="utf-8")
+        return out_dir / "generative-model.npz"
+
+    def _fake_predict(**kwargs):
+        out_dir = Path(kwargs["output_dir"])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "validation_metrics.json").write_text("{}", encoding="utf-8")
+        (out_dir / "predictions.csv").write_text("sample,prediction\nA,0\n", encoding="utf-8")
+        return {"accuracy": 1.0}
+
+    monkeypatch.setattr("methyl_validation.model_bundle.build_model_feature_bundle", _fake_bundle)
+    monkeypatch.setattr("methyl_validation.generative_backend.train_generative_model", _fake_train)
+    monkeypatch.setattr("methyl_validation.generative_backend.predict_generative_model_from_project", _fake_predict)
+
+    config = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+            "train_fraction": 0.8,
+            "n_iterations": 2,
+            "base_project": str(tmp_path / "project.json"),
+            "output_base": str(tmp_path),
+            "model_backend": "generative_hybrid",
+        }
+    )
+    ok, errors, timings = pipeline_runner.run_pipeline_for_model(
+        project_json=tmp_path / "project.json",
+        predictor_output_dir=tmp_path / "predictors",
+        config=config,
+    )
+    assert ok is True
+    assert not errors
+    assert [t["step_name"] for t in timings] == ["model-bundle", "generative-train", "generative-predictor"]
+
+
+def test_generative_config_validation_strict_fields():
+    with pytest.raises(ValueError, match="model_backend must be one of"):
+        MonteCarloConfig.model_validate(
+            {
+                "samples_base_path": "/tmp",
+                "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+                "train_fraction": 0.8,
+                "n_iterations": 1,
+                "base_project": "/tmp/project.json",
+                "output_base": "/tmp",
+                "model_backend": "unknown_backend",
+            }
+        )
+    with pytest.raises(ValueError, match="generative_density_type must be one of"):
+        MonteCarloConfig.model_validate(
+            {
+                "samples_base_path": "/tmp",
+                "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+                "train_fraction": 0.8,
+                "n_iterations": 1,
+                "base_project": "/tmp/project.json",
+                "output_base": "/tmp",
+                "model_backend": "generative_hybrid",
+                "generative_density_type": "full_covariance",
+            }
+        )
+

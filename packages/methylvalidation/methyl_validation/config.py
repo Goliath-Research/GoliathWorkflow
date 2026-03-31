@@ -5,7 +5,7 @@ Runner config schema for Monte Carlo validation.
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class CohortCsv(BaseModel):
@@ -144,7 +144,8 @@ class MonteCarloConfig(BaseModel):
         description=(
             "Backend for --model. "
             "'ecdf' runs methyl-classifier -> methyl-predictor (default). "
-            "'tabular_sklearn' builds a ModelFeatureBundle and trains/evaluates a tabular sklearn model."
+            "'tabular_sklearn' builds a ModelFeatureBundle and trains/evaluates a tabular sklearn model. "
+            "'generative_hybrid' trains an encoder + class-conditional latent density model."
         ),
     )
     model_bundle_dir: Optional[str] = Field(
@@ -181,6 +182,44 @@ class MonteCarloConfig(BaseModel):
         default="sample_id",
         description="Column name in covariates table used to join with sample basename.",
     )
+    generative_latent_dim: int = Field(
+        default=16,
+        ge=2,
+        description="For model_backend=generative_hybrid: latent dimensionality.",
+    )
+    generative_kl_weight: float = Field(
+        default=0.1,
+        ge=0.0,
+        description=(
+            "For model_backend=generative_hybrid: KL-like regularization weight in hybrid loss/selection metadata."
+        ),
+    )
+    generative_density_type: str = Field(
+        default="diag_gaussian",
+        description="For model_backend=generative_hybrid: latent class density family (currently diag_gaussian).",
+    )
+    generative_epochs: int = Field(
+        default=50,
+        ge=1,
+        description="For model_backend=generative_hybrid: training epochs metadata/control.",
+    )
+    generative_batch_size: int = Field(
+        default=64,
+        ge=1,
+        description="For model_backend=generative_hybrid: mini-batch size metadata/control.",
+    )
+    generative_seed: int = Field(
+        default=13,
+        description="For model_backend=generative_hybrid: random seed.",
+    )
+    generative_calibrate: bool = Field(
+        default=False,
+        description="For model_backend=generative_hybrid: enable probability calibration stage when available.",
+    )
+    generative_covariates_strict: bool = Field(
+        default=True,
+        description="For model_backend=generative_hybrid: require all sample IDs to exist in covariates sidecar when used.",
+    )
 
     # Support for step_config.validation when loading from a project JSON
     validation: Optional[Dict[str, Any]] = Field(
@@ -215,6 +254,24 @@ class MonteCarloConfig(BaseModel):
                 "or legacy healthy_csv and disease_csv."
             )
         return self
+
+    @field_validator("model_backend")
+    @classmethod
+    def _validate_model_backend(cls, value: str) -> str:
+        allowed = {"ecdf", "tabular_sklearn", "generative_hybrid"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"model_backend must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("generative_density_type")
+    @classmethod
+    def _validate_generative_density_type(cls, value: str) -> str:
+        allowed = {"diag_gaussian"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"generative_density_type must be one of {sorted(allowed)}")
+        return normalized
 
     @property
     def n_cohorts(self) -> int:

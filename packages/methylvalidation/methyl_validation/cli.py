@@ -210,7 +210,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--model-backend",
-        choices=["ecdf", "tabular_sklearn"],
+        choices=["ecdf", "tabular_sklearn", "generative_hybrid"],
         default=None,
         help="Override validation.model_backend for --model (default: ecdf).",
     )
@@ -219,7 +219,7 @@ def main() -> None:
         type=Path,
         default=None,
         metavar="FILE",
-        help="Optional covariates sidecar for tabular backend (.h5 preferred; .csv accepted).",
+        help="Optional covariates sidecar for tabular_sklearn or generative_hybrid backends (.h5 preferred; .csv accepted).",
     )
     parser.add_argument(
         "--tabular-max-dmps",
@@ -233,6 +233,57 @@ def main() -> None:
         choices=["random_forest", "hist_gradient_boosting", "logistic_regression"],
         default=None,
         help="For tabular backend: sklearn estimator type.",
+    )
+    parser.add_argument(
+        "--generative-latent-dim",
+        type=int,
+        default=None,
+        metavar="N",
+        help="For generative_hybrid backend: latent dimensionality.",
+    )
+    parser.add_argument(
+        "--generative-kl-weight",
+        type=float,
+        default=None,
+        metavar="W",
+        help="For generative_hybrid backend: KL-like regularization weight.",
+    )
+    parser.add_argument(
+        "--generative-density-type",
+        choices=["diag_gaussian"],
+        default=None,
+        help="For generative_hybrid backend: latent density type.",
+    )
+    parser.add_argument(
+        "--generative-epochs",
+        type=int,
+        default=None,
+        metavar="N",
+        help="For generative_hybrid backend: number of training epochs.",
+    )
+    parser.add_argument(
+        "--generative-batch-size",
+        type=int,
+        default=None,
+        metavar="N",
+        help="For generative_hybrid backend: batch size.",
+    )
+    parser.add_argument(
+        "--generative-seed",
+        type=int,
+        default=None,
+        metavar="S",
+        help="For generative_hybrid backend: random seed.",
+    )
+    parser.add_argument(
+        "--generative-calibrate",
+        action="store_true",
+        help="For generative_hybrid backend: enable calibration stage when available.",
+    )
+    parser.add_argument(
+        "--no-generative-covariates-strict",
+        action="store_true",
+        help="For generative_hybrid backend: do not fail when covariate rows are missing for some samples.",
     )
     parser.add_argument(
         "--predictor-only",
@@ -313,6 +364,22 @@ def main() -> None:
         config = config.model_copy(update={"tabular_max_dmps": int(args.tabular_max_dmps)})
     if args.tabular_model_type:
         config = config.model_copy(update={"tabular_model_type": str(args.tabular_model_type)})
+    if args.generative_latent_dim is not None:
+        config = config.model_copy(update={"generative_latent_dim": int(args.generative_latent_dim)})
+    if args.generative_kl_weight is not None:
+        config = config.model_copy(update={"generative_kl_weight": float(args.generative_kl_weight)})
+    if args.generative_density_type:
+        config = config.model_copy(update={"generative_density_type": str(args.generative_density_type)})
+    if args.generative_epochs is not None:
+        config = config.model_copy(update={"generative_epochs": int(args.generative_epochs)})
+    if args.generative_batch_size is not None:
+        config = config.model_copy(update={"generative_batch_size": int(args.generative_batch_size)})
+    if args.generative_seed is not None:
+        config = config.model_copy(update={"generative_seed": int(args.generative_seed)})
+    if args.generative_calibrate:
+        config = config.model_copy(update={"generative_calibrate": True})
+    if args.no_generative_covariates_strict:
+        config = config.model_copy(update={"generative_covariates_strict": False})
 
     base_project = Path(config.base_project)
     if not base_project.is_file():
