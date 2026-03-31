@@ -769,11 +769,11 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.grok_max_workers = config.grok_max_workers
     if config.grok_batch_size is not None:
         args.grok_batch_size = config.grok_batch_size
-    if getattr(config, "grok_rate_limit_delay", None) is not None:
+    if config.grok_rate_limit_delay is not None:
         args.grok_rate_limit_delay = config.grok_rate_limit_delay
-    if getattr(config, "grok_max_retries", None) is not None:
+    if config.grok_max_retries is not None:
         args.grok_max_retries = config.grok_max_retries
-    if getattr(config, "grok_429_cooldown", None) is not None:
+    if config.grok_429_cooldown is not None:
         args.grok_429_cooldown = config.grok_429_cooldown
     if config.grok_batch_api is not None:
         args.grok_batch_api = config.grok_batch_api
@@ -809,11 +809,11 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.no_extend_after_stable = True
     if config.feature_types is not None and args.feature_types is None:
         args.feature_types = config.feature_types
-    if getattr(config, "auxiliary_bed_paths", None) and not getattr(args, "auxiliary_bed", None):
+    if config.auxiliary_bed_paths and not getattr(args, "auxiliary_bed", None):
         args.auxiliary_bed = list(config.auxiliary_bed_paths)
     if config.run_bedtools_closest is True:
         args.closest_gene = True
-    if getattr(config, "closest_gene_bed", None) and not getattr(args, "closest_gene_bed", None):
+    if config.closest_gene_bed and not getattr(args, "closest_gene_bed", None):
         args.closest_gene_bed = config.closest_gene_bed
     # SP-equivalent / bedtools parity (from step_config.mapper)
     if config.use_sp_regions is not None:

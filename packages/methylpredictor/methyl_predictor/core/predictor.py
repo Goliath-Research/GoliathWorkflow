@@ -558,7 +558,7 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     prediction_mode = _prepare_predictor_paths_and_mode(config)
 
     # Build classifier config and load model (merge step_config.classifier snapshot from project resolver)
-    snap = getattr(config, "classifier_step_snapshot", None) or {}
+    snap = config.classifier_step_snapshot or {}
     merge_keys = (
         "temperature",
         "enable_platt_calibration",

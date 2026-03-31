@@ -13,13 +13,16 @@ import json
 import shutil
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from methyl_utils import load_project
 from methyl_utils.logging_utils import setup_module_logging
 
 logger = setup_module_logging(__name__)
+
+if TYPE_CHECKING:
+    from .config import MonteCarloConfig
 
 
 def find_validation_metrics_json(run_dir: Path) -> Optional[Path]:
@@ -730,7 +733,7 @@ def freeze_production_model(
     stable_dmp_csv: str,
     monte_carlo_runs_root: Path,
     production_output_dir: Optional[str] = None,
-    config: Optional[Any] = None,
+    config: Optional["MonteCarloConfig"] = None,
 ) -> Dict[str, Any]:
     """
     Merge per-chromosome stable DMPs (if multiple files/dir provided) into one
@@ -754,7 +757,7 @@ def freeze_production_model(
     with open(base_project, encoding="utf-8") as f:
         project_dict = json.load(f)
 
-    pr = getattr(config, "path_remap", None) if config is not None else None
+    pr = config.path_remap if config is not None else None
     pr_dict = dict(pr) if pr else None
     if pr_dict is not None:
         from .path_remap import (
@@ -764,7 +767,7 @@ def freeze_production_model(
         )
 
         apply_path_remap_to_nested(project_dict, pr_dict)
-    if config is not None and getattr(config, "samples_base_path", None):
+    if config is not None and config.samples_base_path:
         # MonteCarloConfig.samples_base_path is copied from the template project at CLI load time.
         # Without remapping here it would overwrite apply_path_remap_to_nested's samples_base_path
         # with a stale OLD-prefix value.
@@ -821,7 +824,7 @@ def freeze_production_model(
 def build_production_model(
     monte_carlo_runs_root: Path,
     production_output_dir: Optional[str] = None,
-    config: Optional[Any] = None,
+    config: Optional["MonteCarloConfig"] = None,
 ) -> Dict[str, Any]:
     """
     Run the model building and evaluation steps on the production project:
@@ -852,7 +855,7 @@ def build_production_model(
     summary = {
         "output_dir": str(prod_dir),
         "production_project": str(prod_project_path),
-        "model_backend": str(getattr(config, "model_backend", "ecdf")) if config is not None else "ecdf",
+        "model_backend": config.model_backend if config is not None else "ecdf",
         "success": success,
         "errors": errors,
         "timings": timings,

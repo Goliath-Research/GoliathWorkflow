@@ -10,7 +10,10 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple
+
+if TYPE_CHECKING:
+    from .config import MonteCarloConfig
 
 
 def _find_cmd(name: str) -> Optional[str]:
@@ -447,7 +450,7 @@ def run_pipeline_for_production(
     project_json: Path,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
-    config: Optional[Any] = None,
+    config: Optional["MonteCarloConfig"] = None,
 ) -> Tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Production freeze build: centroid -> detector (fixed_dmp_panel) -> mapper -> enricher.
@@ -462,7 +465,7 @@ def run_pipeline_for_production(
         ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=False)),
         ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=False)),
     ]
-    skip_enricher = config is not None and getattr(config, "skip_enricher", False)
+    skip_enricher = config.skip_enricher if config is not None else False
     progression_cfg = _progression_settings(project_json)
     progression_enabled = bool(progression_cfg.get("enabled", False))
     if not skip_enricher:
@@ -567,7 +570,7 @@ def run_pipeline_for_model(
     predictor_output_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     per_cancer_group: bool = False,
-    config: Optional[Any] = None,
+    config: Optional["MonteCarloConfig"] = None,
 ) -> Tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Production model step after freeze: methyl-classifier → methyl-predictor.
@@ -579,7 +582,7 @@ def run_pipeline_for_model(
 
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []
-    backend = str(getattr(config, "model_backend", "ecdf") or "ecdf").strip().lower()
+    backend = (config.model_backend if config is not None else "ecdf").strip().lower()
     steps: List[Tuple[str, Callable[[], tuple[int, str, str]]]]
     if backend == "tabular_sklearn":
         model_dir = predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"
@@ -589,14 +592,14 @@ def run_pipeline_for_model(
                 from .model_bundle import build_model_feature_bundle
 
                 bundle_dir = (
-                    Path(getattr(config, "model_bundle_dir"))
-                    if config is not None and getattr(config, "model_bundle_dir", None)
+                    Path(config.model_bundle_dir)
+                    if config is not None and config.model_bundle_dir
                     else (project_json.parent / "model_bundle")
                 )
                 build_model_feature_bundle(
                     project_json=project_json,
                     output_dir=bundle_dir,
-                    weight_column=str(getattr(config, "model_weight_column", "weight") or "weight"),
+                    weight_column=(config.model_weight_column if config is not None else "weight"),
                     extra_metadata={"model_backend": "tabular_sklearn"},
                 )
                 return 0, f"Bundle written to {bundle_dir}", ""
@@ -608,18 +611,18 @@ def run_pipeline_for_model(
                 from .tabular_backend import train_tabular_model
 
                 bundle_dir = (
-                    Path(getattr(config, "model_bundle_dir"))
-                    if config is not None and getattr(config, "model_bundle_dir", None)
+                    Path(config.model_bundle_dir)
+                    if config is not None and config.model_bundle_dir
                     else (project_json.parent / "model_bundle")
                 )
                 model_path = train_tabular_model(
                     project_json=project_json,
                     bundle_h5=bundle_dir / "model_feature_bundle.h5",
                     output_dir=model_dir,
-                    model_type=str(getattr(config, "tabular_model_type", "random_forest")),
-                    max_dmps=int(getattr(config, "tabular_max_dmps", 5000)),
-                    covariates_path=getattr(config, "covariates_path", None),
-                    covariate_id_column=str(getattr(config, "covariate_id_column", "sample_id")),
+                    model_type=(config.tabular_model_type if config is not None else "random_forest"),
+                    max_dmps=(config.tabular_max_dmps if config is not None else 5000),
+                    covariates_path=(config.covariates_path if config is not None else None),
+                    covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                 )
                 return 0, f"Tabular model trained: {model_path}", ""
             except Exception as e:
@@ -633,8 +636,8 @@ def run_pipeline_for_model(
                     project_json=project_json,
                     model_dir=model_dir,
                     output_dir=predictor_output_dir or (project_json.parent / "predictors"),
-                    covariates_path=getattr(config, "covariates_path", None),
-                    covariate_id_column=str(getattr(config, "covariate_id_column", "sample_id")),
+                    covariates_path=(config.covariates_path if config is not None else None),
+                    covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                 )
                 return 0, json.dumps(metrics), ""
             except Exception as e:

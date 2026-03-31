@@ -3,7 +3,7 @@ Merge DMP CSVs from multiple per-cancer detection dirs for native multiclass bui
 """
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -31,7 +31,7 @@ def _resolve_weight_column(df: pd.DataFrame, weights_column: Optional[str]) -> s
 
 
 def check_detection_dirs_have_dmps(
-    configs_and_labels: List[Tuple[object, str]],
+    configs_and_labels: List[Tuple[Any, str]],
     output_dir_attr: str = "output_dir",
 ) -> List[Tuple[Path, str]]:
     """
@@ -40,7 +40,17 @@ def check_detection_dirs_have_dmps(
     """
     missing = []
     for config, label in configs_and_labels:
-        out_dir = Path(getattr(config, output_dir_attr, config))
+        if isinstance(config, (str, Path)):
+            out_dir = Path(config)
+        elif hasattr(config, "model_dump"):
+            cfg_map = config.model_dump(mode="python")
+            out_dir = Path(cfg_map.get(output_dir_attr, ""))
+        elif isinstance(config, dict):
+            out_dir = Path(config.get(output_dir_attr, ""))
+        else:
+            raise TypeError(
+                f"Unsupported config type for detection dir resolution: {type(config)!r}"
+            )
         csvs = _find_dmp_csvs(out_dir)
         if not csvs:
             missing.append((out_dir, label))

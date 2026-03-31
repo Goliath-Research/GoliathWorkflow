@@ -1471,7 +1471,7 @@ def _export_ovr_pkl_from_config(config: ClassificationConfig, out_path: Path) ->
     """Load OvR sources from config and write the portable ecdf_one_vs_rest PKL (no classification)."""
     ovr_p = config.ovr_binary_model_paths or []
     ovr_d = config.ovr_detection_dirs or []
-    agg = bool(getattr(config, "ovr_pairwise_aggregate_control", False))
+    agg = bool(config.ovr_pairwise_aggregate_control)
     if len(ovr_p) < 2 and len(ovr_d) < 2 and not (agg and len(ovr_d) >= 1):
         raise ValueError(
             "--export-ovr-pkl requires ovr_binary_model_paths or ovr_detection_dirs (length >= 2), "
@@ -1522,9 +1522,7 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
         ovr_binary_model_paths=config.ovr_binary_model_paths,
         ovr_detection_dirs=config.ovr_detection_dirs,
         ovr_class_names=ovr_names,
-        ovr_pairwise_aggregate_control=bool(
-            getattr(config, "ovr_pairwise_aggregate_control", False)
-        ),
+        ovr_pairwise_aggregate_control=bool(config.ovr_pairwise_aggregate_control),
         temperature=config.temperature,
         enable_platt_calibration=config.enable_platt_calibration,
         trimmed_percentile_low=config.trimmed_percentile_low,

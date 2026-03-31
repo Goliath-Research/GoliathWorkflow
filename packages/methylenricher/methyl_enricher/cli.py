@@ -280,12 +280,13 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
     if config.outdir is not None and args.outdir in (None, "results"):
         args.outdir = config.outdir
     # Rest: set from config. For network_plot, only set when user did not pass --network-plot (args is None).
+    config_values = config.model_dump(mode="python", exclude_none=True)
     for name in EnricherStepConfig.model_fields:
         if name in ("input", "input_file", "output_dir", "outdir"):
             continue
-        val = getattr(config, name, None)
-        if val is None:
+        if name not in config_values:
             continue
+        val = config_values[name]
         if not hasattr(args, name):
             continue
         if name == "network_plot" and getattr(args, name) is not None:
