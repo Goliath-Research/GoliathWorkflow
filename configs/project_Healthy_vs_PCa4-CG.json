@@ -10,7 +10,7 @@
       {
         "label": "all",
         "sample_paths": [
-          "configs/healthy.csv"
+          "/work/prostate-cancer/data/healthy.csv"
         ]
       }
     ]
@@ -24,7 +24,7 @@
           {
             "label": "pca4",
             "sample_paths": [
-              "configs/pca4.csv"
+              "/work/prostate-cancer/data/pca4.csv"
             ]
           }          
         ]

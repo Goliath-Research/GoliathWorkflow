@@ -10,7 +10,7 @@
       {
         "label": "all",
         "sample_paths": [
-          "configs/Exp_01_ts_healthy.csv"
+          "/work/prostate-cancer/data/Exp_01_ts_healthy.csv"
         ]
       }
     ]
@@ -24,7 +24,7 @@
           {
             "label": "pca1",
             "sample_paths": [
-              "configs/Exp_01_ts_prostate.csv"
+              "/work/prostate-cancer/data/Exp_01_ts_prostate.csv"
             ]
           }
         ]
@@ -185,7 +185,7 @@
           {
             "label": "all",
             "sample_paths": [
-              "configs/Exp_01_tr_healthy.csv"
+              "/work/prostate-cancer/data/Exp_01_tr_healthy.csv"
             ]
           }
         ]
@@ -199,7 +199,7 @@
               {
                 "label": "pca1",
                 "sample_paths": [
-                  "configs/Exp_01_tr_prostate.csv"
+                  "/work/prostate-cancer/data/Exp_01_tr_prostate.csv"
                 ]
               }
             ]

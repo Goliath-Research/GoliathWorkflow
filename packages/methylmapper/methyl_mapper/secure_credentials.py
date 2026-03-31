@@ -40,7 +40,8 @@ class SecureCredentialManager:
         azure_key_vault_url: Optional[str] = None,
         azure_secret_name: Optional[str] = None,
         encrypted_file_path: Optional[Path] = None,
-        env_var_name: Optional[str] = None
+        env_var_name: Optional[str] = None,
+        methyl_mapper_home: Optional[Path] = None,
     ):
         """
         Initialize SecureCredentialManager.
@@ -51,6 +52,8 @@ class SecureCredentialManager:
             azure_secret_name: Key Vault secret name override; default is derived from credential_name (hyphenated)
             encrypted_file_path: Path to encrypted credential file
             env_var_name: Environment variable name (defaults to credential_name.upper())
+            methyl_mapper_home: Optional root directory (e.g. /path/.methyl_mapper) for
+                default credentials under {home}/credentials/; defaults to ~/.methyl_mapper
         """
         self.credential_name = credential_name
         self.azure_key_vault_url = azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL')
@@ -60,6 +63,7 @@ class SecureCredentialManager:
         self.azure_secret_name = (
             azure_secret_name.strip() if azure_secret_name else default_secret_name
         )
+        self.methyl_mapper_home = Path(methyl_mapper_home).expanduser() if methyl_mapper_home else None
         self.encrypted_file_path = encrypted_file_path or self._get_default_encrypted_path()
         self.env_var_name = env_var_name or credential_name.upper().replace('-', '_')
         self.last_resolution_error: Optional[str] = None
@@ -69,8 +73,8 @@ class SecureCredentialManager:
     
     def _get_default_encrypted_path(self) -> Path:
         """Get default path for encrypted credential file."""
-        home = Path.home()
-        cred_dir = home / ".methyl_mapper" / "credentials"
+        root = self.methyl_mapper_home if self.methyl_mapper_home is not None else (Path.home() / ".methyl_mapper")
+        cred_dir = root / "credentials"
         cred_dir.mkdir(parents=True, exist_ok=True)
         return cred_dir / f"{self.credential_name}.encrypted"
     

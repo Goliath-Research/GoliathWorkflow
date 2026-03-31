@@ -172,6 +172,7 @@ class MapperStepConfig(BaseModel):
     grok_cache_ttl_days: Optional[int] = None
     cache_dir: Optional[str] = None
     cache_ttl_days: Optional[int] = None
+    methyl_mapper_home: Optional[str] = None
     azure_key_vault_url: Optional[str] = None
     encrypted_file_path: Optional[str] = None
     optimize_dmps: Optional[bool] = None

@@ -510,6 +510,12 @@ Examples:
         help='Cache directory for enrichment queries (default: project_root/enrich_cache or output_dir/enrich_cache or ./enrich_cache)'
     )
     disease_group.add_argument(
+        '--methyl-mapper-home',
+        type=str,
+        default=None,
+        help='Root for MethylMapper data: default cache at {home}/cache and credentials at {home}/credentials (default: ~/.methyl_mapper)',
+    )
+    disease_group.add_argument(
         '--cache-ttl-days',
         type=int,
         default=7,
@@ -737,6 +743,9 @@ Examples:
             mapper_config = MapperStepConfig.model_validate(cfg)
             _apply_mapper_config_to_args(args, mapper_config)
 
+    if getattr(args, "methyl_mapper_home", None) and not args.cache_dir:
+        args.cache_dir = str(Path(args.methyl_mapper_home).expanduser() / "cache")
+
     return args
 
 
@@ -780,8 +789,14 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.no_persist_secrets = True
     if config.grok_cache_ttl_days is not None:
         args.grok_cache_ttl_days = config.grok_cache_ttl_days
+    if config.methyl_mapper_home is not None:
+        args.methyl_mapper_home = config.methyl_mapper_home
     if config.cache_dir is not None and args.cache_dir is None:
         args.cache_dir = config.cache_dir
+    elif getattr(args, "methyl_mapper_home", None) and args.cache_dir is None:
+        from pathlib import Path as _P
+
+        args.cache_dir = str(_P(args.methyl_mapper_home) / "cache")
     if config.cache_ttl_days is not None:
         args.cache_ttl_days = config.cache_ttl_days
     if config.azure_key_vault_url is not None and args.azure_key_vault_url is None:
@@ -841,6 +856,8 @@ def _grok_api_key_available(args: argparse.Namespace) -> bool:
     }
     if getattr(args, "azure_secret_name", None):
         kw["azure_secret_name"] = args.azure_secret_name
+    if getattr(args, "methyl_mapper_home", None):
+        kw["methyl_mapper_home"] = Path(args.methyl_mapper_home).expanduser()
     mgr = SecureCredentialManager(**kw)
     key = mgr.get_credential(explicit_key=None)
     if key:
@@ -876,6 +893,8 @@ def _maybe_persist_bedtools_enrichment_secrets(args: argparse.Namespace) -> None
         }
         if getattr(args, "azure_secret_name", None):
             kw["azure_secret_name"] = args.azure_secret_name
+        if getattr(args, "methyl_mapper_home", None):
+            kw["methyl_mapper_home"] = Path(args.methyl_mapper_home).expanduser()
         return SecureCredentialManager(**kw)
 
     use_grok, _, use_disgenet = BedtoolsMapper._parse_enrich_source(getattr(args, "enrich_source", "") or "")
@@ -1011,6 +1030,7 @@ def main_bedtools():
             azure_key_vault_url=args.azure_key_vault_url or os.environ.get('AZURE_KEY_VAULT_URL'),
             azure_secret_name=args.azure_secret_name,
             encrypted_file_path=Path(args.encrypted_file_path) if args.encrypted_file_path else None,
+            methyl_mapper_home=Path(args.methyl_mapper_home).expanduser() if getattr(args, "methyl_mapper_home", None) else None,
             optimize_dmps=not args.no_optimize_dmps,
             dmp_rank_columns=args.dmp_rank_columns,
             min_k=args.min_k,

@@ -10,7 +10,7 @@
       {
         "label": "all",
         "sample_paths": [
-          "configs/healthy.csv"
+          "/work/prostate-cancer/data/healthy.csv"
         ]
       }
     ]
@@ -24,25 +24,25 @@
           {
             "label": "pca1",
             "sample_paths": [
-              "configs/pca1.csv"
+              "/work/prostate-cancer/data/pca1.csv"
             ]
           },
           {
             "label": "pca2",
             "sample_paths": [
-              "configs/pca2.csv"
+              "/work/prostate-cancer/data/pca2.csv"
             ]
           },
           {
             "label": "pca3",
             "sample_paths": [
-              "configs/pca3.csv"
+              "/work/prostate-cancer/data/pca3.csv"
             ]
           },
           {
             "label": "pca4",
             "sample_paths": [
-              "configs/pca4.csv"
+              "/work/prostate-cancer/data/pca4.csv"
             ]
           }
         ]
@@ -205,7 +205,7 @@
           {
             "label": "all",
             "sample_paths": [
-              "configs/healthy.csv"
+              "/work/prostate-cancer/data/healthy.csv"
             ]
           }
         ]
@@ -219,25 +219,25 @@
               {
                 "label": "pca1",
                 "sample_paths": [
-                  "configs/pca1.csv"
+                  "/work/prostate-cancer/data/pca1.csv"
                 ]
               },
               {
                 "label": "pca2",
                 "sample_paths": [
-                  "configs/pca2.csv"
+                  "/work/prostate-cancer/data/pca2.csv"
                 ]
               },
               {
                 "label": "pca3",
                 "sample_paths": [
-                  "configs/pca3.csv"
+                  "/work/prostate-cancer/data/pca3.csv"
                 ]
               },
               {
                 "label": "pca4",
                 "sample_paths": [
-                  "configs/pca4.csv"
+                  "/work/prostate-cancer/data/pca4.csv"
                 ]
               }
             ]

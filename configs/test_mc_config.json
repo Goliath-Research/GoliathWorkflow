@@ -1,6 +1,6 @@
 {
   "samples_base_path": "/work/prostate-cancer/samples",
-  "base_project": "configs/project_Healthy_vs_PCa1-4_CG.json",
+  "base_project": "/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json",
   "output_base": "/work/prostate-cancer",
   "train_fraction": 0.8,
   "n_iterations": 3,

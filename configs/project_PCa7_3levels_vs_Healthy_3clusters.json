@@ -217,7 +217,7 @@
         "/work/david-gladys/all-prostate/2401-081425-112029",
         "/work/david-gladys/all-prostate/2401-081425-112031"
       ],
-      "level_labels_path": "configs/pca7_levels.csv"
+      "level_labels_path": "/work/prostate-cancer/data/pca7_levels.csv"
     }
   ],
   "chromosomes": [
