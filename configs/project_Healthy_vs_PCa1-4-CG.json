@@ -3,7 +3,7 @@
   "laboratory": "psomagen",
   "batch": "Second batch of prostate cancer samples",
   "output_base": "/work/prostate-cancer",
-  "samples_base_path": "/work/prostate-cancer/samples",
+  "samples_base_path": "/work/samples",
   "controls": {
     "label": "healthy",
     "groups": [
