@@ -5,6 +5,7 @@ Monte Carlo iterations run **methyl-centroid** and **methyl-detector** only; **-
 mapper/enricher; **--model** runs classifier then predictor.
 """
 
+import json
 import shutil
 import subprocess
 import time
@@ -566,6 +567,7 @@ def run_pipeline_for_model(
     predictor_output_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     per_cancer_group: bool = False,
+    config: Optional[Any] = None,
 ) -> Tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Production model step after freeze: methyl-classifier → methyl-predictor.
@@ -577,13 +579,80 @@ def run_pipeline_for_model(
 
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []
-    steps: List[Tuple[str, Callable[[], tuple[int, str, str]]]] = [
-        ("methyl-classifier", lambda: run_classifier(project_json, per_cancer_group=per_cancer_group)),
-        (
-            "methyl-predictor",
-            lambda: run_predictor_from_project(project_json, predictor_output_dir),
-        ),
-    ]
+    backend = str(getattr(config, "model_backend", "ecdf") or "ecdf").strip().lower()
+    steps: List[Tuple[str, Callable[[], tuple[int, str, str]]]]
+    if backend == "tabular_sklearn":
+        model_dir = predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"
+
+        def _run_tabular_bundle() -> tuple[int, str, str]:
+            try:
+                from .model_bundle import build_model_feature_bundle
+
+                bundle_dir = (
+                    Path(getattr(config, "model_bundle_dir"))
+                    if config is not None and getattr(config, "model_bundle_dir", None)
+                    else (project_json.parent / "model_bundle")
+                )
+                build_model_feature_bundle(
+                    project_json=project_json,
+                    output_dir=bundle_dir,
+                    weight_column=str(getattr(config, "model_weight_column", "weight") or "weight"),
+                    extra_metadata={"model_backend": "tabular_sklearn"},
+                )
+                return 0, f"Bundle written to {bundle_dir}", ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        def _run_tabular_train() -> tuple[int, str, str]:
+            try:
+                from .tabular_backend import train_tabular_model
+
+                bundle_dir = (
+                    Path(getattr(config, "model_bundle_dir"))
+                    if config is not None and getattr(config, "model_bundle_dir", None)
+                    else (project_json.parent / "model_bundle")
+                )
+                model_path = train_tabular_model(
+                    project_json=project_json,
+                    bundle_h5=bundle_dir / "model_feature_bundle.h5",
+                    output_dir=model_dir,
+                    model_type=str(getattr(config, "tabular_model_type", "random_forest")),
+                    max_dmps=int(getattr(config, "tabular_max_dmps", 5000)),
+                    covariates_path=getattr(config, "covariates_path", None),
+                    covariate_id_column=str(getattr(config, "covariate_id_column", "sample_id")),
+                )
+                return 0, f"Tabular model trained: {model_path}", ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        def _run_tabular_predict() -> tuple[int, str, str]:
+            try:
+                from .tabular_backend import predict_tabular_model_from_project
+
+                metrics = predict_tabular_model_from_project(
+                    project_json=project_json,
+                    model_dir=model_dir,
+                    output_dir=predictor_output_dir or (project_json.parent / "predictors"),
+                    covariates_path=getattr(config, "covariates_path", None),
+                    covariate_id_column=str(getattr(config, "covariate_id_column", "sample_id")),
+                )
+                return 0, json.dumps(metrics), ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        steps = [
+            ("model-bundle", _run_tabular_bundle),
+            ("tabular-train", _run_tabular_train),
+            ("tabular-predictor", _run_tabular_predict),
+        ]
+    else:
+        steps = [
+            ("methyl-classifier", lambda: run_classifier(project_json, per_cancer_group=per_cancer_group)),
+            (
+                "methyl-predictor",
+                lambda: run_predictor_from_project(project_json, predictor_output_dir),
+            ),
+        ]
 
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:

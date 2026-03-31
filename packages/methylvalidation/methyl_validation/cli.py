@@ -209,6 +209,32 @@ def main() -> None:
         help="Build production model and predict: runs classifier and predictor on the production project (after --freeze).",
     )
     parser.add_argument(
+        "--model-backend",
+        choices=["ecdf", "tabular_sklearn"],
+        default=None,
+        help="Override validation.model_backend for --model (default: ecdf).",
+    )
+    parser.add_argument(
+        "--covariates-path",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="Optional covariates sidecar for tabular backend (.h5 preferred; .csv accepted).",
+    )
+    parser.add_argument(
+        "--tabular-max-dmps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="For tabular backend: max DMP loci from bundle index.",
+    )
+    parser.add_argument(
+        "--tabular-model-type",
+        choices=["random_forest", "hist_gradient_boosting", "logistic_regression"],
+        default=None,
+        help="For tabular backend: sklearn estimator type.",
+    )
+    parser.add_argument(
         "--predictor-only",
         action="store_true",
         help="Each iteration runs only methyl-predictor on MC holdouts; use frozen_project_path or monte_carlo_runs/production/project.json.",
@@ -279,6 +305,14 @@ def main() -> None:
         config.skip_enricher = True
     if getattr(args, "predictor_only", False):
         config.predictor_only = True
+    if getattr(args, "model_backend", None):
+        config = config.model_copy(update={"model_backend": args.model_backend})
+    if getattr(args, "covariates_path", None) is not None:
+        config = config.model_copy(update={"covariates_path": str(args.covariates_path)})
+    if getattr(args, "tabular_max_dmps", None) is not None:
+        config = config.model_copy(update={"tabular_max_dmps": int(args.tabular_max_dmps)})
+    if getattr(args, "tabular_model_type", None):
+        config = config.model_copy(update={"tabular_model_type": str(args.tabular_model_type)})
 
     base_project = Path(config.base_project)
     if not base_project.is_file():

@@ -846,11 +846,13 @@ def build_production_model(
         prod_project_path,
         logs_dir=prod_dir / "logs",
         predictor_output_dir=predictor_out,
+        config=config,
     )
 
     summary = {
         "output_dir": str(prod_dir),
         "production_project": str(prod_project_path),
+        "model_backend": str(getattr(config, "model_backend", "ecdf")) if config is not None else "ecdf",
         "success": success,
         "errors": errors,
         "timings": timings,

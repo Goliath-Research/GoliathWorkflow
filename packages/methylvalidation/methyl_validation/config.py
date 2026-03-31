@@ -139,6 +139,48 @@ class MonteCarloConfig(BaseModel):
         default=False,
         description="After review, set True in step_config.validation to allow --model (classifier + predictor).",
     )
+    model_backend: str = Field(
+        default="ecdf",
+        description=(
+            "Backend for --model. "
+            "'ecdf' runs methyl-classifier -> methyl-predictor (default). "
+            "'tabular_sklearn' builds a ModelFeatureBundle and trains/evaluates a tabular sklearn model."
+        ),
+    )
+    model_bundle_dir: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional output directory for ModelFeatureBundle files. "
+            "Default: <production_output_dir>/model_bundle."
+        ),
+    )
+    model_weight_column: str = Field(
+        default="weight",
+        description=(
+            "Preferred weight column from detector exports when building bundle DMP index. "
+            "Falls back to effect_size or 1.0 when absent."
+        ),
+    )
+    tabular_model_type: str = Field(
+        default="random_forest",
+        description="For model_backend=tabular_sklearn: random_forest | hist_gradient_boosting | logistic_regression.",
+    )
+    tabular_max_dmps: int = Field(
+        default=5000,
+        ge=10,
+        description="For model_backend=tabular_sklearn: cap number of DMP loci selected from bundle index.",
+    )
+    covariates_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional covariates sidecar (HDF5 preferred, CSV accepted). "
+            "Rows should include sample identifier column for join with sample basename."
+        ),
+    )
+    covariate_id_column: str = Field(
+        default="sample_id",
+        description="Column name in covariates table used to join with sample basename.",
+    )
 
     # Support for step_config.validation when loading from a project JSON
     validation: Optional[Dict[str, Any]] = Field(
