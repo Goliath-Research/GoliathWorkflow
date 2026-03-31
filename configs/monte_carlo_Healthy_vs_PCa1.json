@@ -1,11 +1,11 @@
 {
   "samples_base_path": "/work/prostate-cancer/samples",
-  "healthy_csv": "configs/healthy.csv",
-  "disease_csv": "configs/pca1.csv",
+  "healthy_csv": "/work/prostate-cancer/data/healthy.csv",
+  "disease_csv": "/work/prostate-cancer/data/pca1.csv",
   "train_fraction": 0.8,
   "n_iterations": 10,
   "seed": 42,
-  "base_project": "configs/project_Healthy_vs_PCa1_only_CG.json",
+  "base_project": "/work/prostate-cancer/configs/project_Healthy_vs_PCa1_only_CG.json",
   "output_base": "/work/prostate-cancer",
   "abort_on_step_failure": false,
   "_comment": "Binary MC needs exactly two resolved centroid leaves. Use project_Healthy_vs_PCa1_only_CG.json (all + pca_pca1). Full project_Healthy_vs_PCa1-4_CG.json has five leaves — use cohorts[] with five CSVs instead of healthy_csv+disease_csv."

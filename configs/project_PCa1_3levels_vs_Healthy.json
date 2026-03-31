@@ -6,25 +6,25 @@
     {
       "label": "healthy",
       "sample_paths": [
-        "configs/healthy.csv"
+        "/work/prostate-cancer/data/healthy.csv"
       ]
     },
     {
       "label": "pca1-1",
       "sample_paths": [
-        "configs/pca1-1.csv"
+        "/work/prostate-cancer/data/pca1-1.csv"
       ]
     },
     {
       "label": "pca1-2",
       "sample_paths": [
-        "configs/pca1-2.csv"
+        "/work/prostate-cancer/data/pca1-2.csv"
       ]
     },
     {
       "label": "pca1-3",
       "sample_paths": [
-        "configs/pca1-3.csv"
+        "/work/prostate-cancer/data/pca1-3.csv"
       ]
     }
   ],

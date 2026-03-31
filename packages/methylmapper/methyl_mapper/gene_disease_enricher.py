@@ -222,7 +222,8 @@ class GeneDiseaseEnricher:
         disgenet_max_workers: int = DEFAULT_DISGENET_MAX_WORKERS,
         azure_key_vault_url: Optional[str] = None,
         azure_secret_name: Optional[str] = None,
-        encrypted_file_path: Optional[Path] = None
+        encrypted_file_path: Optional[Path] = None,
+        methyl_mapper_home: Optional[Path] = None,
     ):
         """
         Initialize GeneDiseaseEnricher.
@@ -261,14 +262,17 @@ class GeneDiseaseEnricher:
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
             azure_secret_name: Optional Key Vault secret name override (defaults: grok-api-key / disgenet-api-key)
             encrypted_file_path: Path to encrypted credential file (optional)
+            methyl_mapper_home: Root for cache/ and credentials/ when defaults are used (default: ~/.methyl_mapper)
         """
+        _mm_home = Path(methyl_mapper_home).expanduser() if methyl_mapper_home else None
         # Initialize secure credential managers
         self.grok_credential_manager = SecureCredentialManager(
             credential_name="grok_api_key",
             azure_key_vault_url=azure_key_vault_url,
             azure_secret_name=azure_secret_name,
             encrypted_file_path=encrypted_file_path,
-            env_var_name="GROK_API_KEY"
+            env_var_name="GROK_API_KEY",
+            methyl_mapper_home=_mm_home,
         ) if use_grok else None
 
         self.disgenet_credential_manager = SecureCredentialManager(
@@ -276,7 +280,8 @@ class GeneDiseaseEnricher:
             azure_key_vault_url=azure_key_vault_url,
             azure_secret_name=azure_secret_name,
             encrypted_file_path=encrypted_file_path,
-            env_var_name="DISGENET_API_KEY"
+            env_var_name="DISGENET_API_KEY",
+            methyl_mapper_home=_mm_home,
         ) if use_disgenet else None
 
         # Get credentials using secure managers
@@ -318,7 +323,12 @@ class GeneDiseaseEnricher:
         self.cache_enabled = cache_enabled
         self.cache_ttl_days = None if cache_ttl_days is None else int(cache_ttl_days)
         self.grok_cache_ttl_days = None if grok_cache_ttl_days is None else int(grok_cache_ttl_days)
-        self.cache_dir = Path(cache_dir).expanduser() if cache_dir else (Path.home() / ".methyl_mapper" / "cache")
+        if cache_dir is not None:
+            self.cache_dir = Path(cache_dir).expanduser()
+        elif _mm_home is not None:
+            self.cache_dir = _mm_home / "cache"
+        else:
+            self.cache_dir = Path.home() / ".methyl_mapper" / "cache"
         self.cache_file = self.cache_dir / "gene_disease_cache.json"
 
         if self.min_evidence_level not in EVIDENCE_LEVEL_ORDER:

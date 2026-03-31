@@ -127,6 +127,7 @@ class BedtoolsMapper:
         azure_key_vault_url: Optional[str] = None,
         azure_secret_name: Optional[str] = None,
         encrypted_file_path: Optional[Path] = None,
+        methyl_mapper_home: Optional[Path] = None,
         optimize_dmps: bool = True,
         dmp_rank_columns: Optional[List[str]] = None,
         min_k: int = 10,
@@ -188,6 +189,7 @@ class BedtoolsMapper:
             azure_key_vault_url: Azure Key Vault URL (or set AZURE_KEY_VAULT_URL env var)
             azure_secret_name: Optional Key Vault secret name override for enrichment keys (per-credential defaults if unset)
             encrypted_file_path: Path to encrypted credential file (optional)
+            methyl_mapper_home: Root directory for default cache/ and credentials/ (default: ~/.methyl_mapper)
             optimize_dmps: Whether to optimize DMP count for stable gene sets (default: True)
             dmp_rank_columns: Optional list of columns to rank DMPs by importance
             min_k: Minimum number of DMPs to test (default: 10)
@@ -255,7 +257,8 @@ class BedtoolsMapper:
                 disgenet_max_workers=disgenet_max_workers,
                 azure_key_vault_url=azure_key_vault_url,
                 azure_secret_name=azure_secret_name,
-                encrypted_file_path=encrypted_file_path
+                encrypted_file_path=encrypted_file_path,
+                methyl_mapper_home=methyl_mapper_home,
             )
             except Exception as e:
                 logger.warning(f"Disease enricher initialization failed: {e}. Enrichment columns will not be added.")
