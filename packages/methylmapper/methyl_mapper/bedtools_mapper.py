@@ -925,10 +925,14 @@ class BedtoolsMapper:
         if normalized == "both":
             return True, True, False
 
-        tokens = [t for t in re.split(r"[+/,\\s]+", normalized) if t]
+        # Split on separators and whitespace. Use \s (not literal "s"), so
+        # values like "opentargets" are not truncated to "opentarget".
+        tokens = [t for t in re.split(r"[+/,\s]+", normalized) if t]
         use_grok = "grok" in tokens
         use_disgenet = "disgenet" in tokens
-        use_open_targets = any(t in tokens for t in ["opentargets", "open_targets", "open-targets"])
+        use_open_targets = any(
+            t in tokens for t in ["opentargets", "opentarget", "open_targets", "open-targets"]
+        )
 
         return use_grok, use_open_targets, use_disgenet
 
