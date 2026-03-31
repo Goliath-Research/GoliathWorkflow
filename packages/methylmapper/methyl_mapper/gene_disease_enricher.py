@@ -19,6 +19,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from .cache_db import SQLiteCacheStore
 from .secure_credentials import SecureCredentialManager
 
 logger = logging.getLogger(__name__)
@@ -29,8 +30,8 @@ CACHE_COLUMNS = ["source", "gene", "disease_term", "ts", "value_json"]
 DISEASE_CACHE_COLUMNS = ["disease_term", "ts", "disease_id"]
 TARGET_CACHE_COLUMNS = ["gene_name", "ts", "target_id"]
 
-DEFAULT_CACHE_TTL_DAYS = 7
-DEFAULT_GROK_CACHE_TTL_DAYS = 7
+DEFAULT_CACHE_TTL_DAYS = 30
+DEFAULT_GROK_CACHE_TTL_DAYS = 30
 DEFAULT_GROK_BATCH_SIZE = 16
 DEFAULT_GROK_MAX_WORKERS = 1
 DEFAULT_GROK_USE_XAI_BATCH_API = False
@@ -207,6 +208,8 @@ class GeneDiseaseEnricher:
         allow_predicted: Optional[bool] = None,
         cache_enabled: bool = True,
         cache_dir: Optional[Path] = None,
+        cache_backend: str = "sqlite",
+        cache_db_path: Optional[Path] = None,
         cache_ttl_days: Optional[int] = DEFAULT_CACHE_TTL_DAYS,
         grok_cache_ttl_days: Optional[int] = DEFAULT_GROK_CACHE_TTL_DAYS,
         rate_limit_delay: float = 5.0,
@@ -246,6 +249,8 @@ class GeneDiseaseEnricher:
             allow_predicted: Whether to allow "predicted" associations
             cache_enabled: Whether to persist cache to disk
             cache_dir: Directory for disk cache (default: ~/.methyl_mapper/cache)
+            cache_backend: Cache persistence backend (sqlite)
+            cache_db_path: Explicit cache DB path (default: <cache_dir>/gene_disease_cache.sqlite)
             cache_ttl_days: Disk cache TTL in days for Open Targets / DisGeNET and metadata caches
             grok_cache_ttl_days: Disk cache TTL in days for Grok results (default: 7; set 0 to refresh each run)
             rate_limit_delay: Minimum delay between starting consecutive Grok batch requests (seconds)
@@ -330,6 +335,17 @@ class GeneDiseaseEnricher:
         else:
             self.cache_dir = Path.home() / ".methyl_mapper" / "cache"
         self.cache_file = self.cache_dir / "gene_disease_cache.json"
+        self.cache_backend = str(cache_backend or "sqlite").strip().lower()
+        self.cache_db_path = (
+            Path(cache_db_path).expanduser()
+            if cache_db_path is not None
+            else (self.cache_dir / "gene_disease_cache.sqlite")
+        )
+        if self.cache_backend != "sqlite":
+            raise ValueError(f"Unsupported cache_backend '{self.cache_backend}'. Supported: sqlite")
+        self.cache_store: Optional[SQLiteCacheStore] = (
+            SQLiteCacheStore(self.cache_db_path) if self.cache_enabled else None
+        )
 
         if self.min_evidence_level not in EVIDENCE_LEVEL_ORDER:
             raise ValueError(
@@ -1867,6 +1883,7 @@ Example:
         if not gene_names:
             return {}
         result = {}
+        missing_for_disk: List[str] = []
         with self._cache_lock:
             for gene_name in gene_names:
                 gene_upper = str(gene_name).strip().upper()
@@ -1878,22 +1895,23 @@ Example:
                 if isinstance(runtime_value, dict):
                     result[gene_upper] = runtime_value
                     continue
+                missing_for_disk.append(gene_upper)
 
-                disk_entry = self._association_disk_cache.get(key)
-                if not disk_entry:
-                    continue
-
-                ts = disk_entry.get("ts")
-                ts = float(ts) if ts is not None else None
-                if not self._is_cache_valid(ts, source):
-                    self._association_disk_cache.pop(key, None)
-                    self._cache_dirty = True
-                    continue
-
-                value = disk_entry.get("value")
-                if isinstance(value, dict):
-                    result[gene_upper] = value
-                    self._association_runtime_cache[key] = value
+            if self.cache_enabled and self.cache_store is not None and missing_for_disk:
+                disk_rows = self.cache_store.fetch_associations_batch(source, missing_for_disk, disease_term)
+                for gene_upper in missing_for_disk:
+                    disk_entry = disk_rows.get(gene_upper)
+                    if not disk_entry:
+                        continue
+                    ts = disk_entry.get("ts")
+                    ts = float(ts) if ts is not None else None
+                    if not self._is_cache_valid(ts, source):
+                        continue
+                    value = disk_entry.get("value")
+                    if isinstance(value, dict):
+                        key = self._cache_key(source, gene_upper, disease_term)
+                        result[gene_upper] = value
+                        self._association_runtime_cache[key] = value
         return result
 
     def _cache_set(self, key: str, value: Dict) -> None:
@@ -1905,28 +1923,29 @@ Example:
         with self._cache_lock:
             self._association_runtime_cache[key] = value
             ttl = self._cache_ttl_for_source(source)
-            if self.cache_enabled and ttl != 0:
-                self._association_disk_cache[key] = {"ts": ts, "value": value}
-                self._cache_dirty = True
-            elif key in self._association_disk_cache:
-                self._association_disk_cache.pop(key, None)
-                self._cache_dirty = True
+            if self.cache_enabled and ttl != 0 and self.cache_store is not None:
+                self.cache_store.upsert_association(
+                    source=source,
+                    gene=gene,
+                    disease_term=disease_term,
+                    ts=ts,
+                    value=value,
+                )
 
     def _disease_cache_get(self, key: str) -> Optional[str]:
         with self._cache_lock:
             if key in self._disease_runtime_cache:
                 value = self._disease_runtime_cache[key]
                 return None if value == NULL_CACHE_VALUE else value
-            entry = self._disease_disk_cache.get(key)
-            if not entry:
+            if not self.cache_enabled or self.cache_store is None:
                 return None
-            ts = entry.get("ts")
-            ts = float(ts) if ts is not None else None
+            row = self.cache_store.get_disease_id(key)
+            if row is None:
+                return None
+            ts, value = row
             if not self._is_cache_valid(ts, "open_targets_disease"):
-                self._disease_disk_cache.pop(key, None)
-                self._cache_dirty = True
+                self.cache_store.delete_disease_id(key)
                 return None
-            value = entry.get("value")
             resolved = str(value) if value is not None else NULL_CACHE_VALUE
             self._disease_runtime_cache[key] = resolved
             return None if resolved == NULL_CACHE_VALUE else resolved
@@ -1936,12 +1955,8 @@ Example:
         with self._cache_lock:
             self._disease_runtime_cache[key] = stored_value
             ttl = self._cache_ttl_for_source("open_targets_disease")
-            if self.cache_enabled and ttl != 0:
-                self._disease_disk_cache[key] = {"ts": time.time(), "value": stored_value}
-                self._cache_dirty = True
-            elif key in self._disease_disk_cache:
-                self._disease_disk_cache.pop(key, None)
-                self._cache_dirty = True
+            if self.cache_enabled and ttl != 0 and self.cache_store is not None:
+                self.cache_store.upsert_disease_id(key, time.time(), stored_value)
 
     def _target_cache_get(self, gene_name: str) -> Optional[str]:
         key = str(gene_name).strip().upper()
@@ -1949,16 +1964,15 @@ Example:
             if key in self._target_runtime_cache:
                 value = self._target_runtime_cache[key]
                 return None if value == NULL_CACHE_VALUE else value
-            entry = self._target_disk_cache.get(key)
-            if not entry:
+            if not self.cache_enabled or self.cache_store is None:
                 return None
-            ts = entry.get("ts")
-            ts = float(ts) if ts is not None else None
+            row = self.cache_store.get_target_id(key)
+            if row is None:
+                return None
+            ts, value = row
             if not self._is_cache_valid(ts, "open_targets_target"):
-                self._target_disk_cache.pop(key, None)
-                self._cache_dirty = True
+                self.cache_store.delete_target_id(key)
                 return None
-            value = entry.get("value")
             resolved = str(value) if value is not None else NULL_CACHE_VALUE
             self._target_runtime_cache[key] = resolved
             return None if resolved == NULL_CACHE_VALUE else resolved
@@ -1969,12 +1983,8 @@ Example:
         with self._cache_lock:
             self._target_runtime_cache[key] = stored_value
             ttl = self._cache_ttl_for_source("open_targets_target")
-            if self.cache_enabled and ttl != 0:
-                self._target_disk_cache[key] = {"ts": time.time(), "value": stored_value}
-                self._cache_dirty = True
-            elif key in self._target_disk_cache:
-                self._target_disk_cache.pop(key, None)
-                self._cache_dirty = True
+            if self.cache_enabled and ttl != 0 and self.cache_store is not None:
+                self.cache_store.upsert_target_id(key, time.time(), stored_value)
 
     def _is_cache_valid(self, ts: Optional[float], source: str) -> bool:
         if ts is None:
@@ -2017,11 +2027,61 @@ Example:
         ]
         for key in stale_targets:
             self._target_disk_cache.pop(key, None)
+        if self.cache_store is not None and self.cache_enabled:
+            self.cache_store.prune_expired(
+                source_ttls_days={
+                    "grok": self._cache_ttl_for_source("grok"),
+                    "open_targets": self._cache_ttl_for_source("open_targets"),
+                    "disgenet": self._cache_ttl_for_source("disgenet"),
+                },
+                disease_ttl_days=self._cache_ttl_for_source("open_targets_disease"),
+                target_ttl_days=self._cache_ttl_for_source("open_targets_target"),
+            )
+
+    def _migrate_json_cache_to_sqlite_if_needed(self) -> None:
+        if self.cache_store is None:
+            return
+        marker = self.cache_store.get_metadata("legacy_json_migrated")
+        if marker == "1":
+            return
+        if not self.cache_file.exists():
+            self.cache_store.set_metadata("legacy_json_migrated", "1")
+            return
+        try:
+            with open(self.cache_file, "r", encoding="utf-8") as handle:
+                payload = json.load(handle)
+            self.cache_store.import_legacy_payload(payload)
+            migrated_name = self.cache_file.with_suffix(self.cache_file.suffix + ".migrated")
+            try:
+                self.cache_file.rename(migrated_name)
+                logger.info("Migrated legacy cache JSON -> SQLite and renamed to %s", migrated_name)
+            except OSError:
+                logger.info("Migrated legacy cache JSON -> SQLite (rename skipped)")
+            self.cache_store.set_metadata("legacy_json_migrated", "1")
+        except Exception as exc:
+            logger.warning("Failed JSON->SQLite cache migration: %s", exc)
 
     def _load_disk_cache(self) -> None:
         if not self.cache_enabled:
             return
         try:
+            if self.cache_store is not None:
+                self._migrate_json_cache_to_sqlite_if_needed()
+                self.cache_store.prune_expired(
+                    source_ttls_days={
+                        "grok": self._cache_ttl_for_source("grok"),
+                        "open_targets": self._cache_ttl_for_source("open_targets"),
+                        "disgenet": self._cache_ttl_for_source("disgenet"),
+                    },
+                    disease_ttl_days=self._cache_ttl_for_source("open_targets_disease"),
+                    target_ttl_days=self._cache_ttl_for_source("open_targets_target"),
+                )
+                logger.info(
+                    "Enrichment cache DB ready at %s (%d associations)",
+                    self.cache_db_path,
+                    self.cache_store.association_count(),
+                )
+                return
             if not self.cache_file.exists():
                 logger.info(f"Enrichment cache: none found (will use {self.cache_file} for new entries)")
                 return
@@ -2122,9 +2182,22 @@ Example:
             logger.warning(f"Failed to load enrichment cache from {self.cache_file}: {exc}")
 
     def _save_disk_cache(self) -> None:
-        if not self.cache_enabled or not self._cache_dirty:
+        if not self.cache_enabled:
             return
         try:
+            if self.cache_store is not None:
+                self.cache_store.prune_expired(
+                    source_ttls_days={
+                        "grok": self._cache_ttl_for_source("grok"),
+                        "open_targets": self._cache_ttl_for_source("open_targets"),
+                        "disgenet": self._cache_ttl_for_source("disgenet"),
+                    },
+                    disease_ttl_days=self._cache_ttl_for_source("open_targets_disease"),
+                    target_ttl_days=self._cache_ttl_for_source("open_targets_target"),
+                )
+                return
+            if not self._cache_dirty:
+                return
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             with self._cache_lock:
                 associations = []

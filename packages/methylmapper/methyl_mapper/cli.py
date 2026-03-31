@@ -510,6 +510,19 @@ Examples:
         help='Cache directory for enrichment queries (default: project_root/enrich_cache or output_dir/enrich_cache or ./enrich_cache)'
     )
     disease_group.add_argument(
+        '--cache-backend',
+        type=str,
+        choices=['sqlite'],
+        default='sqlite',
+        help='Cache backend for enrichment queries (default: sqlite)'
+    )
+    disease_group.add_argument(
+        '--cache-db-path',
+        type=str,
+        default=None,
+        help='SQLite cache DB path (default: <cache-dir>/gene_disease_cache.sqlite)'
+    )
+    disease_group.add_argument(
         '--methyl-mapper-home',
         type=str,
         default=None,
@@ -518,14 +531,14 @@ Examples:
     disease_group.add_argument(
         '--cache-ttl-days',
         type=int,
-        default=7,
-        help='Disk cache TTL in days for Open Targets / DisGeNET lookups (default: 7)'
+        default=30,
+        help='Disk cache TTL in days for Open Targets / DisGeNET lookups (default: 30)'
     )
     disease_group.add_argument(
         '--grok-cache-ttl-days',
         type=int,
-        default=7,
-        help='Disk cache TTL in days for Grok lookups (default: 7; set 0 to refresh each run)'
+        default=30,
+        help='Disk cache TTL in days for Grok lookups (default: 30; set 0 to refresh each run)'
     )
     disease_group.add_argument(
         '--source-max-workers',
@@ -797,6 +810,10 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         from pathlib import Path as _P
 
         args.cache_dir = str(_P(args.methyl_mapper_home) / "cache")
+    if config.cache_backend is not None:
+        args.cache_backend = config.cache_backend
+    if config.cache_db_path is not None and args.cache_db_path is None:
+        args.cache_db_path = config.cache_db_path
     if config.cache_ttl_days is not None:
         args.cache_ttl_days = config.cache_ttl_days
     if config.azure_key_vault_url is not None and args.azure_key_vault_url is None:
@@ -1014,6 +1031,8 @@ def main_bedtools():
             allow_predicted=args.allow_predicted,
             cache_enabled=not args.no_cache,
             cache_dir=Path(args.cache_dir) if args.cache_dir else None,
+            cache_backend=args.cache_backend,
+            cache_db_path=Path(args.cache_db_path) if args.cache_db_path else None,
             cache_ttl_days=args.cache_ttl_days,
             grok_cache_ttl_days=args.grok_cache_ttl_days,
             source_max_workers=args.source_max_workers,

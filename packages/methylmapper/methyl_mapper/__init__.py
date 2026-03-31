@@ -11,6 +11,7 @@ from .database import AzureSQLConnection
 from .models import DMPStaging, GeneMappingResult, SampleDMP
 from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
+from .cache_db import SQLiteCacheStore
 from .gene_disease_enricher import GeneDiseaseEnricher
 from .secure_credentials import SecureCredentialManager, persist_secret_if_changed
 
@@ -30,6 +31,7 @@ __all__ = [
     # High-level API
     "DMPMapper",
     "BedtoolsMapper",
+    "SQLiteCacheStore",
     "GeneDiseaseEnricher",
     "SecureCredentialManager",
     "persist_secret_if_changed",
