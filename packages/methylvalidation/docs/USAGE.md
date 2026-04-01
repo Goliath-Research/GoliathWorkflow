@@ -60,18 +60,29 @@ methyl-validation --project configs/my_project.json --predictor-only
 
 ## CLI Flags
 
-| Flag | Description |
-|------|-------------|
-| `--project PATH` | Path to the project JSON (preferred; reads `step_config.validation` from the project). |
-| `--config PATH` | Path to a standalone Monte Carlo config JSON (alternative to `--project`). |
-| `--stability` | Run stability analysis after the MC loop (Workflow 1, Step 1). |
-| `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If `step_config.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. |
-| `--model` | Run production model builder after freeze (Workflow 1, Step 3). |
-| `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). |
-| `--skip-enricher` | Skip the enricher inside MC iterations even when `run_mapper_and_enricher: true`. |
-| `--iterations N` | Override `n_iterations` from config. |
-| `--seed S` | Override `seed` from config. |
-| `--output-base DIR` | Override `output_base` from config. |
+### Which steps run (CLI package mapping)
+
+| Mode / Flag | Main steps that run |
+|---|---|
+| Monte Carlo loop (`methyl-validation` default, optional `--stability`) | Per iteration: `methyl-centroid` + `methyl-detector` |
+| `--stability` | Uses the same Monte Carlo loop above, then runs stability aggregation over discovery DMP outputs (`run_stability_analysis`) |
+| `--freeze` | `methyl-centroid` + `methyl-detector` (fixed panel) + `methyl-mapper` + `methyl-enricher` + optional `methyl-disease-progression` |
+| `--model` (`model_backend="ecdf"`) | `methyl-classifier` + `methyl-predictor` on frozen `production/project.json` |
+| `--model` (`model_backend="tabular_sklearn"` / `"generative_hybrid"`) | In-process backend flow: model bundle -> train -> predict (consumes freeze outputs; does not re-run `methyl-detector`) |
+| `--predictor-only` | Monte Carlo iterations where each iteration runs only `methyl-predictor` with frozen artifacts |
+
+| Flag | Description | Main subprocesses / backend path |
+|------|-------------|----------------------------------|
+| `--project PATH` | Path to the project JSON (preferred; reads `step_config.validation` from the project). | Controls whichever path you select (`--stability`, `--freeze`, `--model`, or `--predictor-only`). |
+| `--config PATH` | Path to a standalone Monte Carlo config JSON (alternative to `--project`). | Same as above, but from MC config file mode. |
+| `--stability` | Run stability analysis after the MC loop (Workflow 1, Step 1). | MC loop (`methyl-centroid` + `methyl-detector`) then in-process stability aggregation. |
+| `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If `step_config.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. | `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher` (+ optional progression). |
+| `--model` | Run production model builder after freeze (Workflow 1, Step 3). | `ecdf`: `methyl-classifier` -> `methyl-predictor`; other backends: bundle -> train -> predict. |
+| `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). | Monte Carlo iterations, predictor only. |
+| `--skip-enricher` | Skip the enricher inside MC iterations even when `run_mapper_and_enricher: true`. | Also short-circuits enricher (and therefore progression) in `--freeze`. |
+| `--iterations N` | Override `n_iterations` from config. | Affects MC loop count (`--stability` and `--predictor-only`). |
+| `--seed S` | Override `seed` from config. | Affects MC split reproducibility. |
+| `--output-base DIR` | Override `output_base` from config. | Affects all output roots. |
 
 ---
 

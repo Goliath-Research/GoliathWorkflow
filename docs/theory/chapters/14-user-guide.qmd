@@ -143,9 +143,9 @@ Full theoretical background: @sec-workflow-model-creation.
 
 Workflow 1 should be run and reviewed in three explicit stages:
 
-1. **Stability (`--stability`)**: optimize panel robustness (`n_iterations`, `train_fraction`, `stability_dmp_freq`) and verify `stable_dmps_production.csv` is non-empty and biologically plausible.
-2. **Freeze/analysis (`--freeze`)**: lock the panel into `production/project.json`, then review production detector outputs together with mapper/enricher summaries.
-3. **Modeling (`--model`)**: train final classifier and predictor artifacts only after stability and biological review are complete.
+1. **Stability (`--stability`)**: optimize panel robustness (`n_iterations`, `train_fraction`, `stability_dmp_freq`) and verify `stable_dmps_production.csv` is non-empty and biologically plausible. In this stage, each MC iteration runs `methyl-centroid` -> `methyl-detector`, then methyl-validation runs in-process stability aggregation.
+2. **Freeze/analysis (`--freeze`)**: lock the panel into `production/project.json`, then review production detector outputs together with mapper/enricher summaries. This stage runs `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, with optional `methyl-disease-progression`.
+3. **Modeling (`--model`)**: train final classifier and predictor artifacts only after stability and biological review are complete. For `model_backend: "ecdf"` this is `methyl-classifier` -> `methyl-predictor`; for `tabular_sklearn` and `generative_hybrid`, methyl-validation runs in-process bundle -> train -> predict.
 
 Treat changes in any of these stage inputs as a model version change, not as a minor rerun.
 
@@ -197,7 +197,7 @@ If `step_config.progression.enabled=true`, freeze also runs `methyl-disease-prog
 methyl-validation --project configs/my_project.json --model
 ```
 
-This runs classifier → predictor on the frozen production project.
+This runs the model stage on the frozen production project. For `ecdf`, this is `methyl-classifier` -> `methyl-predictor`; for `tabular_sklearn` or `generative_hybrid`, methyl-validation runs in-process bundle -> train -> predict. This stage does not re-run `methyl-detector`.
 
 If `step_config.validation.require_biological_review_for_model=true`, `--model` requires:
 

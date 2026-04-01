@@ -201,12 +201,12 @@ def main() -> None:
     parser.add_argument(
         "--freeze",
         action="store_true",
-        help="Run production freeze: centroid→detector(fixed panel)→mapper→enricher (no classifier/predictor).",
+        help="Run production freeze: centroid→detector(fixed panel)→mapper→enricher; optional progression via step_config.progression.enabled (no classifier/predictor).",
     )
     parser.add_argument(
         "--model",
         action="store_true",
-        help="Build production model and predict: runs classifier and predictor on the production project (after --freeze).",
+        help="Build production model after --freeze. ecdf backend: classifier→predictor; tabular/generative backends: bundle→train→predict (no detector, not Monte Carlo). Use --predictor-only for repeated predictor-only runs.",
     )
     parser.add_argument(
         "--model-backend",

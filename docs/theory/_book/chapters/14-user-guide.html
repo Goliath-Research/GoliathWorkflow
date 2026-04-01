@@ -504,9 +504,9 @@ sample_003</code></pre>
 <h3 data-number="14.3.1" class="anchored" data-anchor-id="stage-oriented-execution-checklist"><span class="header-section-number">14.3.1</span> Stage-oriented execution checklist</h3>
 <p>Workflow 1 should be run and reviewed in three explicit stages:</p>
 <ol type="1">
-<li><strong>Stability (<code>--stability</code>)</strong>: optimize panel robustness (<code>n_iterations</code>, <code>train_fraction</code>, <code>stability_dmp_freq</code>) and verify <code>stable_dmps_production.csv</code> is non-empty and biologically plausible.</li>
-<li><strong>Freeze/analysis (<code>--freeze</code>)</strong>: lock the panel into <code>production/project.json</code>, then review production detector outputs together with mapper/enricher summaries.</li>
-<li><strong>Modeling (<code>--model</code>)</strong>: train final classifier and predictor artifacts only after stability and biological review are complete.</li>
+<li><strong>Stability (<code>--stability</code>)</strong>: optimize panel robustness (<code>n_iterations</code>, <code>train_fraction</code>, <code>stability_dmp_freq</code>) and verify <code>stable_dmps_production.csv</code> is non-empty and biologically plausible. In this stage, each MC iteration runs <code>methyl-centroid</code> -&gt; <code>methyl-detector</code>, then methyl-validation runs in-process stability aggregation.</li>
+<li><strong>Freeze/analysis (<code>--freeze</code>)</strong>: lock the panel into <code>production/project.json</code>, then review production detector outputs together with mapper/enricher summaries. This stage runs <code>methyl-centroid</code> -&gt; <code>methyl-detector</code> (fixed panel) -&gt; <code>methyl-mapper</code> -&gt; <code>methyl-enricher</code>, with optional <code>methyl-disease-progression</code>.</li>
+<li><strong>Modeling (<code>--model</code>)</strong>: train final classifier and predictor artifacts only after stability and biological review are complete. For <code>model_backend: "ecdf"</code> this is <code>methyl-classifier</code> -&gt; <code>methyl-predictor</code>; for <code>tabular_sklearn</code> and <code>generative_hybrid</code>, methyl-validation runs in-process bundle -&gt; train -&gt; predict.</li>
 </ol>
 <p>Treat changes in any of these stage inputs as a model version change, not as a minor rerun.</p>
 </section>
@@ -535,7 +535,7 @@ sample_003</code></pre>
 <section id="step-4-run-the-final-model-stage" class="level3" data-number="14.3.5">
 <h3 data-number="14.3.5" class="anchored" data-anchor-id="step-4-run-the-final-model-stage"><span class="header-section-number">14.3.5</span> Step 4: Run the final model stage</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/my_project.json <span class="at">--model</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>This runs classifier → predictor on the frozen production project.</p>
+<p>This runs the model stage on the frozen production project. For <code>ecdf</code>, this is <code>methyl-classifier</code> -&gt; <code>methyl-predictor</code>; for <code>tabular_sklearn</code> or <code>generative_hybrid</code>, methyl-validation runs in-process bundle -&gt; train -&gt; predict. This stage does not re-run <code>methyl-detector</code>.</p>
 <p>If <code>step_config.validation.require_biological_review_for_model=true</code>, <code>--model</code> requires:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="st">"biological_review_confirmed"</span><span class="er">:</span> <span class="kw">true</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>

@@ -34,8 +34,9 @@ Project configurations should follow a **single source of truth** principle:
 
 ### 1. Model Creation (Monte Carlo + Stability + Freeze)
 
-- Run with `--stability` to evaluate many random splits
-- Run with `--freeze` to create final production model
+- Run with `--stability` to evaluate many random splits and aggregate stable DMPs
+- Run with `--freeze` to build production biological outputs from the stable panel
+- Run with `--model` to build final production model artifacts
 - Uses `step_config.validation` settings from the project
 
 ### 2. Model Use for Prediction (Predictor-only)
@@ -58,6 +59,14 @@ methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --predicto
 ## Architecture overview
 
 MethylValidation orchestrates stratified splits, project generation, and pipeline execution via subprocess calls. It supports both workflows described above.
+
+### Package mapping by stage
+
+- **MC loop (`methyl-validation` default, with optional `--stability`)**: per iteration runs `methyl-centroid` then `methyl-detector` (`run_pipeline_for_iteration`, `run_pipeline_for_iteration_multiclass`).
+- **`--stability`**: after the MC loop, runs in-process stability aggregation (`run_stability_analysis`) over detector discovery outputs.
+- **`--freeze`**: runs `run_pipeline_for_production`: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, then optional `methyl-disease-progression`.
+- **`--model`**: runs `run_pipeline_for_model`. For `model_backend=ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.
+- **`--predictor-only`**: MC iterations that run only `methyl-predictor` using frozen artifacts.
 
 The main components are:
 
