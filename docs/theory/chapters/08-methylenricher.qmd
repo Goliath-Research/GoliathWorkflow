@@ -23,6 +23,43 @@ The statistical test itself therefore lives outside the repository. The in-repo 
 
 Publication text should cite Enrichr [@chen2013] and record the exact library set used in the analysis. In MethylEnricher this can be done either by logging an explicit `libraries` list or by logging a named `library_preset` (for example `cancer-extended` for cancer-focused studies).
 
+### Library sets used by MethylEnricher
+
+The package now supports both a standard default set and named cancer presets.
+
+**Standard default (`DEFAULT_LIBRARIES`)**
+
+- `KEGG_2021_Human`
+- `Reactome_2022`
+- `GO_Biological_Process_2023`
+- `GO_Molecular_Function_2023`
+- `GO_Cellular_Component_2023`
+- `MSigDB_Hallmark_2020`
+- `WikiPathway_2023_Human`
+
+**`cancer-core` preset**
+
+Standard default plus:
+
+- `ChEA_2022`
+- `ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X`
+- `TRRUST_Transcription_Factors_2019`
+- `DisGeNET`
+- `Jensen_DISEASES`
+- `GWAS_Catalog_2019`
+
+**`cancer-extended` preset**
+
+`cancer-core` plus:
+
+- `DSigDB`
+- `DGIdb_Drug_Targets_2024`
+- `LINCS_L1000_Chem_Pert_up`
+- `LINCS_L1000_Chem_Pert_down`
+- `miRTarBase_2017`
+
+When both `libraries` and `library_preset` are provided, explicit `libraries` take precedence.
+
 ## Pathway Graph Construction
 
 The package builds a pathway graph in which nodes are pathways and edges represent gene-set overlap. In the simplest case the edge weight is based on Jaccard similarity:
@@ -41,6 +78,16 @@ When broad library presets are used (for example `cancer-extended`), module cons
 - per-library cap (`module_cluster_top_terms_per_library`): keep top N terms per library before graph construction.
 
 These controls change the module graph itself, not only the display layer, so they should be reported in methods sections.
+
+## Why This Layer Matters For DMP Validation
+
+`methylmapper` and `methylenricher` are not upstream feature selectors, but they are the main biological validation layer for the selected DMP panel. In practice, if the detector-selected loci are biologically coherent, downstream enrichment should recover:
+
+- lineage-consistent terms (for prostate cancer: prostate epithelial identity programs),
+- stage-consistent pathway transitions (for example increasing mitochondrial/OXPHOS emphasis in later disease),
+- reproducible themes across mapping, enrichment, and module summaries.
+
+This is not formal proof of causal correctness, but it is a strong orthogonal consistency check on DMP/gene selection quality.
 
 ## Module Enrichment Score
 

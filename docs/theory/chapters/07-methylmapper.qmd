@@ -73,3 +73,13 @@ The most defensible description is:
 - and disease evidence is external-service-backed annotation.
 
 That is still scientifically useful, but it is not the same kind of object as the upstream ECDF hypothesis tests.
+
+## Mapper As Biological Validation Layer
+
+Although `methylmapper` is downstream from DMP detection, it is a key validation checkpoint for selection quality. The practical question is whether selected loci project to coherent gene-level biology:
+
+- Do top genes retain known lineage markers?
+- Do mapped signals remain stable across runs and cohorts?
+- Do gene-level aggregates bridge naturally into enrichment/module themes?
+
+In this sense, mapper outputs are not only annotations; they are a sanity check that locus-level selection carries biologically meaningful structure into gene space.

@@ -256,6 +256,28 @@ The progression step writes:
 
 This layer is best interpreted as structured biological summarization across stages, not causal disease dynamics inference.
 
+### Stage-wise enrichment interpretation (prostate cancer template)
+
+For prostate cancer stage series (PCa1 -> PCa4), a common interpretation template is:
+
+| Stage | Prostate-specific signal | NKX3-1 lineage TF | Mitochondrial/OXPHOS | Overall pattern | Interpretation |
+|---|---|---|---|---|---|
+| PCa1 (early) | very strong | high | low/secondary | clean prostate identity | early prostate cancer phenotype with strong lineage specificity |
+| PCa2 | strong | moderate down | moderate up | mixed | transition phase: partial lineage erosion with metabolic emergence |
+| PCa3 | moderate | low down-down | high up-up | shifted | inflection point: lineage programs weaken while metabolic programs dominate |
+| PCa4 (late) | moderate (still present) | weak | very strong | metabolic-dominant | advanced phenotype with strong mitochondrial/OXPHOS signature and diluted lineage identity |
+
+This stage-wise pattern is exactly why mapper -> enricher -> progression is valuable: it tests whether selected DMP/gene signals produce coherent biological trajectories rather than isolated statistical hits.
+
+### Key axes of progression (what is changing)
+
+| Feature | Direction across stages | Meaning |
+|---|---|---|
+| Prostate identity (NKX3-1, prostate terms) | decreasing | Loss of lineage control and differentiation state |
+| Disease specificity (prostate cancer terms) | slight decrease but stable | Disease signal persists across all stages |
+| Mitochondrial respiration (Complex I, OXPHOS) | strongly increasing | Metabolic rewiring becomes dominant in later stages |
+| Pathway structure | simple -> complex | Transition from cleaner single-axis signal to multi-system adaptation |
+
 ## Two Workflows Summary {#sec-two-workflows-summary}
 
 MethylValidation supports two primary operational modes, described in full in @sec-two-workflows. A brief summary for theory readers:

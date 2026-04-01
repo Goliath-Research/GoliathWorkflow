@@ -297,12 +297,16 @@ window.Quarto = {
    
   <ul>
   <li><a href="#role" id="toc-role" class="nav-link active" data-scroll-target="#role"><span class="header-section-number">8.1</span> Role</a></li>
-  <li><a href="#over-representation-analysis" id="toc-over-representation-analysis" class="nav-link" data-scroll-target="#over-representation-analysis"><span class="header-section-number">8.2</span> Over-Representation Analysis</a></li>
+  <li><a href="#over-representation-analysis" id="toc-over-representation-analysis" class="nav-link" data-scroll-target="#over-representation-analysis"><span class="header-section-number">8.2</span> Over-Representation Analysis</a>
+  <ul class="collapse">
+  <li><a href="#library-sets-used-by-methylenricher" id="toc-library-sets-used-by-methylenricher" class="nav-link" data-scroll-target="#library-sets-used-by-methylenricher"><span class="header-section-number">8.2.1</span> Library sets used by MethylEnricher</a></li>
+  </ul></li>
   <li><a href="#pathway-graph-construction" id="toc-pathway-graph-construction" class="nav-link" data-scroll-target="#pathway-graph-construction"><span class="header-section-number">8.3</span> Pathway Graph Construction</a></li>
-  <li><a href="#module-enrichment-score" id="toc-module-enrichment-score" class="nav-link" data-scroll-target="#module-enrichment-score"><span class="header-section-number">8.4</span> Module Enrichment Score</a></li>
-  <li><a href="#disease-relevance-prior" id="toc-disease-relevance-prior" class="nav-link" data-scroll-target="#disease-relevance-prior"><span class="header-section-number">8.5</span> Disease Relevance Prior</a></li>
-  <li><a href="#theme-normalization-and-labels" id="toc-theme-normalization-and-labels" class="nav-link" data-scroll-target="#theme-normalization-and-labels"><span class="header-section-number">8.6</span> Theme Normalization And Labels</a></li>
-  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">8.7</span> Publication Guidance</a></li>
+  <li><a href="#why-this-layer-matters-for-dmp-validation" id="toc-why-this-layer-matters-for-dmp-validation" class="nav-link" data-scroll-target="#why-this-layer-matters-for-dmp-validation"><span class="header-section-number">8.4</span> Why This Layer Matters For DMP Validation</a></li>
+  <li><a href="#module-enrichment-score" id="toc-module-enrichment-score" class="nav-link" data-scroll-target="#module-enrichment-score"><span class="header-section-number">8.5</span> Module Enrichment Score</a></li>
+  <li><a href="#disease-relevance-prior" id="toc-disease-relevance-prior" class="nav-link" data-scroll-target="#disease-relevance-prior"><span class="header-section-number">8.6</span> Disease Relevance Prior</a></li>
+  <li><a href="#theme-normalization-and-labels" id="toc-theme-normalization-and-labels" class="nav-link" data-scroll-target="#theme-normalization-and-labels"><span class="header-section-number">8.7</span> Theme Normalization And Labels</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">8.8</span> Publication Guidance</a></li>
   </ul>
 </nav>
     </div>
@@ -349,6 +353,40 @@ window.Quarto = {
 <li>carrying forward the adjusted p-values into later scoring steps.</li>
 </ul>
 <p>Publication text should cite Enrichr <span class="citation" data-cites="chen2013">(<a href="#ref-chen2013" role="doc-biblioref">Chen et al. 2013</a>)</span> and record the exact library set used in the analysis. In MethylEnricher this can be done either by logging an explicit <code>libraries</code> list or by logging a named <code>library_preset</code> (for example <code>cancer-extended</code> for cancer-focused studies).</p>
+<section id="library-sets-used-by-methylenricher" class="level3" data-number="8.2.1">
+<h3 data-number="8.2.1" class="anchored" data-anchor-id="library-sets-used-by-methylenricher"><span class="header-section-number">8.2.1</span> Library sets used by MethylEnricher</h3>
+<p>The package now supports both a standard default set and named cancer presets.</p>
+<p><strong>Standard default (<code>DEFAULT_LIBRARIES</code>)</strong></p>
+<ul>
+<li><code>KEGG_2021_Human</code></li>
+<li><code>Reactome_2022</code></li>
+<li><code>GO_Biological_Process_2023</code></li>
+<li><code>GO_Molecular_Function_2023</code></li>
+<li><code>GO_Cellular_Component_2023</code></li>
+<li><code>MSigDB_Hallmark_2020</code></li>
+<li><code>WikiPathway_2023_Human</code></li>
+</ul>
+<p><strong><code>cancer-core</code> preset</strong></p>
+<p>Standard default plus:</p>
+<ul>
+<li><code>ChEA_2022</code></li>
+<li><code>ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X</code></li>
+<li><code>TRRUST_Transcription_Factors_2019</code></li>
+<li><code>DisGeNET</code></li>
+<li><code>Jensen_DISEASES</code></li>
+<li><code>GWAS_Catalog_2019</code></li>
+</ul>
+<p><strong><code>cancer-extended</code> preset</strong></p>
+<p><code>cancer-core</code> plus:</p>
+<ul>
+<li><code>DSigDB</code></li>
+<li><code>DGIdb_Drug_Targets_2024</code></li>
+<li><code>LINCS_L1000_Chem_Pert_up</code></li>
+<li><code>LINCS_L1000_Chem_Pert_down</code></li>
+<li><code>miRTarBase_2017</code></li>
+</ul>
+<p>When both <code>libraries</code> and <code>library_preset</code> are provided, explicit <code>libraries</code> take precedence.</p>
+</section>
 </section>
 <section id="pathway-graph-construction" class="level2" data-number="8.3">
 <h2 data-number="8.3" class="anchored" data-anchor-id="pathway-graph-construction"><span class="header-section-number">8.3</span> Pathway Graph Construction</h2>
@@ -365,8 +403,18 @@ J(A,B) = \frac{|A \cap B|}{|A \cup B|},
 </ul>
 <p>These controls change the module graph itself, not only the display layer, so they should be reported in methods sections.</p>
 </section>
-<section id="module-enrichment-score" class="level2" data-number="8.4">
-<h2 data-number="8.4" class="anchored" data-anchor-id="module-enrichment-score"><span class="header-section-number">8.4</span> Module Enrichment Score</h2>
+<section id="why-this-layer-matters-for-dmp-validation" class="level2" data-number="8.4">
+<h2 data-number="8.4" class="anchored" data-anchor-id="why-this-layer-matters-for-dmp-validation"><span class="header-section-number">8.4</span> Why This Layer Matters For DMP Validation</h2>
+<p><code>methylmapper</code> and <code>methylenricher</code> are not upstream feature selectors, but they are the main biological validation layer for the selected DMP panel. In practice, if the detector-selected loci are biologically coherent, downstream enrichment should recover:</p>
+<ul>
+<li>lineage-consistent terms (for prostate cancer: prostate epithelial identity programs),</li>
+<li>stage-consistent pathway transitions (for example increasing mitochondrial/OXPHOS emphasis in later disease),</li>
+<li>reproducible themes across mapping, enrichment, and module summaries.</li>
+</ul>
+<p>This is not formal proof of causal correctness, but it is a strong orthogonal consistency check on DMP/gene selection quality.</p>
+</section>
+<section id="module-enrichment-score" class="level2" data-number="8.5">
+<h2 data-number="8.5" class="anchored" data-anchor-id="module-enrichment-score"><span class="header-section-number">8.5</span> Module Enrichment Score</h2>
 <p><code>compute_module_enrichment_score()</code> converts a module into a scalar ranking score by combining:</p>
 <ul>
 <li>mean <span class="math inline">\(-\log_{10}(q)\)</span> across pathways,</li>
@@ -386,8 +434,8 @@ J(A,B) = \frac{|A \cap B|}{|A \cup B|},
 <p>where each tilded quantity is clipped to <span class="math inline">\([0,1]\)</span> after dividing by a hand-chosen scale such as <span class="math inline">\(10\)</span>, <span class="math inline">\(50\)</span>, or <span class="math inline">\(200\)</span>.</p>
 <p>This is explicitly heuristic. It is a ranking function, not an enrichment test.</p>
 </section>
-<section id="disease-relevance-prior" class="level2" data-number="8.5">
-<h2 data-number="8.5" class="anchored" data-anchor-id="disease-relevance-prior"><span class="header-section-number">8.5</span> Disease Relevance Prior</h2>
+<section id="disease-relevance-prior" class="level2" data-number="8.6">
+<h2 data-number="8.6" class="anchored" data-anchor-id="disease-relevance-prior"><span class="header-section-number">8.6</span> Disease Relevance Prior</h2>
 <p>The package also computes a disease-relevance score by overlap with a curated gene set:</p>
 <p><span id="eq-disease-prior"><span class="math display">\[
 \operatorname{score}_{\text{disease}}
@@ -405,12 +453,12 @@ J(A,B) = \frac{|A \cap B|}{|A \cup B|},
 \tag{8.4}\]</span></span></p>
 <p>This is again a heuristic prioritization rule.</p>
 </section>
-<section id="theme-normalization-and-labels" class="level2" data-number="8.6">
-<h2 data-number="8.6" class="anchored" data-anchor-id="theme-normalization-and-labels"><span class="header-section-number">8.6</span> Theme Normalization And Labels</h2>
+<section id="theme-normalization-and-labels" class="level2" data-number="8.7">
+<h2 data-number="8.7" class="anchored" data-anchor-id="theme-normalization-and-labels"><span class="header-section-number">8.7</span> Theme Normalization And Labels</h2>
 <p>The package includes theme normalization based on substring matching against a JSON mapping file, plus discrete labels such as <code>High</code>, <code>Medium</code>, and <code>Low</code> relevance. Those labels are workflow conveniences. They should not be presented as probabilistic classifications.</p>
 </section>
-<section id="publication-guidance" class="level2" data-number="8.7">
-<h2 data-number="8.7" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">8.7</span> Publication Guidance</h2>
+<section id="publication-guidance" class="level2" data-number="8.8">
+<h2 data-number="8.8" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">8.8</span> Publication Guidance</h2>
 <p>The most accurate description is:</p>
 <ul>
 <li>enrichment significance comes from an external ORA engine,</li>

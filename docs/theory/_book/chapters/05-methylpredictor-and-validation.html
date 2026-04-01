@@ -298,6 +298,8 @@ window.Quarto = {
   <li><a href="#entity-scores" id="toc-entity-scores" class="nav-link" data-scroll-target="#entity-scores"><span class="header-section-number">6.10.2</span> Entity Scores</a></li>
   <li><a href="#progression-labels" id="toc-progression-labels" class="nav-link" data-scroll-target="#progression-labels"><span class="header-section-number">6.10.3</span> Progression Labels</a></li>
   <li><a href="#outputs" id="toc-outputs" class="nav-link" data-scroll-target="#outputs"><span class="header-section-number">6.10.4</span> Outputs</a></li>
+  <li><a href="#stage-wise-enrichment-interpretation-prostate-cancer-template" id="toc-stage-wise-enrichment-interpretation-prostate-cancer-template" class="nav-link" data-scroll-target="#stage-wise-enrichment-interpretation-prostate-cancer-template"><span class="header-section-number">6.10.5</span> Stage-wise enrichment interpretation (prostate cancer template)</a></li>
+  <li><a href="#key-axes-of-progression-what-is-changing" id="toc-key-axes-of-progression-what-is-changing" class="nav-link" data-scroll-target="#key-axes-of-progression-what-is-changing"><span class="header-section-number">6.10.6</span> Key axes of progression (what is changing)</a></li>
   </ul></li>
   <li><a href="#sec-two-workflows-summary" id="toc-sec-two-workflows-summary" class="nav-link" data-scroll-target="#sec-two-workflows-summary"><span class="header-section-number">6.11</span> Two Workflows Summary</a></li>
   <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">6.12</span> Publication Guidance</a></li>
@@ -555,6 +557,104 @@ p(z \mid y=k) \approx \mathcal{N}\!\left(\mu_k,\operatorname{diag}(\sigma_k^2)\r
 <li>optional <code>report.md</code> (when <code>report_md=true</code>)</li>
 </ul>
 <p>This layer is best interpreted as structured biological summarization across stages, not causal disease dynamics inference.</p>
+</section>
+<section id="stage-wise-enrichment-interpretation-prostate-cancer-template" class="level3" data-number="6.10.5">
+<h3 data-number="6.10.5" class="anchored" data-anchor-id="stage-wise-enrichment-interpretation-prostate-cancer-template"><span class="header-section-number">6.10.5</span> Stage-wise enrichment interpretation (prostate cancer template)</h3>
+<p>For prostate cancer stage series (PCa1 -&gt; PCa4), a common interpretation template is:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 16%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Stage</th>
+<th>Prostate-specific signal</th>
+<th>NKX3-1 lineage TF</th>
+<th>Mitochondrial/OXPHOS</th>
+<th>Overall pattern</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>PCa1 (early)</td>
+<td>very strong</td>
+<td>high</td>
+<td>low/secondary</td>
+<td>clean prostate identity</td>
+<td>early prostate cancer phenotype with strong lineage specificity</td>
+</tr>
+<tr class="even">
+<td>PCa2</td>
+<td>strong</td>
+<td>moderate down</td>
+<td>moderate up</td>
+<td>mixed</td>
+<td>transition phase: partial lineage erosion with metabolic emergence</td>
+</tr>
+<tr class="odd">
+<td>PCa3</td>
+<td>moderate</td>
+<td>low down-down</td>
+<td>high up-up</td>
+<td>shifted</td>
+<td>inflection point: lineage programs weaken while metabolic programs dominate</td>
+</tr>
+<tr class="even">
+<td>PCa4 (late)</td>
+<td>moderate (still present)</td>
+<td>weak</td>
+<td>very strong</td>
+<td>metabolic-dominant</td>
+<td>advanced phenotype with strong mitochondrial/OXPHOS signature and diluted lineage identity</td>
+</tr>
+</tbody>
+</table>
+<p>This stage-wise pattern is exactly why mapper -&gt; enricher -&gt; progression is valuable: it tests whether selected DMP/gene signals produce coherent biological trajectories rather than isolated statistical hits.</p>
+</section>
+<section id="key-axes-of-progression-what-is-changing" class="level3" data-number="6.10.6">
+<h3 data-number="6.10.6" class="anchored" data-anchor-id="key-axes-of-progression-what-is-changing"><span class="header-section-number">6.10.6</span> Key axes of progression (what is changing)</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Feature</th>
+<th>Direction across stages</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Prostate identity (NKX3-1, prostate terms)</td>
+<td>decreasing</td>
+<td>Loss of lineage control and differentiation state</td>
+</tr>
+<tr class="even">
+<td>Disease specificity (prostate cancer terms)</td>
+<td>slight decrease but stable</td>
+<td>Disease signal persists across all stages</td>
+</tr>
+<tr class="odd">
+<td>Mitochondrial respiration (Complex I, OXPHOS)</td>
+<td>strongly increasing</td>
+<td>Metabolic rewiring becomes dominant in later stages</td>
+</tr>
+<tr class="even">
+<td>Pathway structure</td>
+<td>simple -&gt; complex</td>
+<td>Transition from cleaner single-axis signal to multi-system adaptation</td>
+</tr>
+</tbody>
+</table>
 </section>
 </section>
 <section id="sec-two-workflows-summary" class="level2" data-number="6.11">

@@ -303,6 +303,7 @@ window.Quarto = {
   <li><a href="#stable-gene-set-optimization" id="toc-stable-gene-set-optimization" class="nav-link" data-scroll-target="#stable-gene-set-optimization"><span class="header-section-number">7.5</span> Stable Gene Set Optimization</a></li>
   <li><a href="#external-evidence-enrichment" id="toc-external-evidence-enrichment" class="nav-link" data-scroll-target="#external-evidence-enrichment"><span class="header-section-number">7.6</span> External Evidence Enrichment</a></li>
   <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">7.7</span> Publication Guidance</a></li>
+  <li><a href="#mapper-as-biological-validation-layer" id="toc-mapper-as-biological-validation-layer" class="nav-link" data-scroll-target="#mapper-as-biological-validation-layer"><span class="header-section-number">7.8</span> Mapper As Biological Validation Layer</a></li>
   </ul>
 </nav>
     </div>
@@ -396,6 +397,16 @@ p_{\text{gene}} = 2\left[1-\Phi(|Z_{\text{gene}}|)\right].
 <li>and disease evidence is external-service-backed annotation.</li>
 </ul>
 <p>That is still scientifically useful, but it is not the same kind of object as the upstream ECDF hypothesis tests.</p>
+</section>
+<section id="mapper-as-biological-validation-layer" class="level2" data-number="7.8">
+<h2 data-number="7.8" class="anchored" data-anchor-id="mapper-as-biological-validation-layer"><span class="header-section-number">7.8</span> Mapper As Biological Validation Layer</h2>
+<p>Although <code>methylmapper</code> is downstream from DMP detection, it is a key validation checkpoint for selection quality. The practical question is whether selected loci project to coherent gene-level biology:</p>
+<ul>
+<li>Do top genes retain known lineage markers?</li>
+<li>Do mapped signals remain stable across runs and cohorts?</li>
+<li>Do gene-level aggregates bridge naturally into enrichment/module themes?</li>
+</ul>
+<p>In this sense, mapper outputs are not only annotations; they are a sanity check that locus-level selection carries biologically meaningful structure into gene space.</p>
 
 
 <div id="refs" class="references csl-bib-body hanging-indent" role="list">
