@@ -139,7 +139,7 @@ class ECDFClassifier:
                 pdf_table[:, j] = density[:, idx]
 
         # Renormalise each row so the trapezoidal integral is 1
-        trapz = getattr(np, "trapezoid", np.trapz)
+        trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
         area = trapz(pdf_table, self._grid, axis=1)  # (n_pos,)
         area = np.maximum(area, 1e-12)
         pdf_table /= area[:, np.newaxis]

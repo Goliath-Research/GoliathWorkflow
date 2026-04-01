@@ -659,7 +659,7 @@ def ecdf_overlap_integral(
     """
     position_indices = np.asarray(position_indices, dtype=np.intp).ravel()
     grid = np.linspace(0.0, 1.0, grid_size, dtype=np.float64)
-    trapz = getattr(np, "trapezoid", np.trapz)
+    trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
 
     if hasattr(ecdf_view1, "_pdf_batch") and hasattr(ecdf_view2, "_pdf_batch"):
         pdf1 = np.asarray(ecdf_view1._pdf_batch(position_indices, grid), dtype=np.float64)

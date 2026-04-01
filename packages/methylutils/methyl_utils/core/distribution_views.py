@@ -294,7 +294,7 @@ class ECDFView:
             idx = np.arange(n, dtype=np.intp)
             pdf1 = self._pdf_batch(idx, grid)
             pdf2 = other._pdf_batch(idx, grid)
-            trapz = getattr(np, "trapezoid", np.trapz)
+            trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
             area1 = trapz(pdf1, grid, axis=1)
             area2 = trapz(pdf2, grid, axis=1)
             pdf1 = pdf1 / np.maximum(area1[:, None], MIN_EPS)
