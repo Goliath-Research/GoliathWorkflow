@@ -78,6 +78,16 @@ The current docs/code governance already reduces this risk:
 2. Production workflow chapters describe the active ECDF-first detector/classifier path and the current model backends explicitly.
 3. Legacy modules remain in-repo for compatibility and experimentation, but publication claims should cite only methods documented as active in this book.
 
+### Deprecation Status Snapshot
+
+| Component / path | Status | Practical guidance |
+|---|---|---|
+| `methylutils` ECDF core (`core/distribution_views.py`, `ecdf_classifier.py`, centroid pair ECDF comparison path) | active | Safe to cite as current detector/classifier mathematical backbone. |
+| `methylvalidation` model backends (`ecdf`, `tabular_sklearn`, `generative_hybrid`) | active | Safe to cite when backend and key hyperparameters are reported. |
+| `methylmapper`, `methylenricher`, `methyldiseaseprogression` workflow synthesis | active | Safe to cite as downstream interpretation/synthesis layers (with heuristic/external-service caveats). |
+| `methyl_utils/comparison.py` beta-comparator module | legacy-supported | Keep for compatibility/auxiliary use; do not describe as active production detector path. |
+| Incomplete/retired experimental branches (historical clustering and partial DP-like ideas) | experimental | Do not cite as validated production methodology. |
+
 ## Publication-Ready Positioning
 
 The strongest defensible manuscript framing is:

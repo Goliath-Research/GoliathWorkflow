@@ -257,6 +257,7 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#legacy-or-experimental-remnants" id="toc-legacy-or-experimental-remnants" class="nav-link" data-scroll-target="#legacy-or-experimental-remnants"><span class="header-section-number">10.7</span> Legacy Or Experimental Remnants</a>
   <ul class="collapse">
   <li><a href="#current-safeguards" id="toc-current-safeguards" class="nav-link" data-scroll-target="#current-safeguards"><span class="header-section-number">10.7.1</span> Current safeguards</a></li>
+  <li><a href="#deprecation-status-snapshot" id="toc-deprecation-status-snapshot" class="nav-link" data-scroll-target="#deprecation-status-snapshot"><span class="header-section-number">10.7.2</span> Deprecation Status Snapshot</a></li>
   </ul></li>
   <li><a href="#publication-ready-positioning" id="toc-publication-ready-positioning" class="nav-link" data-scroll-target="#publication-ready-positioning"><span class="header-section-number">10.8</span> Publication-Ready Positioning</a></li>
   <li><a href="#what-would-strengthen-the-theory-further" id="toc-what-would-strengthen-the-theory-further" class="nav-link" data-scroll-target="#what-would-strengthen-the-theory-further"><span class="header-section-number">10.9</span> What Would Strengthen The Theory Further</a></li>
@@ -362,6 +363,50 @@ ul.task-list li input[type="checkbox"] {
 <li>Production workflow chapters describe the active ECDF-first detector/classifier path and the current model backends explicitly.</li>
 <li>Legacy modules remain in-repo for compatibility and experimentation, but publication claims should cite only methods documented as active in this book.</li>
 </ol>
+</section>
+<section id="deprecation-status-snapshot" class="level3" data-number="10.7.2">
+<h3 data-number="10.7.2" class="anchored" data-anchor-id="deprecation-status-snapshot"><span class="header-section-number">10.7.2</span> Deprecation Status Snapshot</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Component / path</th>
+<th>Status</th>
+<th>Practical guidance</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>methylutils</code> ECDF core (<code>core/distribution_views.py</code>, <code>ecdf_classifier.py</code>, centroid pair ECDF comparison path)</td>
+<td>active</td>
+<td>Safe to cite as current detector/classifier mathematical backbone.</td>
+</tr>
+<tr class="even">
+<td><code>methylvalidation</code> model backends (<code>ecdf</code>, <code>tabular_sklearn</code>, <code>generative_hybrid</code>)</td>
+<td>active</td>
+<td>Safe to cite when backend and key hyperparameters are reported.</td>
+</tr>
+<tr class="odd">
+<td><code>methylmapper</code>, <code>methylenricher</code>, <code>methyldiseaseprogression</code> workflow synthesis</td>
+<td>active</td>
+<td>Safe to cite as downstream interpretation/synthesis layers (with heuristic/external-service caveats).</td>
+</tr>
+<tr class="even">
+<td><code>methyl_utils/comparison.py</code> beta-comparator module</td>
+<td>legacy-supported</td>
+<td>Keep for compatibility/auxiliary use; do not describe as active production detector path.</td>
+</tr>
+<tr class="odd">
+<td>Incomplete/retired experimental branches (historical clustering and partial DP-like ideas)</td>
+<td>experimental</td>
+<td>Do not cite as validated production methodology.</td>
+</tr>
+</tbody>
+</table>
 </section>
 </section>
 <section id="publication-ready-positioning" class="level2" data-number="10.8">
