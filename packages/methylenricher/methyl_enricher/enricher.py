@@ -46,7 +46,7 @@ LIBRARY_PRESETS = {
         "Jensen_DISEASES",
         "GWAS_Catalog_2019",
         "DSigDB",
-        "DrugBank",
+        "DGIdb_Drug_Targets_2024",
         "LINCS_L1000_Chem_Pert_up",
         "LINCS_L1000_Chem_Pert_down",
         "miRTarBase_2017",
@@ -62,7 +62,7 @@ _LIBRARY_ALIASES = {
     "jensen diseases": "Jensen_DISEASES",
     "gwas catalog": "GWAS_Catalog_2019",
     "dsigdb": "DSigDB",
-    "drugbank": "DrugBank",
+    "drugbank": "DGIdb_Drug_Targets_2024",
     "lincs l1000": "LINCS_L1000_Chem_Pert_up",
     "mirtarbase": "miRTarBase_2017",
 }
