@@ -30,10 +30,6 @@ book:
     - part: "Part IV: User Guide"
       chapters:
         - chapters/14-user-guide.qmd
-  appendices:
-    - README.md
-    - DOCUMENTATION_PLAN.md
-
 bibliography: references.bib
 link-citations: true
 
