@@ -25,6 +25,89 @@ DEFAULT_LIBRARIES = [
     "WikiPathway_2023_Human"
 ]
 
+# Cancer-focused presets.
+# Explicit `libraries` always takes precedence over presets.
+LIBRARY_PRESETS = {
+    "cancer-core": [
+        *DEFAULT_LIBRARIES,
+        "ChEA_2022",
+        "ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X",
+        "TRRUST_Transcription_Factors_2019",
+        "DisGeNET",
+        "Jensen_DISEASES",
+        "GWAS_Catalog_2019",
+    ],
+    "cancer-extended": [
+        *DEFAULT_LIBRARIES,
+        "ChEA_2022",
+        "ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X",
+        "TRRUST_Transcription_Factors_2019",
+        "DisGeNET",
+        "Jensen_DISEASES",
+        "GWAS_Catalog_2019",
+        "DSigDB",
+        "DrugBank",
+        "LINCS_L1000_Chem_Pert_up",
+        "LINCS_L1000_Chem_Pert_down",
+        "miRTarBase_2017",
+    ],
+}
+
+# Friendly aliases for CLI/config readability. Keys are normalized to lowercase.
+_LIBRARY_ALIASES = {
+    "chea 2022": "ChEA_2022",
+    "encode tf chip-seq": "ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X",
+    "trrust": "TRRUST_Transcription_Factors_2019",
+    "disgenet": "DisGeNET",
+    "jensen diseases": "Jensen_DISEASES",
+    "gwas catalog": "GWAS_Catalog_2019",
+    "dsigdb": "DSigDB",
+    "drugbank": "DrugBank",
+    "lincs l1000": "LINCS_L1000_Chem_Pert_up",
+    "mirtarbase": "miRTarBase_2017",
+}
+
+
+def _normalize_library_name(name: str) -> str:
+    """Normalize a human-friendly library name to an Enrichr key when possible."""
+    cleaned = str(name).strip()
+    if not cleaned:
+        return cleaned
+    return _LIBRARY_ALIASES.get(cleaned.lower(), cleaned)
+
+
+def resolve_enrichr_libraries(
+    libraries: Optional[List[str]] = None,
+    library_preset: Optional[str] = None
+) -> List[str]:
+    """
+    Resolve final Enrichr libraries from explicit list and/or named preset.
+
+    Precedence:
+      1) explicit libraries (if provided),
+      2) library preset,
+      3) DEFAULT_LIBRARIES.
+    """
+    if libraries:
+        source = libraries
+    elif library_preset:
+        if library_preset not in LIBRARY_PRESETS:
+            valid = ", ".join(sorted(LIBRARY_PRESETS))
+            raise ValueError(f"Unknown library_preset '{library_preset}'. Valid presets: {valid}")
+        source = LIBRARY_PRESETS[library_preset]
+    else:
+        source = DEFAULT_LIBRARIES
+
+    # Preserve order and remove duplicates after normalization.
+    resolved: List[str] = []
+    seen = set()
+    for raw in source:
+        normalized = _normalize_library_name(raw)
+        if normalized and normalized not in seen:
+            resolved.append(normalized)
+            seen.add(normalized)
+    return resolved
+
 
 class EnrichmentAnalyzer:
     """
@@ -37,6 +120,7 @@ class EnrichmentAnalyzer:
     def __init__(
         self,
         libraries: Optional[List[str]] = None,
+        library_preset: Optional[str] = None,
         organism: str = "Human",
         cutoff: float = 0.05
     ):
@@ -44,11 +128,15 @@ class EnrichmentAnalyzer:
         Initialize the EnrichmentAnalyzer.
         
         Args:
-            libraries: List of Enrichr library names (default: DEFAULT_LIBRARIES)
+            libraries: List of Enrichr library names (highest precedence)
+            library_preset: Named preset when libraries are not provided
             organism: Organism name for Enrichr (default: "Human")
             cutoff: Adjusted p-value cutoff for filtering significant results
         """
-        self.libraries = libraries if libraries is not None else DEFAULT_LIBRARIES
+        self.libraries = resolve_enrichr_libraries(
+            libraries=libraries,
+            library_preset=library_preset
+        )
         self.organism = organism
         self.cutoff = cutoff
         self.results = {}
@@ -518,6 +606,7 @@ def run_enrichment(
     input_file: Union[str, Path],
     output_dir: Union[str, Path],
     libraries: Optional[List[str]] = None,
+    library_preset: Optional[str] = None,
     top_n: Optional[int] = 200,
     cutoff: float = 0.05,
     organism: str = "Human",
@@ -543,6 +632,7 @@ def run_enrichment(
     """
     analyzer = EnrichmentAnalyzer(
         libraries=libraries,
+        library_preset=library_preset,
         organism=organism,
         cutoff=cutoff
     )

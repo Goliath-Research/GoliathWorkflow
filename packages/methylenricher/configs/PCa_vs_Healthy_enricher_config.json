@@ -12,5 +12,5 @@
     "top": 150,
     "cutoff": 0.05,
     "organism": "Human",
-    "libraries": ["KEGG_2021_Human", "Reactome_2022", "GO_Biological_Process_2023", "MSigDB_Hallmark_2020", "WikiPathway_2023_Human"]
+    "library_preset": "cancer-extended"
   }

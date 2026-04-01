@@ -21,7 +21,7 @@ The statistical test itself therefore lives outside the repository. The in-repo 
 - filtering the returned tables, and
 - carrying forward the adjusted p-values into later scoring steps.
 
-Publication text should cite Enrichr [@chen2013] and record the exact library set used in the analysis.
+Publication text should cite Enrichr [@chen2013] and record the exact library set used in the analysis. In MethylEnricher this can be done either by logging an explicit `libraries` list or by logging a named `library_preset` (for example `cancer-extended` for cancer-focused studies).
 
 ## Pathway Graph Construction
 

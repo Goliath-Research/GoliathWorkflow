@@ -203,7 +203,8 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `max_gene_q_value` | float | `0.05` | Maximum gene-level q-value to include in enrichment. |
 | `sort_by` | str | `"total_weight"` | Column to sort the enriched gene list by. |
 | `sort_ascending` | bool | `false` | Sort direction. |
-| `libraries` | list[str] | `["KEGG_2021_Human", "Reactome_2022", "GO_Biological_Process_2023", "MSigDB_Hallmark_2020"]` | Enrichr library names for over-representation analysis. |
+| `library_preset` | str \| null | `null` | Named Enrichr preset. Supported values include `"cancer-core"` and `"cancer-extended"`. Used when `libraries` is not set. |
+| `libraries` | list[str] | `["KEGG_2021_Human", "Reactome_2022", "GO_Biological_Process_2023", "GO_Molecular_Function_2023", "GO_Cellular_Component_2023", "MSigDB_Hallmark_2020", "WikiPathway_2023_Human"]` | Explicit Enrichr libraries for over-representation analysis. **Highest precedence**: if set, overrides `library_preset`. |
 | `top` | int | `150` | Maximum number of genes to report. |
 | `cutoff` | float | `0.05` | Adjusted p-value cutoff for pathway enrichment. |
 | `organism` | str | `"Human"` | Organism for Enrichr queries. |

@@ -7,7 +7,12 @@ import json
 import sys
 from pathlib import Path
 
-from .enricher import run_enrichment, DEFAULT_LIBRARIES
+from .enricher import (
+    run_enrichment,
+    DEFAULT_LIBRARIES,
+    LIBRARY_PRESETS,
+    resolve_enrichr_libraries,
+)
 from .module_pipeline import run_module_pipeline
 
 
@@ -184,6 +189,13 @@ For theory and package documentation, see:
         nargs='+',
         default=None,
         help=f'Enrichr libraries to query (default: {len(DEFAULT_LIBRARIES)} standard libraries)'
+    )
+    enrich_group.add_argument(
+        '--library-preset',
+        type=str,
+        choices=sorted(LIBRARY_PRESETS.keys()),
+        default=None,
+        help='Named Enrichr preset (used when --libraries is not provided)'
     )
     enrich_group.add_argument(
         '--top', '-t',
@@ -374,6 +386,13 @@ def main():
         print("[ERROR] Input file not specified. Use --input /path/to/file or set 'input' in --config.")
         sys.exit(1)
 
+    # Resolve final library list once with explicit precedence:
+    # --libraries > --library-preset > defaults.
+    resolved_libraries = resolve_enrichr_libraries(
+        libraries=args.libraries,
+        library_preset=args.library_preset
+    )
+
     # Display parameters
     print("=" * 70)
     print("MethylEnricher - Gene Enrichment Analysis")
@@ -417,9 +436,14 @@ def main():
         print(f"Filter: feature_type in {args.feature_types}")
     
     if args.libraries:
-        print(f"Libraries: {', '.join(args.libraries)}")
+        print("Libraries source: explicit --libraries")
+        print(f"Libraries: {', '.join(resolved_libraries)}")
+    elif args.library_preset:
+        print(f"Libraries source: preset '{args.library_preset}'")
+        print(f"Libraries: {', '.join(resolved_libraries)}")
     else:
-        print(f"Libraries: {len(DEFAULT_LIBRARIES)} default libraries")
+        print(f"Libraries source: default ({len(DEFAULT_LIBRARIES)} libraries)")
+        print(f"Libraries: {', '.join(resolved_libraries)}")
     if getattr(args, "modules", False):
         print("Mode: pathway-to-module pipeline (output: modules_ranked.csv)")
         print(f"Similarity threshold: {getattr(args, 'similarity_threshold', 0.15)}")
@@ -439,7 +463,7 @@ def main():
                 output_dir=Path(out_dir),
                 gene_column=args.gene_column,
                 top_n=args.top,
-                libraries=args.libraries,
+                libraries=resolved_libraries,
                 organism=args.organism,
                 cutoff=args.cutoff,
                 disease_only=args.disease_only,
@@ -463,7 +487,7 @@ def main():
         return run_enrichment(
             input_file=in_file,
             output_dir=out_dir,
-            libraries=args.libraries,
+            libraries=resolved_libraries,
             top_n=args.top,
             cutoff=args.cutoff,
             organism=args.organism,

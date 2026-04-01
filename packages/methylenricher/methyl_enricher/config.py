@@ -42,6 +42,7 @@ class EnricherStepConfig(BaseModel):
 
     # Enrichment
     libraries: Optional[List[str]] = None
+    library_preset: Optional[str] = None
     top: Optional[int] = None
     cutoff: Optional[float] = None
     organism: Optional[str] = None
