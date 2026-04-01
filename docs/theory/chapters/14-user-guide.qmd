@@ -167,8 +167,6 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 \node[box, below=of E] (F) {Optional: methyl-disease-progression (for staged diseases, e.g. PCa)};
 \node[box, below=of F] (G) {Stage C--model};
 \node[box, below=of G] (H) {methyl-classifier trains production model; methyl-predictor runs production validation pass};
-\node[box, below left=0.7cm and 4.2cm of H] (I) {Workflow 2 --predictor-only: repeated MC holdouts with frozen model to estimate metric distributions (balanced accuracy, etc.)};
-\node[box, below right=0.7cm and 4.2cm of H] (J) {Final deployment path: use frozen trained model to predict new unlabeled samples};
 
 \draw[arr] (A)--(B);
 \draw[arr] (B)--(C);
@@ -177,12 +175,10 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 \draw[arr] (E)--(F);
 \draw[arr] (F)--(G);
 \draw[arr] (G)--(H);
-\draw[arr] (H)--(I);
-\draw[arr] (H)--(J);
 \end{tikzpicture}
 ```
 
-The metric distribution branch is the `--predictor-only` workflow (repeated holdouts with a frozen model). The final deployment branch is direct prediction on new unlabeled samples using the trained production artifacts.
+Metric-distribution evaluation is run via `--predictor-only` (repeated holdouts with the frozen model). Final deployment predicts new unlabeled samples with the frozen trained artifacts.
 
 ### Step 1: Run Monte Carlo with stability
 
