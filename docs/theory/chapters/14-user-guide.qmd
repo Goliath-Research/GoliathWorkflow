@@ -139,6 +139,16 @@ Sample paths are resolved as `<samples_base_path>/<sample_name>`.
 
 Full theoretical background: @sec-workflow-model-creation.
 
+### Stage-oriented execution checklist
+
+Workflow 1 should be run and reviewed in three explicit stages:
+
+1. **Stability (`--stability`)**: optimize panel robustness (`n_iterations`, `train_fraction`, `stability_dmp_freq`) and verify `stable_dmps_production.csv` is non-empty and biologically plausible.
+2. **Freeze/analysis (`--freeze`)**: lock the panel into `production/project.json`, then review production detector outputs together with mapper/enricher summaries.
+3. **Modeling (`--model`)**: train final classifier and predictor artifacts only after stability and biological review are complete.
+
+Treat changes in any of these stage inputs as a model version change, not as a minor rerun.
+
 ### Step 1: Run Monte Carlo with stability
 
 ```bash

@@ -33,7 +33,6 @@ The complete package map with all four parts is in the "Reading This Book" secti
 | @sec-methyldetector | `methyldetector` | DMP testing, filtering, classifier export, and production panel bypass |
 | @sec-methylclassifier | `methylclassifier` | binary, multi-chromosome, OvR, and multiclass learned-head classification |
 | @sec-methylpredictor-validation | `methylpredictor`, `methylvalidation`, `methyldiseaseprogression` | prediction metrics, Monte Carlo validation, stability analysis, production freeze, progression synthesis |
-| @sec-methylcluster | `methylcluster` | beta-based and distance-based clustering workflows |
 | @sec-methylmapper | `methylmapper` | DMP-to-gene mapping and gene-level aggregation |
 | @sec-methylenricher | `methylenricher` | over-representation analysis, pathway graph clustering, and module scoring |
 | @sec-methylalignmentqc | `methylalignmentqc` | deterministic QC parsing and summarization |
@@ -124,7 +123,6 @@ This book is organized into four parts.
 | I | @sec-methyldetector | `methyldetector` | DMP testing, filtering, classifier export, and production panel bypass |
 | I | @sec-methylclassifier | `methylclassifier` | binary, multi-chromosome, OvR, and multiclass learned-head classification |
 | I | @sec-methylpredictor-validation | `methylpredictor`, `methylvalidation` | prediction metrics, Monte Carlo validation, stability analysis, production freeze |
-| I | @sec-methylcluster | `methylcluster` | beta-based and distance-based clustering workflows |
 | I | @sec-methylmapper | `methylmapper` | DMP-to-gene mapping and gene-level aggregation |
 | I | @sec-methylenricher | `methylenricher` | over-representation analysis, pathway graph clustering, and module scoring |
 | I | @sec-methylalignmentqc | `methylalignmentqc` | deterministic QC parsing and summarization |

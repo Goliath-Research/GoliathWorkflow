@@ -16,7 +16,6 @@ book:
         - chapters/03-methyldetector.qmd
         - chapters/04-methylclassifier.qmd
         - chapters/05-methylpredictor-and-validation.qmd
-        - chapters/06-methylcluster.qmd
         - chapters/07-methylmapper.qmd
         - chapters/08-methylenricher.qmd
         - chapters/09-methylalignmentqc.qmd

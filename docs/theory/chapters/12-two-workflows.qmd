@@ -9,7 +9,7 @@ MethylPipeline supports two primary end-to-end operational workflows. They are d
 | **Goal** | Build a stable, production-ready model | Evaluate the frozen production model |
 | **Flag** | `--stability`, then `--freeze`, then `--model` | `--predictor-only` |
 | **Steps run per iteration** | centroid → detector | predictor only |
-| **Steps run once (freeze/model)** | freeze: centroid → detector(fixed) → mapper → enricher (optional progression); model: classifier → predictor | — |
+| **Steps run once (freeze/model)** | freeze/analysis: centroid → detector(fixed) → mapper → enricher (optional progression); model: classifier → predictor | — |
 | **Output** | stable panel, production biological outputs, final classifier/predictor outputs | `all_metrics.csv`, `metrics_summary.json` |
 | **Answers** | Which positions and model best separate the classes on all data? | What performance distribution does the frozen model achieve? |
 
@@ -28,6 +28,55 @@ MethylValidation addresses this by repeating only the discovery portion of the p
 After many such iterations, a DMP that appears consistently in the discovery sets of most runs is more likely to reflect a true biological signal than one that appears in only a few. This motivates the stability analysis: the stable panel is a consensus over repeated random partitions of the data.
 
 The production freeze then trains a final classifier on **all available data** restricted to the stable panel. Because the panel itself was selected using the full sample set (via the MC iterations), this is still an internal analysis; it is not a substitute for external validation on an independent cohort.
+
+### The Three Stages of Workflow 1
+
+Workflow 1 is easiest to reason about as three explicit stages with different statistical roles.
+
+#### Stage A — Stability (`--stability`)
+
+**Theoretical role.** This stage estimates *feature-selection stability* rather than final predictive performance. Let $\mathcal{D}_{\text{disc},r}$ be the discovery DMP set from split $r$. A locus-level recurrence estimator
+
+$$
+\hat{f}(d) = \frac{1}{R^*} \sum_{r=1}^{R^*} \mathbf{1}[d \in \mathcal{D}_{\text{disc},r}]
+$$
+
+acts as a Monte Carlo approximation to selection probability under re-sampling. Thresholding with $\hat{f}(d)\ge\tau$ (where $\tau=$ `stability_dmp_freq`) enforces reproducibility pressure on the panel.
+
+**Practical role.** This stage answers: "Which loci survive repeated train/validation perturbations?" In practice:
+
+- it runs only `centroid -> detector` per split (fast enough for many iterations),
+- it creates `all_metrics.csv`/`metrics_summary.json` for detector-side internal diagnostics,
+- it writes `stability/stable_dmps_production.csv`, which is the only accepted panel input for `--freeze`,
+- and it allows optional run-quality filtering via `stability_min_balanced_accuracy` before recurrence counting.
+
+For most projects, this is the stage where panel size and robustness are tuned (`n_iterations`, `train_fraction`, `stability_dmp_freq`).
+
+#### Stage B — Freeze/Analysis (`--freeze`)
+
+**Theoretical role.** This stage converts the consensus panel into a deterministic production artifact. The key operation is a *panel-constrained rerun on all samples*: detector inference is no longer discovering a new panel; it is applying fixed loci and producing full downstream biological interpretation from a stable feature space.
+
+**Practical role.** This stage answers: "Given a locked panel, what is the complete biological analysis on the full cohort?" In practice it:
+
+1. injects `fixed_dmp_panel` into `production/project.json`,
+2. rebuilds centroids on all data,
+3. runs detector in fixed-panel mode,
+4. runs mapper and enricher to produce gene/pathway outputs,
+5. optionally runs progression synthesis for ordered disease-stage summaries.
+
+The freeze artifacts (`production/project.json`, fixed-panel detection outputs, mapper/enricher summaries) become the canonical handoff package for model release and review.
+
+#### Stage C — Modeling (`--model`)
+
+**Theoretical role.** This stage fits the final prediction function conditioned on the frozen panel and frozen production project. It separates *feature agreement* (handled in Stage A/B) from *final classifier parameter estimation* (handled here).
+
+**Practical role.** This stage answers: "What trained classifier and predictor artifacts should be deployed?" In practice it:
+
+- runs `methyl-classifier` on `production/project.json`,
+- runs `methyl-predictor` to generate production-side metrics/artifacts,
+- enforces the optional biological gate (`require_biological_review_for_model`) before model creation.
+
+The resulting files under `production/classifiers/` and `production/predictors/` are the deployable model artifacts. Any rerun with changed panel or freeze inputs should be treated as a new model version.
 
 ### Steps
 

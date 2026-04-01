@@ -10,7 +10,7 @@
 - `methyl_utils/statistical_tests.py`
 - `methyl_utils/ecdf_classifier.py`
 
-Those modules define the empirical-distribution view used by centroid comparison, DMP detection, and ECDF classification. They also expose several auxiliary or legacy methods, especially beta-based distances, that are still used by downstream packages such as `methylcluster`.
+Those modules define the empirical-distribution view used by centroid comparison, DMP detection, and ECDF classification. They also expose several auxiliary or legacy methods, especially beta-based distances, that remain available as optional utilities.
 
 ## Implemented Method Inventory
 

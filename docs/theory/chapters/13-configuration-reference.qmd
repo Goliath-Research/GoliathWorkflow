@@ -292,29 +292,6 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 
 ---
 
-## `step_config.cluster` {#sec-ref-cluster}
-
-*See @sec-methylcluster for theoretical background.*
-
-| Parameter | Type | Description |
-|---|---|---|
-| `clustering_method` | str | Algorithm: `"hdbscan"`, `"hierarchical"`, `"kmeans"`, `"gmm"`. |
-| `metric` | str | Distance metric: `"jensenshannon"`, `"euclidean"`, etc. |
-| `min_cluster_size` | int | HDBSCAN minimum cluster size. |
-| `min_samples` | int | HDBSCAN minimum samples. |
-| `cluster_selection_epsilon` | float | HDBSCAN epsilon for flat extraction. |
-| `cluster_selection_method` | str | `"eom"` or `"leaf"`. |
-| `allow_single_cluster` | bool | Allow HDBSCAN to return a single cluster. |
-| `linkage_method` | str | Hierarchical linkage: `"ward"`, `"complete"`, `"average"`. |
-| `max_k` | int | Maximum $k$ for automatic $k$ selection (hierarchical/KMeans). |
-| `force_k` | int \| null | Force a specific $k$ (overrides auto-selection). |
-| `silhouette_threshold` | float | Minimum silhouette score for valid clusters. |
-| `enable_medoid_refinement` | bool | Refine cluster assignments using medoids. |
-| `use_gpu` | bool | Use GPU for distance matrix computation. |
-| `output_dir` | str \| null | Override output directory. |
-
----
-
 ## `step_config.alignment_qc` {#sec-ref-alignment-qc}
 
 *See @sec-methylalignmentqc for theoretical background.*

@@ -8,7 +8,7 @@ The source of truth is the code. This book is written from the implemented behav
 
 - shared notation and data structures,
 - the ECDF-centered centroid, detector, classifier, predictor, and validation stack,
-- downstream packages such as clustering, mapping, enrichment, and alignment QC,
+- downstream packages such as mapping, enrichment, and alignment QC,
 - explicit caveats for approximations, heuristics, legacy remnants, and external-service-backed steps.
 
 ## Build Requirements
@@ -65,3 +65,13 @@ Rendered output is written to `docs/theory/_book/`.
 ## Relationship To Package Docs
 
 The Quarto book is the canonical theory reference. Package-local `docs/THEORY.md` files should stay concise and point back to the corresponding Quarto chapter instead of becoming competing sources.
+
+## Migration Note: Clustering Docs Retirement
+
+`MethylCluster` is no longer part of the active MethylPipeline workflow documentation and has been removed from this book.
+
+For the practical interpretation layer that previously mixed with clustering narratives, use:
+
+- `chapters/12-two-workflows.qmd` for stage-level pipeline operations (`--stability`, `--freeze`, `--model`),
+- `chapters/07-methylmapper.qmd` for DMP-to-gene aggregation and scoring,
+- `chapters/08-methylenricher.qmd` for pathway/module interpretation.
