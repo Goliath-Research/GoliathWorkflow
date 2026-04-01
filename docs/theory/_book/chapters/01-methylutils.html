@@ -571,7 +571,7 @@ T_{\text{eff}} = T \sqrt{n_{\text{effective}}},
 </section>
 <section id="auxiliary-beta-based-metrics" class="level2" data-number="2.10">
 <h2 data-number="2.10" class="anchored" data-anchor-id="auxiliary-beta-based-metrics"><span class="header-section-number">2.10</span> Auxiliary Beta-Based Metrics</h2>
-<p><code>metrics_core.py</code> still contains exact beta divergences, beta overlap surrogates, and moment calculations. These are mathematically legitimate utilities, but they are <strong>not</strong> the main production path for DMP detection plus classification. They matter mainly because downstream clustering still uses beta-based geometry. In publication text, beta distances should therefore be described as an auxiliary branch of the repository, not as the canonical detector-classifier model.</p>
+<p><code>metrics_core.py</code> still contains exact beta divergences, beta overlap surrogates, and moment calculations. The repository also contains a legacy beta-comparator module (<code>methyl_utils/comparison.py</code>). These are mathematically legitimate utilities, but they are <strong>not</strong> the main production path for DMP detection plus classification and are not used by the active detector/classifier runtime flow. In publication text, beta distances should therefore be described as an auxiliary branch of the repository, not as the canonical detector-classifier model.</p>
 
 
 <div id="refs" class="references csl-bib-body hanging-indent" role="list">

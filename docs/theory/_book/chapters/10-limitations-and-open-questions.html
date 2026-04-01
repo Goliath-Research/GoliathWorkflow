@@ -254,7 +254,10 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#approximation-layers" id="toc-approximation-layers" class="nav-link" data-scroll-target="#approximation-layers"><span class="header-section-number">10.4</span> Approximation Layers</a></li>
   <li><a href="#heuristic-layers" id="toc-heuristic-layers" class="nav-link" data-scroll-target="#heuristic-layers"><span class="header-section-number">10.5</span> Heuristic Layers</a></li>
   <li><a href="#external-dependencies" id="toc-external-dependencies" class="nav-link" data-scroll-target="#external-dependencies"><span class="header-section-number">10.6</span> External Dependencies</a></li>
-  <li><a href="#legacy-or-experimental-remnants" id="toc-legacy-or-experimental-remnants" class="nav-link" data-scroll-target="#legacy-or-experimental-remnants"><span class="header-section-number">10.7</span> Legacy Or Experimental Remnants</a></li>
+  <li><a href="#legacy-or-experimental-remnants" id="toc-legacy-or-experimental-remnants" class="nav-link" data-scroll-target="#legacy-or-experimental-remnants"><span class="header-section-number">10.7</span> Legacy Or Experimental Remnants</a>
+  <ul class="collapse">
+  <li><a href="#current-safeguards" id="toc-current-safeguards" class="nav-link" data-scroll-target="#current-safeguards"><span class="header-section-number">10.7.1</span> Current safeguards</a></li>
+  </ul></li>
   <li><a href="#publication-ready-positioning" id="toc-publication-ready-positioning" class="nav-link" data-scroll-target="#publication-ready-positioning"><span class="header-section-number">10.8</span> Publication-Ready Positioning</a></li>
   <li><a href="#what-would-strengthen-the-theory-further" id="toc-what-would-strengthen-the-theory-further" class="nav-link" data-scroll-target="#what-would-strengthen-the-theory-further"><span class="header-section-number">10.9</span> What Would Strengthen The Theory Further</a></li>
   </ul>
@@ -345,12 +348,21 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="legacy-or-experimental-remnants" class="level2" data-number="10.7">
 <h2 data-number="10.7" class="anchored" data-anchor-id="legacy-or-experimental-remnants"><span class="header-section-number">10.7</span> Legacy Or Experimental Remnants</h2>
-<p>Several code paths look incomplete or partially superseded:</p>
+<p>The repository still contains legacy components, but their status is now clearer:</p>
 <ul>
-<li><code>packages/methylutils/comparison.py</code> still advertises beta-based comparison logic that does not match the active ECDF-first production path.</li>
-<li>Some older package docs still describe a stricter or cleaner theory story than the code currently supports.</li>
+<li><code>packages/methylutils/comparison.py</code> contains a beta-based comparator path that is <strong>not</strong> used by the active detector/classifier production flow.</li>
+<li>A few package-local docs can lag behind code evolution between releases.</li>
 </ul>
-<p>These remnants do not have to be deleted immediately, but they should not be cited as active method descriptions.</p>
+<p>To avoid methodological confusion, interpret these as <strong>historical/auxiliary artifacts</strong>, not active runtime estimators.</p>
+<section id="current-safeguards" class="level3" data-number="10.7.1">
+<h3 data-number="10.7.1" class="anchored" data-anchor-id="current-safeguards"><span class="header-section-number">10.7.1</span> Current safeguards</h3>
+<p>The current docs/code governance already reduces this risk:</p>
+<ol type="1">
+<li>The Quarto theory book (<code>docs/theory</code>) is the canonical method reference.</li>
+<li>Production workflow chapters describe the active ECDF-first detector/classifier path and the current model backends explicitly.</li>
+<li>Legacy modules remain in-repo for compatibility and experimentation, but publication claims should cite only methods documented as active in this book.</li>
+</ol>
+</section>
 </section>
 <section id="publication-ready-positioning" class="level2" data-number="10.8">
 <h2 data-number="10.8" class="anchored" data-anchor-id="publication-ready-positioning"><span class="header-section-number">10.8</span> Publication-Ready Positioning</h2>

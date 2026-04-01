@@ -63,12 +63,20 @@ Any publication using those layers should record service versions, access dates,
 
 ## Legacy Or Experimental Remnants
 
-Several code paths look incomplete or partially superseded:
+The repository still contains legacy components, but their status is now clearer:
 
-- `packages/methylutils/comparison.py` still advertises beta-based comparison logic that does not match the active ECDF-first production path.
-- Some older package docs still describe a stricter or cleaner theory story than the code currently supports.
+- `packages/methylutils/comparison.py` contains a beta-based comparator path that is **not** used by the active detector/classifier production flow.
+- A few package-local docs can lag behind code evolution between releases.
 
-These remnants do not have to be deleted immediately, but they should not be cited as active method descriptions.
+To avoid methodological confusion, interpret these as **historical/auxiliary artifacts**, not active runtime estimators.
+
+### Current safeguards
+
+The current docs/code governance already reduces this risk:
+
+1. The Quarto theory book (`docs/theory`) is the canonical method reference.
+2. Production workflow chapters describe the active ECDF-first detector/classifier path and the current model backends explicitly.
+3. Legacy modules remain in-repo for compatibility and experimentation, but publication claims should cite only methods documented as active in this book.
 
 ## Publication-Ready Positioning
 
