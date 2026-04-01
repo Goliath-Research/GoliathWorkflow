@@ -52,6 +52,10 @@ format:
     number-sections: true
     colorlinks: true
     pdf-engine: lualatex
+    include-in-header:
+      text: |
+        \usepackage{tikz}
+        \usetikzlibrary{arrows.meta,positioning}
     geometry:
       - margin=1in
 

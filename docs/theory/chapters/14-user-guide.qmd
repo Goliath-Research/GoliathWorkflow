@@ -151,9 +151,21 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 
 ### Workflow mental model
 
-```{tikz}
-%%| fig-cap: "Workflow mental model: stability MC, single freeze pass, model build, repeated frozen-model evaluation, and new-sample inference."
-\usetikzlibrary{arrows.meta, positioning}
+::: {.content-visible when-format="html"}
+1. Stage A--stability: MC iterations (`n_iterations`)
+2. Per iteration: `methyl-centroid` -> `methyl-detector`
+3. Stability aggregation of DMP recurrence across runs
+4. Stage B--freeze (single execution on all samples)
+5. `methyl-centroid` -> `methyl-detector`(fixed panel) -> `methyl-mapper` -> `methyl-enricher`
+6. Optional `methyl-disease-progression` (for staged diseases, e.g. PCa)
+7. Stage C--model
+8. `methyl-classifier` trains production model; `methyl-predictor` runs production validation pass
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
 \begin{tikzpicture}[
   node distance=0.5cm and 0cm,
   box/.style={draw, rectangle, rounded corners=2pt, text width=8.0cm, align=center, font=\small, minimum height=0.65cm, fill=gray!8},
@@ -167,7 +179,6 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 \node[box, below=of E] (F) {Optional: methyl-disease-progression (for staged diseases, e.g. PCa)};
 \node[box, below=of F] (G) {Stage C--model};
 \node[box, below=of G] (H) {methyl-classifier trains production model; methyl-predictor runs production validation pass};
-
 \draw[arr] (A)--(B);
 \draw[arr] (B)--(C);
 \draw[arr] (C)--(D);
@@ -176,7 +187,10 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 \draw[arr] (F)--(G);
 \draw[arr] (G)--(H);
 \end{tikzpicture}
+\caption{Workflow mental model: stability MC, single freeze pass, model build, repeated frozen-model evaluation, and new-sample inference.}
+\end{figure}
 ```
+:::
 
 Metric-distribution evaluation is run via `--predictor-only` (repeated holdouts with the frozen model). Final deployment predicts new unlabeled samples with the frozen trained artifacts.
 
