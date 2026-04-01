@@ -211,6 +211,8 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `modules` | bool | `true` | Compute gene-gene co-citation modules. |
 | `similarity_threshold` | float | `0.15` | Jaccard similarity threshold for module graph edges. |
 | `cluster_resolution` | float | `0.8` | Leiden clustering resolution for module detection. |
+| `module_cluster_max_q` | float \| null | `null` | Optional pre-clustering filter: keep only terms with `Adjusted P-value <= module_cluster_max_q` when building pathway modules. Recommended with large presets like `cancer-extended`. |
+| `module_cluster_top_terms_per_library` | int \| null | `null` | Optional pre-clustering cap: keep top N enrichment terms per library (after q-value sorting) before module clustering. |
 | `network_plot` | str | `"plotly"` | Library used for the network visualization (`"plotly"` or `"matplotlib"`). |
 
 ---

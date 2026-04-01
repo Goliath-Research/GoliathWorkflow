@@ -237,6 +237,20 @@ For theory and package documentation, see:
         help='Louvain cluster resolution (default: 0.8). Lower values yield fewer, larger modules. Tune with --similarity-threshold to target 3-5 modules.'
     )
     parser.add_argument(
+        '--module-cluster-max-q',
+        type=float,
+        default=None,
+        metavar='Q',
+        help='When --modules: keep only terms with Adjusted P-value <= Q before clustering (default: disabled).'
+    )
+    parser.add_argument(
+        '--module-cluster-top-terms-per-library',
+        type=int,
+        default=None,
+        metavar='N',
+        help='When --modules: keep top N terms per library before clustering (default: disabled).'
+    )
+    parser.add_argument(
         '--network-plot',
         type=str,
         default=None,
@@ -448,6 +462,13 @@ def main():
         print("Mode: pathway-to-module pipeline (output: modules_ranked.csv)")
         print(f"Similarity threshold: {getattr(args, 'similarity_threshold', 0.15)}")
         print(f"Cluster resolution: {getattr(args, 'cluster_resolution', 0.8)}")
+        if getattr(args, "module_cluster_max_q", None) is not None:
+            print(f"Module term filter: Adjusted P-value <= {args.module_cluster_max_q}")
+        if getattr(args, "module_cluster_top_terms_per_library", None) is not None:
+            print(
+                "Module term filter: "
+                f"top {args.module_cluster_top_terms_per_library} terms/library"
+            )
         _np = getattr(args, "network_plot", None)
         effective_network_plot = "plotly" if _np is None else _np
         if effective_network_plot and effective_network_plot.lower() != "none":
@@ -482,6 +503,10 @@ def main():
                 sort_ascending=args.sort_ascending,
                 similarity_threshold=getattr(args, "similarity_threshold", 0.15),
                 cluster_resolution=getattr(args, "cluster_resolution", 0.8),
+                module_cluster_max_q=getattr(args, "module_cluster_max_q", None),
+                module_cluster_top_terms_per_library=getattr(
+                    args, "module_cluster_top_terms_per_library", None
+                ),
                 network_plot=effective_network_plot,
             )
         return run_enrichment(

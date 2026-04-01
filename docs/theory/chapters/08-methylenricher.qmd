@@ -35,6 +35,13 @@ or a closely related overlap score. Community detection is then performed with t
 
 This is a standard graph heuristic for organizing pathways, but the resulting modules depend materially on the chosen threshold, graph construction rule, and Louvain resolution behavior.
 
+When broad library presets are used (for example `cancer-extended`), module construction can include tens of thousands of enrichment terms. The implementation now supports pre-clustering term reduction so modules can be built from a focused subset:
+
+- q-value gate (`module_cluster_max_q`): keep only terms with adjusted p-value below a threshold,
+- per-library cap (`module_cluster_top_terms_per_library`): keep top N terms per library before graph construction.
+
+These controls change the module graph itself, not only the display layer, so they should be reported in methods sections.
+
 ## Module Enrichment Score
 
 `compute_module_enrichment_score()` converts a module into a scalar ranking score by combining:

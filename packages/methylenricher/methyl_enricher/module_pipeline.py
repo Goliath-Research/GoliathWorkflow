@@ -20,6 +20,58 @@ logger = logging.getLogger(__name__)
 OVERLAP_GENES_CAP = 50
 
 
+def _reduce_terms_for_clustering(
+    merged_df: pd.DataFrame,
+    *,
+    max_q: Optional[float] = None,
+    top_terms_per_library: Optional[int] = None,
+) -> pd.DataFrame:
+    """
+    Reduce enrichment terms before pathway clustering.
+
+    This keeps enrichment exports untouched while allowing module construction
+    to operate on a more focused term set when large library presets are used.
+    """
+    if merged_df.empty:
+        return merged_df
+
+    work = merged_df.copy()
+    q_col = "Adjusted P-value" if "Adjusted P-value" in work.columns else None
+
+    if max_q is not None and q_col is not None:
+        q = pd.to_numeric(work[q_col], errors="coerce")
+        work = work[q <= max_q].copy()
+
+    if top_terms_per_library is not None and top_terms_per_library > 0 and "library" in work.columns:
+        sort_cols: List[str] = []
+        ascending: List[bool] = []
+        if q_col is not None:
+            work["_adj_q"] = pd.to_numeric(work[q_col], errors="coerce").fillna(1.0)
+            sort_cols.append("_adj_q")
+            ascending.append(True)
+        if "P-value" in work.columns:
+            work["_pval"] = pd.to_numeric(work["P-value"], errors="coerce").fillna(1.0)
+            sort_cols.append("_pval")
+            ascending.append(True)
+        if "Combined Score" in work.columns:
+            work["_combined_score"] = pd.to_numeric(work["Combined Score"], errors="coerce").fillna(0.0)
+            sort_cols.append("_combined_score")
+            ascending.append(False)
+
+        if sort_cols:
+            work = work.sort_values(sort_cols, ascending=ascending)
+        work = (
+            work.groupby("library", as_index=False, group_keys=False)
+            .head(top_terms_per_library)
+            .copy()
+        )
+
+    drop_cols = [c for c in ["_adj_q", "_pval", "_combined_score"] if c in work.columns]
+    if drop_cols:
+        work = work.drop(columns=drop_cols)
+    return work
+
+
 def _overlap_genes_str(module_genes: Set[str], cap: int = OVERLAP_GENES_CAP) -> str:
     """Comma-separated overlap genes for the module, optionally capped for readability."""
     genes = sorted(module_genes)
@@ -127,6 +179,8 @@ def run_module_pipeline(
     sort_ascending: bool = False,
     similarity_threshold: float = 0.15,
     cluster_resolution: float = 0.8,
+    module_cluster_max_q: Optional[float] = None,
+    module_cluster_top_terms_per_library: Optional[int] = None,
     disease_genes: Optional[Set[str]] = None,
     network_plot: Optional[str] = None,
 ) -> pd.DataFrame:
@@ -166,8 +220,27 @@ def run_module_pipeline(
         logger.warning("No enrichment results; cannot build modules.")
         return pd.DataFrame()
 
-    pathway_to_module_id, pathway_to_genes = run_pathway_clustering(
+    clustering_df = _reduce_terms_for_clustering(
         merged_df,
+        max_q=module_cluster_max_q,
+        top_terms_per_library=module_cluster_top_terms_per_library,
+    )
+    if clustering_df.empty:
+        logger.warning(
+            "Term reduction produced zero rows for module clustering "
+            f"(module_cluster_max_q={module_cluster_max_q}, "
+            f"module_cluster_top_terms_per_library={module_cluster_top_terms_per_library})."
+        )
+        return pd.DataFrame()
+    if len(clustering_df) < len(merged_df):
+        logger.info(
+            "Reduced terms for module clustering: %d -> %d rows",
+            len(merged_df),
+            len(clustering_df),
+        )
+
+    pathway_to_module_id, pathway_to_genes = run_pathway_clustering(
+        clustering_df,
         similarity_threshold=similarity_threshold,
         use_jaccard=True,
         cluster_resolution=cluster_resolution,
@@ -182,7 +255,7 @@ def run_module_pipeline(
     score_df = score_and_rank_modules(
         pathway_to_module_id,
         pathway_to_genes,
-        merged_df,
+        clustering_df,
         gene_weights=gene_weights,
         disease_genes=disease_genes or DEFAULT_PCA_RELEVANT_GENES,
     )
@@ -196,7 +269,7 @@ def run_module_pipeline(
             module_genes |= pathway_to_genes.get(p, set())
         label = _module_label_from_themes(pathways, normalizer)
         main_genes = _main_genes_for_module(module_genes, gene_weights, top_k=10)
-        main_pathways = _main_pathways_for_module(pathways, merged_df, top_k=5)
+        main_pathways = _main_pathways_for_module(pathways, clustering_df, top_k=5)
         overlap_genes = _overlap_genes_str(module_genes)
         n_genes = row["n_genes"]
         # Curated PCa tier override for canonical themes; else use score-based
@@ -230,7 +303,7 @@ def run_module_pipeline(
 
     # Per-pathway overlap genes (which genes drive each pathway)
     if pathway_to_genes:
-        display_by_key = _display_term_by_canonical_key(merged_df)
+        display_by_key = _display_term_by_canonical_key(clustering_df)
         pathway_overlap = [
             {
                 "Pathway": display_by_key.get(term, term),
@@ -255,7 +328,7 @@ def run_module_pipeline(
             output_dir=output_dir,
             pathway_to_module_id=pathway_to_module_id,
             pathway_to_genes=pathway_to_genes,
-            merged_df=merged_df,
+            merged_df=clustering_df,
             module_id_to_label=module_id_to_label,
             similarity_threshold=similarity_threshold,
             network_plot=network_plot,
