@@ -18,11 +18,13 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(),
-    python_requires=">=3.8",
+    python_requires=">=3.10,<3.13",
     install_requires=[
         "gseapy>=1.1.0",
-        "pandas>=1.3.0",
-        "numpy>=1.20.0",
+        "pandas>=2.1.0,<3.0.0",
+        "numpy>=1.26.0,<3.0.0",
+        "networkx>=3.0",
+        "python-louvain>=0.16",
     ],
     entry_points={
         "console_scripts": [

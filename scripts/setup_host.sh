@@ -307,6 +307,39 @@ pathlib.Path(dest).write_text("\n".join(lines) + "\n")
 PY
 }
 
+verify_methylenricher_deps() {
+  info "Verifying MethylEnricher runtime dependencies in current environment..."
+  "$PYTHON_BIN" - <<'PY'
+import importlib
+import sys
+
+required = [
+    ("methyl_enricher", "MethylEnricher package"),
+    ("gseapy", "Enrichr client"),
+    ("pandas", "tabular data"),
+    ("numpy", "numerical backend"),
+    ("networkx", "pathway graph"),
+    ("community", "python-louvain"),
+]
+
+missing = []
+for module_name, label in required:
+    try:
+        mod = importlib.import_module(module_name)
+        version = getattr(mod, "__version__", "unknown")
+        print(f"[OK] {label}: {module_name} ({version})")
+    except Exception as exc:
+        missing.append((module_name, str(exc)))
+
+if missing:
+    print("[ERROR] Missing required MethylEnricher dependencies:")
+    for module_name, err in missing:
+        print(f"  - {module_name}: {err}")
+    print("[ERROR] Re-run setup_host.sh or install missing packages manually.")
+    sys.exit(1)
+PY
+}
+
 REQ_BASE="$PROJECT_ROOT/requirements-pipeline.txt"
 # GPU requirements file depends on detected CUDA major (12 vs 13)
 if [ "$GPU_DEPS" -eq 1 ]; then
@@ -423,6 +456,8 @@ for pkg in "${PACKAGES[@]}"; do
     warn "Skipping $pkg (directory not found)"
   fi
 done
+
+verify_methylenricher_deps
 
 info "Host setup complete."
 info "Test imports:"
