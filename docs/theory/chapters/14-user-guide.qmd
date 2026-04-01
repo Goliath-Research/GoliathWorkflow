@@ -205,6 +205,40 @@ If `step_config.validation.require_biological_review_for_model=true`, `--model` 
 "biological_review_confirmed": true
 ```
 
+### Choosing the `--model` backend
+
+By default, `--model` uses the ECDF backend (`model_backend: "ecdf"`). Advanced projects can choose a different backend in `step_config.validation`:
+
+- `model_backend: "tabular_sklearn"`
+- `model_backend: "generative_hybrid"`
+
+CLI overrides are also available in `methyl-validation` for quick experiments (for example `--model-backend generative_hybrid`, `--generative-latent-dim`, `--generative-density-type`, `--generative-calibrate`).
+
+Example:
+
+```json
+"validation": {
+  "model_backend": "generative_hybrid",
+  "model_weight_column": "weight",
+  "tabular_max_dmps": 5000,
+  "generative_latent_dim": 16,
+  "generative_density_type": "diag_gaussian",
+  "generative_epochs": 50,
+  "generative_batch_size": 64,
+  "generative_seed": 13
+}
+```
+
+### Backend comparison (practical)
+
+| Backend | Best used when | Main strengths | Main risks / caveats |
+|---|---|---|---|
+| `ecdf` | You want continuity with historical MethylPipeline behavior and detector-classifier semantics | Native pipeline path, direct compatibility with existing classifier/predictor tooling, easiest interpretation relative to prior studies | Can underperform when class boundaries need stronger discriminative reshaping or additional covariates |
+| `tabular_sklearn` | You want fast supervised baselines or covariate-aware tabular modeling from fixed DMP bundles | Simple deployment, mature sklearn ecosystem, often strong baseline performance with moderate tuning | Less directly tied to ECDF likelihood semantics; performance may depend strongly on feature cap (`tabular_max_dmps`) and model choice |
+| `generative_hybrid` | You want likelihood-based latent modeling with posterior probabilities while preserving detector-driven weighting | Hybrid latent-density scoring, consistent DMP bundle contract, supports binary and multiclass posterior inference | More modeling complexity; requires careful reporting of latent/density settings and calibration choices for reproducibility |
+
+For manuscript methods sections, always report backend choice, key hyperparameters, and whether covariates were used.
+
 ### Optional: Run progression synthesis as a standalone step
 
 If your project has multiple ordered disease groups and you want a dedicated cross-stage summary after freeze, run:

@@ -126,6 +126,15 @@ The fields that are appropriate for `step_config.validation` are only the Monte 
 
 Fields that are **not** needed here (because they are inherited from the project): `samples_base_path`, `output_base`, `base_project`, `cohorts`, `healthy_csv`, `disease_csv`.
 
+### Modeling backend inside `step_config.validation`
+
+The same `validation` block also controls what happens during `methyl-validation --model`. The default backend is `ecdf` (classifier + predictor), but the project may select:
+
+- `model_backend: "tabular_sklearn"` for tabular bundle-based training/evaluation,
+- `model_backend: "generative_hybrid"` for the hybrid latent-density generative backend.
+
+This keeps backend choice versioned in the same project JSON used for stability/freeze/model orchestration.
+
 ## Annotated Example
 
 The following is an annotated excerpt from `configs/project_Healthy_vs_PCa1-4-CG.json`, the reference project for prostate cancer staging:

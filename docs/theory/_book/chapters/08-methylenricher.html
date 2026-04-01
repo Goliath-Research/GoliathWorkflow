@@ -358,6 +358,12 @@ J(A,B) = \frac{|A \cap B|}{|A \cup B|},
 \tag{8.1}\]</span></span></p>
 <p>or a closely related overlap score. Community detection is then performed with the Louvain method <span class="citation" data-cites="blondel2008">(<a href="#ref-blondel2008" role="doc-biblioref">Blondel et al. 2008</a>)</span>, with connected-components fallbacks if the required package is unavailable.</p>
 <p>This is a standard graph heuristic for organizing pathways, but the resulting modules depend materially on the chosen threshold, graph construction rule, and Louvain resolution behavior.</p>
+<p>When broad library presets are used (for example <code>cancer-extended</code>), module construction can include tens of thousands of enrichment terms. The implementation now supports pre-clustering term reduction so modules can be built from a focused subset:</p>
+<ul>
+<li>q-value gate (<code>module_cluster_max_q</code>): keep only terms with adjusted p-value below a threshold,</li>
+<li>per-library cap (<code>module_cluster_top_terms_per_library</code>): keep top N terms per library before graph construction.</li>
+</ul>
+<p>These controls change the module graph itself, not only the display layer, so they should be reported in methods sections.</p>
 </section>
 <section id="module-enrichment-score" class="level2" data-number="8.4">
 <h2 data-number="8.4" class="anchored" data-anchor-id="module-enrichment-score"><span class="header-section-number">8.4</span> Module Enrichment Score</h2>

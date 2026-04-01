@@ -70,11 +70,13 @@ The freeze artifacts (`production/project.json`, fixed-panel detection outputs, 
 
 **Theoretical role.** This stage fits the final prediction function conditioned on the frozen panel and frozen production project. It separates *feature agreement* (handled in Stage A/B) from *final classifier parameter estimation* (handled here).
 
-**Practical role.** This stage answers: "What trained classifier and predictor artifacts should be deployed?" In practice it:
+**Practical role.** This stage answers: "What trained model artifacts should be deployed?" In practice it uses `step_config.validation.model_backend`:
 
-- runs `methyl-classifier` on `production/project.json`,
-- runs `methyl-predictor` to generate production-side metrics/artifacts,
-- enforces the optional biological gate (`require_biological_review_for_model`) before model creation.
+- `ecdf` (default): runs `methyl-classifier` then `methyl-predictor`,
+- `tabular_sklearn`: runs model bundle -> tabular training -> tabular predictor evaluation,
+- `generative_hybrid`: runs model bundle -> latent-density generative training -> generative predictor evaluation.
+
+For all backends, the optional biological gate (`require_biological_review_for_model`) is enforced before model creation.
 
 The resulting files under `production/classifiers/` and `production/predictors/` are the deployable model artifacts. Any rerun with changed panel or freeze inputs should be treated as a new model version.
 

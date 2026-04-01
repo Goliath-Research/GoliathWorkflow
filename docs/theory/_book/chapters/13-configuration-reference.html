@@ -1434,6 +1434,18 @@ window.Quarto = {
 <td>Leiden clustering resolution for module detection.</td>
 </tr>
 <tr class="odd">
+<td><code>module_cluster_max_q</code></td>
+<td>float | null</td>
+<td><code>null</code></td>
+<td>Optional pre-clustering filter: keep only terms with <code>Adjusted P-value &lt;= module_cluster_max_q</code> when building pathway modules. Recommended with large presets like <code>cancer-extended</code>.</td>
+</tr>
+<tr class="even">
+<td><code>module_cluster_top_terms_per_library</code></td>
+<td>int | null</td>
+<td><code>null</code></td>
+<td>Optional pre-clustering cap: keep top N enrichment terms per library (after q-value sorting) before module clustering.</td>
+</tr>
+<tr class="odd">
 <td><code>network_plot</code></td>
 <td>str</td>
 <td><code>"plotly"</code></td>
@@ -1741,6 +1753,111 @@ window.Quarto = {
 <td><code>false</code></td>
 <td>—</td>
 <td>If <code>true</code>, abort all iterations when any pipeline step fails. If <code>false</code>, log the error and skip the iteration.</td>
+</tr>
+<tr class="odd">
+<td><code>model_backend</code></td>
+<td>str</td>
+<td><code>"ecdf"</code></td>
+<td><code>"ecdf"</code>, <code>"tabular_sklearn"</code>, <code>"generative_hybrid"</code></td>
+<td>Backend for <code>--model</code>. <code>ecdf</code>: classifier→predictor. <code>tabular_sklearn</code>: bundle + sklearn train/predict. <code>generative_hybrid</code>: bundle + latent-density generative train/predict.</td>
+</tr>
+<tr class="even">
+<td><code>model_bundle_dir</code></td>
+<td>str | null</td>
+<td><code>null</code></td>
+<td>—</td>
+<td>Optional output directory for model feature bundle artifacts. Default: <code>&lt;production_output_dir&gt;/model_bundle</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>model_weight_column</code></td>
+<td>str</td>
+<td><code>"weight"</code></td>
+<td>—</td>
+<td>Preferred detector DMP column used as feature weight in model bundle construction; falls back to <code>effect_size</code> or <code>1.0</code>.</td>
+</tr>
+<tr class="even">
+<td><code>tabular_model_type</code></td>
+<td>str</td>
+<td><code>"random_forest"</code></td>
+<td><code>"random_forest"</code>, <code>"hist_gradient_boosting"</code>, <code>"logistic_regression"</code></td>
+<td>Model type when <code>model_backend="tabular_sklearn"</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>tabular_max_dmps</code></td>
+<td>int</td>
+<td><code>5000</code></td>
+<td>≥ 10</td>
+<td>Maximum number of DMP loci retained from bundle index for tabular/generative backend training.</td>
+</tr>
+<tr class="even">
+<td><code>covariates_path</code></td>
+<td>str | null</td>
+<td><code>null</code></td>
+<td>—</td>
+<td>Optional covariates sidecar (<code>.h5</code> preferred, <code>.csv</code> accepted) for tabular or generative backend.</td>
+</tr>
+<tr class="odd">
+<td><code>covariate_id_column</code></td>
+<td>str</td>
+<td><code>"sample_id"</code></td>
+<td>—</td>
+<td>Covariates column used to join rows with sample basenames.</td>
+</tr>
+<tr class="even">
+<td><code>generative_latent_dim</code></td>
+<td>int</td>
+<td><code>16</code></td>
+<td>≥ 2</td>
+<td>Latent dimensionality for <code>model_backend="generative_hybrid"</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>generative_kl_weight</code></td>
+<td>float</td>
+<td><code>0.1</code></td>
+<td>≥ 0</td>
+<td>KL-like regularization weight metadata/control for generative hybrid training.</td>
+</tr>
+<tr class="even">
+<td><code>generative_density_type</code></td>
+<td>str</td>
+<td><code>"diag_gaussian"</code></td>
+<td>currently only <code>"diag_gaussian"</code></td>
+<td>Latent class-density family for the generative hybrid backend.</td>
+</tr>
+<tr class="odd">
+<td><code>generative_epochs</code></td>
+<td>int</td>
+<td><code>50</code></td>
+<td>≥ 1</td>
+<td>Epoch count metadata/control for generative hybrid training.</td>
+</tr>
+<tr class="even">
+<td><code>generative_batch_size</code></td>
+<td>int</td>
+<td><code>64</code></td>
+<td>≥ 1</td>
+<td>Batch size metadata/control for generative hybrid training.</td>
+</tr>
+<tr class="odd">
+<td><code>generative_seed</code></td>
+<td>int</td>
+<td><code>13</code></td>
+<td>—</td>
+<td>RNG seed for generative hybrid training.</td>
+</tr>
+<tr class="even">
+<td><code>generative_calibrate</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>—</td>
+<td>Enable optional calibration stage for generative hybrid probabilities when available.</td>
+</tr>
+<tr class="odd">
+<td><code>generative_covariates_strict</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>—</td>
+<td>If <code>true</code>, require all sample IDs to exist in covariates sidecar during generative backend joins.</td>
 </tr>
 </tbody>
 </table>

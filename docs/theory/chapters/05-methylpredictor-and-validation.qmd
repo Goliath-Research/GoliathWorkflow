@@ -138,6 +138,69 @@ If configured (`step_config.validation.require_biological_review_for_model=true`
 
 The production project JSON (`production/project.json`) is the artifact that links the frozen model to the `--predictor-only` workflow: it encodes the centroid directories, detection output paths, and classifier paths so that `methyl-predictor` can resolve them without re-running any upstream steps.
 
+## Hybrid Generative Backend (`model_backend=generative_hybrid`)
+
+The `--model` stage now supports a first-class hybrid generative backend in addition to the legacy ECDF path and the tabular sklearn path. This backend is orchestrated by `methylvalidation` and uses the same detector-derived DMP bundle as the other non-ECDF model backends.
+
+### Data Contract and Bundle Reuse
+
+The backend does **not** re-derive DMP biology or feature importance. Instead it consumes the `ModelFeatureBundle` generated from detector exports:
+
+- DMP index (`chromosome`, `position`, `context`)
+- detector-side `effect_size` and `weight` columns
+- class labels resolved from project comparisons/groups
+
+This keeps biological weighting aligned with detector outputs and avoids backend-specific feature redefinition.
+
+### Modeling Structure
+
+The implemented hybrid backend follows a VAE-style latent-density pattern:
+
+1. encode weighted methylation features into a latent representation $z$ (current implementation uses a linear latent encoder surrogate),
+2. fit class-conditional latent densities (currently diagonal Gaussian),
+3. compute class posteriors via Bayes-style normalization.
+
+In symbolic form, for classes $k=1,\dots,K$:
+
+$$
+p(z \mid y=k) \approx \mathcal{N}\!\left(\mu_k,\operatorname{diag}(\sigma_k^2)\right),
+$$
+
+$$
+\hat P(y=k\mid z)
+=
+\frac{\pi_k\,p(z\mid y=k)}
+{\sum_{r=1}^{K}\pi_r\,p(z\mid y=r)}.
+$$
+
+This yields likelihood-based scoring for both binary and multiclass settings while preserving the detector-derived feature index.
+
+### Orchestration in `--model`
+
+When `step_config.validation.model_backend="generative_hybrid"`, `run_pipeline_for_model()` executes:
+
+1. **model-bundle**: `build_model_feature_bundle(...)`
+2. **generative-train**: `train_generative_model(...)`
+3. **generative-predictor**: `predict_generative_model_from_project(...)`
+
+instead of the legacy `methyl-classifier -> methyl-predictor` ECDF chain.
+
+### Configuration Surface
+
+The backend is controlled under `step_config.validation`:
+
+- `model_backend: "generative_hybrid"`
+- `model_bundle_dir`, `model_weight_column`
+- `generative_latent_dim`
+- `generative_kl_weight`
+- `generative_density_type` (currently `diag_gaussian`)
+- `generative_epochs`, `generative_batch_size`, `generative_seed`
+- `generative_calibrate`
+- `covariates_path`, `covariate_id_column`
+- `generative_covariates_strict`
+
+Those fields are part of the same validation config object as Monte Carlo settings, so backend choice is fully reproducible from project JSON.
+
 ## MethylDiseaseProgression Synthesis
 
 `methyl-disease-progression` is a post-freeze synthesis step that treats disease groups as an ordered stage sequence and aggregates entity-level signals across stages.

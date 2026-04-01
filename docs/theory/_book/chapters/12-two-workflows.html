@@ -458,12 +458,13 @@ window.Quarto = {
 <section id="stage-c-modeling---model" class="level4" data-number="12.2.2.3">
 <h4 data-number="12.2.2.3" class="anchored" data-anchor-id="stage-c-modeling---model"><span class="header-section-number">12.2.2.3</span> Stage C — Modeling (<code>--model</code>)</h4>
 <p><strong>Theoretical role.</strong> This stage fits the final prediction function conditioned on the frozen panel and frozen production project. It separates <em>feature agreement</em> (handled in Stage A/B) from <em>final classifier parameter estimation</em> (handled here).</p>
-<p><strong>Practical role.</strong> This stage answers: “What trained classifier and predictor artifacts should be deployed?” In practice it:</p>
+<p><strong>Practical role.</strong> This stage answers: “What trained model artifacts should be deployed?” In practice it uses <code>step_config.validation.model_backend</code>:</p>
 <ul>
-<li>runs <code>methyl-classifier</code> on <code>production/project.json</code>,</li>
-<li>runs <code>methyl-predictor</code> to generate production-side metrics/artifacts,</li>
-<li>enforces the optional biological gate (<code>require_biological_review_for_model</code>) before model creation.</li>
+<li><code>ecdf</code> (default): runs <code>methyl-classifier</code> then <code>methyl-predictor</code>,</li>
+<li><code>tabular_sklearn</code>: runs model bundle -&gt; tabular training -&gt; tabular predictor evaluation,</li>
+<li><code>generative_hybrid</code>: runs model bundle -&gt; latent-density generative training -&gt; generative predictor evaluation.</li>
 </ul>
+<p>For all backends, the optional biological gate (<code>require_biological_review_for_model</code>) is enforced before model creation.</p>
 <p>The resulting files under <code>production/classifiers/</code> and <code>production/predictors/</code> are the deployable model artifacts. Any rerun with changed panel or freeze inputs should be treated as a new model version.</p>
 </section>
 </section>

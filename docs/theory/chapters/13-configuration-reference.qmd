@@ -277,6 +277,21 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `require_biological_review_for_model` | bool | `false` | — | If `true`, `methyl-validation --model` is blocked unless `biological_review_confirmed=true`. |
 | `biological_review_confirmed` | bool | `false` | — | Explicit confirmation flag that unlocks `--model` when biological review is required. |
 | `abort_on_step_failure` | bool | `false` | — | If `true`, abort all iterations when any pipeline step fails. If `false`, log the error and skip the iteration. |
+| `model_backend` | str | `"ecdf"` | `"ecdf"`, `"tabular_sklearn"`, `"generative_hybrid"` | Backend for `--model`. `ecdf`: classifier→predictor. `tabular_sklearn`: bundle + sklearn train/predict. `generative_hybrid`: bundle + latent-density generative train/predict. |
+| `model_bundle_dir` | str \| null | `null` | — | Optional output directory for model feature bundle artifacts. Default: `<production_output_dir>/model_bundle`. |
+| `model_weight_column` | str | `"weight"` | — | Preferred detector DMP column used as feature weight in model bundle construction; falls back to `effect_size` or `1.0`. |
+| `tabular_model_type` | str | `"random_forest"` | `"random_forest"`, `"hist_gradient_boosting"`, `"logistic_regression"` | Model type when `model_backend="tabular_sklearn"`. |
+| `tabular_max_dmps` | int | `5000` | ≥ 10 | Maximum number of DMP loci retained from bundle index for tabular/generative backend training. |
+| `covariates_path` | str \| null | `null` | — | Optional covariates sidecar (`.h5` preferred, `.csv` accepted) for tabular or generative backend. |
+| `covariate_id_column` | str | `"sample_id"` | — | Covariates column used to join rows with sample basenames. |
+| `generative_latent_dim` | int | `16` | ≥ 2 | Latent dimensionality for `model_backend="generative_hybrid"`. |
+| `generative_kl_weight` | float | `0.1` | ≥ 0 | KL-like regularization weight metadata/control for generative hybrid training. |
+| `generative_density_type` | str | `"diag_gaussian"` | currently only `"diag_gaussian"` | Latent class-density family for the generative hybrid backend. |
+| `generative_epochs` | int | `50` | ≥ 1 | Epoch count metadata/control for generative hybrid training. |
+| `generative_batch_size` | int | `64` | ≥ 1 | Batch size metadata/control for generative hybrid training. |
+| `generative_seed` | int | `13` | — | RNG seed for generative hybrid training. |
+| `generative_calibrate` | bool | `false` | — | Enable optional calibration stage for generative hybrid probabilities when available. |
+| `generative_covariates_strict` | bool | `true` | — | If `true`, require all sample IDs to exist in covariates sidecar during generative backend joins. |
 
 ---
 

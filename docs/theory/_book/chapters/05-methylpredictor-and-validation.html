@@ -285,15 +285,22 @@ window.Quarto = {
   <li><a href="#what-the-validation-layer-does-not-do" id="toc-what-the-validation-layer-does-not-do" class="nav-link" data-scroll-target="#what-the-validation-layer-does-not-do"><span class="header-section-number">6.6</span> What The Validation Layer Does Not Do</a></li>
   <li><a href="#sec-stability-analysis" id="toc-sec-stability-analysis" class="nav-link" data-scroll-target="#sec-stability-analysis"><span class="header-section-number">6.7</span> Stability Analysis</a></li>
   <li><a href="#sec-production-freeze" id="toc-sec-production-freeze" class="nav-link" data-scroll-target="#sec-production-freeze"><span class="header-section-number">6.8</span> Production Freeze</a></li>
-  <li><a href="#methyldiseaseprogression-synthesis" id="toc-methyldiseaseprogression-synthesis" class="nav-link" data-scroll-target="#methyldiseaseprogression-synthesis"><span class="header-section-number">6.9</span> MethylDiseaseProgression Synthesis</a>
+  <li><a href="#hybrid-generative-backend-model_backendgenerative_hybrid" id="toc-hybrid-generative-backend-model_backendgenerative_hybrid" class="nav-link" data-scroll-target="#hybrid-generative-backend-model_backendgenerative_hybrid"><span class="header-section-number">6.9</span> Hybrid Generative Backend (<code>model_backend=generative_hybrid</code>)</a>
   <ul class="collapse">
-  <li><a href="#inputs-and-stage-resolution" id="toc-inputs-and-stage-resolution" class="nav-link" data-scroll-target="#inputs-and-stage-resolution"><span class="header-section-number">6.9.1</span> Inputs and Stage Resolution</a></li>
-  <li><a href="#entity-scores" id="toc-entity-scores" class="nav-link" data-scroll-target="#entity-scores"><span class="header-section-number">6.9.2</span> Entity Scores</a></li>
-  <li><a href="#progression-labels" id="toc-progression-labels" class="nav-link" data-scroll-target="#progression-labels"><span class="header-section-number">6.9.3</span> Progression Labels</a></li>
-  <li><a href="#outputs" id="toc-outputs" class="nav-link" data-scroll-target="#outputs"><span class="header-section-number">6.9.4</span> Outputs</a></li>
+  <li><a href="#data-contract-and-bundle-reuse" id="toc-data-contract-and-bundle-reuse" class="nav-link" data-scroll-target="#data-contract-and-bundle-reuse"><span class="header-section-number">6.9.1</span> Data Contract and Bundle Reuse</a></li>
+  <li><a href="#modeling-structure" id="toc-modeling-structure" class="nav-link" data-scroll-target="#modeling-structure"><span class="header-section-number">6.9.2</span> Modeling Structure</a></li>
+  <li><a href="#orchestration-in---model" id="toc-orchestration-in---model" class="nav-link" data-scroll-target="#orchestration-in---model"><span class="header-section-number">6.9.3</span> Orchestration in <code>--model</code></a></li>
+  <li><a href="#configuration-surface" id="toc-configuration-surface" class="nav-link" data-scroll-target="#configuration-surface"><span class="header-section-number">6.9.4</span> Configuration Surface</a></li>
   </ul></li>
-  <li><a href="#sec-two-workflows-summary" id="toc-sec-two-workflows-summary" class="nav-link" data-scroll-target="#sec-two-workflows-summary"><span class="header-section-number">6.10</span> Two Workflows Summary</a></li>
-  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">6.11</span> Publication Guidance</a></li>
+  <li><a href="#methyldiseaseprogression-synthesis" id="toc-methyldiseaseprogression-synthesis" class="nav-link" data-scroll-target="#methyldiseaseprogression-synthesis"><span class="header-section-number">6.10</span> MethylDiseaseProgression Synthesis</a>
+  <ul class="collapse">
+  <li><a href="#inputs-and-stage-resolution" id="toc-inputs-and-stage-resolution" class="nav-link" data-scroll-target="#inputs-and-stage-resolution"><span class="header-section-number">6.10.1</span> Inputs and Stage Resolution</a></li>
+  <li><a href="#entity-scores" id="toc-entity-scores" class="nav-link" data-scroll-target="#entity-scores"><span class="header-section-number">6.10.2</span> Entity Scores</a></li>
+  <li><a href="#progression-labels" id="toc-progression-labels" class="nav-link" data-scroll-target="#progression-labels"><span class="header-section-number">6.10.3</span> Progression Labels</a></li>
+  <li><a href="#outputs" id="toc-outputs" class="nav-link" data-scroll-target="#outputs"><span class="header-section-number">6.10.4</span> Outputs</a></li>
+  </ul></li>
+  <li><a href="#sec-two-workflows-summary" id="toc-sec-two-workflows-summary" class="nav-link" data-scroll-target="#sec-two-workflows-summary"><span class="header-section-number">6.11</span> Two Workflows Summary</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">6.12</span> Publication Guidance</a></li>
   </ul>
 </nav>
     </div>
@@ -436,11 +443,71 @@ s_m^2 = \frac{1}{R-1}\sum_{r=1}^{R}(m_r - \bar m)^2,
 <p>If configured (<code>step_config.validation.require_biological_review_for_model=true</code>), <code>--model</code> is blocked until <code>biological_review_confirmed=true</code>.</p>
 <p>The production project JSON (<code>production/project.json</code>) is the artifact that links the frozen model to the <code>--predictor-only</code> workflow: it encodes the centroid directories, detection output paths, and classifier paths so that <code>methyl-predictor</code> can resolve them without re-running any upstream steps.</p>
 </section>
-<section id="methyldiseaseprogression-synthesis" class="level2" data-number="6.9">
-<h2 data-number="6.9" class="anchored" data-anchor-id="methyldiseaseprogression-synthesis"><span class="header-section-number">6.9</span> MethylDiseaseProgression Synthesis</h2>
+<section id="hybrid-generative-backend-model_backendgenerative_hybrid" class="level2" data-number="6.9">
+<h2 data-number="6.9" class="anchored" data-anchor-id="hybrid-generative-backend-model_backendgenerative_hybrid"><span class="header-section-number">6.9</span> Hybrid Generative Backend (<code>model_backend=generative_hybrid</code>)</h2>
+<p>The <code>--model</code> stage now supports a first-class hybrid generative backend in addition to the legacy ECDF path and the tabular sklearn path. This backend is orchestrated by <code>methylvalidation</code> and uses the same detector-derived DMP bundle as the other non-ECDF model backends.</p>
+<section id="data-contract-and-bundle-reuse" class="level3" data-number="6.9.1">
+<h3 data-number="6.9.1" class="anchored" data-anchor-id="data-contract-and-bundle-reuse"><span class="header-section-number">6.9.1</span> Data Contract and Bundle Reuse</h3>
+<p>The backend does <strong>not</strong> re-derive DMP biology or feature importance. Instead it consumes the <code>ModelFeatureBundle</code> generated from detector exports:</p>
+<ul>
+<li>DMP index (<code>chromosome</code>, <code>position</code>, <code>context</code>)</li>
+<li>detector-side <code>effect_size</code> and <code>weight</code> columns</li>
+<li>class labels resolved from project comparisons/groups</li>
+</ul>
+<p>This keeps biological weighting aligned with detector outputs and avoids backend-specific feature redefinition.</p>
+</section>
+<section id="modeling-structure" class="level3" data-number="6.9.2">
+<h3 data-number="6.9.2" class="anchored" data-anchor-id="modeling-structure"><span class="header-section-number">6.9.2</span> Modeling Structure</h3>
+<p>The implemented hybrid backend follows a VAE-style latent-density pattern:</p>
+<ol type="1">
+<li>encode weighted methylation features into a latent representation <span class="math inline">\(z\)</span> (current implementation uses a linear latent encoder surrogate),</li>
+<li>fit class-conditional latent densities (currently diagonal Gaussian),</li>
+<li>compute class posteriors via Bayes-style normalization.</li>
+</ol>
+<p>In symbolic form, for classes <span class="math inline">\(k=1,\dots,K\)</span>:</p>
+<p><span class="math display">\[
+p(z \mid y=k) \approx \mathcal{N}\!\left(\mu_k,\operatorname{diag}(\sigma_k^2)\right),
+\]</span></p>
+<p><span class="math display">\[
+\hat P(y=k\mid z)
+=
+\frac{\pi_k\,p(z\mid y=k)}
+{\sum_{r=1}^{K}\pi_r\,p(z\mid y=r)}.
+\]</span></p>
+<p>This yields likelihood-based scoring for both binary and multiclass settings while preserving the detector-derived feature index.</p>
+</section>
+<section id="orchestration-in---model" class="level3" data-number="6.9.3">
+<h3 data-number="6.9.3" class="anchored" data-anchor-id="orchestration-in---model"><span class="header-section-number">6.9.3</span> Orchestration in <code>--model</code></h3>
+<p>When <code>step_config.validation.model_backend="generative_hybrid"</code>, <code>run_pipeline_for_model()</code> executes:</p>
+<ol type="1">
+<li><strong>model-bundle</strong>: <code>build_model_feature_bundle(...)</code></li>
+<li><strong>generative-train</strong>: <code>train_generative_model(...)</code></li>
+<li><strong>generative-predictor</strong>: <code>predict_generative_model_from_project(...)</code></li>
+</ol>
+<p>instead of the legacy <code>methyl-classifier -&gt; methyl-predictor</code> ECDF chain.</p>
+</section>
+<section id="configuration-surface" class="level3" data-number="6.9.4">
+<h3 data-number="6.9.4" class="anchored" data-anchor-id="configuration-surface"><span class="header-section-number">6.9.4</span> Configuration Surface</h3>
+<p>The backend is controlled under <code>step_config.validation</code>:</p>
+<ul>
+<li><code>model_backend: "generative_hybrid"</code></li>
+<li><code>model_bundle_dir</code>, <code>model_weight_column</code></li>
+<li><code>generative_latent_dim</code></li>
+<li><code>generative_kl_weight</code></li>
+<li><code>generative_density_type</code> (currently <code>diag_gaussian</code>)</li>
+<li><code>generative_epochs</code>, <code>generative_batch_size</code>, <code>generative_seed</code></li>
+<li><code>generative_calibrate</code></li>
+<li><code>covariates_path</code>, <code>covariate_id_column</code></li>
+<li><code>generative_covariates_strict</code></li>
+</ul>
+<p>Those fields are part of the same validation config object as Monte Carlo settings, so backend choice is fully reproducible from project JSON.</p>
+</section>
+</section>
+<section id="methyldiseaseprogression-synthesis" class="level2" data-number="6.10">
+<h2 data-number="6.10" class="anchored" data-anchor-id="methyldiseaseprogression-synthesis"><span class="header-section-number">6.10</span> MethylDiseaseProgression Synthesis</h2>
 <p><code>methyl-disease-progression</code> is a post-freeze synthesis step that treats disease groups as an ordered stage sequence and aggregates entity-level signals across stages.</p>
-<section id="inputs-and-stage-resolution" class="level3" data-number="6.9.1">
-<h3 data-number="6.9.1" class="anchored" data-anchor-id="inputs-and-stage-resolution"><span class="header-section-number">6.9.1</span> Inputs and Stage Resolution</h3>
+<section id="inputs-and-stage-resolution" class="level3" data-number="6.10.1">
+<h3 data-number="6.10.1" class="anchored" data-anchor-id="inputs-and-stage-resolution"><span class="header-section-number">6.10.1</span> Inputs and Stage Resolution</h3>
 <p>For each ordered stage, the code reads:</p>
 <ul>
 <li>mapper combined gene table (<code>all-gene_name-combined.csv</code> by default),</li>
@@ -454,8 +521,8 @@ s_m^2 = \frac{1}{R-1}\sum_{r=1}^{R}(m_r - \bar m)^2,
 <li>project comparison order.</li>
 </ol>
 </section>
-<section id="entity-scores" class="level3" data-number="6.9.2">
-<h3 data-number="6.9.2" class="anchored" data-anchor-id="entity-scores"><span class="header-section-number">6.9.2</span> Entity Scores</h3>
+<section id="entity-scores" class="level3" data-number="6.10.2">
+<h3 data-number="6.10.2" class="anchored" data-anchor-id="entity-scores"><span class="header-section-number">6.10.2</span> Entity Scores</h3>
 <p>The synthesis creates long-format tables for genes, pathways, and modules with <code>(entity_type, entity_id, stage_index, rank, score)</code>.</p>
 <ul>
 <li><strong>Genes:</strong> score is max of available gene-weight columns per gene (e.g.&nbsp;<code>total_weight</code>, <code>gene_importance</code>).</li>
@@ -466,8 +533,8 @@ s_m^2 = \frac{1}{R-1}\sum_{r=1}^{R}(m_r - \bar m)^2,
 \]</span></p>
 <p>so larger values indicate stronger enrichment. - <strong>Modules:</strong> score is the module score exported by <code>modules_ranked.csv</code>.</p>
 </section>
-<section id="progression-labels" class="level3" data-number="6.9.3">
-<h3 data-number="6.9.3" class="anchored" data-anchor-id="progression-labels"><span class="header-section-number">6.9.3</span> Progression Labels</h3>
+<section id="progression-labels" class="level3" data-number="6.10.3">
+<h3 data-number="6.10.3" class="anchored" data-anchor-id="progression-labels"><span class="header-section-number">6.10.3</span> Progression Labels</h3>
 <p>For each entity across ordered stages, the package assigns categorical progression labels:</p>
 <ul>
 <li><code>stage_specific</code>, <code>early_only</code>, <code>late_only</code>,</li>
@@ -476,8 +543,8 @@ s_m^2 = \frac{1}{R-1}\sum_{r=1}^{R}(m_r - \bar m)^2,
 </ul>
 <p>These are deterministic rule-based labels, not fitted trajectory models.</p>
 </section>
-<section id="outputs" class="level3" data-number="6.9.4">
-<h3 data-number="6.9.4" class="anchored" data-anchor-id="outputs"><span class="header-section-number">6.9.4</span> Outputs</h3>
+<section id="outputs" class="level3" data-number="6.10.4">
+<h3 data-number="6.10.4" class="anchored" data-anchor-id="outputs"><span class="header-section-number">6.10.4</span> Outputs</h3>
 <p>The progression step writes:</p>
 <ul>
 <li><code>genes_long.csv</code></li>
@@ -490,15 +557,15 @@ s_m^2 = \frac{1}{R-1}\sum_{r=1}^{R}(m_r - \bar m)^2,
 <p>This layer is best interpreted as structured biological summarization across stages, not causal disease dynamics inference.</p>
 </section>
 </section>
-<section id="sec-two-workflows-summary" class="level2" data-number="6.10">
-<h2 data-number="6.10" class="anchored" data-anchor-id="sec-two-workflows-summary"><span class="header-section-number">6.10</span> Two Workflows Summary</h2>
+<section id="sec-two-workflows-summary" class="level2" data-number="6.11">
+<h2 data-number="6.11" class="anchored" data-anchor-id="sec-two-workflows-summary"><span class="header-section-number">6.11</span> Two Workflows Summary</h2>
 <p>MethylValidation supports two primary operational modes, described in full in <a href="12-two-workflows.html" class="quarto-xref"><span>Chapter 12</span></a>. A brief summary for theory readers:</p>
 <p><strong>Workflow 1 — Model Creation.</strong> Repeated Monte Carlo runs with <code>--stability</code> estimate DMP recurrence frequencies from centroid+detector iterations. The <code>--freeze</code> step then builds production biological outputs on the stable panel (<code>fixed_dmp_panel</code>) and may run progression synthesis. The <code>--model</code> step then performs final classifier/predictor execution after optional biological gate checks.</p>
 <p><strong>Workflow 2 — Model Use for Prediction.</strong> The <code>--predictor-only</code> flag evaluates the frozen production model on repeated random holdouts without retraining. This workflow answers the question: <em>what is the empirical distribution of classification performance for the frozen production classifier under random sampling from the available cohort?</em></p>
 <p>The two workflows share the same split-and-aggregate infrastructure (<code>split.py</code>, <code>project_gen.py</code>, <code>pipeline_runner.py</code>) but differ in which pipeline steps execute per iteration. Workflow 1 iterations run centroid+detector; Workflow 2 iterations run predictor only.</p>
 </section>
-<section id="publication-guidance" class="level2" data-number="6.11">
-<h2 data-number="6.11" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">6.11</span> Publication Guidance</h2>
+<section id="publication-guidance" class="level2" data-number="6.12">
+<h2 data-number="6.12" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">6.12</span> Publication Guidance</h2>
 <p>For publication text:</p>
 <ul>
 <li>describe <code>methylpredictor</code> as the evaluation and application layer for trained classifiers,</li>

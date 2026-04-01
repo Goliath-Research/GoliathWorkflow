@@ -288,7 +288,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#the-cohort-hierarchy" id="toc-the-cohort-hierarchy" class="nav-link" data-scroll-target="#the-cohort-hierarchy"><span class="header-section-number">11.3</span> The Cohort Hierarchy</a></li>
   <li><a href="#the-step_config-dictionary" id="toc-the-step_config-dictionary" class="nav-link" data-scroll-target="#the-step_config-dictionary"><span class="header-section-number">11.4</span> The <code>step_config</code> Dictionary</a></li>
   <li><a href="#the-step_config.predictor-anti-pattern" id="toc-the-step_config.predictor-anti-pattern" class="nav-link" data-scroll-target="#the-step_config.predictor-anti-pattern"><span class="header-section-number">11.5</span> The <code>step_config.predictor</code> Anti-Pattern</a></li>
-  <li><a href="#embedding-monte-carlo-settings-step_config.validation" id="toc-embedding-monte-carlo-settings-step_config.validation" class="nav-link" data-scroll-target="#embedding-monte-carlo-settings-step_config.validation"><span class="header-section-number">11.6</span> Embedding Monte Carlo Settings: <code>step_config.validation</code></a></li>
+  <li><a href="#embedding-monte-carlo-settings-step_config.validation" id="toc-embedding-monte-carlo-settings-step_config.validation" class="nav-link" data-scroll-target="#embedding-monte-carlo-settings-step_config.validation"><span class="header-section-number">11.6</span> Embedding Monte Carlo Settings: <code>step_config.validation</code></a>
+  <ul class="collapse">
+  <li><a href="#modeling-backend-inside-step_config.validation" id="toc-modeling-backend-inside-step_config.validation" class="nav-link" data-scroll-target="#modeling-backend-inside-step_config.validation"><span class="header-section-number">11.6.1</span> Modeling backend inside <code>step_config.validation</code></a></li>
+  </ul></li>
   <li><a href="#annotated-example" id="toc-annotated-example" class="nav-link" data-scroll-target="#annotated-example"><span class="header-section-number">11.7</span> Annotated Example</a></li>
   <li><a href="#output-directory-layout" id="toc-output-directory-layout" class="nav-link" data-scroll-target="#output-directory-layout"><span class="header-section-number">11.8</span> Output Directory Layout</a></li>
   </ul>
@@ -512,6 +515,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"abort_on_step_failure"</span><span class="fu">:</span> <span class="kw">false</span></span>
 <span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Fields that are <strong>not</strong> needed here (because they are inherited from the project): <code>samples_base_path</code>, <code>output_base</code>, <code>base_project</code>, <code>cohorts</code>, <code>healthy_csv</code>, <code>disease_csv</code>.</p>
+<section id="modeling-backend-inside-step_config.validation" class="level3" data-number="11.6.1">
+<h3 data-number="11.6.1" class="anchored" data-anchor-id="modeling-backend-inside-step_config.validation"><span class="header-section-number">11.6.1</span> Modeling backend inside <code>step_config.validation</code></h3>
+<p>The same <code>validation</code> block also controls what happens during <code>methyl-validation --model</code>. The default backend is <code>ecdf</code> (classifier + predictor), but the project may select:</p>
+<ul>
+<li><code>model_backend: "tabular_sklearn"</code> for tabular bundle-based training/evaluation,</li>
+<li><code>model_backend: "generative_hybrid"</code> for the hybrid latent-density generative backend.</li>
+</ul>
+<p>This keeps backend choice versioned in the same project JSON used for stability/freeze/model orchestration.</p>
+</section>
 </section>
 <section id="annotated-example" class="level2" data-number="11.7">
 <h2 data-number="11.7" class="anchored" data-anchor-id="annotated-example"><span class="header-section-number">11.7</span> Annotated Example</h2>
