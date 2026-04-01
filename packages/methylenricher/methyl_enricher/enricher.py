@@ -6,6 +6,7 @@ filtering by disease columns and DMP/gene metrics to focus on important genes.
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 import pandas as pd
@@ -241,6 +242,33 @@ class EnrichmentAnalyzer:
             out = out[out["feature_type"].astype(str).str.strip().str.lower().isin(allowed)]
             print(f"[INFO] Filter feature_type in {allowed}: {len(out)} genes (was {n_before})")
 
+        return out
+
+    @staticmethod
+    def _excel_safe_overlap_export(df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Make Overlap values Excel-safe on CSV export.
+
+        Excel often auto-converts values like ``8/10`` to dates. Prefixing with
+        a leading apostrophe forces text interpretation.
+        """
+        if "Overlap" not in df.columns:
+            return df
+
+        out = df.copy()
+        pattern = re.compile(r"^\d+\s*/\s*\d+$")
+
+        def _normalize_overlap(v: object) -> object:
+            if pd.isna(v):
+                return v
+            s = str(v).strip()
+            if s.startswith("'"):
+                return s
+            if pattern.match(s):
+                return f"'{s}"
+            return s
+
+        out["Overlap"] = out["Overlap"].map(_normalize_overlap)
         return out
 
     def load_gene_list(
@@ -526,7 +554,7 @@ class EnrichmentAnalyzer:
                     
                     # Save per-library results
                     per_lib_csv = output_dir / f"enrich_{lib}.csv"
-                    df.to_csv(per_lib_csv, index=False)
+                    self._excel_safe_overlap_export(df).to_csv(per_lib_csv, index=False)
                     print(f"[INFO] ✓ {lib}: {len(df)} terms found")
                     
                     # Show top hit if any significant
@@ -555,7 +583,7 @@ class EnrichmentAnalyzer:
         
         # Save merged results
         merged_csv = output_dir / "enrichment_merged.csv"
-        merged.to_csv(merged_csv, index=False)
+        self._excel_safe_overlap_export(merged).to_csv(merged_csv, index=False)
         print(f"\n[INFO] ✓ Merged results saved: {merged_csv}")
         
         # Save top significant hits
@@ -563,7 +591,7 @@ class EnrichmentAnalyzer:
         if not top_hits.empty:
             top_hits = top_hits.head(200)
             top_csv = output_dir / f"enrichment_top_q{self.cutoff}.csv"
-            top_hits.to_csv(top_csv, index=False)
+            self._excel_safe_overlap_export(top_hits).to_csv(top_csv, index=False)
             print(f"[INFO] ✓ Top significant hits: {top_csv} ({len(top_hits)} terms)")
         else:
             print(f"[WARN] No significant terms found at q ≤ {self.cutoff}")
