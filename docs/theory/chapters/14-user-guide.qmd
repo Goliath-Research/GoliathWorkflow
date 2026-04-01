@@ -151,49 +151,38 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 
 ### Workflow mental model
 
-```mermaid
-flowchart TB
-  subgraph mcStage [Stage A Stability MC]
-    mcIter["MC iterations (n_iterations)"]
-    mcCentroid[methyl-centroid]
-    mcDetector[methyl-detector]
-    mcStability["stability aggregation (DMP recurrence)"]
-    mcIter --> mcCentroid --> mcDetector --> mcStability
-  end
+```{tikz}
+%%| fig-cap: "Workflow mental model: stability MC, single freeze pass, model build, repeated frozen-model evaluation, and new-sample inference."
+\usetikzlibrary{arrows.meta, positioning}
+\begin{tikzpicture}[
+  node distance=0.5cm and 0cm,
+  box/.style={draw, rectangle, rounded corners=2pt, text width=8.0cm, align=center, font=\small, minimum height=0.65cm, fill=gray!8},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box] (A) {Stage A--stability: MC iterations (n\_iterations)};
+\node[box, below=of A] (B) {Per iteration: methyl-centroid $\to$ methyl-detector};
+\node[box, below=of B] (C) {Stability aggregation: DMP recurrence across runs};
+\node[box, below=of C] (D) {Stage B--freeze (single execution on all samples)};
+\node[box, below=of D] (E) {methyl-centroid $\to$ methyl-detector(fixed panel) $\to$ methyl-mapper $\to$ methyl-enricher};
+\node[box, below=of E] (F) {Optional: methyl-disease-progression (for staged diseases, e.g. PCa)};
+\node[box, below=of F] (G) {Stage C--model};
+\node[box, below=of G] (H) {methyl-classifier trains production model; methyl-predictor runs production validation pass};
+\node[box, below left=0.7cm and 4.2cm of H] (I) {Workflow 2 --predictor-only: repeated MC holdouts with frozen model to estimate metric distributions (balanced accuracy, etc.)};
+\node[box, below right=0.7cm and 4.2cm of H] (J) {Final deployment path: use frozen trained model to predict new unlabeled samples};
 
-  mcStability --> freezeStart["Stage B --freeze"]
-
-  subgraph freezeStage [Stage B Freeze Analysis]
-    freezeCentroid[methyl-centroid]
-    freezeDetector["methyl-detector fixed panel"]
-    freezeMapper[methyl-mapper]
-    freezeEnricher[methyl-enricher]
-    freezeProgression["optional methyl-disease-progression"]
-    freezeCentroid --> freezeDetector --> freezeMapper --> freezeEnricher --> freezeProgression
-  end
-
-  freezeStart --> freezeCentroid
-  freezeProgression --> modelStart["Stage C --model"]
-
-  subgraph modelStage [Stage C Model Build]
-    modelClassifier[methyl-classifier]
-    modelPredictor["methyl-predictor (production validation pass)"]
-    modelClassifier --> modelPredictor
-  end
-
-  modelStart --> modelClassifier
-  modelPredictor --> evalStart["Workflow 2 --predictor-only"]
-
-  subgraph evalStage [Frozen Model Distribution]
-    evalIter["MC holdouts"]
-    evalPredictor["methyl-predictor per iteration"]
-    evalMetrics["balanced accuracy distribution"]
-    evalIter --> evalPredictor --> evalMetrics
-  end
-
-  evalStart --> evalIter
-  modelPredictor --> newSamples["Predict new unlabeled samples with frozen model"]
+\draw[arr] (A)--(B);
+\draw[arr] (B)--(C);
+\draw[arr] (C)--(D);
+\draw[arr] (D)--(E);
+\draw[arr] (E)--(F);
+\draw[arr] (F)--(G);
+\draw[arr] (G)--(H);
+\draw[arr] (H)--(I);
+\draw[arr] (H)--(J);
+\end{tikzpicture}
 ```
+
+The metric distribution branch is the `--predictor-only` workflow (repeated holdouts with a frozen model). The final deployment branch is direct prediction on new unlabeled samples using the trained production artifacts.
 
 ### Step 1: Run Monte Carlo with stability
 
