@@ -205,6 +205,22 @@ If `step_config.validation.require_biological_review_for_model=true`, `--model` 
 "biological_review_confirmed": true
 ```
 
+### Optional: Run progression synthesis as a standalone step
+
+If your project has multiple ordered disease groups and you want a dedicated cross-stage summary after freeze, run:
+
+```bash
+methyl-disease-progression --project configs/my_project.json
+```
+
+Useful flags:
+
+- `--ordered-comparison-labels pca_pca1,pca_pca2,pca_pca3,pca_pca4` to enforce explicit stage order
+- `--strict-missing` to fail when any stage input file is missing
+- `--report-md` to also emit a markdown summary report
+
+Default output directory is `production/progression/` when called from the freeze workflow, or `<project_root>/progression` for standalone runs.
+
 ---
 
 ## Workflow 2: Model Use for Prediction {#sec-guide-workflow2}

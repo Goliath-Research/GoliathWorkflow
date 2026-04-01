@@ -200,7 +200,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -303,9 +303,15 @@ window.Quarto = {
   <li><a href="#pairwise-control-aggregation" id="toc-pairwise-control-aggregation" class="nav-link" data-scroll-target="#pairwise-control-aggregation"><span class="header-section-number">5.5</span> Pairwise Control Aggregation</a></li>
   <li><a href="#bipartite-multi-control-multi-disease-aggregation" id="toc-bipartite-multi-control-multi-disease-aggregation" class="nav-link" data-scroll-target="#bipartite-multi-control-multi-disease-aggregation"><span class="header-section-number">5.6</span> Bipartite Multi-Control × Multi-Disease Aggregation</a></li>
   <li><a href="#calibration" id="toc-calibration" class="nav-link" data-scroll-target="#calibration"><span class="header-section-number">5.7</span> Calibration</a></li>
-  <li><a href="#sec-classifier-class-weight" id="toc-sec-classifier-class-weight" class="nav-link" data-scroll-target="#sec-classifier-class-weight"><span class="header-section-number">5.8</span> Multiclass Learned Head: Class Weighting</a></li>
-  <li><a href="#missing-data-semantics" id="toc-missing-data-semantics" class="nav-link" data-scroll-target="#missing-data-semantics"><span class="header-section-number">5.9</span> Missing Data Semantics</a></li>
-  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">5.10</span> Publication Guidance</a></li>
+  <li><a href="#new-modeling-features-in-production" id="toc-new-modeling-features-in-production" class="nav-link" data-scroll-target="#new-modeling-features-in-production"><span class="header-section-number">5.8</span> New Modeling Features in Production</a>
+  <ul class="collapse">
+  <li><a href="#learned-multiclass-head" id="toc-learned-multiclass-head" class="nav-link" data-scroll-target="#learned-multiclass-head"><span class="header-section-number">5.8.1</span> Learned Multiclass Head</a></li>
+  <li><a href="#isotonic-and-stacking-layers" id="toc-isotonic-and-stacking-layers" class="nav-link" data-scroll-target="#isotonic-and-stacking-layers"><span class="header-section-number">5.8.2</span> Isotonic and Stacking Layers</a></li>
+  <li><a href="#practical-reproducibility" id="toc-practical-reproducibility" class="nav-link" data-scroll-target="#practical-reproducibility"><span class="header-section-number">5.8.3</span> Practical Reproducibility</a></li>
+  </ul></li>
+  <li><a href="#sec-classifier-class-weight" id="toc-sec-classifier-class-weight" class="nav-link" data-scroll-target="#sec-classifier-class-weight"><span class="header-section-number">5.9</span> Multiclass Learned Head: Class Weighting</a></li>
+  <li><a href="#missing-data-semantics" id="toc-missing-data-semantics" class="nav-link" data-scroll-target="#missing-data-semantics"><span class="header-section-number">5.10</span> Missing Data Semantics</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">5.11</span> Publication Guidance</a></li>
   </ul>
 </nav>
     </div>
@@ -410,8 +416,51 @@ window.Quarto = {
 \tag{5.4}\]</span></span></p>
 <p>This improves probability calibration under distribution shift or class imbalance, but it should not be confused with changing the underlying classifier likelihood.</p>
 </section>
-<section id="sec-classifier-class-weight" class="level2" data-number="5.8">
-<h2 data-number="5.8" class="anchored" data-anchor-id="sec-classifier-class-weight"><span class="header-section-number">5.8</span> Multiclass Learned Head: Class Weighting</h2>
+<section id="new-modeling-features-in-production" class="level2" data-number="5.8">
+<h2 data-number="5.8" class="anchored" data-anchor-id="new-modeling-features-in-production"><span class="header-section-number">5.8</span> New Modeling Features in Production</h2>
+<p>Recent versions of <code>methylclassifier</code> expose a broader post-detector modeling layer than the original binary ECDF-only story. In practice, production runs may combine several of the following:</p>
+<ul>
+<li>native multiclass histogram model export (<code>multiclass-classifier.pkl</code>) from per-comparison detector outputs,</li>
+<li>optional learned multinomial logistic head on top of histogram pre-softmax scores,</li>
+<li>optional isotonic calibration for probability reshaping,</li>
+<li>optional elastic-net stacking for chromosome-level fusion,</li>
+<li>hierarchical panel readout for family-level reporting.</li>
+</ul>
+<p>These are all valid engineering extensions, but conceptually they sit <strong>on top of</strong> the ECDF likelihood core rather than replacing it.</p>
+<section id="learned-multiclass-head" class="level3" data-number="5.8.1">
+<h3 data-number="5.8.1" class="anchored" data-anchor-id="learned-multiclass-head"><span class="header-section-number">5.8.1</span> Learned Multiclass Head</h3>
+<p>The learned head takes base multiclass score vectors <span class="math inline">\(z(x)\)</span> and fits a multinomial logistic layer:</p>
+<p><span class="math display">\[
+\hat P(Y=k\mid x)
+=
+\frac{\exp(\beta_k^\top z(x)+b_k)}
+{\sum_{r=1}^K \exp(\beta_r^\top z(x)+b_r)}.
+\]</span></p>
+<p>This layer is controlled by <code>multiclass_train_learned_head</code> and related hyperparameters in <code>step_config.detection</code> (see <a href="13-configuration-reference.html" class="quarto-xref"><span>Chapter 13</span></a>). It is especially useful when the raw histogram scores have good ranking behavior but imperfect class boundaries.</p>
+</section>
+<section id="isotonic-and-stacking-layers" class="level3" data-number="5.8.2">
+<h3 data-number="5.8.2" class="anchored" data-anchor-id="isotonic-and-stacking-layers"><span class="header-section-number">5.8.2</span> Isotonic and Stacking Layers</h3>
+<p>Two additional modeling switches in <code>step_config.classifier</code> are important for current production behavior:</p>
+<ul>
+<li><code>use_isotonic_calibration</code>: nonparametric monotone calibration of predicted probabilities,</li>
+<li><code>use_elasticnet_stacking</code>: linear meta-model for chromosome-weight fusion under elastic-net regularization.</li>
+</ul>
+<p>Both improve empirical calibration or discrimination in many cohorts, but they increase model complexity and should be reported explicitly in methods sections.</p>
+</section>
+<section id="practical-reproducibility" class="level3" data-number="5.8.3">
+<h3 data-number="5.8.3" class="anchored" data-anchor-id="practical-reproducibility"><span class="header-section-number">5.8.3</span> Practical Reproducibility</h3>
+<p>For reproducibility claims, report:</p>
+<ol type="1">
+<li>whether the learned multiclass head was enabled,</li>
+<li>whether class balancing was used (<code>multiclass_learned_class_weight</code>),</li>
+<li>whether isotonic calibration and/or elastic-net stacking were enabled,</li>
+<li>the sklearn version stored in PKL metadata.</li>
+</ol>
+<p>Without these details, two runs with the same DMP panel can still produce materially different probabilities.</p>
+</section>
+</section>
+<section id="sec-classifier-class-weight" class="level2" data-number="5.9">
+<h2 data-number="5.9" class="anchored" data-anchor-id="sec-classifier-class-weight"><span class="header-section-number">5.9</span> Multiclass Learned Head: Class Weighting</h2>
 <p>When the native multiclass histogram classifier is extended with a learned logistic head (<code>multiclass_train_learned_head: true</code>), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a <code>class_weight</code> parameter (exposed as <code>multiclass_learned_class_weight</code> in <code>step_config.detection</code>; see <a href="13-configuration-reference.html" class="quarto-xref"><span>Chapter 13</span></a>).</p>
 <p>With <code>multiclass_learned_class_weight: "balanced"</code>, sklearn computes inverse-frequency weights:</p>
 <p><span id="eq-class-weight-balanced"><span class="math display">\[
@@ -422,13 +471,13 @@ w_k = \frac{n_{\text{total}}}{K \cdot n_k},
 <p><strong>Theoretical note.</strong> Class weighting corrects for imbalance in the empirical class frequencies of the training set. It does not correct for population prevalence differences between training and deployment contexts. If the intended clinical population has very different disease prevalence from the training cohort, additional calibration against the target distribution is required.</p>
 <p><strong>Reproducibility.</strong> Since sklearn 1.4, the version of sklearn used to train the logistic head is saved in the model PKL metadata under the key <code>sklearn_version</code>. This allows detection of version mismatches between training and inference environments. The key is written by <code>_fit_learned_multiclass_head</code> in <code>packages/methylclassifier/methyl_classifier/utils/multiclass_builder.py</code>.</p>
 </section>
-<section id="missing-data-semantics" class="level2" data-number="5.9">
-<h2 data-number="5.9" class="anchored" data-anchor-id="missing-data-semantics"><span class="header-section-number">5.9</span> Missing Data Semantics</h2>
+<section id="missing-data-semantics" class="level2" data-number="5.10">
+<h2 data-number="5.10" class="anchored" data-anchor-id="missing-data-semantics"><span class="header-section-number">5.10</span> Missing Data Semantics</h2>
 <p>A practical but important detail is how the classifier handles unavailable loci. The implementation masks those loci out of the weighted average rather than imputing them with a full modeled distribution. As a result, the effective evidence for a sample depends on how many DMPs are observed for that sample.</p>
 <p>This is a sensible engineering choice, but it means that the posterior confidence is partly a function of data availability as well as class separation.</p>
 </section>
-<section id="publication-guidance" class="level2" data-number="5.10">
-<h2 data-number="5.10" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">5.10</span> Publication Guidance</h2>
+<section id="publication-guidance" class="level2" data-number="5.11">
+<h2 data-number="5.11" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">5.11</span> Publication Guidance</h2>
 <p>The strongest defensible summary is:</p>
 <ul>
 <li>the binary head is an ECDF-based Naive Bayes style score with optional calibration,</li>
@@ -855,8 +904,8 @@ Platt, John C. 1999. <span>“Probabilistic Outputs for Support Vector Machines 
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="../chapters/05-methylpredictor-and-validation.html" class="pagination-link" aria-label="MethylPredictor and MethylValidation">
-        <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span> <i class="bi bi-arrow-right-short"></i>
+      <a href="../chapters/05-methylpredictor-and-validation.html" class="pagination-link" aria-label="MethylPredictor, MethylValidation, and MethylDiseaseProgression">
+        <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

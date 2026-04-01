@@ -122,7 +122,7 @@ This book is organized into four parts.
 | I | @sec-methylcentroid | `methylcentroid` | centroid construction and coverage preprocessing |
 | I | @sec-methyldetector | `methyldetector` | DMP testing, filtering, classifier export, and production panel bypass |
 | I | @sec-methylclassifier | `methylclassifier` | binary, multi-chromosome, OvR, and multiclass learned-head classification |
-| I | @sec-methylpredictor-validation | `methylpredictor`, `methylvalidation` | prediction metrics, Monte Carlo validation, stability analysis, production freeze |
+| I | @sec-methylpredictor-validation | `methylpredictor`, `methylvalidation`, `methyldiseaseprogression` | prediction metrics, Monte Carlo validation, stability analysis, production freeze, progression synthesis |
 | I | @sec-methylmapper | `methylmapper` | DMP-to-gene mapping and gene-level aggregation |
 | I | @sec-methylenricher | `methylenricher` | over-representation analysis, pathway graph clustering, and module scoring |
 | I | @sec-methylalignmentqc | `methylalignmentqc` | deterministic QC parsing and summarization |

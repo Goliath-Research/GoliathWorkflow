@@ -90,6 +90,51 @@ $$ {#eq-platt}
 
 This improves probability calibration under distribution shift or class imbalance, but it should not be confused with changing the underlying classifier likelihood.
 
+## New Modeling Features in Production
+
+Recent versions of `methylclassifier` expose a broader post-detector modeling layer than the original binary ECDF-only story. In practice, production runs may combine several of the following:
+
+- native multiclass histogram model export (`multiclass-classifier.pkl`) from per-comparison detector outputs,
+- optional learned multinomial logistic head on top of histogram pre-softmax scores,
+- optional isotonic calibration for probability reshaping,
+- optional elastic-net stacking for chromosome-level fusion,
+- hierarchical panel readout for family-level reporting.
+
+These are all valid engineering extensions, but conceptually they sit **on top of** the ECDF likelihood core rather than replacing it.
+
+### Learned Multiclass Head
+
+The learned head takes base multiclass score vectors $z(x)$ and fits a multinomial logistic layer:
+
+$$
+\hat P(Y=k\mid x)
+=
+\frac{\exp(\beta_k^\top z(x)+b_k)}
+{\sum_{r=1}^K \exp(\beta_r^\top z(x)+b_r)}.
+$$
+
+This layer is controlled by `multiclass_train_learned_head` and related hyperparameters in `step_config.detection` (see @sec-configuration-reference). It is especially useful when the raw histogram scores have good ranking behavior but imperfect class boundaries.
+
+### Isotonic and Stacking Layers
+
+Two additional modeling switches in `step_config.classifier` are important for current production behavior:
+
+- `use_isotonic_calibration`: nonparametric monotone calibration of predicted probabilities,
+- `use_elasticnet_stacking`: linear meta-model for chromosome-weight fusion under elastic-net regularization.
+
+Both improve empirical calibration or discrimination in many cohorts, but they increase model complexity and should be reported explicitly in methods sections.
+
+### Practical Reproducibility
+
+For reproducibility claims, report:
+
+1. whether the learned multiclass head was enabled,
+2. whether class balancing was used (`multiclass_learned_class_weight`),
+3. whether isotonic calibration and/or elastic-net stacking were enabled,
+4. the sklearn version stored in PKL metadata.
+
+Without these details, two runs with the same DMP panel can still produce materially different probabilities.
+
 ## Multiclass Learned Head: Class Weighting {#sec-classifier-class-weight}
 
 When the native multiclass histogram classifier is extended with a learned logistic head (`multiclass_train_learned_head: true`), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a `class_weight` parameter (exposed as `multiclass_learned_class_weight` in `step_config.detection`; see @sec-configuration-reference).

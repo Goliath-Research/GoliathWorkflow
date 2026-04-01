@@ -1,11 +1,12 @@
-# MethylPredictor and MethylValidation {#sec-methylpredictor-validation}
+# MethylPredictor, MethylValidation, and MethylDiseaseProgression {#sec-methylpredictor-validation}
 
 ## Role
 
-`methylpredictor` and `methylvalidation` do not introduce a new generative methylation model. Instead they evaluate and operationalize the models exported by the detector and classifier packages.
+`methylpredictor`, `methylvalidation`, and `methyldiseaseprogression` do not introduce a new generative methylation model. Instead they evaluate, operationalize, and synthesize outputs exported by detector/classifier/mapper/enricher stages.
 
 - `methylpredictor` applies trained classifier artifacts to new cohorts and computes prediction summaries.
 - `methylvalidation` creates repeated train/validation splits and aggregates run-level metrics across Monte Carlo style repetitions.
+- `methyldiseaseprogression` aggregates per-comparison mapper/enricher outputs into ordered cross-stage progression tables and labels.
 
 ## MethylPredictor: Labeled Evaluation
 
@@ -136,6 +137,61 @@ Final model fitting is a separate explicit step: `methyl-validation --model` run
 If configured (`step_config.validation.require_biological_review_for_model=true`), `--model` is blocked until `biological_review_confirmed=true`.
 
 The production project JSON (`production/project.json`) is the artifact that links the frozen model to the `--predictor-only` workflow: it encodes the centroid directories, detection output paths, and classifier paths so that `methyl-predictor` can resolve them without re-running any upstream steps.
+
+## MethylDiseaseProgression Synthesis
+
+`methyl-disease-progression` is a post-freeze synthesis step that treats disease groups as an ordered stage sequence and aggregates entity-level signals across stages.
+
+### Inputs and Stage Resolution
+
+For each ordered stage, the code reads:
+
+- mapper combined gene table (`all-gene_name-combined.csv` by default),
+- enricher pathway table (`enrichment_merged.csv`, fallback `enrichment_top_q0.05.csv`),
+- optional module table (`modules_ranked.csv`).
+
+Stage order comes from:
+
+1. CLI `--ordered-comparison-labels` (highest precedence),
+2. `step_config.progression.ordered_comparison_labels` (or alias `ordered_disease_groups`),
+3. project comparison order.
+
+### Entity Scores
+
+The synthesis creates long-format tables for genes, pathways, and modules with `(entity_type, entity_id, stage_index, rank, score)`.
+
+- **Genes:** score is max of available gene-weight columns per gene (e.g. `total_weight`, `gene_importance`).
+- **Pathways:** when q-values exist, score is transformed to
+
+$$
+\operatorname{score}_{\text{pathway}} = -\log_{10}(\max(q, 10^{-300})),
+$$
+
+so larger values indicate stronger enrichment.
+- **Modules:** score is the module score exported by `modules_ranked.csv`.
+
+### Progression Labels
+
+For each entity across ordered stages, the package assigns categorical progression labels:
+
+- `stage_specific`, `early_only`, `late_only`,
+- `stable_across_stages`,
+- `monotonic_up` / `monotonic_down` (based on adjacent score differences over at least three points).
+
+These are deterministic rule-based labels, not fitted trajectory models.
+
+### Outputs
+
+The progression step writes:
+
+- `genes_long.csv`
+- `pathways_long.csv`
+- `modules_long.csv`
+- `entities_progression_labels.csv`
+- `summary.json`
+- optional `report.md` (when `report_md=true`)
+
+This layer is best interpreted as structured biological summarization across stages, not causal disease dynamics inference.
 
 ## Two Workflows Summary {#sec-two-workflows-summary}
 

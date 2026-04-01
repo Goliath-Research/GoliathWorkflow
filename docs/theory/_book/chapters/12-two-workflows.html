@@ -216,7 +216,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -625,7 +625,7 @@ window.Quarto = {
 <p><strong>Fix.</strong> In <code>step_config.detection</code>, add:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_train_learned_head"</span><span class="er">:</span> <span class="kw">true</span><span class="er">,</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_learned_class_weight"</span><span class="er">:</span> <span class="st">"balanced"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The <code>balanced</code> setting computes <span class="math inline">\(w_k = n_{\text{total}} / (K \cdot n_k)\)</span>, penalizing majority-class errors proportionally less than minority-class errors. See <a href="04-methylclassifier.html#sec-classifier-class-weight" class="quarto-xref"><span>Section 5.8</span></a> for the full derivation.</p>
+<p>The <code>balanced</code> setting computes <span class="math inline">\(w_k = n_{\text{total}} / (K \cdot n_k)\)</span>, penalizing majority-class errors proportionally less than minority-class errors. See <a href="04-methylclassifier.html#sec-classifier-class-weight" class="quarto-xref"><span>Section 5.9</span></a> for the full derivation.</p>
 <hr>
 </section>
 <section id="sec-diag-sklearn-version" class="level2" data-number="12.6">

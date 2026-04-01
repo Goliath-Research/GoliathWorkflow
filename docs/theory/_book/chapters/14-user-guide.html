@@ -215,7 +215,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -328,6 +328,7 @@ window.Quarto = {
   <li><a href="#step-2-check-stability-results" id="toc-step-2-check-stability-results" class="nav-link" data-scroll-target="#step-2-check-stability-results"><span class="header-section-number">14.3.3</span> Step 2: Check stability results</a></li>
   <li><a href="#step-3-run-the-production-freeze" id="toc-step-3-run-the-production-freeze" class="nav-link" data-scroll-target="#step-3-run-the-production-freeze"><span class="header-section-number">14.3.4</span> Step 3: Run the production freeze</a></li>
   <li><a href="#step-4-run-the-final-model-stage" id="toc-step-4-run-the-final-model-stage" class="nav-link" data-scroll-target="#step-4-run-the-final-model-stage"><span class="header-section-number">14.3.5</span> Step 4: Run the final model stage</a></li>
+  <li><a href="#optional-run-progression-synthesis-as-a-standalone-step" id="toc-optional-run-progression-synthesis-as-a-standalone-step" class="nav-link" data-scroll-target="#optional-run-progression-synthesis-as-a-standalone-step"><span class="header-section-number">14.3.6</span> Optional: Run progression synthesis as a standalone step</a></li>
   </ul></li>
   <li><a href="#sec-guide-workflow2" id="toc-sec-guide-workflow2" class="nav-link" data-scroll-target="#sec-guide-workflow2"><span class="header-section-number">14.4</span> Workflow 2: Model Use for Prediction</a>
   <ul class="collapse">
@@ -535,6 +536,18 @@ sample_003</code></pre>
 <p>This runs classifier → predictor on the frozen production project.</p>
 <p>If <code>step_config.validation.require_biological_review_for_model=true</code>, <code>--model</code> requires:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="st">"biological_review_confirmed"</span><span class="er">:</span> <span class="kw">true</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="optional-run-progression-synthesis-as-a-standalone-step" class="level3" data-number="14.3.6">
+<h3 data-number="14.3.6" class="anchored" data-anchor-id="optional-run-progression-synthesis-as-a-standalone-step"><span class="header-section-number">14.3.6</span> Optional: Run progression synthesis as a standalone step</h3>
+<p>If your project has multiple ordered disease groups and you want a dedicated cross-stage summary after freeze, run:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-disease-progression</span> <span class="at">--project</span> configs/my_project.json</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Useful flags:</p>
+<ul>
+<li><code>--ordered-comparison-labels pca_pca1,pca_pca2,pca_pca3,pca_pca4</code> to enforce explicit stage order</li>
+<li><code>--strict-missing</code> to fail when any stage input file is missing</li>
+<li><code>--report-md</code> to also emit a markdown summary report</li>
+</ul>
+<p>Default output directory is <code>production/progression/</code> when called from the freeze workflow, or <code>&lt;project_root&gt;/progression</code> for standalone runs.</p>
 <hr>
 </section>
 </section>
@@ -547,7 +560,7 @@ sample_003</code></pre>
 </section>
 <section id="run-predictor-only-evaluation" class="level3" data-number="14.4.2">
 <h3 data-number="14.4.2" class="anchored" data-anchor-id="run-predictor-only-evaluation"><span class="header-section-number">14.4.2</span> Run predictor-only evaluation</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/my_project.json <span class="at">--predictor-only</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/my_project.json <span class="at">--predictor-only</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>This applies the frozen production model to random held-out splits. The same <code>n_iterations</code> from <code>step_config.validation</code> is used.</p>
 <p><strong>Performance comparison.</strong> Workflow 2 is much faster than Workflow 1 because each iteration runs only <code>methyl-predictor</code> rather than the full pipeline. On typical hardware, a 20-iteration Workflow 2 run takes minutes rather than hours.</p>
 <hr>
@@ -556,26 +569,26 @@ sample_003</code></pre>
 <section id="sec-guide-individual-steps" class="level2" data-number="14.5">
 <h2 data-number="14.5" class="anchored" data-anchor-id="sec-guide-individual-steps"><span class="header-section-number">14.5</span> Running Individual Pipeline Steps</h2>
 <p>Each pipeline step can be run independently using its <code>--project</code> flag:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Rebuild centroids for all groups</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-centroid</span> <span class="at">--project</span> configs/my_project.json <span class="at">--group</span> all</span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run detection</span></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-detector</span> <span class="at">--project</span> configs/my_project.json</span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run classification</span></span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-classifier</span> <span class="at">--project</span> configs/my_project.json</span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run prediction (requires val CSVs)</span></span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-predictor</span> <span class="at">--project</span> configs/my_project.json</span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run mapping</span></span>
-<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-mapper</span> <span class="at">--project</span> configs/my_project.json</span>
-<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run enrichment</span></span>
-<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-enricher</span> <span class="at">--project</span> configs/my_project.json</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Rebuild centroids for all groups</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-centroid</span> <span class="at">--project</span> configs/my_project.json <span class="at">--group</span> all</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run detection</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-detector</span> <span class="at">--project</span> configs/my_project.json</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run classification</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-classifier</span> <span class="at">--project</span> configs/my_project.json</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run prediction (requires val CSVs)</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-predictor</span> <span class="at">--project</span> configs/my_project.json</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run mapping</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-mapper</span> <span class="at">--project</span> configs/my_project.json</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Re-run enrichment</span></span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-enricher</span> <span class="at">--project</span> configs/my_project.json</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>For multi-comparison (hierarchical) projects, use <code>--per-cancer-group</code> with <code>methyl-detector</code> and <code>methyl-classifier</code>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-detector</span> <span class="at">--project</span> configs/my_project.json <span class="at">--per-cancer-group</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-classifier</span> <span class="at">--project</span> configs/my_project.json <span class="at">--per-cancer-group</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-detector</span> <span class="at">--project</span> configs/my_project.json <span class="at">--per-cancer-group</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-classifier</span> <span class="at">--project</span> configs/my_project.json <span class="at">--per-cancer-group</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <hr>
 </section>
 <section id="sec-guide-outputs" class="level2" data-number="14.6">
@@ -683,20 +696,20 @@ sample_003</code></pre>
 <section id="metrics_summary.json" class="level3" data-number="14.7.2">
 <h3 data-number="14.7.2" class="anchored" data-anchor-id="metrics_summary.json"><span class="header-section-number">14.7.2</span> <code>metrics_summary.json</code></h3>
 <p>For each metric in <code>all_metrics.csv</code>, reports:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"balanced_accuracy"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"mean"</span><span class="fu">:</span> <span class="fl">0.75</span><span class="fu">,</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"std"</span><span class="fu">:</span> <span class="fl">0.05</span><span class="fu">,</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"min"</span><span class="fu">:</span> <span class="fl">0.62</span><span class="fu">,</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"max"</span><span class="fu">:</span> <span class="fl">0.84</span><span class="fu">,</span></span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"count"</span><span class="fu">:</span> <span class="dv">20</span><span class="fu">,</span></span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p5"</span><span class="fu">:</span> <span class="fl">0.65</span><span class="fu">,</span></span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p25"</span><span class="fu">:</span> <span class="fl">0.72</span><span class="fu">,</span></span>
-<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p50"</span><span class="fu">:</span> <span class="fl">0.76</span><span class="fu">,</span></span>
-<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p75"</span><span class="fu">:</span> <span class="fl">0.79</span><span class="fu">,</span></span>
-<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p95"</span><span class="fu">:</span> <span class="fl">0.82</span></span>
-<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
-<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"balanced_accuracy"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"mean"</span><span class="fu">:</span> <span class="fl">0.75</span><span class="fu">,</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"std"</span><span class="fu">:</span> <span class="fl">0.05</span><span class="fu">,</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"min"</span><span class="fu">:</span> <span class="fl">0.62</span><span class="fu">,</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"max"</span><span class="fu">:</span> <span class="fl">0.84</span><span class="fu">,</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"count"</span><span class="fu">:</span> <span class="dv">20</span><span class="fu">,</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p5"</span><span class="fu">:</span> <span class="fl">0.65</span><span class="fu">,</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p25"</span><span class="fu">:</span> <span class="fl">0.72</span><span class="fu">,</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p50"</span><span class="fu">:</span> <span class="fl">0.76</span><span class="fu">,</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p75"</span><span class="fu">:</span> <span class="fl">0.79</span><span class="fu">,</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"p95"</span><span class="fu">:</span> <span class="fl">0.82</span></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Interpreting balanced accuracy.</strong> For <span class="math inline">\(K\)</span> classes, random chance gives <span class="math inline">\(1/K\)</span> (0.2 for 5 classes). A production model with mean BA 0.75 and std 0.05 is substantially above chance. Publication claims should report mean ± std and the 95th percentile interval.</p>
 </section>
 <section id="validation_metrics.json-per-run" class="level3" data-number="14.7.3">
@@ -721,8 +734,8 @@ sample_003</code></pre>
 <p><strong>Symptom:</strong> <code>sample_dmp_coverage.dmps_used_fraction_median</code> &lt; 0.5 in <code>validation_metrics.json</code>. All cancer classes predicted as healthy.</p>
 <p><strong>Root cause:</strong> <code>min_sample_coverage</code> in <code>step_config.detection</code> is higher than the centroid <code>min_coverage</code> in <code>step_config.centroid.base_config</code>.</p>
 <p><strong>Fix:</strong> Align both thresholds:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="st">"centroid"</span><span class="er">:</span> <span class="fu">{</span> <span class="dt">"base_config"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"min_coverage"</span><span class="fu">:</span> <span class="dv">4</span> <span class="fu">}</span> <span class="fu">}</span><span class="er">,</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="st">"detection"</span><span class="er">:</span> <span class="fu">{</span> <span class="dt">"min_coverage"</span><span class="fu">:</span> <span class="dv">4</span><span class="fu">,</span> <span class="dt">"min_sample_coverage"</span><span class="fu">:</span> <span class="dv">4</span> <span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="st">"centroid"</span><span class="er">:</span> <span class="fu">{</span> <span class="dt">"base_config"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"min_coverage"</span><span class="fu">:</span> <span class="dv">4</span> <span class="fu">}</span> <span class="fu">}</span><span class="er">,</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="st">"detection"</span><span class="er">:</span> <span class="fu">{</span> <span class="dt">"min_coverage"</span><span class="fu">:</span> <span class="dv">4</span><span class="fu">,</span> <span class="dt">"min_sample_coverage"</span><span class="fu">:</span> <span class="dv">4</span> <span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Verification:</strong> After re-running, check <code>dmps_used_fraction_median</code> in the new run’s <code>validation_metrics.json</code>. Expected range: 0.6–0.95.</p>
 <p>See <a href="03-methyldetector.html#sec-detector-coverage" class="quarto-xref"><span>Section 4.10</span></a> for theoretical background.</p>
 <hr>
@@ -732,24 +745,24 @@ sample_003</code></pre>
 <p><strong>Symptom:</strong> Confusion matrix shows recall ≈ 1.0 for the majority class (e.g.&nbsp;healthy/control) and recall ≈ 0 for all disease classes. Balanced accuracy close to <code>1/K</code>.</p>
 <p><strong>Root cause:</strong> The training cohort has substantially more samples in one class. The multinomial logistic head defaults to the majority class when histogram scores are ambiguous.</p>
 <p><strong>Fix:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="st">"detection"</span><span class="er">:</span> <span class="fu">{</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"multiclass_train_learned_head"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"multiclass_learned_class_weight"</span><span class="fu">:</span> <span class="st">"balanced"</span></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="st">"detection"</span><span class="er">:</span> <span class="fu">{</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"multiclass_train_learned_head"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"multiclass_learned_class_weight"</span><span class="fu">:</span> <span class="st">"balanced"</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>This sets <span class="math inline">\(w_k = n_{\text{total}} / (K n_k)\)</span> in the logistic regression. Note that <code>multiclass_train_learned_head: true</code> is required for <code>multiclass_learned_class_weight</code> to take effect.</p>
 <p><strong>Verification:</strong> Re-run. The confusion matrix diagonal should become more balanced. Per-class recall should be non-zero for all classes.</p>
-<p>See <a href="04-methylclassifier.html#sec-classifier-class-weight" class="quarto-xref"><span>Section 5.8</span></a> for theoretical background.</p>
+<p>See <a href="04-methylclassifier.html#sec-classifier-class-weight" class="quarto-xref"><span>Section 5.9</span></a> for theoretical background.</p>
 <hr>
 </section>
 <section id="diagnostic-3-sklearn-version-mismatch" class="level3" data-number="14.8.3">
 <h3 data-number="14.8.3" class="anchored" data-anchor-id="diagnostic-3-sklearn-version-mismatch"><span class="header-section-number">14.8.3</span> Diagnostic 3: Sklearn Version Mismatch</h3>
 <p><strong>Symptom:</strong> <code>InconsistentVersionWarning</code> during prediction. The model was trained with sklearn <code>X.Y.Z</code> but is being run with <code>A.B.C</code>.</p>
 <p><strong>Check:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pickle, sklearn</span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> <span class="bu">open</span>(<span class="st">"monte_carlo_runs/production/classifiers/multiclass-classifier.pkl"</span>, <span class="st">"rb"</span>) <span class="im">as</span> f:</span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> pickle.load(f)</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Trained with sklearn:"</span>, model[<span class="st">"metadata"</span>].get(<span class="st">"sklearn_version"</span>))</span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Current sklearn:     "</span>, sklearn.__version__)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pickle, sklearn</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> <span class="bu">open</span>(<span class="st">"monte_carlo_runs/production/classifiers/multiclass-classifier.pkl"</span>, <span class="st">"rb"</span>) <span class="im">as</span> f:</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> pickle.load(f)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Trained with sklearn:"</span>, model[<span class="st">"metadata"</span>].get(<span class="st">"sklearn_version"</span>))</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Current sklearn:     "</span>, sklearn.__version__)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p><strong>Fix:</strong> Re-run <code>--freeze</code> with the current sklearn version. The new PKL will be trained with the current version and record it in metadata.</p>
 <p><strong>Long-term:</strong> Pin <code>scikit-learn</code> to a specific version in your environment to avoid future mismatches.</p>
 <hr>
@@ -758,19 +771,19 @@ sample_003</code></pre>
 <section id="sec-guide-docker" class="level2" data-number="14.9">
 <h2 data-number="14.9" class="anchored" data-anchor-id="sec-guide-docker"><span class="header-section-number">14.9</span> Running with Docker</h2>
 <p>If you use the MethylPipeline Docker container, paths in the project config must be valid <strong>inside</strong> the container. Mount your data volumes at the expected paths.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /path/to/MethylPipeline/docker</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">-d</span></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run Workflow 1 inside the container</span></span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec <span class="at">-w</span> /workspace methylpipeline <span class="dt">\</span></span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>  methyl-validation <span class="at">--project</span> /workspace/configs/my_project.json <span class="at">--stability</span></span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Run the production freeze</span></span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec <span class="at">-w</span> /workspace methylpipeline <span class="dt">\</span></span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>  methyl-validation <span class="at">--project</span> /workspace/configs/my_project.json <span class="at">--freeze</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> /path/to/MethylPipeline/docker</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> compose up <span class="at">-d</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run Workflow 1 inside the container</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec <span class="at">-w</span> /workspace methylpipeline <span class="dt">\</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  methyl-validation <span class="at">--project</span> /workspace/configs/my_project.json <span class="at">--stability</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Run the production freeze</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec <span class="at">-w</span> /workspace methylpipeline <span class="dt">\</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>  methyl-validation <span class="at">--project</span> /workspace/configs/my_project.json <span class="at">--freeze</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Override <code>n_iterations</code> for a quick test:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec <span class="at">-w</span> /workspace methylpipeline <span class="dt">\</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>  methyl-validation <span class="at">--project</span> /workspace/configs/my_project.json <span class="at">--stability</span> <span class="at">--iterations</span> 3</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> exec <span class="at">-w</span> /workspace methylpipeline <span class="dt">\</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>  methyl-validation <span class="at">--project</span> /workspace/configs/my_project.json <span class="at">--stability</span> <span class="at">--iterations</span> 3</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <hr>
 </section>
 <section id="sec-guide-troubleshooting" class="level2" data-number="14.10">

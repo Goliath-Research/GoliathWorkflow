@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>6&nbsp; MethylPredictor and MethylValidation – MethylPipeline: Theory, Workflows, and Reference</title>
+<title>6&nbsp; MethylPredictor, MethylValidation, and MethylDiseaseProgression – MethylPipeline: Theory, Workflows, and Reference</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -114,7 +114,7 @@ window.Quarto = {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/05-methylpredictor-and-validation.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/05-methylpredictor-and-validation.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -181,7 +181,7 @@ window.Quarto = {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></a>
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -285,17 +285,24 @@ window.Quarto = {
   <li><a href="#what-the-validation-layer-does-not-do" id="toc-what-the-validation-layer-does-not-do" class="nav-link" data-scroll-target="#what-the-validation-layer-does-not-do"><span class="header-section-number">6.6</span> What The Validation Layer Does Not Do</a></li>
   <li><a href="#sec-stability-analysis" id="toc-sec-stability-analysis" class="nav-link" data-scroll-target="#sec-stability-analysis"><span class="header-section-number">6.7</span> Stability Analysis</a></li>
   <li><a href="#sec-production-freeze" id="toc-sec-production-freeze" class="nav-link" data-scroll-target="#sec-production-freeze"><span class="header-section-number">6.8</span> Production Freeze</a></li>
-  <li><a href="#sec-two-workflows-summary" id="toc-sec-two-workflows-summary" class="nav-link" data-scroll-target="#sec-two-workflows-summary"><span class="header-section-number">6.9</span> Two Workflows Summary</a></li>
-  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">6.10</span> Publication Guidance</a></li>
+  <li><a href="#methyldiseaseprogression-synthesis" id="toc-methyldiseaseprogression-synthesis" class="nav-link" data-scroll-target="#methyldiseaseprogression-synthesis"><span class="header-section-number">6.9</span> MethylDiseaseProgression Synthesis</a>
+  <ul class="collapse">
+  <li><a href="#inputs-and-stage-resolution" id="toc-inputs-and-stage-resolution" class="nav-link" data-scroll-target="#inputs-and-stage-resolution"><span class="header-section-number">6.9.1</span> Inputs and Stage Resolution</a></li>
+  <li><a href="#entity-scores" id="toc-entity-scores" class="nav-link" data-scroll-target="#entity-scores"><span class="header-section-number">6.9.2</span> Entity Scores</a></li>
+  <li><a href="#progression-labels" id="toc-progression-labels" class="nav-link" data-scroll-target="#progression-labels"><span class="header-section-number">6.9.3</span> Progression Labels</a></li>
+  <li><a href="#outputs" id="toc-outputs" class="nav-link" data-scroll-target="#outputs"><span class="header-section-number">6.9.4</span> Outputs</a></li>
+  </ul></li>
+  <li><a href="#sec-two-workflows-summary" id="toc-sec-two-workflows-summary" class="nav-link" data-scroll-target="#sec-two-workflows-summary"><span class="header-section-number">6.10</span> Two Workflows Summary</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">6.11</span> Publication Guidance</a></li>
   </ul>
 </nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/05-methylpredictor-and-validation.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></a></li></ol></nav>
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/05-methylpredictor-and-validation.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></a></li></ol></nav>
 <div class="quarto-title">
-<h1 class="title"><span id="sec-methylpredictor-validation" class="quarto-section-identifier"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor and MethylValidation</span></span></h1>
+<h1 class="title"><span id="sec-methylpredictor-validation" class="quarto-section-identifier"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span></h1>
 </div>
 
 
@@ -314,10 +321,11 @@ window.Quarto = {
 
 <section id="role" class="level2" data-number="6.1">
 <h2 data-number="6.1" class="anchored" data-anchor-id="role"><span class="header-section-number">6.1</span> Role</h2>
-<p><code>methylpredictor</code> and <code>methylvalidation</code> do not introduce a new generative methylation model. Instead they evaluate and operationalize the models exported by the detector and classifier packages.</p>
+<p><code>methylpredictor</code>, <code>methylvalidation</code>, and <code>methyldiseaseprogression</code> do not introduce a new generative methylation model. Instead they evaluate, operationalize, and synthesize outputs exported by detector/classifier/mapper/enricher stages.</p>
 <ul>
 <li><code>methylpredictor</code> applies trained classifier artifacts to new cohorts and computes prediction summaries.</li>
 <li><code>methylvalidation</code> creates repeated train/validation splits and aggregates run-level metrics across Monte Carlo style repetitions.</li>
+<li><code>methyldiseaseprogression</code> aggregates per-comparison mapper/enricher outputs into ordered cross-stage progression tables and labels.</li>
 </ul>
 </section>
 <section id="methylpredictor-labeled-evaluation" class="level2" data-number="6.2">
@@ -428,15 +436,69 @@ s_m^2 = \frac{1}{R-1}\sum_{r=1}^{R}(m_r - \bar m)^2,
 <p>If configured (<code>step_config.validation.require_biological_review_for_model=true</code>), <code>--model</code> is blocked until <code>biological_review_confirmed=true</code>.</p>
 <p>The production project JSON (<code>production/project.json</code>) is the artifact that links the frozen model to the <code>--predictor-only</code> workflow: it encodes the centroid directories, detection output paths, and classifier paths so that <code>methyl-predictor</code> can resolve them without re-running any upstream steps.</p>
 </section>
-<section id="sec-two-workflows-summary" class="level2" data-number="6.9">
-<h2 data-number="6.9" class="anchored" data-anchor-id="sec-two-workflows-summary"><span class="header-section-number">6.9</span> Two Workflows Summary</h2>
+<section id="methyldiseaseprogression-synthesis" class="level2" data-number="6.9">
+<h2 data-number="6.9" class="anchored" data-anchor-id="methyldiseaseprogression-synthesis"><span class="header-section-number">6.9</span> MethylDiseaseProgression Synthesis</h2>
+<p><code>methyl-disease-progression</code> is a post-freeze synthesis step that treats disease groups as an ordered stage sequence and aggregates entity-level signals across stages.</p>
+<section id="inputs-and-stage-resolution" class="level3" data-number="6.9.1">
+<h3 data-number="6.9.1" class="anchored" data-anchor-id="inputs-and-stage-resolution"><span class="header-section-number">6.9.1</span> Inputs and Stage Resolution</h3>
+<p>For each ordered stage, the code reads:</p>
+<ul>
+<li>mapper combined gene table (<code>all-gene_name-combined.csv</code> by default),</li>
+<li>enricher pathway table (<code>enrichment_merged.csv</code>, fallback <code>enrichment_top_q0.05.csv</code>),</li>
+<li>optional module table (<code>modules_ranked.csv</code>).</li>
+</ul>
+<p>Stage order comes from:</p>
+<ol type="1">
+<li>CLI <code>--ordered-comparison-labels</code> (highest precedence),</li>
+<li><code>step_config.progression.ordered_comparison_labels</code> (or alias <code>ordered_disease_groups</code>),</li>
+<li>project comparison order.</li>
+</ol>
+</section>
+<section id="entity-scores" class="level3" data-number="6.9.2">
+<h3 data-number="6.9.2" class="anchored" data-anchor-id="entity-scores"><span class="header-section-number">6.9.2</span> Entity Scores</h3>
+<p>The synthesis creates long-format tables for genes, pathways, and modules with <code>(entity_type, entity_id, stage_index, rank, score)</code>.</p>
+<ul>
+<li><strong>Genes:</strong> score is max of available gene-weight columns per gene (e.g.&nbsp;<code>total_weight</code>, <code>gene_importance</code>).</li>
+<li><strong>Pathways:</strong> when q-values exist, score is transformed to</li>
+</ul>
+<p><span class="math display">\[
+\operatorname{score}_{\text{pathway}} = -\log_{10}(\max(q, 10^{-300})),
+\]</span></p>
+<p>so larger values indicate stronger enrichment. - <strong>Modules:</strong> score is the module score exported by <code>modules_ranked.csv</code>.</p>
+</section>
+<section id="progression-labels" class="level3" data-number="6.9.3">
+<h3 data-number="6.9.3" class="anchored" data-anchor-id="progression-labels"><span class="header-section-number">6.9.3</span> Progression Labels</h3>
+<p>For each entity across ordered stages, the package assigns categorical progression labels:</p>
+<ul>
+<li><code>stage_specific</code>, <code>early_only</code>, <code>late_only</code>,</li>
+<li><code>stable_across_stages</code>,</li>
+<li><code>monotonic_up</code> / <code>monotonic_down</code> (based on adjacent score differences over at least three points).</li>
+</ul>
+<p>These are deterministic rule-based labels, not fitted trajectory models.</p>
+</section>
+<section id="outputs" class="level3" data-number="6.9.4">
+<h3 data-number="6.9.4" class="anchored" data-anchor-id="outputs"><span class="header-section-number">6.9.4</span> Outputs</h3>
+<p>The progression step writes:</p>
+<ul>
+<li><code>genes_long.csv</code></li>
+<li><code>pathways_long.csv</code></li>
+<li><code>modules_long.csv</code></li>
+<li><code>entities_progression_labels.csv</code></li>
+<li><code>summary.json</code></li>
+<li>optional <code>report.md</code> (when <code>report_md=true</code>)</li>
+</ul>
+<p>This layer is best interpreted as structured biological summarization across stages, not causal disease dynamics inference.</p>
+</section>
+</section>
+<section id="sec-two-workflows-summary" class="level2" data-number="6.10">
+<h2 data-number="6.10" class="anchored" data-anchor-id="sec-two-workflows-summary"><span class="header-section-number">6.10</span> Two Workflows Summary</h2>
 <p>MethylValidation supports two primary operational modes, described in full in <a href="12-two-workflows.html" class="quarto-xref"><span>Chapter 12</span></a>. A brief summary for theory readers:</p>
 <p><strong>Workflow 1 — Model Creation.</strong> Repeated Monte Carlo runs with <code>--stability</code> estimate DMP recurrence frequencies from centroid+detector iterations. The <code>--freeze</code> step then builds production biological outputs on the stable panel (<code>fixed_dmp_panel</code>) and may run progression synthesis. The <code>--model</code> step then performs final classifier/predictor execution after optional biological gate checks.</p>
 <p><strong>Workflow 2 — Model Use for Prediction.</strong> The <code>--predictor-only</code> flag evaluates the frozen production model on repeated random holdouts without retraining. This workflow answers the question: <em>what is the empirical distribution of classification performance for the frozen production classifier under random sampling from the available cohort?</em></p>
 <p>The two workflows share the same split-and-aggregate infrastructure (<code>split.py</code>, <code>project_gen.py</code>, <code>pipeline_runner.py</code>) but differ in which pipeline steps execute per iteration. Workflow 1 iterations run centroid+detector; Workflow 2 iterations run predictor only.</p>
 </section>
-<section id="publication-guidance" class="level2" data-number="6.10">
-<h2 data-number="6.10" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">6.10</span> Publication Guidance</h2>
+<section id="publication-guidance" class="level2" data-number="6.11">
+<h2 data-number="6.11" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">6.11</span> Publication Guidance</h2>
 <p>For publication text:</p>
 <ul>
 <li>describe <code>methylpredictor</code> as the evaluation and application layer for trained classifiers,</li>
