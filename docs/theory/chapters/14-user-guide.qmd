@@ -149,6 +149,52 @@ Workflow 1 should be run and reviewed in three explicit stages:
 
 Treat changes in any of these stage inputs as a model version change, not as a minor rerun.
 
+### Workflow mental model
+
+```mermaid
+flowchart TB
+  subgraph mcStage [Stage A Stability MC]
+    mcIter["MC iterations (n_iterations)"]
+    mcCentroid[methyl-centroid]
+    mcDetector[methyl-detector]
+    mcStability["stability aggregation (DMP recurrence)"]
+    mcIter --> mcCentroid --> mcDetector --> mcStability
+  end
+
+  mcStability --> freezeStart["Stage B --freeze"]
+
+  subgraph freezeStage [Stage B Freeze Analysis]
+    freezeCentroid[methyl-centroid]
+    freezeDetector["methyl-detector fixed panel"]
+    freezeMapper[methyl-mapper]
+    freezeEnricher[methyl-enricher]
+    freezeProgression["optional methyl-disease-progression"]
+    freezeCentroid --> freezeDetector --> freezeMapper --> freezeEnricher --> freezeProgression
+  end
+
+  freezeStart --> freezeCentroid
+  freezeProgression --> modelStart["Stage C --model"]
+
+  subgraph modelStage [Stage C Model Build]
+    modelClassifier[methyl-classifier]
+    modelPredictor["methyl-predictor (production validation pass)"]
+    modelClassifier --> modelPredictor
+  end
+
+  modelStart --> modelClassifier
+  modelPredictor --> evalStart["Workflow 2 --predictor-only"]
+
+  subgraph evalStage [Frozen Model Distribution]
+    evalIter["MC holdouts"]
+    evalPredictor["methyl-predictor per iteration"]
+    evalMetrics["balanced accuracy distribution"]
+    evalIter --> evalPredictor --> evalMetrics
+  end
+
+  evalStart --> evalIter
+  modelPredictor --> newSamples["Predict new unlabeled samples with frozen model"]
+```
+
 ### Step 1: Run Monte Carlo with stability
 
 ```bash

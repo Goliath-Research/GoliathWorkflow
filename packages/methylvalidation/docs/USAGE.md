@@ -40,6 +40,31 @@ methyl-validation --project configs/my_project.json --model
 
 **Output:** `monte_carlo_runs/production/classifiers/multiclass-classifier.pkl` is the final production model (created after `--model`).
 
+### Workflow mental model
+
+```mermaid
+flowchart TB
+  subgraph mcStage [Workflow 1 Stage A Stability]
+    mcIter["MC iterations"]
+    mcC[methyl-centroid]
+    mcD[methyl-detector]
+    mcS["stability aggregation"]
+    mcIter --> mcC --> mcD --> mcS
+  end
+
+  mcS --> freezeStageStart["Workflow 1 Stage B --freeze"]
+  freezeStageStart --> frC[methyl-centroid]
+  frC --> frD["methyl-detector fixed panel"] --> frM[methyl-mapper] --> frE[methyl-enricher] --> frP["optional methyl-disease-progression"]
+
+  frP --> modelStageStart["Workflow 1 Stage C --model"]
+  modelStageStart --> mdC[methyl-classifier] --> mdP["methyl-predictor (production validation pass)"]
+
+  mdP --> wf2Start["Workflow 2 --predictor-only"]
+  wf2Start --> wf2Iter["MC holdouts"] --> wf2Pred["methyl-predictor per iteration"] --> wf2Ba["balanced accuracy distribution"]
+
+  mdP --> newSamplePred["Predict new samples with the frozen model"]
+```
+
 ### Workflow 2: Model Use for Prediction
 
 **Purpose:** Measure the performance distribution of the frozen production model on held-out samples.
