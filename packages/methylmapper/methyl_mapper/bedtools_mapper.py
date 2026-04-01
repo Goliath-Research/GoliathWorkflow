@@ -1175,6 +1175,39 @@ class BedtoolsMapper:
                 gene_qvals[finite_mask] = _qvals
             grouped["gene_q_value"] = gene_qvals
 
+        # Keep gene-level stat columns stable across exports, even when not computable.
+        for col in ["gene_p_value", "gene_q_value", "gene_z", "gene_direction", "gene_weight_sumsq", "gene_z_numerator"]:
+            if col not in grouped.columns:
+                grouped[col] = np.nan
+
+        # Fallback: when p-values were not available for Stouffer, expose a proxy gene_p_value from group-level minima.
+        gene_p_numeric = pd.to_numeric(grouped["gene_p_value"], errors="coerce")
+        if not np.isfinite(gene_p_numeric).any():
+            for fallback_col in ("min_p_value", "mean_p_value", "min_q_value", "mean_q_value"):
+                if fallback_col in grouped.columns:
+                    fallback_vals = pd.to_numeric(grouped[fallback_col], errors="coerce")
+                    fallback_vals = fallback_vals.where(np.isfinite(fallback_vals), np.nan)
+                    if np.isfinite(fallback_vals).any():
+                        grouped["gene_p_value"] = fallback_vals.astype(float)
+                        break
+
+        # If gene_q_value is still missing but gene_p_value is available, derive q-values from gene_p_value.
+        gene_q_numeric = pd.to_numeric(grouped["gene_q_value"], errors="coerce")
+        gene_p_numeric = pd.to_numeric(grouped["gene_p_value"], errors="coerce")
+        if not np.isfinite(gene_q_numeric).any() and np.isfinite(gene_p_numeric).any():
+            gene_qvals = np.full(len(grouped), np.nan, dtype=float)
+            finite_mask = np.isfinite(gene_p_numeric.to_numpy(dtype=float))
+            if np.any(finite_mask):
+                kwargs = {}
+                if getattr(self, "storey_lambda", None) is not None:
+                    kwargs["lambdas"] = np.array([self.storey_lambda], dtype=float)
+                try:
+                    _qvals, _ = storey_qvalues(gene_p_numeric.to_numpy(dtype=float)[finite_mask], **kwargs)
+                    gene_qvals[finite_mask] = _qvals
+                    grouped["gene_q_value"] = gene_qvals
+                except Exception as exc:
+                    logger.warning("Failed to derive gene_q_value from gene_p_value fallback: %s", exc)
+
         if 'total_importance' in grouped.columns:
             grouped['gene_importance'] = grouped['total_importance']
         elif 'total_weight' in grouped.columns:

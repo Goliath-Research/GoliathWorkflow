@@ -116,9 +116,15 @@ class EnrichmentAnalyzer:
             n_before = len(out)
 
         if max_gene_q_value is not None and "gene_q_value" in out.columns:
-            out = out[pd.to_numeric(out["gene_q_value"], errors="coerce").fillna(1) <= max_gene_q_value]
-            print(f"[INFO] Filter gene_q_value <= {max_gene_q_value}: {len(out)} genes (was {n_before})")
-            n_before = len(out)
+            gene_q = pd.to_numeric(out["gene_q_value"], errors="coerce")
+            finite_mask = gene_q.notna()
+            if finite_mask.any():
+                keep_mask = (~finite_mask) | (gene_q <= max_gene_q_value)
+                out = out[keep_mask]
+                print(f"[INFO] Filter gene_q_value <= {max_gene_q_value}: {len(out)} genes (was {n_before})")
+                n_before = len(out)
+            else:
+                print("[INFO] Skip gene_q_value filter: no finite gene_q_value values available.")
 
         if min_mean_effect_size is not None:
             for col in ("mean_effect_size", "mean_weight", "total_weight"):
