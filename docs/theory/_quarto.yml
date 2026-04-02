@@ -30,6 +30,9 @@ book:
     - part: "Part IV: User Guide"
       chapters:
         - chapters/14-user-guide.qmd
+    - part: "Part V: Model Training and Validation"
+      chapters:
+        - chapters/15-model-creation-and-validation.qmd
 bibliography: references.bib
 link-citations: true
 
@@ -47,6 +50,7 @@ format:
     code-overflow: wrap
     html-math-method: mathjax
   pdf:
+    output-file: "MethylPipeline Theory - Implementation - Usage.pdf"
     documentclass: scrreprt
     toc: true
     number-sections: true

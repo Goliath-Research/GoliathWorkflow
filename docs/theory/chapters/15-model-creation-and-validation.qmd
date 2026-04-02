@@ -1,0 +1,111 @@
+# Model Creation and Validation {#sec-model-creation-validation}
+
+This chapter consolidates the implementation-facing view of model training and validation across the current MethylPipeline stack.
+
+It complements:
+
+- @sec-workflow-model-creation (workflow theory),
+- @sec-workflow-prediction (predictor-only evaluation),
+- @sec-guide-workflow1 and @sec-guide-workflow2 (operator guide).
+
+---
+
+## Scope
+
+Model creation in MethylPipeline has two layers:
+
+1. **Biology-first feature stabilization** (Monte Carlo stability + freeze), and
+2. **Final model fitting and evaluation** (`--model` backend path).
+
+The validated production sequence is:
+
+- `--stability` (MC centroid -> detector recurrence),
+- `--freeze` (single all-sample run with fixed panel + interpretation),
+- `--model` (backend-specific train/predict),
+- optional `--predictor-only` for repeated frozen-model performance distribution.
+
+---
+
+## Training and Validation Lifecycle
+
+::: {.content-visible when-format="html"}
+1. Start from project config and frozen biological panel inputs.
+2. Run stability Monte Carlo (`methyl-centroid` -> `methyl-detector`) to estimate robust loci.
+3. Freeze production on all samples with fixed panel (`centroid` -> `detector` -> `mapper` -> `enricher`).
+4. Train final model backend (`ecdf` or backend-specific tabular/generative path).
+5. Run production predictor pass and collect metrics.
+6. Optionally run repeated frozen-model evaluation (`--predictor-only`) for metric distributions.
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=0.55cm and 0cm,
+  box/.style={draw, rectangle, rounded corners=2pt, text width=7.8cm, align=center, font=\small, minimum height=0.7cm, fill=gray!8},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box] (A) {Project config + cohort definitions};
+\node[box, below=of A] (B) {Stage A --stability: MC runs (centroid $\to$ detector)};
+\node[box, below=of B] (C) {Stable panel from recurrence thresholding};
+\node[box, below=of C] (D) {Stage B --freeze: all-sample run with fixed panel};
+\node[box, below=of D] (E) {centroid $\to$ detector(fixed panel) $\to$ mapper $\to$ enricher (+ progression optional)};
+\node[box, below=of E] (F) {Stage C --model: backend training + predictor execution};
+\node[box, below=of F] (G) {Production metrics + model artifacts};
+\node[box, below=of G] (H) {Optional Workflow 2: repeated frozen-model predictor evaluation};
+\draw[arr] (A)--(B);
+\draw[arr] (B)--(C);
+\draw[arr] (C)--(D);
+\draw[arr] (D)--(E);
+\draw[arr] (E)--(F);
+\draw[arr] (F)--(G);
+\draw[arr] (G)--(H);
+\end{tikzpicture}
+\caption{Model creation and validation lifecycle from stability runs to production evaluation.}
+\end{figure}
+```
+:::
+
+---
+
+## Backend Roles
+
+Current `--model` backend semantics:
+
+- **`ecdf`**: `methyl-classifier` -> `methyl-predictor` (Bayesian/ECDF path, DMP-centric).
+- **`tabular_sklearn`**: model bundle -> tabular train -> tabular predictor.
+- **`generative_hybrid`**: model bundle -> latent generative train -> generative predictor.
+
+Covariate fusion is backend-specific:
+
+- `ecdf`: DMP-only reference path.
+- `tabular_sklearn` / `generative_hybrid`: DMP features plus optional covariates.
+
+---
+
+## Covariate-Aware Validation Contract
+
+When covariates are enabled for tabular/generative backends:
+
+- join key is sample basename against `covariate_id_column`,
+- numeric/categorical role assignment is fixed at training and reused at inference,
+- numeric imputation + optional standardization are frozen from training statistics,
+- categorical encoding uses frozen vocabulary with unknown-category handling,
+- shape/schema consistency is enforced before prediction.
+
+This contract keeps training and inference feature spaces aligned while preserving reproducibility across reruns.
+
+---
+
+## Outputs to Review
+
+For model readiness decisions, review at least:
+
+- `monte_carlo_runs/stability/stable_dmps_production.csv`,
+- `monte_carlo_runs/production/production_summary.json`,
+- `monte_carlo_runs/production/classifiers/*`,
+- `monte_carlo_runs/production/predictors/validation_metrics.json`,
+- `monte_carlo_runs/all_metrics.csv` and `metrics_summary.json` (or predictor-only equivalents).
+
+For covariate-aware backends, also review backend metadata and preprocessing artifacts under the production classifier directory.
