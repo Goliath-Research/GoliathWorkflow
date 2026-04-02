@@ -234,13 +234,22 @@ After all iterations, the same aggregation as Workflow 1 produces `all_metrics.c
 
 ### Workflow 2 Diagram
 
-```{tikz}
-%%| fig-cap: "Workflow 2: Model Use for Prediction — predictor-only evaluation of the frozen model."
-\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+::: {.content-visible when-format="html"}
+1. `production/project.json` (frozen model)
+2. `project.json` (cohorts + validation settings)
+3. `--predictor-only`: `R` iterations, predictor only
+4. Per iteration: split -> merge frozen paths -> predictor
+5. `validation_metrics.json` per iteration
+6. Aggregate to `all_metrics.csv` + `metrics_summary.json`
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
 \begin{tikzpicture}[
   node distance=0.55cm and 2cm,
-  box/.style={draw, rectangle, rounded corners=2pt, text width=6.5cm,
-              align=center, font=\small, minimum height=0.65cm, fill=gray!8},
+  box/.style={draw, rectangle, rounded corners=2pt, text width=6.5cm, align=center, font=\small, minimum height=0.65cm, fill=gray!8},
   arr/.style={-{Latex[length=2mm]}, thick}
 ]
 \node[box] (A) {\texttt{production/project.json} (frozen model)};
@@ -252,7 +261,10 @@ After all iterations, the same aggregation as Workflow 1 produces `all_metrics.c
 \draw[arr] (A)--(B); \draw[arr] (B)--(C); \draw[arr] (C)--(D);
 \draw[arr] (D)--(E); \draw[arr] (E)--(F);
 \end{tikzpicture}
+\caption{Workflow 2: Model Use for Prediction --- predictor-only evaluation of the frozen model.}
+\end{figure}
 ```
+:::
 
 ---
 
