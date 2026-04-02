@@ -5,6 +5,7 @@ Contract:
 - Join key is sample basename (or caller-provided sample id list) matched against
   ``covariate_id_column`` in sidecar.
 - Numeric columns are imputed then optionally standardized.
+- Ordinal columns are mapped to numeric codes while preserving user-defined order.
 - Categorical columns are one-hot encoded with frozen vocab and ``__UNKNOWN__`` bucket.
 """
 
@@ -72,11 +73,34 @@ def _infer_column_roles(df: pd.DataFrame, candidate_cols: List[str]) -> Tuple[Li
     return numeric, categorical
 
 
+_KNOWN_ORDINAL_MAPS: Dict[Tuple[str, ...], Dict[str, float]] = {
+    ("low", "medium", "high"): {"low": 1.0, "medium": 2.0, "high": 3.0},
+    ("very_low", "low", "medium", "high", "very_high"): {
+        "very_low": 1.0,
+        "low": 2.0,
+        "medium": 3.0,
+        "high": 4.0,
+        "very_high": 5.0,
+    },
+}
+
+
+def _auto_ordinal_map_for_series(values: Sequence[str]) -> Optional[Dict[str, float]]:
+    observed = sorted({str(v).strip().lower() for v in values if str(v).strip()})
+    for key, mapping in _KNOWN_ORDINAL_MAPS.items():
+        if set(observed).issubset(set(key)):
+            return {k: float(v) for k, v in mapping.items()}
+    return None
+
+
 @dataclass
 class CovariatePreprocessor:
     id_column: str
     numeric_columns: List[str]
+    ordinal_columns: List[str]
     categorical_columns: List[str]
+    ordinal_maps: Dict[str, Dict[str, float]]
+    ordinal_unknown_value: float
     numeric_fill_values: Dict[str, float]
     numeric_means: Dict[str, float]
     numeric_stds: Dict[str, float]
@@ -91,7 +115,13 @@ class CovariatePreprocessor:
         return {
             "id_column": self.id_column,
             "numeric_columns": list(self.numeric_columns),
+            "ordinal_columns": list(self.ordinal_columns),
             "categorical_columns": list(self.categorical_columns),
+            "ordinal_maps": {
+                str(k): {str(kk): float(vv) for kk, vv in vm.items()}
+                for k, vm in self.ordinal_maps.items()
+            },
+            "ordinal_unknown_value": float(self.ordinal_unknown_value),
             "numeric_fill_values": {k: float(v) for k, v in self.numeric_fill_values.items()},
             "numeric_means": {k: float(v) for k, v in self.numeric_means.items()},
             "numeric_stds": {k: float(v) for k, v in self.numeric_stds.items()},
@@ -108,7 +138,13 @@ class CovariatePreprocessor:
         return cls(
             id_column=str(payload["id_column"]),
             numeric_columns=[str(x) for x in payload.get("numeric_columns", [])],
+            ordinal_columns=[str(x) for x in payload.get("ordinal_columns", [])],
             categorical_columns=[str(x) for x in payload.get("categorical_columns", [])],
+            ordinal_maps={
+                str(k): {str(kk): float(vv) for kk, vv in vm.items()}
+                for k, vm in (payload.get("ordinal_maps") or {}).items()
+            },
+            ordinal_unknown_value=float(payload.get("ordinal_unknown_value", 0.0)),
             numeric_fill_values={str(k): float(v) for k, v in (payload.get("numeric_fill_values") or {}).items()},
             numeric_means={str(k): float(v) for k, v in (payload.get("numeric_means") or {}).items()},
             numeric_stds={str(k): float(v) for k, v in (payload.get("numeric_stds") or {}).items()},
@@ -154,6 +190,9 @@ def fit_covariates(
     covariate_id_column: str,
     strict_join: bool,
     numeric_columns: Optional[Sequence[str]] = None,
+    ordinal_columns: Optional[Sequence[str]] = None,
+    ordinal_maps: Optional[Dict[str, Dict[str, float]]] = None,
+    ordinal_unknown_value: float = 0.0,
     categorical_columns: Optional[Sequence[str]] = None,
     missing_numeric_strategy: str = "mean",
     standardize_numeric: bool = True,
@@ -179,6 +218,13 @@ def fit_covariates(
             raise ValueError(f"Configured numeric covariate columns not found: {unknown}")
     else:
         numeric = []
+    if ordinal_columns is not None:
+        ordinal = [str(c) for c in ordinal_columns]
+        unknown = sorted(set(ordinal) - set(candidate_cols))
+        if unknown:
+            raise ValueError(f"Configured ordinal covariate columns not found: {unknown}")
+    else:
+        ordinal = []
     if categorical_columns is not None:
         categorical = [str(c) for c in categorical_columns]
         unknown = sorted(set(categorical) - set(candidate_cols))
@@ -187,15 +233,47 @@ def fit_covariates(
     else:
         categorical = []
 
-    if numeric_columns is None and categorical_columns is None:
+    # Default inference only touches numeric/categorical. Ordinal must be explicit
+    # or auto-discovered via known label sets for non-numeric columns.
+    if numeric_columns is None and categorical_columns is None and ordinal_columns is None:
         numeric, categorical = _infer_column_roles(aligned, candidate_cols)
+        auto_ord: List[str] = []
+        for col in list(categorical):
+            series_vals = aligned[col].astype(object)
+            series_vals = series_vals.where(pd.notna(series_vals), "").astype(str).tolist()
+            inferred = _auto_ordinal_map_for_series(series_vals)
+            if inferred is not None:
+                auto_ord.append(col)
+        if auto_ord:
+            categorical = [c for c in categorical if c not in auto_ord]
+            ordinal = auto_ord
+            if ordinal_maps is None:
+                ordinal_maps = {}
+            for col in auto_ord:
+                series_vals = aligned[col].astype(object)
+                series_vals = series_vals.where(pd.notna(series_vals), "").astype(str).tolist()
+                inferred = _auto_ordinal_map_for_series(series_vals)
+                if inferred is not None:
+                    ordinal_maps[col] = inferred
+    elif ordinal_columns is None:
+        ordinal = []
     elif numeric_columns is None:
-        numeric = [c for c in candidate_cols if c not in categorical]
+        numeric = [c for c in candidate_cols if c not in categorical and c not in ordinal]
     elif categorical_columns is None:
-        categorical = [c for c in candidate_cols if c not in numeric]
+        categorical = [c for c in candidate_cols if c not in numeric and c not in ordinal]
 
-    if not numeric and not categorical:
+    overlap = (set(numeric) & set(ordinal)) | (set(numeric) & set(categorical)) | (set(ordinal) & set(categorical))
+    if overlap:
+        raise ValueError(f"Covariate columns must have exactly one role, overlap found: {sorted(overlap)}")
+
+    if not numeric and not ordinal and not categorical:
         raise ValueError("No usable covariate columns after role assignment")
+    ord_maps_in = {
+        str(k): {str(kk).strip().lower(): float(vv) for kk, vv in vm.items()}
+        for k, vm in (ordinal_maps or {}).items()
+    }
+    ord_maps: Dict[str, Dict[str, float]] = {}
+    unknown_ordinal_count = 0
 
     missing_numeric_strategy = str(missing_numeric_strategy).strip().lower()
     if missing_numeric_strategy not in {"mean", "median", "zero"}:
@@ -231,6 +309,41 @@ def fit_covariates(
         means[col] = mu
         stds[col] = sd
 
+    for col in ordinal:
+        vals_obj = aligned[col].astype(object) if col in aligned.columns else pd.Series([""] * len(sample_ids), index=aligned.index, dtype=object)
+        vals_str = vals_obj.where(pd.notna(vals_obj), "").astype(str)
+        mapping = ord_maps_in.get(col)
+        if mapping is None:
+            inferred = _auto_ordinal_map_for_series(vals_str.tolist())
+            if inferred is None:
+                raise ValueError(
+                    f"Ordinal column '{col}' requires covariate_ordinal_maps[{col!r}] "
+                    "or values matching a known order (e.g. low/medium/high)."
+                )
+            mapping = inferred
+        ord_maps[col] = mapping
+        coded = np.full((len(sample_ids),), float(ordinal_unknown_value), dtype=np.float32)
+        for i, raw in enumerate(vals_str.tolist()):
+            key = str(raw).strip().lower()
+            if key in mapping:
+                coded[i] = float(mapping[key])
+            else:
+                unknown_ordinal_count += 1
+        if standardize_numeric:
+            mu = float(np.mean(coded, dtype=np.float64))
+            sd = float(np.std(coded, dtype=np.float64))
+            if not np.isfinite(sd) or sd <= 0.0:
+                sd = 1.0
+            coded = ((coded - mu) / sd).astype(np.float32)
+            means[col] = mu
+            stds[col] = sd
+        else:
+            means[col] = float(np.mean(coded, dtype=np.float64))
+            stds[col] = float(np.std(coded, dtype=np.float64) or 1.0)
+        fill_vals[col] = float(ordinal_unknown_value)
+        out_parts.append(coded.reshape(-1, 1))
+        output_columns.append(col)
+
     for col in categorical:
         s = aligned[col].astype(object)
         s = s.where(pd.notna(s), missing_token).astype(str)
@@ -246,7 +359,10 @@ def fit_covariates(
     prep = CovariatePreprocessor(
         id_column=covariate_id_column,
         numeric_columns=numeric,
+        ordinal_columns=ordinal,
         categorical_columns=categorical,
+        ordinal_maps=ord_maps,
+        ordinal_unknown_value=float(ordinal_unknown_value),
         numeric_fill_values=fill_vals,
         numeric_means=means,
         numeric_stds=stds,
@@ -263,10 +379,13 @@ def fit_covariates(
         "n_rows_missing": int(len(missing)),
         "missing_sample_ids_preview": [str(x) for x in missing[:10]],
         "n_numeric_columns": int(len(numeric)),
+        "n_ordinal_columns": int(len(ordinal)),
         "n_categorical_columns": int(len(categorical)),
         "n_output_columns": int(matrix.shape[1]),
         "numeric_columns": list(numeric),
+        "ordinal_columns": list(ordinal),
         "categorical_columns": list(categorical),
+        "unknown_ordinal_values_mapped": int(unknown_ordinal_count),
         "missing_numeric_strategy": missing_numeric_strategy,
         "standardize_numeric": bool(standardize_numeric),
     }
@@ -307,6 +426,29 @@ def transform_covariates(
             vals = ((vals - mu) / sd).astype(np.float32)
         out_parts.append(vals.reshape(-1, 1))
 
+    unknown_ordinal_count = 0
+    for col in preprocessor.ordinal_columns:
+        if col in aligned.columns:
+            vals_obj = aligned[col].astype(object)
+            vals_str = vals_obj.where(pd.notna(vals_obj), "").astype(str)
+        else:
+            vals_str = pd.Series([""] * len(sample_ids), index=aligned.index, dtype=str)
+        mapping = preprocessor.ordinal_maps.get(col, {})
+        coded = np.full((len(sample_ids),), float(preprocessor.ordinal_unknown_value), dtype=np.float32)
+        for i, raw in enumerate(vals_str.tolist()):
+            key = str(raw).strip().lower()
+            if key in mapping:
+                coded[i] = float(mapping[key])
+            else:
+                unknown_ordinal_count += 1
+        if preprocessor.standardize_numeric:
+            mu = float(preprocessor.numeric_means.get(col, 0.0))
+            sd = float(preprocessor.numeric_stds.get(col, 1.0))
+            if not np.isfinite(sd) or sd <= 0.0:
+                sd = 1.0
+            coded = ((coded - mu) / sd).astype(np.float32)
+        out_parts.append(coded.reshape(-1, 1))
+
     unknown_count = 0
     for col in preprocessor.categorical_columns:
         if col in aligned.columns:
@@ -339,6 +481,7 @@ def transform_covariates(
         "n_rows_missing": int(len(missing)),
         "missing_sample_ids_preview": [str(x) for x in missing[:10]],
         "unknown_categorical_values_mapped": int(unknown_count),
+        "unknown_ordinal_values_mapped": int(unknown_ordinal_count),
         "n_output_columns": int(matrix.shape[1]),
     }
     return matrix, report

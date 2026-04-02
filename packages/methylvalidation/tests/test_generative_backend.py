@@ -314,3 +314,33 @@ def test_generative_config_validation_strict_fields():
             }
         )
 
+    with pytest.raises(ValueError, match="covariate role columns overlap"):
+        MonteCarloConfig.model_validate(
+            {
+                "samples_base_path": "/tmp",
+                "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+                "train_fraction": 0.8,
+                "n_iterations": 1,
+                "base_project": "/tmp/project.json",
+                "output_base": "/tmp",
+                "model_backend": "tabular_sklearn",
+                "covariate_numeric_columns": ["age"],
+                "covariate_ordinal_columns": ["age"],
+            }
+        )
+
+    with pytest.raises(ValueError, match="covariate_ordinal_maps has columns not listed"):
+        MonteCarloConfig.model_validate(
+            {
+                "samples_base_path": "/tmp",
+                "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+                "train_fraction": 0.8,
+                "n_iterations": 1,
+                "base_project": "/tmp/project.json",
+                "output_base": "/tmp",
+                "model_backend": "tabular_sklearn",
+                "covariate_ordinal_columns": ["severity"],
+                "covariate_ordinal_maps": {"risk_band": {"low": 1, "high": 2}},
+            }
+        )
+

@@ -160,10 +160,34 @@ Covariates are backend-specific and are **not** used by the ECDF Bayesian path.
 
 - **Join key:** `covariate_id_column` must match sample folder basename (for example `S123` from `/path/to/S123`).
 - **Input formats:** `.csv` / `.tsv` or `.h5`/`.hdf5` sidecar (`sample_id`, `values`, optional `columns`).
-- **Column roles:** inferred by default, or fixed via `covariate_numeric_columns` / `covariate_categorical_columns`.
+- **Column roles:** inferred by default, or fixed via `covariate_numeric_columns`, `covariate_ordinal_columns`, and `covariate_categorical_columns`.
 - **Numeric preprocessing:** impute via `covariate_missing_numeric_strategy` (`mean`, `median`, `zero`) then optional z-score (`covariate_standardize_numeric`).
+- **Ordinal preprocessing:** mapped to ordered numeric codes (single feature per column) using `covariate_ordinal_maps`; if omitted, known label sets like `low/medium/high` are auto-mapped; unknown/missing values use `covariate_ordinal_unknown_value`.
 - **Categorical preprocessing:** one-hot with frozen vocab and `__UNKNOWN__` bucket at inference.
 - **Strictness:** `covariates_strict_join` (tabular) and `generative_covariates_strict` (generative) enforce one-to-one sample id coverage.
+
+Example (`step_config.validation`) using all covariate types:
+
+```json
+"validation": {
+  "model_backend": "generative_hybrid",
+  "covariates_path": "/data/covariates.csv",
+  "covariate_id_column": "sample_id",
+  "covariate_numeric_columns": ["age", "bmi", "visceral_fat_pct"],
+  "covariate_ordinal_columns": ["risk_band"],
+  "covariate_ordinal_maps": {
+    "risk_band": {
+      "low": 1,
+      "medium": 2,
+      "high": 3
+    }
+  },
+  "covariate_ordinal_unknown_value": 0,
+  "covariate_categorical_columns": ["ethnicity", "center"],
+  "covariate_missing_numeric_strategy": "median",
+  "covariate_standardize_numeric": true
+}
+```
 
 ### Optional: `step_config.progression`
 

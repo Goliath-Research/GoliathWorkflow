@@ -68,7 +68,7 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **`--model`**: runs `run_pipeline_for_model`. For `model_backend=ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.
 - **`--predictor-only`**: MC iterations that run only `methyl-predictor` using frozen artifacts.
 
-ECDF/Bayesian remains DMP-only by design. Covariates are fused only in `tabular_sklearn` and `generative_hybrid` backends through a shared preprocessing contract.
+ECDF/Bayesian remains DMP-only by design. Covariates are fused only in `tabular_sklearn` and `generative_hybrid` backends through a shared preprocessing contract that supports numeric, ordinal (ordered code maps), and categorical features with persisted train/inference schema.
 
 The main components are:
 

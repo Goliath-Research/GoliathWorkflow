@@ -89,8 +89,9 @@ Covariate fusion is backend-specific:
 When covariates are enabled for tabular/generative backends:
 
 - join key is sample basename against `covariate_id_column`,
-- numeric/categorical role assignment is fixed at training and reused at inference,
+- numeric/ordinal/categorical role assignment is fixed at training and reused at inference,
 - numeric imputation + optional standardization are frozen from training statistics,
+- ordinal columns use preserved label->code mappings (`covariate_ordinal_maps`) with unknown-value fallback,
 - categorical encoding uses frozen vocabulary with unknown-category handling,
 - shape/schema consistency is enforced before prediction.
 

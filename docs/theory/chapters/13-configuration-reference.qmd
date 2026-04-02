@@ -284,6 +284,14 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `tabular_max_dmps` | int | `5000` | ≥ 10 | Maximum number of DMP loci retained from bundle index for tabular/generative backend training. |
 | `covariates_path` | str \| null | `null` | — | Optional covariates sidecar (`.h5` preferred, `.csv` accepted) for tabular or generative backend. |
 | `covariate_id_column` | str | `"sample_id"` | — | Covariates column used to join rows with sample basenames. |
+| `covariate_numeric_columns` | list[str] \| null | `null` | no overlap with ordinal/categorical columns | Explicit numeric covariate columns. If omitted (and no explicit role lists are set), numeric roles are inferred. |
+| `covariate_ordinal_columns` | list[str] \| null | `null` | no overlap with numeric/categorical columns | Explicit ordinal columns (ordered labels such as low/medium/high). Encoded as one numeric feature per column. |
+| `covariate_ordinal_maps` | dict[str, dict[str, float]] \| null | `null` | keys must be listed in `covariate_ordinal_columns` | Optional per-column label->code mapping for ordinal values; labels are normalized to lowercase. |
+| `covariate_ordinal_unknown_value` | float | `0.0` | — | Fallback numeric code for missing/unknown ordinal values at training/inference. |
+| `covariate_categorical_columns` | list[str] \| null | `null` | no overlap with numeric/ordinal columns | Explicit categorical columns; encoded with one-hot and frozen levels. |
+| `covariate_missing_numeric_strategy` | str | `"mean"` | `"mean"`, `"median"`, `"zero"` | Numeric imputation strategy used for numeric covariates. |
+| `covariate_standardize_numeric` | bool | `true` | — | If true, z-score standardize numeric and ordinal-coded features using training statistics. |
+| `covariates_strict_join` | bool | `false` | — | If true, tabular backend requires every sample id to exist in covariates sidecar. |
 | `generative_latent_dim` | int | `16` | ≥ 2 | Latent dimensionality for `model_backend="generative_hybrid"`. |
 | `generative_kl_weight` | float | `0.1` | ≥ 0 | KL-like regularization weight metadata/control for generative hybrid training. |
 | `generative_density_type` | str | `"diag_gaussian"` | currently only `"diag_gaussian"` | Latent class-density family for the generative hybrid backend. |

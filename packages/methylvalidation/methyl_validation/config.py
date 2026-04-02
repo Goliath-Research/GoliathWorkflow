@@ -189,6 +189,26 @@ class MonteCarloConfig(BaseModel):
             "When omitted, numeric/categorical role is inferred."
         ),
     )
+    covariate_ordinal_columns: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Optional explicit ordinal covariate columns (ordered categories such as low/medium/high). "
+            "These are encoded as single numeric features using covariate_ordinal_maps or known defaults."
+        ),
+    )
+    covariate_ordinal_maps: Optional[Dict[str, Dict[str, float]]] = Field(
+        default=None,
+        description=(
+            "Optional mapping per ordinal column from raw level -> code, e.g. "
+            "{'risk_band': {'low': 1, 'medium': 2, 'high': 3}}."
+        ),
+    )
+    covariate_ordinal_unknown_value: float = Field(
+        default=0.0,
+        description=(
+            "Fallback code used when an ordinal value is missing/unknown at train or inference time."
+        ),
+    )
     covariate_categorical_columns: Optional[List[str]] = Field(
         default=None,
         description=(
@@ -310,6 +330,36 @@ class MonteCarloConfig(BaseModel):
         if normalized not in allowed:
             raise ValueError(f"covariate_missing_numeric_strategy must be one of {sorted(allowed)}")
         return normalized
+
+    @field_validator("covariate_ordinal_maps")
+    @classmethod
+    def _normalize_covariate_ordinal_maps(cls, value: Optional[Dict[str, Dict[str, float]]]) -> Optional[Dict[str, Dict[str, float]]]:
+        if value is None:
+            return None
+        out: Dict[str, Dict[str, float]] = {}
+        for col, mapping in value.items():
+            c = str(col)
+            if not isinstance(mapping, dict) or not mapping:
+                raise ValueError(f"covariate_ordinal_maps[{c!r}] must be a non-empty object")
+            out[c] = {str(k).strip().lower(): float(v) for k, v in mapping.items()}
+        return out
+
+    @model_validator(mode="after")
+    def _validate_covariate_roles(self) -> "MonteCarloConfig":
+        numeric = set(self.covariate_numeric_columns or [])
+        ordinal = set(self.covariate_ordinal_columns or [])
+        categorical = set(self.covariate_categorical_columns or [])
+        overlap = (numeric & ordinal) | (numeric & categorical) | (ordinal & categorical)
+        if overlap:
+            raise ValueError(f"covariate role columns overlap across types: {sorted(overlap)}")
+        if self.covariate_ordinal_maps:
+            missing = sorted(set(self.covariate_ordinal_maps.keys()) - ordinal)
+            if missing:
+                raise ValueError(
+                    "covariate_ordinal_maps has columns not listed in covariate_ordinal_columns: "
+                    f"{missing}"
+                )
+        return self
 
     @property
     def n_cohorts(self) -> int:
