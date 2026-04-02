@@ -27,14 +27,8 @@ from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
 from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
+from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .model_bundle import load_bundle_dmp_index
-
-
-def _import_h5py_with_plugins():
-    import hdf5plugin  # noqa: F401
-    import h5py
-
-    return h5py
 
 
 def _build_reference_map(
@@ -80,53 +74,6 @@ def _extract_matrix_for_samples(
         return np.full((n_samples, len(feature_order)), np.nan, dtype=np.float32)
     X_all = np.concatenate(blocks, axis=1)
     return X_all
-
-
-def _load_covariates(
-    covariates_path: Optional[str],
-    sample_ids: List[str],
-    covariate_id_column: str,
-) -> Optional[np.ndarray]:
-    if not covariates_path:
-        return None
-    p = Path(covariates_path)
-    if not p.is_file():
-        return None
-    if p.suffix.lower() in (".csv", ".tsv"):
-        sep = "\t" if p.suffix.lower() == ".tsv" else ","
-        df = pd.read_csv(p, sep=sep)
-    elif p.suffix.lower() in (".h5", ".hdf5"):
-        h5py = _import_h5py_with_plugins()
-        with h5py.File(p, "r") as f:
-            if not all(k in f for k in ("sample_id", "values")):
-                return None
-            sids = np.asarray(f["sample_id"])
-            if sids.dtype.kind == "S":
-                sids = np.char.decode(sids, "utf-8")
-            vals = np.asarray(f["values"], dtype=np.float32)
-            cols = np.asarray(f["columns"]) if "columns" in f else np.array([f"cov_{i}" for i in range(vals.shape[1])])
-            if cols.dtype.kind == "S":
-                cols = np.char.decode(cols, "utf-8")
-        df = pd.DataFrame(vals, columns=[str(c) for c in cols])
-        df[covariate_id_column] = [str(x) for x in sids.tolist()]
-    else:
-        return None
-    if covariate_id_column not in df.columns:
-        return None
-    df = df.copy()
-    df[covariate_id_column] = df[covariate_id_column].astype(str)
-    lookup = df.set_index(covariate_id_column)
-    feature_cols = [c for c in lookup.columns if c != covariate_id_column]
-    if not feature_cols:
-        return None
-    out = np.zeros((len(sample_ids), len(feature_cols)), dtype=np.float32)
-    for i, sid in enumerate(sample_ids):
-        if sid in lookup.index:
-            row = pd.to_numeric(lookup.loc[sid, feature_cols], errors="coerce")
-            arr = np.asarray(row, dtype=np.float32).reshape(-1)
-            arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
-            out[i, :] = arr[: len(feature_cols)]
-    return out
 
 
 def _build_estimator(model_type: str, random_state: int = 13):
@@ -176,6 +123,11 @@ def train_tabular_model(
     max_dmps: int = 5000,
     covariates_path: Optional[str] = None,
     covariate_id_column: str = "sample_id",
+    covariates_strict_join: bool = False,
+    covariate_numeric_columns: Optional[List[str]] = None,
+    covariate_categorical_columns: Optional[List[str]] = None,
+    covariate_missing_numeric_strategy: str = "mean",
+    covariate_standardize_numeric: bool = True,
 ) -> Path:
     project = load_project(project_json)
     out_dir = Path(output_dir).resolve()
@@ -201,7 +153,16 @@ def train_tabular_model(
     X = np.asarray(X, dtype=np.float32)
     X = np.nan_to_num(X, nan=0.5, posinf=0.5, neginf=0.5)
 
-    cov = _load_covariates(covariates_path, sample_ids, covariate_id_column)
+    cov, preprocessor, cov_report = fit_covariates(
+        covariates_path,
+        sample_ids,
+        covariate_id_column=covariate_id_column,
+        strict_join=covariates_strict_join,
+        numeric_columns=covariate_numeric_columns,
+        categorical_columns=covariate_categorical_columns,
+        missing_numeric_strategy=covariate_missing_numeric_strategy,
+        standardize_numeric=covariate_standardize_numeric,
+    )
     if cov is not None:
         X = np.concatenate([X, cov], axis=1)
 
@@ -211,6 +172,10 @@ def train_tabular_model(
 
     model_path = out_dir / "tabular-model.joblib"
     joblib.dump(estimator, model_path)
+
+    preprocessor_path = out_dir / "covariate-preprocessor.json"
+    if preprocessor is not None:
+        preprocessor.save_json(preprocessor_path)
 
     meta = {
         "model_backend": "tabular_sklearn",
@@ -223,6 +188,13 @@ def train_tabular_model(
         "feature_order": [{"chromosome": c, "context": ctx, "position": int(pos)} for c, ctx, pos in feature_order],
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": covariate_id_column,
+        "covariates_strict_join": bool(covariates_strict_join),
+        "covariate_numeric_columns": [str(x) for x in (covariate_numeric_columns or [])],
+        "covariate_categorical_columns": [str(x) for x in (covariate_categorical_columns or [])],
+        "covariate_missing_numeric_strategy": str(covariate_missing_numeric_strategy),
+        "covariate_standardize_numeric": bool(covariate_standardize_numeric),
+        "covariate_preprocessor_path": str(preprocessor_path) if preprocessor is not None else None,
+        "covariate_preprocessing": cov_report,
     }
     with open(out_dir / "tabular-model-metadata.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
@@ -236,6 +208,7 @@ def predict_tabular_model_from_project(
     *,
     covariates_path: Optional[str] = None,
     covariate_id_column: str = "sample_id",
+    covariates_strict_join: bool = False,
 ) -> Dict[str, Any]:
     model_dir = Path(model_dir).resolve()
     out_dir = Path(output_dir).resolve()
@@ -271,13 +244,26 @@ def predict_tabular_model_from_project(
 
     X = _extract_matrix_for_samples(samples, refs, feature_order, min_coverage=1)
     X = np.nan_to_num(np.asarray(X, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
-    cov = _load_covariates(covariates_path or meta.get("covariates_path"), sample_ids, covariate_id_column)
+    preproc_path_meta = meta.get("covariate_preprocessor_path")
+    preprocessor = (
+        CovariatePreprocessor.load_json(preproc_path_meta)
+        if isinstance(preproc_path_meta, str) and Path(preproc_path_meta).is_file()
+        else None
+    )
+    cov, cov_report = transform_covariates(
+        covariates_path or meta.get("covariates_path"),
+        sample_ids,
+        preprocessor,
+        strict_join=bool(covariates_strict_join or meta.get("covariates_strict_join", False)),
+    )
     if cov is not None:
         X = np.concatenate([X, cov], axis=1)
 
     probs = estimator.predict_proba(X)
     y_pred = np.asarray(np.argmax(probs, axis=1), dtype=np.int32)
     metrics = _compute_metrics(y_true, y_pred, class_names=class_names or ["control", "disease"])
+    metrics["covariate_preprocessing"] = cov_report
+    metrics["n_covariate_features_used"] = int(cov.shape[1]) if cov is not None else 0
     metrics_path = out_dir / "validation_metrics.json"
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)

@@ -182,6 +182,35 @@ class MonteCarloConfig(BaseModel):
         default="sample_id",
         description="Column name in covariates table used to join with sample basename.",
     )
+    covariate_numeric_columns: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Optional explicit numeric covariate columns. "
+            "When omitted, numeric/categorical role is inferred."
+        ),
+    )
+    covariate_categorical_columns: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Optional explicit categorical covariate columns. "
+            "Columns are one-hot encoded with frozen vocab."
+        ),
+    )
+    covariate_missing_numeric_strategy: str = Field(
+        default="mean",
+        description="How numeric covariate NaNs are imputed: mean | median | zero.",
+    )
+    covariate_standardize_numeric: bool = Field(
+        default=True,
+        description="If true, z-score standardize numeric covariates using train-set statistics.",
+    )
+    covariates_strict_join: bool = Field(
+        default=False,
+        description=(
+            "For covariate-aware tabular/generic paths: require every sample id to exist in "
+            "covariates sidecar during train/predict."
+        ),
+    )
     generative_latent_dim: int = Field(
         default=16,
         ge=2,
@@ -271,6 +300,15 @@ class MonteCarloConfig(BaseModel):
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"generative_density_type must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("covariate_missing_numeric_strategy")
+    @classmethod
+    def _validate_covariate_missing_numeric_strategy(cls, value: str) -> str:
+        allowed = {"mean", "median", "zero"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"covariate_missing_numeric_strategy must be one of {sorted(allowed)}")
         return normalized
 
     @property

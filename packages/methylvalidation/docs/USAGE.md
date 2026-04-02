@@ -154,6 +154,17 @@ Rather than a separate Monte Carlo config file, embed the validation settings di
 
 All `step_config.validation` fields are documented in the configuration reference (see `docs/theory/chapters/13-configuration-reference.qmd` or the Quarto book at `docs/theory/`).
 
+### Covariate contract for `tabular_sklearn` / `generative_hybrid`
+
+Covariates are backend-specific and are **not** used by the ECDF Bayesian path.
+
+- **Join key:** `covariate_id_column` must match sample folder basename (for example `S123` from `/path/to/S123`).
+- **Input formats:** `.csv` / `.tsv` or `.h5`/`.hdf5` sidecar (`sample_id`, `values`, optional `columns`).
+- **Column roles:** inferred by default, or fixed via `covariate_numeric_columns` / `covariate_categorical_columns`.
+- **Numeric preprocessing:** impute via `covariate_missing_numeric_strategy` (`mean`, `median`, `zero`) then optional z-score (`covariate_standardize_numeric`).
+- **Categorical preprocessing:** one-hot with frozen vocab and `__UNKNOWN__` bucket at inference.
+- **Strictness:** `covariates_strict_join` (tabular) and `generative_covariates_strict` (generative) enforce one-to-one sample id coverage.
+
 ### Optional: `step_config.progression`
 
 `methyl-validation` reads progression settings from `step_config.progression` in the project JSON when running `--freeze`:

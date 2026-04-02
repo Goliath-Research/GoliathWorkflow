@@ -26,14 +26,8 @@ from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
 from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
+from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .model_bundle import load_bundle_dmp_index
-
-
-def _import_h5py_with_plugins():
-    import hdf5plugin  # noqa: F401
-    import h5py
-
-    return h5py
 
 
 def _build_reference_map(
@@ -79,61 +73,6 @@ def _extract_matrix_for_samples(
         return np.full((n_samples, len(feature_order)), np.nan, dtype=np.float32)
     X_all = np.concatenate(blocks, axis=1)
     return X_all
-
-
-def _load_covariates(
-    covariates_path: Optional[str],
-    sample_ids: List[str],
-    covariate_id_column: str,
-    *,
-    strict_join: bool,
-) -> Optional[np.ndarray]:
-    if not covariates_path:
-        return None
-    p = Path(covariates_path)
-    if not p.is_file():
-        raise FileNotFoundError(f"covariates_path not found: {p}")
-    if p.suffix.lower() in (".csv", ".tsv"):
-        sep = "\t" if p.suffix.lower() == ".tsv" else ","
-        df = pd.read_csv(p, sep=sep)
-    elif p.suffix.lower() in (".h5", ".hdf5"):
-        h5py = _import_h5py_with_plugins()
-        with h5py.File(p, "r") as f:
-            if not all(k in f for k in ("sample_id", "values")):
-                raise ValueError(f"Covariates HDF5 missing sample_id/values datasets: {p}")
-            sids = np.asarray(f["sample_id"])
-            if sids.dtype.kind == "S":
-                sids = np.char.decode(sids, "utf-8")
-            vals = np.asarray(f["values"], dtype=np.float32)
-            cols = np.asarray(f["columns"]) if "columns" in f else np.array([f"cov_{i}" for i in range(vals.shape[1])])
-            if cols.dtype.kind == "S":
-                cols = np.char.decode(cols, "utf-8")
-        df = pd.DataFrame(vals, columns=[str(c) for c in cols])
-        df[covariate_id_column] = [str(x) for x in sids.tolist()]
-    else:
-        raise ValueError(f"Unsupported covariates sidecar format: {p.suffix}")
-    if covariate_id_column not in df.columns:
-        raise ValueError(f"Covariates table missing id column '{covariate_id_column}'")
-    df = df.copy()
-    df[covariate_id_column] = df[covariate_id_column].astype(str)
-    lookup = df.set_index(covariate_id_column)
-    feature_cols = [c for c in lookup.columns if c != covariate_id_column]
-    if not feature_cols:
-        raise ValueError("Covariates table has no numeric feature columns")
-
-    missing = [sid for sid in sample_ids if sid not in lookup.index]
-    if strict_join and missing:
-        preview = ", ".join(missing[:5])
-        raise ValueError(f"Missing covariate rows for {len(missing)} sample ids (first: {preview})")
-
-    out = np.zeros((len(sample_ids), len(feature_cols)), dtype=np.float32)
-    for i, sid in enumerate(sample_ids):
-        if sid in lookup.index:
-            row = pd.to_numeric(lookup.loc[sid, feature_cols], errors="coerce")
-            arr = np.asarray(row, dtype=np.float32).reshape(-1)
-            arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
-            out[i, :] = arr[: len(feature_cols)]
-    return out
 
 
 def _fit_linear_latent_encoder(X: np.ndarray, latent_dim: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -236,6 +175,10 @@ def train_generative_model(
     covariates_path: Optional[str] = None,
     covariate_id_column: str = "sample_id",
     covariates_strict_join: bool = True,
+    covariate_numeric_columns: Optional[List[str]] = None,
+    covariate_categorical_columns: Optional[List[str]] = None,
+    covariate_missing_numeric_strategy: str = "mean",
+    covariate_standardize_numeric: bool = True,
 ) -> Path:
     np.random.seed(int(random_seed))
     project = load_project(project_json)
@@ -270,11 +213,15 @@ def train_generative_model(
     else:
         dmp_weights = dmp_weights / float(np.max(dmp_weights))
 
-    cov = _load_covariates(
+    cov, preprocessor, cov_report = fit_covariates(
         covariates_path,
         sample_ids,
-        covariate_id_column,
+        covariate_id_column=covariate_id_column,
         strict_join=covariates_strict_join,
+        numeric_columns=covariate_numeric_columns,
+        categorical_columns=covariate_categorical_columns,
+        missing_numeric_strategy=covariate_missing_numeric_strategy,
+        standardize_numeric=covariate_standardize_numeric,
     )
     n_covariates = 0
     if cov is not None:
@@ -315,6 +262,10 @@ def train_generative_model(
         class_priors=class_priors.astype(np.float32),
     )
 
+    preprocessor_path = out_dir / "covariate-preprocessor.json"
+    if preprocessor is not None:
+        preprocessor.save_json(preprocessor_path)
+
     meta = {
         "model_backend": "generative_hybrid",
         "architecture": "linear_encoder_diag_gaussian",
@@ -330,6 +281,12 @@ def train_generative_model(
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": covariate_id_column,
         "covariates_strict_join": bool(covariates_strict_join),
+        "covariate_numeric_columns": [str(x) for x in (covariate_numeric_columns or [])],
+        "covariate_categorical_columns": [str(x) for x in (covariate_categorical_columns or [])],
+        "covariate_missing_numeric_strategy": str(covariate_missing_numeric_strategy),
+        "covariate_standardize_numeric": bool(covariate_standardize_numeric),
+        "covariate_preprocessor_path": str(preprocessor_path) if preprocessor is not None else None,
+        "covariate_preprocessing": cov_report,
         "latent_dim_requested": int(latent_dim),
         "latent_dim_fitted": int(encoder_components.shape[0]),
         "kl_weight": float(kl_weight),
@@ -384,12 +341,18 @@ def predict_generative_model_from_project(
     X_methyl = _extract_matrix_for_samples(samples, refs, feature_order, min_coverage=1)
     X_methyl = np.nan_to_num(np.asarray(X_methyl, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
 
-    cov = _load_covariates(
+    preproc_path_meta = meta.get("covariate_preprocessor_path")
+    preprocessor = (
+        CovariatePreprocessor.load_json(preproc_path_meta)
+        if isinstance(preproc_path_meta, str) and Path(preproc_path_meta).is_file()
+        else None
+    )
+    cov, cov_report = transform_covariates(
         covariates_path or meta.get("covariates_path"),
         sample_ids,
-        covariate_id_column or str(meta.get("covariate_id_column", "sample_id")),
-        strict_join=covariates_strict_join,
-    ) if (covariates_path or meta.get("covariates_path")) else None
+        preprocessor,
+        strict_join=bool(covariates_strict_join),
+    )
     if cov is not None:
         X = np.concatenate([X_methyl, cov], axis=1)
     else:
@@ -423,6 +386,8 @@ def predict_generative_model_from_project(
             "n_classes": int(len(class_names)),
             "class_names": class_names,
         }
+    metrics["covariate_preprocessing"] = cov_report
+    metrics["n_covariate_features_used"] = int(cov.shape[1]) if cov is not None else 0
     with open(out_dir / "validation_metrics.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
 

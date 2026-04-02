@@ -210,6 +210,38 @@ def test_generative_covariates_strict_join(tmp_path: Path, monkeypatch):
         )
 
 
+def test_generative_covariate_preprocessor_written(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    _write_detector_dmps(det)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProjectBinary(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+
+    monkeypatch.setattr(generative_backend, "load_project", lambda _p: _StubProjectBinary(det))
+    monkeypatch.setattr(
+        generative_backend.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract,
+    )
+    cov_csv = tmp_path / "cov.csv"
+    pd.DataFrame(
+        {
+            "sample_id": ["S1", "S2", "S3", "S4"],
+            "age": [50, 52, 61, 64],
+            "ethnicity": ["A", "A", "B", "C"],
+        }
+    ).to_csv(cov_csv, index=False)
+    model_dir = tmp_path / "model"
+    generative_backend.train_generative_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        covariates_path=str(cov_csv),
+        covariates_strict_join=True,
+    )
+    assert (model_dir / "covariate-preprocessor.json").is_file()
+
+
 def test_pipeline_runner_generative_backend_dispatch(tmp_path: Path, monkeypatch):
     def _fake_bundle(**kwargs):
         out_dir = Path(kwargs["output_dir"])

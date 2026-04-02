@@ -68,6 +68,8 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **`--model`**: runs `run_pipeline_for_model`. For `model_backend=ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.
 - **`--predictor-only`**: MC iterations that run only `methyl-predictor` using frozen artifacts.
 
+ECDF/Bayesian remains DMP-only by design. Covariates are fused only in `tabular_sklearn` and `generative_hybrid` backends through a shared preprocessing contract.
+
 The main components are:
 
 1. **Config & Layout**: Loads `MonteCarloConfig`, rejects blind predictors, and infers binary vs multiclass layout.
@@ -133,6 +135,7 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 | **split.py** | `load_and_resolve_sample_paths`; `stratified_split` (binary); `stratified_split_multiclass` (per-label train/val). |
 | **project_gen.py** | `infer_monte_carlo_layout` (rejects 2 cohorts when project resolves to >2 leaves); `generate_run_project` (binary CSV names unchanged); `generate_run_project_multiclass` / `generate_run_project_hierarchical_multiclass` (`training_<label>.csv`, `testing_<label>.csv`, `val_test_groups.json`). Each run’s `project.json` rewrites `step_config.predictor` to the holdout CSVs: **flat** MC also sets `test_group_paths`; **hierarchical** MC only updates nested `controls`/`diseases` (keeps template parent labels, e.g. `prostate_cancer` vs top-level `pca`). MethylPredictor zips predictor list expansion with resolved centroid labels when `test_group_paths` is absent. |
 | **pipeline_runner.py** | `run_pipeline_for_iteration` / `run_pipeline_for_iteration_multiclass`: centroid + detector only. In binary MC iterations, centroid executes as two tracked runs (`group1`, `group2`) with separate logs/timing rows and per-row `n_processed_samples` read from centroid metadata (`samples_used`). `run_pipeline_for_production`: freeze (centroid→detector→mapper→enricher) and optional `methyl-disease-progression` from `step_config.progression`. `run_pipeline_for_model`: classifier→predictor. `run_predictor_only_*`: predictor-only. |
+| **trainer_api.py** | Backend step abstraction for `--model`. Builds backend-specific step lists (ECDF, tabular, generative) so orchestration can be extracted into a future `methylmodeltrainer` package without changing workflow CLI semantics. |
 | **validator_metrics.py** | `iteration_scalar_metrics_from_run_dir`: predictor `validation_metrics.json` if present, else mean detector `balanced_accuracy` from `detections/**/result*.json`. |
 
 Config-contract audit and redundancy classification are tracked in [../../../docs/config_parameter_matrix.md](../../../docs/config_parameter_matrix.md). Use canonical keys (`predictor`, `input_file`, `output_dir`, `ecdf_grid_size`) in new project files; legacy aliases are compatibility-only.
