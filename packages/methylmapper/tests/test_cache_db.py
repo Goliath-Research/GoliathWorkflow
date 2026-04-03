@@ -108,6 +108,82 @@ def test_enricher_json_migration_once(tmp_path: Path):
     assert enricher2.cache_store.association_count() == 1
 
 
+def test_enricher_json_migration_reimports_new_json_after_marker(tmp_path: Path):
+    cache_dir = tmp_path / "cache"
+    cache_dir.mkdir(parents=True)
+    legacy = cache_dir / "gene_disease_cache.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                "version": 3,
+                "associations": [
+                    {
+                        "source": "grok",
+                        "gene": "TP53",
+                        "disease_term": "prostate cancer",
+                        "ts": time.time(),
+                        "value_json": json.dumps({"associated": True}),
+                    }
+                ],
+                "disease_ids": [],
+                "target_ids": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    enricher = GeneDiseaseEnricher(
+        use_grok=False,
+        use_open_targets=False,
+        use_disgenet=False,
+        cache_enabled=True,
+        cache_dir=cache_dir,
+        cache_backend="sqlite",
+    )
+    assert enricher.cache_store is not None
+    assert enricher.cache_store.association_count() == 1
+    assert enricher.cache_store.get_metadata("legacy_json_migrated") == "1"
+
+    # Simulate a new legacy JSON appearing later (e.g. from older tool version).
+    legacy.write_text(
+        json.dumps(
+            {
+                "version": 3,
+                "associations": [
+                    {
+                        "source": "grok",
+                        "gene": "TP53",
+                        "disease_term": "prostate cancer",
+                        "ts": time.time(),
+                        "value_json": json.dumps({"associated": True}),
+                    },
+                    {
+                        "source": "grok",
+                        "gene": "MYC",
+                        "disease_term": "prostate cancer",
+                        "ts": time.time(),
+                        "value_json": json.dumps({"associated": False}),
+                    },
+                ],
+                "disease_ids": [],
+                "target_ids": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    enricher2 = GeneDiseaseEnricher(
+        use_grok=False,
+        use_open_targets=False,
+        use_disgenet=False,
+        cache_enabled=True,
+        cache_dir=cache_dir,
+        cache_backend="sqlite",
+    )
+    assert enricher2.cache_store is not None
+    assert enricher2.cache_store.association_count() >= 2
+    assert (cache_dir / "gene_disease_cache.json").exists() is False
+
+
 def test_enricher_migrates_grok_only_json_and_keeps_open_targets_miss(tmp_path: Path):
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir(parents=True)

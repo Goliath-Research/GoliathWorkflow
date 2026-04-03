@@ -2091,10 +2091,14 @@ Example:
         if self.cache_store is None:
             return
         marker = self.cache_store.get_metadata("legacy_json_migrated")
-        if marker == "1":
-            return
         if not self.cache_file.exists():
-            self.cache_store.set_metadata("legacy_json_migrated", "1")
+            if marker != "1":
+                self.cache_store.set_metadata("legacy_json_migrated", "1")
+            return
+        stat = self.cache_file.stat()
+        fingerprint = f"{int(stat.st_mtime_ns)}:{int(stat.st_size)}"
+        last_fp = self.cache_store.get_metadata("legacy_json_fingerprint")
+        if marker == "1" and last_fp == fingerprint:
             return
         try:
             with open(self.cache_file, "r", encoding="utf-8") as handle:
@@ -2102,11 +2106,16 @@ Example:
             self.cache_store.import_legacy_payload(payload)
             migrated_name = self.cache_file.with_suffix(self.cache_file.suffix + ".migrated")
             try:
+                if migrated_name.exists():
+                    migrated_name = self.cache_file.with_suffix(
+                        self.cache_file.suffix + f".migrated.{int(time.time())}"
+                    )
                 self.cache_file.rename(migrated_name)
                 logger.info("Migrated legacy cache JSON -> SQLite and renamed to %s", migrated_name)
             except OSError:
                 logger.info("Migrated legacy cache JSON -> SQLite (rename skipped)")
             self.cache_store.set_metadata("legacy_json_migrated", "1")
+            self.cache_store.set_metadata("legacy_json_fingerprint", fingerprint)
         except Exception as exc:
             logger.warning("Failed JSON->SQLite cache migration: %s", exc)
 
