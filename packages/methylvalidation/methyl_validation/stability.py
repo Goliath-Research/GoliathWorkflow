@@ -57,22 +57,36 @@ def run_balanced_accuracy(run_dir: Path) -> Optional[float]:
         return None
 
 
-def load_discovery_dmps(run_dir: Path) -> Optional[pd.DataFrame]:
-    """Load and concatenate all dmps-*-discovery.csv files from a MC run directory.
+def load_discovery_dmps(run_dir: Path, prefer_classifier_panel: bool = False) -> Optional[pd.DataFrame]:
+    """Load and concatenate detector DMP exports from a MC run directory.
 
     Searches all detection subdirectories so that multi-chromosome runs are
     correctly aggregated into a single DataFrame before stability counting.
+
+    When ``prefer_classifier_panel`` is true, the function prefers classifier
+    exports (``dmps-*-classifier.csv`` / ``dmps-*.csv``) and falls back to
+    discovery exports.
     """
     detection_dirs = list(run_dir.glob("**/detections/*/*"))
     if not detection_dirs:
         detection_dirs = list(run_dir.glob("detections/*/*"))
     frames: list = []
     for d in detection_dirs:
-        for csv in sorted(d.glob("dmps-*-discovery.csv")):
-            try:
-                frames.append(pd.read_csv(csv))
-            except Exception:
-                continue
+        patterns: List[str]
+        if prefer_classifier_panel:
+            patterns = ["dmps-*-classifier.csv", "dmps-*.csv", "dmps-*-discovery.csv"]
+        else:
+            patterns = ["dmps-*-discovery.csv"]
+        found_local = False
+        for pat in patterns:
+            for csv in sorted(d.glob(pat)):
+                try:
+                    frames.append(pd.read_csv(csv))
+                    found_local = True
+                except Exception:
+                    continue
+            if found_local:
+                break
     if not frames:
         return None
     return pd.concat(frames, ignore_index=True)
@@ -482,9 +496,10 @@ def compute_dmp_stability(
     monte_carlo_runs_root: Path,
     min_frequency: float = 0.7,
     min_balanced_accuracy: Optional[float] = None,
+    prefer_classifier_panel_dmps: bool = False,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """
-    Count how often each DMP appears in discovery CSVs across runs.
+    Count how often each DMP appears in detector exports across runs.
 
     If ``min_balanced_accuracy`` is set, only iterations whose ``validation_metrics.json``
     reports ``balanced_accuracy >= min_balanced_accuracy`` contribute DMPs and define the
@@ -500,7 +515,7 @@ def compute_dmp_stability(
     skipped_low_ba = 0
 
     for run_dir in runs:
-        df = load_discovery_dmps(run_dir)
+        df = load_discovery_dmps(run_dir, prefer_classifier_panel=prefer_classifier_panel_dmps)
         if df is None or "position" not in df.columns or "chromosome" not in df.columns:
             skipped_no_discovery += 1
             continue
@@ -611,13 +626,17 @@ def run_stability_analysis(
     gene_min_freq: float = 0.5,
     top_n_dmps: Optional[int] = None,
     min_balanced_accuracy: Optional[float] = None,
+    prefer_classifier_panel_dmps: bool = False,
 ) -> Dict[str, Any]:
     """Main entry point for stability analysis."""
     if output_dir is None:
         output_dir = monte_carlo_runs_root / "stability"
 
     dmp_df, dmp_summary = compute_dmp_stability(
-        monte_carlo_runs_root, dmp_min_freq, min_balanced_accuracy=min_balanced_accuracy
+        monte_carlo_runs_root,
+        dmp_min_freq,
+        min_balanced_accuracy=min_balanced_accuracy,
+        prefer_classifier_panel_dmps=prefer_classifier_panel_dmps,
     )
     gene_df, gene_summary = compute_gene_stability(monte_carlo_runs_root, gene_min_freq)
     detector_param_summary = compute_detector_parameter_stability(monte_carlo_runs_root)

@@ -1893,7 +1893,7 @@ Example:
 
                 runtime_value = self._association_runtime_cache.get(key)
                 if isinstance(runtime_value, dict):
-                    if self._is_empty_association_payload(runtime_value):
+                    if self._is_empty_association_payload(runtime_value, source=source):
                         self._association_runtime_cache.pop(key, None)
                     else:
                         result[gene_upper] = runtime_value
@@ -1912,7 +1912,7 @@ Example:
                         continue
                     value = disk_entry.get("value")
                     if isinstance(value, dict):
-                        if self._is_empty_association_payload(value):
+                        if self._is_empty_association_payload(value, source=source):
                             continue
                         key = self._cache_key(source, gene_upper, disease_term)
                         result[gene_upper] = value
@@ -1920,7 +1920,7 @@ Example:
         return result
 
     @staticmethod
-    def _is_empty_association_payload(value: Dict) -> bool:
+    def _is_empty_association_payload(value: Dict, source: Optional[str] = None) -> bool:
         """
         Treat placeholder/failed payloads as cache-miss candidates.
 
@@ -1929,6 +1929,12 @@ Example:
         """
         if not isinstance(value, dict) or not value:
             return True
+
+        # Grok can legitimately return explicit negatives (associated=False). Those
+        # are valid decisions and should be reused from cache to avoid re-querying
+        # every "not associated" gene on subsequent runs.
+        if str(source or "").strip().lower() == "grok" and "associated" in value:
+            return False
 
         ignored_keys = {"source", "gene", "gene_name", "disease_term", "ts"}
         has_signal = False
@@ -2091,10 +2097,14 @@ Example:
         if self.cache_store is None:
             return
         marker = self.cache_store.get_metadata("legacy_json_migrated")
-        if marker == "1":
-            return
         if not self.cache_file.exists():
-            self.cache_store.set_metadata("legacy_json_migrated", "1")
+            if marker != "1":
+                self.cache_store.set_metadata("legacy_json_migrated", "1")
+            return
+        stat = self.cache_file.stat()
+        fingerprint = f"{int(stat.st_mtime_ns)}:{int(stat.st_size)}"
+        last_fp = self.cache_store.get_metadata("legacy_json_fingerprint")
+        if marker == "1" and last_fp == fingerprint:
             return
         try:
             with open(self.cache_file, "r", encoding="utf-8") as handle:
@@ -2102,11 +2112,16 @@ Example:
             self.cache_store.import_legacy_payload(payload)
             migrated_name = self.cache_file.with_suffix(self.cache_file.suffix + ".migrated")
             try:
+                if migrated_name.exists():
+                    migrated_name = self.cache_file.with_suffix(
+                        self.cache_file.suffix + f".migrated.{int(time.time())}"
+                    )
                 self.cache_file.rename(migrated_name)
                 logger.info("Migrated legacy cache JSON -> SQLite and renamed to %s", migrated_name)
             except OSError:
                 logger.info("Migrated legacy cache JSON -> SQLite (rename skipped)")
             self.cache_store.set_metadata("legacy_json_migrated", "1")
+            self.cache_store.set_metadata("legacy_json_fingerprint", fingerprint)
         except Exception as exc:
             logger.warning("Failed JSON->SQLite cache migration: %s", exc)
 

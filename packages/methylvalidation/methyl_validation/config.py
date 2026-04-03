@@ -100,6 +100,30 @@ class MonteCarloConfig(BaseModel):
         le=1.0,
         description="Minimum frequency for a gene to be considered stable (only when enricher outputs exist).",
     )
+    stability_featurecuts_enabled: bool = Field(
+        default=False,
+        description=(
+            "If true, MC detector runs force classifier_dmp_selection=featurecuts_validation "
+            "so stability can be computed from discriminatory classifier panels."
+        ),
+    )
+    stability_target_balanced_accuracy: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Optional target BA for detector FeatureCuts: choose minimum top-k DMPs that reach this BA "
+            "on detector validation splits."
+        ),
+    )
+    stability_min_selected_dmps: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Optional lower bound for detector classifier panel size in FeatureCuts mode. "
+            "Final selected k is max(featurecuts_k, stability_min_selected_dmps)."
+        ),
+    )
     run_mapper_and_enricher: bool = Field(
         default=False,
         description="If True, run methyl-mapper and methyl-enricher inside each MC iteration (optional; not used for --stability).",

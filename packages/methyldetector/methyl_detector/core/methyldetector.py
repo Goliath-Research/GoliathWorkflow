@@ -1955,7 +1955,17 @@ class MethylDetector:
                 logger.warning("FeatureCuts: no validation splits; cannot optimize k")
                 return None, None
             cache = self._build_validation_prefix_cache(sorted_pool, X_val, y_val, splits)
-            best_k, best_result = self._optimize_dmps_featurecuts(sorted_pool, len(sorted_pool), cache)
+            target_ba = getattr(self.config, "target_balanced_accuracy", None)
+            if target_ba is not None:
+                best_k = self._optimize_dmps_binary_search(
+                    sorted_pool,
+                    float(target_ba),
+                    len(sorted_pool),
+                    cache,
+                )
+                best_result = self._evaluate_prefix_subset(cache, best_k)
+            else:
+                best_k, best_result = self._optimize_dmps_featurecuts(sorted_pool, len(sorted_pool), cache)
             if best_k <= 0:
                 return None, None
             sel = sorted_pool.iloc[:best_k].copy().reset_index(drop=True)
@@ -1974,11 +1984,21 @@ class MethylDetector:
             cap = getattr(self.config, "featurecuts_max_k_cap", None)
             if cap is not None and len(pool) > int(cap):
                 pool = pool.iloc[: int(cap)].copy().reset_index(drop=True)
+            effect_size_pool = pool
             if bool(getattr(self.config, "dynamic_dmp_cutoff_enabled", True)) and len(pool) > 0:
-                pool = self._effect_size_elbow_trim(pool, enabled=True)
-            selected, res = self._featurecuts_select_k(pool)
+                effect_size_pool = self._effect_size_elbow_trim(pool, enabled=True)
+            target_ba = getattr(self.config, "target_balanced_accuracy", None)
+            # For target-BA mode, search over the full ranked pool and then keep at least
+            # the effect-size-elbow count so final export is max(effect-size, BA-required).
+            search_pool = pool if target_ba is not None else effect_size_pool
+            selected, res = self._featurecuts_select_k(search_pool)
             if selected is not None and len(selected) > 0:
                 self._featurecuts_last_result = res
+                final_k = int(len(selected))
+                if target_ba is not None:
+                    final_k = max(final_k, int(len(effect_size_pool)))
+                    if final_k != len(selected):
+                        selected = pool.iloc[:final_k].copy().reset_index(drop=True)
                 logger.info("📋 Classifier panel: FeatureCuts selected k=%s DMPs", len(selected))
 
                 # Enforce minimum DMP count for robustness on new samples
