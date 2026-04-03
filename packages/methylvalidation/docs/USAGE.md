@@ -101,6 +101,7 @@ methyl-validation --project configs/my_project.json --predictor-only
 | `--project PATH` | Path to the project JSON (preferred; reads `step_config.validation` from the project). | Controls whichever path you select (`--stability`, `--freeze`, `--model`, or `--predictor-only`). |
 | `--config PATH` | Path to a standalone Monte Carlo config JSON (alternative to `--project`). | Same as above, but from MC config file mode. |
 | `--stability` | Run stability analysis after the MC loop (Workflow 1, Step 1). | MC loop (`methyl-centroid` + `methyl-detector`) then in-process stability aggregation. |
+| `--resume [RUN]` | Resume interrupted MC runs for `--stability` / default MC mode. Without `RUN`, repeats the last existing run and continues to `n_iterations`; with `RUN` (1-based), restarts from that run. | MC loop resume control (run directories `run_0001`, `run_0002`, ...). |
 | `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If `step_config.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. | `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher` (+ optional progression). |
 | `--model` | Run production model builder after freeze (Workflow 1, Step 3). | `ecdf`: `methyl-classifier` -> `methyl-predictor`; other backends: bundle -> train -> predict. |
 | `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). | Monte Carlo iterations, predictor only. |
@@ -160,10 +161,34 @@ Covariates are backend-specific and are **not** used by the ECDF Bayesian path.
 
 - **Join key:** `covariate_id_column` must match sample folder basename (for example `S123` from `/path/to/S123`).
 - **Input formats:** `.csv` / `.tsv` or `.h5`/`.hdf5` sidecar (`sample_id`, `values`, optional `columns`).
-- **Column roles:** inferred by default, or fixed via `covariate_numeric_columns` / `covariate_categorical_columns`.
+- **Column roles:** inferred by default, or fixed via `covariate_numeric_columns`, `covariate_ordinal_columns`, and `covariate_categorical_columns`.
 - **Numeric preprocessing:** impute via `covariate_missing_numeric_strategy` (`mean`, `median`, `zero`) then optional z-score (`covariate_standardize_numeric`).
+- **Ordinal preprocessing:** mapped to ordered numeric codes (single feature per column) using `covariate_ordinal_maps`; if omitted, known label sets like `low/medium/high` are auto-mapped; unknown/missing values use `covariate_ordinal_unknown_value`.
 - **Categorical preprocessing:** one-hot with frozen vocab and `__UNKNOWN__` bucket at inference.
 - **Strictness:** `covariates_strict_join` (tabular) and `generative_covariates_strict` (generative) enforce one-to-one sample id coverage.
+
+Example (`step_config.validation`) using all covariate types:
+
+```json
+"validation": {
+  "model_backend": "generative_hybrid",
+  "covariates_path": "/data/covariates.csv",
+  "covariate_id_column": "sample_id",
+  "covariate_numeric_columns": ["age", "bmi", "visceral_fat_pct"],
+  "covariate_ordinal_columns": ["risk_band"],
+  "covariate_ordinal_maps": {
+    "risk_band": {
+      "low": 1,
+      "medium": 2,
+      "high": 3
+    }
+  },
+  "covariate_ordinal_unknown_value": 0,
+  "covariate_categorical_columns": ["ethnicity", "center"],
+  "covariate_missing_numeric_strategy": "median",
+  "covariate_standardize_numeric": true
+}
+```
 
 ### Optional: `step_config.progression`
 

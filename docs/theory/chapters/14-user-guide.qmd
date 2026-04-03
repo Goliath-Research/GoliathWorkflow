@@ -144,6 +144,7 @@ Full theoretical background: @sec-workflow-model-creation.
 Workflow 1 should be run and reviewed in three explicit stages:
 
 1. **Stability (`--stability`)**: optimize panel robustness (`n_iterations`, `train_fraction`, `stability_dmp_freq`) and verify `stable_dmps_production.csv` is non-empty and biologically plausible. In this stage, each MC iteration runs `methyl-centroid` -> `methyl-detector`, then methyl-validation runs in-process stability aggregation.
+   - If MC execution is interrupted, use `--resume` to continue from existing `run_XXXX` directories; `--resume` (no number) repeats the last run and continues, and `--resume N` restarts from run `N`.
 2. **Freeze/analysis (`--freeze`)**: lock the panel into `production/project.json`, then review production detector outputs together with mapper/enricher summaries. This stage runs `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, with optional `methyl-disease-progression`.
 3. **Modeling (`--model`)**: train final classifier and predictor artifacts only after stability and biological review are complete. For `model_backend: "ecdf"` this is `methyl-classifier` -> `methyl-predictor`; for `tabular_sklearn` and `generative_hybrid`, methyl-validation runs in-process bundle -> train -> predict.
 

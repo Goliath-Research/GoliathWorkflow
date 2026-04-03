@@ -3,10 +3,13 @@ CLI for Monte Carlo validation runner.
 """
 
 import argparse
+import csv
+import re
+import shutil
 import sys
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from rich.console import Console
 from rich.progress import (
@@ -47,6 +50,84 @@ from .validator_metrics import (
     write_summary_json,
 )
 from .stability import run_stability_analysis, freeze_production_model, build_production_model
+
+
+_RUN_ID_RE = re.compile(r"^run_(\d{4})$")
+
+
+def _list_existing_run_numbers(monte_carlo_runs_root: Path) -> List[int]:
+    nums: List[int] = []
+    if not monte_carlo_runs_root.is_dir():
+        return nums
+    for p in sorted(monte_carlo_runs_root.iterdir()):
+        if not p.is_dir():
+            continue
+        m = _RUN_ID_RE.match(p.name)
+        if m:
+            nums.append(int(m.group(1)))
+    return nums
+
+
+def _resolve_resume_start_iteration(
+    resume_arg: Optional[int],
+    *,
+    n_iterations: int,
+    existing_runs: List[int],
+) -> int:
+    """
+    Resolve 0-based start iteration for resume mode.
+
+    resume_arg semantics:
+      - None: no resume (start at 0)
+      - 0   : auto-resume (repeat last existing run, then continue)
+      - N>0 : resume starting from run N (1-based; run N is repeated)
+    """
+    if resume_arg is None:
+        return 0
+    if resume_arg < 0:
+        raise ValueError("--resume must be >= 1 when provided with a run number")
+    if resume_arg == 0:
+        if not existing_runs:
+            return 0
+        return max(0, max(existing_runs) - 1)
+    if resume_arg > n_iterations:
+        raise ValueError(f"--resume run must be <= n_iterations ({n_iterations}), got {resume_arg}")
+    return resume_arg - 1
+
+
+def _load_existing_step_timings(
+    step_timings_csv: Path,
+    *,
+    keep_until_iteration_exclusive: int,
+) -> List[Dict[str, Any]]:
+    if not step_timings_csv.is_file():
+        return []
+    kept: List[Dict[str, Any]] = []
+    with open(step_timings_csv, encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            run_id = str(row.get("run_id") or "")
+            m = _RUN_ID_RE.match(run_id)
+            if not m:
+                continue
+            run_num = int(m.group(1))
+            if run_num >= keep_until_iteration_exclusive:
+                continue
+            parsed: Dict[str, Any] = dict(row)
+            for key in ("duration_seconds", "max_rss_mb"):
+                if key in parsed and parsed[key] not in (None, ""):
+                    try:
+                        parsed[key] = float(parsed[key])
+                    except (TypeError, ValueError):
+                        pass
+            for key in ("return_code", "n_train_samples", "n_val_samples", "n_processed_samples"):
+                if key in parsed and parsed[key] not in (None, ""):
+                    try:
+                        parsed[key] = int(float(parsed[key]))
+                    except (TypeError, ValueError):
+                        pass
+            kept.append(parsed)
+    return kept
 
 
 def _infer_monte_carlo_cohorts_from_project(
@@ -192,6 +273,18 @@ def main() -> None:
         "--stability",
         action="store_true",
         help="After main analysis, run stability on discovery DMPs from centroid+detector iterations (classifier/predictor via --model).",
+    )
+    parser.add_argument(
+        "--resume",
+        nargs="?",
+        const=0,
+        type=int,
+        default=None,
+        metavar="RUN",
+        help=(
+            "Resume interrupted MC runs. Without RUN, repeats last existing run then continues "
+            "to n_iterations. With RUN (1-based), restarts from run_00RUN and continues."
+        ),
     )
     parser.add_argument(
         "--skip-enricher",
@@ -393,6 +486,10 @@ def main() -> None:
     monte_carlo_runs_root = output_base / project_name / "monte_carlo_runs"
     monte_carlo_runs_root.mkdir(parents=True, exist_ok=True)
 
+    if args.resume is not None and (args.freeze or args.model):
+        print("Error: --resume can only be used with Monte Carlo iteration mode (not --freeze/--model).", file=sys.stderr)
+        sys.exit(1)
+
     if args.freeze:
         if not config.freeze_stable_dmp_csv:
             config.freeze_stable_dmp_csv = str(monte_carlo_runs_root / "stability" / "stable_dmps_production.csv")
@@ -502,6 +599,50 @@ def main() -> None:
 
     rows: List[Dict[str, Any]] = []
     all_timings: List[Dict[str, Any]] = []
+    existing_runs = _list_existing_run_numbers(monte_carlo_runs_root)
+    try:
+        start_iteration_idx = _resolve_resume_start_iteration(
+            args.resume,
+            n_iterations=config.n_iterations,
+            existing_runs=existing_runs,
+        )
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    if args.resume is not None and start_iteration_idx > 0:
+        for prev_i in range(start_iteration_idx):
+            prev_run_id = f"run_{prev_i + 1:04d}"
+            prev_run_dir = monte_carlo_runs_root / prev_run_id
+            if not prev_run_dir.is_dir():
+                continue
+            prev_scalar = iteration_scalar_metrics_from_run_dir(prev_run_dir)
+            if prev_scalar:
+                rows.append(
+                    {
+                        "iteration": prev_i + 1,
+                        "run_id": prev_run_id,
+                        "run_dir": str(prev_run_dir),
+                        **prev_scalar,
+                    }
+                )
+        all_timings.extend(
+            _load_existing_step_timings(
+                monte_carlo_runs_root / "step_timings.csv",
+                keep_until_iteration_exclusive=start_iteration_idx + 1,
+            )
+        )
+    if args.resume is not None:
+        for n in existing_runs:
+            if n >= (start_iteration_idx + 1):
+                run_dir = monte_carlo_runs_root / f"run_{n:04d}"
+                if run_dir.is_dir():
+                    shutil.rmtree(run_dir)
+        resume_label = "auto" if args.resume == 0 else str(args.resume)
+        print(
+            f"Resuming Monte Carlo iterations (--resume {resume_label}): "
+            f"starting at run_{start_iteration_idx + 1:04d} through run_{config.n_iterations:04d}",
+            file=sys.stderr,
+        )
     previous_train_control: List[str] | None = None
     previous_train_disease: List[str] | None = None
 
@@ -524,11 +665,11 @@ def main() -> None:
 
     with (progress if progress is not None else nullcontext()):
         if progress is not None:
-            task_iter = progress.add_task("Iterations", total=config.n_iterations)
+            task_iter = progress.add_task("Iterations", total=config.n_iterations, completed=start_iteration_idx)
         else:
             task_iter = None
 
-        for i in range(config.n_iterations):
+        for i in range(start_iteration_idx, config.n_iterations):
             run_id = f"run_{i + 1:04d}"
             run_dir = monte_carlo_runs_root / run_id
             seed_i = (config.seed + i) if config.seed is not None else None
