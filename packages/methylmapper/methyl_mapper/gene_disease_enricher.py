@@ -1893,7 +1893,7 @@ Example:
 
                 runtime_value = self._association_runtime_cache.get(key)
                 if isinstance(runtime_value, dict):
-                    if self._is_empty_association_payload(runtime_value):
+                    if self._is_empty_association_payload(runtime_value, source=source):
                         self._association_runtime_cache.pop(key, None)
                     else:
                         result[gene_upper] = runtime_value
@@ -1912,7 +1912,7 @@ Example:
                         continue
                     value = disk_entry.get("value")
                     if isinstance(value, dict):
-                        if self._is_empty_association_payload(value):
+                        if self._is_empty_association_payload(value, source=source):
                             continue
                         key = self._cache_key(source, gene_upper, disease_term)
                         result[gene_upper] = value
@@ -1920,7 +1920,7 @@ Example:
         return result
 
     @staticmethod
-    def _is_empty_association_payload(value: Dict) -> bool:
+    def _is_empty_association_payload(value: Dict, source: Optional[str] = None) -> bool:
         """
         Treat placeholder/failed payloads as cache-miss candidates.
 
@@ -1929,6 +1929,12 @@ Example:
         """
         if not isinstance(value, dict) or not value:
             return True
+
+        # Grok can legitimately return explicit negatives (associated=False). Those
+        # are valid decisions and should be reused from cache to avoid re-querying
+        # every "not associated" gene on subsequent runs.
+        if str(source or "").strip().lower() == "grok" and "associated" in value:
+            return False
 
         ignored_keys = {"source", "gene", "gene_name", "disease_term", "ts"}
         has_signal = False

@@ -268,3 +268,34 @@ def test_empty_cached_payload_is_treated_as_miss(tmp_path: Path):
     rows = enricher._cache_get_batch("open_targets", ["TP53"], "prostate cancer")
     assert "TP53" not in rows
 
+
+def test_grok_explicit_negative_payload_is_cache_hit(tmp_path: Path):
+    cache_dir = tmp_path / "cache"
+    enricher = GeneDiseaseEnricher(
+        use_grok=False,
+        use_open_targets=False,
+        use_disgenet=False,
+        cache_enabled=True,
+        cache_dir=cache_dir,
+        cache_backend="sqlite",
+    )
+    assert enricher.cache_store is not None
+    enricher.cache_store.upsert_association(
+        source="grok",
+        gene="TP53",
+        disease_term="prostate cancer",
+        ts=time.time(),
+        value={
+            "associated": False,
+            "association_type": "none",
+            "evidence_level": "none",
+            "description": None,
+            "publications": 0,
+            "functional_role": None,
+            "source": "grok",
+        },
+    )
+    rows = enricher._cache_get_batch("grok", ["TP53"], "prostate cancer")
+    assert "TP53" in rows
+    assert rows["TP53"]["associated"] is False
+
