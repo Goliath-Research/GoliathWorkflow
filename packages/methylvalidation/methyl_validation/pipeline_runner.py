@@ -141,9 +141,15 @@ def _read_centroid_processed_samples(
     return max(samples_used_counts)
 
 
-def run_detector(project_json: str | Path, per_cancer_group: bool = False) -> tuple[int, str, str]:
+def run_detector(
+    project_json: str | Path,
+    per_cancer_group: bool = False,
+    detector_step_override: Optional[str | Path] = None,
+) -> tuple[int, str, str]:
     """Run methyl-detector --project <project_json> [--per-cancer-group]. For binary single comparison, --per-cancer-group is optional."""
     cmd = ["methyl-detector", "--project", str(project_json)]
+    if detector_step_override is not None:
+        cmd.extend(["--step-override", str(detector_step_override)])
     if per_cancer_group:
         cmd.append("--per-cancer-group")
     return run_cmd(cmd)
@@ -255,6 +261,7 @@ def run_pipeline_for_iteration(
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     centroid_step_overrides: Optional[Dict[str, Path]] = None,
+    detector_step_override: Optional[Path] = None,
     config: Optional["MonteCarloConfig"] = None,  # reserved; mapper/enricher belong to --freeze, not MC
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
@@ -304,7 +311,11 @@ def run_pipeline_for_iteration(
     steps.append(
         (
             "methyl-detector",
-            lambda: run_detector(project_json, per_cancer_group=per_cancer_group),
+            lambda: run_detector(
+                project_json,
+                per_cancer_group=per_cancer_group,
+                detector_step_override=detector_step_override,
+            ),
             None,
             None,
         )
@@ -508,6 +519,7 @@ def run_pipeline_for_iteration_multiclass(
     per_cancer_group: bool = False,
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
+    detector_step_override: Optional[Path] = None,
     config: Optional["MonteCarloConfig"] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
@@ -520,7 +532,14 @@ def run_pipeline_for_iteration_multiclass(
     step_timings: List[Dict[str, Any]] = []
     steps = [
         ("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)),
-        ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=per_cancer_group)),
+        (
+            "methyl-detector",
+            lambda: run_detector(
+                project_json,
+                per_cancer_group=per_cancer_group,
+                detector_step_override=detector_step_override,
+            ),
+        ),
     ]
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:

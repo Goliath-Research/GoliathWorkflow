@@ -130,6 +130,39 @@ def _load_existing_step_timings(
     return kept
 
 
+def _write_detector_featurecuts_override(
+    run_dir: Path,
+    config: "MonteCarloConfig",
+) -> Optional[Path]:
+    """
+    Optionally write detector step override JSON for stability/FeatureCuts runs.
+
+    Returns override path when any override is active, otherwise None.
+    """
+    enable_featurecuts = bool(config.stability_featurecuts_enabled)
+    target_ba = config.stability_target_balanced_accuracy
+    min_selected_dmps = config.stability_min_selected_dmps
+    if not enable_featurecuts and target_ba is None and min_selected_dmps is None:
+        return None
+
+    import json
+
+    payload: Dict[str, Any] = {}
+    if enable_featurecuts or target_ba is not None or min_selected_dmps is not None:
+        payload["classifier_dmp_selection"] = "featurecuts_validation"
+    if target_ba is not None:
+        payload["target_balanced_accuracy"] = float(target_ba)
+    if min_selected_dmps is not None:
+        payload["min_selected_dmps"] = int(min_selected_dmps)
+    if not payload:
+        return None
+    out = run_dir / "detector_step_override.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return out
+
+
 def _infer_monte_carlo_cohorts_from_project(
     project_data: Dict[str, Any],
     project_path: Path,
@@ -272,7 +305,26 @@ def main() -> None:
     parser.add_argument(
         "--stability",
         action="store_true",
-        help="After main analysis, run stability on discovery DMPs from centroid+detector iterations (classifier/predictor via --model).",
+        help="After main analysis, run stability on detector DMP exports from centroid+detector iterations (classifier/predictor via --model).",
+    )
+    parser.add_argument(
+        "--stability-featurecuts",
+        action="store_true",
+        help="During MC stability runs, force detector classifier_dmp_selection=featurecuts_validation.",
+    )
+    parser.add_argument(
+        "--stability-target-ba",
+        type=float,
+        default=None,
+        metavar="BA",
+        help="Optional detector target balanced accuracy for FeatureCuts (0..1).",
+    )
+    parser.add_argument(
+        "--stability-min-selected-dmps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Optional lower bound for detector selected DMPs in FeatureCuts mode.",
     )
     parser.add_argument(
         "--resume",
@@ -445,6 +497,16 @@ def main() -> None:
         config = config.model_copy(update={"path_remap": merged})
     if args.stability:
         config.run_stability = True
+    if args.stability_featurecuts:
+        config = config.model_copy(update={"stability_featurecuts_enabled": True})
+    if args.stability_target_ba is not None:
+        config = config.model_copy(
+            update={"stability_target_balanced_accuracy": float(args.stability_target_ba)}
+        )
+    if args.stability_min_selected_dmps is not None:
+        config = config.model_copy(
+            update={"stability_min_selected_dmps": int(args.stability_min_selected_dmps)}
+        )
     if args.skip_enricher:
         config.skip_enricher = True
     if args.predictor_only:
@@ -673,6 +735,7 @@ def main() -> None:
             run_id = f"run_{i + 1:04d}"
             run_dir = monte_carlo_runs_root / run_id
             seed_i = (config.seed + i) if config.seed is not None else None
+            detector_step_override = _write_detector_featurecuts_override(run_dir, config)
 
             if progress is not None:
                 task_steps = progress.add_task("Steps", total=n_step_tasks, completed=0)
@@ -781,6 +844,7 @@ def main() -> None:
                             "group1": centroid_group1_override,
                             "group2": centroid_group2_override,
                         },
+                        detector_step_override=detector_step_override,
                         config=config,
                     )
             elif layout == "multiclass":
@@ -814,6 +878,7 @@ def main() -> None:
                         per_cancer_group=per_cancer_group,
                         logs_dir=run_dir / "logs",
                         progress_callback=progress_callback,
+                        detector_step_override=detector_step_override,
                         config=config,
                     )
             else:
@@ -847,6 +912,7 @@ def main() -> None:
                         per_cancer_group=True,
                         logs_dir=run_dir / "logs",
                         progress_callback=progress_callback,
+                        detector_step_override=detector_step_override,
                         config=config,
                     )
             if progress is not None:
@@ -889,6 +955,7 @@ def main() -> None:
             dmp_min_freq=config.stability_dmp_freq,
             gene_min_freq=config.stability_gene_freq,
             min_balanced_accuracy=config.stability_min_balanced_accuracy,
+            prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
         )
         print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
         print(f"  Stable DMPs: {stability_summary['dmp_stability'].get('stable_dmps_at_threshold', 0)}")

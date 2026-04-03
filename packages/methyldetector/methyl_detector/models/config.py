@@ -315,6 +315,15 @@ class MethylDetectorConfig(BaseModel):
         ge=1,
         description="Optional upper bound on k when running featurecuts (speed). None = use all rows after elbow prefilter.",
     )
+    target_balanced_accuracy: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Optional target BA for FeatureCuts. When set with classifier_dmp_selection=featurecuts_validation, "
+            "the selector chooses the minimum top-k (by effect_size rank) that reaches this BA."
+        ),
+    )
     min_selected_dmps: Optional[int] = Field(
         default=None, ge=1,
         description="Minimum number of DMPs to select via binary search (None = auto-determine)"
