@@ -262,6 +262,7 @@ def run_pipeline_for_iteration(
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     centroid_step_overrides: Optional[Dict[str, Path]] = None,
     detector_step_override: Optional[Path] = None,
+    skip_centroid: bool = False,
     config: Optional["MonteCarloConfig"] = None,  # reserved; mapper/enricher belong to --freeze, not MC
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
@@ -274,40 +275,41 @@ def run_pipeline_for_iteration(
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []
     steps: List[Tuple[str, Callable[[], tuple[int, str, str]], Optional[str], Optional[str | Path]]] = []
-    if centroid_step_overrides:
-        steps.extend(
-            [
-                (
-                    "methyl-centroid-group1",
-                    lambda: run_centroid_group(
-                        project_json,
+    if not skip_centroid:
+        if centroid_step_overrides:
+            steps.extend(
+                [
+                    (
+                        "methyl-centroid-group1",
+                        lambda: run_centroid_group(
+                            project_json,
+                            "group1",
+                            step_override=centroid_step_overrides.get("group1"),
+                        ),
                         "group1",
-                        step_override=centroid_step_overrides.get("group1"),
+                        centroid_step_overrides.get("group1"),
                     ),
-                    "group1",
-                    centroid_step_overrides.get("group1"),
-                ),
-                (
-                    "methyl-centroid-group2",
-                    lambda: run_centroid_group(
-                        project_json,
+                    (
+                        "methyl-centroid-group2",
+                        lambda: run_centroid_group(
+                            project_json,
+                            "group2",
+                            step_override=centroid_step_overrides.get("group2"),
+                        ),
                         "group2",
-                        step_override=centroid_step_overrides.get("group2"),
+                        centroid_step_overrides.get("group2"),
                     ),
-                    "group2",
-                    centroid_step_overrides.get("group2"),
-                ),
-            ]
-        )
-    else:
-        steps.append(
-            (
-                "methyl-centroid",
-                lambda: run_centroid(project_json, centroid_step_overrides=centroid_step_overrides),
-                None,
-                None,
+                ]
             )
-        )
+        else:
+            steps.append(
+                (
+                    "methyl-centroid",
+                    lambda: run_centroid(project_json, centroid_step_overrides=centroid_step_overrides),
+                    None,
+                    None,
+                )
+            )
     steps.append(
         (
             "methyl-detector",
@@ -520,6 +522,7 @@ def run_pipeline_for_iteration_multiclass(
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     detector_step_override: Optional[Path] = None,
+    skip_centroid: bool = False,
     config: Optional["MonteCarloConfig"] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
@@ -530,8 +533,12 @@ def run_pipeline_for_iteration_multiclass(
 
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []
-    steps = [
-        ("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)),
+    steps: List[Tuple[str, Callable[[], tuple[int, str, str]]]] = []
+    if not skip_centroid:
+        steps.append(
+            ("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None))
+        )
+    steps.append(
         (
             "methyl-detector",
             lambda: run_detector(
@@ -540,7 +547,7 @@ def run_pipeline_for_iteration_multiclass(
                 detector_step_override=detector_step_override,
             ),
         ),
-    ]
+    )
     for step_index, (step_name, run_fn) in enumerate(steps):
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")

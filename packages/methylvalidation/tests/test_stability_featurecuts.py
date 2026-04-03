@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from methyl_validation.cli import _write_detector_featurecuts_override
+from methyl_validation.cli import _count_run_samples_from_existing_files
 from methyl_validation.config import MonteCarloConfig
 from methyl_validation.stability import load_discovery_dmps
 
@@ -56,3 +57,15 @@ def test_load_discovery_dmps_prefers_classifier_panel(tmp_path: Path):
     df_discovery = load_discovery_dmps(tmp_path / "run_0001", prefer_classifier_panel=False)
     assert df_discovery is not None
     assert len(df_discovery) == 2
+
+
+def test_count_run_samples_from_existing_files(tmp_path: Path):
+    run_dir = tmp_path / "run_0001"
+    run_dir.mkdir(parents=True)
+    (run_dir / "train_control.csv").write_text("sample\nA\nB\n", encoding="utf-8")
+    (run_dir / "train_disease.csv").write_text("sample\nC\n", encoding="utf-8")
+    (run_dir / "val_control.csv").write_text("path\n/x/A\n", encoding="utf-8")
+    (run_dir / "val_disease.csv").write_text("path\n/x/C\n/x/D\n", encoding="utf-8")
+    n_train, n_val = _count_run_samples_from_existing_files(run_dir)
+    assert n_train == 3
+    assert n_val == 3

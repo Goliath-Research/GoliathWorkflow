@@ -163,6 +163,26 @@ def _write_detector_featurecuts_override(
     return out
 
 
+def _count_csv_data_rows(path: Path) -> int:
+    if not path.is_file():
+        return 0
+    with open(path, encoding="utf-8", newline="") as f:
+        reader = csv.reader(f)
+        try:
+            next(reader)
+        except StopIteration:
+            return 0
+        return sum(1 for _ in reader)
+
+
+def _count_run_samples_from_existing_files(run_dir: Path) -> Tuple[int, int]:
+    train_files = sorted(set(list(run_dir.glob("train_*.csv")) + list(run_dir.glob("training_*.csv"))))
+    val_files = sorted(set(list(run_dir.glob("val_*.csv")) + list(run_dir.glob("testing_*.csv"))))
+    n_train = sum(_count_csv_data_rows(p) for p in train_files)
+    n_val = sum(_count_csv_data_rows(p) for p in val_files)
+    return int(n_train), int(n_val)
+
+
 def _infer_monte_carlo_cohorts_from_project(
     project_data: Dict[str, Any],
     project_path: Path,
@@ -336,6 +356,14 @@ def main() -> None:
         help=(
             "Resume interrupted MC runs. Without RUN, repeats last existing run then continues "
             "to n_iterations. With RUN (1-based), restarts from run_00RUN and continues."
+        ),
+    )
+    parser.add_argument(
+        "--skip-centroid",
+        action="store_true",
+        help=(
+            "Reuse existing per-run centroids and run detector only. Useful when tuning "
+            "step_config.detection hyperparameters on already-generated MC runs."
         ),
     )
     parser.add_argument(
@@ -551,6 +579,12 @@ def main() -> None:
     if args.resume is not None and (args.freeze or args.model):
         print("Error: --resume can only be used with Monte Carlo iteration mode (not --freeze/--model).", file=sys.stderr)
         sys.exit(1)
+    if args.skip_centroid and (args.freeze or args.model):
+        print("Error: --skip-centroid can only be used with Monte Carlo iteration mode.", file=sys.stderr)
+        sys.exit(1)
+    if args.skip_centroid and config.predictor_only:
+        print("Error: --skip-centroid is incompatible with --predictor-only.", file=sys.stderr)
+        sys.exit(1)
 
     if args.freeze:
         if not config.freeze_stable_dmp_csv:
@@ -765,21 +799,22 @@ def main() -> None:
             centroid_group2_override: Path | None = None
 
             try:
-                if layout == "binary":
-                    train_control, train_disease, val_control, val_disease = stratified_split(
-                        control_paths,
-                        disease_paths,
-                        config.train_fraction,
-                        seed=seed_i,
-                    )
-                elif layout in ("multiclass", "hierarchical_multiclass"):
-                    train_m, val_m = stratified_split_multiclass(
-                        cohort_paths_list,
-                        config.train_fraction,
-                        seed=seed_i,
-                    )
-                else:
-                    raise RuntimeError(f"unknown Monte Carlo layout: {layout}")
+                if not args.skip_centroid:
+                    if layout == "binary":
+                        train_control, train_disease, val_control, val_disease = stratified_split(
+                            control_paths,
+                            disease_paths,
+                            config.train_fraction,
+                            seed=seed_i,
+                        )
+                    elif layout in ("multiclass", "hierarchical_multiclass"):
+                        train_m, val_m = stratified_split_multiclass(
+                            cohort_paths_list,
+                            config.train_fraction,
+                            seed=seed_i,
+                        )
+                    else:
+                        raise RuntimeError(f"unknown Monte Carlo layout: {layout}")
             except ValueError as e:
                 print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
                 if progress is not None:
@@ -789,42 +824,64 @@ def main() -> None:
                 continue
 
             if layout == "binary":
-                (
-                    project_path,
-                    _,
-                    _,
-                    val_control_csv,
-                    val_disease_csv,
-                    centroid_group1_override,
-                    centroid_group2_override,
-                ) = generate_run_project(
-                    base_project,
-                    run_dir,
-                    run_id,
-                    str(monte_carlo_runs_root),
-                    train_control,
-                    train_disease,
-                    val_control,
-                    val_disease,
-                    config.samples_base_path,
-                    previous_train_control_paths=previous_train_control,
-                    previous_train_disease_paths=previous_train_disease,
-                )
-                previous_train_control = list(train_control)
-                previous_train_disease = list(train_disease)
-                if config.predictor_only:
-                    apply_frozen_pipeline_artifacts_to_run_project(
-                        project_path, Path(config.frozen_project_path)
-                    )
-                run_project = load_project(project_path)
-                comparisons = run_project.get_comparisons()
-                if comparisons:
-                    spec = comparisons[0]
-                    predictor_output_dir = run_dir / "predictors" / spec.control_group / spec.disease_group
+                if args.skip_centroid:
+                    project_path = run_dir / "project.json"
+                    if not project_path.is_file():
+                        print(
+                            f"Warning: iteration {i + 1} skipped: missing existing run project at {project_path} "
+                            "(run without --skip-centroid first).",
+                            file=sys.stderr,
+                        )
+                        if progress is not None:
+                            progress.remove_task(task_steps)
+                            progress.remove_task(task_current)
+                            progress.advance(task_iter, 1)
+                        continue
+                    run_project = load_project(project_path)
+                    comparisons = run_project.get_comparisons()
+                    if comparisons:
+                        spec = comparisons[0]
+                        predictor_output_dir = run_dir / "predictors" / spec.control_group / spec.disease_group
+                    else:
+                        predictor_output_dir = run_dir / "predictors"
+                    n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
                 else:
-                    predictor_output_dir = run_dir / "predictors"
-                n_train_samples = len(train_control) + len(train_disease)
-                n_val_samples = len(val_control) + len(val_disease)
+                    (
+                        project_path,
+                        _,
+                        _,
+                        val_control_csv,
+                        val_disease_csv,
+                        centroid_group1_override,
+                        centroid_group2_override,
+                    ) = generate_run_project(
+                        base_project,
+                        run_dir,
+                        run_id,
+                        str(monte_carlo_runs_root),
+                        train_control,
+                        train_disease,
+                        val_control,
+                        val_disease,
+                        config.samples_base_path,
+                        previous_train_control_paths=previous_train_control,
+                        previous_train_disease_paths=previous_train_disease,
+                    )
+                    previous_train_control = list(train_control)
+                    previous_train_disease = list(train_disease)
+                    if config.predictor_only:
+                        apply_frozen_pipeline_artifacts_to_run_project(
+                            project_path, Path(config.frozen_project_path)
+                        )
+                    run_project = load_project(project_path)
+                    comparisons = run_project.get_comparisons()
+                    if comparisons:
+                        spec = comparisons[0]
+                        predictor_output_dir = run_dir / "predictors" / spec.control_group / spec.disease_group
+                    else:
+                        predictor_output_dir = run_dir / "predictors"
+                    n_train_samples = len(train_control) + len(train_disease)
+                    n_val_samples = len(val_control) + len(val_disease)
                 if config.predictor_only:
                     success, errors, step_timings = run_predictor_only_binary(
                         project_path,
@@ -845,22 +902,40 @@ def main() -> None:
                             "group2": centroid_group2_override,
                         },
                         detector_step_override=detector_step_override,
+                        skip_centroid=bool(args.skip_centroid),
                         config=config,
                     )
             elif layout == "multiclass":
-                project_path, val_groups_json = generate_run_project_multiclass(
-                    base_project,
-                    run_dir,
-                    run_id,
-                    str(monte_carlo_runs_root),
-                    train_m,
-                    val_m,
-                    cohort_labels,
-                    config.samples_base_path,
-                )
-                predictor_output_dir = run_dir / "predictors"
-                n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
-                n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
+                if args.skip_centroid:
+                    project_path = run_dir / "project.json"
+                    val_groups_json = run_dir / "val_test_groups.json"
+                    if not project_path.is_file():
+                        print(
+                            f"Warning: iteration {i + 1} skipped: missing existing run project at {project_path} "
+                            "(run without --skip-centroid first).",
+                            file=sys.stderr,
+                        )
+                        if progress is not None:
+                            progress.remove_task(task_steps)
+                            progress.remove_task(task_current)
+                            progress.advance(task_iter, 1)
+                        continue
+                    predictor_output_dir = run_dir / "predictors"
+                    n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
+                else:
+                    project_path, val_groups_json = generate_run_project_multiclass(
+                        base_project,
+                        run_dir,
+                        run_id,
+                        str(monte_carlo_runs_root),
+                        train_m,
+                        val_m,
+                        cohort_labels,
+                        config.samples_base_path,
+                    )
+                    predictor_output_dir = run_dir / "predictors"
+                    n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
+                    n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
                 if config.predictor_only:
                     apply_frozen_pipeline_artifacts_to_run_project(
                         project_path, Path(config.frozen_project_path)
@@ -879,22 +954,40 @@ def main() -> None:
                         logs_dir=run_dir / "logs",
                         progress_callback=progress_callback,
                         detector_step_override=detector_step_override,
+                        skip_centroid=bool(args.skip_centroid),
                         config=config,
                     )
             else:
-                project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
-                    base_project,
-                    run_dir,
-                    run_id,
-                    str(monte_carlo_runs_root),
-                    train_m,
-                    val_m,
-                    cohort_labels,
-                    config.samples_base_path,
-                )
-                predictor_output_dir = run_dir / "predictors"
-                n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
-                n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
+                if args.skip_centroid:
+                    project_path = run_dir / "project.json"
+                    val_groups_json = run_dir / "val_test_groups.json"
+                    if not project_path.is_file():
+                        print(
+                            f"Warning: iteration {i + 1} skipped: missing existing run project at {project_path} "
+                            "(run without --skip-centroid first).",
+                            file=sys.stderr,
+                        )
+                        if progress is not None:
+                            progress.remove_task(task_steps)
+                            progress.remove_task(task_current)
+                            progress.advance(task_iter, 1)
+                        continue
+                    predictor_output_dir = run_dir / "predictors"
+                    n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
+                else:
+                    project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
+                        base_project,
+                        run_dir,
+                        run_id,
+                        str(monte_carlo_runs_root),
+                        train_m,
+                        val_m,
+                        cohort_labels,
+                        config.samples_base_path,
+                    )
+                    predictor_output_dir = run_dir / "predictors"
+                    n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
+                    n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
                 if config.predictor_only:
                     apply_frozen_pipeline_artifacts_to_run_project(
                         project_path, Path(config.frozen_project_path)
@@ -913,6 +1006,7 @@ def main() -> None:
                         logs_dir=run_dir / "logs",
                         progress_callback=progress_callback,
                         detector_step_override=detector_step_override,
+                        skip_centroid=bool(args.skip_centroid),
                         config=config,
                     )
             if progress is not None:
