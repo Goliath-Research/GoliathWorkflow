@@ -418,7 +418,19 @@ def main() -> None:
         "--model-backend",
         choices=["ecdf", "tabular_sklearn", "generative_hybrid"],
         default=None,
-        help="Override validation.model_backend for --model (default: ecdf).",
+        help=(
+            "Override validation.model_backend for --model and --post-model-validation "
+            "(default comes from step_config.validation.model_backend or ecdf)."
+        ),
+    )
+    parser.add_argument(
+        "--post-model-backend",
+        choices=["ecdf", "tabular_sklearn", "generative_hybrid"],
+        default=None,
+        help=(
+            "Alias for backend override used with --post-model-validation. "
+            "When omitted, uses step_config.validation.model_backend."
+        ),
     )
     parser.add_argument(
         "--covariates-path",
@@ -573,8 +585,15 @@ def main() -> None:
         config.skip_enricher = True
     if args.predictor_only:
         config.predictor_only = True
-    if args.model_backend:
-        config = config.model_copy(update={"model_backend": args.model_backend})
+    if args.model_backend and args.post_model_backend and args.model_backend != args.post_model_backend:
+        print(
+            "Error: --model-backend and --post-model-backend must match when both are provided.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    selected_backend = args.post_model_backend or args.model_backend
+    if selected_backend:
+        config = config.model_copy(update={"model_backend": selected_backend})
     if args.covariates_path is not None:
         config = config.model_copy(update={"covariates_path": str(args.covariates_path)})
     if args.tabular_max_dmps is not None:
