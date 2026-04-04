@@ -118,6 +118,8 @@ def test_infer_monte_carlo_layout_hierarchical_multiclass(tmp_path: Path):
         encoding="utf-8",
     )
     assert infer_monte_carlo_layout(p, 3) == "hierarchical_multiclass"
+    with pytest.raises(ValueError, match="does not match control/disease resolved groups count"):
+        infer_monte_carlo_layout(p, 4)
 
 
 def test_infer_monte_carlo_layout_rejects_two_cohorts_when_disease_has_stages(tmp_path: Path):

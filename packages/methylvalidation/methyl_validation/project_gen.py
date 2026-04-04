@@ -277,6 +277,12 @@ def infer_monte_carlo_layout(base_project_path: str | Path, n_cohorts: int) -> s
             resolved_labels = [x[0] for x in resolved]
             if n_cohorts >= 3 and len(resolved) == n_cohorts:
                 return "hierarchical_multiclass"
+            if n_cohorts >= 3 and len(resolved) != n_cohorts:
+                raise ValueError(
+                    f"Monte Carlo cohorts count ({n_cohorts}) does not match control/disease resolved groups "
+                    f"count ({len(resolved)}): {resolved_labels!r}. "
+                    "Use one cohort per resolved leaf label in the same order."
+                )
             if n_cohorts == 2 and len(resolved) > 2:
                 raise ValueError(
                     f"Monte Carlo config has 2 cohorts (e.g. legacy healthy_csv + disease_csv) but "
@@ -286,8 +292,12 @@ def infer_monte_carlo_layout(base_project_path: str | Path, n_cohorts: int) -> s
                 )
     except ValueError:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        if n_cohorts >= 3:
+            raise ValueError(
+                "Unable to resolve hierarchical control/disease groups from base project. "
+                f"Underlying error: {e}"
+            ) from e
     if n_cohorts != 2:
         raise ValueError(
             "For control/disease projects: use exactly two Monte Carlo cohorts (binary), or "
