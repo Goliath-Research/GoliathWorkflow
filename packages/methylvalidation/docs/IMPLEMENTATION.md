@@ -36,7 +36,8 @@ Project configurations should follow a **single source of truth** principle:
 
 - Run with `--stability` to evaluate many random splits and aggregate stable DMPs
 - Run with `--freeze` to build production biological outputs from the stable panel
-- Run with `--model` to build final production model artifacts
+- Run with `--model-mc` to perform full backend-specific MC retrain+test loops for model selection
+- Run with `--select-best-model` to select best backend and build final production model artifacts
 - Uses `step_config.validation` settings from the project
 
 ### 2. Model Use for Prediction (Predictor-only)
@@ -50,7 +51,13 @@ Project configurations should follow a **single source of truth** principle:
 methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --stability
 methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --freeze
 
-# Model Use for Prediction  
+# Model Selection Monte Carlo
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --model-mc --model-mc-all
+
+# Final model training (all data)
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --select-best-model --model-mc-all
+
+# Model Use for Prediction
 methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --predictor-only
 ```
 
@@ -65,7 +72,9 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **MC loop (`methyl-validation` default, with optional `--stability`)**: per iteration runs `methyl-centroid` then `methyl-detector` (`run_pipeline_for_iteration`, `run_pipeline_for_iteration_multiclass`).
 - **`--stability`**: after the MC loop, runs in-process stability aggregation (`run_stability_analysis`) over detector discovery outputs.
 - **`--freeze`**: runs `run_pipeline_for_production`: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, then optional `methyl-disease-progression`.
+- **`--model-mc`**: full retrain+test MC by backend under isolated roots (`model_mc/<backend>/run_XXXX`): centroid -> detector -> backend train/predict.
 - **`--model`**: runs `run_pipeline_for_model`. For `model_backend=ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.
+- **`--select-best-model`**: ranks backend model-MC summaries and runs final all-data production model build using selected backend.
 - **`--post-model-validation`**: runs MC holdout evaluation against frozen production artifacts only (no retraining). `ecdf` dispatches predictor-only runs; `tabular_sklearn` and `generative_hybrid` dispatch frozen model inference via backend predictors.
 - **`--predictor-only`**: MC iterations that run only `methyl-predictor` using frozen artifacts.
 
@@ -125,7 +134,7 @@ MethylValidation uses **MethylUtils** only for project loading:
 - **load_project(base_project)** — To read `project_name` and project structure so that run directories are created under `output_base/project_name/monte_carlo_runs/run_0001`, etc.
 - **load_project(project_path)** — Per run (binary), to resolve the predictor output directory from comparisons (`run_dir/predictors/<control>/<disease>`). Multiclass flat runs use `run_dir/predictors` directly.
 
-Sample path resolution is done locally in MethylValidation ([split.py](../methyl_validation/split.py): `load_and_resolve_sample_paths`). Iteration metrics are produced by **MethylDetector** (balanced accuracy in `result*.json`) during the default MC loop, or by **MethylPredictor** when using **`--predictor-only`** or after **`--model`**; MethylValidation aggregates via `iteration_scalar_metrics_from_run_dir`.
+Sample path resolution is done locally in MethylValidation ([split.py](../methyl_validation/split.py): `load_and_resolve_sample_paths`). Iteration metrics are produced by **MethylDetector** (balanced accuracy in `result*.json`) during the default MC loop, by backend predictors during `--model-mc`, or by frozen predictor paths during `--post-model-validation` / `--predictor-only`; MethylValidation aggregates via `iteration_scalar_metrics_from_run_dir`.
 
 ## Modules
 
@@ -135,7 +144,7 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 | **predictor_policy.py** | `assert_monte_carlo_predictor_allowed` — reject `predictor.blind` / `test_blind_paths` for MC. |
 | **split.py** | `load_and_resolve_sample_paths`; `stratified_split` (binary); `stratified_split_multiclass` (per-label train/val). |
 | **project_gen.py** | `infer_monte_carlo_layout` (rejects 2 cohorts when project resolves to >2 leaves); `generate_run_project` (binary CSV names unchanged); `generate_run_project_multiclass` / `generate_run_project_hierarchical_multiclass` (`training_<label>.csv`, `testing_<label>.csv`, `val_test_groups.json`). Each run’s `project.json` rewrites `step_config.predictor` to the holdout CSVs: **flat** MC also sets `test_group_paths`; **hierarchical** MC only updates nested `controls`/`diseases` (keeps template parent labels, e.g. `prostate_cancer` vs top-level `pca`). MethylPredictor zips predictor list expansion with resolved centroid labels when `test_group_paths` is absent. |
-| **pipeline_runner.py** | `run_pipeline_for_iteration` / `run_pipeline_for_iteration_multiclass`: centroid + detector only. In binary MC iterations, centroid executes as two tracked runs (`group1`, `group2`) with separate logs/timing rows and per-row `n_processed_samples` read from centroid metadata (`samples_used`). `run_pipeline_for_production`: freeze (centroid→detector→mapper→enricher) and optional `methyl-disease-progression` from `step_config.progression`. `run_pipeline_for_model`: classifier→predictor. `run_predictor_only_*`: predictor-only. `run_post_model_validation_*`: frozen-artifact evaluation for post-model MC mode across all backends. |
+| **pipeline_runner.py** | `run_pipeline_for_iteration` / `run_pipeline_for_iteration_multiclass`: centroid + detector only. In binary MC iterations, centroid executes as two tracked runs (`group1`, `group2`) with separate logs/timing rows and per-row `n_processed_samples` read from centroid metadata (`samples_used`). `run_pipeline_for_production`: freeze (centroid→detector→mapper→enricher) and optional `methyl-disease-progression` from `step_config.progression`. `run_pipeline_for_model`: classifier→predictor or backend bundle/train/predict. `run_predictor_only_*`: predictor-only. `run_post_model_validation_*`: frozen-artifact evaluation for post-model MC mode across all backends. |
 | **trainer_api.py** | Backend step abstraction for `--model`. Builds backend-specific step lists (ECDF, tabular, generative) so orchestration can be extracted into a future `methylmodeltrainer` package without changing workflow CLI semantics. |
 | **validator_metrics.py** | `iteration_scalar_metrics_from_run_dir`: predictor `validation_metrics.json` if present, else mean detector `balanced_accuracy` from `detections/**/result*.json`. Also exports aggregated Plotly KDE+ECDF chart (`metrics_distributions_plotly.html`) for post-model validation summaries. |
 
@@ -146,15 +155,16 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 1. Load config; `assert_monte_carlo_predictor_allowed`; `infer_monte_carlo_layout(base_project, len(cohorts))`.
 2. Resolve `project_name`; create `output_base/project_name/monte_carlo_runs/`.
 3. Resolve all cohort sample paths from CSVs.
-4. For each iteration:
+4. For each default/stability iteration:
    - **Binary:** `stratified_split` → `generate_run_project` → `run_pipeline_for_iteration` (centroid group1/group2 overrides).
    - **Multiclass:** `stratified_split_multiclass` → `generate_run_project_multiclass` → `run_pipeline_for_iteration_multiclass` (centroid + detector only).
    - Read metrics via `iteration_scalar_metrics_from_run_dir(run_dir)` (predictor JSON if present, else detector `result*.json`).
 5. Aggregate → `all_metrics.csv`, `metrics_summary.json`, `step_timings.csv`, optional `resource_summary.json`.
+6. For `--model-mc`, repeat per backend under isolated roots and emit cross-backend ranking files (`backend_ranking.csv`, `backend_ranking.json`).
 
 **MethylPredictor:** flat-group projects with **multiclass-classifier.pkl** resolve via `resolve_predictor_config` (shared `_build_multiclass_predictor_config`). The CLI applies `--test-groups` in both single-config and per-comparison multiclass runs (`_apply_test_groups_json_to_config`).
 
-**After a frozen production build:** `--model` runs **methyl-classifier** then **methyl-predictor** (`run_pipeline_for_model`). `--post-model-validation` then runs descriptive holdout MC on frozen artifacts and writes outputs under `monte_carlo_runs/post_model_validation/` (`all_metrics.csv`, `metrics_summary.json`, `metrics_distributions_plotly.html`). **`--predictor-only`** remains available as a lightweight predictor-only MC path.
+**After a frozen production build:** `--model-mc` runs full retrain+test MC per backend under `monte_carlo_runs/model_mc/<backend>/`. `--select-best-model` reads these summaries, selects best backend by configured metric/statistic, and runs final all-data production model build. `--post-model-validation` remains a descriptive frozen-model MC path under `monte_carlo_runs/post_model_validation/`.
 
 **Disease progression synthesis:** when `step_config.progression.enabled` is set, freeze invokes `methyl-disease-progression --project <production/project.json>` after enricher. The progression tool reads comparison outputs (`mapper/<control>/<disease>/all-gene_name-combined.csv`, `enricher/<control>/<disease>/enrichment_merged.csv`, optional `modules_ranked.csv`) and writes long tables + summary under `<project_root>/progression`.
 
@@ -166,6 +176,10 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 | **metrics_summary.json** | Per-metric empirical distribution: mean, std, min, max, count, percentiles (p5, p25, p50, p75, p95). |
 | **step_timings.csv** | Per step per run: `step_name`, `duration_seconds`, `return_code`, `run_id`, `run_dir`, `n_train_samples`, `n_val_samples`, and optional `n_processed_samples` (centroid rows). Binary centroid runs emit `methyl-centroid-group1` and `methyl-centroid-group2` rows. |
 | **resource_summary.json** | (Optional) Mean/std duration per step, mean total time per iteration, min/max/mean `n_train_samples`, `n_val_samples`, and `n_processed_samples` when present. |
+| **model_mc/<backend>/all_metrics.csv** | Per-backend full retrain+test MC metrics table. |
+| **model_mc/<backend>/metrics_summary.json** | Per-backend summary statistics used for backend ranking. |
+| **model_mc/backend_ranking.csv** | Cross-backend ranking by configured metric/statistic. |
+| **production/selected_backend.json** | Selected backend and ranking metadata for final all-data training decision. |
 | **post_model_validation/metrics_distributions_plotly.html** | Plotly dashboard with KDE (density) and ECDF (cumulative) panels for each numeric metric. |
 | **stability/dmp_frequency_by_chromosome.html** | Combined Plotly stability chart with per-chromosome traces for both candidate (`all`) and final (`selected`) DMPs. X=frequency (% of runs), Y=DMP count. |
 | **stability/dmp_frequency_chr_<chrom>.html** | Per-chromosome Plotly charts with `all` vs `selected` count curves over frequency (%). |

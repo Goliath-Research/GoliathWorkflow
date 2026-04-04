@@ -31,6 +31,7 @@ from .pipeline_runner import (
     run_post_model_validation_multiclass,
     run_pipeline_for_iteration,
     run_pipeline_for_iteration_multiclass,
+    run_pipeline_for_model,
     run_predictor_only_binary,
     run_predictor_only_multiclass,
 )
@@ -279,6 +280,291 @@ def _infer_monte_carlo_cohorts_from_project(
     return cohorts
 
 
+def _write_model_mc_outputs(
+    backend_root: Path,
+    rows: List[Dict[str, Any]],
+    all_timings: List[Dict[str, Any]],
+) -> None:
+    df = build_metrics_table(rows)
+    write_all_metrics_csv(df, backend_root / "all_metrics.csv")
+    summary = compute_summary(df)
+    write_summary_json(summary, backend_root / "metrics_summary.json")
+    if all_timings:
+        write_step_timings_csv(all_timings, backend_root / "step_timings.csv")
+        resource_summary = compute_resource_summary(all_timings)
+        if resource_summary:
+            write_resource_summary_json(resource_summary, backend_root / "resource_summary.json")
+    write_metrics_distribution_plotly(df, backend_root / "metrics_distributions_plotly.html")
+
+
+def _score_backend_from_outputs(
+    backend_root: Path,
+    metric: str,
+    stat: str,
+) -> float:
+    import json
+
+    summary_path = backend_root / "metrics_summary.json"
+    if not summary_path.is_file():
+        raise FileNotFoundError(f"Missing backend summary: {summary_path}")
+    with open(summary_path, encoding="utf-8") as f:
+        summary = json.load(f)
+    if metric not in summary:
+        raise ValueError(f"Metric {metric!r} not found in {summary_path}")
+    metric_summary = summary[metric]
+    if stat == "median":
+        p50 = ((metric_summary.get("percentiles") or {}).get("p50"))
+        if p50 is None:
+            raise ValueError(f"Median (p50) missing for metric {metric!r} in {summary_path}")
+        return float(p50)
+    return float(metric_summary.get("mean"))
+
+
+def _write_backend_ranking(
+    model_mc_root: Path,
+    backends: List[str],
+    metric: str,
+    stat: str,
+) -> List[Dict[str, Any]]:
+    import json
+
+    rows: List[Dict[str, Any]] = []
+    for backend in backends:
+        backend_root = model_mc_root / backend
+        score = _score_backend_from_outputs(backend_root, metric=metric, stat=stat)
+        rows.append({"backend": backend, "metric": metric, "stat": stat, "score": float(score)})
+    rows.sort(key=lambda r: r["score"], reverse=True)
+    for idx, row in enumerate(rows, start=1):
+        row["rank"] = idx
+
+    ranking_csv = model_mc_root / "backend_ranking.csv"
+    with open(ranking_csv, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["rank", "backend", "metric", "stat", "score"])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+    ranking_json = model_mc_root / "backend_ranking.json"
+    with open(ranking_json, "w", encoding="utf-8") as f:
+        json.dump({"metric": metric, "stat": stat, "rows": rows}, f, indent=2)
+    return rows
+
+
+def _run_model_mc_backend(
+    *,
+    backend: str,
+    base_project_for_runs: Path,
+    config: MonteCarloConfig,
+    layout: str,
+    cohort_paths_list: List[Tuple[str, List[str]]],
+    cohort_labels: List[str],
+    control_paths: List[str],
+    disease_paths: List[str],
+    backend_root: Path,
+    resume_arg: Optional[int],
+    per_cancer_group: bool,
+) -> None:
+    backend_root.mkdir(parents=True, exist_ok=True)
+    rows: List[Dict[str, Any]] = []
+    all_timings: List[Dict[str, Any]] = []
+
+    existing_runs = _list_existing_run_numbers(backend_root)
+    start_iteration_idx = _resolve_resume_start_iteration(
+        resume_arg,
+        n_iterations=config.n_iterations,
+        existing_runs=existing_runs,
+    )
+    if resume_arg is not None and start_iteration_idx > 0:
+        for prev_i in range(start_iteration_idx):
+            prev_run_id = f"run_{prev_i + 1:04d}"
+            prev_run_dir = backend_root / prev_run_id
+            if not prev_run_dir.is_dir():
+                continue
+            prev_scalar = iteration_scalar_metrics_from_run_dir(prev_run_dir)
+            if prev_scalar:
+                rows.append(
+                    {
+                        "iteration": prev_i + 1,
+                        "run_id": prev_run_id,
+                        "run_dir": str(prev_run_dir),
+                        "model_backend": backend,
+                        **prev_scalar,
+                    }
+                )
+        all_timings.extend(
+            _load_existing_step_timings(
+                backend_root / "step_timings.csv",
+                keep_until_iteration_exclusive=start_iteration_idx + 1,
+            )
+        )
+    if resume_arg is not None:
+        for n in existing_runs:
+            if n >= (start_iteration_idx + 1):
+                run_dir = backend_root / f"run_{n:04d}"
+                if run_dir.is_dir():
+                    shutil.rmtree(run_dir)
+    completed_iteration_seconds: List[float] = []
+
+    for i in range(start_iteration_idx, config.n_iterations):
+        iteration_t0 = time.perf_counter()
+        run_id = f"run_{i + 1:04d}"
+        run_dir = backend_root / run_id
+        seed_i = (config.seed + i) if config.seed is not None else None
+        train_m: Dict[str, List[str]] = {}
+        val_m: Dict[str, List[str]] = {}
+        try:
+            if layout == "binary":
+                train_control, train_disease, val_control, val_disease = stratified_split(
+                    control_paths,
+                    disease_paths,
+                    config.train_fraction,
+                    seed=seed_i,
+                )
+            else:
+                train_m, val_m = stratified_split_multiclass(
+                    cohort_paths_list,
+                    config.train_fraction,
+                    seed=seed_i,
+                )
+        except ValueError as e:
+            print(f"[model-mc:{backend}] Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
+            continue
+
+        if layout == "binary":
+            (
+                project_path,
+                _,
+                _,
+                _val_control_csv,
+                _val_disease_csv,
+                centroid_group1_override,
+                centroid_group2_override,
+            ) = generate_run_project(
+                base_project_for_runs,
+                run_dir,
+                run_id,
+                str(backend_root),
+                train_control,
+                train_disease,
+                val_control,
+                val_disease,
+                config.samples_base_path,
+            )
+            run_project = load_project(project_path)
+            comparisons = run_project.get_comparisons()
+            if comparisons:
+                spec = comparisons[0]
+                predictor_output_dir = run_dir / "predictors" / spec.control_group / spec.disease_group
+            else:
+                predictor_output_dir = run_dir / "predictors"
+            n_train_samples = len(train_control) + len(train_disease)
+            n_val_samples = len(val_control) + len(val_disease)
+            ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration(
+                project_path,
+                per_cancer_group=per_cancer_group,
+                logs_dir=run_dir / "logs",
+                progress_callback=None,
+                centroid_step_overrides={
+                    "group1": centroid_group1_override,
+                    "group2": centroid_group2_override,
+                },
+                detector_step_override=None,
+                skip_centroid=False,
+                config=config,
+            )
+        else:
+            if layout == "multiclass":
+                project_path, _val_groups_json = generate_run_project_multiclass(
+                    base_project_for_runs,
+                    run_dir,
+                    run_id,
+                    str(backend_root),
+                    train_m,
+                    val_m,
+                    cohort_labels,
+                    config.samples_base_path,
+                )
+            else:
+                project_path, _val_groups_json = generate_run_project_hierarchical_multiclass(
+                    base_project_for_runs,
+                    run_dir,
+                    run_id,
+                    str(backend_root),
+                    train_m,
+                    val_m,
+                    cohort_labels,
+                    config.samples_base_path,
+                )
+            predictor_output_dir = run_dir / "predictors"
+            n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
+            n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
+            ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration_multiclass(
+                project_path,
+                per_cancer_group=per_cancer_group,
+                logs_dir=run_dir / "logs",
+                progress_callback=None,
+                detector_step_override=None,
+                skip_centroid=False,
+                config=config,
+            )
+
+        for t in timings_iter:
+            all_timings.append(
+                {
+                    **t,
+                    "run_id": run_id,
+                    "run_dir": str(run_dir),
+                    "n_train_samples": n_train_samples,
+                    "n_val_samples": n_val_samples,
+                    "model_backend": backend,
+                }
+            )
+        if not ok_iter:
+            for msg in errors_iter:
+                print(f"[model-mc:{backend}] Error [{run_id}]: {msg}", file=sys.stderr)
+            if config.abort_on_step_failure:
+                raise RuntimeError(f"[model-mc:{backend}] abort_on_step_failure=true and detector stage failed")
+            continue
+
+        ok_model, errors_model, timings_model = run_pipeline_for_model(
+            project_json=project_path,
+            logs_dir=run_dir / "logs" / "model",
+            predictor_output_dir=predictor_output_dir,
+            per_cancer_group=per_cancer_group,
+            config=config.model_copy(update={"model_backend": backend}),
+        )
+        for t in timings_model:
+            all_timings.append(
+                {
+                    **t,
+                    "run_id": run_id,
+                    "run_dir": str(run_dir),
+                    "n_train_samples": n_train_samples,
+                    "n_val_samples": n_val_samples,
+                    "model_backend": backend,
+                }
+            )
+        if not ok_model:
+            for msg in errors_model:
+                print(f"[model-mc:{backend}] Error [{run_id}]: {msg}", file=sys.stderr)
+            if config.abort_on_step_failure:
+                raise RuntimeError(f"[model-mc:{backend}] abort_on_step_failure=true and model stage failed")
+            continue
+        scalar = iteration_scalar_metrics_from_run_dir(run_dir)
+        rows.append({"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), "model_backend": backend, **scalar})
+        elapsed = time.perf_counter() - iteration_t0
+        completed_iteration_seconds.append(elapsed)
+        eta = _estimate_iteration_eta(completed_iteration_seconds, config.n_iterations - (i + 1))
+        print(
+            f"[model-mc:{backend}] Completed iteration {i + 1}/{config.n_iterations} ({run_id}) "
+            f"in {_format_duration(elapsed)} (ETA {eta})",
+            file=sys.stderr,
+        )
+
+    if not rows:
+        raise RuntimeError(f"No successful model-mc iterations for backend={backend}")
+    _write_model_mc_outputs(backend_root=backend_root, rows=rows, all_timings=all_timings)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -406,6 +692,40 @@ def main() -> None:
         help="Build production model after --freeze. ecdf backend: classifier→predictor; tabular/generative backends: bundle→train→predict (no detector, not Monte Carlo). Use --predictor-only for repeated predictor-only runs.",
     )
     parser.add_argument(
+        "--model-mc",
+        action="store_true",
+        help=(
+            "Run full Monte Carlo retrain+test model stage per split (centroid->detector->train->predict) "
+            "for model backend selection. Outputs are isolated under monte_carlo_runs/model_mc/<backend>/."
+        ),
+    )
+    parser.add_argument(
+        "--model-mc-all",
+        action="store_true",
+        help="With --model-mc, run all backends (ecdf, tabular_sklearn, generative_hybrid).",
+    )
+    parser.add_argument(
+        "--select-best-model",
+        action="store_true",
+        help=(
+            "Select the best backend from model-mc summaries and train final production model on all data "
+            "using that backend."
+        ),
+    )
+    parser.add_argument(
+        "--selection-metric",
+        type=str,
+        default="balanced_accuracy",
+        metavar="METRIC",
+        help="Metric used to rank backends for --select-best-model (default: balanced_accuracy).",
+    )
+    parser.add_argument(
+        "--selection-stat",
+        choices=["mean", "median"],
+        default="median",
+        help="Statistic used to rank backends for --select-best-model (default: median).",
+    )
+    parser.add_argument(
         "--post-model-validation",
         action="store_true",
         help=(
@@ -419,7 +739,7 @@ def main() -> None:
         choices=["ecdf", "tabular_sklearn", "generative_hybrid"],
         default=None,
         help=(
-            "Override validation.model_backend for --model and --post-model-validation "
+            "Override validation.model_backend for --model, --model-mc, and --post-model-validation "
             "(default comes from step_config.validation.model_backend or ecdf)."
         ),
     )
@@ -630,9 +950,9 @@ def main() -> None:
     monte_carlo_runs_root.mkdir(parents=True, exist_ok=True)
 
     if args.resume is not None and (args.freeze or args.model):
-        print("Error: --resume can only be used with Monte Carlo iteration mode (not --freeze/--model).", file=sys.stderr)
+        print("Error: --resume can only be used with Monte Carlo iteration modes (not --freeze/--model).", file=sys.stderr)
         sys.exit(1)
-    if args.skip_centroid and (args.freeze or args.model or args.post_model_validation):
+    if args.skip_centroid and (args.freeze or args.model or args.post_model_validation or args.model_mc):
         print("Error: --skip-centroid can only be used with Monte Carlo iteration mode.", file=sys.stderr)
         sys.exit(1)
     if args.skip_centroid and config.predictor_only:
@@ -643,6 +963,27 @@ def main() -> None:
         sys.exit(1)
     if args.post_model_validation and args.predictor_only:
         print("Error: --post-model-validation cannot be combined with --predictor-only.", file=sys.stderr)
+        sys.exit(1)
+    if args.model_mc_all and not args.model_mc:
+        print("Error: --model-mc-all requires --model-mc.", file=sys.stderr)
+        sys.exit(1)
+    if args.model_mc and args.post_model_validation:
+        print("Error: --model-mc cannot be combined with --post-model-validation.", file=sys.stderr)
+        sys.exit(1)
+    if args.model_mc and args.predictor_only:
+        print("Error: --model-mc cannot be combined with --predictor-only.", file=sys.stderr)
+        sys.exit(1)
+    if args.model_mc and args.model:
+        print("Error: --model-mc cannot be combined with --model.", file=sys.stderr)
+        sys.exit(1)
+    if args.model_mc and args.freeze:
+        print("Error: --model-mc cannot be combined with --freeze.", file=sys.stderr)
+        sys.exit(1)
+    if args.select_best_model and (args.freeze or args.model or args.post_model_validation or config.predictor_only):
+        print(
+            "Error: --select-best-model cannot be combined with --freeze/--model/--post-model-validation/--predictor-only.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     if args.freeze:
@@ -723,6 +1064,132 @@ def main() -> None:
             )
             sys.exit(1)
         print(f"Production model build complete. See: {out}")
+        print("Done.")
+        return
+    elif args.model_mc or args.select_best_model:
+        production_dir = (
+            Path(config.production_output_dir)
+            if config.production_output_dir
+            else (monte_carlo_runs_root / "production")
+        )
+        production_project = production_dir / "project.json"
+        if not production_project.is_file():
+            print(
+                f"Error: model-mc requires production project at {production_project} (run --freeze first).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        base_project_for_runs = production_project
+        try:
+            layout = infer_monte_carlo_layout(base_project_for_runs, len(config.cohorts))
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        cohort_paths_list: List[Tuple[str, List[str]]] = []
+        for c in config.cohorts:
+            paths = load_and_resolve_sample_paths(c.csv, config.samples_base_path)
+            if not paths:
+                print(f"Error: cohort {c.label!r} ({c.csv}) must list at least one sample.", file=sys.stderr)
+                sys.exit(1)
+            cohort_paths_list.append((c.label, paths))
+        cohort_labels = [c.label for c in config.cohorts]
+        control_paths: List[str] = []
+        disease_paths: List[str] = []
+        if layout == "binary":
+            control_paths = cohort_paths_list[0][1]
+            disease_paths = cohort_paths_list[1][1]
+        per_cancer_group = False
+
+        model_mc_root = monte_carlo_runs_root / "model_mc"
+        model_mc_root.mkdir(parents=True, exist_ok=True)
+        configured_backends = (
+            ["ecdf", "tabular_sklearn", "generative_hybrid"]
+            if args.model_mc_all
+            else [str(config.model_backend or "ecdf").strip().lower()]
+        )
+        if args.select_best_model and not args.model_mc:
+            discovered = [p.name for p in sorted(model_mc_root.iterdir()) if p.is_dir()]
+            backends = discovered or configured_backends
+        else:
+            backends = configured_backends
+        if args.model_mc:
+            for backend in backends:
+                backend_root = model_mc_root / backend
+                print(
+                    f"Running model-mc backend={backend} into {backend_root}",
+                    file=sys.stderr,
+                )
+                try:
+                    _run_model_mc_backend(
+                        backend=backend,
+                        base_project_for_runs=base_project_for_runs,
+                        config=config.model_copy(update={"model_backend": backend}),
+                        layout=layout,
+                        cohort_paths_list=cohort_paths_list,
+                        cohort_labels=cohort_labels,
+                        control_paths=control_paths,
+                        disease_paths=disease_paths,
+                        backend_root=backend_root,
+                        resume_arg=args.resume,
+                        per_cancer_group=per_cancer_group,
+                    )
+                except Exception as e:
+                    print(f"Error: model-mc backend {backend} failed: {e}", file=sys.stderr)
+                    sys.exit(1)
+                print(f"Completed model-mc backend={backend}", file=sys.stderr)
+
+        if args.select_best_model:
+            try:
+                ranking = _write_backend_ranking(
+                    model_mc_root=model_mc_root,
+                    backends=backends,
+                    metric=args.selection_metric,
+                    stat=args.selection_stat,
+                )
+            except Exception as e:
+                print(f"Error: backend ranking failed: {e}", file=sys.stderr)
+                sys.exit(1)
+            best = ranking[0]
+            best_backend = str(best["backend"])
+            print(
+                f"Selected best backend: {best_backend} ({args.selection_metric} {args.selection_stat}={best['score']:.6f})",
+                file=sys.stderr,
+            )
+            try:
+                summary = build_production_model(
+                    monte_carlo_runs_root=monte_carlo_runs_root,
+                    production_output_dir=config.production_output_dir,
+                    config=config.model_copy(update={"model_backend": best_backend}),
+                )
+            except Exception as e:
+                print(f"Error: failed final all-data model build for backend={best_backend}: {e}", file=sys.stderr)
+                sys.exit(1)
+            if not summary.get("success", False):
+                for err in summary.get("errors") or []:
+                    print(err, file=sys.stderr)
+                print(
+                    f"Production model build failed for selected backend={best_backend}.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            import json
+
+            selection_payload = {
+                "selected_backend": best_backend,
+                "selection_metric": args.selection_metric,
+                "selection_stat": args.selection_stat,
+                "ranking": ranking,
+            }
+            selection_path = production_dir / "selected_backend.json"
+            with open(selection_path, "w", encoding="utf-8") as f:
+                json.dump(selection_payload, f, indent=2)
+            print(f"Wrote backend selection: {selection_path}")
+            print(f"Production model build complete. See: {summary.get('output_dir', 'unknown')}")
+            print("Done.")
+            return
+
+        print(f"Model-mc complete. See: {model_mc_root}")
         print("Done.")
         return
     elif args.post_model_validation:

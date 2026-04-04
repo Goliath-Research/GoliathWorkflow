@@ -2,12 +2,13 @@
 
 ## Overview
 
-MethylValidation orchestrates repeated train/validation splits, **methyl-centroid + methyl-detector** per iteration, aggregation of **detector** (or **predictor** when using `--predictor-only`) metrics, then optional **--freeze** (mapper/enricher) and **--model** (classifier→predictor). It supports two primary workflows:
+MethylValidation orchestrates repeated train/validation splits, **methyl-centroid + methyl-detector** per iteration, backend model training/evaluation loops, and production freeze/model build. It supports the staged workflow below:
 
-1. **Model Creation** (`--stability` + `--freeze` + `--model`) — Identify stable DMPs across many random splits, extract pathways, and then build a final production model on all data.
-2. **Post-model Validation** (`--post-model-validation`) — Evaluate a frozen production model on random holdouts without retraining and export KDE/ECDF metric distributions.
-3. **Model Use for Prediction** (`--predictor-only`) — Lightweight predictor-only MC runs for ECDF projects that need repeated predictor validation.
-4. **Disease Progression Synthesis** (`step_config.progression.enabled`) — After freeze, aggregate per-stage mapper/enricher outputs into cross-stage progression tables.
+1. **Stability discovery** (`--stability`) — Identify stable DMPs across many random splits.
+2. **Production freeze** (`--freeze`) — Build fixed-panel biological outputs on all data.
+3. **Model-selection Monte Carlo** (`--model-mc`) — Full retrain+test MC per backend with isolated backend outputs.
+4. **Final model training** (`--select-best-model`) — Select best backend from model-MC summaries and train final production model on all data.
+5. **On-demand evaluation/prediction** (`--post-model-validation` / `--predictor-only`) — Optional frozen-model descriptive holdouts or direct prediction use.
 
 Both workflows are controlled by the project configuration file. See the full Quarto documentation at `docs/theory/` for theoretical background and the complete configuration reference.
 
@@ -28,8 +29,11 @@ methyl-validation --project configs/my_project.json --stability
 # Step 2: Production freeze (full pipeline on all data up to mapper/enricher)
 methyl-validation --project configs/my_project.json --freeze
 
-# Step 3: Production model (after reviewing pathways, train the classifier and validate)
-methyl-validation --project configs/my_project.json --model
+# Step 3: Full model-selection MC retraining loop
+methyl-validation --project configs/my_project.json --model-mc --model-mc-all
+
+# Step 4: Select best backend and train final production model on all data
+methyl-validation --project configs/my_project.json --select-best-model --model-mc-all
 ```
 
 **Why this workflow?**
@@ -37,7 +41,8 @@ methyl-validation --project configs/my_project.json --model
 - Monte Carlo splits refit centroids and detection on training fractions; **balanced_accuracy** in `all_metrics.csv` comes from **MethylDetector** validation (mean over `result*.json`) unless you use **`--predictor-only`** with a frozen model.
 - Stability analysis identifies DMPs that recur in ≥ `stability_dmp_freq` fraction of runs.
 - The freeze step prepares the final data using only the stable positions (`fixed_dmp_panel`), bypassing re-discovery, and extracting the valid pathway families (genes).
-- The model step builds the final model from the verified DMPs and predicts on the test set.
+- The model-MC step retrains each backend on each split and produces backend-specific metric distributions.
+- Final model training uses the selected best backend on all production data.
 
 **Output:** `monte_carlo_runs/production/classifiers/multiclass-classifier.pkl` is the final production model (created after `--model`).
 
@@ -68,9 +73,9 @@ flowchart TB
   mdP --> newSamplePred["Predict new samples with the frozen model"]
 ```
 
-### Workflow 2: Model Use for Prediction
+### Workflow 2: Optional Frozen-Model Evaluation
 
-**Purpose:** Measure empirical distributions of frozen-model performance on held-out samples after model build.
+**Purpose:** Measure descriptive frozen-model performance distributions after final model build (no retraining).
 
 **Prerequisites:** Workflow 1 must have been completed (`production/project.json` must exist).
 
@@ -81,10 +86,35 @@ methyl-validation --project configs/my_project.json --post-model-validation
 **Why this workflow?**
 
 - Uses frozen artifacts only (no retraining).
-- Supports all model backends: `ecdf`, `tabular_sklearn`, `generative_hybrid`.
+- Supports all model backends.
 - Provides empirical distributions for multiple metrics (`balanced_accuracy`, `sensitivity`, `specificity`, `macro_f1`, etc.).
 - Exports `metrics_distributions_plotly.html` with KDE and ECDF for each metric.
 - Uses the same stratified splitting logic as Workflow 1 for consistency.
+
+### Recommended backend-selection defaults (PCa)
+
+For prostate cancer stage workflows similar to `Healthy_vs_PCa1-4-CG`, use:
+
+- `--selection-metric balanced_accuracy`
+- `--selection-stat median`
+
+Why:
+
+- `balanced_accuracy` is robust to class imbalance across stages/cohorts.
+- `median` (p50) is less sensitive to outlier runs than `mean`, so backend ranking is usually more stable in Monte Carlo experiments.
+
+Example:
+
+```bash
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+  --select-best-model --model-mc-all \
+  --selection-metric balanced_accuracy --selection-stat median
+```
+
+When to change defaults:
+
+- Use `--selection-stat mean` if you explicitly want to reward occasional high-performing runs and accept higher variance.
+- Use `--selection-metric macro_f1` when your primary objective is balanced precision/recall behavior across all classes rather than rank-balanced accuracy.
 
 ---
 
@@ -99,12 +129,13 @@ methyl-validation --project configs/my_project.json --post-model-validation
 | `--freeze` | `methyl-centroid` + `methyl-detector` (fixed panel) + `methyl-mapper` + `methyl-enricher` + optional `methyl-disease-progression` |
 | `--model` (`model_backend="ecdf"`) | `methyl-classifier` + `methyl-predictor` on frozen `production/project.json` |
 | `--model` (`model_backend="tabular_sklearn"` / `"generative_hybrid"`) | In-process backend flow: model bundle -> train -> predict (consumes freeze outputs; does not re-run `methyl-detector`) |
+| `--model-mc` | Full MC retraining per split: centroid -> detector -> backend train/predict; writes isolated results under `model_mc/<backend>/` |
 | `--post-model-validation` | MC holdout evaluation on frozen production artifacts (no retraining): `ecdf` uses predictor-only runs, tabular/generative use frozen model inference |
 | `--predictor-only` | Monte Carlo iterations where each iteration runs only `methyl-predictor` with frozen artifacts |
 
 | Flag | Description | Main subprocesses / backend path |
 |------|-------------|----------------------------------|
-| `--project PATH` | Path to the project JSON (preferred; reads `step_config.validation` from the project). | Controls whichever path you select (`--stability`, `--freeze`, `--model`, or `--predictor-only`). |
+| `--project PATH` | Path to the project JSON (preferred; reads `step_config.validation` from the project). | Controls whichever path you select (`--stability`, `--freeze`, `--model-mc`, `--select-best-model`, `--model`, `--post-model-validation`, or `--predictor-only`). |
 | `--config PATH` | Path to a standalone Monte Carlo config JSON (alternative to `--project`). | Same as above, but from MC config file mode. |
 | `--stability` | Run stability analysis after the MC loop (Workflow 1, Step 1). | MC loop (`methyl-centroid` + `methyl-detector`) then in-process stability aggregation. |
 | `--stability-featurecuts` | Enable detector FeatureCuts during MC (`classifier_dmp_selection=featurecuts_validation`) and compute stability from classifier-panel DMP exports. | Detector step override per run + classifier-panel stability aggregation. |
@@ -114,8 +145,13 @@ methyl-validation --project configs/my_project.json --post-model-validation
 | `--resume [RUN]` | Resume interrupted MC runs for `--stability` / default MC mode. Without `RUN`, repeats the last existing run and continues to `n_iterations`; with `RUN` (1-based), restarts from that run. | MC loop resume control (run directories `run_0001`, `run_0002`, ...). |
 | `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If `step_config.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. | `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher` (+ optional progression). |
 | `--model` | Run production model builder after freeze (Workflow 1, Step 3). | `ecdf`: `methyl-classifier` -> `methyl-predictor`; other backends: bundle -> train -> predict. |
+| `--model-mc` | Run full backend MC retraining+evaluation loop for model selection. | Per iteration: centroid -> detector -> backend train -> backend predict. |
+| `--model-mc-all` | With `--model-mc`, run all supported backends with isolated outputs. | Creates `model_mc/ecdf`, `model_mc/tabular_sklearn`, `model_mc/generative_hybrid`. |
+| `--select-best-model` | Rank backend model-MC summaries and train final production model on all data. | Reads `model_mc/*/metrics_summary.json`, picks best by `--selection-metric`/`--selection-stat`, then runs production model build. |
+| `--selection-metric METRIC` | Metric for backend ranking in `--select-best-model`. | Default: `balanced_accuracy`. |
+| `--selection-stat {mean,median}` | Statistic for backend ranking in `--select-best-model`. | Default: `median` (p50). |
 | `--post-model-validation` | Run descriptive MC holdout evaluation with frozen production artifacts (no retraining). | `ecdf`: predictor-only evaluation; tabular/generative: in-process frozen model predict. Outputs to `monte_carlo_runs/post_model_validation/`. |
-| `--model-backend` / `--post-model-backend` | Override backend used by `--model` or `--post-model-validation`. If omitted, backend is read from `step_config.validation.model_backend`. | `ecdf` \| `tabular_sklearn` \| `generative_hybrid` |
+| `--model-backend` / `--post-model-backend` | Override backend used by `--model`, `--model-mc`, or `--post-model-validation`. If omitted, backend is read from `step_config.validation.model_backend`. | `ecdf` \| `tabular_sklearn` \| `generative_hybrid` |
 | `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). | Monte Carlo iterations, predictor only. |
 | `--skip-enricher` | Skip the enricher inside MC iterations even when `run_mapper_and_enricher: true`. | Also short-circuits enricher (and therefore progression) in `--freeze`. |
 | `--iterations N` | Override `n_iterations` from config. | Affects MC loop count (`--stability` and `--predictor-only`). |
@@ -248,6 +284,11 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `stability/dmp_frequency_chr_<chrom>.html` | Per-chromosome Plotly chart files, each showing `all` vs `selected` DMP count distributions over frequency (%). |
 | `stability/stability_summary.json` | Stability run summary for DMP/gene frequency plus detector parameter extraction. Includes `detector_parameters.per_run` and `detector_parameters.aggregates` built from `detections/**/results-*.json` (minimal fields: exported/statistical/biological DMP totals, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). |
 | `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |
+| `model_mc/<backend>/run_000N/` | Per-iteration full retraining outputs for each backend. |
+| `model_mc/<backend>/all_metrics.csv` | One row per successful model-MC iteration for that backend. |
+| `model_mc/<backend>/metrics_summary.json` | Per-backend empirical distribution summary. |
+| `model_mc/backend_ranking.csv` | Cross-backend ranking by `--selection-metric` and `--selection-stat`. |
+| `production/selected_backend.json` | Selected backend metadata and ranking used for final all-data training. |
 | `post_model_validation/run_000N/` | Per-iteration post-model holdout evaluation outputs and logs. |
 | `post_model_validation/all_metrics.csv` | One row per successful post-model iteration with scalar metrics. |
 | `post_model_validation/metrics_summary.json` | Empirical distribution summary of post-model metrics. |

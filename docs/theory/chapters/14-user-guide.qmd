@@ -148,7 +148,8 @@ Workflow 1 should be run and reviewed in three explicit stages:
    - To couple stability with detector discrimination, use `--stability-featurecuts` (optionally `--stability-target-ba` and `--stability-min-selected-dmps`) so stability uses per-run classifier-panel DMP exports rather than broad discovery exports.
    - To retune detector hyperparameters without recomputing centroids, use `--skip-centroid` so each run reuses existing centroids and executes detector-only on the same per-run project/splits.
 2. **Freeze/analysis (`--freeze`)**: lock the panel into `production/project.json`, then review production detector outputs together with mapper/enricher summaries. This stage runs `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, with optional `methyl-disease-progression`.
-3. **Modeling (`--model`)**: train final classifier and predictor artifacts only after stability and biological review are complete. For `model_backend: "ecdf"` this is `methyl-classifier` -> `methyl-predictor`; for `tabular_sklearn` and `generative_hybrid`, methyl-validation runs in-process bundle -> train -> predict.
+3. **Model-selection MC (`--model-mc`)**: run full retrain+test Monte Carlo loops per backend (centroid -> detector -> backend train/predict) with isolated backend outputs.
+4. **Final model (`--select-best-model`)**: rank backend summaries and train the selected backend on all production data.
 
 Treat changes in any of these stage inputs as a model version change, not as a minor rerun.
 
@@ -161,8 +162,10 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 4. Stage B--freeze (single execution on all samples)
 5. `methyl-centroid` -> `methyl-detector`(fixed panel) -> `methyl-mapper` -> `methyl-enricher`
 6. Optional `methyl-disease-progression` (for staged diseases, e.g. PCa)
-7. Stage C--model
-8. `methyl-classifier` trains production model; `methyl-predictor` runs production validation pass
+7. Stage C--model-mc
+8. full retrain+test loops per backend with isolated outputs
+9. Stage D--select-best-model
+10. best backend is trained on all production data
 :::
 
 ::: {.content-visible when-format="pdf"}
@@ -180,8 +183,8 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 \node[box, below=of C] (D) {Stage B--freeze (single execution on all samples)};
 \node[box, below=of D] (E) {methyl-centroid $\to$ methyl-detector(fixed panel) $\to$ methyl-mapper $\to$ methyl-enricher};
 \node[box, below=of E] (F) {Optional: methyl-disease-progression (for staged diseases, e.g. PCa)};
-\node[box, below=of F] (G) {Stage C--model};
-\node[box, below=of G] (H) {methyl-classifier trains production model; methyl-predictor runs production validation pass};
+\node[box, below=of F] (G) {Stage C--model-mc (backend-isolated full retrain+test)};
+\node[box, below=of G] (H) {Stage D--select-best-model (train selected backend on all production data)};
 \draw[arr] (A)--(B);
 \draw[arr] (B)--(C);
 \draw[arr] (C)--(D);
@@ -195,7 +198,7 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 ```
 :::
 
-Metric-distribution evaluation is run via `--post-model-validation` (repeated holdouts with frozen artifacts and no retraining). Final deployment predicts new unlabeled samples with the frozen trained artifacts.
+Metric-distribution evaluation can be run via `--post-model-validation` (repeated holdouts with frozen artifacts and no retraining). Final deployment predicts new unlabeled samples with the frozen trained artifacts.
 
 ### Step 1: Run Monte Carlo with stability
 
@@ -239,40 +242,81 @@ This runs the production freeze pipeline on all samples using the stable DMP pan
 
 If `step_config.progression.enabled=true`, freeze also runs `methyl-disease-progression` and writes `production/progression/`.
 
-### Step 4: Run the final model stage
+### Step 4: Run backend model-selection Monte Carlo
 
 ```bash
-methyl-validation --project configs/my_project.json --model
+methyl-validation --project configs/my_project.json --model-mc --model-mc-all
 ```
 
-This runs the model stage on the frozen production project. For `ecdf`, this is `methyl-classifier` -> `methyl-predictor`; for `tabular_sklearn` or `generative_hybrid`, methyl-validation runs in-process bundle -> train -> predict. This stage does not re-run `methyl-detector`.
+This stage runs full retrain+test Monte Carlo loops for each backend and writes isolated outputs under:
 
-If `step_config.validation.require_biological_review_for_model=true`, `--model` requires:
+- `monte_carlo_runs/model_mc/ecdf/`
+- `monte_carlo_runs/model_mc/tabular_sklearn/`
+- `monte_carlo_runs/model_mc/generative_hybrid/`
 
-```json
-"biological_review_confirmed": true
+Each backend directory contains `all_metrics.csv`, `metrics_summary.json`, and `metrics_distributions_plotly.html` (KDE + ECDF).
+
+### Step 5: Select best backend and train final model on all data
+
+```bash
+methyl-validation --project configs/my_project.json --select-best-model --model-mc-all
 ```
 
-### Choosing the `--model` backend
+This stage ranks backend summaries (default: `balanced_accuracy` median) and trains the best backend on all production data.
 
-By default, `--model` uses the ECDF backend (`model_backend: "ecdf"`). Advanced projects can choose a different backend in `step_config.validation`:
+Outputs include:
 
-- `model_backend: "tabular_sklearn"`
-- `model_backend: "generative_hybrid"`
+- `monte_carlo_runs/model_mc/backend_ranking.csv`
+- `monte_carlo_runs/model_mc/backend_ranking.json`
+- `production/selected_backend.json`
 
-### Step 5: Run post-model Monte Carlo validation
+### Step 6: Optional frozen-model post-validation
 
 ```bash
 methyl-validation --project configs/my_project.json --post-model-validation
 ```
 
-This stage evaluates the frozen production model over repeated MC holdout splits and writes:
+This optional stage evaluates frozen artifacts only (no retraining) over MC holdouts.
 
-- `monte_carlo_runs/post_model_validation/all_metrics.csv`
-- `monte_carlo_runs/post_model_validation/metrics_summary.json`
-- `monte_carlo_runs/post_model_validation/metrics_distributions_plotly.html` (KDE + ECDF for all numeric metrics)
+If `step_config.validation.require_biological_review_for_model=true`, final all-data training still requires:
 
-`--post-model-validation` supports all model backends (`ecdf`, `tabular_sklearn`, `generative_hybrid`) and is the recommended empirical evaluation stage after `--model`.
+```json
+"biological_review_confirmed": true
+```
+
+### Choosing model backends
+
+By default, backend selection starts from `model_backend: "ecdf"`. Advanced projects can choose different backends in `step_config.validation`, run them in `--model-mc`, and then select the best for final all-data training:
+
+- `model_backend: "tabular_sklearn"`
+- `model_backend: "generative_hybrid"`
+
+`--post-model-validation` supports all model backends (`ecdf`, `tabular_sklearn`, `generative_hybrid`) and is an optional descriptive stage after final model build.
+
+### Recommended backend-selection defaults (PCa)
+
+For prostate cancer stage workflows similar to `Healthy_vs_PCa1-4-CG`, use:
+
+- `--selection-metric balanced_accuracy`
+- `--selection-stat median`
+
+Why:
+
+- `balanced_accuracy` is robust to class imbalance across stages/cohorts.
+- `median` (p50) is less sensitive to outlier runs than `mean`, so backend ranking is typically more stable in Monte Carlo settings.
+
+Example:
+
+```bash
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+  --select-best-model --model-mc-all \
+  --selection-metric balanced_accuracy --selection-stat median
+```
+
+When to change defaults:
+
+- Use `--selection-stat mean` if you want to reward occasional high-scoring runs and accept higher variance.
+- Use `--selection-metric macro_f1` when your primary objective is balanced precision/recall behavior across all classes.
 
 CLI overrides are also available in `methyl-validation` for quick experiments (for example `--model-backend generative_hybrid`, `--generative-latent-dim`, `--generative-density-type`, `--generative-calibrate`).
 

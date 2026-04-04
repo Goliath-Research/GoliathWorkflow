@@ -82,3 +82,40 @@ def test_post_model_validation_requires_production_project(tmp_path: Path, monke
     assert ex.value.code == 1
     err = capsys.readouterr().err
     assert "requires production project" in err
+
+
+def test_model_mc_all_requires_model_mc(tmp_path: Path, monkeypatch, capsys):
+    h = tmp_path / "healthy.csv"
+    d = tmp_path / "disease.csv"
+    h.write_text("sample\nH1\n", encoding="utf-8")
+    d.write_text("sample\nD1\n", encoding="utf-8")
+    project = tmp_path / "project.json"
+    project.write_text(
+        f"""
+{{
+  "project_name": "x",
+  "output_base": "{tmp_path.as_posix()}",
+  "samples_base_path": "{tmp_path.as_posix()}",
+  "groups": [
+    {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
+    {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
+  ],
+  "step_config": {{
+    "validation": {{
+      "train_fraction": 0.8,
+      "n_iterations": 2
+    }}
+  }}
+}}
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["methyl-validation", "--project", str(project), "--model-mc-all"],
+    )
+    with pytest.raises(SystemExit) as ex:
+        cli.main()
+    assert ex.value.code == 1
+    err = capsys.readouterr().err
+    assert "--model-mc-all requires --model-mc" in err
