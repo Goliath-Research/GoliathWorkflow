@@ -7,12 +7,33 @@ mapper/enricher; **--model** runs classifier then predictor.
 
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple
 
 if TYPE_CHECKING:
     from .config import MonteCarloConfig
+
+
+def _format_duration(seconds: float) -> str:
+    total = int(max(0, round(float(seconds))))
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    if h > 0:
+        return f"{h}h {m}m {s}s"
+    if m > 0:
+        return f"{m}m {s}s"
+    return f"{s}s"
+
+
+def _estimate_eta(completed_step_seconds: List[float], remaining_steps: int) -> str:
+    if remaining_steps <= 0:
+        return "0s"
+    if not completed_step_seconds:
+        return "unknown"
+    avg = sum(completed_step_seconds) / max(1, len(completed_step_seconds))
+    return _format_duration(avg * remaining_steps)
 
 
 def _find_cmd(name: str) -> Optional[str]:
@@ -322,7 +343,15 @@ def run_pipeline_for_iteration(
             None,
         )
     )
+    completed_seconds: List[float] = []
+    total_steps = len(steps)
     for step_index, (step_name, run_fn, centroid_group, centroid_override) in enumerate(steps):
+        if progress_callback is None:
+            print(
+                f"[mc] [{step_index + 1}/{total_steps}] running {step_name}...",
+                file=sys.stderr,
+                flush=True,
+            )
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")
         t0 = time.perf_counter()
@@ -347,6 +376,16 @@ def run_pipeline_for_iteration(
         if logs_dir is not None:
             log_path = logs_dir / f"{step_name}.log"
             _write_step_log(log_path, out, err)
+        completed_seconds.append(duration_seconds)
+        if progress_callback is None:
+            remaining = total_steps - (step_index + 1)
+            eta = _estimate_eta(completed_seconds, remaining)
+            print(
+                f"[mc] [{step_index + 1}/{total_steps}] {step_name} finished in "
+                f"{_format_duration(duration_seconds)} (ETA {eta})",
+                file=sys.stderr,
+                flush=True,
+            )
         if rc != 0:
             msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
             errors.append(msg)
@@ -382,7 +421,15 @@ def run_predictor_only_binary(
             ),
         ),
     ]
+    completed_seconds: List[float] = []
+    total_steps = len(steps)
     for step_index, (step_name, run_fn) in enumerate(steps):
+        if progress_callback is None:
+            print(
+                f"[mc-predictor-only] [{step_index + 1}/{total_steps}] running {step_name}...",
+                file=sys.stderr,
+                flush=True,
+            )
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")
         t0 = time.perf_counter()
@@ -398,6 +445,16 @@ def run_predictor_only_binary(
         if logs_dir is not None:
             log_path = logs_dir / f"{step_name}.log"
             _write_step_log(log_path, out, err)
+        completed_seconds.append(duration_seconds)
+        if progress_callback is None:
+            remaining = total_steps - (step_index + 1)
+            eta = _estimate_eta(completed_seconds, remaining)
+            print(
+                f"[mc-predictor-only] [{step_index + 1}/{total_steps}] {step_name} finished in "
+                f"{_format_duration(duration_seconds)} (ETA {eta})",
+                file=sys.stderr,
+                flush=True,
+            )
         if rc != 0:
             msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
             errors.append(msg)
@@ -431,7 +488,15 @@ def run_predictor_only_multiclass(
             ),
         ),
     ]
+    completed_seconds: List[float] = []
+    total_steps = len(steps)
     for step_index, (step_name, run_fn) in enumerate(steps):
+        if progress_callback is None:
+            print(
+                f"[mc-predictor-only] [{step_index + 1}/{total_steps}] running {step_name}...",
+                file=sys.stderr,
+                flush=True,
+            )
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")
         t0 = time.perf_counter()
@@ -447,6 +512,16 @@ def run_predictor_only_multiclass(
         if logs_dir is not None:
             log_path = logs_dir / f"{step_name}.log"
             _write_step_log(log_path, out, err)
+        completed_seconds.append(duration_seconds)
+        if progress_callback is None:
+            remaining = total_steps - (step_index + 1)
+            eta = _estimate_eta(completed_seconds, remaining)
+            print(
+                f"[mc-predictor-only] [{step_index + 1}/{total_steps}] {step_name} finished in "
+                f"{_format_duration(duration_seconds)} (ETA {eta})",
+                file=sys.stderr,
+                flush=True,
+            )
         if rc != 0:
             msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
             errors.append(msg)
@@ -489,7 +564,14 @@ def run_pipeline_for_production(
                 ("methyl-disease-progression", lambda: run_progression(project_json)),
             )
 
+    completed_seconds: List[float] = []
+    total_steps = len(steps)
     for step_index, (step_name, run_fn) in enumerate(steps):
+        print(
+            f"[freeze] [{step_index + 1}/{total_steps}] running {step_name}...",
+            file=sys.stderr,
+            flush=True,
+        )
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")
         t0 = time.perf_counter()
@@ -505,6 +587,15 @@ def run_pipeline_for_production(
         if logs_dir is not None:
             log_path = logs_dir / f"{step_name}.log"
             _write_step_log(log_path, out, err)
+        completed_seconds.append(duration_seconds)
+        remaining = total_steps - (step_index + 1)
+        eta = _estimate_eta(completed_seconds, remaining)
+        print(
+            f"[freeze] [{step_index + 1}/{total_steps}] {step_name} finished in "
+            f"{_format_duration(duration_seconds)} (ETA {eta})",
+            file=sys.stderr,
+            flush=True,
+        )
         if rc != 0:
             msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
             errors.append(msg)
@@ -548,7 +639,15 @@ def run_pipeline_for_iteration_multiclass(
             ),
         ),
     )
+    completed_seconds: List[float] = []
+    total_steps = len(steps)
     for step_index, (step_name, run_fn) in enumerate(steps):
+        if progress_callback is None:
+            print(
+                f"[mc] [{step_index + 1}/{total_steps}] running {step_name}...",
+                file=sys.stderr,
+                flush=True,
+            )
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")
         t0 = time.perf_counter()
@@ -564,6 +663,16 @@ def run_pipeline_for_iteration_multiclass(
         if logs_dir is not None:
             log_path = logs_dir / f"{step_name}.log"
             _write_step_log(log_path, out, err)
+        completed_seconds.append(duration_seconds)
+        if progress_callback is None:
+            remaining = total_steps - (step_index + 1)
+            eta = _estimate_eta(completed_seconds, remaining)
+            print(
+                f"[mc] [{step_index + 1}/{total_steps}] {step_name} finished in "
+                f"{_format_duration(duration_seconds)} (ETA {eta})",
+                file=sys.stderr,
+                flush=True,
+            )
         if rc != 0:
             msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
             errors.append(msg)
@@ -618,7 +727,14 @@ def run_pipeline_for_model(
         run_predictor_fn=run_predictor_from_project,
     )
 
+    completed_seconds: List[float] = []
+    total_steps = len(steps)
     for step_index, (step_name, run_fn) in enumerate(steps):
+        print(
+            f"[model] [{step_index + 1}/{total_steps}] running {step_name}...",
+            file=sys.stderr,
+            flush=True,
+        )
         if progress_callback is not None:
             progress_callback(step_index, step_name, "start")
         t0 = time.perf_counter()
@@ -634,6 +750,15 @@ def run_pipeline_for_model(
         if logs_dir is not None:
             log_path = logs_dir / f"{step_name}.log"
             _write_step_log(log_path, out, err)
+        completed_seconds.append(duration_seconds)
+        remaining = total_steps - (step_index + 1)
+        eta = _estimate_eta(completed_seconds, remaining)
+        print(
+            f"[model] [{step_index + 1}/{total_steps}] {step_name} finished in "
+            f"{_format_duration(duration_seconds)} (ETA {eta})",
+            file=sys.stderr,
+            flush=True,
+        )
         if rc != 0:
             msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
             errors.append(msg)

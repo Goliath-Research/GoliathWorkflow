@@ -7,6 +7,7 @@ import csv
 import re
 import shutil
 import sys
+import time
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -53,6 +54,26 @@ from .stability import run_stability_analysis, freeze_production_model, build_pr
 
 
 _RUN_ID_RE = re.compile(r"^run_(\d{4})$")
+
+
+def _format_duration(seconds: float) -> str:
+    total = int(max(0, round(float(seconds))))
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    if h > 0:
+        return f"{h}h {m}m {s}s"
+    if m > 0:
+        return f"{m}m {s}s"
+    return f"{s}s"
+
+
+def _estimate_iteration_eta(completed_iteration_seconds: List[float], remaining_iterations: int) -> str:
+    if remaining_iterations <= 0:
+        return "0s"
+    if not completed_iteration_seconds:
+        return "unknown"
+    avg = sum(completed_iteration_seconds) / max(1, len(completed_iteration_seconds))
+    return _format_duration(avg * remaining_iterations)
 
 
 def _list_existing_run_numbers(monte_carlo_runs_root: Path) -> List[int]:
@@ -766,7 +787,9 @@ def main() -> None:
         else:
             task_iter = None
 
+        completed_iteration_seconds: List[float] = []
         for i in range(start_iteration_idx, config.n_iterations):
+            iteration_t0 = time.perf_counter()
             run_id = f"run_{i + 1:04d}"
             run_dir = monte_carlo_runs_root / run_id
             seed_i = (config.seed + i) if config.seed is not None else None
@@ -818,6 +841,17 @@ def main() -> None:
                         raise RuntimeError(f"unknown Monte Carlo layout: {layout}")
             except ValueError as e:
                 print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
+                if progress is None:
+                    elapsed = time.perf_counter() - iteration_t0
+                    eta = _estimate_iteration_eta(
+                        completed_iteration_seconds,
+                        config.n_iterations - (i + 1),
+                    )
+                    print(
+                        f"Iteration {i + 1}/{config.n_iterations} skipped ({run_id}) "
+                        f"in {_format_duration(elapsed)} (ETA {eta})",
+                        file=sys.stderr,
+                    )
                 if progress is not None:
                     progress.remove_task(task_steps)
                     progress.remove_task(task_current)
@@ -833,6 +867,17 @@ def main() -> None:
                             "(run without --skip-centroid first).",
                             file=sys.stderr,
                         )
+                        if progress is None:
+                            elapsed = time.perf_counter() - iteration_t0
+                            eta = _estimate_iteration_eta(
+                                completed_iteration_seconds,
+                                config.n_iterations - (i + 1),
+                            )
+                            print(
+                                f"Iteration {i + 1}/{config.n_iterations} skipped ({run_id}) "
+                                f"in {_format_duration(elapsed)} (ETA {eta})",
+                                file=sys.stderr,
+                            )
                         if progress is not None:
                             progress.remove_task(task_steps)
                             progress.remove_task(task_current)
@@ -916,6 +961,17 @@ def main() -> None:
                             "(run without --skip-centroid first).",
                             file=sys.stderr,
                         )
+                        if progress is None:
+                            elapsed = time.perf_counter() - iteration_t0
+                            eta = _estimate_iteration_eta(
+                                completed_iteration_seconds,
+                                config.n_iterations - (i + 1),
+                            )
+                            print(
+                                f"Iteration {i + 1}/{config.n_iterations} skipped ({run_id}) "
+                                f"in {_format_duration(elapsed)} (ETA {eta})",
+                                file=sys.stderr,
+                            )
                         if progress is not None:
                             progress.remove_task(task_steps)
                             progress.remove_task(task_current)
@@ -968,6 +1024,17 @@ def main() -> None:
                             "(run without --skip-centroid first).",
                             file=sys.stderr,
                         )
+                        if progress is None:
+                            elapsed = time.perf_counter() - iteration_t0
+                            eta = _estimate_iteration_eta(
+                                completed_iteration_seconds,
+                                config.n_iterations - (i + 1),
+                            )
+                            print(
+                                f"Iteration {i + 1}/{config.n_iterations} skipped ({run_id}) "
+                                f"in {_format_duration(elapsed)} (ETA {eta})",
+                                file=sys.stderr,
+                            )
                         if progress is not None:
                             progress.remove_task(task_steps)
                             progress.remove_task(task_current)
@@ -1022,6 +1089,8 @@ def main() -> None:
                     "n_val_samples": n_val_samples,
                 })
             if not success:
+                elapsed = time.perf_counter() - iteration_t0
+                completed_iteration_seconds.append(elapsed)
                 for msg in errors:
                     print(f"Error [{run_id}]: {msg}", file=sys.stderr)
                 if config.abort_on_step_failure:
@@ -1029,13 +1098,33 @@ def main() -> None:
                     sys.exit(1)
                 if progress is not None:
                     progress.advance(task_iter, 1)
+                else:
+                    eta = _estimate_iteration_eta(
+                        completed_iteration_seconds,
+                        config.n_iterations - (i + 1),
+                    )
+                    print(
+                        f"Iteration {i + 1}/{config.n_iterations} failed ({run_id}) "
+                        f"in {_format_duration(elapsed)} (ETA {eta})",
+                        file=sys.stderr,
+                    )
                 continue
 
             scalar = iteration_scalar_metrics_from_run_dir(run_dir)
             row = {"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), **scalar}
             rows.append(row)
+            elapsed = time.perf_counter() - iteration_t0
+            completed_iteration_seconds.append(elapsed)
             if progress is None:
-                print(f"Completed iteration {i + 1}/{config.n_iterations} ({run_id})", file=sys.stderr)
+                eta = _estimate_iteration_eta(
+                    completed_iteration_seconds,
+                    config.n_iterations - (i + 1),
+                )
+                print(
+                    f"Completed iteration {i + 1}/{config.n_iterations} ({run_id}) "
+                    f"in {_format_duration(elapsed)} (ETA {eta})",
+                    file=sys.stderr,
+                )
             else:
                 progress.advance(task_iter, 1)
 
