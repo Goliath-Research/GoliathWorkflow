@@ -44,3 +44,40 @@ def test_project_config_normalizes_comparisons_and_predictor_alias(tmp_path):
 
     resolved = project.get_group_sample_paths_by_label("healthy")
     assert resolved == ["/samples/ctrl_a", "/samples/ctrl_b"]
+
+
+def test_sample_list_csv_resolves_from_samples_base_parent(tmp_path, monkeypatch):
+    root = tmp_path / "work"
+    data_dir = root / "data"
+    configs_dir = root / "configs"
+    data_dir.mkdir(parents=True)
+    configs_dir.mkdir(parents=True)
+    (configs_dir / "healthy.csv").write_text("sample\nA001\nA002\n", encoding="utf-8")
+
+    config_path = tmp_path / "project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "Contract Test",
+                "output_base": str(root / "out"),
+                "samples_base_path": str(data_dir),
+                "controls": {
+                    "label": "controls",
+                    "groups": [{"label": "healthy", "sample_paths": ["configs/healthy.csv"]}],
+                },
+                "diseases": {
+                    "label": "diseases",
+                    "groups": [{"label": "pca", "sample_paths": ["P001"]}],
+                },
+                "comparisons": [{"control_group": "healthy", "disease_group": "pca"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.chdir(tmp_path)
+    project = load_project(str(config_path))
+    resolved = project.get_group_sample_paths_by_label("healthy")
+    assert resolved == [str(data_dir / "A001"), str(data_dir / "A002")]
+
+

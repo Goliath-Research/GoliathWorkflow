@@ -832,6 +832,31 @@ def _resolve_sample_paths(
     out: List[str] = []
     base = Path(base_path).resolve() if base_path else None
 
+    # Relative list files (e.g. "configs/healthy.csv") are commonly placed under
+    # a project root while sample folders live under a sibling "data" directory.
+    # Search a few deterministic roots before failing hard.
+    search_roots: List[Path] = [Path.cwd()]
+    if base is not None:
+        search_roots.append(base)
+        search_roots.append(base.parent)
+    seen_roots: set[str] = set()
+    deduped_roots: List[Path] = []
+    for root in search_roots:
+        key = str(root)
+        if key not in seen_roots:
+            seen_roots.add(key)
+            deduped_roots.append(root)
+
+    def find_list_file(entry: str) -> Optional[Path]:
+        p_entry = Path(entry)
+        if p_entry.is_absolute():
+            return p_entry if p_entry.is_file() else None
+        for root in deduped_roots:
+            cand = root / entry
+            if cand.is_file():
+                return cand
+        return None
+
     def resolve_entry(entry: str) -> str:
         entry = entry.strip()
         if not entry:
@@ -844,7 +869,7 @@ def _resolve_sample_paths(
         p = p.strip()
         if not p:
             continue
-        path = Path(p)
+        path = find_list_file(p) or Path(p)
         if path.is_file():
             content = path.read_text().strip()
             if content.startswith("["):
