@@ -8,6 +8,8 @@ and evaluates a multiclass classifier.
 from __future__ import annotations
 
 import json
+import os
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -29,6 +31,17 @@ from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .model_bundle import load_bundle_dmp_index
+
+
+@contextmanager
+def _project_cwd(project_json: str | Path):
+    pj = Path(project_json).resolve()
+    prev = Path.cwd()
+    try:
+        os.chdir(pj.parent)
+        yield
+    finally:
+        os.chdir(prev)
 
 
 def _build_reference_map(
@@ -132,7 +145,8 @@ def train_tabular_model(
     covariate_missing_numeric_strategy: str = "mean",
     covariate_standardize_numeric: bool = True,
 ) -> Path:
-    project = load_project(project_json)
+    with _project_cwd(project_json):
+        project = load_project(project_json)
     out_dir = Path(output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
