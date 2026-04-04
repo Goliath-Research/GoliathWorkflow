@@ -487,6 +487,7 @@ def main() -> None:
                 "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
                 "base_project": str(args.project),
                 "output_base": project_data.get("output_base", "/work/prostate-cancer"),
+                "path_remap": project_data.get("path_remap"),
                 "cohorts": cohorts,
                 **validation_settings
             }
