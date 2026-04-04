@@ -206,7 +206,7 @@ def build_model_feature_bundle(
 
     for spec in comparisons:
         cmp_label = spec.comparison_label or spec.disease_group
-        det_dir = Path(project.get_detection_dir(spec.control_group, spec.disease_group))
+        det_dir = Path(project.get_detection_output_dir(spec.control_group, spec.disease_group))
         csvs = _choose_detector_csvs(det_dir)
         classifier_csv = csvs["classifier"]
         discovery_csv = csvs["discovery"]

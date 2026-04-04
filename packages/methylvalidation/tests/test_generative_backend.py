@@ -25,7 +25,7 @@ class _StubProjectMulti:
             )
         ]
 
-    def get_detection_dir(self, control_group: str, disease_group: str) -> str:
+    def get_detection_output_dir(self, control_group: str, disease_group: str) -> str:
         assert control_group == "healthy"
         assert disease_group == "pca1"
         return str(self._det)
@@ -55,7 +55,7 @@ class _StubProjectBinary:
             )
         ]
 
-    def get_detection_dir(self, control_group: str, disease_group: str) -> str:
+    def get_detection_output_dir(self, control_group: str, disease_group: str) -> str:
         assert control_group == "healthy"
         assert disease_group == "pca1"
         return str(self._det)
