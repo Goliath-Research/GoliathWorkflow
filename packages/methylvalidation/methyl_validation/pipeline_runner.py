@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import time
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple
 
@@ -525,6 +526,222 @@ def run_predictor_only_multiclass(
         if rc != 0:
             msg = f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}"
             errors.append(msg)
+            if logs_dir is not None:
+                write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+            return False, errors, step_timings
+    if logs_dir is not None:
+        write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+    return True, [], step_timings
+
+
+def run_post_model_validation_binary(
+    project_json: Path,
+    val_control_csv: Path,
+    val_disease_csv: Path,
+    predictor_output_dir: Path,
+    production_output_dir: Path,
+    logs_dir: Optional[Path] = None,
+    progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
+    config: Optional["MonteCarloConfig"] = None,
+) -> tuple[bool, List[str], List[Dict[str, Any]]]:
+    """Evaluate frozen production model on one binary MC holdout split."""
+    from .validator_metrics import write_step_timings_csv
+
+    backend = (config.model_backend if config is not None else "ecdf").strip().lower()
+    errors: List[str] = []
+    step_timings: List[Dict[str, Any]] = []
+    predictor_output_dir.mkdir(parents=True, exist_ok=True)
+    model_dir = production_output_dir / "classifiers"
+
+    if backend == "tabular_sklearn":
+        def _run_eval() -> tuple[int, str, str]:
+            try:
+                from .tabular_backend import predict_tabular_model_from_project
+
+                metrics = predict_tabular_model_from_project(
+                    project_json=project_json,
+                    model_dir=model_dir,
+                    output_dir=predictor_output_dir,
+                    covariates_path=(config.covariates_path if config is not None else None),
+                    covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
+                    covariates_strict_join=(config.covariates_strict_join if config is not None else False),
+                )
+                return 0, json.dumps(metrics), ""
+            except Exception as e:
+                return 1, "", str(e)
+        steps = [("tabular-predictor", _run_eval)]
+    elif backend == "generative_hybrid":
+        def _run_eval() -> tuple[int, str, str]:
+            try:
+                from .generative_backend import predict_generative_model_from_project
+
+                metrics = predict_generative_model_from_project(
+                    project_json=project_json,
+                    model_dir=model_dir,
+                    output_dir=predictor_output_dir,
+                    covariates_path=(config.covariates_path if config is not None else None),
+                    covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
+                    covariates_strict_join=(config.generative_covariates_strict if config is not None else True),
+                )
+                return 0, json.dumps(metrics), ""
+            except Exception as e:
+                return 1, "", str(e)
+        steps = [("generative-predictor", _run_eval)]
+    else:
+        steps = [
+            (
+                "methyl-predictor",
+                lambda: run_predictor(
+                    project_json,
+                    val_control_csv,
+                    val_disease_csv,
+                    predictor_output_dir,
+                ),
+            ),
+        ]
+
+    completed_seconds: List[float] = []
+    total_steps = len(steps)
+    for step_index, (step_name, run_fn) in enumerate(steps):
+        if progress_callback is None:
+            print(
+                f"[post-model-validation] [{step_index + 1}/{total_steps}] running {step_name}...",
+                file=sys.stderr,
+                flush=True,
+            )
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "start")
+        t0 = time.perf_counter()
+        rc, out, err = run_fn()
+        duration_seconds = time.perf_counter() - t0
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "end")
+        step_timings.append({
+            "step_name": step_name,
+            "duration_seconds": round(duration_seconds, 6),
+            "return_code": rc,
+        })
+        if logs_dir is not None:
+            _write_step_log(logs_dir / f"{step_name}.log", out, err)
+        completed_seconds.append(duration_seconds)
+        if progress_callback is None:
+            remaining = total_steps - (step_index + 1)
+            eta = _estimate_eta(completed_seconds, remaining)
+            print(
+                f"[post-model-validation] [{step_index + 1}/{total_steps}] {step_name} finished in "
+                f"{_format_duration(duration_seconds)} (ETA {eta})",
+                file=sys.stderr,
+                flush=True,
+            )
+        if rc != 0:
+            errors.append(f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}")
+            if logs_dir is not None:
+                write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+            return False, errors, step_timings
+    if logs_dir is not None:
+        write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+    return True, [], step_timings
+
+
+def run_post_model_validation_multiclass(
+    project_json: Path,
+    test_groups_json: Path,
+    predictor_output_dir: Path,
+    production_output_dir: Path,
+    logs_dir: Optional[Path] = None,
+    progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
+    config: Optional["MonteCarloConfig"] = None,
+) -> tuple[bool, List[str], List[Dict[str, Any]]]:
+    """Evaluate frozen production model on one multiclass/hierarchical MC holdout split."""
+    from .validator_metrics import write_step_timings_csv
+
+    backend = (config.model_backend if config is not None else "ecdf").strip().lower()
+    errors: List[str] = []
+    step_timings: List[Dict[str, Any]] = []
+    predictor_output_dir.mkdir(parents=True, exist_ok=True)
+    model_dir = production_output_dir / "classifiers"
+
+    if backend == "tabular_sklearn":
+        def _run_eval() -> tuple[int, str, str]:
+            try:
+                from .tabular_backend import predict_tabular_model_from_project
+
+                metrics = predict_tabular_model_from_project(
+                    project_json=project_json,
+                    model_dir=model_dir,
+                    output_dir=predictor_output_dir,
+                    covariates_path=(config.covariates_path if config is not None else None),
+                    covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
+                    covariates_strict_join=(config.covariates_strict_join if config is not None else False),
+                )
+                return 0, json.dumps(metrics), ""
+            except Exception as e:
+                return 1, "", str(e)
+        steps = [("tabular-predictor", _run_eval)]
+    elif backend == "generative_hybrid":
+        def _run_eval() -> tuple[int, str, str]:
+            try:
+                from .generative_backend import predict_generative_model_from_project
+
+                metrics = predict_generative_model_from_project(
+                    project_json=project_json,
+                    model_dir=model_dir,
+                    output_dir=predictor_output_dir,
+                    covariates_path=(config.covariates_path if config is not None else None),
+                    covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
+                    covariates_strict_join=(config.generative_covariates_strict if config is not None else True),
+                )
+                return 0, json.dumps(metrics), ""
+            except Exception as e:
+                return 1, "", str(e)
+        steps = [("generative-predictor", _run_eval)]
+    else:
+        steps = [
+            (
+                "methyl-predictor",
+                lambda: run_predictor_multiclass(
+                    project_json,
+                    test_groups_json,
+                    predictor_output_dir,
+                ),
+            ),
+        ]
+
+    completed_seconds: List[float] = []
+    total_steps = len(steps)
+    for step_index, (step_name, run_fn) in enumerate(steps):
+        if progress_callback is None:
+            print(
+                f"[post-model-validation] [{step_index + 1}/{total_steps}] running {step_name}...",
+                file=sys.stderr,
+                flush=True,
+            )
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "start")
+        t0 = time.perf_counter()
+        rc, out, err = run_fn()
+        duration_seconds = time.perf_counter() - t0
+        if progress_callback is not None:
+            progress_callback(step_index, step_name, "end")
+        step_timings.append({
+            "step_name": step_name,
+            "duration_seconds": round(duration_seconds, 6),
+            "return_code": rc,
+        })
+        if logs_dir is not None:
+            _write_step_log(logs_dir / f"{step_name}.log", out, err)
+        completed_seconds.append(duration_seconds)
+        if progress_callback is None:
+            remaining = total_steps - (step_index + 1)
+            eta = _estimate_eta(completed_seconds, remaining)
+            print(
+                f"[post-model-validation] [{step_index + 1}/{total_steps}] {step_name} finished in "
+                f"{_format_duration(duration_seconds)} (ETA {eta})",
+                file=sys.stderr,
+                flush=True,
+            )
+        if rc != 0:
+            errors.append(f"{step_name} failed (exit {rc}). stderr: {err[:500] if err else 'none'}")
             if logs_dir is not None:
                 write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
             return False, errors, step_timings

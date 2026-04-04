@@ -8,6 +8,7 @@ from methyl_validation.validator_metrics import (
     compute_resource_summary,
     compute_summary,
     iteration_scalar_metrics_from_run_dir,
+    write_metrics_distribution_plotly,
 )
 
 
@@ -93,3 +94,20 @@ def test_iteration_scalar_metrics_prefers_predictor_then_detector(tmp_path):
     m2 = iteration_scalar_metrics_from_run_dir(run2)
     assert abs(m2.get("balanced_accuracy", 0) - 0.75) < 1e-9
     assert m2.get("metrics_source") == "detector"
+
+
+def test_write_metrics_distribution_plotly(tmp_path):
+    import pytest
+
+    pytest.importorskip("plotly")
+    pytest.importorskip("scipy")
+    df = build_metrics_table(
+        [
+            {"iteration": 1, "balanced_accuracy": 0.8, "sensitivity": 0.7, "specificity": 0.9},
+            {"iteration": 2, "balanced_accuracy": 0.85, "sensitivity": 0.75, "specificity": 0.88},
+            {"iteration": 3, "balanced_accuracy": 0.82, "sensitivity": 0.72, "specificity": 0.91},
+        ]
+    )
+    out = tmp_path / "metrics_distributions_plotly.html"
+    write_metrics_distribution_plotly(df, out)
+    assert out.is_file()

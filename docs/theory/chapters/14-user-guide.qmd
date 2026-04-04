@@ -195,7 +195,7 @@ Treat changes in any of these stage inputs as a model version change, not as a m
 ```
 :::
 
-Metric-distribution evaluation is run via `--predictor-only` (repeated holdouts with the frozen model). Final deployment predicts new unlabeled samples with the frozen trained artifacts.
+Metric-distribution evaluation is run via `--post-model-validation` (repeated holdouts with frozen artifacts and no retraining). Final deployment predicts new unlabeled samples with the frozen trained artifacts.
 
 ### Step 1: Run Monte Carlo with stability
 
@@ -259,6 +259,20 @@ By default, `--model` uses the ECDF backend (`model_backend: "ecdf"`). Advanced 
 
 - `model_backend: "tabular_sklearn"`
 - `model_backend: "generative_hybrid"`
+
+### Step 5: Run post-model Monte Carlo validation
+
+```bash
+methyl-validation --project configs/my_project.json --post-model-validation
+```
+
+This stage evaluates the frozen production model over repeated MC holdout splits and writes:
+
+- `monte_carlo_runs/post_model_validation/all_metrics.csv`
+- `monte_carlo_runs/post_model_validation/metrics_summary.json`
+- `monte_carlo_runs/post_model_validation/metrics_distributions_plotly.html` (KDE + ECDF for all numeric metrics)
+
+`--post-model-validation` supports all model backends (`ecdf`, `tabular_sklearn`, `generative_hybrid`) and is the recommended empirical evaluation stage after `--model`.
 
 CLI overrides are also available in `methyl-validation` for quick experiments (for example `--model-backend generative_hybrid`, `--generative-latent-dim`, `--generative-density-type`, `--generative-calibrate`).
 

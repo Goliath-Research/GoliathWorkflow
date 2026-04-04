@@ -5,8 +5,9 @@
 MethylValidation orchestrates repeated train/validation splits, **methyl-centroid + methyl-detector** per iteration, aggregation of **detector** (or **predictor** when using `--predictor-only`) metrics, then optional **--freeze** (mapper/enricher) and **--model** (classifier→predictor). It supports two primary workflows:
 
 1. **Model Creation** (`--stability` + `--freeze` + `--model`) — Identify stable DMPs across many random splits, extract pathways, and then build a final production model on all data.
-2. **Model Use for Prediction** (`--predictor-only`) — Evaluate a frozen production model on random holdouts without retraining.
-3. **Disease Progression Synthesis** (`step_config.progression.enabled`) — After freeze, aggregate per-stage mapper/enricher outputs into cross-stage progression tables.
+2. **Post-model Validation** (`--post-model-validation`) — Evaluate a frozen production model on random holdouts without retraining and export KDE/ECDF metric distributions.
+3. **Model Use for Prediction** (`--predictor-only`) — Lightweight predictor-only MC runs for ECDF projects that need repeated predictor validation.
+4. **Disease Progression Synthesis** (`step_config.progression.enabled`) — After freeze, aggregate per-stage mapper/enricher outputs into cross-stage progression tables.
 
 Both workflows are controlled by the project configuration file. See the full Quarto documentation at `docs/theory/` for theoretical background and the complete configuration reference.
 
@@ -59,26 +60,30 @@ flowchart TB
   frP --> modelStageStart["Workflow 1 Stage C --model"]
   modelStageStart --> mdC[methyl-classifier] --> mdP["methyl-predictor (production validation pass)"]
 
-  mdP --> wf2Start["Workflow 2 --predictor-only"]
-  wf2Start --> wf2Iter["MC holdouts"] --> wf2Pred["methyl-predictor per iteration"] --> wf2Ba["balanced accuracy distribution"]
+  mdP --> wf2Start["Workflow 2 --post-model-validation"]
+  wf2Start --> wf2Iter["MC holdouts"] --> wf2Pred["frozen backend evaluation per iteration"] --> wf2Ba["all metrics distributions + Plotly KDE/ECDF"]
+
+  wf2Start --> wf2Lite["Optional --predictor-only (ECDF-only lightweight path)"]
 
   mdP --> newSamplePred["Predict new samples with the frozen model"]
 ```
 
 ### Workflow 2: Model Use for Prediction
 
-**Purpose:** Measure the performance distribution of the frozen production model on held-out samples.
+**Purpose:** Measure empirical distributions of frozen-model performance on held-out samples after model build.
 
 **Prerequisites:** Workflow 1 must have been completed (`production/project.json` must exist).
 
 ```bash
-methyl-validation --project configs/my_project.json --predictor-only
+methyl-validation --project configs/my_project.json --post-model-validation
 ```
 
 **Why this workflow?**
 
-- Much faster (only `methyl-predictor` runs per iteration).
-- Provides the empirical distribution of the frozen model's balanced accuracy.
+- Uses frozen artifacts only (no retraining).
+- Supports all model backends: `ecdf`, `tabular_sklearn`, `generative_hybrid`.
+- Provides empirical distributions for multiple metrics (`balanced_accuracy`, `sensitivity`, `specificity`, `macro_f1`, etc.).
+- Exports `metrics_distributions_plotly.html` with KDE and ECDF for each metric.
 - Uses the same stratified splitting logic as Workflow 1 for consistency.
 
 ---
@@ -94,6 +99,7 @@ methyl-validation --project configs/my_project.json --predictor-only
 | `--freeze` | `methyl-centroid` + `methyl-detector` (fixed panel) + `methyl-mapper` + `methyl-enricher` + optional `methyl-disease-progression` |
 | `--model` (`model_backend="ecdf"`) | `methyl-classifier` + `methyl-predictor` on frozen `production/project.json` |
 | `--model` (`model_backend="tabular_sklearn"` / `"generative_hybrid"`) | In-process backend flow: model bundle -> train -> predict (consumes freeze outputs; does not re-run `methyl-detector`) |
+| `--post-model-validation` | MC holdout evaluation on frozen production artifacts (no retraining): `ecdf` uses predictor-only runs, tabular/generative use frozen model inference |
 | `--predictor-only` | Monte Carlo iterations where each iteration runs only `methyl-predictor` with frozen artifacts |
 
 | Flag | Description | Main subprocesses / backend path |
@@ -108,6 +114,7 @@ methyl-validation --project configs/my_project.json --predictor-only
 | `--resume [RUN]` | Resume interrupted MC runs for `--stability` / default MC mode. Without `RUN`, repeats the last existing run and continues to `n_iterations`; with `RUN` (1-based), restarts from that run. | MC loop resume control (run directories `run_0001`, `run_0002`, ...). |
 | `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If `step_config.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. | `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher` (+ optional progression). |
 | `--model` | Run production model builder after freeze (Workflow 1, Step 3). | `ecdf`: `methyl-classifier` -> `methyl-predictor`; other backends: bundle -> train -> predict. |
+| `--post-model-validation` | Run descriptive MC holdout evaluation with frozen production artifacts (no retraining). | `ecdf`: predictor-only evaluation; tabular/generative: in-process frozen model predict. Outputs to `monte_carlo_runs/post_model_validation/`. |
 | `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). | Monte Carlo iterations, predictor only. |
 | `--skip-enricher` | Skip the enricher inside MC iterations even when `run_mapper_and_enricher: true`. | Also short-circuits enricher (and therefore progression) in `--freeze`. |
 | `--iterations N` | Override `n_iterations` from config. | Affects MC loop count (`--stability` and `--predictor-only`). |
@@ -240,6 +247,10 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `stability/dmp_frequency_chr_<chrom>.html` | Per-chromosome Plotly chart files, each showing `all` vs `selected` DMP count distributions over frequency (%). |
 | `stability/stability_summary.json` | Stability run summary for DMP/gene frequency plus detector parameter extraction. Includes `detector_parameters.per_run` and `detector_parameters.aggregates` built from `detections/**/results-*.json` (minimal fields: exported/statistical/biological DMP totals, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). |
 | `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |
+| `post_model_validation/run_000N/` | Per-iteration post-model holdout evaluation outputs and logs. |
+| `post_model_validation/all_metrics.csv` | One row per successful post-model iteration with scalar metrics. |
+| `post_model_validation/metrics_summary.json` | Empirical distribution summary of post-model metrics. |
+| `post_model_validation/metrics_distributions_plotly.html` | Plotly chart with KDE and ECDF for all numeric metrics. |
 | `production/progression/` | Disease progression synthesis outputs (`genes_long.csv`, `pathways_long.csv`, `modules_long.csv`, `entities_progression_labels.csv`, `summary.json`, optional `report.md`). |
 | `production/classifiers/multiclass-classifier.pkl` | **Final production model.** |
 | `production/production_summary.json` | Production freeze summary. |

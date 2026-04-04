@@ -128,13 +128,40 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, class_names: List[s
     precision, recall, f1, support = precision_recall_fscore_support(
         y_true, y_pred, labels=labels, zero_division=0
     )
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    specificity_per_class: List[float] = []
+    for i in range(n_classes):
+        tp = float(cm[i, i])
+        fp = float(cm[:, i].sum() - tp)
+        fn = float(cm[i, :].sum() - tp)
+        tn = float(cm.sum() - tp - fp - fn)
+        denom = tn + fp
+        specificity_per_class.append(float(tn / denom) if denom > 0 else 0.0)
+    macro_precision = float(np.mean(precision)) if len(precision) > 0 else 0.0
+    macro_recall = float(np.mean(recall)) if len(recall) > 0 else 0.0
+    sensitivity = float(recall[1]) if n_classes == 2 and len(recall) > 1 else macro_recall
+    specificity = (
+        float(specificity_per_class[1])
+        if n_classes == 2 and len(specificity_per_class) > 1
+        else float(np.mean(specificity_per_class) if specificity_per_class else 0.0)
+    )
+    precision_binary = float(precision[1]) if n_classes == 2 and len(precision) > 1 else macro_precision
+    recall_binary = float(recall[1]) if n_classes == 2 and len(recall) > 1 else macro_recall
+    f1_binary = float(f1[1]) if n_classes == 2 and len(f1) > 1 else float(np.mean(f1) if len(f1) > 0 else 0.0)
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
         "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
-        "confusion_matrix": confusion_matrix(y_true, y_pred, labels=labels).tolist(),
+        "confusion_matrix": cm.tolist(),
         "n_samples": int(len(y_true)),
         "n_classes": int(n_classes),
         "class_names": class_names,
+        "sensitivity": sensitivity,
+        "specificity": specificity,
+        "macro_precision": macro_precision,
+        "macro_recall": macro_recall,
+        "precision_binary": precision_binary,
+        "recall_binary": recall_binary,
+        "f1_binary": f1_binary,
         "macro_f1": float(np.mean(f1)),
         "weighted_f1": float(np.average(f1, weights=support) if support.sum() > 0 else 0.0),
     }

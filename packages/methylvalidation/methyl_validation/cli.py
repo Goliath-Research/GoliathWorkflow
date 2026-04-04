@@ -27,6 +27,8 @@ from methyl_utils import load_project
 from .config import MonteCarloConfig, assert_production_model_build_allowed
 from .predictor_policy import assert_monte_carlo_predictor_allowed
 from .pipeline_runner import (
+    run_post_model_validation_binary,
+    run_post_model_validation_multiclass,
     run_pipeline_for_iteration,
     run_pipeline_for_iteration_multiclass,
     run_predictor_only_binary,
@@ -47,6 +49,7 @@ from .validator_metrics import (
     iteration_scalar_metrics_from_run_dir,
     write_all_metrics_csv,
     write_resource_summary_json,
+    write_metrics_distribution_plotly,
     write_step_timings_csv,
     write_summary_json,
 )
@@ -403,6 +406,15 @@ def main() -> None:
         help="Build production model after --freeze. ecdf backend: classifier→predictor; tabular/generative backends: bundle→train→predict (no detector, not Monte Carlo). Use --predictor-only for repeated predictor-only runs.",
     )
     parser.add_argument(
+        "--post-model-validation",
+        action="store_true",
+        help=(
+            "Run Monte Carlo holdout evaluation using the frozen production model artifacts "
+            "(no retraining) and export empirical metric distributions under "
+            "monte_carlo_runs/post_model_validation."
+        ),
+    )
+    parser.add_argument(
         "--model-backend",
         choices=["ecdf", "tabular_sklearn", "generative_hybrid"],
         default=None,
@@ -601,11 +613,17 @@ def main() -> None:
     if args.resume is not None and (args.freeze or args.model):
         print("Error: --resume can only be used with Monte Carlo iteration mode (not --freeze/--model).", file=sys.stderr)
         sys.exit(1)
-    if args.skip_centroid and (args.freeze or args.model):
+    if args.skip_centroid and (args.freeze or args.model or args.post_model_validation):
         print("Error: --skip-centroid can only be used with Monte Carlo iteration mode.", file=sys.stderr)
         sys.exit(1)
     if args.skip_centroid and config.predictor_only:
         print("Error: --skip-centroid is incompatible with --predictor-only.", file=sys.stderr)
+        sys.exit(1)
+    if args.post_model_validation and (args.freeze or args.model):
+        print("Error: --post-model-validation cannot be combined with --freeze or --model.", file=sys.stderr)
+        sys.exit(1)
+    if args.post_model_validation and args.predictor_only:
+        print("Error: --post-model-validation cannot be combined with --predictor-only.", file=sys.stderr)
         sys.exit(1)
 
     if args.freeze:
@@ -686,6 +704,307 @@ def main() -> None:
             )
             sys.exit(1)
         print(f"Production model build complete. See: {out}")
+        print("Done.")
+        return
+    elif args.post_model_validation:
+        try:
+            assert_production_model_build_allowed(config)
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        production_dir = (
+            Path(config.production_output_dir)
+            if config.production_output_dir
+            else (monte_carlo_runs_root / "production")
+        )
+        production_project = production_dir / "project.json"
+        if not production_project.is_file():
+            print(
+                f"Error: post-model validation requires production project at {production_project} (run --freeze first).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if (config.model_backend or "ecdf").strip().lower() in {"tabular_sklearn", "generative_hybrid"}:
+            model_dir = production_dir / "classifiers"
+            if not model_dir.is_dir():
+                print(
+                    f"Error: post-model validation requires trained backend model artifacts under {model_dir} "
+                    "(run --model first).",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+        try:
+            layout = infer_monte_carlo_layout(base_project, len(config.cohorts))
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        cohort_paths_list: List[Tuple[str, List[str]]] = []
+        for c in config.cohorts:
+            paths = load_and_resolve_sample_paths(c.csv, config.samples_base_path)
+            if not paths:
+                print(f"Error: cohort {c.label!r} ({c.csv}) must list at least one sample.", file=sys.stderr)
+                sys.exit(1)
+            cohort_paths_list.append((c.label, paths))
+        cohort_labels = [c.label for c in config.cohorts]
+        control_paths: List[str] = []
+        disease_paths: List[str] = []
+        if layout == "binary":
+            control_paths = cohort_paths_list[0][1]
+            disease_paths = cohort_paths_list[1][1]
+
+        post_model_root = monte_carlo_runs_root / "post_model_validation"
+        post_model_root.mkdir(parents=True, exist_ok=True)
+
+        rows: List[Dict[str, Any]] = []
+        all_timings: List[Dict[str, Any]] = []
+        existing_runs = _list_existing_run_numbers(post_model_root)
+        try:
+            start_iteration_idx = _resolve_resume_start_iteration(
+                args.resume,
+                n_iterations=config.n_iterations,
+                existing_runs=existing_runs,
+            )
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        if args.resume is not None:
+            for n in existing_runs:
+                if n >= (start_iteration_idx + 1):
+                    run_dir = post_model_root / f"run_{n:04d}"
+                    if run_dir.is_dir():
+                        shutil.rmtree(run_dir)
+            resume_label = "auto" if args.resume == 0 else str(args.resume)
+            print(
+                f"Resuming post-model validation (--resume {resume_label}): "
+                f"starting at run_{start_iteration_idx + 1:04d} through run_{config.n_iterations:04d}",
+                file=sys.stderr,
+            )
+
+        use_rich = sys.stderr.isatty()
+        console = Console(file=sys.stderr) if use_rich else None
+        n_step_tasks = 1
+        if use_rich and console is not None:
+            progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[bold blue]{task.description}"),
+                BarColumn(bar_width=40),
+                TaskProgressColumn(),
+                TimeRemainingColumn(),
+                console=console,
+                expand=False,
+            )
+        else:
+            progress = None
+
+        completed_iteration_seconds: List[float] = []
+        with (progress if progress is not None else nullcontext()):
+            if progress is not None:
+                task_iter = progress.add_task("Post-model iterations", total=config.n_iterations, completed=start_iteration_idx)
+            else:
+                task_iter = None
+
+            for i in range(start_iteration_idx, config.n_iterations):
+                iteration_t0 = time.perf_counter()
+                run_id = f"run_{i + 1:04d}"
+                run_dir = post_model_root / run_id
+                seed_i = (config.seed + i) if config.seed is not None else None
+                if progress is not None:
+                    task_steps = progress.add_task("Steps", total=n_step_tasks, completed=0)
+                    task_current = progress.add_task("Running…", total=None, visible=False)
+
+                    def make_progress_cb(prog: Progress, t_steps: Any, t_cur: Any):
+                        def progress_cb(step_index: int, step_name: str, event: str) -> None:
+                            if event == "start":
+                                prog.update(t_steps, description=f"Steps ({step_name})")
+                                prog.update(t_cur, description=f"Running {step_name}…", visible=True)
+                            else:
+                                prog.advance(t_steps, 1)
+                                prog.update(t_cur, visible=False)
+                        return progress_cb
+
+                    progress_callback = make_progress_cb(progress, task_steps, task_current)
+                else:
+                    task_steps = task_current = None
+                    progress_callback = None
+
+                train_m: Dict[str, List[str]] = {}
+                val_m: Dict[str, List[str]] = {}
+                try:
+                    if layout == "binary":
+                        train_control, train_disease, val_control, val_disease = stratified_split(
+                            control_paths,
+                            disease_paths,
+                            config.train_fraction,
+                            seed=seed_i,
+                        )
+                    else:
+                        train_m, val_m = stratified_split_multiclass(
+                            cohort_paths_list,
+                            config.train_fraction,
+                            seed=seed_i,
+                        )
+                except ValueError as e:
+                    print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
+                    elapsed = time.perf_counter() - iteration_t0
+                    eta = _estimate_iteration_eta(completed_iteration_seconds, config.n_iterations - (i + 1))
+                    if progress is None:
+                        print(
+                            f"Post-model iteration {i + 1}/{config.n_iterations} skipped ({run_id}) "
+                            f"in {_format_duration(elapsed)} (ETA {eta})",
+                            file=sys.stderr,
+                        )
+                    if progress is not None:
+                        progress.remove_task(task_steps)
+                        progress.remove_task(task_current)
+                        progress.advance(task_iter, 1)
+                    continue
+
+                if layout == "binary":
+                    (
+                        project_path,
+                        _,
+                        _,
+                        val_control_csv,
+                        val_disease_csv,
+                        _,
+                        _,
+                    ) = generate_run_project(
+                        base_project,
+                        run_dir,
+                        run_id,
+                        str(post_model_root),
+                        train_control,
+                        train_disease,
+                        val_control,
+                        val_disease,
+                        config.samples_base_path,
+                    )
+                    if (config.model_backend or "ecdf").strip().lower() == "ecdf":
+                        apply_frozen_pipeline_artifacts_to_run_project(project_path, production_project)
+                    run_project = load_project(project_path)
+                    comparisons = run_project.get_comparisons()
+                    if comparisons:
+                        spec = comparisons[0]
+                        predictor_output_dir = run_dir / "predictors" / spec.control_group / spec.disease_group
+                    else:
+                        predictor_output_dir = run_dir / "predictors"
+                    n_train_samples = len(train_control) + len(train_disease)
+                    n_val_samples = len(val_control) + len(val_disease)
+                    success, errors, step_timings = run_post_model_validation_binary(
+                        project_json=project_path,
+                        val_control_csv=val_control_csv,
+                        val_disease_csv=val_disease_csv,
+                        predictor_output_dir=predictor_output_dir,
+                        production_output_dir=production_dir,
+                        logs_dir=run_dir / "logs",
+                        progress_callback=progress_callback,
+                        config=config,
+                    )
+                else:
+                    if layout == "multiclass":
+                        project_path, val_groups_json = generate_run_project_multiclass(
+                            base_project,
+                            run_dir,
+                            run_id,
+                            str(post_model_root),
+                            train_m,
+                            val_m,
+                            cohort_labels,
+                            config.samples_base_path,
+                        )
+                    else:
+                        project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
+                            base_project,
+                            run_dir,
+                            run_id,
+                            str(post_model_root),
+                            train_m,
+                            val_m,
+                            cohort_labels,
+                            config.samples_base_path,
+                        )
+                    if (config.model_backend or "ecdf").strip().lower() == "ecdf":
+                        apply_frozen_pipeline_artifacts_to_run_project(project_path, production_project)
+                    predictor_output_dir = run_dir / "predictors"
+                    n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
+                    n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
+                    success, errors, step_timings = run_post_model_validation_multiclass(
+                        project_json=project_path,
+                        test_groups_json=val_groups_json,
+                        predictor_output_dir=predictor_output_dir,
+                        production_output_dir=production_dir,
+                        logs_dir=run_dir / "logs",
+                        progress_callback=progress_callback,
+                        config=config,
+                    )
+
+                if progress is not None:
+                    progress.remove_task(task_steps)
+                    progress.remove_task(task_current)
+                for t in step_timings:
+                    all_timings.append({
+                        **t,
+                        "run_id": run_id,
+                        "run_dir": str(run_dir),
+                        "n_train_samples": n_train_samples,
+                        "n_val_samples": n_val_samples,
+                    })
+                elapsed = time.perf_counter() - iteration_t0
+                completed_iteration_seconds.append(elapsed)
+
+                if not success:
+                    for msg in errors:
+                        print(f"Error [{run_id}]: {msg}", file=sys.stderr)
+                    if config.abort_on_step_failure:
+                        print("Aborting (abort_on_step_failure=true).", file=sys.stderr)
+                        sys.exit(1)
+                    if progress is not None:
+                        progress.advance(task_iter, 1)
+                    else:
+                        eta = _estimate_iteration_eta(completed_iteration_seconds, config.n_iterations - (i + 1))
+                        print(
+                            f"Post-model iteration {i + 1}/{config.n_iterations} failed ({run_id}) "
+                            f"in {_format_duration(elapsed)} (ETA {eta})",
+                            file=sys.stderr,
+                        )
+                    continue
+
+                scalar = iteration_scalar_metrics_from_run_dir(run_dir)
+                rows.append({"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), **scalar})
+                if progress is None:
+                    eta = _estimate_iteration_eta(completed_iteration_seconds, config.n_iterations - (i + 1))
+                    print(
+                        f"Completed post-model iteration {i + 1}/{config.n_iterations} ({run_id}) "
+                        f"in {_format_duration(elapsed)} (ETA {eta})",
+                        file=sys.stderr,
+                    )
+                else:
+                    progress.advance(task_iter, 1)
+
+        if not rows:
+            print("No successful post-model iterations; nothing to aggregate.", file=sys.stderr)
+            sys.exit(1)
+        df = build_metrics_table(rows)
+        all_metrics_csv = post_model_root / "all_metrics.csv"
+        write_all_metrics_csv(df, all_metrics_csv)
+        summary = compute_summary(df)
+        summary_path = post_model_root / "metrics_summary.json"
+        write_summary_json(summary, summary_path)
+        if all_timings:
+            step_timings_path = post_model_root / "step_timings.csv"
+            write_step_timings_csv(all_timings, step_timings_path)
+            resource_summary = compute_resource_summary(all_timings)
+            if resource_summary:
+                write_resource_summary_json(resource_summary, post_model_root / "resource_summary.json")
+        chart_path = post_model_root / "metrics_distributions_plotly.html"
+        write_metrics_distribution_plotly(df, chart_path)
+        print(f"Post-model validation complete. See: {post_model_root}")
+        print(f"Wrote {all_metrics_csv}")
+        print(f"Wrote {summary_path}")
+        print(f"Wrote {chart_path}")
         print("Done.")
         return
     try:

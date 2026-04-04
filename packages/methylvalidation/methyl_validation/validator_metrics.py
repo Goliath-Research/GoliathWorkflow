@@ -197,6 +197,78 @@ def write_resource_summary_json(summary: Dict[str, Any], path: str | Path) -> No
         json.dump(summary, f, indent=2)
 
 
+def write_metrics_distribution_plotly(df: pd.DataFrame, path: str | Path) -> None:
+    """
+    Export Plotly HTML with KDE and ECDF for all numeric metrics.
+
+    Produces one row per metric and two columns: KDE (left), ECDF (right).
+    """
+    numeric_cols = [c for c in df.select_dtypes(include=[np.number]).columns if c not in {"iteration"}]
+    if not numeric_cols:
+        raise ValueError("No numeric metrics available to plot.")
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+    except Exception as e:
+        raise RuntimeError(f"Plotly is required for chart export: {e}") from e
+    try:
+        from scipy.stats import gaussian_kde
+    except Exception as e:
+        raise RuntimeError(f"SciPy is required for KDE export: {e}") from e
+
+    fig = make_subplots(
+        rows=len(numeric_cols),
+        cols=2,
+        subplot_titles=[
+            f"{numeric_cols[i // 2]} KDE" if i % 2 == 0 else f"{numeric_cols[i // 2]} ECDF"
+            for i in range(len(numeric_cols) * 2)
+        ],
+        horizontal_spacing=0.08,
+        vertical_spacing=0.08,
+    )
+    for row_idx, metric in enumerate(numeric_cols, start=1):
+        series = pd.to_numeric(df[metric], errors="coerce").dropna().astype(float).values
+        if len(series) == 0:
+            continue
+        xmin, xmax = float(np.min(series)), float(np.max(series))
+        if xmin == xmax:
+            x_grid = np.array([xmin - 1e-9, xmin, xmin + 1e-9], dtype=float)
+            y_kde = np.array([0.0, 1.0, 0.0], dtype=float)
+        else:
+            x_grid = np.linspace(xmin, xmax, 256)
+            try:
+                kde = gaussian_kde(series)
+                y_kde = kde(x_grid)
+            except Exception:
+                y_kde = np.zeros_like(x_grid)
+        fig.add_trace(
+            go.Scatter(x=x_grid, y=y_kde, mode="lines", name=f"{metric} KDE", showlegend=False),
+            row=row_idx,
+            col=1,
+        )
+
+        x_sorted = np.sort(series)
+        y_ecdf = np.arange(1, len(x_sorted) + 1, dtype=float) / float(len(x_sorted))
+        fig.add_trace(
+            go.Scatter(x=x_sorted, y=y_ecdf, mode="lines", name=f"{metric} ECDF", showlegend=False),
+            row=row_idx,
+            col=2,
+        )
+        fig.update_yaxes(title_text="Density", row=row_idx, col=1)
+        fig.update_yaxes(title_text="Cumulative Probability", row=row_idx, col=2, range=[0, 1])
+        fig.update_xaxes(title_text=metric, row=row_idx, col=1)
+        fig.update_xaxes(title_text=metric, row=row_idx, col=2)
+
+    fig.update_layout(
+        title_text="Monte Carlo Metric Distributions (KDE and ECDF)",
+        height=max(360, 260 * len(numeric_cols)),
+        width=1200,
+    )
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.write_html(str(path), include_plotlyjs="cdn", full_html=True)
+
+
 def _find_validation_metrics_json_under_run(run_dir: Path) -> Optional[Path]:
     predictors = run_dir / "predictors"
     if predictors.is_dir():

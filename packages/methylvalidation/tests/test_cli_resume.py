@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from methyl_validation import cli
 from methyl_validation.cli import (
     _list_existing_run_numbers,
     _load_existing_step_timings,
@@ -47,3 +48,37 @@ def test_list_existing_run_numbers_and_load_step_timings(tmp_path: Path):
     assert kept[0]["run_id"] == "run_0001"
     assert isinstance(kept[0]["duration_seconds"], float)
     assert isinstance(kept[0]["return_code"], int)
+
+
+def test_post_model_validation_requires_production_project(tmp_path: Path, monkeypatch, capsys):
+    project = tmp_path / "project.json"
+    project.write_text(
+        """
+{
+  "project_name": "x",
+  "output_base": "/tmp/out",
+  "samples_base_path": "/tmp/samples",
+  "groups": [
+    {"label": "healthy", "sample_paths": ["healthy.csv"]},
+    {"label": "disease", "sample_paths": ["disease.csv"]}
+  ],
+  "step_config": {
+    "validation": {
+      "samples_base_path": "/tmp/samples",
+      "train_fraction": 0.8,
+      "n_iterations": 2
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["methyl-validation", "--project", str(project), "--post-model-validation"],
+    )
+    with pytest.raises(SystemExit) as ex:
+        cli.main()
+    assert ex.value.code == 1
+    err = capsys.readouterr().err
+    assert "requires production project" in err
