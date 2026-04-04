@@ -257,3 +257,28 @@ def test_tabular_covariate_preprocessor_ordinal(tmp_path: Path, monkeypatch):
         covariates_strict_join=True,
     )
     assert int(metrics["covariate_preprocessing"]["unknown_ordinal_values_mapped"]) >= 1
+
+
+def test_tabular_resolve_eval_paths_multiclass_falls_back_from_binary_predictor(tmp_path: Path, monkeypatch):
+    class _StubProjectMulti:
+        def get_resolved_groups(self):
+            return [
+                ("healthy", ["/tmp/S1", "/tmp/S2"]),
+                ("pca1", ["/tmp/S3", "/tmp/S4"]),
+                ("pca2", ["/tmp/S5", "/tmp/S6"]),
+            ]
+
+    stub = _StubProjectMulti()
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=None,
+        test_control_paths=["/tmp/S1", "/tmp/S2"],
+        test_disease_paths=["/tmp/S3", "/tmp/S4"],
+    )
+    monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: stub)
+    samples, y_true = tabular_backend._resolve_eval_paths_and_labels(
+        project_json=tmp_path / "project.json",
+        class_names=["healthy", "pca1", "pca2"],
+    )
+    assert len(samples) == 6
+    assert set(np.unique(y_true).tolist()) == {0, 1, 2}

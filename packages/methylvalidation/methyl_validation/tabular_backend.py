@@ -127,6 +127,39 @@ def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, class_names: List[s
     }
 
 
+def _resolve_eval_paths_and_labels(project_json: str | Path, class_names: List[str]) -> Tuple[List[str], np.ndarray]:
+    predictor_cfg = resolve_predictor_config(project_json)
+    samples: List[str] = []
+    y_true: List[int] = []
+    test_group_paths = getattr(predictor_cfg, "test_group_paths", None)
+    test_control_paths = list(getattr(predictor_cfg, "test_control_paths", []) or [])
+    test_disease_paths = list(getattr(predictor_cfg, "test_disease_paths", []) or [])
+
+    if test_group_paths:
+        for idx, entry in enumerate(test_group_paths):
+            cls_idx = int(entry.get("class_index", idx))
+            paths = [str(p) for p in (entry.get("paths") or [])]
+            for p in paths:
+                samples.append(p)
+                y_true.append(cls_idx)
+        return samples, np.asarray(y_true, dtype=np.int32)
+
+    if (test_control_paths or test_disease_paths) and len(class_names) <= 2:
+        samples = test_control_paths + test_disease_paths
+        y_true = [0] * len(test_control_paths) + [1] * len(test_disease_paths)
+        return samples, np.asarray(y_true, dtype=np.int32)
+
+    with _project_cwd(project_json):
+        project = load_project(project_json)
+    for cls_idx, (label, paths) in enumerate(project.get_resolved_groups()):
+        if cls_idx >= len(class_names):
+            continue
+        for p in paths:
+            samples.append(str(p))
+            y_true.append(cls_idx)
+    return samples, np.asarray(y_true, dtype=np.int32)
+
+
 def train_tabular_model(
     project_json: str | Path,
     bundle_h5: str | Path,
@@ -257,12 +290,7 @@ def predict_tabular_model_from_project(
         for ctx in list(refs[chrom].keys()):
             refs[chrom][ctx] = np.asarray(sorted(set(refs[chrom][ctx])), dtype=np.uint32)
 
-    predictor_cfg = resolve_predictor_config(project_json)
-    samples = list(predictor_cfg.test_control_paths) + list(predictor_cfg.test_disease_paths)
-    y_true = np.asarray(
-        [0] * len(predictor_cfg.test_control_paths) + [1] * len(predictor_cfg.test_disease_paths),
-        dtype=np.int32,
-    )
+    samples, y_true = _resolve_eval_paths_and_labels(project_json, class_names)
     sample_ids = [Path(p).name for p in samples]
 
     X = _extract_matrix_for_samples(samples, refs, feature_order, min_coverage=1)

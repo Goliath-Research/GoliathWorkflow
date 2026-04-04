@@ -144,9 +144,12 @@ def _resolve_eval_paths_and_labels(project_json: str | Path, class_names: List[s
     predictor_cfg = resolve_predictor_config(project_json)
     samples: List[str] = []
     y_true: List[int] = []
+    test_group_paths = getattr(predictor_cfg, "test_group_paths", None)
+    test_control_paths = list(getattr(predictor_cfg, "test_control_paths", []) or [])
+    test_disease_paths = list(getattr(predictor_cfg, "test_disease_paths", []) or [])
 
-    if predictor_cfg.test_group_paths:
-        for idx, entry in enumerate(predictor_cfg.test_group_paths):
+    if test_group_paths:
+        for idx, entry in enumerate(test_group_paths):
             cls_idx = int(entry.get("class_index", idx))
             paths = [str(p) for p in (entry.get("paths") or [])]
             for p in paths:
@@ -154,9 +157,9 @@ def _resolve_eval_paths_and_labels(project_json: str | Path, class_names: List[s
                 y_true.append(cls_idx)
         return samples, np.asarray(y_true, dtype=np.int32)
 
-    if predictor_cfg.test_control_paths or predictor_cfg.test_disease_paths:
-        samples = list(predictor_cfg.test_control_paths) + list(predictor_cfg.test_disease_paths)
-        y_true = [0] * len(predictor_cfg.test_control_paths) + [1] * len(predictor_cfg.test_disease_paths)
+    if (test_control_paths or test_disease_paths) and len(class_names) <= 2:
+        samples = test_control_paths + test_disease_paths
+        y_true = [0] * len(test_control_paths) + [1] * len(test_disease_paths)
         return samples, np.asarray(y_true, dtype=np.int32)
 
     # Fallback: evaluate on project-resolved cohorts.

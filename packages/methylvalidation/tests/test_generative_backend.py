@@ -180,6 +180,24 @@ def test_generative_backend_binary_predict_shape(tmp_path: Path, monkeypatch):
     assert {"prob_class0", "prob_class1"}.issubset(set(pred_df.columns))
 
 
+def test_resolve_eval_paths_multiclass_falls_back_from_binary_predictor(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    stub = _StubProjectMulti(det)
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=None,
+        test_control_paths=["/tmp/S1", "/tmp/S2"],
+        test_disease_paths=["/tmp/S3", "/tmp/S4"],
+    )
+    monkeypatch.setattr(generative_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+    monkeypatch.setattr(generative_backend, "load_project", lambda _p: stub)
+    samples, y_true = generative_backend._resolve_eval_paths_and_labels(
+        project_json=tmp_path / "project.json",
+        class_names=["healthy", "pca1", "pca2"],
+    )
+    assert len(samples) == 6
+    assert set(np.unique(y_true).tolist()) == {0, 1, 2}
+
+
 def test_generative_covariates_strict_join(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     _write_detector_dmps(det)
