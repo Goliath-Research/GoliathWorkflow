@@ -46,6 +46,8 @@ class BundleComparison(BaseModel):
     detection_dir: str
     classifier_dmps_csv: Optional[str] = None
     discovery_dmps_csv: Optional[str] = None
+    classifier_dmps_csvs: List[str] = Field(default_factory=list)
+    discovery_dmps_csvs: List[str] = Field(default_factory=list)
 
 
 class ModelFeatureBundleManifest(BaseModel):
@@ -79,7 +81,7 @@ def _h5_write_str(g: Any, name: str, values: List[str]) -> None:
     g.create_dataset(name, data=data, compression="gzip", compression_opts=4)
 
 
-def _choose_detector_csvs(detection_dir: Path) -> Dict[str, Optional[Path]]:
+def _choose_detector_csvs(detection_dir: Path) -> Dict[str, List[Path]]:
     classifier = sorted(detection_dir.glob("dmps-*-classifier.csv"))
     discovery = sorted(detection_dir.glob("dmps-*-discovery.csv"))
     unified = sorted(
@@ -88,8 +90,8 @@ def _choose_detector_csvs(detection_dir: Path) -> Dict[str, Optional[Path]]:
         if "-classifier" not in p.name and "-discovery" not in p.name
     )
     return {
-        "classifier": classifier[0] if classifier else (unified[0] if unified else None),
-        "discovery": discovery[0] if discovery else None,
+        "classifier": classifier if classifier else unified,
+        "discovery": discovery,
     }
 
 
@@ -125,7 +127,7 @@ def _load_dmps_table(
             "context": df["context"].astype(str),
             "effect_size": pd.to_numeric(df.get("effect_size", np.nan), errors="coerce").astype(float),
             "weight": pd.to_numeric(df[weight_column], errors="coerce").fillna(0.0).astype(float),
-            "source_csv": str(csv_path.resolve()),
+            "source_csv": str(csv_path.absolute()),
         }
     )
     out = out[out["position"] >= 0].copy()
@@ -190,8 +192,8 @@ def build_model_feature_bundle(
     weight_column: str = "weight",
     extra_metadata: Optional[Dict[str, Any]] = None,
 ) -> Path:
-    project_json = Path(project_json).resolve()
-    out_dir = Path(output_dir).resolve()
+    project_json = Path(project_json).absolute()
+    out_dir = Path(output_dir).absolute()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     with _project_cwd(project_json):
@@ -208,37 +210,42 @@ def build_model_feature_bundle(
         cmp_label = spec.comparison_label or spec.disease_group
         det_dir = Path(project.get_detection_output_dir(spec.control_group, spec.disease_group))
         csvs = _choose_detector_csvs(det_dir)
-        classifier_csv = csvs["classifier"]
-        discovery_csv = csvs["discovery"]
+        classifier_csvs = [p for p in csvs["classifier"] if p.is_file()]
+        discovery_csvs = [p for p in csvs["discovery"] if p.is_file()]
         cmp_items.append(
             BundleComparison(
                 comparison_label=str(cmp_label),
                 control_group=str(spec.control_group),
                 disease_group=str(spec.disease_group),
                 detection_dir=str(det_dir),
-                classifier_dmps_csv=str(classifier_csv.resolve()) if classifier_csv else None,
-                discovery_dmps_csv=str(discovery_csv.resolve()) if discovery_csv else None,
+                classifier_dmps_csv=str(classifier_csvs[0].absolute()) if classifier_csvs else None,
+                discovery_dmps_csv=str(discovery_csvs[0].absolute()) if discovery_csvs else None,
+                classifier_dmps_csvs=[str(p.absolute()) for p in classifier_csvs],
+                discovery_dmps_csvs=[str(p.absolute()) for p in discovery_csvs],
             )
         )
         detector_pointer["comparisons"].append(cmp_items[-1].model_dump(mode="json"))
-        if classifier_csv and classifier_csv.is_file():
-            rows.append(_load_dmps_table(classifier_csv, str(cmp_label), weight_column=weight_column))
+        for csv_path in classifier_csvs:
+            rows.append(_load_dmps_table(csv_path, str(cmp_label), weight_column=weight_column))
 
     # Flat projects or missing explicit comparisons: use root detection dir fallback.
     if not rows:
         det_dir = Path(paths.detection_dir)
         csvs = _choose_detector_csvs(det_dir)
-        classifier_csv = csvs["classifier"]
-        if classifier_csv and classifier_csv.is_file():
-            rows.append(_load_dmps_table(classifier_csv, "default", weight_column=weight_column))
+        classifier_csvs = [p for p in csvs["classifier"] if p.is_file()]
+        if classifier_csvs:
+            for csv_path in classifier_csvs:
+                rows.append(_load_dmps_table(csv_path, "default", weight_column=weight_column))
             cmp_items.append(
                 BundleComparison(
                     comparison_label="default",
                     control_group="group1",
                     disease_group="group2",
                     detection_dir=str(det_dir),
-                    classifier_dmps_csv=str(classifier_csv.resolve()),
+                    classifier_dmps_csv=str(classifier_csvs[0].absolute()),
                     discovery_dmps_csv=None,
+                    classifier_dmps_csvs=[str(p.absolute()) for p in classifier_csvs],
+                    discovery_dmps_csvs=[],
                 )
             )
             detector_pointer["comparisons"].append(cmp_items[-1].model_dump(mode="json"))

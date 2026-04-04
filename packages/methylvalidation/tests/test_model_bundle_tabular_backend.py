@@ -68,6 +68,39 @@ def test_build_model_feature_bundle_and_load(tmp_path: Path, monkeypatch):
     assert set(out_df.columns) >= {"chromosome", "position", "context", "weight", "comparison_label"}
 
 
+def test_build_model_feature_bundle_loads_all_chromosome_csvs(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1"],
+            "position": [100],
+            "context": ["CG"],
+            "effect_size": [0.7],
+            "weight": [0.8],
+        }
+    ).to_csv(det / "dmps-1.csv", index=False)
+    pd.DataFrame(
+        {
+            "chromosome": ["2"],
+            "position": [200],
+            "context": ["CG"],
+            "effect_size": [0.9],
+            "weight": [1.0],
+        }
+    ).to_csv(det / "dmps-2.csv", index=False)
+
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+    manifest_path = model_bundle.build_model_feature_bundle(tmp_path / "project.json", tmp_path / "bundle")
+    out_df = model_bundle.load_bundle_dmp_index(tmp_path / "bundle" / "model_feature_bundle.h5")
+    assert len(out_df) == 2
+    assert set(out_df["chromosome"].astype(str).tolist()) == {"1", "2"}
+    with open(manifest_path, encoding="utf-8") as f:
+        manifest = json.load(f)
+    cmp0 = manifest["comparisons"][0]
+    assert len(cmp0["classifier_dmps_csvs"]) == 2
+
+
 def test_tabular_backend_train_and_predict(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     det.mkdir(parents=True)
