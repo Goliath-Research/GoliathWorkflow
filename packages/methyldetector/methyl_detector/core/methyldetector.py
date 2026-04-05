@@ -1185,7 +1185,12 @@ class MethylDetector:
             traceback.print_exc()
             return None
 
-    def _check_centroid_self_classification(self, dmps_df: pd.DataFrame) -> None:
+    def _check_centroid_self_classification(
+        self,
+        dmps_df: pd.DataFrame,
+        *,
+        check_name: Optional[str] = None,
+    ) -> None:
         """
         Sanity check: classify each centroid's methylation profile at the DMP positions.
         Each centroid should get probability ~1.0 for its own class. If not, positions
@@ -1201,12 +1206,14 @@ class MethylDetector:
                 return
             # Optionally restrict to top K by effect_size for a more stable check
             top_k = getattr(self.config, "centroid_self_check_top_k", None)
+            label_prefix = f"[{check_name}] " if check_name else ""
             if top_k is not None and top_k > 0 and "effect_size" in dmps_df.columns:
                 # Already sorted by effect_size desc from _compute_biological_importance; take first K
                 check_df = dmps_df.head(int(top_k)).copy()
                 if len(check_df) < len(dmps_df):
                     logger.info(
-                        "Centroid self-check using top K=%s DMPs by effect_size (of %s biological), effect_size weights",
+                        "%sCentroid self-check using top K=%s DMPs by effect_size (of %s biological), effect_size weights",
+                        label_prefix,
                         len(check_df), len(dmps_df),
                     )
             else:
@@ -1257,8 +1264,9 @@ class MethylDetector:
                     return f"{p:.4e}"
                 return f"{p:.4f}"
             logger.info(
-                "Centroid self-check (DMP positions): centroid1 → P(class1)=%s, centroid2 → P(class1)=%s "
+                "%sCentroid self-check (DMP positions): centroid1 → P(class1)=%s, centroid2 → P(class1)=%s "
                 "(expect ~0 and ~1)",
+                label_prefix,
                 _fmt_p(float(p_c1)), _fmt_p(float(p_c2))
             )
             # Fail if either centroid is on the wrong side of the decision boundary (0.5)
@@ -1281,9 +1289,10 @@ class MethylDetector:
                     mean_ll_c1_prof2 = float(np.sum(w * log_p2_c1_cap) / w_sum)
                     mean_ll_c2_prof2 = float(np.sum(w * log_p2_c2_cap) / w_sum)
                     logger.warning(
-                        "Centroid self-check diagnostic (weighted-mean log-likelihood, %d DMPs, cap=%.1f): "
+                        "%sCentroid self-check diagnostic (weighted-mean log-likelihood, %d DMPs, cap=%.1f): "
                         "centroid1 profile: class0=%.4f class1=%.4f; centroid2 profile: class0=%.4f class1=%.4f "
                         "(expect centroid1→class0>class1, centroid2→class1>class0).",
+                        label_prefix,
                         n_dmps, cap, mean_ll_c1_prof1, mean_ll_c2_prof1, mean_ll_c1_prof2, mean_ll_c2_prof2,
                     )
                     # When centroid2 loses: log a few per-position log-PDFs (capped, as in classifier)
@@ -1306,22 +1315,25 @@ class MethylDetector:
                     logger.debug("Centroid self-check diagnostic failed: %s", diag_e)
                 if p_c1 >= 0.5 and p_c2 >= 0.5:
                     logger.warning(
-                        "Centroid self-check FAILED: both centroids classify as class1 (centroid1→%s, centroid2→%s). "
+                        "%sCentroid self-check FAILED: both centroids classify as class1 (centroid1→%s, centroid2→%s). "
                         "Often due to poor centroid separation on this chromosome (see earlier 'Poor separation' / small delta_mean). "
                         "Validation BA may be low or meaningless.",
+                        label_prefix,
                         _fmt_p(float(p_c1)), _fmt_p(float(p_c2))
                     )
                 elif p_c1 < 0.5 and p_c2 < 0.5:
                     logger.warning(
-                        "Centroid self-check FAILED: both centroids classify as class0 (centroid1→P(class1)=%s, centroid2→%s). "
+                        "%sCentroid self-check FAILED: both centroids classify as class0 (centroid1→P(class1)=%s, centroid2→%s). "
                         "Context/position merging matches the DMP list, so this usually indicates weak centroid separation or "
                         "a DMP set dominated by low-information loci. Check delta_mean/effect_size and held-out BA.",
+                        label_prefix,
                         _fmt_p(float(p_c1)), _fmt_p(float(p_c2))
                     )
                 else:
                     logger.warning(
-                        "Centroid self-check FAILED: centroid1 → P(class1)=%s, centroid2 → P(class1)=%s (expect ~0 and ~1). "
+                        "%sCentroid self-check FAILED: centroid1 → P(class1)=%s, centroid2 → P(class1)=%s (expect ~0 and ~1). "
                         "Possible position/order mismatch between samples and DMP list. Validation BA may be meaningless.",
+                        label_prefix,
                         _fmt_p(float(p_c1)), _fmt_p(float(p_c2))
                     )
         except Exception as e:
@@ -1994,12 +2006,15 @@ class MethylDetector:
             selected, res = self._featurecuts_select_k(search_pool)
             if selected is not None and len(selected) > 0:
                 self._featurecuts_last_result = res
-                final_k = int(len(selected))
+                selected_k_target = int(len(selected))
+                final_k = selected_k_target
+                k_effect_size = int(len(effect_size_pool))
+                k_after_target_and_effect = final_k
                 if target_ba is not None:
-                    final_k = max(final_k, int(len(effect_size_pool)))
+                    final_k = max(final_k, k_effect_size)
                     if final_k != len(selected):
                         selected = pool.iloc[:final_k].copy().reset_index(drop=True)
-                logger.info("📋 Classifier panel: FeatureCuts selected k=%s DMPs", len(selected))
+                k_after_target_and_effect = int(final_k)
 
                 # Enforce minimum DMP count for robustness on new samples
                 min_dmps = getattr(self.config, "min_selected_dmps", None)
@@ -2010,7 +2025,35 @@ class MethylDetector:
                     )
                     selected = sorted_by_importance_df.iloc[: int(min_dmps)].copy().reset_index(drop=True)
 
-                self._check_centroid_self_classification(selected)
+                final_k = int(len(selected))
+                ba_text = "n/a"
+                if isinstance(res, dict):
+                    try:
+                        ba_text = f"{float(res.get('balanced_accuracy')):.4f}"
+                    except (TypeError, ValueError):
+                        ba_text = "n/a"
+                logger.info(
+                    "📋 Classifier panel audit (FeatureCuts): k_target_ba=%s (BA=%s), "
+                    "k_effect_size=%s, k_after_max=%s, min_selected_dmps=%s, k_final=%s",
+                    selected_k_target,
+                    ba_text,
+                    k_effect_size,
+                    k_after_target_and_effect,
+                    (str(min_dmps) if min_dmps is not None else "none"),
+                    final_k,
+                )
+                logger.info("📋 Classifier panel: FeatureCuts selected k=%s DMPs", final_k)
+
+                # Dual diagnostic: contrast discriminatory minimum against final exported panel.
+                selected_target_panel = search_pool.iloc[:selected_k_target].copy().reset_index(drop=True)
+                self._check_centroid_self_classification(
+                    selected_target_panel,
+                    check_name=f"featurecuts-target-k={selected_k_target}",
+                )
+                self._check_centroid_self_classification(
+                    selected,
+                    check_name=f"featurecuts-final-k={final_k}",
+                )
                 return selected
             logger.warning("FeatureCuts failed or empty; falling back to elbow-only classifier panel")
 

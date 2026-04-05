@@ -288,3 +288,48 @@ def test_prefix_cache_matches_direct_validation(monkeypatch):
             direct_result["balanced_accuracy"],
             abs=1e-9,
         )
+
+
+def test_featurecuts_logs_dual_self_check_panels(monkeypatch):
+    with TemporaryDirectory() as temp_dir:
+        detector = build_detector(
+            temp_dir,
+            classifier_dmp_selection="featurecuts_validation",
+            target_balanced_accuracy=0.95,
+            min_selected_dmps=10,
+            dynamic_dmp_cutoff_enabled=True,
+        )
+        sorted_df = pd.DataFrame(
+            {
+                "position": np.arange(1000, 1020, dtype=np.uint32),
+                "context": ["CG"] * 20,
+                "effect_size": np.linspace(1.0, 0.1, 20),
+                "mean1": np.linspace(0.2, 0.3, 20),
+                "mean2": np.linspace(0.7, 0.6, 20),
+            }
+        )
+
+        monkeypatch.setattr(
+            detector,
+            "_featurecuts_select_k",
+            lambda pool: (pool.iloc[:4].copy().reset_index(drop=True), {"balanced_accuracy": 0.9783}),
+        )
+        monkeypatch.setattr(
+            detector,
+            "_effect_size_elbow_trim",
+            lambda pool, enabled=True: pool.iloc[:7].copy().reset_index(drop=True),
+        )
+
+        check_calls = []
+
+        def _fake_self_check(dmps_df, *, check_name=None):
+            check_calls.append((len(dmps_df), check_name))
+
+        monkeypatch.setattr(detector, "_check_centroid_self_classification", _fake_self_check)
+
+        out = detector._classifier_dmps_from_sorted(sorted_df)
+        assert len(out) == 10
+        assert check_calls == [
+            (4, "featurecuts-target-k=4"),
+            (10, "featurecuts-final-k=10"),
+        ]
