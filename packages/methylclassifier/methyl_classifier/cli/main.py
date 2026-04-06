@@ -63,7 +63,13 @@ def _calibration_fit_mask_for_classifier(
 
 
 def _remap_centroid_path(path: str, path_remap: Optional[Dict[str, str]], sample_root: Optional[Path]) -> str:
-    """Apply path_remap (prefix replacement) or sample_root/basename. path_remap takes precedence."""
+    """
+    Apply path_remap (prefix replacement), then optionally resolve bare sample IDs via sample_root.
+
+    Some centroid metadata stores ``samples_used`` as sample IDs (e.g. ``039377_21M_25_99``)
+    rather than absolute paths; in that case, join with sample_root so downstream loading can
+    find the sample directory.
+    """
     if path_remap:
         # Longest matching prefix so /a/b/c matches /a/b before /a
         best_old: Optional[str] = None
@@ -74,8 +80,18 @@ def _remap_centroid_path(path: str, path_remap: Optional[Dict[str, str]], sample
             new_prefix = path_remap[best_old]
             rest = path[len(best_old):].lstrip("/")
             return f"{new_prefix.rstrip('/')}/{rest}" if rest else new_prefix.rstrip("/")
-    if sample_root is not None:
-        return str(sample_root / Path(path).name)
+    # Fallback for bare IDs or relative paths in samples_used metadata.
+    if not Path(path).is_absolute():
+        if sample_root is not None:
+            return str(sample_root / Path(path).name)
+        # When sample_root is not available, infer from remap targets (prefer ".../samples").
+        if path_remap:
+            remap_targets = [v.rstrip("/") for v in path_remap.values() if isinstance(v, str)]
+            samples_targets = [t for t in remap_targets if Path(t).name.lower() == "samples"]
+            if samples_targets:
+                # Longest target first for deterministic behavior when multiple candidates exist.
+                best_target = sorted(samples_targets, key=len, reverse=True)[0]
+                return f"{best_target}/{Path(path).name}"
     return path
 
 
@@ -1566,7 +1582,7 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
         print(f"📂 Centroid validation: {len(c1_paths)} centroid1 + {len(c2_paths)} centroid2 samples")
     elif c1_dir and c2_dir:
         path_remap = config.centroid_path_remap
-        sample_root = config.centroid_sample_root if not path_remap else None
+        sample_root = config.centroid_sample_root
         c1_resolved = _read_samples_used_from_centroid_dir(Path(c1_dir), sample_root=sample_root, path_remap=path_remap)
         c2_resolved = _read_samples_used_from_centroid_dir(Path(c2_dir), sample_root=sample_root, path_remap=path_remap)
         if not c1_resolved or not c2_resolved:
@@ -1580,7 +1596,7 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
     elif config.centroid_dirs and len(config.centroid_dirs) > 2:
         centroid_dirs = config.centroid_dirs
         path_remap = config.centroid_path_remap
-        sample_root = config.centroid_sample_root if not path_remap else None
+        sample_root = config.centroid_sample_root
         all_samples = []
         expected_classes = []
         for class_idx, c_dir in enumerate(centroid_dirs):
