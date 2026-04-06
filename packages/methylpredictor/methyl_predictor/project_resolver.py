@@ -244,6 +244,19 @@ def _control_disease_side_to_dict(side: Any) -> Dict[str, Any]:
     )
 
 
+def _optional_predictor_side_from_step(
+    step_cfg: Dict[str, Any],
+    side_key: str,
+) -> Optional[Dict[str, Any]]:
+    """Return predictor step side only if it defines non-empty ``groups`` (no project fallback)."""
+    raw = step_cfg.get(side_key)
+    if isinstance(raw, dict):
+        groups = raw.get("groups")
+        if isinstance(groups, list) and len(groups) > 0:
+            return copy.deepcopy(raw)
+    return None
+
+
 def _effective_predictor_side(
     step_cfg: Dict[str, Any],
     project: ProjectConfig,
@@ -414,6 +427,73 @@ def _collect_paths_and_lineage(
     return paths_out, lineage
 
 
+def _tag_lineage_evaluation_split(
+    lineage: List[Dict[str, str]], split: str
+) -> List[Dict[str, str]]:
+    out: List[Dict[str, str]] = []
+    for row in lineage:
+        r = dict(row)
+        r["evaluation_split"] = split
+        out.append(r)
+    return out
+
+
+def _try_dual_binary_predictor_paths(
+    step_cfg: Dict[str, Any],
+    *,
+    base_path: Optional[str],
+    project_path: Union[str, Path],
+    path_remap: Optional[Dict[str, str]],
+    controls_side: Dict[str, Any],
+    diseases_side: Dict[str, Any],
+    ctrl_labels: List[str],
+    dis_labels: List[str],
+) -> Optional[
+    Tuple[
+        List[str],
+        List[str],
+        List[str],
+        List[str],
+        List[Dict[str, str]],
+    ]
+]:
+    """
+    If step_config.predictor defines holdout_controls and holdout_diseases, return
+    (train_control_paths, train_disease_paths, holdout_control_paths, holdout_disease_paths, lineage).
+    Train sides default to the same merged sides used for undifferentiated evaluation.
+    """
+    ho_c = _optional_predictor_side_from_step(step_cfg, "holdout_controls")
+    ho_d = _optional_predictor_side_from_step(step_cfg, "holdout_diseases")
+    if ho_c is None or ho_d is None:
+        return None
+    tr_c = _optional_predictor_side_from_step(step_cfg, "train_controls") or controls_side
+    tr_d = _optional_predictor_side_from_step(step_cfg, "train_diseases") or diseases_side
+    ho_ctrl_labels = _resolved_leaf_labels_from_side(ho_c)
+    ho_dis_labels = _resolved_leaf_labels_from_side(ho_d)
+    if ho_ctrl_labels != ctrl_labels or ho_dis_labels != dis_labels:
+        raise ValueError(
+            "holdout_controls/holdout_diseases must use the same group/stage leaf labels as "
+            "train_controls/train_diseases (or the default predictor controls/diseases). "
+            f"Expected control leaves {ctrl_labels!r}, holdout has {ho_ctrl_labels!r}; "
+            f"expected disease leaves {dis_labels!r}, holdout has {ho_dis_labels!r}."
+        )
+    tr_ctrl_map = _expand_side_group_paths(tr_c, base_path, project_path, path_remap)
+    tr_dis_map = _expand_side_group_paths(tr_d, base_path, project_path, path_remap)
+    ho_ctrl_map = _expand_side_group_paths(ho_c, base_path, project_path, path_remap)
+    ho_dis_map = _expand_side_group_paths(ho_d, base_path, project_path, path_remap)
+    tr_cp, lin_tr_c = _collect_paths_and_lineage("control", ctrl_labels, tr_ctrl_map)
+    tr_dp, lin_tr_d = _collect_paths_and_lineage("disease", dis_labels, tr_dis_map)
+    ho_cp, lin_ho_c = _collect_paths_and_lineage("control", ctrl_labels, ho_ctrl_map)
+    ho_dp, lin_ho_d = _collect_paths_and_lineage("disease", dis_labels, ho_dis_map)
+    lineage = (
+        _tag_lineage_evaluation_split(lin_tr_c, "training")
+        + _tag_lineage_evaluation_split(lin_tr_d, "training")
+        + _tag_lineage_evaluation_split(lin_ho_c, "holdout")
+        + _tag_lineage_evaluation_split(lin_ho_d, "holdout")
+    )
+    return tr_cp, tr_dp, ho_cp, ho_dp, lineage
+
+
 def _predictor_blind_has_groups(step_cfg: Dict[str, Any]) -> bool:
     b = step_cfg.get("blind")
     if not isinstance(b, dict):
@@ -424,7 +504,7 @@ def _predictor_blind_has_groups(step_cfg: Dict[str, Any]) -> bool:
 
 def _assert_predictor_blind_exclusive(step_cfg: Dict[str, Any]) -> None:
     """Blind cohort cannot be combined with explicit labeled predictor.controls / .diseases."""
-    for key in ("controls", "diseases"):
+    for key in ("controls", "diseases", "train_controls", "train_diseases", "holdout_controls", "holdout_diseases"):
         side = step_cfg.get(key)
         if isinstance(side, dict):
             grp = side.get("groups")
@@ -433,6 +513,12 @@ def _assert_predictor_blind_exclusive(step_cfg: Dict[str, Any]) -> None:
                     f'step_config.predictor.{key} has non-empty "groups" while "blind" is also set; '
                     "use either labeled (controls+diseases) or blind, not both."
                 )
+    for gkey in ("holdout_group_paths", "train_group_paths"):
+        g = step_cfg.get(gkey)
+        if isinstance(g, list) and len(g) > 0:
+            raise ValueError(
+                f"step_config.predictor.{gkey} cannot be combined with predictor.blind."
+            )
 
 
 def _build_blind_predictor_dict(
@@ -485,6 +571,59 @@ def _build_blind_predictor_dict(
 
 
 MULTICLASS_CLASSIFIER_FILENAME = "multiclass-classifier.pkl"
+
+
+def _holdout_multiclass_group_paths_nonempty(step_cfg: Dict[str, Any]) -> bool:
+    hog = step_cfg.get("holdout_group_paths")
+    if not isinstance(hog, list):
+        return False
+    for e in hog:
+        if not isinstance(e, dict):
+            continue
+        paths = e.get("paths") or []
+        if isinstance(paths, str):
+            paths = [paths]
+        if any(p and str(p).strip() for p in paths):
+            return True
+    return False
+
+
+def _expand_multiclass_group_paths_list(
+    entries: List[Dict[str, Any]],
+    *,
+    base_path: Optional[str],
+    project_path: Union[str, Path],
+    path_remap: Optional[Dict[str, str]],
+    evaluation_split: str,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
+    """Expand predictor-style group path entries; tag lineage with evaluation_split."""
+    out: List[Dict[str, Any]] = []
+    mc_lineage: List[Dict[str, str]] = []
+    for j, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+        label = entry.get("label") or entry.get("class_name") or str(len(out))
+        paths_raw = entry.get("paths") or []
+        if isinstance(paths_raw, str):
+            paths_raw = [paths_raw]
+        expanded = _expand_test_paths(
+            list(paths_raw), base_path, project_config_path=project_path
+        )
+        expanded = [_resolve_one_path(p, base_path) for p in expanded if p]
+        if path_remap:
+            expanded = _apply_path_remap(expanded, path_remap)
+        cls_idx = int(entry.get("class_index", j))
+        out.append({"label": label, "paths": expanded, "class_index": cls_idx})
+        for p in expanded:
+            mc_lineage.append(
+                {
+                    "absolute_path": p,
+                    "side": "multiclass",
+                    "group_label": str(label),
+                    "evaluation_split": evaluation_split,
+                }
+            )
+    return out, mc_lineage
 
 
 def _get_multiclass_model_path(
@@ -616,8 +755,68 @@ def _build_multiclass_predictor_config(
                     mc_lineage.append(
                         {"absolute_path": p, "side": "multiclass", "group_label": str(label)}
                     )
+    for j, g in enumerate(test_group_paths):
+        g.setdefault("class_index", j)
+
     tree = project.cohort_tree_dict()
-    base_dict: Dict[str, Any] = {
+    if _holdout_multiclass_group_paths_nonempty(step_cfg):
+        hog_raw = step_cfg.get("holdout_group_paths")
+        assert isinstance(hog_raw, list)
+        train_raw = step_cfg.get("train_group_paths")
+        if train_raw and isinstance(train_raw, list) and len(train_raw) > 0:
+            train_group_paths, lin_tr = _expand_multiclass_group_paths_list(
+                train_raw,
+                base_path=base_path,
+                project_path=project_path,
+                path_remap=project.path_remap,
+                evaluation_split="training",
+            )
+        else:
+            train_group_paths = copy.deepcopy(test_group_paths)
+            lin_tr = []
+            for row in mc_lineage:
+                r = dict(row)
+                r["evaluation_split"] = "training"
+                lin_tr.append(r)
+        holdout_group_paths, lin_ho = _expand_multiclass_group_paths_list(
+            hog_raw,
+            base_path=base_path,
+            project_path=project_path,
+            path_remap=project.path_remap,
+            evaluation_split="holdout",
+        )
+        tr_idx = {int(g["class_index"]) for g in train_group_paths}
+        ho_idx = {int(g["class_index"]) for g in holdout_group_paths}
+        if tr_idx != ho_idx:
+            raise ValueError(
+                "train_group_paths and holdout_group_paths must define the same class_index set "
+                f"(train={sorted(tr_idx)}, holdout={sorted(ho_idx)})."
+            )
+        base_dict = {
+            "model_path": str(multiclass_path),
+            "model_dir": None,
+            "output_dir": out_resolved,
+            "test_control_paths": [],
+            "test_disease_paths": [],
+            "test_group_paths": [],
+            "train_group_paths": train_group_paths,
+            "holdout_group_paths": holdout_group_paths,
+            "path_remap": project.path_remap,
+            "samples_base_path": project.samples_base_path,
+            "debug": step_cfg.get("debug", False),
+            "comparison_label": "multiclass",
+            "report_controls": None,
+            "report_diseases": None,
+            "sample_lineage": lin_tr + lin_ho,
+            "cohort_hierarchy": tree or None,
+            "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            "classifier_step_snapshot": _classifier_step_snapshot(
+                project.get_step_config("classifier") or {}
+            ),
+        }
+        return PredictorConfig(**base_dict)
+
+    base_dict = {
         "model_path": str(multiclass_path),
         "model_dir": None,
         "output_dir": out_resolved,
@@ -751,12 +950,48 @@ def resolve_predictor_config(
     dis_map = _expand_side_group_paths(diseases_side, base_path, proj_path_arg, project.path_remap)
     ctrl_labels = _resolved_leaf_labels_from_side(controls_side)
     dis_labels = _resolved_leaf_labels_from_side(diseases_side)
+    dual = _try_dual_binary_predictor_paths(
+        step_cfg,
+        base_path=base_path,
+        project_path=proj_path_arg,
+        path_remap=project.path_remap,
+        controls_side=controls_side,
+        diseases_side=diseases_side,
+        ctrl_labels=ctrl_labels,
+        dis_labels=dis_labels,
+    )
+
+    tree = project.cohort_tree_dict()
+    if dual is not None:
+        tr_cp, tr_dp, ho_cp, ho_dp, lineage = dual
+        base: Dict[str, Any] = {
+            "model_path": model_path,
+            "model_dir": model_dir,
+            "output_dir": out_dir,
+            "test_control_paths": [],
+            "test_disease_paths": [],
+            "train_control_paths": tr_cp,
+            "train_disease_paths": tr_dp,
+            "holdout_control_paths": ho_cp,
+            "holdout_disease_paths": ho_dp,
+            "path_remap": project.path_remap,
+            "samples_base_path": project.samples_base_path,
+            "debug": step_cfg.get("debug", False),
+            "comparison_label": None,
+            "report_controls": controls_side,
+            "report_diseases": diseases_side,
+            "sample_lineage": lineage,
+            "cohort_hierarchy": tree or None,
+            "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
+        }
+        return PredictorConfig(**base)
+
     control_paths, lin_c = _collect_paths_and_lineage("control", ctrl_labels, ctrl_map)
     disease_paths, lin_d = _collect_paths_and_lineage("disease", dis_labels, dis_map)
     lineage = lin_c + lin_d
 
-    tree = project.cohort_tree_dict()
-    base: Dict[str, Any] = {
+    base = {
         "model_path": model_path,
         "model_dir": model_dir,
         "output_dir": out_dir,
@@ -787,8 +1022,10 @@ def resolve_predictor_config_per_comparison(
     multi-class config if multiclass-classifier.pkl exists.
     Test sample precedence: (1) Caller test paths (e.g. CLI) supersede all — for multiclass
     PKL, ``--test-control`` + ``--test-disease`` replace default ``test_group_paths`` with two
-    cohorts (class indices 0 and 1). (2) Else step_config.predictor test paths when set.
-    (3) Else training cohorts from the project.
+    cohorts (class indices 0 and 1). (2) Else, if ``holdout_controls`` and ``holdout_diseases``
+    (binary) or ``holdout_group_paths`` (multiclass) are set under ``step_config.predictor``,
+    train vs holdout paths are resolved for dual metrics (optional ``train_*`` overrides).
+    (3) Else step_config.predictor cohorts when set. (4) Else training cohorts from the project.
     Returns list of (PredictorConfig, comparison_label) or [(config, "multiclass")] when multiclass model is used.
     """
     project = load_project(project_path)
@@ -937,16 +1174,45 @@ def resolve_predictor_config_per_comparison(
                 lineage.append({"absolute_path": p, "side": "disease", "group_label": "cli"})
             rep_c = {"label": controls_side.get("label", ""), "groups": [{"label": "cli", "sample_paths": []}]}
             rep_d = {"label": diseases_side.get("label", ""), "groups": [{"label": "cli", "sample_paths": []}]}
+            train_control_paths: List[str] = []
+            train_disease_paths: List[str] = []
+            holdout_control_paths: List[str] = []
+            holdout_disease_paths: List[str] = []
         else:
-            control_paths, lin_c = _collect_paths_and_lineage(
-                "control", [ctrl_label], ctrl_map
+            dual_comp = _try_dual_binary_predictor_paths(
+                step_cfg,
+                base_path=base_path,
+                project_path=project_path,
+                path_remap=project.path_remap,
+                controls_side=controls_side,
+                diseases_side=diseases_side,
+                ctrl_labels=[ctrl_label],
+                dis_labels=[dis_label],
             )
-            disease_paths, lin_d = _collect_paths_and_lineage(
-                "disease", [dis_label], dis_map
-            )
-            lineage = lin_c + lin_d
-            rep_c = _filter_side_report(controls_side, [ctrl_label])
-            rep_d = _filter_side_report(diseases_side, [dis_label])
+            if dual_comp is not None:
+                tr_cp, tr_dp, ho_cp, ho_dp, lineage = dual_comp
+                control_paths = []
+                disease_paths = []
+                train_control_paths = tr_cp
+                train_disease_paths = tr_dp
+                holdout_control_paths = ho_cp
+                holdout_disease_paths = ho_dp
+                rep_c = _filter_side_report(controls_side, [ctrl_label])
+                rep_d = _filter_side_report(diseases_side, [dis_label])
+            else:
+                train_control_paths = []
+                train_disease_paths = []
+                holdout_control_paths = []
+                holdout_disease_paths = []
+                control_paths, lin_c = _collect_paths_and_lineage(
+                    "control", [ctrl_label], ctrl_map
+                )
+                disease_paths, lin_d = _collect_paths_and_lineage(
+                    "disease", [dis_label], dis_map
+                )
+                lineage = lin_c + lin_d
+                rep_c = _filter_side_report(controls_side, [ctrl_label])
+                rep_d = _filter_side_report(diseases_side, [dis_label])
 
         base: Dict[str, Any] = {
             "model_path": model_path,
@@ -954,6 +1220,10 @@ def resolve_predictor_config_per_comparison(
             "output_dir": out_dir,
             "test_control_paths": control_paths,
             "test_disease_paths": disease_paths,
+            "train_control_paths": train_control_paths,
+            "train_disease_paths": train_disease_paths,
+            "holdout_control_paths": holdout_control_paths,
+            "holdout_disease_paths": holdout_disease_paths,
             "path_remap": project.path_remap,
             "samples_base_path": project.samples_base_path,
             "debug": step_cfg.get("debug", False),

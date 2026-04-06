@@ -12,6 +12,10 @@ import pytest
 from methyl_predictor.models.config import PredictorConfig
 from methyl_predictor.core.predictor import _expand_nested_labeled_paths, run_prediction
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:Labeled metrics are undifferentiated:UserWarning",
+)
+
 
 class _DummyClassifier:
     def __init__(self, *_args, **_kwargs):
@@ -105,10 +109,78 @@ def test_run_prediction_multiclass_ovr_k3_writes_validation_metrics(monkeypatch,
 
     assert metrics["n_classes"] == 3
     assert metrics["accuracy"] == 1.0
+    assert metrics["evaluation_semantics"] == "undifferentiated"
     assert Path(output_dir / "validation_metrics.json").exists()
     vm = json.loads((output_dir / "validation_metrics.json").read_text(encoding="utf-8"))
     assert vm["n_classes"] == 3
     assert len(vm["per_class"]) == 3
+    assert vm["evaluation_semantics"] == "undifferentiated"
+
+
+def test_run_prediction_train_holdout_binary_writes_dual_metrics(monkeypatch, tmp_path):
+    """Binary config with train + holdout paths writes training_metrics, holdout_metrics, and evaluation_split column."""
+    output_dir = tmp_path / "pred_th"
+    classifier_cli_main = importlib.import_module("methyl_classifier.cli.main")
+    tc0 = str(tmp_path / "tc0")
+    td0 = str(tmp_path / "td0")
+    hc0 = str(tmp_path / "hc0")
+    hd0 = str(tmp_path / "hd0")
+    config = PredictorConfig(
+        model_path=str(tmp_path / "b.pkl"),
+        output_dir=str(output_dir),
+        train_control_paths=[tc0],
+        train_disease_paths=[td0],
+        holdout_control_paths=[hc0],
+        holdout_disease_paths=[hd0],
+        sample_lineage=[],
+    )
+
+    monkeypatch.setattr(
+        "methyl_classifier.core.classifier.MethylClassifier",
+        _DummyClassifier,
+    )
+
+    def fake_classify(*, classifier, samples_list, output_file, expected_classes, **_kwargs):
+        assert samples_list == [tc0, td0, hc0, hd0]
+        assert expected_classes == [0, 1, 0, 1]
+        with Path(output_file).open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "sample",
+                    "prediction",
+                    "expected_class",
+                    "prob_class0",
+                    "prob_class1",
+                ],
+            )
+            writer.writeheader()
+            for name, y, pred in [
+                ("tc0", 0, 0),
+                ("td0", 1, 1),
+                ("hc0", 0, 0),
+                ("hd0", 1, 1),
+            ]:
+                writer.writerow(
+                    {
+                        "sample": name,
+                        "prediction": pred,
+                        "expected_class": y,
+                        "prob_class0": 0.9 if pred == 0 else 0.1,
+                        "prob_class1": 0.1 if pred == 0 else 0.9,
+                    }
+                )
+
+    monkeypatch.setattr(classifier_cli_main, "classify_samples_from_list", fake_classify)
+
+    metrics = run_prediction(config)
+    assert metrics["evaluation_semantics"] == "train_holdout"
+    assert metrics["training_metrics"]["balanced_accuracy"] == 1.0
+    assert metrics["holdout_metrics"]["balanced_accuracy"] == 1.0
+    assert metrics["balanced_accuracy"] == 1.0
+
+    df = pd.read_csv(output_dir / "predictions.csv")
+    assert list(df["evaluation_split"]) == ["training", "training", "holdout", "holdout"]
 
 
 def test_run_prediction_ovr_k2_uses_test_group_paths_only(monkeypatch, tmp_path):
@@ -166,6 +238,7 @@ def test_run_prediction_ovr_k2_uses_test_group_paths_only(monkeypatch, tmp_path)
     metrics = run_prediction(config)
     assert metrics["n_classes"] == 2
     assert metrics["accuracy"] == 1.0
+    assert metrics["evaluation_semantics"] == "undifferentiated"
 
 
 def test_predictor_config_resolves_relative_test_paths(tmp_path):
@@ -257,6 +330,7 @@ def test_run_prediction_metrics_follow_filtered_rows(monkeypatch, tmp_path):
     assert metrics["sensitivity"] == 1.0
     assert metrics["specificity"] == 1.0
     assert metrics["balanced_accuracy"] == 1.0
+    assert metrics["evaluation_semantics"] == "undifferentiated"
     assert Path(output_dir / "validation_metrics.json").exists()
     report_path = output_dir / "prediction_report.json"
     assert report_path.exists()
@@ -418,6 +492,7 @@ def test_run_prediction_degenerate_class_and_dmp_coverage_in_metrics(
     err = capsys.readouterr().out
     assert "Degenerate predictions" in err
 
+    assert metrics["evaluation_semantics"] == "undifferentiated"
     assert metrics["balanced_accuracy"] == 0.5
     assert "sample_dmp_coverage" in metrics
     cov = metrics["sample_dmp_coverage"]

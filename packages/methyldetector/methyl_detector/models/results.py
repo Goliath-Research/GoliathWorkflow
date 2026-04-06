@@ -231,6 +231,14 @@ class MethylDetectorValidationResults(NumpyCompatibleModel):
         default=None,
         description="Biological filter thresholds used and value ranges (min/max) of delta_mean, overlap, effect_size in retained DMPs"
     )
+    validation_row_split_semantics: Optional[str] = Field(
+        default=None,
+        description=(
+            "How validation rows were split for reported BA: "
+            "'no_row_holdout' when validation_split_ratio<=0 (same rows for calibration and test); "
+            "'stratified_holdout' when validation_split_ratio>0."
+        ),
+    )
 
     model_config = {
         "arbitrary_types_allowed": True,

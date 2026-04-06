@@ -52,6 +52,30 @@ class PredictorConfig(BaseModel):
         description="For multi-class: list of {label: str, paths: list} or {class_index: int, paths: list}. "
         "Order must match classifier class_names. Resolved to absolute paths.",
     )
+    train_control_paths: List[str] = Field(
+        default_factory=list,
+        description="Training split: class-0 paths when using train/holdout dual evaluation (with holdout_*).",
+    )
+    train_disease_paths: List[str] = Field(
+        default_factory=list,
+        description="Training split: class-1 paths for dual evaluation.",
+    )
+    holdout_control_paths: List[str] = Field(
+        default_factory=list,
+        description="Holdout split: class-0 paths; when any holdout_* paths are set, metrics are split into training vs holdout.",
+    )
+    holdout_disease_paths: List[str] = Field(
+        default_factory=list,
+        description="Holdout split: class-1 paths for dual evaluation.",
+    )
+    train_group_paths: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Multiclass training split paths (same shape as test_group_paths). Used with holdout_group_paths.",
+    )
+    holdout_group_paths: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Multiclass holdout split paths per class.",
+    )
     controls: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Nested control cohort: {label, groups[{label, sample_paths}]}. "
@@ -117,13 +141,21 @@ class PredictorConfig(BaseModel):
     def ensure_absolute_test_paths(self) -> "PredictorConfig":
         """Normalize test_control_paths, test_disease_paths, and test_group_paths to absolute paths."""
         has_labeled = bool(
-            self.test_control_paths or self.test_disease_paths or self.test_group_paths
+            self.test_control_paths
+            or self.test_disease_paths
+            or self.test_group_paths
+            or self.train_control_paths
+            or self.train_disease_paths
+            or self.holdout_control_paths
+            or self.holdout_disease_paths
+            or self.train_group_paths
+            or self.holdout_group_paths
         )
         has_blind = bool(self.test_blind_paths)
         if has_labeled and has_blind:
             raise ValueError(
                 "PredictorConfig: cannot set test_blind_paths together with labeled "
-                "test_control_paths/test_disease_paths or test_group_paths."
+                "test_control_paths/test_disease_paths, test_group_paths, or train/holdout path lists."
             )
 
         def _nested_groups_nonempty(d: Optional[Dict[str, Any]]) -> bool:
@@ -148,9 +180,33 @@ class PredictorConfig(BaseModel):
         self.test_blind_paths = _to_absolute_paths(
             self.test_blind_paths, self.samples_base_path
         )
+        self.train_control_paths = _to_absolute_paths(
+            self.train_control_paths, self.samples_base_path
+        )
+        self.train_disease_paths = _to_absolute_paths(
+            self.train_disease_paths, self.samples_base_path
+        )
+        self.holdout_control_paths = _to_absolute_paths(
+            self.holdout_control_paths, self.samples_base_path
+        )
+        self.holdout_disease_paths = _to_absolute_paths(
+            self.holdout_disease_paths, self.samples_base_path
+        )
         if self.test_group_paths:
             base = self.samples_base_path
             for entry in self.test_group_paths:
+                paths = entry.get("paths")
+                if isinstance(paths, list):
+                    entry["paths"] = _to_absolute_paths(paths, base)
+        if self.train_group_paths:
+            base = self.samples_base_path
+            for entry in self.train_group_paths:
+                paths = entry.get("paths")
+                if isinstance(paths, list):
+                    entry["paths"] = _to_absolute_paths(paths, base)
+        if self.holdout_group_paths:
+            base = self.samples_base_path
+            for entry in self.holdout_group_paths:
                 paths = entry.get("paths")
                 if isinstance(paths, list):
                     entry["paths"] = _to_absolute_paths(paths, base)

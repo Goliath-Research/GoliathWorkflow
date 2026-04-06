@@ -33,6 +33,19 @@ def _scalar_metrics_from_dict(metrics: Dict[str, Any]) -> Dict[str, Any]:
     for k in SCALAR_KEYS:
         if k in metrics and isinstance(metrics[k], (int, float)):
             out[k] = metrics[k]
+    tr = metrics.get("training_metrics")
+    ho = metrics.get("holdout_metrics")
+    if isinstance(tr, dict):
+        for k in SCALAR_KEYS:
+            if k in tr and isinstance(tr[k], (int, float)):
+                out[f"training_{k}"] = tr[k]
+    if isinstance(ho, dict):
+        for k in SCALAR_KEYS:
+            if k in ho and isinstance(ho[k], (int, float)):
+                out[f"holdout_{k}"] = ho[k]
+    sem = metrics.get("evaluation_semantics")
+    if isinstance(sem, str) and sem:
+        out["evaluation_semantics"] = sem
     return out
 
 

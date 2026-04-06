@@ -1420,7 +1420,7 @@ class MethylDetector:
         if n_total == 0:
             return []
 
-        split_ratio = float(getattr(self.config, "validation_split_ratio", 0.0) or 0.0)
+        split_ratio = float(self.config.validation_split_ratio or 0.0)
         idx_all = np.arange(n_total, dtype=np.int64)
         class0 = idx_all[y == 0]
         class1 = idx_all[y == 1]
@@ -1442,7 +1442,7 @@ class MethylDetector:
         if n_test0 <= 0 or n_test1 <= 0:
             return [(idx_all, idx_all)]
 
-        n_repeats = max(int(getattr(self.config, "validation_n_repeats", 1) or 1), 1)
+        n_repeats = max(int(self.config.validation_n_repeats or 1), 1)
         splits: List[Tuple[np.ndarray, np.ndarray]] = []
         base_seed = int(self.config.random_state or 42)
         for repeat_idx in range(n_repeats):
@@ -2942,6 +2942,10 @@ class MethylDetector:
         biological_filter = self._biological_filter_summary if hasattr(self, '_biological_filter_summary') else None
 
         # Create the main results object
+        vsr = float(self.config.validation_split_ratio or 0.0)
+        row_split_sem = (
+            "stratified_holdout" if vsr > 0.0 else "no_row_holdout"
+        )
         results = MethylDetectorValidationResults(
             chromosome=self.chromosome,
             timestamp=datetime.now().isoformat(),
@@ -2952,6 +2956,7 @@ class MethylDetector:
             total_statistical_dmps=total_statistical_dmps,
             total_biological_dmps=total_biological_dmps,
             biological_filter=biological_filter,
+            validation_row_split_semantics=row_split_sem,
         )
 
         # Save to JSON using Pydantic's model_dump_json for proper serialization

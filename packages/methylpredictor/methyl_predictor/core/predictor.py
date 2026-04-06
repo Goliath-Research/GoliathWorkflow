@@ -4,6 +4,7 @@ Core prediction: load MethylClassifier, run prediction on test sets, compute met
 
 import copy
 import json
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
@@ -56,6 +57,15 @@ def _expand_nested_blind_paths(config: PredictorConfig) -> None:
 def _expand_nested_labeled_paths(config: PredictorConfig) -> None:
     """Expand optional config.controls / config.diseases into flat paths and report blocks."""
     if config.test_blind_paths:
+        return
+    if (
+        config.train_control_paths
+        or config.train_disease_paths
+        or config.holdout_control_paths
+        or config.holdout_disease_paths
+        or config.train_group_paths
+        or config.holdout_group_paths
+    ):
         return
     if config.test_group_paths:
         return
@@ -458,10 +468,10 @@ def _warn_if_degenerate_predictions(
     )
 
 
-def _print_metrics(metrics: Dict[str, Any]) -> None:
+def _print_metrics(metrics: Dict[str, Any], *, title: str = "Validation metrics") -> None:
     """Print a concise summary to console."""
     n_classes = metrics.get("n_classes", 2)
-    print("\n📊 Validation metrics:")
+    print(f"\n📊 {title}:")
     print(f"   Accuracy:          {metrics['accuracy']:.4f}")
     print(f"   Balanced accuracy: {metrics['balanced_accuracy']:.4f}")
     if n_classes == 2:
@@ -485,25 +495,74 @@ def _print_metrics(metrics: Dict[str, Any]) -> None:
             print("   " + "; ".join(parts))
 
 
+def _holdout_multiclass_nonempty(config: PredictorConfig) -> bool:
+    if not config.holdout_group_paths:
+        return False
+    for entry in config.holdout_group_paths:
+        if not isinstance(entry, dict):
+            continue
+        paths = entry.get("paths") or []
+        if any(p and str(p).strip() for p in paths):
+            return True
+    return False
+
+
 def _build_samples_and_expected(
     config: PredictorConfig,
     n_classes: int,
     prediction_mode: Literal["labeled", "blind"],
-) -> tuple[List[str], Optional[List[int]]]:
+) -> tuple[List[str], Optional[List[int]], Optional[List[str]]]:
     """
-    Build samples_list and expected_classes from already-resolved config paths.
-    Returns (samples_list, expected_classes). expected_classes is None for blind or inference-only.
+    Build samples_list, expected_classes, and optional per-sample evaluation_split tags
+    ("training" / "holdout") when train/holdout paths are configured.
     """
     n_classes = n_classes or 2
     is_multiclass = n_classes > 2
 
     if prediction_mode == "blind":
         blind_list = [p for p in config.test_blind_paths if p and str(p).strip()]
-        return blind_list, None if blind_list else None
+        return blind_list, None, None
+
+    if config.holdout_control_paths or config.holdout_disease_paths:
+        tc = [p for p in config.train_control_paths if p and str(p).strip()]
+        td = [p for p in config.train_disease_paths if p and str(p).strip()]
+        hc = [p for p in config.holdout_control_paths if p and str(p).strip()]
+        hd = [p for p in config.holdout_disease_paths if p and str(p).strip()]
+        samples_list = tc + td + hc + hd
+        expected_classes = [0] * len(tc) + [1] * len(td) + [0] * len(hc) + [1] * len(hd)
+        splits = (["training"] * (len(tc) + len(td))) + (["holdout"] * (len(hc) + len(hd)))
+        return samples_list, expected_classes, splits
+
+    if _holdout_multiclass_nonempty(config):
+        train_groups = config.train_group_paths or []
+        if not train_groups:
+            raise ValueError(
+                "holdout_group_paths is set but train_group_paths is empty. "
+                "Provide train_group_paths in step_config.predictor or use project resolver defaults."
+            )
+        samples_list = []
+        expected_classes = []
+        splits: List[str] = []
+
+        def _consume_groups(groups: List[Dict[str, Any]], tag: str) -> None:
+            for j, entry in enumerate(groups):
+                if not isinstance(entry, dict):
+                    continue
+                paths = entry.get("paths") or []
+                paths = [p for p in paths if p and str(p).strip()]
+                if not paths:
+                    continue
+                cls_idx = int(entry.get("class_index", j))
+                samples_list.extend(paths)
+                expected_classes.extend([cls_idx] * len(paths))
+                splits.extend([tag] * len(paths))
+
+        _consume_groups(train_groups, "training")
+        _consume_groups(config.holdout_group_paths or [], "holdout")
+        if samples_list:
+            return samples_list, expected_classes, splits
 
     # Labeled runs: test_group_paths (K ≥ 2, including binary OvR where n_classes == 2).
-    # Project-resolved multiclass configs set only test_group_paths, not test_control_paths /
-    # test_disease_paths; previously K=2 models skipped this branch and saw an empty sample list.
     def _test_group_paths_have_samples() -> bool:
         if not config.test_group_paths:
             return False
@@ -517,7 +576,7 @@ def _build_samples_and_expected(
 
     if _test_group_paths_have_samples():
         samples_list = []
-        expected_classes: List[int] = []
+        expected_classes_list: List[int] = []
         for j, entry in enumerate(config.test_group_paths):
             if not isinstance(entry, dict):
                 continue
@@ -527,22 +586,74 @@ def _build_samples_and_expected(
                 continue
             cls_idx = int(entry.get("class_index", j))
             samples_list.extend(paths)
-            expected_classes.extend([cls_idx] * len(paths))
+            expected_classes_list.extend([cls_idx] * len(paths))
         if samples_list:
-            return samples_list, expected_classes
+            return samples_list, expected_classes_list, None
 
-    # Multi-class inference-only: use binary-style paths as single unlabeled list
     if is_multiclass:
         flat = list(config.test_control_paths) + list(config.test_disease_paths)
         flat = [p for p in flat if p and str(p).strip()]
-        return flat, None if flat else None
+        return flat, None if flat else None, None
 
-    # Binary
     samples_list = list(config.test_control_paths) + list(config.test_disease_paths)
     n_control = len(config.test_control_paths)
     n_disease = len(config.test_disease_paths)
-    expected_classes = [0] * n_control + [1] * n_disease
-    return samples_list, expected_classes
+    expected_classes_bin = [0] * n_control + [1] * n_disease
+    return samples_list, expected_classes_bin, None
+
+
+def _warn_undifferentiated_labeled_evaluation() -> None:
+    warnings.warn(
+        "Labeled metrics are undifferentiated: samples were not split into training vs holdout. "
+        "balanced_accuracy reflects the scored cohort only (often the same paths used to build the model). "
+        "For separate generalization metrics, set step_config.predictor.holdout_controls and "
+        "holdout_diseases (binary) or holdout_group_paths (multiclass), with optional train_* overrides.",
+        UserWarning,
+        stacklevel=3,
+    )
+
+
+def _assemble_train_holdout_metrics(
+    training_metrics: Optional[Dict[str, Any]],
+    holdout_metrics: Optional[Dict[str, Any]],
+    n_classes: int,
+    class_names: List[str],
+) -> Dict[str, Any]:
+    out: Dict[str, Any] = {
+        "evaluation_semantics": "train_holdout",
+        "training_metrics": training_metrics,
+        "holdout_metrics": holdout_metrics,
+        "n_classes": n_classes,
+        "class_names": class_names,
+    }
+    primary = holdout_metrics or training_metrics
+    if primary:
+        for key in (
+            "balanced_accuracy",
+            "accuracy",
+            "macro_f1",
+            "weighted_f1",
+            "sensitivity",
+            "specificity",
+        ):
+            if key in primary:
+                out[key] = primary[key]
+        if "confusion_matrix" in primary:
+            out["confusion_matrix"] = primary["confusion_matrix"]
+        if "per_class" in primary:
+            out["per_class"] = primary["per_class"]
+        cov = primary.get("sample_dmp_coverage")
+        if isinstance(cov, dict) and cov:
+            out["sample_dmp_coverage"] = cov
+    return out
+
+
+def _assemble_undifferentiated_metrics(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(metrics)
+    out["evaluation_semantics"] = "undifferentiated"
+    out["training_metrics"] = None
+    out["holdout_metrics"] = None
+    return out
 
 
 def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
@@ -603,14 +714,15 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
             "HDF5 is read only during the sample-loading phase."
         )
 
-    samples_list, expected_classes = _build_samples_and_expected(
+    samples_list, expected_classes, split_tags = _build_samples_and_expected(
         config, n_classes, prediction_mode
     )
     if not samples_list:
         raise ValueError(
             "No test samples: set predictor.blind, or config.controls and config.diseases, "
             "or test_control_paths + test_disease_paths (binary), "
-            "or test_group_paths (K-class / OvR, including K=2)."
+            "or test_group_paths (K-class / OvR, including K=2), "
+            "or train/holdout path lists from step_config.predictor."
         )
 
     output_dir = Path(config.output_dir)
@@ -665,17 +777,86 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     if "prediction" not in df.columns:
         raise RuntimeError("predictions CSV must contain prediction column")
 
+    if split_tags is not None and len(split_tags) != len(df):
+        warnings.warn(
+            f"Per-sample evaluation_split length ({len(split_tags)}) does not match "
+            f"predictions rows ({len(df)}); metrics will be undifferentiated.",
+            UserWarning,
+            stacklevel=2,
+        )
+        split_tags = None
+
     metrics: Optional[Dict[str, Any]] = None
-    # Metrics only when we have labels
     if expected_classes is not None and "expected_class" in df.columns:
-        y_true = df["expected_class"].values.astype(int)
-        y_pred = df["prediction"].values.astype(int)
-        metrics = _compute_metrics(y_true, y_pred, n_classes, class_names)
-        _warn_if_degenerate_predictions(y_pred, n_classes, class_names)
-        cov_stats = _dmp_coverage_stats_from_predictions_df(df)
-        if cov_stats:
-            metrics["sample_dmp_coverage"] = cov_stats
-        _print_metrics(metrics)
+        if split_tags is not None and len(split_tags) == len(df):
+            df = df.copy()
+            df["evaluation_split"] = split_tags
+            df.to_csv(predictions_csv, index=False)
+
+        if (
+            split_tags is not None
+            and len(split_tags) == len(df)
+            and "evaluation_split" in df.columns
+        ):
+            tr_mask = df["evaluation_split"].astype(str) == "training"
+            ho_mask = df["evaluation_split"].astype(str) == "holdout"
+            tr_m: Optional[Dict[str, Any]] = None
+            ho_m: Optional[Dict[str, Any]] = None
+            if tr_mask.any():
+                tr_m = _compute_metrics(
+                    df.loc[tr_mask, "expected_class"].values.astype(int),
+                    df.loc[tr_mask, "prediction"].values.astype(int),
+                    n_classes,
+                    class_names,
+                )
+                cov_tr = _dmp_coverage_stats_from_predictions_df(df.loc[tr_mask])
+                if cov_tr:
+                    tr_m["sample_dmp_coverage"] = cov_tr
+                _warn_if_degenerate_predictions(
+                    df.loc[tr_mask, "prediction"].values.astype(int),
+                    n_classes,
+                    class_names,
+                )
+            if ho_mask.any():
+                ho_m = _compute_metrics(
+                    df.loc[ho_mask, "expected_class"].values.astype(int),
+                    df.loc[ho_mask, "prediction"].values.astype(int),
+                    n_classes,
+                    class_names,
+                )
+                cov_ho = _dmp_coverage_stats_from_predictions_df(df.loc[ho_mask])
+                if cov_ho:
+                    ho_m["sample_dmp_coverage"] = cov_ho
+                _warn_if_degenerate_predictions(
+                    df.loc[ho_mask, "prediction"].values.astype(int),
+                    n_classes,
+                    class_names,
+                )
+            if ho_m is None and tr_m is not None:
+                warnings.warn(
+                    "No holdout samples were scored; holdout_metrics is null.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+            metrics = _assemble_train_holdout_metrics(
+                tr_m, ho_m, n_classes, class_names
+            )
+            if ho_m:
+                _print_metrics(ho_m, title="Holdout (generalization)")
+            if tr_m:
+                _print_metrics(tr_m, title="Training (in-sample fit)")
+        else:
+            _warn_undifferentiated_labeled_evaluation()
+            y_true = df["expected_class"].values.astype(int)
+            y_pred = df["prediction"].values.astype(int)
+            metrics = _compute_metrics(y_true, y_pred, n_classes, class_names)
+            _warn_if_degenerate_predictions(y_pred, n_classes, class_names)
+            cov_stats = _dmp_coverage_stats_from_predictions_df(df)
+            if cov_stats:
+                metrics["sample_dmp_coverage"] = cov_stats
+            _print_metrics(metrics)
+            metrics = _assemble_undifferentiated_metrics(metrics)
+
         metrics_path = output_dir / "validation_metrics.json"
         with open(metrics_path, "w") as f:
             json.dump(metrics, f, indent=2)

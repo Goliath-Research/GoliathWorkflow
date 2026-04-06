@@ -132,6 +132,22 @@ class MethylDetectorConfig(BaseModel):
         default=None,
         description="When centroid H5 stores sample directory basenames without samples_base_path, prepend this directory (typically project samples_base_path).",
     )
+    validation_split_ratio: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Fraction of validation samples per class held out as a test row split for BA (repeated stratified). "
+            "0 = no row holdout (calibration and evaluation indices are the same — optimistic). "
+            "Use e.g. 0.2 for generalization-style BA within the validation matrix."
+        ),
+    )
+    validation_n_repeats: int = Field(
+        default=1,
+        ge=1,
+        le=100,
+        description="Number of repeated stratified holdout splits when validation_split_ratio > 0.",
+    )
 
     # ----------------
     # Statistical Filter

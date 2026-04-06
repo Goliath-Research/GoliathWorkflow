@@ -232,6 +232,17 @@ Point **`model_path`** at the saved file. Classifier order must match **`class_n
 
 When samples have **known** expected classes (control vs disease, or multiclass `test_group_paths`), MethylPredictor computes accuracy-style metrics and writes **validation_metrics.json**. **Blind** runs skip these and only emit descriptive **`blind_summary`** statistics in **prediction_report.json**.
 
+### Training vs holdout (generalization)
+
+By default, labeled runs score a **single** cohort list (often the same sample paths used to build centroids). In that case **`validation_metrics.json`** includes **`evaluation_semantics": "undifferentiated"`** and a **UserWarning** is emitted: top-level **`balanced_accuracy`** describes **in-sample** fit on the scored list, not a disjoint test set.
+
+To report **both** cohort homogeneity and **holdout generalization** in one run, set under **`step_config.predictor`**:
+
+- **Binary:** **`holdout_controls`** and **`holdout_diseases`** (same nested shape as **`controls`** / **`diseases`**). Training paths default to the usual predictor/project cohorts; override with **`train_controls`** / **`train_diseases`** if needed. Holdout group/stage **labels** must match the training sides.
+- **Multiclass:** **`holdout_group_paths`** (same shape as **`test_group_paths`**). Training paths default to the resolved evaluation groups; override with **`train_group_paths`**. The **`class_index`** set must match between train and holdout entries.
+
+Then **`evaluation_semantics`** is **`"train_holdout"`**, with nested **`training_metrics`** and **`holdout_metrics`**, and top-level **`balanced_accuracy`** (and related scalars when present) mirror the **holdout** split when it has samples (else training). **`predictions.csv`** gains an **`evaluation_split`** column (`training` / `holdout`).
+
 ### Global metrics
 
 | Metric | Description |
@@ -275,8 +286,8 @@ When the classifier is binary (control vs disease), MethylPredictor also reports
 
 ### Where to find the metrics
 
-- **validation_metrics.json** (in `output_dir`): Full JSON-serializable dict with all metrics above. Use this for downstream scripts or reporting.
-- **Console**: A short summary is printed after the run (accuracy, balanced accuracy, sensitivity, specificity, confusion matrix).
+- **validation_metrics.json** (in `output_dir`): Full JSON-serializable dict with all metrics above, plus **`evaluation_semantics`**, and when applicable **`training_metrics`** / **`holdout_metrics`**. Use this for downstream scripts or reporting.
+- **Console**: A short summary is printed after the run (for train/holdout mode, separate summaries for holdout and training when both exist).
 
 ---
 
@@ -285,7 +296,7 @@ When the classifier is binary (control vs disease), MethylPredictor also reports
 | File | Description |
 |------|-------------|
 | **validation_metrics.json** | Written only for **labeled** runs (accuracy, balanced_accuracy, confusion_matrix, etc.). |
-| **predictions.csv** | One row per scored sample: `expected_class` when labeled; prediction, `prob_class*`, `predicted_class`. |
+| **predictions.csv** | One row per scored sample: `expected_class` when labeled; prediction, `prob_class*`, `predicted_class`. With train/holdout config, includes **`evaluation_split`**. |
 | **prediction_report.json** | **`mode`**: `"labeled"` or `"blind"`. Labeled: nested **`controls` / `diseases`** (or **`multiclass_groups`**) + **`samples`** + **`validation_metrics`**. Blind: **`blind`** block + **`blind_summary`**; **`validation_metrics`** is `null`. |
 
 All are written under `--output-dir` / `output_dir`.

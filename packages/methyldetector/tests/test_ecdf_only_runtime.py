@@ -89,6 +89,28 @@ def test_methyl_detector_config_rejects_removed_statistical_test_option():
             )
 
 
+def test_methyl_detector_config_persists_validation_split_fields():
+    """validation_split_ratio / validation_n_repeats must survive model_validate (not stripped)."""
+    with TemporaryDirectory() as temp_dir:
+        centroid1_dir = Path(temp_dir) / "c1"
+        centroid2_dir = Path(temp_dir) / "c2"
+        centroid1_dir.mkdir()
+        centroid2_dir.mkdir()
+        cfg = MethylDetectorConfig.model_validate(
+            {
+                "chromosome": "1",
+                "contexts": ["CG"],
+                "centroid1_dir": str(centroid1_dir),
+                "centroid2_dir": str(centroid2_dir),
+                "output_dir": str(Path(temp_dir) / "out"),
+                "validation_split_ratio": 0.25,
+                "validation_n_repeats": 2,
+            }
+        )
+        assert cfg.validation_split_ratio == pytest.approx(0.25)
+        assert cfg.validation_n_repeats == 2
+
+
 def test_methyl_detector_config_warns_on_legacy_ecdf_grid_alias():
     with TemporaryDirectory() as temp_dir:
         centroid1_dir = Path(temp_dir) / "c1"

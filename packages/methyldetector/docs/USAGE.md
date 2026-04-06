@@ -179,7 +179,7 @@ Minimal JSON config example:
 - **output_dir**: Where to write DMP CSVs, summary, and classifier outputs.  
 - **alpha**: FDR threshold (e.g. 0.01 or 0.05).  
 - **effect_size_coverage**: Per-context cumulative effect-mass threshold for biological selection.  
-- **validation_split_ratio / validation_n_repeats**: Repeated stratified held-out validation for BA reporting and top-k selection.  
+- **validation_split_ratio / validation_n_repeats**: Repeated stratified held-out validation for BA reporting and top-k selection. Both are fields on **MethylDetectorConfig** (so project JSON values are applied). **results-\*.json** includes **`validation_row_split_semantics`**: `no_row_holdout` when the ratio is 0 (same rows used for calibration and test), or `stratified_holdout` when a fraction is held out per class.  
 - **use_gpu**: Use GPU when available.
 
 Optional **filter funnel exploration** (`filter_funnel_explore`): sweep `effect_size_coverage` over a min/max/step range in one run and write `filter_funnel.csv` (columns: `n_statistical_dmps`, `effect_size_coverage`, `n_biological_dmps`) for charting; see README “Filter funnel exploration”.
