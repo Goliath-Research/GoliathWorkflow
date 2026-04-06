@@ -4,6 +4,8 @@ CLI for Monte Carlo validation runner.
 
 import argparse
 import csv
+import hashlib
+import json
 import re
 import shutil
 import sys
@@ -48,6 +50,7 @@ from .validator_metrics import (
     compute_resource_summary,
     compute_summary,
     iteration_scalar_metrics_from_run_dir,
+    metrics_schema_descriptor,
     write_all_metrics_csv,
     write_resource_summary_json,
     write_metrics_distribution_plotly,
@@ -55,9 +58,58 @@ from .validator_metrics import (
     write_summary_json,
 )
 from .stability import run_stability_analysis, freeze_production_model, build_production_model
+from .rollout import evaluate_dual_run, write_rollout_report
 
 
 _RUN_ID_RE = re.compile(r"^run_(\d{4})$")
+
+
+def _digest_sample_paths(paths: List[str]) -> str:
+    h = hashlib.sha256()
+    for p in sorted(str(x) for x in paths):
+        h.update(p.encode("utf-8"))
+        h.update(b"\n")
+    return h.hexdigest()
+
+
+def _write_baseline_manifest(
+    *,
+    output_root: Path,
+    mode: str,
+    config: MonteCarloConfig,
+    layout: str,
+    cohort_paths_list: List[Tuple[str, List[str]]],
+) -> Path:
+    """
+    Write a deterministic run manifest describing split policy, seed policy, and
+    metric schema. This is the baseline lock artifact for cross-phase comparisons.
+    """
+    payload: Dict[str, Any] = {
+        "manifest_version": "probabilistic_v2_baseline_v1",
+        "mode": str(mode),
+        "layout": str(layout),
+        "n_iterations": int(config.n_iterations),
+        "train_fraction": float(config.train_fraction),
+        "seed_policy": {
+            "base_seed": int(config.seed) if config.seed is not None else None,
+            "per_iteration_seed_rule": "seed_i = base_seed + iteration_index",
+            "split_strategy": "stratified_per_cohort",
+        },
+        "cohorts": [
+            {
+                "label": str(label),
+                "n_samples": int(len(paths)),
+                "sample_digest_sha256": _digest_sample_paths(paths),
+            }
+            for label, paths in cohort_paths_list
+        ],
+        "metrics_schema": metrics_schema_descriptor(),
+    }
+    output_root.mkdir(parents=True, exist_ok=True)
+    out = output_root / "baseline_manifest.json"
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return out
 
 
 def _format_duration(seconds: float) -> str:
@@ -309,9 +361,12 @@ def _score_backend_from_outputs(
         raise FileNotFoundError(f"Missing backend summary: {summary_path}")
     with open(summary_path, encoding="utf-8") as f:
         summary = json.load(f)
-    if metric not in summary:
+    metric_node = summary.get(metric)
+    if metric_node is None and isinstance(summary.get("metrics"), dict):
+        metric_node = summary["metrics"].get(metric)
+    if metric_node is None:
         raise ValueError(f"Metric {metric!r} not found in {summary_path}")
-    metric_summary = summary[metric]
+    metric_summary = metric_node
     if stat == "median":
         p50 = ((metric_summary.get("percentiles") or {}).get("p50"))
         if p50 is None:
@@ -364,6 +419,13 @@ def _run_model_mc_backend(
     per_cancer_group: bool,
 ) -> None:
     backend_root.mkdir(parents=True, exist_ok=True)
+    _write_baseline_manifest(
+        output_root=backend_root,
+        mode="model_mc",
+        config=config,
+        layout=layout,
+        cohort_paths_list=cohort_paths_list,
+    )
     rows: List[Dict[str, Any]] = []
     all_timings: List[Dict[str, Any]] = []
 
@@ -713,6 +775,35 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--rollout-compare",
+        action="store_true",
+        help=(
+            "Compare baseline vs candidate metrics_summary.json using rollout thresholds "
+            "and write a go/no-go recommendation report."
+        ),
+    )
+    parser.add_argument(
+        "--baseline-summary",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="Path to baseline metrics_summary.json for --rollout-compare.",
+    )
+    parser.add_argument(
+        "--candidate-summary",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="Path to candidate metrics_summary.json for --rollout-compare.",
+    )
+    parser.add_argument(
+        "--rollout-report",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help="Optional output path for rollout report JSON (default: monte_carlo_runs/rollout_decision.json).",
+    )
+    parser.add_argument(
         "--selection-metric",
         type=str,
         default="balanced_accuracy",
@@ -985,6 +1076,46 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+    if args.rollout_compare and (
+        args.freeze or args.model or args.model_mc or args.post_model_validation or args.select_best_model
+    ):
+        print(
+            "Error: --rollout-compare cannot be combined with execution modes.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if args.rollout_compare:
+        if args.baseline_summary is None or args.candidate_summary is None:
+            print(
+                "Error: --rollout-compare requires --baseline-summary and --candidate-summary.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        try:
+            report = evaluate_dual_run(
+                baseline_summary_path=args.baseline_summary,
+                candidate_summary_path=args.candidate_summary,
+                tolerances={
+                    "balanced_accuracy_drop_max": config.rollout_balanced_accuracy_drop_max,
+                    "macro_f1_drop_max": config.rollout_macro_f1_drop_max,
+                    "nll_improvement_min_frac": config.rollout_nll_improvement_min_frac,
+                    "brier_improvement_min_frac": config.rollout_brier_improvement_min_frac,
+                    "ece_improvement_min_frac": config.rollout_ece_improvement_min_frac,
+                },
+            )
+        except Exception as e:
+            print(f"Error: rollout comparison failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        report_path = (
+            args.rollout_report
+            if args.rollout_report is not None
+            else (monte_carlo_runs_root / "rollout_decision.json")
+        )
+        write_rollout_report(report, report_path)
+        print(f"Rollout recommendation: {report['recommendation']}")
+        print(f"Wrote rollout report: {report_path}")
+        print("Done.")
+        return
 
     if args.freeze:
         if not config.freeze_stable_dmp_csv:
@@ -1099,10 +1230,18 @@ def main() -> None:
         if layout == "binary":
             control_paths = cohort_paths_list[0][1]
             disease_paths = cohort_paths_list[1][1]
+
         per_cancer_group = False
 
         model_mc_root = monte_carlo_runs_root / "model_mc"
         model_mc_root.mkdir(parents=True, exist_ok=True)
+        _write_baseline_manifest(
+            output_root=model_mc_root,
+            mode="model_mc",
+            config=config,
+            layout=layout,
+            cohort_paths_list=cohort_paths_list,
+        )
         configured_backends = (
             ["ecdf", "tabular_sklearn", "generative_hybrid"]
             if args.model_mc_all
@@ -1243,6 +1382,13 @@ def main() -> None:
 
         post_model_root = monte_carlo_runs_root / "post_model_validation"
         post_model_root.mkdir(parents=True, exist_ok=True)
+        _write_baseline_manifest(
+            output_root=post_model_root,
+            mode="post_model_validation",
+            config=config,
+            layout=layout,
+            cohort_paths_list=cohort_paths_list,
+        )
 
         rows: List[Dict[str, Any]] = []
         all_timings: List[Dict[str, Any]] = []
@@ -1513,6 +1659,13 @@ def main() -> None:
     if layout == "binary":
         control_paths = cohort_paths_list[0][1]
         disease_paths = cohort_paths_list[1][1]
+    _write_baseline_manifest(
+        output_root=monte_carlo_runs_root,
+        mode="monte_carlo",
+        config=config,
+        layout=layout,
+        cohort_paths_list=cohort_paths_list,
+    )
 
     # Optional: base project has multiple disease groups -> use --per-cancer-group (we generate single comparison, so no)
     per_cancer_group = False

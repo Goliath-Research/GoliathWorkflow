@@ -3,8 +3,8 @@ ECDFClassifier: Weighted log-likelihood classifier using ECDF (PCHIP) densities.
 
 Drop-in replacement for BetaClassifier.  The prediction formula is identical:
 
-    log L(class_k | x) = Σ_i  w_i · log F'_k_i(x_i)
-    P(class_k | x) ∝ exp( log L(class_k | x) / T )
+    log p(x | class_k) = Σ_i  w_i · log F'_k_i(x_i)
+    p(class_k | x) ∝ exp( log p(x | class_k) / T ) · p(class_k)
 
 The only difference is the density model: PCHIP-derived PDF from centroid
 binned_stats instead of Beta(alpha, beta).  This captures multimodal
@@ -61,6 +61,10 @@ class ECDFClassifier:
         directions: np.ndarray,
         temperature: float = 2.0,
         contexts: Optional[np.ndarray] = None,
+        prior_c1: float = 0.5,
+        prior_c2: float = 0.5,
+        dependence_block_size: int = 1,
+        dependence_block_shrinkage: float = 0.0,
     ):
         self.positions = np.asarray(positions, dtype=np.uint32)
         self.bin_edges = np.asarray(bin_edges, dtype=np.float64)
@@ -72,6 +76,13 @@ class ECDFClassifier:
         self.contexts = np.asarray(contexts) if contexts is not None else None
         self.n_dmps = len(self.positions)
         self.calibrator = None  # compatible with BetaClassifier interface
+        self.dependence_block_size = max(1, int(dependence_block_size))
+        self.dependence_block_shrinkage = min(
+            1.0, max(0.0, float(dependence_block_shrinkage))
+        )
+        pri = np.asarray([float(prior_c1), float(prior_c2)], dtype=np.float64)
+        pri = np.maximum(pri, 1e-12)
+        self.class_priors = pri / np.sum(pri)
 
         n1, n2 = len(self.bin_counts_c1), len(self.bin_counts_c2)
         if n1 != self.n_dmps or n2 != self.n_dmps:
@@ -152,6 +163,12 @@ class ECDFClassifier:
     def set_temperature(self, temperature: float) -> None:
         self.temperature = max(float(temperature), 0.1)
 
+    def set_class_priors(self, prior_c1: float, prior_c2: float) -> None:
+        """Set class priors used by posterior prediction."""
+        pri = np.asarray([float(prior_c1), float(prior_c2)], dtype=np.float64)
+        pri = np.maximum(pri, 1e-12)
+        self.class_priors = pri / np.sum(pri)
+
     def compute_log_pdf_matrices(
         self,
         X: np.ndarray,
@@ -191,6 +208,47 @@ class ECDFClassifier:
         log_p_c2 = np.where(avail, log_p_c2, 0.0)
         return log_p_c1, log_p_c2, avail
 
+    def _aggregate_weighted_log_likelihood(
+        self,
+        log_p: np.ndarray,
+        avail: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Aggregate per-feature log-likelihoods.
+
+        Default (block_size=1): weighted mean over features.
+        Dependence-aware mode (block_size>1): compute block means and combine with
+        sqrt(block_weight) to damp over-confidence from dense correlated loci.
+        """
+        w = self.weights[np.newaxis, :]  # (1, n_dmps)
+        w_avail = np.where(avail, w, 0.0)
+        w_sum = np.sum(w_avail, axis=1)
+        w_sum = np.maximum(w_sum, 1e-12)
+        global_mean = np.sum(w_avail * log_p, axis=1) / w_sum
+
+        if self.dependence_block_size <= 1:
+            return global_mean
+
+        bs = int(self.dependence_block_size)
+        n = int(self.n_dmps)
+        block_num = np.zeros(log_p.shape[0], dtype=np.float64)
+        block_den = np.zeros(log_p.shape[0], dtype=np.float64)
+        sh = float(self.dependence_block_shrinkage)
+        for start in range(0, n, bs):
+            stop = min(start + bs, n)
+            sl = slice(start, stop)
+            bw = np.sum(w_avail[:, sl], axis=1)
+            bw_safe = np.maximum(bw, 1e-12)
+            bmean = np.sum(w_avail[:, sl] * log_p[:, sl], axis=1) / bw_safe
+            if sh > 0.0:
+                bmean = (1.0 - sh) * bmean + sh * global_mean
+            # Effective weight dampening to reduce correlation-driven overcounting.
+            beff = np.sqrt(np.maximum(bw, 0.0))
+            block_num += beff * bmean
+            block_den += beff
+        block_den = np.maximum(block_den, 1e-12)
+        return block_num / block_den
+
     def predict_proba(
         self,
         X: np.ndarray,
@@ -221,14 +279,10 @@ class ECDFClassifier:
         log_p_c1 = np.maximum(log_p_c1, _LOG_PDF_CAP)
         log_p_c2 = np.maximum(log_p_c2, _LOG_PDF_CAP)
 
-        # Weighted log-likelihood: use weighted mean (not sum) so scale is O(1) and softmax does not underflow with many DMPs.
-        # Same decision boundary: argmax(sum w_i log p_i) = argmax(mean w_i log p_i).
-        w = self.weights[np.newaxis, :]  # (1, n_dmps)
-        w_avail = np.where(avail, w, 0.0)
-        w_sum = np.sum(w_avail, axis=1, keepdims=True)
-        w_sum = np.maximum(w_sum, 1e-12)
-        sum_ll_c1 = np.sum(w_avail * log_p_c1, axis=1) / w_sum.ravel()
-        sum_ll_c2 = np.sum(w_avail * log_p_c2, axis=1) / w_sum.ravel()
+        # Weighted likelihood aggregation (independent-loci baseline or optional
+        # dependence-aware block aggregation).
+        sum_ll_c1 = self._aggregate_weighted_log_likelihood(log_p_c1, avail)
+        sum_ll_c2 = self._aggregate_weighted_log_likelihood(log_p_c2, avail)
 
         # Zero out samples with no valid positions
         valid_counts = np.sum(avail, axis=1)
@@ -256,8 +310,9 @@ class ECDFClassifier:
         # Temperature scaled by effective number of positions so many positions don't over-sharpen
         T_eff = self.temperature * math.sqrt(self._n_effective)
         T_eff = min(T_eff, 10.0)  # cap to avoid numerical issues
-        # Temperature-scaled softmax (log-sum-exp trick for stability)
-        log_likes = np.stack([sum_ll_c1, sum_ll_c2], axis=1) / T_eff
+        # Temperature-scaled posterior log-scores: likelihood + log-prior.
+        log_priors = np.log(np.maximum(self.class_priors, 1e-300))[np.newaxis, :]
+        log_likes = (np.stack([sum_ll_c1, sum_ll_c2], axis=1) / T_eff) + log_priors
         log_likes -= log_likes.max(axis=1, keepdims=True)
         probs = np.exp(log_likes)
         probs /= probs.sum(axis=1, keepdims=True)
@@ -321,6 +376,11 @@ class ECDFClassifier:
             weights=self.weights,
             directions=self.directions,
             temperature=np.array([self.temperature]),
+            class_priors=np.asarray(self.class_priors, dtype=np.float64),
+            dependence_block_size=np.array([self.dependence_block_size], dtype=np.int32),
+            dependence_block_shrinkage=np.array(
+                [self.dependence_block_shrinkage], dtype=np.float64
+            ),
         )
         if self.contexts is not None:
             # Store as fixed-length bytes for portability
@@ -340,6 +400,9 @@ class ECDFClassifier:
         contexts = None
         if "contexts" in d:
             contexts = np.asarray([c.decode("utf-8") for c in d["contexts"]])
+        priors = np.asarray(d["class_priors"], dtype=np.float64) if "class_priors" in d else np.array([0.5, 0.5], dtype=np.float64)
+        dep_block_size = int(d["dependence_block_size"][0]) if "dependence_block_size" in d else 1
+        dep_block_shrink = float(d["dependence_block_shrinkage"][0]) if "dependence_block_shrinkage" in d else 0.0
         return cls(
             positions=d["positions"],
             bin_edges=d["bin_edges"],
@@ -349,6 +412,10 @@ class ECDFClassifier:
             directions=d["directions"],
             temperature=float(d["temperature"][0]),
             contexts=contexts,
+            prior_c1=float(priors[0]),
+            prior_c2=float(priors[1]),
+            dependence_block_size=dep_block_size,
+            dependence_block_shrinkage=dep_block_shrink,
         )
 
     # ------------------------------------------------------------------
@@ -363,6 +430,10 @@ class ECDFClassifier:
         bin_counts_c1: np.ndarray,
         bin_counts_c2: np.ndarray,
         temperature: float = 2.0,
+        prior_c1: float = 0.5,
+        prior_c2: float = 0.5,
+        dependence_block_size: int = 1,
+        dependence_block_shrinkage: float = 0.0,
     ) -> "ECDFClassifier":
         """
         Create an ECDFClassifier from a DMP DataFrame and centroid histograms.
@@ -409,6 +480,10 @@ class ECDFClassifier:
             directions=directions,
             temperature=temperature,
             contexts=contexts,
+            prior_c1=prior_c1,
+            prior_c2=prior_c2,
+            dependence_block_size=dependence_block_size,
+            dependence_block_shrinkage=dependence_block_shrinkage,
         )
 
     # ------------------------------------------------------------------
@@ -430,5 +505,8 @@ class ECDFClassifier:
         return (
             f"ECDFClassifier(n_dmps={self.n_dmps}, "
             f"n_bins={len(self.bin_edges)-1}, "
-            f"temperature={self.temperature:.2f})"
+            f"temperature={self.temperature:.2f}, "
+            f"priors=({self.class_priors[0]:.3f},{self.class_priors[1]:.3f}), "
+            f"dep_block={self.dependence_block_size}, "
+            f"dep_shrink={self.dependence_block_shrinkage:.2f})"
         )

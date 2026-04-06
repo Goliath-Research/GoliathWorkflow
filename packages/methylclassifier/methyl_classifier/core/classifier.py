@@ -15,6 +15,7 @@ from ..models.config import ClassifierConfig
 from .multiclass_ovr import (
     ECDF_ONE_VS_REST_TYPE,
     OV_R_PACKAGE_VERSION,
+    OVR_INFERENCE_VERSION,
     OvrMultiChromBinaryExpert,
     OvrPairwiseColumnAggregateExpert,
     OvrPairwiseControlAggregateExpert,
@@ -105,6 +106,7 @@ class MethylClassifier:
                     _c.set_temperature(self.config.temperature)
                 elif hasattr(_c, "set_temperature"):
                     _c.set_temperature(self.config.temperature)
+                self._apply_probability_contract_options(_c)
             return
 
         # Determine if we're loading a directory or single file
@@ -177,6 +179,7 @@ class MethylClassifier:
 
         self.metadata = dict(model_package.get("metadata") or {})
         self.metadata.setdefault("classifier_type", ECDF_ONE_VS_REST_TYPE)
+        self.metadata.setdefault("ovr_inference_version", OVR_INFERENCE_VERSION)
 
         if isinstance(entries[0], dict) and entries[0].get("bipartite_pairwise_geometric"):
             M = int(entries[0]["n_control_classes"])
@@ -196,6 +199,7 @@ class MethylClassifier:
             self.n_classes = len(names)
             self.metadata["n_classes"] = self.n_classes
             self.metadata["class_names"] = list(self.class_names)
+            self.metadata.setdefault("ovr_fuse_mode", "flat")
 
             pairwise_experts: List[Any] = []
             for j, entry in enumerate(body):
@@ -285,6 +289,7 @@ class MethylClassifier:
         self.n_classes = len(names)
         self.metadata["n_classes"] = self.n_classes
         self.metadata["class_names"] = list(self.class_names)
+        self.metadata.setdefault("ovr_inference_version", OVR_INFERENCE_VERSION)
 
         union_df, col_idx = build_union_dmp_dataframe(entries)
         self.dmp_positions_df = union_df
@@ -621,6 +626,9 @@ class MethylClassifier:
                     pk = clf.predict_proba(Xk, Mk, debug=debug)
             binary_probas.append(pk)
         fuse_mode = (self.metadata or {}).get("ovr_fuse_mode")
+        cfg_fuse_mode = getattr(self.config, "ovr_fuse_mode", None)
+        if cfg_fuse_mode in ("flat", "pairwise_max_contrast"):
+            fuse_mode = cfg_fuse_mode
         if fuse_mode == "flat":
             use_pmc = False
         elif fuse_mode == "pairwise_max_contrast":
@@ -865,12 +873,14 @@ class MethylClassifier:
                     _c.set_temperature(self.config.temperature)
                 elif hasattr(_c, "set_temperature"):
                     _c.set_temperature(self.config.temperature)
+                self._apply_probability_contract_options(_c)
         elif self.classifier is not None:
             _target = self.classifier
             if hasattr(_target, "classifier") and hasattr(getattr(_target, "classifier", None), "set_temperature"):
                 _target = _target.classifier
             if hasattr(_target, "set_temperature"):
                 _target.set_temperature(self.config.temperature)
+            self._apply_probability_contract_options(_target)
 
     def load_classifiers_from_directory(self, model_dir: Path) -> None:
         """
@@ -1052,11 +1062,55 @@ class MethylClassifier:
         
         print(f"\n✅ Multi-chromosome classifier ready: {len(self.classifiers)} chromosomes, {self.n_classes} classes")
 
+        for _chrom, _clf in self.classifiers.items():
+            self._apply_probability_contract_options(_clf)
+
         # Centroid self-check: each chromosome's classifier should give P(class1)≈0 for centroid1, ≈1 for centroid2
         self._run_centroid_self_check(model_packages)
 
         # Collect all unique DMP positions across all classifiers (for massive performance optimization)
         self._collect_all_dmp_positions()
+
+    def _apply_probability_contract_options(self, obj: Any) -> None:
+        """
+        Apply configurable posterior semantics to ECDF-based binary heads:
+        - class priors
+        - optional dependence-aware block aggregation settings
+        """
+        if obj is None:
+            return
+        if isinstance(obj, OvrMultiChromBinaryExpert):
+            for _k, _sub in obj.classifiers.items():
+                self._apply_probability_contract_options(_sub)
+            return
+        if isinstance(obj, OvrPairwiseControlAggregateExpert):
+            for _sub in obj.disease_experts:
+                self._apply_probability_contract_options(_sub)
+            return
+        if isinstance(obj, OvrPairwiseColumnAggregateExpert):
+            for _sub in obj.pairwise_experts:
+                self._apply_probability_contract_options(_sub)
+            return
+
+        target = obj.classifier if hasattr(obj, "classifier") else obj
+        pri = getattr(self.config, "class_priors", None)
+        if pri is not None and len(pri) == 2 and hasattr(target, "set_class_priors"):
+            try:
+                target.set_class_priors(float(pri[0]), float(pri[1]))
+            except Exception:
+                pass
+        if hasattr(target, "dependence_block_size"):
+            try:
+                target.dependence_block_size = max(1, int(self.config.dependence_block_size))
+            except Exception:
+                pass
+        if hasattr(target, "dependence_block_shrinkage"):
+            try:
+                target.dependence_block_shrinkage = min(
+                    1.0, max(0.0, float(self.config.dependence_block_shrinkage))
+                )
+            except Exception:
+                pass
 
     def _run_centroid_self_check(self, model_packages: Dict[str, Dict[str, Any]]) -> None:
         """

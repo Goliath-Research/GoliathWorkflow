@@ -171,7 +171,7 @@ methyl_classifier --config ovr_only.json --export-ovr-pkl /custom/out.pkl
 - **Requires** **ovr_binary_model_paths** or **ovr_detection_dirs** (K≥2) in the config / `step_config.classifier`.
 - **Control/disease projects** are supported when **`step_config.classifier`** (or **`--step-override`**) defines **project-wide** `ovr_binary_model_paths` or `ovr_detection_dirs`, or sets **`ovr_binary_pickles_from_comparisons`: true**. That resolver fills **`ovr_detection_dirs`** with **one directory per disease comparison** and sets **`ovr_pairwise_aggregate_control`: true** unless an explicit control artifact exists (`ovr_control_vs_rest_pkl` or `detections/one_vs_rest/...`). With aggregation, you get **K** class probabilities (control + each subgroup) from **K−1** pairwise detectors plus a **synthetic control head** (geometric mean of each pairwise’s P(control)); each pairwise folder is still merged across chromosomes via **all** `classifier*.pkl` there.  
   The **exported** multiclass OvR PKL defaults to **`{project_root}/classifiers/<control_group_label>/classifier_<control>_<project_name>.pkl`**. **MethylPredictor** should use that single saved PKL (`model_path`) so prediction stays one load for the full union of DMPs across chromosomes and classes.
-  **Fusion:** aggregated-control bundles record **`metadata.ovr_fuse_mode`**: **`pairwise_max_contrast`** by default (see `fuse_ovr_binary_probas` in `multiclass_ovr.py`). Use **`flat`** in the PKL metadata only if you need the legacy softmax over all K heads.
+  **Fusion:** aggregated-control bundles record **`metadata.ovr_fuse_mode`**: **`pairwise_max_contrast`** by default (see `fuse_ovr_binary_probas` in `multiclass_ovr.py`). Use **`flat`** in the PKL metadata only if you need the legacy softmax over all K heads. Packages also persist **`metadata.ovr_inference_version`** so multiclass semantics are auditable across releases.
 
 ### Hierarchical panel readout (OvR, pairwise max-contrast)
 
@@ -437,6 +437,10 @@ When using `--config`, the JSON file can include:
 | `model_path` | string or null | Single classifier .pkl (single-chromosome). Use `null` when using `model_dir` |
 | `temperature` | number | Softmax temperature (default: 1.0) |
 | `enable_platt_calibration` | boolean | Use pre-fitted Platt calibrator from model if present (default: false) |
+| `class_priors` | array or null | Optional `[p_class0, p_class1]` prior weights for binary ECDF posterior (defaults to uniform) |
+| `dependence_block_size` | integer | Optional block size for dependence-aware aggregation (`1` = independent-loci baseline) |
+| `dependence_block_shrinkage` | number | Optional shrinkage in `[0,1]` for block-level aggregation (`0` = no shrinkage) |
+| `ovr_fuse_mode` | string or null | Optional OvR fusion override: `flat` or `pairwise_max_contrast` (else use model metadata) |
 | `trimmed_percentile_low` | number | Lower percentile for chromosome weight from effect_size (default: 0.10) |
 | `trimmed_percentile_high` | number | Upper percentile for chromosome weight (default: 0.01) |
 | `chromosome_weights` | object or null | Optional `{"1": 0.4, "2": 0.3, ...}`; if set, overrides trimmed-mean weights |

@@ -11,6 +11,7 @@ MethylValidation orchestrates repeated train/validation splits, **methyl-centroi
 5. **On-demand evaluation/prediction** (`--post-model-validation` / `--predictor-only`) — Optional frozen-model descriptive holdouts or direct prediction use.
 
 Both workflows are controlled by the project configuration file. See the full Quarto documentation at `docs/theory/` for theoretical background and the complete configuration reference.
+For production migration policy, see [`ROLLOUT.md`](ROLLOUT.md).
 
 ---
 
@@ -43,6 +44,7 @@ methyl-validation --project configs/my_project.json --select-best-model --model-
 - The freeze step prepares the final data using only the stable positions (`fixed_dmp_panel`), bypassing re-discovery, and extracting the valid pathway families (genes).
 - The model-MC step retrains each backend on each split and produces backend-specific metric distributions.
 - Final model training uses the selected best backend on all production data.
+- Every MC output root now writes `baseline_manifest.json` with split policy, seed policy, cohort sample digests, and metric schema version for reproducibility locking.
 
 **Output:** `monte_carlo_runs/production/classifiers/multiclass-classifier.pkl` is the final production model (created after `--model`).
 
@@ -88,6 +90,7 @@ methyl-validation --project configs/my_project.json --post-model-validation
 - Uses frozen artifacts only (no retraining).
 - Supports all model backends.
 - Provides empirical distributions for multiple metrics (`balanced_accuracy`, `sensitivity`, `specificity`, `macro_f1`, etc.).
+- Includes proper-score diagnostics when probabilities are available (`nll`, `brier_score`, `ece`) in `validation_metrics.json` and MC aggregates.
 - Exports `metrics_distributions_plotly.html` with KDE and ECDF for each metric.
 - Uses the same stratified splitting logic as Workflow 1 for consistency.
 
@@ -148,6 +151,7 @@ When to change defaults:
 | `--model-mc` | Run full backend MC retraining+evaluation loop for model selection. | Per iteration: centroid -> detector -> backend train -> backend predict. |
 | `--model-mc-all` | With `--model-mc`, run all supported backends with isolated outputs. | Creates `model_mc/ecdf`, `model_mc/tabular_sklearn`, `model_mc/generative_hybrid`. |
 | `--select-best-model` | Rank backend model-MC summaries and train final production model on all data. | Reads `model_mc/*/metrics_summary.json`, picks best by `--selection-metric`/`--selection-stat`, then runs production model build. |
+| `--rollout-compare` + `--baseline-summary` + `--candidate-summary` | Compare dual-run summaries and emit promote/hold recommendation JSON using rollout thresholds from `step_config.validation`. | In-process comparison (no training/inference run). |
 | `--selection-metric METRIC` | Metric for backend ranking in `--select-best-model`. | Default: `balanced_accuracy`. |
 | `--selection-stat {mean,median}` | Statistic for backend ranking in `--select-best-model`. | Default: `median` (p50). |
 | `--post-model-validation` | Run descriptive MC holdout evaluation with frozen production artifacts (no retraining). | `ecdf`: predictor-only evaluation; tabular/generative: in-process frozen model predict. Outputs to `monte_carlo_runs/post_model_validation/`. |

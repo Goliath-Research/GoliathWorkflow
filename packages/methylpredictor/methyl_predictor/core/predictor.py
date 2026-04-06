@@ -20,6 +20,87 @@ from sklearn.metrics import (
 from ..models.config import PredictorConfig
 
 
+def _extract_probability_matrix_from_df(
+    df: pd.DataFrame,
+    n_classes: int,
+) -> Optional[np.ndarray]:
+    """
+    Build an (n_samples, n_classes) probability matrix from predictions CSV columns.
+    Returns None when probability columns are unavailable.
+    """
+    cols = [f"prob_class{i}" for i in range(int(n_classes))]
+    if not cols or any(c not in df.columns for c in cols):
+        return None
+    m = df[cols].apply(pd.to_numeric, errors="coerce").to_numpy(dtype=float)
+    if m.ndim != 2 or m.shape[1] != int(n_classes):
+        return None
+    if np.isnan(m).all():
+        return None
+    # Normalize row sums for numerical safety.
+    m = np.nan_to_num(m, nan=0.0, posinf=0.0, neginf=0.0)
+    row_sums = m.sum(axis=1, keepdims=True)
+    row_sums = np.where(row_sums <= 0.0, 1.0, row_sums)
+    return m / row_sums
+
+
+def _compute_probabilistic_diagnostics(
+    y_true: np.ndarray,
+    y_proba: np.ndarray,
+    *,
+    ece_bins: int = 15,
+) -> Dict[str, float]:
+    """
+    Compute proper-score and calibration diagnostics from probabilities.
+    """
+    eps = 1e-12
+    y_true = np.asarray(y_true, dtype=int).ravel()
+    y_proba = np.asarray(y_proba, dtype=float)
+    n_samples = int(y_true.shape[0])
+    if y_proba.ndim != 2 or y_proba.shape[0] != n_samples:
+        return {}
+    if n_samples == 0:
+        return {}
+    n_classes = int(y_proba.shape[1])
+    row_sums = y_proba.sum(axis=1, keepdims=True)
+    row_sums = np.where(row_sums <= 0.0, 1.0, row_sums)
+    y_proba = y_proba / row_sums
+    y_proba = np.clip(y_proba, eps, 1.0 - eps)
+
+    y_onehot = np.zeros((n_samples, n_classes), dtype=float)
+    ok = (y_true >= 0) & (y_true < n_classes)
+    idx = np.where(ok)[0]
+    y_onehot[idx, y_true[idx]] = 1.0
+
+    true_p = y_proba[np.arange(n_samples), np.clip(y_true, 0, n_classes - 1)]
+    nll = float(-np.mean(np.log(true_p)))
+    brier = float(np.mean(np.sum((y_proba - y_onehot) ** 2, axis=1)))
+
+    pred_class = np.argmax(y_proba, axis=1)
+    conf = np.max(y_proba, axis=1)
+    correct = (pred_class == y_true).astype(float)
+    bins = max(2, int(ece_bins))
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    ece = 0.0
+    for i in range(bins):
+        lo, hi = edges[i], edges[i + 1]
+        if i == bins - 1:
+            mask = (conf >= lo) & (conf <= hi)
+        else:
+            mask = (conf >= lo) & (conf < hi)
+        if not np.any(mask):
+            continue
+        w = float(np.mean(mask))
+        acc_bin = float(np.mean(correct[mask]))
+        conf_bin = float(np.mean(conf[mask]))
+        ece += w * abs(acc_bin - conf_bin)
+    return {
+        "nll": nll,
+        "brier_score": brier,
+        "ece": float(ece),
+        "ece_bins": int(bins),
+    }
+
+
 def _expand_nested_blind_paths(config: PredictorConfig) -> None:
     """Expand config.blind groups into test_blind_paths and lineage (standalone JSON)."""
     if config.test_blind_paths:
@@ -377,6 +458,7 @@ def _compute_metrics(
     y_pred: np.ndarray,
     n_classes: int,
     class_names: Optional[List[str]] = None,
+    y_proba: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
     """Compute classification metrics (binary or multiclass). Returns a JSON-serializable dict."""
     if class_names is None:
@@ -422,6 +504,8 @@ def _compute_metrics(
         metrics["precision_binary"] = float(precision[1])
         metrics["recall_binary"] = float(recall[1])
         metrics["f1_binary"] = float(f1[1])
+    if y_proba is not None:
+        metrics.update(_compute_probabilistic_diagnostics(y_true, y_proba, ece_bins=15))
     return metrics
 
 
@@ -788,6 +872,7 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
 
     metrics: Optional[Dict[str, Any]] = None
     if expected_classes is not None and "expected_class" in df.columns:
+        proba_all = _extract_probability_matrix_from_df(df, n_classes)
         if split_tags is not None and len(split_tags) == len(df):
             df = df.copy()
             df["evaluation_split"] = split_tags
@@ -803,11 +888,13 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
             tr_m: Optional[Dict[str, Any]] = None
             ho_m: Optional[Dict[str, Any]] = None
             if tr_mask.any():
+                proba_tr = proba_all[tr_mask.values] if proba_all is not None else None
                 tr_m = _compute_metrics(
                     df.loc[tr_mask, "expected_class"].values.astype(int),
                     df.loc[tr_mask, "prediction"].values.astype(int),
                     n_classes,
                     class_names,
+                    y_proba=proba_tr,
                 )
                 cov_tr = _dmp_coverage_stats_from_predictions_df(df.loc[tr_mask])
                 if cov_tr:
@@ -818,11 +905,13 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
                     class_names,
                 )
             if ho_mask.any():
+                proba_ho = proba_all[ho_mask.values] if proba_all is not None else None
                 ho_m = _compute_metrics(
                     df.loc[ho_mask, "expected_class"].values.astype(int),
                     df.loc[ho_mask, "prediction"].values.astype(int),
                     n_classes,
                     class_names,
+                    y_proba=proba_ho,
                 )
                 cov_ho = _dmp_coverage_stats_from_predictions_df(df.loc[ho_mask])
                 if cov_ho:
@@ -849,7 +938,13 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
             _warn_undifferentiated_labeled_evaluation()
             y_true = df["expected_class"].values.astype(int)
             y_pred = df["prediction"].values.astype(int)
-            metrics = _compute_metrics(y_true, y_pred, n_classes, class_names)
+            metrics = _compute_metrics(
+                y_true,
+                y_pred,
+                n_classes,
+                class_names,
+                y_proba=proba_all,
+            )
             _warn_if_degenerate_predictions(y_pred, n_classes, class_names)
             cov_stats = _dmp_coverage_stats_from_predictions_df(df)
             if cov_stats:
@@ -858,6 +953,15 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
             metrics = _assemble_undifferentiated_metrics(metrics)
 
         metrics_path = output_dir / "validation_metrics.json"
+        metrics["probability_semantics"] = {
+            "posterior_source": "classifier_predict_proba",
+            "platt_enabled": bool(getattr(config, "enable_platt_calibration", False)),
+            "isotonic_enabled": bool(getattr(config, "use_isotonic_calibration", False)),
+            "note": (
+                "Calibration flags indicate optional post-hoc mapping. "
+                "NLL/Brier/ECE are computed from exported class probabilities."
+            ),
+        }
         with open(metrics_path, "w") as f:
             json.dump(metrics, f, indent=2)
         print(f"\n💾 Metrics saved to {metrics_path}")

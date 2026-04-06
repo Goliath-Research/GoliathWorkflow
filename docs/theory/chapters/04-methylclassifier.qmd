@@ -11,7 +11,13 @@ The relevant implementation files are:
 
 ## Binary Classification
 
-For a single binary model, the underlying score is the ECDF log-density average described in @eq-ecdf-score and @eq-ecdf-softmax. From the perspective of `methylclassifier`, the main practical issues are:
+For a single binary model, the underlying score is the ECDF log-density average described in @eq-ecdf-score and @eq-ecdf-softmax, with explicit class priors:
+
+$$
+\hat P(Y=c\mid x)\propto \exp\!\left(\frac{\log \hat p(x\mid c)}{T}\right)\hat P(Y=c).
+$$
+
+From the perspective of `methylclassifier`, the main practical issues are:
 
 - aligning the input sample to the stored DMP order,
 - constructing an availability mask for missing loci, and
@@ -54,7 +60,7 @@ $$
 {\sum_{r=1}^{K} \exp(\ell_r(x))}.
 $$ {#eq-ovr-fusion}
 
-This is a practical multiclass reduction. It is not guaranteed to recover a single joint Bayesian posterior unless the binary heads are themselves perfectly compatible.
+This is a practical multiclass reduction. It is not guaranteed to recover a single joint Bayesian posterior unless the binary heads are themselves perfectly compatible. Package metadata now records `ovr_inference_version` and `ovr_fuse_mode` so multiclass semantics are explicit and reproducible.
 
 ## Pairwise Control Aggregation
 
@@ -98,6 +104,7 @@ Recent versions of `methylclassifier` expose a broader post-detector modeling la
 - optional learned multinomial logistic head on top of histogram pre-softmax scores,
 - optional isotonic calibration for probability reshaping,
 - optional elastic-net stacking for chromosome-level fusion,
+- optional dependence-aware block aggregation (`dependence_block_size`, `dependence_block_shrinkage`),
 - hierarchical panel readout for family-level reporting.
 
 These are all valid engineering extensions, but conceptually they sit **on top of** the ECDF likelihood core rather than replacing it.
@@ -163,7 +170,7 @@ This is a sensible engineering choice, but it means that the posterior confidenc
 
 The strongest defensible summary is:
 
-- the binary head is an ECDF-based Naive Bayes style score with optional calibration,
+- the binary head is an ECDF-based Naive Bayes style score with explicit priors and optional calibration,
 - multi-chromosome fusion is a weighted ensemble,
 - multiclass OvR is a reduction from binary heads to a normalized $K$-class score,
 - pairwise control aggregation is heuristic,

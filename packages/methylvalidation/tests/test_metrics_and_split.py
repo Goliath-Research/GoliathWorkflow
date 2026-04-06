@@ -32,17 +32,19 @@ def test_stratified_split_is_reproducible_and_exhaustive():
 
 def test_validation_metric_summaries_aggregate_runs():
     records = [
-        {"iteration": 1, "accuracy": 1.0, "balanced_accuracy": 0.90, "sensitivity": 0.80, "specificity": 1.00},
-        {"iteration": 2, "accuracy": 0.8, "balanced_accuracy": 0.70, "sensitivity": 0.60, "specificity": 0.80},
-        {"iteration": 3, "accuracy": 0.9, "balanced_accuracy": 0.80, "sensitivity": 0.70, "specificity": 0.90},
+        {"iteration": 1, "accuracy": 1.0, "balanced_accuracy": 0.90, "sensitivity": 0.80, "specificity": 1.00, "nll": 0.20, "brier_score": 0.08, "ece": 0.03},
+        {"iteration": 2, "accuracy": 0.8, "balanced_accuracy": 0.70, "sensitivity": 0.60, "specificity": 0.80, "nll": 0.35, "brier_score": 0.15, "ece": 0.06},
+        {"iteration": 3, "accuracy": 0.9, "balanced_accuracy": 0.80, "sensitivity": 0.70, "specificity": 0.90, "nll": 0.27, "brier_score": 0.11, "ece": 0.04},
     ]
     metrics_df = build_metrics_table(records)
     summary = compute_summary(metrics_df)
 
+    assert summary["metrics_schema_version"] == "probabilistic_v2_mc_v1"
     assert math.isclose(summary["accuracy"]["mean"], 0.9)
     assert math.isclose(summary["balanced_accuracy"]["percentiles"]["p50"], 0.8)
     assert math.isclose(summary["sensitivity"]["max"], 0.8)
     assert math.isclose(summary["specificity"]["min"], 0.8)
+    assert math.isclose(summary["nll"]["mean"], (0.20 + 0.35 + 0.27) / 3.0)
 
     resource_summary = compute_resource_summary(
         [

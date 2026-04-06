@@ -293,6 +293,31 @@ class MonteCarloConfig(BaseModel):
         default=True,
         description="For model_backend=generative_hybrid: require all sample IDs to exist in covariates sidecar when used.",
     )
+    rollout_balanced_accuracy_drop_max: float = Field(
+        default=0.005,
+        ge=0.0,
+        description="Dual-run promotion guard: max allowed BA drop vs baseline.",
+    )
+    rollout_macro_f1_drop_max: float = Field(
+        default=0.005,
+        ge=0.0,
+        description="Dual-run promotion guard: max allowed macro-F1 drop vs baseline.",
+    )
+    rollout_nll_improvement_min_frac: float = Field(
+        default=0.02,
+        ge=0.0,
+        description="Dual-run promotion target: minimum relative NLL improvement.",
+    )
+    rollout_brier_improvement_min_frac: float = Field(
+        default=0.02,
+        ge=0.0,
+        description="Dual-run promotion target: minimum relative Brier improvement.",
+    )
+    rollout_ece_improvement_min_frac: float = Field(
+        default=0.05,
+        ge=0.0,
+        description="Dual-run promotion target: minimum relative ECE improvement.",
+    )
 
     # Support for step_config.validation when loading from a project JSON
     validation: Optional[Dict[str, Any]] = Field(

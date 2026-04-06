@@ -64,8 +64,15 @@ For **binary** (control vs disease):
 - **precision_binary**, **recall_binary**, **f1_binary** (positive class = disease)
 - **confusion_matrix** (2×2)
 - **per_class**: for each class, precision, recall, f1, support
+- **proper-score diagnostics** (when probability columns are present): `nll`, `brier_score`, and `ece` (15-bin expected calibration error)
 
 For **multiclass**, the same structure with more classes; sensitivity/specificity are not defined; macro and weighted F1 are reported.
+
+### Probability Semantics and Calibration Governance
+
+- `validation_metrics.json` now includes a `probability_semantics` block documenting whether Platt/isotonic calibration flags were enabled during inference.
+- Proper-score diagnostics (`nll`, `brier_score`, `ece`) are computed from exported `prob_class*` columns, so reliability can be monitored alongside discrimination.
+- Calibration remains an optional post-hoc layer; core posterior semantics are preserved in classifier metadata and output reporting.
 
 ### Multiclass OvR ECDF (`classifier_type: ecdf_one_vs_rest`)
 

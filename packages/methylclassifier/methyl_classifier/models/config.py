@@ -34,6 +34,13 @@ class ClassifierConfig(BaseModel):
         default=False,
         description="When true with ovr_detection_dirs: first class is control; dirs are K-1 pairwise control-vs-disease folders; control OvR head aggregates P(control) across those pairwises.",
     )
+    ovr_fuse_mode: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional OvR fusion mode override: 'flat' or 'pairwise_max_contrast'. "
+            "None uses package metadata/default behavior."
+        ),
+    )
     ovr_bipartite_aggregate: bool = Field(
         default=False,
         description="When true with ovr_detection_dirs: multi-control × multi-disease bipartite. "
@@ -90,6 +97,30 @@ class ClassifierConfig(BaseModel):
     enable_platt_calibration: bool = Field(
         default=False,
         description="Enable Platt scaling calibration on validation data"
+    )
+    class_priors: Optional[List[float]] = Field(
+        default=None,
+        description=(
+            "Optional binary class priors [p(class0), p(class1)] used by ECDF posterior. "
+            "If omitted, priors default to uniform."
+        ),
+    )
+    dependence_block_size: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Optional dependence-aware aggregation block size for ECDF features. "
+            "1 keeps independent-loci aggregation."
+        ),
+    )
+    dependence_block_shrinkage: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Optional shrinkage factor for block-level dependence-aware aggregation "
+            "(0.0 = no shrinkage)."
+        ),
     )
     use_elasticnet_stacking: bool = Field(
         default=False,
@@ -164,6 +195,16 @@ class ClassifierConfig(BaseModel):
             raise ValueError("weight_fit_regularization must be one of: none, ridge, lasso, l1, l2")
         return v
 
+    @field_validator("ovr_fuse_mode")
+    @classmethod
+    def validate_ovr_fuse_mode(cls, v):
+        if v is None:
+            return v
+        vv = str(v).strip().lower()
+        if vv not in {"flat", "pairwise_max_contrast"}:
+            raise ValueError("ovr_fuse_mode must be one of: flat, pairwise_max_contrast")
+        return vv
+
     @field_validator("calibration_train_fraction")
     @classmethod
     def validate_calibration_train_fraction(cls, v):
@@ -172,6 +213,20 @@ class ClassifierConfig(BaseModel):
         if v <= 0 or v > 1:
             raise ValueError("calibration_train_fraction must be None or in (0, 1]")
         return v
+
+    @field_validator("class_priors")
+    @classmethod
+    def validate_class_priors(cls, v):
+        if v is None:
+            return v
+        if len(v) != 2:
+            raise ValueError("class_priors must have exactly two values: [p0, p1]")
+        if any(float(x) <= 0 for x in v):
+            raise ValueError("class_priors values must be > 0")
+        s = float(sum(float(x) for x in v))
+        if s <= 0:
+            raise ValueError("class_priors must sum to > 0")
+        return [float(x) / s for x in v]
 
     @model_validator(mode='after')
     def validate_trimmed_percentile_sum(self):

@@ -1,5 +1,6 @@
 """
-Read validation_metrics.json, flatten to one row per run, and compute empirical distribution summary.
+Read validation_metrics.json, flatten to one row per run, and compute empirical
+distribution summaries under a versioned metrics schema.
 """
 
 import json
@@ -9,10 +10,17 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-# Scalar metric keys we want in the flat table and in the summary (skip nested per_class, confusion_matrix)
+# Schema version for aggregated Monte Carlo metrics artifacts.
+METRICS_SCHEMA_VERSION = "probabilistic_v2_mc_v1"
+
+# Scalar metric keys we want in the flat table and in the summary
+# (skip nested per_class, confusion_matrix).
 SCALAR_KEYS = [
     "accuracy",
     "balanced_accuracy",
+    "nll",
+    "brier_score",
+    "ece",
     "sensitivity",
     "specificity",
     "macro_precision",
@@ -25,6 +33,20 @@ SCALAR_KEYS = [
     "n_samples",
     "n_classes",
 ]
+
+
+def metrics_schema_descriptor() -> Dict[str, Any]:
+    """
+    Return a compact descriptor for the MC metric schema written by this module.
+    """
+    return {
+        "metrics_schema_version": METRICS_SCHEMA_VERSION,
+        "scalar_metric_keys": list(SCALAR_KEYS),
+        "notes": (
+            "Flat tables include scalar top-level keys and optional training_/holdout_"
+            " prefixed variants when evaluation_semantics=train_holdout."
+        ),
+    }
 
 
 def _scalar_metrics_from_dict(metrics: Dict[str, Any]) -> Dict[str, Any]:
@@ -89,13 +111,16 @@ def compute_summary(df: pd.DataFrame) -> Dict[str, Any]:
     Compute per-metric empirical distribution: mean, std, min, max, and percentiles (5, 25, 50, 75, 95).
     Only numeric columns are summarized.
     """
-    summary: Dict[str, Any] = {}
+    summary: Dict[str, Any] = {
+        "metrics_schema_version": METRICS_SCHEMA_VERSION,
+    }
     percentiles = [5, 25, 50, 75, 95]
+    per_metric: Dict[str, Any] = {}
     for col in df.select_dtypes(include=[np.number]).columns:
         series = df[col].dropna()
         if len(series) == 0:
             continue
-        summary[col] = {
+        per_metric[col] = {
             "mean": float(series.mean()),
             "std": float(series.std()) if len(series) > 1 else 0.0,
             "min": float(series.min()),
@@ -104,9 +129,12 @@ def compute_summary(df: pd.DataFrame) -> Dict[str, Any]:
         }
         try:
             p = np.percentile(series, percentiles)
-            summary[col]["percentiles"] = {f"p{pct}": float(v) for pct, v in zip(percentiles, p)}
+            per_metric[col]["percentiles"] = {f"p{pct}": float(v) for pct, v in zip(percentiles, p)}
         except Exception:
             pass
+    summary["metrics"] = per_metric
+    # Backward compatibility: keep legacy top-level per-metric keys.
+    summary.update(per_metric)
     return summary
 
 

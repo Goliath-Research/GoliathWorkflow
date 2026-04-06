@@ -77,6 +77,10 @@ class ClassificationConfig(BaseModel):
         default=False,
         description="True when ovr_detection_dirs lists K-1 pairwise folders and first OvR class is control (geometric-mean aggregate head).",
     )
+    ovr_fuse_mode: Optional[str] = Field(
+        default=None,
+        description="Optional OvR fusion mode override: flat | pairwise_max_contrast.",
+    )
     ovr_bipartite_aggregate: bool = Field(
         default=False,
         description="True when ovr_detection_dirs lists M×N bipartite pairwises (multi-control × multi-disease).",
@@ -141,6 +145,21 @@ class ClassificationConfig(BaseModel):
     enable_platt_calibration: bool = Field(
         default=False,
         description="Enable Platt scaling calibration on validation data"
+    )
+    class_priors: Optional[List[float]] = Field(
+        default=None,
+        description="Optional binary class priors [p(class0), p(class1)] for ECDF posterior.",
+    )
+    dependence_block_size: int = Field(
+        default=1,
+        ge=1,
+        description="Optional dependence-aware aggregation block size (1 = independent-loci).",
+    )
+    dependence_block_shrinkage: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Optional shrinkage for dependence-aware block aggregation.",
     )
     use_isotonic_calibration: bool = Field(
         default=False,
@@ -223,6 +242,16 @@ class ClassificationConfig(BaseModel):
             raise ValueError("weight_fit_regularization must be one of: none, ridge, lasso, l1, l2")
         return v
 
+    @field_validator("ovr_fuse_mode")
+    @classmethod
+    def validate_ovr_fuse_mode(cls, v):
+        if v is None:
+            return v
+        vv = str(v).strip().lower()
+        if vv not in {"flat", "pairwise_max_contrast"}:
+            raise ValueError("ovr_fuse_mode must be one of: flat, pairwise_max_contrast")
+        return vv
+
     @field_validator("calibration_train_fraction")
     @classmethod
     def validate_calibration_train_fraction(cls, v):
@@ -231,6 +260,20 @@ class ClassificationConfig(BaseModel):
         if v <= 0 or v > 1:
             raise ValueError("calibration_train_fraction must be None or in (0, 1]")
         return v
+
+    @field_validator("class_priors")
+    @classmethod
+    def validate_class_priors(cls, v):
+        if v is None:
+            return v
+        if len(v) != 2:
+            raise ValueError("class_priors must have exactly two values: [p0, p1]")
+        if any(float(x) <= 0 for x in v):
+            raise ValueError("class_priors values must be > 0")
+        s = float(sum(float(x) for x in v))
+        if s <= 0:
+            raise ValueError("class_priors must sum to > 0")
+        return [float(x) / s for x in v]
     
     def model_post_init(self, __context):
         """Validate that at least one input source is provided."""

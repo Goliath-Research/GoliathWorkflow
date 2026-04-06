@@ -14,6 +14,7 @@ import pandas as pd
 
 ECDF_ONE_VS_REST_TYPE = "ecdf_one_vs_rest"
 OV_R_PACKAGE_VERSION = 2
+OVR_INFERENCE_VERSION = 1
 
 
 def _normalize_chrom(c: Any) -> str:

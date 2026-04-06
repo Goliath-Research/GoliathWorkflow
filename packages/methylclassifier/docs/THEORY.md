@@ -14,13 +14,20 @@ The canonical mathematical and statistical reference for this package is the Qua
 
 ## Method Status
 
-- **Principled**: binary ECDF log-likelihood scoring with optional calibration.
+- **Principled**: binary ECDF density scoring with explicit class priors (`p(X|c) * p(c)`), optional dependence-aware block aggregation, and optional calibration.
 - **Approximate**: chromosome fusion inherits the assumptions of its component binary models.
-- **Heuristic**: OvR fusion, geometric-mean control aggregation, and some multiclass reductions.
+- **Heuristic / Versioned**: OvR fusion and geometric-mean control aggregation remain engineered reductions, but are now versioned via `ovr_inference_version` + `ovr_fuse_mode` metadata for reproducible interpretation.
 
 ## Key Point
 
-The binary head is the cleanest part of the model. Multiclass and multi-chromosome behavior is an engineered ensemble on top of that binary core, not one unified generative model.
+The binary head is the cleanest part of the model and now has an explicit posterior contract:
+
+- feature densities from ECDF/PCHIP per class,
+- weighted log-likelihood aggregation,
+- explicit class priors,
+- optional post-hoc calibration.
+
+Multiclass and multi-chromosome behavior remain an engineered ensemble on top of that core; inference semantics are explicitly versioned in package metadata.
 
 ## Key Code Paths
 
