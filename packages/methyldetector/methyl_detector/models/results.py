@@ -207,7 +207,11 @@ class MethylDetectorValidationResults(NumpyCompatibleModel):
     # Validation results
     optimization_validation: Optional[ValidationResults] = Field(
         default=None,
-        description="Results from optimization validation (real validation mode)"
+        description="Holdout / evaluation-fold results (generalization when validation_split_ratio>0)"
+    )
+    training_fold_validation: Optional[ValidationResults] = Field(
+        default=None,
+        description="Calibration / training-fold metrics (in-sample fit) per repeated split; same rows as holdout when validation_split_ratio=0",
     )
     real_validation: Optional[ValidationResults] = Field(
         default=None,

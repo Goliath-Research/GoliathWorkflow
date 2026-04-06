@@ -58,6 +58,8 @@ class ValidationPrefixCache:
     splits: List[Tuple[np.ndarray, np.ndarray]]
     prefix_ll_c1: List[np.ndarray]
     prefix_ll_c2: List[np.ndarray]
+    prefix_ll_c1_calib: List[np.ndarray]
+    prefix_ll_c2_calib: List[np.ndarray]
     temperature: float
 
 def _select_by_effect_coverage(df: pd.DataFrame, coverage: float) -> pd.DataFrame:
@@ -377,6 +379,7 @@ class MethylDetector:
         logger.info("📋 Sorting DMPs by biological importance...")
         sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
         self._featurecuts_last_result = None
+        self._final_validation_results = None
         export_mode = getattr(self.config, "dmp_export_mode", "unified")
         classifier_dmps_df = self._classifier_dmps_from_sorted(sorted_by_importance_df)
         selected_dmps_df = classifier_dmps_df
@@ -415,6 +418,12 @@ class MethylDetector:
                     )
                 self._export_unified_csv(export_df, suffix="")
             self._save_unified_model(None, classifier_dmps_df)
+            if getattr(self, '_featurecuts_last_result', None) is not None:
+                self._final_validation_results = self._featurecuts_last_result
+            else:
+                merged_val = self._validate_selected_dmps(classifier_dmps_df)
+                if merged_val:
+                    self._final_validation_results = merged_val
             self._save_validation_results(
                 n_dmps_exported=len(classifier_dmps_df),
                 total_statistical_dmps=total_confirmed,
@@ -1340,6 +1349,14 @@ class MethylDetector:
             logger.warning("Centroid self-check failed: %s", e)
 
     def _default_validation_result(self) -> dict:
+        empty_tm = {
+            'balanced_accuracy': 0.5,
+            'confusion_matrix': {'tp': 0, 'tn': 0, 'fp': 0, 'fn': 0},
+            'metrics': {'sensitivity': 0.0, 'specificity': 0.0, 'accuracy': 0.0, 'precision': 0.0},
+            'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0},
+            'split_balanced_accuracy_std': 0.0,
+            'n_splits': 0,
+        }
         return {
             'balanced_accuracy': 0.5,
             'confusion_matrix': {'tp': 0, 'tn': 0, 'fp': 0, 'fn': 0},
@@ -1347,6 +1364,66 @@ class MethylDetector:
             'counts': {'n_positive': 0, 'n_negative': 0, 'n_total': 0},
             'split_balanced_accuracy_std': 0.0,
             'n_splits': 0,
+            'training_metrics': dict(empty_tm),
+        }
+
+    @staticmethod
+    def _binary_metrics_package(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, Any]:
+        """Confusion-derived metrics for binary classification (rows = validation samples)."""
+        y_true = np.asarray(y_true, dtype=int).ravel()
+        y_pred = np.asarray(y_pred, dtype=int).ravel()
+        tp = int(np.sum((y_pred == 1) & (y_true == 1)))
+        tn = int(np.sum((y_pred == 0) & (y_true == 0)))
+        fp = int(np.sum((y_pred == 1) & (y_true == 0)))
+        fn = int(np.sum((y_pred == 0) & (y_true == 1)))
+        n_pos = tp + fn
+        n_neg = tn + fp
+        sensitivity = tp / n_pos if n_pos > 0 else 0.0
+        specificity = tn / n_neg if n_neg > 0 else 0.0
+        total = tp + tn + fp + fn
+        return {
+            'balanced_accuracy': float((sensitivity + specificity) / 2.0),
+            'confusion_matrix': {'tp': tp, 'tn': tn, 'fp': fp, 'fn': fn},
+            'metrics': {
+                'sensitivity': float(sensitivity),
+                'specificity': float(specificity),
+                'accuracy': float((tp + tn) / total) if total > 0 else 0.0,
+                'precision': float(tp / (tp + fp)) if (tp + fp) > 0 else 0.0,
+            },
+            'counts': {
+                'n_positive': int(n_pos),
+                'n_negative': int(n_neg),
+                'n_total': int(total),
+            },
+        }
+
+    def _merge_training_metrics_results(self, training_payloads: List[dict]) -> dict:
+        """Aggregate training-fold metrics across repeated splits (same pattern as holdout merge)."""
+        if not training_payloads:
+            d = self._default_validation_result()
+            return d['training_metrics']
+        ba_values = [float(t.get('balanced_accuracy', 0.5)) for t in training_payloads]
+        tp = sum(int(t['confusion_matrix']['tp']) for t in training_payloads)
+        tn = sum(int(t['confusion_matrix']['tn']) for t in training_payloads)
+        fp = sum(int(t['confusion_matrix']['fp']) for t in training_payloads)
+        fn = sum(int(t['confusion_matrix']['fn']) for t in training_payloads)
+        n_pos = tp + fn
+        n_neg = tn + fp
+        total = n_pos + n_neg
+        sensitivity = tp / n_pos if n_pos > 0 else 0.0
+        specificity = tn / n_neg if n_neg > 0 else 0.0
+        return {
+            'balanced_accuracy': float(np.mean(ba_values)),
+            'confusion_matrix': {'tp': int(tp), 'tn': int(tn), 'fp': int(fp), 'fn': int(fn)},
+            'metrics': {
+                'sensitivity': float(sensitivity),
+                'specificity': float(specificity),
+                'accuracy': float((tp + tn) / total) if total > 0 else 0.0,
+                'precision': float(tp / (tp + fp)) if (tp + fp) > 0 else 0.0,
+            },
+            'counts': {'n_positive': int(n_pos), 'n_negative': int(n_neg), 'n_total': int(total)},
+            'split_balanced_accuracy_std': float(np.std(ba_values)) if len(ba_values) > 1 else 0.0,
+            'n_splits': len(ba_values),
         }
 
     def _get_classifier_weights(self, dmps_df: pd.DataFrame) -> np.ndarray:
@@ -1475,9 +1552,13 @@ class MethylDetector:
         weighted_c2 = log_p_c2 * weights[np.newaxis, :]
         prefix_ll_c1: List[np.ndarray] = []
         prefix_ll_c2: List[np.ndarray] = []
-        for _, test_idx in splits:
+        prefix_ll_c1_calib: List[np.ndarray] = []
+        prefix_ll_c2_calib: List[np.ndarray] = []
+        for calib_idx, test_idx in splits:
             prefix_ll_c1.append(np.cumsum(weighted_c1[test_idx], axis=1))
             prefix_ll_c2.append(np.cumsum(weighted_c2[test_idx], axis=1))
+            prefix_ll_c1_calib.append(np.cumsum(weighted_c1[calib_idx], axis=1))
+            prefix_ll_c2_calib.append(np.cumsum(weighted_c2[calib_idx], axis=1))
         return ValidationPrefixCache(
             sorted_df=sorted_df.copy(),
             weights=weights,
@@ -1485,6 +1566,8 @@ class MethylDetector:
             splits=splits,
             prefix_ll_c1=prefix_ll_c1,
             prefix_ll_c2=prefix_ll_c2,
+            prefix_ll_c1_calib=prefix_ll_c1_calib,
+            prefix_ll_c2_calib=prefix_ll_c2_calib,
             temperature=self.config.temperature,
         )
 
@@ -1500,11 +1583,15 @@ class MethylDetector:
         k = min(int(k), len(cache.sorted_df))
         split_bas: List[float] = []
         tp = tn = fp = fn = 0
+        split_bas_train: List[float] = []
+        tp_tr = tn_tr = fp_tr = fn_tr = 0
 
-        for (calib_idx, test_idx), prefix_c1, prefix_c2 in zip(
+        for (calib_idx, test_idx), prefix_c1, prefix_c2, pc1_cal, pc2_cal in zip(
             cache.splits,
             cache.prefix_ll_c1,
             cache.prefix_ll_c2,
+            cache.prefix_ll_c1_calib,
+            cache.prefix_ll_c2_calib,
         ):
             if prefix_c1.shape[1] < k or len(test_idx) == 0:
                 continue
@@ -1533,6 +1620,40 @@ class MethylDetector:
             fp += fp_i
             fn += fn_i
 
+            same_fold = calib_idx.shape == test_idx.shape and (
+                calib_idx is test_idx or np.array_equal(calib_idx, test_idx)
+            )
+            if same_fold:
+                y_calib = y_test
+                y_pred_calib = y_pred
+            elif len(calib_idx) == 0:
+                y_calib = None
+            else:
+                log_c = np.stack(
+                    [pc1_cal[:, k - 1], pc2_cal[:, k - 1]],
+                    axis=1,
+                ) / max(cache.temperature, 0.1)
+                log_c -= log_c.max(axis=1, keepdims=True)
+                pr_c = np.exp(log_c)
+                pr_c /= pr_c.sum(axis=1, keepdims=True)
+                y_calib = cache.y_val[calib_idx]
+                y_pred_calib = np.argmax(pr_c, axis=1)
+
+            if y_calib is not None:
+                ttp = int(np.sum((y_pred_calib == 1) & (y_calib == 1)))
+                ttn = int(np.sum((y_pred_calib == 0) & (y_calib == 0)))
+                tfp = int(np.sum((y_pred_calib == 1) & (y_calib == 0)))
+                tfn = int(np.sum((y_pred_calib == 0) & (y_calib == 1)))
+                np_tr = ttp + tfn
+                nn_tr = ttn + tfp
+                sen_tr = ttp / np_tr if np_tr > 0 else 0.0
+                spe_tr = ttn / nn_tr if nn_tr > 0 else 0.0
+                split_bas_train.append((sen_tr + spe_tr) / 2.0)
+                tp_tr += ttp
+                tn_tr += ttn
+                fp_tr += tfp
+                fn_tr += tfn
+
         if not split_bas:
             return self._default_validation_result()
 
@@ -1541,6 +1662,28 @@ class MethylDetector:
         sensitivity = tp / n_pos if n_pos > 0 else 0.0
         specificity = tn / n_neg if n_neg > 0 else 0.0
         total = n_pos + n_neg
+
+        if not split_bas_train:
+            training_metrics = dict(self._default_validation_result()['training_metrics'])
+        else:
+            n_pos_tr = tp_tr + fn_tr
+            n_neg_tr = tn_tr + fp_tr
+            sensitivity_tr = tp_tr / n_pos_tr if n_pos_tr > 0 else 0.0
+            specificity_tr = tn_tr / n_neg_tr if n_neg_tr > 0 else 0.0
+            total_tr = n_pos_tr + n_neg_tr
+            training_metrics = {
+                'balanced_accuracy': float(np.mean(split_bas_train)),
+                'confusion_matrix': {'tp': int(tp_tr), 'tn': int(tn_tr), 'fp': int(fp_tr), 'fn': int(fn_tr)},
+                'metrics': {
+                    'sensitivity': sensitivity_tr,
+                    'specificity': specificity_tr,
+                    'accuracy': (tp_tr + tn_tr) / total_tr if total_tr > 0 else 0.0,
+                    'precision': tp_tr / (tp_tr + fp_tr) if (tp_tr + fp_tr) > 0 else 0.0,
+                },
+                'counts': {'n_positive': int(n_pos_tr), 'n_negative': int(n_neg_tr), 'n_total': int(total_tr)},
+                'split_balanced_accuracy_std': float(np.std(split_bas_train)) if len(split_bas_train) > 1 else 0.0,
+                'n_splits': len(split_bas_train),
+            }
         return {
             'balanced_accuracy': float(np.mean(split_bas)),
             'confusion_matrix': {'tp': int(tp), 'tn': int(tn), 'fp': int(fp), 'fn': int(fn)},
@@ -1553,6 +1696,7 @@ class MethylDetector:
             'counts': {'n_positive': int(n_pos), 'n_negative': int(n_neg), 'n_total': int(total)},
             'split_balanced_accuracy_std': float(np.std(split_bas)) if len(split_bas) > 1 else 0.0,
             'n_splits': len(split_bas),
+            'training_metrics': training_metrics,
         }
 
     def _merge_validation_results(self, results: List[dict]) -> dict:
@@ -1587,7 +1731,38 @@ class MethylDetector:
                 if key in result:
                     merged[key] = result[key]
                     break
+        training_parts = [
+            r['training_metrics']
+            for r in valid_results
+            if isinstance(r.get('training_metrics'), dict)
+        ]
+        merged['training_metrics'] = self._merge_training_metrics_results(training_parts)
         return merged
+
+    def _full_validation_merge_for_selected_panel(
+        self,
+        dmps_df: pd.DataFrame,
+        X_val: np.ndarray,
+        y_val: np.ndarray,
+        val_positions: np.ndarray,
+        val_contexts: np.ndarray,
+        splits: List[Tuple[np.ndarray, np.ndarray]],
+    ) -> Optional[dict]:
+        """Run ECDF + optional Platt per split and merge (authoritative vs prefix-only FeatureCuts search)."""
+        split_results: List[dict] = []
+        for calib_indices, test_indices in splits:
+            split_results.append(
+                self._validate_classifier_subset(
+                    dmps_df,
+                    X_val[calib_indices],
+                    y_val[calib_indices],
+                    X_val[test_indices],
+                    y_val[test_indices],
+                    val_positions,
+                    val_contexts,
+                )
+            )
+        return self._merge_validation_results(split_results)
 
     def _validate_classifier_subset(
         self,
@@ -1728,27 +1903,29 @@ class MethylDetector:
                     prob_range, test_probas[:, 1].mean()
                 )
             
-            # Extract probabilities for class 1 (centroid2/cancer)
-            probabilities = test_probas[:, 1].tolist()
             y_pred = np.argmax(test_probas, axis=1)
-            
-            # Compute metrics on TEST set only
-            probabilities = np.array(probabilities)
-            
-            # Compute confusion matrix on TEST set
-            tp = np.sum((y_pred == 1) & (y_test == 1))
-            tn = np.sum((y_pred == 0) & (y_test == 0))
-            fp = np.sum((y_pred == 1) & (y_test == 0))
-            fn = np.sum((y_pred == 0) & (y_test == 1))
-            
-            # Compute balanced accuracy
-            n_pos = tp + fn
-            n_neg = tn + fp
-            
-            sensitivity = tp / n_pos if n_pos > 0 else 0.0
-            specificity = tn / n_neg if n_neg > 0 else 0.0
-            
-            balanced_accuracy = (sensitivity + specificity) / 2.0
+            test_pkg = self._binary_metrics_package(y_test, y_pred)
+            balanced_accuracy = test_pkg['balanced_accuracy']
+            n_pos = test_pkg['counts']['n_positive']
+            n_neg = test_pkg['counts']['n_negative']
+
+            xc = np.nan_to_num(X_calib_subset, nan=0.5)
+            xt = np.nan_to_num(X_test_subset, nan=0.5)
+            same_fold = (
+                xc.shape == xt.shape
+                and np.array_equal(y_calib, y_test)
+                and np.array_equal(xc, xt)
+            )
+            if same_fold:
+                train_pkg = dict(test_pkg)
+                y_pred_calib = y_pred
+            else:
+                if use_calibration and hasattr(temp_classifier, 'predict_proba_calibrated') and temp_classifier.calibrator is not None:
+                    calib_probas = temp_classifier.predict_proba_calibrated(X_calib_subset_clean, calib_availability)
+                else:
+                    calib_probas = temp_classifier.predict_proba(X_calib_subset_clean, calib_availability, debug=False)
+                y_pred_calib = np.argmax(calib_probas, axis=1)
+                train_pkg = self._binary_metrics_package(y_calib, y_pred_calib)
 
             # Diagnose BA≈0.5 (coin toss): usually means classifier predicts one class only
             n_pred_0 = int(np.sum(y_pred == 0))
@@ -1766,22 +1943,32 @@ class MethylDetector:
                     )
                 else:
                     logger.debug("BA≈0.5 again: pred %s/%s, true %s/%s", n_pred_0, n_pred_1, n_neg, n_pos)
-            
-            # Return both balanced accuracy and confusion matrix details
+
+            if len(dmps_subset) <= 100 and not same_fold:
+                logger.debug(
+                    "    training fold: k=%s, calib BA=%.4f (pred class0/class1=%s/%s)",
+                    f"{len(dmps_subset):,}",
+                    float(train_pkg['balanced_accuracy']),
+                    int(np.sum(y_pred_calib == 0)),
+                    int(np.sum(y_pred_calib == 1)),
+                )
+
+            # Holdout = generalization; training_metrics = calibration-fold (in-sample) fit
             result = {
-                'balanced_accuracy': balanced_accuracy,
-                'confusion_matrix': {
-                    'tp': int(tp), 'tn': int(tn), 'fp': int(fp), 'fn': int(fn)
-                },
-                'metrics': {
-                    'sensitivity': sensitivity,
-                    'specificity': specificity,
-                    'accuracy': (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0,
-                    'precision': tp / (tp + fp) if (tp + fp) > 0 else 0.0
-                },
-                'counts': {'n_positive': int(n_pos), 'n_negative': int(n_neg), 'n_total': int(n_pos + n_neg)},
+                'balanced_accuracy': test_pkg['balanced_accuracy'],
+                'confusion_matrix': test_pkg['confusion_matrix'],
+                'metrics': test_pkg['metrics'],
+                'counts': test_pkg['counts'],
                 'split_balanced_accuracy_std': 0.0,
                 'n_splits': 1,
+                'training_metrics': {
+                    'balanced_accuracy': train_pkg['balanced_accuracy'],
+                    'confusion_matrix': train_pkg['confusion_matrix'],
+                    'metrics': train_pkg['metrics'],
+                    'counts': train_pkg['counts'],
+                    'split_balanced_accuracy_std': 0.0,
+                    'n_splits': 1,
+                },
             }
             # Include fitted Platt calibrator for export when enabled (so MethylClassifier can use it)
             if use_calibration and self.config.enable_platt_calibration and temp_classifier.calibrator is not None:
@@ -1981,6 +2168,17 @@ class MethylDetector:
             if best_k <= 0:
                 return None, None
             sel = sorted_pool.iloc[:best_k].copy().reset_index(drop=True)
+            try:
+                refined = self._full_validation_merge_for_selected_panel(
+                    sel, X_val, y_val, _val_positions, _val_contexts, splits
+                )
+                if refined is not None:
+                    best_result = refined
+            except Exception as e:
+                logger.warning(
+                    "FeatureCuts: full ECDF validation merge failed (%s); using prefix log-likelihood metrics",
+                    e,
+                )
             return sel, best_result
         except Exception as e:
             logger.warning("FeatureCuts error: %s", e)
@@ -2092,6 +2290,9 @@ class MethylDetector:
                     "balanced_accuracy": float(r.get("balanced_accuracy", 0.0)),
                     "split_balanced_accuracy_std": float(r.get("split_balanced_accuracy_std", 0.0)),
                 }
+                tm = r.get("training_metrics")
+                if isinstance(tm, dict) and int(tm.get("n_splits") or 0) > 0:
+                    fc_summary["training_balanced_accuracy"] = float(tm.get("balanced_accuracy", 0.0))
             except (TypeError, ValueError):
                 fc_summary = {"note": "featurecuts ran; see results-{chrom}.json for full metrics"}
 
@@ -2877,6 +3078,23 @@ class MethylDetector:
         return optimal_k
 
     
+    def _validation_block_to_pydantic(self, block: dict, type_label: str):
+        """Map a merged validation dict (holdout or training_metrics) to ValidationResults."""
+        from ..models import ValidationResults, PerformanceMetrics, ConfusionMatrix, SampleCounts
+
+        return ValidationResults(
+            type=type_label,
+            performance=PerformanceMetrics(
+                balanced_accuracy=float(block['balanced_accuracy']),
+                sensitivity=float(block['metrics']['sensitivity']),
+                specificity=float(block['metrics']['specificity']),
+                precision=float(block['metrics']['precision']),
+                accuracy=float(block['metrics']['accuracy']),
+            ),
+            confusion_matrix=ConfusionMatrix(**block['confusion_matrix']),
+            sample_counts=SampleCounts(**block['counts']),
+        )
+
     def _save_validation_results(
         self,
         n_dmps_exported: Optional[int] = None,
@@ -2908,20 +3126,14 @@ class MethylDetector:
 
         # Create validation results objects
         optimization_validation = None
+        training_fold_validation = None
+        vtype = getattr(self.config, "validation_mode", "real")
         if hasattr(self, '_final_validation_results') and self._final_validation_results:
             result = self._final_validation_results
-            optimization_validation = ValidationResults(
-                type=getattr(self.config, "validation_mode", "real"),
-                performance=PerformanceMetrics(
-                    balanced_accuracy=result['balanced_accuracy'],
-                    sensitivity=result['metrics']['sensitivity'],
-                    specificity=result['metrics']['specificity'],
-                    precision=result['metrics']['precision'],
-                    accuracy=result['metrics']['accuracy']
-                ),
-                confusion_matrix=ConfusionMatrix(**result['confusion_matrix']),
-                sample_counts=SampleCounts(**result['counts'])
-            )
+            optimization_validation = self._validation_block_to_pydantic(result, vtype)
+            tm = result.get('training_metrics')
+            if isinstance(tm, dict) and int(tm.get('n_splits') or 0) > 0:
+                training_fold_validation = self._validation_block_to_pydantic(tm, vtype)
 
         real_validation = None
         if hasattr(self, '_real_validation_results') and self._real_validation_results:
@@ -2951,6 +3163,7 @@ class MethylDetector:
             timestamp=datetime.now().isoformat(),
             config=config_dict,
             optimization_validation=optimization_validation,
+            training_fold_validation=training_fold_validation,
             real_validation=real_validation,
             n_dmps_exported=n_dmps_exported,
             total_statistical_dmps=total_statistical_dmps,

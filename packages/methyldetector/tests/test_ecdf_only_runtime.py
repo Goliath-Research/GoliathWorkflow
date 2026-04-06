@@ -312,6 +312,66 @@ def test_prefix_cache_matches_direct_validation(monkeypatch):
         )
 
 
+def test_merge_validation_results_merges_training_metrics():
+    with TemporaryDirectory() as temp_dir:
+        detector = build_detector(temp_dir)
+        base_holdout = {
+            "balanced_accuracy": 0.9,
+            "confusion_matrix": {"tp": 1, "tn": 1, "fp": 0, "fn": 0},
+            "metrics": {
+                "sensitivity": 1.0,
+                "specificity": 1.0,
+                "accuracy": 1.0,
+                "precision": 1.0,
+            },
+            "counts": {"n_positive": 1, "n_negative": 1, "n_total": 2},
+            "split_balanced_accuracy_std": 0.0,
+            "n_splits": 1,
+        }
+        base_train = {
+            "balanced_accuracy": 0.85,
+            "confusion_matrix": {"tp": 1, "tn": 0, "fp": 1, "fn": 0},
+            "metrics": {
+                "sensitivity": 1.0,
+                "specificity": 0.0,
+                "accuracy": 0.5,
+                "precision": 0.5,
+            },
+            "counts": {"n_positive": 1, "n_negative": 1, "n_total": 2},
+            "split_balanced_accuracy_std": 0.0,
+            "n_splits": 1,
+        }
+        r1 = {**base_holdout, "training_metrics": dict(base_train)}
+        r2 = {
+            **base_holdout,
+            "balanced_accuracy": 0.7,
+            "confusion_matrix": {"tp": 0, "tn": 2, "fp": 0, "fn": 0},
+            "metrics": {
+                "sensitivity": 0.0,
+                "specificity": 1.0,
+                "accuracy": 1.0,
+                "precision": 0.0,
+            },
+            "counts": {"n_positive": 0, "n_negative": 2, "n_total": 2},
+            "training_metrics": {
+                **base_train,
+                "balanced_accuracy": 0.95,
+                "confusion_matrix": {"tp": 2, "tn": 0, "fp": 0, "fn": 0},
+                "metrics": {
+                    "sensitivity": 1.0,
+                    "specificity": 0.0,
+                    "accuracy": 1.0,
+                    "precision": 1.0,
+                },
+                "counts": {"n_positive": 2, "n_negative": 0, "n_total": 2},
+            },
+        }
+        merged = detector._merge_validation_results([r1, r2])
+        assert merged["training_metrics"]["n_splits"] == 2
+        assert merged["training_metrics"]["balanced_accuracy"] == pytest.approx(0.9, abs=1e-9)
+        assert merged["training_metrics"]["confusion_matrix"]["tp"] == 3
+
+
 def test_featurecuts_logs_dual_self_check_panels(monkeypatch):
     with TemporaryDirectory() as temp_dir:
         detector = build_detector(
