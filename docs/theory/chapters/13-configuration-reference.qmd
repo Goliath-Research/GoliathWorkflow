@@ -337,3 +337,160 @@ The active-steps configuration audit (declared vs consumed vs inherited keys, al
 - [docs/config_parameter_matrix.md](../../config_parameter_matrix.md)
 
 Use that matrix as the practical source for cleanup/deprecation planning. This chapter remains the canonical reference for currently supported keys.
+
+---
+
+## Deprecation Roadmap (Proposed) {#sec-config-deprecation-roadmap}
+
+This roadmap aligns deprecations with the current production workflow (`--stability` -> `--freeze` -> `--model`) and prioritizes migration safety for existing projects.
+
+### Scope of proposed deprecations
+
+| Key / pattern | Current state | Proposed disposition |
+|---|---|---|
+| `step_config.validation.run_mapper_and_enricher` | Legacy behavior flag | Deprecate, then remove. Freeze stage owns mapper/enricher execution. |
+| `step_config.validation.skip_enricher` | Legacy companion flag | Deprecate, then remove. Use explicit freeze/enricher step policy instead. |
+| `step_config.validator` | Deprecated alias of `step_config.predictor` | Remove after one full release cycle of warnings. |
+| Flat schema (`group1`/`group2`/`groups`) for new configs | Backward-compatible | Keep loader compatibility; stop documenting as a preferred authoring pattern. |
+
+### Phased plan
+
+#### Phase 1: Warn (next minor release)
+
+- Emit `DeprecationWarning` whenever deprecated keys are parsed.
+- Keep runtime behavior unchanged.
+- Add docs examples showing only canonical keys:
+  - `step_config.predictor` (not `validator`),
+  - control/disease/comparisons project schema,
+  - freeze-stage mapper/enricher behavior.
+
+#### Phase 2: Migrate (following minor release)
+
+- Provide a migration helper that rewrites old project JSONs to canonical shape.
+- In CI/examples, validate only canonical schema.
+- Keep deprecated key parsing behind an explicit compatibility switch for transition runs.
+
+#### Phase 3: Remove (next major release)
+
+- Drop deprecated keys and compatibility parsing paths.
+- Convert compatibility warnings into validation errors with actionable messages.
+- Keep a pinned migration guide with before/after JSON snippets.
+
+### Migration acceptance criteria
+
+Before removing compatibility paths, require:
+
+1. all first-party templates/examples use canonical schema only,
+2. at least one full release cycle with warnings enabled,
+3. no unresolved blockers in the configuration audit matrix.
+
+### Accuracy guardrails during migration
+
+Deprecation must not change model-quality semantics:
+
+- detector holdout reporting (`optimization_validation`) remains the model-selection target,
+- detector training-fold reporting (`training_fold_validation`) remains an overfit diagnostic,
+- freeze-stage outputs remain reproducible for fixed inputs and seeds.
+
+### Operator migration checklist (before/after JSON)
+
+Use this quick checklist when modernizing existing project configs.
+
+#### 1) `step_config.validator` -> `step_config.predictor`
+
+Before:
+
+```json
+"step_config": {
+  "validator": {
+    "debug": false,
+    "panel": { "primary_family": "prostate", "families": { "prostate": ["pca_pca1"] } }
+  }
+}
+```
+
+After:
+
+```json
+"step_config": {
+  "predictor": {
+    "debug": false,
+    "panel": { "primary_family": "prostate", "families": { "prostate": ["pca_pca1"] } }
+  }
+}
+```
+
+#### 2) Remove `run_mapper_and_enricher` / `skip_enricher` from `step_config.validation`
+
+Before:
+
+```json
+"step_config": {
+  "validation": {
+    "train_fraction": 0.8,
+    "n_iterations": 50,
+    "run_stability": true,
+    "run_mapper_and_enricher": true,
+    "skip_enricher": false
+  }
+}
+```
+
+After:
+
+```json
+"step_config": {
+  "validation": {
+    "train_fraction": 0.8,
+    "n_iterations": 50,
+    "run_stability": true
+  },
+  "mapper": {
+    "gtf": "/path/to/annotation.gtf"
+  },
+  "enricher": {
+    "libraries": ["KEGG_2021_Human", "Reactome_2022"]
+  }
+}
+```
+
+#### 3) Flat schema -> control/disease/comparisons schema
+
+Before:
+
+```json
+{
+  "group1": { "label": "healthy", "sample_paths": ["configs/healthy.csv"] },
+  "group2": { "label": "pca1", "sample_paths": ["configs/pca1.csv"] }
+}
+```
+
+After:
+
+```json
+{
+  "control": {
+    "label": "healthy",
+    "groups": [{ "label": "all", "sample_paths": ["configs/healthy.csv"] }]
+  },
+  "disease": {
+    "label": "cancer",
+    "groups": [{ "label": "pca1", "sample_paths": ["configs/pca1.csv"] }]
+  },
+  "comparisons": "control_vs_each_disease"
+}
+```
+
+#### 4) Accuracy sanity checks after migration
+
+After rewriting config keys, rerun:
+
+1. `methyl-validation --project <project.json> --stability`
+2. `methyl-validation --project <project.json> --freeze`
+3. `methyl-validation --project <project.json> --model`
+
+Then verify in detector results:
+
+- `optimization_validation` (holdout/generalization) is present,
+- `training_fold_validation` (in-sample fit) is present,
+- holdout-vs-training gap is acceptable for your deployment tolerance.
