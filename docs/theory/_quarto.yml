@@ -4,6 +4,7 @@ project:
 
 book:
   title: "MethylPipeline: Theory, Workflows, and Reference"
+  output-file: "MethylPipeline Theory - Implementation - Usage"
   subtitle: "Mathematical foundations, operational workflows, and complete configuration reference"
   author: "MethylPipeline Team"
   date: last-modified
@@ -50,7 +51,6 @@ format:
     code-overflow: wrap
     html-math-method: mathjax
   pdf:
-    output-file: "MethylPipeline Theory - Implementation - Usage.pdf"
     documentclass: scrreprt
     toc: true
     number-sections: true
@@ -58,8 +58,10 @@ format:
     pdf-engine: lualatex
     include-in-header:
       text: |
+        \usepackage{amsmath,amssymb,mathtools}
+        \usepackage{microtype}
         \usepackage{tikz}
-        \usetikzlibrary{arrows.meta,positioning}
+        \usetikzlibrary{arrows.meta,positioning,calc,fit}
     geometry:
       - margin=1in
 

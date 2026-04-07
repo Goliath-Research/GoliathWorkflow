@@ -110,3 +110,69 @@ For model readiness decisions, review at least:
 - `monte_carlo_runs/all_metrics.csv` and `metrics_summary.json` (or predictor-only equivalents).
 
 For covariate-aware backends, also review backend metadata and preprocessing artifacts under the production classifier directory.
+
+---
+
+## Configuration Audit for Accuracy-First Modeling {#sec-model-config-audit}
+
+The latest workflow (`--stability` -> `--freeze` -> `--model` with optional `--predictor-only`) is now mature enough that some configuration surfaces can be simplified without losing capability.
+
+### Deprecation candidates (proposed)
+
+These are practical candidates for staged deprecation in a future major release:
+
+| Candidate key / pattern | Current status | Why deprecate | Replacement |
+|---|---|---|---|
+| `step_config.validation.run_mapper_and_enricher` | Marked legacy in config reference | Stability iterations now run centroid+detector only; mapper/enricher belong to `--freeze` | Remove flag; always run mapper/enricher in `--freeze` when enabled in project steps |
+| `step_config.validation.skip_enricher` | Legacy companion to `run_mapper_and_enricher` | Semantics overlap with step-level enricher control and creates branchy MC behavior | Drop from validation block; control enricher directly in freeze-stage execution policy |
+| `step_config.validator` (alias) | Deprecated alias for `step_config.predictor` | Duplicates predictor namespace and complicates resolver logic | Use only `step_config.predictor` |
+| Flat cohort schema (`group1` / `group2` / top-level `groups`) | Backward-compatible path | New control/disease/comparisons schema is clearer and supports multiclass/stage workflows natively | Use `control`, `disease`, and explicit `comparisons` |
+
+Deprecation strategy recommendation:
+
+1. Keep warnings in the next minor release.
+2. Add a migration helper command that rewrites legacy project JSON fields.
+3. Remove legacy keys in the next major version after one full release cycle.
+
+### Accuracy-first project profile
+
+For the best downstream predictive performance, favor stable panel discovery first, then conservative production fitting:
+
+- **Stability stage quality**: use enough iterations (`n_iterations >= 50`) and apply run filtering (`stability_min_balanced_accuracy`) only when sample count supports it.
+- **Coverage consistency**: keep centroid and detector coverage thresholds aligned (`centroid.min_coverage == detection.min_coverage == detection.min_sample_coverage`) to avoid panel collapse at inference.
+- **Panel robustness over aggressiveness**: use detector FeatureCuts in stability/freeze (`classifier_dmp_selection="featurecuts_validation"`) with a minimum panel size floor (`min_selected_dmps`) so high BA does not come from brittle tiny panels.
+- **Generalization-first model selection**: prioritize `optimization_validation` (held-out fold) for backend and parameter decisions; use `training_fold_validation` only as overfit diagnostic.
+- **Covariate discipline**: only enable covariates when join coverage is high and schema is stable; otherwise default to pure ECDF path to avoid leakage/shift from weak sidecars.
+
+### Reference tuning template (binary ECDF-first)
+
+```json
+"step_config": {
+  "validation": {
+    "train_fraction": 0.8,
+    "n_iterations": 50,
+    "seed": 42,
+    "run_stability": true,
+    "stability_dmp_freq": 0.7,
+    "stability_min_balanced_accuracy": 0.6,
+    "model_backend": "ecdf"
+  },
+  "detection": {
+    "min_coverage": 4,
+    "min_sample_coverage": 4,
+    "validation_split_ratio": 0.2,
+    "validation_n_repeats": 5,
+    "classifier_dmp_selection": "featurecuts_validation",
+    "min_selected_dmps": 500,
+    "dynamic_dmp_cutoff_enabled": true,
+    "effect_size_coverage": 0.95,
+    "enable_platt_calibration": true
+  }
+}
+```
+
+Use this as a starting point, then tune in this order:
+
+1. stabilize panel recurrence (`stability_dmp_freq`, `n_iterations`),
+2. verify holdout-vs-training gap (`optimization_validation` vs `training_fold_validation`),
+3. only then tune panel size/FeatureCuts constraints for marginal BA gains.
