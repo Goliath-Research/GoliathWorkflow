@@ -337,9 +337,16 @@ def _select_stable_dmps_df(
     top_n: Optional[int] = None,
 ) -> pd.DataFrame:
     """Build selected stable DMP table from full frequency table."""
+    if dmp_freq_df is None or dmp_freq_df.empty or "frequency" not in dmp_freq_df.columns:
+        return pd.DataFrame(
+            columns=["chromosome", "position", "frequency", "count", "n_runs"]
+        )
     selected = dmp_freq_df[dmp_freq_df["frequency"] >= min_frequency].copy()
     if top_n is not None and len(selected) > top_n:
         selected = selected.head(top_n)
+    for col in ("chromosome", "position", "frequency", "count", "n_runs"):
+        if col not in selected.columns:
+            selected[col] = pd.Series(dtype="float64" if col in {"frequency"} else "object")
     return selected
 
 
@@ -646,11 +653,13 @@ def run_stability_analysis(
     dmp_frequency_plot_path = None
     dmp_frequency_plot_by_chrom = {}
     dmp_frequency_counts_by_chrom = {}
+    selected_dmp_df = _select_stable_dmps_df(
+        dmp_df, min_frequency=dmp_min_freq, top_n=top_n_dmps
+    )
+    # Always materialize the stable panel path so --freeze has a deterministic input artifact,
+    # even when no DMP passes thresholds (empty CSV with canonical headers).
+    stable_dmp_path = write_stable_panel(dmp_df, output_dir, dmp_min_freq, top_n_dmps)
     if not dmp_df.empty:
-        selected_dmp_df = _select_stable_dmps_df(
-            dmp_df, min_frequency=dmp_min_freq, top_n=top_n_dmps
-        )
-        stable_dmp_path = write_stable_panel(dmp_df, output_dir, dmp_min_freq, top_n_dmps)
         (
             dmp_frequency_plot_path,
             dmp_frequency_plot_by_chrom,

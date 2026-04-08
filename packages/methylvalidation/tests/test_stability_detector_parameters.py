@@ -176,3 +176,25 @@ def test_run_stability_analysis_writes_frequency_plot_html(tmp_path):
         counts_by_chrom = summary.get("dmp_frequency_counts_by_chromosome") or {}
         assert counts_by_chrom["1"]["all_dmps"] == 4
         assert counts_by_chrom["1"]["selected_dmps"] >= 1
+
+
+def test_run_stability_analysis_writes_empty_stable_panel_when_no_dmps(tmp_path):
+    monte_root = tmp_path / "monte_carlo_runs"
+    run_dir = monte_root / "run_0001" / "detections" / "all" / "pca_pca1"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    # Simulate a run with detector export present but no retained DMP rows.
+    _write_discovery_csv(run_dir / "dmps-1-discovery.csv", [])
+
+    summary = run_stability_analysis(
+        monte_carlo_runs_root=monte_root,
+        output_dir=monte_root / "stability",
+        dmp_min_freq=0.7,
+    )
+    stable_csv = Path(summary["stable_dmp_csv"])
+    assert stable_csv.is_file()
+
+    import pandas as pd
+
+    df = pd.read_csv(stable_csv)
+    assert list(df.columns) == ["chromosome", "position", "frequency", "count", "n_runs"]
+    assert len(df) == 0
