@@ -138,8 +138,8 @@ def test_run_pipeline_for_iteration_splits_centroid_logs_and_counts(monkeypatch)
         calls.append(("centroid", str(group), str(step_override) if step_override is not None else None))
         return 0, f"{group}-stdout", ""
 
-    def fake_run_detector(project_json, per_cancer_group=False):
-        calls.append(("detector", per_cancer_group))
+    def fake_run_detector(project_json, per_cancer_group=False, detector_step_override=None):
+        calls.append(("detector", per_cancer_group, str(detector_step_override) if detector_step_override is not None else None))
         return 0, "detector-stdout", ""
 
     def fake_processed_samples(project_json, group, step_override=None):
