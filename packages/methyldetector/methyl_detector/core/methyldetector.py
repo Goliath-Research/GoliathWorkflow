@@ -112,6 +112,15 @@ class MethylDetector:
         self._exported_csv_path = None  # Path to exported CSV file
         self._current_chromosome = None  # Current chromosome being processed (for multi-chromosome mode)
         self._centroid_bin_cache: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        # Optional calibration artifacts are attached only when validation trains them.
+        # Initialize to None so export paths can safely check these attributes.
+        self._platt_calibrator_bytes: Optional[bytes] = None
+        self._platt_calibrator_scaler_bytes: Optional[bytes] = None
+        # One-shot warning guards for noisy validation diagnostics.
+        self._low_overlap_warned_once = False
+        self._no_variation_warned_once = False
+        self._degenerate_probs_warned_once = False
+        self._ba_05_warned_once = False
         logger.debug("Initialized MethylDetector")
     
     @property
