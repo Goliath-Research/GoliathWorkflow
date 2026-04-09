@@ -50,6 +50,28 @@ def run_balanced_accuracy(run_dir: Path) -> Optional[float]:
     row = iteration_scalar_metrics_from_run_dir(run_dir)
     ba = row.get("balanced_accuracy")
     if ba is None:
+        bas: List[float] = []
+        for path in _detector_results_files_for_run(run_dir):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    payload = json.load(f)
+            except Exception:
+                continue
+            # New nested format: optimization_validation.performance.balanced_accuracy
+            opt = payload.get("optimization_validation")
+            if isinstance(opt, dict):
+                perf = opt.get("performance")
+                if isinstance(perf, dict):
+                    v = perf.get("balanced_accuracy")
+                    if isinstance(v, (int, float)):
+                        bas.append(float(v))
+                        continue
+            # Legacy/top-level fallback
+            v = payload.get("balanced_accuracy")
+            if isinstance(v, (int, float)):
+                bas.append(float(v))
+        if bas:
+            return float(sum(bas) / len(bas))
         return None
     try:
         return float(ba)

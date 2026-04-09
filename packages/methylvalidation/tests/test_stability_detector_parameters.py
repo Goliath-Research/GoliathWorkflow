@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from methyl_validation.stability import (
+    run_balanced_accuracy,
     extract_detector_parameters_for_run,
     run_stability_analysis,
 )
@@ -198,3 +199,33 @@ def test_run_stability_analysis_writes_empty_stable_panel_when_no_dmps(tmp_path)
     df = pd.read_csv(stable_csv)
     assert list(df.columns) == ["chromosome", "position", "frequency", "count", "n_runs"]
     assert len(df) == 0
+
+
+def test_run_balanced_accuracy_falls_back_to_detector_results(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "methyl_validation.validator_metrics.iteration_scalar_metrics_from_run_dir",
+        lambda _run_dir: {},
+    )
+    run_dir = tmp_path / "run_0001"
+    _write_results_json(
+        run_dir / "detections" / "all" / "pca_pca1" / "results-1.json",
+        {
+            "optimization_validation": {
+                "performance": {
+                    "balanced_accuracy": 0.88
+                }
+            }
+        },
+    )
+    _write_results_json(
+        run_dir / "detections" / "all" / "pca_pca2" / "results-1.json",
+        {
+            "optimization_validation": {
+                "performance": {
+                    "balanced_accuracy": 0.92
+                }
+            }
+        },
+    )
+    ba = run_balanced_accuracy(run_dir)
+    assert ba == 0.90
