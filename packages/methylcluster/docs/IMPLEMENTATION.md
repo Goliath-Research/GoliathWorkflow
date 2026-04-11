@@ -1,5 +1,7 @@
 # Centroid-Based Clustering Implementation
 
+> Legacy note: this document is retained for historical/technical reference. `methylcluster` is deprecated and excluded from the active canonical production workflow.
+
 ## Overview
 
 Implemented a new centroid-based clustering method for MethylCluster that uses `MethylSample` instances as dynamic cluster centroids with Beta distribution log-likelihood for probabilistic sample assignment.

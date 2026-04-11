@@ -1,51 +1,171 @@
 # MethylPipeline
 
-MethylPipeline is a monorepo for DNA methylation analysis. Its core supervised path is built around empirical distributions rather than a single parametric family, but the repository as a whole also includes clustering, mapping, enrichment, and QC packages that use additional statistical machinery, heuristics, and external services.
+MethylPipeline is a Python monorepo for DNA methylation analysis.  
+The active production path is code-driven and centered on empirical distribution workflows:
 
-## Package Overview
+1. centroid construction (`methylcentroid`)
+2. DMP discovery and panel generation (`methyldetector`)
+3. classification (`methylclassifier`)
+4. prediction and metrics (`methylpredictor`)
+5. Monte Carlo validation and production orchestration (`methylvalidation`)
 
-The pipeline is organized into focused packages that share `methylutils` where appropriate:
+This document is the canonical root guide and is written from repository code/config as source of truth.
 
-- **`methylutils`**: shared mathematical layer for centroid summaries, ECDF views, testing, overlap, and classification scores.
-- **`methylcentroid`**: builds cohort centroids with sufficient statistics and histogram summaries.
-- **`methyldetector`**: performs locus-wise differential methylation screening and exports classifier-ready DMP sets.
-- **`methylclassifier`**: applies ECDF-based binary, multi-chromosome, and OvR classification logic.
-- **`methylpredictor`**: runs trained classifiers on holdout or blind cohorts and reports prediction metrics.
-- **`methylvalidation`**: performs repeated split-sample validation of the full pipeline.
-- **`methylcluster`**: exploratory clustering utilities over methylation samples and derived distances.
-- **`methylmapper`**: maps DMPs to genes and genomic features, then aggregates gene-level evidence.
-- **`methylenricher`**: performs downstream enrichment, pathway graph clustering, and module ranking.
-- **`methylalignmentqc`**: parses and normalizes alignment QC metrics from external tools.
+## Theoretical Foundations
 
-## Documentation Structure
+Core methods implemented in the active path:
 
-MethylPipeline now has two documentation layers:
+- **ECDF/PCHIP likelihood modeling** in `packages/methylutils/methyl_utils/ecdf_classifier.py`
+- **Hypothesis testing and correction** in `packages/methylutils/methyl_utils/statistical_tests.py`:
+  - KS ECDF statistics
+  - Mann-Whitney from histogram counts
+  - Storey q-values and p-value aggregation methods
+- **Biological effect ranking and overlap metrics** in `packages/methyldetector/methyl_detector/core/methyldetector.py`
+- **OvR and multiclass fusion, isotonic calibration, chromosome weighting** in `packages/methylclassifier/methyl_classifier/core/classifier.py`
+- **Prediction metrics and probabilistic diagnostics** in `packages/methylpredictor/methyl_predictor/core/predictor.py`
 
-1. **Canonical theory book**: [`docs/theory/README.md`](docs/theory/README.md) and the Quarto sources under `docs/theory/`. This is the publication-grade mathematical and statistical reference for the repository, written from the code as the source of truth.
-2. **Package-local docs**: each package keeps `README.md`, `docs/THEORY.md`, `docs/IMPLEMENTATION.md`, and `docs/USAGE.md` as local entry points. The local `THEORY.md` files are concise summaries that defer to the canonical theory book.
+Method categories are intentionally separated in implementation and documentation:
 
-## Source Of Truth
+- principled statistical methods
+- approximations
+- heuristics
+- external-service-backed analysis
 
-For theory, the source of truth is the code. The documentation explicitly distinguishes among:
+## Implementation
 
-- principled statistical or numerical methods,
-- approximations,
-- heuristics, and
-- external-service-backed steps.
+## Active package roles
 
-That distinction matters because the core centroid-detector-classifier path is ECDF-centered, while downstream packages also use beta-based clustering, p-value aggregation, graph heuristics, and external knowledge services.
+- `methylutils`: shared mathematical/statistical/config foundation.
+- `methylcentroid`: cohort centroid generation and binned summaries.
+- `methyldetector`: DMP detection, effect-size filtering, export logic.
+- `methylclassifier`: binary/multiclass/OvR model logic and calibration.
+- `methylpredictor`: inference + reporting + evaluation metrics.
+- `methylvalidation`: MC orchestration, stability, freeze/model flows, backend selection.
+- `methylmapper`: DMP-to-gene and feature mapping.
+- `methylenricher`: enrichment and module-level interpretation.
+- `methyldiseaseprogression`: cross-stage synthesis reports.
+- `methylalignmentqc`: alignment QC extraction/normalization.
 
-## Deployment
+## CLI entry points
 
-For details on how to deploy this repository on supported platforms via virtual environments or containers, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+CLI contracts are defined in package `pyproject.toml` files:
 
-### Virtual environment
+- `methyl-centroid`, `methyl-centroid-explorer`
+- `methyl-detector`, `methyl-detector-explorer`
+- `methyl-classifier`
+- `methyl-predictor`
+- `methyl-validation`
+- `methyl-mapper`
+- `methyl-enricher`
+- `methyl-disease-progression`
+- `methyl-alignment-qc`, `methyl-qc`
 
-From the repository root, activate the canonical environment before running `pytest`, `pip`, or any `methyl-*` CLI:
+## Usage
+
+## Installation
+
+This repo expects the local virtual environment at `.venv`.
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+```
+
+Install package stack (editable/develop mode) via:
+
+```bash
+bash scripts/install_all.sh
+```
+
+Optional dependency layers:
+
+- `--pipeline-reqs` installs `requirements-pipeline.txt`
+- `--gpu-reqs` installs `requirements-gpu.txt`
+
+Container setup is available via:
+
+```bash
+bash scripts/setup_dev.sh
+```
+
+## Upgrades
+
+When upgrading dependencies or package code:
+
+1. activate `.venv`
+2. rerun `scripts/install_all.sh` (same package order as production scripts)
+3. rerun tests:
+
+```bash
+bash scripts/run_tests.sh
+```
+
+## Full project execution
+
+Active production path (code-backed in `methyl_validation`):
+
+1. run Monte Carlo iterations
+2. run stability analysis to materialize stable DMP panel
+3. run freeze (`--freeze`) to generate `production/project.json` with `fixed_dmp_panel`
+4. run model build (`--model`)
+5. optionally run post-model validation (`--post-model-validation`) or predictor-only evaluation
+
+Typical command sequence:
 
 ```bash
 source .venv/bin/activate
-pytest
+methyl-validation --project project.json --stability
+methyl-validation --project project.json --freeze
+methyl-validation --project project.json --model
 ```
 
-If `.venv` does not exist yet, create it as described in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). You can also run the full test suite without manually activating using [`scripts/run_tests.sh`](scripts/run_tests.sh), which invokes `.venv/bin/python -m pytest` directly.
+## Step-by-step execution boundaries
+
+Implemented pipeline boundaries in `packages/methylvalidation/methyl_validation/pipeline_runner.py`:
+
+- MC iteration mode: `methyl-centroid` -> `methyl-detector`
+- Freeze mode: `methyl-centroid` -> `methyl-detector` -> `methyl-mapper` -> `methyl-enricher` (+ optional progression)
+- Model mode: `methyl-classifier` -> `methyl-predictor`
+- Predictor-only mode: `methyl-predictor` using frozen production artifacts
+
+## Strategy Playbooks
+
+## 1) Initial research
+
+- run baseline MC validation to characterize data behavior
+- inspect detector exports and stability summaries
+- establish candidate panel quality before freeze/model stages
+
+## 2) Disease characterization
+
+- use detector q-value/effect-size outputs for locus-level evidence
+- run mapper + enricher during freeze for biological interpretation
+- optionally run progression synthesis for stage-ordered interpretation
+
+## 3) Model creation
+
+- stabilize panel through MC + stability outputs
+- freeze with `fixed_dmp_panel`
+- build production model with `--model`
+- use `--model-mc` and `--select-best-model` for backend comparisons when required
+
+## 4) Final prediction from best model
+
+- run predictor on holdout/blind cohorts with frozen artifacts
+- track balanced accuracy, class-wise metrics, and probabilistic diagnostics
+- use rollout comparison gates for baseline-vs-candidate promotion decisions
+
+## Deprecated Appendix: MethylCluster
+
+`MethylCluster` is excluded from the active workflow documented above.
+
+- legacy package/CLI may remain in the repository for compatibility (`methyl-cluster`)
+- do not treat clustering outputs as part of the canonical production path
+- historical references should stay isolated to deprecated/legacy notes, not main workflow sections
+
+## Additional references
+
+- Theory book: `docs/theory/README.md`
+- Deployment details: `docs/DEPLOYMENT.md`
+- Active parameter contract matrix: `docs/config_parameter_matrix.md`
+- Code-first discovery basis: `docs/code_first_discovery_report.md`

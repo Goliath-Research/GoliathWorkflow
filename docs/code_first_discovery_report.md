@@ -3,6 +3,16 @@
 Date: 2026-04-11  
 Scope: analysis only (no documentation replacement in this phase)
 
+## Status Note (Post-Cleanup)
+
+This report preserves the discovery-time snapshot used to plan remediation.  
+Some findings listed below (for example broken `06-methylcluster.qmd` links and active-workflow wording) were subsequently addressed during phase-2 documentation cleanup.
+
+Current canonical status after cleanup:
+- active workflow docs exclude `MethylCluster` from production-path sections
+- broken links to `docs/theory/chapters/06-methylcluster.qmd` were removed/repointed
+- legacy `MethylCluster` content is isolated to deprecated/compatibility contexts
+
 ## 1) Deprecated `MethylCluster` Reference Inventory
 
 Classification policy used:

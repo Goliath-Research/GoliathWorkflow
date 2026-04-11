@@ -35,7 +35,6 @@ docs/theory/
     ├── 03-methyldetector.qmd      UPDATE — add §fixed_dmp_panel + §min_sample_coverage
     ├── 04-methylclassifier.qmd    UPDATE — add §multiclass_learned_head_class_weighting
     ├── 05-methylpredictor-and-validation.qmd   UPDATE — add §stability_analysis, §production_freeze, §two_workflows
-    ├── 06-methylcluster.qmd       (unchanged)
     ├── 07-methylmapper.qmd        (unchanged)
     ├── 08-methylenricher.qmd      (unchanged)
     ├── 09-methylalignmentqc.qmd   (unchanged)
@@ -64,7 +63,6 @@ book:
         - chapters/03-methyldetector.qmd
         - chapters/04-methylclassifier.qmd
         - chapters/05-methylpredictor-and-validation.qmd
-        - chapters/06-methylcluster.qmd
         - chapters/07-methylmapper.qmd
         - chapters/08-methylenricher.qmd
         - chapters/09-methylalignmentqc.qmd
@@ -185,8 +183,7 @@ Sections:
 6. `step_config.classifier`
 7. `step_config.predictor`
 8. `step_config.validation`
-9. `step_config.cluster`
-10. `step_config.alignment_qc`
+9. `step_config.alignment_qc`
 
 Cross-references to theory chapters for each parameter group.
 

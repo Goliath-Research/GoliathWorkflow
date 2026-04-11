@@ -1,7 +1,7 @@
 (Original TOC preserved, with additions:  
 - 5. MethylClassifier (expanded)  
 - 6. MethylPredictor and MethylValidation (expanded)  
-- 7. MethylCluster (deprecated note added)  
+- 7. Legacy Components (deprecated notes)  
 - 14. Case Study: Prostate Cancer Staging Progression (new)  
 
 ### 1. Scope, Traceability, and Notation
@@ -64,8 +64,8 @@ ECDFs key for two-sample comparisons.
 
 **6.10 Publication Guidance and Progression Visibility Checks (New Addition)**: For disease staging, assess evolution visibility post-validation. Compute ordinal trends (e.g., Spearman correlation between stage and pathway scores). If no significant trends (p > 0.05) or flat matrices, flag model as "useless" (insufficient discriminatory power). Example: In prostate cancer, check if EMT scores increase monotonically.  
 
-#### 7. MethylCluster (Deprecated)
-**Note (New)**: Deprecated in favor of parametric approaches. Originally used centroids; now recommends Beta-Binomial distributions for overdispersed clustering. Legacy code retained for reference but not in active workflows.
+#### 7. Legacy Components (Deprecated)
+**Note (New)**: Deprecated components are retained only for historical compatibility notes and are excluded from the active canonical production workflow.
 
 (Other chapters original, with minor deprecation notes where relevant.)
 

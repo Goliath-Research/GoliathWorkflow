@@ -76,10 +76,11 @@ For flat two-class binary projects (one control group, one disease group, no sta
 | `classifier` | `methyl-classifier` | Chromosome weighting, OvR layout, panel definition. |
 | `predictor` | `methyl-predictor` | Panel definition, debug mode. |
 | `validation` | `methyl-validation` | Monte Carlo settings embedded in the project. |
-| `cluster` | `methyl-cluster` | Clustering method, distance metric, k selection. |
 | `alignment_qc` | `methyl-alignment-qc` | Schema validation, group filtering. |
 
 The exhaustive list of parameters for each key is in @sec-configuration-reference.
+
+`step_config.cluster` is a legacy compatibility key for deprecated clustering workflows and is intentionally excluded from the active canonical workflow.
 
 ## The `step_config.predictor` Anti-Pattern
 

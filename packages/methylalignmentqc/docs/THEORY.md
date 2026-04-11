@@ -4,7 +4,7 @@ The canonical mathematical and statistical reference for this package is the Qua
 
 ## Scope
 
-`methylalignmentqc` parses and normalizes alignment QC metrics produced by external tools such as Picard and Parabricks.
+`methylalignmentqc` performs initial extraction/parsing and normalization of alignment QC metrics produced by external tools such as Picard and Parabricks.
 
 ## Method Status
 
@@ -18,3 +18,4 @@ The canonical mathematical and statistical reference for this package is the Qua
 - `methyl_alignment_qc/core/writer.py`
 - `methyl_alignment_qc/cli/main.py`
 - `methyl_alignment_qc/utils/monitor.py`
+- `methyl_alignment_qc/core/wgbs_parabricks_qc.py` (standalone WGBS Parabricks guardrail check utility)

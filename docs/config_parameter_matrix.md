@@ -1,6 +1,6 @@
 # Configuration Parameter Matrix (Active Components)
 
-This matrix is code-backed and scoped to active components (excluding `methylcluster`).
+This matrix is code-backed and scoped to the active canonical production workflow. Deprecated/legacy compatibility surfaces (including `methylcluster`) are out of scope except where explicitly called out as aliases.
 
 Status legend:
 - `declared`: present in a config schema/model or documented step config contract
@@ -8,6 +8,10 @@ Status legend:
 - `inherited`: from top-level project fields (`output_base`, `samples_base_path`, `controls/diseases`, etc.)
 - `alias`: backward-compatible synonym
 - `legacy`: compatibility-only key; avoid in new configs
+
+Legacy compatibility boundary:
+- entries marked `legacy` are retained for backward compatibility only
+- they are not part of the active canonical production workflow
 
 ## Shared project contract
 

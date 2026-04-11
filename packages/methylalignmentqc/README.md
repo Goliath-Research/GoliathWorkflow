@@ -2,6 +2,8 @@
 
 This package is a QC and reporting component of the MethylPipeline monorepo.
 
+It covers initial alignment/QC metrics extraction and normalization from upstream reports (including WGBS Parabricks metrics JSON inputs) into structured per-sample JSON outputs.
+
 ## High-Level Functionality
 Please refer to the root [README.md](../../README.md) for the functional placement of this package in the broader MethylPipeline workflow.
 
@@ -12,5 +14,8 @@ The canonical mathematical and statistical reference is the Quarto theory book a
 - 📖 **[THEORY.md](docs/THEORY.md)**: Theoretical foundation, including high-quality formulas, statistical models, and references.
 - ⚙️ **[IMPLEMENTATION.md](docs/IMPLEMENTATION.md)**: Implementation details, code design, architecture, and memory organization.
 - 🚀 **[USAGE.md](docs/USAGE.md)**: Practical usage, CLI commands, Python API snippets, and configuration parameters.
+
+Historical utility note:
+- `methyl_alignment_qc/core/wgbs_parabricks_qc.py` is retained as a standalone WGBS Parabricks guardrail checker for initial metrics assessment workflows.
 
 For deployment instructions on supported platforms (Linux/macOS) via virtual environments or Docker, please consult the global [DEPLOYMENT.md](../../docs/DEPLOYMENT.md).

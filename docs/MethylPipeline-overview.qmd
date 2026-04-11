@@ -25,7 +25,7 @@ execute:
 
 # Executive Summary
 
-MethylPipeline is a monorepo for DNA methylation analysis. Its core supervised path centers on empirical cumulative distribution functions (ECDFs) and histogram-backed centroid summaries rather than forcing the full workflow into a single parametric family. Around that core, the repository adds packages for clustering, gene mapping, enrichment, prediction, repeated validation, and alignment quality control.
+MethylPipeline is a monorepo for DNA methylation analysis. Its core supervised path centers on empirical cumulative distribution functions (ECDFs) and histogram-backed centroid summaries rather than forcing the full workflow into a single parametric family. Around that core, the repository adds packages for gene mapping, enrichment, prediction, repeated validation, and alignment quality control.
 
 At a practical level, the repository supports two major modes of work:
 
@@ -53,7 +53,6 @@ This path is the most tightly coupled statistical spine of the repository.
 - `methylmapper` maps DMPs to genes and genomic regions.
 - `methylenricher` performs enrichment analysis, graph clustering, and module ranking.
 - `methylalignmentqc` parses alignment/QC outputs from upstream sequencing workflows.
-- `methylcluster` provides exploratory clustering utilities outside the main production path.
 - `methylutils` provides shared data structures, ECDF reconstruction, overlap metrics, tests, logging, configuration utilities, and classifier support code.
 
 # Package Architecture
@@ -72,8 +71,6 @@ flowchart TD
     M["methylmapper\ngene/genomic mapping"]
     E["methylenricher\nenrichment and modules"]
     Q["methylalignmentqc\nalignment QC parsing"]
-    K["methylcluster\nexploratory clustering"]
-
     U --> C
     U --> D
     U --> CL
@@ -88,7 +85,6 @@ flowchart TD
     V --> P
     D --> M --> E
     Q --> V
-    K --> U
 ```
 :::
 
@@ -112,7 +108,6 @@ flowchart TD
 \node[core, right=3.8cm of classifier] (predictor) {methylpredictor\\prediction metrics};
 \node[core, left=3.8cm of centroid] (validation) {methylvalidation\\stability, freeze, model build};
 
-\node[support, below left=1.5cm and 2.2cm of utils] (cluster) {methylcluster\\exploratory clustering};
 \node[support, below=1.5cm of utils] (mapper) {methylmapper\\gene and region mapping};
 \node[support, below right=1.5cm and 2.2cm of utils] (enricher) {methylenricher\\enrichment and modules};
 \node[support, right=3.8cm of enricher] (qc) {methylalignmentqc\\alignment QC parsing};
@@ -124,8 +119,6 @@ flowchart TD
 \draw[arr] (utils) -- (validation);
 \draw[arr] (utils) -- (mapper);
 \draw[arr] (utils) -- (enricher);
-\draw[arr] (utils) -- (cluster);
-
 \draw[arr] (centroid) -- (detector);
 \draw[arr] (detector) -- (classifier);
 \draw[arr] (classifier) -- (predictor);

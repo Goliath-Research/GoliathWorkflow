@@ -1,8 +1,11 @@
 # MethylCluster Usage
 
+> Status: legacy/deprecated package. Not part of the active canonical production workflow.
+
 ## Canonical References
 
-- Theory: [`docs/theory/chapters/06-methylcluster.qmd`](../../../docs/theory/chapters/06-methylcluster.qmd)
+- Canonical workflow reference: [`README.md`](../../../README.md)
+- Theory-book migration note: [`docs/theory/README.md`](../../../docs/theory/README.md)
 - Implementation notes: [`IMPLEMENTATION.md`](IMPLEMENTATION.md)
 
 ## CLI Entry Points
