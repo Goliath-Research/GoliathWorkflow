@@ -258,6 +258,55 @@ For theory and package documentation, see:
         metavar='MODE',
         help='When --modules: generate network plot. none=skip; plotly=Plotly HTML (default when -m); pyvis=PyVis HTML; cytoscape=Cytoscape.js HTML+JSON; all=all three.'
     )
+    parser.add_argument(
+        '--network-refinement-enabled',
+        action='store_true',
+        help='When --modules: enable optional STRING-based PPI network refinement stage.'
+    )
+    parser.add_argument(
+        '--network-refinement-source',
+        type=str,
+        choices=['string_api', 'local_edges'],
+        default='string_api',
+        metavar='SRC',
+        help='Network refinement edge source (default: string_api).'
+    )
+    parser.add_argument(
+        '--network-refinement-local-edges-file',
+        type=str,
+        default=None,
+        metavar='CSV',
+        help='Local CSV edge list file for network refinement when source=local_edges.'
+    )
+    parser.add_argument(
+        '--network-refinement-score-threshold',
+        type=float,
+        default=400.0,
+        metavar='S',
+        help='STRING interaction score threshold in [0,1000] (default: 400).'
+    )
+    parser.add_argument(
+        '--network-refinement-community-method',
+        type=str,
+        choices=['louvain', 'label_propagation', 'connected_components'],
+        default='louvain',
+        metavar='M',
+        help='Community detection method for PPI graph (default: louvain).'
+    )
+    parser.add_argument(
+        '--network-refinement-min-component-size',
+        type=int,
+        default=2,
+        metavar='N',
+        help='Minimum connected component size to keep in PPI graph (default: 2).'
+    )
+    parser.add_argument(
+        '--network-refinement-weight-in-final-score',
+        type=float,
+        default=0.3,
+        metavar='W',
+        help='Blend weight for ppi_coherence_score in [0,1] (default: 0.3).'
+    )
 
     # Other options
     parser.add_argument(
@@ -305,10 +354,79 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
         args.outdir = config.output_dir
     if config.outdir is not None and args.outdir in (None, "results"):
         args.outdir = config.outdir
+    def _apply_network_refinement_field(attr: str, value, default):
+        if value is None:
+            return
+        if not hasattr(args, attr):
+            return
+        if getattr(args, attr) == default:
+            setattr(args, attr, value)
+
+    # Support nested network_refinement object while preserving flat-key compatibility.
+    if config.network_refinement is not None:
+        nr = config.network_refinement
+        _apply_network_refinement_field("network_refinement_enabled", nr.enabled, False)
+        _apply_network_refinement_field("network_refinement_source", nr.source, "string_api")
+        _apply_network_refinement_field("network_refinement_local_edges_file", nr.local_edges_file, None)
+        _apply_network_refinement_field("network_refinement_score_threshold", nr.score_threshold, 400.0)
+        _apply_network_refinement_field("network_refinement_community_method", nr.community_method, "louvain")
+        _apply_network_refinement_field("network_refinement_min_component_size", nr.min_component_size, 2)
+        _apply_network_refinement_field("network_refinement_weight_in_final_score", nr.weight_in_final_score, 0.3)
+
+    # Flat-key compatibility (legacy or simple configs).
+    _apply_network_refinement_field(
+        "network_refinement_enabled",
+        config.network_refinement_enabled,
+        False,
+    )
+    _apply_network_refinement_field(
+        "network_refinement_source",
+        config.network_refinement_source,
+        "string_api",
+    )
+    _apply_network_refinement_field(
+        "network_refinement_local_edges_file",
+        config.network_refinement_local_edges_file,
+        None,
+    )
+    _apply_network_refinement_field(
+        "network_refinement_score_threshold",
+        config.network_refinement_score_threshold,
+        400.0,
+    )
+    _apply_network_refinement_field(
+        "network_refinement_community_method",
+        config.network_refinement_community_method,
+        "louvain",
+    )
+    _apply_network_refinement_field(
+        "network_refinement_min_component_size",
+        config.network_refinement_min_component_size,
+        2,
+    )
+    _apply_network_refinement_field(
+        "network_refinement_weight_in_final_score",
+        config.network_refinement_weight_in_final_score,
+        0.3,
+    )
+
     # Rest: set from config. For network_plot, only set when user did not pass --network-plot (args is None).
     config_values = config.model_dump(mode="python", exclude_none=True)
     for name in EnricherStepConfig.model_fields:
-        if name in ("input", "input_file", "output_dir", "outdir"):
+        if name in (
+            "input",
+            "input_file",
+            "output_dir",
+            "outdir",
+            "network_refinement",
+            "network_refinement_enabled",
+            "network_refinement_source",
+            "network_refinement_local_edges_file",
+            "network_refinement_score_threshold",
+            "network_refinement_community_method",
+            "network_refinement_min_component_size",
+            "network_refinement_weight_in_final_score",
+        ):
             continue
         if name not in config_values:
             continue
@@ -473,6 +591,15 @@ def main():
         effective_network_plot = "plotly" if _np is None else _np
         if effective_network_plot and effective_network_plot.lower() != "none":
             print(f"Network plot: {effective_network_plot}")
+        if getattr(args, "network_refinement_enabled", False):
+            print("Network refinement: enabled")
+            print(f"  source={args.network_refinement_source}")
+            if args.network_refinement_local_edges_file:
+                print(f"  local_edges_file={args.network_refinement_local_edges_file}")
+            print(f"  score_threshold={args.network_refinement_score_threshold}")
+            print(f"  community_method={args.network_refinement_community_method}")
+            print(f"  min_component_size={args.network_refinement_min_component_size}")
+            print(f"  weight_in_final_score={args.network_refinement_weight_in_final_score}")
     print("=" * 70)
     
     def _run_one(in_file: Path, out_dir: str):
@@ -508,6 +635,13 @@ def main():
                     args, "module_cluster_top_terms_per_library", None
                 ),
                 network_plot=effective_network_plot,
+                network_refinement_enabled=getattr(args, "network_refinement_enabled", False),
+                network_refinement_source=getattr(args, "network_refinement_source", "string_api"),
+                network_refinement_local_edges_file=getattr(args, "network_refinement_local_edges_file", None),
+                network_refinement_score_threshold=getattr(args, "network_refinement_score_threshold", 400.0),
+                network_refinement_community_method=getattr(args, "network_refinement_community_method", "louvain"),
+                network_refinement_min_component_size=getattr(args, "network_refinement_min_component_size", 2),
+                network_refinement_weight_in_final_score=getattr(args, "network_refinement_weight_in_final_score", 0.3),
             )
         return run_enrichment(
             input_file=in_file,

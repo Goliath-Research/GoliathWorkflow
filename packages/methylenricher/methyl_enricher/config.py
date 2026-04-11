@@ -7,6 +7,20 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict
 
 
+class NetworkRefinementConfig(BaseModel):
+    """Optional PPI network refinement settings."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: Optional[bool] = None
+    source: Optional[str] = None
+    local_edges_file: Optional[str] = None
+    score_threshold: Optional[float] = None
+    community_method: Optional[str] = None
+    min_component_size: Optional[int] = None
+    weight_in_final_score: Optional[float] = None
+
+
 class EnricherStepConfig(BaseModel):
     """
     Pydantic model for step_config.enricher in the pipeline project JSON (and --config).
@@ -54,3 +68,13 @@ class EnricherStepConfig(BaseModel):
     module_cluster_max_q: Optional[float] = None
     module_cluster_top_terms_per_library: Optional[int] = None
     network_plot: Optional[str] = None
+
+    # Optional PPI/network refinement (nested and flat key support)
+    network_refinement: Optional[NetworkRefinementConfig] = None
+    network_refinement_enabled: Optional[bool] = None
+    network_refinement_source: Optional[str] = None
+    network_refinement_local_edges_file: Optional[str] = None
+    network_refinement_score_threshold: Optional[float] = None
+    network_refinement_community_method: Optional[str] = None
+    network_refinement_min_component_size: Optional[int] = None
+    network_refinement_weight_in_final_score: Optional[float] = None
