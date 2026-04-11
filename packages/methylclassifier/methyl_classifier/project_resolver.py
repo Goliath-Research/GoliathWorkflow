@@ -46,6 +46,21 @@ def default_ovr_unified_classifier_basename(project: ProjectConfig) -> str:
     return f"classifier-{ch}-{ctx_str}.pkl"
 
 
+def _default_centroid_sample_root(project: ProjectConfig) -> Optional[str]:
+    """
+    Default root used to expand basename-only centroid ``samples_used`` entries.
+
+    Centroid metadata in this workspace commonly stores sample IDs/basenames instead of
+    absolute paths. In that case classifier centroid-validation must anchor them to the
+    project sample root to build valid sample directories.
+    """
+    root = getattr(project, "samples_base_path", None)
+    if root is None:
+        return None
+    s = str(root).strip()
+    return s or None
+
+
 # Merged into effective classifier step when predicting default OvR bundle save path.
 _CLASSIFIER_STEP_KEYS_FOR_BUNDLE_PATH = (
     "ovr_binary_pickles_from_comparisons",
@@ -319,6 +334,10 @@ def resolve_classifier_config_per_cancer_group(
                 base["centroid_path_remap"] = project.path_remap
             for k, v in step_cfg.items():
                 base[k] = v
+            if not base.get("centroid_sample_root"):
+                default_root = _default_centroid_sample_root(project)
+                if default_root is not None:
+                    base["centroid_sample_root"] = default_root
             if not base.get("save_classifier_path"):
                 classifier_out_dir = Path(project.get_classifier_output_dir(ctrl_label, dis_label))
                 base["save_classifier_path"] = str(
@@ -357,6 +376,10 @@ def resolve_classifier_config_per_cancer_group(
             base["centroid_path_remap"] = project.path_remap
         for k, v in step_cfg.items():
             base[k] = v
+        if not base.get("centroid_sample_root"):
+            default_root = _default_centroid_sample_root(project)
+            if default_root is not None:
+                base["centroid_sample_root"] = default_root
         if not base.get("save_classifier_path"):
             classifier_out_dir = Path(project.get_classifier_output_dir(control_label, label))
             base["save_classifier_path"] = str(
@@ -503,6 +526,10 @@ def resolve_classifier_config(
                 overrides = json.load(f)
             for k, v in overrides.items():
                 base[k] = v
+    if not base.get("centroid_sample_root"):
+        default_root = _default_centroid_sample_root(project)
+        if default_root is not None:
+            base["centroid_sample_root"] = default_root
 
     _consume_ovr_comparison_options_and_maybe_expand(project, base)
 
