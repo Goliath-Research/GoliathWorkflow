@@ -195,6 +195,7 @@ def run_module_pipeline(
     network_refinement_enabled: bool = False,
     network_refinement_source: str = "string_api",
     network_refinement_local_edges_file: Optional[str] = None,
+    network_refinement_cache_path: Optional[str] = None,
     network_refinement_score_threshold: float = 400.0,
     network_refinement_community_method: str = "louvain",
     network_refinement_min_component_size: int = 2,
@@ -285,6 +286,7 @@ def run_module_pipeline(
                 edges_df = fetch_string_edges(
                     genes=genes,
                     required_score=float(network_refinement_score_threshold),
+                    cache_path=network_refinement_cache_path,
                 )
 
             network_genes = sorted(

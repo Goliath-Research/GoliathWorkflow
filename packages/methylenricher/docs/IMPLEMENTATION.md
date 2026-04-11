@@ -25,3 +25,4 @@ For formulas, assumptions, and caveats, see [`docs/theory/chapters/08-methylenri
   - `ppi_module_coherence.csv`
 - Module ranking remains backward compatible; `modules_ranked.csv` preserves historical columns and now also reports `Base_score`, `PPI_coherence_score`, and `Blended_score`.
 - PPI refinement is best interpreted as structural support for module quality, not as a replacement for disease evidence sources.
+- For `source=string_api`, `network_refinement.cache_path` (or `--network-refinement-cache-path`) enables shared edge caching across runs/instances.

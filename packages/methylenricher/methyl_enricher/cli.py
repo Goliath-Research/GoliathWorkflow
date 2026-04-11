@@ -279,6 +279,13 @@ For theory and package documentation, see:
         help='Local CSV edge list file for network refinement when source=local_edges.'
     )
     parser.add_argument(
+        '--network-refinement-cache-path',
+        type=str,
+        default=None,
+        metavar='PATH',
+        help='Optional shared cache path for STRING API edges (directory or .csv file path).'
+    )
+    parser.add_argument(
         '--network-refinement-score-threshold',
         type=float,
         default=400.0,
@@ -368,6 +375,7 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
         _apply_network_refinement_field("network_refinement_enabled", nr.enabled, False)
         _apply_network_refinement_field("network_refinement_source", nr.source, "string_api")
         _apply_network_refinement_field("network_refinement_local_edges_file", nr.local_edges_file, None)
+        _apply_network_refinement_field("network_refinement_cache_path", nr.cache_path, None)
         _apply_network_refinement_field("network_refinement_score_threshold", nr.score_threshold, 400.0)
         _apply_network_refinement_field("network_refinement_community_method", nr.community_method, "louvain")
         _apply_network_refinement_field("network_refinement_min_component_size", nr.min_component_size, 2)
@@ -387,6 +395,11 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
     _apply_network_refinement_field(
         "network_refinement_local_edges_file",
         config.network_refinement_local_edges_file,
+        None,
+    )
+    _apply_network_refinement_field(
+        "network_refinement_cache_path",
+        config.network_refinement_cache_path,
         None,
     )
     _apply_network_refinement_field(
@@ -422,6 +435,7 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
             "network_refinement_enabled",
             "network_refinement_source",
             "network_refinement_local_edges_file",
+            "network_refinement_cache_path",
             "network_refinement_score_threshold",
             "network_refinement_community_method",
             "network_refinement_min_component_size",
@@ -596,6 +610,8 @@ def main():
             print(f"  source={args.network_refinement_source}")
             if args.network_refinement_local_edges_file:
                 print(f"  local_edges_file={args.network_refinement_local_edges_file}")
+            if args.network_refinement_cache_path:
+                print(f"  cache_path={args.network_refinement_cache_path}")
             print(f"  score_threshold={args.network_refinement_score_threshold}")
             print(f"  community_method={args.network_refinement_community_method}")
             print(f"  min_component_size={args.network_refinement_min_component_size}")
@@ -638,6 +654,7 @@ def main():
                 network_refinement_enabled=getattr(args, "network_refinement_enabled", False),
                 network_refinement_source=getattr(args, "network_refinement_source", "string_api"),
                 network_refinement_local_edges_file=getattr(args, "network_refinement_local_edges_file", None),
+                network_refinement_cache_path=getattr(args, "network_refinement_cache_path", None),
                 network_refinement_score_threshold=getattr(args, "network_refinement_score_threshold", 400.0),
                 network_refinement_community_method=getattr(args, "network_refinement_community_method", "louvain"),
                 network_refinement_min_component_size=getattr(args, "network_refinement_min_component_size", 2),

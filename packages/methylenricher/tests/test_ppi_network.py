@@ -5,6 +5,7 @@ from methyl_enricher.ppi_network import (
     compute_module_coherence,
     compute_network_metrics,
     detect_communities,
+    fetch_string_edges,
     load_local_edges,
     normalize_gene_symbols,
 )
@@ -54,3 +55,43 @@ def test_compute_module_coherence_outputs_expected_columns():
         "ppi_nodes",
         "ppi_edges",
     }.issubset(set(module_df.columns))
+
+
+class _FakeResponse:
+    def __init__(self, payload: str):
+        self._payload = payload.encode("utf-8")
+
+    def read(self):
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+def test_fetch_string_edges_uses_cache(monkeypatch, tmp_path):
+    tsv = "preferredName_A\tpreferredName_B\tscore\nTP53\tBRCA1\t0.91\n"
+    monkeypatch.setattr("methyl_enricher.ppi_network.urlopen", lambda *_a, **_k: _FakeResponse(tsv))
+    cache_dir = tmp_path / "string_cache"
+
+    first = fetch_string_edges(
+        genes=["TP53", "BRCA1"],
+        required_score=400.0,
+        cache_path=str(cache_dir),
+    )
+    assert len(first) == 1
+    assert any(cache_dir.glob("string_edges_*.csv"))
+
+    def _fail_open(*_args, **_kwargs):
+        raise AssertionError("Network should not be called when cache exists.")
+
+    monkeypatch.setattr("methyl_enricher.ppi_network.urlopen", _fail_open)
+    second = fetch_string_edges(
+        genes=["BRCA1", "TP53"],  # same set, different order
+        required_score=400.0,
+        cache_path=str(cache_dir),
+    )
+    assert len(second) == 1
+    assert set(second.columns) == {"source", "target", "score"}

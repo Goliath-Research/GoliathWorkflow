@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import io
 import logging
+from hashlib import sha1
+from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Set
 from urllib.error import URLError
 from urllib.parse import quote_plus
@@ -18,6 +20,34 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 STRING_NETWORK_API = "https://string-db.org/api/tsv/network"
+
+
+def _cache_file_path(
+    cache_path: str,
+    genes: Sequence[str],
+    species: int,
+    required_score: float,
+) -> Path:
+    """
+    Resolve cache file location.
+
+    If cache_path ends with '.csv', it is treated as explicit file path.
+    Otherwise cache_path is treated as a directory and a query-keyed file is used.
+    """
+    base = Path(cache_path)
+    if base.suffix.lower() == ".csv":
+        base.parent.mkdir(parents=True, exist_ok=True)
+        return base
+    base.mkdir(parents=True, exist_ok=True)
+    key_payload = "|".join(
+        [
+            ",".join(sorted(normalize_gene_symbols(genes))),
+            str(int(species)),
+            f"{float(required_score):.4f}",
+        ]
+    )
+    key = sha1(key_payload.encode("utf-8")).hexdigest()[:16]
+    return base / f"string_edges_{key}.csv"
 
 
 def normalize_gene_symbols(genes: Iterable[str]) -> List[str]:
@@ -38,6 +68,7 @@ def fetch_string_edges(
     species: int = 9606,
     required_score: float = 400.0,
     timeout_s: int = 20,
+    cache_path: Optional[str] = None,
 ) -> pd.DataFrame:
     """
     Fetch STRING edges for a gene symbol list.
@@ -47,6 +78,26 @@ def fetch_string_edges(
     gene_list = normalize_gene_symbols(genes)
     if len(gene_list) < 2:
         return pd.DataFrame(columns=["source", "target", "score"])
+
+    cache_file: Optional[Path] = None
+    if cache_path:
+        cache_file = _cache_file_path(
+            cache_path=cache_path,
+            genes=gene_list,
+            species=species,
+            required_score=required_score,
+        )
+        if cache_file.exists():
+            try:
+                cached = load_local_edges(str(cache_file))
+                cached = cached[
+                    pd.to_numeric(cached["score"], errors="coerce").fillna(0.0)
+                    >= float(required_score)
+                ].copy()
+                logger.info("Using cached STRING edges: %s", cache_file)
+                return cached
+            except Exception as exc:
+                logger.warning("Failed to read STRING edge cache %s: %s", cache_file, exc)
 
     identifiers = "%0d".join(gene_list)
     query = (
@@ -92,6 +143,12 @@ def fetch_string_edges(
     out = out[out["source"] != out["target"]].copy()
     out.drop_duplicates(subset=["source", "target"], inplace=True)
     out.reset_index(drop=True, inplace=True)
+    if cache_file is not None:
+        try:
+            out.to_csv(cache_file, index=False)
+            logger.info("Saved STRING edges cache: %s", cache_file)
+        except Exception as exc:
+            logger.warning("Failed to write STRING edge cache %s: %s", cache_file, exc)
     return out
 
 

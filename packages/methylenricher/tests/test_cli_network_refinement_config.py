@@ -12,6 +12,7 @@ def _base_args():
         network_refinement_enabled=False,
         network_refinement_source="string_api",
         network_refinement_local_edges_file=None,
+        network_refinement_cache_path=None,
         network_refinement_score_threshold=400.0,
         network_refinement_community_method="louvain",
         network_refinement_min_component_size=2,
@@ -27,6 +28,7 @@ def test_apply_nested_network_refinement_config():
                 "enabled": True,
                 "source": "local_edges",
                 "local_edges_file": "/tmp/edges.csv",
+                "cache_path": "/tmp/shared-cache",
                 "score_threshold": 650,
                 "community_method": "connected_components",
                 "min_component_size": 3,
@@ -38,6 +40,7 @@ def test_apply_nested_network_refinement_config():
     assert args.network_refinement_enabled is True
     assert args.network_refinement_source == "local_edges"
     assert args.network_refinement_local_edges_file == "/tmp/edges.csv"
+    assert args.network_refinement_cache_path == "/tmp/shared-cache"
     assert args.network_refinement_score_threshold == 650
     assert args.network_refinement_community_method == "connected_components"
     assert args.network_refinement_min_component_size == 3

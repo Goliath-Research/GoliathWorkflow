@@ -15,6 +15,7 @@ class NetworkRefinementConfig(BaseModel):
     enabled: Optional[bool] = None
     source: Optional[str] = None
     local_edges_file: Optional[str] = None
+    cache_path: Optional[str] = None
     score_threshold: Optional[float] = None
     community_method: Optional[str] = None
     min_component_size: Optional[int] = None
@@ -74,6 +75,7 @@ class EnricherStepConfig(BaseModel):
     network_refinement_enabled: Optional[bool] = None
     network_refinement_source: Optional[str] = None
     network_refinement_local_edges_file: Optional[str] = None
+    network_refinement_cache_path: Optional[str] = None
     network_refinement_score_threshold: Optional[float] = None
     network_refinement_community_method: Optional[str] = None
     network_refinement_min_component_size: Optional[int] = None
