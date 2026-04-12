@@ -257,6 +257,14 @@ def write_metrics_distribution_plotly(df: pd.DataFrame, path: str | Path) -> Non
     except Exception as e:
         raise RuntimeError(f"SciPy is required for KDE export: {e}") from e
 
+    # Plotly enforces vertical_spacing <= 1 / (rows - 1). When many metrics are
+    # present, use a reduced spacing to avoid runtime failures.
+    if len(numeric_cols) > 1:
+        max_vertical_spacing = 1.0 / float(len(numeric_cols) - 1)
+        vertical_spacing = min(0.08, max(0.001, max_vertical_spacing - 1e-6))
+    else:
+        vertical_spacing = 0.0
+
     fig = make_subplots(
         rows=len(numeric_cols),
         cols=2,
@@ -265,7 +273,7 @@ def write_metrics_distribution_plotly(df: pd.DataFrame, path: str | Path) -> Non
             for i in range(len(numeric_cols) * 2)
         ],
         horizontal_spacing=0.08,
-        vertical_spacing=0.08,
+        vertical_spacing=vertical_spacing,
     )
     for row_idx, metric in enumerate(numeric_cols, start=1):
         series = pd.to_numeric(df[metric], errors="coerce").dropna().astype(float).values
