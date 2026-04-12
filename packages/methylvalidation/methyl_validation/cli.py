@@ -413,7 +413,8 @@ def _shared_run_metadata_from_step_timings(
         if not run_id:
             continue
         run = meta.setdefault(run_id, {"detector_ok": False, "n_train_samples": None, "n_val_samples": None})
-        if row.get("step_name") == "methyl-detector" and int(row.get("return_code") or 1) == 0:
+        return_code = row.get("return_code")
+        if row.get("step_name") == "methyl-detector" and isinstance(return_code, (int, float)) and int(return_code) == 0:
             run["detector_ok"] = True
         if row.get("n_train_samples") is not None:
             run["n_train_samples"] = int(row["n_train_samples"])
@@ -781,6 +782,96 @@ def _run_model_mc_backend_from_shared_runs(
     if not rows:
         raise RuntimeError(f"No successful model-mc iterations for backend={backend}")
     _write_model_mc_outputs(backend_root=backend_root, rows=rows, all_timings=all_timings)
+
+
+def _load_model_mc_shared_rows(
+    *,
+    shared_root: Path,
+    n_iterations: int,
+) -> List[Dict[str, Any]]:
+    def _remap_shared_project_paths(project_json: Path, run_dir: Path) -> None:
+        if not project_json.is_file():
+            return
+        try:
+            payload = json.loads(project_json.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        changed = False
+        if isinstance(payload, dict):
+            new_output_base = str(run_dir.parent)
+            if payload.get("output_base") != new_output_base:
+                payload["output_base"] = new_output_base
+                changed = True
+        model_mc_root = run_dir.parent.parent
+        run_id = run_dir.name
+        target_prefix = str(run_dir)
+        source_prefixes = [
+            str(model_mc_root / backend / run_id)
+            for backend in ("ecdf", "tabular_sklearn", "generative_hybrid", "shared")
+        ]
+
+        def _rewrite(value: Any) -> Any:
+            nonlocal changed
+            if isinstance(value, str):
+                for src in source_prefixes:
+                    if value == src or value.startswith(f"{src}/"):
+                        mapped = f"{target_prefix}{value[len(src):]}"
+                        if mapped != value:
+                            changed = True
+                        return mapped
+                for backend in ("ecdf", "tabular_sklearn", "generative_hybrid", "shared"):
+                    marker = f"/model_mc/{backend}/{run_id}"
+                    idx = value.find(marker)
+                    if idx >= 0:
+                        mapped = f"{target_prefix}{value[idx + len(marker):]}"
+                        if mapped != value:
+                            changed = True
+                        return mapped
+                return value
+            if isinstance(value, list):
+                return [_rewrite(v) for v in value]
+            if isinstance(value, dict):
+                return {k: _rewrite(v) for k, v in value.items()}
+            return value
+
+        rewritten = _rewrite(payload)
+        if changed:
+            project_json.write_text(json.dumps(rewritten, indent=2), encoding="utf-8")
+
+    run_numbers = [n for n in _list_existing_run_numbers(shared_root) if n <= n_iterations]
+    if not run_numbers:
+        raise RuntimeError(f"No shared runs found under {shared_root}")
+    timings = _load_existing_step_timings(
+        shared_root / "step_timings.csv",
+        keep_until_iteration_exclusive=n_iterations + 1,
+    )
+    meta_by_run = _shared_run_metadata_from_step_timings(timings)
+    rows: List[Dict[str, Any]] = []
+    for run_number in run_numbers:
+        run_id = f"run_{run_number:04d}"
+        run_dir = shared_root / run_id
+        project_json = run_dir / "project.json"
+        _remap_shared_project_paths(project_json, run_dir)
+        if not project_json.is_file():
+            continue
+        run_meta = meta_by_run.get(run_id, {})
+        if timings and not bool(run_meta.get("detector_ok")):
+            continue
+        rows.append(
+            {
+                "iteration": run_number,
+                "run_id": run_id,
+                "run_dir": str(run_dir),
+                "project_json": str(project_json),
+                "n_train_samples": run_meta.get("n_train_samples"),
+                "n_val_samples": run_meta.get("n_val_samples"),
+            }
+        )
+    if not rows:
+        raise RuntimeError(
+            f"Shared runs under {shared_root} are missing usable project.json/detector outputs"
+        )
+    return rows
 
 
 def _run_model_mc_backend(
@@ -1682,6 +1773,26 @@ def main() -> None:
                         sys.exit(1)
                     print(f"Completed model-mc backend={backend}", file=sys.stderr)
             else:
+                shared_root = model_mc_root / "shared"
+                use_shared_runs = shared_root.is_dir()
+                shared_rows: List[Dict[str, Any]] = []
+                if use_shared_runs:
+                    try:
+                        shared_rows = _load_model_mc_shared_rows(
+                            shared_root=shared_root,
+                            n_iterations=config.n_iterations,
+                        )
+                        print(
+                            f"Reusing existing model-mc shared runs from {shared_root}",
+                            file=sys.stderr,
+                        )
+                    except Exception as e:
+                        print(
+                            f"Warning: unable to reuse shared runs at {shared_root}: {e}. "
+                            "Falling back to backend-local model-mc execution.",
+                            file=sys.stderr,
+                        )
+                        use_shared_runs = False
                 for backend in backends:
                     backend_root = model_mc_root / backend
                     print(
@@ -1689,19 +1800,32 @@ def main() -> None:
                         file=sys.stderr,
                     )
                     try:
-                        _run_model_mc_backend(
-                            backend=backend,
-                            base_project_for_runs=base_project_for_runs,
-                            config=config.model_copy(update={"model_backend": backend}),
-                            layout=layout,
-                            cohort_paths_list=cohort_paths_list,
-                            cohort_labels=cohort_labels,
-                            control_paths=control_paths,
-                            disease_paths=disease_paths,
-                            backend_root=backend_root,
-                            resume_arg=args.resume,
-                            per_cancer_group=per_cancer_group,
-                        )
+                        if use_shared_runs:
+                            _run_model_mc_backend_from_shared_runs(
+                                backend=backend,
+                                config=config.model_copy(update={"model_backend": backend}),
+                                layout=layout,
+                                cohort_paths_list=cohort_paths_list,
+                                backend_root=backend_root,
+                                shared_root=shared_root,
+                                shared_rows=shared_rows,
+                                resume_arg=args.resume,
+                                per_cancer_group=per_cancer_group,
+                            )
+                        else:
+                            _run_model_mc_backend(
+                                backend=backend,
+                                base_project_for_runs=base_project_for_runs,
+                                config=config.model_copy(update={"model_backend": backend}),
+                                layout=layout,
+                                cohort_paths_list=cohort_paths_list,
+                                cohort_labels=cohort_labels,
+                                control_paths=control_paths,
+                                disease_paths=disease_paths,
+                                backend_root=backend_root,
+                                resume_arg=args.resume,
+                                per_cancer_group=per_cancer_group,
+                            )
                     except Exception as e:
                         print(f"Error: model-mc backend {backend} failed: {e}", file=sys.stderr)
                         sys.exit(1)
