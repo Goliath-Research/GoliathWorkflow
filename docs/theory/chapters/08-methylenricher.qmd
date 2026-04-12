@@ -7,6 +7,7 @@
 - external enrichment analysis through Enrichr [@chen2013],
 - graph-based pathway grouping,
 - optional PPI topology refinement,
+- optional interactive Cytoscape-style exploration (Dash),
 - heuristic module ranking and disease-prior labeling.
 
 Because of that mixture, this package should be described as a discovery and prioritization layer, not as a single statistical model.
@@ -166,6 +167,15 @@ $$
 $$ {#eq-blended-module-score}
 
 This extension is still heuristic. It should be reported as structural corroboration of module coherence, not as formal inference or disease-association evidence.
+
+## Visualization Modes
+
+The package supports both reproducible offline artifacts and interactive inspection:
+
+- offline: Plotly HTML and Cytoscape.js HTML+JSON exports,
+- interactive: optional `dash_cytoscape` viewer (`network_plot=dash`) with module and edge-threshold filtering.
+
+For publication and auditability, offline artifacts should remain the canonical archived output; Dash should be treated as an exploratory interface.
 
 ## Theme Normalization And Labels
 

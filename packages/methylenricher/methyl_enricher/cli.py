@@ -254,9 +254,28 @@ For theory and package documentation, see:
         '--network-plot',
         type=str,
         default=None,
-        choices=['none', 'plotly', 'pyvis', 'cytoscape', 'all'],
+        choices=['none', 'plotly', 'pyvis', 'cytoscape', 'dash', 'all'],
         metavar='MODE',
-        help='When --modules: generate network plot. none=skip; plotly=Plotly HTML (default when -m); pyvis=PyVis HTML; cytoscape=Cytoscape.js HTML+JSON; all=all three.'
+        help='When --modules: generate network plot. none=skip; plotly=Plotly HTML (default when -m); pyvis=PyVis HTML; cytoscape=Cytoscape.js HTML+JSON; dash=interactive Dash Cytoscape server; all=plotly+pyvis+cytoscape.'
+    )
+    parser.add_argument(
+        '--dash-host',
+        type=str,
+        default='127.0.0.1',
+        metavar='HOST',
+        help='When --network-plot dash: host to bind Dash server (default: 127.0.0.1).'
+    )
+    parser.add_argument(
+        '--dash-port',
+        type=int,
+        default=8050,
+        metavar='PORT',
+        help='When --network-plot dash: port for Dash server (default: 8050).'
+    )
+    parser.add_argument(
+        '--dash-open-browser',
+        action='store_true',
+        help='When --network-plot dash: open browser automatically.'
     )
     parser.add_argument(
         '--network-refinement-enabled',
@@ -605,6 +624,10 @@ def main():
         effective_network_plot = "plotly" if _np is None else _np
         if effective_network_plot and effective_network_plot.lower() != "none":
             print(f"Network plot: {effective_network_plot}")
+        if effective_network_plot and effective_network_plot.lower() == "dash":
+            print(f"Dash host: {args.dash_host}")
+            print(f"Dash port: {args.dash_port}")
+            print(f"Dash open browser: {bool(args.dash_open_browser)}")
         if getattr(args, "network_refinement_enabled", False):
             print("Network refinement: enabled")
             print(f"  source={args.network_refinement_source}")
@@ -659,6 +682,9 @@ def main():
                 network_refinement_community_method=getattr(args, "network_refinement_community_method", "louvain"),
                 network_refinement_min_component_size=getattr(args, "network_refinement_min_component_size", 2),
                 network_refinement_weight_in_final_score=getattr(args, "network_refinement_weight_in_final_score", 0.3),
+                dash_host=getattr(args, "dash_host", "127.0.0.1"),
+                dash_port=getattr(args, "dash_port", 8050),
+                dash_open_browser=getattr(args, "dash_open_browser", False),
             )
         return run_enrichment(
             input_file=in_file,

@@ -26,6 +26,12 @@ setup(
         "networkx>=3.0",
         "python-louvain>=0.16",
     ],
+    extras_require={
+        "dash": [
+            "dash>=2.17.0",
+            "dash-cytoscape>=1.0.2",
+        ],
+    },
     entry_points={
         "console_scripts": [
             "methyl_enricher=methyl_enricher.cli:main",

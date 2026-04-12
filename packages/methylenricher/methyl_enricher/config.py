@@ -69,6 +69,9 @@ class EnricherStepConfig(BaseModel):
     module_cluster_max_q: Optional[float] = None
     module_cluster_top_terms_per_library: Optional[int] = None
     network_plot: Optional[str] = None
+    dash_host: Optional[str] = None
+    dash_port: Optional[int] = None
+    dash_open_browser: Optional[bool] = None
 
     # Optional PPI/network refinement (nested and flat key support)
     network_refinement: Optional[NetworkRefinementConfig] = None

@@ -78,3 +78,35 @@ def test_module_pipeline_network_refinement_fallback(monkeypatch, tmp_path: Path
     assert "PPI_coherence_score" in out_df.columns
     # Failure path should skip PPI artifacts and continue baseline ranking.
     assert not (tmp_path / "ppi_module_coherence.csv").exists()
+
+
+def test_module_pipeline_passes_ppi_dataset_to_dash(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(module_pipeline, "EnrichmentAnalyzer", _FakeAnalyzer)
+    captured = {}
+
+    def _capture_write_network_plots(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(module_pipeline.module_network_plot, "write_network_plots", _capture_write_network_plots)
+
+    in_file = tmp_path / "genes.csv"
+    in_file.write_text("gene\nTP53\n", encoding="utf-8")
+    edges_file = tmp_path / "edges.csv"
+    edges_file.write_text(
+        "source,target,score\nTP53,BRCA1,800\nEGFR,MTOR,700\nTP53,EGFR,450\n",
+        encoding="utf-8",
+    )
+
+    out_df = module_pipeline.run_module_pipeline(
+        input_path=in_file,
+        output_dir=tmp_path,
+        network_refinement_enabled=True,
+        network_refinement_source="local_edges",
+        network_refinement_local_edges_file=str(edges_file),
+        network_plot="dash",
+    )
+
+    assert not out_df.empty
+    assert captured.get("network_plot") == "dash"
+    assert captured.get("ppi_elements")
+    assert captured.get("ppi_stylesheet")

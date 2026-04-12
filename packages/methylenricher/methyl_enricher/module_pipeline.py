@@ -200,6 +200,9 @@ def run_module_pipeline(
     network_refinement_community_method: str = "louvain",
     network_refinement_min_component_size: int = 2,
     network_refinement_weight_in_final_score: float = 0.3,
+    dash_host: str = "127.0.0.1",
+    dash_port: int = 8050,
+    dash_open_browser: bool = False,
 ) -> pd.DataFrame:
     """
     Run the full pathway-to-module pipeline (Steps A–E) and write modules_ranked.csv.
@@ -270,6 +273,8 @@ def run_module_pipeline(
     pca_relevance_tier, theme_descriptions = load_theme_extras()
 
     ppi_coherence_by_module: Dict[int, float] = {}
+    ppi_dash_elements: Optional[List[Dict]] = None
+    ppi_dash_stylesheet: Optional[List[Dict]] = None
     if network_refinement_enabled:
         try:
             if network_refinement_source == "local_edges":
@@ -322,6 +327,22 @@ def run_module_pipeline(
                 int(r["module_id"]): float(r["ppi_coherence_score"])
                 for _, r in module_coherence_df.iterrows()
             }
+
+            # Optional PPI dataset for Dash Cytoscape visualization
+            if ppi_graph.number_of_nodes() > 0:
+                for node in ppi_graph.nodes():
+                    cid = int(communities.get(node, -1))
+                    ppi_graph.nodes[node]["module_id"] = cid
+                    ppi_graph.nodes[node]["module_label"] = f"Community {cid}" if cid >= 0 else "Other"
+                    ppi_graph.nodes[node]["n_genes"] = int(ppi_graph.degree(node))
+                ppi_payload = module_network_plot.build_cytoscape_payload_from_graph(
+                    ppi_graph,
+                    layout="spring",
+                    include_positions=True,
+                    show_labels=True,
+                )
+                ppi_dash_elements = ppi_payload.get("elements")
+                ppi_dash_stylesheet = ppi_payload.get("stylesheet")
 
             edges_path = output_dir / "ppi_network_edges.csv"
             edges_df.to_csv(edges_path, index=False)
@@ -433,6 +454,11 @@ def run_module_pipeline(
             module_id_to_label=module_id_to_label,
             similarity_threshold=similarity_threshold,
             network_plot=network_plot,
+            ppi_elements=ppi_dash_elements,
+            ppi_stylesheet=ppi_dash_stylesheet,
+            dash_host=dash_host,
+            dash_port=dash_port,
+            dash_open_browser=dash_open_browser,
         )
 
     return out_df

@@ -9,6 +9,9 @@ def _base_args():
         input=None,
         outdir="results",
         network_plot=None,
+        dash_host="127.0.0.1",
+        dash_port=8050,
+        dash_open_browser=False,
         network_refinement_enabled=False,
         network_refinement_source="string_api",
         network_refinement_local_edges_file=None,
@@ -62,3 +65,20 @@ def test_apply_network_refinement_respects_non_default_cli_values():
     _apply_enricher_config_to_args(args, cfg)
     assert args.network_refinement_source == "local_edges"
     assert args.network_refinement_weight_in_final_score == 0.7
+
+
+def test_apply_dash_runtime_config():
+    args = _base_args()
+    cfg = EnricherStepConfig.model_validate(
+        {
+            "network_plot": "dash",
+            "dash_host": "0.0.0.0",
+            "dash_port": 9999,
+            "dash_open_browser": True,
+        }
+    )
+    _apply_enricher_config_to_args(args, cfg)
+    assert args.network_plot == "dash"
+    assert args.dash_host == "0.0.0.0"
+    assert args.dash_port == 9999
+    assert args.dash_open_browser is True
