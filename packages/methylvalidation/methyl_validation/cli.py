@@ -404,6 +404,385 @@ def _write_backend_ranking(
     return rows
 
 
+def _shared_run_metadata_from_step_timings(
+    rows: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    meta: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        run_id = str(row.get("run_id") or "")
+        if not run_id:
+            continue
+        run = meta.setdefault(run_id, {"detector_ok": False, "n_train_samples": None, "n_val_samples": None})
+        if row.get("step_name") == "methyl-detector" and int(row.get("return_code") or 1) == 0:
+            run["detector_ok"] = True
+        if row.get("n_train_samples") is not None:
+            run["n_train_samples"] = int(row["n_train_samples"])
+        if row.get("n_val_samples") is not None:
+            run["n_val_samples"] = int(row["n_val_samples"])
+    return meta
+
+
+def _build_model_mc_shared_runs(
+    *,
+    base_project_for_runs: Path,
+    config: MonteCarloConfig,
+    layout: str,
+    cohort_paths_list: List[Tuple[str, List[str]]],
+    cohort_labels: List[str],
+    control_paths: List[str],
+    disease_paths: List[str],
+    shared_root: Path,
+    resume_arg: Optional[int],
+    per_cancer_group: bool,
+) -> List[Dict[str, Any]]:
+    shared_root.mkdir(parents=True, exist_ok=True)
+    _write_baseline_manifest(
+        output_root=shared_root,
+        mode="model_mc_shared",
+        config=config,
+        layout=layout,
+        cohort_paths_list=cohort_paths_list,
+    )
+    rows: List[Dict[str, Any]] = []
+    all_timings: List[Dict[str, Any]] = []
+    existing_runs = _list_existing_run_numbers(shared_root)
+    start_iteration_idx = _resolve_resume_start_iteration(
+        resume_arg,
+        n_iterations=config.n_iterations,
+        existing_runs=existing_runs,
+    )
+    existing_timings: List[Dict[str, Any]] = []
+    if resume_arg is not None and start_iteration_idx > 0:
+        existing_timings = _load_existing_step_timings(
+            shared_root / "step_timings.csv",
+            keep_until_iteration_exclusive=start_iteration_idx + 1,
+        )
+        all_timings.extend(existing_timings)
+        existing_meta = _shared_run_metadata_from_step_timings(existing_timings)
+        for prev_i in range(start_iteration_idx):
+            prev_run_id = f"run_{prev_i + 1:04d}"
+            prev_run_dir = shared_root / prev_run_id
+            if not prev_run_dir.is_dir():
+                continue
+            run_meta = existing_meta.get(prev_run_id, {})
+            if not bool(run_meta.get("detector_ok")):
+                continue
+            rows.append(
+                {
+                    "iteration": prev_i + 1,
+                    "run_id": prev_run_id,
+                    "run_dir": str(prev_run_dir),
+                    "project_json": str(prev_run_dir / "project.json"),
+                    "n_train_samples": run_meta.get("n_train_samples"),
+                    "n_val_samples": run_meta.get("n_val_samples"),
+                }
+            )
+    if resume_arg is not None:
+        for n in existing_runs:
+            if n >= (start_iteration_idx + 1):
+                run_dir = shared_root / f"run_{n:04d}"
+                if run_dir.is_dir():
+                    shutil.rmtree(run_dir)
+        resume_label = "auto" if resume_arg == 0 else str(resume_arg)
+        print(
+            f"Resuming model-mc shared runs (--resume {resume_label}): "
+            f"starting at run_{start_iteration_idx + 1:04d} through run_{config.n_iterations:04d}",
+            file=sys.stderr,
+        )
+
+    completed_iteration_seconds: List[float] = []
+    for i in range(start_iteration_idx, config.n_iterations):
+        iteration_t0 = time.perf_counter()
+        run_id = f"run_{i + 1:04d}"
+        run_dir = shared_root / run_id
+        seed_i = (config.seed + i) if config.seed is not None else None
+        train_m: Dict[str, List[str]] = {}
+        val_m: Dict[str, List[str]] = {}
+        try:
+            if layout == "binary":
+                train_control, train_disease, val_control, val_disease = stratified_split(
+                    control_paths,
+                    disease_paths,
+                    config.train_fraction,
+                    seed=seed_i,
+                )
+            else:
+                train_m, val_m = stratified_split_multiclass(
+                    cohort_paths_list,
+                    config.train_fraction,
+                    seed=seed_i,
+                )
+        except ValueError as e:
+            print(f"[model-mc:shared] Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
+            continue
+
+        if layout == "binary":
+            (
+                project_path,
+                _,
+                _,
+                _val_control_csv,
+                _val_disease_csv,
+                centroid_group1_override,
+                centroid_group2_override,
+            ) = generate_run_project(
+                base_project_for_runs,
+                run_dir,
+                run_id,
+                str(shared_root),
+                train_control,
+                train_disease,
+                val_control,
+                val_disease,
+                config.samples_base_path,
+            )
+            n_train_samples = len(train_control) + len(train_disease)
+            n_val_samples = len(val_control) + len(val_disease)
+            ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration(
+                project_path,
+                per_cancer_group=per_cancer_group,
+                logs_dir=run_dir / "logs",
+                progress_callback=None,
+                centroid_step_overrides={
+                    "group1": centroid_group1_override,
+                    "group2": centroid_group2_override,
+                },
+                detector_step_override=None,
+                skip_centroid=False,
+                config=config,
+            )
+        else:
+            if layout == "multiclass":
+                project_path, _val_groups_json = generate_run_project_multiclass(
+                    base_project_for_runs,
+                    run_dir,
+                    run_id,
+                    str(shared_root),
+                    train_m,
+                    val_m,
+                    cohort_labels,
+                    config.samples_base_path,
+                )
+            else:
+                project_path, _val_groups_json = generate_run_project_hierarchical_multiclass(
+                    base_project_for_runs,
+                    run_dir,
+                    run_id,
+                    str(shared_root),
+                    train_m,
+                    val_m,
+                    cohort_labels,
+                    config.samples_base_path,
+                )
+            n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
+            n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
+            ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration_multiclass(
+                project_path,
+                per_cancer_group=per_cancer_group,
+                logs_dir=run_dir / "logs",
+                progress_callback=None,
+                detector_step_override=None,
+                skip_centroid=False,
+                config=config,
+            )
+
+        for t in timings_iter:
+            all_timings.append(
+                {
+                    **t,
+                    "run_id": run_id,
+                    "run_dir": str(run_dir),
+                    "n_train_samples": n_train_samples,
+                    "n_val_samples": n_val_samples,
+                    "model_backend": "shared",
+                }
+            )
+        if not ok_iter:
+            for msg in errors_iter:
+                print(f"[model-mc:shared] Error [{run_id}]: {msg}", file=sys.stderr)
+            if config.abort_on_step_failure:
+                raise RuntimeError("[model-mc:shared] abort_on_step_failure=true and detector stage failed")
+            continue
+
+        rows.append(
+            {
+                "iteration": i + 1,
+                "run_id": run_id,
+                "run_dir": str(run_dir),
+                "project_json": str(project_path),
+                "n_train_samples": n_train_samples,
+                "n_val_samples": n_val_samples,
+            }
+        )
+        elapsed = time.perf_counter() - iteration_t0
+        completed_iteration_seconds.append(elapsed)
+        eta = _estimate_iteration_eta(completed_iteration_seconds, config.n_iterations - (i + 1))
+        print(
+            f"[model-mc:shared] Completed iteration {i + 1}/{config.n_iterations} ({run_id}) "
+            f"in {_format_duration(elapsed)} (ETA {eta})",
+            file=sys.stderr,
+        )
+
+    if not rows:
+        raise RuntimeError("No successful model-mc shared iterations")
+    write_step_timings_csv(all_timings, shared_root / "step_timings.csv")
+    return rows
+
+
+def _run_model_mc_backend_from_shared_runs(
+    *,
+    backend: str,
+    config: MonteCarloConfig,
+    layout: str,
+    cohort_paths_list: List[Tuple[str, List[str]]],
+    backend_root: Path,
+    shared_root: Path,
+    shared_rows: List[Dict[str, Any]],
+    resume_arg: Optional[int],
+    per_cancer_group: bool,
+) -> None:
+    backend_root.mkdir(parents=True, exist_ok=True)
+    _write_baseline_manifest(
+        output_root=backend_root,
+        mode="model_mc",
+        config=config,
+        layout=layout,
+        cohort_paths_list=cohort_paths_list,
+    )
+    rows: List[Dict[str, Any]] = []
+    all_timings: List[Dict[str, Any]] = []
+    existing_runs = _list_existing_run_numbers(backend_root)
+    start_iteration_idx = _resolve_resume_start_iteration(
+        resume_arg,
+        n_iterations=config.n_iterations,
+        existing_runs=existing_runs,
+    )
+    if resume_arg is not None and start_iteration_idx > 0:
+        for prev_i in range(start_iteration_idx):
+            prev_run_id = f"run_{prev_i + 1:04d}"
+            prev_run_dir = backend_root / prev_run_id
+            if not prev_run_dir.is_dir():
+                continue
+            prev_scalar = iteration_scalar_metrics_from_run_dir(prev_run_dir)
+            if prev_scalar:
+                rows.append(
+                    {
+                        "iteration": prev_i + 1,
+                        "run_id": prev_run_id,
+                        "run_dir": str(prev_run_dir),
+                        "model_backend": backend,
+                        **prev_scalar,
+                    }
+                )
+        all_timings.extend(
+            _load_existing_step_timings(
+                backend_root / "step_timings.csv",
+                keep_until_iteration_exclusive=start_iteration_idx + 1,
+            )
+        )
+    if resume_arg is not None:
+        for n in existing_runs:
+            if n >= (start_iteration_idx + 1):
+                run_dir = backend_root / f"run_{n:04d}"
+                if run_dir.is_dir():
+                    shutil.rmtree(run_dir)
+
+    shared_timings = _load_existing_step_timings(
+        shared_root / "step_timings.csv",
+        keep_until_iteration_exclusive=config.n_iterations + 1,
+    )
+    shared_timings_by_run: Dict[str, List[Dict[str, Any]]] = {}
+    for t in shared_timings:
+        run_id = str(t.get("run_id") or "")
+        if run_id:
+            shared_timings_by_run.setdefault(run_id, []).append(t)
+
+    completed_iteration_seconds: List[float] = []
+    for row in sorted(shared_rows, key=lambda r: int(r["iteration"])):
+        i = int(row["iteration"]) - 1
+        if i < start_iteration_idx:
+            continue
+        iteration_t0 = time.perf_counter()
+        run_id = str(row["run_id"])
+        shared_run_dir = Path(str(row["run_dir"]))
+        project_path = Path(str(row.get("project_json") or (shared_run_dir / "project.json")))
+        if not project_path.is_file():
+            raise FileNotFoundError(f"Shared project.json missing for {run_id}: {project_path}")
+        backend_run_dir = backend_root / run_id
+        backend_run_dir.mkdir(parents=True, exist_ok=True)
+
+        if layout == "binary":
+            run_project = load_project(project_path)
+            comparisons = run_project.get_comparisons()
+            if comparisons:
+                spec = comparisons[0]
+                predictor_output_dir = backend_run_dir / "predictors" / spec.control_group / spec.disease_group
+            else:
+                predictor_output_dir = backend_run_dir / "predictors"
+        else:
+            predictor_output_dir = backend_run_dir / "predictors"
+
+        backend_config = config.model_copy(update={"model_backend": backend})
+        if (
+            backend in {"tabular_sklearn", "generative_hybrid"}
+            and not backend_config.model_bundle_dir
+        ):
+            backend_config = backend_config.model_copy(
+                update={"model_bundle_dir": str(backend_run_dir / "model_bundle")}
+            )
+
+        n_train_samples = row.get("n_train_samples")
+        n_val_samples = row.get("n_val_samples")
+
+        for t in shared_timings_by_run.get(run_id, []):
+            all_timings.append(
+                {
+                    **t,
+                    "run_id": run_id,
+                    "model_backend": backend,
+                }
+            )
+
+        ok_model, errors_model, timings_model = run_pipeline_for_model(
+            project_json=project_path,
+            logs_dir=backend_run_dir / "logs" / "model",
+            predictor_output_dir=predictor_output_dir,
+            per_cancer_group=per_cancer_group,
+            config=backend_config,
+        )
+        for t in timings_model:
+            all_timings.append(
+                {
+                    **t,
+                    "run_id": run_id,
+                    "run_dir": str(backend_run_dir),
+                    "n_train_samples": n_train_samples,
+                    "n_val_samples": n_val_samples,
+                    "model_backend": backend,
+                }
+            )
+        if not ok_model:
+            for msg in errors_model:
+                print(f"[model-mc:{backend}] Error [{run_id}]: {msg}", file=sys.stderr)
+            if config.abort_on_step_failure:
+                raise RuntimeError(f"[model-mc:{backend}] abort_on_step_failure=true and model stage failed")
+            continue
+        scalar = iteration_scalar_metrics_from_run_dir(backend_run_dir)
+        rows.append({"iteration": i + 1, "run_id": run_id, "run_dir": str(backend_run_dir), "model_backend": backend, **scalar})
+        elapsed = time.perf_counter() - iteration_t0
+        completed_iteration_seconds.append(elapsed)
+        eta = _estimate_iteration_eta(completed_iteration_seconds, config.n_iterations - (i + 1))
+        print(
+            f"[model-mc:{backend}] Completed iteration {i + 1}/{config.n_iterations} ({run_id}) "
+            f"in {_format_duration(elapsed)} (ETA {eta})",
+            file=sys.stderr,
+        )
+
+    if not rows:
+        raise RuntimeError(f"No successful model-mc iterations for backend={backend}")
+    _write_model_mc_outputs(backend_root=backend_root, rows=rows, all_timings=all_timings)
+
+
 def _run_model_mc_backend(
     *,
     backend: str,
@@ -1248,35 +1627,85 @@ def main() -> None:
             else [str(config.model_backend or "ecdf").strip().lower()]
         )
         if args.select_best_model and not args.model_mc:
-            discovered = [p.name for p in sorted(model_mc_root.iterdir()) if p.is_dir()]
+            discovered = [
+                p.name
+                for p in sorted(model_mc_root.iterdir())
+                if p.is_dir() and p.name in {"ecdf", "tabular_sklearn", "generative_hybrid"}
+            ]
             backends = discovered or configured_backends
         else:
             backends = configured_backends
         if args.model_mc:
-            for backend in backends:
-                backend_root = model_mc_root / backend
+            if args.model_mc_all:
+                shared_root = model_mc_root / "shared"
                 print(
-                    f"Running model-mc backend={backend} into {backend_root}",
+                    f"Running model-mc shared iteration stage into {shared_root}",
                     file=sys.stderr,
                 )
                 try:
-                    _run_model_mc_backend(
-                        backend=backend,
+                    shared_rows = _build_model_mc_shared_runs(
                         base_project_for_runs=base_project_for_runs,
-                        config=config.model_copy(update={"model_backend": backend}),
+                        config=config,
                         layout=layout,
                         cohort_paths_list=cohort_paths_list,
                         cohort_labels=cohort_labels,
                         control_paths=control_paths,
                         disease_paths=disease_paths,
-                        backend_root=backend_root,
+                        shared_root=shared_root,
                         resume_arg=args.resume,
                         per_cancer_group=per_cancer_group,
                     )
                 except Exception as e:
-                    print(f"Error: model-mc backend {backend} failed: {e}", file=sys.stderr)
+                    print(f"Error: model-mc shared run stage failed: {e}", file=sys.stderr)
                     sys.exit(1)
-                print(f"Completed model-mc backend={backend}", file=sys.stderr)
+                print("Completed model-mc shared iteration stage", file=sys.stderr)
+                for backend in backends:
+                    backend_root = model_mc_root / backend
+                    print(
+                        f"Running model-mc backend={backend} into {backend_root}",
+                        file=sys.stderr,
+                    )
+                    try:
+                        _run_model_mc_backend_from_shared_runs(
+                            backend=backend,
+                            config=config.model_copy(update={"model_backend": backend}),
+                            layout=layout,
+                            cohort_paths_list=cohort_paths_list,
+                            backend_root=backend_root,
+                            shared_root=shared_root,
+                            shared_rows=shared_rows,
+                            resume_arg=args.resume,
+                            per_cancer_group=per_cancer_group,
+                        )
+                    except Exception as e:
+                        print(f"Error: model-mc backend {backend} failed: {e}", file=sys.stderr)
+                        sys.exit(1)
+                    print(f"Completed model-mc backend={backend}", file=sys.stderr)
+            else:
+                for backend in backends:
+                    backend_root = model_mc_root / backend
+                    print(
+                        f"Running model-mc backend={backend} into {backend_root}",
+                        file=sys.stderr,
+                    )
+                    try:
+                        _run_model_mc_backend(
+                            backend=backend,
+                            base_project_for_runs=base_project_for_runs,
+                            config=config.model_copy(update={"model_backend": backend}),
+                            layout=layout,
+                            cohort_paths_list=cohort_paths_list,
+                            cohort_labels=cohort_labels,
+                            control_paths=control_paths,
+                            disease_paths=disease_paths,
+                            backend_root=backend_root,
+                            resume_arg=args.resume,
+                            per_cancer_group=per_cancer_group,
+                        )
+                    except Exception as e:
+                        print(f"Error: model-mc backend {backend} failed: {e}", file=sys.stderr)
+                        sys.exit(1)
+                    print(f"Completed model-mc backend={backend}", file=sys.stderr)
 
         if args.select_best_model:
             try:

@@ -72,7 +72,7 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **MC loop (`methyl-validation` default, with optional `--stability`)**: per iteration runs `methyl-centroid` then `methyl-detector` (`run_pipeline_for_iteration`, `run_pipeline_for_iteration_multiclass`).
 - **`--stability`**: after the MC loop, runs in-process stability aggregation (`run_stability_analysis`) over detector discovery outputs.
 - **`--freeze`**: runs `run_pipeline_for_production`: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, then optional `methyl-disease-progression`.
-- **`--model-mc`**: full retrain+test MC by backend under isolated roots (`model_mc/<backend>/run_XXXX`): centroid -> detector -> backend train/predict.
+- **`--model-mc`**: full retrain+test MC for model selection. With `--model-mc-all`, MethylValidation first builds a shared iteration set (`model_mc/shared/run_XXXX`) for split + centroid + detector, then runs backend-specific train/predict stages under `model_mc/<backend>/run_XXXX`.
 - **`--model`**: runs `run_pipeline_for_model`. For `model_backend=ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.
 - **`--select-best-model`**: ranks backend model-MC summaries and runs final all-data production model build using selected backend.
 - **`--post-model-validation`**: runs MC holdout evaluation against frozen production artifacts only (no retraining). `ecdf` dispatches predictor-only runs; `tabular_sklearn` and `generative_hybrid` dispatch frozen model inference via backend predictors.
@@ -160,11 +160,11 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
    - **Multiclass:** `stratified_split_multiclass` → `generate_run_project_multiclass` → `run_pipeline_for_iteration_multiclass` (centroid + detector only).
    - Read metrics via `iteration_scalar_metrics_from_run_dir(run_dir)` (predictor JSON if present, else detector `result*.json`).
 5. Aggregate → `all_metrics.csv`, `metrics_summary.json`, `step_timings.csv`, optional `resource_summary.json`.
-6. For `--model-mc`, repeat per backend under isolated roots and emit cross-backend ranking files (`backend_ranking.csv`, `backend_ranking.json`).
+6. For `--model-mc`, run shared split+centroid+detector preparation once (for `--model-mc-all`), then run backend model stages under isolated backend roots and emit cross-backend ranking files (`backend_ranking.csv`, `backend_ranking.json`).
 
 **MethylPredictor:** flat-group projects with **multiclass-classifier.pkl** resolve via `resolve_predictor_config` (shared `_build_multiclass_predictor_config`). The CLI applies `--test-groups` in both single-config and per-comparison multiclass runs (`_apply_test_groups_json_to_config`).
 
-**After a frozen production build:** `--model-mc` runs full retrain+test MC per backend under `monte_carlo_runs/model_mc/<backend>/`. `--select-best-model` reads these summaries, selects best backend by configured metric/statistic, and runs final all-data production model build. `--post-model-validation` remains a descriptive frozen-model MC path under `monte_carlo_runs/post_model_validation/`.
+**After a frozen production build:** `--model-mc --model-mc-all` builds shared iteration artifacts under `monte_carlo_runs/model_mc/shared/` and evaluates each backend under `monte_carlo_runs/model_mc/<backend>/`. `--select-best-model` reads backend summaries, selects best backend by configured metric/statistic, and runs final all-data production model build. `--post-model-validation` remains a descriptive frozen-model MC path under `monte_carlo_runs/post_model_validation/`.
 
 **Disease progression synthesis:** when `step_config.progression.enabled` is set, freeze invokes `methyl-disease-progression --project <production/project.json>` after enricher. The progression tool reads comparison outputs (`mapper/<control>/<disease>/all-gene_name-combined.csv`, `enricher/<control>/<disease>/enrichment_merged.csv`, optional `modules_ranked.csv`) and writes long tables + summary under `<project_root>/progression`.
 
@@ -176,7 +176,8 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 | **metrics_summary.json** | Per-metric empirical distribution: mean, std, min, max, count, percentiles (p5, p25, p50, p75, p95). |
 | **step_timings.csv** | Per step per run: `step_name`, `duration_seconds`, `return_code`, `run_id`, `run_dir`, `n_train_samples`, `n_val_samples`, and optional `n_processed_samples` (centroid rows). Binary centroid runs emit `methyl-centroid-group1` and `methyl-centroid-group2` rows. |
 | **resource_summary.json** | (Optional) Mean/std duration per step, mean total time per iteration, min/max/mean `n_train_samples`, `n_val_samples`, and `n_processed_samples` when present. |
-| **model_mc/<backend>/all_metrics.csv** | Per-backend full retrain+test MC metrics table. |
+| **model_mc/shared/run_XXXX/** | Shared per-iteration project + centroid/detector artifacts reused across backends when running `--model-mc --model-mc-all`. |
+| **model_mc/<backend>/all_metrics.csv** | Per-backend model-stage MC metrics table produced from shared runs (or standalone backend runs when `--model-mc-all` is not used). |
 | **model_mc/<backend>/metrics_summary.json** | Per-backend summary statistics used for backend ranking. |
 | **model_mc/backend_ranking.csv** | Cross-backend ranking by configured metric/statistic. |
 | **production/selected_backend.json** | Selected backend and ranking metadata for final all-data training decision. |

@@ -119,3 +119,125 @@ def test_model_mc_all_requires_model_mc(tmp_path: Path, monkeypatch, capsys):
     assert ex.value.code == 1
     err = capsys.readouterr().err
     assert "--model-mc-all requires --model-mc" in err
+
+
+def test_model_mc_all_uses_shared_stage(tmp_path: Path, monkeypatch):
+    h = tmp_path / "healthy.csv"
+    d = tmp_path / "disease.csv"
+    h.write_text("sample\nH1\nH2\n", encoding="utf-8")
+    d.write_text("sample\nD1\nD2\n", encoding="utf-8")
+    out_dir = tmp_path / "out"
+    production_dir = out_dir / "x" / "monte_carlo_runs" / "production"
+    production_dir.mkdir(parents=True, exist_ok=True)
+    (production_dir / "project.json").write_text("{}", encoding="utf-8")
+    project = tmp_path / "project.json"
+    project.write_text(
+        f"""
+{{
+  "project_name": "x",
+  "output_base": "{out_dir.as_posix()}",
+  "samples_base_path": "{tmp_path.as_posix()}",
+  "groups": [
+    {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
+    {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
+  ],
+  "step_config": {{
+    "validation": {{
+      "train_fraction": 0.8,
+      "n_iterations": 2
+    }}
+  }}
+}}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    calls = {"shared": 0, "backends": []}
+
+    def _fake_shared(**kwargs):
+        calls["shared"] += 1
+        return [
+            {
+                "iteration": 1,
+                "run_id": "run_0001",
+                "run_dir": str(tmp_path / "shared" / "run_0001"),
+                "project_json": str(tmp_path / "shared" / "run_0001" / "project.json"),
+                "n_train_samples": 2,
+                "n_val_samples": 2,
+            }
+        ]
+
+    def _fake_backend(**kwargs):
+        calls["backends"].append(kwargs["backend"])
+
+    monkeypatch.setattr(cli, "_build_model_mc_shared_runs", _fake_shared)
+    monkeypatch.setattr(cli, "_run_model_mc_backend_from_shared_runs", _fake_backend)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["methyl-validation", "--project", str(project), "--model-mc", "--model-mc-all"],
+    )
+    cli.main()
+    assert calls["shared"] == 1
+    assert calls["backends"] == ["ecdf", "tabular_sklearn", "generative_hybrid"]
+
+
+def test_select_best_model_ignores_shared_directory(tmp_path: Path, monkeypatch):
+    h = tmp_path / "healthy.csv"
+    d = tmp_path / "disease.csv"
+    h.write_text("sample\nH1\nH2\n", encoding="utf-8")
+    d.write_text("sample\nD1\nD2\n", encoding="utf-8")
+    out_dir = tmp_path / "out"
+    model_mc_root = out_dir / "x" / "monte_carlo_runs" / "model_mc"
+    production_dir = out_dir / "x" / "monte_carlo_runs" / "production"
+    production_dir.mkdir(parents=True, exist_ok=True)
+    (production_dir / "project.json").write_text("{}", encoding="utf-8")
+    (model_mc_root / "shared").mkdir(parents=True, exist_ok=True)
+    for backend in ("ecdf", "tabular_sklearn", "generative_hybrid"):
+        root = model_mc_root / backend
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "metrics_summary.json").write_text(
+            '{"balanced_accuracy": {"mean": 0.7, "percentiles": {"p50": 0.7}}}',
+            encoding="utf-8",
+        )
+    project = tmp_path / "project.json"
+    project.write_text(
+        f"""
+{{
+  "project_name": "x",
+  "output_base": "{out_dir.as_posix()}",
+  "samples_base_path": "{tmp_path.as_posix()}",
+  "groups": [
+    {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
+    {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
+  ],
+  "step_config": {{
+    "validation": {{
+      "train_fraction": 0.8,
+      "n_iterations": 2
+    }}
+  }}
+}}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    captured: dict[str, object] = {}
+
+    def _fake_rank(**kwargs):
+        captured["backends"] = list(kwargs["backends"])
+        return [
+            {"backend": "ecdf", "metric": "balanced_accuracy", "stat": "median", "score": 0.8, "rank": 1}
+        ]
+
+    monkeypatch.setattr(cli, "_write_backend_ranking", _fake_rank)
+    monkeypatch.setattr(
+        cli,
+        "build_production_model",
+        lambda **kwargs: {"success": True, "output_dir": str(production_dir)},
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["methyl-validation", "--project", str(project), "--select-best-model", "--model-mc-all"],
+    )
+    cli.main()
+    assert captured["backends"] == ["ecdf", "tabular_sklearn", "generative_hybrid"]

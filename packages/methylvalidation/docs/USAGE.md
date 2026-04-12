@@ -132,7 +132,7 @@ When to change defaults:
 | `--freeze` | `methyl-centroid` + `methyl-detector` (fixed panel) + `methyl-mapper` + `methyl-enricher` + optional `methyl-disease-progression` |
 | `--model` (`model_backend="ecdf"`) | `methyl-classifier` + `methyl-predictor` on frozen `production/project.json` |
 | `--model` (`model_backend="tabular_sklearn"` / `"generative_hybrid"`) | In-process backend flow: model bundle -> train -> predict (consumes freeze outputs; does not re-run `methyl-detector`) |
-| `--model-mc` | Full MC retraining per split: centroid -> detector -> backend train/predict; writes isolated results under `model_mc/<backend>/` |
+| `--model-mc` | Full MC retraining per split: centroid -> detector -> backend train/predict; writes isolated results under `model_mc/<backend>/`. With `--model-mc-all`, centroid+detector runs are built once and reused by all backends. |
 | `--post-model-validation` | MC holdout evaluation on frozen production artifacts (no retraining): `ecdf` uses predictor-only runs, tabular/generative use frozen model inference |
 | `--predictor-only` | Monte Carlo iterations where each iteration runs only `methyl-predictor` with frozen artifacts |
 
@@ -149,7 +149,7 @@ When to change defaults:
 | `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If `step_config.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. | `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher` (+ optional progression). |
 | `--model` | Run production model builder after freeze (Workflow 1, Step 3). | `ecdf`: `methyl-classifier` -> `methyl-predictor`; other backends: bundle -> train -> predict. |
 | `--model-mc` | Run full backend MC retraining+evaluation loop for model selection. | Per iteration: centroid -> detector -> backend train -> backend predict. |
-| `--model-mc-all` | With `--model-mc`, run all supported backends with isolated outputs. | Creates `model_mc/ecdf`, `model_mc/tabular_sklearn`, `model_mc/generative_hybrid`. |
+| `--model-mc-all` | With `--model-mc`, run all supported backends with isolated outputs while reusing one shared MC run set. | Creates `model_mc/shared/run_XXXX` plus `model_mc/ecdf`, `model_mc/tabular_sklearn`, `model_mc/generative_hybrid`. |
 | `--select-best-model` | Rank backend model-MC summaries and train final production model on all data. | Reads `model_mc/*/metrics_summary.json`, picks best by `--selection-metric`/`--selection-stat`, then runs production model build. |
 | `--rollout-compare` + `--baseline-summary` + `--candidate-summary` | Compare dual-run summaries and emit promote/hold recommendation JSON using rollout thresholds from `step_config.validation`. | In-process comparison (no training/inference run). |
 | `--selection-metric METRIC` | Metric for backend ranking in `--select-best-model`. | Default: `balanced_accuracy`. |
@@ -288,7 +288,8 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `stability/dmp_frequency_chr_<chrom>.html` | Per-chromosome Plotly chart files, each showing `all` vs `selected` DMP count distributions over frequency (%). |
 | `stability/stability_summary.json` | Stability run summary for DMP/gene frequency plus detector parameter extraction. Includes `detector_parameters.per_run` and `detector_parameters.aggregates` built from `detections/**/results-*.json` (minimal fields: exported/statistical/biological DMP totals, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). |
 | `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |
-| `model_mc/<backend>/run_000N/` | Per-iteration full retraining outputs for each backend. |
+| `model_mc/shared/run_000N/` | Shared per-iteration artifacts (split projects + centroid/detector outputs) reused by all backends in `--model-mc --model-mc-all`. |
+| `model_mc/<backend>/run_000N/` | Per-iteration backend model outputs (predictor/model artifacts and logs) produced from shared runs. |
 | `model_mc/<backend>/all_metrics.csv` | One row per successful model-MC iteration for that backend. |
 | `model_mc/<backend>/metrics_summary.json` | Per-backend empirical distribution summary. |
 | `model_mc/backend_ranking.csv` | Cross-backend ranking by `--selection-metric` and `--selection-stat`. |
