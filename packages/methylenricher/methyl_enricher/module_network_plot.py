@@ -140,6 +140,86 @@ def plot_pathway_network_plotly(
     logger.info(f"Wrote Plotly network plot: {output_path}")
 
 
+def _compute_positions(G: nx.Graph, layout: str = "spring") -> Dict[str, tuple]:
+    """Compute deterministic node positions for Cytoscape payloads."""
+    if layout == "kamada_kawai":
+        return nx.kamada_kawai_layout(G)
+    return nx.spring_layout(G, seed=42, k=1.5)
+
+
+def cytoscape_default_stylesheet(show_labels: bool = True) -> List[Dict]:
+    """Default Cytoscape stylesheet shared by static and Dash views."""
+    label_value = "data(label)" if show_labels else ""
+    return [
+        {
+            "selector": "node",
+            "style": {
+                "label": label_value,
+                "text-valign": "bottom",
+                "text-margin-y": 4,
+                "font-size": 10,
+                "width": 20,
+                "height": 20,
+                "background-color": "#6fb1fc",
+            },
+        },
+        {
+            "selector": "edge",
+            "style": {
+                "width": "mapData(weight, 0, 1, 1, 4)",
+                "line-color": "#ccc",
+                "opacity": 0.8,
+            },
+        },
+    ]
+
+
+def build_cytoscape_payload_from_graph(
+    G: nx.Graph,
+    *,
+    layout: str = "spring",
+    include_positions: bool = True,
+    show_labels: bool = True,
+) -> Dict[str, List[Dict]]:
+    """
+    Build Cytoscape-compatible payload from a NetworkX graph.
+
+    Returns dict with keys: nodes, edges, elements, stylesheet.
+    """
+    positions = _compute_positions(G, layout=layout) if include_positions and G.nodes() else {}
+    node_ids = sorted(str(n) for n in G.nodes())
+
+    nodes_cy: List[Dict] = []
+    for node_id in node_ids:
+        attrs = G.nodes[node_id]
+        data = {
+            "id": node_id,
+            "label": str(attrs.get("label", node_id))[:80],
+            "module": str(attrs.get("module_label", "Other")),
+            "module_id": int(attrs.get("module_id", -1)),
+            "n_genes": int(attrs.get("n_genes", 0)),
+        }
+        node_entry = {"data": data}
+        if node_id in positions:
+            px, py = positions[node_id]
+            node_entry["position"] = {"x": float(px * 400), "y": float(py * 400)}
+        nodes_cy.append(node_entry)
+
+    edge_tuples = sorted((str(u), str(v)) for u, v in G.edges())
+    edges_cy: List[Dict] = []
+    for u, v in edge_tuples:
+        w = float(G.edges[u, v].get("weight", 0.0))
+        edges_cy.append({"data": {"source": u, "target": v, "weight": w}})
+
+    stylesheet = cytoscape_default_stylesheet(show_labels=show_labels)
+    return {
+        "nodes": nodes_cy,
+        "edges": edges_cy,
+        "elements": nodes_cy + edges_cy,
+        "stylesheet": stylesheet,
+    }
+
+
 def write_network_plots(
     output_dir: Path,
     pathway_to_module_id: Dict[str, int],
@@ -148,6 +228,11 @@ def write_network_plots(
     module_id_to_label: Dict[int, str],
     similarity_threshold: float,
     network_plot: str,
+    ppi_elements: Optional[List[Dict]] = None,
+    ppi_stylesheet: Optional[List[Dict]] = None,
+    dash_host: str = "127.0.0.1",
+    dash_port: int = 8050,
+    dash_open_browser: bool = False,
 ) -> None:
     """
     Generate network plot(s) according to network_plot: 'plotly', 'pyvis', 'cytoscape', or 'all'.
@@ -170,6 +255,7 @@ def write_network_plots(
 
     modes = ["plotly", "pyvis", "cytoscape"] if network_plot.lower() == "all" else [network_plot.lower()]
     skipped = []
+    cy_payload = build_cytoscape_payload_from_graph(G, layout="spring", include_positions=True)
 
     for mode in modes:
         if mode == "plotly":
@@ -182,7 +268,18 @@ def write_network_plots(
                 skipped.append("pyvis (install with: pip install pyvis)")
                 logger.warning("PyVis not installed; skipping pathway_network_pyvis.html. Install with: pip install pyvis")
         elif mode == "cytoscape":
-            _write_cytoscape_html(G, output_dir)
+            _write_cytoscape_html(cy_payload, output_dir)
+        elif mode == "dash":
+            from .module_network_dash import launch_dashboard
+            launch_dashboard(
+                pathway_elements=cy_payload["elements"],
+                pathway_stylesheet=cy_payload["stylesheet"],
+                ppi_elements=ppi_elements,
+                ppi_stylesheet=ppi_stylesheet,
+                host=dash_host,
+                port=int(dash_port),
+                open_browser=bool(dash_open_browser),
+            )
 
     if skipped and network_plot.lower() == "all":
         logger.info("Network plots: some formats skipped: %s. Generated: plotly, cytoscape (PyVis optional).", ", ".join(skipped))
@@ -216,33 +313,30 @@ def _write_pyvis_html(G: nx.Graph, output_path: Path) -> None:
     logger.info(f"Wrote PyVis network plot: {output_path}")
 
 
-def _write_cytoscape_html(G: nx.Graph, output_dir: Path) -> None:
+def _write_cytoscape_html(cy_payload: Dict[str, List[Dict]], output_dir: Path) -> None:
     """Export graph to Cytoscape.js HTML + JSON."""
     import json
 
-    nodes_cy = []
-    for n in G.nodes():
-        lab = G.nodes[n].get("module_label", "Other")
-        ng = G.nodes[n].get("n_genes", 0)
-        nodes_cy.append({"data": {"id": n, "label": n[:40], "module": lab, "n_genes": ng}})
-
-    edges_cy = [{"data": {"source": u, "target": v}} for u, v in G.edges()]
+    nodes_cy = cy_payload.get("nodes", [])
+    edges_cy = cy_payload.get("edges", [])
+    stylesheet = cy_payload.get("stylesheet", cytoscape_default_stylesheet())
 
     json_path = output_dir / "pathway_network_cytoscape.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({"nodes": nodes_cy, "edges": edges_cy}, f, indent=2)
 
-    html = _cytoscape_html_template(nodes_cy, edges_cy)
+    html = _cytoscape_html_template(nodes_cy, edges_cy, stylesheet)
     html_path = output_dir / "pathway_network_cytoscape.html"
     html_path.write_text(html, encoding="utf-8")
     logger.info(f"Wrote Cytoscape.js network: {html_path}, {json_path}")
 
 
-def _cytoscape_html_template(nodes_cy: List[Dict], edges_cy: List[Dict]) -> str:
+def _cytoscape_html_template(nodes_cy: List[Dict], edges_cy: List[Dict], stylesheet: List[Dict]) -> str:
     """Single HTML that loads Cytoscape.js from CDN and renders the graph."""
     import json
 
     data_js = json.dumps({"nodes": nodes_cy, "edges": edges_cy})
+    style_js = json.dumps(stylesheet)
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -262,25 +356,8 @@ def _cytoscape_html_template(nodes_cy: List[Dict], edges_cy: List[Dict]) -> str:
     var cy = cytoscape({{
       container: document.getElementById('cy'),
       elements: data.nodes.concat(data.edges),
-      style: [
-        {{
-          selector: 'node',
-          style: {{
-            'label': 'data(label)',
-            'text-valign': 'bottom',
-            'text-margin-y': 4,
-            'font-size': 10,
-            'width': 20,
-            'height': 20,
-            'background-color': '#6fb1fc'
-          }}
-        }},
-        {{
-          selector: 'edge',
-          style: {{ 'width': 0.8, 'line-color': '#ccc' }}
-        }}
-      ],
-      layout: {{ name: 'cose' }}
+      style: {style_js},
+      layout: {{ name: 'preset' }}
     }});
   </script>
 </body>

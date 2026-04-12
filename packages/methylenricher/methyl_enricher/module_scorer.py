@@ -105,14 +105,19 @@ def score_and_rank_modules(
     disease_genes: Optional[Set[str]] = None,
     weight_enrichment: float = 0.7,
     weight_disease: float = 0.3,
+    ppi_coherence_by_module: Optional[Dict[int, float]] = None,
+    ppi_weight_in_final_score: float = 0.0,
 ) -> pd.DataFrame:
     """
     For each module, compute enrichment score and disease relevance, combine into
     final score, and return a DataFrame of modules sorted by final score (descending).
     Columns: module_id, module_label (placeholder), n_pathways, n_genes, enrichment_score,
-    disease_relevance, final_score, pca_relevance (High/Medium/Low).
+    disease_relevance, final_score, pca_relevance (High/Medium/Low), and optional
+    ppi_coherence_score/blended_score fields.
     """
     disease_genes = disease_genes or DEFAULT_PCA_RELEVANT_GENES
+    ppi_coherence_by_module = ppi_coherence_by_module or {}
+    ppi_weight = float(np.clip(ppi_weight_in_final_score, 0.0, 1.0))
     module_ids = sorted(set(pathway_to_module_id.values()))
     rows = []
     for mid in module_ids:
@@ -124,14 +129,19 @@ def score_and_rank_modules(
             pathways, merged_df, pathway_to_genes, gene_weights
         )
         disease_score = compute_disease_relevance(genes, disease_genes)
-        final = weight_enrichment * enrich_score + weight_disease * disease_score
+        base_score = weight_enrichment * enrich_score + weight_disease * disease_score
+        ppi_score = float(np.clip(ppi_coherence_by_module.get(int(mid), 0.0), 0.0, 1.0))
+        blended_score = (1.0 - ppi_weight) * base_score + ppi_weight * ppi_score
         rows.append({
             "module_id": mid,
             "n_pathways": len(pathways),
             "n_genes": len(genes),
             "enrichment_score": round(enrich_score, 4),
             "disease_relevance": round(disease_score, 4),
-            "final_score": round(final, 4),
+            "base_score": round(base_score, 4),
+            "ppi_coherence_score": round(ppi_score, 4),
+            "blended_score": round(blended_score, 4),
+            "final_score": round(blended_score, 4),
             "pca_relevance": pca_relevance_label(disease_score),
         })
     df = pd.DataFrame(rows)

@@ -27,6 +27,7 @@ Notes:
 Libraries in use (for verification):
   - Base: requirements-pipeline.txt (scipy, h5py, hdf5plugin, pandas, numpy, networkx,
     python-louvain for MethylEnricher pathway-to-module, etc.).
+  - Visualization: dash and dash-cytoscape (for optional Cytoscape-style interactive views).
   - GPU: requirements-gpu-cuda12.txt or requirements-gpu.txt (cupy, cudf, torch).
   - System (--system-deps): Python dev, build-essential, hdf5-tools, libhdf5-dev,
     libzstd-dev, ODBC, bedtools (for MethylMapper); with GPU, libnvrtc{N} for NVRTC.
@@ -320,6 +321,8 @@ required = [
     ("numpy", "numerical backend"),
     ("networkx", "pathway graph"),
     ("community", "python-louvain"),
+    ("dash", "Dash web framework"),
+    ("dash_cytoscape", "Dash Cytoscape components"),
 ]
 
 missing = []
@@ -384,6 +387,9 @@ if [ "$HDBSCAN_CAN_BUILD" -eq 0 ]; then
 fi
 
 "$PYTHON_BIN" -m pip install -r "$REQ_INSTALL"
+
+info "Installing MethylEnricher visualization dependencies (Dash + dash-cytoscape)..."
+"$PYTHON_BIN" -m pip install "dash>=2.17.0" "dash-cytoscape>=1.0.2"
 
 if [ "$HDBSCAN_CAN_BUILD" -eq 0 ]; then
   info "Installing hdbscan from wheel (if available)..."

@@ -6,6 +6,8 @@
 
 - external enrichment analysis through Enrichr [@chen2013],
 - graph-based pathway grouping,
+- optional PPI topology refinement,
+- optional interactive Cytoscape-style exploration (Dash),
 - heuristic module ranking and disease-prior labeling.
 
 Because of that mixture, this package should be described as a discovery and prioritization layer, not as a single statistical model.
@@ -137,6 +139,44 @@ $$ {#eq-final-module-score}
 
 This is again a heuristic prioritization rule.
 
+## Optional PPI Network Refinement
+
+When enabled (`network_refinement.enabled=true` or matching CLI flags), the package adds a second graph layer from gene-level protein-protein interactions (STRING API or a local edge list). For each module it computes:
+
+- induced-subgraph density,
+- mean node degree centrality,
+- largest connected-component ratio.
+
+These features are combined into a heuristic PPI coherence score:
+
+$$
+\operatorname{score}_{\text{ppi}}
+=
+0.4\,\operatorname{density}
++ 0.3\,\operatorname{mean\_degree\_centrality}
++ 0.3\,\operatorname{largest\_component\_ratio}.
+$$ {#eq-ppi-coherence}
+
+The final ranking can then be blended with weight $w \in [0,1]$:
+
+$$
+\operatorname{score}_{\text{blended}}
+=
+(1-w)\,\operatorname{score}_{\text{final}}
++ w\,\operatorname{score}_{\text{ppi}}.
+$$ {#eq-blended-module-score}
+
+This extension is still heuristic. It should be reported as structural corroboration of module coherence, not as formal inference or disease-association evidence.
+
+## Visualization Modes
+
+The package supports both reproducible offline artifacts and interactive inspection:
+
+- offline: Plotly HTML and Cytoscape.js HTML+JSON exports,
+- interactive: optional `dash_cytoscape` viewer (`network_plot=dash`) with module and edge-threshold filtering.
+
+For publication and auditability, offline artifacts should remain the canonical archived output; Dash should be treated as an exploratory interface.
+
 ## Theme Normalization And Labels
 
 The package includes theme normalization based on substring matching against a JSON mapping file, plus discrete labels such as `High`, `Medium`, and `Low` relevance. Those labels are workflow conveniences. They should not be presented as probabilistic classifications.
@@ -147,6 +187,7 @@ The most accurate description is:
 
 - enrichment significance comes from an external ORA engine,
 - pathway modules come from graph clustering over pathway overlap,
+- optional PPI refinement comes from STRING or local edge lists with explicit score thresholds and community settings,
 - module ranking is heuristic,
 - and disease relevance is a curated prior overlap rather than a learned posterior.
 

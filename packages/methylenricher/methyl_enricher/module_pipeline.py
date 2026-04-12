@@ -14,6 +14,15 @@ from .pathway_normalizer import PathwayNormalizer, load_theme_extras
 from .pathway_graph import canonical_pathway_key, run_pathway_clustering
 from .module_scorer import score_and_rank_modules, DEFAULT_PCA_RELEVANT_GENES
 from . import module_network_plot
+from .ppi_network import (
+    build_ppi_graph,
+    compute_module_coherence,
+    compute_network_metrics,
+    detect_communities,
+    fetch_string_edges,
+    load_local_edges,
+    rank_hubs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +192,17 @@ def run_module_pipeline(
     module_cluster_top_terms_per_library: Optional[int] = None,
     disease_genes: Optional[Set[str]] = None,
     network_plot: Optional[str] = None,
+    network_refinement_enabled: bool = False,
+    network_refinement_source: str = "string_api",
+    network_refinement_local_edges_file: Optional[str] = None,
+    network_refinement_cache_path: Optional[str] = None,
+    network_refinement_score_threshold: float = 400.0,
+    network_refinement_community_method: str = "louvain",
+    network_refinement_min_component_size: int = 2,
+    network_refinement_weight_in_final_score: float = 0.3,
+    dash_host: str = "127.0.0.1",
+    dash_port: int = 8050,
+    dash_open_browser: bool = False,
 ) -> pd.DataFrame:
     """
     Run the full pathway-to-module pipeline (Steps A–E) and write modules_ranked.csv.
@@ -252,12 +272,111 @@ def run_module_pipeline(
     normalizer = PathwayNormalizer()
     pca_relevance_tier, theme_descriptions = load_theme_extras()
 
+    ppi_coherence_by_module: Dict[int, float] = {}
+    ppi_dash_elements: Optional[List[Dict]] = None
+    ppi_dash_stylesheet: Optional[List[Dict]] = None
+    if network_refinement_enabled:
+        try:
+            if network_refinement_source == "local_edges":
+                if not network_refinement_local_edges_file:
+                    raise ValueError(
+                        "network_refinement_local_edges_file is required when source=local_edges"
+                    )
+                edges_df = load_local_edges(network_refinement_local_edges_file)
+                edges_df = edges_df[
+                    pd.to_numeric(edges_df["score"], errors="coerce").fillna(0.0)
+                    >= float(network_refinement_score_threshold)
+                ].copy()
+            else:
+                edges_df = fetch_string_edges(
+                    genes=genes,
+                    required_score=float(network_refinement_score_threshold),
+                    cache_path=network_refinement_cache_path,
+                )
+
+            network_genes = sorted(
+                {
+                    g.upper()
+                    for genes_set in pathway_to_genes.values()
+                    for g in genes_set
+                    if str(g).strip()
+                }
+            )
+            ppi_graph = build_ppi_graph(
+                edges_df=edges_df,
+                genes=network_genes,
+                min_component_size=int(network_refinement_min_component_size),
+            )
+            node_metrics_df = compute_network_metrics(ppi_graph)
+            communities = detect_communities(
+                ppi_graph,
+                method=network_refinement_community_method,
+            )
+            if not node_metrics_df.empty:
+                node_metrics_df["community_id"] = (
+                    node_metrics_df["gene"].astype(str).str.upper().map(communities)
+                )
+            module_coherence_df = compute_module_coherence(
+                pathway_to_module_id=pathway_to_module_id,
+                pathway_to_genes=pathway_to_genes,
+                graph=ppi_graph,
+                node_metrics=node_metrics_df,
+            )
+
+            ppi_coherence_by_module = {
+                int(r["module_id"]): float(r["ppi_coherence_score"])
+                for _, r in module_coherence_df.iterrows()
+            }
+
+            # Optional PPI dataset for Dash Cytoscape visualization
+            if ppi_graph.number_of_nodes() > 0:
+                for node in ppi_graph.nodes():
+                    cid = int(communities.get(node, -1))
+                    ppi_graph.nodes[node]["module_id"] = cid
+                    ppi_graph.nodes[node]["module_label"] = f"Community {cid}" if cid >= 0 else "Other"
+                    ppi_graph.nodes[node]["n_genes"] = int(ppi_graph.degree(node))
+                ppi_payload = module_network_plot.build_cytoscape_payload_from_graph(
+                    ppi_graph,
+                    layout="spring",
+                    include_positions=True,
+                    show_labels=True,
+                )
+                ppi_dash_elements = ppi_payload.get("elements")
+                ppi_dash_stylesheet = ppi_payload.get("stylesheet")
+
+            edges_path = output_dir / "ppi_network_edges.csv"
+            edges_df.to_csv(edges_path, index=False)
+            logger.info("Wrote %s with %d edges.", edges_path, len(edges_df))
+
+            node_metrics_path = output_dir / "ppi_node_metrics.csv"
+            node_metrics_df.to_csv(node_metrics_path, index=False)
+            logger.info("Wrote %s with %d nodes.", node_metrics_path, len(node_metrics_df))
+
+            hubs_path = output_dir / "ppi_hubs.csv"
+            rank_hubs(node_metrics_df, top_k=25).to_csv(hubs_path, index=False)
+            logger.info("Wrote %s.", hubs_path)
+
+            module_coherence_path = output_dir / "ppi_module_coherence.csv"
+            module_coherence_df.to_csv(module_coherence_path, index=False)
+            logger.info("Wrote %s with %d modules.", module_coherence_path, len(module_coherence_df))
+        except Exception as exc:
+            logger.warning(
+                "Network refinement failed, falling back to baseline module score: %s",
+                exc,
+            )
+
     score_df = score_and_rank_modules(
         pathway_to_module_id,
         pathway_to_genes,
         clustering_df,
         gene_weights=gene_weights,
         disease_genes=disease_genes or DEFAULT_PCA_RELEVANT_GENES,
+        ppi_coherence_by_module=ppi_coherence_by_module,
+        ppi_weight_in_final_score=(
+            float(network_refinement_weight_in_final_score)
+            if network_refinement_enabled
+            else 0.0
+        ),
     )
 
     out_rows = []
@@ -279,6 +398,9 @@ def run_module_pipeline(
         out_rows.append({
             "Module": label,
             "Score": round(row["final_score"], 4),
+            "Base_score": round(row.get("base_score", row["final_score"]), 4),
+            "PPI_coherence_score": round(row.get("ppi_coherence_score", 0.0), 4),
+            "Blended_score": round(row.get("blended_score", row["final_score"]), 4),
             "Main_genes": main_genes,
             "Overlap_genes": overlap_genes,
             "Main_pathways": main_pathways,
@@ -332,6 +454,11 @@ def run_module_pipeline(
             module_id_to_label=module_id_to_label,
             similarity_threshold=similarity_threshold,
             network_plot=network_plot,
+            ppi_elements=ppi_dash_elements,
+            ppi_stylesheet=ppi_dash_stylesheet,
+            dash_host=dash_host,
+            dash_port=dash_port,
+            dash_open_browser=dash_open_browser,
         )
 
     return out_df
