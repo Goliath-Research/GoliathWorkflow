@@ -162,6 +162,30 @@ def test_tabular_backend_train_and_predict(tmp_path: Path, monkeypatch):
     assert (tmp_path / "predict" / "predictions.csv").is_file()
 
 
+def test_tabular_resolve_eval_prefers_holdout_binary_paths(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    stub = _StubProject(det)
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=None,
+        holdout_group_paths=None,
+        train_group_paths=None,
+        test_control_paths=[],
+        test_disease_paths=[],
+        train_control_paths=["/tmp/TR_C1", "/tmp/TR_C2"],
+        train_disease_paths=["/tmp/TR_D1", "/tmp/TR_D2"],
+        holdout_control_paths=["/tmp/HO_C1"],
+        holdout_disease_paths=["/tmp/HO_D1", "/tmp/HO_D2"],
+    )
+    monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: stub)
+    samples, y_true = tabular_backend._resolve_eval_paths_and_labels(
+        project_json=tmp_path / "project.json",
+        class_names=["healthy", "pca1"],
+    )
+    assert samples == ["/tmp/HO_C1", "/tmp/HO_D1", "/tmp/HO_D2"]
+    assert y_true.tolist() == [0, 1, 1]
+
+
 def test_tabular_covariate_preprocessor_categorical(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     det.mkdir(parents=True)

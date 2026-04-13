@@ -198,6 +198,31 @@ def test_resolve_eval_paths_multiclass_falls_back_from_binary_predictor(tmp_path
     assert set(np.unique(y_true).tolist()) == {0, 1, 2}
 
 
+def test_generative_resolve_eval_prefers_holdout_binary_paths(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    stub = _StubProjectBinary(det)
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=None,
+        holdout_group_paths=None,
+        train_group_paths=None,
+        test_control_paths=[],
+        test_disease_paths=[],
+        train_control_paths=["/tmp/TR_C1", "/tmp/TR_C2"],
+        train_disease_paths=["/tmp/TR_D1", "/tmp/TR_D2"],
+        holdout_control_paths=["/tmp/HO_C1"],
+        holdout_disease_paths=["/tmp/HO_D1", "/tmp/HO_D2"],
+    )
+    monkeypatch.setattr(generative_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+    monkeypatch.setattr(generative_backend, "load_project", lambda _p: stub)
+    samples, y_true = generative_backend._resolve_eval_paths_and_labels(
+        project_json=tmp_path / "project.json",
+        class_names=["healthy", "pca1"],
+    )
+    assert samples == ["/tmp/HO_C1", "/tmp/HO_D1", "/tmp/HO_D2"]
+    assert y_true is not None
+    assert y_true.tolist() == [0, 1, 1]
+
+
 def test_generative_covariates_strict_join(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     _write_detector_dmps(det)

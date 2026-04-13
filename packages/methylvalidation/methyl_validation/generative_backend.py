@@ -172,8 +172,14 @@ def _resolve_eval_paths_and_labels(project_json: str | Path, class_names: List[s
     samples: List[str] = []
     y_true: List[int] = []
     test_group_paths = getattr(predictor_cfg, "test_group_paths", None)
+    holdout_group_paths = getattr(predictor_cfg, "holdout_group_paths", None)
+    train_group_paths = getattr(predictor_cfg, "train_group_paths", None)
     test_control_paths = list(getattr(predictor_cfg, "test_control_paths", []) or [])
     test_disease_paths = list(getattr(predictor_cfg, "test_disease_paths", []) or [])
+    holdout_control_paths = list(getattr(predictor_cfg, "holdout_control_paths", []) or [])
+    holdout_disease_paths = list(getattr(predictor_cfg, "holdout_disease_paths", []) or [])
+    train_control_paths = list(getattr(predictor_cfg, "train_control_paths", []) or [])
+    train_disease_paths = list(getattr(predictor_cfg, "train_disease_paths", []) or [])
 
     if test_group_paths:
         for idx, entry in enumerate(test_group_paths):
@@ -182,6 +188,36 @@ def _resolve_eval_paths_and_labels(project_json: str | Path, class_names: List[s
             for p in paths:
                 samples.append(p)
                 y_true.append(cls_idx)
+        return samples, np.asarray(y_true, dtype=np.int32)
+
+    if holdout_group_paths:
+        for idx, entry in enumerate(holdout_group_paths):
+            cls_idx = int(entry.get("class_index", idx))
+            paths = [str(p) for p in (entry.get("paths") or [])]
+            for p in paths:
+                samples.append(p)
+                y_true.append(cls_idx)
+        if samples:
+            return samples, np.asarray(y_true, dtype=np.int32)
+
+    if train_group_paths:
+        for idx, entry in enumerate(train_group_paths):
+            cls_idx = int(entry.get("class_index", idx))
+            paths = [str(p) for p in (entry.get("paths") or [])]
+            for p in paths:
+                samples.append(p)
+                y_true.append(cls_idx)
+        if samples:
+            return samples, np.asarray(y_true, dtype=np.int32)
+
+    if (holdout_control_paths or holdout_disease_paths) and len(class_names) <= 2:
+        samples = holdout_control_paths + holdout_disease_paths
+        y_true = [0] * len(holdout_control_paths) + [1] * len(holdout_disease_paths)
+        return samples, np.asarray(y_true, dtype=np.int32)
+
+    if (train_control_paths or train_disease_paths) and len(class_names) <= 2:
+        samples = train_control_paths + train_disease_paths
+        y_true = [0] * len(train_control_paths) + [1] * len(train_disease_paths)
         return samples, np.asarray(y_true, dtype=np.int32)
 
     if (test_control_paths or test_disease_paths) and len(class_names) <= 2:
