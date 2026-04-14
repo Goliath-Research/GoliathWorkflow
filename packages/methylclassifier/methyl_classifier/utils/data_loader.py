@@ -304,6 +304,7 @@ class DataLoader:
                 continue
 
             # Merge contexts: single context → use as-is; multiple → union of positions (CG preferred)
+            merged_sample = None
             try:
                 merged_sample = DataLoader._merge_context_samples(contexts_to_merge)
             except Exception as e:
@@ -313,6 +314,17 @@ class DataLoader:
                 print("   Traceback:")
                 traceback.print_exc()
                 continue
+            finally:
+                # Multi-context merge creates a new sample object; release the temporary
+                # per-context samples immediately so large Monte Carlo loops do not retain
+                # unnecessary dataframes.
+                if len(contexts_to_merge) > 1:
+                    for context_sample in contexts_to_merge:
+                        if context_sample is not None and hasattr(context_sample, "close"):
+                            try:
+                                context_sample.close()
+                            except Exception:
+                                pass
             
             # Skip if merged sample is empty (no positions after merging)
             if len(merged_sample.pos) == 0:

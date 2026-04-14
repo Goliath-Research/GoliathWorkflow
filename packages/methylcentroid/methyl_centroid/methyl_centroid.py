@@ -924,11 +924,7 @@ class MethylCentroid:
             self.logger.info(
                 f"Using streaming centroid builder for {self.ctx} (GPU enabled)"
             )
-            builder = _create_centroid_builder(
-                self._min_coverage,
-                self.use_gpu,
-                binned_stats_bins=getattr(self, "binned_stats_bins", 20),
-            )
+            builder = self._create_streaming_builder()
 
             for sample_idx, sample_path in tqdm(
                 enumerate(all_samples),
@@ -1274,31 +1270,36 @@ class MethylCentroid:
             f"GPU: {gpu_free_gb:.1f}GB free ({gpu_available_gb:.1f}GB used)"
         )
 
-        # Use latest MethylUtils GPU-optimized chunk sizing for genome-scale processing
-        # Target: 95% GPU utilization with 500M position chunks for optimal performance
-        if use_gpu and gpu_free_gb >= 80.0:  # GH200 with sufficient GPU memory
-            # Maximum GPU utilization: 500M positions per chunk for 6 total chunks on 3B positions
-            chunk_size_positions = 500_000_000  # 500M positions
-            memory_limit_gb = min(
-                system_memory_available_gb * 0.8, 350.0
-            )  # Use 80% of available RAM
-            max_workers = 1  # Sequential processing for maximum GPU utilization
-
-            self.logger.info(
-                f"Using genome-scale GPU optimization: {chunk_size_positions:,} positions per chunk "
-                f"({memory_limit_gb:.1f}GB RAM limit)"
+        if use_gpu and gpu_free_gb > 0.0:
+            free_bytes = self._get_gpu_free_bytes()
+            sample_count_estimate = max(1, len(self.samples) + len(self.add_samples))
+            bin_counter_bytes = 2 if sample_count_estimate < 60000 else 4
+            # Chunked centroid accumulation footprint per position:
+            # Sm,Su,Sc2,N(uint32)=16, Swx2,Sx,Sx2(float32)=12, positions(uint32)=4,
+            # bin_counts(bins*uint16/uint32)=bins*bin_counter_bytes.
+            bytes_per_position = 32 + (self.binned_stats_bins * bin_counter_bytes)
+            reserve_bytes = 512 * 1024**2
+            target_bytes = int(free_bytes * 0.98)
+            usable_bytes = max(0, target_bytes - reserve_bytes)
+            chunk_size_positions = usable_bytes // max(1, bytes_per_position)
+            chunk_size_positions = max(
+                1_000_000, min(int(chunk_size_positions), 500_000_000)
             )
-
-        elif use_gpu and gpu_free_gb >= 40.0:  # Other GPUs with decent memory
-            # High GPU utilization: 100M positions per chunk
-            chunk_size_positions = 100_000_000  # 100M positions
-            memory_limit_gb = min(system_memory_available_gb * 0.7, 200.0)
+            memory_limit_gb = max(
+                10.0,
+                min(
+                    system_memory_available_gb * 0.9,
+                    self.memory_manager.system_memory_limit_gb,
+                ),
+            )
             max_workers = 1
 
             self.logger.info(
-                f"Using high GPU optimization: {chunk_size_positions:,} positions per chunk"
+                "Using VRAM-derived GPU chunking: free_vram=%.2fGB, bytes/pos=%s, chunk_size=%s",
+                gpu_free_gb,
+                bytes_per_position,
+                f"{chunk_size_positions:,}",
             )
-
         else:
             # Fallback to memory-optimized chunking for CPU or limited GPU
             # Dynamic chunk size calculation based on context and available memory
@@ -1764,6 +1765,104 @@ class MethylCentroid:
     def _cleanup_gpu_after_sample(self) -> None:
         if self.use_gpu:
             cleanup_gpu_memory()
+
+    def _get_gpu_free_bytes(self) -> int:
+        """Return currently available GPU bytes (0 when unavailable)."""
+        if not self.use_gpu:
+            return 0
+        try:
+            import cupy as cp
+
+            free_bytes, _total_bytes = cp.cuda.runtime.memGetInfo()
+            return int(free_bytes)
+        except Exception:
+            memory_info = self.memory_manager.get_memory_usage()
+            gpu_free_gb = float(memory_info.get("gpu_free_gb", 0.0) or 0.0)
+            return int(gpu_free_gb * (1024**3))
+
+    def _derive_streaming_gpu_chunk_size(
+        self,
+        bins: int,
+        utilization_fraction: float = 0.98,
+        reserve_bytes: int = 256 * 1024**2,
+    ) -> int:
+        """
+        Compute streaming builder chunk size from real-time free GPU memory.
+
+        Per-position GPU footprint in `MethylCentroidBuilder`:
+        pos(4) + mC_sum(4) + uC_sum(4) + Sc2(4) + Swx2(4) + N(4) + Sx(4) + Sx2(4) + tnc(1) + bin_counts(4*bins)
+        """
+        free_bytes = self._get_gpu_free_bytes()
+        if free_bytes <= 0:
+            return 1_000_000
+
+        bytes_per_position = 33 + (4 * int(bins))
+        target_bytes = int(free_bytes * float(utilization_fraction))
+        usable_bytes = max(0, target_bytes - int(reserve_bytes))
+        if usable_bytes <= 0:
+            return 1_000_000
+
+        chunk = usable_bytes // max(1, bytes_per_position)
+        return int(max(1_000_000, min(chunk, 500_000_000)))
+
+    def _create_streaming_builder(self):
+        """
+        Create a streaming centroid builder with OOM-aware GPU fallback.
+
+        Builder initialization allocates large GPU buffers up front. When CUDA
+        memory is fragmented this can fail before per-sample fallback logic runs.
+        """
+        bins = int(getattr(self, "binned_stats_bins", 20))
+
+        if self.use_gpu:
+            primary_chunk = self._derive_streaming_gpu_chunk_size(bins)
+            gpu_chunk_candidates = []
+            for scale in (1.0, 0.75, 0.5, 0.25):
+                candidate = int(max(1_000_000, primary_chunk * scale))
+                if candidate not in gpu_chunk_candidates:
+                    gpu_chunk_candidates.append(candidate)
+            for chunk_size in gpu_chunk_candidates:
+                try:
+                    builder = _create_centroid_builder(
+                        self._min_coverage,
+                        True,
+                        binned_stats_bins=bins,
+                        chunk_size=chunk_size,
+                    )
+                    self.logger.info(
+                        "Initialized GPU streaming builder with chunk_size=%s (free_vram=%.2fGB) for %s-%s",
+                        f"{chunk_size:,}",
+                        self._get_gpu_free_bytes() / (1024**3),
+                        self.chrom,
+                        self.ctx,
+                    )
+                    return builder
+                except (RuntimeError, MemoryError) as e:
+                    if _is_gpu_oom_error(e):
+                        self.logger.warning(
+                            "GPU builder init OOM at chunk_size=%s for %s-%s (%s). Retrying...",
+                            f"{chunk_size:,}",
+                            self.chrom,
+                            self.ctx,
+                            str(e)[:200],
+                        )
+                        self._cleanup_gpu_after_sample()
+                        continue
+                    raise
+
+            self.logger.warning(
+                "GPU builder initialization failed for %s-%s after reduced chunk retries; "
+                "falling back to CPU streaming builder.",
+                self.chrom,
+                self.ctx,
+            )
+
+        return _create_centroid_builder(
+            self._min_coverage,
+            False,
+            binned_stats_bins=bins,
+            chunk_size=50_000_000,
+        )
 
     def _sample_id_for_index(self, sample_idx: int) -> Tuple[bool, int]:
         """Map a flat sample index back to the active_samples identifier."""

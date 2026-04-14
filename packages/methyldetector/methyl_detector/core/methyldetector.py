@@ -151,7 +151,10 @@ class MethylDetector:
         if len(chromosomes) == 1:
             # Single chromosome: process normally
             self._current_chromosome = chromosomes[0]
-            return self._run_multi_context()
+            try:
+                return self._run_multi_context()
+            finally:
+                self._release_iteration_resources()
         else:
             # Multiple chromosomes: require binned_stats once before any work (fail fast)
             self._current_chromosome = chromosomes[0]
@@ -175,6 +178,8 @@ class MethylDetector:
                     import traceback
                     traceback.print_exc()
                     failed_chromosomes.append((chrom, str(e)))
+                finally:
+                    self._release_iteration_resources()
             
             # Summary
             logger.info(f"\n{'='*80}")
@@ -187,6 +192,23 @@ class MethylDetector:
             logger.info(f"{'='*80}\n")
             
             return results
+
+    def _release_iteration_resources(self) -> None:
+        """
+        Release per-iteration caches and best-effort GPU allocations.
+
+        Monte Carlo and multi-chromosome runs execute many consecutive detector
+        passes in one process; clearing cached centroid arrays avoids unbounded
+        growth across iterations.
+        """
+        self._centroid_bin_cache.clear()
+        try:
+            cleanup_gpu_memory()
+        except Exception:
+            pass
+
+        import gc
+        gc.collect()
     
     def _run_multi_context(self) -> MethylDetectorResult:
         """Run multi-context analysis (new unified approach)."""
@@ -480,14 +502,18 @@ class MethylDetector:
                 "MethylDetector requires centroids with binned_stats; build them first (methyl-centroid with binned_stats_bins, default 20)."
             )
         centroid = MethylSample.load_from_h5(str(c1_path))
-        binned = centroid.binned_stats if centroid else None
-        if not binned or "bin_edges" not in binned or "bin_counts" not in binned:
-            raise ValueError(
-                "Centroids must have binned_stats for MethylDetector (continuous ECDF overlap and effect_size). "
-                "Re-run methyl-centroid with binned_stats_bins (e.g. base_config.binned_stats_bins=20, or use default 20). "
-                "If you already did, check that the H5 files at "
-                "centroid1_dir/centroid2_dir are the ones just built (e.g. Python: MethylSample.load_from_h5(path).binned_stats)."
-            )
+        try:
+            binned = centroid.binned_stats if centroid else None
+            if not binned or "bin_edges" not in binned or "bin_counts" not in binned:
+                raise ValueError(
+                    "Centroids must have binned_stats for MethylDetector (continuous ECDF overlap and effect_size). "
+                    "Re-run methyl-centroid with binned_stats_bins (e.g. base_config.binned_stats_bins=20, or use default 20). "
+                    "If you already did, check that the H5 files at "
+                    "centroid1_dir/centroid2_dir are the ones just built (e.g. Python: MethylSample.load_from_h5(path).binned_stats)."
+                )
+        finally:
+            if centroid is not None and hasattr(centroid, "close"):
+                centroid.close()
 
     def _detect_statistical_dmps_for_context(
         self, 
@@ -2013,7 +2039,13 @@ class MethylDetector:
 
             centroid1 = MethylSample.load_from_h5(str(centroid1_path))
             centroid2 = MethylSample.load_from_h5(str(centroid2_path))
-            results = MethylCentroidPair.validate_centroid_parameters(centroid1, centroid2)
+            try:
+                results = MethylCentroidPair.validate_centroid_parameters(centroid1, centroid2)
+            finally:
+                if centroid1 is not None and hasattr(centroid1, "close"):
+                    centroid1.close()
+                if centroid2 is not None and hasattr(centroid2, "close"):
+                    centroid2.close()
 
             if "error" in results:
                 logger.warning(f"Centroid summary failed: {results['error']}")
@@ -3378,35 +3410,40 @@ class MethylDetector:
 
         c1 = load_from_h5(c1_path)
         c2 = load_from_h5(c2_path)
+        try:
+            bs1 = c1.binned_stats if c1 else None
+            bs2 = c2.binned_stats if c2 else None
+            if not bs1 or "bin_counts" not in bs1 or not bs2 or "bin_counts" not in bs2:
+                logger.warning(
+                    "_get_or_load_centroid_bin_cache: binned_stats missing for %s-%s",
+                    chrom,
+                    ctx,
+                )
+                return None
 
-        bs1 = c1.binned_stats if c1 else None
-        bs2 = c2.binned_stats if c2 else None
-        if not bs1 or "bin_counts" not in bs1 or not bs2 or "bin_counts" not in bs2:
-            logger.warning(
-                "_get_or_load_centroid_bin_cache: binned_stats missing for %s-%s",
-                chrom,
-                ctx,
-            )
-            return None
-
-        be1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
-        be2 = np.asarray(bs2["bin_edges"], dtype=np.float64) if "bin_edges" in bs2 else None
-        if be2 is not None and (be2.shape != be1.shape or not np.allclose(be2, be1)):
-            logger.warning(
-                "_get_or_load_centroid_bin_cache: %s-%s centroid2 bin_edges differ from centroid1; "
-                "class 2 PDFs may be wrong (centroid self-check can fail). Build both centroids with the same bins.",
-                chrom,
-                ctx,
-            )
-        cached = {
-            "bin_edges": be1,
-            "pos1": np.asarray(c1.pos.values, dtype=np.uint32),
-            "pos2": np.asarray(c2.pos.values, dtype=np.uint32),
-            "bc1": np.asarray(bs1["bin_counts"], dtype=np.float64),
-            "bc2": np.asarray(bs2["bin_counts"], dtype=np.float64),
-        }
-        self._centroid_bin_cache[cache_key] = cached
-        return cached
+            be1 = np.asarray(bs1["bin_edges"], dtype=np.float64)
+            be2 = np.asarray(bs2["bin_edges"], dtype=np.float64) if "bin_edges" in bs2 else None
+            if be2 is not None and (be2.shape != be1.shape or not np.allclose(be2, be1)):
+                logger.warning(
+                    "_get_or_load_centroid_bin_cache: %s-%s centroid2 bin_edges differ from centroid1; "
+                    "class 2 PDFs may be wrong (centroid self-check can fail). Build both centroids with the same bins.",
+                    chrom,
+                    ctx,
+                )
+            cached = {
+                "bin_edges": be1,
+                "pos1": np.asarray(c1.pos.values, dtype=np.uint32),
+                "pos2": np.asarray(c2.pos.values, dtype=np.uint32),
+                "bc1": np.asarray(bs1["bin_counts"], dtype=np.float64),
+                "bc2": np.asarray(bs2["bin_counts"], dtype=np.float64),
+            }
+            self._centroid_bin_cache[cache_key] = cached
+            return cached
+        finally:
+            if c1 is not None and hasattr(c1, "close"):
+                c1.close()
+            if c2 is not None and hasattr(c2, "close"):
+                c2.close()
 
     def _subset_dmps_to_both_centroids(
         self,

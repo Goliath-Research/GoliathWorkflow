@@ -327,12 +327,16 @@ def estimate_n_cap_from_sample_path(
     n_sample = min(n, max_positions)
     idx = rng.choice(n, size=n_sample, replace=False)
     obj = load_from_h5(path, indices=idx)
-    _, _, n_cap = obj.coverage_iqr_n_cap(
-        max_positions=n_sample,
-        iqr_multiplier=iqr_multiplier,
-        seed=seed,
-    )
-    return n_cap
+    try:
+        _, _, n_cap = obj.coverage_iqr_n_cap(
+            max_positions=n_sample,
+            iqr_multiplier=iqr_multiplier,
+            seed=seed,
+        )
+        return n_cap
+    finally:
+        if hasattr(obj, "close"):
+            obj.close()
 
 
 def estimate_n_cap_from_sample_path_with_log(
@@ -354,8 +358,12 @@ def estimate_n_cap_from_sample_path_with_log(
     n_sample = min(n, max_positions)
     idx = rng.choice(n, size=n_sample, replace=False)
     obj = load_from_h5(path, indices=idx)
-    return obj.coverage_iqr_n_cap(
-        max_positions=n_sample,
-        iqr_multiplier=iqr_multiplier,
-        seed=seed,
-    )
+    try:
+        return obj.coverage_iqr_n_cap(
+            max_positions=n_sample,
+            iqr_multiplier=iqr_multiplier,
+            seed=seed,
+        )
+    finally:
+        if hasattr(obj, "close"):
+            obj.close()
