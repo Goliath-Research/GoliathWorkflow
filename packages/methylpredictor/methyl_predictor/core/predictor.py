@@ -101,6 +101,61 @@ def _compute_probabilistic_diagnostics(
     }
 
 
+def _apply_binary_decision_policy(
+    df: pd.DataFrame,
+    *,
+    enabled: bool,
+    min_margin: float,
+    min_confidence: float,
+) -> pd.DataFrame:
+    """
+    Add non-breaking binary decision columns based on probabilities.
+
+    final_decision:
+      - control
+      - disease
+      - indeterminate
+    """
+    if not enabled:
+        return df
+    if "prob_class0" not in df.columns or "prob_class1" not in df.columns:
+        return df
+
+    out = df.copy()
+    p0 = pd.to_numeric(out["prob_class0"], errors="coerce").to_numpy(dtype=float)
+    p1 = pd.to_numeric(out["prob_class1"], errors="coerce").to_numpy(dtype=float)
+    p0 = np.nan_to_num(p0, nan=0.0, posinf=0.0, neginf=0.0)
+    p1 = np.nan_to_num(p1, nan=0.0, posinf=0.0, neginf=0.0)
+    row_sum = p0 + p1
+    row_sum = np.where(row_sum <= 0.0, 1.0, row_sum)
+    p0 = p0 / row_sum
+    p1 = p1 / row_sum
+
+    margin = np.abs(p1 - p0)
+    max_prob = np.maximum(p0, p1)
+    low_margin = margin < float(min_margin)
+    low_conf = max_prob < float(min_confidence)
+    indeterminate = low_margin | low_conf
+    disease = p1 > p0
+
+    final_decision = np.where(
+        indeterminate,
+        "indeterminate",
+        np.where(disease, "disease", "control"),
+    )
+    decision_reason = np.where(
+        indeterminate,
+        np.where(low_margin, "low_margin", "low_confidence"),
+        np.where(disease, "confident_disease", "confident_control"),
+    )
+
+    out["prob_margin"] = margin
+    out["max_probability"] = max_prob
+    out["final_decision"] = final_decision
+    out["decision_reason"] = decision_reason
+    return out
+
+
 def _expand_nested_blind_paths(config: PredictorConfig) -> None:
     """Expand config.blind groups into test_blind_paths and lineage (standalone JSON)."""
     if config.test_blind_paths:
@@ -407,6 +462,17 @@ def _build_prediction_report(
         "class_names": class_names,
         "n_classes": n_classes,
     }
+    if "final_decision" in df.columns:
+        vc = df["final_decision"].value_counts(dropna=False)
+        n = int(len(df))
+        ind_n = int(vc.get("indeterminate", 0))
+        report["decision_summary"] = {
+            "counts": {str(k): int(v) for k, v in vc.items()},
+            "indeterminate_rate": float(ind_n / n) if n else 0.0,
+            "decision_enabled": bool(config.decision_enabled),
+            "decision_min_margin": float(config.decision_min_margin),
+            "decision_min_confidence": float(config.decision_min_confidence),
+        }
     hs = _hierarchy_probability_summary(df, n_classes, class_names, config.cohort_hierarchy)
     if hs:
         report["hierarchy_summary"] = hs
@@ -870,13 +936,20 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
         )
         split_tags = None
 
+    if n_classes == 2:
+        df = _apply_binary_decision_policy(
+            df,
+            enabled=bool(config.decision_enabled),
+            min_margin=float(config.decision_min_margin),
+            min_confidence=float(config.decision_min_confidence),
+        )
+
     metrics: Optional[Dict[str, Any]] = None
     if expected_classes is not None and "expected_class" in df.columns:
         proba_all = _extract_probability_matrix_from_df(df, n_classes)
         if split_tags is not None and len(split_tags) == len(df):
             df = df.copy()
             df["evaluation_split"] = split_tags
-            df.to_csv(predictions_csv, index=False)
 
         if (
             split_tags is not None
@@ -970,6 +1043,9 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
         print(f"\n💾 Predictions CSV: {predictions_csv} (no labels; metrics skipped)")
         if prediction_mode == "blind":
             _print_blind_summary(df, n_classes, class_names)
+
+    # Always persist any derived columns (decision policy, evaluation_split, etc.).
+    df.to_csv(predictions_csv, index=False)
 
     report_path = output_dir / "prediction_report.json"
     report_body = _build_prediction_report(

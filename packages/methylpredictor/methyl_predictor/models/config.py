@@ -136,6 +136,19 @@ class PredictorConfig(BaseModel):
         description="Optional hierarchical panel readout for OvR ECDF bundles (pairwise max-contrast). "
         "Set under step_config.predictor.panel in the project JSON. See methyl_classifier.core.panel_fusion.",
     )
+    decision_enabled: bool = Field(
+        default=True,
+        description="If true (binary only), derive final_decision in predictions.csv using "
+        "decision_min_margin and decision_min_confidence thresholds.",
+    )
+    decision_min_margin: float = Field(
+        default=0.20,
+        description="Binary decision policy: minimum |prob_class1 - prob_class0| required to avoid indeterminate.",
+    )
+    decision_min_confidence: float = Field(
+        default=0.65,
+        description="Binary decision policy: minimum max(prob_class0, prob_class1) required to avoid indeterminate.",
+    )
 
     @model_validator(mode="after")
     def ensure_absolute_test_paths(self) -> "PredictorConfig":

@@ -527,3 +527,5 @@ def test_predictor_config_nested_controls_diseases_expands(tmp_path):
     assert config.test_disease_paths == [str((samples / "s2").resolve())]
     assert config.report_controls is not None
     assert config.sample_lineage[0]["group_label"] == "g1"
+
+

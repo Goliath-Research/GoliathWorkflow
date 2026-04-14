@@ -34,12 +34,27 @@ _CLASSIFIER_SNAPSHOT_KEYS = (
     "chromosome_weights",
 )
 
+_PREDICTOR_DECISION_KEYS = (
+    "decision_enabled",
+    "decision_min_margin",
+    "decision_min_confidence",
+)
+
 
 def _classifier_step_snapshot(classifier_step: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not classifier_step:
         return None
     out = {k: classifier_step[k] for k in _CLASSIFIER_SNAPSHOT_KEYS if k in classifier_step}
     return out or None
+
+
+def _predictor_decision_overrides(step_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract optional decision policy keys from step_config.predictor."""
+    out: Dict[str, Any] = {}
+    for key in _PREDICTOR_DECISION_KEYS:
+        if key in step_cfg and step_cfg[key] is not None:
+            out[key] = step_cfg[key]
+    return out
 
 
 def _resolve_one_path(entry: str, base_path: Optional[str]) -> str:
@@ -567,6 +582,7 @@ def _build_blind_predictor_dict(
         "cohort_hierarchy": tree or None,
         "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
         "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
+        **_predictor_decision_overrides(step_cfg),
     }
 
 
@@ -813,6 +829,7 @@ def _build_multiclass_predictor_config(
             "classifier_step_snapshot": _classifier_step_snapshot(
                 project.get_step_config("classifier") or {}
             ),
+            **_predictor_decision_overrides(step_cfg),
         }
         return PredictorConfig(**base_dict)
 
@@ -833,6 +850,7 @@ def _build_multiclass_predictor_config(
         "cohort_hierarchy": tree or None,
         "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
         "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
+        **_predictor_decision_overrides(step_cfg),
     }
     return PredictorConfig(**base_dict)
 
@@ -916,6 +934,7 @@ def resolve_predictor_config(
             sample_lineage=lineage,
             panel=step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
             classifier_step_snapshot=_classifier_step_snapshot(classifier_step),
+            **_predictor_decision_overrides(step_cfg),
         )
 
     if _predictor_blind_has_groups(step_cfg):
@@ -984,6 +1003,7 @@ def resolve_predictor_config(
             "cohort_hierarchy": tree or None,
             "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
             "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
+            **_predictor_decision_overrides(step_cfg),
         }
         return PredictorConfig(**base)
 
@@ -1007,6 +1027,7 @@ def resolve_predictor_config(
         "cohort_hierarchy": tree or None,
         "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
         "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
+        **_predictor_decision_overrides(step_cfg),
     }
     return PredictorConfig(**base)
 
@@ -1233,6 +1254,7 @@ def resolve_predictor_config_per_comparison(
             "sample_lineage": lineage,
             "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
             "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
+            **_predictor_decision_overrides(step_cfg),
         }
         result.append((PredictorConfig(**base), comp_label))
     return result
