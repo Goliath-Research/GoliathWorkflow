@@ -361,14 +361,16 @@ def _select_stable_dmps_df(
     """Build selected stable DMP table from full frequency table."""
     if dmp_freq_df is None or dmp_freq_df.empty or "frequency" not in dmp_freq_df.columns:
         return pd.DataFrame(
-            columns=["chromosome", "position", "frequency", "count", "n_runs"]
+            columns=["chromosome", "position", "frequency", "count", "n_runs", "effect_size"]
         )
     selected = dmp_freq_df[dmp_freq_df["frequency"] >= min_frequency].copy()
     if top_n is not None and len(selected) > top_n:
         selected = selected.head(top_n)
-    for col in ("chromosome", "position", "frequency", "count", "n_runs"):
+    for col in ("chromosome", "position", "frequency", "count", "n_runs", "effect_size"):
         if col not in selected.columns:
-            selected[col] = pd.Series(dtype="float64" if col in {"frequency"} else "object")
+            selected[col] = pd.Series(
+                dtype="float64" if col in {"frequency", "effect_size"} else "object"
+            )
     return selected
 
 
@@ -539,6 +541,8 @@ def compute_dmp_stability(
         runs = sorted(monte_carlo_runs_root.glob("run_0*"))
 
     dmp_counts: Dict[Tuple[Any, int], int] = defaultdict(int)
+    dmp_effect_sum: Dict[Tuple[Any, int], float] = defaultdict(float)
+    dmp_effect_runs: Dict[Tuple[Any, int], int] = defaultdict(int)
     run_count = 0
     skipped_no_discovery = 0
     skipped_low_ba = 0
@@ -558,6 +562,25 @@ def compute_dmp_stability(
             key = _dmp_key_from_row(row)
             dmp_counts[key] += 1
 
+        # Compute one effect-size value per DMP key per run (mean over run duplicates),
+        # then average those values across runs where the DMP is present.
+        if "effect_size" in df.columns:
+            run_effect_values: Dict[Tuple[Any, int], List[float]] = defaultdict(list)
+            for _, row in df.iterrows():
+                try:
+                    key = _dmp_key_from_row(row)
+                except Exception:
+                    continue
+                val = pd.to_numeric(row.get("effect_size"), errors="coerce")
+                if pd.isna(val):
+                    continue
+                run_effect_values[key].append(float(val))
+            for key, vals in run_effect_values.items():
+                if not vals:
+                    continue
+                dmp_effect_sum[key] += float(sum(vals) / len(vals))
+                dmp_effect_runs[key] += 1
+
     if run_count == 0:
         return pd.DataFrame(), {
             "n_runs_analyzed": 0,
@@ -569,17 +592,28 @@ def compute_dmp_stability(
     data = []
     for (chrom, pos), count in dmp_counts.items():
         freq = count / run_count
+        effect_runs = int(dmp_effect_runs.get((chrom, pos), 0))
+        effect_size = (
+            float(dmp_effect_sum[(chrom, pos)] / effect_runs)
+            if effect_runs > 0
+            else float("nan")
+        )
         data.append({
             "chromosome": chrom,
             "position": pos,
             "frequency": freq,
             "count": count,
             "n_runs": run_count,
+            "effect_size": effect_size,
         })
 
     df = pd.DataFrame(data)
     if not df.empty:
-        df = df.sort_values("frequency", ascending=False)
+        df = df.sort_values(
+            ["frequency", "effect_size"],
+            ascending=[False, False],
+            na_position="last",
+        )
 
     stable = df[df["frequency"] >= min_frequency] if not df.empty else pd.DataFrame()
     summary = {
@@ -642,6 +676,8 @@ def write_stable_panel(
     """Write stable DMPs as a production classifier panel."""
     output_dir.mkdir(parents=True, exist_ok=True)
     stable = _select_stable_dmps_df(dmp_freq_df, min_frequency=min_frequency, top_n=top_n)
+    if "effect_size" not in stable.columns:
+        stable["effect_size"] = pd.Series(dtype="float64")
 
     out_path = output_dir / "stable_dmps_production.csv"
     stable.to_csv(out_path, index=False)
@@ -748,9 +784,20 @@ def _merge_stable_dmp_panels(
                     logger.warning(f"Skipping unreadable CSV {csv_f}: {e}")
         if frames:
             merged_df = pd.concat(frames, ignore_index=True)
+            if "effect_size" not in merged_df.columns:
+                merged_df["effect_size"] = pd.Series(dtype="float64")
             # Deduplicate, preferring higher frequency if column present
             if "frequency" in merged_df.columns:
-                merged_df = merged_df.sort_values("frequency", ascending=False)
+                sort_cols = ["frequency"]
+                sort_asc = [False]
+                if "effect_size" in merged_df.columns:
+                    sort_cols.append("effect_size")
+                    sort_asc.append(False)
+                merged_df = merged_df.sort_values(
+                    sort_cols,
+                    ascending=sort_asc,
+                    na_position="last",
+                )
             merged_df = merged_df.drop_duplicates(
                 subset=["chromosome", "position"], keep="first"
             ).reset_index(drop=True)

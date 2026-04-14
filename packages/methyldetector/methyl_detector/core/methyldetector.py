@@ -1465,8 +1465,6 @@ class MethylDetector:
         """Extract bounded, positive feature weights from the selected DMP table."""
         if 'effect_size' in dmps_df.columns:
             weights = dmps_df['effect_size'].values.copy()
-        elif 'importance' in dmps_df.columns:
-            weights = dmps_df['importance'].values.copy()
         else:
             weights = np.ones(len(dmps_df), dtype=np.float64)
 
@@ -3955,8 +3953,6 @@ class MethylDetector:
             export_df['delta_sign'] = np.sign(export_df['mean1'] - export_df['mean2']).astype(np.int8)
         if 'effect_size' in export_df.columns:
             export_df['weight'] = export_df['effect_size']
-        elif 'importance' in export_df.columns:
-            export_df['weight'] = export_df['importance']
 
         standard_cols = [
             'chromosome', 'context', 'position', 'n1', 'n2', 'mean1', 'mean2', 'variance1', 'variance2',

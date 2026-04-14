@@ -13,7 +13,7 @@ from .dmp_export_paths import find_classifier_dmps_csvs
 
 DMP_GLOB = "dmps-*.csv"
 REQUIRED_COLS = {"chromosome", "context", "position"}
-WEIGHT_COLS = ["weight", "effect_size", "importance"]
+WEIGHT_COLS = ["weight", "effect_size"]
 
 
 def _find_dmp_csvs(detection_dir: Path) -> List[Path]:
