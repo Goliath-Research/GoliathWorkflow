@@ -73,6 +73,12 @@ def build_model_backend_steps(
                     covariate_categorical_columns=(config.covariate_categorical_columns if config is not None else None),
                     covariate_missing_numeric_strategy=(config.covariate_missing_numeric_strategy if config is not None else "mean"),
                     covariate_standardize_numeric=(config.covariate_standardize_numeric if config is not None else True),
+                    feature_mode=(config.feature_mode if config is not None else "raw_dmp"),
+                    observed_feature_quantiles=(config.observed_feature_quantiles if config is not None else None),
+                    observed_feature_min_coverage=(config.observed_feature_min_coverage if config is not None else 1),
+                    observed_feature_min_obs_fraction=(
+                        config.observed_feature_min_obs_fraction if config is not None else 0.0
+                    ),
                 )
                 return 0, f"Tabular model trained: {model_path}", ""
             except Exception as e:
@@ -89,6 +95,9 @@ def build_model_backend_steps(
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                     covariates_strict_join=(config.covariates_strict_join if config is not None else False),
+                    observed_feature_min_obs_fraction=(
+                        config.observed_feature_min_obs_fraction if config is not None else 0.0
+                    ),
                 )
                 return 0, json.dumps(metrics), ""
             except Exception as e:
@@ -153,6 +162,12 @@ def build_model_backend_steps(
                     covariate_categorical_columns=(config.covariate_categorical_columns if config is not None else None),
                     covariate_missing_numeric_strategy=(config.covariate_missing_numeric_strategy if config is not None else "mean"),
                     covariate_standardize_numeric=(config.covariate_standardize_numeric if config is not None else True),
+                    feature_mode=(config.feature_mode if config is not None else "raw_dmp"),
+                    observed_feature_quantiles=(config.observed_feature_quantiles if config is not None else None),
+                    observed_feature_min_coverage=(config.observed_feature_min_coverage if config is not None else 1),
+                    observed_feature_min_obs_fraction=(
+                        config.observed_feature_min_obs_fraction if config is not None else 0.0
+                    ),
                 )
                 return 0, f"Generative model trained: {model_path}", ""
             except Exception as e:
@@ -169,6 +184,9 @@ def build_model_backend_steps(
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                     covariates_strict_join=(config.generative_covariates_strict if config is not None else True),
+                    observed_feature_min_obs_fraction=(
+                        config.observed_feature_min_obs_fraction if config is not None else 0.0
+                    ),
                 )
                 return 0, json.dumps(metrics), ""
             except Exception as e:
@@ -180,7 +198,26 @@ def build_model_backend_steps(
             ("generative-predictor", _run_generative_predict),
         ]
 
+    def _run_ecdf_second_stage() -> tuple[int, str, str]:
+        try:
+            if config is None or not bool(getattr(config, "ecdf_second_stage_enabled", False)):
+                return 0, "ECDF second-stage scorer disabled.", ""
+            from .ecdf_second_stage import train_and_apply_ecdf_second_stage
+
+            out = train_and_apply_ecdf_second_stage(
+                project_json=project_json,
+                predictor_output_dir=(predictor_output_dir or (project_json.parent / "predictors")),
+                classifier_output_dir=(predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"),
+                max_dmps=(config.tabular_max_dmps if config is not None else 5000),
+                quantiles=(config.observed_feature_quantiles if config is not None else None),
+                min_coverage=(config.observed_feature_min_coverage if config is not None else 1),
+            )
+            return 0, json.dumps(out), ""
+        except Exception as e:
+            return 1, "", str(e)
+
     return [
         ("methyl-classifier", lambda: run_classifier_fn(project_json, per_cancer_group)),
         ("methyl-predictor", lambda: run_predictor_fn(project_json, predictor_output_dir)),
+        ("ecdf-second-stage", _run_ecdf_second_stage),
     ]

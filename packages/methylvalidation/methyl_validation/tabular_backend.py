@@ -31,6 +31,13 @@ from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .model_bundle import load_bundle_dmp_index
+from .observed_feature_builder import (
+    apply_feature_fill_values,
+    build_observed_hybrid_feature_table,
+    fit_feature_fill_values,
+    sample_ids_from_paths,
+    verify_feature_schema,
+)
 
 
 @contextmanager
@@ -96,7 +103,6 @@ def _build_estimator(model_type: str, random_state: int = 13):
     if mt == "logistic_regression":
         return LogisticRegression(
             max_iter=1000,
-            multi_class="multinomial",
             class_weight="balanced",
             random_state=random_state,
         )
@@ -240,6 +246,10 @@ def train_tabular_model(
     covariate_categorical_columns: Optional[List[str]] = None,
     covariate_missing_numeric_strategy: str = "mean",
     covariate_standardize_numeric: bool = True,
+    feature_mode: str = "raw_dmp",
+    observed_feature_quantiles: Optional[List[float]] = None,
+    observed_feature_min_coverage: int = 1,
+    observed_feature_min_obs_fraction: float = 0.0,
 ) -> Path:
     with _project_cwd(project_json):
         project = load_project(project_json)
@@ -262,9 +272,28 @@ def train_tabular_model(
             y.append(cls_idx)
             sample_ids.append(Path(str(p)).name)
 
-    X = _extract_matrix_for_samples(all_paths, refs, feature_order, min_coverage=1)
-    X = np.asarray(X, dtype=np.float32)
-    X = np.nan_to_num(X, nan=0.5, posinf=0.5, neginf=0.5)
+    feature_mode_norm = str(feature_mode or "raw_dmp").strip().lower()
+    if feature_mode_norm == "observed_hybrid":
+        feat = build_observed_hybrid_feature_table(
+            all_paths,
+            dmp_df,
+            quantiles=observed_feature_quantiles,
+            min_coverage=int(max(1, observed_feature_min_coverage)),
+        )
+        X = np.asarray(feat.X, dtype=np.float32)
+        feature_fill_values = fit_feature_fill_values(X)
+        X = apply_feature_fill_values(X, feature_fill_values)
+        observed_feature_names = list(feat.feature_names)
+        observed_feature_report = dict(feat.report)
+        observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
+    else:
+        X = _extract_matrix_for_samples(all_paths, refs, feature_order, min_coverage=1)
+        X = np.asarray(X, dtype=np.float32)
+        X = np.nan_to_num(X, nan=0.5, posinf=0.5, neginf=0.5)
+        feature_fill_values = None
+        observed_feature_names = []
+        observed_feature_report = {}
+        observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
 
     cov, preprocessor, cov_report = fit_covariates(
         covariates_path,
@@ -296,12 +325,22 @@ def train_tabular_model(
     meta = {
         "model_backend": "tabular_sklearn",
         "model_type": model_type,
+        "feature_mode": feature_mode_norm,
         "class_names": class_names,
         "project_json": str(Path(project_json).resolve()),
         "bundle_h5": str(Path(bundle_h5).resolve()),
+        "max_dmps": int(max_dmps),
         "n_features": int(X.shape[1]),
         "n_dmps": int(len(feature_order)),
         "feature_order": [{"chromosome": c, "context": ctx, "position": int(pos)} for c, ctx, pos in feature_order],
+        "observed_feature_names": observed_feature_names,
+        "observed_feature_quantiles": observed_feature_quantiles_out,
+        "observed_feature_min_coverage": int(max(1, observed_feature_min_coverage)),
+        "observed_feature_min_obs_fraction": float(max(0.0, min(1.0, observed_feature_min_obs_fraction))),
+        "observed_feature_fill_values": (
+            [float(v) for v in feature_fill_values.tolist()] if feature_fill_values is not None else None
+        ),
+        "observed_feature_report": observed_feature_report,
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": covariate_id_column,
         "covariates_strict_join": bool(covariates_strict_join),
@@ -328,6 +367,7 @@ def predict_tabular_model_from_project(
     covariates_path: Optional[str] = None,
     covariate_id_column: str = "sample_id",
     covariates_strict_join: bool = False,
+    observed_feature_min_obs_fraction: Optional[float] = None,
 ) -> Dict[str, Any]:
     model_dir = Path(model_dir).resolve()
     out_dir = Path(output_dir).resolve()
@@ -342,22 +382,51 @@ def predict_tabular_model_from_project(
     with open(meta_path, encoding="utf-8") as f:
         meta = json.load(f)
     class_names = [str(x) for x in meta.get("class_names", [])]
-    feature_order = [
-        (str(r["chromosome"]), str(r["context"]), int(r["position"]))
-        for r in meta.get("feature_order", [])
-    ]
-    refs: Dict[str, Dict[str, np.ndarray]] = {}
-    for chrom, ctx, pos in feature_order:
-        refs.setdefault(chrom, {}).setdefault(ctx, []).append(int(pos))
-    for chrom in list(refs.keys()):
-        for ctx in list(refs[chrom].keys()):
-            refs[chrom][ctx] = np.asarray(sorted(set(refs[chrom][ctx])), dtype=np.uint32)
+    feature_mode = str(meta.get("feature_mode", "raw_dmp")).strip().lower()
 
     samples, y_true = _resolve_eval_paths_and_labels(project_json, class_names)
-    sample_ids = [Path(p).name for p in samples]
+    sample_ids = sample_ids_from_paths(samples)
 
-    X = _extract_matrix_for_samples(samples, refs, feature_order, min_coverage=1)
-    X = np.nan_to_num(np.asarray(X, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
+    obs_fraction_vec: Optional[np.ndarray] = None
+    if feature_mode == "observed_hybrid":
+        bundle_h5 = meta.get("bundle_h5")
+        if not isinstance(bundle_h5, str) or not Path(bundle_h5).is_file():
+            raise FileNotFoundError("Observed-hybrid mode requires bundle_h5 in tabular metadata.")
+        dmp_df = load_bundle_dmp_index(bundle_h5)
+        max_dmps = int(meta.get("max_dmps", len(dmp_df) or 0))
+        if max_dmps and len(dmp_df) > max_dmps:
+            dmp_df = dmp_df.sort_values(["weight", "effect_size"], ascending=[False, False]).head(max_dmps).copy()
+        feat = build_observed_hybrid_feature_table(
+            samples,
+            dmp_df,
+            quantiles=meta.get("observed_feature_quantiles") or None,
+            min_coverage=int(meta.get("observed_feature_min_coverage") or 1),
+        )
+        verify_feature_schema(
+            feat.feature_names,
+            meta.get("observed_feature_names") or [],
+            context="tabular predict observed_hybrid",
+        )
+        X = np.asarray(feat.X, dtype=np.float32)
+        if "obs_fraction" in feat.feature_names:
+            obs_fraction_vec = X[:, feat.feature_names.index("obs_fraction")].astype(np.float32)
+        fill_values = meta.get("observed_feature_fill_values")
+        if not isinstance(fill_values, list):
+            raise ValueError("Observed-hybrid mode requires observed_feature_fill_values in metadata.")
+        X = apply_feature_fill_values(X, fill_values)
+    else:
+        feature_order = [
+            (str(r["chromosome"]), str(r["context"]), int(r["position"]))
+            for r in meta.get("feature_order", [])
+        ]
+        refs: Dict[str, Dict[str, np.ndarray]] = {}
+        for chrom, ctx, pos in feature_order:
+            refs.setdefault(chrom, {}).setdefault(ctx, []).append(int(pos))
+        for chrom in list(refs.keys()):
+            for ctx in list(refs[chrom].keys()):
+                refs[chrom][ctx] = np.asarray(sorted(set(refs[chrom][ctx])), dtype=np.uint32)
+        X = _extract_matrix_for_samples(samples, refs, feature_order, min_coverage=1)
+        X = np.nan_to_num(np.asarray(X, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
     preproc_path_meta = meta.get("covariate_preprocessor_path")
     preprocessor = (
         CovariatePreprocessor.load_json(preproc_path_meta)
@@ -383,6 +452,17 @@ def predict_tabular_model_from_project(
         json.dump(metrics, f, indent=2)
 
     recs: List[Dict[str, Any]] = []
+    min_obs = float(
+        max(
+            0.0,
+            min(
+                1.0,
+                observed_feature_min_obs_fraction
+                if observed_feature_min_obs_fraction is not None
+                else float(meta.get("observed_feature_min_obs_fraction", 0.0)),
+            ),
+        )
+    )
     for i, sample in enumerate(samples):
         rec: Dict[str, Any] = {
             "sample": Path(sample).name,
@@ -392,6 +472,11 @@ def predict_tabular_model_from_project(
         }
         for j in range(probs.shape[1]):
             rec[f"prob_class{j}"] = float(probs[i, j])
+        if obs_fraction_vec is not None:
+            obs_f = float(obs_fraction_vec[i])
+            rec["obs_fraction"] = obs_f
+            rec["low_evidence"] = bool(np.isfinite(obs_f) and obs_f < min_obs)
+            rec["prediction_evidence_filtered"] = -1 if rec["low_evidence"] else int(y_pred[i])
         recs.append(rec)
     pred_csv = out_dir / "predictions.csv"
     pd.DataFrame(recs).to_csv(pred_csv, index=False)

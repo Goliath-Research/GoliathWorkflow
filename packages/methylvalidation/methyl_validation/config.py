@@ -195,6 +195,41 @@ class MonteCarloConfig(BaseModel):
         ge=10,
         description="For model_backend=tabular_sklearn: cap number of DMP loci selected from bundle index.",
     )
+    feature_mode: str = Field(
+        default="raw_dmp",
+        description=(
+            "Feature construction mode for tabular/generative backends: "
+            "raw_dmp (legacy per-locus matrix with methylation fill) or "
+            "observed_hybrid (observed-only aggregated features)."
+        ),
+    )
+    observed_feature_quantiles: List[float] = Field(
+        default_factory=lambda: [0.10, 0.25, 0.50, 0.75, 0.90],
+        description=(
+            "Quantiles used by observed_hybrid feature mode when summarizing observed methylation."
+        ),
+    )
+    observed_feature_min_coverage: int = Field(
+        default=1,
+        ge=1,
+        description="Minimum coverage passed to methyl extraction for observed_hybrid features.",
+    )
+    observed_feature_min_obs_fraction: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum observed-fraction evidence threshold for observed_hybrid predictions. "
+            "Used for reporting/optional rejection in backend outputs."
+        ),
+    )
+    ecdf_second_stage_enabled: bool = Field(
+        default=False,
+        description=(
+            "If true for model_backend=ecdf, train optional second-stage binary refiner "
+            "using observed_hybrid features and append extra prediction columns."
+        ),
+    )
     covariates_path: Optional[str] = Field(
         default=None,
         description=(
@@ -361,6 +396,27 @@ class MonteCarloConfig(BaseModel):
         if normalized not in allowed:
             raise ValueError(f"model_backend must be one of {sorted(allowed)}")
         return normalized
+
+    @field_validator("feature_mode")
+    @classmethod
+    def _validate_feature_mode(cls, value: str) -> str:
+        allowed = {"raw_dmp", "observed_hybrid"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"feature_mode must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("observed_feature_quantiles")
+    @classmethod
+    def _validate_observed_feature_quantiles(cls, value: List[float]) -> List[float]:
+        out: List[float] = []
+        for q in value:
+            fq = float(q)
+            if 0.0 <= fq <= 1.0:
+                out.append(fq)
+        if not out:
+            out = [0.5]
+        return out
 
     @field_validator("generative_density_type")
     @classmethod

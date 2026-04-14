@@ -387,3 +387,53 @@ def test_generative_config_validation_strict_fields():
             }
         )
 
+
+def test_generative_observed_hybrid_train_predict_schema_parity(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    _write_detector_dmps(det)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProjectBinary(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+    monkeypatch.setattr(generative_backend, "load_project", lambda _p: _StubProjectBinary(det))
+
+    def _fake_extract_observed(sample_paths, reference_positions, chromosome, min_coverage=1):
+        del chromosome, min_coverage
+        positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
+        if len(positions) >= 2:
+            positions = positions[:2]
+        X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
+        for i, p in enumerate(sample_paths):
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+        ctx = np.asarray(["CG"] * len(positions), dtype=object)
+        return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
+
+    monkeypatch.setattr(
+        generative_backend.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_observed,
+    )
+    model_dir = tmp_path / "model"
+    generative_backend.train_generative_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        feature_mode="observed_hybrid",
+        observed_feature_min_obs_fraction=0.75,
+        latent_dim=3,
+    )
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=None,
+        test_control_paths=["/tmp/S1", "/tmp/S2"],
+        test_disease_paths=["/tmp/S3", "/tmp/S4"],
+    )
+    monkeypatch.setattr(generative_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+    metrics = generative_backend.predict_generative_model_from_project(
+        project_json=tmp_path / "project.json",
+        model_dir=model_dir,
+        output_dir=tmp_path / "predict",
+    )
+    assert "balanced_accuracy" in metrics
+    pred_df = pd.read_csv(tmp_path / "predict" / "predictions.csv")
+    assert {"obs_fraction", "low_evidence", "prediction_evidence_filtered"}.issubset(pred_df.columns)
+    assert pred_df["low_evidence"].astype(bool).all()
+
