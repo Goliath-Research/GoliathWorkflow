@@ -37,7 +37,15 @@ def _find_parabricks_metrics_json(sample_dir: Path, sample_name: str) -> Optiona
 def _find_qc_metrics_tar(sample_dir: Path, sample_name: str) -> Optional[Path]:
     """Resolve canonical qc-metrics tar path for sample."""
     candidate = sample_dir / f"{sample_name}.qc-metrics.tar"
-    return candidate if candidate.exists() else None
+    if candidate.exists():
+        return candidate
+
+    # Fallback for legacy naming variants (e.g., extra underscores in basename):
+    # use the single qc-metrics tar if unambiguous in this sample directory.
+    tars = sorted(sample_dir.glob("*.qc-metrics.tar"))
+    if len(tars) == 1:
+        return tars[0]
+    return None
 
 
 def _extract_table_rows_from_tar(tar: tarfile.TarFile, suffix: str) -> List[Dict[str, str]]:
@@ -51,9 +59,9 @@ def _extract_table_rows_from_tar(tar: tarfile.TarFile, suffix: str) -> List[Dict
     lines = raw.read().decode("utf-8", errors="ignore").splitlines()
     header: Optional[List[str]] = None
     rows: List[Dict[str, str]] = []
-    for line in lines:
-        line = line.strip()
-        if not line or line.startswith("##") or line.startswith("#"):
+    for raw_line in lines:
+        line = raw_line.rstrip("\r\n")
+        if not line.strip() or line.lstrip().startswith("##") or line.lstrip().startswith("#"):
             continue
         if "\t" not in line:
             continue
