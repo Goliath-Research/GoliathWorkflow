@@ -5,7 +5,6 @@ Optional ECDF second-stage scorer using observed-only hybrid features.
 from __future__ import annotations
 
 import json
-import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -83,70 +82,55 @@ def _ensure_bundle_h5(project_json: Path, bundle_dir: Path) -> Path:
     return bundle_h5
 
 
-def _align_features_to_predictions(
+def _sample_paths_from_predictions(
     predictions_df: pd.DataFrame,
-    sample_paths: Sequence[str],
-    feature_matrix: np.ndarray,
-) -> np.ndarray:
-    def _keys_for_sample(value: str) -> List[str]:
-        p = Path(str(value))
-        out = [str(value), p.name, p.stem]
-        # Common path-style/no-extension ambiguities.
-        if p.name.endswith(".h5"):
-            out.append(p.name[:-3])
-        if p.name.endswith(".hdf5"):
-            out.append(p.name[:-5])
-        seen = set()
-        uniq: List[str] = []
-        for k in out:
-            s = str(k).strip()
-            if not s or s in seen:
-                continue
-            uniq.append(s)
-            seen.add(s)
-        return uniq
+    project_json: Path,
+) -> List[str]:
+    """
+    Build per-row sample paths directly from predictions rows.
 
-    key_to_idx: Dict[str, int] = {}
-    for i, p in enumerate(sample_paths):
-        for key in _keys_for_sample(str(p)):
-            key_to_idx.setdefault(key, i)
+    This avoids train/holdout/test group-resolution ambiguity and guarantees row
+    parity between ECDF probabilities and observed-hybrid features.
+    """
+    with open(project_json, encoding="utf-8") as f:
+        project_data = json.load(f)
+    samples_base = str(project_data.get("samples_base_path") or "").strip()
+    samples_base_path = Path(samples_base) if samples_base else None
 
-    idxs: List[int] = []
-    missing: List[str] = []
+    resolved_eval_paths, _ = _resolve_eval_paths_and_labels(project_json)
+    eval_by_name: Dict[str, str] = {Path(str(p)).name: str(p) for p in resolved_eval_paths}
+    eval_by_stem: Dict[str, str] = {Path(str(p)).stem: str(p) for p in resolved_eval_paths}
+
+    out: List[str] = []
     for row in predictions_df.itertuples(index=False):
         sample = str(getattr(row, "sample", "") or "").strip()
         sample_path = str(getattr(row, "sample_path", "") or "").strip()
-        matched_idx: Optional[int] = None
-        for candidate in (sample_path, sample):
-            if not candidate:
-                continue
-            for key in _keys_for_sample(candidate):
-                if key in key_to_idx:
-                    matched_idx = int(key_to_idx[key])
-                    break
-            if matched_idx is not None:
-                break
-        if matched_idx is None:
-            missing.append(sample or sample_path or "<unknown>")
-        else:
-            idxs.append(matched_idx)
+        chosen: Optional[str] = None
 
-    if missing:
-        # Safe fallback: if lengths match, keep row-order alignment instead of failing.
-        if len(sample_paths) == len(predictions_df):
-            warnings.warn(
-                "Second-stage sample ID alignment had unmatched rows; using row-order fallback.",
-                UserWarning,
-                stacklevel=2,
-            )
-            return feature_matrix[np.arange(len(predictions_df), dtype=np.int32), :]
-        head = ", ".join(missing[:5])
-        raise ValueError(
-            "Second-stage scorer could not align all prediction rows to resolved samples. "
-            f"Missing examples: {head}"
-        )
+        if sample_path:
+            p = Path(sample_path)
+            if p.is_absolute():
+                chosen = str(p)
+            elif samples_base_path is not None:
+                chosen = str((samples_base_path / sample_path).resolve())
+            else:
+                chosen = str(p)
 
-    return feature_matrix[np.asarray(idxs, dtype=np.int32), :]
+        if not chosen and sample:
+            # Prefer exact match from predictor-resolved lineage when available.
+            if sample in eval_by_name:
+                chosen = eval_by_name[sample]
+            elif sample in eval_by_stem:
+                chosen = eval_by_stem[sample]
+            elif samples_base_path is not None:
+                chosen = str((samples_base_path / sample).resolve())
+            else:
+                chosen = sample
+
+        if not chosen:
+            raise ValueError("Encountered prediction row without sample identifier for second-stage scorer.")
+        out.append(chosen)
+    return out
 
 
 def train_and_apply_ecdf_second_stage(
@@ -180,9 +164,9 @@ def train_and_apply_ecdf_second_stage(
     if max_dmps and len(dmp_df) > max_dmps:
         dmp_df = dmp_df.sort_values(["weight", "effect_size"], ascending=[False, False]).head(max_dmps).copy()
 
-    sample_paths, _labels = _resolve_eval_paths_and_labels(project_json)
+    sample_paths = _sample_paths_from_predictions(df, project_json)
     if not sample_paths:
-        raise ValueError("Could not resolve evaluation sample paths for ECDF second-stage scorer.")
+        raise ValueError("No sample paths were derived from predictions.csv for ECDF second-stage scorer.")
     feat = build_observed_hybrid_feature_table(
         sample_paths,
         dmp_df,
@@ -192,7 +176,6 @@ def train_and_apply_ecdf_second_stage(
     X_obs = np.asarray(feat.X, dtype=np.float32)
     fill_values = fit_feature_fill_values(X_obs)
     X_obs = apply_feature_fill_values(X_obs, fill_values)
-    X_obs = _align_features_to_predictions(df, sample_paths, X_obs)
 
     X_prob = df[["prob_class0", "prob_class1"]].astype(np.float32).to_numpy()
     X = np.concatenate([X_prob, X_obs], axis=1)
