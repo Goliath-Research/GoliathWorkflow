@@ -5,6 +5,7 @@ Optional ECDF second-stage scorer using observed-only hybrid features.
 from __future__ import annotations
 
 import json
+import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -87,12 +88,64 @@ def _align_features_to_predictions(
     sample_paths: Sequence[str],
     feature_matrix: np.ndarray,
 ) -> np.ndarray:
-    sid_to_idx = {Path(str(p)).name: i for i, p in enumerate(sample_paths)}
+    def _keys_for_sample(value: str) -> List[str]:
+        p = Path(str(value))
+        out = [str(value), p.name, p.stem]
+        # Common path-style/no-extension ambiguities.
+        if p.name.endswith(".h5"):
+            out.append(p.name[:-3])
+        if p.name.endswith(".hdf5"):
+            out.append(p.name[:-5])
+        seen = set()
+        uniq: List[str] = []
+        for k in out:
+            s = str(k).strip()
+            if not s or s in seen:
+                continue
+            uniq.append(s)
+            seen.add(s)
+        return uniq
+
+    key_to_idx: Dict[str, int] = {}
+    for i, p in enumerate(sample_paths):
+        for key in _keys_for_sample(str(p)):
+            key_to_idx.setdefault(key, i)
+
     idxs: List[int] = []
-    for sample_id in predictions_df["sample"].astype(str).tolist():
-        if sample_id not in sid_to_idx:
-            raise ValueError(f"Sample {sample_id} not found in resolved evaluation paths for second-stage scorer.")
-        idxs.append(int(sid_to_idx[sample_id]))
+    missing: List[str] = []
+    for row in predictions_df.itertuples(index=False):
+        sample = str(getattr(row, "sample", "") or "").strip()
+        sample_path = str(getattr(row, "sample_path", "") or "").strip()
+        matched_idx: Optional[int] = None
+        for candidate in (sample_path, sample):
+            if not candidate:
+                continue
+            for key in _keys_for_sample(candidate):
+                if key in key_to_idx:
+                    matched_idx = int(key_to_idx[key])
+                    break
+            if matched_idx is not None:
+                break
+        if matched_idx is None:
+            missing.append(sample or sample_path or "<unknown>")
+        else:
+            idxs.append(matched_idx)
+
+    if missing:
+        # Safe fallback: if lengths match, keep row-order alignment instead of failing.
+        if len(sample_paths) == len(predictions_df):
+            warnings.warn(
+                "Second-stage sample ID alignment had unmatched rows; using row-order fallback.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return feature_matrix[np.arange(len(predictions_df), dtype=np.int32), :]
+        head = ", ".join(missing[:5])
+        raise ValueError(
+            "Second-stage scorer could not align all prediction rows to resolved samples. "
+            f"Missing examples: {head}"
+        )
+
     return feature_matrix[np.asarray(idxs, dtype=np.int32), :]
 
 

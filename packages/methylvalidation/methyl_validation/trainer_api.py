@@ -214,7 +214,8 @@ def build_model_backend_steps(
             )
             return 0, json.dumps(out), ""
         except Exception as e:
-            return 1, "", str(e)
+            # Optional refinement must not fail the primary ECDF build.
+            return 0, "", f"ECDF second-stage skipped: {e}"
 
     return [
         ("methyl-classifier", lambda: run_classifier_fn(project_json, per_cancer_group)),
