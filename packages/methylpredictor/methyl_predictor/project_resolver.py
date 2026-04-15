@@ -480,7 +480,52 @@ def _try_dual_binary_predictor_paths(
     ho_c = _optional_predictor_side_from_step(step_cfg, "holdout_controls")
     ho_d = _optional_predictor_side_from_step(step_cfg, "holdout_diseases")
     if ho_c is None or ho_d is None:
-        return None
+        # Compatibility path: allow binary projects to express train/holdout
+        # split using multiclass-shaped group entries with class_index {0,1}.
+        holdout_groups_raw = step_cfg.get("holdout_group_paths")
+        if isinstance(holdout_groups_raw, list) and not _group_paths_nonempty(holdout_groups_raw):
+            raise ValueError(
+                "holdout_group_paths is set for a binary project but contains no sample paths."
+            )
+        if not _group_paths_nonempty(holdout_groups_raw):
+            return None
+        _require_group_class_indices(holdout_groups_raw, source_key="holdout_group_paths")
+
+        train_groups_raw = step_cfg.get("train_group_paths")
+        holdout_entries, lin_ho = _expand_multiclass_group_paths_list(
+            holdout_groups_raw,
+            base_path=base_path,
+            project_path=project_path,
+            path_remap=path_remap,
+            evaluation_split="holdout",
+        )
+        ho_cp, ho_dp = _binary_paths_from_group_entries(
+            holdout_entries,
+            source_key="holdout_group_paths",
+        )
+        if _group_paths_nonempty(train_groups_raw):
+            _require_group_class_indices(train_groups_raw, source_key="train_group_paths")
+            train_entries, lin_tr = _expand_multiclass_group_paths_list(
+                train_groups_raw,
+                base_path=base_path,
+                project_path=project_path,
+                path_remap=path_remap,
+                evaluation_split="training",
+            )
+            tr_cp, tr_dp = _binary_paths_from_group_entries(
+                train_entries,
+                source_key="train_group_paths",
+            )
+        else:
+            tr_ctrl_map = _expand_side_group_paths(controls_side, base_path, project_path, path_remap)
+            tr_dis_map = _expand_side_group_paths(diseases_side, base_path, project_path, path_remap)
+            tr_cp, lin_tr_c = _collect_paths_and_lineage("control", ctrl_labels, tr_ctrl_map)
+            tr_dp, lin_tr_d = _collect_paths_and_lineage("disease", dis_labels, tr_dis_map)
+            lin_tr = _tag_lineage_evaluation_split(lin_tr_c, "training") + _tag_lineage_evaluation_split(
+                lin_tr_d, "training"
+            )
+        lineage = lin_tr + lin_ho
+        return tr_cp, tr_dp, ho_cp, ho_dp, lineage
     tr_c = _optional_predictor_side_from_step(step_cfg, "train_controls") or controls_side
     tr_d = _optional_predictor_side_from_step(step_cfg, "train_diseases") or diseases_side
     ho_ctrl_labels = _resolved_leaf_labels_from_side(ho_c)
@@ -507,6 +552,61 @@ def _try_dual_binary_predictor_paths(
         + _tag_lineage_evaluation_split(lin_ho_d, "holdout")
     )
     return tr_cp, tr_dp, ho_cp, ho_dp, lineage
+
+
+def _group_paths_nonempty(value: Any) -> bool:
+    if not isinstance(value, list):
+        return False
+    for entry in value:
+        if not isinstance(entry, dict):
+            continue
+        paths = entry.get("paths") or []
+        if isinstance(paths, str):
+            paths = [paths]
+        if any(p and str(p).strip() for p in paths):
+            return True
+    return False
+
+
+def _binary_paths_from_group_entries(
+    entries: List[Dict[str, Any]],
+    *,
+    source_key: str,
+) -> Tuple[List[str], List[str]]:
+    """
+    Convert multiclass-shaped group entries to binary control/disease flat lists.
+    Requires class_index in {0,1}; both classes must be present.
+    """
+    by_index: Dict[int, List[str]] = {0: [], 1: []}
+    seen_idx: set[int] = set()
+    for j, entry in enumerate(entries):
+        cls_idx = int(entry.get("class_index", j))
+        if cls_idx not in (0, 1):
+            raise ValueError(
+                f"{source_key} on binary projects supports only class_index 0/1; got {cls_idx}."
+            )
+        seen_idx.add(cls_idx)
+        paths = entry.get("paths") or []
+        if isinstance(paths, str):
+            paths = [paths]
+        by_index[cls_idx].extend([str(p) for p in paths if p and str(p).strip()])
+    if seen_idx != {0, 1}:
+        raise ValueError(
+            f"{source_key} on binary projects must include both class_index 0 and 1 entries."
+        )
+    return by_index[0], by_index[1]
+
+
+def _require_group_class_indices(entries: Any, *, source_key: str) -> None:
+    if not isinstance(entries, list):
+        return
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if "class_index" not in entry:
+            raise ValueError(
+                f"{source_key} on binary projects requires explicit class_index for each entry."
+            )
 
 
 def _predictor_blind_has_groups(step_cfg: Dict[str, Any]) -> bool:
