@@ -33,10 +33,14 @@ def validate_sample_qc_metrics(data: Dict[str, Any]) -> List[str]:
 
     if "duplication_histogram" in data:
         dh = data["duplication_histogram"]
-        if not isinstance(dh, list):
-            errors.append("duplication_histogram must be a list")
-        elif dh and not isinstance(dh[0], dict):
-            errors.append("duplication_histogram items must be dictionaries")
+        if isinstance(dh, list):
+            if dh and not isinstance(dh[0], dict):
+                errors.append("duplication_histogram list items must be dictionaries")
+        elif isinstance(dh, dict):
+            # Accept Parabricks-style histogram mapping of column -> value array.
+            pass
+        else:
+            errors.append("duplication_histogram must be a list or dictionary")
 
     if not data:
         errors.append("Sample QC data is empty")

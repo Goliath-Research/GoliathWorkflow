@@ -41,6 +41,9 @@ def _parse_metrics_section(lines: List[str]) -> Dict[str, Any]:
     metrics: Dict[str, Any] = {}
     header_idx = None
     for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("METRICS CLASS"):
+            continue
         if not line.startswith("##") and line.strip() and "\t" in line:
             if not any(c.isdigit() for c in line):
                 header_idx = i

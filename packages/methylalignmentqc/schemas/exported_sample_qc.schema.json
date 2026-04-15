@@ -1,0 +1,848 @@
+{
+  "$defs": {
+    "ArtifactSummaries": {
+      "additionalProperties": false,
+      "properties": {
+        "ARTIFACT_NAME": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifact Name",
+          "type": "array"
+        },
+        "TOTAL_QSCORE": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Total Qscore",
+          "type": "array"
+        },
+        "WORST_CXT": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Worst Cxt",
+          "type": "array"
+        },
+        "WORST_CXT_QSCORE": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Worst Cxt Qscore",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ARTIFACT_NAME",
+        "TOTAL_QSCORE",
+        "WORST_CXT",
+        "WORST_CXT_QSCORE"
+      ],
+      "title": "ArtifactSummaries",
+      "type": "object"
+    },
+    "BaseDistributionByCycle": {
+      "additionalProperties": false,
+      "properties": {
+        "PCT_A": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Pct A",
+          "type": "array"
+        },
+        "PCT_C": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Pct C",
+          "type": "array"
+        },
+        "PCT_G": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Pct G",
+          "type": "array"
+        },
+        "PCT_N": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Pct N",
+          "type": "array"
+        },
+        "PCT_T": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Pct T",
+          "type": "array"
+        },
+        "cycle": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Cycle",
+          "type": "array"
+        }
+      },
+      "required": [
+        "cycle",
+        "PCT_A",
+        "PCT_C",
+        "PCT_G",
+        "PCT_T",
+        "PCT_N"
+      ],
+      "title": "BaseDistributionByCycle",
+      "type": "object"
+    },
+    "ConversionLog": {
+      "additionalProperties": false,
+      "properties": {
+        "end_time": {
+          "title": "End Time",
+          "type": "string"
+        },
+        "program": {
+          "title": "Program",
+          "type": "string"
+        },
+        "start_time": {
+          "title": "Start Time",
+          "type": "string"
+        },
+        "total_time": {
+          "title": "Total Time",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "program",
+        "version",
+        "start_time",
+        "end_time",
+        "total_time"
+      ],
+      "title": "ConversionLog",
+      "type": "object"
+    },
+    "DuplicationHistogram": {
+      "additionalProperties": false,
+      "properties": {
+        "BIN": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Bin",
+          "type": "array"
+        },
+        "VALUE": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Value",
+          "type": "array"
+        },
+        "all_sets": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "All Sets",
+          "type": "array"
+        },
+        "non_optical_sets": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Non Optical Sets",
+          "type": "array"
+        },
+        "optical_sets": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Optical Sets",
+          "type": "array"
+        }
+      },
+      "required": [
+        "BIN",
+        "VALUE"
+      ],
+      "title": "DuplicationHistogram",
+      "type": "object"
+    },
+    "DuplicationMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "ESTIMATED_LIBRARY_SIZE": {
+          "title": "Estimated Library Size",
+          "type": "integer"
+        },
+        "LIBRARY": {
+          "title": "Library",
+          "type": "string"
+        },
+        "PERCENT_DUPLICATION": {
+          "title": "Percent Duplication",
+          "type": "number"
+        },
+        "READ_PAIRS_EXAMINED": {
+          "title": "Read Pairs Examined",
+          "type": "integer"
+        },
+        "READ_PAIR_DUPLICATES": {
+          "title": "Read Pair Duplicates",
+          "type": "integer"
+        },
+        "READ_PAIR_OPTICAL_DUPLICATES": {
+          "title": "Read Pair Optical Duplicates",
+          "type": "integer"
+        },
+        "SECONDARY_OR_SUPPLEMENTARY_RDS": {
+          "title": "Secondary Or Supplementary Rds",
+          "type": "integer"
+        },
+        "UNMAPPED_READS": {
+          "title": "Unmapped Reads",
+          "type": "integer"
+        },
+        "UNPAIRED_READS_EXAMINED": {
+          "title": "Unpaired Reads Examined",
+          "type": "integer"
+        },
+        "UNPAIRED_READ_DUPLICATES": {
+          "title": "Unpaired Read Duplicates",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "LIBRARY",
+        "UNPAIRED_READS_EXAMINED",
+        "READ_PAIRS_EXAMINED",
+        "SECONDARY_OR_SUPPLEMENTARY_RDS",
+        "UNMAPPED_READS",
+        "UNPAIRED_READ_DUPLICATES",
+        "READ_PAIR_DUPLICATES",
+        "READ_PAIR_OPTICAL_DUPLICATES",
+        "PERCENT_DUPLICATION",
+        "ESTIMATED_LIBRARY_SIZE"
+      ],
+      "title": "DuplicationMetric",
+      "type": "object"
+    },
+    "ErrorSummaries": {
+      "additionalProperties": false,
+      "properties": {
+        "ALT": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Alt",
+          "type": "array"
+        },
+        "COUNT": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Count",
+          "type": "array"
+        },
+        "QSCORE": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Qscore",
+          "type": "array"
+        },
+        "RATE": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Rate",
+          "type": "array"
+        },
+        "REF": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ref",
+          "type": "array"
+        }
+      },
+      "required": [
+        "REF",
+        "ALT",
+        "COUNT",
+        "RATE",
+        "QSCORE"
+      ],
+      "title": "ErrorSummaries",
+      "type": "object"
+    },
+    "GCBiasDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "ERROR_BAR": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Error Bar",
+          "type": "array"
+        },
+        "GC": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Gc",
+          "type": "array"
+        },
+        "MEAN_BASE_QUALITY": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Mean Base Quality",
+          "type": "array"
+        },
+        "NORMALIZED_COVERAGE": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Normalized Coverage",
+          "type": "array"
+        },
+        "READ_STARTS": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Read Starts",
+          "type": "array"
+        },
+        "WINDOWS": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Windows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "GC",
+        "WINDOWS",
+        "READ_STARTS",
+        "MEAN_BASE_QUALITY",
+        "NORMALIZED_COVERAGE",
+        "ERROR_BAR"
+      ],
+      "title": "GCBiasDetails",
+      "type": "object"
+    },
+    "GCBiasSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "at_dropout": {
+          "title": "At Dropout",
+          "type": "number"
+        },
+        "gc_dropout": {
+          "title": "Gc Dropout",
+          "type": "number"
+        }
+      },
+      "required": [
+        "at_dropout",
+        "gc_dropout"
+      ],
+      "title": "GCBiasSummary",
+      "type": "object"
+    },
+    "GuardrailDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "at_dropout": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "deamination_qscore": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "gc_dropout": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "mean_quality": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "median_insert_bp": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "min_quality_post20": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "oxog_qscore": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "pf_percent": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "q30_percent": {
+          "$ref": "#/$defs/GuardrailMetric"
+        }
+      },
+      "required": [
+        "pf_percent",
+        "q30_percent",
+        "mean_quality",
+        "min_quality_post20",
+        "at_dropout",
+        "gc_dropout",
+        "median_insert_bp",
+        "deamination_qscore",
+        "oxog_qscore"
+      ],
+      "title": "GuardrailDetails",
+      "type": "object"
+    },
+    "GuardrailMetric": {
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "normal_range": {
+          "title": "Normal Range",
+          "type": "string"
+        },
+        "pass": {
+          "title": "Pass",
+          "type": "boolean"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value",
+        "normal_range",
+        "pass",
+        "message"
+      ],
+      "title": "GuardrailMetric",
+      "type": "object"
+    },
+    "GuardrailReport": {
+      "additionalProperties": false,
+      "properties": {
+        "details": {
+          "$ref": "#/$defs/GuardrailDetails"
+        },
+        "next_steps": {
+          "title": "Next Steps",
+          "type": "string"
+        },
+        "overall_pass": {
+          "title": "Overall Pass",
+          "type": "boolean"
+        },
+        "recommendation": {
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "sample_id": {
+          "title": "Sample Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sample_id",
+        "overall_pass",
+        "details",
+        "recommendation",
+        "next_steps"
+      ],
+      "title": "GuardrailReport",
+      "type": "object"
+    },
+    "InsertSizeHistogram": {
+      "additionalProperties": false,
+      "properties": {
+        "All_Reads.fr_count": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "All Reads.Fr Count",
+          "type": "array"
+        },
+        "VALUE": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Value",
+          "type": "array"
+        },
+        "all_sets": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "All Sets",
+          "type": "array"
+        },
+        "insert_size": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Insert Size",
+          "type": "array"
+        },
+        "non_optical_sets": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Non Optical Sets",
+          "type": "array"
+        },
+        "optical_sets": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Optical Sets",
+          "type": "array"
+        },
+        "pair_orientation": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pair Orientation",
+          "type": "array"
+        }
+      },
+      "required": [
+        "insert_size",
+        "pair_orientation",
+        "All_Reads.fr_count"
+      ],
+      "title": "InsertSizeHistogram",
+      "type": "object"
+    },
+    "InsertSizeMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "mean_insert_size": {
+          "title": "Mean Insert Size",
+          "type": "number"
+        },
+        "median_insert_size": {
+          "title": "Median Insert Size",
+          "type": "integer"
+        },
+        "mode_insert_size": {
+          "title": "Mode Insert Size",
+          "type": "integer"
+        },
+        "read_pairs": {
+          "title": "Read Pairs",
+          "type": "integer"
+        },
+        "standard_deviation": {
+          "title": "Standard Deviation",
+          "type": "number"
+        },
+        "width_of_10_percent": {
+          "title": "Width Of 10 Percent",
+          "type": "integer"
+        },
+        "width_of_20_percent": {
+          "title": "Width Of 20 Percent",
+          "type": "integer"
+        },
+        "width_of_30_percent": {
+          "title": "Width Of 30 Percent",
+          "type": "integer"
+        },
+        "width_of_40_percent": {
+          "title": "Width Of 40 Percent",
+          "type": "integer"
+        },
+        "width_of_50_percent": {
+          "title": "Width Of 50 Percent",
+          "type": "integer"
+        },
+        "width_of_60_percent": {
+          "title": "Width Of 60 Percent",
+          "type": "integer"
+        },
+        "width_of_70_percent": {
+          "title": "Width Of 70 Percent",
+          "type": "integer"
+        },
+        "width_of_80_percent": {
+          "title": "Width Of 80 Percent",
+          "type": "integer"
+        },
+        "width_of_90_percent": {
+          "title": "Width Of 90 Percent",
+          "type": "integer"
+        },
+        "width_of_95_percent": {
+          "title": "Width Of 95 Percent",
+          "type": "integer"
+        },
+        "width_of_99_percent": {
+          "title": "Width Of 99 Percent",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "median_insert_size",
+        "mode_insert_size",
+        "mean_insert_size",
+        "standard_deviation",
+        "read_pairs",
+        "width_of_10_percent",
+        "width_of_20_percent",
+        "width_of_30_percent",
+        "width_of_40_percent",
+        "width_of_50_percent",
+        "width_of_60_percent",
+        "width_of_70_percent",
+        "width_of_80_percent",
+        "width_of_90_percent",
+        "width_of_95_percent",
+        "width_of_99_percent"
+      ],
+      "title": "InsertSizeMetrics",
+      "type": "object"
+    },
+    "MeanQualityByCycle": {
+      "additionalProperties": false,
+      "properties": {
+        "cycle": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Cycle",
+          "type": "array"
+        },
+        "mean_quality": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Mean Quality",
+          "type": "array"
+        }
+      },
+      "required": [
+        "cycle",
+        "mean_quality"
+      ],
+      "title": "MeanQualityByCycle",
+      "type": "object"
+    },
+    "QualityScoreDistribution": {
+      "additionalProperties": false,
+      "properties": {
+        "COUNT_OF_Q": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Count Of Q",
+          "type": "array"
+        },
+        "Q": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Q",
+          "type": "array"
+        }
+      },
+      "required": [
+        "Q",
+        "COUNT_OF_Q"
+      ],
+      "title": "QualityScoreDistribution",
+      "type": "object"
+    },
+    "QualityYield": {
+      "additionalProperties": false,
+      "properties": {
+        "pf_bases": {
+          "title": "Pf Bases",
+          "type": "integer"
+        },
+        "pf_q20_bases": {
+          "title": "Pf Q20 Bases",
+          "type": "integer"
+        },
+        "pf_q20_equivalent_yield": {
+          "title": "Pf Q20 Equivalent Yield",
+          "type": "integer"
+        },
+        "pf_q30_bases": {
+          "title": "Pf Q30 Bases",
+          "type": "integer"
+        },
+        "pf_reads": {
+          "title": "Pf Reads",
+          "type": "integer"
+        },
+        "q20_bases": {
+          "title": "Q20 Bases",
+          "type": "integer"
+        },
+        "q20_equivalent_yield": {
+          "title": "Q20 Equivalent Yield",
+          "type": "integer"
+        },
+        "q30_bases": {
+          "title": "Q30 Bases",
+          "type": "integer"
+        },
+        "total_bases": {
+          "title": "Total Bases",
+          "type": "integer"
+        },
+        "total_reads": {
+          "title": "Total Reads",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total_reads",
+        "pf_reads",
+        "total_bases",
+        "pf_bases",
+        "q20_bases",
+        "pf_q20_bases",
+        "q30_bases",
+        "pf_q30_bases",
+        "q20_equivalent_yield",
+        "pf_q20_equivalent_yield"
+      ],
+      "title": "QualityYield",
+      "type": "object"
+    },
+    "SummaryStats": {
+      "additionalProperties": false,
+      "properties": {
+        "duplicate_reads": {
+          "title": "Duplicate Reads",
+          "type": "integer"
+        },
+        "duplication_rate": {
+          "title": "Duplication Rate",
+          "type": "number"
+        },
+        "estimated_library_size": {
+          "title": "Estimated Library Size",
+          "type": "integer"
+        },
+        "optical_duplicates": {
+          "title": "Optical Duplicates",
+          "type": "integer"
+        },
+        "total_reads": {
+          "title": "Total Reads",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total_reads",
+        "duplication_rate",
+        "estimated_library_size",
+        "duplicate_reads",
+        "optical_duplicates"
+      ],
+      "title": "SummaryStats",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Final exported per-sample QC JSON.",
+  "properties": {
+    "bait_bias_summaries": {
+      "$ref": "#/$defs/ArtifactSummaries"
+    },
+    "base_distribution_by_cycle": {
+      "$ref": "#/$defs/BaseDistributionByCycle"
+    },
+    "conversion_log": {
+      "$ref": "#/$defs/ConversionLog"
+    },
+    "duplication_histogram": {
+      "$ref": "#/$defs/DuplicationHistogram"
+    },
+    "duplication_metrics": {
+      "items": {
+        "$ref": "#/$defs/DuplicationMetric"
+      },
+      "title": "Duplication Metrics",
+      "type": "array"
+    },
+    "error_summaries": {
+      "$ref": "#/$defs/ErrorSummaries"
+    },
+    "gc_bias_details": {
+      "$ref": "#/$defs/GCBiasDetails"
+    },
+    "gc_bias_summary": {
+      "$ref": "#/$defs/GCBiasSummary"
+    },
+    "guardrails": {
+      "$ref": "#/$defs/GuardrailReport"
+    },
+    "insert_size_histogram": {
+      "$ref": "#/$defs/InsertSizeHistogram"
+    },
+    "insert_size_metrics": {
+      "$ref": "#/$defs/InsertSizeMetrics"
+    },
+    "mean_quality_by_cycle": {
+      "$ref": "#/$defs/MeanQualityByCycle"
+    },
+    "pre_adapter_summaries": {
+      "$ref": "#/$defs/ArtifactSummaries"
+    },
+    "quality_score_distribution": {
+      "$ref": "#/$defs/QualityScoreDistribution"
+    },
+    "quality_yield": {
+      "$ref": "#/$defs/QualityYield"
+    },
+    "sample_id": {
+      "title": "Sample Id",
+      "type": "string"
+    },
+    "summary_stats": {
+      "$ref": "#/$defs/SummaryStats"
+    }
+  },
+  "required": [
+    "sample_id",
+    "quality_yield",
+    "mean_quality_by_cycle",
+    "quality_score_distribution",
+    "base_distribution_by_cycle",
+    "gc_bias_summary",
+    "gc_bias_details",
+    "insert_size_metrics",
+    "insert_size_histogram",
+    "error_summaries",
+    "pre_adapter_summaries",
+    "bait_bias_summaries",
+    "conversion_log",
+    "duplication_metrics",
+    "duplication_histogram",
+    "summary_stats",
+    "guardrails"
+  ],
+  "title": "ExportedSampleQCPayload",
+  "type": "object"
+}

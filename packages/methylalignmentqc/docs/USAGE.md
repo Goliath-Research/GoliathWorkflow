@@ -19,7 +19,7 @@ Typical runs require:
 ## Typical Outputs
 
 The package writes one structured JSON summary per sample and can optionally validate those files against the package schema.
-When a sample directory contains a Parabricks metrics JSON (typically `{sample_name}.json`), `methyl-qc` enriches that same output file with a top-level `guardrails` block in the same pass.
+When a sample directory contains the canonical Parabricks metrics JSON file `{sample_name}.json`, `methyl-qc` enriches that same output file with a top-level `guardrails` block in the same pass.
 
 For initial metrics extraction workflows, use the package CLI for normalized per-sample QC JSON outputs; the standalone `wgbs_parabricks_qc.py` utility can be used as an additional pre-extraction guardrail check for WGBS Parabricks JSON metrics.
 
@@ -40,3 +40,13 @@ If you already have historical JSON outputs with older guardrail fields (`thresh
   - `methyl-qc-migrate-guardrails /path/to/alignment_qc_jsons --apply`
 - Apply with per-file backups:
   - `methyl-qc-migrate-guardrails /path/to/alignment_qc_jsons --apply --backup`
+
+## Export JSON Schema
+
+Export the strict, versionable JSON Schema generated from the Pydantic export model:
+
+- `methyl-qc-export-schema`
+
+This writes:
+
+- `packages/methylalignmentqc/schemas/exported_sample_qc.schema.json`
