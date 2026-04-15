@@ -22,6 +22,7 @@ dev = [
 [project.scripts]
 methyl-alignment-qc = "methyl_alignment_qc.cli.main:main"
 methyl-qc = "methyl_alignment_qc.cli.main:main"
+methyl-qc-migrate-guardrails = "methyl_alignment_qc.utils.guardrail_migration:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
