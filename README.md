@@ -137,6 +137,13 @@ For model backends that use `feature_mode=observed_hybrid`, second-stage feature
 
 Important evaluation boundary: balanced accuracy is computed only on labeled validation cohorts. Blind prediction outputs remain deployment-facing inference artifacts and should not be interpreted as direct balanced-accuracy estimates.
 
+Recommended sequence:
+
+1. Validate model quality on labeled train/test splits (for example 80/20) and Monte Carlo runs.
+2. Select the best backend/model using labeled metrics.
+3. Retrain final model on all labeled data for deployment.
+4. Run blind inference only after the final model is frozen.
+
 ## Strategy Playbooks
 
 ## 1) Initial research

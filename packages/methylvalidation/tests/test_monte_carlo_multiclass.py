@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 
 from methyl_validation.config import MonteCarloConfig
-from methyl_validation.predictor_policy import assert_monte_carlo_predictor_allowed, monte_carlo_rejects_blind_predictor
+from methyl_validation.predictor_policy import (
+    assert_monte_carlo_predictor_allowed,
+    assert_validation_predictor_accuracy_mode,
+    monte_carlo_rejects_blind_predictor,
+)
 from methyl_validation.project_gen import (
     generate_run_project_hierarchical_multiclass,
     infer_monte_carlo_layout,
@@ -186,6 +190,8 @@ def test_predictor_policy_blind():
     assert not monte_carlo_rejects_blind_predictor({})
     with pytest.raises(ValueError, match="blind"):
         assert_monte_carlo_predictor_allowed({"blind": {"groups": [{"label": "x"}]}})
+    with pytest.raises(ValueError, match="labeled test/holdout cohorts"):
+        assert_validation_predictor_accuracy_mode({"blind": {"groups": [{"label": "x"}]}})
 
 
 def test_hierarchical_mc_run_project_predictor_points_at_testing_csvs(tmp_path: Path):

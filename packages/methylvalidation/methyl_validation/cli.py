@@ -27,7 +27,7 @@ from rich.progress import (
 from methyl_utils import load_project
 
 from .config import MonteCarloConfig, assert_production_model_build_allowed
-from .predictor_policy import assert_monte_carlo_predictor_allowed
+from .predictor_policy import assert_validation_predictor_accuracy_mode
 from .pipeline_runner import (
     run_post_model_validation_binary,
     run_post_model_validation_multiclass,
@@ -1614,7 +1614,7 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        assert_monte_carlo_predictor_allowed(
+        assert_validation_predictor_accuracy_mode(
             base_project_config.get_step_config("predictor") or {}
         )
     except ValueError as e:

@@ -94,6 +94,17 @@ methyl-validation --project configs/my_project.json --post-model-validation
 - Exports `metrics_distributions_plotly.html` with KDE and ECDF for each metric.
 - Uses the same stratified splitting logic as Workflow 1 for consistency.
 
+### Accuracy confirmation vs blind inference
+
+Use this order to keep model-quality evidence valid:
+
+1. Train/evaluate with labeled splits (for example 80% train, 20% test) and Monte Carlo iterations.
+2. Select the best backend by labeled metrics (`balanced_accuracy` default).
+3. Retrain final production model on all available labeled data (`--select-best-model` -> final production build).
+4. Use blind cohorts only after that final build for real-world inference.
+
+Blind predictions are intentionally not used to claim accuracy because they do not include ground-truth labels.
+
 ### Recommended backend-selection defaults (PCa)
 
 For prostate cancer stage workflows similar to `Healthy_vs_PCa1-4-CG`, use:
