@@ -49,6 +49,8 @@ def test_build_model_feature_bundle_and_load(tmp_path: Path, monkeypatch):
             "context": ["CG", "CG", "CHG"],
             "effect_size": [0.7, 0.4, 0.9],
             "weight": [0.8, 0.3, 1.0],
+            "gene_name": ["TP53", "TP53", "MYC"],
+            "dmr_region": ["R1", "R1", "R2"],
         }
     )
     dmp_csv = det / "dmps-1-classifier.csv"
@@ -65,7 +67,15 @@ def test_build_model_feature_bundle_and_load(tmp_path: Path, monkeypatch):
 
     out_df = model_bundle.load_bundle_dmp_index(tmp_path / "bundle" / "model_feature_bundle.h5")
     assert len(out_df) == 3
-    assert set(out_df.columns) >= {"chromosome", "position", "context", "weight", "comparison_label"}
+    assert set(out_df.columns) >= {
+        "chromosome",
+        "position",
+        "context",
+        "weight",
+        "comparison_label",
+        "gene_name",
+        "dmr_region",
+    }
 
 
 def test_build_model_feature_bundle_loads_all_chromosome_csvs(tmp_path: Path, monkeypatch):
@@ -398,3 +408,7 @@ def test_tabular_observed_hybrid_train_predict_schema_parity(tmp_path: Path, mon
     pred_df = pd.read_csv(tmp_path / "predict" / "predictions.csv")
     assert {"obs_fraction", "low_evidence", "prediction_evidence_filtered"}.issubset(pred_df.columns)
     assert pred_df["low_evidence"].astype(bool).all()
+    with open(tmp_path / "predict" / "feature_family_ablation.json", encoding="utf-8") as f:
+        ablation = json.load(f)
+    assert ablation["backend"] == "tabular_sklearn"
+    assert "balanced_accuracy" in ablation

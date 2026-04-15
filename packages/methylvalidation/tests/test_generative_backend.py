@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+import json
 
 import numpy as np
 import pandas as pd
@@ -436,4 +437,8 @@ def test_generative_observed_hybrid_train_predict_schema_parity(tmp_path: Path, 
     pred_df = pd.read_csv(tmp_path / "predict" / "predictions.csv")
     assert {"obs_fraction", "low_evidence", "prediction_evidence_filtered"}.issubset(pred_df.columns)
     assert pred_df["low_evidence"].astype(bool).all()
+    with open(tmp_path / "predict" / "feature_family_ablation.json", encoding="utf-8") as f:
+        ablation = json.load(f)
+    assert ablation["backend"] == "generative_hybrid"
+    assert "balanced_accuracy" in ablation
 

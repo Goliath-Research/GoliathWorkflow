@@ -78,7 +78,14 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **`--post-model-validation`**: runs MC holdout evaluation against frozen production artifacts only (no retraining). `ecdf` dispatches predictor-only runs; `tabular_sklearn` and `generative_hybrid` dispatch frozen model inference via backend predictors.
 - **`--predictor-only`**: MC iterations that run only `methyl-predictor` using frozen artifacts.
 
-ECDF/Bayesian remains DMP-only by design. Covariates are fused only in `tabular_sklearn` and `generative_hybrid` backends through a shared preprocessing contract that supports numeric, ordinal (ordered code maps), and categorical features with persisted train/inference schema.
+ECDF/Bayesian remains DMP-only by design at the first stage. The optional ECDF second stage and the `observed_hybrid` path used by tabular/generative backends now share a unified disease-feature builder with explicit feature-family toggles:
+
+- DMP-derived global/quantile/disease-comparison summaries
+- DMR/region aggregates
+- Gene-level aggregates
+- Chromosome-level aggregates
+
+All backends persist observed-feature schema + fill values, and prediction enforces strict parity via `verify_feature_schema`. This avoids silent train/predict drift while allowing disease-aware second-stage feature families beyond chromosome-only summaries.
 
 The main components are:
 
@@ -182,6 +189,7 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 | **model_mc/backend_ranking.csv** | Cross-backend ranking by configured metric/statistic. |
 | **production/selected_backend.json** | Selected backend and ranking metadata for final all-data training decision. |
 | **post_model_validation/metrics_distributions_plotly.html** | Plotly dashboard with KDE (density) and ECDF (cumulative) panels for each numeric metric. |
+| **predictors/feature_family_ablation.json** | Ablation-oriented scaffold emitted for observed-hybrid paths (active families + recommended matrix for BA comparisons). |
 | **stability/dmp_frequency_by_chromosome.html** | Combined Plotly stability chart with per-chromosome traces for both candidate (`all`) and final (`selected`) DMPs. X=frequency (% of runs), Y=DMP count. |
 | **stability/dmp_frequency_chr_<chrom>.html** | Per-chromosome Plotly charts with `all` vs `selected` count curves over frequency (%). |
 | **stability/stability_summary.json** | Stability summary now includes `detector_parameters` extracted from `detections/**/results-*.json`: per-run records plus aggregated numeric/categorical distributions for minimal detector/filter fields (`n_dmps_exported`, `total_statistical_dmps`, `total_biological_dmps`, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). |

@@ -94,3 +94,36 @@ def test_verify_feature_schema_raises_on_mismatch():
             ["a", "x", "c"],
             context="unit-test",
         )
+
+
+def test_observed_feature_builder_adds_disease_dmr_gene_families(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_pca1", "healthy_vs_pca2", "healthy_vs_pca1", "healthy_vs_pca2"],
+            "chromosome": ["1", "1", "2", "2"],
+            "context": ["CG", "CG", "CG", "CG"],
+            "position": [100, 120, 220, 260],
+            "weight": [1.0, 0.9, 0.8, 0.7],
+            "effect_size": [1.0, 0.9, 0.8, 0.7],
+            "gene_name": ["TP53", "BRCA1", "TP53", "MYC"],
+            "dmr_region": ["R1", "R2", "R1", "R3"],
+        }
+    )
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        ["/tmp/S1", "/tmp/S2"],
+        dmp_df,
+        max_dmr_features=2,
+        max_gene_features=2,
+    )
+    assert "disease_healthy_vs_pca1_weighted_mean" in feat.feature_names
+    assert "dmr_R1_weighted_mean" in feat.feature_names
+    assert "gene_TP53_weighted_mean" in feat.feature_names
+    assert feat.report["feature_families"]["dmr"] is True
+    assert feat.report["feature_families"]["gene"] is True
+    assert len(feat.report["selected_dmrs"]) == 2
+    assert len(feat.report["selected_genes"]) == 2

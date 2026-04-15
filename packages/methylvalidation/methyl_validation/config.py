@@ -223,6 +223,39 @@ class MonteCarloConfig(BaseModel):
             "Used for reporting/optional rejection in backend outputs."
         ),
     )
+    observed_feature_include_dmp: bool = Field(
+        default=True,
+        description="Enable DMP-derived observed_hybrid features (global, quantiles, and disease comparison summaries).",
+    )
+    observed_feature_include_chromosome: bool = Field(
+        default=True,
+        description="Enable chromosome-level observed_hybrid summaries.",
+    )
+    observed_feature_include_dmr: bool = Field(
+        default=True,
+        description="Enable DMR/region-level observed_hybrid summaries.",
+    )
+    observed_feature_include_gene: bool = Field(
+        default=True,
+        description="Enable gene-level observed_hybrid summaries when gene metadata is available.",
+    )
+    observed_feature_dmr_window_bp: int = Field(
+        default=100000,
+        ge=1,
+        description=(
+            "Fallback DMR window size (bp) used to construct region identifiers when explicit DMR labels are missing."
+        ),
+    )
+    observed_feature_max_dmrs: int = Field(
+        default=32,
+        ge=0,
+        description="Maximum number of DMR regions retained in observed_hybrid schema (top-weighted).",
+    )
+    observed_feature_max_genes: int = Field(
+        default=32,
+        ge=0,
+        description="Maximum number of genes retained in observed_hybrid schema (top-weighted).",
+    )
     ecdf_second_stage_enabled: bool = Field(
         default=False,
         description=(

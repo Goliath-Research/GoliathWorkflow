@@ -104,6 +104,17 @@ flowchart TD
 - Biology analysis: mapper/enricher/progression outputs
 - Model artifacts: `.../monte_carlo_runs/production/classifiers/` and `.../production/predictors/`
 
+### Stage-2 disease feature families (all model backends)
+
+When `feature_mode` is `observed_hybrid`, backend training can now use a unified second-stage feature contract:
+
+- **DMP-derived summaries** (global/quantiles + disease-comparison aggregates)
+- **DMR/region aggregates** (from explicit region metadata or fallback genomic windows)
+- **Gene aggregates** (when DMP rows contain gene annotations)
+- **Chromosome aggregates** (optional; still supported but no longer the only aggregate family)
+
+For model-evaluation runs, backend predictor outputs now also include `feature_family_ablation.json`, which records active feature families and a recommended ablation matrix (`baseline`, `+DMP`, `+DMR`, `+gene`, `all`) to structure balanced-accuracy comparisons.
+
 ---
 
 ## 4) Search for the best model

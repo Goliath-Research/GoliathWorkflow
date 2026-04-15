@@ -18,15 +18,20 @@ def _base_config(tmp_path: Path, enabled: bool) -> MonteCarloConfig:
             "output_base": str(tmp_path),
             "model_backend": "ecdf",
             "ecdf_second_stage_enabled": enabled,
+            "observed_feature_include_dmr": True,
+            "observed_feature_include_gene": True,
+            "observed_feature_max_dmrs": 7,
+            "observed_feature_max_genes": 9,
         }
     )
 
 
 def test_build_model_backend_steps_ecdf_includes_second_stage(tmp_path: Path, monkeypatch):
-    called = {"n": 0}
+    called = {"n": 0, "kwargs": None}
 
     def _fake_second_stage(**kwargs):
         called["n"] += 1
+        called["kwargs"] = kwargs
         return {"ok": True, "predictor_output_dir": str(kwargs["predictor_output_dir"])}
 
     monkeypatch.setattr("methyl_validation.ecdf_second_stage.train_and_apply_ecdf_second_stage", _fake_second_stage)
@@ -45,6 +50,8 @@ def test_build_model_backend_steps_ecdf_includes_second_stage(tmp_path: Path, mo
     payload = json.loads(out)
     assert payload["ok"] is True
     assert called["n"] == 1
+    assert called["kwargs"]["max_dmr_features"] == 7
+    assert called["kwargs"]["max_gene_features"] == 9
 
 
 def test_build_model_backend_steps_ecdf_second_stage_disabled(tmp_path: Path):

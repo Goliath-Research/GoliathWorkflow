@@ -79,6 +79,27 @@ def build_model_backend_steps(
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
+                    observed_feature_include_dmp=(
+                        config.observed_feature_include_dmp if config is not None else True
+                    ),
+                    observed_feature_include_chromosome=(
+                        config.observed_feature_include_chromosome if config is not None else True
+                    ),
+                    observed_feature_include_dmr=(
+                        config.observed_feature_include_dmr if config is not None else True
+                    ),
+                    observed_feature_include_gene=(
+                        config.observed_feature_include_gene if config is not None else True
+                    ),
+                    observed_feature_dmr_window_bp=(
+                        config.observed_feature_dmr_window_bp if config is not None else 100000
+                    ),
+                    observed_feature_max_dmrs=(
+                        config.observed_feature_max_dmrs if config is not None else 32
+                    ),
+                    observed_feature_max_genes=(
+                        config.observed_feature_max_genes if config is not None else 32
+                    ),
                 )
                 return 0, f"Tabular model trained: {model_path}", ""
             except Exception as e:
@@ -168,6 +189,27 @@ def build_model_backend_steps(
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
+                    observed_feature_include_dmp=(
+                        config.observed_feature_include_dmp if config is not None else True
+                    ),
+                    observed_feature_include_chromosome=(
+                        config.observed_feature_include_chromosome if config is not None else True
+                    ),
+                    observed_feature_include_dmr=(
+                        config.observed_feature_include_dmr if config is not None else True
+                    ),
+                    observed_feature_include_gene=(
+                        config.observed_feature_include_gene if config is not None else True
+                    ),
+                    observed_feature_dmr_window_bp=(
+                        config.observed_feature_dmr_window_bp if config is not None else 100000
+                    ),
+                    observed_feature_max_dmrs=(
+                        config.observed_feature_max_dmrs if config is not None else 32
+                    ),
+                    observed_feature_max_genes=(
+                        config.observed_feature_max_genes if config is not None else 32
+                    ),
                 )
                 return 0, f"Generative model trained: {model_path}", ""
             except Exception as e:
@@ -211,6 +253,15 @@ def build_model_backend_steps(
                 max_dmps=(config.tabular_max_dmps if config is not None else 5000),
                 quantiles=(config.observed_feature_quantiles if config is not None else None),
                 min_coverage=(config.observed_feature_min_coverage if config is not None else 1),
+                include_dmp_features=(config.observed_feature_include_dmp if config is not None else True),
+                include_chromosome_features=(
+                    config.observed_feature_include_chromosome if config is not None else True
+                ),
+                include_dmr_features=(config.observed_feature_include_dmr if config is not None else True),
+                include_gene_features=(config.observed_feature_include_gene if config is not None else True),
+                dmr_window_bp=(config.observed_feature_dmr_window_bp if config is not None else 100000),
+                max_dmr_features=(config.observed_feature_max_dmrs if config is not None else 32),
+                max_gene_features=(config.observed_feature_max_genes if config is not None else 32),
             )
             return 0, json.dumps(out), ""
         except Exception as e:

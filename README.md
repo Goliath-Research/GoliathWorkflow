@@ -128,6 +128,15 @@ Implemented pipeline boundaries in `packages/methylvalidation/methyl_validation/
 - Model mode: `methyl-classifier` -> `methyl-predictor`
 - Predictor-only mode: `methyl-predictor` using frozen production artifacts
 
+For model backends that use `feature_mode=observed_hybrid`, second-stage feature construction now supports disease-aware families across all backends (`ecdf` second stage, `tabular_sklearn`, `generative_hybrid`):
+
+- DMP-derived summaries (global/quantiles + disease-comparison aggregates)
+- DMR/region aggregates
+- Gene aggregates
+- Chromosome aggregates (optional, not mandatory)
+
+Important evaluation boundary: balanced accuracy is computed only on labeled validation cohorts. Blind prediction outputs remain deployment-facing inference artifacts and should not be interpreted as direct balanced-accuracy estimates.
+
 ## Strategy Playbooks
 
 ## 1) Initial research

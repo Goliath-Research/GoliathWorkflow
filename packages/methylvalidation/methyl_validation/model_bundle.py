@@ -114,6 +114,16 @@ def _load_dmps_table(
         raise ValueError(f"DMP CSV missing required columns {missing}: {csv_path}")
     if "context" not in df.columns:
         df["context"] = "CG"
+    gene_col = None
+    for candidate in ("gene_name", "gene", "gene_symbol", "symbol", "nearest_gene"):
+        if candidate in df.columns:
+            gene_col = candidate
+            break
+    dmr_col = None
+    for candidate in ("dmr_region", "region_id", "dmr_id", "region", "dmr"):
+        if candidate in df.columns:
+            dmr_col = candidate
+            break
     if weight_column not in df.columns:
         if "effect_size" in df.columns:
             df[weight_column] = pd.to_numeric(df["effect_size"], errors="coerce").fillna(0.0)
@@ -127,6 +137,8 @@ def _load_dmps_table(
             "context": df["context"].astype(str),
             "effect_size": pd.to_numeric(df.get("effect_size", np.nan), errors="coerce").astype(float),
             "weight": pd.to_numeric(df[weight_column], errors="coerce").fillna(0.0).astype(float),
+            "gene_name": (df[gene_col].astype(str) if gene_col is not None else "unknown"),
+            "dmr_region": (df[dmr_col].astype(str) if dmr_col is not None else "unknown"),
             "source_csv": str(csv_path.absolute()),
         }
     )
@@ -162,6 +174,8 @@ def _write_bundle_h5(bundle_h5: Path, dmp_df: pd.DataFrame, class_names: List[st
             compression="gzip",
             compression_opts=4,
         )
+        _h5_write_str(g, "gene_name", dmp_df["gene_name"].fillna("unknown").astype(str).tolist())
+        _h5_write_str(g, "dmr_region", dmp_df["dmr_region"].fillna("unknown").astype(str).tolist())
         _h5_write_str(g, "source_csv", dmp_df["source_csv"].astype(str).tolist())
         _h5_write_str(f, "classes", [str(x) for x in class_names])
 
@@ -179,6 +193,16 @@ def load_bundle_dmp_index(bundle_h5: str | Path) -> pd.DataFrame:
                 "context": _decode_bytes(np.asarray(g["context"])).astype(str),
                 "effect_size": np.asarray(g["effect_size"], dtype=np.float32),
                 "weight": np.asarray(g["weight"], dtype=np.float32),
+                "gene_name": (
+                    _decode_bytes(np.asarray(g["gene_name"])).astype(str)
+                    if "gene_name" in g
+                    else np.asarray(["unknown"] * len(np.asarray(g["position"])), dtype=object)
+                ),
+                "dmr_region": (
+                    _decode_bytes(np.asarray(g["dmr_region"])).astype(str)
+                    if "dmr_region" in g
+                    else np.asarray(["unknown"] * len(np.asarray(g["position"])), dtype=object)
+                ),
                 "source_csv": _decode_bytes(np.asarray(g["source_csv"])).astype(str),
             }
         )
@@ -271,7 +295,17 @@ def build_model_feature_bundle(
         dmp_count=int(len(dmp_df)),
         classes=classes,
         comparisons=cmp_items,
-        dmp_columns=["comparison_label", "chromosome", "position", "context", "effect_size", "weight", "source_csv"],
+        dmp_columns=[
+            "comparison_label",
+            "chromosome",
+            "position",
+            "context",
+            "effect_size",
+            "weight",
+            "gene_name",
+            "dmr_region",
+            "source_csv",
+        ],
         metadata=extra_metadata or {},
     )
     manifest_path = out_dir / BUNDLE_MANIFEST_NAME

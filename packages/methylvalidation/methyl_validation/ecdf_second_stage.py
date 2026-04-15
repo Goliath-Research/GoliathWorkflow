@@ -12,6 +12,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import balanced_accuracy_score
 
 from methyl_predictor.project_resolver import resolve_predictor_config
 
@@ -141,6 +142,13 @@ def train_and_apply_ecdf_second_stage(
     max_dmps: int = 5000,
     quantiles: Optional[List[float]] = None,
     min_coverage: int = 1,
+    include_dmp_features: bool = True,
+    include_chromosome_features: bool = True,
+    include_dmr_features: bool = True,
+    include_gene_features: bool = True,
+    dmr_window_bp: int = 100000,
+    max_dmr_features: int = 32,
+    max_gene_features: int = 32,
 ) -> Dict[str, Any]:
     project_json = Path(project_json).resolve()
     predictor_output_dir = Path(predictor_output_dir).resolve()
@@ -172,6 +180,13 @@ def train_and_apply_ecdf_second_stage(
         dmp_df,
         quantiles=quantiles,
         min_coverage=int(max(1, min_coverage)),
+        include_dmp_features=bool(include_dmp_features),
+        include_chromosome_features=bool(include_chromosome_features),
+        include_dmr_features=bool(include_dmr_features),
+        include_gene_features=bool(include_gene_features),
+        dmr_window_bp=int(max(1, dmr_window_bp)),
+        max_dmr_features=int(max(0, max_dmr_features)),
+        max_gene_features=int(max(0, max_gene_features)),
     )
     X_obs = np.asarray(feat.X, dtype=np.float32)
     fill_values = fit_feature_fill_values(X_obs)
@@ -190,6 +205,7 @@ def train_and_apply_ecdf_second_stage(
     clf.fit(X, y)
     probs = clf.predict_proba(np.concatenate([X_prob, X_obs], axis=1))
     y_hat = np.asarray(np.argmax(probs, axis=1), dtype=np.int32)
+    refined_balanced_accuracy = float(balanced_accuracy_score(y, y_hat[valid])) if int(np.sum(valid)) > 0 else None
 
     df["prob_refined_class0"] = probs[:, 0].astype(float)
     df["prob_refined_class1"] = probs[:, 1].astype(float)
@@ -212,6 +228,14 @@ def train_and_apply_ecdf_second_stage(
         "max_dmps": int(max_dmps),
         "quantiles": [float(q) for q in (feat.report.get("quantiles") or [])],
         "min_coverage": int(max(1, min_coverage)),
+        "refined_balanced_accuracy_labeled_rows": refined_balanced_accuracy,
+        "observed_feature_include_dmp": bool(include_dmp_features),
+        "observed_feature_include_chromosome": bool(include_chromosome_features),
+        "observed_feature_include_dmr": bool(include_dmr_features),
+        "observed_feature_include_gene": bool(include_gene_features),
+        "observed_feature_dmr_window_bp": int(max(1, dmr_window_bp)),
+        "observed_feature_max_dmrs": int(max(0, max_dmr_features)),
+        "observed_feature_max_genes": int(max(0, max_gene_features)),
     }
     verify_feature_schema(
         feat.feature_names,
@@ -221,6 +245,26 @@ def train_and_apply_ecdf_second_stage(
     meta_path = classifier_output_dir / "ecdf-second-stage-metadata.json"
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
+    ablation_report = {
+        "backend": "ecdf",
+        "stage": "second_stage",
+        "balanced_accuracy_labeled_rows": refined_balanced_accuracy,
+        "active_feature_families": {
+            "dmp": bool(include_dmp_features),
+            "chromosome": bool(include_chromosome_features),
+            "dmr": bool(include_dmr_features),
+            "gene": bool(include_gene_features),
+        },
+        "recommended_ablation_matrix": [
+            {"name": "baseline", "include_dmp": False, "include_dmr": False, "include_gene": False},
+            {"name": "plus_dmp", "include_dmp": True, "include_dmr": False, "include_gene": False},
+            {"name": "plus_dmr", "include_dmp": False, "include_dmr": True, "include_gene": False},
+            {"name": "plus_gene", "include_dmp": False, "include_dmr": False, "include_gene": True},
+            {"name": "all", "include_dmp": True, "include_dmr": True, "include_gene": True},
+        ],
+    }
+    with open(classifier_output_dir / "feature_family_ablation.json", "w", encoding="utf-8") as f:
+        json.dump(ablation_report, f, indent=2)
 
     return {
         "model_path": str(model_path),

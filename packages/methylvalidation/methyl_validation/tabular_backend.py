@@ -250,6 +250,13 @@ def train_tabular_model(
     observed_feature_quantiles: Optional[List[float]] = None,
     observed_feature_min_coverage: int = 1,
     observed_feature_min_obs_fraction: float = 0.0,
+    observed_feature_include_dmp: bool = True,
+    observed_feature_include_chromosome: bool = True,
+    observed_feature_include_dmr: bool = True,
+    observed_feature_include_gene: bool = True,
+    observed_feature_dmr_window_bp: int = 100000,
+    observed_feature_max_dmrs: int = 32,
+    observed_feature_max_genes: int = 32,
 ) -> Path:
     with _project_cwd(project_json):
         project = load_project(project_json)
@@ -279,6 +286,13 @@ def train_tabular_model(
             dmp_df,
             quantiles=observed_feature_quantiles,
             min_coverage=int(max(1, observed_feature_min_coverage)),
+            include_dmp_features=bool(observed_feature_include_dmp),
+            include_chromosome_features=bool(observed_feature_include_chromosome),
+            include_dmr_features=bool(observed_feature_include_dmr),
+            include_gene_features=bool(observed_feature_include_gene),
+            dmr_window_bp=int(max(1, observed_feature_dmr_window_bp)),
+            max_dmr_features=int(max(0, observed_feature_max_dmrs)),
+            max_gene_features=int(max(0, observed_feature_max_genes)),
         )
         X = np.asarray(feat.X, dtype=np.float32)
         feature_fill_values = fit_feature_fill_values(X)
@@ -337,6 +351,13 @@ def train_tabular_model(
         "observed_feature_quantiles": observed_feature_quantiles_out,
         "observed_feature_min_coverage": int(max(1, observed_feature_min_coverage)),
         "observed_feature_min_obs_fraction": float(max(0.0, min(1.0, observed_feature_min_obs_fraction))),
+        "observed_feature_include_dmp": bool(observed_feature_include_dmp),
+        "observed_feature_include_chromosome": bool(observed_feature_include_chromosome),
+        "observed_feature_include_dmr": bool(observed_feature_include_dmr),
+        "observed_feature_include_gene": bool(observed_feature_include_gene),
+        "observed_feature_dmr_window_bp": int(max(1, observed_feature_dmr_window_bp)),
+        "observed_feature_max_dmrs": int(max(0, observed_feature_max_dmrs)),
+        "observed_feature_max_genes": int(max(0, observed_feature_max_genes)),
         "observed_feature_fill_values": (
             [float(v) for v in feature_fill_values.tolist()] if feature_fill_values is not None else None
         ),
@@ -401,6 +422,13 @@ def predict_tabular_model_from_project(
             dmp_df,
             quantiles=meta.get("observed_feature_quantiles") or None,
             min_coverage=int(meta.get("observed_feature_min_coverage") or 1),
+            include_dmp_features=bool(meta.get("observed_feature_include_dmp", True)),
+            include_chromosome_features=bool(meta.get("observed_feature_include_chromosome", True)),
+            include_dmr_features=bool(meta.get("observed_feature_include_dmr", True)),
+            include_gene_features=bool(meta.get("observed_feature_include_gene", True)),
+            dmr_window_bp=int(meta.get("observed_feature_dmr_window_bp", 100000)),
+            max_dmr_features=int(meta.get("observed_feature_max_dmrs", 32)),
+            max_gene_features=int(meta.get("observed_feature_max_genes", 32)),
         )
         verify_feature_schema(
             feat.feature_names,
@@ -450,6 +478,27 @@ def predict_tabular_model_from_project(
     metrics_path = out_dir / "validation_metrics.json"
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
+    if feature_mode == "observed_hybrid":
+        ablation_report = {
+            "backend": "tabular_sklearn",
+            "feature_mode": feature_mode,
+            "balanced_accuracy": metrics.get("balanced_accuracy"),
+            "active_feature_families": {
+                "dmp": bool(meta.get("observed_feature_include_dmp", True)),
+                "chromosome": bool(meta.get("observed_feature_include_chromosome", True)),
+                "dmr": bool(meta.get("observed_feature_include_dmr", True)),
+                "gene": bool(meta.get("observed_feature_include_gene", True)),
+            },
+            "recommended_ablation_matrix": [
+                {"name": "baseline", "include_dmp": False, "include_dmr": False, "include_gene": False},
+                {"name": "plus_dmp", "include_dmp": True, "include_dmr": False, "include_gene": False},
+                {"name": "plus_dmr", "include_dmp": False, "include_dmr": True, "include_gene": False},
+                {"name": "plus_gene", "include_dmp": False, "include_dmr": False, "include_gene": True},
+                {"name": "all", "include_dmp": True, "include_dmr": True, "include_gene": True},
+            ],
+        }
+        with open(out_dir / "feature_family_ablation.json", "w", encoding="utf-8") as f:
+            json.dump(ablation_report, f, indent=2)
 
     recs: List[Dict[str, Any]] = []
     min_obs = float(

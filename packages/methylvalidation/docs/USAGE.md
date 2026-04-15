@@ -242,6 +242,25 @@ Example (`step_config.validation`) using all covariate types:
 }
 ```
 
+### Disease-feature controls for `observed_hybrid`
+
+When `step_config.validation.feature_mode` is `observed_hybrid`, you can explicitly control which disease-aware feature families are included:
+
+- `observed_feature_include_dmp` (default `true`): DMP-derived global/quantile and disease-comparison summaries
+- `observed_feature_include_dmr` (default `true`): DMR/region aggregates
+- `observed_feature_include_gene` (default `true`): gene-level aggregates
+- `observed_feature_include_chromosome` (default `true`): chromosome-level summaries
+- `observed_feature_dmr_window_bp` (default `100000`): fallback region window size when explicit DMR labels are absent
+- `observed_feature_max_dmrs` / `observed_feature_max_genes` (default `32`): cap the number of top-weighted regions/genes retained in schema
+
+These options are used by all three model backends in model-build flows:
+
+- `ecdf` second-stage refinement (`ecdf-second-stage`)
+- `tabular_sklearn`
+- `generative_hybrid`
+
+`methyl-validation` enforces train/predict schema parity via stored feature names + fill values in backend metadata.
+
 ### Optional: `step_config.progression`
 
 `methyl-validation` reads progression settings from `step_config.progression` in the project JSON when running `--freeze`:
@@ -292,6 +311,7 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `model_mc/<backend>/run_000N/` | Per-iteration backend model outputs (predictor/model artifacts and logs) produced from shared runs. |
 | `model_mc/<backend>/all_metrics.csv` | One row per successful model-MC iteration for that backend. |
 | `model_mc/<backend>/metrics_summary.json` | Per-backend empirical distribution summary. |
+| `model_mc/<backend>/run_000N/predictors/feature_family_ablation.json` | Feature-family ablation scaffold with current balanced accuracy and recommended matrix (`baseline`, `+DMP`, `+DMR`, `+gene`, `all`). |
 | `model_mc/backend_ranking.csv` | Cross-backend ranking by `--selection-metric` and `--selection-stat`. |
 | `production/selected_backend.json` | Selected backend metadata and ranking used for final all-data training. |
 | `post_model_validation/run_000N/` | Per-iteration post-model holdout evaluation outputs and logs. |
