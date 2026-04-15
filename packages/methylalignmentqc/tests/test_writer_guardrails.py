@@ -144,7 +144,7 @@ def test_process_samples_to_qc_jsons_fails_when_parabricks_json_missing(tmp_path
     _write_text(sample_dir / "sampleB.deduplicate_metrics.txt", _dedup_metrics_fixture())
 
     output_dir = tmp_path / "out"
-    with pytest.raises(RuntimeError, match="Missing required Parabricks JSON"):
+    with pytest.raises(RuntimeError, match="Missing Parabricks metrics"):
         process_samples_to_qc_jsons([str(sample_dir)], str(output_dir), validate_schema=True)
 
 
@@ -161,5 +161,5 @@ def test_process_samples_to_qc_jsons_uses_canonical_sample_json_name_only(tmp_pa
     )
 
     output_dir = tmp_path / "out"
-    with pytest.raises(RuntimeError, match="Missing required Parabricks JSON"):
+    with pytest.raises(RuntimeError, match="Missing Parabricks metrics"):
         process_samples_to_qc_jsons([str(sample_dir)], str(output_dir), validate_schema=True)
