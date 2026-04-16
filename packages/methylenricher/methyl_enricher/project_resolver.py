@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
 
+DEFAULT_METHYL_ENRICHER_HOME = "/work/cache/methyl_enricher"
+
 
 def _warn_enricher_alias_keys(cfg: dict) -> None:
     if "input" in cfg:
@@ -142,3 +144,32 @@ def resolve_enricher_paths(
         output_dir = overrides["outdir"]
 
     return EnricherStepPaths(input_file=input_file, output_dir=output_dir)
+
+
+def resolve_methyl_enricher_home(
+    project_path: Path,
+    step_override_path: Optional[Path] = None,
+    default_home: str = DEFAULT_METHYL_ENRICHER_HOME,
+) -> str:
+    """
+    Resolve cache/home root for MethylEnricher persistent artifacts.
+
+    Precedence:
+      1) step override JSON `methyl_enricher_home`
+      2) project `step_config.enricher.methyl_enricher_home`
+      3) default `/work/cache/methyl_enricher`
+    """
+    project = load_project(project_path)
+    step_cfg = project.get_step_config("enricher") or {}
+    home = step_cfg.get("methyl_enricher_home")
+    if step_override_path and step_override_path.exists():
+        import json
+
+        with open(step_override_path, encoding="utf-8") as f:
+            overrides = json.load(f)
+        if isinstance(overrides, dict) and overrides.get("methyl_enricher_home"):
+            home = overrides.get("methyl_enricher_home")
+    resolved = str(home).strip() if home is not None else ""
+    if not resolved:
+        resolved = str(default_home)
+    return str(Path(resolved))

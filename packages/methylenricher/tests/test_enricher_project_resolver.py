@@ -6,8 +6,10 @@ from pathlib import Path
 import pytest
 
 from methyl_enricher.project_resolver import (
+    DEFAULT_METHYL_ENRICHER_HOME,
     resolve_enricher_paths,
     resolve_enricher_paths_per_cancer_group,
+    resolve_methyl_enricher_home,
 )
 
 
@@ -71,3 +73,26 @@ def test_resolve_enricher_paths_warns_on_legacy_alias_keys(tmp_path):
 
     assert paths.input_file == "/tmp/legacy.csv"
     assert paths.output_dir == "/tmp/legacy-out"
+
+
+def test_resolve_methyl_enricher_home_defaults(tmp_path):
+    project_path = _write_project(tmp_path)
+    home = resolve_methyl_enricher_home(project_path)
+    assert home == DEFAULT_METHYL_ENRICHER_HOME
+
+
+def test_resolve_methyl_enricher_home_from_step_config(tmp_path):
+    project_path = tmp_path / "project.json"
+    project_path.write_text(
+        json.dumps(
+            {
+                "project_name": "EnricherProject",
+                "output_base": "/work/output",
+                "groups": [{"label": "g1", "sample_paths": []}, {"label": "g2", "sample_paths": []}],
+                "step_config": {"enricher": {"methyl_enricher_home": "/work/cache/custom_enricher"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    home = resolve_methyl_enricher_home(project_path)
+    assert home == "/work/cache/custom_enricher"

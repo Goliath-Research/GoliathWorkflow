@@ -18,6 +18,8 @@ methylutils = {path = "../methylutils", develop = true}
 [tool.poetry.scripts]
 methyl-enricher = "methyl_enricher.cli:main"
 methyl_enricher = "methyl_enricher.cli:main"
+methyl-enricher-network-discovery = "methyl_enricher.network_discovery_cli:main"
+methyl_enricher_network_discovery = "methyl_enricher.network_discovery_cli:main"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.0.0"

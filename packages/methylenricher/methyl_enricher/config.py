@@ -37,6 +37,7 @@ class EnricherStepConfig(BaseModel):
     outdir: Optional[str] = None
     combined_csv_name: Optional[str] = None
     disease_subdir: Optional[str] = None
+    methyl_enricher_home: Optional[str] = None
 
     # Gene list / filters
     gene_column: Optional[str] = None

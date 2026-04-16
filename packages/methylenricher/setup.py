@@ -35,6 +35,7 @@ setup(
     entry_points={
         "console_scripts": [
             "methyl_enricher=methyl_enricher.cli:main",
+            "methyl-enricher-network-discovery=methyl_enricher.network_discovery_cli:main",
         ],
     },
     classifiers=[

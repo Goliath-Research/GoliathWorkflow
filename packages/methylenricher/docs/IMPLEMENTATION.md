@@ -14,6 +14,8 @@ For formulas, assumptions, and caveats, see [`docs/theory/chapters/08-methylenri
 - `methyl_enricher/module_network_plot.py`: shared pathway network exporters (Plotly, PyVis, Cytoscape.js) and Cytoscape payload builder.
 - `methyl_enricher/module_network_dash.py`: optional Dash + dash_cytoscape interactive viewer.
 - `methyl_enricher/pathway_normalizer.py`: pathway theme normalization and labeling.
+- `methyl_enricher/network_discovery.py`: post-run candidate-edge discovery, STRING novelty labeling, SQLite snapshot storage, and curated edge CSV export.
+- `methyl_enricher/network_discovery_cli.py`: CLI entrypoint for discovery scans and export.
 
 ## Implementation Notes
 
@@ -30,3 +32,7 @@ For formulas, assumptions, and caveats, see [`docs/theory/chapters/08-methylenri
 - For `source=string_api`, `network_refinement.cache_path` (or `--network-refinement-cache-path`) enables shared edge caching across runs/instances.
 - `network_plot=dash` launches an interactive Cytoscape-style server; static exports (`plotly`, `cytoscape`) remain the reproducible offline default.
 - Dash mode can optionally include a second dataset tab for refinement PPI topology when network refinement is enabled.
+- Custom discovery SQLite storage follows `step_config.enricher.methyl_enricher_home` (default `/work/cache/methyl_enricher`), with canonical paths:
+  - `<methyl_enricher_home>/network_discovery/custom_network.sqlite`
+  - `<methyl_enricher_home>/network_discovery/exports/local_edges.csv`
+- SQLite schema reference is maintained in `methyl_enricher/sql/network_discovery_schema.sql`.
