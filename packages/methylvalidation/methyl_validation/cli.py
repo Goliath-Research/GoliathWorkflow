@@ -1334,6 +1334,16 @@ def main() -> None:
         help="For tabular backend: sklearn estimator type.",
     )
     parser.add_argument(
+        "--tabular-methods-json",
+        type=str,
+        default=None,
+        metavar="JSON",
+        help=(
+            "For tabular backend: JSON array of nested method configs, e.g. "
+            "[{\"method\":\"random_forest\",\"params\":{...}}, ...]."
+        ),
+    )
+    parser.add_argument(
         "--generative-latent-dim",
         type=int,
         default=None,
@@ -1480,7 +1490,23 @@ def main() -> None:
     if args.tabular_max_dmps is not None:
         config = config.model_copy(update={"tabular_max_dmps": int(args.tabular_max_dmps)})
     if args.tabular_model_type:
-        config = config.model_copy(update={"tabular_model_type": str(args.tabular_model_type)})
+        mt = str(args.tabular_model_type)
+        config = config.model_copy(
+            update={
+                "tabular_model_type": mt,
+                "tabular_methods": [{"method": mt, "params": {}}],
+            }
+        )
+    if args.tabular_methods_json:
+        try:
+            parsed_methods = json.loads(str(args.tabular_methods_json))
+        except Exception as e:
+            print(f"Error: invalid --tabular-methods-json: {e}", file=sys.stderr)
+            sys.exit(1)
+        if not isinstance(parsed_methods, list) or not parsed_methods:
+            print("Error: --tabular-methods-json must be a non-empty JSON array.", file=sys.stderr)
+            sys.exit(1)
+        config = config.model_copy(update={"tabular_methods": parsed_methods})
     if args.generative_latent_dim is not None:
         config = config.model_copy(update={"generative_latent_dim": int(args.generative_latent_dim)})
     if args.generative_kl_weight is not None:

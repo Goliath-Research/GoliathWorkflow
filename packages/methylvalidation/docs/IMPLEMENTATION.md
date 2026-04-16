@@ -190,6 +190,8 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 | **production/selected_backend.json** | Selected backend and ranking metadata for final all-data training decision. |
 | **post_model_validation/metrics_distributions_plotly.html** | Plotly dashboard with KDE (density) and ECDF (cumulative) panels for each numeric metric. |
 | **predictors/feature_family_ablation.json** | Ablation-oriented scaffold emitted for observed-hybrid paths (active families + recommended matrix for BA comparisons). |
+| **classifiers/tabular_method_metrics.csv** | Per-method evaluation metrics for tabular multi-method sequence runs (ordered method index, selection metric score, rank). |
+| **classifiers/tabular_method_ranking.json** | JSON ranking payload for tabular multi-method selection, including method params and selection rationale fields. |
 | **stability/dmp_frequency_by_chromosome.html** | Combined Plotly stability chart with per-chromosome traces for both candidate (`all`) and final (`selected`) DMPs. X=frequency (% of runs), Y=DMP count. |
 | **stability/dmp_frequency_chr_<chrom>.html** | Per-chromosome Plotly charts with `all` vs `selected` count curves over frequency (%). |
 | **stability/stability_summary.json** | Stability summary now includes `detector_parameters` extracted from `detections/**/results-*.json`: per-run records plus aggregated numeric/categorical distributions for minimal detector/filter fields (`n_dmps_exported`, `total_statistical_dmps`, `total_biological_dmps`, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). |

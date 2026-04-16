@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -97,23 +98,66 @@ def _extract_matrix_for_samples(
     return X_all
 
 
-def _build_estimator(model_type: str, random_state: int = 13):
-    mt = str(model_type or "random_forest").strip().lower()
-    if mt == "hist_gradient_boosting":
-        return HistGradientBoostingClassifier(random_state=random_state)
-    if mt == "logistic_regression":
-        return LogisticRegression(
-            max_iter=1000,
-            class_weight="balanced",
-            random_state=random_state,
-        )
-    return RandomForestClassifier(
-        n_estimators=300,
-        min_samples_leaf=2,
-        n_jobs=-1,
-        class_weight="balanced_subsample",
-        random_state=random_state,
-    )
+def _normalize_tabular_methods(
+    tabular_methods: Optional[Sequence[Any]],
+    legacy_model_type: str,
+) -> List[Dict[str, Any]]:
+    if tabular_methods:
+        out: List[Dict[str, Any]] = []
+        for item in tabular_methods:
+            if hasattr(item, "model_dump"):
+                payload = item.model_dump(mode="python")
+            elif isinstance(item, dict):
+                payload = dict(item)
+            else:
+                raise ValueError(f"Unsupported tabular method config type: {type(item)!r}")
+            method = str(payload.get("method") or "").strip().lower()
+            if not method:
+                raise ValueError("Each tabular method entry requires non-empty 'method'")
+            params = payload.get("params") or {}
+            if not isinstance(params, dict):
+                raise ValueError(f"tabular method params must be an object for method={method}")
+            out.append({"method": method, "params": dict(params)})
+        if out:
+            return out
+    return [{"method": str(legacy_model_type or "random_forest").strip().lower(), "params": {}}]
+
+
+def _build_estimator_from_config(method_cfg: Dict[str, Any]):
+    method = str(method_cfg.get("method") or "random_forest").strip().lower()
+    params = dict(method_cfg.get("params") or {})
+    if method == "hist_gradient_boosting":
+        resolved = {
+            "random_state": int(params.get("random_state", 13)),
+            "learning_rate": float(params.get("learning_rate", 0.1)),
+            "max_iter": int(params.get("max_iter", 100)),
+            "max_depth": (
+                int(params["max_depth"])
+                if params.get("max_depth") is not None
+                else None
+            ),
+        }
+        return HistGradientBoostingClassifier(**resolved), resolved
+    if method == "logistic_regression":
+        resolved = {
+            "max_iter": int(params.get("max_iter", 1000)),
+            "class_weight": str(params.get("class_weight", "balanced")),
+            "random_state": int(params.get("random_state", 13)),
+            "C": float(params.get("c", params.get("C", 1.0))),
+            "solver": str(params.get("solver", "lbfgs")),
+            "penalty": str(params.get("penalty", "l2")),
+        }
+        return LogisticRegression(**resolved), resolved
+    if method != "random_forest":
+        raise ValueError(f"Unsupported tabular method: {method}")
+    resolved = {
+        "n_estimators": int(params.get("n_estimators", 300)),
+        "min_samples_leaf": int(params.get("min_samples_leaf", 2)),
+        "n_jobs": int(params.get("n_jobs", -1)),
+        "class_weight": str(params.get("class_weight", "balanced_subsample")),
+        "random_state": int(params.get("random_state", 13)),
+    }
+    return RandomForestClassifier(**resolved), resolved
 
 
 def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, class_names: List[str]) -> Dict[str, Any]:
@@ -180,6 +224,9 @@ def train_tabular_model(
     output_dir: str | Path,
     *,
     model_type: str = "random_forest",
+    tabular_methods: Optional[Sequence[Any]] = None,
+    tabular_method_selection_metric: str = "balanced_accuracy",
+    tabular_method_selection_stat: str = "mean",
     max_dmps: int = 5000,
     covariates_path: Optional[str] = None,
     covariate_id_column: str = "sample_id",
@@ -271,54 +318,128 @@ def train_tabular_model(
         X = np.concatenate([X, cov], axis=1)
 
     y_arr = np.asarray(y, dtype=np.int32)
-    estimator = _build_estimator(model_type=model_type)
-    estimator.fit(X, y_arr)
+    methods = _normalize_tabular_methods(tabular_methods, legacy_model_type=model_type)
+    method_rows: List[Dict[str, Any]] = []
+    selected_idx = 0
+    models_root = out_dir / "tabular_methods"
+    models_root.mkdir(parents=True, exist_ok=True)
+    selection_metric = str(tabular_method_selection_metric or "balanced_accuracy").strip().lower()
+    selection_stat = str(tabular_method_selection_stat or "mean").strip().lower()
+    best_score = float("-inf")
+    for idx, method_cfg in enumerate(methods):
+        estimator, resolved_params = _build_estimator_from_config(method_cfg)
+        estimator.fit(X, y_arr)
+        method_name = str(method_cfg["method"])
+        method_dir = models_root / f"{idx:02d}_{method_name}"
+        method_dir.mkdir(parents=True, exist_ok=True)
+        method_model_path = method_dir / "tabular-model.joblib"
+        joblib.dump(estimator, method_model_path)
+        method_preproc_path = method_dir / "covariate-preprocessor.json"
+        if preprocessor is not None:
+            preprocessor.save_json(method_preproc_path)
+        method_meta = {
+            "method": method_name,
+            "params": resolved_params,
+            "feature_mode": feature_mode_norm,
+            "class_names": class_names,
+            "project_json": str(Path(project_json).resolve()),
+            "bundle_h5": str(Path(bundle_h5).resolve()),
+            "max_dmps": int(max_dmps),
+            "n_features": int(X.shape[1]),
+            "n_dmps": int(len(feature_order)),
+            "feature_order": [{"chromosome": c, "context": ctx, "position": int(pos)} for c, ctx, pos in feature_order],
+            "observed_feature_names": observed_feature_names,
+            "observed_feature_quantiles": observed_feature_quantiles_out,
+            "observed_feature_min_coverage": int(max(1, observed_feature_min_coverage)),
+            "observed_feature_min_obs_fraction": float(max(0.0, min(1.0, observed_feature_min_obs_fraction))),
+            "observed_feature_include_dmp": bool(observed_feature_include_dmp),
+            "observed_feature_include_chromosome": bool(observed_feature_include_chromosome),
+            "observed_feature_include_dmr": bool(observed_feature_include_dmr),
+            "observed_feature_include_gene": bool(observed_feature_include_gene),
+            "observed_feature_dmr_window_bp": int(max(1, observed_feature_dmr_window_bp)),
+            "observed_feature_max_dmrs": int(max(0, observed_feature_max_dmrs)),
+            "observed_feature_max_genes": int(max(0, observed_feature_max_genes)),
+            "observed_feature_fill_values": (
+                [float(v) for v in feature_fill_values.tolist()] if feature_fill_values is not None else None
+            ),
+            "observed_feature_report": observed_feature_report,
+            "covariates_path": str(covariates_path) if covariates_path else None,
+            "covariate_id_column": covariate_id_column,
+            "covariates_strict_join": bool(covariates_strict_join),
+            "covariate_numeric_columns": [str(x) for x in (covariate_numeric_columns or [])],
+            "covariate_ordinal_columns": [str(x) for x in (covariate_ordinal_columns or [])],
+            "covariate_ordinal_maps": covariate_ordinal_maps or {},
+            "covariate_ordinal_unknown_value": float(covariate_ordinal_unknown_value),
+            "covariate_categorical_columns": [str(x) for x in (covariate_categorical_columns or [])],
+            "covariate_missing_numeric_strategy": str(covariate_missing_numeric_strategy),
+            "covariate_standardize_numeric": bool(covariate_standardize_numeric),
+            "covariate_preprocessor_path": str(method_preproc_path) if preprocessor is not None else None,
+            "covariate_preprocessing": cov_report,
+        }
+        with open(method_dir / "tabular-model-metadata.json", "w", encoding="utf-8") as f:
+            json.dump(method_meta, f, indent=2)
+        eval_out_dir = method_dir / "selection_eval"
+        score = float("nan")
+        try:
+            metrics = predict_tabular_model_from_project(
+                project_json=project_json,
+                model_dir=method_dir,
+                output_dir=eval_out_dir,
+                covariates_path=covariates_path,
+                covariate_id_column=covariate_id_column,
+                covariates_strict_join=covariates_strict_join,
+                observed_feature_min_obs_fraction=observed_feature_min_obs_fraction,
+            )
+            score = float(metrics.get(selection_metric, float("nan")))
+        except Exception:
+            score = float("nan")
+        method_rows.append(
+            {
+                "method_index": int(idx),
+                "method": method_name,
+                "selection_metric": selection_metric,
+                "selection_stat": selection_stat,
+                "score": float(score) if np.isfinite(score) else float("-inf"),
+                "model_dir": str(method_dir),
+                "params_json": json.dumps(resolved_params, sort_keys=True),
+            }
+        )
+        if np.isfinite(score) and score > best_score:
+            best_score = float(score)
+            selected_idx = int(idx)
 
+    method_df = pd.DataFrame(method_rows)
+    if not method_df.empty:
+        method_df.sort_values(["score", "method_index"], ascending=[False, True], inplace=True)
+        method_df.reset_index(drop=True, inplace=True)
+        method_df["rank"] = np.arange(1, len(method_df) + 1, dtype=int)
+        method_df.to_csv(out_dir / "tabular_method_metrics.csv", index=False)
+        with open(out_dir / "tabular_method_ranking.json", "w", encoding="utf-8") as f:
+            json.dump(method_df.to_dict(orient="records"), f, indent=2)
+        selected_idx = int(method_df.iloc[0]["method_index"])
+
+    selected_method_dir = models_root / f"{selected_idx:02d}_{methods[selected_idx]['method']}"
     model_path = out_dir / "tabular-model.joblib"
-    joblib.dump(estimator, model_path)
-
+    shutil.copy2(selected_method_dir / "tabular-model.joblib", model_path)
     preprocessor_path = out_dir / "covariate-preprocessor.json"
-    if preprocessor is not None:
-        preprocessor.save_json(preprocessor_path)
+    method_preproc_path = selected_method_dir / "covariate-preprocessor.json"
+    if method_preproc_path.is_file():
+        shutil.copy2(method_preproc_path, preprocessor_path)
 
+    with open(selected_method_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
+        selected_meta = json.load(f)
     meta = {
         "model_backend": "tabular_sklearn",
-        "model_type": model_type,
-        "feature_mode": feature_mode_norm,
-        "class_names": class_names,
-        "project_json": str(Path(project_json).resolve()),
-        "bundle_h5": str(Path(bundle_h5).resolve()),
-        "max_dmps": int(max_dmps),
-        "n_features": int(X.shape[1]),
-        "n_dmps": int(len(feature_order)),
-        "feature_order": [{"chromosome": c, "context": ctx, "position": int(pos)} for c, ctx, pos in feature_order],
-        "observed_feature_names": observed_feature_names,
-        "observed_feature_quantiles": observed_feature_quantiles_out,
-        "observed_feature_min_coverage": int(max(1, observed_feature_min_coverage)),
-        "observed_feature_min_obs_fraction": float(max(0.0, min(1.0, observed_feature_min_obs_fraction))),
-        "observed_feature_include_dmp": bool(observed_feature_include_dmp),
-        "observed_feature_include_chromosome": bool(observed_feature_include_chromosome),
-        "observed_feature_include_dmr": bool(observed_feature_include_dmr),
-        "observed_feature_include_gene": bool(observed_feature_include_gene),
-        "observed_feature_dmr_window_bp": int(max(1, observed_feature_dmr_window_bp)),
-        "observed_feature_max_dmrs": int(max(0, observed_feature_max_dmrs)),
-        "observed_feature_max_genes": int(max(0, observed_feature_max_genes)),
-        "observed_feature_fill_values": (
-            [float(v) for v in feature_fill_values.tolist()] if feature_fill_values is not None else None
-        ),
-        "observed_feature_report": observed_feature_report,
-        "covariates_path": str(covariates_path) if covariates_path else None,
-        "covariate_id_column": covariate_id_column,
-        "covariates_strict_join": bool(covariates_strict_join),
-        "covariate_numeric_columns": [str(x) for x in (covariate_numeric_columns or [])],
-        "covariate_ordinal_columns": [str(x) for x in (covariate_ordinal_columns or [])],
-        "covariate_ordinal_maps": covariate_ordinal_maps or {},
-        "covariate_ordinal_unknown_value": float(covariate_ordinal_unknown_value),
-        "covariate_categorical_columns": [str(x) for x in (covariate_categorical_columns or [])],
-        "covariate_missing_numeric_strategy": str(covariate_missing_numeric_strategy),
-        "covariate_standardize_numeric": bool(covariate_standardize_numeric),
-        "covariate_preprocessor_path": str(preprocessor_path) if preprocessor is not None else None,
-        "covariate_preprocessing": cov_report,
+        "model_type": selected_meta.get("method"),
+        "selected_tabular_method": selected_meta.get("method"),
+        "selected_tabular_method_index": int(selected_idx),
+        "tabular_methods_evaluated": methods,
+        "tabular_method_selection_metric": selection_metric,
+        "tabular_method_selection_stat": selection_stat,
+        "tabular_method_selection_score": float(best_score) if np.isfinite(best_score) else None,
+        "tabular_method_model_dir": str(selected_method_dir),
+        **selected_meta,
+        "covariate_preprocessor_path": str(preprocessor_path) if method_preproc_path.is_file() else None,
     }
     with open(out_dir / "tabular-model-metadata.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)

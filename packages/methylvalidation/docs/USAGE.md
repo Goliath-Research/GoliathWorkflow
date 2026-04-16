@@ -272,6 +272,40 @@ These options are used by all three model backends in model-build flows:
 
 `methyl-validation` enforces train/predict schema parity via stored feature names + fill values in backend metadata.
 
+### Tabular method configs (`tabular_sklearn`)
+
+`step_config.validation` now supports canonical nested method configs for tabular backends:
+
+- `tabular_methods`: ordered list of one or more entries
+- each entry uses a `method` discriminator and method-specific `params`
+- supported `method` values: `random_forest`, `hist_gradient_boosting`, `logistic_regression`
+- when multiple methods are provided, the run evaluates all in order and promotes the top method to canonical tabular artifacts
+
+Method selection controls:
+
+- `tabular_method_selection_metric` (default `balanced_accuracy`)
+- `tabular_method_selection_stat` (default `mean`, stored as ranking metadata label)
+
+Canonical nested JSON example:
+
+```json
+"validation": {
+  "model_backend": "tabular_sklearn",
+  "tabular_methods": [
+    {"method": "random_forest", "params": {"n_estimators": 500, "min_samples_leaf": 2, "class_weight": "balanced_subsample"}},
+    {"method": "logistic_regression", "params": {"max_iter": 2000, "class_weight": "balanced", "c": 1.0}}
+  ],
+  "tabular_method_selection_metric": "balanced_accuracy",
+  "tabular_method_selection_stat": "mean"
+}
+```
+
+Backward compatibility:
+
+- legacy `tabular_model_type` still works unchanged
+- CLI shorthand `--tabular-model-type` maps to a single-entry `tabular_methods` list
+- optional `--tabular-methods-json` allows direct nested list overrides from CLI
+
 ### Optional: `step_config.progression`
 
 `methyl-validation` reads progression settings from `step_config.progression` in the project JSON when running `--freeze`:

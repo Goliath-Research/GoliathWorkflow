@@ -3,7 +3,7 @@ Runner config schema for Monte Carlo validation.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -17,6 +17,51 @@ class CohortCsv(BaseModel):
         description="Cohort label: for hierarchical MC must match get_resolved_groups() (e.g. all, pca_pca1).",
     )
     csv: str = Field(..., min_length=1, description="Path to CSV of samples (same format as healthy_csv).")
+
+
+class RandomForestMethodParams(BaseModel):
+    n_estimators: int = Field(default=300, ge=1)
+    min_samples_leaf: int = Field(default=2, ge=1)
+    n_jobs: int = Field(default=-1)
+    class_weight: str = Field(default="balanced_subsample")
+    random_state: int = Field(default=13)
+
+
+class HistGradientBoostingMethodParams(BaseModel):
+    random_state: int = Field(default=13)
+    learning_rate: float = Field(default=0.1, gt=0.0)
+    max_iter: int = Field(default=100, ge=1)
+    max_depth: Optional[int] = Field(default=None, ge=1)
+
+
+class LogisticRegressionMethodParams(BaseModel):
+    max_iter: int = Field(default=1000, ge=1)
+    class_weight: str = Field(default="balanced")
+    random_state: int = Field(default=13)
+    c: float = Field(default=1.0, gt=0.0)
+    solver: str = Field(default="lbfgs")
+    penalty: str = Field(default="l2")
+
+
+class RandomForestMethodConfig(BaseModel):
+    method: Literal["random_forest"]
+    params: RandomForestMethodParams = Field(default_factory=RandomForestMethodParams)
+
+
+class HistGradientBoostingMethodConfig(BaseModel):
+    method: Literal["hist_gradient_boosting"]
+    params: HistGradientBoostingMethodParams = Field(default_factory=HistGradientBoostingMethodParams)
+
+
+class LogisticRegressionMethodConfig(BaseModel):
+    method: Literal["logistic_regression"]
+    params: LogisticRegressionMethodParams = Field(default_factory=LogisticRegressionMethodParams)
+
+
+TabularMethodConfig = Annotated[
+    Union[RandomForestMethodConfig, HistGradientBoostingMethodConfig, LogisticRegressionMethodConfig],
+    Field(discriminator="method"),
+]
 
 
 class MonteCarloConfig(BaseModel):
@@ -189,6 +234,27 @@ class MonteCarloConfig(BaseModel):
     tabular_model_type: str = Field(
         default="random_forest",
         description="For model_backend=tabular_sklearn: random_forest | hist_gradient_boosting | logistic_regression.",
+    )
+    tabular_methods: Optional[List[TabularMethodConfig]] = Field(
+        default=None,
+        description=(
+            "Optional ordered list of tabular methods with method-specific parameters. "
+            "When absent, synthesized from tabular_model_type for backward compatibility."
+        ),
+    )
+    tabular_method_selection_metric: str = Field(
+        default="balanced_accuracy",
+        description=(
+            "When multiple tabular_methods are evaluated sequentially, select best method "
+            "using this metric from validation_metrics."
+        ),
+    )
+    tabular_method_selection_stat: str = Field(
+        default="mean",
+        description=(
+            "Selection stat label for method ranking metadata (mean|median). "
+            "Current per-run selection uses direct metric values."
+        ),
     )
     tabular_max_dmps: int = Field(
         default=5000,
@@ -399,6 +465,9 @@ class MonteCarloConfig(BaseModel):
         if not isinstance(data, dict):
             return data
         data = dict(data)
+        if not data.get("tabular_methods"):
+            mt = str(data.get("tabular_model_type") or "random_forest").strip().lower()
+            data["tabular_methods"] = [{"method": mt, "params": {}}]
         cohorts = data.get("cohorts")
         if isinstance(cohorts, list) and len(cohorts) >= 2:
             return data
@@ -421,6 +490,12 @@ class MonteCarloConfig(BaseModel):
             )
         return self
 
+    @model_validator(mode="after")
+    def _require_tabular_methods(self) -> "MonteCarloConfig":
+        if self.model_backend == "tabular_sklearn" and not self.tabular_methods:
+            raise ValueError("tabular_methods must contain at least one entry")
+        return self
+
     @field_validator("model_backend")
     @classmethod
     def _validate_model_backend(cls, value: str) -> str:
@@ -428,6 +503,24 @@ class MonteCarloConfig(BaseModel):
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"model_backend must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("tabular_method_selection_metric")
+    @classmethod
+    def _validate_tabular_method_selection_metric(cls, value: str) -> str:
+        allowed = {"balanced_accuracy", "accuracy", "macro_f1", "weighted_f1"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"tabular_method_selection_metric must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("tabular_method_selection_stat")
+    @classmethod
+    def _validate_tabular_method_selection_stat(cls, value: str) -> str:
+        allowed = {"mean", "median"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"tabular_method_selection_stat must be one of {sorted(allowed)}")
         return normalized
 
     @field_validator("feature_mode")

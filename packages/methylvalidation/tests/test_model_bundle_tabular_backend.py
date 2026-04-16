@@ -442,3 +442,54 @@ def test_tabular_observed_hybrid_train_predict_schema_parity(tmp_path: Path, mon
         ablation = json.load(f)
     assert ablation["backend"] == "tabular_sklearn"
     assert "balanced_accuracy" in ablation
+
+
+def test_tabular_multi_method_sequence_outputs_ranking(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1", "1"],
+            "position": [100, 120, 140],
+            "context": ["CG", "CG", "CG"],
+            "effect_size": [0.9, 0.7, 0.5],
+            "weight": [1.0, 0.8, 0.4],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: _StubProject(det))
+
+    def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
+        positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
+        X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
+        for i, p in enumerate(sample_paths):
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+        ctx = np.asarray(["CG"] * len(positions), dtype=object)
+        return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
+
+    monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
+    predictor_cfg = SimpleNamespace(
+        test_control_paths=["/tmp/S1", "/tmp/S2"],
+        test_disease_paths=["/tmp/S3", "/tmp/S4"],
+    )
+    monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+
+    model_dir = tmp_path / "model"
+    tabular_backend.train_tabular_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        tabular_methods=[
+            {"method": "random_forest", "params": {"n_estimators": 50, "random_state": 13}},
+            {"method": "logistic_regression", "params": {"max_iter": 400, "random_state": 13}},
+        ],
+    )
+    assert (model_dir / "tabular-model.joblib").is_file()
+    assert (model_dir / "tabular_method_metrics.csv").is_file()
+    assert (model_dir / "tabular_method_ranking.json").is_file()
+    with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
+        meta = json.load(f)
+    assert len(meta.get("tabular_methods_evaluated") or []) == 2
+    assert meta.get("selected_tabular_method") in {"random_forest", "logistic_regression"}

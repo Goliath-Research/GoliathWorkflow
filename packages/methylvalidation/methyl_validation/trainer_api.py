@@ -62,6 +62,13 @@ def build_model_backend_steps(
                     bundle_h5=bundle_dir / "model_feature_bundle.h5",
                     output_dir=model_dir,
                     model_type=(config.tabular_model_type if config is not None else "random_forest"),
+                    tabular_methods=(config.tabular_methods if config is not None else None),
+                    tabular_method_selection_metric=(
+                        config.tabular_method_selection_metric if config is not None else "balanced_accuracy"
+                    ),
+                    tabular_method_selection_stat=(
+                        config.tabular_method_selection_stat if config is not None else "mean"
+                    ),
                     max_dmps=(config.tabular_max_dmps if config is not None else 5000),
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
