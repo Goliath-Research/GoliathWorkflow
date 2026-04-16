@@ -27,6 +27,25 @@ outputs with explicit promotion and rollback criteria.
 
 If reliability improves materially while discrimination is flat/slightly better, promote.
 
+These thresholds map directly to `step_config.validation` fields:
+
+- `rollout_balanced_accuracy_drop_max`
+- `rollout_macro_f1_drop_max`
+- `rollout_nll_improvement_min_frac`
+- `rollout_brier_improvement_min_frac`
+- `rollout_ece_improvement_min_frac`
+
+CLI command:
+
+```bash
+methyl-validation --project /path/to/project.json \
+  --rollout-compare \
+  --baseline-summary /path/to/baseline/metrics_summary.json \
+  --candidate-summary /path/to/candidate/metrics_summary.json
+```
+
+Optional: add `--rollout-report /path/to/rollout_decision.json` to override the default report location.
+
 ## Rollback Criteria
 
 Rollback to legacy if any condition holds in production monitoring window:

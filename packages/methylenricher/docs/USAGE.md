@@ -12,6 +12,48 @@ The package exposes:
 - `methyl-enricher` / `methyl_enricher` resolve to `methyl_enricher.cli:main`.
 - `methyl-enricher-network-discovery` / `methyl_enricher_network_discovery` resolve to `methyl_enricher.network_discovery_cli:main`.
 
+## Main run modes
+
+`methyl-enricher` supports three practical modes:
+
+- single-input enrichment (`--input`, optional filters and library controls),
+- module pipeline mode (`--modules`) with pathway clustering and ranking outputs,
+- project-driven mode (`--project`) that resolves input/output paths from pipeline config.
+
+When `--project` points to a project with multiple cancer-group comparisons and no explicit `--input`/`--outdir` overrides, the CLI runs once per comparison using:
+
+- mapper input from `mapper/<control>/<disease>/...combined.csv`,
+- output under `enricher/<control>/<disease>/`.
+
+Passing explicit `--input` or non-default `--outdir` with `--project` forces a single run.
+
+## Library selection precedence
+
+Library resolution is explicit and stable:
+
+- `--libraries` (or `step_config.enricher.libraries`) wins,
+- else `--library-preset`,
+- else package defaults.
+
+Presets currently include `cancer-core` and `cancer-extended`.
+
+## Module + network outputs
+
+With `--modules`, MethylEnricher runs enrichment + pathway graph clustering and writes `modules_ranked.csv`.
+
+`--network-plot` behavior:
+
+- default when omitted in module mode: `plotly`,
+- `none`: disable exports,
+- `plotly`, `pyvis`, `cytoscape`, `all`: offline artifacts,
+- `dash`: interactive server (`--dash-host`, `--dash-port`, optional `--dash-open-browser`).
+
+Optional PPI refinement can be enabled via CLI flags or `step_config.enricher.network_refinement`:
+
+- `source=string_api` (default) or `source=local_edges`,
+- writes `ppi_network_edges.csv`, `ppi_node_metrics.csv`, `ppi_hubs.csv`, `ppi_module_coherence.csv`,
+- adds blended scoring columns in `modules_ranked.csv` (`Base_score`, `PPI_coherence_score`, `Blended_score`).
+
 ## Custom network discovery workflow
 
 The network discovery CLI scans completed enricher outputs (for example directories containing
@@ -36,6 +78,14 @@ methyl-enricher-network-discovery \
   --project /path/to/project.json \
   --scan-root /work/prostate-cancer/Healthy_vs_PCa1-4-CG/enricher
 ```
+
+## Project step config mapping
+
+`step_config.enricher` maps onto CLI arguments through `EnricherStepConfig`.
+
+- Both nested `network_refinement.{...}` and flat `network_refinement_*` keys are supported.
+- For `network_plot`, explicit CLI value wins over config.
+- In project mode, `--step-override` can inject temporary step-level overrides without editing the project JSON.
 
 ## Typical Inputs
 

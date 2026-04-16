@@ -20,6 +20,9 @@ For formulas, assumptions, and caveats, see [`docs/theory/chapters/08-methylenri
 ## Implementation Notes
 
 - Statistical enrichment is delegated to Enrichr through `gseapy`.
+- `--project` path resolution supports two execution layouts:
+  - single-run resolution from `resolve_enricher_paths()`,
+  - per-comparison runs from `resolve_enricher_paths_per_cancer_group()` when multiple groups exist and no explicit input/output overrides are passed.
 - Module construction depends on graph thresholds and clustering settings.
 - Several ranking and labeling steps are intentionally heuristic and should remain documented as such.
 - Optional `network_refinement` adds a second graph layer from gene-level PPI edges (STRING API or local edge CSV) and writes:
@@ -31,8 +34,10 @@ For formulas, assumptions, and caveats, see [`docs/theory/chapters/08-methylenri
 - PPI refinement is best interpreted as structural support for module quality, not as a replacement for disease evidence sources.
 - For `source=string_api`, `network_refinement.cache_path` (or `--network-refinement-cache-path`) enables shared edge caching across runs/instances.
 - `network_plot=dash` launches an interactive Cytoscape-style server; static exports (`plotly`, `cytoscape`) remain the reproducible offline default.
+- In module mode, omitted `network_plot` defaults to `plotly`; `none` disables visualization artifacts.
 - Dash mode can optionally include a second dataset tab for refinement PPI topology when network refinement is enabled.
 - Custom discovery SQLite storage follows `step_config.enricher.methyl_enricher_home` (default `/work/cache/methyl_enricher`), with canonical paths:
   - `<methyl_enricher_home>/network_discovery/custom_network.sqlite`
   - `<methyl_enricher_home>/network_discovery/exports/local_edges.csv`
 - SQLite schema reference is maintained in `methyl_enricher/sql/network_discovery_schema.sql`.
+- Library resolution is deterministic: explicit `libraries` > `library_preset` > built-in defaults.

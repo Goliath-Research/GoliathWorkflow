@@ -218,6 +218,40 @@ Rather than a separate Monte Carlo config file, embed the validation settings di
 
 All `step_config.validation` fields are documented in the configuration reference (see `docs/theory/chapters/13-configuration-reference.qmd` or the Quarto book at `docs/theory/`).
 
+### Stability + freeze controls (operationally important)
+
+Common fields for production staging:
+
+- `run_stability`: enable stability aggregation after MC iterations.
+- `stability_dmp_freq`: recurrence threshold for stable DMP selection.
+- `stability_min_balanced_accuracy`: optional run-quality gate; only qualifying runs contribute to stability counts.
+- `stability_gene_freq`: recurrence threshold for stable genes (when enricher outputs are available).
+- `stability_featurecuts_enabled`: force detector FeatureCuts policy in MC (`classifier_dmp_selection=featurecuts_validation`).
+- `stability_target_balanced_accuracy` / `stability_min_selected_dmps`: optional FeatureCuts constraints used in MC detector overrides.
+- `freeze_stable_dmp_csv`: optional override for freeze input panel path (default: `monte_carlo_runs/stability/stable_dmps_production.csv`).
+- `production_output_dir`: optional freeze/model output root (default: `monte_carlo_runs/production`).
+
+`--freeze` fails fast if the stable panel path is missing, so run `--stability` first or set `freeze_stable_dmp_csv`.
+
+### Strict stability profile example
+
+Use this profile when you want conservative run filtering and classifier-panel-aligned stability:
+
+```json
+"validation": {
+  "n_iterations": 30,
+  "run_stability": true,
+  "stability_dmp_freq": 0.6,
+  "stability_min_balanced_accuracy": 0.9,
+  "stability_gene_freq": 0.5,
+  "stability_featurecuts_enabled": true,
+  "stability_target_balanced_accuracy": 0.95,
+  "stability_min_selected_dmps": 1000
+}
+```
+
+This keeps runtime fixed while enforcing high per-run detector quality and explicit classifier-panel constraints.
+
 ### Covariate contract for `tabular_sklearn` / `generative_hybrid`
 
 Covariates are backend-specific and are **not** used by the ECDF Bayesian path.
@@ -333,6 +367,18 @@ Prefer these canonical keys in project files:
 - `step_config.predictor` (legacy alias `step_config.validator` is deprecated)
 - `step_config.enricher.input_file` / `step_config.enricher.output_dir` (legacy `input` / `outdir` are deprecated)
 - `step_config.detection.ecdf_grid_size` (legacy aliases `ecdf_overlap_grid_size`, `ecdf_ks_grid_size` are deprecated)
+
+### Rollout comparison thresholds
+
+`--rollout-compare` uses thresholds from `step_config.validation`:
+
+- `rollout_balanced_accuracy_drop_max`
+- `rollout_macro_f1_drop_max`
+- `rollout_nll_improvement_min_frac`
+- `rollout_brier_improvement_min_frac`
+- `rollout_ece_improvement_min_frac`
+
+If not set, package defaults in `MonteCarloConfig` are used.
 
 ---
 

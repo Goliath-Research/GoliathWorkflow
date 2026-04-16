@@ -177,6 +177,19 @@ The package supports both reproducible offline artifacts and interactive inspect
 
 For publication and auditability, offline artifacts should remain the canonical archived output; Dash should be treated as an exploratory interface.
 
+## Project-Orchestrated Execution
+
+In pipeline runs, MethylEnricher is commonly launched with `--project` and reads `step_config.enricher`.
+When the project contains multiple comparison groups, the runtime can execute one enrichment/module pass per group using per-comparison mapper inputs and enricher outputs. If explicit input/output arguments are passed, execution falls back to a single run.
+
+Configuration precedence for libraries is:
+
+1. explicit `libraries`,
+2. `library_preset`,
+3. built-in defaults.
+
+This precedence should be reported in methods text to ensure reproducibility of enrichment calls.
+
 ## Theme Normalization And Labels
 
 The package includes theme normalization based on substring matching against a JSON mapping file, plus discrete labels such as `High`, `Medium`, and `Low` relevance. Those labels are workflow conveniences. They should not be presented as probabilistic classifications.

@@ -77,6 +77,7 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **`--select-best-model`**: ranks backend model-MC summaries and runs final all-data production model build using selected backend.
 - **`--post-model-validation`**: runs MC holdout evaluation against frozen production artifacts only (no retraining). `ecdf` dispatches predictor-only runs; `tabular_sklearn` and `generative_hybrid` dispatch frozen model inference via backend predictors.
 - **`--predictor-only`**: MC iterations that run only `methyl-predictor` using frozen artifacts.
+- **`--rollout-compare`**: compares baseline/candidate `metrics_summary.json` and writes promotion/hold report using rollout thresholds in `MonteCarloConfig`.
 
 ECDF/Bayesian remains DMP-only by design at the first stage. The optional ECDF second stage and the `observed_hybrid` path used by tabular/generative backends now share a unified disease-feature builder with explicit feature-family toggles:
 
@@ -94,6 +95,8 @@ The main components are:
 3. **Project Generation**: Creates per-run `project.json` files with appropriate sample paths.
 4. **Pipeline Execution**: Uses `pipeline_runner.py` to run the appropriate steps.
 5. **Aggregation**: Collects metrics and timings from all runs.
+
+During stability MC runs, `stability_featurecuts_enabled` and related `stability_target_balanced_accuracy` / `stability_min_selected_dmps` settings are materialized per iteration as `detector_step_override.json` so detector selection policy is explicit and auditable in each `run_XXXX`.
 
 The `--freeze` path uses `run_pipeline_for_production()` which runs: centroid → detector(with `fixed_dmp_panel`) → mapper → enricher; when `step_config.progression.enabled=true`, it then runs `methyl-disease-progression`.
 
@@ -168,6 +171,7 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
    - Read metrics via `iteration_scalar_metrics_from_run_dir(run_dir)` (predictor JSON if present, else detector `result*.json`).
 5. Aggregate → `all_metrics.csv`, `metrics_summary.json`, `step_timings.csv`, optional `resource_summary.json`.
 6. For `--model-mc`, run shared split+centroid+detector preparation once (for `--model-mc-all`), then run backend model stages under isolated backend roots and emit cross-backend ranking files (`backend_ranking.csv`, `backend_ranking.json`).
+7. For `--rollout-compare`, load baseline/candidate summaries, apply configured rollout thresholds, and emit `rollout_decision.json` (or `--rollout-report` path).
 
 **MethylPredictor:** flat-group projects with **multiclass-classifier.pkl** resolve via `resolve_predictor_config` (shared `_build_multiclass_predictor_config`). The CLI applies `--test-groups` in both single-config and per-comparison multiclass runs (`_apply_test_groups_json_to_config`).
 

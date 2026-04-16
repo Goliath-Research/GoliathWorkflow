@@ -6,6 +6,23 @@ The package exposes:
 
 - `methyl-alignment-qc`
 - `methyl-qc`
+- `methyl-qc-migrate-guardrails`
+- `methyl-qc-export-schema`
+
+## Main execution modes
+
+`methyl-qc` requires exactly one input mode:
+
+- `--project` (optionally `--step-override`) to resolve samples/output from project config,
+- `--samples` (repeatable; can be a sample dir, newline list file, or JSON array file),
+- `--metrics-root` (auto-discovers `*deduplicate_metrics.txt` and derives sample dirs).
+
+For `--samples` and `--metrics-root`, `--output-dir` is required.
+
+Useful flags:
+
+- `--no-validation`: skip schema validation,
+- `--verbose`: print sample counts and output path.
 
 ## Typical Inputs
 
@@ -50,3 +67,5 @@ Export the strict, versionable JSON Schema generated from the Pydantic export mo
 This writes:
 
 - `packages/methylalignmentqc/schemas/exported_sample_qc.schema.json`
+
+Regenerate this artifact whenever Pydantic QC output models change.
