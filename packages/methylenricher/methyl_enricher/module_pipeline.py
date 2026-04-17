@@ -38,7 +38,102 @@ def _disease_relevance_tier(score: float) -> str:
     return "Low"
 
 
-def _collapse_modules_by_theme(df: pd.DataFrame) -> pd.DataFrame:
+def _resolve_gene_column(df: pd.DataFrame, gene_column: Optional[str]) -> Optional[str]:
+    """Resolve gene column name from explicit value or known candidates."""
+    candidates = ["gene_name", "gene_id", "gene_symbol", "gene", "symbol"]
+    if gene_column and gene_column in df.columns:
+        return gene_column
+    return next((c for c in candidates if c in df.columns), None)
+
+
+def _derive_disease_prior_genes(
+    input_path: Path,
+    *,
+    gene_column: Optional[str] = None,
+    disease_only: bool = False,
+    disease_association_types: Optional[List[str]] = None,
+    min_disease_evidence_level: Optional[str] = None,
+    min_disease_publications: Optional[int] = None,
+    min_disease_score: Optional[float] = None,
+) -> Set[str]:
+    """
+    Build disease prior genes from mapper-style disease columns when available.
+
+    Priority:
+    1) If explicit disease filters are provided, apply them.
+    2) Else, if disease_associated exists, use disease_associated=True.
+    3) Else, no disease prior.
+    """
+    path = Path(input_path)
+    if path.suffix.lower() not in {".csv", ".tsv"} or not path.exists():
+        return set()
+
+    sep = "," if path.suffix.lower() == ".csv" else "\t"
+    df = pd.read_csv(path, sep=sep)
+    gc = _resolve_gene_column(df, gene_column)
+    if gc is None:
+        return set()
+
+    disease_columns = {
+        "disease_associated",
+        "disease_association_type",
+        "disease_evidence_level",
+        "disease_publications",
+        "disease_score",
+    }
+    has_disease_info = any(c in df.columns for c in disease_columns)
+    if not has_disease_info:
+        return set()
+
+    work = df.copy()
+    has_explicit_filters = any(
+        [
+            disease_only,
+            bool(disease_association_types),
+            min_disease_evidence_level is not None,
+            min_disease_publications is not None,
+            min_disease_score is not None,
+        ]
+    )
+
+    if "disease_associated" in work.columns and (disease_only or not has_explicit_filters):
+        keep = work["disease_associated"].astype(str).str.strip().str.upper().isin(("TRUE", "1", "YES"))
+        work = work[keep]
+
+    if disease_association_types and "disease_association_type" in work.columns:
+        allowed = {str(s).strip().lower() for s in disease_association_types}
+        work = work[
+            work["disease_association_type"].astype(str).str.strip().str.lower().isin(allowed)
+        ]
+
+    if min_disease_evidence_level is not None and "disease_evidence_level" in work.columns:
+        level_order = {"none": 0, "low": 1, "medium": 2, "high": 3}
+        min_level = level_order.get(str(min_disease_evidence_level).lower(), 0)
+        levels = work["disease_evidence_level"].astype(str).str.strip().str.lower().map(
+            lambda x: level_order.get(x, -1)
+        )
+        work = work[levels >= min_level]
+
+    if min_disease_publications is not None and "disease_publications" in work.columns:
+        pubs = pd.to_numeric(work["disease_publications"], errors="coerce").fillna(0)
+        work = work[pubs >= int(min_disease_publications)]
+
+    if min_disease_score is not None and "disease_score" in work.columns:
+        scores = pd.to_numeric(work["disease_score"], errors="coerce").fillna(0.0)
+        work = work[scores >= float(min_disease_score)]
+
+    if work.empty:
+        return set()
+
+    genes = {
+        g.strip()
+        for g in work[gc].dropna().astype(str).tolist()
+        if str(g).strip()
+    }
+    return genes
+
+
+def _collapse_modules_by_theme(df: pd.DataFrame, *, include_disease_columns: bool) -> pd.DataFrame:
     """
     Collapse module rows by Module_theme so each theme appears once.
 
@@ -62,28 +157,30 @@ def _collapse_modules_by_theme(df: pd.DataFrame) -> pd.DataFrame:
                         vals.append(token)
             return ", ".join(vals[:top_k])
 
-        disease_score = float(pd.to_numeric(sub["Disease_relevance_score"], errors="coerce").fillna(0.5).max())
         row0 = sub.iloc[0]
-        rows.append(
-            {
-                "Module": str(theme),
-                "Module_theme": str(theme),
-                "Theme_cluster_count": int(len(sub)),
-                "Score": float(row0["Score"]),
-                "Base_score": float(row0["Base_score"]),
-                "PPI_coherence_score": float(row0["PPI_coherence_score"]),
-                "Blended_score": float(row0["Blended_score"]),
-                "Main_genes": _tokens_from_csv("Main_genes", top_k=10),
-                "Overlap_genes": _tokens_from_csv("Overlap_genes", top_k=OVERLAP_GENES_CAP),
-                "Main_pathways": _tokens_from_csv("Main_pathways", top_k=5),
-                "Main_theme": str(row0["Main_theme"]),
-                "Disease_relevance_score": round(disease_score, 4),
-                "Disease_relevance_tier": _disease_relevance_tier(disease_score),
-                "module_type": "core" if (sub["module_type"] == "core").any() else "candidate",
-                "n_pathways": int(pd.to_numeric(sub["n_pathways"], errors="coerce").fillna(0).sum()),
-                "n_genes": int(pd.to_numeric(sub["n_genes"], errors="coerce").fillna(0).max()),
-            }
-        )
+        row = {
+            "Module": str(theme),
+            "Module_theme": str(theme),
+            "Theme_cluster_count": int(len(sub)),
+            "Score": float(row0["Score"]),
+            "Base_score": float(row0["Base_score"]),
+            "PPI_coherence_score": float(row0["PPI_coherence_score"]),
+            "Blended_score": float(row0["Blended_score"]),
+            "Main_genes": _tokens_from_csv("Main_genes", top_k=10),
+            "Overlap_genes": _tokens_from_csv("Overlap_genes", top_k=OVERLAP_GENES_CAP),
+            "Main_pathways": _tokens_from_csv("Main_pathways", top_k=5),
+            "Main_theme": str(row0["Main_theme"]),
+            "module_type": "core" if (sub["module_type"] == "core").any() else "candidate",
+            "n_pathways": int(pd.to_numeric(sub["n_pathways"], errors="coerce").fillna(0).sum()),
+            "n_genes": int(pd.to_numeric(sub["n_genes"], errors="coerce").fillna(0).max()),
+        }
+        if include_disease_columns:
+            disease_score = float(
+                pd.to_numeric(sub["Disease_relevance_score"], errors="coerce").dropna().max()
+            )
+            row["Disease_relevance_score"] = round(disease_score, 4)
+            row["Disease_relevance_tier"] = _disease_relevance_tier(disease_score)
+        rows.append(row)
 
     out = pd.DataFrame(rows)
     out.sort_values(by=["Score", "n_genes", "n_pathways"], ascending=[False, False, False], inplace=True)
@@ -331,6 +428,22 @@ def run_module_pipeline(
         logger.warning("Pathway clustering produced no modules.")
         return pd.DataFrame()
 
+    # Build disease prior from mapper-style disease columns unless explicitly provided.
+    if disease_genes is None:
+        disease_genes = _derive_disease_prior_genes(
+            input_path,
+            gene_column=gene_column,
+            disease_only=disease_only,
+            disease_association_types=disease_association_types,
+            min_disease_evidence_level=min_disease_evidence_level,
+            min_disease_publications=min_disease_publications,
+            min_disease_score=min_disease_score,
+        )
+    if disease_genes:
+        logger.info("Disease prior active for module scoring (%d genes).", len(disease_genes))
+    else:
+        logger.info("No disease prior detected; module scoring will not include disease columns.")
+
     normalizer = PathwayNormalizer()
     _, theme_descriptions = load_theme_extras()
 
@@ -468,12 +581,13 @@ def run_module_pipeline(
             "Overlap_genes": overlap_genes,
             "Main_pathways": main_pathways,
             "Main_theme": main_theme,
-            "Disease_relevance_score": round(row.get("disease_relevance", 0.5), 4),
-            "Disease_relevance_tier": row.get("disease_relevance_tier", "Medium"),
             "module_type": module_type,
             "n_pathways": row["n_pathways"],
             "n_genes": n_genes,
         })
+        if bool(row.get("has_disease_prior", False)):
+            out_rows[-1]["Disease_relevance_score"] = round(float(row.get("disease_relevance")), 4)
+            out_rows[-1]["Disease_relevance_tier"] = row.get("disease_relevance_tier", "Medium")
 
     out_df = pd.DataFrame(out_rows)
     # Rank purely by final score so output order matches the reported score.
@@ -483,13 +597,21 @@ def run_module_pipeline(
         inplace=True,
     )
     out_df.reset_index(drop=True, inplace=True)
+    include_disease_columns = bool(
+        "Disease_relevance_score" in out_df.columns and out_df["Disease_relevance_score"].notna().any()
+    )
+    if not include_disease_columns:
+        out_df = out_df.drop(
+            columns=["Disease_relevance_score", "Disease_relevance_tier"],
+            errors="ignore",
+        )
     # Keep detailed per-cluster output for debugging/traceability.
     detailed_path = output_dir / "modules_ranked_detailed.csv"
     out_df.to_csv(detailed_path, index=False)
     logger.info(f"Wrote {detailed_path} with {len(out_df)} module clusters.")
 
     # Primary output: one row per normalized theme (what users typically want to review).
-    collapsed_df = _collapse_modules_by_theme(out_df)
+    collapsed_df = _collapse_modules_by_theme(out_df, include_disease_columns=include_disease_columns)
     out_path = output_dir / "modules_ranked.csv"
     collapsed_df.to_csv(out_path, index=False)
     logger.info(

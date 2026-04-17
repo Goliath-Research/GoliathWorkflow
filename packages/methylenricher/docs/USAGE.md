@@ -41,6 +41,12 @@ Presets currently include `cancer-core` and `cancer-extended`.
 
 With `--modules`, MethylEnricher runs enrichment + pathway graph clustering and writes `modules_ranked.csv`.
 
+Disease columns in module outputs are conditional:
+
+- When a disease prior can be inferred from mapper-style disease columns in the input CSV (or explicitly provided by callers), `modules_ranked.csv` includes `Disease_relevance_score` and `Disease_relevance_tier`.
+- When no valid disease prior exists (for example healthy-vs-healthy runs, or disease filters that leave zero prior genes), disease columns are omitted to avoid misleading interpretation.
+- Disease-related CLI filters (`--disease-only`, `--min-disease-score`, `--min-disease-evidence-level`, etc.) can narrow both input genes and inferred module disease prior when disease metadata exists.
+
 `--network-plot` behavior:
 
 - default when omitted in module mode: `plotly`,

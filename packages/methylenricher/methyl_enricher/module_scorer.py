@@ -13,17 +13,6 @@ from .pathway_graph import canonical_pathway_key
 
 logger = logging.getLogger(__name__)
 
-# Minimal set of prostate-cancer-relevant gene symbols for disease prior (overlap scoring).
-# Can be overridden or extended via config/file.
-DEFAULT_PCA_RELEVANT_GENES: Set[str] = {
-    "AR", "NKX3-1", "PTEN", "TP53", "MYC", "TMPRSS2", "ERG", "ETS1", "ETS2",
-    "PIK3CA", "AKT1", "MTOR", "FOXA1", "HOXB13", "BRCA1", "BRCA2", "ATM",
-    "CDKN1B", "RB1", "MYCL", "KLK3", "KLK2", "ACPP", "AMACR", "PCA3",
-    "GSTP1", "APC", "CTNNB1", "WNT", "TGFB1", "SMAD4", "VEGFA", "IL6",
-    "CD274", "PDCD1", "MSH2", "MSH6", "MLH1", "PMS2", "BARD1",
-}
-
-
 def _normalize_score(x: float, low: float = 0.0, high: float = 1.0) -> float:
     """Clip and optionally scale to [0, 1]."""
     return float(np.clip(x, low, high))
@@ -77,11 +66,11 @@ def compute_disease_relevance(
 ) -> float:
     """
     Disease relevance score: fraction of module genes that are in disease set,
-    or 0 if no disease set. Returns value in [0, 1].
+    or NaN if no disease set. Returns value in [0, 1] when computable.
     """
     disease_genes = disease_genes or set()
     if not disease_genes or not module_genes:
-        return 0.5  # neutral when no prior
+        return float("nan")
     disease_genes = {g.strip().upper() for g in disease_genes}
     module_genes = {g.strip().upper() for g in module_genes}
     overlap = len(module_genes & disease_genes)
@@ -117,6 +106,7 @@ def score_and_rank_modules(
     """
     # Use only user-supplied disease genes; without a prior, keep disease relevance neutral.
     disease_genes = disease_genes or set()
+    has_disease_prior = bool(disease_genes)
     ppi_coherence_by_module = ppi_coherence_by_module or {}
     ppi_weight = float(np.clip(ppi_weight_in_final_score, 0.0, 1.0))
     module_ids = sorted(set(pathway_to_module_id.values()))
@@ -130,7 +120,13 @@ def score_and_rank_modules(
             pathways, merged_df, pathway_to_genes, gene_weights
         )
         disease_score = compute_disease_relevance(genes, disease_genes)
-        base_score = weight_enrichment * enrich_score + weight_disease * disease_score
+        if has_disease_prior and np.isfinite(disease_score):
+            base_score = weight_enrichment * enrich_score + weight_disease * disease_score
+            disease_tier = pca_relevance_label(disease_score)
+        else:
+            # When no disease prior exists, ranking should be purely enrichment-driven.
+            base_score = enrich_score
+            disease_tier = None
         ppi_score = float(np.clip(ppi_coherence_by_module.get(int(mid), 0.0), 0.0, 1.0))
         blended_score = (1.0 - ppi_weight) * base_score + ppi_weight * ppi_score
         rows.append({
@@ -138,12 +134,13 @@ def score_and_rank_modules(
             "n_pathways": len(pathways),
             "n_genes": len(genes),
             "enrichment_score": round(enrich_score, 4),
-            "disease_relevance": round(disease_score, 4),
+            "disease_relevance": (round(disease_score, 4) if np.isfinite(disease_score) else np.nan),
             "base_score": round(base_score, 4),
             "ppi_coherence_score": round(ppi_score, 4),
             "blended_score": round(blended_score, 4),
             "final_score": round(blended_score, 4),
-            "disease_relevance_tier": pca_relevance_label(disease_score),
+            "disease_relevance_tier": disease_tier,
+            "has_disease_prior": has_disease_prior,
         })
     df = pd.DataFrame(rows)
     df.sort_values("final_score", ascending=False, inplace=True)
