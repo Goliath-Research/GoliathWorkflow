@@ -3287,6 +3287,9 @@ class MethylDetector:
         EXTRA_EXPORT_COLS = [
             'context_weight',
             'combined_variance', 'n_estimated_per_group',
+            # Preserve stability-tier recurrence metadata when fixed_dmp_panel
+            # rows provide it, so downstream mappers can weight by frequency.
+            'frequency', 'count', 'n_runs', 'combined_score', 'log_combined_score',
         ]
         export_cols = STANDARD_EXPORT_COLS + [c for c in EXTRA_EXPORT_COLS if c not in STANDARD_EXPORT_COLS]
 

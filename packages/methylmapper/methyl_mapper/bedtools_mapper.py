@@ -866,7 +866,7 @@ class BedtoolsMapper:
 
         optional_cols = [
             'p_value', 'q_value', 'effect_size', 'delta_mean',
-            'context', 'importance', 'weight', 'overlap'
+            'context', 'importance', 'weight', 'overlap', 'frequency'
         ]
         stat_cols = ['p_value', 'q_value', 'effect_size', 'delta_mean']
         existing_cols = [c for c in optional_cols if c in dmp_lookup.columns]
@@ -1259,11 +1259,6 @@ class BedtoolsMapper:
                 except Exception as exc:
                     logger.warning("Failed to derive gene_q_value from gene_p_value fallback: %s", exc)
 
-        if 'total_importance' in grouped.columns:
-            grouped['gene_importance'] = grouped['total_importance']
-        elif 'total_weight' in grouped.columns:
-            grouped['gene_importance'] = grouped['total_weight']
-
         # Fallback: fill undefined stats (NaN) when the gene has DMPs (dmp_count > 0) by recomputing from finite values in the intersection table
         stat_aggs = []
         if 'p_value' in intersect_df.columns:
@@ -1313,9 +1308,53 @@ class BedtoolsMapper:
         if available_metadata:
             metadata = intersect_df.groupby(group_by)[available_metadata].first().reset_index()
             grouped = grouped.merge(metadata, on=group_by, how='left')
+
+        # Domain score for feature ranking:
+        #   gene_score = sum(|effect_size| * frequency * region_weight)
+        # Missing frequency/region_weight default to 1.0.
+        if 'effect_size' in intersect_df.columns:
+            score_df = intersect_df[[group_by, 'effect_size']].copy()
+            score_df['effect_size_abs'] = pd.to_numeric(
+                score_df['effect_size'], errors='coerce'
+            ).fillna(0.0).abs()
+            if 'frequency' in intersect_df.columns:
+                score_df['frequency'] = pd.to_numeric(
+                    intersect_df['frequency'], errors='coerce'
+                ).fillna(1.0)
+            else:
+                score_df['frequency'] = 1.0
+            if 'region_weight' in intersect_df.columns:
+                score_df['region_weight'] = pd.to_numeric(
+                    intersect_df['region_weight'], errors='coerce'
+                ).fillna(1.0)
+            else:
+                score_df['region_weight'] = 1.0
+            score_df['gene_score_term'] = (
+                score_df['effect_size_abs']
+                * score_df['frequency']
+                * score_df['region_weight']
+            )
+            gene_score = (
+                score_df.groupby(group_by)['gene_score_term']
+                .sum()
+                .reset_index()
+                .rename(columns={'gene_score_term': 'gene_score'})
+            )
+            grouped = grouped.merge(gene_score, on=group_by, how='left')
+            grouped['gene_score'] = pd.to_numeric(grouped['gene_score'], errors='coerce').fillna(0.0)
+
+        # Keep the legacy importance column, but prefer the new score when available.
+        if 'total_importance' in grouped.columns:
+            grouped['gene_importance'] = grouped['total_importance']
+        elif 'gene_score' in grouped.columns:
+            grouped['gene_importance'] = grouped['gene_score']
+        elif 'total_weight' in grouped.columns:
+            grouped['gene_importance'] = grouped['total_weight']
         
         # Sort by DMP count (descending), then by weight
         sort_cols = ['dmp_count']
+        if 'gene_score' in grouped.columns:
+            sort_cols.append('gene_score')
         if 'total_weight' in grouped.columns:
             sort_cols.append('total_weight')
         grouped = grouped.sort_values(sort_cols, ascending=False).reset_index(drop=True)
