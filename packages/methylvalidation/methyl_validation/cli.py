@@ -2677,6 +2677,10 @@ def main() -> None:
             gene_min_freq=config.stability_gene_freq,
             min_balanced_accuracy=config.stability_min_balanced_accuracy,
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+            dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
+            relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
+            relaxed_multiplier=config.stability_relaxed_multiplier,
+            score_eps=config.stability_score_eps,
         )
         print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
         print(f"  Stable DMPs: {stability_summary['dmp_stability'].get('stable_dmps_at_threshold', 0)}")

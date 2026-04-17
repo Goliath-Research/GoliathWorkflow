@@ -15,6 +15,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 from methyl_utils import load_project
 from methyl_utils.logging_utils import setup_module_logging
@@ -374,6 +375,159 @@ def _select_stable_dmps_df(
     return selected
 
 
+def _score_stable_dmps(
+    selected_df: pd.DataFrame,
+    score_eps: float = 1e-12,
+) -> pd.DataFrame:
+    """Score stable DMPs using effect_size * sqrt(frequency) and return sorted table."""
+    if selected_df is None or selected_df.empty:
+        out = selected_df.copy() if selected_df is not None else pd.DataFrame()
+        if "combined_score" not in out.columns:
+            out["combined_score"] = pd.Series(dtype="float64")
+        return out
+
+    out = selected_df.copy()
+    freq = pd.to_numeric(out.get("frequency"), errors="coerce").clip(lower=0.0).fillna(0.0)
+    effect = pd.to_numeric(out.get("effect_size"), errors="coerce").fillna(0.0)
+    effect = effect.where(np.isfinite(effect), 0.0)
+    effect = effect.clip(lower=0.0)
+    out["combined_score"] = effect * np.sqrt(freq)
+    out["combined_score"] = pd.to_numeric(out["combined_score"], errors="coerce").fillna(0.0)
+    out["log_combined_score"] = np.log(out["combined_score"] + float(score_eps))
+    out = out.sort_values(
+        ["combined_score", "frequency", "effect_size"],
+        ascending=[False, False, False],
+        na_position="last",
+    ).reset_index(drop=True)
+    return out
+
+
+def _detect_log_score_elbow(
+    sorted_scores: pd.Series,
+    score_eps: float = 1e-12,
+) -> tuple[int, float]:
+    """Detect a robust elbow for descending scores using log-scale distance-to-line."""
+    scores = pd.to_numeric(sorted_scores, errors="coerce").fillna(0.0).astype(float).to_numpy()
+    n = int(len(scores))
+    if n == 0:
+        return 0, 0.0
+    if n == 1:
+        return 0, float(scores[0])
+
+    log_scores = np.log(np.clip(scores, 0.0, None) + float(score_eps))
+    if not np.isfinite(log_scores).any() or n <= 2:
+        idx = int(max(0, n - 1))
+        return idx, float(scores[idx])
+
+    x = np.linspace(0.0, 1.0, n, dtype=float)
+    y = log_scores
+    y_min = float(np.nanmin(y))
+    y_max = float(np.nanmax(y))
+    if not np.isfinite(y_min) or not np.isfinite(y_max) or np.isclose(y_max, y_min):
+        idx = int(max(0, n - 1))
+        return idx, float(scores[idx])
+    y_norm = (y - y_min) / (y_max - y_min)
+
+    x0, y0 = x[0], y_norm[0]
+    x1, y1 = x[-1], y_norm[-1]
+    denom = float(np.hypot(y1 - y0, x1 - x0))
+    if denom <= 0.0 or not np.isfinite(denom):
+        idx = int(max(0, n - 1))
+        return idx, float(scores[idx])
+
+    # Perpendicular distance from each point to endpoint line.
+    distances = np.abs((y1 - y0) * x - (x1 - x0) * y_norm + x1 * y0 - y1 * x0) / denom
+    if n > 2:
+        distances[0] = -1.0
+        distances[-1] = -1.0
+    idx = int(np.argmax(distances))
+    if idx < 0 or idx >= n:
+        idx = int(max(0, n - 1))
+    return idx, float(scores[idx])
+
+
+def _select_dual_cutoff_dmps(
+    dmp_freq_df: pd.DataFrame,
+    min_frequency: float = 0.7,
+    top_n: Optional[int] = None,
+    relaxed_cutoff_mode: str = "elbow_log_score",
+    relaxed_multiplier: float = 0.5,
+    score_eps: float = 1e-12,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
+    """Select strict and relaxed stable DMP sets from a frequency table."""
+    selected = _select_stable_dmps_df(dmp_freq_df, min_frequency=min_frequency, top_n=None)
+    scored = _score_stable_dmps(selected, score_eps=score_eps)
+    if scored.empty:
+        return selected.copy(), selected.copy(), scored, {
+            "enabled": True,
+            "strict_cutoff_mode": "elbow_log_score",
+            "relaxed_cutoff_mode": relaxed_cutoff_mode,
+            "strict_cutoff_index": 0,
+            "strict_cutoff_score": 0.0,
+            "relaxed_cutoff_index": 0,
+            "relaxed_cutoff_score": 0.0,
+            "min_frequency": float(min_frequency),
+            "n_candidates_after_min_frequency": 0,
+            "n_strict_selected": 0,
+            "n_relaxed_selected": 0,
+            "relaxed_multiplier": float(relaxed_multiplier),
+        }
+
+    strict_idx, strict_score = _detect_log_score_elbow(
+        scored["combined_score"], score_eps=score_eps
+    )
+    strict = scored.iloc[: strict_idx + 1].copy()
+
+    relaxed_mode = str(relaxed_cutoff_mode).strip().lower()
+    relaxed_idx = strict_idx
+    relaxed_score = strict_score
+    if relaxed_mode == "strict_multiplier":
+        mult = float(relaxed_multiplier)
+        if mult <= 0:
+            mult = 1.0
+        relaxed_score = float(strict_score * mult)
+        relaxed = scored[scored["combined_score"] >= relaxed_score].copy()
+        if relaxed.empty:
+            relaxed = strict.copy()
+    else:
+        tail = scored.iloc[strict_idx:].reset_index(drop=True)
+        tail_idx, tail_score = _detect_log_score_elbow(
+            tail["combined_score"], score_eps=score_eps
+        )
+        relaxed_idx = int(strict_idx + tail_idx)
+        relaxed_score = float(tail_score)
+        if relaxed_score > strict_score:
+            relaxed_score = strict_score
+            relaxed_idx = strict_idx
+        relaxed = scored.iloc[: relaxed_idx + 1].copy()
+
+    # Guarantee strict subset semantics.
+    if len(relaxed) < len(strict):
+        relaxed = strict.copy()
+        relaxed_idx = strict_idx
+        relaxed_score = strict_score
+
+    if top_n is not None:
+        strict = strict.head(top_n).copy()
+        relaxed = relaxed.head(top_n).copy()
+
+    diagnostics = {
+        "enabled": True,
+        "strict_cutoff_mode": "elbow_log_score",
+        "relaxed_cutoff_mode": relaxed_mode,
+        "strict_cutoff_index": int(strict_idx),
+        "strict_cutoff_score": float(strict_score),
+        "relaxed_cutoff_index": int(relaxed_idx),
+        "relaxed_cutoff_score": float(relaxed_score),
+        "min_frequency": float(min_frequency),
+        "n_candidates_after_min_frequency": int(len(scored)),
+        "n_strict_selected": int(len(strict)),
+        "n_relaxed_selected": int(len(relaxed)),
+        "relaxed_multiplier": float(relaxed_multiplier),
+    }
+    return strict, relaxed, scored, diagnostics
+
+
 def write_dmp_frequency_plot_by_chromosome(
     dmp_freq_df: pd.DataFrame,
     selected_dmp_df: pd.DataFrame,
@@ -684,6 +838,55 @@ def write_stable_panel(
     return out_path
 
 
+def write_stable_dual_panels(
+    dmp_freq_df: pd.DataFrame,
+    output_dir: Path,
+    min_frequency: float = 0.7,
+    top_n: Optional[int] = None,
+    relaxed_cutoff_mode: str = "elbow_log_score",
+    relaxed_multiplier: float = 0.5,
+    score_eps: float = 1e-12,
+) -> Dict[str, Any]:
+    """Write strict and relaxed stability panels plus scoring diagnostics."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    strict, relaxed, scored, diagnostics = _select_dual_cutoff_dmps(
+        dmp_freq_df=dmp_freq_df,
+        min_frequency=min_frequency,
+        top_n=top_n,
+        relaxed_cutoff_mode=relaxed_cutoff_mode,
+        relaxed_multiplier=relaxed_multiplier,
+        score_eps=score_eps,
+    )
+
+    strict_path = output_dir / "stable_dmps_strict.csv"
+    relaxed_path = output_dir / "stable_dmps_relaxed.csv"
+    production_path = output_dir / "stable_dmps_production.csv"
+    diagnostics_json_path = output_dir / "stable_dmps_score_diagnostics.json"
+    diagnostics_csv_path = output_dir / "stable_dmps_score_diagnostics.csv"
+    ranking_path = output_dir / "stable_dmps_scored.csv"
+
+    strict.to_csv(strict_path, index=False)
+    relaxed.to_csv(relaxed_path, index=False)
+    # Backward-compatible production panel: strict by default.
+    strict.to_csv(production_path, index=False)
+    scored.to_csv(ranking_path, index=False)
+    with open(diagnostics_json_path, "w", encoding="utf-8") as f:
+        json.dump(diagnostics, f, indent=2, default=str)
+    pd.DataFrame([diagnostics]).to_csv(diagnostics_csv_path, index=False)
+
+    return {
+        "strict_path": strict_path,
+        "relaxed_path": relaxed_path,
+        "production_path": production_path,
+        "scored_path": ranking_path,
+        "diagnostics_json_path": diagnostics_json_path,
+        "diagnostics_csv_path": diagnostics_csv_path,
+        "strict_df": strict,
+        "relaxed_df": relaxed,
+        "diagnostics": diagnostics,
+    }
+
+
 def run_stability_analysis(
     monte_carlo_runs_root: Path,
     output_dir: Optional[Path] = None,
@@ -692,6 +895,10 @@ def run_stability_analysis(
     top_n_dmps: Optional[int] = None,
     min_balanced_accuracy: Optional[float] = None,
     prefer_classifier_panel_dmps: bool = False,
+    dual_cutoff_enabled: bool = False,
+    relaxed_cutoff_mode: str = "elbow_log_score",
+    relaxed_multiplier: float = 0.5,
+    score_eps: float = 1e-12,
 ) -> Dict[str, Any]:
     """Main entry point for stability analysis."""
     if output_dir is None:
@@ -708,15 +915,40 @@ def run_stability_analysis(
 
     stable_dmp_path = None
     selected_dmp_df = pd.DataFrame()
+    strict_dmp_path = None
+    relaxed_dmp_path = None
+    scored_dmp_path = None
+    score_diagnostics_json_path = None
+    score_diagnostics_csv_path = None
+    score_diagnostics = None
     dmp_frequency_plot_path = None
     dmp_frequency_plot_by_chrom = {}
     dmp_frequency_counts_by_chrom = {}
-    selected_dmp_df = _select_stable_dmps_df(
-        dmp_df, min_frequency=dmp_min_freq, top_n=top_n_dmps
-    )
-    # Always materialize the stable panel path so --freeze has a deterministic input artifact,
-    # even when no DMP passes thresholds (empty CSV with canonical headers).
-    stable_dmp_path = write_stable_panel(dmp_df, output_dir, dmp_min_freq, top_n_dmps)
+    if dual_cutoff_enabled:
+        dual_paths = write_stable_dual_panels(
+            dmp_df,
+            output_dir,
+            min_frequency=dmp_min_freq,
+            top_n=top_n_dmps,
+            relaxed_cutoff_mode=relaxed_cutoff_mode,
+            relaxed_multiplier=relaxed_multiplier,
+            score_eps=score_eps,
+        )
+        selected_dmp_df = dual_paths["strict_df"]
+        stable_dmp_path = dual_paths["production_path"]
+        strict_dmp_path = dual_paths["strict_path"]
+        relaxed_dmp_path = dual_paths["relaxed_path"]
+        scored_dmp_path = dual_paths["scored_path"]
+        score_diagnostics_json_path = dual_paths["diagnostics_json_path"]
+        score_diagnostics_csv_path = dual_paths["diagnostics_csv_path"]
+        score_diagnostics = dual_paths["diagnostics"]
+    else:
+        selected_dmp_df = _select_stable_dmps_df(
+            dmp_df, min_frequency=dmp_min_freq, top_n=top_n_dmps
+        )
+        # Always materialize the stable panel path so --freeze has a deterministic input artifact,
+        # even when no DMP passes thresholds (empty CSV with canonical headers).
+        stable_dmp_path = write_stable_panel(dmp_df, output_dir, dmp_min_freq, top_n_dmps)
     if not dmp_df.empty:
         (
             dmp_frequency_plot_path,
@@ -731,6 +963,17 @@ def run_stability_analysis(
         "gene_stability": gene_summary,
         "detector_parameters": detector_param_summary,
         "stable_dmp_csv": str(stable_dmp_path) if stable_dmp_path else None,
+        "stable_dmp_csv_strict": str(strict_dmp_path) if strict_dmp_path else None,
+        "stable_dmp_csv_relaxed": str(relaxed_dmp_path) if relaxed_dmp_path else None,
+        "stable_dmp_scored_csv": str(scored_dmp_path) if scored_dmp_path else None,
+        "stable_dmp_score_diagnostics_json": (
+            str(score_diagnostics_json_path) if score_diagnostics_json_path else None
+        ),
+        "stable_dmp_score_diagnostics_csv": (
+            str(score_diagnostics_csv_path) if score_diagnostics_csv_path else None
+        ),
+        "stable_dmp_score_diagnostics": score_diagnostics,
+        "dual_cutoff_enabled": bool(dual_cutoff_enabled),
         "dmp_frequency_plot_html": str(dmp_frequency_plot_path) if dmp_frequency_plot_path else None,
         "dmp_frequency_charts_by_chromosome": dmp_frequency_plot_by_chrom,
         "dmp_frequency_counts_by_chromosome": dmp_frequency_counts_by_chrom,

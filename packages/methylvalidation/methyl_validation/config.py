@@ -145,6 +145,33 @@ class MonteCarloConfig(BaseModel):
         le=1.0,
         description="Minimum frequency for a gene to be considered stable (only when enricher outputs exist).",
     )
+    stability_dual_cutoff_enabled: bool = Field(
+        default=False,
+        description=(
+            "If true, stability outputs both strict and relaxed stable DMP panels "
+            "using score = effect_size * sqrt(frequency) with log-score elbow cutoff."
+        ),
+    )
+    stability_relaxed_cutoff_mode: Literal["elbow_log_score", "strict_multiplier"] = Field(
+        default="elbow_log_score",
+        description=(
+            "How to derive relaxed stability cutoff when dual-cutoff is enabled: "
+            "elbow_log_score (second elbow in tail) or strict_multiplier."
+        ),
+    )
+    stability_relaxed_multiplier: float = Field(
+        default=0.5,
+        gt=0.0,
+        description=(
+            "Multiplier applied to strict score threshold when "
+            "stability_relaxed_cutoff_mode='strict_multiplier'."
+        ),
+    )
+    stability_score_eps: float = Field(
+        default=1e-12,
+        gt=0.0,
+        description="Small epsilon used in log(score + eps) elbow detection.",
+    )
     stability_featurecuts_enabled: bool = Field(
         default=False,
         description=(

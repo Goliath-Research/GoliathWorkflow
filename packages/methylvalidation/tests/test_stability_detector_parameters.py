@@ -197,7 +197,7 @@ def test_run_stability_analysis_writes_empty_stable_panel_when_no_dmps(tmp_path)
     import pandas as pd
 
     df = pd.read_csv(stable_csv)
-    assert list(df.columns) == ["chromosome", "position", "frequency", "count", "n_runs"]
+    assert list(df.columns) == ["chromosome", "position", "frequency", "count", "n_runs", "effect_size"]
     assert len(df) == 0
 
 
