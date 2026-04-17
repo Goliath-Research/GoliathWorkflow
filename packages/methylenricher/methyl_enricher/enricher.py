@@ -349,6 +349,9 @@ class EnrichmentAnalyzer:
                 if gene and gene not in seen:
                     genes.append(gene)
                     seen.add(gene)
+            if top_n and len(genes) > top_n:
+                genes = genes[:top_n]
+                print(f"[INFO] Applied top_n={top_n}: {len(genes)} genes retained")
         else:
             if sort_by:
                 print("[WARN] sort_by is only supported for CSV/TSV inputs; ignoring")
