@@ -12,7 +12,7 @@ import pandas as pd
 from .enricher import EnrichmentAnalyzer
 from .pathway_normalizer import PathwayNormalizer, load_theme_extras
 from .pathway_graph import canonical_pathway_key, run_pathway_clustering
-from .module_scorer import score_and_rank_modules, DEFAULT_PCA_RELEVANT_GENES
+from .module_scorer import score_and_rank_modules
 from . import module_network_plot
 from .ppi_network import (
     build_ppi_graph,
@@ -27,6 +27,68 @@ from .ppi_network import (
 logger = logging.getLogger(__name__)
 
 OVERLAP_GENES_CAP = 50
+
+
+def _disease_relevance_tier(score: float) -> str:
+    """Map disease relevance score to High/Medium/Low."""
+    if score >= 0.4:
+        return "High"
+    if score >= 0.2:
+        return "Medium"
+    return "Low"
+
+
+def _collapse_modules_by_theme(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Collapse module rows by Module_theme so each theme appears once.
+
+    Keeps the highest scoring representative statistics while merging human-readable
+    gene/pathway summaries and counting how many clusters contributed to the theme.
+    """
+    if df.empty or "Module_theme" not in df.columns:
+        return df
+
+    rows = []
+    for theme, sub in df.groupby("Module_theme", sort=False):
+        sub = sub.sort_values("Score", ascending=False).reset_index(drop=True)
+
+        def _tokens_from_csv(col: str, top_k: int) -> str:
+            vals = []
+            seen = set()
+            for raw in sub[col].dropna().astype(str):
+                for token in [p.strip() for p in raw.split(",") if p.strip()]:
+                    if token not in seen:
+                        seen.add(token)
+                        vals.append(token)
+            return ", ".join(vals[:top_k])
+
+        disease_score = float(pd.to_numeric(sub["Disease_relevance_score"], errors="coerce").fillna(0.5).max())
+        row0 = sub.iloc[0]
+        rows.append(
+            {
+                "Module": str(theme),
+                "Module_theme": str(theme),
+                "Theme_cluster_count": int(len(sub)),
+                "Score": float(row0["Score"]),
+                "Base_score": float(row0["Base_score"]),
+                "PPI_coherence_score": float(row0["PPI_coherence_score"]),
+                "Blended_score": float(row0["Blended_score"]),
+                "Main_genes": _tokens_from_csv("Main_genes", top_k=10),
+                "Overlap_genes": _tokens_from_csv("Overlap_genes", top_k=OVERLAP_GENES_CAP),
+                "Main_pathways": _tokens_from_csv("Main_pathways", top_k=5),
+                "Main_theme": str(row0["Main_theme"]),
+                "Disease_relevance_score": round(disease_score, 4),
+                "Disease_relevance_tier": _disease_relevance_tier(disease_score),
+                "module_type": "core" if (sub["module_type"] == "core").any() else "candidate",
+                "n_pathways": int(pd.to_numeric(sub["n_pathways"], errors="coerce").fillna(0).sum()),
+                "n_genes": int(pd.to_numeric(sub["n_genes"], errors="coerce").fillna(0).max()),
+            }
+        )
+
+    out = pd.DataFrame(rows)
+    out.sort_values(by=["Score", "n_genes", "n_pathways"], ascending=[False, False, False], inplace=True)
+    out.reset_index(drop=True, inplace=True)
+    return out
 
 
 def _reduce_terms_for_clustering(
@@ -270,7 +332,7 @@ def run_module_pipeline(
         return pd.DataFrame()
 
     normalizer = PathwayNormalizer()
-    pca_relevance_tier, theme_descriptions = load_theme_extras()
+    _, theme_descriptions = load_theme_extras()
 
     ppi_coherence_by_module: Dict[int, float] = {}
     ppi_dash_elements: Optional[List[Dict]] = None
@@ -370,7 +432,7 @@ def run_module_pipeline(
         pathway_to_genes,
         clustering_df,
         gene_weights=gene_weights,
-        disease_genes=disease_genes or DEFAULT_PCA_RELEVANT_GENES,
+        disease_genes=disease_genes,
         ppi_coherence_by_module=ppi_coherence_by_module,
         ppi_weight_in_final_score=(
             float(network_refinement_weight_in_final_score)
@@ -387,16 +449,17 @@ def run_module_pipeline(
         for p in pathways:
             module_genes |= pathway_to_genes.get(p, set())
         label = _module_label_from_themes(pathways, normalizer)
+        module_name = f"{label} (M{int(mid)})"
         main_genes = _main_genes_for_module(module_genes, gene_weights, top_k=10)
         main_pathways = _main_pathways_for_module(pathways, clustering_df, top_k=5)
         overlap_genes = _overlap_genes_str(module_genes)
         n_genes = row["n_genes"]
-        # Curated PCa tier override for canonical themes; else use score-based
-        pca_relevance = pca_relevance_tier.get(label, row["pca_relevance"])
         module_type = "candidate" if n_genes <= 2 else "core"
         main_theme = theme_descriptions.get(label, label)
         out_rows.append({
-            "Module": label,
+            "Module": module_name,
+            "Module_theme": label,
+            "Module_id": int(mid),
             "Score": round(row["final_score"], 4),
             "Base_score": round(row.get("base_score", row["final_score"]), 4),
             "PPI_coherence_score": round(row.get("ppi_coherence_score", 0.0), 4),
@@ -405,23 +468,36 @@ def run_module_pipeline(
             "Overlap_genes": overlap_genes,
             "Main_pathways": main_pathways,
             "Main_theme": main_theme,
-            "PCa_relevance": pca_relevance,
+            "Disease_relevance_score": round(row.get("disease_relevance", 0.5), 4),
+            "Disease_relevance_tier": row.get("disease_relevance_tier", "Medium"),
             "module_type": module_type,
             "n_pathways": row["n_pathways"],
             "n_genes": n_genes,
         })
 
     out_df = pd.DataFrame(out_rows)
-    # Core modules first (by score desc), then candidate modules at bottom
+    # Rank purely by final score so output order matches the reported score.
     out_df.sort_values(
-        by=["module_type", "Score"],
-        ascending=[True, False],
+        by=["Score", "n_genes", "n_pathways"],
+        ascending=[False, False, False],
         inplace=True,
     )
     out_df.reset_index(drop=True, inplace=True)
+    # Keep detailed per-cluster output for debugging/traceability.
+    detailed_path = output_dir / "modules_ranked_detailed.csv"
+    out_df.to_csv(detailed_path, index=False)
+    logger.info(f"Wrote {detailed_path} with {len(out_df)} module clusters.")
+
+    # Primary output: one row per normalized theme (what users typically want to review).
+    collapsed_df = _collapse_modules_by_theme(out_df)
     out_path = output_dir / "modules_ranked.csv"
-    out_df.to_csv(out_path, index=False)
-    logger.info(f"Wrote {out_path} with {len(out_df)} modules.")
+    collapsed_df.to_csv(out_path, index=False)
+    logger.info(
+        "Wrote %s with %d merged themes (from %d clusters).",
+        out_path,
+        len(collapsed_df),
+        len(out_df),
+    )
 
     # Per-pathway overlap genes (which genes drive each pathway)
     if pathway_to_genes:
@@ -461,4 +537,4 @@ def run_module_pipeline(
             dash_open_browser=dash_open_browser,
         )
 
-    return out_df
+    return collapsed_df
