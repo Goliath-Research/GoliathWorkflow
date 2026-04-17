@@ -6,6 +6,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -14,6 +15,59 @@ from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
 from .project_resolver import resolve_mapper_paths, resolve_mapper_paths_per_cancer_group
 from .secure_credentials import SecureCredentialManager, persist_secret_if_changed
+
+
+def normalize_enrich_source(value: str) -> str:
+    """
+    Normalize enrich-source tokens so equivalent combinations are accepted in any order.
+
+    Examples:
+      - "opentargets+grok" -> "grok+opentargets"
+      - "disgenet+grok" -> "grok+disgenet"
+      - "open_targets" -> "opentargets"
+    """
+    raw = str(value or "").strip().lower()
+    if not raw:
+        raise argparse.ArgumentTypeError("Invalid --enrich-source: value cannot be empty.")
+
+    if raw in {"both", "all", "grok", "disgenet", "opentargets"}:
+        return raw
+
+    tokens = [t for t in re.split(r"[+/,\s]+", raw) if t]
+    if not tokens:
+        raise argparse.ArgumentTypeError(
+            "Invalid --enrich-source. Use grok, opentargets, disgenet, "
+            "grok+opentargets, grok+disgenet, both, or all."
+        )
+
+    aliases = {
+        "opentarget": "opentargets",
+        "open_targets": "opentargets",
+        "open-targets": "opentargets",
+    }
+    canonical = {aliases.get(token, token) for token in tokens}
+    allowed = {"grok", "opentargets", "disgenet"}
+    if not canonical.issubset(allowed):
+        raise argparse.ArgumentTypeError(
+            "Invalid --enrich-source. Use grok, opentargets, disgenet, "
+            "grok+opentargets, grok+disgenet, both, or all."
+        )
+
+    if canonical == {"grok", "opentargets"}:
+        return "grok+opentargets"
+    if canonical == {"grok", "disgenet"}:
+        return "grok+disgenet"
+    if canonical == {"grok"}:
+        return "grok"
+    if canonical == {"opentargets"}:
+        return "opentargets"
+    if canonical == {"disgenet"}:
+        return "disgenet"
+
+    raise argparse.ArgumentTypeError(
+        "Unsupported --enrich-source combination. "
+        "Supported combinations: grok+opentargets, grok+disgenet."
+    )
 
 
 def setup_logging(verbose: bool = False):
@@ -419,8 +473,7 @@ Examples:
     )
     disease_group.add_argument(
         '--enrich-source',
-        type=str,
-        choices=['grok', 'disgenet', 'both', 'opentargets', 'grok+opentargets', 'grok+disgenet', 'all'],
+        type=normalize_enrich_source,
         default='grok+opentargets',
         help='Enrichment sources: grok+opentargets = Grok annotation + Open Targets evidence/scores; '
              'disgenet/grok+disgenet require a DisGeNET key; all = Grok + Open Targets (no DisGeNET).'
@@ -775,7 +828,7 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
     if config.enrich_disease is True and not args.enrich_disease:
         args.enrich_disease = True
     if config.enrich_source is not None:
-        args.enrich_source = config.enrich_source
+        args.enrich_source = normalize_enrich_source(config.enrich_source)
     if config.enrich_profile is not None:
         args.enrich_profile = config.enrich_profile
     if config.grok_max_workers is not None:
