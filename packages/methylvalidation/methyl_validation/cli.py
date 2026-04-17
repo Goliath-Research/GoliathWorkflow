@@ -2681,9 +2681,27 @@ def main() -> None:
             relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
             relaxed_multiplier=config.stability_relaxed_multiplier,
             score_eps=config.stability_score_eps,
+            tiered_stability_enabled=bool(config.stability_tiers_enabled),
+            tier_core_frequency=config.stability_tier_core_freq,
+            tier_extended_frequency=config.stability_tier_extended_freq,
+            tier_exploratory_frequency=config.stability_tier_exploratory_freq,
+            default_freeze_tier=config.stability_default_freeze_tier,
         )
         print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
         print(f"  Stable DMPs: {stability_summary['dmp_stability'].get('stable_dmps_at_threshold', 0)}")
+        if stability_summary.get("tiered_stability_enabled"):
+            print(
+                f"  Tiered panels enabled (default freeze tier: {stability_summary.get('stability_default_freeze_tier')})"
+            )
+            tiers = stability_summary.get("stability_tiers") or {}
+            for tier_name in ("core", "extended", "exploratory"):
+                tier = tiers.get(tier_name) or {}
+                if not tier:
+                    continue
+                print(
+                    f"    {tier_name}: min_freq={tier.get('min_frequency')} "
+                    f"strict={tier.get('n_strict_selected')} relaxed={tier.get('n_relaxed_selected')}"
+                )
         gs = stability_summary.get("gene_stability") or {}
         print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (non-zero only if enricher ran in iterations)")
 
