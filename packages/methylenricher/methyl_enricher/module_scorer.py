@@ -115,7 +115,8 @@ def score_and_rank_modules(
     disease_relevance, final_score, pca_relevance (High/Medium/Low), and optional
     ppi_coherence_score/blended_score fields.
     """
-    disease_genes = disease_genes or DEFAULT_PCA_RELEVANT_GENES
+    # Use only user-supplied disease genes; without a prior, keep disease relevance neutral.
+    disease_genes = disease_genes or set()
     ppi_coherence_by_module = ppi_coherence_by_module or {}
     ppi_weight = float(np.clip(ppi_weight_in_final_score, 0.0, 1.0))
     module_ids = sorted(set(pathway_to_module_id.values()))
@@ -142,7 +143,7 @@ def score_and_rank_modules(
             "ppi_coherence_score": round(ppi_score, 4),
             "blended_score": round(blended_score, 4),
             "final_score": round(blended_score, 4),
-            "pca_relevance": pca_relevance_label(disease_score),
+            "disease_relevance_tier": pca_relevance_label(disease_score),
         })
     df = pd.DataFrame(rows)
     df.sort_values("final_score", ascending=False, inplace=True)
