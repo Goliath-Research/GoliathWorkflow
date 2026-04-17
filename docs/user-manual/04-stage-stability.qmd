@@ -1,0 +1,103 @@
+# Stage: Stability
+
+## Purpose
+
+Run repeated train/validation iterations to identify DMPs that recur across runs and materialize a stable production panel.
+
+## Entry command
+
+```bash
+source .venv/bin/activate
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability
+```
+
+Optional strict FeatureCuts alignment:
+
+```bash
+source .venv/bin/activate
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+  --stability --stability-featurecuts --stability-target-ba 0.95 --stability-min-selected-dmps 1000
+```
+
+## Required config keys
+
+Under `step_config.validation`:
+
+- `n_iterations`, `train_fraction`, `seed`
+- `run_stability`
+- `stability_dmp_freq`
+- `stability_min_balanced_accuracy`
+- `stability_gene_freq`
+- optional FeatureCuts controls:
+  - `stability_featurecuts_enabled`
+  - `stability_target_balanced_accuracy`
+  - `stability_min_selected_dmps`
+
+## Process model
+
+```{=latex}
+\begin{center}
+\begin{tikzpicture}[
+  >=Latex,
+  node distance=1.1cm and 1.5cm,
+  box/.style={draw, rounded corners, align=center, minimum width=3.2cm, minimum height=0.8cm}
+]
+\node[box] (runs) {run\_0001..run\_N};
+\node[box, right=of runs] (centroid) {methyl-centroid};
+\node[box, right=of centroid] (detector) {methyl-detector};
+\node[box, below left=of detector] (dmp) {discovery/classifier DMP exports};
+\node[box, below right=of detector] (results) {result JSON};
+\node[box, below=1.5cm of detector] (agg) {run\_stability\_analysis};
+\node[box, below left=of agg] (stable) {stable\_dmps\_production.csv};
+\node[box, below right=of agg] (summary) {stability\_summary.json};
+
+\draw[->] (runs) -- (centroid);
+\draw[->] (centroid) -- (detector);
+\draw[->] (detector) -- (dmp);
+\draw[->] (detector) -- (results);
+\draw[->] (dmp) -- (agg);
+\draw[->] (results) -- (agg);
+\draw[->] (agg) -- (stable);
+\draw[->] (agg) -- (summary);
+\end{tikzpicture}
+\end{center}
+```
+
+## Expected outputs
+
+- `<mc_root>/stability/stable_dmps_production.csv`
+- `<mc_root>/stability/stability_summary.json`
+- `<mc_root>/all_metrics.csv`
+- `<mc_root>/metrics_summary.json`
+- `<mc_root>/baseline_manifest.json`
+
+Where `<mc_root>` is:
+`<output_base>/<project_name>/monte_carlo_runs/`
+
+## Success checks
+
+- `stable_dmps_production.csv` exists and is non-empty.
+- `all_metrics.csv` has successful rows near expected run count.
+- `stability_summary.json` reports configured thresholds.
+
+## Do not do this
+
+- Do not proceed to freeze when stable panel is missing or empty.
+- Do not interpret blind outputs as stability quality evidence.
+
+## Recovery
+
+- Resume interrupted run:
+
+```bash
+source .venv/bin/activate
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume
+```
+
+- If panel is too small: lower `stability_dmp_freq` or increase `n_iterations`.
+- If run quality is too low: tune detector and/or adjust `stability_min_balanced_accuracy`.
+
+## See also
+
+- `docs/theory/chapters/12-two-workflows.qmd`
+- `docs/theory/chapters/15-model-creation-and-validation.qmd`

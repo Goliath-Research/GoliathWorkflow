@@ -1,0 +1,77 @@
+# Stage: Freeze
+
+## Purpose
+
+Create frozen production artifacts using the stable panel and generate biological interpretation outputs (mapper/enricher, optional progression).
+
+## Entry command
+
+```bash
+source .venv/bin/activate
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --freeze
+```
+
+## Prerequisites
+
+- Stability stage completed.
+- Stable panel available at:
+  - configured `step_config.validation.freeze_stable_dmp_csv`, or
+  - default `<mc_root>/stability/stable_dmps_production.csv`.
+
+## Process model
+
+```{=latex}
+\begin{center}
+\begin{tikzpicture}[
+  >=Latex,
+  node distance=1.6cm,
+  box/.style={draw, rounded corners, align=center, minimum width=2.8cm, minimum height=0.8cm}
+]
+\node[box] (stable) {stable\_dmps\_production.csv};
+\node[box, right=of stable] (freeze) {methyl-validation --freeze};
+\node[box, right=of freeze] (centroid) {methyl-centroid};
+\node[box, right=of centroid] (detector) {methyl-detector\\fixed panel};
+\node[box, right=of detector] (mapper) {methyl-mapper};
+\node[box, right=of mapper] (enricher) {methyl-enricher};
+\node[box, above=1.2cm of enricher] (project) {production/project.json};
+\node[box, below=1.2cm of enricher] (progression) {methyl-disease-progression\\optional};
+
+\draw[->] (stable) -- (freeze);
+\draw[->] (freeze) -- (centroid);
+\draw[->] (centroid) -- (detector);
+\draw[->] (detector) -- (mapper);
+\draw[->] (mapper) -- (enricher);
+\draw[->] (enricher) -- (project);
+\draw[->] (enricher) -- (progression);
+\end{tikzpicture}
+\end{center}
+```
+
+## Expected outputs
+
+- `<mc_root>/production/project.json`
+- `<mc_root>/production/production_summary.json`
+- mapper outputs under `production/mapper/...`
+- enricher outputs under `production/enricher/...`
+- optional progression outputs under `production/progression/...`
+
+## Success checks
+
+- `production/project.json` exists and includes fixed panel usage for detector.
+- expected mapper and enricher files are present.
+- stage-specific logs show successful return codes.
+
+## Do not do this
+
+- Do not run freeze before stability panel exists.
+- Do not delete `production/project.json`; later model and predictor stages depend on it.
+
+## Recovery
+
+- If freeze fails because stable panel missing, rerun stability or set `freeze_stable_dmp_csv`.
+- If path mismatch occurs across machines, use `path_remap` or `--path-remap`.
+
+## See also
+
+- `packages/methylvalidation/docs/USAGE.md`
+- `docs/theory/chapters/14-user-guide.qmd`

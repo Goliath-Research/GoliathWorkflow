@@ -1,0 +1,59 @@
+# MethylPipeline User Manual
+
+## What this manual is
+
+This is the operational companion to the theory book. It is designed for execution teams who need:
+
+- exact commands,
+- required config keys,
+- expected output artifacts,
+- stage handoff checks,
+- recovery actions when a run fails.
+
+For statistical background, use `docs/theory/`.
+
+## Reading paths
+
+- **Fast path (stage execution):** Chapters `04` to `08`.
+- **New project setup:** Chapters `01`, `02`, then `04`.
+- **Daily operations:** Chapters `09` to `11`.
+- **Standalone package usage:** Chapter `03`.
+
+## End-to-end workflow map
+
+```{=latex}
+\begin{center}
+\begin{tikzpicture}[
+  >=Latex,
+  node distance=1.9cm,
+  stage/.style={draw, rounded corners, align=center, minimum width=2.6cm, minimum height=0.9cm}
+]
+\node[stage] (setup) {Setup};
+\node[stage, right=of setup] (stability) {Stability};
+\node[stage, right=of stability] (freeze) {Freeze};
+\node[stage, right=of freeze] (model) {Model};
+\node[stage, right=of model] (postmodel) {Post-model\\Validation};
+\node[stage, below=1.2cm of model] (blind) {Blind\\Prediction};
+
+\draw[->] (setup) -- (stability);
+\draw[->] (stability) -- (freeze);
+\draw[->] (freeze) -- (model);
+\draw[->] (model) -- (postmodel);
+\draw[->] (model) -- (blind);
+\end{tikzpicture}
+\end{center}
+```
+
+## Scope boundaries
+
+- `methyl-validation` orchestrates stability, freeze, model, and post-model validation.
+- Blind-only prediction is documented as a standalone `methyl-predictor` operation.
+- Package behavior is documented from implementation in `packages/*`.
+
+## Canonical references
+
+- Workflow reference: `docs/WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md`
+- Validation orchestration: `packages/methylvalidation/docs/USAGE.md`
+- Validation flags and config model:
+  - `packages/methylvalidation/methyl_validation/cli.py`
+  - `packages/methylvalidation/methyl_validation/config.py`

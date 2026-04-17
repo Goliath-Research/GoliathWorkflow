@@ -1,0 +1,102 @@
+# Stage: Model
+
+## Purpose
+
+Train and select final production model artifacts after freeze.
+
+## Common execution patterns
+
+### Pattern A: Direct production model build
+
+```bash
+source .venv/bin/activate
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model
+```
+
+### Pattern B: Backend model-MC comparison then select best
+
+```bash
+source .venv/bin/activate
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model-mc --model-mc-all
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+  --select-best-model --model-mc-all --selection-metric balanced_accuracy --selection-stat median
+```
+
+## Backend behavior
+
+- `ecdf`: `methyl-classifier` -> `methyl-predictor`
+- `tabular_sklearn`: in-process bundle -> train -> predict
+- `generative_hybrid`: in-process bundle -> train -> predict
+
+Configured by `step_config.validation.model_backend` or CLI override.
+
+## Process model
+
+```{=latex}
+\begin{center}
+\begin{tikzpicture}[
+  >=Latex,
+  node distance=1.2cm and 1.8cm,
+  box/.style={draw, rounded corners, align=center, minimum width=3.1cm, minimum height=0.8cm},
+  decision/.style={draw, diamond, aspect=2, align=center, inner sep=1pt}
+]
+\node[box] (project) {production/project.json};
+\node[decision, below=of project] (mode) {mode};
+\node[box, below left=of mode] (direct) {--model};
+\node[box, below right=of mode] (mc) {--model-mc};
+\node[box, below=of mc] (backend) {ecdf/tabular/generative runs};
+\node[box, below=of backend] (rank) {backend ranking};
+\node[box, below=of rank] (select) {--select-best-model};
+\node[box, below=1.5cm of mode] (final) {production classifiers\\and predictors};
+
+\draw[->] (project) -- (mode);
+\draw[->] (mode) -- (direct);
+\draw[->] (mode) -- (mc);
+\draw[->] (mc) -- (backend);
+\draw[->] (backend) -- (rank);
+\draw[->] (rank) -- (select);
+\draw[->] (direct) -- (final);
+\draw[->] (select) -- (final);
+\end{tikzpicture}
+\end{center}
+```
+
+## Required config keys
+
+- `model_backend`
+- `feature_mode`
+- `ecdf_second_stage_enabled`
+- tabular controls:
+  - `tabular_methods` or `tabular_model_type`
+  - `tabular_method_selection_metric`
+- generative controls:
+  - `generative_latent_dim`, `generative_epochs`, and related keys
+- optional gate:
+  - `require_biological_review_for_model`
+  - `biological_review_confirmed`
+
+## Expected outputs
+
+- `<mc_root>/production/classifiers/...`
+- `<mc_root>/production/predictors/...`
+- if model-MC:
+  - `<mc_root>/model_mc/shared/run_XXXX/...`
+  - `<mc_root>/model_mc/<backend>/all_metrics.csv`
+  - `<mc_root>/model_mc/backend_ranking.csv`
+  - `<mc_root>/production/selected_backend.json` (after selection)
+
+## Success checks
+
+- final classifier/predictor artifacts exist in production root.
+- selected backend metadata exists when using selection workflow.
+- metrics summaries include expected selection metric fields.
+
+## Do not do this
+
+- Do not run model before freeze.
+- Do not claim backend superiority without model-MC summaries.
+
+## See also
+
+- `docs/theory/chapters/15-model-creation-and-validation.qmd`
+- `packages/methylvalidation/docs/ROLLOUT.md`

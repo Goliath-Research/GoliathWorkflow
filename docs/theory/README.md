@@ -66,6 +66,8 @@ Rendered output is written to `docs/theory/_book/`.
 
 The Quarto book is the canonical theory reference. Package-local `docs/THEORY.md` files should stay concise and point back to the corresponding Quarto chapter instead of becoming competing sources.
 
+For workflow-first operations, command runbooks, and stage checklists, use the separate user manual at `docs/user-manual/`.
+
 ## Migration Note: Clustering Docs Retirement
 
 `MethylCluster` is no longer part of the active MethylPipeline workflow documentation and has been removed from this book.

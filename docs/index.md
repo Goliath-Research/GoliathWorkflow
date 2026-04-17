@@ -5,6 +5,7 @@ This `docs/` tree is intentionally thin. The canonical mathematical and statisti
 ## Documentation Layers
 
 - [`theory/README.md`](theory/README.md): build instructions and authoring guide for the Quarto theory book.
+- [`user-manual/index.qmd`](user-manual/index.qmd): workflow-first operational manual (package runbooks, stage checklists, troubleshooting).
 - [`theory/index.qmd`](theory/index.qmd): code-backed overview of the statistical pipeline, notation, and traceability rules.
 - [`config_parameter_matrix.md`](config_parameter_matrix.md): active-component config audit matrix (declared/consumed/inherited/legacy keys).
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): environment setup for the monorepo and command-line tools.
@@ -30,6 +31,6 @@ That distinction matters for this repository. The centroid, detector, and classi
 
 ## Recommended Reading Order
 
-1. Start with the [theory book](theory/README.md) for the mathematical model.
-2. Use the package `README.md` files for high-level package placement.
-3. Use package `USAGE.md` and `IMPLEMENTATION.md` files when you need operational or code-level detail.
+1. Start with the [user manual](user-manual/index.qmd) for stage execution and operations.
+2. Use the [theory book](theory/README.md) for mathematical/statistical background.
+3. Use package `README.md`, `USAGE.md`, and `IMPLEMENTATION.md` for package-level specifics.

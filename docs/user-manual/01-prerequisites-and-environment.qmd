@@ -1,0 +1,64 @@
+# Prerequisites and Environment
+
+## Purpose
+
+Set up a reproducible execution environment for all package CLIs and workflow stages.
+
+## Required tools
+
+- Python environment in repo-local `.venv`
+- Installed package CLIs (`methyl-*`)
+- Quarto for manual rendering (optional for pipeline runs)
+- TeX engine for PDF rendering (`quarto install tinytex` recommended)
+
+## Environment bootstrap
+
+From repo root:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+bash scripts/install_all.sh
+```
+
+Optional dependency sets:
+
+```bash
+bash scripts/install_all.sh --pipeline-reqs
+bash scripts/install_all.sh --gpu-reqs
+```
+
+## Verify CLI availability
+
+```bash
+source .venv/bin/activate
+methyl-validation --help
+methyl-centroid --help
+methyl-detector --help
+methyl-mapper --help
+methyl-enricher --help
+methyl-predictor --help
+```
+
+## Runtime assumptions
+
+- Activate `.venv` before every run.
+- Use absolute paths in project configs where possible.
+- Keep `samples_base_path` consistent across stages.
+
+## Success checks
+
+- `.venv` activates without import errors.
+- `methyl-validation --help` prints options.
+- Project JSON path resolves on the execution host.
+
+## Common failures and fixes
+
+- **`command not found`**: activate `.venv` and reinstall with `scripts/install_all.sh`.
+- **module import errors**: reinstall editable packages from repo root.
+- **path mismatch between hosts**: set `step_config.validation.path_remap` or `--path-remap OLD=NEW`.
+
+## See also
+
+- `README.md`
+- `docs/DEPLOYMENT.md`

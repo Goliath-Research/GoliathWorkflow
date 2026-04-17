@@ -181,6 +181,7 @@ Recommended sequence:
 
 ## Additional references
 
+- User manual: `docs/user-manual/index.qmd`
 - Theory book: `docs/theory/README.md`
 - Deployment details: `docs/DEPLOYMENT.md`
 - Active parameter contract matrix: `docs/config_parameter_matrix.md`

@@ -1,0 +1,51 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "MethylPipeline User Manual"
+  output-file: "MethylPipeline User Manual"
+  subtitle: "Operational runbook for package usage and staged workflows"
+  author: "MethylPipeline Team"
+  date: last-modified
+  chapters:
+    - index.qmd
+    - part: "Part I: Setup and Package Orientation"
+      chapters:
+        - 01-prerequisites-and-environment.qmd
+        - 02-project-config-and-layout.qmd
+        - 03-package-reference-individual-usage.qmd
+    - part: "Part II: Staged Solution Workflow"
+      chapters:
+        - 04-stage-stability.qmd
+        - 05-stage-freeze.qmd
+        - 06-stage-model.qmd
+        - 07-stage-post-model-validation.qmd
+        - 08-stage-blind-prediction.qmd
+    - part: "Part III: Operations and Reliability"
+      chapters:
+        - 09-artifacts-and-qa-checks.qmd
+        - 10-troubleshooting-and-recovery.qmd
+        - 11-command-cookbook.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    number-sections: true
+    code-overflow: wrap
+  pdf:
+    documentclass: scrreprt
+    toc: true
+    number-sections: true
+    colorlinks: true
+    pdf-engine: lualatex
+    include-in-header:
+      text: |
+        \usepackage{tikz}
+        \usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+    geometry:
+      - margin=1in
+
+execute:
+  enabled: false
