@@ -887,6 +887,62 @@ def write_stable_dual_panels(
     }
 
 
+def _write_tiered_stable_panels(
+    dmp_freq_df: pd.DataFrame,
+    output_dir: Path,
+    top_n: Optional[int],
+    relaxed_cutoff_mode: str,
+    relaxed_multiplier: float,
+    score_eps: float,
+    tier_thresholds: Dict[str, float],
+    default_tier: str,
+) -> Dict[str, Any]:
+    """Write tiered dual-panel outputs and alias root production panel."""
+    tiers: Dict[str, Dict[str, Any]] = {}
+    for tier_name, threshold in tier_thresholds.items():
+        tier_out = output_dir / f"tier_{tier_name}"
+        artifact = write_stable_dual_panels(
+            dmp_freq_df=dmp_freq_df,
+            output_dir=tier_out,
+            min_frequency=float(threshold),
+            top_n=top_n,
+            relaxed_cutoff_mode=relaxed_cutoff_mode,
+            relaxed_multiplier=relaxed_multiplier,
+            score_eps=score_eps,
+        )
+        diag = artifact.get("diagnostics") or {}
+        tiers[tier_name] = {
+            "name": tier_name,
+            "min_frequency": float(threshold),
+            "output_dir": str(tier_out),
+            "stable_dmp_csv": str(artifact["production_path"]),
+            "stable_dmp_csv_strict": str(artifact["strict_path"]),
+            "stable_dmp_csv_relaxed": str(artifact["relaxed_path"]),
+            "stable_dmp_scored_csv": str(artifact["scored_path"]),
+            "stable_dmp_score_diagnostics_json": str(artifact["diagnostics_json_path"]),
+            "stable_dmp_score_diagnostics_csv": str(artifact["diagnostics_csv_path"]),
+            "stable_dmp_score_diagnostics": diag,
+            "n_candidates_after_min_frequency": int(diag.get("n_candidates_after_min_frequency", 0)),
+            "n_strict_selected": int(diag.get("n_strict_selected", 0)),
+            "n_relaxed_selected": int(diag.get("n_relaxed_selected", 0)),
+        }
+
+    selected_tier = default_tier if default_tier in tiers else "extended"
+    if selected_tier not in tiers:
+        selected_tier = next(iter(tiers.keys()))
+    selected = tiers[selected_tier]
+
+    root_production_path = output_dir / "stable_dmps_production.csv"
+    shutil.copy2(Path(selected["stable_dmp_csv"]), root_production_path)
+    selected["root_production_alias"] = str(root_production_path)
+
+    return {
+        "tiers": tiers,
+        "default_tier": selected_tier,
+        "root_production_path": root_production_path,
+    }
+
+
 def run_stability_analysis(
     monte_carlo_runs_root: Path,
     output_dir: Optional[Path] = None,
@@ -899,6 +955,11 @@ def run_stability_analysis(
     relaxed_cutoff_mode: str = "elbow_log_score",
     relaxed_multiplier: float = 0.5,
     score_eps: float = 1e-12,
+    tiered_stability_enabled: bool = False,
+    tier_core_frequency: float = 0.85,
+    tier_extended_frequency: float = 0.80,
+    tier_exploratory_frequency: float = 0.70,
+    default_freeze_tier: str = "extended",
 ) -> Dict[str, Any]:
     """Main entry point for stability analysis."""
     if output_dir is None:
@@ -921,10 +982,40 @@ def run_stability_analysis(
     score_diagnostics_json_path = None
     score_diagnostics_csv_path = None
     score_diagnostics = None
+    tier_outputs: Dict[str, Any] = {}
+    selected_tier_name: Optional[str] = None
     dmp_frequency_plot_path = None
     dmp_frequency_plot_by_chrom = {}
     dmp_frequency_counts_by_chrom = {}
-    if dual_cutoff_enabled:
+    if tiered_stability_enabled:
+        tier_thresholds = {
+            "core": float(tier_core_frequency),
+            "extended": float(tier_extended_frequency),
+            "exploratory": float(tier_exploratory_frequency),
+        }
+        tier_payload = _write_tiered_stable_panels(
+            dmp_freq_df=dmp_df,
+            output_dir=output_dir,
+            top_n=top_n_dmps,
+            relaxed_cutoff_mode=relaxed_cutoff_mode,
+            relaxed_multiplier=relaxed_multiplier,
+            score_eps=score_eps,
+            tier_thresholds=tier_thresholds,
+            default_tier=str(default_freeze_tier).strip().lower(),
+        )
+        tier_outputs = tier_payload["tiers"]
+        selected_tier_name = tier_payload["default_tier"]
+        stable_dmp_path = tier_payload["root_production_path"]
+
+        selected_tier = tier_outputs[selected_tier_name]
+        strict_dmp_path = Path(selected_tier["stable_dmp_csv_strict"])
+        relaxed_dmp_path = Path(selected_tier["stable_dmp_csv_relaxed"])
+        scored_dmp_path = Path(selected_tier["stable_dmp_scored_csv"])
+        score_diagnostics_json_path = Path(selected_tier["stable_dmp_score_diagnostics_json"])
+        score_diagnostics_csv_path = Path(selected_tier["stable_dmp_score_diagnostics_csv"])
+        score_diagnostics = selected_tier["stable_dmp_score_diagnostics"]
+        selected_dmp_df = pd.read_csv(strict_dmp_path) if strict_dmp_path.exists() else pd.DataFrame()
+    elif dual_cutoff_enabled:
         dual_paths = write_stable_dual_panels(
             dmp_df,
             output_dir,
@@ -973,7 +1064,10 @@ def run_stability_analysis(
             str(score_diagnostics_csv_path) if score_diagnostics_csv_path else None
         ),
         "stable_dmp_score_diagnostics": score_diagnostics,
-        "dual_cutoff_enabled": bool(dual_cutoff_enabled),
+        "dual_cutoff_enabled": bool(dual_cutoff_enabled or tiered_stability_enabled),
+        "tiered_stability_enabled": bool(tiered_stability_enabled),
+        "stability_default_freeze_tier": selected_tier_name,
+        "stability_tiers": tier_outputs,
         "dmp_frequency_plot_html": str(dmp_frequency_plot_path) if dmp_frequency_plot_path else None,
         "dmp_frequency_charts_by_chromosome": dmp_frequency_plot_by_chrom,
         "dmp_frequency_counts_by_chromosome": dmp_frequency_counts_by_chrom,

@@ -172,6 +172,38 @@ class MonteCarloConfig(BaseModel):
         gt=0.0,
         description="Small epsilon used in log(score + eps) elbow detection.",
     )
+    stability_tiers_enabled: bool = Field(
+        default=False,
+        description=(
+            "If true, write three tiered stability outputs under stability/tier_core, "
+            "stability/tier_extended, stability/tier_exploratory."
+        ),
+    )
+    stability_tier_core_freq: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Core tier threshold for frequency-based stability.",
+    )
+    stability_tier_extended_freq: float = Field(
+        default=0.80,
+        ge=0.0,
+        le=1.0,
+        description="Extended tier threshold for frequency-based stability.",
+    )
+    stability_tier_exploratory_freq: float = Field(
+        default=0.70,
+        ge=0.0,
+        le=1.0,
+        description="Exploratory tier threshold for frequency-based stability.",
+    )
+    stability_default_freeze_tier: Literal["core", "extended", "exploratory"] = Field(
+        default="extended",
+        description=(
+            "Tier whose stable_dmps_production.csv is aliased to root stability/stable_dmps_production.csv "
+            "for default --freeze behavior."
+        ),
+    )
     stability_featurecuts_enabled: bool = Field(
         default=False,
         description=(
@@ -616,6 +648,19 @@ class MonteCarloConfig(BaseModel):
                 raise ValueError(
                     "covariate_ordinal_maps has columns not listed in covariate_ordinal_columns: "
                     f"{missing}"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_stability_tier_thresholds(self) -> "MonteCarloConfig":
+        if self.stability_tiers_enabled:
+            if not (
+                self.stability_tier_core_freq
+                >= self.stability_tier_extended_freq
+                >= self.stability_tier_exploratory_freq
+            ):
+                raise ValueError(
+                    "stability tiers require core >= extended >= exploratory frequency thresholds."
                 )
         return self
 

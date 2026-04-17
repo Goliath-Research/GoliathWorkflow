@@ -122,3 +122,71 @@ def test_run_stability_analysis_dual_cutoff_writes_expected_artifacts(tmp_path):
     strict_df = pd.read_csv(summary["stable_dmp_csv_strict"])
     relaxed_df = pd.read_csv(summary["stable_dmp_csv_relaxed"])
     assert len(strict_df) <= len(relaxed_df)
+
+
+def test_run_stability_analysis_tiered_outputs_and_extended_alias(tmp_path):
+    monte_root = tmp_path / "monte_carlo_runs"
+    run_rows = {
+        "run_0001": [100, 200, 300, 400],
+        "run_0002": [100, 200, 300],
+        "run_0003": [100, 200],
+        "run_0004": [100],
+    }
+    for run_id, positions in run_rows.items():
+        _write_discovery_csv(
+            monte_root / run_id / "detections" / "all" / "pca_pca1" / "dmps-1-discovery.csv",
+            [
+                {
+                    "chromosome": 1,
+                    "position": p,
+                    "effect_size": 1.0 - (p / 1000.0),
+                }
+                for p in positions
+            ],
+        )
+
+    summary = run_stability_analysis(
+        monte_carlo_runs_root=monte_root,
+        output_dir=monte_root / "stability",
+        tiered_stability_enabled=True,
+        tier_core_frequency=0.85,
+        tier_extended_frequency=0.80,
+        tier_exploratory_frequency=0.70,
+        default_freeze_tier="extended",
+        relaxed_cutoff_mode="strict_multiplier",
+        relaxed_multiplier=0.6,
+    )
+
+    assert summary["tiered_stability_enabled"] is True
+    assert summary["stability_default_freeze_tier"] == "extended"
+    tiers = summary.get("stability_tiers") or {}
+    assert set(tiers.keys()) == {"core", "extended", "exploratory"}
+
+    for tier_name in ("core", "extended", "exploratory"):
+        tier = tiers[tier_name]
+        assert pd.notna(tier["stable_dmp_csv"])
+        assert pd.notna(tier["stable_dmp_csv_strict"])
+        assert pd.notna(tier["stable_dmp_csv_relaxed"])
+        assert pd.notna(tier["stable_dmp_scored_csv"])
+
+    root_df = pd.read_csv(summary["stable_dmp_csv"])
+    ext_df = pd.read_csv(tiers["extended"]["stable_dmp_csv"])
+    assert len(root_df) == len(ext_df)
+    assert root_df.equals(ext_df)
+
+
+def test_run_stability_analysis_legacy_mode_has_no_tier_outputs(tmp_path):
+    monte_root = tmp_path / "monte_carlo_runs"
+    _write_discovery_csv(
+        monte_root / "run_0001" / "detections" / "all" / "pca_pca1" / "dmps-1-discovery.csv",
+        [{"chromosome": 1, "position": 100, "effect_size": 0.9}],
+    )
+
+    summary = run_stability_analysis(
+        monte_carlo_runs_root=monte_root,
+        output_dir=monte_root / "stability",
+        dmp_min_freq=0.7,
+    )
+    assert summary["tiered_stability_enabled"] is False
+    assert summary["stability_tiers"] == {}
+    assert summary["stable_dmp_csv"] is not None
