@@ -237,6 +237,13 @@ For theory and package documentation, see:
         help='Louvain cluster resolution (default: 0.8). Lower values yield fewer, larger modules. Tune with --similarity-threshold to target 3-5 modules.'
     )
     parser.add_argument(
+        '--cluster-seed',
+        type=int,
+        default=42,
+        metavar='N',
+        help='Random seed for Louvain clustering reproducibility (default: 42).'
+    )
+    parser.add_argument(
         '--module-cluster-max-q',
         type=float,
         default=None,
@@ -613,6 +620,7 @@ def main():
         print("Mode: pathway-to-module pipeline (output: modules_ranked.csv)")
         print(f"Similarity threshold: {getattr(args, 'similarity_threshold', 0.15)}")
         print(f"Cluster resolution: {getattr(args, 'cluster_resolution', 0.8)}")
+        print(f"Cluster seed: {getattr(args, 'cluster_seed', 42)}")
         if getattr(args, "module_cluster_max_q", None) is not None:
             print(f"Module term filter: Adjusted P-value <= {args.module_cluster_max_q}")
         if getattr(args, "module_cluster_top_terms_per_library", None) is not None:
@@ -669,6 +677,7 @@ def main():
                 sort_ascending=args.sort_ascending,
                 similarity_threshold=getattr(args, "similarity_threshold", 0.15),
                 cluster_resolution=getattr(args, "cluster_resolution", 0.8),
+                cluster_seed=getattr(args, "cluster_seed", 42),
                 module_cluster_max_q=getattr(args, "module_cluster_max_q", None),
                 module_cluster_top_terms_per_library=getattr(
                     args, "module_cluster_top_terms_per_library", None

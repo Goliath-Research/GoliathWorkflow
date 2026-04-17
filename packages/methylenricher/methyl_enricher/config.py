@@ -67,6 +67,7 @@ class EnricherStepConfig(BaseModel):
     modules: Optional[bool] = None
     similarity_threshold: Optional[float] = None
     cluster_resolution: Optional[float] = None
+    cluster_seed: Optional[int] = None
     module_cluster_max_q: Optional[float] = None
     module_cluster_top_terms_per_library: Optional[int] = None
     network_plot: Optional[str] = None

@@ -1,9 +1,12 @@
 """Tests for pathway graph: canonical keys merge same-name pathways across libraries."""
 
+import types
+
 import pandas as pd
 
 from methyl_enricher.pathway_graph import (
     canonical_pathway_key,
+    cluster_pathways_louvain,
     pathway_gene_sets_from_merged,
     run_pathway_clustering,
 )
@@ -41,3 +44,24 @@ def test_run_pathway_clustering_single_node_per_canonical_name():
     assert canonical_pathway_key("Apoptosis") in pgenes
     assert canonical_pathway_key("DNA Repair") in pgenes
     assert sum(1 for k in pgenes if k == "apoptosis") == 1
+
+
+def test_cluster_pathways_louvain_passes_random_state(monkeypatch):
+    calls = {}
+
+    def _fake_best_partition(_graph, resolution, random_state):
+        calls["resolution"] = resolution
+        calls["random_state"] = random_state
+        return {}
+
+    fake_community = types.SimpleNamespace(best_partition=_fake_best_partition)
+    monkeypatch.setitem(__import__("sys").modules, "community", fake_community)
+
+    import networkx as nx
+
+    G = nx.Graph()
+    G.add_node("a")
+    _ = cluster_pathways_louvain(G, resolution=0.9, random_state=123)
+
+    assert calls["resolution"] == 0.9
+    assert calls["random_state"] == 123

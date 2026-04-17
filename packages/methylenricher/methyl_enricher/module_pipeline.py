@@ -347,6 +347,7 @@ def run_module_pipeline(
     sort_ascending: bool = False,
     similarity_threshold: float = 0.15,
     cluster_resolution: float = 0.8,
+    cluster_seed: int = 42,
     module_cluster_max_q: Optional[float] = None,
     module_cluster_top_terms_per_library: Optional[int] = None,
     disease_genes: Optional[Set[str]] = None,
@@ -423,6 +424,7 @@ def run_module_pipeline(
         similarity_threshold=similarity_threshold,
         use_jaccard=True,
         cluster_resolution=cluster_resolution,
+        cluster_seed=cluster_seed,
     )
     if not pathway_to_module_id:
         logger.warning("Pathway clustering produced no modules.")

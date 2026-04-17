@@ -117,7 +117,11 @@ def build_similarity_graph(
     return G, nodes
 
 
-def cluster_pathways_louvain(G, resolution: float = 0.8) -> Dict[str, int]:
+def cluster_pathways_louvain(
+    G,
+    resolution: float = 0.8,
+    random_state: int = 42,
+) -> Dict[str, int]:
     """
     Run Louvain community detection. Returns pathway -> community_id (int).
     Singletons get their own community id.
@@ -125,7 +129,11 @@ def cluster_pathways_louvain(G, resolution: float = 0.8) -> Dict[str, int]:
     """
     try:
         import community as community_louvain  # python-louvain
-        partition = community_louvain.best_partition(G, resolution=resolution)
+        partition = community_louvain.best_partition(
+            G,
+            resolution=resolution,
+            random_state=random_state,
+        )
         return partition
     except ImportError:
         logger.warning("python-louvain not installed; using connected components as fallback.")
@@ -143,6 +151,7 @@ def run_pathway_clustering(
     similarity_threshold: float = 0.15,
     use_jaccard: bool = True,
     cluster_resolution: float = 0.8,
+    cluster_seed: int = 42,
 ) -> Tuple[Dict[str, int], Dict[str, Set[str]]]:
     """
     From merged enrichment DataFrame, build pathway graph and cluster into modules.
@@ -161,5 +170,9 @@ def run_pathway_clustering(
         similarity_threshold=similarity_threshold,
         use_jaccard=use_jaccard,
     )
-    partition = cluster_pathways_louvain(G, resolution=cluster_resolution)
+    partition = cluster_pathways_louvain(
+        G,
+        resolution=cluster_resolution,
+        random_state=cluster_seed,
+    )
     return partition, pathway_genes

@@ -59,6 +59,7 @@ def plot_pathway_network_plotly(
     write interactive HTML to output_path.
     """
     import plotly.graph_objects as go
+    from plotly.colors import qualitative
 
     if not G.nodes():
         logger.warning("Empty graph; skipping Plotly network plot.")
@@ -71,14 +72,15 @@ def plot_pathway_network_plotly(
     else:
         pos = nx.spring_layout(G, seed=42, k=1.5)
 
-    # Unique module labels for color mapping
-    labels = sorted({G.nodes[n].get("module_label", "Other") for n in G.nodes()})
-    label_to_idx = {L: i for i, L in enumerate(labels)}
-    colors = [label_to_idx.get(G.nodes[n].get("module_label", "Other"), 0) for n in G.nodes()]
+    node_list = list(G.nodes())
+    # Unique module labels for discrete legend mapping
+    labels = sorted({G.nodes[n].get("module_label", "Other") for n in node_list})
+    palette = qualitative.Plotly + qualitative.D3 + qualitative.Dark24
+    label_to_color = {label: palette[i % len(palette)] for i, label in enumerate(labels)}
 
-    x = [pos[n][0] for n in G.nodes()]
-    y = [pos[n][1] for n in G.nodes()]
-    sizes = [G.nodes[n].get(node_size_by, 5) for n in G.nodes()]
+    x = [pos[n][0] for n in node_list]
+    y = [pos[n][1] for n in node_list]
+    sizes = [G.nodes[n].get(node_size_by, 5) for n in node_list]
     # Scale for visibility (e.g. 8–25)
     min_s, max_s = min(sizes) or 1, max(sizes) or 1
     if max_s > min_s:
@@ -86,30 +88,20 @@ def plot_pathway_network_plotly(
     else:
         sizes = [12] * len(sizes)
 
-    hover_text = []
-    for n in G.nodes():
-        lab = G.nodes[n].get("module_label", "Other")
+    node_records = []
+    for n, xv, yv, sv in zip(node_list, x, y, sizes):
+        module_label = G.nodes[n].get("module_label", "Other")
         ng = G.nodes[n].get("n_genes", 0)
-        hover_text.append(f"<b>{n}</b><br>Module: {lab}<br>Genes: {ng}")
-
-    node_trace = go.Scatter(
-        x=x,
-        y=y,
-        mode="markers+text",
-        marker=dict(
-            size=sizes,
-            color=colors,
-            colorscale="Viridis",
-            showscale=True,
-            colorbar=dict(title="Module"),
-        ),
-        text=[G.nodes[n].get("module_label", "Other") for n in G.nodes()],
-        textposition="top center",
-        textfont=dict(size=9),
-        hovertext=hover_text,
-        hoverinfo="text",
-        name="",
-    )
+        node_records.append(
+            {
+                "node": n,
+                "x": xv,
+                "y": yv,
+                "size": sv,
+                "module": module_label,
+                "hover": f"<b>{n}</b><br>Module: {module_label}<br>Genes: {ng}",
+            }
+        )
 
     edge_x, edge_y = [], []
     for u, v in G.edges():
@@ -126,13 +118,47 @@ def plot_pathway_network_plotly(
         mode="lines",
     )
 
-    fig = go.Figure(data=[edge_trace, node_trace])
+    node_traces = []
+    for label in labels:
+        sub = [r for r in node_records if r["module"] == label]
+        if not sub:
+            continue
+        node_traces.append(
+            go.Scatter(
+                x=[r["x"] for r in sub],
+                y=[r["y"] for r in sub],
+                mode="markers+text",
+                marker=dict(
+                    size=[r["size"] for r in sub],
+                    color=label_to_color[label],
+                    line=dict(width=0.5, color="#333333"),
+                ),
+                text=[label] * len(sub),
+                textposition="top center",
+                textfont=dict(size=9),
+                hovertext=[r["hover"] for r in sub],
+                hoverinfo="text",
+                name=str(label),
+                showlegend=True,
+            )
+        )
+
+    fig = go.Figure(data=[edge_trace, *node_traces])
     fig.update_layout(
-        showlegend=False,
+        showlegend=True,
+        legend=dict(
+            title="Module",
+            itemsizing="constant",
+            orientation="h",
+            x=0.0,
+            xanchor="left",
+            y=1.06,
+            yanchor="top",
+        ),
         title="Pathway similarity network (nodes = pathways, colored by module)",
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        margin=dict(b=20, l=20, r=20, t=40),
+        margin=dict(b=20, l=20, r=20, t=80),
         hovermode="closest",
         plot_bgcolor="white",
     )
