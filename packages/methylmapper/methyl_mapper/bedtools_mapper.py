@@ -769,7 +769,58 @@ class BedtoolsMapper:
                 rename[c] = 'direction'
         if rename:
             df = df.rename(columns=rename)
+        df = BedtoolsMapper._recover_effect_size_column(df)
         return df
+
+    @staticmethod
+    def _recover_effect_size_column(df: pd.DataFrame) -> pd.DataFrame:
+        """Populate/repair effect_size using alternate exported weight columns when needed.
+
+        Some upstream tables carry usable effect proxies (e.g. ``weight`` or
+        ``effect_size_mean``) but either omit ``effect_size`` or provide a flat
+        fallback value (commonly all ``1.0``). Prefer a varying numeric source so
+        downstream ranking and weighting keep MethylDetector signal strength.
+        """
+        out = df.copy()
+
+        def _coerce_numeric(col_name: str) -> Optional[pd.Series]:
+            if col_name not in out.columns:
+                return None
+            return pd.to_numeric(out[col_name], errors="coerce")
+
+        eff = _coerce_numeric("effect_size")
+        has_effect = eff is not None and np.isfinite(eff).any()
+        effect_is_flat_one = bool(
+            has_effect and np.isclose(eff[np.isfinite(eff)], 1.0).all()
+        )
+
+        # Preferred explicit aliases before generic fallbacks.
+        candidate_cols = [
+            "effect_size_approx",
+            "effect_size_mean",
+            "effect_size_max",
+            "effect_size_sum",
+            "importance",
+            "weight",
+        ]
+        for col in candidate_cols:
+            vals = _coerce_numeric(col)
+            if vals is None or not np.isfinite(vals).any():
+                continue
+            if effect_is_flat_one and np.isclose(vals[np.isfinite(vals)], 1.0).all():
+                continue
+            if (not has_effect) or effect_is_flat_one:
+                out["effect_size"] = vals.astype(float)
+                return out
+
+        per_comparison_cols = [c for c in out.columns if str(c).startswith("effect_size__")]
+        if per_comparison_cols and ((not has_effect) or effect_is_flat_one):
+            wide_vals = out[per_comparison_cols].apply(pd.to_numeric, errors="coerce")
+            row_max = wide_vals.max(axis=1, skipna=True)
+            if np.isfinite(row_max).any():
+                out["effect_size"] = row_max.astype(float)
+
+        return out
 
     @staticmethod
     def _build_dmp_name_series(df: pd.DataFrame) -> pd.Series:
