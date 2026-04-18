@@ -116,6 +116,8 @@ def plot_pathway_network_plotly(
         line=dict(width=0.8, color="#888"),
         hoverinfo="none",
         mode="lines",
+        showlegend=False,
+        name="",
     )
 
     node_traces = []
@@ -152,13 +154,21 @@ def plot_pathway_network_plotly(
             orientation="h",
             x=0.0,
             xanchor="left",
-            y=1.06,
-            yanchor="top",
+            y=1.02,
+            yanchor="bottom",
+            bgcolor="rgba(255,255,255,0.85)",
         ),
-        title="Pathway similarity network (nodes = pathways, colored by module)",
+        title=dict(
+            text="Pathway similarity network (nodes = pathways, colored by module)",
+            x=0.5,
+            xanchor="center",
+            y=0.99,
+            yanchor="top",
+            pad=dict(b=16),
+        ),
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-        margin=dict(b=20, l=20, r=20, t=80),
+        margin=dict(b=20, l=20, r=20, t=180),
         hovermode="closest",
         plot_bgcolor="white",
     )
