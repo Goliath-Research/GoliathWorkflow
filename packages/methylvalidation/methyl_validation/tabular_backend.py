@@ -249,6 +249,8 @@ def train_tabular_model(
     observed_feature_dmr_window_bp: int = 100000,
     observed_feature_max_dmrs: int = 32,
     observed_feature_max_genes: int = 32,
+    save_train_dataset: bool = False,
+    train_dataset_path: Optional[str | Path] = None,
 ) -> Path:
     with _project_cwd(project_json):
         project = load_project(project_json)
@@ -318,6 +320,38 @@ def train_tabular_model(
         X = np.concatenate([X, cov], axis=1)
 
     y_arr = np.asarray(y, dtype=np.int32)
+    train_dataset_out_path: Optional[Path] = None
+    if save_train_dataset:
+        if feature_mode_norm == "observed_hybrid":
+            base_feature_names = list(observed_feature_names)
+        else:
+            base_feature_names = [f"{c}:{ctx}:{int(pos)}" for c, ctx, pos in feature_order]
+        cov_feature_names = list(preprocessor.output_columns) if preprocessor is not None else []
+        expected_n_features = len(base_feature_names) + len(cov_feature_names)
+        if expected_n_features != int(X.shape[1]):
+            feature_names = [f"feature_{i}" for i in range(int(X.shape[1]))]
+        else:
+            feature_names = base_feature_names + cov_feature_names
+
+        train_export_df = pd.DataFrame(X, columns=feature_names)
+        train_export_df.insert(0, "sample_id", sample_ids)
+        train_export_df.insert(1, "class_index", y_arr.astype(int))
+        train_export_df.insert(2, "class_label", [class_names[int(v)] for v in y_arr.tolist()])
+
+        train_dataset_out_path = (
+            Path(train_dataset_path).expanduser().resolve()
+            if train_dataset_path
+            else (out_dir / "tabular-train-dataset.csv")
+        )
+        train_dataset_out_path.parent.mkdir(parents=True, exist_ok=True)
+        ext = train_dataset_out_path.suffix.lower()
+        if ext == ".parquet":
+            train_export_df.to_parquet(train_dataset_out_path, index=False)
+        elif ext == ".tsv":
+            train_export_df.to_csv(train_dataset_out_path, sep="\t", index=False)
+        else:
+            train_export_df.to_csv(train_dataset_out_path, index=False)
+
     methods = _normalize_tabular_methods(tabular_methods, legacy_model_type=model_type)
     method_rows: List[Dict[str, Any]] = []
     selected_idx = 0
@@ -375,6 +409,8 @@ def train_tabular_model(
             "covariate_standardize_numeric": bool(covariate_standardize_numeric),
             "covariate_preprocessor_path": str(method_preproc_path) if preprocessor is not None else None,
             "covariate_preprocessing": cov_report,
+            "train_dataset_saved": bool(save_train_dataset),
+            "train_dataset_path": str(train_dataset_out_path) if train_dataset_out_path is not None else None,
         }
         with open(method_dir / "tabular-model-metadata.json", "w", encoding="utf-8") as f:
             json.dump(method_meta, f, indent=2)

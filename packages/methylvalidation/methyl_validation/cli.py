@@ -1344,6 +1344,24 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--tabular-save-train-dataset",
+        action="store_true",
+        help=(
+            "For tabular backend: export assembled training dataset "
+            "(sample_id, class labels, feature columns)."
+        ),
+    )
+    parser.add_argument(
+        "--tabular-train-dataset-path",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "For tabular backend: optional output path for exported training dataset "
+            "(supports .csv, .tsv, .parquet)."
+        ),
+    )
+    parser.add_argument(
         "--generative-latent-dim",
         type=int,
         default=None,
@@ -1507,6 +1525,10 @@ def main() -> None:
             print("Error: --tabular-methods-json must be a non-empty JSON array.", file=sys.stderr)
             sys.exit(1)
         config = config.model_copy(update={"tabular_methods": parsed_methods})
+    if args.tabular_save_train_dataset:
+        config = config.model_copy(update={"tabular_save_train_dataset": True})
+    if args.tabular_train_dataset_path is not None:
+        config = config.model_copy(update={"tabular_train_dataset_path": str(args.tabular_train_dataset_path)})
     if args.generative_latent_dim is not None:
         config = config.model_copy(update={"generative_latent_dim": int(args.generative_latent_dim)})
     if args.generative_kl_weight is not None:

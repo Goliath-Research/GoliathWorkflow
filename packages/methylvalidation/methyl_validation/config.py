@@ -320,6 +320,21 @@ class MonteCarloConfig(BaseModel):
         ge=10,
         description="For model_backend=tabular_sklearn: cap number of DMP loci selected from bundle index.",
     )
+    tabular_save_train_dataset: bool = Field(
+        default=False,
+        description=(
+            "For model_backend=tabular_sklearn: if true, export the assembled training dataset "
+            "(features + labels + sample_id) for reproducibility/auditing."
+        ),
+    )
+    tabular_train_dataset_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional output file for exported tabular training dataset. "
+            "When omitted and tabular_save_train_dataset=true, defaults to "
+            "<classifiers>/tabular-train-dataset.csv."
+        ),
+    )
     feature_mode: str = Field(
         default="raw_dmp",
         description=(

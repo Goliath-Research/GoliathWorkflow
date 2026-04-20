@@ -107,6 +107,16 @@ def build_model_backend_steps(
                     observed_feature_max_genes=(
                         config.observed_feature_max_genes if config is not None else 32
                     ),
+                    save_train_dataset=(
+                        bool(config.tabular_save_train_dataset)
+                        if config is not None and hasattr(config, "tabular_save_train_dataset")
+                        else False
+                    ),
+                    train_dataset_path=(
+                        config.tabular_train_dataset_path
+                        if config is not None and hasattr(config, "tabular_train_dataset_path")
+                        else None
+                    ),
                 )
                 return 0, f"Tabular model trained: {model_path}", ""
             except Exception as e:
