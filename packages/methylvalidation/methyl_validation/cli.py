@@ -44,6 +44,7 @@ from .project_gen import (
     generate_run_project_multiclass,
     infer_monte_carlo_layout,
 )
+from .reuse_splits import resolve_iteration_split, write_split_reuse_summary
 from .split import load_and_resolve_sample_paths, stratified_split, stratified_split_multiclass
 from .validator_metrics import (
     build_metrics_table,
@@ -79,6 +80,7 @@ def _write_baseline_manifest(
     config: MonteCarloConfig,
     layout: str,
     cohort_paths_list: List[Tuple[str, List[str]]],
+    split_reuse_source_root: Optional[Path] = None,
 ) -> Path:
     """
     Write a deterministic run manifest describing split policy, seed policy, and
@@ -105,6 +107,12 @@ def _write_baseline_manifest(
         ],
         "metrics_schema": metrics_schema_descriptor(),
     }
+    if split_reuse_source_root is not None:
+        payload["split_reuse"] = {
+            "policy": "auto_try_primary_runs_then_stratified",
+            "candidate_source_root": str(Path(split_reuse_source_root).resolve()),
+            "run_id_pattern": "run_{iteration:04d} for iteration 1..n_iterations",
+        }
     output_root.mkdir(parents=True, exist_ok=True)
     out = output_root / "baseline_manifest.json"
     with open(out, "w", encoding="utf-8") as f:
@@ -435,6 +443,7 @@ def _build_model_mc_shared_runs(
     shared_root: Path,
     resume_arg: Optional[int],
     per_cancer_group: bool,
+    primary_monte_carlo_runs_root: Path,
 ) -> List[Dict[str, Any]]:
     shared_root.mkdir(parents=True, exist_ok=True)
     _write_baseline_manifest(
@@ -443,6 +452,7 @@ def _build_model_mc_shared_runs(
         config=config,
         layout=layout,
         cohort_paths_list=cohort_paths_list,
+        split_reuse_source_root=primary_monte_carlo_runs_root,
     )
     rows: List[Dict[str, Any]] = []
     all_timings: List[Dict[str, Any]] = []
@@ -491,6 +501,13 @@ def _build_model_mc_shared_runs(
             file=sys.stderr,
         )
 
+    split_reuse_stats: Dict[str, Any] = {
+        "mode": "model_mc_shared",
+        "candidate_source_root": str(primary_monte_carlo_runs_root.resolve()),
+        "reused": 0,
+        "generated": 0,
+        "per_iteration": [],
+    }
     completed_iteration_seconds: List[float] = []
     for i in range(start_iteration_idx, config.n_iterations):
         iteration_t0 = time.perf_counter()
@@ -499,20 +516,42 @@ def _build_model_mc_shared_runs(
         seed_i = (config.seed + i) if config.seed is not None else None
         train_m: Dict[str, List[str]] = {}
         val_m: Dict[str, List[str]] = {}
+        train_control: List[str] = []
+        train_disease: List[str] = []
+        val_control: List[str] = []
+        val_disease: List[str] = []
         try:
-            if layout == "binary":
-                train_control, train_disease, val_control, val_disease = stratified_split(
-                    control_paths,
-                    disease_paths,
-                    config.train_fraction,
-                    seed=seed_i,
+            split_payload, split_src = resolve_iteration_split(
+                layout=layout,
+                iteration_index=i,
+                split_source_root=primary_monte_carlo_runs_root,
+                cohort_paths_list=cohort_paths_list,
+                cohort_labels=cohort_labels,
+                control_paths=control_paths,
+                disease_paths=disease_paths,
+                train_fraction=config.train_fraction,
+                seed_i=seed_i,
+                samples_base_path=config.samples_base_path,
+            )
+            split_reuse_stats["per_iteration"].append({"iteration": i + 1, "run_id": run_id, "source": split_src})
+            if split_src == "reused":
+                split_reuse_stats["reused"] += 1
+                print(
+                    f"[split-reuse] model-mc:shared {run_id}: reusing partitions from "
+                    f"{primary_monte_carlo_runs_root / run_id}",
+                    file=sys.stderr,
                 )
             else:
-                train_m, val_m = stratified_split_multiclass(
-                    cohort_paths_list,
-                    config.train_fraction,
-                    seed=seed_i,
+                split_reuse_stats["generated"] += 1
+                print(
+                    "[split-reuse] model-mc:shared "
+                    f"{run_id}: generated stratified split (no compatible reuse under primary monte_carlo_runs)",
+                    file=sys.stderr,
                 )
+            if layout == "binary":
+                train_control, train_disease, val_control, val_disease = split_payload  # type: ignore[misc]
+            else:
+                train_m, val_m = split_payload  # type: ignore[misc]
         except ValueError as e:
             print(f"[model-mc:shared] Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
             continue
@@ -624,9 +663,10 @@ def _build_model_mc_shared_runs(
             file=sys.stderr,
         )
 
+    write_step_timings_csv(all_timings, shared_root / "step_timings.csv")
+    write_split_reuse_summary(shared_root, split_reuse_stats)
     if not rows:
         raise RuntimeError("No successful model-mc shared iterations")
-    write_step_timings_csv(all_timings, shared_root / "step_timings.csv")
     return rows
 
 
@@ -641,6 +681,7 @@ def _run_model_mc_backend_from_shared_runs(
     shared_rows: List[Dict[str, Any]],
     resume_arg: Optional[int],
     per_cancer_group: bool,
+    primary_monte_carlo_runs_root: Path,
 ) -> None:
     backend_root.mkdir(parents=True, exist_ok=True)
     _write_baseline_manifest(
@@ -649,6 +690,7 @@ def _run_model_mc_backend_from_shared_runs(
         config=config,
         layout=layout,
         cohort_paths_list=cohort_paths_list,
+        split_reuse_source_root=primary_monte_carlo_runs_root,
     )
     rows: List[Dict[str, Any]] = []
     all_timings: List[Dict[str, Any]] = []
@@ -887,6 +929,7 @@ def _run_model_mc_backend(
     backend_root: Path,
     resume_arg: Optional[int],
     per_cancer_group: bool,
+    primary_monte_carlo_runs_root: Path,
 ) -> None:
     backend_root.mkdir(parents=True, exist_ok=True)
     _write_baseline_manifest(
@@ -895,6 +938,7 @@ def _run_model_mc_backend(
         config=config,
         layout=layout,
         cohort_paths_list=cohort_paths_list,
+        split_reuse_source_root=primary_monte_carlo_runs_root,
     )
     rows: List[Dict[str, Any]] = []
     all_timings: List[Dict[str, Any]] = []
@@ -934,6 +978,13 @@ def _run_model_mc_backend(
                 run_dir = backend_root / f"run_{n:04d}"
                 if run_dir.is_dir():
                     shutil.rmtree(run_dir)
+    split_reuse_stats: Dict[str, Any] = {
+        "mode": f"model_mc_{backend}",
+        "candidate_source_root": str(primary_monte_carlo_runs_root.resolve()),
+        "reused": 0,
+        "generated": 0,
+        "per_iteration": [],
+    }
     completed_iteration_seconds: List[float] = []
 
     for i in range(start_iteration_idx, config.n_iterations):
@@ -943,20 +994,42 @@ def _run_model_mc_backend(
         seed_i = (config.seed + i) if config.seed is not None else None
         train_m: Dict[str, List[str]] = {}
         val_m: Dict[str, List[str]] = {}
+        train_control: List[str] = []
+        train_disease: List[str] = []
+        val_control: List[str] = []
+        val_disease: List[str] = []
         try:
-            if layout == "binary":
-                train_control, train_disease, val_control, val_disease = stratified_split(
-                    control_paths,
-                    disease_paths,
-                    config.train_fraction,
-                    seed=seed_i,
+            split_payload, split_src = resolve_iteration_split(
+                layout=layout,
+                iteration_index=i,
+                split_source_root=primary_monte_carlo_runs_root,
+                cohort_paths_list=cohort_paths_list,
+                cohort_labels=cohort_labels,
+                control_paths=control_paths,
+                disease_paths=disease_paths,
+                train_fraction=config.train_fraction,
+                seed_i=seed_i,
+                samples_base_path=config.samples_base_path,
+            )
+            split_reuse_stats["per_iteration"].append({"iteration": i + 1, "run_id": run_id, "source": split_src})
+            if split_src == "reused":
+                split_reuse_stats["reused"] += 1
+                print(
+                    f"[split-reuse] model-mc:{backend} {run_id}: reusing partitions from "
+                    f"{primary_monte_carlo_runs_root / run_id}",
+                    file=sys.stderr,
                 )
             else:
-                train_m, val_m = stratified_split_multiclass(
-                    cohort_paths_list,
-                    config.train_fraction,
-                    seed=seed_i,
+                split_reuse_stats["generated"] += 1
+                print(
+                    f"[split-reuse] model-mc:{backend} {run_id}: generated stratified split "
+                    "(no compatible reuse under primary monte_carlo_runs)",
+                    file=sys.stderr,
                 )
+            if layout == "binary":
+                train_control, train_disease, val_control, val_disease = split_payload  # type: ignore[misc]
+            else:
+                train_m, val_m = split_payload  # type: ignore[misc]
         except ValueError as e:
             print(f"[model-mc:{backend}] Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
             continue
@@ -1092,6 +1165,7 @@ def _run_model_mc_backend(
             file=sys.stderr,
         )
 
+    write_split_reuse_summary(backend_root, split_reuse_stats)
     if not rows:
         raise RuntimeError(f"No successful model-mc iterations for backend={backend}")
     _write_model_mc_outputs(backend_root=backend_root, rows=rows, all_timings=all_timings)
@@ -1759,6 +1833,7 @@ def main() -> None:
             config=config,
             layout=layout,
             cohort_paths_list=cohort_paths_list,
+            split_reuse_source_root=monte_carlo_runs_root,
         )
         configured_backends = (
             ["ecdf", "tabular_sklearn", "generative_hybrid"]
@@ -1793,6 +1868,7 @@ def main() -> None:
                         shared_root=shared_root,
                         resume_arg=args.resume,
                         per_cancer_group=per_cancer_group,
+                        primary_monte_carlo_runs_root=monte_carlo_runs_root,
                     )
                 except Exception as e:
                     print(f"Error: model-mc shared run stage failed: {e}", file=sys.stderr)
@@ -1815,6 +1891,7 @@ def main() -> None:
                             shared_rows=shared_rows,
                             resume_arg=args.resume,
                             per_cancer_group=per_cancer_group,
+                            primary_monte_carlo_runs_root=monte_carlo_runs_root,
                         )
                     except Exception as e:
                         print(f"Error: model-mc backend {backend} failed: {e}", file=sys.stderr)
@@ -1859,6 +1936,7 @@ def main() -> None:
                                 shared_rows=shared_rows,
                                 resume_arg=args.resume,
                                 per_cancer_group=per_cancer_group,
+                                primary_monte_carlo_runs_root=monte_carlo_runs_root,
                             )
                         else:
                             _run_model_mc_backend(
@@ -1873,6 +1951,7 @@ def main() -> None:
                                 backend_root=backend_root,
                                 resume_arg=args.resume,
                                 per_cancer_group=per_cancer_group,
+                                primary_monte_carlo_runs_root=monte_carlo_runs_root,
                             )
                     except Exception as e:
                         print(f"Error: model-mc backend {backend} failed: {e}", file=sys.stderr)
@@ -1989,6 +2068,12 @@ def main() -> None:
             config=config,
             layout=layout,
             cohort_paths_list=cohort_paths_list,
+            split_reuse_source_root=monte_carlo_runs_root,
+        )
+        print(
+            f"[split-reuse] post-model validation: will try partitions from "
+            f"{monte_carlo_runs_root}/run_XXXX before drawing new stratified splits.",
+            file=sys.stderr,
         )
 
         rows: List[Dict[str, Any]] = []
@@ -2016,6 +2101,13 @@ def main() -> None:
                 file=sys.stderr,
             )
 
+        split_reuse_stats: Dict[str, Any] = {
+            "mode": "post_model_validation",
+            "candidate_source_root": str(monte_carlo_runs_root.resolve()),
+            "reused": 0,
+            "generated": 0,
+            "per_iteration": [],
+        }
         use_rich = sys.stderr.isatty()
         console = Console(file=sys.stderr) if use_rich else None
         n_step_tasks = 1
@@ -2065,20 +2157,44 @@ def main() -> None:
 
                 train_m: Dict[str, List[str]] = {}
                 val_m: Dict[str, List[str]] = {}
+                train_control: List[str] = []
+                train_disease: List[str] = []
+                val_control: List[str] = []
+                val_disease: List[str] = []
                 try:
-                    if layout == "binary":
-                        train_control, train_disease, val_control, val_disease = stratified_split(
-                            control_paths,
-                            disease_paths,
-                            config.train_fraction,
-                            seed=seed_i,
+                    split_payload, split_src = resolve_iteration_split(
+                        layout=layout,
+                        iteration_index=i,
+                        split_source_root=monte_carlo_runs_root,
+                        cohort_paths_list=cohort_paths_list,
+                        cohort_labels=cohort_labels,
+                        control_paths=control_paths,
+                        disease_paths=disease_paths,
+                        train_fraction=config.train_fraction,
+                        seed_i=seed_i,
+                        samples_base_path=config.samples_base_path,
+                    )
+                    split_reuse_stats["per_iteration"].append(
+                        {"iteration": i + 1, "run_id": run_id, "source": split_src}
+                    )
+                    if split_src == "reused":
+                        split_reuse_stats["reused"] += 1
+                        print(
+                            f"[split-reuse] post-model {run_id}: reusing partitions from "
+                            f"{monte_carlo_runs_root / run_id}",
+                            file=sys.stderr,
                         )
                     else:
-                        train_m, val_m = stratified_split_multiclass(
-                            cohort_paths_list,
-                            config.train_fraction,
-                            seed=seed_i,
+                        split_reuse_stats["generated"] += 1
+                        print(
+                            "[split-reuse] post-model "
+                            f"{run_id}: generated stratified split (no compatible reuse under primary monte_carlo_runs)",
+                            file=sys.stderr,
                         )
+                    if layout == "binary":
+                        train_control, train_disease, val_control, val_disease = split_payload  # type: ignore[misc]
+                    else:
+                        train_m, val_m = split_payload  # type: ignore[misc]
                 except ValueError as e:
                     print(f"Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
                     elapsed = time.perf_counter() - iteration_t0
@@ -2217,6 +2333,7 @@ def main() -> None:
                 else:
                     progress.advance(task_iter, 1)
 
+        write_split_reuse_summary(post_model_root, split_reuse_stats)
         if not rows:
             print("No successful post-model iterations; nothing to aggregate.", file=sys.stderr)
             sys.exit(1)
