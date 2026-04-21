@@ -8,7 +8,7 @@ import io
 import logging
 from hashlib import sha1
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from urllib.error import URLError
 from urllib.parse import quote_plus
 from urllib.request import urlopen
@@ -222,6 +222,80 @@ def build_ppi_graph(
     return graph
 
 
+def _normalize_minmax_array(arr: np.ndarray) -> np.ndarray:
+    """Map values to [0, 1]; uniform input maps to all ones (full weight)."""
+    arr = np.asarray(arr, dtype=float)
+    lo, hi = float(np.nanmin(arr)), float(np.nanmax(arr))
+    if not np.isfinite(lo) or hi <= lo:
+        return np.ones_like(arr, dtype=float)
+    return np.clip((arr - lo) / (hi - lo), 0.0, 1.0)
+
+
+def attach_signal_to_node_metrics(
+    node_metrics_df: pd.DataFrame,
+    gene_weights: Optional[Dict[str, float]] = None,
+    *,
+    hub_ranking_mode: str = "signal_weighted",
+    disease_genes: Optional[Set[str]] = None,
+    hub_disease_boost: float = 0.0,
+    topology_blend: Tuple[float, float, float] = (1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0),
+) -> pd.DataFrame:
+    """
+    Add methylation signal and combined hub scores to topology-only metrics.
+
+    ``gene_weights`` maps gene symbol -> weight (e.g. mean_effect_size, gene_importance).
+    ``hub_ranking_mode``: ``topology`` (ignore methylation for ranking) or ``signal_weighted``
+    (topology × normalized weight × optional disease boost).
+    """
+    if node_metrics_df.empty or "gene" not in node_metrics_df.columns:
+        return node_metrics_df
+
+    df = node_metrics_df.copy()
+    wdeg, wbet, wcls = topology_blend
+    s = float(wdeg) + float(wbet) + float(wcls)
+    if s <= 0:
+        wdeg, wbet, wcls = 1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0
+    else:
+        wdeg, wbet, wcls = float(wdeg) / s, float(wbet) / s, float(wcls) / s
+
+    genes_upper = df["gene"].astype(str).str.upper()
+    lookup = {str(k).strip().upper(): float(v) for k, v in (gene_weights or {}).items()}
+    raw_weights = np.array([lookup.get(g, 1.0) for g in genes_upper], dtype=float)
+    df["methylation_weight"] = raw_weights
+    df["methylation_weight_norm"] = _normalize_minmax_array(raw_weights)
+
+    deg = pd.to_numeric(df["degree_centrality"], errors="coerce").fillna(0.0).to_numpy()
+    bet = pd.to_numeric(df["betweenness_centrality"], errors="coerce").fillna(0.0).to_numpy()
+    cls = pd.to_numeric(df["closeness_centrality"], errors="coerce").fillna(0.0).to_numpy()
+    ndeg = _normalize_minmax_array(deg)
+    nbet = _normalize_minmax_array(bet)
+    ncls = _normalize_minmax_array(cls)
+    df["topology_score"] = wdeg * ndeg + wbet * nbet + wcls * ncls
+
+    dg = {str(g).strip().upper() for g in (disease_genes or set())}
+    boost = float(hub_disease_boost) if hub_disease_boost else 0.0
+    disease_mult = np.array(
+        [(1.0 + boost) if g in dg else 1.0 for g in genes_upper],
+        dtype=float,
+    )
+
+    if str(hub_ranking_mode).lower() == "topology":
+        df["methylation_weight_norm"] = 1.0
+        df["combined_hub_score"] = df["topology_score"] * disease_mult
+    else:
+        df["combined_hub_score"] = (
+            df["topology_score"] * df["methylation_weight_norm"].to_numpy() * disease_mult
+        )
+
+    df.sort_values(
+        by=["combined_hub_score", "topology_score", "degree_centrality"],
+        ascending=False,
+        inplace=True,
+    )
+    df.reset_index(drop=True, inplace=True)
+    return df
+
+
 def compute_network_metrics(graph: nx.Graph) -> pd.DataFrame:
     """Compute node-level centrality metrics."""
     if graph.number_of_nodes() == 0:
@@ -260,11 +334,29 @@ def compute_network_metrics(graph: nx.Graph) -> pd.DataFrame:
     return df
 
 
-def rank_hubs(node_metrics: pd.DataFrame, top_k: int = 25) -> pd.DataFrame:
-    """Return top central genes."""
+def rank_hubs(
+    node_metrics: pd.DataFrame,
+    top_k: int = 25,
+    *,
+    hub_ranking_mode: str = "signal_weighted",
+) -> pd.DataFrame:
+    """Return top hub genes, ranked by combined signal+topology or topology only."""
     if node_metrics.empty:
         return node_metrics
-    return node_metrics.head(top_k).copy()
+    mode = str(hub_ranking_mode).lower()
+    if mode == "topology" and "topology_score" in node_metrics.columns:
+        sorted_df = node_metrics.sort_values(
+            by=["topology_score", "degree_centrality", "betweenness_centrality", "closeness_centrality"],
+            ascending=False,
+        )
+    elif "combined_hub_score" in node_metrics.columns:
+        sorted_df = node_metrics.sort_values(
+            by=["combined_hub_score", "topology_score", "degree_centrality"],
+            ascending=False,
+        )
+    else:
+        sorted_df = node_metrics
+    return sorted_df.head(top_k).copy()
 
 
 def detect_communities(graph: nx.Graph, method: str = "louvain") -> Dict[str, int]:
@@ -303,23 +395,40 @@ def compute_module_coherence(
     pathway_to_genes: Dict[str, Set[str]],
     graph: nx.Graph,
     node_metrics: pd.DataFrame,
+    *,
+    coherence_metric_column: str = "combined_hub_score",
 ) -> pd.DataFrame:
     """
     Compute module-level PPI coherence metrics.
 
+    ``coherence_metric_column`` selects which node metric drives the coherence blend (default:
+    ``combined_hub_score`` when present from :func:`attach_signal_to_node_metrics`; falls back to
+    ``degree_centrality``).
+
     Returns columns:
       module_id, ppi_coherence_score, ppi_density, ppi_mean_degree_centrality,
-      ppi_largest_component_ratio, ppi_nodes, ppi_edges
+      ppi_mean_combined_hub_score (when available), ppi_largest_component_ratio, ppi_nodes, ppi_edges
     """
+    deg_lookup: Dict[str, float] = {}
+    combo_lookup: Dict[str, float] = {}
+    if not node_metrics.empty and "gene" in node_metrics.columns:
+        for _, r in node_metrics.iterrows():
+            g = str(r["gene"]).upper()
+            deg_lookup[g] = float(r.get("degree_centrality", 0.0))
+            if "combined_hub_score" in node_metrics.columns:
+                combo_lookup[g] = float(r.get("combined_hub_score", 0.0))
+
+    use_col = coherence_metric_column
+    if use_col not in node_metrics.columns or node_metrics.empty:
+        use_col = "degree_centrality"
     metric_lookup: Dict[str, float] = {}
     if not node_metrics.empty and "gene" in node_metrics.columns:
-        metric_lookup = {
-            str(r["gene"]).upper(): float(r.get("degree_centrality", 0.0))
-            for _, r in node_metrics.iterrows()
-        }
+        for _, r in node_metrics.iterrows():
+            g = str(r["gene"]).upper()
+            metric_lookup[g] = float(r.get(use_col, r.get("degree_centrality", 0.0)))
 
     module_ids = sorted(set(pathway_to_module_id.values()))
-    rows: List[Dict[str, float]] = []
+    rows: List[Dict[str, Any]] = []
     for module_id in module_ids:
         module_pathways = [p for p, m in pathway_to_module_id.items() if m == module_id]
         module_genes: Set[str] = set()
@@ -328,25 +437,38 @@ def compute_module_coherence(
         existing_nodes = sorted(g for g in module_genes if graph.has_node(g))
         subgraph = graph.subgraph(existing_nodes).copy() if existing_nodes else nx.Graph()
         density = float(nx.density(subgraph)) if subgraph.number_of_nodes() > 1 else 0.0
-        mean_centrality = (
+        mean_deg_c = (
+            float(np.mean([deg_lookup.get(g, 0.0) for g in existing_nodes]))
+            if existing_nodes
+            else 0.0
+        )
+        mean_combo = (
+            float(np.mean([combo_lookup.get(g, 0.0) for g in existing_nodes]))
+            if existing_nodes and combo_lookup
+            else float("nan")
+        )
+        mean_for_blend = (
             float(np.mean([metric_lookup.get(g, 0.0) for g in existing_nodes]))
             if existing_nodes
             else 0.0
         )
         lcc_ratio = _largest_component_ratio(subgraph)
         # Balanced coherence score in [0,1]
-        coherence = float(np.clip(0.4 * density + 0.3 * mean_centrality + 0.3 * lcc_ratio, 0.0, 1.0))
-        rows.append(
-            {
-                "module_id": int(module_id),
-                "ppi_coherence_score": coherence,
-                "ppi_density": density,
-                "ppi_mean_degree_centrality": mean_centrality,
-                "ppi_largest_component_ratio": lcc_ratio,
-                "ppi_nodes": int(subgraph.number_of_nodes()),
-                "ppi_edges": int(subgraph.number_of_edges()),
-            }
+        coherence = float(
+            np.clip(0.4 * density + 0.3 * mean_for_blend + 0.3 * lcc_ratio, 0.0, 1.0)
         )
+        row: Dict[str, object] = {
+            "module_id": int(module_id),
+            "ppi_coherence_score": coherence,
+            "ppi_density": density,
+            "ppi_mean_degree_centrality": mean_deg_c,
+            "ppi_largest_component_ratio": lcc_ratio,
+            "ppi_nodes": int(subgraph.number_of_nodes()),
+            "ppi_edges": int(subgraph.number_of_edges()),
+        }
+        if combo_lookup:
+            row["ppi_mean_combined_hub_score"] = mean_combo
+        rows.append(row)
     out = pd.DataFrame(rows)
     if not out.empty:
         out.sort_values("ppi_coherence_score", ascending=False, inplace=True)

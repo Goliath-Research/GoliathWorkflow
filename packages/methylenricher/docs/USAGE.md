@@ -61,6 +61,13 @@ Optional PPI refinement can be enabled via CLI flags or `step_config.enricher.ne
 - writes `ppi_network_edges.csv`, `ppi_node_metrics.csv`, `ppi_hubs.csv`, `ppi_module_coherence.csv`,
 - adds blended scoring columns in `modules_ranked.csv` (`Base_score`, `PPI_coherence_score`, `Blended_score`).
 
+Hub ranking and module-level PPI coherence use **methylation signal** by default (`hub_ranking_mode=signal_weighted`, CLI `--network-refinement-hub-ranking-mode`):
+
+- `ppi_node_metrics.csv` includes `methylation_weight`, `topology_score`, and `combined_hub_score` (topology × normalized input weight × optional disease boost).
+- `ppi_hubs.csv` is sorted by `combined_hub_score` unless you set `hub_ranking_mode=topology` (pure graph centrality).
+- `ppi_module_coherence.csv` includes `ppi_mean_combined_hub_score` when signal-weighted mode is active, and the coherence blend uses that metric instead of raw degree centrality alone.
+- Optional: `hub_disease_boost` scales genes in the disease prior; `hub_w_degree` / `hub_w_betweenness` / `hub_w_closeness` weight the three normalized centrality terms inside `topology_score` (defaults: equal thirds).
+
 ## Custom network discovery workflow
 
 The network discovery CLI scans completed enricher outputs (for example directories containing

@@ -144,8 +144,10 @@ This is again a heuristic prioritization rule.
 When enabled (`network_refinement.enabled=true` or matching CLI flags), the package adds a second graph layer from gene-level protein-protein interactions (STRING API or a local edge list). For each module it computes:
 
 - induced-subgraph density,
-- mean node degree centrality,
+- mean of a **per-gene node metric** on the subgraph (by default the signal-weighted combined hub score, not only raw degree centrality),
 - largest connected-component ratio.
+
+Raw PPI hubs are often dominated by high-database-degree “infrastructure” genes. By default, node metrics are combined with **input methylation weights** (e.g.\ `mean_effect_size` / `gene_importance` from the mapper CSV): normalized centrality terms are blended into `topology_score`, then multiplied by min--max normalized weights and an optional disease-prior boost to form `combined_hub_score`. Hub lists and module coherence use this score unless `hub_ranking_mode=topology`.
 
 These features are combined into a heuristic PPI coherence score:
 
@@ -153,7 +155,7 @@ $$
 \operatorname{score}_{\text{ppi}}
 =
 0.4\,\operatorname{density}
-+ 0.3\,\operatorname{mean\_degree\_centrality}
++ 0.3\,\operatorname{mean\_node\_metric}
 + 0.3\,\operatorname{largest\_component\_ratio}.
 $$ {#eq-ppi-coherence}
 

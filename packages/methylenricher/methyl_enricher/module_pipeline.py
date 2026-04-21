@@ -15,6 +15,7 @@ from .pathway_graph import canonical_pathway_key, run_pathway_clustering
 from .module_scorer import score_and_rank_modules
 from . import module_network_plot
 from .ppi_network import (
+    attach_signal_to_node_metrics,
     build_ppi_graph,
     compute_module_coherence,
     compute_network_metrics,
@@ -360,6 +361,11 @@ def run_module_pipeline(
     network_refinement_community_method: str = "louvain",
     network_refinement_min_component_size: int = 2,
     network_refinement_weight_in_final_score: float = 0.3,
+    network_refinement_hub_ranking_mode: str = "signal_weighted",
+    network_refinement_hub_disease_boost: float = 0.0,
+    network_refinement_hub_w_degree: Optional[float] = None,
+    network_refinement_hub_w_betweenness: Optional[float] = None,
+    network_refinement_hub_w_closeness: Optional[float] = None,
     dash_host: str = "127.0.0.1",
     dash_port: int = 8050,
     dash_open_browser: bool = False,
@@ -485,6 +491,31 @@ def run_module_pipeline(
                 min_component_size=int(network_refinement_min_component_size),
             )
             node_metrics_df = compute_network_metrics(ppi_graph)
+            wd = network_refinement_hub_w_degree
+            wb = network_refinement_hub_w_betweenness
+            wc = network_refinement_hub_w_closeness
+            if wd is None and wb is None and wc is None:
+                topology_blend = (1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0)
+            else:
+                topology_blend = (
+                    float(wd if wd is not None else 1.0 / 3.0),
+                    float(wb if wb is not None else 1.0 / 3.0),
+                    float(wc if wc is not None else 1.0 / 3.0),
+                )
+            node_metrics_df = attach_signal_to_node_metrics(
+                node_metrics_df,
+                gene_weights,
+                hub_ranking_mode=network_refinement_hub_ranking_mode,
+                disease_genes=disease_genes,
+                hub_disease_boost=float(network_refinement_hub_disease_boost),
+                topology_blend=topology_blend,
+            )
+            coherence_metric_column = (
+                "combined_hub_score"
+                if str(network_refinement_hub_ranking_mode).lower() == "signal_weighted"
+                and "combined_hub_score" in node_metrics_df.columns
+                else "degree_centrality"
+            )
             communities = detect_communities(
                 ppi_graph,
                 method=network_refinement_community_method,
@@ -498,6 +529,7 @@ def run_module_pipeline(
                 pathway_to_genes=pathway_to_genes,
                 graph=ppi_graph,
                 node_metrics=node_metrics_df,
+                coherence_metric_column=coherence_metric_column,
             )
 
             ppi_coherence_by_module = {
@@ -530,7 +562,11 @@ def run_module_pipeline(
             logger.info("Wrote %s with %d nodes.", node_metrics_path, len(node_metrics_df))
 
             hubs_path = output_dir / "ppi_hubs.csv"
-            rank_hubs(node_metrics_df, top_k=25).to_csv(hubs_path, index=False)
+            rank_hubs(
+                node_metrics_df,
+                top_k=25,
+                hub_ranking_mode=network_refinement_hub_ranking_mode,
+            ).to_csv(hubs_path, index=False)
             logger.info("Wrote %s.", hubs_path)
 
             module_coherence_path = output_dir / "ppi_module_coherence.csv"

@@ -20,6 +20,11 @@ def _base_args():
         network_refinement_community_method="louvain",
         network_refinement_min_component_size=2,
         network_refinement_weight_in_final_score=0.3,
+        network_refinement_hub_ranking_mode="signal_weighted",
+        network_refinement_hub_disease_boost=0.0,
+        network_refinement_hub_w_degree=None,
+        network_refinement_hub_w_betweenness=None,
+        network_refinement_hub_w_closeness=None,
     )
 
 

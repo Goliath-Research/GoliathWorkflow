@@ -20,6 +20,11 @@ class NetworkRefinementConfig(BaseModel):
     community_method: Optional[str] = None
     min_component_size: Optional[int] = None
     weight_in_final_score: Optional[float] = None
+    hub_ranking_mode: Optional[str] = None
+    hub_disease_boost: Optional[float] = None
+    hub_w_degree: Optional[float] = None
+    hub_w_betweenness: Optional[float] = None
+    hub_w_closeness: Optional[float] = None
 
 
 class EnricherStepConfig(BaseModel):
@@ -85,3 +90,8 @@ class EnricherStepConfig(BaseModel):
     network_refinement_community_method: Optional[str] = None
     network_refinement_min_component_size: Optional[int] = None
     network_refinement_weight_in_final_score: Optional[float] = None
+    network_refinement_hub_ranking_mode: Optional[str] = None
+    network_refinement_hub_disease_boost: Optional[float] = None
+    network_refinement_hub_w_degree: Optional[float] = None
+    network_refinement_hub_w_betweenness: Optional[float] = None
+    network_refinement_hub_w_closeness: Optional[float] = None

@@ -340,6 +340,43 @@ For theory and package documentation, see:
         metavar='W',
         help='Blend weight for ppi_coherence_score in [0,1] (default: 0.3).'
     )
+    parser.add_argument(
+        '--network-refinement-hub-ranking-mode',
+        type=str,
+        choices=['signal_weighted', 'topology'],
+        default='signal_weighted',
+        metavar='MODE',
+        help='Hub ranking: signal_weighted combines PPI centrality with methylation gene weights '
+        '(default); topology uses graph centrality only.',
+    )
+    parser.add_argument(
+        '--network-refinement-hub-disease-boost',
+        type=float,
+        default=0.0,
+        metavar='B',
+        help='When disease prior genes exist: multiply combined hub score by (1+B) for those genes (default: 0).',
+    )
+    parser.add_argument(
+        '--network-refinement-hub-w-degree',
+        type=float,
+        default=None,
+        metavar='W',
+        help='Weight for normalized degree centrality in topology_score (default: 1/3 if all three unset).',
+    )
+    parser.add_argument(
+        '--network-refinement-hub-w-betweenness',
+        type=float,
+        default=None,
+        metavar='W',
+        help='Weight for normalized betweenness in topology_score (default: 1/3 if all three unset).',
+    )
+    parser.add_argument(
+        '--network-refinement-hub-w-closeness',
+        type=float,
+        default=None,
+        metavar='W',
+        help='Weight for normalized closeness in topology_score (default: 1/3 if all three unset).',
+    )
 
     # Other options
     parser.add_argument(
@@ -406,6 +443,11 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
         _apply_network_refinement_field("network_refinement_community_method", nr.community_method, "louvain")
         _apply_network_refinement_field("network_refinement_min_component_size", nr.min_component_size, 2)
         _apply_network_refinement_field("network_refinement_weight_in_final_score", nr.weight_in_final_score, 0.3)
+        _apply_network_refinement_field("network_refinement_hub_ranking_mode", nr.hub_ranking_mode, "signal_weighted")
+        _apply_network_refinement_field("network_refinement_hub_disease_boost", nr.hub_disease_boost, 0.0)
+        _apply_network_refinement_field("network_refinement_hub_w_degree", nr.hub_w_degree, None)
+        _apply_network_refinement_field("network_refinement_hub_w_betweenness", nr.hub_w_betweenness, None)
+        _apply_network_refinement_field("network_refinement_hub_w_closeness", nr.hub_w_closeness, None)
 
     # Flat-key compatibility (legacy or simple configs).
     _apply_network_refinement_field(
@@ -448,6 +490,31 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
         config.network_refinement_weight_in_final_score,
         0.3,
     )
+    _apply_network_refinement_field(
+        "network_refinement_hub_ranking_mode",
+        config.network_refinement_hub_ranking_mode,
+        "signal_weighted",
+    )
+    _apply_network_refinement_field(
+        "network_refinement_hub_disease_boost",
+        config.network_refinement_hub_disease_boost,
+        0.0,
+    )
+    _apply_network_refinement_field(
+        "network_refinement_hub_w_degree",
+        config.network_refinement_hub_w_degree,
+        None,
+    )
+    _apply_network_refinement_field(
+        "network_refinement_hub_w_betweenness",
+        config.network_refinement_hub_w_betweenness,
+        None,
+    )
+    _apply_network_refinement_field(
+        "network_refinement_hub_w_closeness",
+        config.network_refinement_hub_w_closeness,
+        None,
+    )
 
     # Rest: set from config. For network_plot, only set when user did not pass --network-plot (args is None).
     config_values = config.model_dump(mode="python", exclude_none=True)
@@ -466,6 +533,11 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
             "network_refinement_community_method",
             "network_refinement_min_component_size",
             "network_refinement_weight_in_final_score",
+            "network_refinement_hub_ranking_mode",
+            "network_refinement_hub_disease_boost",
+            "network_refinement_hub_w_degree",
+            "network_refinement_hub_w_betweenness",
+            "network_refinement_hub_w_closeness",
         ):
             continue
         if name not in config_values:
@@ -647,6 +719,8 @@ def main():
             print(f"  community_method={args.network_refinement_community_method}")
             print(f"  min_component_size={args.network_refinement_min_component_size}")
             print(f"  weight_in_final_score={args.network_refinement_weight_in_final_score}")
+            print(f"  hub_ranking_mode={getattr(args, 'network_refinement_hub_ranking_mode', 'signal_weighted')}")
+            print(f"  hub_disease_boost={getattr(args, 'network_refinement_hub_disease_boost', 0.0)}")
     print("=" * 70)
     
     def _run_one(in_file: Path, out_dir: str):
@@ -691,6 +765,17 @@ def main():
                 network_refinement_community_method=getattr(args, "network_refinement_community_method", "louvain"),
                 network_refinement_min_component_size=getattr(args, "network_refinement_min_component_size", 2),
                 network_refinement_weight_in_final_score=getattr(args, "network_refinement_weight_in_final_score", 0.3),
+                network_refinement_hub_ranking_mode=getattr(
+                    args, "network_refinement_hub_ranking_mode", "signal_weighted"
+                ),
+                network_refinement_hub_disease_boost=getattr(
+                    args, "network_refinement_hub_disease_boost", 0.0
+                ),
+                network_refinement_hub_w_degree=getattr(args, "network_refinement_hub_w_degree", None),
+                network_refinement_hub_w_betweenness=getattr(
+                    args, "network_refinement_hub_w_betweenness", None
+                ),
+                network_refinement_hub_w_closeness=getattr(args, "network_refinement_hub_w_closeness", None),
                 dash_host=getattr(args, "dash_host", "127.0.0.1"),
                 dash_port=getattr(args, "dash_port", 8050),
                 dash_open_browser=getattr(args, "dash_open_browser", False),

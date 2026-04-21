@@ -55,9 +55,12 @@ def test_module_pipeline_network_refinement_local_edges(monkeypatch, tmp_path: P
     assert not out_df.empty
     assert {"PPI_coherence_score", "Blended_score", "Base_score"}.issubset(set(out_df.columns))
     assert (tmp_path / "ppi_network_edges.csv").exists()
-    assert (tmp_path / "ppi_node_metrics.csv").exists()
+    nm = pd.read_csv(tmp_path / "ppi_node_metrics.csv")
+    assert "combined_hub_score" in nm.columns
+    assert "methylation_weight_norm" in nm.columns
     assert (tmp_path / "ppi_hubs.csv").exists()
-    assert (tmp_path / "ppi_module_coherence.csv").exists()
+    mc = pd.read_csv(tmp_path / "ppi_module_coherence.csv")
+    assert "ppi_mean_combined_hub_score" in mc.columns
 
 
 def test_module_pipeline_network_refinement_fallback(monkeypatch, tmp_path: Path):

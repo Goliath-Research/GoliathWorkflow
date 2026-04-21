@@ -1,6 +1,7 @@
 import pandas as pd
 
 from methyl_enricher.ppi_network import (
+    attach_signal_to_node_metrics,
     build_ppi_graph,
     compute_module_coherence,
     compute_network_metrics,
@@ -8,6 +9,7 @@ from methyl_enricher.ppi_network import (
     fetch_string_edges,
     load_local_edges,
     normalize_gene_symbols,
+    rank_hubs,
 )
 
 
@@ -23,6 +25,48 @@ def test_load_local_edges_supports_source_target(tmp_path):
     assert list(df.columns) == ["source", "target", "score"]
     assert len(df) == 2
     assert set(df["source"]) == {"TP53", "BRCA1"}
+
+
+def test_attach_signal_reorders_hubs_by_methylation_weight():
+    """Symmetric topology; methylation weights should determine hub order."""
+    edges = pd.DataFrame(
+        [
+            {"source": "A", "target": "B", "score": 800},
+            {"source": "B", "target": "C", "score": 800},
+            {"source": "C", "target": "A", "score": 800},
+        ]
+    )
+    graph = build_ppi_graph(edges, genes=["A", "B", "C"], min_component_size=2)
+    raw = compute_network_metrics(graph)
+    # Triangle: identical degree / centrality for all nodes; ranking follows weights only.
+    w_favor_c = {"A": 0.1, "B": 0.2, "C": 10.0}
+    w_favor_b = {"A": 0.2, "B": 10.0, "C": 0.2}
+    m1 = attach_signal_to_node_metrics(raw, w_favor_c, hub_ranking_mode="signal_weighted")
+    m2 = attach_signal_to_node_metrics(raw, w_favor_b, hub_ranking_mode="signal_weighted")
+    h1 = rank_hubs(m1, top_k=3, hub_ranking_mode="signal_weighted")["gene"].tolist()
+    h2 = rank_hubs(m2, top_k=3, hub_ranking_mode="signal_weighted")["gene"].tolist()
+    assert h1[0] == "C"
+    assert h2[0] == "B"
+
+
+def test_rank_hubs_topology_ignores_weight_ordering():
+    edges = pd.DataFrame(
+        [
+            {"source": "A", "target": "B", "score": 800},
+            {"source": "B", "target": "C", "score": 800},
+        ]
+    )
+    graph = build_ppi_graph(edges, genes=["A", "B", "C"], min_component_size=2)
+    raw = compute_network_metrics(graph)
+    weighted = attach_signal_to_node_metrics(
+        raw,
+        {"A": 0.01, "B": 0.99, "C": 0.5},
+        hub_ranking_mode="topology",
+    )
+    hubs = rank_hubs(weighted, top_k=2, hub_ranking_mode="topology")
+    assert "combined_hub_score" in hubs.columns
+    assert hubs.iloc[0]["gene"] == "B"
+    assert hubs.iloc[1]["gene"] in ("A", "C")
 
 
 def test_compute_module_coherence_outputs_expected_columns():
