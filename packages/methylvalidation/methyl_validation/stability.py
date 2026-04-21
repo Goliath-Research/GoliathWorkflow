@@ -1217,7 +1217,10 @@ def freeze_production_model(
         project_dict["step_config"] = {}
     if "detection" not in project_dict["step_config"]:
         project_dict["step_config"]["detection"] = {}
-    project_dict["step_config"]["detection"]["fixed_dmp_panel"] = str(merged_panel.resolve())
+    # Preserve configured path style (e.g., /work mount aliases) instead of
+    # canonicalizing through OS realpath resolution, which can rewrite to
+    # environment-specific NFS prefixes (e.g., /lambda/nfs/...).
+    project_dict["step_config"]["detection"]["fixed_dmp_panel"] = str(merged_panel)
 
     # Production run uses full dataset (no MC train/val split), unique project name
     project_dict["project_name"] = "production"
