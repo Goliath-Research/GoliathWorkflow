@@ -49,7 +49,44 @@ def main() -> None:
         action="store_true",
         help="Write an additional markdown summary report.md.",
     )
+    gsm = parser.add_mutually_exclusive_group()
+    gsm.add_argument(
+        "--gene-set-metrics",
+        action="store_true",
+        help="Enable gene set overlap metrics (overrides progression.gene_set_metrics.enabled).",
+    )
+    gsm.add_argument(
+        "--no-gene-set-metrics",
+        action="store_true",
+        help="Disable gene set overlap metrics (overrides progression config).",
+    )
+    parser.add_argument(
+        "--gene-sets-path",
+        type=Path,
+        default=None,
+        help="JSON file mapping category_id -> [gene symbols]; overrides progression.gene_sets_path.",
+    )
+    parser.add_argument(
+        "--gene-set-profile",
+        type=Path,
+        default=None,
+        help="Alias for --gene-sets-path (JSON profile path).",
+    )
+    parser.add_argument(
+        "--disease-profile",
+        type=str,
+        default=None,
+        metavar="KEY",
+        help="Bundled profile name (e.g. prostate_cancer); overrides progression.disease_profile / disease_context.",
+    )
     args = parser.parse_args()
+
+    if args.no_gene_set_metrics:
+        gsm_enabled: Optional[bool] = False
+    elif args.gene_set_metrics:
+        gsm_enabled = True
+    else:
+        gsm_enabled = None
 
     try:
         summary = run_progression_report(
@@ -58,6 +95,10 @@ def main() -> None:
             ordered_comparison_labels=_parse_labels(args.ordered_comparison_labels),
             strict_missing=bool(args.strict_missing),
             report_md=bool(args.report_md),
+            gene_set_metrics_enabled=gsm_enabled,
+            gene_sets_path=args.gene_sets_path,
+            gene_set_profile=args.gene_set_profile,
+            disease_profile=args.disease_profile,
         )
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)

@@ -377,6 +377,7 @@ def render_markdown_report(
     labels_df: pd.DataFrame,
     *,
     top_n: int = 10,
+    gene_set_metrics_df: Optional[pd.DataFrame] = None,
 ) -> str:
     lines = [
         "# Disease Progression Report",
@@ -408,6 +409,30 @@ def render_markdown_report(
         for label, count in vc.items():
             lines.append(f"- `{label}`: {count}")
     lines.append("")
+
+    if gene_set_metrics_df is not None and not gene_set_metrics_df.empty:
+        lines.append("## Gene set overlap metrics")
+        lines.append("")
+        frac_meta = summary.get("gene_set_fractions") or summary.get("gene_set_metrics") or {}
+        bn = str(frac_meta.get("output_basename") or "stage_gene_set_fractions").strip() or "stage_gene_set_fractions"
+        lines.append(
+            "Per-stage fraction of mapper gene universe overlapping curated categories "
+            f"(see `{bn}.csv` and `{bn}.json`)."
+        )
+        lines.append("")
+        src = gene_set_metrics_df["gene_set_profile_source"].iloc[0]
+        lines.append(f"- Profile source: `{src}`")
+        lines.append("")
+        for _, row in gene_set_metrics_df.sort_values(
+            ["stage_index", "category_id"]
+        ).iterrows():
+            lines.append(
+                f"- Stage {int(row['stage_index'])} `{row['comparison_label']}` "
+                f"**{row['category_id']}**: "
+                f"{float(row['fraction']):.4f} ({int(row['n_overlap'])}/{int(row['n_universe'])})"
+            )
+        lines.append("")
+
     return "\n".join(lines)
 
 
@@ -418,6 +443,10 @@ def run_progression_report(
     ordered_comparison_labels: Optional[Sequence[str]] = None,
     strict_missing: bool = False,
     report_md: bool = False,
+    gene_set_metrics_enabled: Optional[bool] = None,
+    gene_sets_path: Optional[Path] = None,
+    disease_profile: Optional[str] = None,
+    gene_set_profile: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """
     Main entrypoint for progression synthesis.
@@ -436,6 +465,26 @@ def run_progression_report(
         modules_df,
         stage_count=len(stage_specs),
     )
+
+    from .gene_set_coverage import (
+        build_gene_set_fractions_json_payload,
+        compute_gene_set_fractions,
+        gene_set_fractions_summary,
+        normalize_progression_gene_set_config,
+    )
+
+    gene_cfg: Dict[str, Any] = dict(meta.get("progression_step_config") or {})
+    if gene_set_metrics_enabled is not None:
+        gene_cfg["gene_set_metrics_enabled"] = bool(gene_set_metrics_enabled)
+    if gene_sets_path is not None:
+        gene_cfg["gene_sets_path"] = str(Path(gene_sets_path).expanduser())
+    if disease_profile is not None:
+        gene_cfg["disease_profile"] = str(disease_profile).strip()
+    if gene_set_profile is not None:
+        gene_cfg["gene_set_profile"] = str(Path(gene_set_profile).expanduser())
+
+    metrics_df = compute_gene_set_fractions(stage_specs, gene_cfg)
+    gene_norm = normalize_progression_gene_set_config(gene_cfg)
 
     genes_path = out_dir / "genes_long.csv"
     pathways_path = out_dir / "pathways_long.csv"
@@ -457,13 +506,36 @@ def run_progression_report(
         "modules_long_csv": str(modules_path),
         "labels_csv": str(labels_path),
     }
+    _gsm = gene_set_fractions_summary(metrics_df, gene_cfg)
+    summary["gene_set_fractions"] = _gsm
+    summary["gene_set_metrics"] = _gsm
+    if not metrics_df.empty:
+        base = str(gene_norm.get("_gene_set_output_basename") or "stage_gene_set_fractions").strip()
+        if not base:
+            base = "stage_gene_set_fractions"
+        metrics_path = out_dir / f"{base}.csv"
+        metrics_json_path = out_dir / f"{base}.json"
+        metrics_df.to_csv(metrics_path, index=False)
+        with open(metrics_json_path, "w", encoding="utf-8") as jf:
+            json.dump(build_gene_set_fractions_json_payload(metrics_df), jf, indent=2, default=str)
+        summary["gene_set_fractions_csv"] = str(metrics_path)
+        summary["gene_set_fractions_json"] = str(metrics_json_path)
+        summary["gene_set_metrics_csv"] = str(metrics_path)
+
     with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, indent=2)
+        json.dump(summary, f, indent=2, default=str)
     summary["summary_json"] = str(summary_path)
 
     if report_md:
         md_path = out_dir / "report.md"
-        md_path.write_text(render_markdown_report(summary, labels_df), encoding="utf-8")
+        md_path.write_text(
+            render_markdown_report(
+                summary,
+                labels_df,
+                gene_set_metrics_df=metrics_df if not metrics_df.empty else None,
+            ),
+            encoding="utf-8",
+        )
         summary["report_md"] = str(md_path)
 
     return summary

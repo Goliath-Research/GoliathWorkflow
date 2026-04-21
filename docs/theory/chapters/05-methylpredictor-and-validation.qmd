@@ -256,6 +256,10 @@ The progression step writes:
 
 This layer is best interpreted as structured biological summarization across stages, not causal disease dynamics inference.
 
+### Optional gene set overlap metrics
+
+When metrics are enabled and a profile is provided, the tool writes per-stage overlap tables as CSV plus a JSON summary for plotting. **Preferred config (v1 plan):** nested `step_config.progression.gene_set_metrics` with `enabled`, optional `gene_universe` (`mapper_all`, `mapper_top_n`, `mapper_min_weight_quantile`), optional `output_basename` (default `stage_gene_set_fractions` when this block is used), plus `gene_set_profile` (path string, `{"path": ...}`, or inline `categories` with `{id, label, genes}`) or `disease_context` (e.g. `prostate_cancer` → bundled `profiles/prostate_cancer.json`). **Legacy flat keys** remain supported: `gene_set_metrics_enabled`, `gene_sets_path`, `disease_profile`, and `gene_set_denominator` / `gene_set_top_n` / `gene_set_weight_quantile` (default CSV basename `stage_gene_set_metrics`). For each stage and category, outputs include `n_universe` (mapper genes after optional filtering), `n_overlap`, and `fraction = n_overlap / n_universe`. These fractions are descriptive checks against curated hypotheses; they complement pathway q-values and do not replace enrichment statistics or imply causal stage biology.
+
 ### Stage-wise enrichment interpretation (prostate cancer template)
 
 For prostate cancer stage series (PCa1 -> PCa4), a common interpretation template is:
