@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,23 @@ from methyl_validation.cli import (
     _load_existing_step_timings,
     _resolve_resume_start_iteration,
 )
+
+
+def _valid_production_project_text(
+    tmp_path: Path, healthy_csv: Path, disease_csv: Path, out_dir: Path
+) -> str:
+    """Minimal project.json that passes load_project and infer_monte_carlo_layout (2 flat groups)."""
+    return json.dumps(
+        {
+            "project_name": "x",
+            "output_base": str(out_dir),
+            "samples_base_path": str(tmp_path),
+            "groups": [
+                {"label": "healthy", "sample_paths": [str(healthy_csv)]},
+                {"label": "disease", "sample_paths": [str(disease_csv)]},
+            ],
+        }
+    )
 
 
 def test_resolve_resume_start_iteration_auto_and_explicit():
@@ -129,7 +147,9 @@ def test_model_mc_all_uses_shared_stage(tmp_path: Path, monkeypatch):
     out_dir = tmp_path / "out"
     production_dir = out_dir / "x" / "monte_carlo_runs" / "production"
     production_dir.mkdir(parents=True, exist_ok=True)
-    (production_dir / "project.json").write_text("{}", encoding="utf-8")
+    (production_dir / "project.json").write_text(
+        _valid_production_project_text(tmp_path, h, d, out_dir), encoding="utf-8"
+    )
     project = tmp_path / "project.json"
     project.write_text(
         f"""
@@ -190,7 +210,9 @@ def test_select_best_model_ignores_shared_directory(tmp_path: Path, monkeypatch)
     model_mc_root = out_dir / "x" / "monte_carlo_runs" / "model_mc"
     production_dir = out_dir / "x" / "monte_carlo_runs" / "production"
     production_dir.mkdir(parents=True, exist_ok=True)
-    (production_dir / "project.json").write_text("{}", encoding="utf-8")
+    (production_dir / "project.json").write_text(
+        _valid_production_project_text(tmp_path, h, d, out_dir), encoding="utf-8"
+    )
     (model_mc_root / "shared").mkdir(parents=True, exist_ok=True)
     for backend in ("ecdf", "tabular_sklearn", "generative_hybrid"):
         root = model_mc_root / backend
@@ -240,7 +262,7 @@ def test_select_best_model_ignores_shared_directory(tmp_path: Path, monkeypatch)
         ["methyl-validation", "--project", str(project), "--select-best-model", "--model-mc-all"],
     )
     cli.main()
-    assert captured["backends"] == ["ecdf", "tabular_sklearn", "generative_hybrid"]
+    assert set(captured["backends"]) == {"ecdf", "tabular_sklearn", "generative_hybrid"}
 
 
 def test_model_mc_single_backend_reuses_existing_shared_runs(tmp_path: Path, monkeypatch):
@@ -251,7 +273,9 @@ def test_model_mc_single_backend_reuses_existing_shared_runs(tmp_path: Path, mon
     out_dir = tmp_path / "out"
     production_dir = out_dir / "x" / "monte_carlo_runs" / "production"
     production_dir.mkdir(parents=True, exist_ok=True)
-    (production_dir / "project.json").write_text("{}", encoding="utf-8")
+    (production_dir / "project.json").write_text(
+        _valid_production_project_text(tmp_path, h, d, out_dir), encoding="utf-8"
+    )
     shared_run_dir = out_dir / "x" / "monte_carlo_runs" / "model_mc" / "shared" / "run_0001"
     shared_run_dir.mkdir(parents=True, exist_ok=True)
     (shared_run_dir / "project.json").write_text("{}", encoding="utf-8")

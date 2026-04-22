@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from methyl_validation.cli import _write_detector_featurecuts_override
+from methyl_validation.mc_manifest import write_detector_featurecuts_override
 from methyl_validation.cli import _count_run_samples_from_existing_files
 from methyl_validation.config import MonteCarloConfig
 from methyl_validation.stability import load_discovery_dmps
@@ -32,7 +32,7 @@ def test_write_detector_featurecuts_override(tmp_path: Path):
             stability_min_selected_dmps=1200,
         )
     )
-    out = _write_detector_featurecuts_override(tmp_path / "run_0001", cfg)
+    out = write_detector_featurecuts_override(tmp_path / "run_0001", cfg)
     assert out is not None and out.is_file()
     payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["classifier_dmp_selection"] == "featurecuts_validation"
