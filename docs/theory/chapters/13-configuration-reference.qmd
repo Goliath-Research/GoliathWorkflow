@@ -280,7 +280,7 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `model_backend` | str | `"ecdf"` | `"ecdf"`, `"tabular_sklearn"`, `"generative_hybrid"` | Backend for `--model`. `ecdf`: classifier→predictor. `tabular_sklearn`: bundle + sklearn train/predict. `generative_hybrid`: bundle + latent-density generative train/predict. |
 | `model_bundle_dir` | str \| null | `null` | — | Optional output directory for model feature bundle artifacts. Default: `<production_output_dir>/model_bundle`. |
 | `model_weight_column` | str | `"weight"` | — | Preferred detector DMP column used as feature weight in model bundle construction; falls back to `effect_size` or `1.0`. |
-| `tabular_model_type` | str | `"random_forest"` | `"random_forest"`, `"hist_gradient_boosting"`, `"logistic_regression"` | Model type when `model_backend="tabular_sklearn"`. |
+| `tabular_model_type` | str | `"random_forest"` | `"random_forest"`, `"hist_gradient_boosting"`, `"logistic_regression"`, `"xgboost"` | Model type when `model_backend="tabular_sklearn"`. |
 | `tabular_max_dmps` | int | `5000` | ≥ 10 | Maximum number of DMP loci retained from bundle index for tabular/generative backend training. |
 | `covariates_path` | str \| null | `null` | — | Optional covariates sidecar (`.h5` preferred, `.csv` accepted) for tabular or generative backend. |
 | `covariate_id_column` | str | `"sample_id"` | — | Covariates column used to join rows with sample basenames. |

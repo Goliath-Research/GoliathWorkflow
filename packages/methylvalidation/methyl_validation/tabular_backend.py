@@ -25,6 +25,10 @@ from sklearn.metrics import (
     confusion_matrix,
     precision_recall_fscore_support,
 )
+try:
+    from xgboost import XGBClassifier
+except ImportError:  # pragma: no cover - handled at runtime when xgboost method is requested
+    XGBClassifier = None
 
 from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
@@ -149,6 +153,30 @@ def _build_estimator_from_config(method_cfg: Dict[str, Any]):
             "penalty": str(params.get("penalty", "l2")),
         }
         return LogisticRegression(**resolved), resolved
+    if method == "xgboost":
+        if XGBClassifier is None:
+            raise ImportError(
+                "xgboost is required for tabular method 'xgboost'. "
+                "Install xgboost in the runtime environment."
+            )
+        resolved = {
+            "n_estimators": int(params.get("n_estimators", 300)),
+            "max_depth": int(params.get("max_depth", 6)),
+            "learning_rate": float(params.get("learning_rate", 0.1)),
+            "subsample": float(params.get("subsample", 1.0)),
+            "colsample_bytree": float(params.get("colsample_bytree", 1.0)),
+            "min_child_weight": float(params.get("min_child_weight", 1.0)),
+            "reg_lambda": float(params.get("reg_lambda", params.get("lambda", 1.0))),
+            "random_state": int(params.get("random_state", 13)),
+            "n_jobs": int(params.get("n_jobs", -1)),
+            "tree_method": str(params.get("tree_method", "hist")),
+            "eval_metric": str(params.get("eval_metric", "mlogloss")),
+            "verbosity": int(params.get("verbosity", 0)),
+        }
+        objective = params.get("objective")
+        if objective is not None:
+            resolved["objective"] = str(objective)
+        return XGBClassifier(**resolved), resolved
     if method != "random_forest":
         raise ValueError(f"Unsupported tabular method: {method}")
     resolved = {

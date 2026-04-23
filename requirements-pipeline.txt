@@ -32,4 +32,5 @@ sqlalchemy
 sqlmodel
 statsmodels
 tqdm
+xgboost
 zarr

@@ -6,6 +6,7 @@ import json
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from methyl_validation import model_bundle, tabular_backend
 
@@ -499,3 +500,28 @@ def test_tabular_multi_method_sequence_outputs_ranking(tmp_path: Path, monkeypat
         meta = json.load(f)
     assert len(meta.get("tabular_methods_evaluated") or []) == 2
     assert meta.get("selected_tabular_method") in {"random_forest", "logistic_regression"}
+
+
+def test_build_estimator_from_config_xgboost(monkeypatch):
+    class _FakeXGBClassifier:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    monkeypatch.setattr(tabular_backend, "XGBClassifier", _FakeXGBClassifier)
+    estimator, resolved = tabular_backend._build_estimator_from_config(
+        {
+            "method": "xgboost",
+            "params": {"n_estimators": 123, "max_depth": 4, "learning_rate": 0.05},
+        }
+    )
+    assert isinstance(estimator, _FakeXGBClassifier)
+    assert resolved["n_estimators"] == 123
+    assert resolved["max_depth"] == 4
+    assert resolved["learning_rate"] == 0.05
+    assert estimator.kwargs["tree_method"] == "hist"
+
+
+def test_build_estimator_from_config_xgboost_requires_dependency(monkeypatch):
+    monkeypatch.setattr(tabular_backend, "XGBClassifier", None)
+    with pytest.raises(ImportError, match="xgboost is required"):
+        tabular_backend._build_estimator_from_config({"method": "xgboost", "params": {}})

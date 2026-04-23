@@ -1259,7 +1259,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--tabular-model-type",
-        choices=["random_forest", "hist_gradient_boosting", "logistic_regression"],
+        choices=["random_forest", "hist_gradient_boosting", "logistic_regression", "xgboost"],
         default=None,
         help="For tabular backend: sklearn estimator type.",
     )

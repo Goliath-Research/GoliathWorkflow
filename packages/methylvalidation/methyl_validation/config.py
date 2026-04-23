@@ -43,6 +43,22 @@ class LogisticRegressionMethodParams(BaseModel):
     penalty: str = Field(default="l2")
 
 
+class XGBoostMethodParams(BaseModel):
+    n_estimators: int = Field(default=300, ge=1)
+    max_depth: int = Field(default=6, ge=1)
+    learning_rate: float = Field(default=0.1, gt=0.0)
+    subsample: float = Field(default=1.0, gt=0.0, le=1.0)
+    colsample_bytree: float = Field(default=1.0, gt=0.0, le=1.0)
+    min_child_weight: float = Field(default=1.0, gt=0.0)
+    reg_lambda: float = Field(default=1.0, ge=0.0)
+    random_state: int = Field(default=13)
+    n_jobs: int = Field(default=-1)
+    tree_method: str = Field(default="hist")
+    eval_metric: str = Field(default="mlogloss")
+    objective: Optional[str] = Field(default=None)
+    verbosity: int = Field(default=0)
+
+
 class RandomForestMethodConfig(BaseModel):
     method: Literal["random_forest"]
     params: RandomForestMethodParams = Field(default_factory=RandomForestMethodParams)
@@ -58,8 +74,18 @@ class LogisticRegressionMethodConfig(BaseModel):
     params: LogisticRegressionMethodParams = Field(default_factory=LogisticRegressionMethodParams)
 
 
+class XGBoostMethodConfig(BaseModel):
+    method: Literal["xgboost"]
+    params: XGBoostMethodParams = Field(default_factory=XGBoostMethodParams)
+
+
 TabularMethodConfig = Annotated[
-    Union[RandomForestMethodConfig, HistGradientBoostingMethodConfig, LogisticRegressionMethodConfig],
+    Union[
+        RandomForestMethodConfig,
+        HistGradientBoostingMethodConfig,
+        LogisticRegressionMethodConfig,
+        XGBoostMethodConfig,
+    ],
     Field(discriminator="method"),
 ]
 
@@ -292,7 +318,10 @@ class MonteCarloConfig(BaseModel):
     )
     tabular_model_type: str = Field(
         default="random_forest",
-        description="For model_backend=tabular_sklearn: random_forest | hist_gradient_boosting | logistic_regression.",
+        description=(
+            "For model_backend=tabular_sklearn: "
+            "random_forest | hist_gradient_boosting | logistic_regression | xgboost."
+        ),
     )
     tabular_methods: Optional[List[TabularMethodConfig]] = Field(
         default=None,

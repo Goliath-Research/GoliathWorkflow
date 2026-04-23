@@ -43,7 +43,7 @@ RUN conda install -y -n base -c conda-forge mamba && \
         jupyter hdbscan umap-learn && \
     mamba install -y -n rapids-25.10 -c conda-forge \
         h5py hdf5plugin zarr pyarrow psutil plotly matplotlib seaborn \
-        click tqdm statsmodels sqlalchemy scikit-learn pydantic pyodbc pymssql && \
+        click tqdm statsmodels sqlalchemy scikit-learn xgboost pydantic pyodbc pymssql && \
     conda clean -ay
 
 ENV CONDA_DEFAULT_ENV=rapids-25.10

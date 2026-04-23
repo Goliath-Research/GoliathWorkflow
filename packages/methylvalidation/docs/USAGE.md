@@ -325,7 +325,7 @@ These options are used by all three model backends in model-build flows:
 
 - `tabular_methods`: ordered list of one or more entries
 - each entry uses a `method` discriminator and method-specific `params`
-- supported `method` values: `random_forest`, `hist_gradient_boosting`, `logistic_regression`
+- supported `method` values: `random_forest`, `hist_gradient_boosting`, `logistic_regression`, `xgboost`
 - when multiple methods are provided, the run evaluates all in order and promotes the top method to canonical tabular artifacts
 
 Method selection controls:
@@ -340,7 +340,7 @@ Canonical nested JSON example:
   "model_backend": "tabular_sklearn",
   "tabular_methods": [
     {"method": "random_forest", "params": {"n_estimators": 500, "min_samples_leaf": 2, "class_weight": "balanced_subsample"}},
-    {"method": "logistic_regression", "params": {"max_iter": 2000, "class_weight": "balanced", "c": 1.0}}
+    {"method": "xgboost", "params": {"n_estimators": 500, "max_depth": 6, "learning_rate": 0.05, "subsample": 0.9}}
   ],
   "tabular_method_selection_metric": "balanced_accuracy",
   "tabular_method_selection_stat": "mean"

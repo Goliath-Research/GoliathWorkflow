@@ -55,7 +55,7 @@ def _add_common_config_args(
     p.add_argument("--tabular-max-dmps", type=int, default=None)
     p.add_argument(
         "--tabular-model-type",
-        choices=["random_forest", "hist_gradient_boosting", "logistic_regression"],
+        choices=["random_forest", "hist_gradient_boosting", "logistic_regression", "xgboost"],
         default=None,
     )
     p.add_argument("--tabular-methods-json", type=str, default=None)
