@@ -332,6 +332,8 @@ Method selection controls:
 
 - `tabular_method_selection_metric` (default `balanced_accuracy`)
 - `tabular_method_selection_stat` (default `mean`, stored as ranking metadata label)
+- training-time method selection evaluation runs only when `tabular_methods` has 2+ entries
+- single-method runs skip training-time `selection_eval` and are evaluated in the `tabular-predictor` step
 
 Canonical nested JSON example:
 

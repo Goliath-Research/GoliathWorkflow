@@ -409,6 +409,7 @@ def train_tabular_model(
             train_export_df.to_csv(train_dataset_out_path, index=False)
 
     methods = _normalize_tabular_methods(tabular_methods, legacy_model_type=model_type)
+    run_selection_eval = len(methods) > 1
     method_rows: List[Dict[str, Any]] = []
     selected_idx = 0
     models_root = out_dir / "tabular_methods"
@@ -481,21 +482,22 @@ def train_tabular_model(
         }
         with open(method_dir / "tabular-model-metadata.json", "w", encoding="utf-8") as f:
             json.dump(method_meta, f, indent=2)
-        eval_out_dir = method_dir / "selection_eval"
         score = float("nan")
-        try:
-            metrics = predict_tabular_model_from_project(
-                project_json=project_json,
-                model_dir=method_dir,
-                output_dir=eval_out_dir,
-                covariates_path=covariates_path,
-                covariate_id_column=covariate_id_column,
-                covariates_strict_join=covariates_strict_join,
-                observed_feature_min_obs_fraction=observed_feature_min_obs_fraction,
-            )
-            score = float(metrics.get(selection_metric, float("nan")))
-        except Exception:
-            score = float("nan")
+        if run_selection_eval:
+            eval_out_dir = method_dir / "selection_eval"
+            try:
+                metrics = predict_tabular_model_from_project(
+                    project_json=project_json,
+                    model_dir=method_dir,
+                    output_dir=eval_out_dir,
+                    covariates_path=covariates_path,
+                    covariate_id_column=covariate_id_column,
+                    covariates_strict_join=covariates_strict_join,
+                    observed_feature_min_obs_fraction=observed_feature_min_obs_fraction,
+                )
+                score = float(metrics.get(selection_metric, float("nan")))
+            except Exception:
+                score = float("nan")
         method_rows.append(
             {
                 "method_index": int(idx),
@@ -512,7 +514,7 @@ def train_tabular_model(
             selected_idx = int(idx)
 
     method_df = pd.DataFrame(method_rows)
-    if not method_df.empty:
+    if run_selection_eval and not method_df.empty:
         method_df.sort_values(["score", "method_index"], ascending=[False, True], inplace=True)
         method_df.reset_index(drop=True, inplace=True)
         method_df["rank"] = np.arange(1, len(method_df) + 1, dtype=int)
