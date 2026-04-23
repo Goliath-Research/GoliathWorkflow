@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.36">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>5&nbsp; MethylClassifier – MethylPipeline: Theory, Workflows, and Reference</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../chapters/05-methylpredictor-and-validation.html" rel="next">
+<link href="../chapters/03-methyldetector.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-dc6ca2cd4fc154dd9d00f02dacb9d42f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/04-methylclassifier.html"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../">MethylPipeline: Theory, Workflows, and Reference</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Scope, Traceability, and Notation</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I: Mathematical and Statistical Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II: Workflows and Production</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-project-configuration.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">The Project Configuration File</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-two-workflows.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Two Workflows</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III: Configuration Reference</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/13-configuration-reference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Configuration Reference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV: User Guide</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/14-user-guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">User Guide</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V: Model Training and Validation</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/15-model-creation-and-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Model Creation and Validation</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#role" id="toc-role" class="nav-link active" data-scroll-target="#role"><span class="header-section-number">5.1</span> Role</a></li>
+  <li><a href="#binary-classification" id="toc-binary-classification" class="nav-link" data-scroll-target="#binary-classification"><span class="header-section-number">5.2</span> Binary Classification</a></li>
+  <li><a href="#multi-chromosome-binary-classification" id="toc-multi-chromosome-binary-classification" class="nav-link" data-scroll-target="#multi-chromosome-binary-classification"><span class="header-section-number">5.3</span> Multi-Chromosome Binary Classification</a></li>
+  <li><a href="#one-vs-rest-ovr-multiclass-fusion" id="toc-one-vs-rest-ovr-multiclass-fusion" class="nav-link" data-scroll-target="#one-vs-rest-ovr-multiclass-fusion"><span class="header-section-number">5.4</span> One-vs-Rest (OvR) Multiclass Fusion</a></li>
+  <li><a href="#pairwise-control-aggregation" id="toc-pairwise-control-aggregation" class="nav-link" data-scroll-target="#pairwise-control-aggregation"><span class="header-section-number">5.5</span> Pairwise Control Aggregation</a></li>
+  <li><a href="#bipartite-multi-control-multi-disease-aggregation" id="toc-bipartite-multi-control-multi-disease-aggregation" class="nav-link" data-scroll-target="#bipartite-multi-control-multi-disease-aggregation"><span class="header-section-number">5.6</span> Bipartite Multi-Control × Multi-Disease Aggregation</a></li>
+  <li><a href="#calibration" id="toc-calibration" class="nav-link" data-scroll-target="#calibration"><span class="header-section-number">5.7</span> Calibration</a></li>
+  <li><a href="#new-modeling-features-in-production" id="toc-new-modeling-features-in-production" class="nav-link" data-scroll-target="#new-modeling-features-in-production"><span class="header-section-number">5.8</span> New Modeling Features in Production</a>
+  <ul class="collapse">
+  <li><a href="#learned-multiclass-head" id="toc-learned-multiclass-head" class="nav-link" data-scroll-target="#learned-multiclass-head"><span class="header-section-number">5.8.1</span> Learned Multiclass Head</a></li>
+  <li><a href="#isotonic-and-stacking-layers" id="toc-isotonic-and-stacking-layers" class="nav-link" data-scroll-target="#isotonic-and-stacking-layers"><span class="header-section-number">5.8.2</span> Isotonic and Stacking Layers</a></li>
+  <li><a href="#practical-reproducibility" id="toc-practical-reproducibility" class="nav-link" data-scroll-target="#practical-reproducibility"><span class="header-section-number">5.8.3</span> Practical Reproducibility</a></li>
+  </ul></li>
+  <li><a href="#sec-classifier-class-weight" id="toc-sec-classifier-class-weight" class="nav-link" data-scroll-target="#sec-classifier-class-weight"><span class="header-section-number">5.9</span> Multiclass Learned Head: Class Weighting</a></li>
+  <li><a href="#missing-data-semantics" id="toc-missing-data-semantics" class="nav-link" data-scroll-target="#missing-data-semantics"><span class="header-section-number">5.10</span> Missing Data Semantics</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">5.11</span> Publication Guidance</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/04-methylclassifier.html"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-methylclassifier" class="quarto-section-identifier"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="role" class="level2" data-number="5.1">
+<h2 data-number="5.1" class="anchored" data-anchor-id="role"><span class="header-section-number">5.1</span> Role</h2>
+<p><code>methylclassifier</code> is the orchestration layer that applies one or more binary ECDF classifiers to new samples. The mathematical core still lives in <code>methyl_utils/ecdf_classifier.py</code>, but <code>methylclassifier</code> determines how per-chromosome models, one-vs-rest bundles, and pairwise disease heads are fused into final probabilities.</p>
+<p>The relevant implementation files are:</p>
+<ul>
+<li><code>packages/methylclassifier/methyl_classifier/core/classifier.py</code></li>
+<li><code>packages/methylclassifier/methyl_classifier/core/multiclass_ovr.py</code></li>
+</ul>
+</section>
+<section id="binary-classification" class="level2" data-number="5.2">
+<h2 data-number="5.2" class="anchored" data-anchor-id="binary-classification"><span class="header-section-number">5.2</span> Binary Classification</h2>
+<p>For a single binary model, the underlying score is the ECDF log-density average described in <a href="01-methylutils.html#eq-ecdf-score" class="quarto-xref">Eq.&nbsp;<span>2.11</span></a> and <a href="01-methylutils.html#eq-ecdf-softmax" class="quarto-xref">Eq.&nbsp;<span>2.12</span></a>, with explicit class priors:</p>
+<p><span class="math display">\[
+\hat P(Y=c\mid x)\propto \exp\!\left(\frac{\log \hat p(x\mid c)}{T}\right)\hat P(Y=c).
+\]</span></p>
+<p>From the perspective of <code>methylclassifier</code>, the main practical issues are:</p>
+<ul>
+<li>aligning the input sample to the stored DMP order,</li>
+<li>constructing an availability mask for missing loci, and</li>
+<li>optionally applying a stored Platt calibrator.</li>
+</ul>
+<p>If the binary classifier is used alone, this is the cleanest statistical story in the package.</p>
+</section>
+<section id="multi-chromosome-binary-classification" class="level2" data-number="5.3">
+<h2 data-number="5.3" class="anchored" data-anchor-id="multi-chromosome-binary-classification"><span class="header-section-number">5.3</span> Multi-Chromosome Binary Classification</h2>
+<p>When a detector run exports one classifier per chromosome, <code>methylclassifier</code> computes chromosome-specific binary probabilities and then fuses them using normalized weights:</p>
+<p><span id="eq-chrom-fusion"><span class="math display">\[
+\hat p(y \mid x)
+\propto
+\sum_{c \in \mathcal{C}} w_c\,\hat p_c(y \mid x_c),
+\qquad
+\sum_{c \in \mathcal{C}} w_c &gt; 0.
+\tag{5.1}\]</span></span></p>
+<p>The code supports several ways to determine the weights <span class="math inline">\(w_c\)</span>:</p>
+<ul>
+<li>fixed configuration weights,</li>
+<li>trimmed mean effect-size weights derived from detector output,</li>
+<li>fitted linear, ridge, lasso, logistic, or elastic-net models trained on validation probabilities.</li>
+</ul>
+<p>The last family is best understood as a second-stage meta-model that uses per-chromosome probabilities as features. It can improve prediction, but it is no longer a single coherent generative model.</p>
+</section>
+<section id="one-vs-rest-ovr-multiclass-fusion" class="level2" data-number="5.4">
+<h2 data-number="5.4" class="anchored" data-anchor-id="one-vs-rest-ovr-multiclass-fusion"><span class="header-section-number">5.4</span> One-vs-Rest (OvR) Multiclass Fusion</h2>
+<p>For multiclass problems the package builds <span class="math inline">\(K\)</span> binary heads and fuses them into a <span class="math inline">\(K\)</span>-class probability vector. The active implementation in <code>multiclass_ovr.py</code> uses binary probabilities or logits as intermediate scores and then applies a softmax-like normalization. In symbolic form,</p>
+<p><span class="math display">\[
+\ell_k(x) = \log \hat p_k(y = k \mid x) - \log \hat p_k(y \neq k \mid x),
+\]</span></p>
+<p><span id="eq-ovr-fusion"><span class="math display">\[
+\hat P(Y = k \mid x)
+=
+\frac{\exp(\ell_k(x))}
+{\sum_{r=1}^{K} \exp(\ell_r(x))}.
+\tag{5.2}\]</span></span></p>
+<p>This is a practical multiclass reduction. It is not guaranteed to recover a single joint Bayesian posterior unless the binary heads are themselves perfectly compatible. Package metadata now records <code>ovr_inference_version</code> and <code>ovr_fuse_mode</code> so multiclass semantics are explicit and reproducible.</p>
+</section>
+<section id="pairwise-control-aggregation" class="level2" data-number="5.5">
+<h2 data-number="5.5" class="anchored" data-anchor-id="pairwise-control-aggregation"><span class="header-section-number">5.5</span> Pairwise Control Aggregation</h2>
+<p>Some project layouts export only pairwise control-vs-disease detectors. In that case the package constructs the control class probability from the geometric mean of the pairwise control probabilities:</p>
+<p><span id="eq-geomean-control"><span class="math display">\[
+\hat p_{\text{ctrl}}(x)
+=
+\exp\!\left(
+\frac{1}{K-1}
+\sum_{k=1}^{K-1}
+\log \hat p_{\text{ctrl} \mid \text{ctrl-vs-}k}(x)
+\right).
+\tag{5.3}\]</span></span></p>
+<p>The complement <span class="math inline">\(1 - \hat p_{\text{ctrl}}(x)\)</span> is then used to form a binary control-vs-rest head before final row normalization.</p>
+<p>This is a useful aggregation rule, but it is a heuristic. The geometric mean is not derived in the code from a global multiclass likelihood.</p>
+</section>
+<section id="bipartite-multi-control-multi-disease-aggregation" class="level2" data-number="5.6">
+<h2 data-number="5.6" class="anchored" data-anchor-id="bipartite-multi-control-multi-disease-aggregation"><span class="header-section-number">5.6</span> Bipartite Multi-Control × Multi-Disease Aggregation</h2>
+<p>The package also supports bipartite layouts with several control strata and several disease strata. Here it aggregates one probability column across several pairwise experts, again using geometric means. The logic is similar to <a href="#eq-geomean-control" class="quarto-xref">Eq.&nbsp;<span>5.3</span></a> but now applied to either the control column or the disease column depending on which class head is being built.</p>
+<p>That construction is convenient for complex cohort hierarchies, but it should be presented as a carefully engineered reduction strategy rather than a textbook probabilistic model.</p>
+</section>
+<section id="calibration" class="level2" data-number="5.7">
+<h2 data-number="5.7" class="anchored" data-anchor-id="calibration"><span class="header-section-number">5.7</span> Calibration</h2>
+<p>When enabled, the package can apply Platt scaling <span class="citation" data-cites="platt1999">(<a href="#ref-platt1999" role="doc-biblioref">Platt 1999</a>)</span> to the raw binary outputs. In effect, one learns parameters <span class="math inline">\(a\)</span> and <span class="math inline">\(b\)</span> so that a raw score <span class="math inline">\(s\)</span> is mapped to</p>
+<p><span id="eq-platt"><span class="math display">\[
+\hat p(y=1 \mid s) = \frac{1}{1 + \exp(as + b)}.
+\tag{5.4}\]</span></span></p>
+<p>This improves probability calibration under distribution shift or class imbalance, but it should not be confused with changing the underlying classifier likelihood.</p>
+</section>
+<section id="new-modeling-features-in-production" class="level2" data-number="5.8">
+<h2 data-number="5.8" class="anchored" data-anchor-id="new-modeling-features-in-production"><span class="header-section-number">5.8</span> New Modeling Features in Production</h2>
+<p>Recent versions of <code>methylclassifier</code> expose a broader post-detector modeling layer than the original binary ECDF-only story. In practice, production runs may combine several of the following:</p>
+<ul>
+<li>native multiclass histogram model export (<code>multiclass-classifier.pkl</code>) from per-comparison detector outputs,</li>
+<li>optional learned multinomial logistic head on top of histogram pre-softmax scores,</li>
+<li>optional isotonic calibration for probability reshaping,</li>
+<li>optional elastic-net stacking for chromosome-level fusion,</li>
+<li>optional dependence-aware block aggregation (<code>dependence_block_size</code>, <code>dependence_block_shrinkage</code>),</li>
+<li>hierarchical panel readout for family-level reporting.</li>
+</ul>
+<p>These are all valid engineering extensions, but conceptually they sit <strong>on top of</strong> the ECDF likelihood core rather than replacing it.</p>
+<section id="learned-multiclass-head" class="level3" data-number="5.8.1">
+<h3 data-number="5.8.1" class="anchored" data-anchor-id="learned-multiclass-head"><span class="header-section-number">5.8.1</span> Learned Multiclass Head</h3>
+<p>The learned head takes base multiclass score vectors <span class="math inline">\(z(x)\)</span> and fits a multinomial logistic layer:</p>
+<p><span class="math display">\[
+\hat P(Y=k\mid x)
+=
+\frac{\exp(\beta_k^\top z(x)+b_k)}
+{\sum_{r=1}^K \exp(\beta_r^\top z(x)+b_r)}.
+\]</span></p>
+<p>This layer is controlled by <code>multiclass_train_learned_head</code> and related hyperparameters in <code>step_config.detection</code> (see <a href="13-configuration-reference.html" class="quarto-xref"><span>Chapter 13</span></a>). It is especially useful when the raw histogram scores have good ranking behavior but imperfect class boundaries.</p>
+</section>
+<section id="isotonic-and-stacking-layers" class="level3" data-number="5.8.2">
+<h3 data-number="5.8.2" class="anchored" data-anchor-id="isotonic-and-stacking-layers"><span class="header-section-number">5.8.2</span> Isotonic and Stacking Layers</h3>
+<p>Two additional modeling switches in <code>step_config.classifier</code> are important for current production behavior:</p>
+<ul>
+<li><code>use_isotonic_calibration</code>: nonparametric monotone calibration of predicted probabilities,</li>
+<li><code>use_elasticnet_stacking</code>: linear meta-model for chromosome-weight fusion under elastic-net regularization.</li>
+</ul>
+<p>Both improve empirical calibration or discrimination in many cohorts, but they increase model complexity and should be reported explicitly in methods sections.</p>
+</section>
+<section id="practical-reproducibility" class="level3" data-number="5.8.3">
+<h3 data-number="5.8.3" class="anchored" data-anchor-id="practical-reproducibility"><span class="header-section-number">5.8.3</span> Practical Reproducibility</h3>
+<p>For reproducibility claims, report:</p>
+<ol type="1">
+<li>whether the learned multiclass head was enabled,</li>
+<li>whether class balancing was used (<code>multiclass_learned_class_weight</code>),</li>
+<li>whether isotonic calibration and/or elastic-net stacking were enabled,</li>
+<li>the sklearn version stored in PKL metadata.</li>
+</ol>
+<p>Without these details, two runs with the same DMP panel can still produce materially different probabilities.</p>
+</section>
+</section>
+<section id="sec-classifier-class-weight" class="level2" data-number="5.9">
+<h2 data-number="5.9" class="anchored" data-anchor-id="sec-classifier-class-weight"><span class="header-section-number">5.9</span> Multiclass Learned Head: Class Weighting</h2>
+<p>When the native multiclass histogram classifier is extended with a learned logistic head (<code>multiclass_train_learned_head: true</code>), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a <code>class_weight</code> parameter (exposed as <code>multiclass_learned_class_weight</code> in <code>step_config.detection</code>; see <a href="13-configuration-reference.html" class="quarto-xref"><span>Chapter 13</span></a>).</p>
+<p>With <code>multiclass_learned_class_weight: "balanced"</code>, sklearn computes inverse-frequency weights:</p>
+<p><span id="eq-class-weight-balanced"><span class="math display">\[
+w_k = \frac{n_{\text{total}}}{K \cdot n_k},
+\tag{5.5}\]</span></span></p>
+<p>where <span class="math inline">\(n_k\)</span> is the number of training samples in class <span class="math inline">\(k\)</span>, <span class="math inline">\(K\)</span> is the number of classes, and <span class="math inline">\(n_{\text{total}} = \sum_k n_k\)</span>. These weights are passed to the loss function of the multinomial logistic regression, penalizing errors on minority classes more heavily.</p>
+<p>This is particularly important for the prostate cancer staging problem where the healthy control cohort may be two to four times larger than any individual disease stage cohort. Without balancing, the logistic head learns to predict the healthy class as the default when the pre-softmax histogram scores do not provide strong class separation (for example, when only 20% of DMP positions are covered in a test sample; see <a href="03-methyldetector.html#sec-detector-coverage" class="quarto-xref"><span>Section 4.10</span></a>).</p>
+<p><strong>Theoretical note.</strong> Class weighting corrects for imbalance in the empirical class frequencies of the training set. It does not correct for population prevalence differences between training and deployment contexts. If the intended clinical population has very different disease prevalence from the training cohort, additional calibration against the target distribution is required.</p>
+<p><strong>Reproducibility.</strong> Since sklearn 1.4, the version of sklearn used to train the logistic head is saved in the model PKL metadata under the key <code>sklearn_version</code>. This allows detection of version mismatches between training and inference environments. The key is written by <code>_fit_learned_multiclass_head</code> in <code>packages/methylclassifier/methyl_classifier/utils/multiclass_builder.py</code>.</p>
+</section>
+<section id="missing-data-semantics" class="level2" data-number="5.10">
+<h2 data-number="5.10" class="anchored" data-anchor-id="missing-data-semantics"><span class="header-section-number">5.10</span> Missing Data Semantics</h2>
+<p>A practical but important detail is how the classifier handles unavailable loci. The implementation masks those loci out of the weighted average rather than imputing them with a full modeled distribution. As a result, the effective evidence for a sample depends on how many DMPs are observed for that sample.</p>
+<p>This is a sensible engineering choice, but it means that the posterior confidence is partly a function of data availability as well as class separation.</p>
+</section>
+<section id="publication-guidance" class="level2" data-number="5.11">
+<h2 data-number="5.11" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">5.11</span> Publication Guidance</h2>
+<p>The strongest defensible summary is:</p>
+<ul>
+<li>the binary head is an ECDF-based Naive Bayes style score with explicit priors and optional calibration,</li>
+<li>multi-chromosome fusion is a weighted ensemble,</li>
+<li>multiclass OvR is a reduction from binary heads to a normalized <span class="math inline">\(K\)</span>-class score,</li>
+<li>pairwise control aggregation is heuristic,</li>
+<li>and fitted chromosome weights are second-stage discriminative models, not part of the original density model.</li>
+</ul>
+<p>That framing is more accurate than calling the entire package a single Bayesian multiclass classifier.</p>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list">
+<div id="ref-platt1999" class="csl-entry" role="listitem">
+Platt, John C. 1999. <span>“Probabilistic Outputs for Support Vector Machines and Comparisons to Regularized Likelihood Methods.”</span> In <em>Advances in Large Margin Classifiers</em>. MIT Press.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../chapters/03-methyldetector.html" class="pagination-link" aria-label="MethylDetector">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../chapters/05-methylpredictor-and-validation.html" class="pagination-link" aria-label="MethylPredictor, MethylValidation, and MethylDiseaseProgression">
+        <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

@@ -51,7 +51,6 @@ from .validator_metrics import (
     compute_resource_summary,
     compute_summary,
     iteration_scalar_metrics_from_run_dir,
-    metrics_schema_descriptor,
     write_all_metrics_csv,
     write_resource_summary_json,
     write_metrics_distribution_plotly,
@@ -60,64 +59,15 @@ from .validator_metrics import (
 )
 from .stability import run_stability_analysis, freeze_production_model, build_production_model
 from .rollout import evaluate_dual_run, write_rollout_report
+from .mc_config_load import (
+    apply_monte_carlo_config_overrides,
+    ensure_monte_carlo_output_tree,
+    load_monte_carlo_config,
+)
+from .mc_manifest import write_baseline_manifest, write_detector_featurecuts_override
 
 
 _RUN_ID_RE = re.compile(r"^run_(\d{4})$")
-
-
-def _digest_sample_paths(paths: List[str]) -> str:
-    h = hashlib.sha256()
-    for p in sorted(str(x) for x in paths):
-        h.update(p.encode("utf-8"))
-        h.update(b"\n")
-    return h.hexdigest()
-
-
-def _write_baseline_manifest(
-    *,
-    output_root: Path,
-    mode: str,
-    config: MonteCarloConfig,
-    layout: str,
-    cohort_paths_list: List[Tuple[str, List[str]]],
-    split_reuse_source_root: Optional[Path] = None,
-) -> Path:
-    """
-    Write a deterministic run manifest describing split policy, seed policy, and
-    metric schema. This is the baseline lock artifact for cross-phase comparisons.
-    """
-    payload: Dict[str, Any] = {
-        "manifest_version": "probabilistic_v2_baseline_v1",
-        "mode": str(mode),
-        "layout": str(layout),
-        "n_iterations": int(config.n_iterations),
-        "train_fraction": float(config.train_fraction),
-        "seed_policy": {
-            "base_seed": int(config.seed) if config.seed is not None else None,
-            "per_iteration_seed_rule": "seed_i = base_seed + iteration_index",
-            "split_strategy": "stratified_per_cohort",
-        },
-        "cohorts": [
-            {
-                "label": str(label),
-                "n_samples": int(len(paths)),
-                "sample_digest_sha256": _digest_sample_paths(paths),
-            }
-            for label, paths in cohort_paths_list
-        ],
-        "metrics_schema": metrics_schema_descriptor(),
-    }
-    if split_reuse_source_root is not None:
-        payload["split_reuse"] = {
-            "policy": "auto_try_primary_runs_then_stratified",
-            "candidate_source_root": str(Path(split_reuse_source_root).resolve()),
-            "run_id_pattern": "run_{iteration:04d} for iteration 1..n_iterations",
-        }
-    output_root.mkdir(parents=True, exist_ok=True)
-    out = output_root / "baseline_manifest.json"
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-    return out
 
 
 def _format_duration(seconds: float) -> str:
@@ -215,39 +165,6 @@ def _load_existing_step_timings(
     return kept
 
 
-def _write_detector_featurecuts_override(
-    run_dir: Path,
-    config: "MonteCarloConfig",
-) -> Optional[Path]:
-    """
-    Optionally write detector step override JSON for stability/FeatureCuts runs.
-
-    Returns override path when any override is active, otherwise None.
-    """
-    enable_featurecuts = bool(config.stability_featurecuts_enabled)
-    target_ba = config.stability_target_balanced_accuracy
-    min_selected_dmps = config.stability_min_selected_dmps
-    if not enable_featurecuts and target_ba is None and min_selected_dmps is None:
-        return None
-
-    import json
-
-    payload: Dict[str, Any] = {}
-    if enable_featurecuts or target_ba is not None or min_selected_dmps is not None:
-        payload["classifier_dmp_selection"] = "featurecuts_validation"
-    if target_ba is not None:
-        payload["target_balanced_accuracy"] = float(target_ba)
-    if min_selected_dmps is not None:
-        payload["min_selected_dmps"] = int(min_selected_dmps)
-    if not payload:
-        return None
-    out = run_dir / "detector_step_override.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-    return out
-
-
 def _count_csv_data_rows(path: Path) -> int:
     if not path.is_file():
         return 0
@@ -266,78 +183,6 @@ def _count_run_samples_from_existing_files(run_dir: Path) -> Tuple[int, int]:
     n_train = sum(_count_csv_data_rows(p) for p in train_files)
     n_val = sum(_count_csv_data_rows(p) for p in val_files)
     return int(n_train), int(n_val)
-
-
-def _infer_monte_carlo_cohorts_from_project(
-    project_data: Dict[str, Any],
-    project_path: Path,
-) -> List[Dict[str, str]]:
-    """
-    Build MC cohorts from a project JSON using resolved leaf labels.
-
-    For control/disease projects this yields:
-      - control group labels (e.g. all)
-      - disease leaf labels (e.g. pca_pca1, pca_pca2, ...)
-    For flat groups it yields group labels as-is.
-    """
-    def _norm_csv_path(p: str) -> str:
-        # Keep relative paths as authored in the project (typically relative to repo root),
-        # only normalize explicit absolute paths.
-        pp = Path(str(p))
-        return str(pp) if pp.is_absolute() else str(p)
-
-    cohorts: List[Dict[str, str]] = []
-
-    # Flat multiclass template
-    groups = project_data.get("groups")
-    if isinstance(groups, list) and groups:
-        for g in groups:
-            if not isinstance(g, dict):
-                continue
-            label = str(g.get("label") or "").strip()
-            paths = g.get("sample_paths") or []
-            if label and isinstance(paths, list) and len(paths) > 0:
-                cohorts.append({"label": label, "csv": _norm_csv_path(str(paths[0]))})
-        return cohorts
-
-    # control/disease template (accept plural keys used in many project JSONs)
-    controls = project_data.get("controls") or project_data.get("control") or {}
-    diseases = project_data.get("diseases") or project_data.get("disease") or {}
-
-    ctrl_groups = controls.get("groups") if isinstance(controls, dict) else None
-    if isinstance(ctrl_groups, list):
-        for g in ctrl_groups:
-            if not isinstance(g, dict):
-                continue
-            label = str(g.get("label") or "").strip()
-            paths = g.get("sample_paths") or []
-            if label and isinstance(paths, list) and len(paths) > 0:
-                cohorts.append({"label": label, "csv": _norm_csv_path(str(paths[0]))})
-
-    dis_groups = diseases.get("groups") if isinstance(diseases, dict) else None
-    if isinstance(dis_groups, list):
-        for g in dis_groups:
-            if not isinstance(g, dict):
-                continue
-            parent = str(g.get("label") or "").strip()
-            stages = g.get("stages")
-            if isinstance(stages, list) and stages:
-                for st in stages:
-                    if not isinstance(st, dict):
-                        continue
-                    stage_label = str(st.get("label") or "").strip()
-                    paths = st.get("sample_paths") or []
-                    if parent and stage_label and isinstance(paths, list) and len(paths) > 0:
-                        cohorts.append(
-                            {"label": f"{parent}_{stage_label}", "csv": _norm_csv_path(str(paths[0]))}
-                        )
-            else:
-                label = parent
-                paths = g.get("sample_paths") or []
-                if label and isinstance(paths, list) and len(paths) > 0:
-                    cohorts.append({"label": label, "csv": _norm_csv_path(str(paths[0]))})
-
-    return cohorts
 
 
 def _write_model_mc_outputs(
@@ -446,7 +291,7 @@ def _build_model_mc_shared_runs(
     primary_monte_carlo_runs_root: Path,
 ) -> List[Dict[str, Any]]:
     shared_root.mkdir(parents=True, exist_ok=True)
-    _write_baseline_manifest(
+    write_baseline_manifest(
         output_root=shared_root,
         mode="model_mc_shared",
         config=config,
@@ -684,7 +529,7 @@ def _run_model_mc_backend_from_shared_runs(
     primary_monte_carlo_runs_root: Path,
 ) -> None:
     backend_root.mkdir(parents=True, exist_ok=True)
-    _write_baseline_manifest(
+    write_baseline_manifest(
         output_root=backend_root,
         mode="model_mc",
         config=config,
@@ -932,7 +777,7 @@ def _run_model_mc_backend(
     primary_monte_carlo_runs_root: Path,
 ) -> None:
     backend_root.mkdir(parents=True, exist_ok=True)
-    _write_baseline_manifest(
+    write_baseline_manifest(
         output_root=backend_root,
         mode="model_mc",
         config=config,
@@ -1172,6 +1017,17 @@ def _run_model_mc_backend(
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in (
+        "plan-runs",
+        "run-task",
+        "export-queue",
+        "aggregate-results",
+    ):
+        from . import queue_cli
+
+        queue_cli.main()
+        return
+
     parser = argparse.ArgumentParser(
         description=(
             "Monte Carlo validation: stratified train/val splits, methyl-centroid + methyl-detector per "
@@ -1493,144 +1349,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Support both --config (dedicated MC config) and --project (project with step_config.validation)
-    if args.project is not None:
-        # Load project and extract validation settings from step_config.validation
-        import json
-        with open(args.project, encoding="utf-8") as f:
-            project_data = json.load(f)
-
-        if "step_config" in project_data and "validation" in project_data.get("step_config", {}):
-            validation_settings = project_data["step_config"]["validation"]
-            cohorts = _infer_monte_carlo_cohorts_from_project(project_data, args.project)
-            if len(cohorts) < 2:
-                print(
-                    "Error: Could not infer >=2 Monte Carlo cohorts from project. "
-                    "Define project controls/diseases sample_paths (or flat groups) with CSVs.",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-
-            mc_config_dict = {
-                "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
-                "base_project": str(args.project),
-                "output_base": project_data.get("output_base", "/work/prostate-cancer"),
-                "path_remap": project_data.get("path_remap"),
-                "cohorts": cohorts,
-                **validation_settings
-            }
-            config = MonteCarloConfig.model_validate(mc_config_dict)
-        else:
-            print(f"Error: Project {args.project} does not contain step_config.validation", file=sys.stderr)
-            sys.exit(1)
-    elif args.config is not None:
-        # Regular dedicated MC config file
-        config = MonteCarloConfig.from_json_file(args.config)
-    else:
-        parser.error("Either --config or --project must be provided")
-
-    if args.iterations is not None:
-        config.n_iterations = args.iterations
-    if args.seed is not None:
-        config.seed = args.seed
-    if args.output_base is not None:
-        config.output_base = str(args.output_base)
-    if args.samples_base_path is not None:
-        config = config.model_copy(update={"samples_base_path": str(args.samples_base_path)})
-    if args.path_remap:
-        merged = dict(config.path_remap or {})
-        for item in args.path_remap:
-            if "=" not in item:
-                print(
-                    f"Error: --path-remap must be OLD=NEW, got: {item!r}",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
-            old_p, new_p = item.split("=", 1)
-            if not old_p.strip():
-                print(f"Error: empty OLD prefix in --path-remap: {item!r}", file=sys.stderr)
-                sys.exit(1)
-            merged[old_p] = new_p
-        config = config.model_copy(update={"path_remap": merged})
-    if args.stability:
-        config.run_stability = True
-    if args.stability_featurecuts:
-        config = config.model_copy(update={"stability_featurecuts_enabled": True})
-    if args.stability_target_ba is not None:
-        config = config.model_copy(
-            update={"stability_target_balanced_accuracy": float(args.stability_target_ba)}
-        )
-    if args.stability_min_selected_dmps is not None:
-        config = config.model_copy(
-            update={"stability_min_selected_dmps": int(args.stability_min_selected_dmps)}
-        )
-    if args.skip_enricher:
-        config.skip_enricher = True
-    if args.predictor_only:
-        config.predictor_only = True
-    if args.model_backend and args.post_model_backend and args.model_backend != args.post_model_backend:
-        print(
-            "Error: --model-backend and --post-model-backend must match when both are provided.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-    selected_backend = args.post_model_backend or args.model_backend
-    if selected_backend:
-        config = config.model_copy(update={"model_backend": selected_backend})
-    if args.covariates_path is not None:
-        config = config.model_copy(update={"covariates_path": str(args.covariates_path)})
-    if args.tabular_max_dmps is not None:
-        config = config.model_copy(update={"tabular_max_dmps": int(args.tabular_max_dmps)})
-    if args.tabular_model_type:
-        mt = str(args.tabular_model_type)
-        config = config.model_copy(
-            update={
-                "tabular_model_type": mt,
-                "tabular_methods": [{"method": mt, "params": {}}],
-            }
-        )
-    if args.tabular_methods_json:
-        try:
-            parsed_methods = json.loads(str(args.tabular_methods_json))
-        except Exception as e:
-            print(f"Error: invalid --tabular-methods-json: {e}", file=sys.stderr)
-            sys.exit(1)
-        if not isinstance(parsed_methods, list) or not parsed_methods:
-            print("Error: --tabular-methods-json must be a non-empty JSON array.", file=sys.stderr)
-            sys.exit(1)
-        config = config.model_copy(update={"tabular_methods": parsed_methods})
-    if args.tabular_save_train_dataset:
-        config = config.model_copy(update={"tabular_save_train_dataset": True})
-    if args.tabular_train_dataset_path is not None:
-        config = config.model_copy(update={"tabular_train_dataset_path": str(args.tabular_train_dataset_path)})
-    if args.generative_latent_dim is not None:
-        config = config.model_copy(update={"generative_latent_dim": int(args.generative_latent_dim)})
-    if args.generative_kl_weight is not None:
-        config = config.model_copy(update={"generative_kl_weight": float(args.generative_kl_weight)})
-    if args.generative_density_type:
-        config = config.model_copy(update={"generative_density_type": str(args.generative_density_type)})
-    if args.generative_epochs is not None:
-        config = config.model_copy(update={"generative_epochs": int(args.generative_epochs)})
-    if args.generative_batch_size is not None:
-        config = config.model_copy(update={"generative_batch_size": int(args.generative_batch_size)})
-    if args.generative_seed is not None:
-        config = config.model_copy(update={"generative_seed": int(args.generative_seed)})
-    if args.generative_calibrate:
-        config = config.model_copy(update={"generative_calibrate": True})
-    if args.no_generative_covariates_strict:
-        config = config.model_copy(update={"generative_covariates_strict": False})
-
-    base_project = Path(config.base_project)
-    if not base_project.is_file():
-        print(f"Error: base_project not found: {base_project}", file=sys.stderr)
-        sys.exit(1)
-
-    base_project_config = load_project(config.base_project)
-    output_base = Path(config.output_base)
-    output_base.mkdir(parents=True, exist_ok=True)
-    project_name = base_project_config.project_name
-    monte_carlo_runs_root = output_base / project_name / "monte_carlo_runs"
-    monte_carlo_runs_root.mkdir(parents=True, exist_ok=True)
+    config, _ = load_monte_carlo_config(args, parser)
+    config = apply_monte_carlo_config_overrides(config, args)
+    base_project, base_project_config, output_base, monte_carlo_runs_root = ensure_monte_carlo_output_tree(
+        config
+    )
 
     if args.resume is not None and (args.freeze or args.model):
         print("Error: --resume can only be used with Monte Carlo iteration modes (not --freeze/--model).", file=sys.stderr)
@@ -1647,7 +1370,7 @@ def main() -> None:
     if args.post_model_validation and args.predictor_only:
         print("Error: --post-model-validation cannot be combined with --predictor-only.", file=sys.stderr)
         sys.exit(1)
-    if args.model_mc_all and not args.model_mc:
+    if args.model_mc_all and not args.model_mc and not args.select_best_model:
         print("Error: --model-mc-all requires --model-mc.", file=sys.stderr)
         sys.exit(1)
     if args.model_mc and args.post_model_validation:
@@ -1827,7 +1550,7 @@ def main() -> None:
 
         model_mc_root = monte_carlo_runs_root / "model_mc"
         model_mc_root.mkdir(parents=True, exist_ok=True)
-        _write_baseline_manifest(
+        write_baseline_manifest(
             output_root=model_mc_root,
             mode="model_mc",
             config=config,
@@ -2062,7 +1785,7 @@ def main() -> None:
 
         post_model_root = monte_carlo_runs_root / "post_model_validation"
         post_model_root.mkdir(parents=True, exist_ok=True)
-        _write_baseline_manifest(
+        write_baseline_manifest(
             output_root=post_model_root,
             mode="post_model_validation",
             config=config,
@@ -2377,7 +2100,7 @@ def main() -> None:
     if layout == "binary":
         control_paths = cohort_paths_list[0][1]
         disease_paths = cohort_paths_list[1][1]
-    _write_baseline_manifest(
+    write_baseline_manifest(
         output_root=monte_carlo_runs_root,
         mode="monte_carlo",
         config=config,
@@ -2469,7 +2192,7 @@ def main() -> None:
             run_id = f"run_{i + 1:04d}"
             run_dir = monte_carlo_runs_root / run_id
             seed_i = (config.seed + i) if config.seed is not None else None
-            detector_step_override = _write_detector_featurecuts_override(run_dir, config)
+            detector_step_override = write_detector_featurecuts_override(run_dir, config)
 
             if progress is not None:
                 task_steps = progress.add_task("Steps", total=n_step_tasks, completed=0)
