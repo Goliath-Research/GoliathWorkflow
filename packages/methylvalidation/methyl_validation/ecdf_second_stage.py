@@ -20,6 +20,7 @@ from .model_bundle import build_model_feature_bundle, load_bundle_dmp_index
 from .observed_feature_builder import (
     apply_feature_fill_values,
     build_observed_hybrid_feature_table,
+    derive_observed_hybrid_anchors,
     fit_feature_fill_values,
     verify_feature_schema,
 )
@@ -175,6 +176,15 @@ def train_and_apply_ecdf_second_stage(
     sample_paths = _sample_paths_from_predictions(df, project_json)
     if not sample_paths:
         raise ValueError("No sample paths were derived from predictions.csv for ECDF second-stage scorer.")
+    y_for_anchor = pd.to_numeric(df["expected_class"], errors="coerce").fillna(0).astype(int).to_numpy()
+    y_for_anchor = np.where(y_for_anchor > 0, 1, 0).astype(np.int32)
+    anchors = derive_observed_hybrid_anchors(
+        sample_paths=sample_paths,
+        sample_class_indices=y_for_anchor.tolist(),
+        class_names=["healthy", "cancer"],
+        dmp_df=dmp_df,
+        min_coverage=int(max(1, min_coverage)),
+    )
     feat = build_observed_hybrid_feature_table(
         sample_paths,
         dmp_df,
@@ -187,6 +197,12 @@ def train_and_apply_ecdf_second_stage(
         dmr_window_bp=int(max(1, dmr_window_bp)),
         max_dmr_features=int(max(0, max_dmr_features)),
         max_gene_features=int(max(0, max_gene_features)),
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
     )
     X_obs = np.asarray(feat.X, dtype=np.float32)
     fill_values = fit_feature_fill_values(X_obs)
@@ -225,6 +241,12 @@ def train_and_apply_ecdf_second_stage(
         "observed_feature_names": list(feat.feature_names),
         "observed_feature_report": dict(feat.report),
         "observed_feature_fill_values": [float(v) for v in fill_values.tolist()],
+        "observed_healthy_reference_vector": [float(v) for v in anchors.healthy_reference_vector.tolist()],
+        "observed_cancer_reference_vector": [float(v) for v in anchors.cancer_reference_vector.tolist()],
+        "observed_healthy_class_label": str(anchors.healthy_class_label),
+        "observed_cancer_class_labels": [str(x) for x in anchors.cancer_class_labels],
+        "observed_anchor_strategy": str(anchors.anchor_strategy),
+        "observed_feature_order_fingerprint": str(anchors.feature_order_fingerprint),
         "max_dmps": int(max_dmps),
         "quantiles": [float(q) for q in (feat.report.get("quantiles") or [])],
         "min_coverage": int(max(1, min_coverage)),

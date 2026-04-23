@@ -34,6 +34,7 @@ from .model_bundle import load_bundle_dmp_index
 from .observed_feature_builder import (
     apply_feature_fill_values,
     build_observed_hybrid_feature_table,
+    derive_observed_hybrid_anchors,
     fit_feature_fill_values,
     sample_ids_from_paths,
     verify_feature_schema,
@@ -246,6 +247,13 @@ def train_generative_model(
 
     feature_mode_norm = str(feature_mode or "raw_dmp").strip().lower()
     if feature_mode_norm == "observed_hybrid":
+        anchors = derive_observed_hybrid_anchors(
+            all_paths,
+            y,
+            class_names,
+            dmp_df,
+            min_coverage=int(max(1, observed_feature_min_coverage)),
+        )
         feat = build_observed_hybrid_feature_table(
             all_paths,
             dmp_df,
@@ -258,6 +266,12 @@ def train_generative_model(
             dmr_window_bp=int(max(1, observed_feature_dmr_window_bp)),
             max_dmr_features=int(max(0, observed_feature_max_dmrs)),
             max_gene_features=int(max(0, observed_feature_max_genes)),
+            healthy_reference_vector=anchors.healthy_reference_vector,
+            cancer_reference_vector=anchors.cancer_reference_vector,
+            healthy_class_label=anchors.healthy_class_label,
+            cancer_class_labels=anchors.cancer_class_labels,
+            anchor_strategy=anchors.anchor_strategy,
+            expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
         )
         X_methyl = np.asarray(feat.X, dtype=np.float32)
         feature_fill_values = fit_feature_fill_values(X_methyl)
@@ -266,6 +280,13 @@ def train_generative_model(
         observed_feature_names = list(feat.feature_names)
         observed_feature_report = dict(feat.report)
         observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
+        observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
+        observed_cancer_reference = anchors.cancer_reference_vector.astype(np.float32)
+        observed_healthy_class_index = int(anchors.healthy_class_index)
+        observed_healthy_class_label = str(anchors.healthy_class_label)
+        observed_cancer_class_labels = [str(x) for x in anchors.cancer_class_labels]
+        observed_anchor_strategy = str(anchors.anchor_strategy)
+        observed_feature_order_fingerprint = str(anchors.feature_order_fingerprint)
     else:
         X_methyl = _extract_matrix_for_samples(all_paths, refs, feature_order, min_coverage=1)
         X_methyl = np.nan_to_num(np.asarray(X_methyl, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
@@ -280,6 +301,13 @@ def train_generative_model(
         observed_feature_names = []
         observed_feature_report = {}
         observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
+        observed_healthy_reference = None
+        observed_cancer_reference = None
+        observed_healthy_class_index = None
+        observed_healthy_class_label = None
+        observed_cancer_class_labels = []
+        observed_anchor_strategy = None
+        observed_feature_order_fingerprint = None
 
     cov, preprocessor, cov_report = fit_covariates(
         covariates_path,
@@ -366,6 +394,17 @@ def train_generative_model(
             [float(v) for v in feature_fill_values.tolist()] if feature_fill_values is not None else None
         ),
         "observed_feature_report": observed_feature_report,
+        "observed_healthy_reference_vector": (
+            [float(v) for v in observed_healthy_reference.tolist()] if observed_healthy_reference is not None else None
+        ),
+        "observed_cancer_reference_vector": (
+            [float(v) for v in observed_cancer_reference.tolist()] if observed_cancer_reference is not None else None
+        ),
+        "observed_healthy_class_index": observed_healthy_class_index,
+        "observed_healthy_class_label": observed_healthy_class_label,
+        "observed_cancer_class_labels": observed_cancer_class_labels,
+        "observed_anchor_strategy": observed_anchor_strategy,
+        "observed_feature_order_fingerprint": observed_feature_order_fingerprint,
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": covariate_id_column,
         "covariates_strict_join": bool(covariates_strict_join),
@@ -442,6 +481,12 @@ def predict_generative_model_from_project(
             dmr_window_bp=int(meta.get("observed_feature_dmr_window_bp", 100000)),
             max_dmr_features=int(meta.get("observed_feature_max_dmrs", 32)),
             max_gene_features=int(meta.get("observed_feature_max_genes", 32)),
+            healthy_reference_vector=meta.get("observed_healthy_reference_vector"),
+            cancer_reference_vector=meta.get("observed_cancer_reference_vector"),
+            healthy_class_label=meta.get("observed_healthy_class_label"),
+            cancer_class_labels=meta.get("observed_cancer_class_labels") or [],
+            anchor_strategy=meta.get("observed_anchor_strategy"),
+            expected_feature_order_fingerprint=meta.get("observed_feature_order_fingerprint"),
         )
         verify_feature_schema(
             feat.feature_names,

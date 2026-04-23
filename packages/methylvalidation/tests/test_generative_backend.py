@@ -181,6 +181,50 @@ def test_generative_backend_binary_predict_shape(tmp_path: Path, monkeypatch):
     assert {"prob_class0", "prob_class1"}.issubset(set(pred_df.columns))
 
 
+def test_generative_observed_hybrid_train_predict_schema_parity(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    _write_detector_dmps(det)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProjectBinary(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+
+    monkeypatch.setattr(generative_backend, "load_project", lambda _p: _StubProjectBinary(det))
+    monkeypatch.setattr(
+        generative_backend.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract,
+    )
+    model_dir = tmp_path / "model"
+    generative_backend.train_generative_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        feature_mode="observed_hybrid",
+        observed_feature_min_obs_fraction=0.75,
+    )
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=None,
+        test_control_paths=["/tmp/S1", "/tmp/S2"],
+        test_disease_paths=["/tmp/S3", "/tmp/S4"],
+    )
+    monkeypatch.setattr(generative_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+    metrics = generative_backend.predict_generative_model_from_project(
+        project_json=tmp_path / "project.json",
+        model_dir=model_dir,
+        output_dir=tmp_path / "predict",
+    )
+    assert "balanced_accuracy" in metrics
+    pred_df = pd.read_csv(tmp_path / "predict" / "predictions.csv")
+    assert {"obs_fraction", "low_evidence", "prediction_evidence_filtered"}.issubset(pred_df.columns)
+    assert pred_df["low_evidence"].astype(bool).all()
+    with open(model_dir / "generative-model-metadata.json", encoding="utf-8") as f:
+        meta = json.load(f)
+    assert isinstance(meta.get("observed_healthy_reference_vector"), list)
+    assert isinstance(meta.get("observed_cancer_reference_vector"), list)
+    assert meta.get("observed_healthy_class_label") == "healthy"
+    assert meta.get("observed_feature_order_fingerprint")
+
+
 def test_resolve_eval_paths_multiclass_falls_back_from_binary_predictor(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     stub = _StubProjectMulti(det)
