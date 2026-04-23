@@ -64,6 +64,28 @@ quarto render docs/user-manual --to html
 quarto render docs/user-manual --to pdf
 ```
 
+## 7) Distributed queue (one task)
+
+Full workflow: [Distributed MethylValidation on shared storage](12-distributed-methyl-validation.qmd) (`12`). One worker invocation:
+
+```bash
+source .venv/bin/activate
+methyl-validation run-task --task /work/.../monte_carlo_runs/queue/tasks/run_0001.json
+```
+
+## 8) Hyperparameter search grid (example)
+
+After `plan-runs` / full stability is understood, use the grid driver. Details: [Optional hyperparameter search](13-optional-hyperparameter-search.qmd) (`13`).
+
+```bash
+source .venv/bin/activate
+methyl-hyperparam-search \
+  --config /work/experiments/my_mc_config.json \
+  --work-dir /work/experiments/hp_run1 \
+  --grid '{"stability_dmp_freq": [0.6, 0.7]}' \
+  -- --stability
+```
+
 ## Execution notes
 
 - Always activate `.venv` before `methyl-*` commands.

@@ -17,6 +17,7 @@ For statistical background, use `docs/theory/`.
 - **Fast path (stage execution):** Chapters `04` to `08`.
 - **New project setup:** Chapters `01`, `02`, then `04`.
 - **Daily operations:** Chapters `09` to `11`.
+- **Scaling MC across machines / optional hyperparameter tuning:** Chapters `12` and `13` (shared `/work` storage, queue subcommands, and the `methyl-hyperparam-search` grid driver).
 - **Standalone package usage:** Chapter `03`.
 
 ## End-to-end workflow map
@@ -54,6 +55,8 @@ For statistical background, use `docs/theory/`.
 
 - Workflow reference: `docs/WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md`
 - Validation orchestration: `packages/methylvalidation/docs/USAGE.md`
+- Distributed queue (shared storage, `plan-runs` / `run-task` / `aggregate-results`): `packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`
+- Hyperparameter search (objective \(J\), `methyl-hyperparam-search`): `packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md`
 - Validation flags and config model:
   - `packages/methylvalidation/methyl_validation/cli.py`
   - `packages/methylvalidation/methyl_validation/config.py`

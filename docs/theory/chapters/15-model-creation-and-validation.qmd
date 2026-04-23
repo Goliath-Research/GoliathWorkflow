@@ -176,3 +176,17 @@ Use this as a starting point, then tune in this order:
 1. stabilize panel recurrence (`stability_dmp_freq`, `n_iterations`),
 2. verify holdout-vs-training gap (`optimization_validation` vs `training_fold_validation`),
 3. only then tune panel size/FeatureCuts constraints for marginal BA gains.
+
+---
+
+## Distributed Monte Carlo on shared storage {#sec-distributed-mc-shared-storage}
+
+Large `n_iterations` in stability discovery are often limited by **wall time** on a single host, not by statistical need. MethylValidation can **shard** the same Monte Carlo work across many processes or machines, provided every worker has read–write access to the **same** `output_base` tree (for example NFS or another shared mount under `/work/...`). The queue workflow is a **plan → workers → aggregate** pattern: a short planning pass materializes per-iteration task descriptors under `monte_carlo_runs/queue/`; workers each run a single task; a final pass merges metrics and can run the usual stability pass. The legacy monolithic `methyl-validation` loop (one process running all iterations) is unchanged and remains valid when that is fast enough.
+
+Commands, directory layout, recovery, and manifest details are specified in `packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`. The same flow is written for operators in the user manual chapter *Distributed MethylValidation on shared storage* (`docs/user-manual/12-distributed-methyl-validation.qmd`).
+
+---
+
+## Optional pipeline hyperparameter search {#sec-optional-hyperparameter-search}
+
+After a baseline stability/freeze/model path is understood, you may want to **compare** several candidate `MonteCarloConfig` (or project) settings. The package implements a read-only **scalar objective** \(J(\theta)\) from completed runs: it reads `monte_carlo_runs/metrics_summary.json` and optional `stability/stability_summary.json`, combines weighted validation metrics (e.g. balanced accuracy, macro F1, NLL, ECE) with optional capped panel terms, and can treat **rollout-style constraints** (comparison to a baseline `metrics_summary.json`) as feasibility filters—sklearn’s in-memory CV is **not** used because the “estimator” is an out-of-process `methyl-validation` run. A small **grid** driver, `methyl-hyperparam-search`, writes isolated trial directories and calls the objective after each run. Discovery/stability optima and calibration metrics (NLL, ECE) can **conflict**; a **two-stage** search (stability first, then model on a frozen panel) is often safer than a single ad hoc \(J\). **Multi-stage progression** consistency across disease stages is not implemented in the objective; treat it as a follow-on design. Full formulas, CLI flags, and pitfalls: `packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md`. Operational steps appear in the user manual chapter *Optional hyperparameter search* (`docs/user-manual/13-optional-hyperparameter-search.qmd`).

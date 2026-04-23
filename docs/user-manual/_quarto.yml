@@ -27,6 +27,8 @@ book:
         - 09-artifacts-and-qa-checks.qmd
         - 10-troubleshooting-and-recovery.qmd
         - 11-command-cookbook.qmd
+        - 12-distributed-methyl-validation.qmd
+        - 13-optional-hyperparameter-search.qmd
 
 format:
   html:
