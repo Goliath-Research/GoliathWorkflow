@@ -124,6 +124,12 @@ def test_generative_backend_multiclass_train_predict(tmp_path: Path, monkeypatch
     )
     assert (model_dir / "generative-model.npz").is_file()
     assert (model_dir / "generative-model-metadata.json").is_file()
+    assert (model_dir / "training_metrics.json").is_file()
+    with open(model_dir / "training_metrics.json", encoding="utf-8") as f:
+        train_metrics = json.load(f)
+    assert "balanced_accuracy" in train_metrics
+    assert int(train_metrics.get("n_samples", 0)) == 6
+    assert int(train_metrics.get("n_classes", 0)) == 3
 
     predictor_cfg = SimpleNamespace(
         test_group_paths=[
@@ -497,6 +503,7 @@ def test_generative_observed_hybrid_train_predict_schema_parity(tmp_path: Path, 
         observed_feature_min_obs_fraction=0.75,
         latent_dim=3,
     )
+    assert (model_dir / "training_metrics.json").is_file()
     predictor_cfg = SimpleNamespace(
         test_group_paths=None,
         test_control_paths=["/tmp/S1", "/tmp/S2"],

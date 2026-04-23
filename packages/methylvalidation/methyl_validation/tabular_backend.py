@@ -420,11 +420,21 @@ def train_tabular_model(
     for idx, method_cfg in enumerate(methods):
         estimator, resolved_params = _build_estimator_from_config(method_cfg)
         estimator.fit(X, y_arr)
+        y_pred_train = np.asarray(estimator.predict(X), dtype=np.int32)
         method_name = str(method_cfg["method"])
         method_dir = models_root / f"{idx:02d}_{method_name}"
         method_dir.mkdir(parents=True, exist_ok=True)
         method_model_path = method_dir / "tabular-model.joblib"
         joblib.dump(estimator, method_model_path)
+        train_metrics = _compute_metrics(y_arr, y_pred_train, class_names=class_names)
+        train_metrics["metrics_source"] = "tabular_train"
+        train_metrics["evaluation_split"] = "training"
+        train_metrics["method"] = method_name
+        train_metrics["method_index"] = int(idx)
+        train_metrics["n_train_samples"] = int(len(y_arr))
+        train_metrics["n_train_features"] = int(X.shape[1])
+        with open(method_dir / "training_metrics.json", "w", encoding="utf-8") as f:
+            json.dump(train_metrics, f, indent=2)
         method_preproc_path = method_dir / "covariate-preprocessor.json"
         if preprocessor is not None:
             preprocessor.save_json(method_preproc_path)
@@ -526,6 +536,9 @@ def train_tabular_model(
     selected_method_dir = models_root / f"{selected_idx:02d}_{methods[selected_idx]['method']}"
     model_path = out_dir / "tabular-model.joblib"
     shutil.copy2(selected_method_dir / "tabular-model.joblib", model_path)
+    selected_train_metrics_path = selected_method_dir / "training_metrics.json"
+    if selected_train_metrics_path.is_file():
+        shutil.copy2(selected_train_metrics_path, out_dir / "training_metrics.json")
     preprocessor_path = out_dir / "covariate-preprocessor.json"
     method_preproc_path = selected_method_dir / "covariate-preprocessor.json"
     if method_preproc_path.is_file():

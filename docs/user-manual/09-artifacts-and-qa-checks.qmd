@@ -10,7 +10,7 @@ Provide a single checklist for expected files at each stage and quick quality ga
 |---|---|---|
 | Stability | `stability/stable_dmps_production.csv`, `stability_summary.json`, `all_metrics.csv` | Stable panel exists and is non-empty |
 | Freeze | `production/project.json`, mapper/enricher outputs | Production project exists; fixed-panel detector run completed |
-| Model | `production/classifiers/*`, `production/predictors/*` | Final classifier/predictor artifacts present |
+| Model | `production/classifiers/*`, `production/classifiers/training_metrics.json` (all model backends), `production/predictors/*` | Final classifier/predictor artifacts present |
 | Post-model validation | `post_model_validation/all_metrics.csv`, `metrics_summary.json`, plotly report | Distribution summaries generated |
 | Blind prediction | blind prediction report + per-sample probabilities | All input blind samples receive predictions |
 

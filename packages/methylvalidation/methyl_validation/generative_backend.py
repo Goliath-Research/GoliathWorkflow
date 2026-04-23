@@ -350,6 +350,21 @@ def train_generative_model(
         class_vars[cls] = np.var(z_cls, axis=0, dtype=np.float64).astype(np.float32) + 1e-4
         class_priors[cls] = float(z_cls.shape[0]) / float(z.shape[0])
 
+    train_probs = _posterior_from_latent(
+        z=z,
+        class_means=class_means,
+        class_vars=class_vars,
+        class_priors=class_priors,
+    )
+    y_pred_train = np.asarray(np.argmax(train_probs, axis=1), dtype=np.int32)
+    train_metrics = _compute_metrics(y_arr, y_pred_train, class_names=class_names)
+    train_metrics["metrics_source"] = "generative_train"
+    train_metrics["evaluation_split"] = "training"
+    train_metrics["n_train_samples"] = int(len(y_arr))
+    train_metrics["n_train_features"] = int(X.shape[1])
+    with open(out_dir / "training_metrics.json", "w", encoding="utf-8") as f:
+        json.dump(train_metrics, f, indent=2)
+
     model_path = out_dir / "generative-model.npz"
     np.savez_compressed(
         model_path,

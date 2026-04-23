@@ -9,11 +9,85 @@ later with minimal CLI/workflow changes.
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Tuple
 
 StepFn = Callable[[], tuple[int, str, str]]
 TrainerStep = Tuple[str, StepFn]
+
+
+def _write_ecdf_training_metrics(project_json: Path, classifier_output_dir: Path) -> tuple[bool, str]:
+    """
+    Evaluate the ECDF classifier on training cohorts and persist training_metrics.json.
+
+    Returns (success, message_or_path).
+    """
+    try:
+        from methyl_predictor.core.predictor import run_prediction
+        from methyl_predictor.models.config import PredictorConfig
+        from methyl_predictor.project_resolver import resolve_predictor_config
+        from methyl_utils import load_project
+    except Exception as e:
+        return False, f"ECDF training metrics unavailable (imports): {e}"
+
+    try:
+        project = load_project(project_json)
+        resolved_groups = project.get_resolved_groups()
+        if not resolved_groups:
+            return False, "ECDF training metrics unavailable: no resolved training groups."
+
+        base_predictor = resolve_predictor_config(project_json)
+        test_group_paths = [
+            {
+                "label": str(label),
+                "class_index": int(idx),
+                "paths": [str(p) for p in (paths or [])],
+            }
+            for idx, (label, paths) in enumerate(resolved_groups)
+            if paths
+        ]
+        if not test_group_paths:
+            return False, "ECDF training metrics unavailable: resolved groups had no sample paths."
+
+        classifier_output_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            dir=str(classifier_output_dir),
+            prefix=".ecdf-training-eval-",
+        ) as tmp_out:
+            cfg = PredictorConfig(
+                model_path=base_predictor.model_path,
+                model_dir=base_predictor.model_dir,
+                output_dir=tmp_out,
+                test_group_paths=test_group_paths,
+                test_control_paths=[],
+                test_disease_paths=[],
+                samples_base_path=base_predictor.samples_base_path,
+                path_remap=base_predictor.path_remap,
+                debug=bool(base_predictor.debug),
+                classifier_step_snapshot=base_predictor.classifier_step_snapshot,
+                panel=base_predictor.panel,
+                decision_enabled=bool(base_predictor.decision_enabled),
+                decision_min_margin=float(base_predictor.decision_min_margin),
+                decision_min_confidence=float(base_predictor.decision_min_confidence),
+            )
+            metrics = run_prediction(cfg)
+
+        if not isinstance(metrics, dict) or not metrics:
+            return False, "ECDF training metrics unavailable: predictor returned empty metrics."
+
+        payload = dict(metrics)
+        payload["metrics_source"] = "ecdf_train"
+        payload["evaluation_split"] = "training"
+        payload["model_backend"] = "ecdf"
+        payload["n_train_samples"] = int(sum(len(g.get("paths") or []) for g in test_group_paths))
+        payload["n_train_groups"] = int(len(test_group_paths))
+        out_path = classifier_output_dir / "training_metrics.json"
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+        return True, str(out_path)
+    except Exception as e:
+        return False, f"ECDF training metrics unavailable: {e}"
 
 
 def build_model_backend_steps(
@@ -258,9 +332,17 @@ def build_model_backend_steps(
         ]
 
     def _run_ecdf_second_stage() -> tuple[int, str, str]:
+        classifier_output_dir = (
+            predictor_output_dir.parent / "classifiers"
+            if predictor_output_dir is not None
+            else project_json.parent / "classifiers"
+        )
+        tm_ok, tm_msg = _write_ecdf_training_metrics(project_json, classifier_output_dir)
         try:
             if config is None or not bool(getattr(config, "ecdf_second_stage_enabled", False)):
-                return 0, "ECDF second-stage scorer disabled.", ""
+                if tm_ok:
+                    return 0, f"ECDF second-stage scorer disabled. Training metrics saved: {tm_msg}", ""
+                return 0, f"ECDF second-stage scorer disabled. {tm_msg}", ""
             from .ecdf_second_stage import train_and_apply_ecdf_second_stage
 
             out = train_and_apply_ecdf_second_stage(
@@ -280,10 +362,16 @@ def build_model_backend_steps(
                 max_dmr_features=(config.observed_feature_max_dmrs if config is not None else 32),
                 max_gene_features=(config.observed_feature_max_genes if config is not None else 32),
             )
+            if isinstance(out, dict):
+                out["training_metrics_saved"] = bool(tm_ok)
+                out["training_metrics_path"] = tm_msg if tm_ok else None
+                out["training_metrics_note"] = None if tm_ok else tm_msg
             return 0, json.dumps(out), ""
         except Exception as e:
             # Optional refinement must not fail the primary ECDF build.
-            return 0, "", f"ECDF second-stage skipped: {e}"
+            if not tm_ok:
+                return 0, "", f"ECDF second-stage skipped: {e}. {tm_msg}"
+            return 0, "", f"ECDF second-stage skipped: {e}. Training metrics saved: {tm_msg}"
 
     return [
         ("methyl-classifier", lambda: run_classifier_fn(project_json, per_cancer_group)),

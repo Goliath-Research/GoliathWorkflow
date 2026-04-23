@@ -158,7 +158,16 @@ def test_tabular_backend_train_and_predict(tmp_path: Path, monkeypatch):
     )
     assert (model_dir / "tabular-model.joblib").is_file()
     assert (model_dir / "tabular-model-metadata.json").is_file()
+    assert (model_dir / "training_metrics.json").is_file()
+    assert (model_dir / "tabular_methods" / "00_random_forest" / "training_metrics.json").is_file()
     assert not (model_dir / "tabular_methods" / "00_random_forest" / "selection_eval").exists()
+    with open(model_dir / "training_metrics.json", encoding="utf-8") as f:
+        training_metrics = json.load(f)
+    assert "balanced_accuracy" in training_metrics
+    assert int(training_metrics.get("n_samples", 0)) == 4
+    assert int(training_metrics.get("n_classes", 0)) == 2
+    assert training_metrics.get("method") == "random_forest"
+    assert int(training_metrics.get("method_index", -1)) == 0
     with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
         meta = json.load(f)
     assert meta.get("selected_tabular_method_index") == 0
@@ -501,8 +510,17 @@ def test_tabular_multi_method_sequence_outputs_ranking(tmp_path: Path, monkeypat
     assert (model_dir / "tabular-model.joblib").is_file()
     assert (model_dir / "tabular_method_metrics.csv").is_file()
     assert (model_dir / "tabular_method_ranking.json").is_file()
+    assert (model_dir / "training_metrics.json").is_file()
+    assert (model_dir / "tabular_methods" / "00_random_forest" / "training_metrics.json").is_file()
+    assert (model_dir / "tabular_methods" / "01_logistic_regression" / "training_metrics.json").is_file()
     assert (model_dir / "tabular_methods" / "00_random_forest" / "selection_eval").is_dir()
     assert (model_dir / "tabular_methods" / "01_logistic_regression" / "selection_eval").is_dir()
+    with open(model_dir / "training_metrics.json", encoding="utf-8") as f:
+        training_metrics = json.load(f)
+    assert "balanced_accuracy" in training_metrics
+    assert int(training_metrics.get("n_samples", 0)) == 4
+    assert int(training_metrics.get("n_classes", 0)) == 2
+    assert training_metrics.get("method") in {"random_forest", "logistic_regression"}
     with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
         meta = json.load(f)
     assert len(meta.get("tabular_methods_evaluated") or []) == 2

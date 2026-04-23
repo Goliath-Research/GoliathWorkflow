@@ -28,13 +28,20 @@ def _base_config(tmp_path: Path, enabled: bool) -> MonteCarloConfig:
 
 def test_build_model_backend_steps_ecdf_includes_second_stage(tmp_path: Path, monkeypatch):
     called = {"n": 0, "kwargs": None}
+    tm_called = {"n": 0, "args": None}
 
     def _fake_second_stage(**kwargs):
         called["n"] += 1
         called["kwargs"] = kwargs
         return {"ok": True, "predictor_output_dir": str(kwargs["predictor_output_dir"])}
 
+    def _fake_training_metrics(project_json: Path, classifier_output_dir: Path):
+        tm_called["n"] += 1
+        tm_called["args"] = (project_json, classifier_output_dir)
+        return True, str(classifier_output_dir / "training_metrics.json")
+
     monkeypatch.setattr("methyl_validation.ecdf_second_stage.train_and_apply_ecdf_second_stage", _fake_second_stage)
+    monkeypatch.setattr("methyl_validation.trainer_api._write_ecdf_training_metrics", _fake_training_metrics)
     steps = build_model_backend_steps(
         project_json=tmp_path / "project.json",
         predictor_output_dir=tmp_path / "predictors",
@@ -49,12 +56,21 @@ def test_build_model_backend_steps_ecdf_includes_second_stage(tmp_path: Path, mo
     assert err == ""
     payload = json.loads(out)
     assert payload["ok"] is True
+    assert payload["training_metrics_saved"] is True
     assert called["n"] == 1
+    assert tm_called["n"] == 1
     assert called["kwargs"]["max_dmr_features"] == 7
     assert called["kwargs"]["max_gene_features"] == 9
 
 
-def test_build_model_backend_steps_ecdf_second_stage_disabled(tmp_path: Path):
+def test_build_model_backend_steps_ecdf_second_stage_disabled(tmp_path: Path, monkeypatch):
+    tm_called = {"n": 0}
+
+    def _fake_training_metrics(project_json: Path, classifier_output_dir: Path):
+        tm_called["n"] += 1
+        return True, str(classifier_output_dir / "training_metrics.json")
+
+    monkeypatch.setattr("methyl_validation.trainer_api._write_ecdf_training_metrics", _fake_training_metrics)
     steps = build_model_backend_steps(
         project_json=tmp_path / "project.json",
         predictor_output_dir=tmp_path / "predictors",
@@ -66,4 +82,6 @@ def test_build_model_backend_steps_ecdf_second_stage_disabled(tmp_path: Path):
     rc, out, err = steps[-1][1]()
     assert rc == 0
     assert "disabled" in out.lower()
+    assert "training metrics" in out.lower()
+    assert tm_called["n"] == 1
     assert err == ""

@@ -431,6 +431,7 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `post_model_validation/metrics_summary.json` | Empirical distribution summary of post-model metrics. |
 | `post_model_validation/metrics_distributions_plotly.html` | Plotly chart with KDE and ECDF for all numeric metrics. |
 | `production/progression/` | Disease progression synthesis outputs (`genes_long.csv`, `pathways_long.csv`, `modules_long.csv`, `entities_progression_labels.csv`, `summary.json`, optional `report.md`). |
+| `production/classifiers/training_metrics.json` | Training metrics for the selected production model backend (`ecdf`, `tabular_sklearn`, `generative_hybrid`). For tabular multi-method runs, this mirrors the selected method's training metrics. |
 | `production/classifiers/multiclass-classifier.pkl` | **Final production model.** |
 | `production/production_summary.json` | Production freeze summary. |
 
