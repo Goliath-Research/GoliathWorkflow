@@ -1,0 +1,105 @@
+# Pipeline-wide hyperparameter search
+
+This document specifies the **objective** \(J(\theta)\), the **search space** (by tier), **search algorithms**, and the **implementation** in this package.
+
+## 1. Objective \(J(\theta)\)
+
+Let \(\theta\) denote tunable parameters (merged into `MonteCarloConfig` and/or project `step_config`).
+
+**Implemented in** `methyl_validation.optimization.objective_from_monte_carlo_artifacts`:
+
+- **Inputs (read-only):**
+  - `monte_carlo_runs/metrics_summary.json` — scalar metrics with `mean` and `percentiles.p50` per metric.
+  - Optional `monte_carlo_runs/stability/stability_summary.json` — `dmp_stability.stable_dmps_at_threshold`, `gene_stability.stable_genes_at_threshold`.
+
+- **Scalarization (maximize):**
+  \[
+  J = w_{\mathrm{BA}} \cdot \mathrm{BA}_s + w_{\mathrm{F1}} \cdot \mathrm{F1}_s
+      - w_{\mathrm{NLL}} \cdot \mathrm{NLL}_s - w_{\mathrm{Brier}} \cdot \mathrm{Brier}_s - w_{\mathrm{ECE}} \cdot \mathrm{ECE}_s
+      + w_{\mathrm{panel}} \cdot f(n_{\mathrm{DMP}}) + w_{\mathrm{genes}} \cdot f(n_{\mathrm{genes}})
+  \]
+  where subscript \(s \in \{\mathrm{mean}, \mathrm{median}\}\) is chosen via `ObjectiveWeights.stat`, and
+  \(f(n) = \min(n, \mathrm{cap})/\mathrm{cap}\) caps the reward for very large panels.
+
+- **Missing metrics:** If `w_nll > 0` but NLL is absent (e.g. detector-only runs), that term is skipped. `w_balanced_accuracy` and `w_macro_f1` require the corresponding metric when non-zero.
+
+- **Constraints:** Optional `ConstraintSet` delegates to `rollout.evaluate_dual_run` (same **mean**-based guards as rollout) comparing the **candidate** `metrics_summary.json` to a **baseline** file. If the recommendation is not `promote`, \(J\) is treated as infeasible (`feasible=False`, large negative value).
+
+- **Minimum stable panel:** If `min_stable_dmps` (or genes) is set, `stability_summary.json` must exist and counts must meet minima unless `relax_min_stable=True`.
+
+- **Progression (multi-stage):** Not implemented in code; for disease-stage work, define a second objective over per-stage outputs (e.g. Jaccard of module sets) and combine in a separate script once single-stage search is stable.
+
+## 2. Hyperparameter tiers (search space)
+
+| Tier | Scope | Examples |
+|------|--------|----------|
+| **A** | `MonteCarloConfig` / `step_config.validation` | `train_fraction`, `n_iterations`, `stability_dmp_freq`, `stability_gene_freq`, `stability_min_balanced_accuracy`, FeatureCuts: `stability_featurecuts_enabled`, `stability_target_balanced_accuracy`, `stability_min_selected_dmps` |
+| **B** | Project `step_config` for detector/classifier | Thresholds, k for DMPs, options exposed in JSON |
+| **C** | Model backend | `model_backend`, `tabular_methods`, `generative_*` — use **nested** search after Tier A, often on a **fixed** frozen panel |
+
+**Rule:** Full Cartesian product over A×B×C is usually too large. Use **small grids** on Tier A, **random** or **Bayesian** search on B/C, or **successive halving** with a low `n_iterations` pilot.
+
+## 3. Search methods
+
+| Method | Use when |
+|--------|----------|
+| **Grid** | 1–2 discrete dimensions, very few values (e.g. `stability_dmp_freq` × `stability_min_balanced_accuracy`) |
+| **Random** | Many mixed types; cheap exploration |
+| **Successive halving / Hyperband** | You can score cheap trials with `n_iterations` small, then full runs for winners |
+| **Bayesian (Optuna, skopt)** | Low-dimensional \(\theta\), less noisy J (increase MC iterations) |
+
+`sklearn.model_selection.GridSearchCV` is **not** used: the “estimator” is an out-of-process `methyl-validation` run.
+
+## 4. Software
+
+### 4.1 `objective_from_monte_carlo_artifacts`
+
+```python
+from pathlib import Path
+from methyl_validation.optimization import (
+    objective_from_monte_carlo_artifacts,
+    ObjectiveWeights,
+    ConstraintSet,
+)
+w = ObjectiveWeights(w_balanced_accuracy=1.0, w_macro_f1=1.0, stat="median")
+# optional: c = ConstraintSet(baseline_metrics_summary_path=Path("baseline/metrics_summary.json"))
+r = objective_from_monte_carlo_artifacts(Path(".../monte_carlo_runs"), w, None)
+print(r.value, r.feasible, r.details)
+```
+
+### 4.2 `methyl-hyperparam-search` (grid driver)
+
+After a normal pipeline layout exists under each trial’s `output_base` (isolated per grid point):
+
+```bash
+methyl-hyperparam-search \
+  --config my_mc_config.json \
+  --work-dir /work/experiments/hp_run1 \
+  --grid '{"stability_dmp_freq": [0.65, 0.7, 0.75], "stability_min_balanced_accuracy": [null, 0.5]}' \
+  -- \
+  --stability
+```
+
+- Each trial writes `work-dir/trial_NNNN/mc_config.json` and sets `output_base=work-dir/trial_NNNN/out`.
+- Results: `work-dir/search_summary.json` (best trial + all rows).
+- `--weights-json` can point to a JSON file for `ObjectiveWeights`.
+- `--baseline-summary path/to/metrics_summary.json` enables rollout constraints.
+- `--dry-run` only writes configs and paths (no `methyl-validation` subprocess).
+
+**Example 2×2** (as in the design): `stability_dmp_freq` ∈ {0.6, 0.7} × `stability_min_balanced_accuracy` ∈ {null, 0.5} — use JSON `null` to omit the field (keeps the base config value) or pass explicit numbers.
+
+## 5. Large shared-storage projects (e.g. `/work/.../project.json`)
+
+Set `output_base` in the base config (or per-trial under `--work-dir`) to shared NFS. The driver isolates each trial under `work-dir/trial_*/out` so runs do not overwrite each other. See [DISTRIBUTED_QUEUE.md](DISTRIBUTED_QUEUE.md) for queue-based execution of the same `methyl-validation` invocations at scale.
+
+## 6. Pitfalls
+
+- **Discovery vs calibration:** Best stability settings may not align with best NLL/ECE; prefer a two-stage search or strong constraints on rollout metrics.
+- **`n_iterations`:** Treat as **compute budget** to reduce variance of the median, not as a free hyperparameter to grid-search widely.
+- **Baseline for constraints:** The baseline `metrics_summary.json` must use the same metric schema (predictor vs detector-only) as candidates.
+
+## 7. References
+
+- Metrics schema: `validator_metrics.METRICS_SCHEMA_VERSION`, `SCALAR_KEYS`
+- Rollout checks: `rollout.evaluate_dual_run`
+- Config model: `config.MonteCarloConfig`
