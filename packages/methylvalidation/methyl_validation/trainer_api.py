@@ -134,6 +134,7 @@ def build_model_backend_steps(
                 model_path = train_tabular_model(
                     project_json=project_json,
                     bundle_h5=bundle_dir / "model_feature_bundle.h5",
+                    bundle_dir=bundle_dir,
                     output_dir=model_dir,
                     model_type=(config.tabular_model_type if config is not None else "random_forest"),
                     tabular_methods=(config.tabular_methods if config is not None else None),
@@ -186,9 +187,24 @@ def build_model_backend_steps(
                         if config is not None and hasattr(config, "tabular_save_train_dataset")
                         else False
                     ),
+                    reuse_train_dataset=(
+                        bool(config.tabular_reuse_train_dataset)
+                        if config is not None and hasattr(config, "tabular_reuse_train_dataset")
+                        else True
+                    ),
                     train_dataset_path=(
                         config.tabular_train_dataset_path
                         if config is not None and hasattr(config, "tabular_train_dataset_path")
+                        else None
+                    ),
+                    save_test_dataset=(
+                        bool(config.tabular_save_test_dataset)
+                        if config is not None and hasattr(config, "tabular_save_test_dataset")
+                        else True
+                    ),
+                    test_dataset_path=(
+                        config.tabular_test_dataset_path
+                        if config is not None and hasattr(config, "tabular_test_dataset_path")
                         else None
                     ),
                 )

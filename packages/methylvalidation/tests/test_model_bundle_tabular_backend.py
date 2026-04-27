@@ -527,6 +527,180 @@ def test_tabular_multi_method_sequence_outputs_ranking(tmp_path: Path, monkeypat
     assert meta.get("selected_tabular_method") in {"random_forest", "logistic_regression"}
 
 
+def test_tabular_train_dataset_cache_hit_skips_feature_recompute(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1"],
+            "position": [100, 120],
+            "context": ["CG", "CG"],
+            "effect_size": [0.7, 0.4],
+            "weight": [0.8, 0.3],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: _StubProject(det))
+
+    calls = {"count": 0}
+
+    def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
+        del chromosome, min_coverage
+        calls["count"] += 1
+        positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
+        X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
+        for i, p in enumerate(sample_paths):
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+        ctx = np.asarray(["CG"] * len(positions), dtype=object)
+        return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
+
+    monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
+
+    dataset_path = tmp_path / "cache" / "tabular_train_dataset.parquet"
+    model_dir_1 = tmp_path / "model_first"
+    tabular_backend.train_tabular_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir_1,
+        model_type="logistic_regression",
+        save_train_dataset=True,
+        reuse_train_dataset=True,
+        train_dataset_path=dataset_path,
+        save_test_dataset=False,
+    )
+    assert calls["count"] > 0
+    assert dataset_path.is_file()
+    assert (tmp_path / "cache" / "tabular_train_dataset.parquet.meta.json").is_file()
+
+    calls["count"] = 0
+    model_dir_2 = tmp_path / "model_second"
+    tabular_backend.train_tabular_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir_2,
+        model_type="logistic_regression",
+        save_train_dataset=True,
+        reuse_train_dataset=True,
+        train_dataset_path=dataset_path,
+        save_test_dataset=False,
+    )
+    assert calls["count"] == 0
+    with open(model_dir_2 / "tabular-model-metadata.json", encoding="utf-8") as f:
+        meta = json.load(f)
+    assert bool(meta.get("train_dataset_cache_hit")) is True
+
+
+def test_tabular_saves_test_dataset_next_to_train_dataset(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1"],
+            "position": [100, 120],
+            "context": ["CG", "CG"],
+            "effect_size": [0.7, 0.4],
+            "weight": [0.8, 0.3],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: _StubProject(det))
+
+    def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
+        del chromosome, min_coverage
+        positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
+        X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
+        for i, p in enumerate(sample_paths):
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+        ctx = np.asarray(["CG"] * len(positions), dtype=object)
+        return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
+
+    monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=[
+            {"label": "healthy", "class_index": 0, "paths": ["/tmp/S1", "/tmp/S2"]},
+            {"label": "pca1", "class_index": 1, "paths": ["/tmp/S3", "/tmp/S4"]},
+        ],
+    )
+    monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+
+    train_dataset_path = tmp_path / "export" / "tabular_train_dataset.parquet"
+    model_dir = tmp_path / "model"
+    tabular_backend.train_tabular_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        model_type="random_forest",
+        save_train_dataset=True,
+        train_dataset_path=train_dataset_path,
+        save_test_dataset=True,
+    )
+    test_dataset_path = tmp_path / "export" / "tabular_test_dataset.parquet"
+    assert train_dataset_path.is_file()
+    assert test_dataset_path.is_file()
+    assert (tmp_path / "export" / "tabular_test_dataset.parquet.meta.json").is_file()
+    with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
+        meta = json.load(f)
+    assert bool(meta.get("test_dataset_saved")) is True
+    assert str(meta.get("test_dataset_path")).endswith("tabular_test_dataset.parquet")
+
+
+def test_tabular_defaults_train_and_test_dataset_paths_to_bundle_dir(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1"],
+            "position": [100, 120],
+            "context": ["CG", "CG"],
+            "effect_size": [0.7, 0.4],
+            "weight": [0.8, 0.3],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: _StubProject(det))
+
+    def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
+        del chromosome, min_coverage
+        positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
+        X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
+        for i, p in enumerate(sample_paths):
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+        ctx = np.asarray(["CG"] * len(positions), dtype=object)
+        return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
+
+    monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=[
+            {"label": "healthy", "class_index": 0, "paths": ["/tmp/S1", "/tmp/S2"]},
+            {"label": "pca1", "class_index": 1, "paths": ["/tmp/S3", "/tmp/S4"]},
+        ],
+    )
+    monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+
+    model_dir = tmp_path / "model"
+    tabular_backend.train_tabular_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        bundle_dir=bundle_dir,
+        output_dir=model_dir,
+        model_type="random_forest",
+        save_train_dataset=True,
+        save_test_dataset=True,
+    )
+    assert (bundle_dir / "tabular_train_dataset.parquet").is_file()
+    assert (bundle_dir / "tabular_test_dataset.parquet").is_file()
+    with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
+        meta = json.load(f)
+    assert str(meta.get("train_dataset_path")).endswith("bundle/tabular_train_dataset.parquet")
+    assert str(meta.get("test_dataset_path")).endswith("bundle/tabular_test_dataset.parquet")
+
+
 def test_build_estimator_from_config_xgboost(monkeypatch):
     class _FakeXGBClassifier:
         def __init__(self, **kwargs):

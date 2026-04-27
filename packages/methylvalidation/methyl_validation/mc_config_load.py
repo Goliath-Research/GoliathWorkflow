@@ -146,8 +146,14 @@ def apply_monte_carlo_config_overrides(
         config = config.model_copy(update={"tabular_methods": parsed_methods})
     if getattr(args, "tabular_save_train_dataset", None):
         config = config.model_copy(update={"tabular_save_train_dataset": True})
+    if getattr(args, "no_tabular_reuse_train_dataset", None):
+        config = config.model_copy(update={"tabular_reuse_train_dataset": False})
     if getattr(args, "tabular_train_dataset_path", None) is not None:
         config = config.model_copy(update={"tabular_train_dataset_path": str(args.tabular_train_dataset_path)})
+    if getattr(args, "no_tabular_save_test_dataset", None):
+        config = config.model_copy(update={"tabular_save_test_dataset": False})
+    if getattr(args, "tabular_test_dataset_path", None) is not None:
+        config = config.model_copy(update={"tabular_test_dataset_path": str(args.tabular_test_dataset_path)})
     if getattr(args, "generative_latent_dim", None) is not None:
         config = config.model_copy(update={"generative_latent_dim": int(args.generative_latent_dim)})
     if getattr(args, "generative_kl_weight", None) is not None:

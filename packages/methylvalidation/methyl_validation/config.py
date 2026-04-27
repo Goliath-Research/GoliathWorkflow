@@ -356,12 +356,35 @@ class MonteCarloConfig(BaseModel):
             "(features + labels + sample_id) for reproducibility/auditing."
         ),
     )
+    tabular_reuse_train_dataset: bool = Field(
+        default=True,
+        description=(
+            "For model_backend=tabular_sklearn: when true and tabular_save_train_dataset is enabled, "
+            "reuse a previously exported training dataset if its fingerprint matches current inputs."
+        ),
+    )
     tabular_train_dataset_path: Optional[str] = Field(
         default=None,
         description=(
             "Optional output file for exported tabular training dataset. "
             "When omitted and tabular_save_train_dataset=true, defaults to "
-            "<classifiers>/tabular-train-dataset.csv."
+            "<model_bundle_dir>/tabular_train_dataset.parquet."
+        ),
+    )
+    tabular_save_test_dataset: bool = Field(
+        default=True,
+        description=(
+            "For model_backend=tabular_sklearn: when an explicit evaluation split is configured, "
+            "export the assembled test/eval dataset."
+        ),
+    )
+    tabular_test_dataset_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional output file for exported tabular test/eval dataset. "
+            "When omitted and tabular_save_test_dataset=true, defaults to the same directory as "
+            "tabular_train_dataset_path with filename tabular_test_dataset.<ext> "
+            "(or <model_bundle_dir>/tabular_test_dataset.parquet when train path is also omitted)."
         ),
     )
     feature_mode: str = Field(
