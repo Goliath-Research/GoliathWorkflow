@@ -24,6 +24,7 @@ This flow splits **discovery** Monte Carlo work into a **plan** phase (fast, met
    methyl-validation plan-runs --config mc.json --overwrite
    # or: --project /work/.../project.json
    ```
+   `plan-runs --overwrite` **refreshes** `queue/tasks/` and per-run plan inputs; it does **not** delete existing `run_####` directories (so completed worker outputs stay). To remove all `run_####` trees and start from a clean slate, use `--wipe-runs` (destructive).
 
 2. **Export** (optional): build manifest for your queue broker.
    ```bash

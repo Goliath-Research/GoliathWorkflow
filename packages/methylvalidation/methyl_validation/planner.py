@@ -50,6 +50,7 @@ def plan_discovery_runs(
     base_project: Path,
     monte_carlo_runs_root: Path,
     overwrite: bool = False,
+    wipe_runs: bool = False,
 ) -> Dict[str, Any]:
     """
     Write ``run_####/project.json`` and training/validation CSVs for each MC iteration, plus
@@ -57,6 +58,13 @@ def plan_discovery_runs(
 
     Does **not** run centroid/detector (use ``run-task`` on each worker). ``--skip-centroid`` is
     not supported: workers require pre-generated run directories from this planner with full splits.
+
+    * ``--overwrite`` replaces ``queue/tasks`` and regenerates the plan; it refreshes per-run
+      inputs under each ``run_####`` but does **not** delete existing ``run_####`` trees (so
+      completed worker outputs are preserved by default).
+    * ``--wipe-runs`` (optional) removes all existing ``run_####`` directories and ``queue/tasks``
+      before planning — same as the legacy ``--overwrite`` behavior, and irreversibly deletes
+      prior per-run pipeline outputs.
     """
     if config.predictor_only and not config.frozen_project_path:
         default_frozen = monte_carlo_runs_root / "production" / "project.json"
@@ -94,13 +102,18 @@ def plan_discovery_runs(
         per_cancer_group = True
 
     run_id_re = re.compile(r"^run_(\d{4})$")
-    if overwrite and monte_carlo_runs_root.is_dir():
-        for name in list(monte_carlo_runs_root.iterdir()):
-            if name.is_dir() and run_id_re.match(name.name):
-                shutil.rmtree(name, ignore_errors=True)
-        tdir = tasks_subdir(monte_carlo_runs_root)
-        if tdir.is_dir():
-            shutil.rmtree(tdir, ignore_errors=True)
+    if monte_carlo_runs_root.is_dir():
+        if wipe_runs:
+            for name in list(monte_carlo_runs_root.iterdir()):
+                if name.is_dir() and run_id_re.match(name.name):
+                    shutil.rmtree(name, ignore_errors=True)
+            tdir = tasks_subdir(monte_carlo_runs_root)
+            if tdir.is_dir():
+                shutil.rmtree(tdir, ignore_errors=True)
+        elif overwrite:
+            tdir = tasks_subdir(monte_carlo_runs_root)
+            if tdir.is_dir():
+                shutil.rmtree(tdir, ignore_errors=True)
 
     write_baseline_manifest(
         output_root=monte_carlo_runs_root,

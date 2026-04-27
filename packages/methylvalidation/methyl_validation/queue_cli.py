@@ -76,7 +76,18 @@ def cmd_plan_runs(argv: List[str]) -> None:
     p.add_argument(
         "--overwrite",
         action="store_true",
-        help="Delete existing run_* and queue/tasks under monte_carlo_runs before planning.",
+        help=(
+            "Regenerate queue/tasks, plan, and per-run project inputs. Removes queue/tasks/ only; "
+            "keeps existing run_#### output directories (use --wipe-runs to delete those)."
+        ),
+    )
+    p.add_argument(
+        "--wipe-runs",
+        action="store_true",
+        help=(
+            "Delete all run_#### directories and queue/tasks before planning. Destroys prior "
+            "per-run pipeline results; use only when you intend a full reset. Implies --overwrite."
+        ),
     )
     ns, rest = p.parse_known_args(argv)
     if rest:
@@ -90,7 +101,8 @@ def cmd_plan_runs(argv: List[str]) -> None:
         config=config,
         base_project=Path(config.base_project),
         monte_carlo_runs_root=mcr,
-        overwrite=bool(ns.overwrite),
+        overwrite=bool(ns.overwrite) or bool(ns.wipe_runs),
+        wipe_runs=bool(ns.wipe_runs),
     )
     n = plan.get("n_planned", 0)
     print(f"Planned {n} runs. Tasks under {mcr / 'queue' / 'tasks'}")

@@ -33,6 +33,8 @@ methyl-validation plan-runs --config /work/experiments/my_mc_config.json --overw
 # or:  methyl-validation plan-runs --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --overwrite
 ```
 
+`--overwrite` only replaces `queue/tasks/` and regenerates the plan; it does **not** remove existing `run_####` output directories. To delete all `run_####` trees before planning, add `--wipe-runs` (irreversible).
+
 **2) Export** (optional; for a central queue broker):
 
 ```bash

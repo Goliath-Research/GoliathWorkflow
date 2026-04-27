@@ -160,3 +160,134 @@ def test_plan_runs_idempotent_replan_same_seed(tmp_path: Path) -> None:
     )
     p2 = (mcr / "run_0001" / "project.json").read_text()
     assert p1 == p2
+
+
+def test_plan_runs_overwrite_does_not_delete_run_dirs(tmp_path: Path) -> None:
+    """--overwrite must refresh queue/plan without removing existing run_#### trees."""
+    from argparse import Namespace
+
+    from methyl_validation.mc_config_load import (
+        apply_monte_carlo_config_overrides,
+        ensure_monte_carlo_output_tree,
+        load_monte_carlo_config,
+    )
+    from methyl_validation.planner import plan_discovery_runs
+
+    project = _binary_project_for_mc(tmp_path)
+    ns = dict(
+        project=project,
+        config=None,
+        seed=99,
+        path_remap=None,
+        stability=None,
+        stability_featurecuts=None,
+        stability_target_ba=None,
+        stability_min_selected_dmps=None,
+        skip_enricher=None,
+        predictor_only=None,
+        model_backend=None,
+        post_model_backend=None,
+        covariates_path=None,
+        tabular_max_dmps=None,
+        tabular_model_type=None,
+        tabular_methods_json=None,
+        tabular_save_train_dataset=None,
+        tabular_train_dataset_path=None,
+        generative_latent_dim=None,
+        generative_kl_weight=None,
+        generative_density_type=None,
+        generative_epochs=None,
+        generative_batch_size=None,
+        generative_seed=None,
+        generative_calibrate=None,
+        no_generative_covariates_strict=None,
+        iterations=None,
+        output_base=None,
+        samples_base_path=None,
+    )
+    args = Namespace(**ns)
+    config, _ = load_monte_carlo_config(args, None)
+    config = apply_monte_carlo_config_overrides(config, args)
+    *_, mcr = ensure_monte_carlo_output_tree(config)
+    plan_discovery_runs(
+        config=config,
+        base_project=Path(config.base_project),
+        monte_carlo_runs_root=mcr,
+        overwrite=False,
+    )
+    marker = mcr / "run_0001" / "user_preserved_artifact.txt"
+    marker.write_text("keep", encoding="utf-8")
+    plan_discovery_runs(
+        config=config,
+        base_project=Path(config.base_project),
+        monte_carlo_runs_root=mcr,
+        overwrite=True,
+        wipe_runs=False,
+    )
+    assert marker.is_file()
+    assert marker.read_text(encoding="utf-8") == "keep"
+
+
+def test_plan_runs_wipe_runs_deletes_run_dirs(tmp_path: Path) -> None:
+    from argparse import Namespace
+
+    from methyl_validation.mc_config_load import (
+        apply_monte_carlo_config_overrides,
+        ensure_monte_carlo_output_tree,
+        load_monte_carlo_config,
+    )
+    from methyl_validation.planner import plan_discovery_runs
+
+    project = _binary_project_for_mc(tmp_path)
+    ns = dict(
+        project=project,
+        config=None,
+        seed=99,
+        path_remap=None,
+        stability=None,
+        stability_featurecuts=None,
+        stability_target_ba=None,
+        stability_min_selected_dmps=None,
+        skip_enricher=None,
+        predictor_only=None,
+        model_backend=None,
+        post_model_backend=None,
+        covariates_path=None,
+        tabular_max_dmps=None,
+        tabular_model_type=None,
+        tabular_methods_json=None,
+        tabular_save_train_dataset=None,
+        tabular_train_dataset_path=None,
+        generative_latent_dim=None,
+        generative_kl_weight=None,
+        generative_density_type=None,
+        generative_epochs=None,
+        generative_batch_size=None,
+        generative_seed=None,
+        generative_calibrate=None,
+        no_generative_covariates_strict=None,
+        iterations=None,
+        output_base=None,
+        samples_base_path=None,
+    )
+    args = Namespace(**ns)
+    config, _ = load_monte_carlo_config(args, None)
+    config = apply_monte_carlo_config_overrides(config, args)
+    *_, mcr = ensure_monte_carlo_output_tree(config)
+    plan_discovery_runs(
+        config=config,
+        base_project=Path(config.base_project),
+        monte_carlo_runs_root=mcr,
+        overwrite=True,
+    )
+    marker = mcr / "run_0001" / "stale_artifact.txt"
+    marker.write_text("gone", encoding="utf-8")
+    plan_discovery_runs(
+        config=config,
+        base_project=Path(config.base_project),
+        monte_carlo_runs_root=mcr,
+        overwrite=True,
+        wipe_runs=True,
+    )
+    assert not marker.exists()
+    assert (mcr / "run_0001" / "project.json").is_file()
