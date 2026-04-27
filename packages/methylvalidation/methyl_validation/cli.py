@@ -1292,6 +1292,32 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--no-tabular-reuse-train-dataset",
+        action="store_true",
+        help=(
+            "For tabular backend: disable train dataset cache reuse "
+            "and force recomputation even when exported dataset exists."
+        ),
+    )
+    parser.add_argument(
+        "--no-tabular-save-test-dataset",
+        action="store_true",
+        help=(
+            "For tabular backend: disable exporting/reusing test dataset "
+            "even when explicit test split is configured."
+        ),
+    )
+    parser.add_argument(
+        "--tabular-test-dataset-path",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "For tabular backend: optional output path for exported/reused test dataset "
+            "(supports .csv, .tsv, .parquet)."
+        ),
+    )
+    parser.add_argument(
         "--generative-latent-dim",
         type=int,
         default=None,

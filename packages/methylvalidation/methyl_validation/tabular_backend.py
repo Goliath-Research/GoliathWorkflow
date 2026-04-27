@@ -7,6 +7,7 @@ and evaluates a multiclass classifier.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -56,6 +57,89 @@ def _project_cwd(project_json: str | Path):
         yield
     finally:
         os.chdir(prev)
+
+
+def _dataset_meta_path(dataset_path: Path) -> Path:
+    return dataset_path.with_suffix(f"{dataset_path.suffix}.meta.json")
+
+
+def _write_dataset_frame(dataset_path: Path, frame: pd.DataFrame) -> None:
+    dataset_path.parent.mkdir(parents=True, exist_ok=True)
+    ext = dataset_path.suffix.lower()
+    if ext == ".parquet":
+        frame.to_parquet(dataset_path, index=False)
+    elif ext == ".tsv":
+        frame.to_csv(dataset_path, sep="\t", index=False)
+    else:
+        frame.to_csv(dataset_path, index=False)
+
+
+def _read_dataset_frame(dataset_path: Path) -> pd.DataFrame:
+    ext = dataset_path.suffix.lower()
+    if ext == ".parquet":
+        return pd.read_parquet(dataset_path)
+    if ext == ".tsv":
+        return pd.read_csv(dataset_path, sep="\t")
+    return pd.read_csv(dataset_path)
+
+
+def _dataset_to_matrix(frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, List[str], List[str], List[str]]:
+    required = {"sample_id", "class_index", "class_label"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ValueError(f"Dataset is missing required columns: {missing}")
+    feature_names = [str(c) for c in frame.columns.tolist() if c not in required]
+    X = frame[feature_names].to_numpy(dtype=np.float32)
+    y_arr = frame["class_index"].to_numpy(dtype=np.int32)
+    sample_ids = [str(x) for x in frame["sample_id"].astype(str).tolist()]
+    class_names = [str(x) for x in frame["class_label"].astype(str).tolist()]
+    return X, y_arr, sample_ids, class_names, feature_names
+
+
+def _fingerprint_payload(payload: Dict[str, Any]) -> str:
+    body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def _dmp_index_fingerprint(dmp_df: pd.DataFrame) -> str:
+    if dmp_df.empty:
+        return _fingerprint_payload({"rows": []})
+    cols = [c for c in ("chromosome", "context", "position", "weight", "effect_size") if c in dmp_df.columns]
+    rows = dmp_df[cols].copy().sort_values(["chromosome", "context", "position"]).to_dict(orient="records")
+    return _fingerprint_payload({"rows": rows})
+
+
+def _derive_test_dataset_path(
+    train_dataset_out_path: Optional[Path],
+    explicit_test_dataset_path: Optional[str | Path],
+    out_dir: Path,
+    bundle_dir: Optional[Path],
+) -> Path:
+    if explicit_test_dataset_path:
+        return Path(explicit_test_dataset_path).expanduser().resolve()
+    if train_dataset_out_path is not None:
+        ext = train_dataset_out_path.suffix or ".csv"
+        return train_dataset_out_path.with_name(f"tabular_test_dataset{ext}")
+    if bundle_dir is not None:
+        return bundle_dir / "tabular_test_dataset.parquet"
+    return out_dir / "tabular_test_dataset.parquet"
+
+
+def _has_explicit_eval_split(predictor_cfg: Any) -> bool:
+    if predictor_cfg is None:
+        return False
+    for key in (
+        "test_group_paths",
+        "holdout_group_paths",
+        "test_control_paths",
+        "test_disease_paths",
+        "holdout_control_paths",
+        "holdout_disease_paths",
+    ):
+        values = getattr(predictor_cfg, key, None)
+        if isinstance(values, list) and len(values) > 0:
+            return True
+    return False
 
 
 def _build_reference_map(
@@ -252,6 +336,7 @@ def train_tabular_model(
     bundle_h5: str | Path,
     output_dir: str | Path,
     *,
+    bundle_dir: Optional[str | Path] = None,
     model_type: str = "random_forest",
     tabular_methods: Optional[Sequence[Any]] = None,
     tabular_method_selection_metric: str = "balanced_accuracy",
@@ -279,7 +364,10 @@ def train_tabular_model(
     observed_feature_max_dmrs: int = 32,
     observed_feature_max_genes: int = 32,
     save_train_dataset: bool = False,
+    reuse_train_dataset: bool = True,
     train_dataset_path: Optional[str | Path] = None,
+    save_test_dataset: bool = True,
+    test_dataset_path: Optional[str | Path] = None,
 ) -> Path:
     with _project_cwd(project_json):
         project = load_project(project_json)
@@ -303,81 +391,218 @@ def train_tabular_model(
             sample_ids.append(Path(str(p)).name)
 
     feature_mode_norm = str(feature_mode or "raw_dmp").strip().lower()
-    if feature_mode_norm == "observed_hybrid":
-        anchors = derive_observed_hybrid_anchors(
-            all_paths,
-            y,
-            class_names,
-            dmp_df,
-            min_coverage=int(max(1, observed_feature_min_coverage)),
-        )
-        feat = build_observed_hybrid_feature_table(
-            all_paths,
-            dmp_df,
-            quantiles=observed_feature_quantiles,
-            min_coverage=int(max(1, observed_feature_min_coverage)),
-            include_dmp_features=bool(observed_feature_include_dmp),
-            include_chromosome_features=bool(observed_feature_include_chromosome),
-            include_dmr_features=bool(observed_feature_include_dmr),
-            include_gene_features=bool(observed_feature_include_gene),
-            dmr_window_bp=int(max(1, observed_feature_dmr_window_bp)),
-            max_dmr_features=int(max(0, observed_feature_max_dmrs)),
-            max_gene_features=int(max(0, observed_feature_max_genes)),
-            healthy_reference_vector=anchors.healthy_reference_vector,
-            cancer_reference_vector=anchors.cancer_reference_vector,
-            healthy_class_label=anchors.healthy_class_label,
-            cancer_class_labels=anchors.cancer_class_labels,
-            anchor_strategy=anchors.anchor_strategy,
-            expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
-        )
-        X = np.asarray(feat.X, dtype=np.float32)
-        feature_fill_values = fit_feature_fill_values(X)
-        X = apply_feature_fill_values(X, feature_fill_values)
-        observed_feature_names = list(feat.feature_names)
-        observed_feature_report = dict(feat.report)
-        observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
-        observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
-        observed_cancer_reference = anchors.cancer_reference_vector.astype(np.float32)
-        observed_healthy_class_index = int(anchors.healthy_class_index)
-        observed_healthy_class_label = str(anchors.healthy_class_label)
-        observed_cancer_class_labels = [str(x) for x in anchors.cancer_class_labels]
-        observed_anchor_strategy = str(anchors.anchor_strategy)
-        observed_feature_order_fingerprint = str(anchors.feature_order_fingerprint)
-    else:
-        X = _extract_matrix_for_samples(all_paths, refs, feature_order, min_coverage=1)
-        X = np.asarray(X, dtype=np.float32)
-        X = np.nan_to_num(X, nan=0.5, posinf=0.5, neginf=0.5)
-        feature_fill_values = None
-        observed_feature_names = []
-        observed_feature_report = {}
-        observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
-        observed_healthy_reference = None
-        observed_cancer_reference = None
-        observed_healthy_class_index = None
-        observed_healthy_class_label = None
-        observed_cancer_class_labels = []
-        observed_anchor_strategy = None
-        observed_feature_order_fingerprint = None
-
-    cov, preprocessor, cov_report = fit_covariates(
-        covariates_path,
-        sample_ids,
-        covariate_id_column=covariate_id_column,
-        strict_join=covariates_strict_join,
-        numeric_columns=covariate_numeric_columns,
-        ordinal_columns=covariate_ordinal_columns,
-        ordinal_maps=covariate_ordinal_maps,
-        ordinal_unknown_value=covariate_ordinal_unknown_value,
-        categorical_columns=covariate_categorical_columns,
-        missing_numeric_strategy=covariate_missing_numeric_strategy,
-        standardize_numeric=covariate_standardize_numeric,
-    )
-    if cov is not None:
-        X = np.concatenate([X, cov], axis=1)
-
     y_arr = np.asarray(y, dtype=np.int32)
-    train_dataset_out_path: Optional[Path] = None
-    if save_train_dataset:
+    dmp_index_fingerprint = _dmp_index_fingerprint(dmp_df)
+    bundle_dir_path: Optional[Path] = None
+    if bundle_dir:
+        bundle_dir_path = Path(bundle_dir).expanduser().resolve()
+    else:
+        bundle_h5_parent = Path(bundle_h5).expanduser().resolve().parent
+        if bundle_h5_parent:
+            bundle_dir_path = bundle_h5_parent
+    train_dataset_out_path = (
+        Path(train_dataset_path).expanduser().resolve()
+        if (save_train_dataset and train_dataset_path)
+        else (
+            (bundle_dir_path / "tabular_train_dataset.parquet")
+            if (save_train_dataset and bundle_dir_path is not None)
+            else ((out_dir / "tabular_train_dataset.parquet") if save_train_dataset else None)
+        )
+    )
+    train_dataset_meta_path = _dataset_meta_path(train_dataset_out_path) if train_dataset_out_path is not None else None
+    train_cache_enabled = bool(save_train_dataset and reuse_train_dataset and train_dataset_out_path is not None)
+    train_cache_hit = False
+    train_cache_miss_reason: Optional[str] = None
+    feature_names: List[str] = []
+    preprocessor: Optional[CovariatePreprocessor] = None
+    cov_report: Dict[str, Any] = {"used": False}
+    observed_feature_names: List[str] = []
+    observed_feature_report: Dict[str, Any] = {}
+    observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
+    observed_healthy_reference: Optional[np.ndarray] = None
+    observed_cancer_reference: Optional[np.ndarray] = None
+    observed_healthy_class_index: Optional[int] = None
+    observed_healthy_class_label: Optional[str] = None
+    observed_cancer_class_labels: List[str] = []
+    observed_anchor_strategy: Optional[str] = None
+    observed_feature_order_fingerprint: Optional[str] = None
+    feature_fill_values: Optional[np.ndarray] = None
+    X = np.zeros((0, 0), dtype=np.float32)
+
+    fingerprint_common_payload: Dict[str, Any] = {
+        "schema_version": 1,
+        "feature_mode": feature_mode_norm,
+        "dmp_index_fingerprint": dmp_index_fingerprint,
+        "max_dmps": int(max_dmps),
+        "covariates_path": str(covariates_path) if covariates_path else None,
+        "covariate_id_column": str(covariate_id_column),
+        "covariates_strict_join": bool(covariates_strict_join),
+        "covariate_numeric_columns": [str(x) for x in (covariate_numeric_columns or [])],
+        "covariate_ordinal_columns": [str(x) for x in (covariate_ordinal_columns or [])],
+        "covariate_ordinal_maps": covariate_ordinal_maps or {},
+        "covariate_ordinal_unknown_value": float(covariate_ordinal_unknown_value),
+        "covariate_categorical_columns": [str(x) for x in (covariate_categorical_columns or [])],
+        "covariate_missing_numeric_strategy": str(covariate_missing_numeric_strategy),
+        "covariate_standardize_numeric": bool(covariate_standardize_numeric),
+        "observed_feature_quantiles": [float(q) for q in (observed_feature_quantiles or [])],
+        "observed_feature_min_coverage": int(max(1, observed_feature_min_coverage)),
+        "observed_feature_include_dmp": bool(observed_feature_include_dmp),
+        "observed_feature_include_chromosome": bool(observed_feature_include_chromosome),
+        "observed_feature_include_dmr": bool(observed_feature_include_dmr),
+        "observed_feature_include_gene": bool(observed_feature_include_gene),
+        "observed_feature_dmr_window_bp": int(max(1, observed_feature_dmr_window_bp)),
+        "observed_feature_max_dmrs": int(max(0, observed_feature_max_dmrs)),
+        "observed_feature_max_genes": int(max(0, observed_feature_max_genes)),
+    }
+    train_fingerprint = _fingerprint_payload(
+        {
+            "common": fingerprint_common_payload,
+            "split": "train",
+            "sample_paths": all_paths,
+            "class_names": class_names,
+            "labels": [int(v) for v in y],
+        }
+    )
+
+    if train_cache_enabled and train_dataset_out_path is not None and train_dataset_meta_path is not None:
+        if train_dataset_out_path.is_file() and train_dataset_meta_path.is_file():
+            try:
+                with open(train_dataset_meta_path, encoding="utf-8") as f:
+                    train_meta = json.load(f)
+                if train_meta.get("fingerprint") != train_fingerprint:
+                    train_cache_miss_reason = "fingerprint_mismatch"
+                else:
+                    train_df = _read_dataset_frame(train_dataset_out_path)
+                    X, y_arr, sample_ids, _cached_labels, feature_names = _dataset_to_matrix(train_df)
+                    preproc_payload = train_meta.get("covariate_preprocessor")
+                    preprocessor = (
+                        CovariatePreprocessor.from_dict(preproc_payload)
+                        if isinstance(preproc_payload, dict)
+                        else None
+                    )
+                    cov_report = (
+                        dict(train_meta.get("covariate_report"))
+                        if isinstance(train_meta.get("covariate_report"), dict)
+                        else {"used": bool(preprocessor is not None)}
+                    )
+                    observed_feature_names = [str(x) for x in (train_meta.get("observed_feature_names") or [])]
+                    observed_feature_report = (
+                        dict(train_meta.get("observed_feature_report"))
+                        if isinstance(train_meta.get("observed_feature_report"), dict)
+                        else {}
+                    )
+                    observed_feature_quantiles_out = [
+                        float(x) for x in (train_meta.get("observed_feature_quantiles") or [])
+                    ]
+                    fill_vals = train_meta.get("observed_feature_fill_values")
+                    feature_fill_values = (
+                        np.asarray(fill_vals, dtype=np.float32)
+                        if isinstance(fill_vals, list) and len(fill_vals) > 0
+                        else None
+                    )
+                    href = train_meta.get("observed_healthy_reference_vector")
+                    observed_healthy_reference = (
+                        np.asarray(href, dtype=np.float32) if isinstance(href, list) and len(href) > 0 else None
+                    )
+                    cref = train_meta.get("observed_cancer_reference_vector")
+                    observed_cancer_reference = (
+                        np.asarray(cref, dtype=np.float32) if isinstance(cref, list) and len(cref) > 0 else None
+                    )
+                    observed_healthy_class_index = train_meta.get("observed_healthy_class_index")
+                    observed_healthy_class_label = (
+                        str(train_meta["observed_healthy_class_label"])
+                        if train_meta.get("observed_healthy_class_label") is not None
+                        else None
+                    )
+                    observed_cancer_class_labels = [
+                        str(x) for x in (train_meta.get("observed_cancer_class_labels") or [])
+                    ]
+                    observed_anchor_strategy = (
+                        str(train_meta["observed_anchor_strategy"])
+                        if train_meta.get("observed_anchor_strategy") is not None
+                        else None
+                    )
+                    observed_feature_order_fingerprint = (
+                        str(train_meta["observed_feature_order_fingerprint"])
+                        if train_meta.get("observed_feature_order_fingerprint") is not None
+                        else None
+                    )
+                    if feature_mode_norm == "observed_hybrid":
+                        if (
+                            not observed_feature_names
+                            or feature_fill_values is None
+                            or observed_healthy_reference is None
+                            or observed_cancer_reference is None
+                        ):
+                            raise ValueError("observed_hybrid cache metadata is incomplete")
+                    train_cache_hit = True
+            except Exception as e:
+                train_cache_miss_reason = f"cache_read_error:{e}"
+        else:
+            train_cache_miss_reason = "cache_missing"
+
+    if not train_cache_hit:
+        if feature_mode_norm == "observed_hybrid":
+            anchors = derive_observed_hybrid_anchors(
+                all_paths,
+                y,
+                class_names,
+                dmp_df,
+                min_coverage=int(max(1, observed_feature_min_coverage)),
+            )
+            feat = build_observed_hybrid_feature_table(
+                all_paths,
+                dmp_df,
+                quantiles=observed_feature_quantiles,
+                min_coverage=int(max(1, observed_feature_min_coverage)),
+                include_dmp_features=bool(observed_feature_include_dmp),
+                include_chromosome_features=bool(observed_feature_include_chromosome),
+                include_dmr_features=bool(observed_feature_include_dmr),
+                include_gene_features=bool(observed_feature_include_gene),
+                dmr_window_bp=int(max(1, observed_feature_dmr_window_bp)),
+                max_dmr_features=int(max(0, observed_feature_max_dmrs)),
+                max_gene_features=int(max(0, observed_feature_max_genes)),
+                healthy_reference_vector=anchors.healthy_reference_vector,
+                cancer_reference_vector=anchors.cancer_reference_vector,
+                healthy_class_label=anchors.healthy_class_label,
+                cancer_class_labels=anchors.cancer_class_labels,
+                anchor_strategy=anchors.anchor_strategy,
+                expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+            )
+            X = np.asarray(feat.X, dtype=np.float32)
+            feature_fill_values = fit_feature_fill_values(X)
+            X = apply_feature_fill_values(X, feature_fill_values)
+            observed_feature_names = list(feat.feature_names)
+            observed_feature_report = dict(feat.report)
+            observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
+            observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
+            observed_cancer_reference = anchors.cancer_reference_vector.astype(np.float32)
+            observed_healthy_class_index = int(anchors.healthy_class_index)
+            observed_healthy_class_label = str(anchors.healthy_class_label)
+            observed_cancer_class_labels = [str(x) for x in anchors.cancer_class_labels]
+            observed_anchor_strategy = str(anchors.anchor_strategy)
+            observed_feature_order_fingerprint = str(anchors.feature_order_fingerprint)
+        else:
+            X = _extract_matrix_for_samples(all_paths, refs, feature_order, min_coverage=1)
+            X = np.asarray(X, dtype=np.float32)
+            X = np.nan_to_num(X, nan=0.5, posinf=0.5, neginf=0.5)
+
+        cov, preprocessor, cov_report = fit_covariates(
+            covariates_path,
+            sample_ids,
+            covariate_id_column=covariate_id_column,
+            strict_join=covariates_strict_join,
+            numeric_columns=covariate_numeric_columns,
+            ordinal_columns=covariate_ordinal_columns,
+            ordinal_maps=covariate_ordinal_maps,
+            ordinal_unknown_value=covariate_ordinal_unknown_value,
+            categorical_columns=covariate_categorical_columns,
+            missing_numeric_strategy=covariate_missing_numeric_strategy,
+            standardize_numeric=covariate_standardize_numeric,
+        )
+        if cov is not None:
+            X = np.concatenate([X, cov], axis=1)
+
         if feature_mode_norm == "observed_hybrid":
             base_feature_names = list(observed_feature_names)
         else:
@@ -389,24 +614,155 @@ def train_tabular_model(
         else:
             feature_names = base_feature_names + cov_feature_names
 
-        train_export_df = pd.DataFrame(X, columns=feature_names)
-        train_export_df.insert(0, "sample_id", sample_ids)
-        train_export_df.insert(1, "class_index", y_arr.astype(int))
-        train_export_df.insert(2, "class_label", [class_names[int(v)] for v in y_arr.tolist()])
+        if save_train_dataset and train_dataset_out_path is not None and train_dataset_meta_path is not None:
+            train_export_df = pd.DataFrame(X, columns=feature_names)
+            train_export_df.insert(0, "sample_id", sample_ids)
+            train_export_df.insert(1, "class_index", y_arr.astype(int))
+            train_export_df.insert(2, "class_label", [class_names[int(v)] for v in y_arr.tolist()])
+            _write_dataset_frame(train_dataset_out_path, train_export_df)
+            train_dataset_meta = {
+                "split": "train",
+                "fingerprint": train_fingerprint,
+                "feature_names": feature_names,
+                "class_names": class_names,
+                "covariate_preprocessor": preprocessor.to_dict() if preprocessor is not None else None,
+                "covariate_report": cov_report,
+                "observed_feature_names": observed_feature_names,
+                "observed_feature_report": observed_feature_report,
+                "observed_feature_quantiles": observed_feature_quantiles_out,
+                "observed_feature_fill_values": (
+                    [float(v) for v in feature_fill_values.tolist()] if feature_fill_values is not None else None
+                ),
+                "observed_healthy_reference_vector": (
+                    [float(v) for v in observed_healthy_reference.tolist()]
+                    if observed_healthy_reference is not None
+                    else None
+                ),
+                "observed_cancer_reference_vector": (
+                    [float(v) for v in observed_cancer_reference.tolist()]
+                    if observed_cancer_reference is not None
+                    else None
+                ),
+                "observed_healthy_class_index": observed_healthy_class_index,
+                "observed_healthy_class_label": observed_healthy_class_label,
+                "observed_cancer_class_labels": observed_cancer_class_labels,
+                "observed_anchor_strategy": observed_anchor_strategy,
+                "observed_feature_order_fingerprint": observed_feature_order_fingerprint,
+            }
+            with open(train_dataset_meta_path, "w", encoding="utf-8") as f:
+                json.dump(train_dataset_meta, f, indent=2)
 
-        train_dataset_out_path = (
-            Path(train_dataset_path).expanduser().resolve()
-            if train_dataset_path
-            else (out_dir / "tabular-train-dataset.csv")
+    test_dataset_out_path: Optional[Path] = None
+    test_cache_hit: Optional[bool] = None
+    test_cache_miss_reason: Optional[str] = None
+    try:
+        predictor_cfg = resolve_predictor_config(project_json)
+    except Exception:
+        predictor_cfg = None
+    explicit_eval_split = _has_explicit_eval_split(predictor_cfg)
+    if save_test_dataset and explicit_eval_split:
+        test_dataset_out_path = _derive_test_dataset_path(
+            train_dataset_out_path,
+            test_dataset_path,
+            out_dir,
+            bundle_dir_path,
         )
-        train_dataset_out_path.parent.mkdir(parents=True, exist_ok=True)
-        ext = train_dataset_out_path.suffix.lower()
-        if ext == ".parquet":
-            train_export_df.to_parquet(train_dataset_out_path, index=False)
-        elif ext == ".tsv":
-            train_export_df.to_csv(train_dataset_out_path, sep="\t", index=False)
+        test_meta_path = _dataset_meta_path(test_dataset_out_path)
+        eval_paths, eval_y = resolve_eval_paths_and_labels(
+            project_json,
+            class_names,
+            predictor_cfg=predictor_cfg,
+            project_loader=load_project,
+        )
+        if eval_y is None:
+            raise ValueError("No labeled evaluation samples resolved for tabular test dataset export.")
+        eval_ids = sample_ids_from_paths(eval_paths)
+        test_fingerprint = _fingerprint_payload(
+            {
+                "common": fingerprint_common_payload,
+                "split": "test",
+                "sample_paths": [str(p) for p in eval_paths],
+                "class_names": class_names,
+                "labels": [int(v) for v in np.asarray(eval_y, dtype=np.int32).tolist()],
+                "train_fingerprint": train_fingerprint,
+            }
+        )
+        if test_dataset_out_path.is_file() and test_meta_path.is_file():
+            try:
+                with open(test_meta_path, encoding="utf-8") as f:
+                    test_meta = json.load(f)
+                if test_meta.get("fingerprint") == test_fingerprint:
+                    test_cache_hit = True
+                else:
+                    test_cache_hit = False
+                    test_cache_miss_reason = "fingerprint_mismatch"
+            except Exception as e:
+                test_cache_hit = False
+                test_cache_miss_reason = f"cache_read_error:{e}"
         else:
-            train_export_df.to_csv(train_dataset_out_path, index=False)
+            test_cache_hit = False
+            test_cache_miss_reason = "cache_missing"
+        if not test_cache_hit:
+            if feature_mode_norm == "observed_hybrid":
+                if observed_healthy_reference is None or observed_cancer_reference is None:
+                    raise ValueError("Observed-hybrid test export requires training reference vectors.")
+                feat_eval = build_observed_hybrid_feature_table(
+                    eval_paths,
+                    dmp_df,
+                    quantiles=observed_feature_quantiles_out or observed_feature_quantiles,
+                    min_coverage=int(max(1, observed_feature_min_coverage)),
+                    include_dmp_features=bool(observed_feature_include_dmp),
+                    include_chromosome_features=bool(observed_feature_include_chromosome),
+                    include_dmr_features=bool(observed_feature_include_dmr),
+                    include_gene_features=bool(observed_feature_include_gene),
+                    dmr_window_bp=int(max(1, observed_feature_dmr_window_bp)),
+                    max_dmr_features=int(max(0, observed_feature_max_dmrs)),
+                    max_gene_features=int(max(0, observed_feature_max_genes)),
+                    healthy_reference_vector=observed_healthy_reference,
+                    cancer_reference_vector=observed_cancer_reference,
+                    healthy_class_label=observed_healthy_class_label,
+                    cancer_class_labels=observed_cancer_class_labels,
+                    anchor_strategy=observed_anchor_strategy,
+                    expected_feature_order_fingerprint=observed_feature_order_fingerprint,
+                )
+                verify_feature_schema(
+                    feat_eval.feature_names,
+                    observed_feature_names,
+                    context="tabular train test-dataset export observed_hybrid",
+                )
+                X_eval = np.asarray(feat_eval.X, dtype=np.float32)
+                X_eval = apply_feature_fill_values(X_eval, feature_fill_values)
+            else:
+                X_eval = _extract_matrix_for_samples(eval_paths, refs, feature_order, min_coverage=1)
+                X_eval = np.nan_to_num(np.asarray(X_eval, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
+            cov_eval, _cov_eval_report = transform_covariates(
+                covariates_path,
+                eval_ids,
+                preprocessor,
+                strict_join=bool(covariates_strict_join),
+            )
+            if cov_eval is not None:
+                X_eval = np.concatenate([X_eval, cov_eval], axis=1)
+            test_feature_names = feature_names
+            if len(test_feature_names) != int(X_eval.shape[1]):
+                test_feature_names = [f"feature_{i}" for i in range(int(X_eval.shape[1]))]
+            eval_df = pd.DataFrame(X_eval, columns=test_feature_names)
+            eval_y_arr = np.asarray(eval_y, dtype=np.int32)
+            eval_df.insert(0, "sample_id", eval_ids)
+            eval_df.insert(1, "class_index", eval_y_arr.astype(int))
+            eval_df.insert(2, "class_label", [class_names[int(v)] for v in eval_y_arr.tolist()])
+            _write_dataset_frame(test_dataset_out_path, eval_df)
+            with open(test_meta_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "split": "test",
+                        "fingerprint": test_fingerprint,
+                        "feature_names": test_feature_names,
+                        "class_names": class_names,
+                    },
+                    f,
+                    indent=2,
+                )
 
     methods = _normalize_tabular_methods(tabular_methods, legacy_model_type=model_type)
     run_selection_eval = len(methods) > 1
@@ -489,6 +845,13 @@ def train_tabular_model(
             "covariate_preprocessing": cov_report,
             "train_dataset_saved": bool(save_train_dataset),
             "train_dataset_path": str(train_dataset_out_path) if train_dataset_out_path is not None else None,
+            "train_dataset_cache_enabled": bool(train_cache_enabled),
+            "train_dataset_cache_hit": bool(train_cache_hit) if train_cache_enabled else False,
+            "train_dataset_cache_miss_reason": train_cache_miss_reason,
+            "test_dataset_saved": bool(test_dataset_out_path is not None),
+            "test_dataset_path": str(test_dataset_out_path) if test_dataset_out_path is not None else None,
+            "test_dataset_cache_hit": test_cache_hit,
+            "test_dataset_cache_miss_reason": test_cache_miss_reason,
         }
         with open(method_dir / "tabular-model-metadata.json", "w", encoding="utf-8") as f:
             json.dump(method_meta, f, indent=2)

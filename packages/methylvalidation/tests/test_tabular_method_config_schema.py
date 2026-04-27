@@ -57,3 +57,10 @@ def test_tabular_method_selection_metric_is_validated():
     payload["tabular_method_selection_metric"] = "roc_auc"
     with pytest.raises(ValueError, match="tabular_method_selection_metric"):
         MonteCarloConfig.model_validate(payload)
+
+
+def test_tabular_dataset_reuse_and_test_export_defaults():
+    cfg = MonteCarloConfig.model_validate(_base_payload())
+    assert cfg.tabular_reuse_train_dataset is True
+    assert cfg.tabular_save_test_dataset is True
+    assert cfg.tabular_test_dataset_path is None
