@@ -105,19 +105,32 @@ def cmd_plan_runs(argv: List[str]) -> None:
         wipe_runs=bool(ns.wipe_runs),
     )
     n = plan.get("n_planned", 0)
-    print(f"Planned {n} runs. Tasks under {mcr / 'queue' / 'tasks'}")
+    n_pres = int(plan.get("n_preserved", 0) or 0)
+    n_mat = int(plan.get("n_materialized", 0) or 0)
+    if n_pres:
+        print(
+            f"Planned {n} runs ({n_pres} already completed, left in place; {n_mat} written or updated).",
+        )
+    else:
+        print(f"Planned {n} runs.")
+    print(f"Tasks under {mcr / 'queue' / 'tasks'}")
     print("Next: methyl-validation export-queue, then run workers: methyl-validation run-task --task <...>")
 
 
 def cmd_run_task(argv: List[str]) -> None:
     p = argparse.ArgumentParser(description="Execute a single task JSON (worker).")
     p.add_argument("--task", type=Path, required=True, help="Path to queue/tasks/<run_####>.json")
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Run pipeline even if this run is already marked completed in queue_task_status.json.",
+    )
     ns, rest = p.parse_known_args(argv)
     if rest:
         p.error(f"unknown args: {rest!r}")
     if not ns.task.is_file():
         p.error(f"not a file: {ns.task}")
-    sys.exit(execute_discovery_task(str(ns.task.resolve())))
+    sys.exit(execute_discovery_task(str(ns.task.resolve()), force=bool(ns.force)))
 
 
 def cmd_export_queue(argv: List[str]) -> None:

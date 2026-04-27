@@ -25,6 +25,7 @@ This flow splits **discovery** Monte Carlo work into a **plan** phase (fast, met
    # or: --project /work/.../project.json
    ```
    `plan-runs --overwrite` **refreshes** `queue/tasks/` and per-run plan inputs; it does **not** delete existing `run_####` directories (so completed worker outputs stay). To remove all `run_####` trees and start from a clean slate, use `--wipe-runs` (destructive).
+   **Without** `--overwrite` (and without `--wipe-runs`), runs that already have `queue_task_status.json` with status `completed` and a matching `queue/tasks/run_####.json` are left **unchanged** on disk (same `project.json` / list files); you can raise `n_iterations` and only new `run_####` directories are materialized. `run-task` also exits 0 without re-running the pipeline if the run is already `completed` (use `run-task --force` to redo), so schedulers can re-submit a full job array safely.
 
 2. **Export** (optional): build manifest for your queue broker.
    ```bash

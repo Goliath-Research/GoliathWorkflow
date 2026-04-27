@@ -62,9 +62,13 @@ def execute_discovery_task(
     task_path: str,
     *,
     mark_running: bool = True,
+    force: bool = False,
 ) -> int:
     """
     Run a single `DiscoveryRunTaskV1` and write `queue_task_status.json` in the run directory.
+
+    If ``queue_task_status.json`` already has status ``completed`` and ``force`` is false, the
+    pipeline is skipped and the command exits 0 (idempotent re-queue / scheduler re-run).
 
     Returns 0 on success, 1 on failure.
     """
@@ -72,6 +76,18 @@ def execute_discovery_task(
     run_dir = Path(task.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     status_path = run_status_path(run_dir)
+    if not force and status_path.is_file():
+        try:
+            prev = json.loads(status_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            prev = {}
+        if str(prev.get("status")) == "completed":
+            print(
+                f"Skip {task.run_id}: {status_path.name} is already completed "
+                f"(use run-task --force to run again).",
+                file=sys.stderr,
+            )
+            return 0
 
     t0 = _now_iso()
     if mark_running:

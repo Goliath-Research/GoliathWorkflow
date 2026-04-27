@@ -291,3 +291,132 @@ def test_plan_runs_wipe_runs_deletes_run_dirs(tmp_path: Path) -> None:
     )
     assert not marker.exists()
     assert (mcr / "run_0001" / "project.json").is_file()
+
+
+def test_plan_runs_incremental_preserves_completed_runs_and_adds_new(tmp_path: Path) -> None:
+    from argparse import Namespace
+
+    from methyl_validation.mc_config_load import (
+        apply_monte_carlo_config_overrides,
+        ensure_monte_carlo_output_tree,
+        load_monte_carlo_config,
+    )
+    from methyl_validation.planner import plan_discovery_runs
+    from methyl_validation.storage_layout import atomic_write_json, run_status_path
+
+    project = _binary_project_for_mc(tmp_path)
+    ns1 = _queue_ns_base(project, iterations=1)
+    args = Namespace(**ns1)
+    config, _ = load_monte_carlo_config(args, None)
+    config = apply_monte_carlo_config_overrides(config, args)
+    *_, mcr = ensure_monte_carlo_output_tree(config)
+    if mcr.is_dir():
+        import shutil
+
+        shutil.rmtree(mcr)
+    out1 = plan_discovery_runs(
+        config=config,
+        base_project=Path(config.base_project),
+        monte_carlo_runs_root=mcr,
+        overwrite=True,
+    )
+    assert int(out1["n_materialized"]) == 1
+    p1 = (mcr / "run_0001" / "project.json").read_text(encoding="utf-8")
+    atomic_write_json(
+        run_status_path(mcr / "run_0001"),
+        {"schema_version": "1.0", "status": "completed", "task_id": "t"},
+    )
+    ns2 = _queue_ns_base(project, iterations=2)
+    args2 = Namespace(**ns2)
+    config2, _ = load_monte_carlo_config(args2, None)
+    config2 = apply_monte_carlo_config_overrides(config2, args2)
+    out2 = plan_discovery_runs(
+        config=config2,
+        base_project=Path(config2.base_project),
+        monte_carlo_runs_root=mcr,
+        overwrite=False,
+    )
+    assert out2["n_preserved"] == 1
+    assert out2["n_materialized"] == 1
+    assert (mcr / "run_0001" / "project.json").read_text(encoding="utf-8") == p1
+    assert (mcr / "run_0002" / "project.json").is_file()
+
+
+def _queue_ns_base(project: Path, *, iterations: int) -> dict:
+    return {
+        "project": project,
+        "config": None,
+        "seed": 99,
+        "iterations": iterations,
+        "path_remap": None,
+        "stability": None,
+        "stability_featurecuts": None,
+        "stability_target_ba": None,
+        "stability_min_selected_dmps": None,
+        "skip_enricher": None,
+        "predictor_only": None,
+        "model_backend": None,
+        "post_model_backend": None,
+        "covariates_path": None,
+        "tabular_max_dmps": None,
+        "tabular_model_type": None,
+        "tabular_methods_json": None,
+        "tabular_save_train_dataset": None,
+        "tabular_train_dataset_path": None,
+        "generative_latent_dim": None,
+        "generative_kl_weight": None,
+        "generative_density_type": None,
+        "generative_epochs": None,
+        "generative_batch_size": None,
+        "generative_seed": None,
+        "generative_calibrate": None,
+        "no_generative_covariates_strict": None,
+        "output_base": None,
+        "samples_base_path": None,
+    }
+
+
+def test_run_task_exits_0_if_already_completed(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    from argparse import Namespace
+
+    from methyl_validation.executor import execute_discovery_task
+    from methyl_validation.storage_layout import atomic_write_json, run_status_path
+
+    from methyl_validation.mc_config_load import (
+        apply_monte_carlo_config_overrides,
+        ensure_monte_carlo_output_tree,
+        load_monte_carlo_config,
+    )
+    from methyl_validation.planner import plan_discovery_runs
+
+    project = _binary_project_for_mc(tmp_path)
+    args = Namespace(**_queue_ns_base(project, iterations=1))
+    config, _ = load_monte_carlo_config(args, None)
+    config = apply_monte_carlo_config_overrides(config, args)
+    *_, mcr = ensure_monte_carlo_output_tree(config)
+    if mcr.is_dir():
+        import shutil
+
+        shutil.rmtree(mcr)
+    plan_discovery_runs(
+        config=config,
+        base_project=Path(config.base_project),
+        monte_carlo_runs_root=mcr,
+        overwrite=True,
+    )
+    tpath = mcr / "queue" / "tasks" / "run_0001.json"
+    r1 = mcr / "run_0001"
+    atomic_write_json(
+        run_status_path(r1),
+        {"schema_version": "1.0", "status": "completed", "task_id": "discovery_run_0001"},
+    )
+    from methyl_validation import pipeline_runner
+
+    def boom(*_a, **_k):
+        raise AssertionError("pipeline should not run when already completed")
+
+    monkeypatch.setattr(pipeline_runner, "run_pipeline_for_iteration", boom)
+    assert execute_discovery_task(str(tpath), force=False) == 0
+    assert execute_discovery_task(str(tpath), force=True) == 1  # pipeline fails (assertion in stub)
