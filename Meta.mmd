@@ -1,0 +1,41 @@
+erDiagram
+    CLASSES {
+        int ID PK
+        string Name
+        string TableName
+        int ParentID
+        int HasHistory
+    }
+
+    EVENT {
+        int ID PK
+        string Name
+    }
+
+    LINKTYPES {
+        int ID PK
+        string Name
+    }
+
+    LINKS {
+        int ID PK
+        string Name
+        int ClassID1 FK
+        int ClassID2 FK
+        int LinkTypeID FK
+        int MinIdx2
+        int MaxIdx2
+        int Indexed
+        int Owns
+    }
+
+    OPERATIONS {
+        int ID PK
+        string Name
+        int ClassID FK
+    }
+
+    CLASSES ||--o{ LINKS : end1
+    CLASSES ||--o{ LINKS : end2
+    LINKTYPES ||--o{ LINKS : typed_as
+    CLASSES ||--o{ OPERATIONS : for_class
