@@ -554,6 +554,52 @@ def _try_dual_binary_predictor_paths(
     return tr_cp, tr_dp, ho_cp, ho_dp, lineage
 
 
+def _try_binary_test_group_paths(
+    step_cfg: Dict[str, Any],
+    *,
+    base_path: Optional[str],
+    project_path: Union[str, Path],
+    path_remap: Optional[Dict[str, str]],
+) -> Optional[Tuple[List[str], List[str], List[Dict[str, str]]]]:
+    """
+    Allow binary projects to use the same labeled test group shape as multiclass.
+
+    ``test_group_paths`` is the normal train-on-project-cohorts, test-on-other-cohorts
+    API. ``holdout_group_paths`` remains supported for the older dual train/holdout
+    metrics path.
+    """
+    test_groups_raw = step_cfg.get("test_group_paths")
+    if not _group_paths_nonempty(test_groups_raw):
+        return None
+    _require_group_class_indices(test_groups_raw, source_key="test_group_paths")
+    test_entries, _ = _expand_multiclass_group_paths_list(
+        test_groups_raw,
+        base_path=base_path,
+        project_path=project_path,
+        path_remap=path_remap,
+        evaluation_split="test",
+    )
+    control_paths, disease_paths = _binary_paths_from_group_entries(
+        test_entries,
+        source_key="test_group_paths",
+    )
+    lineage: List[Dict[str, str]] = []
+    for entry in test_entries:
+        cls_idx = int(entry["class_index"])
+        side = "control" if cls_idx == 0 else "disease"
+        group_label = str(entry.get("label") or side)
+        for p in entry.get("paths") or []:
+            lineage.append(
+                {
+                    "absolute_path": str(p),
+                    "side": side,
+                    "group_label": group_label,
+                    "evaluation_split": "test",
+                }
+            )
+    return control_paths, disease_paths, lineage
+
+
 def _group_paths_nonempty(value: Any) -> bool:
     if not isinstance(value, list):
         return False
@@ -1069,18 +1115,50 @@ def resolve_predictor_config(
     dis_map = _expand_side_group_paths(diseases_side, base_path, proj_path_arg, project.path_remap)
     ctrl_labels = _resolved_leaf_labels_from_side(controls_side)
     dis_labels = _resolved_leaf_labels_from_side(diseases_side)
-    dual = _try_dual_binary_predictor_paths(
+    binary_test_groups = _try_binary_test_group_paths(
         step_cfg,
         base_path=base_path,
         project_path=proj_path_arg,
         path_remap=project.path_remap,
-        controls_side=controls_side,
-        diseases_side=diseases_side,
-        ctrl_labels=ctrl_labels,
-        dis_labels=dis_labels,
+    )
+    dual = (
+        None
+        if binary_test_groups is not None
+        else _try_dual_binary_predictor_paths(
+            step_cfg,
+            base_path=base_path,
+            project_path=proj_path_arg,
+            path_remap=project.path_remap,
+            controls_side=controls_side,
+            diseases_side=diseases_side,
+            ctrl_labels=ctrl_labels,
+            dis_labels=dis_labels,
+        )
     )
 
     tree = project.cohort_tree_dict()
+    if binary_test_groups is not None:
+        control_paths, disease_paths, lineage = binary_test_groups
+        base = {
+            "model_path": model_path,
+            "model_dir": model_dir,
+            "output_dir": out_dir,
+            "test_control_paths": control_paths,
+            "test_disease_paths": disease_paths,
+            "path_remap": project.path_remap,
+            "samples_base_path": project.samples_base_path,
+            "debug": step_cfg.get("debug", False),
+            "comparison_label": None,
+            "report_controls": controls_side,
+            "report_diseases": diseases_side,
+            "sample_lineage": lineage,
+            "cohort_hierarchy": tree or None,
+            "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
+            **_predictor_decision_overrides(step_cfg),
+        }
+        return PredictorConfig(**base)
+
     if dual is not None:
         tr_cp, tr_dp, ho_cp, ho_dp, lineage = dual
         base: Dict[str, Any] = {
@@ -1300,17 +1378,35 @@ def resolve_predictor_config_per_comparison(
             holdout_control_paths: List[str] = []
             holdout_disease_paths: List[str] = []
         else:
-            dual_comp = _try_dual_binary_predictor_paths(
+            binary_test_groups = _try_binary_test_group_paths(
                 step_cfg,
                 base_path=base_path,
                 project_path=project_path,
                 path_remap=project.path_remap,
-                controls_side=controls_side,
-                diseases_side=diseases_side,
-                ctrl_labels=[ctrl_label],
-                dis_labels=[dis_label],
             )
-            if dual_comp is not None:
+            dual_comp = (
+                None
+                if binary_test_groups is not None
+                else _try_dual_binary_predictor_paths(
+                    step_cfg,
+                    base_path=base_path,
+                    project_path=project_path,
+                    path_remap=project.path_remap,
+                    controls_side=controls_side,
+                    diseases_side=diseases_side,
+                    ctrl_labels=[ctrl_label],
+                    dis_labels=[dis_label],
+                )
+            )
+            if binary_test_groups is not None:
+                control_paths, disease_paths, lineage = binary_test_groups
+                train_control_paths = []
+                train_disease_paths = []
+                holdout_control_paths = []
+                holdout_disease_paths = []
+                rep_c = _filter_side_report(controls_side, [ctrl_label])
+                rep_d = _filter_side_report(diseases_side, [dis_label])
+            elif dual_comp is not None:
                 tr_cp, tr_dp, ho_cp, ho_dp, lineage = dual_comp
                 control_paths = []
                 disease_paths = []

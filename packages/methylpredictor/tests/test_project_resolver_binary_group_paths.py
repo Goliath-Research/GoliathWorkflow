@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from methyl_predictor.project_resolver import resolve_predictor_config
+from methyl_predictor.project_resolver import resolve_predictor_config, resolve_predictor_config_per_comparison
 
 
 def _write_binary_project(tmp_path: Path, predictor_cfg: dict) -> Path:
@@ -54,6 +54,89 @@ def test_binary_resolver_accepts_group_paths_train_holdout(tmp_path: Path) -> No
     assert cfg.train_disease_paths == ["/x/TR_D1"]
     assert cfg.holdout_control_paths == ["/x/HO_C1"]
     assert cfg.holdout_disease_paths == ["/x/HO_D1", "/x/HO_D2"]
+
+
+def test_binary_resolver_accepts_test_group_paths(tmp_path: Path) -> None:
+    project_path = _write_binary_project(
+        tmp_path,
+        predictor_cfg={
+            "test_group_paths": [
+                {"label": "healthy", "class_index": 0, "paths": ["/x/TE_C1", "/x/TE_C2"]},
+                {"label": "pca", "class_index": 1, "paths": ["/x/TE_D1"]},
+            ],
+        },
+    )
+    cfg = resolve_predictor_config(project_path)
+    assert cfg.test_control_paths == ["/x/TE_C1", "/x/TE_C2"]
+    assert cfg.test_disease_paths == ["/x/TE_D1"]
+    assert cfg.train_control_paths == []
+    assert cfg.train_disease_paths == []
+    assert cfg.holdout_control_paths == []
+    assert cfg.holdout_disease_paths == []
+    assert [row["evaluation_split"] for row in cfg.sample_lineage] == ["test", "test", "test"]
+
+
+def test_binary_resolver_prefers_test_group_paths_over_training_cohorts(tmp_path: Path) -> None:
+    project_path = _write_binary_project(
+        tmp_path,
+        predictor_cfg={
+            "test_group_paths": [
+                {"label": "healthy", "class_index": 0, "paths": ["/x/TE_C1"]},
+                {"label": "pca", "class_index": 1, "paths": ["/x/TE_D1"]},
+            ],
+        },
+    )
+    cfg = resolve_predictor_config(project_path)
+    assert cfg.test_control_paths == ["/x/TE_C1"]
+    assert cfg.test_disease_paths == ["/x/TE_D1"]
+    assert "C_TRAIN_1" not in cfg.test_control_paths
+    assert "D_TRAIN_1" not in cfg.test_disease_paths
+
+
+def test_binary_per_comparison_resolver_accepts_test_group_paths(tmp_path: Path) -> None:
+    project_path = _write_binary_project(
+        tmp_path,
+        predictor_cfg={
+            "test_group_paths": [
+                {"label": "healthy", "class_index": 0, "paths": ["/x/TE_C1"]},
+                {"label": "pca", "class_index": 1, "paths": ["/x/TE_D1", "/x/TE_D2"]},
+            ],
+        },
+    )
+    [(cfg, comparison_label)] = resolve_predictor_config_per_comparison(project_path)
+    assert comparison_label == "pca"
+    assert cfg.test_control_paths == ["/x/TE_C1"]
+    assert cfg.test_disease_paths == ["/x/TE_D1", "/x/TE_D2"]
+    assert cfg.holdout_control_paths == []
+    assert cfg.holdout_disease_paths == []
+
+
+def test_binary_resolver_rejects_test_group_paths_with_non_binary_class_index(tmp_path: Path) -> None:
+    project_path = _write_binary_project(
+        tmp_path,
+        predictor_cfg={
+            "test_group_paths": [
+                {"label": "healthy", "class_index": 0, "paths": ["/x/TE_C1"]},
+                {"label": "other", "class_index": 2, "paths": ["/x/TE_X1"]},
+            ]
+        },
+    )
+    with pytest.raises(ValueError, match="class_index 0/1"):
+        resolve_predictor_config(project_path)
+
+
+def test_binary_resolver_rejects_test_group_paths_missing_class_index(tmp_path: Path) -> None:
+    project_path = _write_binary_project(
+        tmp_path,
+        predictor_cfg={
+            "test_group_paths": [
+                {"label": "healthy", "paths": ["/x/TE_C1"]},
+                {"label": "pca", "class_index": 1, "paths": ["/x/TE_D1"]},
+            ]
+        },
+    )
+    with pytest.raises(ValueError, match="requires explicit class_index"):
+        resolve_predictor_config(project_path)
 
 
 def test_binary_resolver_rejects_group_paths_with_non_binary_class_index(tmp_path: Path) -> None:
