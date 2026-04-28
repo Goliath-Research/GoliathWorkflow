@@ -1,188 +1,34 @@
-# MethylPipeline
+# SQL Server Workflow Engine scripts
 
-MethylPipeline is a Python monorepo for DNA methylation analysis.  
-The active production path is code-driven and centered on empirical distribution workflows:
+Run scripts **in this order** on a database (SQL Server 2017+ recommended for `JSON_*` functions):
 
-1. centroid construction (`methylcentroid`)
-2. DMP discovery and panel generation (`methyldetector`)
-3. classification (`methylclassifier`)
-4. prediction and metrics (`methylpredictor`)
-5. Monte Carlo validation and production orchestration (`methylvalidation`)
+1. [`workflow_definition.sql`](workflow_definition.sql) — definitions (workflows, nodes, edges, templates/bindings).
+2. [`workflow_runtime.sql`](workflow_runtime.sql) — instances, executions, leases, loop state.
+3. [`workflow_constraints_indexes.sql`](workflow_constraints_indexes.sql) — extra indexes/constraints.
+4. [`workflow_worker_api.sql`](workflow_worker_api.sql) — functions + stored procedures (`sp_worker_request_task`, `sp_worker_submit_result`, engine activation).
+5. [`workflow_seed_examples.sql`](workflow_seed_examples.sql) — optional demo workflow (`DemoFlow`).
 
-This document is the canonical root guide and is written from repository code/config as source of truth.
+To redeploy from scratch, drop runtime tables before re-running `workflow_definition.sql` if `workflow_instance` exists (it references `workflow_version`). Example:
 
-## Theoretical Foundations
-
-Core methods implemented in the active path:
-
-- **ECDF/PCHIP likelihood modeling** in `packages/methylutils/methyl_utils/ecdf_classifier.py`
-- **Hypothesis testing and correction** in `packages/methylutils/methyl_utils/statistical_tests.py`:
-  - KS ECDF statistics
-  - Mann-Whitney from histogram counts
-  - Storey q-values and p-value aggregation methods
-- **Biological effect ranking and overlap metrics** in `packages/methyldetector/methyl_detector/core/methyldetector.py`
-- **OvR and multiclass fusion, isotonic calibration, chromosome weighting** in `packages/methylclassifier/methyl_classifier/core/classifier.py`
-- **Prediction metrics and probabilistic diagnostics** in `packages/methylpredictor/methyl_predictor/core/predictor.py`
-
-Method categories are intentionally separated in implementation and documentation:
-
-- principled statistical methods
-- approximations
-- heuristics
-- external-service-backed analysis
-
-## Implementation
-
-## Active package roles
-
-- `methylutils`: shared mathematical/statistical/config foundation.
-- `methylcentroid`: cohort centroid generation and binned summaries.
-- `methyldetector`: DMP detection, effect-size filtering, export logic.
-- `methylclassifier`: binary/multiclass/OvR model logic and calibration.
-- `methylpredictor`: inference + reporting + evaluation metrics.
-- `methylvalidation`: MC orchestration, stability, freeze/model flows, backend selection.
-- `methylmapper`: DMP-to-gene and feature mapping.
-- `methylenricher`: enrichment and module-level interpretation.
-- `methyldiseaseprogression`: cross-stage synthesis reports.
-- `methylalignmentqc`: alignment QC extraction/normalization.
-
-## CLI entry points
-
-CLI contracts are defined in package `pyproject.toml` files:
-
-- `methyl-centroid`, `methyl-centroid-explorer`
-- `methyl-detector`, `methyl-detector-explorer`
-- `methyl-classifier`
-- `methyl-predictor`
-- `methyl-validation`
-- `methyl-mapper`
-- `methyl-enricher`
-- `methyl-disease-progression`
-- `methyl-alignment-qc`, `methyl-qc`
-
-## Usage
-
-## Installation
-
-This repo expects the local virtual environment at `.venv`.
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
+```sql
+DROP TABLE IF EXISTS dbo.execution_context;
+DROP TABLE IF EXISTS dbo.task_lease;
+DROP TABLE IF EXISTS dbo.loop_state;
+DROP TABLE IF EXISTS dbo.instance_cursor;
+DROP TABLE IF EXISTS dbo.node_execution;
+DROP TABLE IF EXISTS dbo.workflow_instance;
+-- then run scripts 1–5 again
 ```
 
-Install package stack (editable/develop mode) via:
+## Worker API (summary)
 
-```bash
-bash scripts/install_all.sh
-```
+| Procedure | Purpose |
+|-----------|---------|
+| `sp_start_workflow_instance @workflow_instance_id` | Move instance to `RUNNING` and expand the workflow graph from `root_node_id`. |
+| `sp_worker_request_task @worker_id, @capability, @max_lease_seconds` | Atomically claims one `READY` action row (returns 0 or 1 row). |
+| `sp_worker_submit_result @node_execution_id, @worker_id, @result_code, @output_json, ... OUTPUT` | Applies completion; advances control flow. Use `@result_code < 0` to fail the instance. |
+| `sp_worker_heartbeat` / `sp_worker_fail_task` | Lease renewal and explicit failure. |
 
-Optional dependency layers:
+## Placeholders
 
-- `--pipeline-reqs` installs `requirements-pipeline.txt`
-- `--gpu-reqs` installs `requirements-gpu.txt`
-
-Container setup is available via:
-
-```bash
-bash scripts/setup_dev.sh
-```
-
-## Upgrades
-
-When upgrading dependencies or package code:
-
-1. activate `.venv`
-2. rerun `scripts/install_all.sh` (same package order as production scripts)
-3. rerun tests:
-
-```bash
-bash scripts/run_tests.sh
-```
-
-## Full project execution
-
-Active production path (code-backed in `methyl_validation`):
-
-1. run Monte Carlo iterations
-2. run stability analysis to materialize stable DMP panel
-3. run freeze (`--freeze`) to generate `production/project.json` with `fixed_dmp_panel`
-4. run model build (`--model`)
-5. optionally run post-model validation (`--post-model-validation`) or predictor-only evaluation
-
-Typical command sequence:
-
-```bash
-source .venv/bin/activate
-methyl-validation --project project.json --stability
-methyl-validation --project project.json --freeze
-methyl-validation --project project.json --model
-```
-
-## Step-by-step execution boundaries
-
-Implemented pipeline boundaries in `packages/methylvalidation/methyl_validation/pipeline_runner.py`:
-
-- MC iteration mode: `methyl-centroid` -> `methyl-detector`
-- Freeze mode: `methyl-centroid` -> `methyl-detector` -> `methyl-mapper` -> `methyl-enricher` (+ optional progression)
-- Model mode: `methyl-classifier` -> `methyl-predictor`
-- Predictor-only mode: `methyl-predictor` using frozen production artifacts
-
-For model backends that use `feature_mode=observed_hybrid`, second-stage feature construction now supports disease-aware families across all backends (`ecdf` second stage, `tabular_sklearn`, `generative_hybrid`):
-
-- DMP-derived summaries (global/quantiles + disease-comparison aggregates)
-- DMR/region aggregates
-- Gene aggregates
-- Chromosome aggregates (optional, not mandatory)
-
-Important evaluation boundary: balanced accuracy is computed only on labeled validation cohorts. Blind prediction outputs remain deployment-facing inference artifacts and should not be interpreted as direct balanced-accuracy estimates.
-
-Recommended sequence:
-
-1. Validate model quality on labeled train/test splits (for example 80/20) and Monte Carlo runs.
-2. Select the best backend/model using labeled metrics.
-3. Retrain final model on all labeled data for deployment.
-4. Run blind inference only after the final model is frozen.
-
-## Strategy Playbooks
-
-## 1) Initial research
-
-- run baseline MC validation to characterize data behavior
-- inspect detector exports and stability summaries
-- establish candidate panel quality before freeze/model stages
-
-## 2) Disease characterization
-
-- use detector q-value/effect-size outputs for locus-level evidence
-- run mapper + enricher during freeze for biological interpretation
-- optionally run progression synthesis for stage-ordered interpretation
-
-## 3) Model creation
-
-- stabilize panel through MC + stability outputs
-- freeze with `fixed_dmp_panel`
-- build production model with `--model`
-- use `--model-mc` and `--select-best-model` for backend comparisons when required
-
-## 4) Final prediction from best model
-
-- run predictor on holdout/blind cohorts with frozen artifacts
-- track balanced accuracy, class-wise metrics, and probabilistic diagnostics
-- use rollout comparison gates for baseline-vs-candidate promotion decisions
-
-## Deprecated Appendix: MethylCluster
-
-`MethylCluster` is excluded from the active workflow documented above.
-
-- legacy package/CLI may remain in the repository for compatibility (`methyl-cluster`)
-- do not treat clustering outputs as part of the canonical production path
-- historical references should stay isolated to deprecated/legacy notes, not main workflow sections
-
-## Additional references
-
-- User manual: `docs/user-manual/index.qmd`
-- Theory book: `docs/theory/README.md`
-- Deployment details: `docs/DEPLOYMENT.md`
-- Active parameter contract matrix: `docs/config_parameter_matrix.md`
-- Code-first discovery basis: `docs/code_first_discovery_report.md`
+Templates use `${...}` tokens only. Supported references include `ctx.iterationNo`, `ctx.sequenceIndex`, `ctx.parallelIndex`, `ctx.parent.resultCode`, and `ctx.task.<node_key>.resultCode` / `ctx.task.<node_key>.output.<path>`.
