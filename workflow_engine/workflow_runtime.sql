@@ -92,9 +92,9 @@ CREATE TABLE dbo.loop_state (
     scope_node_execution_id BIGINT NOT NULL,
     current_iteration       INT NOT NULL CONSTRAINT DF_ls_cur DEFAULT (0),
     repeat_target_count     INT NULL,
-    CONSTRAINT FK_ls_instance FOREIGN KEY (workflow_instance_id) REFERENCES dbo.workflow_instance(id) ON DELETE CASCADE,
+    CONSTRAINT FK_ls_instance FOREIGN KEY (workflow_instance_id) REFERENCES dbo.workflow_instance(id),
     CONSTRAINT FK_ls_control FOREIGN KEY (control_node_id) REFERENCES dbo.workflow_node(id),
-    CONSTRAINT FK_ls_scope FOREIGN KEY (scope_node_execution_id) REFERENCES dbo.node_execution(id) ON DELETE CASCADE,
+    CONSTRAINT FK_ls_scope FOREIGN KEY (scope_node_execution_id) REFERENCES dbo.node_execution(id),
     CONSTRAINT UQ_ls_scope UNIQUE (scope_node_execution_id)
 );
 GO

@@ -20,7 +20,7 @@ IF NOT EXISTS (
 )
 CREATE INDEX IX_ne_ready_worker_poll ON dbo.node_execution(status, available_at_utc)
     INCLUDE (workflow_instance_id, workflow_node_id)
-    WHERE status IN (N'READY', N'RUNNING');
+    WHERE status IN ('READY', 'RUNNING');
 GO
 
 -- Prior-output lookup by instance + logical node key (via workflow_node join in queries).

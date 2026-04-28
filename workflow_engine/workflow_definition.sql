@@ -79,8 +79,8 @@ CREATE TABLE dbo.workflow_edge (
     condition_expr      NVARCHAR(MAX) NULL,
     switch_case_value   INT NULL,
     is_default          BIT NOT NULL CONSTRAINT DF_we_default DEFAULT (0),
-    CONSTRAINT FK_we_parent FOREIGN KEY (parent_node_id) REFERENCES dbo.workflow_node(id) ON DELETE CASCADE,
-    CONSTRAINT FK_we_child FOREIGN KEY (child_node_id) REFERENCES dbo.workflow_node(id) ON DELETE CASCADE,
+    CONSTRAINT FK_we_parent FOREIGN KEY (parent_node_id) REFERENCES dbo.workflow_node(id),
+    CONSTRAINT FK_we_child FOREIGN KEY (child_node_id) REFERENCES dbo.workflow_node(id),
     CONSTRAINT CK_we_no_self_loop CHECK (parent_node_id <> child_node_id),
     CONSTRAINT CK_we_branch_kind CHECK (branch_kind IS NULL OR branch_kind IN (
         N'SEQUENCE', N'PARALLEL', N'THEN', N'ELSE', N'CASE', N'DEFAULT', N'BODY'
