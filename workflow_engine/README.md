@@ -1,6 +1,10 @@
 # SQL Server Workflow Engine scripts
 
-Run scripts **in this order** on a database (SQL Server 2017+ recommended for `JSON_*` functions):
+**Azure SQL / bundled engine (`wf` schema):** use [`MethylPipeline_202604291041.sql`](MethylPipeline_202604291041.sql) as the single deploy script. It defines clusters, registered workers (`wf.worker`), bearer tokens (`wf.worker_token`), native `JSON` payload columns, and worker procedures that require `@worker_id BIGINT` (from `wf.worker.id`) plus `@worker_token`.
+
+---
+
+Run scripts **in this order** on a database (SQL Server 2017+ recommended for `JSON_*` functions) — legacy **dbo** layout:
 
 1. [`workflow_definition.sql`](workflow_definition.sql) — definitions (workflows, nodes, edges, templates/bindings).
 2. [`workflow_runtime.sql`](workflow_runtime.sql) — instances, executions, leases, loop state.
@@ -21,6 +25,19 @@ DROP TABLE IF EXISTS dbo.workflow_instance;
 ```
 
 ## Worker API (summary)
+
+### `wf` schema (`MethylPipeline_*.sql`)
+
+| Procedure | Purpose |
+|-----------|---------|
+| `wf.sp_start_workflow_instance @workflow_instance_id` | Move instance to `RUNNING` and expand the workflow graph from `root_node_id`. |
+| `wf.sp_worker_request_task @worker_id BIGINT, @worker_token NVARCHAR(4000), @capability, @max_lease_seconds` | Authenticates registered worker; atomically claims one `READY` action row (returns 0 or 1 row). |
+| `wf.sp_worker_submit_result @node_execution_id, @worker_id BIGINT, @worker_token, @result_code, @output_json JSON, ... OUTPUT` | Validates lease + token; advances control flow. Use `@result_code < 0` to fail the instance. |
+| `wf.sp_worker_heartbeat` / `wf.sp_worker_fail_task` | Lease renewal and explicit failure (same `@worker_id` / `@worker_token`). |
+
+Tokens are verified against `HASHBYTES('SHA2_256', @worker_token)` rows in `wf.worker_token` (portal must register workers and issue secrets before polling).
+
+### Legacy dbo scripts (`workflow_worker_api.sql`)
 
 | Procedure | Purpose |
 |-----------|---------|

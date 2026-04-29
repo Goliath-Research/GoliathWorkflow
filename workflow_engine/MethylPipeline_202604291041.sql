@@ -6,6 +6,15 @@
 --
 
 --
+-- Create schema [wf]
+--
+PRINT (N'Create schema [wf]')
+GO
+IF SCHEMA_ID(N'wf') IS NULL
+EXEC sp_executesql N'CREATE SCHEMA wf AUTHORIZATION dbo'
+GO
+
+--
 -- Create table [wf].[workflow_def]
 --
 PRINT (N'Create table [wf].[workflow_def]')
@@ -69,14 +78,13 @@ CREATE TABLE wf.workflow_instance (
   id bigint IDENTITY,
   workflow_version_id bigint NOT NULL,
   status varchar(32) NOT NULL CONSTRAINT DF_wi_status DEFAULT (N'CREATED'),
-  context_json nvarchar(max) NULL,
+  context_json json NULL,
   started_at_utc datetime2 NULL,
   completed_at_utc datetime2 NULL,
   PRIMARY KEY CLUSTERED (id),
   CONSTRAINT CK_wi_status CHECK ([status]=N'CANCELLED' OR [status]=N'FAILED' OR [status]=N'COMPLETED' OR [status]=N'RUNNING' OR [status]=N'CREATED')
 )
 ON [PRIMARY]
-TEXTIMAGE_ON [PRIMARY]
 GO
 
 --
@@ -266,11 +274,10 @@ GO
 IF OBJECT_ID(N'wf.workflow_input_template', 'U') IS NULL
 CREATE TABLE wf.workflow_input_template (
   workflow_node_id bigint NOT NULL,
-  template_json nvarchar(max) NOT NULL CONSTRAINT DF_wit_template DEFAULT (N'{}'),
+  template_json json NOT NULL CONSTRAINT DF_wit_template DEFAULT (CAST(N'{}' AS json)),
   PRIMARY KEY CLUSTERED (workflow_node_id)
 )
 ON [PRIMARY]
-TEXTIMAGE_ON [PRIMARY]
 GO
 
 --
@@ -485,8 +492,8 @@ CREATE TABLE wf.node_execution (
   attempt_no int NOT NULL CONSTRAINT DF_ne_attempt DEFAULT (1),
   parent_node_execution_id bigint NULL,
   iteration_no int NOT NULL CONSTRAINT DF_ne_iter DEFAULT (0),
-  input_json nvarchar(max) NULL,
-  output_json nvarchar(max) NULL,
+  input_json json NULL,
+  output_json json NULL,
   result_code int NULL,
   engine_error_code int NULL,
   engine_error_message nvarchar(1024) NULL,
@@ -497,7 +504,6 @@ CREATE TABLE wf.node_execution (
   CONSTRAINT CK_ne_status CHECK ([status]=N'CANCELLED' OR [status]=N'SKIPPED' OR [status]=N'FAILED' OR [status]=N'SUCCEEDED' OR [status]=N'RUNNING' OR [status]=N'READY' OR [status]=N'PENDING')
 )
 ON [PRIMARY]
-TEXTIMAGE_ON [PRIMARY]
 GO
 
 --
@@ -925,6 +931,91 @@ END;
 GO
 
 --
+-- Create table [wf].[cluster]
+--
+PRINT (N'Create table [wf].[cluster]')
+GO
+IF OBJECT_ID(N'wf.cluster', 'U') IS NULL
+CREATE TABLE wf.cluster (
+  id bigint IDENTITY NOT NULL,
+  cluster_key nvarchar(128) NOT NULL,
+  name nvarchar(256) NOT NULL,
+  provider nvarchar(64) NULL,
+  shared_storage_uri nvarchar(1024) NULL,
+  worker_mount_path nvarchar(256) NOT NULL CONSTRAINT DF_cluster_mount DEFAULT (N'/work'),
+  status varchar(32) NOT NULL CONSTRAINT DF_cluster_status DEFAULT (N'ACTIVE'),
+  created_at_utc datetime2 NOT NULL CONSTRAINT DF_cluster_created DEFAULT (SYSUTCDATETIME()),
+  updated_at_utc datetime2 NULL,
+  PRIMARY KEY CLUSTERED (id),
+  CONSTRAINT UQ_cluster_key UNIQUE (cluster_key),
+  CONSTRAINT CK_cluster_status CHECK ([status]=N'DISABLED' OR [status]=N'ACTIVE')
+)
+ON [PRIMARY]
+GO
+
+--
+-- Create table [wf].[worker]
+--
+PRINT (N'Create table [wf].[worker]')
+GO
+IF OBJECT_ID(N'wf.worker', 'U') IS NULL
+CREATE TABLE wf.worker (
+  id bigint IDENTITY NOT NULL,
+  cluster_id bigint NOT NULL,
+  external_worker_key nvarchar(128) NULL,
+  display_name nvarchar(256) NULL,
+  hostname nvarchar(256) NULL,
+  capabilities json NULL,
+  status varchar(32) NOT NULL CONSTRAINT DF_worker_status DEFAULT (N'REGISTERED'),
+  last_seen_at_utc datetime2 NULL,
+  created_at_utc datetime2 NOT NULL CONSTRAINT DF_worker_created DEFAULT (SYSUTCDATETIME()),
+  updated_at_utc datetime2 NULL,
+  PRIMARY KEY CLUSTERED (id),
+  CONSTRAINT FK_worker_cluster FOREIGN KEY (cluster_id) REFERENCES wf.cluster (id),
+  CONSTRAINT UQ_worker_external_key UNIQUE (external_worker_key),
+  CONSTRAINT CK_worker_status CHECK ([status]=N'REVOKED' OR [status]=N'SUSPENDED' OR [status]=N'REGISTERED')
+)
+ON [PRIMARY]
+GO
+
+--
+-- Create index [IX_worker_cluster_status] on table [wf].[worker]
+--
+PRINT (N'Create index [IX_worker_cluster_status] on table [wf].[worker]')
+GO
+IF NOT EXISTS (
+  SELECT 1 FROM sys.indexes WITH (NOLOCK)
+  WHERE name = N'IX_worker_cluster_status' AND object_id = OBJECT_ID(N'wf.worker'))
+  AND OBJECT_ID(N'wf.worker', 'U') IS NOT NULL
+CREATE INDEX IX_worker_cluster_status
+  ON wf.worker (cluster_id, status)
+  ON [PRIMARY]
+GO
+
+--
+-- Create table [wf].[worker_token]
+--
+PRINT (N'Create table [wf].[worker_token]')
+GO
+IF OBJECT_ID(N'wf.worker_token', 'U') IS NULL
+CREATE TABLE wf.worker_token (
+  id bigint IDENTITY NOT NULL,
+  worker_id bigint NOT NULL,
+  token_hash varbinary(32) NOT NULL,
+  token_prefix nvarchar(16) NULL,
+  issued_at_utc datetime2 NOT NULL CONSTRAINT DF_wt_issued DEFAULT (SYSUTCDATETIME()),
+  expires_at_utc datetime2 NULL,
+  revoked_at_utc datetime2 NULL,
+  status varchar(32) NOT NULL CONSTRAINT DF_wt_status DEFAULT (N'ACTIVE'),
+  PRIMARY KEY CLUSTERED (id),
+  CONSTRAINT UQ_wt_worker_hash UNIQUE (worker_id, token_hash),
+  CONSTRAINT FK_wt_worker FOREIGN KEY (worker_id) REFERENCES wf.worker (id) ON DELETE CASCADE,
+  CONSTRAINT CK_wt_status CHECK ([status]=N'REVOKED' OR [status]=N'EXPIRED' OR [status]=N'ACTIVE')
+)
+ON [PRIMARY]
+GO
+
+--
 -- Create table [wf].[task_lease]
 --
 PRINT (N'Create table [wf].[task_lease]')
@@ -932,7 +1023,7 @@ GO
 IF OBJECT_ID(N'wf.task_lease', 'U') IS NULL
 CREATE TABLE wf.task_lease (
   node_execution_id bigint NOT NULL,
-  worker_id nvarchar(128) NOT NULL,
+  worker_id bigint NOT NULL,
   lease_expires_at_utc datetime2 NOT NULL,
   heartbeat_at_utc datetime2 NULL,
   PRIMARY KEY CLUSTERED (node_execution_id)
@@ -978,15 +1069,71 @@ ALTER TABLE wf.task_lease
 GO
 
 --
+-- Create foreign key [FK_tl_worker] on table [wf].[task_lease]
+--
+PRINT (N'Create foreign key [FK_tl_worker] on table [wf].[task_lease]')
+GO
+IF OBJECT_ID('wf.FK_tl_worker', 'F') IS NULL
+  AND OBJECT_ID('wf.task_lease', 'U') IS NOT NULL
+  AND OBJECT_ID('wf.worker', 'U') IS NOT NULL
+ALTER TABLE wf.task_lease
+  ADD CONSTRAINT FK_tl_worker FOREIGN KEY (worker_id) REFERENCES wf.worker (id)
+GO
+
+--
+-- Create or alter procedure [wf].[wf_worker_authenticate]
+--
+GO
+PRINT (N'Create or alter procedure [wf].[wf_worker_authenticate]')
+GO
+EXEC sp_executesql N'
+CREATE OR ALTER PROCEDURE wf.wf_worker_authenticate
+    @worker_id BIGINT,
+    @worker_token NVARCHAR(4000)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF @worker_id IS NULL
+        THROW 50002, N''worker_id is required.'', 1;
+
+    DECLARE @tok NVARCHAR(4000) = NULLIF(LTRIM(RTRIM(@worker_token)), N'''');
+    IF @tok IS NULL
+        THROW 50002, N''worker_token is required.'', 1;
+
+    DECLARE @hash VARBINARY(32) = HASHBYTES(N''SHA2_256'', @tok);
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM wf.worker_token AS wt
+        INNER JOIN wf.worker AS w ON w.id = wt.worker_id
+        INNER JOIN wf.cluster AS c ON c.id = w.cluster_id
+        WHERE wt.worker_id = @worker_id
+          AND wt.token_hash = @hash
+          AND wt.status = N''ACTIVE''
+          AND (wt.expires_at_utc IS NULL OR wt.expires_at_utc > SYSUTCDATETIME())
+          AND w.status = N''REGISTERED''
+          AND c.status = N''ACTIVE''
+    )
+        THROW 50003, N''Invalid or unauthorized worker credentials.'', 1;
+
+    UPDATE wf.worker
+    SET last_seen_at_utc = SYSUTCDATETIME()
+    WHERE id = @worker_id;
+END;
+'
+GO
+
+--
 -- Create or alter procedure [wf].[sp_worker_request_task]
 --
 GO
 PRINT (N'Create or alter procedure [wf].[sp_worker_request_task]')
 GO
-IF OBJECT_ID(N'wf.sp_worker_request_task', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.sp_worker_request_task
-    @worker_id NVARCHAR(128),
+    @worker_id BIGINT,
+    @worker_token NVARCHAR(4000),
     @capability NVARCHAR(128) NULL,
     @max_lease_seconds INT = 300
 AS
@@ -994,12 +1141,10 @@ BEGIN
     SET NOCOUNT ON;
     SET XACT_ABORT ON;
 
+    EXEC wf.wf_worker_authenticate @worker_id = @worker_id, @worker_token = @worker_token;
+
     DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
     DECLARE @lease_end DATETIME2(7) = DATEADD(SECOND, @max_lease_seconds, @now);
-    DECLARE @wid NVARCHAR(128) = NULLIF(LTRIM(RTRIM(@worker_id)), N'''');
-
-    IF @wid IS NULL
-        THROW 50002, N''worker_id is required.'', 1;
 
     BEGIN TRANSACTION;
 
@@ -1037,10 +1182,10 @@ BEGIN
     ;MERGE wf.task_lease AS t
     USING (SELECT @picked AS node_execution_id) AS s ON (t.node_execution_id = s.node_execution_id)
     WHEN MATCHED THEN
-        UPDATE SET worker_id = @wid, lease_expires_at_utc = @lease_end, heartbeat_at_utc = @now
+        UPDATE SET worker_id = @worker_id, lease_expires_at_utc = @lease_end, heartbeat_at_utc = @now
     WHEN NOT MATCHED THEN
         INSERT (node_execution_id, worker_id, lease_expires_at_utc, heartbeat_at_utc)
-        VALUES (@picked, @wid, @lease_end, @now);
+        VALUES (@picked, @worker_id, @lease_end, @now);
 
     COMMIT TRANSACTION;
 
@@ -1067,18 +1212,17 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[sp_worker_heartbeat]')
 GO
-IF OBJECT_ID(N'wf.sp_worker_heartbeat', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.sp_worker_heartbeat
     @node_execution_id BIGINT,
-    @worker_id NVARCHAR(128),
+    @worker_id BIGINT,
+    @worker_token NVARCHAR(4000),
     @extend_seconds INT = 300
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @wid NVARCHAR(128) = NULLIF(LTRIM(RTRIM(@worker_id)), N'''');
-    IF @wid IS NULL THROW 50002, N''worker_id is required.'', 1;
+    EXEC wf.wf_worker_authenticate @worker_id = @worker_id, @worker_token = @worker_token;
 
     DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
 
@@ -1086,7 +1230,7 @@ BEGIN
     SET lease_expires_at_utc = DATEADD(SECOND, @extend_seconds, @now),
         heartbeat_at_utc = @now
     FROM wf.task_lease AS tl
-    WHERE tl.node_execution_id = @node_execution_id AND tl.worker_id = @wid;
+    WHERE tl.node_execution_id = @node_execution_id AND tl.worker_id = @worker_id;
 
     SELECT @@ROWCOUNT AS rows_updated;
 END;
@@ -1099,22 +1243,21 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[sp_worker_fail_task]')
 GO
-IF OBJECT_ID(N'wf.sp_worker_fail_task', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.sp_worker_fail_task
     @node_execution_id BIGINT,
-    @worker_id NVARCHAR(128),
+    @worker_id BIGINT,
+    @worker_token NVARCHAR(4000),
     @error_code INT,
     @error_message NVARCHAR(1024) NULL
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    DECLARE @wid NVARCHAR(128) = NULLIF(LTRIM(RTRIM(@worker_id)), N'''');
-    IF @wid IS NULL THROW 50002, N''worker_id is required.'', 1;
+    EXEC wf.wf_worker_authenticate @worker_id = @worker_id, @worker_token = @worker_token;
 
     IF NOT EXISTS (
-        SELECT 1 FROM wf.task_lease WHERE node_execution_id = @node_execution_id AND worker_id = @wid
+        SELECT 1 FROM wf.task_lease WHERE node_execution_id = @node_execution_id AND worker_id = @worker_id
     )
         RETURN;
 
@@ -1292,12 +1435,11 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[wf_engine_on_action_complete]')
 GO
-IF OBJECT_ID(N'wf.wf_engine_on_action_complete', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.wf_engine_on_action_complete
     @action_execution_id BIGINT,
     @result_code INT,
-    @output_json NVARCHAR(MAX) NULL
+    @output_json json NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1376,13 +1518,13 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[sp_worker_submit_result]')
 GO
-IF OBJECT_ID(N'wf.sp_worker_submit_result', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.sp_worker_submit_result
     @node_execution_id BIGINT,
-    @worker_id NVARCHAR(128),
+    @worker_id BIGINT,
+    @worker_token NVARCHAR(4000),
     @result_code INT,
-    @output_json NVARCHAR(MAX) NULL,
+    @output_json json NULL,
     @accepted BIT OUTPUT,
     @instance_status VARCHAR(32) OUTPUT,
     @next_ready_count INT OUTPUT
@@ -1395,15 +1537,14 @@ BEGIN
     SET @next_ready_count = 0;
     SET @instance_status = NULL;
 
-    DECLARE @wid NVARCHAR(128) = NULLIF(LTRIM(RTRIM(@worker_id)), N'''');
-    IF @wid IS NULL THROW 50002, N''worker_id is required.'', 1;
+    EXEC wf.wf_worker_authenticate @worker_id = @worker_id, @worker_token = @worker_token;
 
     BEGIN TRANSACTION;
 
-    DECLARE @lease_worker NVARCHAR(128);
+    DECLARE @lease_worker BIGINT;
     SELECT @lease_worker = worker_id FROM wf.task_lease WITH (UPDLOCK, HOLDLOCK) WHERE node_execution_id = @node_execution_id;
 
-    IF @lease_worker IS NULL OR @lease_worker <> @wid
+    IF @lease_worker IS NULL OR @lease_worker <> @worker_id
     BEGIN
         ROLLBACK TRANSACTION;
         RETURN;
@@ -1447,12 +1588,11 @@ CREATE TABLE wf.execution_context (
   id bigint IDENTITY,
   node_execution_id bigint NOT NULL,
   context_key nvarchar(256) NOT NULL,
-  context_value_json nvarchar(max) NULL,
+  context_value_json json NULL,
   PRIMARY KEY CLUSTERED (id),
   CONSTRAINT UQ_ec_ne_key UNIQUE (node_execution_id, context_key)
 )
 ON [PRIMARY]
-TEXTIMAGE_ON [PRIMARY]
 GO
 
 --
@@ -1495,7 +1635,6 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[wf_seed_execution_context]')
 GO
-IF OBJECT_ID(N'wf.wf_seed_execution_context', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.wf_seed_execution_context
     @node_execution_id BIGINT,
@@ -1512,22 +1651,22 @@ BEGIN
     DELETE FROM wf.execution_context WHERE node_execution_id = @node_execution_id;
 
     INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-    VALUES (@node_execution_id, N''ctx.iterationNo'', CAST(@iteration_no AS NVARCHAR(32)));
+    VALUES (@node_execution_id, N''ctx.iterationNo'', CAST(CAST(@iteration_no AS VARCHAR(32)) AS json));
 
     IF @sequence_index IS NOT NULL
         INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-        VALUES (@node_execution_id, N''ctx.sequenceIndex'', CAST(@sequence_index AS NVARCHAR(32)));
+        VALUES (@node_execution_id, N''ctx.sequenceIndex'', CAST(CAST(@sequence_index AS VARCHAR(32)) AS json));
 
     IF @parallel_index IS NOT NULL
         INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-        VALUES (@node_execution_id, N''ctx.parallelIndex'', CAST(@parallel_index AS NVARCHAR(32)));
+        VALUES (@node_execution_id, N''ctx.parallelIndex'', CAST(CAST(@parallel_index AS VARCHAR(32)) AS json));
 
     IF @parent_node_execution_id IS NOT NULL
     BEGIN
         DECLARE @prc INT;
         SELECT @prc = result_code FROM wf.node_execution WHERE id = @parent_node_execution_id;
         INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-        VALUES (@node_execution_id, N''ctx.parent.resultCode'', CAST(@prc AS NVARCHAR(32)));
+        VALUES (@node_execution_id, N''ctx.parent.resultCode'', CAST(CAST(@prc AS VARCHAR(32)) AS json));
     END
 END;
 '
@@ -1556,14 +1695,13 @@ GO
 GO
 PRINT (N'Create or alter function [wf].[wf_try_task_output_json]')
 GO
-IF NOT EXISTS (SELECT 1 FROM sys.objects WITH (NOLOCK) WHERE object_id = OBJECT_ID(N'wf.wf_try_task_output_json') AND type IN ('IF', 'FN', 'TF'))
 EXEC sp_executesql N'
 CREATE OR ALTER FUNCTION wf.wf_try_task_output_json(@workflow_instance_id BIGINT, @node_key NVARCHAR(128), @jsonPath NVARCHAR(4000))
 RETURNS NVARCHAR(MAX)
 AS
 BEGIN
     DECLARE @out NVARCHAR(MAX);
-    SELECT TOP (1) @out = ne.output_json
+    SELECT TOP (1) @out = CAST(ne.output_json AS NVARCHAR(MAX))
     FROM wf.node_execution AS ne
     INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
     WHERE ne.workflow_instance_id = @workflow_instance_id
@@ -1598,7 +1736,6 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[wf_resolve_token]')
 GO
-IF OBJECT_ID(N'wf.wf_resolve_token', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.wf_resolve_token
     @token NVARCHAR(1024),
@@ -1665,7 +1802,7 @@ BEGIN
     IF LEFT(@token, 4) = N''ctx.''
     BEGIN
         DECLARE @v NVARCHAR(MAX);
-        SELECT @v = context_value_json
+        SELECT @v = CAST(context_value_json AS NVARCHAR(MAX))
         FROM wf.execution_context
         WHERE node_execution_id = @node_execution_id AND context_key = @token;
 
@@ -1694,7 +1831,6 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[wf_resolve_placeholders]')
 GO
-IF OBJECT_ID(N'wf.wf_resolve_placeholders', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.wf_resolve_placeholders
     @text NVARCHAR(MAX),
@@ -1755,7 +1891,6 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[wf_build_input_json_for_action]')
 GO
-IF OBJECT_ID(N'wf.wf_build_input_json_for_action', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.wf_build_input_json_for_action
     @node_execution_id BIGINT,
@@ -1772,7 +1907,7 @@ BEGIN
 
     DECLARE @template NVARCHAR(MAX) = N''{}'';
     IF EXISTS (SELECT 1 FROM wf.workflow_input_template WHERE workflow_node_id = @workflow_node_id)
-        SELECT @template = template_json FROM wf.workflow_input_template WHERE workflow_node_id = @workflow_node_id;
+        SELECT @template = CAST(template_json AS NVARCHAR(MAX)) FROM wf.workflow_input_template WHERE workflow_node_id = @workflow_node_id;
 
     DECLARE @cur NVARCHAR(MAX);
     DECLARE @tf BIT;
@@ -1870,7 +2005,6 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[wf_engine_activate]')
 GO
-IF OBJECT_ID(N'wf.wf_engine_activate', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.wf_engine_activate
     @workflow_instance_id BIGINT,
@@ -1946,7 +2080,7 @@ BEGIN
             RETURN;
         END
 
-        UPDATE wf.node_execution SET input_json = @fj WHERE id = @ne_id;
+        UPDATE wf.node_execution SET input_json = CAST(@fj AS json) WHERE id = @ne_id;
         RETURN;
     END
 
@@ -2162,7 +2296,6 @@ GO
 GO
 PRINT (N'Create or alter procedure [wf].[sp_start_workflow_instance]')
 GO
-IF OBJECT_ID(N'wf.sp_start_workflow_instance', 'P') IS NULL
 EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.sp_start_workflow_instance
     @workflow_instance_id BIGINT
@@ -2195,13 +2328,4 @@ BEGIN
         @parallel_index = NULL;
 END;
 '
-GO
-
---
--- Create schema [wf]
---
-PRINT (N'Create schema [wf]')
-GO
-IF SCHEMA_ID(N'wf') IS NULL
-EXEC sp_executesql N'CREATE SCHEMA wf AUTHORIZATION dbo'
 GO

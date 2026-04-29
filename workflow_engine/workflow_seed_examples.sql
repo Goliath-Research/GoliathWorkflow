@@ -151,22 +151,26 @@ GO
 
 /* ---- Verification helpers (manual execution) ---- */
 /*
+  For `wf` schema (MethylPipeline_*.sql): register `wf.cluster`, `wf.worker`, and `wf.worker_token`
+  before polling; use registered worker id + portal token.
+
 DECLARE @i BIGINT;
 INSERT INTO dbo.workflow_instance(workflow_version_id) VALUES ((SELECT TOP (1) id FROM dbo.workflow_version ORDER BY id DESC));
 SET @i = SCOPE_IDENTITY();
 EXEC dbo.sp_start_workflow_instance @workflow_instance_id = @i;
 
 DECLARE @accepted BIT, @st VARCHAR(32), @nr INT;
-DECLARE @wid NVARCHAR(128) = N'worker-1';
+DECLARE @wid BIGINT = 1;                     -- wf.worker.id (registered)
+DECLARE @tok NVARCHAR(4000) = N'<secret>';   -- must match HASHBYTES(SHA2_256, secret) in wf.worker_token
 
 WHILE EXISTS (SELECT 1 FROM dbo.node_execution WHERE workflow_instance_id=@i AND status IN (N'READY',N'RUNNING'))
 BEGIN
   DECLARE @ne BIGINT;
   DECLARE @cap NVARCHAR(128) = NULL;
 
-  -- Claim
+  -- Claim (wf schema example; adapt schema prefix if using dbo legacy scripts)
   CREATE TABLE #t (node_execution_id BIGINT, workflow_instance_id BIGINT, node_key NVARCHAR(128), action_name NVARCHAR(256), capability NVARCHAR(128), attempt_no INT, input_json NVARCHAR(MAX), iteration_no INT);
-  INSERT INTO #t EXEC dbo.sp_worker_request_task @worker_id=@wid, @capability=@cap, @max_lease_seconds=300;
+  INSERT INTO #t EXEC wf.sp_worker_request_task @worker_id=@wid, @worker_token=@tok, @capability=@cap, @max_lease_seconds=300;
   IF NOT EXISTS (SELECT 1 FROM #t) BREAK;
 
   SELECT TOP (1) @ne = node_execution_id FROM #t;
@@ -179,7 +183,7 @@ BEGIN
     ELSE 1
   END;
 
-  EXEC dbo.sp_worker_submit_result @node_execution_id=@ne, @worker_id=@wid, @result_code=@rc, @output_json=N'{"ok":true}', @accepted=@accepted OUTPUT, @instance_status=@st OUTPUT, @next_ready_count=@nr OUTPUT;
+  EXEC wf.sp_worker_submit_result @node_execution_id=@ne, @worker_id=@wid, @worker_token=@tok, @result_code=@rc, @output_json=CAST(N'{"ok":true}' AS json), @accepted=@accepted OUTPUT, @instance_status=@st OUTPUT, @next_ready_count=@nr OUTPUT;
   DROP TABLE #t;
 END
 

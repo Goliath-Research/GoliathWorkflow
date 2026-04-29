@@ -99,7 +99,7 @@ GO
 
 CREATE TABLE dbo.workflow_input_template (
     workflow_node_id    BIGINT NOT NULL PRIMARY KEY,
-    template_json       NVARCHAR(MAX) NOT NULL CONSTRAINT DF_wit_template DEFAULT (N'{}'),
+    template_json       JSON NOT NULL CONSTRAINT DF_wit_template DEFAULT (CAST(N'{}' AS JSON)),
     CONSTRAINT FK_wit_node FOREIGN KEY (workflow_node_id) REFERENCES dbo.workflow_node(id) ON DELETE CASCADE
 );
 GO
