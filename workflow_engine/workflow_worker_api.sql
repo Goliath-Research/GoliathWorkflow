@@ -737,13 +737,14 @@ BEGIN
         UPDATE dbo.node_execution SET status = N'SUCCEEDED', ended_at_utc = SYSUTCDATETIME() WHERE id = @sequence_execution_id;
         EXEC dbo.wf_engine_on_composite_complete @node_execution_id = @sequence_execution_id;
         RETURN;
-    END
+    END;
 
+    DECLARE @iter INT = (SELECT iteration_no FROM dbo.node_execution WHERE id = @sequence_execution_id);
     EXEC dbo.wf_engine_activate
         @workflow_instance_id = @inst,
         @workflow_node_id = @next_child,
         @parent_node_execution_id = @sequence_execution_id,
-        @iteration_no = (SELECT iteration_no FROM dbo.node_execution WHERE id = @sequence_execution_id),
+        @iteration_no = @iter,
         @sequence_index = @next_order,
         @parallel_index = NULL;
 END;
@@ -793,11 +794,11 @@ BEGIN
 
     DECLARE @inst BIGINT;
     DECLARE @ctl BIGINT;
-    SELECT @inst = workflow_instance_id, @ctl = workflow_node_id FROM dbo.node_execution WHERE id = @repeat_execution_id;
-
     DECLARE @ls BIGINT;
     DECLARE @cur INT;
     DECLARE @max INT;
+
+    SELECT @inst = workflow_instance_id, @ctl = workflow_node_id FROM dbo.node_execution WHERE id = @repeat_execution_id;
     SELECT TOP (1)
         @ls = id,
         @cur = current_iteration,
@@ -825,11 +826,12 @@ BEGIN
     DECLARE @body BIGINT;
     SELECT TOP (1) @body = child_node_id FROM dbo.workflow_edge WHERE parent_node_id = @ctl AND branch_kind = N'BODY' ORDER BY child_order ASC;
 
+    DECLARE @cur1 INT = @cur + 1;
     EXEC dbo.wf_engine_activate
         @workflow_instance_id = @inst,
         @workflow_node_id = @body,
         @parent_node_execution_id = @repeat_execution_id,
-        @iteration_no = @cur + 1,
+        @iteration_no = @cur1,
         @sequence_index = NULL,
         @parallel_index = NULL;
 END;
@@ -841,6 +843,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
+    DECLARE @workflow_instance_id BIGINT;
     DECLARE @inst BIGINT;
     DECLARE @ctl BIGINT;
     SELECT @inst = workflow_instance_id, @ctl = workflow_node_id FROM dbo.node_execution WHERE id = @while_execution_id;
@@ -864,11 +867,12 @@ BEGIN
     DECLARE @wbody BIGINT;
     SELECT TOP (1) @wbody = child_node_id FROM dbo.workflow_edge WHERE parent_node_id = @ctl AND branch_kind = N'BODY' ORDER BY child_order ASC;
 
+    DECLARE @iter1 INT = @iter + 1;
     EXEC dbo.wf_engine_activate
         @workflow_instance_id = @inst,
         @workflow_node_id = @wbody,
         @parent_node_execution_id = @while_execution_id,
-        @iteration_no = @iter + 1,
+        @iteration_no = @iter1,
         @sequence_index = NULL,
         @parallel_index = NULL;
 END;
