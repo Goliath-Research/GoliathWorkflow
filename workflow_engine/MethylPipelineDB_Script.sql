@@ -507,6 +507,51 @@ ON [PRIMARY]
 GO
 
 --
+-- Ensure [wf].[node_execution] JSON payload columns are native JSON
+--
+PRINT (N'Ensure JSON columns on [wf].[node_execution]')
+GO
+IF OBJECT_ID(N'wf.node_execution', 'U') IS NOT NULL
+  AND EXISTS (
+    SELECT 1
+    FROM sys.columns c
+    JOIN sys.types t ON t.user_type_id = c.user_type_id
+    WHERE c.object_id = OBJECT_ID(N'wf.node_execution')
+      AND c.name = N'input_json'
+      AND t.name <> N'json'
+  )
+ALTER TABLE wf.node_execution ALTER COLUMN input_json json NULL
+GO
+IF OBJECT_ID(N'wf.node_execution', 'U') IS NOT NULL
+  AND EXISTS (
+    SELECT 1
+    FROM sys.columns c
+    JOIN sys.types t ON t.user_type_id = c.user_type_id
+    WHERE c.object_id = OBJECT_ID(N'wf.node_execution')
+      AND c.name = N'output_json'
+      AND t.name <> N'json'
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM sys.indexes WITH (NOLOCK)
+    WHERE name = N'IX_ne_instance_status_ended'
+      AND object_id = OBJECT_ID(N'wf.node_execution')
+  )
+DROP INDEX IX_ne_instance_status_ended ON wf.node_execution
+GO
+IF OBJECT_ID(N'wf.node_execution', 'U') IS NOT NULL
+  AND EXISTS (
+    SELECT 1
+    FROM sys.columns c
+    JOIN sys.types t ON t.user_type_id = c.user_type_id
+    WHERE c.object_id = OBJECT_ID(N'wf.node_execution')
+      AND c.name = N'output_json'
+      AND t.name <> N'json'
+  )
+ALTER TABLE wf.node_execution ALTER COLUMN output_json json NULL
+GO
+
+--
 -- Create index [IX_ne_instance_node] on table [wf].[node_execution]
 --
 PRINT (N'Create index [IX_ne_instance_node] on table [wf].[node_execution]')
@@ -1439,7 +1484,7 @@ EXEC sp_executesql N'
 CREATE OR ALTER PROCEDURE wf.wf_engine_on_action_complete
     @action_execution_id BIGINT,
     @result_code INT,
-    @output_json json NULL
+    @output_json NVARCHAR(MAX) NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -1447,6 +1492,14 @@ BEGIN
     DECLARE @inst BIGINT;
     DECLARE @wn BIGINT;
     DECLARE @parent BIGINT;
+    /* Normalize payload as NVARCHAR only. Do not use a typed `json` variable here: assigning `json`
+       to an `nvarchar(max)` column (older schemas) raises error 257; `nvarchar` assigns to both
+       `nvarchar(max)` and native `json` columns via implicit conversion where supported. */
+    DECLARE @oj NVARCHAR(MAX) = CASE
+        WHEN @output_json IS NULL THEN NULL
+        WHEN LTRIM(RTRIM(@output_json)) = N'''' THEN NULL
+        ELSE @output_json
+    END;
 
     SELECT @inst = workflow_instance_id, @wn = workflow_node_id, @parent = parent_node_execution_id
     FROM wf.node_execution WHERE id = @action_execution_id;
@@ -1456,7 +1509,7 @@ BEGIN
         UPDATE wf.node_execution
         SET status = N''FAILED'',
             result_code = @result_code,
-            output_json = @output_json,
+            output_json = @oj,
             ended_at_utc = SYSUTCDATETIME(),
             engine_error_code = @result_code
         WHERE id = @action_execution_id;
@@ -1473,7 +1526,7 @@ BEGIN
     UPDATE wf.node_execution
     SET status = N''SUCCEEDED'',
         result_code = @result_code,
-        output_json = @output_json,
+        output_json = @oj,
         ended_at_utc = SYSUTCDATETIME()
     WHERE id = @action_execution_id;
 
@@ -1524,7 +1577,7 @@ CREATE OR ALTER PROCEDURE wf.sp_worker_submit_result
     @worker_id BIGINT,
     @worker_token NVARCHAR(4000),
     @result_code INT,
-    @output_json json NULL,
+    @output_json NVARCHAR(MAX) NULL,
     @accepted BIT OUTPUT,
     @instance_status VARCHAR(32) OUTPUT,
     @next_ready_count INT OUTPUT
@@ -1651,22 +1704,22 @@ BEGIN
     DELETE FROM wf.execution_context WHERE node_execution_id = @node_execution_id;
 
     INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-    VALUES (@node_execution_id, N''ctx.iterationNo'', CAST(CAST(@iteration_no AS VARCHAR(32)) AS json));
+    VALUES (@node_execution_id, N''ctx.iterationNo'', CAST(@iteration_no AS NVARCHAR(32)));
 
     IF @sequence_index IS NOT NULL
         INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-        VALUES (@node_execution_id, N''ctx.sequenceIndex'', CAST(CAST(@sequence_index AS VARCHAR(32)) AS json));
+        VALUES (@node_execution_id, N''ctx.sequenceIndex'', CAST(@sequence_index AS NVARCHAR(32)));
 
     IF @parallel_index IS NOT NULL
         INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-        VALUES (@node_execution_id, N''ctx.parallelIndex'', CAST(CAST(@parallel_index AS VARCHAR(32)) AS json));
+        VALUES (@node_execution_id, N''ctx.parallelIndex'', CAST(@parallel_index AS NVARCHAR(32)));
 
     IF @parent_node_execution_id IS NOT NULL
     BEGIN
         DECLARE @prc INT;
         SELECT @prc = result_code FROM wf.node_execution WHERE id = @parent_node_execution_id;
         INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-        VALUES (@node_execution_id, N''ctx.parent.resultCode'', CAST(CAST(@prc AS VARCHAR(32)) AS json));
+        VALUES (@node_execution_id, N''ctx.parent.resultCode'', CAST(@prc AS NVARCHAR(32)));
     END
 END;
 '

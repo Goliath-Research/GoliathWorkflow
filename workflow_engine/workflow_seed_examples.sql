@@ -183,7 +183,7 @@ BEGIN
     ELSE 1
   END;
 
-  EXEC wf.sp_worker_submit_result @node_execution_id=@ne, @worker_id=@wid, @worker_token=@tok, @result_code=@rc, @output_json=CAST(N'{"ok":true}' AS json), @accepted=@accepted OUTPUT, @instance_status=@st OUTPUT, @next_ready_count=@nr OUTPUT;
+  EXEC wf.sp_worker_submit_result @node_execution_id=@ne, @worker_id=@wid, @worker_token=@tok, @result_code=@rc, @output_json=N'{"ok":true}', @accepted=@accepted OUTPUT, @instance_status=@st OUTPUT, @next_ready_count=@nr OUTPUT;
   DROP TABLE #t;
 END
 
