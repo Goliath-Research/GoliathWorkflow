@@ -39,10 +39,13 @@ from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, trans
 from .eval_split_resolver import resolve_eval_paths_and_labels
 from .model_bundle import load_bundle_dmp_index
 from .observed_feature_builder import (
+    OBSERVED_HYBRID_SCHEMA_VERSION,
     apply_feature_fill_values,
     build_observed_hybrid_feature_table,
     derive_observed_hybrid_anchors,
     fit_feature_fill_values,
+    observed_hybrid_feature_names,
+    observed_hybrid_schema_fingerprint,
     sample_ids_from_paths,
     verify_feature_schema,
 )
@@ -432,6 +435,12 @@ def train_tabular_model(
     fingerprint_common_payload: Dict[str, Any] = {
         "schema_version": 1,
         "feature_mode": feature_mode_norm,
+        "observed_hybrid_schema_version": (
+            OBSERVED_HYBRID_SCHEMA_VERSION if feature_mode_norm == "observed_hybrid" else None
+        ),
+        "observed_hybrid_schema_fingerprint": (
+            observed_hybrid_schema_fingerprint() if feature_mode_norm == "observed_hybrid" else None
+        ),
         "dmp_index_fingerprint": dmp_index_fingerprint,
         "max_dmps": int(max_dmps),
         "covariates_path": str(covariates_path) if covariates_path else None,
@@ -535,6 +544,11 @@ def train_tabular_model(
                             or observed_cancer_reference is None
                         ):
                             raise ValueError("observed_hybrid cache metadata is incomplete")
+                        verify_feature_schema(
+                            observed_feature_names,
+                            observed_hybrid_feature_names(),
+                            context="tabular train cached observed_hybrid",
+                        )
                     train_cache_hit = True
             except Exception as e:
                 train_cache_miss_reason = f"cache_read_error:{e}"

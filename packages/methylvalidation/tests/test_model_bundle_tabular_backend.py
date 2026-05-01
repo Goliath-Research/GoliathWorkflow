@@ -592,6 +592,78 @@ def test_tabular_train_dataset_cache_hit_skips_feature_recompute(tmp_path: Path,
     assert bool(meta.get("train_dataset_cache_hit")) is True
 
 
+def test_tabular_observed_hybrid_cache_schema_mismatch_recomputes(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1"],
+            "position": [100, 120],
+            "context": ["CG", "CG"],
+            "effect_size": [0.7, 0.4],
+            "weight": [0.8, 0.3],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: _StubProject(det))
+
+    calls = {"count": 0}
+
+    def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
+        del chromosome, min_coverage
+        calls["count"] += 1
+        positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
+        X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
+        for i, p in enumerate(sample_paths):
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+        ctx = np.asarray(["CG"] * len(positions), dtype=object)
+        return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
+
+    monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
+
+    dataset_path = tmp_path / "cache" / "tabular_train_dataset.parquet"
+    tabular_backend.train_tabular_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=tmp_path / "model_first",
+        model_type="logistic_regression",
+        feature_mode="observed_hybrid",
+        save_train_dataset=True,
+        reuse_train_dataset=True,
+        train_dataset_path=dataset_path,
+        save_test_dataset=False,
+    )
+    assert calls["count"] > 0
+
+    meta_path = tmp_path / "cache" / "tabular_train_dataset.parquet.meta.json"
+    with open(meta_path, encoding="utf-8") as f:
+        cache_meta = json.load(f)
+    cache_meta["observed_feature_names"] = cache_meta["observed_feature_names"][:-1]
+    cache_meta["observed_feature_fill_values"] = cache_meta["observed_feature_fill_values"][:-1]
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(cache_meta, f, indent=2)
+
+    calls["count"] = 0
+    tabular_backend.train_tabular_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=tmp_path / "model_second",
+        model_type="logistic_regression",
+        feature_mode="observed_hybrid",
+        save_train_dataset=True,
+        reuse_train_dataset=True,
+        train_dataset_path=dataset_path,
+        save_test_dataset=False,
+    )
+    assert calls["count"] > 0
+    with open(tmp_path / "model_second" / "tabular-model-metadata.json", encoding="utf-8") as f:
+        model_meta = json.load(f)
+    assert bool(model_meta.get("train_dataset_cache_hit")) is False
+    assert "schema mismatch" in str(model_meta.get("train_dataset_cache_miss_reason"))
+
+
 def test_tabular_saves_test_dataset_next_to_train_dataset(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     det.mkdir(parents=True)

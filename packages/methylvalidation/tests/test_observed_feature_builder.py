@@ -183,6 +183,8 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
         "cosine_similarity_to_healthy_centroid",
         "cosine_similarity_to_cancer_centroid",
         "fraction_dmps_closer_to_cancer_centroid",
+        "weighted_fraction_dmps_closer_to_cancer_centroid",
+        "mean_abs_distance_margin",
         "dmp_global_skewness",
         "dmp_global_kurtosis",
         "avg_chrom_dev_from_healthy_centroid",
@@ -198,6 +200,10 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     cos_h_idx = feat.feature_names.index("cosine_similarity_to_healthy_centroid")
     cos_c_idx = feat.feature_names.index("cosine_similarity_to_cancer_centroid")
     frac_idx = feat.feature_names.index("fraction_dmps_closer_to_cancer_centroid")
+    weighted_frac_idx = feat.feature_names.index(
+        "weighted_fraction_dmps_closer_to_cancer_centroid"
+    )
+    margin_idx = feat.feature_names.index("mean_abs_distance_margin")
     prog_idx = feat.feature_names.index("methylation_progression_score")
     dev_h_idx = feat.feature_names.index("global_mean_dev_from_healthy")
 
@@ -205,11 +211,16 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert float(feat.X[0, js_h_idx]) < float(feat.X[0, js_c_idx])
     assert float(feat.X[0, cos_h_idx]) > float(feat.X[0, cos_c_idx])
     assert float(feat.X[0, frac_idx]) <= 0.5
+    assert float(feat.X[0, weighted_frac_idx]) <= 0.5
+    assert float(feat.X[0, margin_idx]) < 0.0
 
     # Cancer-like sample should move towards cancer anchor.
     assert float(feat.X[2, js_c_idx]) < float(feat.X[2, js_h_idx])
     assert float(feat.X[2, frac_idx]) >= 0.5
+    assert float(feat.X[2, weighted_frac_idx]) >= 0.5
+    assert float(feat.X[2, margin_idx]) > 0.0
 
     # Progression should increase with higher methylation profiles in this synthetic setup.
     assert float(feat.X[2, prog_idx]) > float(feat.X[0, prog_idx])
+    assert np.all((feat.X[:, prog_idx] >= 0.0) & (feat.X[:, prog_idx] <= 1.0))
     assert float(feat.X[0, dev_h_idx]) <= float(feat.X[2, dev_h_idx])

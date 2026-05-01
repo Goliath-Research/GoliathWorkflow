@@ -36,6 +36,9 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v3_fixed"
+
+
 def _weighted_mean(values: np.ndarray, weights: np.ndarray) -> float:
     w_sum = float(np.sum(weights))
     if w_sum <= 0.0:
@@ -351,6 +354,8 @@ def _fixed_feature_names() -> List[str]:
         "cosine_similarity_to_healthy_centroid",
         "cosine_similarity_to_cancer_centroid",
         "fraction_dmps_closer_to_cancer_centroid",
+        "weighted_fraction_dmps_closer_to_cancer_centroid",
+        "mean_abs_distance_margin",
         "dmp_global_skewness",
         "dmp_global_kurtosis",
         "avg_chrom_dev_from_healthy_centroid",
@@ -359,6 +364,14 @@ def _fixed_feature_names() -> List[str]:
         "n_obs_dmps",
         "n_total_dmps",
     ]
+
+
+def observed_hybrid_feature_names() -> List[str]:
+    return _fixed_feature_names()
+
+
+def observed_hybrid_schema_fingerprint() -> str:
+    return hashlib.sha256("\n".join(_fixed_feature_names()).encode("utf-8")).hexdigest()
 
 
 def build_observed_hybrid_feature_table(
@@ -431,7 +444,7 @@ def build_observed_hybrid_feature_table(
 
     healthy_global_mean = _weighted_mean_with_fallback(healthy_ref, w)
     cancer_global_mean = _weighted_mean_with_fallback(cancer_ref, w)
-    progression_denom = float(cancer_global_mean - healthy_global_mean)
+    progression_denom = float(cancer_global_mean - healthy_global_mean + 1e-8)
 
     chroms = sorted({c for c, _ctx, _pos in feature_order}, key=lambda x: (len(str(x)), str(x)))
     chrom_to_indices: Dict[str, np.ndarray] = {}
@@ -473,6 +486,16 @@ def build_observed_hybrid_feature_table(
             dist_h = np.abs(obs_vals - healthy_obs)
             dist_c = np.abs(obs_vals - cancer_obs)
             closer_to_cancer = float(np.mean(dist_c < dist_h)) if dist_h.size > 0 else float("nan")
+            obs_w_sum = float(np.sum(obs_w))
+            if obs_w.size == obs_vals.size and obs_w_sum > 0.0:
+                weighted_closer_to_cancer = float(np.sum(obs_w[dist_c < dist_h]) / obs_w_sum)
+            else:
+                weighted_closer_to_cancer = float("nan")
+            mean_abs_distance_margin = (
+                float(np.mean(dist_h) - np.mean(dist_c))
+                if dist_h.size > 0 and dist_c.size > 0
+                else float("nan")
+            )
         else:
             g_mean = float("nan")
             g_std = float("nan")
@@ -487,11 +510,15 @@ def build_observed_hybrid_feature_table(
             cos_h = float("nan")
             cos_c = float("nan")
             closer_to_cancer = float("nan")
+            weighted_closer_to_cancer = float("nan")
+            mean_abs_distance_margin = float("nan")
 
         global_dev_healthy = float(g_mean - healthy_global_mean) if np.isfinite(g_mean) else float("nan")
         global_dev_cancer = float(g_mean - cancer_global_mean) if np.isfinite(g_mean) else float("nan")
-        if np.isfinite(g_mean) and abs(progression_denom) > 1e-12:
-            progression = float((g_mean - healthy_global_mean) / progression_denom)
+        if np.isfinite(g_mean) and np.isfinite(progression_denom):
+            progression = float(
+                np.clip((g_mean - healthy_global_mean) / progression_denom, 0.0, 1.0)
+            )
         else:
             progression = float("nan")
 
@@ -531,6 +558,8 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["cosine_similarity_to_healthy_centroid"]] = cos_h
         X_feat[i, idx["cosine_similarity_to_cancer_centroid"]] = cos_c
         X_feat[i, idx["fraction_dmps_closer_to_cancer_centroid"]] = closer_to_cancer
+        X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
+        X_feat[i, idx["mean_abs_distance_margin"]] = mean_abs_distance_margin
         X_feat[i, idx["dmp_global_skewness"]] = skew
         X_feat[i, idx["dmp_global_kurtosis"]] = kurt
         X_feat[i, idx["avg_chrom_dev_from_healthy_centroid"]] = avg_chrom_dev
@@ -540,12 +569,12 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["n_total_dmps"]] = float(n_loci)
 
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()
-    schema_fingerprint = hashlib.sha256("\n".join(feature_names).encode("utf-8")).hexdigest()
+    schema_fingerprint = observed_hybrid_schema_fingerprint()
     report = {
         "n_samples": int(n_samples),
         "n_loci_reference": int(n_loci),
         "n_features": int(len(feature_names)),
-        "schema_version": "observed_hybrid_v2_fixed",
+        "schema_version": OBSERVED_HYBRID_SCHEMA_VERSION,
         "quantiles": [0.10, 0.50, 0.90],
         "feature_families": {
             "dmp": True,
