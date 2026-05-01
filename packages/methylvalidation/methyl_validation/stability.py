@@ -1263,6 +1263,7 @@ def freeze_production_model(
     stable_dmp_csv: str,
     monte_carlo_runs_root: Path,
     production_output_dir: Optional[str] = None,
+    skip_centroid: bool = False,
     config: Optional["MonteCarloConfig"] = None,
 ) -> Dict[str, Any]:
     """
@@ -1335,6 +1336,7 @@ def freeze_production_model(
     success, errors, timings = run_pipeline_for_production(
         prod_project_path,
         logs_dir=prod_dir / "logs",
+        skip_centroid=bool(skip_centroid),
         config=config,
     )
 

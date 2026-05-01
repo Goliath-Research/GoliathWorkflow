@@ -1134,8 +1134,8 @@ def main() -> None:
         "--skip-centroid",
         action="store_true",
         help=(
-            "Reuse existing per-run centroids and run detector only. Useful when tuning "
-            "step_config.detection hyperparameters on already-generated MC runs."
+            "Reuse existing centroid artifacts instead of recomputing centroid. "
+            "Supported for MC iterations and --freeze."
         ),
     )
     parser.add_argument(
@@ -1384,8 +1384,8 @@ def main() -> None:
     if args.resume is not None and (args.freeze or args.model):
         print("Error: --resume can only be used with Monte Carlo iteration modes (not --freeze/--model).", file=sys.stderr)
         sys.exit(1)
-    if args.skip_centroid and (args.freeze or args.model or args.post_model_validation or args.model_mc):
-        print("Error: --skip-centroid can only be used with Monte Carlo iteration mode.", file=sys.stderr)
+    if args.skip_centroid and (args.model or args.post_model_validation or args.model_mc):
+        print("Error: --skip-centroid is only supported for Monte Carlo iteration mode or --freeze.", file=sys.stderr)
         sys.exit(1)
     if args.skip_centroid and config.predictor_only:
         print("Error: --skip-centroid is incompatible with --predictor-only.", file=sys.stderr)
@@ -1500,6 +1500,7 @@ def main() -> None:
             stable_dmp_csv=str(stable_path),
             monte_carlo_runs_root=monte_carlo_runs_root,
             production_output_dir=config.production_output_dir,
+            skip_centroid=bool(args.skip_centroid),
             config=config,
         )
         out = production_summary.get("output_dir", "unknown")
