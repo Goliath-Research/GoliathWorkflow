@@ -69,6 +69,7 @@ def test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits_and_score
     assert row["hits_exon"] == 1
     assert row["hits_intron"] == 1
     assert row["hits_gene_body"] == 0
+    assert row["gene_feature_score"] == pytest.approx((1 * 1.5) + (1 * 0.7))
     assert row["gene_score"] == pytest.approx((0.5 * 0.8 * 1.5) + (0.4 * 0.9 * 0.7))
 
 

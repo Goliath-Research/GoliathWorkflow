@@ -5,7 +5,7 @@ import pandas as pd
 from methyl_enricher.enricher import EnrichmentAnalyzer
 
 
-def test_hits_feature_score_is_computed_and_used_as_default_weight():
+def test_gene_feature_score_is_used_as_default_weight_without_recompute():
     analyzer = EnrichmentAnalyzer(libraries=["GO_Biological_Process_2023"])
     df = pd.DataFrame(
         {
@@ -15,14 +15,14 @@ def test_hits_feature_score_is_computed_and_used_as_default_weight():
             "hits_intron": [3],
             "hits_gene_body": [4],
             "hits_terminator": [5],
+            "gene_feature_score": [42.5],
             "total_weight": [999.0],
         }
     )
     out = analyzer._apply_csv_filters(df)
     row = out.iloc[0]
-    expected = 1 * 2.0 + 2 * 1.5 + 3 * 0.7 + 4 * 1.0 + 5 * 0.5
-    assert row["feature_weight_score"] == expected
-    assert analyzer._gene_weight_from_row(row) == expected
+    assert "feature_weight_score" not in out.columns
+    assert analyzer._gene_weight_from_row(row) == 42.5
 
 
 def test_hits_filter_removes_rows_without_any_hits():

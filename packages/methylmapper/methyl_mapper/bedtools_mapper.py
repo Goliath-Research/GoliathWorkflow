@@ -1097,6 +1097,7 @@ class BedtoolsMapper:
             "total_weight",
             "mean_effect_size",
             "gene_score",
+            "gene_feature_score",
             "hits_promoter",
             "hits_exon",
             "hits_intron",
@@ -1232,6 +1233,13 @@ class BedtoolsMapper:
                 if col not in grouped.columns:
                     grouped[col] = 0
                 grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0).astype(int)
+            grouped["gene_feature_score"] = (
+                grouped["hits_promoter"] * 2.0
+                + grouped["hits_exon"] * 1.5
+                + grouped["hits_intron"] * 0.7
+                + grouped["hits_gene_body"] * 1.0
+                + grouped["hits_terminator"] * 0.5
+            )
         
         # Add Stouffer aggregated gene p-values (weighted, signed by delta_mean)
         if 'p_value' in intersect_df.columns:
