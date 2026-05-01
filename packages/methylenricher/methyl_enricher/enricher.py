@@ -13,6 +13,13 @@ import pandas as pd
 
 # Evidence level order (higher index = stricter when used as min)
 EVIDENCE_LEVEL_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3}
+FEATURE_HITS_WEIGHTS = {
+    "hits_promoter": 2.0,
+    "hits_exon": 1.5,
+    "hits_intron": 0.7,
+    "hits_gene_body": 1.0,
+    "hits_terminator": 0.5,
+}
 
 # Default Enrichr libraries optimized for methylation studies
 DEFAULT_LIBRARIES = [
@@ -162,6 +169,21 @@ class EnrichmentAnalyzer:
         """Apply MethylMapper-style filters to a DataFrame. Only columns that exist are used."""
         out = df.copy()
         n_before = len(out)
+        hits_cols = [c for c in FEATURE_HITS_WEIGHTS if c in out.columns]
+
+        if "hits_body_gene" in out.columns and "hits_gene_body" not in out.columns:
+            out["hits_gene_body"] = pd.to_numeric(out["hits_body_gene"], errors="coerce").fillna(0)
+            hits_cols = [c for c in FEATURE_HITS_WEIGHTS if c in out.columns]
+        if hits_cols:
+            for c in hits_cols:
+                out[c] = pd.to_numeric(out[c], errors="coerce").fillna(0)
+            out["feature_weight_score"] = 0.0
+            for c in hits_cols:
+                out["feature_weight_score"] += out[c] * FEATURE_HITS_WEIGHTS[c]
+            hits_any = out[hits_cols].sum(axis=1) > 0
+            out = out[hits_any]
+            print(f"[INFO] Filter hits_* > 0: {len(out)} genes (was {n_before})")
+            n_before = len(out)
 
         if disease_only and disease_column in out.columns:
             out = out[out[disease_column].astype(str).str.upper().isin(("TRUE", "1", "YES"))]
@@ -236,10 +258,8 @@ class EnrichmentAnalyzer:
                     n_before = len(out)
                     break
 
-        if feature_types and "feature_type" in out.columns:
-            allowed = {s.strip().lower() for s in feature_types}
-            out = out[out["feature_type"].astype(str).str.strip().str.lower().isin(allowed)]
-            print(f"[INFO] Filter feature_type in {allowed}: {len(out)} genes (was {n_before})")
+        if feature_types:
+            print("[WARN] Ignoring feature_types filter: feature_type-based filtering is removed; hits_* columns are used instead.")
 
         return out
 
@@ -366,7 +386,7 @@ class EnrichmentAnalyzer:
 
     def _gene_weight_from_row(self, row: pd.Series) -> float:
         """Compute a single gene weight from a CSV row (gene-level or first feature row)."""
-        for col in ("gene_importance", "total_importance", "total_weight", "mean_effect_size", "mean_weight"):
+        for col in ("feature_weight_score", "gene_score", "total_weight", "mean_effect_size"):
             if col in row.index and pd.notna(row.get(col)):
                 try:
                     return float(row[col])

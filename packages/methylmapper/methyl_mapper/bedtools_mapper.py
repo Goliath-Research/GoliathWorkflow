@@ -86,6 +86,20 @@ class BedtoolsMapper:
     - Weighting by p-value, q-value, and effect_size; gene-level Stouffer + Storey
     - Per-gene feature mix summaries when aggregating by gene_name / gene_id
     """
+    _FEATURE_PRIORITY = {
+        "promoter": 0,
+        "exon": 1,
+        "intron": 2,
+        "gene_body": 3,
+        "terminator": 4,
+    }
+    _FEATURE_HITS_COLS = {
+        "promoter": "hits_promoter",
+        "exon": "hits_exon",
+        "intron": "hits_intron",
+        "gene_body": "hits_gene_body",
+        "terminator": "hits_terminator",
+    }
     
     def __init__(
         self,
@@ -1021,6 +1035,88 @@ class BedtoolsMapper:
 
         logger.info(f"Sorting DMPs by {rank_col} for optimization")
         return df
+
+    @staticmethod
+    def _normalize_feature_type(value: str) -> str:
+        raw = str(value).strip().lower()
+        aliases = {
+            "genebody": "gene_body",
+            "gene-body": "gene_body",
+            "body_gene": "gene_body",
+            "hits_body_gene": "gene_body",
+        }
+        return aliases.get(raw, raw)
+
+    def _compute_exclusive_feature_hits(self, intersect_df: pd.DataFrame, group_by: str) -> pd.DataFrame:
+        """Per (DMP, gene) exclusive assignment by priority for stable hit counts."""
+        work = self._exclusive_feature_rows(intersect_df, group_by=group_by)
+        if work.empty:
+            return pd.DataFrame(columns=[group_by])
+
+        work = work[[group_by, "dmp_name", "feature_norm"]].copy()
+        work = work[work["feature_norm"].isin(self._FEATURE_HITS_COLS.keys())]
+        if work.empty:
+            return pd.DataFrame(columns=[group_by])
+
+        counts = (
+            work.groupby([group_by, "feature_norm"])
+            .size()
+            .unstack(fill_value=0)
+            .reset_index()
+        )
+        rename_map = {k: v for k, v in self._FEATURE_HITS_COLS.items() if k in counts.columns}
+        counts = counts.rename(columns=rename_map)
+        for col in self._FEATURE_HITS_COLS.values():
+            if col not in counts.columns:
+                counts[col] = 0
+        counts["hits_body_gene"] = counts["hits_gene_body"]
+        return counts[[group_by, "hits_promoter", "hits_exon", "hits_intron", "hits_gene_body", "hits_body_gene", "hits_terminator"]]
+
+    def _exclusive_feature_rows(self, intersect_df: pd.DataFrame, group_by: str) -> pd.DataFrame:
+        """Return one row per (group_by, dmp_name) using feature priority."""
+        if (
+            group_by not in intersect_df.columns
+            or "dmp_name" not in intersect_df.columns
+            or "feature_type" not in intersect_df.columns
+        ):
+            return pd.DataFrame()
+        work = intersect_df.copy()
+        work["feature_norm"] = work["feature_type"].map(self._normalize_feature_type)
+        work["feature_priority"] = work["feature_norm"].map(self._FEATURE_PRIORITY).fillna(99).astype(int)
+        work = work.sort_values(["feature_priority"], ascending=True)
+        work = work.drop_duplicates(subset=[group_by, "dmp_name"], keep="first")
+        return work
+
+    @staticmethod
+    def _prune_gene_output_columns(df: pd.DataFrame) -> pd.DataFrame:
+        keep_cols = [
+            "gene_name",
+            "gene_id",
+            "dmp_count",
+            "unique_dmps",
+            "total_weight",
+            "mean_effect_size",
+            "gene_score",
+            "hits_promoter",
+            "hits_exon",
+            "hits_intron",
+            "hits_gene_body",
+            "hits_body_gene",
+            "hits_terminator",
+            "feature_chrom",
+            "gene_p_value",
+            "gene_q_value",
+            "disease_associated",
+            "disease_evidence_level",
+            "disease_description",
+            "disease_source",
+            "disease_score",
+            "gene_ncbi_link",
+            "gene_ensembl_link",
+            "gene_uniprot_link",
+            "gene_omim_link",
+        ]
+        return df[[c for c in keep_cols if c in df.columns]].copy()
     
     def aggregate_by_feature(
         self,
@@ -1128,22 +1224,14 @@ class BedtoolsMapper:
             # Already flattened
             grouped.columns = [col[0] if isinstance(col, tuple) and len(col) == 2 else col for col in grouped.columns]
 
-        if group_by in ("gene_name", "gene_id") and "feature_type" in intersect_df.columns:
-            def _feat_mix(g: pd.DataFrame) -> pd.Series:
-                vc = g["feature_type"].astype(str).value_counts()
-                return pd.Series({
-                    "feature_types_hit": "|".join(sorted(vc.index.tolist())),
-                    "n_distinct_feature_types": int(len(vc)),
-                    "feature_type_counts": "|".join(f"{k}:{int(v)}" for k, v in vc.items()),
-                })
-
-            try:
-                mix = intersect_df.groupby(group_by, observed=False).apply(
-                    _feat_mix, include_groups=False
-                ).reset_index()
-            except TypeError:
-                mix = intersect_df.groupby(group_by).apply(_feat_mix).reset_index()
-            grouped = grouped.merge(mix, on=group_by, how="left")
+        if group_by in ("gene_name", "gene_id"):
+            hits_df = self._compute_exclusive_feature_hits(intersect_df, group_by=group_by)
+            if not hits_df.empty:
+                grouped = grouped.merge(hits_df, on=group_by, how="left")
+            for col in ("hits_promoter", "hits_exon", "hits_intron", "hits_gene_body", "hits_body_gene", "hits_terminator"):
+                if col not in grouped.columns:
+                    grouped[col] = 0
+                grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0).astype(int)
         
         # Add Stouffer aggregated gene p-values (weighted, signed by delta_mean)
         if 'p_value' in intersect_df.columns:
@@ -1303,7 +1391,7 @@ class BedtoolsMapper:
                 grouped = grouped.drop(columns=[out_col + '_fb'], errors='ignore')
 
         # Add feature metadata (take first occurrence)
-        metadata_cols = ['feature_type', 'feature_chrom', 'feature_strand', 'gene_id', 'transcript_id']
+        metadata_cols = ['feature_chrom', 'gene_id']
         available_metadata = [c for c in metadata_cols if c in intersect_df.columns]
         if available_metadata:
             metadata = intersect_df.groupby(group_by)[available_metadata].first().reset_index()
@@ -1311,21 +1399,39 @@ class BedtoolsMapper:
 
         # Domain score for feature ranking:
         #   gene_score = sum(|effect_size| * frequency * region_weight)
-        # Missing frequency/region_weight default to 1.0.
-        if 'effect_size' in intersect_df.columns:
-            score_df = intersect_df[[group_by, 'effect_size']].copy()
+        # Stability/fixed-panel flows require strict [0,1] frequency.
+        score_source_df = self._exclusive_feature_rows(intersect_df, group_by=group_by)
+        if score_source_df.empty:
+            score_source_df = intersect_df
+        if 'effect_size' in score_source_df.columns:
+            score_df = score_source_df[[group_by, 'effect_size']].copy()
             score_df['effect_size_abs'] = pd.to_numeric(
                 score_df['effect_size'], errors='coerce'
             ).fillna(0.0).abs()
-            if 'frequency' in intersect_df.columns:
-                score_df['frequency'] = pd.to_numeric(
-                    intersect_df['frequency'], errors='coerce'
-                ).fillna(1.0)
+            is_stability_like = {"count", "n_runs"}.issubset(set(score_source_df.columns))
+            if is_stability_like and 'frequency' not in score_source_df.columns:
+                raise ValueError(
+                    "Stability/fixed-panel input requires 'frequency' for gene_score, but the column is missing."
+                )
+            if 'frequency' in score_source_df.columns:
+                freq = pd.to_numeric(score_source_df['frequency'], errors='coerce')
+                if is_stability_like:
+                    invalid = (~np.isfinite(freq)) | (freq < 0.0) | (freq > 1.0)
+                    if invalid.any():
+                        bad_cols = [c for c in [group_by, "dmp_name", "frequency"] if c in score_source_df.columns]
+                        bad = score_source_df.loc[invalid, bad_cols].head(5).to_dict(orient="records")
+                        raise ValueError(
+                            "Invalid stability frequency values for gene_score (expected finite values in [0,1]). "
+                            f"Examples: {bad}"
+                        )
+                    score_df['frequency'] = freq.astype(float)
+                else:
+                    score_df['frequency'] = freq.fillna(1.0)
             else:
                 score_df['frequency'] = 1.0
-            if 'region_weight' in intersect_df.columns:
+            if 'region_weight' in score_source_df.columns:
                 score_df['region_weight'] = pd.to_numeric(
-                    intersect_df['region_weight'], errors='coerce'
+                    score_source_df['region_weight'], errors='coerce'
                 ).fillna(1.0)
             else:
                 score_df['region_weight'] = 1.0
@@ -1735,6 +1841,8 @@ class BedtoolsMapper:
                 agg = self._apply_shared_enrichment_payload(
                     agg, group_by=group_by, payload=shared_payload, separate_sources=False,
                 )
+            if group_by in ("gene_name", "gene_id"):
+                agg = self._prune_gene_output_columns(agg)
             agg.to_csv(artifact['output_csv'], index=False)
             artifact['intersect_df'].to_csv(artifact['detail_csv'], index=False)
             results[artifact['key']] = agg
@@ -1931,6 +2039,8 @@ class BedtoolsMapper:
                     payload=shared_payload,
                     separate_sources=False,
                 )
+            if group_by in ("gene_name", "gene_id"):
+                aggregated = self._prune_gene_output_columns(aggregated)
 
             aggregated.to_csv(artifact['output_csv'], index=False)
             artifact['intersect_df'].to_csv(artifact['detail_csv'], index=False)

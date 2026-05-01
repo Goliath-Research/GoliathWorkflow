@@ -197,8 +197,49 @@ def test_run_stability_analysis_writes_empty_stable_panel_when_no_dmps(tmp_path)
     import pandas as pd
 
     df = pd.read_csv(stable_csv)
-    assert list(df.columns) == ["chromosome", "position", "frequency", "count", "n_runs", "effect_size"]
+    assert list(df.columns) == [
+        "chromosome",
+        "position",
+        "frequency",
+        "count",
+        "n_runs",
+        "effect_size",
+        "p_value",
+        "q_value",
+    ]
     assert len(df) == 0
+
+
+def test_run_stability_analysis_counts_each_dmp_once_per_run(tmp_path):
+    monte_root = tmp_path / "monte_carlo_runs"
+    # DMP at 100 appears multiple times in run_0001 but should count as one run hit.
+    _write_discovery_csv(
+        monte_root / "run_0001" / "detections" / "all" / "pca_pca1" / "dmps-1-discovery.csv",
+        [
+            {"chromosome": 1, "position": 100, "effect_size": 0.4, "p_value": 0.01, "delta_mean": 0.2},
+            {"chromosome": 1, "position": 100, "effect_size": 0.5, "p_value": 0.02, "delta_mean": 0.3},
+        ],
+    )
+    _write_discovery_csv(
+        monte_root / "run_0002" / "detections" / "all" / "pca_pca1" / "dmps-1-discovery.csv",
+        [{"chromosome": 1, "position": 100, "effect_size": 0.6, "p_value": 0.03, "delta_mean": 0.1}],
+    )
+
+    summary = run_stability_analysis(
+        monte_carlo_runs_root=monte_root,
+        output_dir=monte_root / "stability",
+        dmp_min_freq=0.0,
+    )
+    import pandas as pd
+
+    dmp_freq = pd.read_csv(monte_root / "stability" / "dmp_frequency.csv")
+    row = dmp_freq[(dmp_freq["chromosome"] == 1) & (dmp_freq["position"] == 100)].iloc[0]
+    assert row["count"] == 2
+    assert row["n_runs"] == 2
+    assert row["frequency"] == 1.0
+    assert 0.0 <= row["p_value"] <= 1.0
+    assert 0.0 <= row["q_value"] <= 1.0
+    assert summary["dmp_stability"]["n_runs_analyzed"] == 2
 
 
 def test_run_balanced_accuracy_falls_back_to_detector_results(tmp_path, monkeypatch):

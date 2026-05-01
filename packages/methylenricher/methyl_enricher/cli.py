@@ -143,14 +143,6 @@ For theory and package documentation, see:
         help='Minimum gene_importance (or total_weight)'
     )
     io_group.add_argument(
-        '--feature-types',
-        type=str,
-        nargs='+',
-        default=None,
-        metavar='TYPE',
-        help='Keep only these feature_type values (e.g. gene exon)'
-    )
-    io_group.add_argument(
         '--sort-by',
         type=str,
         default=None,
@@ -676,8 +668,6 @@ def main():
         print(f"Filter: mean_effect_size >= {args.min_mean_effect_size}")
     if args.min_gene_importance is not None:
         print(f"Filter: gene_importance >= {args.min_gene_importance}")
-    if args.feature_types:
-        print(f"Filter: feature_type in {args.feature_types}")
     
     if args.libraries:
         print("Libraries source: explicit --libraries")
@@ -746,7 +736,6 @@ def main():
                 min_mean_effect_size=args.min_mean_effect_size,
                 min_gene_z=args.min_gene_z,
                 min_gene_importance=args.min_gene_importance,
-                feature_types=args.feature_types,
                 sort_by=args.sort_by,
                 sort_ascending=args.sort_ascending,
                 similarity_threshold=getattr(args, "similarity_threshold", 0.15),
@@ -799,7 +788,6 @@ def main():
             min_mean_effect_size=args.min_mean_effect_size,
             min_gene_z=args.min_gene_z,
             min_gene_importance=args.min_gene_importance,
-            feature_types=args.feature_types,
             sort_by=args.sort_by,
             sort_ascending=args.sort_ascending
         )

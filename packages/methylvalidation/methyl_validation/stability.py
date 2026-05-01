@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 from methyl_utils import load_project
 from methyl_utils.logging_utils import setup_module_logging
+from scipy.stats import norm
 
 logger = setup_module_logging(__name__)
 
@@ -327,6 +328,45 @@ def _dmp_key_from_row(row: Any) -> Tuple[Any, int]:
     return (chrom_n, int(row["position"]))
 
 
+def _bh_qvalues(pvals: np.ndarray) -> np.ndarray:
+    """Benjamini-Hochberg q-values for finite p-values in [0,1]."""
+    n = int(len(pvals))
+    if n == 0:
+        return np.array([], dtype=float)
+    order = np.argsort(pvals)
+    ranked = pvals[order]
+    q = np.empty(n, dtype=float)
+    prev = 1.0
+    for i in range(n - 1, -1, -1):
+        rank = i + 1
+        val = float(ranked[i] * n / rank)
+        prev = min(prev, val)
+        q[i] = prev
+    out = np.empty(n, dtype=float)
+    out[order] = np.clip(q, 0.0, 1.0)
+    return out
+
+
+def _signed_stouffer(pvals: np.ndarray, signs: np.ndarray, weights: np.ndarray) -> float:
+    """Return two-sided p-value from signed weighted Stouffer aggregation."""
+    if pvals.size == 0:
+        return float("nan")
+    pvals = np.clip(pvals.astype(float), 1e-300, 1.0 - 1e-16)
+    z = norm.ppf(1.0 - pvals / 2.0) * signs.astype(float)
+    w = weights.astype(float)
+    valid = np.isfinite(z) & np.isfinite(w) & (w > 0)
+    if not np.any(valid):
+        return float("nan")
+    z = z[valid]
+    w = w[valid]
+    denom = np.sqrt(np.sum(w ** 2))
+    if not np.isfinite(denom) or denom <= 0:
+        return float("nan")
+    z_combined = float(np.sum(w * z) / denom)
+    p = float(2.0 * (1.0 - norm.cdf(abs(z_combined))))
+    return float(np.clip(p, 0.0, 1.0))
+
+
 def _frequency_count_distribution(
     dmp_freq_df: pd.DataFrame,
     chromosome: Any,
@@ -362,15 +402,24 @@ def _select_stable_dmps_df(
     """Build selected stable DMP table from full frequency table."""
     if dmp_freq_df is None or dmp_freq_df.empty or "frequency" not in dmp_freq_df.columns:
         return pd.DataFrame(
-            columns=["chromosome", "position", "frequency", "count", "n_runs", "effect_size"]
+            columns=[
+                "chromosome",
+                "position",
+                "frequency",
+                "count",
+                "n_runs",
+                "effect_size",
+                "p_value",
+                "q_value",
+            ]
         )
     selected = dmp_freq_df[dmp_freq_df["frequency"] >= min_frequency].copy()
     if top_n is not None and len(selected) > top_n:
         selected = selected.head(top_n)
-    for col in ("chromosome", "position", "frequency", "count", "n_runs", "effect_size"):
+    for col in ("chromosome", "position", "frequency", "count", "n_runs", "effect_size", "p_value", "q_value"):
         if col not in selected.columns:
             selected[col] = pd.Series(
-                dtype="float64" if col in {"frequency", "effect_size"} else "object"
+                dtype="float64" if col in {"frequency", "effect_size", "p_value", "q_value"} else "object"
             )
     return selected
 
@@ -697,6 +746,9 @@ def compute_dmp_stability(
     dmp_counts: Dict[Tuple[Any, int], int] = defaultdict(int)
     dmp_effect_sum: Dict[Tuple[Any, int], float] = defaultdict(float)
     dmp_effect_runs: Dict[Tuple[Any, int], int] = defaultdict(int)
+    dmp_run_pvals: Dict[Tuple[Any, int], List[float]] = defaultdict(list)
+    dmp_run_signs: Dict[Tuple[Any, int], List[float]] = defaultdict(list)
+    dmp_run_weights: Dict[Tuple[Any, int], List[float]] = defaultdict(list)
     run_count = 0
     skipped_no_discovery = 0
     skipped_low_ba = 0
@@ -712,28 +764,60 @@ def compute_dmp_stability(
                 skipped_low_ba += 1
                 continue
         run_count += 1
+        seen_keys: set[Tuple[Any, int]] = set()
         for _, row in df.iterrows():
-            key = _dmp_key_from_row(row)
+            try:
+                key = _dmp_key_from_row(row)
+            except Exception:
+                continue
+            seen_keys.add(key)
+        for key in seen_keys:
             dmp_counts[key] += 1
 
         # Compute one effect-size value per DMP key per run (mean over run duplicates),
         # then average those values across runs where the DMP is present.
-        if "effect_size" in df.columns:
-            run_effect_values: Dict[Tuple[Any, int], List[float]] = defaultdict(list)
-            for _, row in df.iterrows():
-                try:
-                    key = _dmp_key_from_row(row)
-                except Exception:
-                    continue
-                val = pd.to_numeric(row.get("effect_size"), errors="coerce")
-                if pd.isna(val):
-                    continue
-                run_effect_values[key].append(float(val))
-            for key, vals in run_effect_values.items():
-                if not vals:
-                    continue
-                dmp_effect_sum[key] += float(sum(vals) / len(vals))
-                dmp_effect_runs[key] += 1
+        run_effect_values: Dict[Tuple[Any, int], List[float]] = defaultdict(list)
+        run_p_values: Dict[Tuple[Any, int], List[float]] = defaultdict(list)
+        run_delta_values: Dict[Tuple[Any, int], List[float]] = defaultdict(list)
+        for _, row in df.iterrows():
+            try:
+                key = _dmp_key_from_row(row)
+            except Exception:
+                continue
+            effect_val = pd.to_numeric(row.get("effect_size"), errors="coerce")
+            if pd.notna(effect_val):
+                run_effect_values[key].append(float(effect_val))
+            p_val = pd.to_numeric(row.get("p_value"), errors="coerce")
+            if pd.notna(p_val) and np.isfinite(p_val):
+                run_p_values[key].append(float(p_val))
+            delta_val = pd.to_numeric(row.get("delta_mean"), errors="coerce")
+            if pd.notna(delta_val):
+                run_delta_values[key].append(float(delta_val))
+
+        for key, vals in run_effect_values.items():
+            if not vals:
+                continue
+            dmp_effect_sum[key] += float(sum(vals) / len(vals))
+            dmp_effect_runs[key] += 1
+
+        # Per-run collapse -> one p-value and one signed direction per key.
+        for key in seen_keys:
+            pvals = run_p_values.get(key, [])
+            if pvals:
+                p_run = float(np.median(np.asarray(pvals, dtype=float)))
+            else:
+                p_run = float("nan")
+            deltas = run_delta_values.get(key, [])
+            if deltas:
+                direction = float(np.sign(np.mean(np.asarray(deltas, dtype=float))))
+            else:
+                direction = 1.0
+            if not np.isfinite(direction) or direction == 0.0:
+                direction = 1.0
+            if np.isfinite(p_run):
+                dmp_run_pvals[key].append(p_run)
+                dmp_run_signs[key].append(direction)
+                dmp_run_weights[key].append(1.0)
 
     if run_count == 0:
         return pd.DataFrame(), {
@@ -752,6 +836,10 @@ def compute_dmp_stability(
             if effect_runs > 0
             else float("nan")
         )
+        pvals = np.asarray(dmp_run_pvals.get((chrom, pos), []), dtype=float)
+        signs = np.asarray(dmp_run_signs.get((chrom, pos), []), dtype=float)
+        weights = np.asarray(dmp_run_weights.get((chrom, pos), []), dtype=float)
+        dmp_p = _signed_stouffer(pvals, signs, weights)
         data.append({
             "chromosome": chrom,
             "position": pos,
@@ -759,10 +847,17 @@ def compute_dmp_stability(
             "count": count,
             "n_runs": run_count,
             "effect_size": effect_size,
+            "p_value": dmp_p,
         })
 
     df = pd.DataFrame(data)
     if not df.empty:
+        pvals = pd.to_numeric(df.get("p_value"), errors="coerce")
+        finite_mask = pvals.notna().to_numpy()
+        qvals = np.full(len(df), np.nan, dtype=float)
+        if finite_mask.any():
+            qvals[finite_mask] = _bh_qvalues(pvals.to_numpy(dtype=float)[finite_mask])
+        df["q_value"] = qvals
         df = df.sort_values(
             ["frequency", "effect_size"],
             ascending=[False, False],
@@ -830,8 +925,9 @@ def write_stable_panel(
     """Write stable DMPs as a production classifier panel."""
     output_dir.mkdir(parents=True, exist_ok=True)
     stable = _select_stable_dmps_df(dmp_freq_df, min_frequency=min_frequency, top_n=top_n)
-    if "effect_size" not in stable.columns:
-        stable["effect_size"] = pd.Series(dtype="float64")
+    for col in ("effect_size", "p_value", "q_value"):
+        if col not in stable.columns:
+            stable[col] = pd.Series(dtype="float64")
 
     out_path = output_dir / "stable_dmps_production.csv"
     stable.to_csv(out_path, index=False)

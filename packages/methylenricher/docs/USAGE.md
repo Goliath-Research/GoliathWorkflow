@@ -47,6 +47,7 @@ Disease columns in module outputs are conditional:
 - When no valid disease prior exists (for example healthy-vs-healthy runs, or disease filters that leave zero prior genes), disease columns are omitted to avoid misleading interpretation.
 - Disease-related CLI filters (`--disease-only`, `--min-disease-score`, `--min-disease-evidence-level`, etc.) can narrow both input genes and inferred module disease prior when disease metadata exists.
 - Use `--cluster-seed` to make Louvain module assignments reproducible across runs with identical inputs/parameters.
+- When mapper exports `hits_*` columns, enricher computes a default feature-weight score from SP weights (`promoter=2.0`, `exon=1.5`, `gene_body=1.0`, `intron=0.7`, `terminator=0.5`) and uses it as the default gene weight.
 
 `--network-plot` behavior:
 
