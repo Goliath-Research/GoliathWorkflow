@@ -33,6 +33,41 @@ def _write_binary_project(tmp_path: Path, predictor_cfg: dict) -> Path:
     return project_path
 
 
+def _write_comparison_multiclass_project(tmp_path: Path, predictor_cfg: dict) -> Path:
+    project_path = tmp_path / "project_multiclass_like.json"
+    project_path.write_text(
+        json.dumps(
+            {
+                "project_name": "ComparisonMulticlassCompat",
+                "output_base": str(tmp_path / "out"),
+                "samples_base_path": str(tmp_path / "samples"),
+                "controls": {
+                    "label": "controls",
+                    "groups": [{"label": "all", "sample_paths": ["C_TRAIN_1"]}],
+                },
+                "diseases": {
+                    "label": "diseases",
+                    "groups": [
+                        {
+                            "label": "pca",
+                            "stages": [
+                                {"label": "pca1", "sample_paths": ["D1_TRAIN_1"]},
+                                {"label": "pca2", "sample_paths": ["D2_TRAIN_1"]},
+                                {"label": "pca3", "sample_paths": ["D3_TRAIN_1"]},
+                                {"label": "pca4", "sample_paths": ["D4_TRAIN_1"]},
+                            ],
+                        }
+                    ],
+                },
+                "comparisons": "control_vs_each_disease",
+                "step_config": {"predictor": predictor_cfg},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return project_path
+
+
 def test_binary_resolver_accepts_group_paths_train_holdout(tmp_path: Path) -> None:
     project_path = _write_binary_project(
         tmp_path,
@@ -109,6 +144,27 @@ def test_binary_per_comparison_resolver_accepts_test_group_paths(tmp_path: Path)
     assert cfg.test_disease_paths == ["/x/TE_D1", "/x/TE_D2"]
     assert cfg.holdout_control_paths == []
     assert cfg.holdout_disease_paths == []
+
+
+def test_comparison_multiclass_resolver_accepts_multiclass_test_group_paths(tmp_path: Path) -> None:
+    project_path = _write_comparison_multiclass_project(
+        tmp_path,
+        predictor_cfg={
+            "test_group_paths": [
+                {"label": "all", "class_index": 0, "paths": ["/x/TE_C1"]},
+                {"label": "pca_pca1", "class_index": 1, "paths": ["/x/TE_D1"]},
+                {"label": "pca_pca2", "class_index": 2, "paths": ["/x/TE_D2"]},
+                {"label": "pca_pca3", "class_index": 3, "paths": ["/x/TE_D3"]},
+                {"label": "pca_pca4", "class_index": 4, "paths": ["/x/TE_D4"]},
+            ],
+        },
+    )
+    cfg = resolve_predictor_config(project_path)
+    assert cfg.test_control_paths == []
+    assert cfg.test_disease_paths == []
+    assert cfg.test_group_paths is not None
+    assert [int(row["class_index"]) for row in cfg.test_group_paths] == [0, 1, 2, 3, 4]
+    assert [row["evaluation_split"] for row in cfg.sample_lineage] == ["test"] * 5
 
 
 def test_binary_resolver_rejects_test_group_paths_with_non_binary_class_index(tmp_path: Path) -> None:

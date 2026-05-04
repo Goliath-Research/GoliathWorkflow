@@ -1109,6 +1109,42 @@ def resolve_predictor_config(
                 out_dir=out_dir,
             )
 
+    # Compatibility bridge:
+    # Some pipelines keep control_vs_each_disease project layout but provide explicit
+    # multiclass test_group_paths (class_index 0..K-1). For those projects, preserve
+    # the multiclass paths instead of forcing binary 0/1 conversion.
+    test_groups_raw = step_cfg.get("test_group_paths")
+    if project.uses_control_disease() and _group_paths_nonempty(test_groups_raw):
+        test_entries, mc_lineage = _expand_multiclass_group_paths_list(
+            test_groups_raw,
+            base_path=base_path,
+            project_path=proj_path_arg,
+            path_remap=project.path_remap,
+            evaluation_split="test",
+        )
+        max_class_index = max((int(e.get("class_index", 0)) for e in test_entries), default=-1)
+        if max_class_index > 1 and len(project.get_resolved_groups()) > 2:
+            tree = project.cohort_tree_dict()
+            return PredictorConfig(
+                model_path=model_path,
+                model_dir=model_dir,
+                output_dir=out_dir,
+                test_control_paths=[],
+                test_disease_paths=[],
+                test_group_paths=test_entries,
+                path_remap=project.path_remap,
+                samples_base_path=project.samples_base_path,
+                debug=step_cfg.get("debug", False),
+                comparison_label=None,
+                report_controls=None,
+                report_diseases=None,
+                sample_lineage=mc_lineage,
+                cohort_hierarchy=tree or None,
+                panel=step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+                classifier_step_snapshot=_classifier_step_snapshot(classifier_step),
+                **_predictor_decision_overrides(step_cfg),
+            )
+
     controls_side = _effective_predictor_side(step_cfg, project, "controls")
     diseases_side = _effective_predictor_side(step_cfg, project, "diseases")
     ctrl_map = _expand_side_group_paths(controls_side, base_path, proj_path_arg, project.path_remap)
