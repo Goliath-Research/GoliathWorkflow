@@ -36,7 +36,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v3_fixed"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v6_fixed"
 
 
 def _weighted_mean(values: np.ndarray, weights: np.ndarray) -> float:
@@ -353,6 +353,7 @@ def _fixed_feature_names() -> List[str]:
         "js_div_to_cancer_centroid",
         "cosine_similarity_to_healthy_centroid",
         "cosine_similarity_to_cancer_centroid",
+        "centroid_contrast_score",
         "fraction_dmps_closer_to_cancer_centroid",
         "weighted_fraction_dmps_closer_to_cancer_centroid",
         "mean_abs_distance_margin",
@@ -483,6 +484,7 @@ def build_observed_hybrid_feature_table(
             js_c = _jensen_shannon_distance(obs_vals, cancer_obs)
             cos_h = _cosine_similarity(obs_vals, healthy_obs)
             cos_c = _cosine_similarity(obs_vals, cancer_obs)
+            centroid_contrast_score = (cos_c - cos_h) + (js_h - js_c)
             dist_h = np.abs(obs_vals - healthy_obs)
             dist_c = np.abs(obs_vals - cancer_obs)
             closer_to_cancer = float(np.mean(dist_c < dist_h)) if dist_h.size > 0 else float("nan")
@@ -509,6 +511,7 @@ def build_observed_hybrid_feature_table(
             js_c = float("nan")
             cos_h = float("nan")
             cos_c = float("nan")
+            centroid_contrast_score = float("nan")
             closer_to_cancer = float("nan")
             weighted_closer_to_cancer = float("nan")
             mean_abs_distance_margin = float("nan")
@@ -557,6 +560,7 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["js_div_to_cancer_centroid"]] = js_c
         X_feat[i, idx["cosine_similarity_to_healthy_centroid"]] = cos_h
         X_feat[i, idx["cosine_similarity_to_cancer_centroid"]] = cos_c
+        X_feat[i, idx["centroid_contrast_score"]] = centroid_contrast_score
         X_feat[i, idx["fraction_dmps_closer_to_cancer_centroid"]] = closer_to_cancer
         X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
         X_feat[i, idx["mean_abs_distance_margin"]] = mean_abs_distance_margin
