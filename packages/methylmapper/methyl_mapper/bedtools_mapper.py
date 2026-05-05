@@ -1043,7 +1043,6 @@ class BedtoolsMapper:
             "genebody": "gene_body",
             "gene-body": "gene_body",
             "body_gene": "gene_body",
-            "hits_body_gene": "gene_body",
         }
         return aliases.get(raw, raw)
 
@@ -1069,8 +1068,7 @@ class BedtoolsMapper:
         for col in self._FEATURE_HITS_COLS.values():
             if col not in counts.columns:
                 counts[col] = 0
-        counts["hits_body_gene"] = counts["hits_gene_body"]
-        return counts[[group_by, "hits_promoter", "hits_exon", "hits_intron", "hits_gene_body", "hits_body_gene", "hits_terminator"]]
+        return counts[[group_by, "hits_promoter", "hits_exon", "hits_intron", "hits_gene_body", "hits_terminator"]]
 
     def _exclusive_feature_rows(self, intersect_df: pd.DataFrame, group_by: str) -> pd.DataFrame:
         """Return one row per (group_by, dmp_name) using feature priority."""
@@ -1102,7 +1100,6 @@ class BedtoolsMapper:
             "hits_exon",
             "hits_intron",
             "hits_gene_body",
-            "hits_body_gene",
             "hits_terminator",
             "feature_chrom",
             "gene_p_value",
@@ -1229,7 +1226,7 @@ class BedtoolsMapper:
             hits_df = self._compute_exclusive_feature_hits(intersect_df, group_by=group_by)
             if not hits_df.empty:
                 grouped = grouped.merge(hits_df, on=group_by, how="left")
-            for col in ("hits_promoter", "hits_exon", "hits_intron", "hits_gene_body", "hits_body_gene", "hits_terminator"):
+            for col in ("hits_promoter", "hits_exon", "hits_intron", "hits_gene_body", "hits_terminator"):
                 if col not in grouped.columns:
                     grouped[col] = 0
                 grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0).astype(int)

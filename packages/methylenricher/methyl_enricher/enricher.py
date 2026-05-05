@@ -162,10 +162,6 @@ class EnrichmentAnalyzer:
         out = df.copy()
         n_before = len(out)
         hits_cols = [c for c in ("hits_promoter", "hits_exon", "hits_intron", "hits_gene_body", "hits_terminator") if c in out.columns]
-
-        if "hits_body_gene" in out.columns and "hits_gene_body" not in out.columns:
-            out["hits_gene_body"] = pd.to_numeric(out["hits_body_gene"], errors="coerce").fillna(0)
-            hits_cols = [c for c in ("hits_promoter", "hits_exon", "hits_intron", "hits_gene_body", "hits_terminator") if c in out.columns]
         if hits_cols:
             for c in hits_cols:
                 out[c] = pd.to_numeric(out[c], errors="coerce").fillna(0)
