@@ -100,6 +100,7 @@ class BedtoolsMapper:
         "gene_body": "hits_gene_body",
         "terminator": "hits_terminator",
     }
+    _FEATURE_SCORE_ORDER = ("promoter", "exon", "intron", "gene_body", "terminator")
     
     def __init__(
         self,
@@ -1086,6 +1087,138 @@ class BedtoolsMapper:
         return work
 
     @staticmethod
+    def _directional_effect_from_effect_sizes(effect_sizes: pd.Series) -> tuple[float, float, float, float]:
+        """
+        Convert a list of signed effect sizes into directionalized magnitude.
+
+        Returns:
+            (directional_effect, direction, direction_balance, raw_abs_sum)
+        """
+        values = pd.to_numeric(effect_sizes, errors="coerce").to_numpy(dtype=float)
+        values = values[np.isfinite(values)]
+        if values.size == 0:
+            return 0.0, 0.0, 0.0, 0.0
+        abs_vals = np.abs(values)
+        raw_abs_sum = float(np.sum(abs_vals))
+        if raw_abs_sum <= 0:
+            return 0.0, 0.0, 0.0, 0.0
+        signed_sum = float(np.sum(np.sign(values) * abs_vals))
+        direction_balance = float(np.clip(np.abs(signed_sum) / raw_abs_sum, 0.0, 1.0))
+        directional_effect = float(raw_abs_sum * direction_balance)
+        direction = float(np.sign(signed_sum))
+        return directional_effect, direction, direction_balance, raw_abs_sum
+
+    def _build_feature_effect_scores(self, intersect_df: pd.DataFrame, group_by: str) -> pd.DataFrame:
+        """
+        Build feature-level directional effect scores.
+
+        Uses exclusive-by-priority rows so each (group, DMP) contributes to only one feature.
+        Exon/intron follow segment-first aggregation:
+          1) per-segment directional effect from DMPs
+          2) feature directional effect from segment effects
+        """
+        work = self._exclusive_feature_rows(intersect_df, group_by=group_by)
+        if work.empty or "effect_size" not in work.columns:
+            cols = [group_by]
+            for feature in self._FEATURE_SCORE_ORDER:
+                cols.extend(
+                    [
+                        f"effect_size_{feature}",
+                        f"direction_{feature}",
+                        f"direction_balance_{feature}",
+                    ]
+                )
+            return pd.DataFrame(columns=cols)
+
+        work = work[[c for c in work.columns if c in {group_by, "feature_norm", "effect_size", "feature_start", "feature_end"}]].copy()
+        work["feature_norm"] = work["feature_norm"].astype(str)
+        work["effect_size"] = pd.to_numeric(work["effect_size"], errors="coerce")
+        work = work[np.isfinite(work["effect_size"])]
+        if work.empty:
+            cols = [group_by]
+            for feature in self._FEATURE_SCORE_ORDER:
+                cols.extend(
+                    [
+                        f"effect_size_{feature}",
+                        f"direction_{feature}",
+                        f"direction_balance_{feature}",
+                    ]
+                )
+            return pd.DataFrame(columns=cols)
+
+        rows: List[Dict[str, float | str]] = []
+        for group_value, group_df in work.groupby(group_by):
+            result: Dict[str, float | str] = {group_by: group_value}
+            for feature in self._FEATURE_SCORE_ORDER:
+                feat_df = group_df[group_df["feature_norm"] == feature]
+                effect_col = f"effect_size_{feature}"
+                direction_col = f"direction_{feature}"
+                balance_col = f"direction_balance_{feature}"
+                if feat_df.empty:
+                    result[effect_col] = 0.0
+                    result[direction_col] = 0.0
+                    result[balance_col] = 0.0
+                    continue
+
+                if feature in {"exon", "intron"}:
+                    # Stage A: segment-first directionalization.
+                    segment_df = feat_df.copy()
+                    if "feature_start" in segment_df.columns:
+                        segment_df["feature_start"] = pd.to_numeric(
+                            segment_df["feature_start"], errors="coerce"
+                        ).fillna(-1).astype(int)
+                    else:
+                        segment_df["feature_start"] = -1
+                    if "feature_end" in segment_df.columns:
+                        segment_df["feature_end"] = pd.to_numeric(
+                            segment_df["feature_end"], errors="coerce"
+                        ).fillna(-1).astype(int)
+                    else:
+                        segment_df["feature_end"] = -1
+                    segment_rows: List[Dict[str, float]] = []
+                    for (_, _), seg in segment_df.groupby(["feature_start", "feature_end"]):
+                        seg_effect, seg_direction, _seg_balance, _seg_raw = self._directional_effect_from_effect_sizes(seg["effect_size"])
+                        segment_rows.append({"segment_effect": seg_effect, "segment_direction": seg_direction})
+
+                    if not segment_rows:
+                        result[effect_col] = 0.0
+                        result[direction_col] = 0.0
+                        result[balance_col] = 0.0
+                        continue
+
+                    seg_table = pd.DataFrame(segment_rows)
+                    seg_effect_sum = float(seg_table["segment_effect"].sum())
+                    if seg_effect_sum <= 0:
+                        result[effect_col] = 0.0
+                        result[direction_col] = 0.0
+                        result[balance_col] = 0.0
+                        continue
+                    seg_signed_sum = float((seg_table["segment_effect"] * seg_table["segment_direction"]).sum())
+                    feat_balance = float(np.clip(np.abs(seg_signed_sum) / seg_effect_sum, 0.0, 1.0))
+                    result[effect_col] = float(seg_effect_sum * feat_balance)
+                    result[direction_col] = float(np.sign(seg_signed_sum))
+                    result[balance_col] = feat_balance
+                else:
+                    feat_effect, feat_direction, feat_balance, _feat_raw = self._directional_effect_from_effect_sizes(feat_df["effect_size"])
+                    result[effect_col] = feat_effect
+                    result[direction_col] = feat_direction
+                    result[balance_col] = feat_balance
+
+            rows.append(result)
+
+        out = pd.DataFrame(rows)
+        for feature in self._FEATURE_SCORE_ORDER:
+            for col in (
+                f"effect_size_{feature}",
+                f"direction_{feature}",
+                f"direction_balance_{feature}",
+            ):
+                if col not in out.columns:
+                    out[col] = 0.0
+                out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+        return out
+
+    @staticmethod
     def _prune_gene_output_columns(df: pd.DataFrame) -> pd.DataFrame:
         keep_cols = [
             "gene_name",
@@ -1095,6 +1228,18 @@ class BedtoolsMapper:
             "total_weight",
             "mean_effect_size",
             "gene_score",
+            "effect_size_promoter",
+            "effect_size_exon",
+            "effect_size_intron",
+            "effect_size_gene_body",
+            "effect_size_terminator",
+            "direction_promoter",
+            "direction_exon",
+            "direction_intron",
+            "direction_gene_body",
+            "direction_terminator",
+            "gene_feature_importance",
+            "gene_importance",
             "gene_feature_score",
             "hits_promoter",
             "hits_exon",
@@ -1236,6 +1381,30 @@ class BedtoolsMapper:
                 + grouped["hits_intron"] * 0.7
                 + grouped["hits_gene_body"] * 1.0
                 + grouped["hits_terminator"] * 0.5
+            )
+            feature_effect_df = self._build_feature_effect_scores(intersect_df, group_by=group_by)
+            if not feature_effect_df.empty:
+                grouped = grouped.merge(feature_effect_df, on=group_by, how="left")
+            for feature in self._FEATURE_SCORE_ORDER:
+                eff_col = f"effect_size_{feature}"
+                dir_col = f"direction_{feature}"
+                bal_col = f"direction_balance_{feature}"
+                if eff_col not in grouped.columns:
+                    grouped[eff_col] = 0.0
+                if dir_col not in grouped.columns:
+                    grouped[dir_col] = 0.0
+                if bal_col not in grouped.columns:
+                    grouped[bal_col] = 0.0
+                grouped[eff_col] = pd.to_numeric(grouped[eff_col], errors="coerce").fillna(0.0)
+                grouped[dir_col] = pd.to_numeric(grouped[dir_col], errors="coerce").fillna(0.0)
+                grouped[bal_col] = pd.to_numeric(grouped[bal_col], errors="coerce").fillna(0.0)
+
+            grouped["gene_feature_importance"] = (
+                grouped["effect_size_promoter"] * float(getattr(self, "w_promoter", 2.0))
+                + grouped["effect_size_exon"] * float(getattr(self, "w_exon", 1.5))
+                + grouped["effect_size_intron"] * float(getattr(self, "w_intron", 0.7))
+                + grouped["effect_size_gene_body"] * float(getattr(self, "w_gene_body", 1.0))
+                + grouped["effect_size_terminator"] * float(getattr(self, "w_terminator", 0.5))
             )
         
         # Add Stouffer aggregated gene p-values (weighted, signed by delta_mean)
@@ -1454,20 +1623,22 @@ class BedtoolsMapper:
             grouped = grouped.merge(gene_score, on=group_by, how='left')
             grouped['gene_score'] = pd.to_numeric(grouped['gene_score'], errors='coerce').fillna(0.0)
 
-        # Keep the legacy importance column, but prefer the new score when available.
-        if 'total_importance' in grouped.columns:
-            grouped['gene_importance'] = grouped['total_importance']
-        elif 'gene_score' in grouped.columns:
-            grouped['gene_importance'] = grouped['gene_score']
-        elif 'total_weight' in grouped.columns:
-            grouped['gene_importance'] = grouped['total_weight']
-        
-        # Sort by DMP count (descending), then by weight
-        sort_cols = ['dmp_count']
-        if 'gene_score' in grouped.columns:
-            sort_cols.append('gene_score')
-        if 'total_weight' in grouped.columns:
-            sort_cols.append('total_weight')
+        # Canonical importance now comes from feature-aware effect aggregation.
+        if "gene_feature_importance" in grouped.columns:
+            grouped["gene_importance"] = pd.to_numeric(grouped["gene_feature_importance"], errors="coerce").fillna(0.0)
+        elif "gene_score" in grouped.columns:
+            grouped["gene_importance"] = pd.to_numeric(grouped["gene_score"], errors="coerce").fillna(0.0)
+        elif "total_weight" in grouped.columns:
+            grouped["gene_importance"] = pd.to_numeric(grouped["total_weight"], errors="coerce").fillna(0.0)
+        else:
+            grouped["gene_importance"] = 0.0
+
+        # Sort by canonical importance first, then stable tie-breakers.
+        sort_cols = ["gene_importance"]
+        if "dmp_count" in grouped.columns:
+            sort_cols.append("dmp_count")
+        if "total_weight" in grouped.columns:
+            sort_cols.append("total_weight")
         grouped = grouped.sort_values(sort_cols, ascending=False).reset_index(drop=True)
 
         # Warn when genes have DMPs but all key stats are missing (join likely failed for those rows)
