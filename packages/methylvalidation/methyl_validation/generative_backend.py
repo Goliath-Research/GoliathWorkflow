@@ -276,9 +276,9 @@ def train_generative_model(
         X_methyl = np.asarray(feat.X, dtype=np.float32)
         feature_fill_values = fit_feature_fill_values(X_methyl)
         X_methyl = apply_feature_fill_values(X_methyl, feature_fill_values)
-        dmp_weights = np.ones((X_methyl.shape[1],), dtype=np.float32)
         observed_feature_names = list(feat.feature_names)
         observed_feature_report = dict(feat.report)
+        dmp_weights = np.ones((X_methyl.shape[1],), dtype=np.float32)
         observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
         observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
         observed_cancer_reference = anchors.cancer_reference_vector.astype(np.float32)

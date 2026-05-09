@@ -36,7 +36,14 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v6_fixed"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v7_healthy_proximity"
+REMOVED_OBSERVED_HYBRID_FEATURES = {
+    "gene_shift_q50",
+    "gene_shift_iqr",
+    "gene_hyper_extreme_fraction",
+    "gene_hypo_extreme_fraction",
+    "topk_minus_rest_abs_shift",
+}
 
 
 def _weighted_mean(values: np.ndarray, weights: np.ndarray) -> float:
@@ -339,7 +346,7 @@ def _jensen_shannon_distance(values_a: np.ndarray, values_b: np.ndarray, eps: fl
 
 
 def _fixed_feature_names() -> List[str]:
-    return [
+    names = [
         "dmp_global_weighted_mean",
         "dmp_global_weighted_std",
         "dmp_global_weighted_abs_shift_from_half",
@@ -356,6 +363,8 @@ def _fixed_feature_names() -> List[str]:
         "centroid_contrast_score",
         "fraction_dmps_closer_to_cancer_centroid",
         "weighted_fraction_dmps_closer_to_cancer_centroid",
+        "fraction_dmps_closer_to_healthy_centroid",
+        "weighted_fraction_dmps_closer_to_healthy_centroid",
         "mean_abs_distance_margin",
         "dmp_global_skewness",
         "dmp_global_kurtosis",
@@ -365,6 +374,7 @@ def _fixed_feature_names() -> List[str]:
         "n_obs_dmps",
         "n_total_dmps",
     ]
+    return [name for name in names if name not in REMOVED_OBSERVED_HYBRID_FEATURES]
 
 
 def observed_hybrid_feature_names() -> List[str]:
@@ -488,11 +498,14 @@ def build_observed_hybrid_feature_table(
             dist_h = np.abs(obs_vals - healthy_obs)
             dist_c = np.abs(obs_vals - cancer_obs)
             closer_to_cancer = float(np.mean(dist_c < dist_h)) if dist_h.size > 0 else float("nan")
+            closer_to_healthy = float(np.mean(dist_h < dist_c)) if dist_h.size > 0 else float("nan")
             obs_w_sum = float(np.sum(obs_w))
             if obs_w.size == obs_vals.size and obs_w_sum > 0.0:
                 weighted_closer_to_cancer = float(np.sum(obs_w[dist_c < dist_h]) / obs_w_sum)
+                weighted_closer_to_healthy = float(np.sum(obs_w[dist_h < dist_c]) / obs_w_sum)
             else:
                 weighted_closer_to_cancer = float("nan")
+                weighted_closer_to_healthy = float("nan")
             mean_abs_distance_margin = (
                 float(np.mean(dist_h) - np.mean(dist_c))
                 if dist_h.size > 0 and dist_c.size > 0
@@ -513,7 +526,9 @@ def build_observed_hybrid_feature_table(
             cos_c = float("nan")
             centroid_contrast_score = float("nan")
             closer_to_cancer = float("nan")
+            closer_to_healthy = float("nan")
             weighted_closer_to_cancer = float("nan")
+            weighted_closer_to_healthy = float("nan")
             mean_abs_distance_margin = float("nan")
 
         global_dev_healthy = float(g_mean - healthy_global_mean) if np.isfinite(g_mean) else float("nan")
@@ -563,6 +578,8 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["centroid_contrast_score"]] = centroid_contrast_score
         X_feat[i, idx["fraction_dmps_closer_to_cancer_centroid"]] = closer_to_cancer
         X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
+        X_feat[i, idx["fraction_dmps_closer_to_healthy_centroid"]] = closer_to_healthy
+        X_feat[i, idx["weighted_fraction_dmps_closer_to_healthy_centroid"]] = weighted_closer_to_healthy
         X_feat[i, idx["mean_abs_distance_margin"]] = mean_abs_distance_margin
         X_feat[i, idx["dmp_global_skewness"]] = skew
         X_feat[i, idx["dmp_global_kurtosis"]] = kurt
