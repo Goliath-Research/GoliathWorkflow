@@ -146,6 +146,21 @@ def test_verify_feature_schema_raises_on_mismatch():
         )
 
 
+def test_observed_feature_builder_requires_effect_size(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    dmp_df = _dmp_df().drop(columns=["effect_size"])
+
+    with pytest.raises(ValueError, match="effect_size"):
+        _derive_anchors(sample_paths, y, class_names, dmp_df)
+
+
 def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(monkeypatch):
     monkeypatch.setattr(
         observed_feature_builder.MethylCentroidPair,

@@ -190,7 +190,7 @@ instead of the legacy `methyl-classifier -> methyl-predictor` ECDF chain.
 The backend is controlled under `step_config.validation`:
 
 - `model_backend: "generative_hybrid"`
-- `model_bundle_dir`, `model_weight_column`
+- `model_bundle_dir` (and legacy `model_weight_column`; weighting is canonicalized to `effect_size`)
 - `generative_latent_dim`
 - `generative_kl_weight`
 - `generative_density_type` (currently `diag_gaussian`)

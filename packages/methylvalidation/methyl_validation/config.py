@@ -310,10 +310,10 @@ class MonteCarloConfig(BaseModel):
         ),
     )
     model_weight_column: str = Field(
-        default="weight",
+        default="effect_size",
         description=(
-            "Preferred weight column from detector exports when building bundle DMP index. "
-            "Falls back to effect_size or 1.0 when absent."
+            "Legacy compatibility field. Model bundle weighting is canonicalized to detector "
+            "effect_size for tabular/generative backends."
         ),
     )
     tabular_model_type: str = Field(

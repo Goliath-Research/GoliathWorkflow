@@ -107,7 +107,7 @@ def _fingerprint_payload(payload: Dict[str, Any]) -> str:
 def _dmp_index_fingerprint(dmp_df: pd.DataFrame) -> str:
     if dmp_df.empty:
         return _fingerprint_payload({"rows": []})
-    cols = [c for c in ("chromosome", "context", "position", "weight", "effect_size") if c in dmp_df.columns]
+    cols = [c for c in ("chromosome", "context", "position", "effect_size") if c in dmp_df.columns]
     rows = dmp_df[cols].copy().sort_values(["chromosome", "context", "position"]).to_dict(orient="records")
     return _fingerprint_payload({"rows": rows})
 
@@ -379,7 +379,7 @@ def train_tabular_model(
 
     dmp_df = load_bundle_dmp_index(bundle_h5)
     if max_dmps and len(dmp_df) > max_dmps:
-        dmp_df = dmp_df.sort_values(["weight", "effect_size"], ascending=[False, False]).head(max_dmps).copy()
+        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps).copy()
     refs, feature_order = _build_reference_map(dmp_df)
 
     resolved = project.get_resolved_groups()
@@ -977,7 +977,7 @@ def predict_tabular_model_from_project(
         dmp_df = load_bundle_dmp_index(bundle_h5)
         max_dmps = int(meta.get("max_dmps", len(dmp_df) or 0))
         if max_dmps and len(dmp_df) > max_dmps:
-            dmp_df = dmp_df.sort_values(["weight", "effect_size"], ascending=[False, False]).head(max_dmps).copy()
+            dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps).copy()
         feat = build_observed_hybrid_feature_table(
             samples,
             dmp_df,

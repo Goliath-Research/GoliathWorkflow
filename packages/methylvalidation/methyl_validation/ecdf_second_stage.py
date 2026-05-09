@@ -171,7 +171,7 @@ def train_and_apply_ecdf_second_stage(
     bundle_h5 = _ensure_bundle_h5(project_json, bundle_dir)
     dmp_df = load_bundle_dmp_index(bundle_h5)
     if max_dmps and len(dmp_df) > max_dmps:
-        dmp_df = dmp_df.sort_values(["weight", "effect_size"], ascending=[False, False]).head(max_dmps).copy()
+        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps).copy()
 
     sample_paths = _sample_paths_from_predictions(df, project_json)
     if not sample_paths:

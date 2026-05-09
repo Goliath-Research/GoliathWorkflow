@@ -279,7 +279,7 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `abort_on_step_failure` | bool | `false` | — | If `true`, abort all iterations when any pipeline step fails. If `false`, log the error and skip the iteration. |
 | `model_backend` | str | `"ecdf"` | `"ecdf"`, `"tabular_sklearn"`, `"generative_hybrid"` | Backend for `--model`. `ecdf`: classifier→predictor. `tabular_sklearn`: bundle + sklearn train/predict. `generative_hybrid`: bundle + latent-density generative train/predict. |
 | `model_bundle_dir` | str \| null | `null` | — | Optional output directory for model feature bundle artifacts. Default: `<production_output_dir>/model_bundle`. |
-| `model_weight_column` | str | `"weight"` | — | Preferred detector DMP column used as feature weight in model bundle construction; falls back to `effect_size` or `1.0`. |
+| `model_weight_column` | str | `"effect_size"` | — | Legacy compatibility field. Tabular/generative model bundle weighting is canonicalized to detector `effect_size`. |
 | `tabular_model_type` | str | `"random_forest"` | `"random_forest"`, `"hist_gradient_boosting"`, `"logistic_regression"`, `"xgboost"` | Model type when `model_backend="tabular_sklearn"`. |
 | `tabular_max_dmps` | int | `5000` | ≥ 10 | Maximum number of DMP loci retained from bundle index for tabular/generative backend training. |
 | `covariates_path` | str \| null | `null` | — | Optional covariates sidecar (`.h5` preferred, `.csv` accepted) for tabular or generative backend. |

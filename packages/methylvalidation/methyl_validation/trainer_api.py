@@ -115,7 +115,7 @@ def build_model_backend_steps(
                 build_model_feature_bundle(
                     project_json=project_json,
                     output_dir=bundle_dir,
-                    weight_column=(config.model_weight_column if config is not None else "weight"),
+                    weight_column=(config.model_weight_column if config is not None else "effect_size"),
                     extra_metadata={"model_backend": "tabular_sklearn"},
                 )
                 return 0, f"Bundle written to {bundle_dir}", ""
@@ -252,7 +252,7 @@ def build_model_backend_steps(
                 build_model_feature_bundle(
                     project_json=project_json,
                     output_dir=bundle_dir,
-                    weight_column=(config.model_weight_column if config is not None else "weight"),
+                    weight_column=(config.model_weight_column if config is not None else "effect_size"),
                     extra_metadata={"model_backend": "generative_hybrid"},
                 )
                 return 0, f"Bundle written to {bundle_dir}", ""

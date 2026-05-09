@@ -110,10 +110,8 @@ def _build_reference_map(
     weights: List[float] = []
 
     work_df = dmp_df.copy()
-    w_col = "weight" if "weight" in work_df.columns else "effect_size"
-    if w_col not in work_df.columns:
-        work_df["weight"] = 1.0
-        w_col = "weight"
+    if "effect_size" not in work_df.columns:
+        raise ValueError("Observed-hybrid feature building requires DMP effect_size values.")
     if "comparison_label" not in work_df.columns:
         work_df["comparison_label"] = "default"
     if "context" not in work_df.columns:
@@ -142,18 +140,13 @@ def _build_reference_map(
     else:
         work_df["dmr_region"] = "unknown"
 
-    work_df["_score"] = np.abs(pd.to_numeric(work_df[w_col], errors="coerce").fillna(0.0).astype(float))
-    if "effect_size" in work_df.columns:
-        work_df["_score"] = np.maximum(
-            work_df["_score"].astype(float),
-            np.abs(pd.to_numeric(work_df["effect_size"], errors="coerce").fillna(0.0).astype(float)),
-        )
+    work_df["_score"] = np.abs(pd.to_numeric(work_df["effect_size"], errors="coerce").fillna(0.0).astype(float))
     work_df = work_df.sort_values(
         ["_score", "chromosome", "context", "position"],
         ascending=[False, True, True, True],
     )
     locus_df = work_df.drop_duplicates(["chromosome", "context", "position"], keep="first").copy()
-    locus_df["w"] = pd.to_numeric(locus_df[w_col], errors="coerce").fillna(0.0).astype(float)
+    locus_df["w"] = pd.to_numeric(locus_df["effect_size"], errors="coerce").fillna(0.0).astype(float)
     locus_df = locus_df.sort_values(["chromosome", "context", "position"], ascending=[True, True, True])
 
     for chrom, cdf in locus_df.groupby("chromosome", sort=True):

@@ -79,6 +79,44 @@ def test_build_model_feature_bundle_and_load(tmp_path: Path, monkeypatch):
     }
 
 
+def test_build_model_feature_bundle_canonicalizes_weight_to_effect_size(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1", "1"],
+            "position": [100, 120, 200],
+            "context": ["CG", "CG", "CG"],
+            "effect_size": [0.9, 0.2, 0.6],
+            # Deliberately conflicting to verify effect_size canonicalization.
+            "weight": [0.1, 5.0, 0.3],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", tmp_path / "bundle")
+    out_df = model_bundle.load_bundle_dmp_index(tmp_path / "bundle" / "model_feature_bundle.h5")
+    assert np.allclose(out_df["weight"].to_numpy(dtype=float), out_df["effect_size"].to_numpy(dtype=float))
+    assert out_df.iloc[0]["position"] == 100
+
+
+def test_build_model_feature_bundle_requires_effect_size(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1"],
+            "position": [100, 120],
+            "context": ["CG", "CG"],
+            "weight": [0.8, 0.3],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+
+    with pytest.raises(ValueError, match="effect_size"):
+        model_bundle.build_model_feature_bundle(tmp_path / "project.json", tmp_path / "bundle")
+
+
 def test_build_model_feature_bundle_loads_all_chromosome_csvs(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     det.mkdir(parents=True)

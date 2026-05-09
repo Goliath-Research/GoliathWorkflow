@@ -98,7 +98,7 @@ def _choose_detector_csvs(detection_dir: Path) -> Dict[str, List[Path]]:
 def _load_dmps_table(
     csv_path: Path,
     comparison_label: str,
-    weight_column: str = "weight",
+    weight_column: str = "effect_size",
 ) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     rename_map: Dict[str, str] = {}
@@ -124,19 +124,21 @@ def _load_dmps_table(
         if candidate in df.columns:
             dmr_col = candidate
             break
-    if weight_column not in df.columns:
-        if "effect_size" in df.columns:
-            df[weight_column] = pd.to_numeric(df["effect_size"], errors="coerce").fillna(0.0)
-        else:
-            df[weight_column] = 1.0
+    if "effect_size" not in df.columns:
+        raise ValueError(
+            f"DMP CSV missing required column ['effect_size']: {csv_path}"
+        )
+    # Keep the parameter for API compatibility, but canonicalize model weighting to effect_size.
+    del weight_column
+    effect_size = pd.to_numeric(df["effect_size"], errors="coerce").fillna(0.0).astype(float)
     out = pd.DataFrame(
         {
             "comparison_label": str(comparison_label),
             "chromosome": df["chromosome"].astype(str),
             "position": pd.to_numeric(df["position"], errors="coerce").fillna(-1).astype(np.int64),
             "context": df["context"].astype(str),
-            "effect_size": pd.to_numeric(df.get("effect_size", np.nan), errors="coerce").astype(float),
-            "weight": pd.to_numeric(df[weight_column], errors="coerce").fillna(0.0).astype(float),
+            "effect_size": effect_size,
+            "weight": effect_size,
             "gene_name": (df[gene_col].astype(str) if gene_col is not None else "unknown"),
             "dmr_region": (df[dmr_col].astype(str) if dmr_col is not None else "unknown"),
             "source_csv": str(csv_path.absolute()),
@@ -213,7 +215,7 @@ def build_model_feature_bundle(
     project_json: str | Path,
     output_dir: str | Path,
     *,
-    weight_column: str = "weight",
+    weight_column: str = "effect_size",
     extra_metadata: Optional[Dict[str, Any]] = None,
 ) -> Path:
     project_json = Path(project_json).absolute()
@@ -279,10 +281,11 @@ def build_model_feature_bundle(
             "No detector DMP CSVs found for bundle build. Expected dmps-*-classifier.csv or dmps-*.csv under detection dirs."
         )
 
+    del weight_column
     dmp_df = pd.concat(rows, ignore_index=True)
     dmp_df = dmp_df.sort_values(
-        ["weight", "effect_size", "chromosome", "position", "comparison_label"],
-        ascending=[False, False, True, True, True],
+        ["effect_size", "chromosome", "position", "comparison_label"],
+        ascending=[False, True, True, True],
     ).reset_index(drop=True)
 
     bundle_h5 = out_dir / BUNDLE_H5_NAME

@@ -325,7 +325,7 @@ Example:
 ```json
 "validation": {
   "model_backend": "generative_hybrid",
-  "model_weight_column": "weight",
+  "model_weight_column": "effect_size",
   "tabular_max_dmps": 5000,
   "generative_latent_dim": 16,
   "generative_density_type": "diag_gaussian",

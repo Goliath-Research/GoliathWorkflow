@@ -229,7 +229,7 @@ def train_generative_model(
 
     dmp_df = load_bundle_dmp_index(bundle_h5)
     if max_dmps and len(dmp_df) > max_dmps:
-        dmp_df = dmp_df.sort_values(["weight", "effect_size"], ascending=[False, False]).head(max_dmps).copy()
+        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps).copy()
     refs, feature_order = _build_reference_map(dmp_df)
 
     resolved = project.get_resolved_groups()
@@ -291,7 +291,9 @@ def train_generative_model(
         X_methyl = _extract_matrix_for_samples(all_paths, refs, feature_order, min_coverage=1)
         X_methyl = np.nan_to_num(np.asarray(X_methyl, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
 
-        dmp_weights = np.asarray(dmp_df["weight"].fillna(0.0).astype(np.float32).tolist(), dtype=np.float32)
+        if "effect_size" not in dmp_df.columns:
+            raise ValueError("Raw DMP feature mode requires effect_size in bundle DMP index.")
+        dmp_weights = np.asarray(dmp_df["effect_size"].fillna(0.0).astype(np.float32).tolist(), dtype=np.float32)
         dmp_weights = np.abs(dmp_weights)
         if float(np.max(dmp_weights)) <= 0.0:
             dmp_weights = np.ones_like(dmp_weights, dtype=np.float32)
@@ -483,7 +485,7 @@ def predict_generative_model_from_project(
         dmp_df = load_bundle_dmp_index(bundle_h5)
         max_dmps = int(meta.get("max_dmps", len(dmp_df) or 0))
         if max_dmps and len(dmp_df) > max_dmps:
-            dmp_df = dmp_df.sort_values(["weight", "effect_size"], ascending=[False, False]).head(max_dmps).copy()
+            dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps).copy()
         feat = build_observed_hybrid_feature_table(
             samples,
             dmp_df,
