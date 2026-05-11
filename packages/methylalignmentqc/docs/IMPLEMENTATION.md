@@ -13,7 +13,9 @@ For scope and caveats, see [`docs/theory/chapters/09-methylalignmentqc.qmd`](../
 - `methyl_alignment_qc/utils/monitor.py`: subprocess monitoring and progress parsing.
 - `methyl_alignment_qc/core/wgbs_parabricks_qc.py`: standalone WGBS Parabricks guardrail checker for pre-extraction QC screening.
 - `methyl_alignment_qc/utils/guardrail_migration.py`: migration utility for legacy guardrail schema keys.
-- `methyl_alignment_qc/utils/schema_export.py`: exporter for versioned JSON schema artifacts.
+- `methyl_alignment_qc/utils/schema_export.py`: exporter for versioned JSON schema artifacts (V1 and V2).
+- `methyl_alignment_qc/models/sample_qc_v2.py`: Pydantic model for **V2** row-oriented export (`ExportedSampleQCV2Payload`).
+- `methyl_alignment_qc/utils/v1_to_v2_migration.py`: deterministic **V1 → V2** conversion and `methyl-qc-convert-v1-to-v2` CLI entrypoint.
 
 ## Implementation Notes
 
