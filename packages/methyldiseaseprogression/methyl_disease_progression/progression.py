@@ -145,30 +145,15 @@ def _build_gene_rows(stage: StageSpec) -> pd.DataFrame:
         agg = work.drop_duplicates(subset=[gene_col]).reset_index(drop=True)
         agg["rank"] = agg.index + 1
         agg["score"] = 1.0
-    agg["entity_type"] = "gene"
-    agg["entity_id"] = agg[gene_col].astype(str)
-    agg["entity_label"] = agg[gene_col].astype(str)
-    agg["q_value"] = pd.NA
-    agg["source_file"] = str(stage.mapper_combined_csv)
-    agg["stage_index"] = stage.stage_index
-    agg["comparison_label"] = stage.comparison_label
-    agg["disease_group"] = stage.disease_group
-    agg["control_group"] = stage.control_group
-    return agg[
-        [
-            "entity_type",
-            "entity_id",
-            "entity_label",
-            "stage_index",
-            "comparison_label",
-            "disease_group",
-            "control_group",
-            "rank",
-            "score",
-            "q_value",
-            "source_file",
-        ]
-    ]
+    return pd.DataFrame(
+        {
+            "stage_index": stage.stage_index,
+            "comparison": stage.comparison_label,
+            "rank": agg["rank"],
+            "score": agg["score"],
+            "gene": agg[gene_col].astype(str),
+        }
+    )
 
 
 def _build_pathway_rows(stage: StageSpec) -> pd.DataFrame:
@@ -197,36 +182,19 @@ def _build_pathway_rows(stage: StageSpec) -> pd.DataFrame:
     if q_col:
         # Higher is better for monotonic trend checks.
         work["score"] = work[q_col].map(lambda x: -math.log10(max(float(x), 1e-300)))
-        work["q_value"] = work[q_col]
     elif score_col:
         work["score"] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0)
-        work["q_value"] = pd.NA
     else:
         work["score"] = 0.0
-        work["q_value"] = pd.NA
-    work["entity_type"] = "pathway"
-    work["entity_id"] = work[term_col].astype(str)
-    work["entity_label"] = work[term_col].astype(str)
-    work["source_file"] = str(stage.pathway_csv)
-    work["stage_index"] = stage.stage_index
-    work["comparison_label"] = stage.comparison_label
-    work["disease_group"] = stage.disease_group
-    work["control_group"] = stage.control_group
-    return work[
-        [
-            "entity_type",
-            "entity_id",
-            "entity_label",
-            "stage_index",
-            "comparison_label",
-            "disease_group",
-            "control_group",
-            "rank",
-            "score",
-            "q_value",
-            "source_file",
-        ]
-    ]
+    return pd.DataFrame(
+        {
+            "stage_index": stage.stage_index,
+            "comparison": stage.comparison_label,
+            "rank": work["rank"],
+            "score": work["score"],
+            "pathway": work[term_col].astype(str),
+        }
+    )
 
 
 def _build_module_rows(stage: StageSpec) -> pd.DataFrame:
@@ -249,30 +217,15 @@ def _build_module_rows(stage: StageSpec) -> pd.DataFrame:
         work = work.reset_index(drop=True)
         work["score"] = 0.0
     work["rank"] = work.index + 1
-    work["entity_type"] = "module"
-    work["entity_id"] = work[module_col].astype(str)
-    work["entity_label"] = work[module_col].astype(str)
-    work["q_value"] = pd.NA
-    work["source_file"] = str(stage.modules_csv)
-    work["stage_index"] = stage.stage_index
-    work["comparison_label"] = stage.comparison_label
-    work["disease_group"] = stage.disease_group
-    work["control_group"] = stage.control_group
-    return work[
-        [
-            "entity_type",
-            "entity_id",
-            "entity_label",
-            "stage_index",
-            "comparison_label",
-            "disease_group",
-            "control_group",
-            "rank",
-            "score",
-            "q_value",
-            "source_file",
-        ]
-    ]
+    return pd.DataFrame(
+        {
+            "stage_index": stage.stage_index,
+            "comparison": stage.comparison_label,
+            "rank": work["rank"],
+            "score": work["score"],
+            "module": work[module_col].astype(str),
+        }
+    )
 
 
 def aggregate_stage_tables(
@@ -331,6 +284,22 @@ def _labels_for_entity(stages_present: List[int], scores: List[float], max_stage
     return labels
 
 
+def _long_table_to_label_frame(df: pd.DataFrame, entity_type: str, name_col: str) -> pd.DataFrame:
+    """Map slim long-table rows to the internal columns used by compute_progression_labels."""
+    if df.empty or name_col not in df.columns:
+        return pd.DataFrame()
+    names = df[name_col].astype(str)
+    return pd.DataFrame(
+        {
+            "entity_type": entity_type,
+            "entity_id": names,
+            "entity_label": names,
+            "stage_index": df["stage_index"],
+            "score": df["score"],
+        }
+    )
+
+
 def compute_progression_labels(
     genes_df: pd.DataFrame,
     pathways_df: pd.DataFrame,
@@ -339,9 +308,13 @@ def compute_progression_labels(
     stage_count: int,
 ) -> pd.DataFrame:
     entity_frames = [
-        df[["entity_type", "entity_id", "entity_label", "stage_index", "score"]].copy()
-        for df in (genes_df, pathways_df, modules_df)
-        if not df.empty
+        f
+        for f in (
+            _long_table_to_label_frame(genes_df, "gene", "gene"),
+            _long_table_to_label_frame(pathways_df, "pathway", "pathway"),
+            _long_table_to_label_frame(modules_df, "module", "module"),
+        )
+        if not f.empty
     ]
     if not entity_frames:
         return pd.DataFrame(

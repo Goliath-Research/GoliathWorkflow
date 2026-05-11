@@ -1,9 +1,24 @@
+import csv
 import json
 from pathlib import Path
 
 import pytest
 
 from methyl_disease_progression.progression import run_progression_report
+
+_LONG_GENE_COLS = ["stage_index", "comparison", "rank", "score", "gene"]
+_LONG_PATHWAY_COLS = ["stage_index", "comparison", "rank", "score", "pathway"]
+_LONG_MODULE_COLS = ["stage_index", "comparison", "rank", "score", "module"]
+_LEGACY_LONG_COLS = {
+    "entity_type",
+    "entity_id",
+    "entity_label",
+    "comparison_label",
+    "disease_group",
+    "control_group",
+    "q_value",
+    "source_file",
+}
 
 
 def _write_project(tmp_path: Path) -> Path:
@@ -87,6 +102,18 @@ def test_progression_report_writes_outputs(tmp_path: Path):
     labels = (out_dir / "entities_progression_labels.csv").read_text(encoding="utf-8")
     assert "GENE_A" in labels
     assert "stable_across_stages" in labels
+
+    def _header(path: Path) -> list[str]:
+        with path.open(encoding="utf-8", newline="") as f:
+            return next(csv.reader(f))
+
+    assert _header(out_dir / "genes_long.csv") == _LONG_GENE_COLS
+    assert _header(out_dir / "pathways_long.csv") == _LONG_PATHWAY_COLS
+    assert _header(out_dir / "modules_long.csv") == _LONG_MODULE_COLS
+
+    mod_text = (out_dir / "modules_long.csv").read_text(encoding="utf-8")
+    for legacy in _LEGACY_LONG_COLS:
+        assert legacy not in mod_text
 
 
 def test_progression_report_respects_explicit_order(tmp_path: Path):

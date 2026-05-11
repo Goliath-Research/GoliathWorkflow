@@ -44,9 +44,11 @@ For each project comparison (`control_group`, `disease_group`), the tool reads:
 
 Default output directory: `<project_root>/progression`.
 
-- `genes_long.csv`
-- `pathways_long.csv`
-- `modules_long.csv` (empty if no module files found)
-- `entities_progression_labels.csv`
+- `genes_long.csv` — long table with columns: `stage_index`, `comparison` (canonical stage token from the project’s ordered comparisons), `rank`, `score`, `gene`.
+- `pathways_long.csv` — same layout with `pathway` instead of `gene`. Pathway `score` is derived from the enrichment table (e.g. `-log10(adjusted p)` when q-values are available); raw q-values are not exported in this file.
+- `modules_long.csv` — same layout with `module` (empty file / no rows if no `modules_ranked.csv` inputs).
+- `entities_progression_labels.csv` — aggregated progression labels per entity (`entity_type`, `entity_id`, `entity_label`, …) built from the long tables above.
 - `summary.json`
 - optional `report.md`
+
+Legacy long-table columns (`entity_type`, `entity_id`, `entity_label`, `comparison_label`, `disease_group`, `control_group`, `q_value`, `source_file`) are no longer written to the `*_long.csv` files.
