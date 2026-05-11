@@ -23,6 +23,27 @@ methyl-stability-freeze-readiness /path/to/<project_name> [--json-out report.jso
 
 `<project_name>` is the directory that **contains** `monte_carlo_runs/` (e.g. `/work/prostate-cancer/Healthy_vs_PCa1-4-CG`).
 
+Optional **`--redact-paths`** omits `project_root`, filesystem artifact paths, and similar fields from **exported** JSON and markdown while retaining deterministic verdict content.
+
+### Grok advisory review (xAI)
+
+By default the CLI asks **Grok** (`grok-4.3`) for **non-blocking**, advisory commentary on progression/module summaries vs optional disease context. This never overrides the deterministic **go / go_with_risks / no_go** verdict or exit codes.
+
+| Behavior | Default |
+|---------|---------|
+| Grok call | **On** — disable with `--no-grok-review` |
+| Model | `grok-4.3` (`--grok-model`) |
+| Evidence rows in AI payload | Top `--grok-max-top-rows` (default **10**) module trends + label counts |
+| HTTP | `--grok-timeout-seconds 60`, `--grok-max-retries 2`, `--grok-temperature 0.1` |
+
+**Credential resolution** follows **MethylMapper** [`SecureCredentialManager`](../../../packages/methylmapper/methyl_mapper/secure_credentials.py): optional `--grok-api-key`, then encrypted credential store / Azure KV (`--azure-key-vault-url`, `--azure-secret-name`), then **`GROK_API_KEY`** in the environment, consistent with other mapper-managed secrets (`credential_name=grok_api_key`). Override **`--methyl-mapper-home`** if credentials live outside the default mapper config dir.
+
+If no key is found or the API errors, the tool prints **`skipped_no_key`** or **`error`** in `report.ai_review` and continues — readiness verdict stays unchanged.
+
+**Privacy:** the Grok payload is built without project roots or artifact paths; free-text fields (e.g. verdict warnings) are scrubbed for obvious `/home/…`, `/work/…`, etc. **`--include-ai-raw-response`** adds truncated raw model text to `ai_review` (default off). Use **`--redact-paths`** when sharing exported markdown/JSON outside trusted hosts.
+
+`production/project.json` **`step_config.mapper.disease_term`** is passed through as **`disease_context`** unless **`--disease-context`** is set.
+
 Exit codes:
 
 - `0` — overall verdict is `go` or `go_with_risks`
@@ -39,6 +60,8 @@ Human biological review remains required before treating outputs as validated hy
 ## JSON output (module trajectory)
 
 Field `progression.module_trajectory.median_abs_pearson_stage_vs_score` is the median of **absolute Pearson** correlations between stage order (comparison labels mapped to `0..K-1`) and per-module scores from `modules_long.csv`. It does **not** use Spearman rank correlation; use scipy/R separately if you need rank-based association.
+
+Exported JSON may also include **`ai_review`** (Grok status, parsed structured commentary, optional raw excerpt) and **`ai_review_payload_meta`** when Grok is enabled — purely advisory.
 
 ## Example output
 

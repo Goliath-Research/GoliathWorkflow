@@ -8,6 +8,7 @@ This module is read-only: it does not modify project data.
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import sys
 from dataclasses import asdict, dataclass, field
@@ -86,7 +87,7 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
         "n_rows": 0,
         "n_unique_entities": 0,
         "entities_all_stages": 0,
-        "median_abs_spearman_vs_stage": None,
+        "median_abs_pearson_stage_vs_score": None,
         "fraction_monotone_up": None,
         "fraction_monotone_down": None,
         "top_by_abs_trend": [],
@@ -117,7 +118,7 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
     if not stage_order:
         stage_order = {str(k): int(k) for k in sorted(work["stage_index"].unique())}
     work["_ord"] = work[comp_col].map(stage_order).fillna(work["stage_index"])
-    spearman_abs: List[float] = []
+    pearson_abs: List[float] = []
     mono_up = mono_down = 0
     ent_details: List[Tuple[str, float, float]] = []
 
@@ -133,7 +134,7 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
             rho = float(np.corrcoef(xs, ys)[0, 1])
             if np.isnan(rho):
                 rho = 0.0
-        spearman_abs.append(abs(rho))
+        pearson_abs.append(abs(rho))
         diffs = np.diff(ys)
         if len(diffs) >= 2:
             if np.all(diffs >= 0) and np.any(diffs > 0):
@@ -147,9 +148,9 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
     n_all = sum(1 for _e, labs in present_by_ent.items() if all_stage_labels <= labs)
     out["entities_all_stages"] = int(n_all)
 
-    if spearman_abs:
-        out["median_abs_spearman_vs_stage"] = float(np.median(spearman_abs))
-        denom = len(spearman_abs)
+    if pearson_abs:
+        out["median_abs_pearson_stage_vs_score"] = float(np.median(pearson_abs))
+        denom = len(pearson_abs)
         out["fraction_monotone_up"] = mono_up / denom
         out["fraction_monotone_down"] = mono_down / denom
     ent_details.sort(key=lambda t: abs(t[1]), reverse=True)
@@ -241,8 +242,16 @@ def analyze_project_root(project_root: Path) -> Dict[str, Any]:
     modules_long = progression_summary.get("modules_long_csv")
     mod_path = Path(modules_long) if modules_long else progression_dir / "modules_long.csv"
 
+    mapper_cfg = ((production_project.get("step_config") or {}).get("mapper")) or {}
+    disease_context = mapper_cfg.get("disease_term")
+    if isinstance(disease_context, str):
+        disease_context = disease_context.strip() or None
+    else:
+        disease_context = None
+
     report: Dict[str, Any] = {
         "project_root": str(root),
+        "disease_context": disease_context,
         "paths": {
             "stability_summary": str(stability_summary_path),
             "production_summary": str(production_summary_path),
@@ -373,10 +382,10 @@ def _compute_verdict(report: Dict[str, Any]) -> ReadinessVerdict:
                 warnings.append("No modules present across all ordered stages — review enricher modules_ranked.csv inputs.")
             else:
                 prog_status = "pass"
-        med = (prog.get("module_trajectory") or {}).get("median_abs_spearman_vs_stage")
+        med = (prog.get("module_trajectory") or {}).get("median_abs_pearson_stage_vs_score")
         if med is not None and med < 0.15:
             warnings.append(
-                "Weak median |correlation| of module score vs stage index — progression signal may be subtle."
+                "Weak median |Pearson(stage_ord, score)| across modules — progression signal may be subtle."
             )
     else:
         prog_status = "skipped"
@@ -405,18 +414,26 @@ def _compute_verdict(report: Dict[str, Any]) -> ReadinessVerdict:
     )
 
 
-def render_markdown(report: Dict[str, Any]) -> str:
-    v = report.get("verdict") or {}
+def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> str:
+    from .grok_readiness import redact_report_for_export
+
+    src = redact_report_for_export(report) if redact_paths else report
+    v = src.get("verdict") or {}
     lines = [
         "# Stability and freeze readiness report",
         "",
-        f"- **Project root**: `{report.get('project_root', '')}`",
-        f"- **Overall verdict**: **{v.get('overall', 'unknown')}**",
-        f"- **Stability**: {v.get('stability')}",
-        f"- **Freeze**: {v.get('freeze')}",
-        f"- **Progression**: {v.get('progression')}",
-        "",
     ]
+    if not redact_paths:
+        lines.append(f"- **Project root**: `{src.get('project_root', '')}`")
+    lines.extend(
+        [
+            f"- **Overall verdict**: **{v.get('overall', 'unknown')}**",
+            f"- **Stability**: {v.get('stability')}",
+            f"- **Freeze**: {v.get('freeze')}",
+            f"- **Progression**: {v.get('progression')}",
+            "",
+        ]
+    )
     if v.get("reasons"):
         lines.extend(["## Blocking issues", ""])
         lines.extend(f"- {r}" for r in v["reasons"])
@@ -426,7 +443,7 @@ def render_markdown(report: Dict[str, Any]) -> str:
         lines.extend(f"- {w}" for w in v["warnings"])
         lines.append("")
 
-    s = report.get("stability") or {}
+    s = src.get("stability") or {}
     lines.extend(
         [
             "## Stability",
@@ -449,14 +466,18 @@ def render_markdown(report: Dict[str, Any]) -> str:
         )
     lines.append("")
 
-    f = report.get("freeze") or {}
+    f = src.get("freeze") or {}
     lines.extend(
         [
             "## Freeze (production)",
             "",
             f"- Summary present: {f.get('present')}",
             f"- Success: {f.get('success')}",
-            f"- Fixed panel path: `{f.get('fixed_dmp_panel_in_project')}`",
+            (
+                f"- Fixed panel path: `{f.get('fixed_dmp_panel_in_project')}`"
+                if f.get("fixed_dmp_panel_in_project")
+                else "- Fixed panel path: (redacted)"
+            ),
             f"- Merged panel rows: {f.get('merged_panel_rows')}",
         ]
     )
@@ -470,7 +491,7 @@ def render_markdown(report: Dict[str, Any]) -> str:
             )
     lines.append("")
 
-    p = report.get("progression") or {}
+    p = src.get("progression") or {}
     lines.extend(
         [
             "## Progression",
@@ -490,7 +511,7 @@ def render_markdown(report: Dict[str, Any]) -> str:
                 "",
                 f"- Entities with rows: {traj.get('n_unique_entities')}",
                 f"- Entities present all stages: {traj.get('entities_all_stages')}",
-                f"- Median |Pearson(stage_ord, score)|: {traj.get('median_abs_spearman_vs_stage')}",
+                f"- Median |Pearson(stage_ord, score)|: {traj.get('median_abs_pearson_stage_vs_score')}",
                 f"- Fraction monotone up (among scored): {traj.get('fraction_monotone_up')}",
                 f"- Fraction monotone down (among scored): {traj.get('fraction_monotone_down')}",
             ]
@@ -509,7 +530,7 @@ def render_markdown(report: Dict[str, Any]) -> str:
             lines.append(f"- `{lab}`: {cnt}")
     lines.append("")
 
-    bal = report.get("panel_balance") or {}
+    bal = src.get("panel_balance") or {}
     lines.extend(
         [
             "## Stable panel chromosome balance",
@@ -524,6 +545,38 @@ def render_markdown(report: Dict[str, Any]) -> str:
         top_chrom = sorted(fracs.items(), key=lambda kv: kv[1], reverse=True)[:8]
         lines.append("- Top chromosomes: " + ", ".join(f"{c}:{frac:.3f}" for c, frac in top_chrom))
     lines.append("")
+
+    ai = report.get("ai_review")
+    if isinstance(ai, dict) and ai:
+        lines.extend(["## AI readiness commentary (advisory)", "", "*Deterministic verdict above is unchanged; this section is LLM-assisted QA only.*", ""])
+        st = ai.get("status")
+        lines.append(f"- **Status**: `{st}`")
+        if ai.get("model_used"):
+            lines.append(f"- **Model**: `{ai.get('model_used')}`")
+        if ai.get("error"):
+            lines.extend(["", f"- **Error**: {ai.get('error')}", ""])
+        struct = ai.get("structured")
+        if isinstance(struct, dict):
+            ca = struct.get("consistency_assessment")
+            if ca:
+                lines.append(f"- **Consistency assessment**: `{ca}`")
+            for key, title in (
+                ("summary_bullets", "Summary"),
+                ("caveats", "Caveats"),
+                ("suggested_human_checks", "Suggested human checks"),
+            ):
+                items = struct.get(key)
+                if isinstance(items, list) and items:
+                    lines.extend(["", f"### {title}", ""])
+                    for item in items:
+                        lines.append(f"- {item}")
+            dp = struct.get("disease_progression_alignment")
+            if isinstance(dp, str) and dp.strip():
+                lines.extend(["", "### Disease progression alignment", "", dp.strip(), ""])
+            if struct.get("narrative_text") and not dp:
+                lines.extend(["", "### Narrative", "", str(struct["narrative_text"])[:4000], ""])
+        lines.append("")
+
     lines.extend(
         [
             "---",
@@ -534,6 +587,14 @@ def render_markdown(report: Dict[str, Any]) -> str:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    from .grok_readiness import (
+        DEFAULT_GROK_MODEL,
+        build_sanitized_ai_payload,
+        redact_report_for_export,
+        resolve_grok_api_key,
+        run_grok_readiness_review,
+    )
+
     parser = argparse.ArgumentParser(
         description="Audit stability, freeze, and progression artifacts before modeling."
     )
@@ -544,15 +605,99 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument("--json-out", type=Path, default=None, help="Write full report JSON to this path.")
     parser.add_argument("--markdown-out", type=Path, default=None, help="Write markdown report to this path.")
+    parser.add_argument(
+        "--redact-paths",
+        action="store_true",
+        help="Omit project_root, artifact paths, and fixed_panel path from markdown and JSON export.",
+    )
+    grok = parser.add_argument_group("Grok advisory review (xAI)")
+    grok.add_argument(
+        "--no-grok-review",
+        action="store_false",
+        dest="grok_review",
+        help="Disable Grok consistency review (default: enabled).",
+    )
+    grok.set_defaults(grok_review=True)
+    grok.add_argument("--grok-model", type=str, default=DEFAULT_GROK_MODEL, help="xAI chat model name.")
+    grok.add_argument("--grok-max-top-rows", type=int, default=10, help="Top-N rows for module trends and labels in AI payload.")
+    grok.add_argument("--grok-timeout-seconds", type=float, default=60.0, help="HTTP timeout per Grok request.")
+    grok.add_argument("--grok-max-retries", type=int, default=2, help="Retries on transient Grok failures.")
+    grok.add_argument("--grok-temperature", type=float, default=0.1, help="Sampling temperature for Grok.")
+    grok.add_argument("--grok-api-key", type=str, default=None, help="Explicit Grok API key (otherwise MethylMapper credential chain).")
+    grok.add_argument("--azure-key-vault-url", type=str, default=None, help="Optional Azure Key Vault URL for Grok key.")
+    grok.add_argument("--azure-secret-name", type=str, default=None, help="Optional Key Vault secret name (default grok-api-key).")
+    grok.add_argument(
+        "--methyl-mapper-home",
+        type=Path,
+        default=None,
+        help="Optional MethylMapper home for credential file resolution (~/.methyl_mapper by default).",
+    )
+    grok.add_argument(
+        "--disease-context",
+        type=str,
+        default=None,
+        help="Override disease label sent to Grok (default: production project mapper disease_term).",
+    )
+    grok.add_argument(
+        "--include-ai-raw-response",
+        action="store_true",
+        help="Include truncated raw Grok text in ai_review (default: off).",
+    )
+    grok.add_argument("--ai-raw-response-max-chars", type=int, default=2000, help="Max chars when --include-ai-raw-response.")
     args = parser.parse_args(argv)
 
     report = analyze_project_root(args.project_root)
-    text = render_markdown(report)
+
+    ai_review: Optional[Dict[str, Any]] = None
+    if getattr(args, "grok_review", True):
+        disease = (args.disease_context or "").strip() or report.get("disease_context")
+        payload = build_sanitized_ai_payload(
+            report,
+            disease_context=str(disease) if disease else None,
+            top_n=max(1, int(args.grok_max_top_rows)),
+        )
+        api_key = resolve_grok_api_key(
+            explicit_key=args.grok_api_key,
+            azure_key_vault_url=(args.azure_key_vault_url or "").strip() or None,
+            azure_secret_name=(args.azure_secret_name or "").strip() or None,
+            methyl_mapper_home=args.methyl_mapper_home.expanduser() if args.methyl_mapper_home else None,
+        )
+        if not api_key:
+            ai_review = {
+                "status": "skipped_no_key",
+                "error": "No Grok API key resolved (set GROK_API_KEY, use methyl_mapper_credentials save, or pass --grok-api-key).",
+                "advisory_only": True,
+            }
+        else:
+            ai_review = run_grok_readiness_review(
+                sanitized_payload=payload,
+                api_key=api_key,
+                model=args.grok_model,
+                temperature=float(args.grok_temperature),
+                timeout_seconds=float(args.grok_timeout_seconds),
+                max_retries=int(args.grok_max_retries),
+                include_raw_response=bool(args.include_ai_raw_response),
+                raw_max_chars=int(args.ai_raw_response_max_chars),
+            )
+        report["ai_review"] = ai_review
+        report["ai_review_payload_meta"] = {
+            "sanitized": True,
+            "top_n": max(1, int(args.grok_max_top_rows)),
+            "model_requested": args.grok_model,
+        }
+    else:
+        report["ai_review"] = {"status": "disabled", "advisory_only": True}
+
+    export_doc = copy.deepcopy(report)
+    if args.redact_paths:
+        export_doc = redact_report_for_export(export_doc)
+
+    text = render_markdown(report, redact_paths=bool(args.redact_paths))
 
     if args.json_out:
         args.json_out.parent.mkdir(parents=True, exist_ok=True)
         with open(args.json_out, "w", encoding="utf-8") as jf:
-            json.dump(report, jf, indent=2, default=str)
+            json.dump(export_doc, jf, indent=2, default=str)
     if args.markdown_out:
         args.markdown_out.parent.mkdir(parents=True, exist_ok=True)
         args.markdown_out.write_text(text, encoding="utf-8")

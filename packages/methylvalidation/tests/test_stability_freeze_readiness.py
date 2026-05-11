@@ -1,12 +1,21 @@
 """Tests for stability_freeze_readiness analyzer."""
 
 import json
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
+from methyl_validation.grok_readiness import (
+    build_sanitized_ai_payload,
+    payload_contains_path_like_strings,
+    redact_report_for_export,
+    resolve_grok_api_key,
+)
 from methyl_validation.stability_freeze_readiness import (
     analyze_project_root,
+    main,
     render_markdown,
 )
 
@@ -127,3 +136,135 @@ def test_no_go_on_legacy_detector_keys(tmp_path: Path):
     report = analyze_project_root(root)
     assert report["verdict"]["freeze"] == "fail"
     assert report["verdict"]["overall"] == "no_go"
+
+
+def test_build_sanitized_ai_payload_no_path_like_strings(tmp_path: Path):
+    root = tmp_path / "Proj"
+    root.mkdir()
+    _write_minimal_project(root)
+    report = analyze_project_root(root)
+    payload = build_sanitized_ai_payload(report, disease_context="Example disease", top_n=5)
+    assert not payload_contains_path_like_strings(payload)
+
+
+def test_build_sanitized_ai_payload_scrubs_paths_in_verdict_text(tmp_path: Path):
+    root = tmp_path / "Proj"
+    root.mkdir()
+    _write_minimal_project(root)
+    report = analyze_project_root(root)
+    report.setdefault("verdict", {})
+    report["verdict"]["warnings"] = list(report["verdict"].get("warnings") or []) + [
+        "Missing file /home/someuser/secret/run/output.csv"
+    ]
+    payload = build_sanitized_ai_payload(report, disease_context=None, top_n=3)
+    assert not payload_contains_path_like_strings(payload)
+    dumped = json.dumps(payload)
+    assert "[redacted]" in dumped
+    assert "/home/someuser" not in dumped
+
+
+def test_resolve_grok_api_key_explicit_overrides_env(monkeypatch):
+    monkeypatch.setenv("GROK_API_KEY", "from-env")
+    assert resolve_grok_api_key(explicit_key=" explicit ") == "explicit"
+
+
+def test_render_markdown_ai_advisory_section(tmp_path: Path):
+    root = tmp_path / "Proj"
+    root.mkdir()
+    _write_minimal_project(root)
+    report = analyze_project_root(root)
+    report["ai_review"] = {
+        "status": "ok",
+        "model_used": "grok-4.3",
+        "advisory_only": True,
+        "structured": {
+            "consistency_assessment": "mixed",
+            "summary_bullets": ["Signal A", "Signal B"],
+            "caveats": ["Limited stages"],
+            "suggested_human_checks": ["Review pathways"],
+            "disease_progression_alignment": "Placeholder alignment text.",
+        },
+    }
+    md = render_markdown(report)
+    assert "AI readiness commentary (advisory)" in md
+    assert "mixed" in md
+    assert "Signal A" in md
+
+
+def test_redact_report_for_export_strips_paths(tmp_path: Path):
+    root = tmp_path / "Proj"
+    root.mkdir()
+    _write_minimal_project(root)
+    report = analyze_project_root(root)
+    redacted = redact_report_for_export(report)
+    assert "project_root" not in redacted
+    assert "paths" not in redacted
+    mt = (redacted.get("progression") or {}).get("module_trajectory") or {}
+    assert "modules_csv" not in mt
+
+
+def test_main_no_grok_review_json(tmp_path: Path):
+    root = tmp_path / "Proj"
+    root.mkdir()
+    _write_minimal_project(root)
+    out = tmp_path / "report.json"
+    prev = os.environ.get("GROK_API_KEY")
+    try:
+        if "GROK_API_KEY" in os.environ:
+            del os.environ["GROK_API_KEY"]
+        rc = main([str(root), "--no-grok-review", "--json-out", str(out)])
+        data = json.loads(out.read_text(encoding="utf-8"))
+        assert data["ai_review"]["status"] == "disabled"
+        assert rc == 0
+    finally:
+        if prev is not None:
+            os.environ["GROK_API_KEY"] = prev
+
+
+def test_main_redact_paths_json(tmp_path: Path):
+    root = tmp_path / "Proj"
+    root.mkdir()
+    _write_minimal_project(root)
+    out = tmp_path / "redacted.json"
+    prev = os.environ.get("GROK_API_KEY")
+    try:
+        if "GROK_API_KEY" in os.environ:
+            del os.environ["GROK_API_KEY"]
+        main([str(root), "--no-grok-review", "--json-out", str(out), "--redact-paths"])
+        data = json.loads(out.read_text(encoding="utf-8"))
+        assert "project_root" not in data
+    finally:
+        if prev is not None:
+            os.environ["GROK_API_KEY"] = prev
+
+
+def test_main_mock_grok_does_not_change_verdict(tmp_path: Path):
+    root = tmp_path / "Proj"
+    root.mkdir()
+    _write_minimal_project(root)
+    expected = analyze_project_root(root)["verdict"]
+    out = tmp_path / "with_ai.json"
+    fake_review = {
+        "provider": "xai",
+        "status": "ok",
+        "model_used": "grok-4.3",
+        "advisory_only": True,
+        "structured": {"consistency_assessment": "high", "summary_bullets": ["ok"]},
+    }
+    with patch("methyl_validation.grok_readiness.run_grok_readiness_review", return_value=fake_review):
+        main([str(root), "--grok-api-key", "dummy", "--json-out", str(out)])
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["verdict"] == expected
+    assert data["ai_review"]["status"] == "ok"
+
+
+def test_main_skipped_no_key_non_blocking(tmp_path: Path):
+    root = tmp_path / "Proj"
+    root.mkdir()
+    _write_minimal_project(root)
+    out = tmp_path / "skipped.json"
+    with patch("methyl_validation.grok_readiness.resolve_grok_api_key", return_value=None):
+        rc = main([str(root), "--json-out", str(out)])
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["ai_review"]["status"] == "skipped_no_key"
+    assert rc == 0

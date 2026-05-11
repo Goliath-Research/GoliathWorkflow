@@ -17,6 +17,7 @@ xgboost = ">=2.0.0,<3.0.0"
 methylutils = {path = "../methylutils", develop = true}
 methyl-predictor = {path = "../methylpredictor", develop = true}
 methyl-detector = {path = "../methyldetector", develop = true}
+methyl_mapper = {path = "../methylmapper", develop = true}
 
 [tool.poetry.scripts]
 methyl-validation = "methyl_validation.cli:main"
