@@ -284,6 +284,13 @@ def test_main_mock_grok_does_not_change_verdict(tmp_path: Path):
     assert data["ai_review"]["status"] == "ok"
 
 
+def test_main_rejects_existing_file_as_project_root(tmp_path: Path):
+    fake_json = tmp_path / "Healthy_vs_PCa1-4-CG.json"
+    fake_json.write_text("{}", encoding="utf-8")
+    rc = main([str(fake_json), "--stdout-only"])
+    assert rc == 2
+
+
 def test_main_skipped_no_key_non_blocking(tmp_path: Path):
     root = tmp_path / "Proj"
     root.mkdir()

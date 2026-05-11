@@ -615,6 +615,32 @@ def _resolve_report_output_path(project_root: Path, arg: Optional[Path], default
     return (rd / p).resolve()
 
 
+def _normalize_project_root_arg(raw: Path) -> Tuple[Optional[Path], int]:
+    """
+    Ensure the positional argument is a project directory, not a stray config file path.
+
+    Returns ``(resolved_directory, 0)`` or ``(None, 2)`` when the path exists and is a file
+    (common mistake: passing ``.../MyProject.json`` instead of ``.../MyProject``).
+    """
+    p = raw.expanduser().resolve()
+    if p.exists() and p.is_file():
+        lines = [
+            "methyl-stability-freeze-readiness: first argument must be the PROJECT DIRECTORY "
+            "that contains monte_carlo_runs/, not a JSON/config file.",
+            f"Received a file: {p}",
+        ]
+        if p.suffix.lower() == ".json":
+            cand = p.with_suffix("")
+            mc = cand / "monte_carlo_runs"
+            if cand.is_dir() and mc.is_dir():
+                lines.append(f"Example: methyl-stability-freeze-readiness {cand}")
+            elif cand.is_dir():
+                lines.append(f"You may have meant the directory: {cand}")
+        print("\n".join(lines), file=sys.stderr)
+        return None, 2
+    return p, 0
+
+
 def _emit_grok_stderr_summary(ai_review: Dict[str, Any]) -> None:
     """One-line stderr hint so terminal runs show Grok outcome even if markdown is easy to miss."""
     st = ai_review.get("status")
@@ -729,6 +755,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     grok.add_argument("--ai-raw-response-max-chars", type=int, default=2000, help="Max chars when --include-ai-raw-response.")
     args = parser.parse_args(argv)
+
+    proj_root, arg_rc = _normalize_project_root_arg(args.project_root)
+    if arg_rc != 0:
+        return arg_rc
+    args.project_root = proj_root
 
     report = analyze_project_root(args.project_root)
 
