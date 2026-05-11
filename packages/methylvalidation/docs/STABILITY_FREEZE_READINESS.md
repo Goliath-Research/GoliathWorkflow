@@ -18,10 +18,12 @@ After Monte Carlo **stability** and production **freeze**, review artifacts befo
 From the repo root (venv active):
 
 ```bash
-methyl-stability-freeze-readiness /path/to/<project_name> [--json-out report.json] [--markdown-out report.md]
+methyl-stability-freeze-readiness /path/to/<project_name>
 ```
 
 `<project_name>` is the directory that **contains** `monte_carlo_runs/` (e.g. `/work/prostate-cancer/Healthy_vs_PCa1-4-CG`).
+
+**Outputs (default):** JSON and markdown are written next to your Monte Carlo tree under **` <project_name>/readiness/readiness.json`** and **` <project_name>/readiness/readiness.md`**. Markdown is also printed to stdout. Override destinations with **`--json-out`** / **`--markdown-out`** (absolute paths are used as-is; **relative paths are resolved under `readiness/`**, not the shell cwd). Use **`--stdout-only`** to skip writing files (pipe-friendly).
 
 Optional **`--redact-paths`** omits `project_root`, filesystem artifact paths, and similar fields from **exported** JSON and markdown while retaining deterministic verdict content.
 
@@ -36,9 +38,11 @@ By default the CLI asks **Grok** (`grok-4.3`) for **non-blocking**, advisory com
 | Evidence rows in AI payload | Top `--grok-max-top-rows` (default **10**) module trends + label counts |
 | HTTP | `--grok-timeout-seconds 60`, `--grok-max-retries 2`, `--grok-temperature 0.1` |
 
-**Credential resolution** follows **MethylMapper** [`SecureCredentialManager`](../../../packages/methylmapper/methyl_mapper/secure_credentials.py): optional `--grok-api-key`, then encrypted credential store / Azure KV (`--azure-key-vault-url`, `--azure-secret-name`), then **`GROK_API_KEY`** in the environment, consistent with other mapper-managed secrets (`credential_name=grok_api_key`). Override **`--methyl-mapper-home`** if credentials live outside the default mapper config dir.
+**Credential resolution** follows **MethylMapper** [`SecureCredentialManager`](../../../packages/methylmapper/methyl_mapper/secure_credentials.py), in this order: **`--grok-api-key`**, encrypted file (**default** `~/.methyl_mapper/credentials/grok_api_key.encrypted`; override with **`--encrypted-file-path`** to match `methyl-mapper`), optional Azure KV (**`--azure-key-vault-url`**, **`--azure-secret-name`**), then **`GROK_API_KEY`**. Use **`--methyl-mapper-home`** if your mapper config root is not `~/.methyl_mapper`.
 
-If no key is found or the API errors, the tool prints **`skipped_no_key`** or **`error`** in `report.ai_review` and continues — readiness verdict stays unchanged.
+If resolution fails, **`ai_review.status`** is **`skipped_no_key`** and **`credential_hint`** explains why (missing file, decrypt error, unset env). Common causes: running readiness under a **different user or host** than where `methyl_mapper_credentials save` wrote the file; **decrypt mismatch** — if you saved with **`METHYL_MAPPER_CREDENTIAL_PASSWORD`**, export the same variable before running readiness; or **`methyl-validation`** installed without **`methyl_mapper`** (then encrypted files are never read — reinstall with mapper available).
+
+If no key is found or the API errors, the tool still emits **`ai_review`** and continues — readiness verdict stays unchanged.
 
 **Privacy:** the Grok payload is built without project roots or artifact paths; free-text fields (e.g. verdict warnings) are scrubbed for obvious `/home/…`, `/work/…`, etc. **`--include-ai-raw-response`** adds truncated raw model text to `ai_review` (default off). Use **`--redact-paths`** when sharing exported markdown/JSON outside trusted hosts.
 

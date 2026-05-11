@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import urllib.error
@@ -38,26 +39,55 @@ def resolve_grok_api_key(
     azure_key_vault_url: Optional[str] = None,
     azure_secret_name: Optional[str] = None,
     methyl_mapper_home: Optional[Path] = None,
-) -> Optional[str]:
-    """Resolve Grok API key using MethylMapper SecureCredentialManager precedence."""
+    encrypted_file_path: Optional[Path] = None,
+) -> tuple[Optional[str], Optional[str]]:
+    """Resolve Grok API key using MethylMapper SecureCredentialManager precedence.
+
+    Returns ``(api_key, hint)``. ``hint`` is a short diagnostic when ``api_key`` is missing
+    (e.g. decrypt failure, ImportError, or expected path for the encrypted file).
+    """
+    exp = (explicit_key or "").strip() or None
     try:
         from methyl_mapper.secure_credentials import SecureCredentialManager
     except ImportError:
-        return (explicit_key or "").strip() or None
+        return (exp, None if exp else "methyl_mapper is not installed; cannot read ~/.methyl_mapper credentials.")
 
     kw: Dict[str, Any] = {
         "credential_name": "grok_api_key",
         "env_var_name": "GROK_API_KEY",
         "azure_key_vault_url": azure_key_vault_url,
-        "encrypted_file_path": None,
+        "encrypted_file_path": encrypted_file_path.expanduser() if encrypted_file_path else None,
     }
     if azure_secret_name:
         kw["azure_secret_name"] = azure_secret_name
     if methyl_mapper_home is not None:
         kw["methyl_mapper_home"] = methyl_mapper_home
     mgr = SecureCredentialManager(**kw)
-    key = mgr.get_credential(explicit_key=(explicit_key or "").strip() or None)
-    return (key or "").strip() or None
+    key = mgr.get_credential(explicit_key=exp)
+    out = (key or "").strip() or None
+    if out:
+        return (out, None)
+
+    hint_parts: List[str] = []
+    if mgr.last_resolution_error:
+        hint_parts.append(mgr.last_resolution_error)
+    ep = mgr.encrypted_file_path
+    if ep is not None:
+        if ep.exists():
+            if not hint_parts:
+                hint_parts.append(
+                    f"Encrypted file exists ({ep}) but no key was returned — check decrypt/password "
+                    "(use same host/user as when saving; set METHYL_MAPPER_CREDENTIAL_PASSWORD if used at save time)."
+                )
+        else:
+            hint_parts.append(
+                f"No encrypted Grok credential at expected path {ep} "
+                "(save with: methyl_mapper_credentials save --credential-type grok --api-key ...)."
+            )
+    if not mgr.azure_key_vault_url and not os.environ.get("GROK_API_KEY"):
+        hint_parts.append("GROK_API_KEY is unset.")
+    combined = " ".join(hint_parts) if hint_parts else None
+    return (None, combined)
 
 
 def build_sanitized_ai_payload(
@@ -288,10 +318,31 @@ def run_grok_readiness_review(
         return review
 
     content = str(result.get("content") or "")
+    if not content.strip():
+        review["status"] = "error"
+        review["error"] = "empty_model_response"
+        return review
+
     parsed = _parse_grok_json_content(content)
     review["status"] = "ok"
     review["model_used"] = result.get("model_used")
     review["structured"] = parsed
+
+    def _structured_usable(d: Dict[str, Any]) -> bool:
+        ca = (d.get("consistency_assessment") or "").strip()
+        bullets = d.get("summary_bullets") if isinstance(d.get("summary_bullets"), list) else []
+        narrative = (d.get("narrative_text") or "").strip()
+        align = (d.get("disease_progression_alignment") or "").strip()
+        return bool(ca or bullets or narrative or align)
+
+    if not _structured_usable(parsed):
+        preview = content.strip()[:2000]
+        review["response_preview"] = preview
+        review["structured_parse_note"] = (
+            "Model reply had no expected JSON fields (or JSON keys differ). "
+            "Showing truncated reply below; use --include-ai-raw-response for a longer excerpt in JSON."
+        )
+
     if include_raw_response:
         review["raw_response_excerpt"] = content[: max(0, int(raw_max_chars))]
     return review

@@ -170,7 +170,10 @@ class SecureCredentialManager:
                 logger.debug(f"✅ Retrieved {self.credential_name} from encrypted file")
                 return decrypted
             except Exception as e:
-                logger.debug(f"Failed to decrypt credential file: {e}")
+                self.last_resolution_error = (
+                    f"Failed to decrypt local credential file {self.encrypted_file_path}: {e}"
+                )
+                logger.warning(self.last_resolution_error)
         
         # 3. Azure Key Vault (fallback if local file not available)
         if self.azure_key_vault_url:

@@ -555,6 +555,13 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             lines.append(f"- **Model**: `{ai.get('model_used')}`")
         if ai.get("error"):
             lines.extend(["", f"- **Error**: {ai.get('error')}", ""])
+        if ai.get("credential_hint"):
+            lines.extend(["", f"- **Credential hint**: {ai.get('credential_hint')}", ""])
+        if ai.get("structured_parse_note"):
+            lines.extend(["", f"- **Parse note**: {ai.get('structured_parse_note')}", ""])
+        if ai.get("response_preview"):
+            pv = str(ai.get("response_preview") or "")[:4000]
+            lines.extend(["", "### Model reply (truncated)", "", "```", pv, "```", ""])
         struct = ai.get("structured")
         if isinstance(struct, dict):
             ca = struct.get("consistency_assessment")
@@ -586,6 +593,60 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
     return "\n".join(lines)
 
 
+def _default_readiness_dir(project_root: Path) -> Path:
+    """Reports live next to Monte Carlo outputs: ``<project>/readiness/``."""
+    return project_root.resolve() / "readiness"
+
+
+def _resolve_report_output_path(project_root: Path, arg: Optional[Path], default_filename: str) -> Path:
+    """
+    Default outputs go under ``<project_root>/readiness/``.
+
+    - If ``arg`` is omitted: ``readiness/<default_filename>``.
+    - If ``arg`` is absolute: use as-is.
+    - If ``arg`` is relative: treat as relative to ``readiness/`` (not the shell cwd).
+    """
+    rd = _default_readiness_dir(project_root)
+    if arg is None:
+        return rd / default_filename
+    p = arg.expanduser()
+    if p.is_absolute():
+        return p
+    return (rd / p).resolve()
+
+
+def _emit_grok_stderr_summary(ai_review: Dict[str, Any]) -> None:
+    """One-line stderr hint so terminal runs show Grok outcome even if markdown is easy to miss."""
+    st = ai_review.get("status")
+    if st == "ok":
+        mu = ai_review.get("model_used") or ai_review.get("model_requested") or "?"
+        print(
+            f"methyl-stability-freeze-readiness: Grok advisory review OK (model_used={mu}). "
+            "See markdown section \"AI readiness commentary (advisory)\".",
+            file=sys.stderr,
+        )
+        return
+    if st == "skipped_no_key":
+        hint = ai_review.get("credential_hint") or ai_review.get("error") or "(no detail)"
+        print(
+            "methyl-stability-freeze-readiness: Grok skipped — no API key resolved. "
+            f"{hint}",
+            file=sys.stderr,
+        )
+        return
+    if st == "error":
+        err = ai_review.get("error") or "(unknown)"
+        print(
+            f"methyl-stability-freeze-readiness: Grok request failed — {err}",
+            file=sys.stderr,
+        )
+        return
+    print(
+        f"methyl-stability-freeze-readiness: Grok advisory status={st!r}.",
+        file=sys.stderr,
+    )
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     from .grok_readiness import (
         DEFAULT_GROK_MODEL,
@@ -603,8 +664,25 @@ def main(argv: Optional[List[str]] = None) -> int:
         type=Path,
         help="Directory containing monte_carlo_runs/ (e.g. .../Healthy_vs_PCa1-4-CG)",
     )
-    parser.add_argument("--json-out", type=Path, default=None, help="Write full report JSON to this path.")
-    parser.add_argument("--markdown-out", type=Path, default=None, help="Write markdown report to this path.")
+    parser.add_argument(
+        "--json-out",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Write full report JSON (default: <project>/readiness/readiness.json). Relative paths are under readiness/.",
+    )
+    parser.add_argument(
+        "--markdown-out",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help="Write markdown report (default: <project>/readiness/readiness.md). Relative paths are under readiness/.",
+    )
+    parser.add_argument(
+        "--stdout-only",
+        action="store_true",
+        help="Do not write JSON/markdown files; print markdown to stdout only (legacy pipe-friendly mode).",
+    )
     parser.add_argument(
         "--redact-paths",
         action="store_true",
@@ -624,6 +702,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     grok.add_argument("--grok-max-retries", type=int, default=2, help="Retries on transient Grok failures.")
     grok.add_argument("--grok-temperature", type=float, default=0.1, help="Sampling temperature for Grok.")
     grok.add_argument("--grok-api-key", type=str, default=None, help="Explicit Grok API key (otherwise MethylMapper credential chain).")
+    grok.add_argument(
+        "--encrypted-file-path",
+        type=Path,
+        default=None,
+        help="Encrypted Grok credential file (same as methyl-mapper --encrypted-file-path; default ~/.methyl_mapper/credentials/grok_api_key.encrypted).",
+    )
     grok.add_argument("--azure-key-vault-url", type=str, default=None, help="Optional Azure Key Vault URL for Grok key.")
     grok.add_argument("--azure-secret-name", type=str, default=None, help="Optional Key Vault secret name (default grok-api-key).")
     grok.add_argument(
@@ -656,16 +740,18 @@ def main(argv: Optional[List[str]] = None) -> int:
             disease_context=str(disease) if disease else None,
             top_n=max(1, int(args.grok_max_top_rows)),
         )
-        api_key = resolve_grok_api_key(
+        api_key, key_hint = resolve_grok_api_key(
             explicit_key=args.grok_api_key,
             azure_key_vault_url=(args.azure_key_vault_url or "").strip() or None,
             azure_secret_name=(args.azure_secret_name or "").strip() or None,
             methyl_mapper_home=args.methyl_mapper_home.expanduser() if args.methyl_mapper_home else None,
+            encrypted_file_path=args.encrypted_file_path.expanduser() if args.encrypted_file_path else None,
         )
         if not api_key:
             ai_review = {
                 "status": "skipped_no_key",
                 "error": "No Grok API key resolved (set GROK_API_KEY, use methyl_mapper_credentials save, or pass --grok-api-key).",
+                "credential_hint": key_hint,
                 "advisory_only": True,
             }
         else:
@@ -685,8 +771,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             "top_n": max(1, int(args.grok_max_top_rows)),
             "model_requested": args.grok_model,
         }
+        _emit_grok_stderr_summary(ai_review)
     else:
         report["ai_review"] = {"status": "disabled", "advisory_only": True}
+        print(
+            "methyl-stability-freeze-readiness: Grok advisory review disabled (--no-grok-review).",
+            file=sys.stderr,
+        )
 
     export_doc = copy.deepcopy(report)
     if args.redact_paths:
@@ -694,13 +785,22 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     text = render_markdown(report, redact_paths=bool(args.redact_paths))
 
-    if args.json_out:
-        args.json_out.parent.mkdir(parents=True, exist_ok=True)
-        with open(args.json_out, "w", encoding="utf-8") as jf:
+    if not args.stdout_only:
+        json_path = _resolve_report_output_path(args.project_root, args.json_out, "readiness.json")
+        md_path = _resolve_report_output_path(args.project_root, args.markdown_out, "readiness.md")
+
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(json_path, "w", encoding="utf-8") as jf:
             json.dump(export_doc, jf, indent=2, default=str)
-    if args.markdown_out:
-        args.markdown_out.parent.mkdir(parents=True, exist_ok=True)
-        args.markdown_out.write_text(text, encoding="utf-8")
+
+        md_path.parent.mkdir(parents=True, exist_ok=True)
+        md_path.write_text(text, encoding="utf-8")
+
+        print(
+            f"methyl-stability-freeze-readiness: wrote JSON → {json_path}\n"
+            f"methyl-stability-freeze-readiness: wrote markdown → {md_path}",
+            file=sys.stderr,
+        )
     print(text)
     return 0 if report.get("verdict", {}).get("overall") != "no_go" else 2
 

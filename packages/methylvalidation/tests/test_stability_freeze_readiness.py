@@ -14,6 +14,7 @@ from methyl_validation.grok_readiness import (
     resolve_grok_api_key,
 )
 from methyl_validation.stability_freeze_readiness import (
+    _resolve_report_output_path,
     analyze_project_root,
     main,
     render_markdown,
@@ -112,6 +113,20 @@ def _write_minimal_project(tree: Path) -> None:
     ).to_csv(prog / "entities_progression_labels.csv", index=False)
 
 
+def test_resolve_report_output_defaults_under_project_readiness(tmp_path: Path):
+    proj = tmp_path / "MyProj"
+    proj.mkdir()
+    assert _resolve_report_output_path(proj, None, "readiness.json") == proj.resolve() / "readiness" / "readiness.json"
+    assert _resolve_report_output_path(proj, Path("archive.json"), "x") == proj.resolve() / "readiness" / "archive.json"
+
+
+def test_resolve_report_output_absolute_unchanged(tmp_path: Path):
+    proj = tmp_path / "MyProj"
+    proj.mkdir()
+    abs_path = tmp_path / "elsewhere" / "out.json"
+    assert _resolve_report_output_path(proj, abs_path, "readiness.json") == abs_path.resolve()
+
+
 def test_analyze_and_render_go(tmp_path: Path):
     root = tmp_path / "Proj"
     root.mkdir()
@@ -165,7 +180,18 @@ def test_build_sanitized_ai_payload_scrubs_paths_in_verdict_text(tmp_path: Path)
 
 def test_resolve_grok_api_key_explicit_overrides_env(monkeypatch):
     monkeypatch.setenv("GROK_API_KEY", "from-env")
-    assert resolve_grok_api_key(explicit_key=" explicit ") == "explicit"
+    key, hint = resolve_grok_api_key(explicit_key=" explicit ")
+    assert key == "explicit"
+    assert hint is None
+
+
+def test_resolve_grok_api_key_decrypt_failure_surfaces_hint(tmp_path: Path):
+    bad = tmp_path / "grok_api_key.encrypted"
+    bad.write_bytes(b"not-valid-fernet-payload")
+    key, hint = resolve_grok_api_key(encrypted_file_path=bad)
+    assert key is None
+    assert hint is not None
+    assert "decrypt" in hint.lower()
 
 
 def test_render_markdown_ai_advisory_section(tmp_path: Path):
@@ -263,7 +289,7 @@ def test_main_skipped_no_key_non_blocking(tmp_path: Path):
     root.mkdir()
     _write_minimal_project(root)
     out = tmp_path / "skipped.json"
-    with patch("methyl_validation.grok_readiness.resolve_grok_api_key", return_value=None):
+    with patch("methyl_validation.grok_readiness.resolve_grok_api_key", return_value=(None, None)):
         rc = main([str(root), "--json-out", str(out)])
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["ai_review"]["status"] == "skipped_no_key"
