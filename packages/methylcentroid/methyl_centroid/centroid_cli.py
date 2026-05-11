@@ -168,7 +168,7 @@ Examples:
                 print("Configuration loaded successfully")
                 print(f"Chromosomes: {chroms}")
                 print(f"Contexts: {ctxs}")
-                print(f"Number of samples: {len(config_data.get('add_samples', config_data.get('samples', [])))}")
+                print(f"Number of samples: {len(config_data.get('add_samples', []))}")
                 print(f"Total combinations: {len(chroms) * len(ctxs)}")
             
             # Process each chromosome/context combination

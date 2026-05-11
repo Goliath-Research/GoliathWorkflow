@@ -218,7 +218,7 @@ def create_config_from_args(args: argparse.Namespace) -> MethylCentroidConfig:
         chrom=args.chromosome,
         ctx=args.context,
         output_dir=str(args.output_dir),
-        samples=sample_paths,
+        add_samples=sample_paths,
         min_coverage=args.min_coverage,
         binned_stats_bins=args.binned_stats_bins,
         use_gpu=True if args.use_gpu is None else bool(args.use_gpu),
@@ -260,7 +260,9 @@ def run_single_processing(
     """
     print(f"🚀 Starting MethylCentroid processing for {config.chrom}-{config.ctx}")
     print(f"📁 Output directory: {config.output_dir}")
-    print(f"📊 Samples: {len(config.samples)}")
+    n_add = len(config.add_samples or [])
+    n_rem = len(config.remove_samples or [])
+    print(f"📊 Cohort deltas: add_samples={n_add}, remove_samples={n_rem}")
     print(f"🎯 Minimum coverage: {config.min_coverage}")
     print()
 

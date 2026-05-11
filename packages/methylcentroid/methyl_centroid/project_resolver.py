@@ -19,6 +19,20 @@ logger = logging.getLogger(__name__)
 CLUSTER_MANIFEST_FILENAME = "manifest.json"
 
 
+def _forbid_centroid_samples_key(step_dict: Any, source: str) -> None:
+    """Reject obsolete ``samples`` in centroid step config or overrides (strict migration)."""
+    if not isinstance(step_dict, dict):
+        return
+    bc = step_dict.get("base_config")
+    if isinstance(bc, dict) and "samples" in bc:
+        raise ValueError(
+            f'{source}: obsolete key "samples" in centroid base_config is no longer supported. '
+            "Remove it from project step_config and step-override JSON. "
+            "Pipeline runs use add_samples for the cohort; incremental updates use add_samples/remove_samples "
+            "with baseline cohort read from existing centroid HDF5 metadata."
+        )
+
+
 def _get_group_config_for_label(project: Any, side: str, label: str) -> Optional[Any]:
     """Return the GroupConfig for (side, label) if project uses control/disease; else None."""
     if not project.uses_control_disease():
@@ -93,6 +107,7 @@ def _run_cluster_then_centroids_per_cluster(
     if step_override_path is not None:
         with open(step_override_path) as f:
             step_cfg = {**step_cfg, **json.load(f)}
+    _forbid_centroid_samples_key(step_cfg, "centroid step config (subcluster)")
 
     for derived_label in derived_labels:
         sample_paths = groups.get(derived_label)
@@ -267,6 +282,7 @@ def resolve_centroid_batch_config(
     # Apply project-level step config (centroid) if present (never override output_dir)
     step_cfg = project.get_step_config("centroid")
     if step_cfg:
+        _forbid_centroid_samples_key(step_cfg, "project step_config.centroid")
         if "base_config" in step_cfg:
             base_data = batch.base_config.model_dump()
             for k, v in step_cfg["base_config"].items():
@@ -279,6 +295,7 @@ def resolve_centroid_batch_config(
     if step_override_path is not None:
         with open(step_override_path) as f:
             overrides = json.load(f)
+        _forbid_centroid_samples_key(overrides, "centroid --step-override")
         if "base_config" in overrides:
             base_data = batch.base_config.model_dump()
             for k, v in overrides["base_config"].items():

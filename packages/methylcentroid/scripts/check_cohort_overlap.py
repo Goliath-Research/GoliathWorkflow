@@ -27,7 +27,7 @@ def _load_add_samples(config_path: Path) -> list:
     with open(config_path) as f:
         data = json.load(f)
     base = data.get("base_config") or data
-    samples = base.get("add_samples") or base.get("samples") or []
+    samples = base.get("add_samples") or []
     return [s for s in samples if isinstance(s, str) and s.strip()]
 
 

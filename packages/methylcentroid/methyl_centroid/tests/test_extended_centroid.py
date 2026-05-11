@@ -27,7 +27,7 @@ class TestCentroid:
     """Test centroid functionality (full schema with Sm, Su, Sc2, Swx2)."""
 
     def test_basic_vs_centroid(self):
-        """Test that centroid output (extended=True) includes full schema columns."""
+        """Centroid HDF5 uses the extended ECDF schema (Sm, Su, N, Sx, Sx2, …) on disk."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             
@@ -55,46 +55,35 @@ class TestCentroid:
             # Initialize MethylCentroid
             samples = [str(sample1_file.parent), str(sample2_file.parent)]
             methyl_centroid = MethylCentroid(
-                samples=samples,
                 chrom="1",
                 ctx="CG",
                 output_dir=output_dir,
-                min_coverage=4
+                add_samples=samples,
+                min_coverage=4,
+                laboratory="lab",
+                disease="d",
+                group="g",
+                batch="b",
+                min_samples=1,
+                binned_stats_bins=20,
+                use_gpu=False,
+                verbose=False,
             )
             
-            # Build basic centroid
-            basic_centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=False)
-            
-            # Check basic centroid columns
-            with h5py.File(basic_centroid_path, "r") as f:
-                data = f["methylation_data"]
-                basic_columns = list(data.keys())
-                assert "pos" in basic_columns
-                assert "mC" in basic_columns
-                assert "uC" in basic_columns
-                assert "tnc" in basic_columns
-                assert "N" in basic_columns
-                assert "Sx" not in basic_columns
-                assert "Sx2" not in basic_columns
-            
-            # Reset for extended centroid
-            methyl_centroid.position_aligner.reset()
-            methyl_centroid.active_samples.clear()
-            
-            # Build centroid (full schema)
             centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
             
-            # Check centroid columns (full schema: Sm, Su, Sc2, Swx2 in addition to N, Sx, Sx2)
             with h5py.File(centroid_path, "r") as f:
                 data = f["methylation_data"]
-                extended_columns = list(data.keys())
-                assert "pos" in extended_columns
-                assert "mC" in extended_columns
-                assert "uC" in extended_columns
-                assert "tnc" in extended_columns
-                assert "N" in extended_columns
-                assert "Sx" in extended_columns
-                assert "Sx2" in extended_columns
+                cols = list(data.keys())
+                assert "pos" in cols
+                assert "tnc" in cols
+                assert "N" in cols
+                assert "Sx" in cols
+                assert "Sx2" in cols
+                assert "Sm" in cols
+                assert "Su" in cols
+                assert "Sc2" in cols
+                assert "Swx2" in cols
     
     def test_centroid_calculations(self):
         """Test that Sx and Sx2 (and full schema) calculations are correct."""
@@ -125,25 +114,31 @@ class TestCentroid:
             # Initialize MethylCentroid
             samples = [str(sample1_file.parent), str(sample2_file.parent)]
             methyl_centroid = MethylCentroid(
-                samples=samples,
                 chrom="1",
                 ctx="CG",
                 output_dir=output_dir,
-                min_coverage=4
+                add_samples=samples,
+                min_coverage=4,
+                laboratory="lab",
+                disease="d",
+                group="g",
+                batch="b",
+                min_samples=1,
+                binned_stats_bins=20,
+                use_gpu=False,
+                verbose=False,
             )
             
             # Build centroid
             centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
             
-            # Check calculations
+            # Check calculations (extended schema: Sm, Su, N, Sx, Sx2)
             with h5py.File(centroid_path, "r") as f:
                 data = f["methylation_data"]
                 
                 # For position 2000, we have data from both samples
                 pos_2000_idx = np.where(data['pos'][:] == 2000)[0][0]
                 
-                mC_2000 = data['mC'][pos_2000_idx]
-                uC_2000 = data['uC'][pos_2000_idx]
                 N_2000 = data['N'][pos_2000_idx]
                 Sx_2000 = data['Sx'][pos_2000_idx]
                 Sx2_2000 = data['Sx2'][pos_2000_idx]
@@ -161,11 +156,10 @@ class TestCentroid:
                 assert abs(Sx2_2000 - expected_Sx2) < 1e-6
     
     def test_incremental_operations(self):
-        """Test adding and removing samples from extended centroids."""
+        """Incremental add/remove via rebuild (baseline from HDF5 + add_samples/remove_samples)."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            
-            # Create initial sample files
+
             sample1_file = temp_path / "sample1" / "1-CG.h5"
             sample1_file.parent.mkdir(exist_ok=True)
             positions1 = np.array([1000, 2000], dtype=np.uint32)
@@ -173,7 +167,7 @@ class TestCentroid:
             uC1 = np.array([5, 15], dtype=np.uint32)
             tnc1 = np.array([1, 2], dtype=np.uint8)
             create_sample_file(sample1_file, positions1, mC1, uC1, tnc1)
-            
+
             sample2_file = temp_path / "sample2" / "1-CG.h5"
             sample2_file.parent.mkdir(exist_ok=True)
             positions2 = np.array([2000, 3000], dtype=np.uint32)
@@ -181,8 +175,7 @@ class TestCentroid:
             uC2 = np.array([8, 18], dtype=np.uint32)
             tnc2 = np.array([2, 3], dtype=np.uint8)
             create_sample_file(sample2_file, positions2, mC2, uC2, tnc2)
-            
-            # Create new sample for incremental addition
+
             sample3_file = temp_path / "sample3" / "1-CG.h5"
             sample3_file.parent.mkdir(exist_ok=True)
             positions3 = np.array([1500, 2000], dtype=np.uint32)
@@ -190,56 +183,58 @@ class TestCentroid:
             uC3 = np.array([6, 16], dtype=np.uint32)
             tnc3 = np.array([3, 4], dtype=np.uint8)
             create_sample_file(sample3_file, positions3, mC3, uC3, tnc3)
-            
-            # Create output directory
+
             output_dir = temp_path / "output"
             output_dir.mkdir(exist_ok=True)
-            
-            # Initialize MethylCentroid
-            original_samples = [str(sample1_file.parent), str(sample2_file.parent)]
-            add_samples = [str(sample3_file.parent)]
-            
-            methyl_centroid = MethylCentroid(
-                samples=original_samples,
+
+            common_kw = dict(
+                laboratory="lab",
+                disease="d",
+                group="g",
+                batch="b",
                 chrom="1",
                 ctx="CG",
                 output_dir=output_dir,
-                add_samples=add_samples,
-                min_coverage=4
+                min_coverage=4,
+                min_samples=1,
+                use_gpu=False,
+                binned_stats_bins=20,
+                verbose=False,
             )
-            
-            # Build initial centroid
-            for i in range(len(original_samples)):
-                methyl_centroid.add_sample(i, is_new_sample=False)
-            
-            initial_centroid_path = methyl_centroid.save_centroid(str(output_dir), extended=True)
-            
-            # Check initial N values
-            with h5py.File(initial_centroid_path, "r") as f:
+
+            original_samples = [str(sample1_file.parent), str(sample2_file.parent)]
+            mc0 = MethylCentroid(add_samples=original_samples, **common_kw)
+            mc0.build_centroid()
+
+            with h5py.File(output_dir / "1-CG.h5", "r") as f:
                 data = f["methylation_data"]
-                pos_2000_idx = np.where(data['pos'][:] == 2000)[0][0]
-                assert data['N'][pos_2000_idx] == 2  # Both samples have position 2000
-            
-            # Add new sample
-            methyl_centroid.add_sample(0, is_new_sample=True)
-            updated_centroid_path = methyl_centroid.save_centroid(str(output_dir), extended=True)
-            
-            # Check updated N values
-            with h5py.File(updated_centroid_path, "r") as f:
+                pos_2000_idx = np.where(data["pos"][:] == 2000)[0][0]
+                assert data["N"][pos_2000_idx] == 2
+
+            mc1 = MethylCentroid(
+                add_samples=[str(sample3_file.parent)],
+                remove_samples=[],
+                **common_kw,
+            )
+            mc1.build_centroid()
+
+            with h5py.File(output_dir / "1-CG.h5", "r") as f:
                 data = f["methylation_data"]
-                pos_2000_idx = np.where(data['pos'][:] == 2000)[0][0]
-                assert data['N'][pos_2000_idx] == 3  # All three samples have position 2000
-            
-            # Remove new sample
-            methyl_centroid.remove_sample(0, is_new_sample=True)
-            final_centroid_path = methyl_centroid.save_centroid(str(output_dir), extended=True)
-            
-            # Check final N values (should be back to initial)
-            with h5py.File(final_centroid_path, "r") as f:
+                pos_2000_idx = np.where(data["pos"][:] == 2000)[0][0]
+                assert data["N"][pos_2000_idx] == 3
+
+            mc2 = MethylCentroid(
+                add_samples=[],
+                remove_samples=[str(sample3_file.parent)],
+                **common_kw,
+            )
+            mc2.build_centroid()
+
+            with h5py.File(output_dir / "1-CG.h5", "r") as f:
                 data = f["methylation_data"]
-                pos_2000_idx = np.where(data['pos'][:] == 2000)[0][0]
-                assert data['N'][pos_2000_idx] == 2  # Back to 2 samples
-    
+                pos_2000_idx = np.where(data["pos"][:] == 2000)[0][0]
+                assert data["N"][pos_2000_idx] == 2
+
     def test_build_centroid(self):
         """Test the build_centroid method."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -265,11 +260,19 @@ class TestCentroid:
             
             # Initialize MethylCentroid runner
             methyl_centroid = MethylCentroid(
-                samples=sample_files,
                 chrom="1",
                 ctx="CG",
                 output_dir=output_dir,
+                add_samples=sample_files,
                 min_coverage=4,
+                laboratory="lab",
+                disease="d",
+                group="g",
+                batch="b",
+                min_samples=1,
+                use_gpu=False,
+                binned_stats_bins=20,
+                verbose=False,
             )
             
             # Build centroid
@@ -290,6 +293,7 @@ class TestCentroid:
     
     def test_position_aligner_centroid_methods(self):
         """Test PositionAligner methods for centroid output."""
+        pytest.importorskip("genomic_position_aligner")
         from genomic_position_aligner import PositionAligner
         
         # Create a simple position aligner
@@ -330,11 +334,17 @@ def test_basic_import():
 
     # Test basic instantiation
     mc = MethylCentroid(
-        samples=["dummy"],
         chrom="1",
         ctx="CG",
         output_dir="/tmp",
-        verbose=True
+        add_samples=["dummy"],
+        verbose=True,
+        laboratory="l",
+        disease="d",
+        group="g",
+        batch="b",
+        min_samples=1,
+        binned_stats_bins=20,
     )
 
     # Test that components are initialized

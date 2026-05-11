@@ -28,7 +28,6 @@ Use `MethylCentroidConfig` when you want to build one chromosome/context pair.
   "chrom": "1",
   "ctx": "CG",
   "output_dir": "/path/to/output/centroids/healthy",
-  "samples": [],
   "add_samples": [
     "/path/to/samples/sample_001",
     "/path/to/samples/sample_002"
@@ -44,16 +43,18 @@ Use `MethylCentroidConfig` when you want to build one chromosome/context pair.
 
 Important points:
 
-- `samples` is the current cohort membership.
-- `add_samples` are appended after removals are applied.
-- `remove_samples` removes by sample directory identity.
+- The `samples` JSON field was **removed**. Pydantic rejects configs that still include it.
+- **Full cohort (typical pipeline / first build):** put all sample directories in `add_samples` with `remove_samples` empty. If no centroid HDF5 exists yet for this chrom/context, the cohort is exactly `add_samples`.
+- **Incremental add:** when `{output_dir}/{chrom}-{ctx}.h5` already exists, if every basename in `add_samples` is **disjoint** from `samples_used` in that HDF5, new paths are appended to the baseline cohort.
+- **Incremental remove (and Monte Carlo deltas):** use non-empty `remove_samples` (and optional `add_samples`). Baseline membership is read from the existing HDF5 metadata (`samples_used` + `samples_base_path`), then removals and additions are applied.
+- **Full cohort refresh when a centroid already exists:** pass the complete new list in `add_samples` (overlapping basenames with the existing centroid). That selects **replace** mode (same as always sending the full cohort from the pipeline resolver).
 - Sample entries are directories, not `.h5` files.
 - `binned_stats_bins` is required and must be positive.
 
 Run it with:
 
 ```bash
-python -m methyl_centroid.cli --config packages/methylcentroid/configs/example_config.json
+python -m methyl_centroid.cli --config /path/to/config.json
 ```
 
 ## Batch Config
@@ -73,7 +74,6 @@ chromosomes and contexts.
     "chrom": "1",
     "ctx": "CG",
     "output_dir": "/path/to/output/centroids/healthy",
-    "samples": [],
     "add_samples": [
       "/path/to/samples/sample_001",
       "/path/to/samples/sample_002"
@@ -130,20 +130,18 @@ methyl-centroid \
   --step-override /path/to/centroid_group1_override.json
 ```
 
-Expected step override shape:
+Expected step override shape (no `samples` key; baseline comes from existing centroid HDF5 when `remove_samples` and/or disjoint `add_samples` are used):
 
 ```json
 {
   "base_config": {
-    "samples": [
-      "/path/to/previous/sample_001",
-      "/path/to/previous/sample_002"
-    ],
     "add_samples": ["/path/to/new/sample_003"],
     "remove_samples": ["/path/to/previous/sample_001"]
   }
 }
 ```
+
+`project.json` must not include `step_config.centroid.base_config.samples` (obsolete); the resolver raises a clear error if it is present.
 
 ## Python Class Usage
 
@@ -175,7 +173,9 @@ results = mc.build_centroid()
 print(results.final_centroid_path)
 ```
 
-### Update build
+### Incremental update (after a centroid HDF5 exists)
+
+Build an initial centroid, then run again with `add_samples` / `remove_samples` only (see rules above). Example: add one sample directory whose basename is not already in `samples_used`, or remove paths that match baseline members.
 
 ```python
 mc = MethylCentroid(
@@ -186,10 +186,6 @@ mc = MethylCentroid(
     chrom="1",
     ctx="CG",
     output_dir="./centroids/healthy",
-    samples=[
-        "/data/samples/sample_001",
-        "/data/samples/sample_002",
-    ],
     add_samples=["/data/samples/sample_003"],
     remove_samples=["/data/samples/sample_001"],
     min_coverage=4,
@@ -200,16 +196,14 @@ mc = MethylCentroid(
 mc.build_centroid()
 ```
 
-The runner resolves the effective cohort as:
+The runner resolves the effective cohort from baseline HDF5 metadata plus `add_samples` / `remove_samples` (see `_plan_cohort_lists_for_runner` in `methyl_centroid.py`).
 
-```text
-effective_samples = samples - remove_samples + add_samples
-```
+The authoritative cohort after a successful build is stored in HDF5 as:
 
-The resulting active cohort is written back to:
+- `samples_used` (directory basenames)
+- optional `samples_base_path` when a common parent exists
 
-- HDF5 metadata field `samples_used`
-- sidecar config field `samples`
+The sidecar `{chrom}-{ctx}_config.json` no longer includes a `samples` field; it may list only pending `add_samples` / `remove_samples` (often empty after a run).
 
 ## Direct CLI Parameters
 
@@ -217,7 +211,7 @@ When not using a JSON config, the important direct flags are:
 
 - `--chromosome`
 - `--context`
-- `--samples`
+- `--samples` (CSV of sample directory paths; passed through as `add_samples` in config)
 - `--output-dir`
 - `--min-coverage`
 - `--binned-stats-bins`
@@ -235,6 +229,11 @@ Each successful build writes:
 
 The HDF5 centroid contains the required ECDF histogram data in
 `methylation_data.attrs["bins"]` and `methylation_data["bin_counts"]`.
+
+## Migration from older configs
+
+- Remove every `"samples"` key from `MethylCentroidConfig` JSON, `BatchProcessingConfig.base_config`, `project.json` `step_config.centroid`, and step-override files.
+- If the old value was the full cohort, move those paths into `add_samples` (and keep `remove_samples` as needed for deltas).
 
 ## Troubleshooting
 

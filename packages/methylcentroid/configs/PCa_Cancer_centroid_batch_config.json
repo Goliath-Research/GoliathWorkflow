@@ -31,16 +31,15 @@
         "CHH"
     ],
     "base_config": {
-        "laboratory": "psomagen",  
+        "laboratory": "psomagen",
         "disease": "prostate cancer",
         "group": "all prostate cancer",
         "batch": "AN00026418",
         "chrom": "1",
         "ctx": "CG",
         "output_dir": "/home/dizada/data/centroids/pc-cancer",
-        "samples": [],
         "add_samples": [
-            "/home/dizada/data/020520_14_C11_89",           
+            "/home/dizada/data/020520_14_C11_89",
             "/home/dizada/data/013361_10C26_34",
             "/home/dizada/data/010608_9N27_56",
             "/home/dizada/data/006655_9A_27_12",
@@ -174,7 +173,7 @@
             "/home/dizada/data/2401-071525-111841",
             "/home/dizada/data/2401-081425-112029",
             "/home/dizada/data/2401-081425-112032",
-            "/home/dizada/data/2401-081425-112031"            
+            "/home/dizada/data/2401-081425-112031"
         ],
         "remove_samples": [],
         "min_coverage": 4,

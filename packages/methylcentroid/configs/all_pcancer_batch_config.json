@@ -28,19 +28,17 @@
     "contexts": [
         "CG",
         "CHG"
-        
     ],
     "base_config": {
-        "laboratory": "psomagen",  
+        "laboratory": "psomagen",
         "disease": "prostate cancer",
         "group": "all prostate cancer",
         "batch": "AN00026418",
         "chrom": "1",
         "ctx": "CG",
         "output_dir": "/home/dizada/data/centroids/pc-cancer",
-        "samples": [],
         "add_samples": [
-            "/home/dizada/data/020520_14_C11_89",           
+            "/home/dizada/data/020520_14_C11_89",
             "/home/dizada/data/013361_10C26_34",
             "/home/dizada/data/010608_9N27_56",
             "/home/dizada/data/006655_9A_27_12",
@@ -77,7 +75,6 @@
             "/home/dizada/data/027102_15Q_10_86",
             "/home/dizada/data/015885_10_H10_12",
             "/home/dizada/data/016969_10_J19_56",
-            
             "/home/dizada/data/021670_14C_19_23",
             "/home/dizada/data/027069_15O_22_31",
             "/home/dizada/data/027023_15O_10_01",
@@ -88,7 +85,6 @@
             "/home/dizada/data/008291_9G9_56",
             "/home/dizada/data/014924_10_F22_56",
             "/home/dizada/data/027168_16A_3_26",
-            
             "/home/dizada/data/006534_9A_21_7",
             "/home/dizada/data/022372_15A_25_67",
             "/home/dizada/data/030761_17K_19_81",
@@ -147,11 +143,9 @@
             "/home/dizada/data/024848_16R_27_21",
             "/home/dizada/data/030792_17L_17_1",
             "/home/dizada/data/5929-606156_V00-1_ACD_BC",
-            
             "/home/dizada/data/035796_21G_24_71",
             "/home/dizada/data/031006_17R_17_46",
             "/home/dizada/data/025125_17M_19_16",
-            
             "/home/dizada/data/033984_18N_7_56",
             "/home/dizada/data/030934_17P_5_36",
             "/home/dizada/data/033911_18L_8_36",
@@ -169,7 +163,6 @@
             "/home/dizada/data/DBCST-062725-111661",
             "/home/dizada/data/DBCST-063025-111652",
             "/home/dizada/data/DBCST-071025-111803",
-            
             "/home/dizada/data/DBCST-071125-111814",
             "/home/dizada/data/2401-060925-111426",
             "/home/dizada/data/2401-060925-111425",
@@ -179,7 +172,7 @@
             "/home/dizada/data/2401-071525-111841",
             "/home/dizada/data/2401-081425-112029",
             "/home/dizada/data/2401-081425-112032",
-            "/home/dizada/data/2401-081425-112031"            
+            "/home/dizada/data/2401-081425-112031"
         ],
         "remove_samples": [],
         "min_coverage": 10,

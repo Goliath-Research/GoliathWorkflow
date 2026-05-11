@@ -93,6 +93,83 @@ def _common_parent_directory(dir_paths: List[str]) -> Optional[Path]:
     return None
 
 
+def _normalize_cohort_dir(sample: Union[str, Path]) -> str:
+    """Normalize a sample directory or {chrom}-{ctx}.h5 path to the sample directory string."""
+    path = Path(sample)
+    if path.suffix.lower() == ".h5":
+        path = path.parent
+    return str(path)
+
+
+def _read_centroid_baseline_dirs(centroid_path: Path) -> List[str]:
+    """Resolve sample directory paths from existing centroid HDF5 metadata (samples_used)."""
+    if not centroid_path.exists():
+        return []
+    try:
+        import h5py
+
+        with h5py.File(centroid_path, "r") as f:
+            raw_used = f.attrs.get("samples_used")
+            raw_base = f.attrs.get("samples_base_path")
+            if raw_used is None:
+                return []
+            if isinstance(raw_used, bytes):
+                raw_used = raw_used.decode("utf-8")
+            if isinstance(raw_used, str):
+                raw_used = json.loads(raw_used)
+            if not isinstance(raw_used, (list, tuple)):
+                return []
+            meta_base: Optional[str] = None
+            if raw_base is not None:
+                meta_base = (
+                    raw_base.decode("utf-8") if isinstance(raw_base, bytes) else str(raw_base)
+                )
+            return MethylSample.resolve_samples_used_paths(
+                [str(x) for x in raw_used],
+                meta_base,
+                None,
+            )
+    except Exception:
+        return []
+
+
+def _plan_cohort_lists_for_runner(
+    add_samples: Optional[List[str]],
+    remove_samples: Optional[List[str]],
+    output_dir: Union[str, Path],
+    chrom: str,
+    ctx: str,
+) -> Tuple[List[str], List[str], List[str]]:
+    """
+    Produce (_original_samples, _original_add_samples, _original_remove_samples) directory strings
+    for cohort resolution without a config ``samples`` field.
+    """
+    add_dirs = [
+        _normalize_cohort_dir(s)
+        for s in (add_samples or [])
+        if s is not None and str(s).strip()
+    ]
+    rem_dirs = [
+        _normalize_cohort_dir(s)
+        for s in (remove_samples or [])
+        if s is not None and str(s).strip()
+    ]
+    centroid_path = Path(output_dir) / f"{chrom}-{ctx}.h5"
+    baseline = _read_centroid_baseline_dirs(centroid_path)
+
+    if rem_dirs:
+        return baseline, add_dirs, rem_dirs
+    if not add_dirs:
+        return baseline, [], []
+    if not baseline:
+        return [], add_dirs, []
+    b_names = {Path(p).name for p in baseline}
+    a_names = {Path(p).name for p in add_dirs}
+    if b_names.isdisjoint(a_names):
+        return baseline, add_dirs, []
+    return [], add_dirs, []
+
+
 def _is_gpu_oom_error(exc: BaseException) -> bool:
     """Best-effort detection for CuPy/RMM CUDA OOM failures."""
     message = str(exc).lower()
@@ -133,8 +210,9 @@ class MethylCentroid:
     Uses MethylUtils for optimized distance calculations, GPU acceleration, and memory management.
 
     Workflows:
-    - Initial centroid creation: provide samples in output_dir
-    - Centroid updates: provide add_samples/remove_samples to modify existing centroid
+    - Initial centroid creation: provide add_samples and output_dir
+    - Centroid updates: provide add_samples/remove_samples; baseline cohort is inferred from
+      existing centroid HDF5 when needed (see _plan_cohort_lists_for_runner)
 
     The centroid represents the average of mC and uC values across all samples:
     - centroid.mC = sum(all sample.mC) / sample_count
@@ -148,7 +226,6 @@ class MethylCentroid:
         chrom: str,
         ctx: str,
         output_dir: Path,
-        samples: List[str] = None,
         add_samples: List[str] = None,
         remove_samples: List[str] = None,
         min_coverage: int = 4,
@@ -193,53 +270,42 @@ class MethylCentroid:
         Initialize MethylCentroid for centroid calculation.
 
         Args:
-            samples: Optional list of base sample directory paths containing {chrom}-{ctx}.h5 files.
-                    For initial centroid creation, use add_samples instead. For updates, this contains
-                    current samples in the centroid.
             chrom: Chromosome identifier (e.g., '1', 'X').
             ctx: Context type (e.g., 'CG', 'CHG', 'CHH').
             output_dir: Directory to save centroid files.
-            add_samples: Optional list of sample directory paths to add (used for initial creation and updates).
-            remove_samples: Optional list of sample directory paths to remove.
+            add_samples: Sample directory paths to include (full cohort for typical pipeline runs, or
+                incremental adds when disjoint from the existing centroid cohort on disk).
+            remove_samples: Sample directory paths to remove (incremental updates; implies baseline
+                from existing centroid HDF5 metadata).
             min_coverage: Minimum sum of mC and uC for a position to be included.
             verbose: Enable verbose logging.
 
         Workflow:
-            - Initial centroid creation: provide add_samples, output_dir (samples=[])
-            - Centroid updates: provide samples (current centroid), add_samples/remove_samples
+            - Initial centroid creation: provide add_samples, output_dir
+            - Centroid updates: provide add_samples/remove_samples (baseline from HDF5 when applicable)
         """
 
         # Setup logging using MethylUtils
         self.verbose = verbose
         self.logger = get_logger(__name__, verbose=verbose)
 
-        # Convert to Path objects with chromosome-context file
-        if samples:
-            self.samples = [Path(sample) / f"{chrom}-{ctx}.h5" for sample in samples]
-            self.add_samples = (
-                [Path(sample) / f"{chrom}-{ctx}.h5" for sample in add_samples]
-                if add_samples
-                else []
-            )
-            # Store original sample paths as strings for config reconstruction
-            self._original_samples = [str(s) for s in samples]
-            self._original_add_samples = (
-                [str(s) for s in add_samples] if add_samples else []
-            )
+        out_path = Path(output_dir) if isinstance(output_dir, str) else output_dir
+        _orig_s, _orig_a, _orig_r = _plan_cohort_lists_for_runner(
+            add_samples, remove_samples, out_path, chrom, ctx
+        )
+
+        if _orig_s:
+            self.samples = [Path(s) / f"{chrom}-{ctx}.h5" for s in _orig_s]
+            self._original_samples = list(_orig_s)
+            self.add_samples = [Path(s) / f"{chrom}-{ctx}.h5" for s in _orig_a]
+            self._original_add_samples = list(_orig_a)
         else:
-            # If no samples provided, use add_samples as the main samples
             self.samples = (
-                [Path(sample) / f"{chrom}-{ctx}.h5" for sample in add_samples]
-                if add_samples
-                else []
+                [Path(s) / f"{chrom}-{ctx}.h5" for s in _orig_a] if _orig_a else []
             )
+            self._original_samples = list(_orig_a) if _orig_a else []
             self.add_samples = []
-            # Store original sample paths as strings for config reconstruction
-            self._original_samples = (
-                [str(s) for s in add_samples] if add_samples else []
-            )
             self._original_add_samples = []
-            # Deduplicate initial list by sample directory basename (keep first occurrence)
             if self.samples:
                 _seen = set()
                 _new_s, _new_o = [], []
@@ -256,13 +322,9 @@ class MethylCentroid:
 
         # Handle remove samples for incremental updates
         self.remove_samples = (
-            [Path(sample) / f"{chrom}-{ctx}.h5" for sample in remove_samples]
-            if remove_samples
-            else []
+            [Path(s) / f"{chrom}-{ctx}.h5" for s in _orig_r] if _orig_r else []
         )
-        self._original_remove_samples = (
-            [str(s) for s in remove_samples] if remove_samples else []
-        )
+        self._original_remove_samples = list(_orig_r)
 
         # Ensure no sample in add_samples is already in the centroid (samples / samples_used).
         # Match by directory basename so the same sample under different paths is not added twice.
@@ -435,10 +497,10 @@ class MethylCentroid:
 
     def _resolve_effective_sample_dirs(self) -> List[str]:
         """
-        Resolve the final cohort from samples, add_samples, and remove_samples.
+        Resolve the final cohort from _original_samples, _original_add_samples, and _original_remove_samples.
 
-        Semantics are deterministic and do not require an existing centroid:
-        start from `samples`, remove `remove_samples`, then append `add_samples`.
+        Semantics are deterministic and do not require an existing centroid file:
+        start from `_original_samples`, remove `_original_remove_samples`, then append `_original_add_samples`.
         Matching prefers exact directory paths and falls back to sample directory basename.
         """
         effective: List[str] = []
@@ -576,7 +638,6 @@ class MethylCentroid:
         verbose_value = verbose if verbose is not None else config.verbose
 
         return cls(
-            samples=config.samples,
             chrom=config.chrom,
             ctx=config.ctx,
             output_dir=config.output_dir,
@@ -613,7 +674,6 @@ class MethylCentroid:
             "chrom": self.chrom,
             "ctx": self.ctx,
             "output_dir": str(self.output_dir),
-            "samples": self._original_samples,
             "add_samples": self._original_add_samples,
             "remove_samples": self._original_remove_samples,
             "min_coverage": self.min_coverage,
@@ -2991,10 +3051,10 @@ if __name__ == "__main__":
         print(f"Found {len(samples)} samples")
 
         mc = MethylCentroid(
-            samples=samples,
             chrom=args.chrom,
             ctx=args.ctx,
             output_dir=out_dir,
+            add_samples=[str(p) for p in samples],
             min_coverage=args.min_coverage,
         )
 
@@ -3039,10 +3099,10 @@ if __name__ == "__main__":
             for ctx in ctxs:
                 print(f"\nProcessing {chrom}-{ctx}...")
                 mc = MethylCentroid(
-                    samples=samples,
                     chrom=chrom,
                     ctx=ctx,
                     output_dir=out_dir,
+                    add_samples=[str(p) for p in samples],
                     min_coverage=4,
                 )
                 # Build extended centroid with methylation statistics
@@ -3163,7 +3223,7 @@ def attach_binned_stats_to_centroid(
         chrom=chrom,
         ctx=ctx,
         output_dir=out_dir,
-        samples=sample_dirs,
+        add_samples=sample_dirs,
         min_coverage=int(meta.get("min_coverage", 4)),
         min_samples=int(meta.get("min_samples", 1)),
         verbose=verbose,

@@ -128,7 +128,6 @@ def _build_centroid_step_override(
     remove_paths = [path for path in prev if path not in curr_set]
     return {
         "base_config": {
-            "samples": prev,
             "add_samples": add_paths,
             "remove_samples": remove_paths,
         }

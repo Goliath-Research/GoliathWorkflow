@@ -91,7 +91,9 @@ def validate_single_config(config_path: Path):
         print(f"\nProcessing details:")
         print(f"  Chromosome: {config.chrom}")
         print(f"  Context: {config.ctx}")
-        print(f"  Samples: {len(config.samples) + len(config.add_samples)} samples")
+        n_add = len(config.add_samples or [])
+        n_rem = len(config.remove_samples or [])
+        print(f"  Cohort: add_samples={n_add}, remove_samples={n_rem}")
         
         return True
         

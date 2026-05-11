@@ -38,7 +38,6 @@
         "chrom": "1",
         "ctx": "CG",
         "output_dir": "/home/dizada/data/centroids/healthy",
-        "samples": [],
         "add_samples": [
             "/home/dizada/data/039377_21M_25_99",
             "/home/dizada/data/039380_21N_11_83",

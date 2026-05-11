@@ -57,11 +57,19 @@ def demonstrate_basic_vs_centroid():
         # Initialize MethylCentroid
         samples = [str(sample1_file.parent), str(sample2_file.parent)]
         methyl_centroid = MethylCentroid(
-            samples=samples,
             chrom="1",
             ctx="CG",
             output_dir=output_dir,
-            min_coverage=4
+            add_samples=samples,
+            min_coverage=4,
+            laboratory="example-lab",
+            disease="example",
+            group="g",
+            batch="b",
+            min_samples=1,
+            binned_stats_bins=20,
+            use_gpu=False,
+            verbose=False,
         )
         
         print("1. Building Basic Centroid:")
@@ -79,10 +87,6 @@ def demonstrate_basic_vs_centroid():
             print(f"   N values: {data['N'][:]}")
         
         print("\n2. Building Centroid (full schema):")
-        # Reset for centroid
-        methyl_centroid.position_aligner.reset()
-        methyl_centroid.active_samples.clear()
-        
         centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
         print(f"   Centroid saved to: {centroid_path}")
         
@@ -163,21 +167,24 @@ def demonstrate_incremental_operations():
         original_samples = [str(sample1_file.parent), str(sample2_file.parent)]
         new_samples = [str(sample3_file.parent)]
         
-        methyl_centroid = MethylCentroid(
-            samples=original_samples,
+        common = dict(
             chrom="1",
             ctx="CG",
             output_dir=output_dir,
-            new_samples=new_samples,
-            min_coverage=4
+            min_coverage=4,
+            laboratory="example-lab",
+            disease="example",
+            group="g",
+            batch="b",
+            min_samples=1,
+            binned_stats_bins=20,
+            use_gpu=False,
+            verbose=False,
         )
-        
+        methyl_centroid = MethylCentroid(add_samples=original_samples, **common)
+
         print("1. Building Initial Extended Centroid:")
-        # Build initial centroid with original samples
-        for i in range(len(original_samples)):
-            methyl_centroid.add_sample(i, is_new_sample=False)
-        
-        initial_centroid_path = methyl_centroid.save_centroid(str(output_dir), extended=True)
+        initial_centroid_path = methyl_centroid.calculate_centroid(str(output_dir), extended=True)
         print(f"   Initial centroid saved to: {initial_centroid_path}")
         
         # Examine initial centroid
@@ -186,28 +193,30 @@ def demonstrate_incremental_operations():
             print(f"   Initial positions: {data['pos'][:]}")
             print(f"   Initial N values: {data['N'][:]}")
         
-        print("\n2. Adding New Sample Incrementally:")
-        # Add new sample
-        methyl_centroid.add_sample(0, is_new_sample=True)
-        
-        updated_centroid_path = methyl_centroid.save_centroid(str(output_dir), extended=True)
+        print("\n2. Adding New Sample (rebuild with baseline from HDF5 + add_samples):")
+        mc_add = MethylCentroid(
+            add_samples=new_samples,
+            remove_samples=[],
+            **common,
+        )
+        updated_centroid_path = mc_add.calculate_centroid(str(output_dir), extended=True)
         print(f"   Updated centroid saved to: {updated_centroid_path}")
-        
-        # Examine updated centroid
+
         with h5py.File(updated_centroid_path, "r") as f:
             data = f["methylation_data"]
             print(f"   Updated positions: {data['pos'][:]}")
             print(f"   Updated N values: {data['N'][:]}")
             print(f"   Updated Sx values: {data['Sx'][:]}")
-        
-        print("\n3. Removing Sample Incrementally:")
-        # Remove the new sample
-        methyl_centroid.remove_sample(0, is_new_sample=True)
-        
-        final_centroid_path = methyl_centroid.save_centroid(str(output_dir), extended=True)
+
+        print("\n3. Removing Sample (rebuild with remove_samples):")
+        mc_rem = MethylCentroid(
+            add_samples=[],
+            remove_samples=new_samples,
+            **common,
+        )
+        final_centroid_path = mc_rem.calculate_centroid(str(output_dir), extended=True)
         print(f"   Final centroid saved to: {final_centroid_path}")
-        
-        # Verify we're back to the initial state
+
         with h5py.File(final_centroid_path, "r") as f:
             data = f["methylation_data"]
             print(f"   Final positions: {data['pos'][:]}")

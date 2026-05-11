@@ -67,6 +67,23 @@ def test_build_centroid_applies_add_and_remove_samples_and_persists_final_cohort
             np.array([1], dtype=np.uint8),
         )
 
+        mc0 = MethylCentroid(
+            laboratory="lab",
+            disease="disease",
+            group="group",
+            batch="batch",
+            chrom="1",
+            ctx="CG",
+            output_dir=output_dir,
+            add_samples=[str(sample1_dir), str(sample2_dir)],
+            min_coverage=1,
+            min_samples=1,
+            use_gpu=False,
+            binned_stats_bins=20,
+            verbose=False,
+        )
+        mc0.build_centroid()
+
         runner = MethylCentroid(
             laboratory="lab",
             disease="disease",
@@ -75,7 +92,6 @@ def test_build_centroid_applies_add_and_remove_samples_and_persists_final_cohort
             chrom="1",
             ctx="CG",
             output_dir=output_dir,
-            samples=[str(sample1_dir), str(sample2_dir)],
             add_samples=[str(sample3_dir)],
             remove_samples=[str(sample1_dir)],
             min_coverage=1,
@@ -105,7 +121,7 @@ def test_build_centroid_applies_add_and_remove_samples_and_persists_final_cohort
             assert f.attrs.get("samples_base_path") == str(root)
 
         saved_config = json.loads(config_path.read_text(encoding="utf-8"))
-        assert saved_config["samples"] == [str(sample2_dir), str(sample3_dir)]
+        assert "samples" not in saved_config
         assert saved_config["add_samples"] == []
         assert saved_config["remove_samples"] == []
 
@@ -121,7 +137,6 @@ def test_runner_rejects_non_positive_binned_stats_bins():
                 chrom="1",
                 ctx="CG",
                 output_dir=Path(temp_dir),
-                samples=[],
                 use_gpu=False,
                 binned_stats_bins=0,
             )
@@ -137,6 +152,19 @@ def test_config_rejects_non_positive_binned_stats_bins():
             chrom="1",
             ctx="CG",
             output_dir="/tmp/out",
-            samples=[],
             binned_stats_bins=0,
+        )
+
+
+def test_config_rejects_removed_samples_field():
+    with pytest.raises(ValidationError, match="samples"):
+        MethylCentroidConfig(
+            laboratory="lab",
+            disease="disease",
+            group="group",
+            batch="batch",
+            chrom="1",
+            ctx="CG",
+            output_dir="/tmp/out",
+            samples=["/tmp/a"],
         )

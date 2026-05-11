@@ -73,12 +73,12 @@ def test_generate_run_project_writes_group_specific_centroid_deltas():
         assert group2_override.exists()
 
         group1_payload = json.loads(group1_override.read_text(encoding="utf-8"))
-        assert group1_payload["base_config"]["samples"] == previous_control
+        assert "samples" not in group1_payload["base_config"]
         assert group1_payload["base_config"]["add_samples"] == ["/samples/control_c"]
         assert group1_payload["base_config"]["remove_samples"] == ["/samples/control_a"]
 
         group2_payload = json.loads(group2_override.read_text(encoding="utf-8"))
-        assert group2_payload["base_config"]["samples"] == previous_disease
+        assert "samples" not in group2_payload["base_config"]
         assert group2_payload["base_config"]["add_samples"] == ["/samples/disease_z"]
         assert group2_payload["base_config"]["remove_samples"] == ["/samples/disease_x"]
 

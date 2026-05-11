@@ -7,7 +7,7 @@ following SOLID principles with clear separation of concerns.
 
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 import json
 
 
@@ -18,7 +18,8 @@ class MethylCentroidConfig(BaseModel):
 
     Workflows:
     - Initial centroid creation: provide add_samples, output_dir for saving
-    - Centroid updates: provide samples (current centroid samples), add_samples/remove_samples
+    - Centroid updates: provide add_samples/remove_samples; current cohort is derived from
+      existing centroid HDF5 metadata (samples_used) when applicable (see MethylCentroid).
     """
 
     # Metadata fields (saved to H5 file)
@@ -31,10 +32,6 @@ class MethylCentroidConfig(BaseModel):
     chrom: str = Field(..., description="Chromosome identifier (e.g., '1', 'X')")
     ctx: str = Field(..., description="Context type (e.g., 'CG', 'CHG', 'CHH')")
     output_dir: str = Field(..., description="Directory to save centroid files")
-    samples: List[str] = Field(
-        default=[],
-        description="List of sample paths currently in the centroid (used for updates)"
-    )
     add_samples: List[str] = Field(
         default=[],
         description="Optional list of new sample paths to add incrementally"
@@ -101,6 +98,18 @@ class MethylCentroidConfig(BaseModel):
         description="Number of bins for the required per-position ECDF histogram. Must be >= 1. Default 20.",
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_removed_samples_field(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "samples" in data:
+            raise ValueError(
+                'The "samples" field was removed from MethylCentroidConfig. '
+                "Use add_samples for a full cohort (typical pipeline runs), or add_samples/remove_samples "
+                "for incremental updates; when a centroid HDF5 already exists, the baseline cohort is "
+                "read from its metadata. Remove the \"samples\" key from JSON and put paths in add_samples."
+            )
+        return data
+
     @field_validator('ctx')
     @classmethod
     def validate_context(cls, v):
@@ -132,7 +141,6 @@ class MethylCentroidConfig(BaseModel):
             "batch": self.batch,
             "chromosome": self.chrom,
             "context": self.ctx,
-            "samples": self.samples if self.samples else self.add_samples,  # Initial samples
             "samples_used": [],  # Will be populated during save_centroid
             "creation_date": datetime.now().isoformat(),
             "min_coverage": self.min_coverage,

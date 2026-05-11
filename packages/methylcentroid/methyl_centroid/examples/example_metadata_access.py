@@ -43,14 +43,13 @@ def example_metadata_access(centroid_path: Path):
     if centroid.metadata:
         print(f"\nAll metadata keys: {list(centroid.metadata.keys())}")
         
-        # Show sample count if available
-        if "samples" in centroid.metadata:
-            samples = centroid.metadata["samples"]
-            print(f"Number of samples: {len(samples)}")
-            if samples:
-                print(f"First sample: {samples[0]}")
-                if len(samples) > 1:
-                    print(f"Last sample: {samples[-1]}")
+        # Show sample count if available (centroid cohort is recorded as samples_used)
+        su = centroid.metadata.get("samples_used")
+        if su:
+            print(f"Number of samples (samples_used): {len(su)}")
+            print(f"First sample id: {su[0]}")
+            if len(su) > 1:
+                print(f"Last sample id: {su[-1]}")
         
         # Show processing parameters
         if "min_coverage" in centroid.metadata:
