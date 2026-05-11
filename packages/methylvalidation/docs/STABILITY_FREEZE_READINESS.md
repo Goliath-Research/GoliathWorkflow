@@ -36,6 +36,10 @@ Exit codes:
 
 Human biological review remains required before treating outputs as validated hypotheses.
 
+## JSON output (module trajectory)
+
+Field `progression.module_trajectory.median_abs_pearson_stage_vs_score` is the median of **absolute Pearson** correlations between stage order (comparison labels mapped to `0..K-1`) and per-module scores from `modules_long.csv`. It does **not** use Spearman rank correlation; use scipy/R separately if you need rank-based association.
+
 ## Example output
 
 A report generated for `Healthy_vs_PCa1-4-CG` (when that tree exists on your machine) is checked in as:

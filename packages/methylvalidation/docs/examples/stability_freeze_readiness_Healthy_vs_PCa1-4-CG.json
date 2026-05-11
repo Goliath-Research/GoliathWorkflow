@@ -77,7 +77,7 @@
       "n_rows": 30,
       "n_unique_entities": 17,
       "entities_all_stages": 2,
-      "median_abs_spearman_vs_stage": 0.6784537233188035,
+      "median_abs_pearson_stage_vs_score": 0.6784537233188035,
       "fraction_monotone_up": 0.4,
       "fraction_monotone_down": 0.0,
       "top_by_abs_trend": [

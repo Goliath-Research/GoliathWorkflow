@@ -91,6 +91,10 @@ Thumbs.db
 .env.local
 *.local
 
+# Local methyl-stability-freeze-readiness dumps (checked-in examples live under packages/methylvalidation/docs/examples/)
+/readiness.json
+/readiness.md
+
 # Working directories
 working_dir/
 output/
