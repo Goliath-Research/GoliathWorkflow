@@ -139,7 +139,7 @@ Deprecation strategy recommendation:
 For the best downstream predictive performance, favor stable panel discovery first, then conservative production fitting:
 
 - **Stability stage quality**: use enough iterations (`n_iterations >= 50`) and apply run filtering (`stability_min_balanced_accuracy`) only when sample count supports it.
-- **Coverage consistency**: keep centroid and detector coverage thresholds aligned (`centroid.min_coverage == detection.min_coverage == detection.min_sample_coverage`) to avoid panel collapse at inference.
+- **Coverage consistency**: keep centroid, detector, and **MethylClassifier** `min_coverage` aligned so DMP loci visible during discovery stay observable in new samples.
 - **Panel robustness over aggressiveness**: use detector FeatureCuts in stability/freeze (`classifier_dmp_selection="featurecuts_validation"`) with a minimum panel size floor (`min_selected_dmps`) so high BA does not come from brittle tiny panels.
 - **Generalization-first model selection**: prioritize `optimization_validation` (held-out fold) for backend and parameter decisions; use `training_fold_validation` only as overfit diagnostic.
 - **Covariate discipline**: only enable covariates when join coverage is high and schema is stable; otherwise default to pure ECDF path to avoid leakage/shift from weak sidecars.
@@ -159,7 +159,6 @@ For the best downstream predictive performance, favor stable panel discovery fir
   },
   "detection": {
     "min_coverage": 4,
-    "min_sample_coverage": 4,
     "validation_split_ratio": 0.2,
     "validation_n_repeats": 5,
     "classifier_dmp_selection": "featurecuts_validation",

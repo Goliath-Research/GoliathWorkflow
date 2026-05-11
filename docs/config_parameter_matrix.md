@@ -28,7 +28,7 @@ Legacy compatibility boundary:
 | Step | Declared source | Consumed source | Notable aliases / legacy |
 |---|---|---|---|
 | `centroid` | `packages/methylcentroid/methyl_centroid/config.py` | `packages/methylcentroid/methyl_centroid/project_resolver.py` | none |
-| `detection` | `packages/methyldetector/methyl_detector/models/config.py` | `packages/methyldetector/methyl_detector/utils/project_resolver.py` | `ecdf_overlap_grid_size`, `ecdf_ks_grid_size` -> `ecdf_grid_size` |
+| `detection` | `packages/methyldetector/methyl_detector/models/config.py` | `packages/methyldetector/methyl_detector/utils/project_resolver.py` | strict: unknown keys rejected; legacy ECDF grid aliases removed (use `ecdf_grid_size`) |
 | `classifier` | `packages/methylclassifier/methyl_classifier/models/config_schema.py` | `packages/methylclassifier/methyl_classifier/project_resolver.py` | none |
 | `predictor` | `packages/methylpredictor/methyl_predictor/models/config.py` | `packages/methylpredictor/methyl_predictor/project_resolver.py` | `validator` alias (legacy) |
 | `mapper` | `packages/methylmapper/methyl_mapper/config.py` | `packages/methylmapper/methyl_mapper/project_resolver.py` | `csv_filename_pattern` alias in resolvers |
@@ -43,7 +43,7 @@ Legacy compatibility boundary:
 |---|---|---|---|---|
 | `step_config.validator` | deprecate, keep alias | low | still useful for old project files; canonical key is predictor | `packages/methylutils/.../pipeline_config.py`, `packages/methylpredictor/.../project_resolver.py` |
 | Enricher `input`/`outdir` aliases | deprecate, keep alias | low | duplicate semantics with `input_file`/`output_dir`; warnings added | `packages/methylenricher/.../project_resolver.py` |
-| Detector legacy ECDF keys | deprecate, keep alias | low | backward compatibility with warning; canonical `ecdf_grid_size` | `packages/methyldetector/.../models/config.py` |
+| Detector legacy ECDF keys | removed | low | strict config: use `ecdf_grid_size` only | `packages/methyldetector/.../models/config.py` |
 | `disease_subdir` arg in detector per-group resolver | remove | low | unused in runtime; removed | `packages/methyldetector/.../utils/project_resolver.py` |
 | Unused MC iteration runner args (`val_*`, predictor output in stability paths) | remove | low | no behavior effect; CLI calls updated | `packages/methylvalidation/.../pipeline_runner.py`, `cli.py` |
 

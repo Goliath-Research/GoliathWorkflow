@@ -64,8 +64,9 @@ MethylDetector can analyze one or more methylation contexts (CG, CHG, CHH). The 
   "centroid2_dir": "/path/to/cancer/centroids",
   "output_dir": "/path/to/output",
   "alpha": 0.01,
-  "min_delta_mean": 0.2,
-  "max_bc": 0.5
+  "delta_mean_reduction": 0.2,
+  "effect_size_coverage": 0.95,
+  "ecdf_grid_size": 256
 }
 ```
 

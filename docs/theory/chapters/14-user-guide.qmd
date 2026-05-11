@@ -98,7 +98,6 @@ The project configuration file is the single entry point for all pipeline steps.
     "detection": {
       "alpha": 0.05,
       "min_coverage": 4,
-      "min_sample_coverage": 4,
       "effect_size_coverage": 0.95
     },
     "classifier": {
@@ -527,13 +526,13 @@ The confusion matrix is indexed `[true_class][predicted_class]`. A model biased 
 
 **Symptom:** `sample_dmp_coverage.dmps_used_fraction_median` < 0.5 in `validation_metrics.json`. All cancer classes predicted as healthy.
 
-**Root cause:** `min_sample_coverage` in `step_config.detection` is higher than the centroid `min_coverage` in `step_config.centroid.base_config`.
+**Root cause:** **MethylClassifier** per-locus coverage for new samples is higher than centroid/detector `min_coverage`, so many DMP loci are missing in the feature matrix.
 
-**Fix:** Align both thresholds:
+**Fix:** Align classifier `min_coverage` with centroid `base_config.min_coverage` (see MethylClassifier docs / schema).
 
 ```json
 "centroid": { "base_config": { "min_coverage": 4 } },
-"detection": { "min_coverage": 4, "min_sample_coverage": 4 }
+"detection": { "min_coverage": 4 }
 ```
 
 **Verification:** After re-running, check `dmps_used_fraction_median` in the new run's `validation_metrics.json`. Expected range: 0.6–0.95.

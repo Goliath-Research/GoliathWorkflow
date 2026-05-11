@@ -1099,73 +1099,6 @@ class MethylDetector:
             ),
         )
     
-    def _generate_synthetic_validation_samples(
-        self,
-        dmps_df: pd.DataFrame
-    ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
-        """
-        Generate synthetic validation samples from centroid ECDF histograms.
-        
-        Args:
-            dmps_df: DataFrame with DMP positions/contexts
-            
-        Returns:
-            Tuple of (X_all, y_all, positions, contexts)
-        """
-        try:
-            n_samples_per_class = self.config.n_validation_samples
-            dmps_df = self._subset_dmps_to_both_centroids(dmps_df)
-            if dmps_df.empty:
-                logger.warning("Synthetic validation: no DMPs after centroid intersection; skipping")
-                return None
-            positions = dmps_df['position'].values
-            contexts = dmps_df['context'].values
-            n_positions = len(positions)
-
-            logger.info(
-                "Generating %s synthetic samples per class from %s DMPs using ECDF histograms...",
-                n_samples_per_class,
-                f"{n_positions:,}",
-            )
-
-            bin_edges, bc1, bc2 = self._extract_bin_counts_for_dmps(dmps_df)
-            rng = np.random.default_rng(self.config.random_state)
-
-            def _sample_histograms(bin_counts: np.ndarray) -> np.ndarray:
-                probs = np.asarray(bin_counts, dtype=np.float64)
-                probs /= np.maximum(probs.sum(axis=1, keepdims=True), 1e-12)
-                lower = bin_edges[:-1]
-                upper = bin_edges[1:]
-                out = np.zeros((n_samples_per_class, probs.shape[0]), dtype=np.float32)
-                for i in range(probs.shape[0]):
-                    chosen_bins = rng.choice(len(lower), size=n_samples_per_class, p=probs[i])
-                    jitter = rng.random(n_samples_per_class)
-                    out[:, i] = lower[chosen_bins] + jitter * (upper[chosen_bins] - lower[chosen_bins])
-                return np.clip(out, 0.0, 1.0)
-
-            X_class1 = _sample_histograms(bc1)
-            X_class2 = _sample_histograms(bc2)
-
-            # Combine classes
-            X_all = np.vstack([X_class1, X_class2])
-            y_all = np.concatenate([np.zeros(n_samples_per_class, dtype=int), np.ones(n_samples_per_class, dtype=int)])
-
-            # Debug: Check synthetic data statistics
-            mean_class1 = np.mean(X_class1, axis=0)
-            mean_class2 = np.mean(X_class2, axis=0)
-            logger.info(f"✅ Generated {len(X_all)} synthetic samples")
-            logger.info(f"Synthetic data stats: Class1 mean={np.mean(mean_class1):.4f}, Class2 mean={np.mean(mean_class2):.4f}")
-            logger.info(f"Sample methylation ranges: Class1 [{np.min(X_class1):.4f}, {np.max(X_class1):.4f}], Class2 [{np.min(X_class2):.4f}, {np.max(X_class2):.4f}]")
-            
-            # Return unsplit data - splitting is handled by the caller
-            return X_all, y_all, positions, contexts
-            
-        except Exception as e:
-            logger.error(f"Failed to generate synthetic samples: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-    
     def _load_validation_samples_multicontext(
         self,
         dmps_df: pd.DataFrame
@@ -1175,8 +1108,7 @@ class MethylDetector:
         
         Requires samples from BOTH centroid1 and centroid2 so that Balanced Accuracy
         (classifying between the two groups) can be computed. If only one group has
-        samples, returns None and the caller decides whether to skip optimization or
-        use explicit synthetic validation.
+        samples, returns None and the caller skips validation-driven optimization.
         
         Returns:
             Tuple of (X, y, positions, contexts) or None if loading fails
@@ -2095,19 +2027,11 @@ class MethylDetector:
                 logger.warning("Cannot validate: no DMPs selected")
                 return None
 
-            validation_mode = getattr(self.config, "validation_mode", "real")
-            if validation_mode == "real":
-                logger.info("📊 Loading validation samples...")
-                validation_data = self._load_validation_samples_multicontext(selected_dmps_df)
-                if validation_data is None:
-                    logger.warning("Failed to load validation samples")
-                    return None
-            else:
-                logger.info("📊 Generating synthetic validation samples from ECDF histograms...")
-                validation_data = self._generate_synthetic_validation_samples(selected_dmps_df)
-                if validation_data is None:
-                    logger.warning("Failed to generate synthetic samples")
-                    return None
+            logger.info("📊 Loading validation samples...")
+            validation_data = self._load_validation_samples_multicontext(selected_dmps_df)
+            if validation_data is None:
+                logger.warning("Failed to load validation samples")
+                return None
 
             X_val, y_val, val_positions, val_contexts = validation_data
             logger.info(f"✅ Loaded {len(X_val)} validation samples with {len(val_positions)} positions")
@@ -3166,7 +3090,7 @@ class MethylDetector:
         # Create validation results objects
         optimization_validation = None
         training_fold_validation = None
-        vtype = getattr(self.config, "validation_mode", "real")
+        vtype = "real"
         if hasattr(self, '_final_validation_results') and self._final_validation_results:
             result = self._final_validation_results
             optimization_validation = self._validation_block_to_pydantic(result, vtype)
@@ -4061,7 +3985,6 @@ class MethylDetector:
             "delta_mean_reduction": self.config.delta_mean_reduction,
             "target_balanced_accuracy": self.config.target_balanced_accuracy,
             "min_selected_dmps": self.config.min_selected_dmps,
-            "eps": self.config.eps,
         }
         # Input files
         input_files = {

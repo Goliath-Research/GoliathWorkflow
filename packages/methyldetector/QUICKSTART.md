@@ -22,10 +22,9 @@ Create a JSON configuration file with only the essential parameters:
   "centroid2_dir": "/path/to/cancer/centroids",
   "output_dir": "/path/to/output",
   "alpha": 0.01,
-  "min_delta_mean": 0.2,
-  "max_bc": 0.6,
-  "biological_filters": ["overlap"],
-  "use_gpu": true
+  "delta_mean_reduction": 0.2,
+  "effect_size_coverage": 0.95,
+  "ecdf_grid_size": 256
 }
 ```
 
@@ -124,7 +123,7 @@ else:
 }
 ```
 
-### With Optimization
+### With FeatureCuts panel selection (validation BA)
 
 ```json
 {
@@ -133,9 +132,9 @@ else:
   "centroid1_dir": "/centroids/healthy",
   "centroid2_dir": "/centroids/cancer",
   "output_dir": "/output",
-  "optimize_dmps": true,
-  "optimization_method": "featurecuts",
-  "target_balanced_accuracy": 0.95
+  "classifier_dmp_selection": "featurecuts_validation",
+  "target_balanced_accuracy": 0.95,
+  "validation_split_ratio": 0.2
 }
 ```
 
@@ -148,7 +147,6 @@ else:
   "centroid1_dir": "/centroids/healthy",
   "centroid2_dir": "/centroids/cancer",
   "output_dir": "/output",
-  "validation_mode": "real",
   "validation_split_ratio": 0.2,
   "centroid1_validation_samples": [
     "/samples/healthy1",
@@ -157,8 +155,7 @@ else:
   "centroid2_validation_samples": [
     "/samples/cancer1",
     "/samples/cancer2"
-  ],
-  "optimize_dmps": true
+  ]
 }
 ```
 
@@ -171,7 +168,6 @@ else:
   "centroid1_dir": "/centroids/healthy",
   "centroid2_dir": "/centroids/cancer",
   "output_dir": "/output",
-  "validation_mode": "real",
   "centroid1_validation_samples": "use_metadata",
   "centroid2_validation_samples": "use_metadata"
 }
@@ -183,9 +179,7 @@ This will read sample paths from the centroid HDF5 file metadata.
 
 To validate Balanced Accuracy with **real data for both groups**:
 
-1. **Set `validation_mode` to `"real"`** (default).
-
-2. **Provide samples in one of two ways:**
+1. **Provide samples in one of two ways:**
 
    - **Explicit paths (recommended when you have a dedicated validation set):**  
      Set `centroid1_validation_samples` and `centroid2_validation_samples` to **arrays of paths**.  
@@ -201,13 +195,11 @@ To validate Balanced Accuracy with **real data for both groups**:
      The pipeline reads sample paths from the centroid H5 metadata (`samples_used` or `sample_paths`).  
      Use this when the same samples used to build the centroids are acceptable for validation (no separate holdout).
 
-3. **Optional:**  
+2. **Optional:**  
    - `validation_split_ratio`: fraction held out for test. Default `0` = no split (use all real validation samples for BA). Set e.g. `0.2` for a holdout when you want train/test separation.  
    - `validation_min_coverage`: min coverage when extracting methylation from these samples (default `4`; use lower than centroid `min_coverage` if needed).
 
-When using real samples, **`n_validation_samples` is not used** (it only applies to synthetic validation).
-
-If no real samples are found (or only one group has samples), the pipeline falls back to **synthetic** validation and logs a warning.
+If no real samples are found (or only one group has samples), FeatureCuts / validation BA steps are skipped and the detector logs a warning (elbow-based panel selection still runs when configured).
 
 ## Data Format
 
@@ -247,21 +239,15 @@ If you get 0 biological DMPs, try relaxing filters:
 
 ```json
 {
-  "alpha": 0.05,          // Increase from 0.01
-  "min_delta_mean": 0.1,  // Decrease from 0.2
-  "max_bc": 0.8          // Increase from 0.5
+  "alpha": 0.05,
+  "delta_mean_reduction": 0.1,
+  "effect_size_coverage": 0.99
 }
 ```
 
 ### GPU Out of Memory
 
-Disable GPU if you encounter memory errors:
-
-```json
-{
-  "use_gpu": false
-}
-```
+Reduce chromosome batch size, lower `ecdf_grid_size`, or run with `CUDA_VISIBLE_DEVICES` unset so the process uses CPU (CuPy not required for CPU path).
 
 ### Validation Errors
 

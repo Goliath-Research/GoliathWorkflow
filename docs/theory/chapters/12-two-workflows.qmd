@@ -292,15 +292,9 @@ After all iterations, the same aggregation as Workflow 1 produces `all_metrics.c
 
 **Symptom.** `sample_dmp_coverage.dmps_used_fraction_median < 0.5` in `validation_metrics.json`. Values below 0.3 indicate severe degradation.
 
-**Cause.** The centroid `min_coverage` (e.g. 4) and the detector `min_sample_coverage` (default 10) are mismatched. DMP positions that were detectable in training centroids at 4× coverage become invisible in test samples when the classifier requires 10× coverage.
+**Cause.** The centroid/detector `min_coverage` (e.g. 4) is lower than the **MethylClassifier** per-locus coverage requirement for new samples, so many DMP loci are treated as missing in the feature matrix.
 
-**Fix.** In `step_config.detection`, add:
-
-```json
-"min_sample_coverage": 4
-```
-
-This aligns the coverage requirement for classification with the centroid build threshold.
+**Fix.** In **`step_config.classifier`** (MethylClassifier config), set `min_coverage` to match centroid `base_config.min_coverage` (see classifier documentation for the exact field name in your layout).
 
 **Verification.** Re-run Workflow 2. `dmps_used_fraction_median` should rise to 0.6–0.9 for typical WGBS data.
 

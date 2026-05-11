@@ -381,7 +381,7 @@ Prefer these canonical keys in project files:
 
 - `step_config.predictor` (legacy alias `step_config.validator` is deprecated)
 - `step_config.enricher.input_file` / `step_config.enricher.output_dir` (legacy `input` / `outdir` are deprecated)
-- `step_config.detection.ecdf_grid_size` (legacy aliases `ecdf_overlap_grid_size`, `ecdf_ks_grid_size` are deprecated)
+- `step_config.detection.ecdf_grid_size` (only canonical key; `ecdf_overlap_grid_size` / `ecdf_ks_grid_size` are rejected)
 
 ### Rollout comparison thresholds
 
@@ -441,12 +441,12 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 
 ### 1. Low DMP coverage (`dmps_used_fraction_median` < 0.5)
 
-**Cause:** `min_sample_coverage` in `step_config.detection` > centroid `min_coverage` in `step_config.centroid.base_config`.
+**Cause:** MethylClassifier `min_coverage` (or equivalent) for new samples is higher than centroid `min_coverage` in `step_config.centroid.base_config`, so many DMP loci are missing in the feature matrix.
 
-**Fix:**
+**Fix:** Align classifier inference `min_coverage` with centroid training `min_coverage` (see MethylClassifier config / docs).
+
 ```json
-"centroid": { "base_config": { "min_coverage": 4 } },
-"detection": { "min_coverage": 4, "min_sample_coverage": 4 }
+"centroid": { "base_config": { "min_coverage": 4 } }
 ```
 
 ### 2. Class imbalance (majority class recall ≈ 1.0, others ≈ 0)

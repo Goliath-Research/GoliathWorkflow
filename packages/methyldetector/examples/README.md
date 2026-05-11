@@ -70,7 +70,7 @@ This will run comparisons for:
 - `alpha`: Significance level for individual tests (default: 0.05)
 - `min_N_pct`: Minimum fraction of samples covering a position (default: 0.10)
 - `min_N_abs`: Absolute minimum sample count (optional, default: None)
-- `use_gpu`: Whether to use GPU acceleration (default: true)
+- GPU is used automatically when CuPy/CUDA is available (not a JSON config field).
 ### Multiple Comparison Parameters
 - `centroid1_dir`: Directory containing centroid1 files (required)
 - `centroid2_dir`: Directory containing centroid2 files (required)
@@ -86,7 +86,7 @@ For multiple comparisons, the tool expects centroid files to follow this naming 
 
 ## Tips
 
-1. **GPU Usage**: Set `use_gpu: true` for faster processing (requires CUDA environment)
+1. **GPU**: Install CuPy for your CUDA version; the detector selects GPU when available.
 2. **Sample Size**: Increase `min_N_pct` for more reliable results but fewer positions analyzed
 3. **Significance Levels**: Adjust `alpha` based on your research needs
 4. **Config Detection**: The tool automatically detects whether to use single or multiple comparison mode based on the presence of `centroid1_path` vs `centroid1_dir` in the config file

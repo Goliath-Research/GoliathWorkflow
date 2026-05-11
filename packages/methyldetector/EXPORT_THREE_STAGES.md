@@ -75,8 +75,7 @@ The files are generated based on your configuration settings:
   "export_all_biological_dmps": false,
   "optimize_for_validation_accuracy": true,
   "target_balanced_accuracy": 0.99,
-  "min_dmps_for_export": 5000,
-  "validation_mode": "real"
+  "min_dmps_for_export": 5000
 }
 ```
 

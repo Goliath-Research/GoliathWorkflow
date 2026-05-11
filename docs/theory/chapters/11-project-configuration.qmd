@@ -179,7 +179,6 @@ The following is an annotated excerpt from `configs/project_Healthy_vs_PCa1-4-CG
     "detection": {
       "alpha": 0.05,                 ← q-value threshold for statistical DMPs
       "min_coverage": 4,             ← same as centroid min_coverage (critical: must match)
-      "min_sample_coverage": 4,      ← coverage required in new samples (must match centroid)
       "effect_size_coverage": 0.95,  ← retain top 95% effect mass
       "multiclass_train_learned_head": true,
       "multiclass_learned_class_weight": "balanced"   ← corrects class imbalance

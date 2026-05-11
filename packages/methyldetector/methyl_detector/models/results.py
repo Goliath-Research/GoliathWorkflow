@@ -188,7 +188,7 @@ class PerformanceMetrics(NumpyCompatibleModel):
 
 class ValidationResults(NumpyCompatibleModel):
     """Results from a validation run."""
-    type: str = Field(..., description="Type of validation ('real' or 'synthetic')")
+    type: str = Field(..., description="Validation cohort label (typically 'real'; stored for schema compatibility)")
     performance: PerformanceMetrics = Field(..., description="Performance metrics")
     confusion_matrix: ConfusionMatrix = Field(..., description="Confusion matrix")
     sample_counts: SampleCounts = Field(..., description="Sample counts")

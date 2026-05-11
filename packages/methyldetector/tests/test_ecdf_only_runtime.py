@@ -111,15 +111,15 @@ def test_methyl_detector_config_persists_validation_split_fields():
         assert cfg.validation_n_repeats == 2
 
 
-def test_methyl_detector_config_warns_on_legacy_ecdf_grid_alias():
+def test_methyl_detector_config_rejects_legacy_ecdf_grid_alias():
     with TemporaryDirectory() as temp_dir:
         centroid1_dir = Path(temp_dir) / "c1"
         centroid2_dir = Path(temp_dir) / "c2"
         centroid1_dir.mkdir()
         centroid2_dir.mkdir()
 
-        with pytest.warns(DeprecationWarning, match="ecdf_overlap_grid_size"):
-            cfg = MethylDetectorConfig.model_validate(
+        with pytest.raises(ValueError, match="ecdf_overlap_grid_size and ecdf_ks_grid_size"):
+            MethylDetectorConfig.model_validate(
                 {
                     "chromosome": "1",
                     "contexts": ["CG"],
@@ -128,7 +128,6 @@ def test_methyl_detector_config_warns_on_legacy_ecdf_grid_alias():
                     "ecdf_overlap_grid_size": 512,
                 }
             )
-        assert cfg.ecdf_grid_size == 512
 
 
 def test_methyl_centroid_pair_is_ecdf_only():

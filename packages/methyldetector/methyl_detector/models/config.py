@@ -1,12 +1,11 @@
 from pathlib import Path
-from typing import List, Literal, Optional, Union, Dict, Any  # noqa: F401
-import warnings
+from typing import List, Literal, Optional, Union, Dict  # noqa: F401
 
 DmpExportMode = Literal["unified", "dual"]
 ClassifierDmpSelection = Literal["elbow", "featurecuts_validation"]
 from math import ceil
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from enum import Enum
 
 # Import utility for extracting chromosome from filenames
@@ -51,11 +50,61 @@ class FilterFunnelExplore(BaseModel):
 class MethylDetectorConfig(BaseModel):
     """Simplified configuration for MethylDetector analysis."""
 
+    model_config = ConfigDict(extra="forbid")
+
     @model_validator(mode="before")
     @classmethod
     def reject_legacy_distribution_keys(cls, data):
         """Reject legacy detector knobs that no longer map to runtime behavior."""
         if isinstance(data, dict):
+            _REMOVED_DETECTOR_KEYS = {
+                "max_dmps_for_classifier": (
+                    "max_dmps_for_classifier was removed from detector config. "
+                    "Use dynamic_dmp_cutoff_enabled / dynamic_dmp_cutoff_relaxation, "
+                    "classifier_dmp_selection, featurecuts_max_k_cap, and min_selected_dmps instead."
+                ),
+                "use_gpu": (
+                    "use_gpu was removed from detector config. "
+                    "The detector uses GPU automatically when CUDA/CuPy is available and falls back to CPU otherwise."
+                ),
+                "validation_mode": (
+                    "validation_mode was removed; MethylDetector always uses real validation samples "
+                    "(centroid1_validation_samples / centroid2_validation_samples or centroid metadata)."
+                ),
+                "n_validation_samples": (
+                    "n_validation_samples was removed; synthetic validation generation is no longer supported."
+                ),
+                "min_sample_coverage": (
+                    "min_sample_coverage was removed from detector config. "
+                    "Align inference coverage with centroid training via methylclassifier / centroid base_config.min_coverage."
+                ),
+                "min_validation_coverage_per_position": (
+                    "min_validation_coverage_per_position was removed; validation matrices use all positions "
+                    "with sufficient per-sample coverage (see validation_min_coverage)."
+                ),
+                "classifier_coverage_weighting": (
+                    "classifier_coverage_weighting was removed; classifier weighting follows the current ECDF pipeline defaults."
+                ),
+                "synthetic_config": (
+                    "synthetic_config was removed; synthetic validation generation is no longer supported."
+                ),
+                "classifier_type": (
+                    "classifier_type was removed from detector config; exports always use the ECDF classifier."
+                ),
+                "eps": (
+                    "eps was removed from detector config; numerical guards are fixed internally."
+                ),
+            }
+            for key, message in _REMOVED_DETECTOR_KEYS.items():
+                if key in data:
+                    raise ValueError(message)
+
+            if "ecdf_overlap_grid_size" in data or "ecdf_ks_grid_size" in data:
+                raise ValueError(
+                    "ecdf_overlap_grid_size and ecdf_ks_grid_size are no longer supported. "
+                    "Set ecdf_grid_size (single grid for ECDF/KS and overlap integration)."
+                )
+
             if "statistical_test" in data:
                 raise ValueError(
                     "statistical_test is no longer supported. Use significance_test instead "
@@ -68,22 +117,6 @@ class MethylDetectorConfig(BaseModel):
                     "Legacy distribution-specific detector options are no longer supported: "
                     f"{used}. MethylDetector now uses the ECDF-first comparison pipeline."
                 )
-            # Alias legacy grid keys to ecdf_grid_size for backward compatibility
-            if "ecdf_grid_size" not in data:
-                if "ecdf_overlap_grid_size" in data:
-                    warnings.warn(
-                        "ecdf_overlap_grid_size is deprecated; use ecdf_grid_size instead.",
-                        DeprecationWarning,
-                        stacklevel=2,
-                    )
-                    data = {**data, "ecdf_grid_size": data["ecdf_overlap_grid_size"]}
-                elif "ecdf_ks_grid_size" in data:
-                    warnings.warn(
-                        "ecdf_ks_grid_size is deprecated; use ecdf_grid_size instead.",
-                        DeprecationWarning,
-                        stacklevel=2,
-                    )
-                    data = {**data, "ecdf_grid_size": data["ecdf_ks_grid_size"]}
         return data
 
     # ----------------
@@ -379,10 +412,6 @@ class MethylDetectorConfig(BaseModel):
     # ----------------
     # System Settings
     # ----------------
-    use_gpu: bool = Field(
-        default=True,
-        description="Whether to use GPU acceleration"
-    )
     significance_test: Literal["ks_ecdf", "mann_whitney"] = Field(
         default="ks_ecdf",
         description="Statistical test for DMP significance: 'ks_ecdf' (Kolmogorov-Smirnov on precise ECDF; recommended and default) or 'mann_whitney' (Mann-Whitney from bin counts; alternative)."
@@ -390,10 +419,6 @@ class MethylDetectorConfig(BaseModel):
     ecdf_grid_size: int = Field(
         default=256, ge=16, le=4096,
         description="Number of grid points for ECDF/KS and overlap integration (single grid; default 256)."
-    )
-    eps: float = Field(
-        default=1e-6, gt=0,
-        description="Epsilon for numerical stability in variance calculations (prevents division by zero in effect_size = |delta_mu / var_delta_mu|)"
     )
 
     # ----------------
@@ -467,66 +492,11 @@ class MethylDetectorConfig(BaseModel):
                 raise ValueError("Output directory cannot be empty")
         return v
 
-    # @field_validator('validation_mode', mode='before')
-    # @classmethod
-    # def validate_validation_mode(cls, v):
-    #     valid_modes = ['synthetic', 'real']
-    #     if v not in valid_modes:
-    #         raise ValueError(f"Validation mode must be one of: {valid_modes}, got: {v}")
-    #     return v
-    
-    classifier_type: str = Field(
-        default="ecdf",
-        description="Classifier type for detector exports. Only 'ecdf' is supported."
-    )
-    
-    min_sample_coverage: int = Field(
-        default=10, ge=1, le=100,
-        description="Min coverage (mC + uC) for positions in new samples. Below this, positions are ignored in classification. Use a lower value (e.g. 4) when centroids were built with high min_coverage (e.g. 10) but patient samples have lower coverage."
-    )
-    
     validation_min_coverage: int = Field(
         default=4, ge=1, le=100,
         description="Min coverage when extracting methylation from validation/centroid samples. Use a value lower than the centroid's min_coverage (e.g. 4 if centroid used 10) so validation samples contribute values at more positions and better match lower-coverage patient data."
     )
 
-    min_validation_coverage_per_position: int = Field(
-        default=1, ge=1, le=100,
-        description="Minimum number of validation samples that must cover a position for it to be kept in calibration/test. Used to drop positions with too few non-NaN values so BA has signal."
-    )
-
-    classifier_coverage_weighting: bool = Field(
-        default=True,
-        description="If True, weight LLR by sample precision (tau_s ~ coverage); False: uniform."
-    )
-    
-    synthetic_config: Dict[str, Any] = Field(
-        default={
-            "realism_level": "basic",
-            "avg_coverage": 30,
-            "min_coverage": 5,
-            "correlation_strength": 0.5,
-            "variability_scale": 0.2,
-            "add_missing": True
-        },
-        description="Configuration for synthetic ECDF-histogram validation sample generation."
-    )
-
-    @field_validator('classifier_type', mode='before')
-    @classmethod
-    def validate_classifier_type(cls, v):
-        if v != "ecdf":
-            raise ValueError("classifier_type must be 'ecdf'.")
-        return v
-
-    @field_validator('synthetic_config', mode='before')
-    @classmethod
-    def validate_synthetic_config(cls, v):
-        realism = v.get('realism_level', 'basic')
-        if realism not in ['off', 'basic', 'advanced']:
-            raise ValueError("realism_level must be 'off', 'basic', or 'advanced'.")
-        return v
-    
     @field_validator('trimmed_percentile_low', 'trimmed_percentile_high', mode='before')
     @classmethod
     def validate_trimmed_percentile(cls, v):

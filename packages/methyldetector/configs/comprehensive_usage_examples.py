@@ -89,7 +89,6 @@ def example_2_command_line_with_json_config() -> None:
             output_dir=Path("/home/ubuntu/Work/output_workflows/arabidopsis/detection/WT-msh1"),
             alpha=0.05,
             min_N_pct=0.1,
-            use_gpu=True
         )
         
         # Save config to file using Pydantic's built-in JSON export
@@ -153,7 +152,6 @@ def example_3_python_api_with_pydantic_config() -> None:
             apply_fdr_correction=True,
             fdr_method="storey",
             global_significance_threshold=0.05,
-            use_gpu=True
         )
         
         print("Configuration created successfully:")
@@ -163,7 +161,6 @@ def example_3_python_api_with_pydantic_config() -> None:
         print(f"  Alpha: {config.alpha}")
         print(f"  Min N: {config.min_N}")
         print(f"  FDR correction: {config.apply_fdr_correction}")
-        print(f"  GPU acceleration: {config.use_gpu}")
         
         # Initialize detector
         detector = MethylDetector(config)
@@ -200,7 +197,6 @@ def example_4_python_api_with_direct_parameters() -> None:
             apply_fdr_correction=True,
             fdr_method="storey",
             global_significance_threshold=0.05,
-            use_gpu=True
         )
         
         print("Detector initialized successfully with direct parameters!")
@@ -208,7 +204,6 @@ def example_4_python_api_with_direct_parameters() -> None:
         print(f"  Alpha: {detector.config.alpha}")
         print(f"  Min N: {detector.config.min_N}")
         print(f"  FDR correction: {detector.config.apply_fdr_correction}")
-        print(f"  GPU acceleration: {detector.config.use_gpu}")
         
         # Run analysis (commented out as it requires real data)
         result: MethylDetectorResult = detector.run()
@@ -243,7 +238,6 @@ def example_5_multiple_comparisons_programmatically() -> None:
             apply_fdr_correction=True,
             fdr_method="storey",
             global_significance_threshold=0.05,
-            use_gpu=True
         )
         
         print("Multiple comparison configuration created:")

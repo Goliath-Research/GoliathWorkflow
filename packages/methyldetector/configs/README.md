@@ -57,7 +57,6 @@ Configuration without FDR correction for comparison with raw p-values.
 | `pvalue_aggregation_method` | string | P-value aggregation method | null |
 | | | Available: "fisher", "stouffer", "lancaster", "tippett", "edgington", "mudholkar_george", "simes" | |
 | `global_significance_threshold` | float | Threshold for global significance | 0.05 |
-| `use_gpu` | bool | Whether to use GPU acceleration | true |
 
 ### Multiple Comparison Config (uses `centroid1_dir` and `centroid2_dir`)
 
@@ -75,7 +74,6 @@ Configuration without FDR correction for comparison with raw p-values.
 | `pvalue_aggregation_method` | string | P-value aggregation method | null |
 | | | Available: "fisher", "stouffer", "lancaster", "tippett", "edgington", "mudholkar_george", "simes" | |
 | `global_significance_threshold` | float | Threshold for global significance | 0.05 |
-| `use_gpu` | bool | Whether to use GPU acceleration | true |
 
 ## File Naming Convention
 
@@ -97,7 +95,7 @@ For multiple comparisons, the tool expects centroid files to follow this naming 
 - Individual comparison files in subdirectories
 ## Tips
 
-1. **GPU Usage**: Set `use_gpu: true` for faster processing (requires CUDA environment)
+1. **GPU**: MethylDetector uses GPU automatically when CuPy/CUDA is available (no detector config toggle).
 2. **Sample Size**: Increase `min_N` for more reliable results but fewer positions analyzed
 3. **FDR Correction**: Use `apply_fdr_correction: true` for multiple testing correction
 4. **Significance Levels**: Adjust `alpha` and `global_significance_threshold` based on your research needs

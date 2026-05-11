@@ -58,7 +58,6 @@ def main():
         apply_fdr_correction=True,
         fdr_method="storey",
         global_significance_threshold=0.05,
-        use_gpu=True,
 
         # DMP filtering parameters (effect_size from MethylCentroidPair; min_effect_size = minimum effect_size threshold)
         apply_dmp_filtering=True,

@@ -23,7 +23,7 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 
 | Parameter | Type | Default | Constraints | Description |
 |---|---|---|---|---|
-| `min_coverage` | int | `4` | ≥ 1 | Minimum total (mC + uC) reads per position per sample. Positions below this threshold are excluded from the centroid. **Must match `step_config.detection.min_coverage` and `step_config.detection.min_sample_coverage`.** |
+| `min_coverage` | int | `4` | ≥ 1 | Minimum total (mC + uC) reads per position per sample. Positions below this threshold are excluded from the centroid. **Should match `step_config.detection.min_coverage`.** |
 | `use_gpu` | bool | `true` | — | Use GPU acceleration when available. |
 | `max_sample_workers` | int \| null | `null` | ≥ 1 or null | Maximum parallel worker processes for sample loading. `null` uses all available CPUs. |
 | `verbose` | bool | `true` | — | Verbose logging during centroid construction. |
@@ -59,12 +59,11 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 |---|---|---|---|---|
 | `alpha` | float | `0.05` | [0, 1] | q-value threshold for the statistical DMP set $\mathcal{D}_{\text{stat}}$ (@eq-detector-statset). |
 | `significance_test` | str | `"ks_ecdf"` | `"ks_ecdf"` or `"mann_whitney"` | Statistical test. `ks_ecdf` uses the KS statistic on reconstructed ECDFs (@sec-methylutils); `mann_whitney` uses the histogram-based rank sum approximation. |
-| `ecdf_grid_size` | int | `256` | [16, 4096] | Grid resolution for ECDF reconstruction, KS statistics, and overlap integration. Higher values improve accuracy at the cost of compute. Legacy alias: `ecdf_overlap_grid_size`. |
+| `ecdf_grid_size` | int | `256` | [16, 4096] | Grid resolution for ECDF reconstruction, KS statistics, and overlap integration. Higher values improve accuracy at the cost of compute. |
 | `min_coverage` | int | `4` | ≥ 1 | Minimum centroid coverage required for a locus to be a DMP candidate. Should match `base_config.min_coverage`. |
 | `min_samples_abs` | int | `1` | ≥ 1 | Absolute minimum number of samples per locus per centroid. |
 | `min_samples_pct` | float | `0.05` | [0, 1] | Minimum fraction of cohort samples that must cover a locus. Effective min = `max(min_samples_abs, ceil(min_samples_pct × cohort_size))`. |
 | `delta_mean_reduction` | float \| null | `null` | [0, 1] or null | Optional pre-statistical gate: discard loci where $|\Delta\mu| < \delta_{\min}$ before running the statistical test. Reduces test count for large CHH context runs. |
-| `eps` | float | `1e-6` | > 0 | Numerical floor for variance estimates to prevent division by zero. |
 | `random_state` | int | `42` | ≥ 0 | RNG seed for reproducibility. |
 
 ### Biological Prioritization ★
@@ -98,6 +97,7 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 | `min_dmps_for_export` | int | `1000` | ≥ 1 | Minimum rows in the exported DMP CSV. In unified mode, the CSV is widened to this count if the classifier elbow subset is smaller and more biological DMPs exist. |
 | `effect_size_weight_power` | float | `1.0` | [0.1, 5] | Power applied to normalized effect sizes when computing classifier feature weights: $w_i = (e_i / e_{\max})^p$. Values > 1 concentrate weight on top positions. |
 | `filter_funnel_explore` | dict \| null | `null` | — | If set, sweeps `effect_size_coverage` over a range and writes `filter_funnel.csv`. Dict with sub-key `effect_size_coverage: {min, max, step}`. |
+| `target_balanced_accuracy` | float \| null | `null` | [0, 1] or null | Optional BA target when `classifier_dmp_selection=featurecuts_validation` (minimum top-$k$ by effect-size rank that reaches this BA). |
 
 ### Context Weighting
 
@@ -108,14 +108,21 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 | `trimmed_percentile_high` | float | `0.01` | [0, 0.5] | Remove the top this fraction. |
 | `context_weight_direction` | str | `"inverse"` | `"inverse"` or `"proportional"` | `inverse`: weight ∝ 1/trimmed_mean (down-weight contexts with inflated effects, e.g. CHH). `proportional`: weight ∝ trimmed_mean. |
 
-### Classifier Handoff and Sample Coverage
+### Validation cohorts (real samples only)
 
 | Parameter | Type | Default | Constraints | Description |
 |---|---|---|---|---|
-| `min_sample_coverage` | int | `10` | [1, 100] | Minimum coverage required at a DMP locus in a **new sample** being classified. Positions below this threshold are treated as missing. **Should match `base_config.min_coverage`** (see @sec-detector-coverage). |
-| `validation_min_coverage` | int | `4` | [1, 100] | Minimum coverage when extracting methylation from validation or centroid samples during the internal self-check. |
-| `min_validation_coverage_per_position` | int | `1` | [1, 100] | Minimum number of validation samples that must cover a position for it to be used in calibration. |
-| `classifier_coverage_weighting` | bool | `true` | — | Weight the log-likelihood ratio by sample precision (higher coverage → more weight). |
+| `centroid1_validation_samples` | str \| list[str] \| null | `null` | — | Paths to class-1 validation cohort (dirs or `.h5`), or `"use_metadata"` to read sample paths from centroid H5 metadata. |
+| `centroid2_validation_samples` | str \| list[str] \| null | `null` | — | Same for class 2. |
+| `validation_samples_base_path` | str \| null | `null` | — | When centroid metadata stores sample basenames only, prepend this directory (often project `samples_base_path`). |
+| `validation_split_ratio` | float | `0.0` | [0, 1] | Fraction of validation rows per class held out for test BA (repeated stratified). `0` = no row holdout. |
+| `validation_n_repeats` | int | `1` | [1, 100] | Number of repeated holdouts when `validation_split_ratio` > 0. |
+| `validation_min_coverage` | int | `4` | [1, 100] | Minimum coverage when extracting methylation from validation samples for BA / FeatureCuts. |
+
+### Classifier metadata and self-check
+
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
 | `temperature` | float | `1.0` | [0.1, 10] | Softmax temperature for the binary ECDF classifier metadata. |
 | `enable_platt_calibration` | bool | `false` | — | Enable Platt scaling calibration on validation data. |
 | `centroid_self_check_top_k` | int \| null | `null` | ≥ 1 or null | If set, restrict the self-check centroid classification to the top-K DMPs by effect size. |
@@ -125,10 +132,8 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 | Parameter | Type | Default | Constraints | Description |
 |---|---|---|---|---|
 | `debug` | bool | `false` | — | Enable verbose debug logging. |
-| `use_gpu` | bool | `true` | — | Use GPU acceleration. |
 | `export_sample_size_estimate` | bool | `false` | — | Add `n_estimated_per_group` column to the DMP CSV: estimated per-group sample size for target statistical power. |
 | `target_power` | float | `0.8` | [0.5, 0.999] | Target power for sample size estimation (only used when `export_sample_size_estimate: true`). |
-| `synthetic_config` | dict | (see defaults) | `realism_level` ∈ `"off"`, `"basic"`, `"advanced"` | Configuration for synthetic ECDF validation sample generation. Sub-keys: `realism_level`, `avg_coverage`, `min_coverage`, `correlation_strength`, `variability_scale`, `add_missing`. |
 
 ---
 
