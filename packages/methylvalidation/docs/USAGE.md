@@ -383,6 +383,13 @@ Prefer these canonical keys in project files:
 - `step_config.enricher.input_file` / `step_config.enricher.output_dir` (legacy `input` / `outdir` are deprecated)
 - `step_config.detection.ecdf_grid_size` (only canonical key; `ecdf_overlap_grid_size` / `ecdf_ks_grid_size` are rejected)
 
+### De-duplicated panel, progression, and MC predictor wiring
+
+- **`comparisons`** is the canonical source for which disease leaves exist and in what order.
+- **Classifier / predictor `panel`**: you may omit both `step_config.classifier.panel` and `step_config.predictor.panel`. Classifier and predictor then use a panel derived from comparisons (disease leaves grouped under each disease **parent** label). If you set only `classifier.panel`, predictor inherits it unless `predictor.panel` is set explicitly.
+- **`step_config.progression.ordered_comparison_labels`**: optional. When omitted, disease-progression uses the same order as **`get_comparisons()`** / `get_ordered_comparison_labels()` on `ProjectConfig`.
+- **Monte Carlo hierarchical runs**: the template project does **not** need nested `step_config.predictor.controls` / `diseases` mirroring the top-level cohorts, and does **not** need `train_group_paths` / `holdout_group_paths` for split wiring. Run `project.json` generation copies top-level cohort shape into the predictor step and points leaves at per-run `testing_*.csv` files (see `methyl_validation.project_gen`).
+
 ### Rollout comparison thresholds
 
 `--rollout-compare` uses thresholds from `step_config.validation`:

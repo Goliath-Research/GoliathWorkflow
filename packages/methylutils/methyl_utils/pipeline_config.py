@@ -25,6 +25,7 @@ the same artifact layout consistently.
 
 import json
 import warnings
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union
 
@@ -682,6 +683,81 @@ class ProjectConfig(BaseModel):
                 comparison_label=spec.comparison_label if spec.comparison_label is not None else spec.disease_group,
             ))
         return out
+
+    def disease_parent_for_resolved_leaf(self, disease_leaf: str) -> str:
+        """
+        Map a resolved disease centroid label (e.g. ``pca_pca1``) to its disease parent group label (``pca``).
+
+        Used to build hierarchical panel ``families`` keyed by parent without duplicating cohort JSON.
+        """
+        if self.disease is None:
+            return disease_leaf
+        for g in self.disease.groups:
+            if g.stages:
+                for st in g.stages:
+                    if f"{g.label}_{st.label}" == disease_leaf:
+                        return g.label
+            else:
+                if g.label == disease_leaf:
+                    return g.label
+        return disease_leaf
+
+    def get_ordered_comparison_labels(self, expand_subclusters: bool = False) -> List[str]:
+        """
+        Ordered comparison tokens for progression / reporting: ``comparison_label`` if set, else ``disease_group``.
+
+        Order matches :meth:`get_comparisons` (i.e. the project ``comparisons`` list or shorthand expansion).
+        """
+        return [
+            (s.comparison_label or s.disease_group)
+            for s in self.get_comparisons(expand_subclusters=expand_subclusters)
+        ]
+
+    def derive_panel_spec_from_comparisons(
+        self,
+        expand_subclusters: bool = False,
+        indeterminate_delta: Optional[float] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build a hierarchical ``panel`` dict (``primary_family``, ``families``, ``indeterminate_delta``)
+        from :meth:`get_comparisons`, grouping disease leaves under each disease parent.
+
+        Returns ``None`` when not control/disease, when there are no comparisons, or when fewer than
+        two distinct disease leaves appear (binary / single-disease layouts do not need a panel).
+        """
+        if not self.uses_control_disease():
+            return None
+        specs = self.get_comparisons(expand_subclusters=expand_subclusters)
+        if not specs:
+            return None
+        disease_leaves_ordered: List[str] = []
+        seen: set[str] = set()
+        for s in specs:
+            if s.disease_group not in seen:
+                seen.add(s.disease_group)
+                disease_leaves_ordered.append(s.disease_group)
+        if len(disease_leaves_ordered) < 2:
+            return None
+
+        families: "OrderedDict[str, List[str]]" = OrderedDict()
+        for s in specs:
+            dg = s.disease_group
+            parent = self.disease_parent_for_resolved_leaf(dg)
+            if parent not in families:
+                families[parent] = []
+            if dg not in families[parent]:
+                families[parent].append(dg)
+
+        first_parent = self.disease_parent_for_resolved_leaf(specs[0].disease_group)
+        if first_parent not in families:
+            first_parent = next(iter(families.keys()))
+
+        delta = 0.25 if indeterminate_delta is None else float(indeterminate_delta)
+        return {
+            "primary_family": first_parent,
+            "families": {k: list(v) for k, v in families.items()},
+            "indeterminate_delta": delta,
+        }
 
     def get_derived_paths(self, expand_subclusters: bool = False) -> DerivedPaths:
         """Compute derived paths from this project config. Project root is {output_base}/{project_name}. When expand_subclusters is True, centroid_dirs include derived groups from clustering manifests."""

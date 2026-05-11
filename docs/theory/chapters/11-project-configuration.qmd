@@ -6,7 +6,9 @@ MethylPipeline is controlled by a single JSON configuration file called the **pr
 
 The governing design principle is **single source of truth**: no piece of information that is already in the project file should be repeated inside any step-specific configuration. Specifically:
 
-- Sample paths are defined once in the top-level `controls`/`diseases` block and never duplicated in `step_config.predictor`.
+- Sample paths are defined once in the top-level `controls`/`diseases` block. For Monte Carlo, per-run `project.json` files rewrite cohort lists to training CSVs; holdout lists are patched automatically—**you do not need** duplicate nested `step_config.predictor.controls` / `diseases` or hand-authored `train_group_paths` / `holdout_group_paths` in the template when the predictor step can inherit the top-level cohort shape (see `ProjectConfig` helpers in `pipeline_config.py`).
+- **Hierarchical panel readout** (`step_config.classifier.panel` / `step_config.predictor.panel`): when omitted, both **methyl-classifier** and **methyl-predictor** default the panel from **`comparisons`**, grouping disease leaves under each disease **parent** group (`derive_panel_spec_from_comparisons`). Explicit `panel` in `step_config.predictor` overrides `step_config.classifier.panel`, which overrides the derived default.
+- **Progression stage order**: when `step_config.progression.ordered_comparison_labels` is omitted, ordering follows **`comparisons`** via `get_ordered_comparison_labels()` (same order as `get_comparisons()`).
 - `output_base` and `samples_base_path` are top-level fields inherited by all steps.
 - Monte Carlo validation settings are embedded under `step_config.validation`, not in a separate file.
 

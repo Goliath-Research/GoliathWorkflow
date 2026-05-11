@@ -48,6 +48,23 @@ def _classifier_step_snapshot(classifier_step: Optional[Dict[str, Any]]) -> Opti
     return out or None
 
 
+def _resolve_panel_for_predictor(
+    project: ProjectConfig, step_cfg: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """
+    Panel precedence: explicit predictor.panel → classifier.panel → derived from comparisons.
+    """
+    p = step_cfg.get("panel")
+    if isinstance(p, dict) and p:
+        return p
+    cls_step = project.get_step_config("classifier") or {}
+    c = cls_step.get("panel")
+    if isinstance(c, dict) and c:
+        return c
+    derived = project.derive_panel_spec_from_comparisons()
+    return derived if isinstance(derived, dict) else None
+
+
 def _predictor_decision_overrides(step_cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Extract optional decision policy keys from step_config.predictor."""
     out: Dict[str, Any] = {}
@@ -726,7 +743,7 @@ def _build_blind_predictor_dict(
         "blind": blind_side,
         "sample_lineage": lineage,
         "cohort_hierarchy": tree or None,
-        "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+        "panel": _resolve_panel_for_predictor(project, step_cfg),
         "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
         **_predictor_decision_overrides(step_cfg),
     }
@@ -971,7 +988,7 @@ def _build_multiclass_predictor_config(
             "report_diseases": None,
             "sample_lineage": lin_tr + lin_ho,
             "cohort_hierarchy": tree or None,
-            "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            "panel": _resolve_panel_for_predictor(project, step_cfg),
             "classifier_step_snapshot": _classifier_step_snapshot(
                 project.get_step_config("classifier") or {}
             ),
@@ -994,7 +1011,7 @@ def _build_multiclass_predictor_config(
         "report_diseases": None,
         "sample_lineage": mc_lineage,
         "cohort_hierarchy": tree or None,
-        "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+        "panel": _resolve_panel_for_predictor(project, step_cfg),
         "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
         **_predictor_decision_overrides(step_cfg),
     }
@@ -1078,7 +1095,7 @@ def resolve_predictor_config(
             report_controls={"label": "control", "groups": [{"label": "cli", "sample_paths": []}]},
             report_diseases={"label": "disease", "groups": [{"label": "cli", "sample_paths": []}]},
             sample_lineage=lineage,
-            panel=step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            panel=_resolve_panel_for_predictor(project, step_cfg),
             classifier_step_snapshot=_classifier_step_snapshot(classifier_step),
             **_predictor_decision_overrides(step_cfg),
         )
@@ -1140,7 +1157,7 @@ def resolve_predictor_config(
                 report_diseases=None,
                 sample_lineage=mc_lineage,
                 cohort_hierarchy=tree or None,
-                panel=step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+                panel=_resolve_panel_for_predictor(project, step_cfg),
                 classifier_step_snapshot=_classifier_step_snapshot(classifier_step),
                 **_predictor_decision_overrides(step_cfg),
             )
@@ -1189,7 +1206,7 @@ def resolve_predictor_config(
             "report_diseases": diseases_side,
             "sample_lineage": lineage,
             "cohort_hierarchy": tree or None,
-            "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            "panel": _resolve_panel_for_predictor(project, step_cfg),
             "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
             **_predictor_decision_overrides(step_cfg),
         }
@@ -1215,7 +1232,7 @@ def resolve_predictor_config(
             "report_diseases": diseases_side,
             "sample_lineage": lineage,
             "cohort_hierarchy": tree or None,
-            "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            "panel": _resolve_panel_for_predictor(project, step_cfg),
             "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
             **_predictor_decision_overrides(step_cfg),
         }
@@ -1239,7 +1256,7 @@ def resolve_predictor_config(
         "report_diseases": diseases_side,
         "sample_lineage": lineage,
         "cohort_hierarchy": tree or None,
-        "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+        "panel": _resolve_panel_for_predictor(project, step_cfg),
         "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
         **_predictor_decision_overrides(step_cfg),
     }
@@ -1484,7 +1501,7 @@ def resolve_predictor_config_per_comparison(
             "report_controls": rep_c,
             "report_diseases": rep_d,
             "sample_lineage": lineage,
-            "panel": step_cfg.get("panel") if isinstance(step_cfg.get("panel"), dict) else None,
+            "panel": _resolve_panel_for_predictor(project, step_cfg),
             "classifier_step_snapshot": _classifier_step_snapshot(classifier_step),
             **_predictor_decision_overrides(step_cfg),
         }

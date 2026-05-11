@@ -7,6 +7,50 @@ import pytest
 from methyl_utils.pipeline_config import load_project
 
 
+def test_derive_panel_and_ordered_comparison_labels_from_comparisons(tmp_path):
+    list_dir = tmp_path / "lists"
+    list_dir.mkdir()
+    for name in ("h.csv", "p1.csv", "p2.csv", "p3.csv"):
+        (list_dir / name).write_text("sample\ns1\n", encoding="utf-8")
+
+    config_path = tmp_path / "project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "PanelDerive",
+                "output_base": str((tmp_path / "out").resolve()),
+                "samples_base_path": str(tmp_path.resolve()),
+                "controls": {
+                    "label": "healthy",
+                    "groups": [{"label": "all", "sample_paths": [str((list_dir / "h.csv").resolve())]}],
+                },
+                "diseases": {
+                    "label": "cancer",
+                    "groups": [
+                        {
+                            "label": "pca",
+                            "stages": [
+                                {"label": "pca1", "sample_paths": [str((list_dir / "p1.csv").resolve())]},
+                                {"label": "pca2", "sample_paths": [str((list_dir / "p2.csv").resolve())]},
+                                {"label": "pca3", "sample_paths": [str((list_dir / "p3.csv").resolve())]},
+                            ],
+                        }
+                    ],
+                },
+                "comparisons": "control_vs_each_disease",
+            }
+        ),
+        encoding="utf-8",
+    )
+    project = load_project(str(config_path))
+    assert project.get_ordered_comparison_labels() == ["pca_pca1", "pca_pca2", "pca_pca3"]
+    panel = project.derive_panel_spec_from_comparisons()
+    assert panel is not None
+    assert panel["primary_family"] == "pca"
+    assert panel["families"] == {"pca": ["pca_pca1", "pca_pca2", "pca_pca3"]}
+    assert panel["indeterminate_delta"] == 0.25
+
+
 def test_project_config_normalizes_comparisons_and_predictor_alias(tmp_path):
     config_path = tmp_path / "project.json"
     config_path.write_text(

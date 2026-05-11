@@ -538,6 +538,38 @@ def _patch_predictor_side_holdouts_ordered(
     return side
 
 
+def _ensure_predictor_sides_from_top_level_project(
+    project: Dict[str, Any], pred: Dict[str, Any]
+) -> None:
+    """
+    When ``step_config.predictor`` omits nested ``controls``/``diseases`` (or empty groups),
+    copy cohort shape from top-level project keys so Monte Carlo can still patch holdout CSVs.
+
+    Clears stale ``train_group_paths`` / ``holdout_group_paths`` from templates; MC run projects
+    use training CSVs on top-level cohorts and testing CSVs under predictor sides.
+    """
+    pred.pop("train_group_paths", None)
+    pred.pop("holdout_group_paths", None)
+
+    def _copy_side(src_key_plural: str, src_key_singular: str) -> Optional[Dict[str, Any]]:
+        for k in (src_key_plural, src_key_singular):
+            side = project.get(k)
+            if isinstance(side, dict) and side.get("groups"):
+                return copy.deepcopy(side)
+        return None
+
+    if not isinstance(pred.get("controls"), dict) or not (pred.get("controls") or {}).get("groups"):
+        c = _copy_side("controls", "control")
+        if c is not None:
+            pred["controls"] = c
+            pred["control"] = copy.deepcopy(c)
+    if not isinstance(pred.get("diseases"), dict) or not (pred.get("diseases") or {}).get("groups"):
+        d = _copy_side("diseases", "disease")
+        if d is not None:
+            pred["diseases"] = d
+            pred["disease"] = copy.deepcopy(d)
+
+
 def _patch_step_config_predictor_multiclass_holdouts(
     project: Dict[str, Any],
     testing_csv_by_label: Dict[str, Path],
@@ -568,6 +600,8 @@ def _patch_step_config_predictor_multiclass_holdouts(
     else:
         pred = {}
     project["step_config"]["predictor"] = pred
+
+    _ensure_predictor_sides_from_top_level_project(project, pred)
 
     if embed_test_group_paths:
         test_group_paths: List[Dict[str, Any]] = []

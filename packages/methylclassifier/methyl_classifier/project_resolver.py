@@ -512,6 +512,12 @@ def resolve_classifier_config(
         for k, v in step_cfg.items():
             base[k] = v
 
+    # Default hierarchical panel from comparisons when step omits panel (dedupe vs predictor JSON)
+    if not (isinstance(base.get("panel"), dict) and base.get("panel")):
+        derived_panel = project.derive_panel_spec_from_comparisons()
+        if derived_panel is not None:
+            base["panel"] = derived_panel
+
     # Default calibration holdout to MC validation train_fraction/seed when classifier omits them
     val_cfg = project.get_step_config("validation") or {}
     if base.get("calibration_train_fraction") is None and val_cfg.get("train_fraction") is not None:

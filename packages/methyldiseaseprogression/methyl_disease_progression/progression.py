@@ -39,6 +39,10 @@ def resolve_stage_specs(
 ) -> Tuple[List[StageSpec], Dict[str, Any]]:
     """
     Resolve ordered per-stage inputs from project comparisons.
+
+    Default stage order matches ``ProjectConfig.get_ordered_comparison_labels()`` in methylutils
+    (i.e. ``comparisons`` list order or shorthand expansion) when neither CLI nor
+    ``step_config.progression.ordered_comparison_labels`` / ``ordered_disease_groups`` is set.
     """
     project = load_project(project_path)
     progression_cfg = project.get_step_config("progression") or {}
@@ -59,6 +63,8 @@ def resolve_stage_specs(
         )
         if isinstance(cfg_order, list):
             ordered_labels = [str(x) for x in cfg_order]
+    if not ordered_labels:
+        ordered_labels = project.get_ordered_comparison_labels()
     if ordered_labels:
         for token in ordered_labels:
             c = by_disease_group.get(token) or by_label.get(token)

@@ -315,3 +315,90 @@ def test_hierarchical_mc_run_project_predictor_points_at_testing_csvs(tmp_path: 
     assert len(st) == 4
     for row in st:
         assert Path(row["sample_paths"][0]).name.startswith("testing_")
+
+
+def test_hierarchical_mc_run_project_without_predictor_nested_sides(tmp_path: Path):
+    """Monte Carlo can omit step_config.predictor.controls/diseases; sides are copied from the project root."""
+    list_files = []
+    for name in ("h.csv", "p1.csv", "p2.csv", "p3.csv", "p4.csv"):
+        fp = tmp_path / name
+        fp.write_text("sample\ns0\ns1\ns2\n", encoding="utf-8")
+        list_files.append(str(fp.resolve()))
+
+    def three_samples(prefix: str) -> list[str]:
+        out = []
+        for i in range(3):
+            d = tmp_path / f"{prefix}_{i}"
+            d.mkdir()
+            out.append(str(d.resolve()))
+        return out
+
+    cohort_labels = ["all", "pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"]
+    train_by_label = {}
+    val_by_label = {}
+    for lbl, prefix in zip(
+        cohort_labels,
+        ["ctrl", "d1", "d2", "d3", "d4"],
+        strict=True,
+    ):
+        paths = three_samples(prefix)
+        train_by_label[lbl] = paths[:2]
+        val_by_label[lbl] = paths[2:]
+
+    out_base = tmp_path / "out"
+    base = tmp_path / "proj.json"
+    base.write_text(
+        json.dumps(
+            {
+                "project_name": "template",
+                "output_base": str(out_base.resolve()),
+                "samples_base_path": str(tmp_path.resolve()),
+                "controls": {
+                    "label": "healthy",
+                    "groups": [{"label": "all", "sample_paths": [list_files[0]]}],
+                },
+                "diseases": {
+                    "label": "cancer",
+                    "groups": [
+                        {
+                            "label": "pca",
+                            "stages": [
+                                {"label": "pca1", "sample_paths": [list_files[1]]},
+                                {"label": "pca2", "sample_paths": [list_files[2]]},
+                                {"label": "pca3", "sample_paths": [list_files[3]]},
+                                {"label": "pca4", "sample_paths": [list_files[4]]},
+                            ],
+                        }
+                    ],
+                },
+                "comparisons": "control_vs_each_disease",
+                "step_config": {
+                    "predictor": {
+                        "debug": False,
+                        "train_group_paths": [{"label": "legacy", "paths": [], "class_index": 0}],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run_dir = tmp_path / "monte_carlo_runs" / "run_0002"
+    mc_root = str((tmp_path / "monte_carlo_runs").resolve())
+    project_path, _ = generate_run_project_hierarchical_multiclass(
+        base,
+        run_dir,
+        "run_0002",
+        mc_root,
+        train_by_label,
+        val_by_label,
+        cohort_labels,
+        str(tmp_path.resolve()),
+    )
+
+    run_proj = json.loads(project_path.read_text(encoding="utf-8"))
+    pred = run_proj["step_config"]["predictor"]
+    assert "train_group_paths" not in pred
+    assert pred["controls"]["groups"][0]["label"] == "all"
+    assert len(pred["diseases"]["groups"][0]["stages"]) == 4
+    assert Path(pred["diseases"]["groups"][0]["stages"][0]["sample_paths"][0]).name.startswith("testing_")

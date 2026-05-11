@@ -208,6 +208,8 @@ methyl-validation --project configs/my_project.json --stability
 
 This runs `n_iterations` Monte Carlo discovery cycles (centroid → detector), then aggregates DMP recurrence frequencies.
 
+Per-iteration `project.json` files can omit duplicate `step_config.predictor` cohort mirrors and `train_group_paths` / `holdout_group_paths`; MethylValidation copies top-level `controls` / `diseases` into the predictor step and wires holdout CSVs automatically (@sec-project-configuration).
+
 **Monitoring progress.** Progress is shown via a Rich progress bar in interactive terminals. Iteration logs are written to `monte_carlo_runs/run_000N/logs/`.
 
 **Useful flags:**
