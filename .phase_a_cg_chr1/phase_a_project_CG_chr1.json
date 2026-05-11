@@ -53,7 +53,6 @@
         "verbose": true,
         "binned_stats_bins": 20
       },
-      "parallel_combinations": 1,
       "min_samples": 3,
       "continue_on_error": true,
       "save_batch_summary": true

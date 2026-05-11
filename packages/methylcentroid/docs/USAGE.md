@@ -85,7 +85,6 @@ chromosomes and contexts.
     "use_gpu": true,
     "verbose": true
   },
-  "parallel_combinations": 1,
   "continue_on_error": true,
   "save_batch_summary": true
 }

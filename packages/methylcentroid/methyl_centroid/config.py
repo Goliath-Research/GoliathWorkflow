@@ -203,7 +203,6 @@ class BatchProcessingConfig(BaseModel):
     )
 
     # Batch-specific settings
-    parallel_combinations: int = Field(default=1, description="Number of combinations to process in parallel")
     continue_on_error: bool = Field(default=True, description="Continue processing if one combination fails")
     save_batch_summary: bool = Field(default=True, description="Save batch processing summary")
 

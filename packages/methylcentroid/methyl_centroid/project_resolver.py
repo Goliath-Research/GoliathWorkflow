@@ -289,7 +289,7 @@ def resolve_centroid_batch_config(
                 if k != "output_dir":  # keep canonical path from get_derived_paths()
                     base_data[k] = v
             batch = batch.model_copy(update={"base_config": MethylCentroidConfig(**base_data)})
-        for key in ("chromosomes", "contexts", "parallel_combinations", "continue_on_error", "save_batch_summary"):
+        for key in ("chromosomes", "contexts", "continue_on_error", "save_batch_summary"):
             if key in step_cfg:
                 batch = batch.model_copy(update={key: step_cfg[key]})
     if step_override_path is not None:
@@ -302,7 +302,7 @@ def resolve_centroid_batch_config(
                 if k != "output_dir":
                     base_data[k] = v
             batch = batch.model_copy(update={"base_config": MethylCentroidConfig(**base_data)})
-        for key in ("chromosomes", "contexts", "parallel_combinations", "continue_on_error", "save_batch_summary"):
+        for key in ("chromosomes", "contexts", "continue_on_error", "save_batch_summary"):
             if key in overrides:
                 batch = batch.model_copy(update={key: overrides[key]})
     # Ensure output_dir is always the derived path (output_base/project_name/centroids/...)

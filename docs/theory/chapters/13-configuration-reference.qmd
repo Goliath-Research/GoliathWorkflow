@@ -16,7 +16,6 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 |---|---|---|---|---|
 | `chromosomes` | list[str] | (from project) | each ∈ 1–22, X, Y | Chromosomes to process in this batch run. |
 | `contexts` | list[str] | `["CG"]` | each ∈ `CG`, `CHG`, `CHH` | Methylation contexts to process. |
-| `parallel_combinations` | int | `1` | ≥ 1 | Number of chromosome×context combinations to run in parallel. |
 | `continue_on_error` | bool | `true` | — | If `true`, log errors and continue; if `false`, abort on first failure. |
 | `save_batch_summary` | bool | `true` | — | Write a JSON summary of the batch run. |
 

@@ -184,7 +184,6 @@
             "max_sample_workers": 1
         }
     },
-    "parallel_combinations": 1,
     "continue_on_error": true,
     "save_batch_summary": true
 }
