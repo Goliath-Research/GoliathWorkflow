@@ -21,6 +21,7 @@ methyl-detector = {path = "../methyldetector", develop = true}
 [tool.poetry.scripts]
 methyl-validation = "methyl_validation.cli:main"
 methyl-hyperparam-search = "methyl_validation.hyperparam_search:main"
+methyl-stability-freeze-readiness = "methyl_validation.stability_freeze_readiness:main"
 
 [tool.poetry.dev-dependencies]
 pytest = "^7.0.0"

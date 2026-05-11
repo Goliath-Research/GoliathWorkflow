@@ -1,0 +1,564 @@
+"""
+Stability and freeze readiness analysis: audit MC stability outputs, production freeze,
+and disease progression artifacts; emit structured JSON and markdown for pre-model review.
+
+This module is read-only: it does not modify project data.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+import pandas as pd
+
+# Mirror deprecated detector keys rejected by MethylDetectorConfig.model_validator (subset used in configs).
+_REMOVED_DETECTOR_KEYS = frozenset(
+    {
+        "max_dmps_for_classifier",
+        "use_gpu",
+        "validation_mode",
+        "n_validation_samples",
+        "min_sample_coverage",
+        "min_validation_coverage_per_position",
+        "classifier_coverage_weighting",
+        "synthetic_config",
+        "classifier_type",
+        "eps",
+        "ecdf_overlap_grid_size",
+        "ecdf_ks_grid_size",
+        "statistical_test",
+        "distribution",
+        "delta_mean_mode",
+        "overlap_mode",
+        "max_N_for_ecdf",
+    }
+)
+
+
+@dataclass
+class ReadinessVerdict:
+    """Aggregate go / go_with_risks / no_go with reasons."""
+
+    overall: str  # go | go_with_risks | no_go
+    stability: str
+    freeze: str
+    progression: str
+    reasons: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+
+
+def _safe_read_json(path: Path) -> Optional[Dict[str, Any]]:
+    if not path.is_file():
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def _scan_removed_detector_keys(detection: Dict[str, Any]) -> List[str]:
+    return sorted(k for k in detection if k in _REMOVED_DETECTOR_KEYS)
+
+
+def _progression_entity_columns(df: pd.DataFrame) -> Tuple[str, Optional[str]]:
+    """Return (comparison_col, entity_col) for long-table progression CSV."""
+    comp = "comparison" if "comparison" in df.columns else ("comparison_label" if "comparison_label" in df.columns else "")
+    if not comp:
+        return "", None
+    for cand in ("module", "pathway", "gene"):
+        if cand in df.columns:
+            return comp, cand
+    if "entity_label" in df.columns:
+        return comp, "entity_label"
+    return comp, None
+
+
+def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {
+        "modules_csv": str(modules_csv),
+        "n_rows": 0,
+        "n_unique_entities": 0,
+        "entities_all_stages": 0,
+        "median_abs_spearman_vs_stage": None,
+        "fraction_monotone_up": None,
+        "fraction_monotone_down": None,
+        "top_by_abs_trend": [],
+        "error": None,
+    }
+    if not modules_csv.is_file():
+        out["error"] = "missing_file"
+        return out
+    try:
+        df = pd.read_csv(modules_csv)
+    except Exception as exc:
+        out["error"] = str(exc)
+        return out
+    out["n_rows"] = int(len(df))
+    comp_col, ent_col = _progression_entity_columns(df)
+    if not comp_col or not ent_col or "stage_index" not in df.columns:
+        out["error"] = "unexpected_columns"
+        return out
+    work = df[[comp_col, ent_col, "stage_index", "score"]].copy()
+    work["stage_index"] = pd.to_numeric(work["stage_index"], errors="coerce")
+    work["score"] = pd.to_numeric(work["score"], errors="coerce")
+    work = work.dropna(subset=["stage_index", "score"])
+    work[ent_col] = work[ent_col].astype(str)
+    n_ent = work[ent_col].nunique()
+    out["n_unique_entities"] = int(n_ent)
+
+    stage_order = {lab: i for i, lab in enumerate(ordered_stages)}
+    if not stage_order:
+        stage_order = {str(k): int(k) for k in sorted(work["stage_index"].unique())}
+    work["_ord"] = work[comp_col].map(stage_order).fillna(work["stage_index"])
+    spearman_abs: List[float] = []
+    mono_up = mono_down = 0
+    ent_details: List[Tuple[str, float, float]] = []
+
+    for ent, g in work.groupby(ent_col, sort=False):
+        gg = g.sort_values("_ord").drop_duplicates(subset=["_ord"], keep="first")
+        if len(gg) < 3:
+            continue
+        xs = gg["_ord"].to_numpy(dtype=float)
+        ys = gg["score"].to_numpy(dtype=float)
+        if np.std(xs) < 1e-12 or np.std(ys) < 1e-12:
+            rho = 0.0
+        else:
+            rho = float(np.corrcoef(xs, ys)[0, 1])
+            if np.isnan(rho):
+                rho = 0.0
+        spearman_abs.append(abs(rho))
+        diffs = np.diff(ys)
+        if len(diffs) >= 2:
+            if np.all(diffs >= 0) and np.any(diffs > 0):
+                mono_up += 1
+            if np.all(diffs <= 0) and np.any(diffs < 0):
+                mono_down += 1
+        ent_details.append((str(ent), rho, float(np.mean(ys))))
+
+    all_stage_labels = set(stage_order.keys())
+    present_by_ent = work.groupby(ent_col)[comp_col].apply(lambda s: set(s.astype(str)))
+    n_all = sum(1 for _e, labs in present_by_ent.items() if all_stage_labels <= labs)
+    out["entities_all_stages"] = int(n_all)
+
+    if spearman_abs:
+        out["median_abs_spearman_vs_stage"] = float(np.median(spearman_abs))
+        denom = len(spearman_abs)
+        out["fraction_monotone_up"] = mono_up / denom
+        out["fraction_monotone_down"] = mono_down / denom
+    ent_details.sort(key=lambda t: abs(t[1]), reverse=True)
+    out["top_by_abs_trend"] = [
+        {"entity": e, "pearson_stage_vs_score": round(r, 4), "mean_score": round(m, 6)}
+        for e, r, m in ent_details[:15]
+    ]
+    return out
+
+
+def _chromosome_panel_balance(panel_csv: Path, max_freq_csv: Optional[Path]) -> Dict[str, Any]:
+    """Fraction of stable DMPs per chromosome (from panel or frequency table)."""
+    out: Dict[str, Any] = {"source": None, "n_positions": 0, "fraction_by_chromosome": {}, "max_chrom_share": None}
+    path = panel_csv if panel_csv.is_file() else None
+    if path is None and max_freq_csv and max_freq_csv.is_file():
+        path = max_freq_csv
+        out["source"] = "dmp_frequency.csv"
+    elif path is not None:
+        out["source"] = str(panel_csv.name)
+    if path is None:
+        return out
+    try:
+        df = pd.read_csv(path, usecols=lambda c: c in ("chromosome", "position"))
+    except Exception:
+        df = pd.read_csv(path)
+    if "chromosome" not in df.columns:
+        return out
+    vc = df["chromosome"].astype(str).value_counts(normalize=True)
+    out["n_positions"] = int(len(df))
+    out["fraction_by_chromosome"] = {str(k): round(float(v), 6) for k, v in vc.items()}
+    if len(vc):
+        out["max_chrom_share"] = round(float(vc.max()), 6)
+    return out
+
+
+def _label_mix(labels_csv: Path) -> Dict[str, Any]:
+    out: Dict[str, Any] = {"n_entities": 0, "by_type": {}, "label_counts": {}}
+    if not labels_csv.is_file():
+        return out
+    try:
+        df = pd.read_csv(labels_csv)
+    except Exception:
+        return out
+    out["n_entities"] = int(len(df))
+    if "entity_type" in df.columns:
+        out["by_type"] = df["entity_type"].value_counts().to_dict()
+    if "progression_labels" in df.columns:
+        vc = df["progression_labels"].astype(str).value_counts().head(25)
+        out["label_counts"] = vc.to_dict()
+    return out
+
+
+def analyze_project_root(project_root: Path) -> Dict[str, Any]:
+    """
+    Collect readiness metrics under ``project_root`` (directory that contains ``monte_carlo_runs``).
+
+    Expected layout::
+        {project_root}/monte_carlo_runs/stability/...
+        {project_root}/monte_carlo_runs/production/...
+    """
+    root = project_root.resolve()
+    mc = root / "monte_carlo_runs"
+    stability_dir = mc / "stability"
+    production_dir = mc / "production"
+    progression_dir = production_dir / "progression"
+
+    stability_summary_path = stability_dir / "stability_summary.json"
+    production_summary_path = production_dir / "production_summary.json"
+    production_project_path = production_dir / "project.json"
+
+    stability_summary = _safe_read_json(stability_summary_path) or {}
+    production_summary = _safe_read_json(production_summary_path) or {}
+    production_project = _safe_read_json(production_project_path) or {}
+
+    dmp_freq_path = stability_dir / "dmp_frequency.csv"
+    stable_panel_path = stability_dir / "stable_dmps_production.csv"
+    merged_panel_path = production_dir / "stable_dmps_genomewide.csv"
+    progression_summary_path = progression_dir / "summary.json"
+
+    dmp_stab = stability_summary.get("dmp_stability") or {}
+    progression_summary = _safe_read_json(progression_summary_path) or {}
+
+    detection_cfg = ((production_project.get("step_config") or {}).get("detection")) or {}
+    fixed_panel = detection_cfg.get("fixed_dmp_panel")
+
+    removed_in_production = _scan_removed_detector_keys(detection_cfg if isinstance(detection_cfg, dict) else {})
+
+    ordered_labels = list(progression_summary.get("ordered_comparison_labels") or [])
+    modules_long = progression_summary.get("modules_long_csv")
+    mod_path = Path(modules_long) if modules_long else progression_dir / "modules_long.csv"
+
+    report: Dict[str, Any] = {
+        "project_root": str(root),
+        "paths": {
+            "stability_summary": str(stability_summary_path),
+            "production_summary": str(production_summary_path),
+            "production_project": str(production_project_path),
+            "stable_panel": str(stable_panel_path),
+            "merged_panel": str(merged_panel_path),
+            "progression_summary": str(progression_summary_path),
+        },
+        "stability": {
+            "present": stability_summary_path.is_file(),
+            "dmp_stability": dmp_stab,
+            "stable_panel_rows": _count_csv_rows(stable_panel_path),
+            "dmp_frequency_rows": _count_csv_rows(dmp_freq_path),
+        },
+        "freeze": {
+            "present": production_summary_path.is_file(),
+            "success": production_summary.get("success"),
+            "errors": production_summary.get("errors"),
+            "timings": production_summary.get("timings"),
+            "fixed_dmp_panel_in_project": fixed_panel,
+            "merged_panel_rows": _count_csv_rows(merged_panel_path),
+            "removed_detector_keys_in_production_project": removed_in_production,
+        },
+        "progression": {
+            "summary_present": progression_summary_path.is_file(),
+            "ordered_comparison_labels": ordered_labels,
+            "missing_inputs": progression_summary.get("missing_inputs"),
+            "row_counts": {
+                "genes": progression_summary.get("genes_rows"),
+                "pathways": progression_summary.get("pathways_rows"),
+                "modules": progression_summary.get("modules_rows"),
+            },
+            "module_trajectory": _module_trajectory_summary(mod_path, ordered_labels),
+            "entity_labels": _label_mix(progression_dir / "entities_progression_labels.csv"),
+        },
+        "panel_balance": _chromosome_panel_balance(merged_panel_path, dmp_freq_path),
+    }
+    report["verdict"] = asdict(_compute_verdict(report))
+    return report
+
+
+def _count_csv_rows(path: Path) -> Optional[int]:
+    if not path.is_file():
+        return None
+    try:
+        return sum(1 for _ in open(path, encoding="utf-8", errors="replace")) - 1
+    except Exception:
+        return None
+
+
+def _compute_verdict(report: Dict[str, Any]) -> ReadinessVerdict:
+    reasons: List[str] = []
+    warnings: List[str] = []
+
+    stab = report["stability"]
+    fr = report["freeze"]
+    prog = report["progression"]
+    balance = report["panel_balance"]
+
+    stab_status = "unknown"
+    if not stab["present"]:
+        stab_status = "fail"
+        reasons.append("Missing stability_summary.json — run stability analysis first.")
+    else:
+        ds = stab.get("dmp_stability") or {}
+        n_runs = int(ds.get("n_runs_analyzed") or 0)
+        stable_n = int(ds.get("stable_dmps_at_threshold") or 0)
+        panel_rows = stab.get("stable_panel_rows")
+        if panel_rows is not None and panel_rows != stable_n and stable_n:
+            warnings.append(f"stable_dmps_production.csv row count ({panel_rows}) differs from summary stable_dmps_at_threshold ({stable_n}).")
+        if stable_n <= 0 or (panel_rows is not None and panel_rows <= 0):
+            stab_status = "fail"
+            reasons.append("Stable DMP panel is empty — lower stability_dmp_freq or increase iterations.")
+        elif n_runs < 5:
+            stab_status = "warn"
+            warnings.append(f"Only {n_runs} runs analyzed; prefer ≥10 for robust recurrence estimates.")
+        else:
+            stab_status = "pass"
+
+    freeze_status = "unknown"
+    if not fr["present"]:
+        freeze_status = "fail"
+        reasons.append("Missing production_summary.json — run --freeze after stability.")
+    elif fr.get("success") is not True:
+        freeze_status = "fail"
+        reasons.append(f"Freeze did not succeed: errors={fr.get('errors')!r}")
+    else:
+        timings = fr.get("timings") or []
+        bad = []
+        for t in timings:
+            rc = t.get("return_code")
+            if rc is None:
+                rc = -1
+            try:
+                rc_int = int(rc)
+            except (TypeError, ValueError):
+                rc_int = -1
+            if rc_int != 0:
+                bad.append(t)
+        if bad:
+            freeze_status = "fail"
+            reasons.append(f"Freeze steps with non-zero return_code: {[t.get('step_name') for t in bad]}")
+        elif fr.get("removed_detector_keys_in_production_project"):
+            freeze_status = "fail"
+            reasons.append(
+                "production/project.json detection block contains removed legacy keys: "
+                f"{fr['removed_detector_keys_in_production_project']}"
+            )
+        elif not fr.get("fixed_dmp_panel_in_project"):
+            freeze_status = "fail"
+            reasons.append("production project missing step_config.detection.fixed_dmp_panel.")
+        else:
+            freeze_status = "pass"
+
+    prog_status = "unknown"
+    if prog["summary_present"]:
+        miss = prog.get("missing_inputs") or []
+        if miss:
+            prog_status = "warn"
+            warnings.append(f"Progression missing_inputs non-empty: {miss[:5]}...")
+        else:
+            traj = prog.get("module_trajectory") or {}
+            if traj.get("error"):
+                prog_status = "warn"
+                warnings.append(f"Module trajectory could not be computed: {traj.get('error')}")
+            elif int(traj.get("entities_all_stages") or 0) == 0:
+                prog_status = "warn"
+                warnings.append("No modules present across all ordered stages — review enricher modules_ranked.csv inputs.")
+            else:
+                prog_status = "pass"
+        med = (prog.get("module_trajectory") or {}).get("median_abs_spearman_vs_stage")
+        if med is not None and med < 0.15:
+            warnings.append(
+                "Weak median |correlation| of module score vs stage index — progression signal may be subtle."
+            )
+    else:
+        prog_status = "skipped"
+        warnings.append("No progression/summary.json — enable step_config.progression on freeze or run progression separately.")
+
+    if balance.get("max_chrom_share") is not None and balance["max_chrom_share"] > 0.45:
+        warnings.append(
+            f"Chromosome imbalance: one chromosome holds ~{balance['max_chrom_share']*100:.1f}% of stable panel."
+        )
+
+    # Overall
+    if stab_status == "fail" or freeze_status == "fail":
+        overall = "no_go"
+    elif stab_status == "warn" or freeze_status == "warn" or prog_status == "warn" or warnings:
+        overall = "go_with_risks"
+    else:
+        overall = "go"
+
+    return ReadinessVerdict(
+        overall=overall,
+        stability=stab_status,
+        freeze=freeze_status,
+        progression=prog_status,
+        reasons=reasons,
+        warnings=warnings,
+    )
+
+
+def render_markdown(report: Dict[str, Any]) -> str:
+    v = report.get("verdict") or {}
+    lines = [
+        "# Stability and freeze readiness report",
+        "",
+        f"- **Project root**: `{report.get('project_root', '')}`",
+        f"- **Overall verdict**: **{v.get('overall', 'unknown')}**",
+        f"- **Stability**: {v.get('stability')}",
+        f"- **Freeze**: {v.get('freeze')}",
+        f"- **Progression**: {v.get('progression')}",
+        "",
+    ]
+    if v.get("reasons"):
+        lines.extend(["## Blocking issues", ""])
+        lines.extend(f"- {r}" for r in v["reasons"])
+        lines.append("")
+    if v.get("warnings"):
+        lines.extend(["## Warnings", ""])
+        lines.extend(f"- {w}" for w in v["warnings"])
+        lines.append("")
+
+    s = report.get("stability") or {}
+    lines.extend(
+        [
+            "## Stability",
+            "",
+            f"- Summary present: {s.get('present')}",
+            f"- Stable panel rows (CSV): {s.get('stable_panel_rows')}",
+            f"- DMP frequency table rows: {s.get('dmp_frequency_rows')}",
+        ]
+    )
+    ds = s.get("dmp_stability") or {}
+    if ds:
+        lines.extend(
+            [
+                f"- Runs analyzed: {ds.get('n_runs_analyzed')}",
+                f"- Skipped (low BA): {ds.get('skipped_low_balanced_accuracy')}",
+                f"- Min frequency threshold: {ds.get('min_frequency')}",
+                f"- Stable DMPs at threshold: {ds.get('stable_dmps_at_threshold')}",
+                f"- Total unique DMPs seen: {ds.get('total_unique_dmps')}",
+            ]
+        )
+    lines.append("")
+
+    f = report.get("freeze") or {}
+    lines.extend(
+        [
+            "## Freeze (production)",
+            "",
+            f"- Summary present: {f.get('present')}",
+            f"- Success: {f.get('success')}",
+            f"- Fixed panel path: `{f.get('fixed_dmp_panel_in_project')}`",
+            f"- Merged panel rows: {f.get('merged_panel_rows')}",
+        ]
+    )
+    if f.get("removed_detector_keys_in_production_project"):
+        lines.append(f"- **Legacy detector keys still present**: {f['removed_detector_keys_in_production_project']}")
+    if f.get("timings"):
+        lines.extend(["", "| Step | Seconds | RC |", "|------|---------|-----|"])
+        for t in f["timings"]:
+            lines.append(
+                f"| {t.get('step_name')} | {t.get('duration_seconds')} | {t.get('return_code')} |"
+            )
+    lines.append("")
+
+    p = report.get("progression") or {}
+    lines.extend(
+        [
+            "## Progression",
+            "",
+            f"- Summary present: {p.get('summary_present')}",
+            f"- Ordered comparisons: {p.get('ordered_comparison_labels')}",
+            f"- Missing inputs: {p.get('missing_inputs')}",
+            f"- Row counts: {p.get('row_counts')}",
+        ]
+    )
+    traj = p.get("module_trajectory") or {}
+    if traj:
+        lines.extend(
+            [
+                "",
+                "### Module score trajectory (vs stage order)",
+                "",
+                f"- Entities with rows: {traj.get('n_unique_entities')}",
+                f"- Entities present all stages: {traj.get('entities_all_stages')}",
+                f"- Median |Pearson(stage_ord, score)|: {traj.get('median_abs_spearman_vs_stage')}",
+                f"- Fraction monotone up (among scored): {traj.get('fraction_monotone_up')}",
+                f"- Fraction monotone down (among scored): {traj.get('fraction_monotone_down')}",
+            ]
+        )
+        top = traj.get("top_by_abs_trend") or []
+        if top:
+            lines.extend(["", "| Entity | Pearson | Mean score |", "|--------|---------|------------|"])
+            for row in top[:10]:
+                lines.append(
+                    f"| {row.get('entity')} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
+                )
+    labels = p.get("entity_labels") or {}
+    if labels.get("label_counts"):
+        lines.extend(["", "### Progression label counts (entities_progression_labels)", ""])
+        for lab, cnt in list(labels["label_counts"].items())[:15]:
+            lines.append(f"- `{lab}`: {cnt}")
+    lines.append("")
+
+    bal = report.get("panel_balance") or {}
+    lines.extend(
+        [
+            "## Stable panel chromosome balance",
+            "",
+            f"- Positions counted: {bal.get('n_positions')}",
+            f"- Source: {bal.get('source')}",
+            f"- Max chromosome share: {bal.get('max_chrom_share')}",
+        ]
+    )
+    fracs = bal.get("fraction_by_chromosome") or {}
+    if fracs:
+        top_chrom = sorted(fracs.items(), key=lambda kv: kv[1], reverse=True)[:8]
+        lines.append("- Top chromosomes: " + ", ".join(f"{c}:{frac:.3f}" for c, frac in top_chrom))
+    lines.append("")
+    lines.extend(
+        [
+            "---",
+            "*Generated by `methyl-stability-freeze-readiness`. Interpret biology with domain review; progression labels are rule-based summaries.*",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Audit stability, freeze, and progression artifacts before modeling."
+    )
+    parser.add_argument(
+        "project_root",
+        type=Path,
+        help="Directory containing monte_carlo_runs/ (e.g. .../Healthy_vs_PCa1-4-CG)",
+    )
+    parser.add_argument("--json-out", type=Path, default=None, help="Write full report JSON to this path.")
+    parser.add_argument("--markdown-out", type=Path, default=None, help="Write markdown report to this path.")
+    args = parser.parse_args(argv)
+
+    report = analyze_project_root(args.project_root)
+    text = render_markdown(report)
+
+    if args.json_out:
+        args.json_out.parent.mkdir(parents=True, exist_ok=True)
+        with open(args.json_out, "w", encoding="utf-8") as jf:
+            json.dump(report, jf, indent=2, default=str)
+    if args.markdown_out:
+        args.markdown_out.parent.mkdir(parents=True, exist_ok=True)
+        args.markdown_out.write_text(text, encoding="utf-8")
+    print(text)
+    return 0 if report.get("verdict", {}).get("overall") != "no_go" else 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

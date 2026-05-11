@@ -12,5 +12,6 @@ The canonical mathematical and statistical reference is the Quarto theory book a
 - 📖 **[THEORY.md](docs/THEORY.md)**: Theoretical foundation, including high-quality formulas, statistical models, and references.
 - ⚙️ **[IMPLEMENTATION.md](docs/IMPLEMENTATION.md)**: Implementation details, code design, architecture, and memory organization.
 - 🚀 **[USAGE.md](docs/USAGE.md)**: Practical usage, CLI commands, Python API snippets, and configuration parameters.
+- 📋 **[STABILITY_FREEZE_READINESS.md](docs/STABILITY_FREEZE_READINESS.md)**: Pre-model audit of stability + freeze + progression artifacts (`methyl-stability-freeze-readiness`).
 
 For deployment instructions on supported platforms (Linux/macOS) via virtual environments or Docker, please consult the global [DEPLOYMENT.md](../../docs/DEPLOYMENT.md).
