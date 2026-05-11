@@ -36,8 +36,8 @@ Typical runs require:
 
 ## Typical Outputs
 
-The package writes one structured JSON summary per sample and can optionally validate those files against the package schema.
-When a sample directory contains the canonical Parabricks metrics JSON file `{sample_name}.json`, `methyl-qc` enriches that same output file with a top-level `guardrails` block in the same pass.
+The package writes one structured **V2** (row-oriented) JSON summary per sample and can optionally validate those files against the package schema (V1-shaped assembly is validated internally, then converted to V2 for export).
+When a sample directory contains the canonical Parabricks metrics JSON file `{sample_name}.json`, `methyl-qc` uses it for metrics and guardrails; the written output in `--output-dir` is always the V2 export shape.
 
 For initial metrics extraction workflows, use the package CLI for normalized per-sample QC JSON outputs; the standalone `wgbs_parabricks_qc.py` utility can be used as an additional pre-extraction guardrail check for WGBS Parabricks JSON metrics.
 
@@ -75,7 +75,7 @@ Use `--output` to write elsewhere. Regenerate whenever the corresponding Pydanti
 
 ## V2 row-oriented JSON (tools / Azure SQL)
 
-`methyl-qc` continues to emit **V1** JSON (`ExportedSampleQCPayload`). For databases and dashboards that prefer one JSON row per chart/table point (e.g. Azure SQL `OPENJSON` without zipping parallel arrays), convert existing files:
+`methyl-qc` writes **V2** JSON (`ExportedSampleQCV2Payload`; see `exported_sample_qc_v2.schema.json`). For **legacy V1** files already on disk (columnar arrays), convert in place or to a new tree with:
 
 - Dry-run (no writes):
   - `methyl-qc-convert-v1-to-v2 /path/to/sample.json`

@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..models.sample_qc import ExportedSampleQCPayload, ParabricksMetricsPayload
+from ..models.sample_qc_v2 import ExportedSampleQCV2Payload
+from ..utils.v1_to_v2_migration import v1_model_to_v2
 from . import parser as core_parser
 from .wgbs_parabricks_qc import check_wgbs_guardrails
 
@@ -268,7 +270,7 @@ def process_samples_to_qc_jsons(
 ) -> None:
     """
     Parse each sample directory and write one JSON per sample to output_dir.
-    Output files: {output_dir}/{sample_basename}.json.
+    Output files: {output_dir}/{sample_basename}.json (V2 row-oriented schema).
 
     Args:
         sample_paths: List of sample directory paths
@@ -350,10 +352,9 @@ def process_samples_to_qc_jsons(
             errs = validate_sample_qc_metrics(payload)
             if errs:
                 raise RuntimeError(f"Validation failed for {sample_name}: " + "; ".join(errs))
-        # Validate against the canonical exported payload model before writing.
-        payload = ExportedSampleQCPayload.model_validate(payload).model_dump(
-            mode="python",
-            by_alias=True,
-            exclude_none=True,
-        )
-        write_sample_qc_json(payload, out / f"{sample_name}.json")
+        # Validate assembled columnar payload, convert to V2 row-oriented export, validate V2, then write.
+        v1_model = ExportedSampleQCPayload.model_validate(payload)
+        v2_model = v1_model_to_v2(v1_model)
+        v2_dict = v2_model.model_dump(mode="python", by_alias=True, exclude_none=True)
+        ExportedSampleQCV2Payload.model_validate(v2_dict)
+        write_sample_qc_json(v2_dict, out / f"{sample_name}.json")

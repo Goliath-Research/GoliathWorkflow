@@ -27,7 +27,7 @@ def _resolve_samples_arg(samples_arg: str) -> List[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Parse Parabricks alignment QC metrics; write one JSON per sample to output dir.",
+        description="Parse Parabricks alignment QC metrics; write one V2 JSON per sample to output dir.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

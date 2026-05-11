@@ -2,7 +2,7 @@
 Validation for MethylAlignmentQC per-sample QC JSON.
 
 Validates a single sample's metrics dict (duplication_metrics, duplication_histogram)
-written as {output_dir}/{sample_basename}.json.
+during assembly before export. The final file written by `methyl-qc` is V2 row-oriented JSON.
 """
 
 from typing import Dict, Any, List

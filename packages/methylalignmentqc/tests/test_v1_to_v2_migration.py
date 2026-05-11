@@ -244,7 +244,7 @@ def test_cli_single_file_dry_run(tmp_path: Path):
     assert "WOULD CONVERT" in proc.stdout
 
 
-def test_end_to_end_writer_output_converts(tmp_path: Path):
+def test_end_to_end_writer_output_is_v2(tmp_path: Path):
     from methyl_alignment_qc.core.writer import process_samples_to_qc_jsons
 
     sample_dir = tmp_path / "sampleA"
@@ -256,7 +256,8 @@ def test_end_to_end_writer_output_converts(tmp_path: Path):
     )
     out_dir = tmp_path / "out"
     process_samples_to_qc_jsons([str(sample_dir)], str(out_dir), validate_schema=True)
-    v1_path = out_dir / "sampleA.json"
-    v2_dict = v1_dict_to_v2_dict(json.loads(v1_path.read_text(encoding="utf-8")))
-    ExportedSampleQCV2Payload.model_validate(v2_dict)
-    assert len(v2_dict["mean_quality_by_cycle"]["rows"]) == 5
+    out_path = out_dir / "sampleA.json"
+    written = json.loads(out_path.read_text(encoding="utf-8"))
+    assert is_v2_alignment_qc_payload(written)
+    ExportedSampleQCV2Payload.model_validate(written)
+    assert len(written["mean_quality_by_cycle"]["rows"]) == 5

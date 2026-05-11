@@ -9,10 +9,10 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version as pkg_version
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
-from methyl_alignment_qc import __version__ as package_version
 from methyl_alignment_qc.models.sample_qc import ExportedSampleQCPayload
 from methyl_alignment_qc.models.sample_qc_v2 import (
     ArtifactSummariesRow,
@@ -37,6 +37,13 @@ from methyl_alignment_qc.models.sample_qc_v2 import (
 )
 
 from .guardrail_migration import migrate_guardrails_payload
+
+
+def _producer_package_version() -> str:
+    try:
+        return pkg_version("methyl_alignment_qc")
+    except PackageNotFoundError:
+        return "0.1.0"
 
 
 def is_v2_alignment_qc_payload(payload: Dict[str, Any]) -> bool:
@@ -68,7 +75,7 @@ def v1_model_to_v2(
         schema_name="methylalignmentqc.sample_qc",
         schema_version="2.0.0",
         exported_at_utc=ts,
-        producer=QCV2Producer(package="methyl_alignment_qc", version=package_version),
+        producer=QCV2Producer(package="methyl_alignment_qc", version=_producer_package_version()),
     )
 
     mqc = v1.mean_quality_by_cycle

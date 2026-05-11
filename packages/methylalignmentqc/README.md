@@ -4,7 +4,7 @@ This package is a QC and reporting component of the MethylPipeline monorepo.
 
 It covers initial alignment/QC metrics extraction and normalization from upstream reports (including WGBS Parabricks metrics JSON inputs) into structured per-sample JSON outputs.
 
-**V1 vs V2 JSON:** `methyl-qc` writes the canonical **V1** (columnar) JSON. For row-oriented payloads suited to `OPENJSON` in Azure SQL, convert with `methyl-qc-convert-v1-to-v2` (see [docs/USAGE.md](docs/USAGE.md)).
+**V1 vs V2 JSON:** `methyl-qc` writes the canonical **V2** (row-oriented) JSON. Use `methyl-qc-convert-v1-to-v2` only to migrate older **V1** exports (see [docs/USAGE.md](docs/USAGE.md)).
 
 ## High-Level Functionality
 Please refer to the root [README.md](../../README.md) for the functional placement of this package in the broader MethylPipeline workflow.
