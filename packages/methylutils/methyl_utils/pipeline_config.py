@@ -27,7 +27,7 @@ import json
 import warnings
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Literal, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -130,6 +130,20 @@ class GroupConfig(BaseModel):
         "When set, parent must not use sample_paths; each child has its own label and sample_paths. "
         "Resolved centroid labels are {parent.label}_{child.label}. See methylutils/docs/COHORT_TREE.md.",
     )
+    description: Optional[str] = Field(
+        default=None,
+        description="Human-readable meaning of this cohort or stage (e.g. clinical stage); do not put file paths here.",
+    )
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def description_strip_empty(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            s = v.strip()
+            return s or None
+        return v
 
     @field_validator("label")
     @classmethod
@@ -712,6 +726,49 @@ class ProjectConfig(BaseModel):
             (s.comparison_label or s.disease_group)
             for s in self.get_comparisons(expand_subclusters=expand_subclusters)
         ]
+
+    def _description_for_disease_group(self, disease_group: str) -> Optional[str]:
+        """Return optional ``description`` from the disease ``GroupConfig`` matching this resolved leaf label."""
+        if self.disease is None:
+            return None
+        dg = disease_group
+        for g in self.disease.groups:
+            if g.stages:
+                for st in g.stages:
+                    leaf = f"{g.label}_{st.label}"
+                    if dg == leaf or dg.startswith(f"{leaf}_"):
+                        d = st.description
+                        if isinstance(d, str) and d.strip():
+                            return d.strip()
+                        return None
+            else:
+                if g.label == dg:
+                    d = g.description
+                    if isinstance(d, str) and d.strip():
+                        return d.strip()
+                    return None
+        return None
+
+    def get_ordered_stage_narratives(self, ordered_tokens: Sequence[str]) -> List[Dict[str, Any]]:
+        """
+        For each progression comparison token (in order), return comparison label, filesystem disease_group,
+        and optional human ``description`` from project JSON. Omits sample_paths (path-free for LLM context).
+        """
+        comparisons = self.get_comparisons()
+        if not comparisons:
+            return []
+        by_disease_group = {c.disease_group: c for c in comparisons}
+        by_label = {(c.comparison_label or c.disease_group): c for c in comparisons}
+        out: List[Dict[str, Any]] = []
+        for token in ordered_tokens:
+            spec = by_disease_group.get(token) or by_label.get(token)
+            if spec is None:
+                out.append({"comparison_label": token, "disease_group": None, "description": None})
+                continue
+            dg = spec.disease_group
+            desc = self._description_for_disease_group(dg)
+            out.append({"comparison_label": token, "disease_group": dg, "description": desc})
+        return out
 
     def derive_panel_spec_from_comparisons(
         self,

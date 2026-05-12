@@ -301,3 +301,87 @@ def test_main_skipped_no_key_non_blocking(tmp_path: Path):
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["ai_review"]["status"] == "skipped_no_key"
     assert rc == 0
+
+
+def test_ordered_stage_narratives_in_report_grok_payload_and_markdown(tmp_path: Path):
+    root = tmp_path / "ProjNarr"
+    root.mkdir()
+    _write_minimal_project(root)
+    lists = root / "lists"
+    lists.mkdir()
+    for name in ("h.csv", "p1.csv", "p2.csv"):
+        (lists / name).write_text("s\nx\n", encoding="utf-8")
+
+    prod = root / "monte_carlo_runs" / "production"
+    prog = prod / "progression"
+    project_full = {
+        "project_name": "ProdRead",
+        "output_base": str(tmp_path / "outbase"),
+        "samples_base_path": str(root),
+        "controls": {
+            "label": "healthy",
+            "groups": [{"label": "all", "sample_paths": [str((lists / "h.csv").resolve())]}],
+        },
+        "diseases": {
+            "label": "cancer",
+            "groups": [
+                {
+                    "label": "pca",
+                    "stages": [
+                        {
+                            "label": "pca1",
+                            "sample_paths": [str((lists / "p1.csv").resolve())],
+                            "description": "Early stage narrative",
+                        },
+                        {
+                            "label": "pca2",
+                            "sample_paths": [str((lists / "p2.csv").resolve())],
+                            "description": "Late stage narrative",
+                        },
+                    ],
+                }
+            ],
+        },
+        "comparisons": "control_vs_each_disease",
+        "chromosomes": ["1"],
+        "contexts": ["CG"],
+        "step_config": {
+            "detection": {
+                "fixed_dmp_panel": str(prod / "stable_dmps_genomewide.csv"),
+                "alpha": 0.05,
+            },
+            "mapper": {"disease_term": "Prostate adenocarcinoma"},
+        },
+    }
+    (prod / "project.json").write_text(json.dumps(project_full), encoding="utf-8")
+
+    progression_summary = {
+        "ordered_comparison_labels": ["pca_pca1", "pca_pca2"],
+        "missing_inputs": [],
+        "genes_rows": 10,
+        "pathways_rows": 20,
+        "modules_rows": 8,
+        "modules_long_csv": str(prog / "modules_long.csv"),
+    }
+    (prog / "summary.json").write_text(json.dumps(progression_summary), encoding="utf-8")
+
+    rows = []
+    for si, comp in enumerate(["pca_pca1", "pca_pca2"]):
+        rows.append({"stage_index": si, "comparison": comp, "rank": 1, "score": 0.2, "module": "ModA"})
+    pd.DataFrame(rows).to_csv(prog / "modules_long.csv", index=False)
+
+    report = analyze_project_root(root)
+    narr = report["progression"]["ordered_stage_narratives"]
+    assert len(narr) == 2
+    assert narr[0]["description"] == "Early stage narrative"
+    assert narr[1]["description"] == "Late stage narrative"
+
+    payload = build_sanitized_ai_payload(
+        report, disease_context=report.get("disease_context"), top_n=5
+    )
+    assert "Early stage narrative" in json.dumps(payload)
+    assert not payload_contains_path_like_strings(payload)
+
+    md = render_markdown(report)
+    assert "Stage definitions (from project config)" in md
+    assert "Early stage narrative" in md
