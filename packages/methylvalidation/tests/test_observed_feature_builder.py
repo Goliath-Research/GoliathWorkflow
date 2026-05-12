@@ -193,8 +193,8 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
         "global_mean_dev_from_healthy",
         "global_mean_dev_from_cancer",
         "methylation_progression_score",
-        "js_div_to_healthy_centroid",
-        "js_div_to_cancer_centroid",
+        "js_distance_to_healthy_centroid",
+        "js_distance_to_cancer_centroid",
         "cosine_similarity_to_healthy_centroid",
         "cosine_similarity_to_cancer_centroid",
         "fraction_dmps_closer_to_cancer_centroid",
@@ -212,8 +212,8 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     }
     assert expected_names.issubset(set(feat.feature_names))
 
-    js_h_idx = feat.feature_names.index("js_div_to_healthy_centroid")
-    js_c_idx = feat.feature_names.index("js_div_to_cancer_centroid")
+    js_h_idx = feat.feature_names.index("js_distance_to_healthy_centroid")
+    js_c_idx = feat.feature_names.index("js_distance_to_cancer_centroid")
     cos_h_idx = feat.feature_names.index("cosine_similarity_to_healthy_centroid")
     cos_c_idx = feat.feature_names.index("cosine_similarity_to_cancer_centroid")
     frac_idx = feat.feature_names.index("fraction_dmps_closer_to_cancer_centroid")

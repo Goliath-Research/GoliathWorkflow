@@ -349,8 +349,8 @@ def _fixed_feature_names() -> List[str]:
         "global_mean_dev_from_healthy",
         "global_mean_dev_from_cancer",
         "methylation_progression_score",
-        "js_div_to_healthy_centroid",
-        "js_div_to_cancer_centroid",
+        "js_distance_to_healthy_centroid",
+        "js_distance_to_cancer_centroid",
         "cosine_similarity_to_healthy_centroid",
         "cosine_similarity_to_cancer_centroid",
         "centroid_contrast_score",
@@ -564,8 +564,8 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["global_mean_dev_from_healthy"]] = global_dev_healthy
         X_feat[i, idx["global_mean_dev_from_cancer"]] = global_dev_cancer
         X_feat[i, idx["methylation_progression_score"]] = progression
-        X_feat[i, idx["js_div_to_healthy_centroid"]] = js_h
-        X_feat[i, idx["js_div_to_cancer_centroid"]] = js_c
+        X_feat[i, idx["js_distance_to_healthy_centroid"]] = js_h
+        X_feat[i, idx["js_distance_to_cancer_centroid"]] = js_c
         X_feat[i, idx["cosine_similarity_to_healthy_centroid"]] = cos_h
         X_feat[i, idx["cosine_similarity_to_cancer_centroid"]] = cos_c
         X_feat[i, idx["centroid_contrast_score"]] = centroid_contrast_score
