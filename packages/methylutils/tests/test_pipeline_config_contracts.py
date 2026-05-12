@@ -51,6 +51,64 @@ def test_derive_panel_and_ordered_comparison_labels_from_comparisons(tmp_path):
     assert panel["indeterminate_delta"] == 0.25
 
 
+def test_get_ordered_stage_narratives_and_description_field(tmp_path):
+    list_dir = tmp_path / "lists"
+    list_dir.mkdir()
+    for name in ("h.csv", "p1.csv", "p2.csv", "p3.csv"):
+        (list_dir / name).write_text("sample\ns1\n", encoding="utf-8")
+
+    config_path = tmp_path / "project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "StageNarrative",
+                "output_base": str((tmp_path / "out").resolve()),
+                "samples_base_path": str(tmp_path.resolve()),
+                "controls": {
+                    "label": "healthy",
+                    "groups": [{"label": "all", "sample_paths": [str((list_dir / "h.csv").resolve())]}],
+                },
+                "diseases": {
+                    "label": "cancer",
+                    "groups": [
+                        {
+                            "label": "pca",
+                            "stages": [
+                                {
+                                    "label": "pca1",
+                                    "sample_paths": [str((list_dir / "p1.csv").resolve())],
+                                    "description": "  Early cohort  ",
+                                },
+                                {
+                                    "label": "pca2",
+                                    "sample_paths": [str((list_dir / "p2.csv").resolve())],
+                                    "description": "Intermediate",
+                                },
+                                {
+                                    "label": "pca3",
+                                    "sample_paths": [str((list_dir / "p3.csv").resolve())],
+                                    "description": "",
+                                },
+                            ],
+                        }
+                    ],
+                },
+                "comparisons": "control_vs_each_disease",
+            }
+        ),
+        encoding="utf-8",
+    )
+    project = load_project(str(config_path))
+    labels = project.get_ordered_comparison_labels()
+    narr = project.get_ordered_stage_narratives(labels)
+    assert len(narr) == 3
+    assert narr[0]["comparison_label"] == "pca_pca1"
+    assert narr[0]["disease_group"] == "pca_pca1"
+    assert narr[0]["description"] == "Early cohort"
+    assert narr[1]["description"] == "Intermediate"
+    assert narr[2]["description"] is None
+
+
 def test_project_config_normalizes_comparisons_and_predictor_alias(tmp_path):
     config_path = tmp_path / "project.json"
     config_path.write_text(

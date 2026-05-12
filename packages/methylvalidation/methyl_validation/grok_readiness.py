@@ -152,6 +152,7 @@ def build_sanitized_ai_payload(
             "module_top_trends": top_trend,
             "progression_label_counts_top": top_labels,
             "entity_counts_by_type": labels.get("by_type"),
+            "ordered_stage_narratives": prog.get("ordered_stage_narratives") or [],
         },
         "panel_balance": {
             "n_positions": (report.get("panel_balance") or {}).get("n_positions"),

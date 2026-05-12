@@ -242,6 +242,17 @@ def analyze_project_root(project_root: Path) -> Dict[str, Any]:
     modules_long = progression_summary.get("modules_long_csv")
     mod_path = Path(modules_long) if modules_long else progression_dir / "modules_long.csv"
 
+    ordered_stage_narratives: List[Dict[str, Any]] = []
+    if production_project_path.is_file():
+        try:
+            from methyl_utils.pipeline_config import load_project
+
+            proj = load_project(production_project_path)
+            tokens = ordered_labels or proj.get_ordered_comparison_labels()
+            ordered_stage_narratives = proj.get_ordered_stage_narratives(tokens)
+        except Exception:
+            ordered_stage_narratives = []
+
     mapper_cfg = ((production_project.get("step_config") or {}).get("mapper")) or {}
     disease_context = mapper_cfg.get("disease_term")
     if isinstance(disease_context, str):
@@ -286,6 +297,7 @@ def analyze_project_root(project_root: Path) -> Dict[str, Any]:
             },
             "module_trajectory": _module_trajectory_summary(mod_path, ordered_labels),
             "entity_labels": _label_mix(progression_dir / "entities_progression_labels.csv"),
+            "ordered_stage_narratives": ordered_stage_narratives,
         },
         "panel_balance": _chromosome_panel_balance(merged_panel_path, dmp_freq_path),
     }
@@ -502,6 +514,18 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             f"- Row counts: {p.get('row_counts')}",
         ]
     )
+    narr = p.get("ordered_stage_narratives") or []
+    if isinstance(narr, list) and narr:
+        lines.extend(["", "### Stage definitions (from project config)", ""])
+        for row in narr:
+            if not isinstance(row, dict):
+                continue
+            lab = row.get("comparison_label") or "?"
+            desc = row.get("description")
+            if isinstance(desc, str) and desc.strip():
+                lines.append(f"- **`{lab}`**: {desc.strip()}")
+            else:
+                lines.append(f"- **`{lab}`**")
     traj = p.get("module_trajectory") or {}
     if traj:
         lines.extend(

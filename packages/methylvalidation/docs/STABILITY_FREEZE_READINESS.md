@@ -48,6 +48,8 @@ If no key is found or the API errors, the tool still emits **`ai_review`** and c
 
 `production/project.json` **`step_config.mapper.disease_term`** is passed through as **`disease_context`** unless **`--disease-context`** is set.
 
+When the production project JSON is valid for [`ProjectConfig`](../../../packages/methylutils/methyl_utils/pipeline_config.py), optional **`description`** fields on disease **`GroupConfig`** entries (including each nested **`stages[]`** child) are read and sent to Grok as **`ordered_stage_narratives`** (comparison token, `disease_group`, short text — no `sample_paths`). The markdown report also lists them under **Stage definitions (from project config)** when present.
+
 Exit codes:
 
 - `0` — overall verdict is `go` or `go_with_risks`

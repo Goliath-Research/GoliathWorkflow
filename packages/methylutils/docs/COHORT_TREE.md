@@ -23,6 +23,8 @@ Rules enforced by the model:
 - Each child must define **`sample_paths`** (non-empty after resolution).
 - **Nested `stages` under a child are not supported in v1** (one parent → one child list only).
 
+Optional **`description`** on each `GroupConfig` (including each stage child) is a short human-readable meaning (e.g. clinical stage narrative) for reporting and tools such as readiness Grok review; keep it free of file paths.
+
 Resolved leaf names are **`{parent.label}_{child.label}`** (e.g. `pca_pca1`, `breast_HR_pos_HER2_neg`). The **scientific meaning** of the child is entirely in your **`label` strings** and cohort definitions, not in the key name `stages`.
 
 ## `cohort_hierarchy` and reporting
