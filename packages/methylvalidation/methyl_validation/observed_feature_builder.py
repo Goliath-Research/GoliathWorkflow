@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 from methyl_utils.methyl_centroid_pair import MethylCentroidPair
-from scipy.stats import entropy
+from scipy.stats import entropy, wasserstein_distance
 
 
 @dataclass
@@ -36,7 +36,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v7_healthy_proximity"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v11_healthy_proximity_weighted_mae_margin"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -326,6 +326,25 @@ def _cosine_similarity(values_a: np.ndarray, values_b: np.ndarray) -> float:
     return float(np.dot(values_a, values_b) / (na * nb))
 
 
+def _weighted_cosine_similarity(values_a: np.ndarray, values_b: np.ndarray, weights: np.ndarray) -> float:
+    if values_a.size == 0 or values_b.size == 0 or values_a.size != values_b.size:
+        return float("nan")
+    if weights.size != values_a.size:
+        return float("nan")
+    w = np.asarray(weights, dtype=np.float64)
+    w = np.abs(np.nan_to_num(w, nan=0.0, posinf=0.0, neginf=0.0))
+    if float(np.sum(w)) <= 0.0:
+        return float("nan")
+    a = np.asarray(values_a, dtype=np.float64)
+    b = np.asarray(values_b, dtype=np.float64)
+    num = float(np.sum(w * a * b))
+    na = float(np.sqrt(np.sum(w * (a**2))))
+    nb = float(np.sqrt(np.sum(w * (b**2))))
+    if na <= 1e-12 or nb <= 1e-12:
+        return float("nan")
+    return float(num / (na * nb))
+
+
 def _jensen_shannon_distance(values_a: np.ndarray, values_b: np.ndarray, eps: float = 1e-10) -> float:
     if values_a.size == 0 or values_b.size == 0 or values_a.size != values_b.size:
         return float("nan")
@@ -336,6 +355,54 @@ def _jensen_shannon_distance(values_a: np.ndarray, values_b: np.ndarray, eps: fl
     if not np.isfinite(js_div):
         return float("nan")
     return float(np.sqrt(max(float(js_div), 0.0)))
+
+
+def _weighted_jensen_shannon_distance(
+    values_a: np.ndarray,
+    values_b: np.ndarray,
+    weights: np.ndarray,
+    eps: float = 1e-10,
+) -> float:
+    if values_a.size == 0 or values_b.size == 0 or values_a.size != values_b.size:
+        return float("nan")
+    if weights.size != values_a.size:
+        return float("nan")
+    w = np.asarray(weights, dtype=np.float64)
+    w = np.abs(np.nan_to_num(w, nan=0.0, posinf=0.0, neginf=0.0))
+    w_sum = float(np.sum(w))
+    if w_sum <= 0.0:
+        return float("nan")
+    w = w / w_sum
+    p = np.clip(np.asarray(values_a, dtype=np.float64), eps, 1.0 - eps)
+    q = np.clip(np.asarray(values_b, dtype=np.float64), eps, 1.0 - eps)
+    p_w = p * w
+    q_w = q * w
+    p_sum = float(np.sum(p_w))
+    q_sum = float(np.sum(q_w))
+    if p_sum <= 0.0 or q_sum <= 0.0:
+        return float("nan")
+    p_w = p_w / p_sum
+    q_w = q_w / q_sum
+    m = 0.5 * (p_w + q_w)
+    js_div = 0.5 * (entropy(p_w, m, base=2) + entropy(q_w, m, base=2))
+    if not np.isfinite(js_div):
+        return float("nan")
+    return float(np.sqrt(max(float(js_div), 0.0)))
+
+
+def _wasserstein_1d_distance(values_a: np.ndarray, values_b: np.ndarray) -> float:
+    if values_a.size == 0 or values_b.size == 0 or values_a.size != values_b.size:
+        return float("nan")
+    return float(wasserstein_distance(values_a, values_b))
+
+
+def _weighted_mean_abs_error(values_a: np.ndarray, values_b: np.ndarray, weights: np.ndarray) -> float:
+    if values_a.size == 0 or values_b.size == 0 or values_a.size != values_b.size:
+        return float("nan")
+    if weights.size != values_a.size:
+        return float("nan")
+    abs_err = np.abs(values_a - values_b)
+    return _weighted_mean_with_fallback(abs_err, weights)
 
 
 def _fixed_feature_names() -> List[str]:
@@ -351,9 +418,19 @@ def _fixed_feature_names() -> List[str]:
         "methylation_progression_score",
         "js_distance_to_healthy_centroid",
         "js_distance_to_cancer_centroid",
+        "weighted_js_distance_to_healthy_centroid",
+        "weighted_js_distance_to_cancer_centroid",
+        "wasserstein_distance_to_healthy_centroid",
+        "wasserstein_distance_to_cancer_centroid",
+        "weighted_mean_abs_error_to_healthy_centroid",
+        "weighted_mean_abs_error_to_cancer_centroid",
+        "weighted_mean_abs_distance_margin",
         "cosine_similarity_to_healthy_centroid",
         "cosine_similarity_to_cancer_centroid",
+        "weighted_cosine_similarity_to_healthy_centroid",
+        "weighted_cosine_similarity_to_cancer_centroid",
         "centroid_contrast_score",
+        "weighted_centroid_contrast_score",
         "fraction_dmps_closer_to_cancer_centroid",
         "weighted_fraction_dmps_closer_to_cancer_centroid",
         "fraction_dmps_closer_to_healthy_centroid",
@@ -485,9 +562,19 @@ def build_observed_hybrid_feature_table(
             cancer_obs = cancer_ref[obs_mask]
             js_h = _jensen_shannon_distance(obs_vals, healthy_obs)
             js_c = _jensen_shannon_distance(obs_vals, cancer_obs)
+            wjs_h = _weighted_jensen_shannon_distance(obs_vals, healthy_obs, obs_w)
+            wjs_c = _weighted_jensen_shannon_distance(obs_vals, cancer_obs, obs_w)
+            wd_h = _wasserstein_1d_distance(obs_vals, healthy_obs)
+            wd_c = _wasserstein_1d_distance(obs_vals, cancer_obs)
+            wmae_h = _weighted_mean_abs_error(obs_vals, healthy_obs, obs_w)
+            wmae_c = _weighted_mean_abs_error(obs_vals, cancer_obs, obs_w)
+            weighted_mean_abs_distance_margin = float(wmae_h - wmae_c)
             cos_h = _cosine_similarity(obs_vals, healthy_obs)
             cos_c = _cosine_similarity(obs_vals, cancer_obs)
+            wcos_h = _weighted_cosine_similarity(obs_vals, healthy_obs, obs_w)
+            wcos_c = _weighted_cosine_similarity(obs_vals, cancer_obs, obs_w)
             centroid_contrast_score = (cos_c - cos_h) + (js_h - js_c)
+            weighted_centroid_contrast_score = (wcos_c - wcos_h) + (wjs_h - wjs_c)
             dist_h = np.abs(obs_vals - healthy_obs)
             dist_c = np.abs(obs_vals - cancer_obs)
             closer_to_cancer = float(np.mean(dist_c < dist_h)) if dist_h.size > 0 else float("nan")
@@ -515,9 +602,19 @@ def build_observed_hybrid_feature_table(
             kurt = float("nan")
             js_h = float("nan")
             js_c = float("nan")
+            wjs_h = float("nan")
+            wjs_c = float("nan")
+            wd_h = float("nan")
+            wd_c = float("nan")
+            wmae_h = float("nan")
+            wmae_c = float("nan")
+            weighted_mean_abs_distance_margin = float("nan")
             cos_h = float("nan")
             cos_c = float("nan")
+            wcos_h = float("nan")
+            wcos_c = float("nan")
             centroid_contrast_score = float("nan")
+            weighted_centroid_contrast_score = float("nan")
             closer_to_cancer = float("nan")
             closer_to_healthy = float("nan")
             weighted_closer_to_cancer = float("nan")
@@ -566,9 +663,19 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["methylation_progression_score"]] = progression
         X_feat[i, idx["js_distance_to_healthy_centroid"]] = js_h
         X_feat[i, idx["js_distance_to_cancer_centroid"]] = js_c
+        X_feat[i, idx["weighted_js_distance_to_healthy_centroid"]] = wjs_h
+        X_feat[i, idx["weighted_js_distance_to_cancer_centroid"]] = wjs_c
+        X_feat[i, idx["wasserstein_distance_to_healthy_centroid"]] = wd_h
+        X_feat[i, idx["wasserstein_distance_to_cancer_centroid"]] = wd_c
+        X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
+        X_feat[i, idx["weighted_mean_abs_error_to_cancer_centroid"]] = wmae_c
+        X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
         X_feat[i, idx["cosine_similarity_to_healthy_centroid"]] = cos_h
         X_feat[i, idx["cosine_similarity_to_cancer_centroid"]] = cos_c
+        X_feat[i, idx["weighted_cosine_similarity_to_healthy_centroid"]] = wcos_h
+        X_feat[i, idx["weighted_cosine_similarity_to_cancer_centroid"]] = wcos_c
         X_feat[i, idx["centroid_contrast_score"]] = centroid_contrast_score
+        X_feat[i, idx["weighted_centroid_contrast_score"]] = weighted_centroid_contrast_score
         X_feat[i, idx["fraction_dmps_closer_to_cancer_centroid"]] = closer_to_cancer
         X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
         X_feat[i, idx["fraction_dmps_closer_to_healthy_centroid"]] = closer_to_healthy
