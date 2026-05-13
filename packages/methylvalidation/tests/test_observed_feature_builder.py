@@ -187,18 +187,11 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
         "dmp_global_weighted_mean",
         "dmp_global_weighted_std",
         "dmp_global_weighted_abs_shift_from_half",
-        "dmp_global_quantile_q10",
-        "dmp_global_quantile_q50",
-        "dmp_global_quantile_q90",
-        "global_mean_dev_from_healthy",
-        "global_mean_dev_from_cancer",
         "methylation_progression_score",
         "js_distance_to_healthy_centroid",
         "js_distance_to_cancer_centroid",
         "weighted_js_distance_to_healthy_centroid",
         "weighted_js_distance_to_cancer_centroid",
-        "wasserstein_distance_to_healthy_centroid",
-        "wasserstein_distance_to_cancer_centroid",
         "weighted_mean_abs_error_to_healthy_centroid",
         "weighted_mean_abs_error_to_cancer_centroid",
         "weighted_mean_abs_distance_margin",
@@ -226,8 +219,6 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     js_c_idx = feat.feature_names.index("js_distance_to_cancer_centroid")
     wjs_h_idx = feat.feature_names.index("weighted_js_distance_to_healthy_centroid")
     wjs_c_idx = feat.feature_names.index("weighted_js_distance_to_cancer_centroid")
-    wd_h_idx = feat.feature_names.index("wasserstein_distance_to_healthy_centroid")
-    wd_c_idx = feat.feature_names.index("wasserstein_distance_to_cancer_centroid")
     wmae_h_idx = feat.feature_names.index("weighted_mean_abs_error_to_healthy_centroid")
     wmae_c_idx = feat.feature_names.index("weighted_mean_abs_error_to_cancer_centroid")
     wmae_margin_idx = feat.feature_names.index("weighted_mean_abs_distance_margin")
@@ -246,12 +237,10 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     )
     margin_idx = feat.feature_names.index("mean_abs_distance_margin")
     prog_idx = feat.feature_names.index("methylation_progression_score")
-    dev_h_idx = feat.feature_names.index("global_mean_dev_from_healthy")
 
     # First sample is healthy-like and should be closer to healthy anchor.
     assert float(feat.X[0, js_h_idx]) < float(feat.X[0, js_c_idx])
     assert float(feat.X[0, wjs_h_idx]) < float(feat.X[0, wjs_c_idx])
-    assert float(feat.X[0, wd_h_idx]) < float(feat.X[0, wd_c_idx])
     assert float(feat.X[0, wmae_h_idx]) < float(feat.X[0, wmae_c_idx])
     assert float(feat.X[0, wmae_margin_idx]) < 0.0
     assert float(feat.X[0, cos_h_idx]) > float(feat.X[0, cos_c_idx])
@@ -266,7 +255,6 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     # Cancer-like sample should move towards cancer anchor.
     assert float(feat.X[2, js_c_idx]) < float(feat.X[2, js_h_idx])
     assert float(feat.X[2, wjs_c_idx]) < float(feat.X[2, wjs_h_idx])
-    assert float(feat.X[2, wd_c_idx]) < float(feat.X[2, wd_h_idx])
     assert float(feat.X[2, wmae_c_idx]) < float(feat.X[2, wmae_h_idx])
     assert float(feat.X[2, wmae_margin_idx]) > 0.0
     assert float(feat.X[2, wcos_c_idx]) > float(feat.X[2, wcos_h_idx])
@@ -280,4 +268,3 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     # Progression should increase with higher methylation profiles in this synthetic setup.
     assert float(feat.X[2, prog_idx]) > float(feat.X[0, prog_idx])
     assert np.all((feat.X[:, prog_idx] >= 0.0) & (feat.X[:, prog_idx] <= 1.0))
-    assert float(feat.X[0, dev_h_idx]) <= float(feat.X[2, dev_h_idx])

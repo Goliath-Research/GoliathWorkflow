@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 from methyl_utils.methyl_centroid_pair import MethylCentroidPair
-from scipy.stats import entropy, wasserstein_distance
+from scipy.stats import entropy
 
 
 @dataclass
@@ -36,7 +36,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v11_healthy_proximity_weighted_mae_margin"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v12_feature_prune"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -390,12 +390,6 @@ def _weighted_jensen_shannon_distance(
     return float(np.sqrt(max(float(js_div), 0.0)))
 
 
-def _wasserstein_1d_distance(values_a: np.ndarray, values_b: np.ndarray) -> float:
-    if values_a.size == 0 or values_b.size == 0 or values_a.size != values_b.size:
-        return float("nan")
-    return float(wasserstein_distance(values_a, values_b))
-
-
 def _weighted_mean_abs_error(values_a: np.ndarray, values_b: np.ndarray, weights: np.ndarray) -> float:
     if values_a.size == 0 or values_b.size == 0 or values_a.size != values_b.size:
         return float("nan")
@@ -410,18 +404,11 @@ def _fixed_feature_names() -> List[str]:
         "dmp_global_weighted_mean",
         "dmp_global_weighted_std",
         "dmp_global_weighted_abs_shift_from_half",
-        "dmp_global_quantile_q10",
-        "dmp_global_quantile_q50",
-        "dmp_global_quantile_q90",
-        "global_mean_dev_from_healthy",
-        "global_mean_dev_from_cancer",
         "methylation_progression_score",
         "js_distance_to_healthy_centroid",
         "js_distance_to_cancer_centroid",
         "weighted_js_distance_to_healthy_centroid",
         "weighted_js_distance_to_cancer_centroid",
-        "wasserstein_distance_to_healthy_centroid",
-        "wasserstein_distance_to_cancer_centroid",
         "weighted_mean_abs_error_to_healthy_centroid",
         "weighted_mean_abs_error_to_cancer_centroid",
         "weighted_mean_abs_distance_margin",
@@ -555,7 +542,6 @@ def build_observed_hybrid_feature_table(
             g_mean = _weighted_mean_with_fallback(obs_vals, obs_w)
             g_std = _weighted_std(obs_vals, obs_w) if obs_w.size == obs_vals.size else float(np.std(obs_vals))
             abs_shift = _weighted_mean_with_fallback(np.abs(obs_vals - 0.5), obs_w)
-            q10, q50, q90 = np.quantile(obs_vals, [0.10, 0.50, 0.90]).tolist()
             skew, kurt = _weighted_skew_kurt_with_fallback(obs_vals, obs_w)
 
             healthy_obs = healthy_ref[obs_mask]
@@ -564,8 +550,6 @@ def build_observed_hybrid_feature_table(
             js_c = _jensen_shannon_distance(obs_vals, cancer_obs)
             wjs_h = _weighted_jensen_shannon_distance(obs_vals, healthy_obs, obs_w)
             wjs_c = _weighted_jensen_shannon_distance(obs_vals, cancer_obs, obs_w)
-            wd_h = _wasserstein_1d_distance(obs_vals, healthy_obs)
-            wd_c = _wasserstein_1d_distance(obs_vals, cancer_obs)
             wmae_h = _weighted_mean_abs_error(obs_vals, healthy_obs, obs_w)
             wmae_c = _weighted_mean_abs_error(obs_vals, cancer_obs, obs_w)
             weighted_mean_abs_distance_margin = float(wmae_h - wmae_c)
@@ -595,17 +579,12 @@ def build_observed_hybrid_feature_table(
             g_mean = float("nan")
             g_std = float("nan")
             abs_shift = float("nan")
-            q10 = float("nan")
-            q50 = float("nan")
-            q90 = float("nan")
             skew = float("nan")
             kurt = float("nan")
             js_h = float("nan")
             js_c = float("nan")
             wjs_h = float("nan")
             wjs_c = float("nan")
-            wd_h = float("nan")
-            wd_c = float("nan")
             wmae_h = float("nan")
             wmae_c = float("nan")
             weighted_mean_abs_distance_margin = float("nan")
@@ -621,8 +600,6 @@ def build_observed_hybrid_feature_table(
             weighted_closer_to_healthy = float("nan")
             mean_abs_distance_margin = float("nan")
 
-        global_dev_healthy = float(g_mean - healthy_global_mean) if np.isfinite(g_mean) else float("nan")
-        global_dev_cancer = float(g_mean - cancer_global_mean) if np.isfinite(g_mean) else float("nan")
         if np.isfinite(g_mean) and np.isfinite(progression_denom):
             progression = float(
                 np.clip((g_mean - healthy_global_mean) / progression_denom, 0.0, 1.0)
@@ -655,18 +632,11 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["dmp_global_weighted_mean"]] = g_mean
         X_feat[i, idx["dmp_global_weighted_std"]] = g_std
         X_feat[i, idx["dmp_global_weighted_abs_shift_from_half"]] = abs_shift
-        X_feat[i, idx["dmp_global_quantile_q10"]] = q10
-        X_feat[i, idx["dmp_global_quantile_q50"]] = q50
-        X_feat[i, idx["dmp_global_quantile_q90"]] = q90
-        X_feat[i, idx["global_mean_dev_from_healthy"]] = global_dev_healthy
-        X_feat[i, idx["global_mean_dev_from_cancer"]] = global_dev_cancer
         X_feat[i, idx["methylation_progression_score"]] = progression
         X_feat[i, idx["js_distance_to_healthy_centroid"]] = js_h
         X_feat[i, idx["js_distance_to_cancer_centroid"]] = js_c
         X_feat[i, idx["weighted_js_distance_to_healthy_centroid"]] = wjs_h
         X_feat[i, idx["weighted_js_distance_to_cancer_centroid"]] = wjs_c
-        X_feat[i, idx["wasserstein_distance_to_healthy_centroid"]] = wd_h
-        X_feat[i, idx["wasserstein_distance_to_cancer_centroid"]] = wd_c
         X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
         X_feat[i, idx["weighted_mean_abs_error_to_cancer_centroid"]] = wmae_c
         X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
