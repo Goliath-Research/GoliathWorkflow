@@ -514,7 +514,8 @@ def resolve_classifier_config(
 
     # Default hierarchical panel from comparisons when step omits panel (dedupe vs predictor JSON)
     if not (isinstance(base.get("panel"), dict) and base.get("panel")):
-        derived_panel = project.derive_panel_spec_from_comparisons()
+        derive_fn = getattr(project, "derive_panel_spec_from_comparisons", None)
+        derived_panel = derive_fn() if callable(derive_fn) else None
         if derived_panel is not None:
             base["panel"] = derived_panel
 
