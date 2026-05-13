@@ -22,7 +22,7 @@ setup(
     install_requires=[
         "gseapy>=1.1.0",
         "pandas>=2.1.0,<3.0.0",
-        "numpy>=1.26.0,<3.0.0",
+        "numpy>=2.0.0,<3.0.0",
         "networkx>=3.0",
         "python-louvain>=0.16",
     ],

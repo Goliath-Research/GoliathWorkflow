@@ -805,7 +805,7 @@ develop = true
 
 [package.dependencies]
 colorlog = ">=6.7.0,<6.8.0"
-numpy = ">=1.26.0,<3.0.0"
+numpy = ">=2.0.0,<3.0.0"
 nvidia-ml-py = ">=12.535.0,<13.0.0"
 pandas = ">=2.1.0,<3.0.0"
 pydantic = ">=2.6.0,<3.0.0"
