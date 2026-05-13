@@ -197,6 +197,10 @@ Shape (example):
 
 **MethylPredictor** can use the same object under **`step_config.predictor.panel`** for prediction-only runs (see MethylPredictor `USAGE.md`). Implementation: **`methyl_classifier.core.panel_fusion`**; classification with **`samples_list`** or centroid-derived sample lists writes extra CSV columns and **`panel_report.json`** next to the results CSV when **`output_path`** is set.
 
+### Low DMP coverage abstention
+
+- **`min_observed_dmp_fraction`** (0–1, default **0**): If the fraction of panel DMPs with **observed** (finite) methylation for a sample is **below** this value, the pipeline **abstains**: uniform class probabilities, **`prediction` = -1**, **`predicted_class` = abstain**, and CSV column **`abstained` = true**. Missing DMP positions (no call or NaN at a matched locus) do not count as observed. CLI override: **`--min-observed-dmp-fraction F`**.
+
 ### Multiclass OvR (K≥2) without a separate bundle script
 
 If you have **K** MethylDetector pickles (one per one-vs-rest class), list them in the config (or under `step_config.classifier` in a project JSON) instead of `model_dir` / `model_path`:

@@ -209,7 +209,12 @@ class MethylDetectorConfig(BaseModel):
     )
     min_samples_pct: float = Field(
         default=0.05, ge=0.0, le=1.0,
-        description="Minimum fraction of that centroid's cohort (samples) per position. Effective min N per centroid = max(min_samples_abs, ceil(min_samples_pct * cohort_size))."
+        description=(
+            "Minimum fraction of that centroid's cohort (samples) per position. "
+            "Effective min N per centroid = max(min_samples_abs, ceil(min_samples_pct * cohort_size)). "
+            "Cohort size is resolved from validation sample lists when set, else centroid metadata "
+            "(n_samples or sample_paths/samples_used length), else max(N) across positions as a fallback."
+        )
     )
 
     # ----------------

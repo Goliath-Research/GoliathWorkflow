@@ -97,6 +97,17 @@ class ClassificationConfig(BaseModel):
         default=None,
         description="OvR pairwise max-contrast only: panel spec (primary_family, families, optional indeterminate_delta). Adds panel columns and panel_report.json when classifying with samples_list / centroid validation.",
     )
+    min_observed_dmp_fraction: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum fraction of classifier DMP positions that must be observed in a sample; "
+            "if coverage is below this after masking missing values, the sample is abstained "
+            "(uniform class probabilities, prediction -1, predicted_class=abstain in CSV). "
+            "0 disables abstention."
+        ),
+    )
 
     # Optional
     output_path: Optional[str] = Field(

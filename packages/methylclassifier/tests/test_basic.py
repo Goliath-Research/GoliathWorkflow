@@ -86,10 +86,18 @@ def test_classify_samples_from_list_realigns_expected_classes(monkeypatch, tmp_p
         ),
     )
 
-    def fake_classify_samples_batch(classifier_obj, feature_matrix, availability_mask, debug=False, expected_classes=None):
+    def fake_classify_samples_batch(
+        classifier_obj,
+        feature_matrix,
+        availability_mask,
+        debug=False,
+        expected_classes=None,
+        min_observed_dmp_fraction=0.0,
+    ):
         predictions = np.array([0, 1], dtype=np.int64)
         probabilities = np.array([[0.9, 0.1], [0.2, 0.8]], dtype=np.float64)
-        return predictions, probabilities
+        abst = np.zeros(2, dtype=bool)
+        return predictions, probabilities, abst
 
     monkeypatch.setattr(classifier_cli_main, "classify_samples_batch", fake_classify_samples_batch)
 
