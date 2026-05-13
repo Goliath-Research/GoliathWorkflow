@@ -13,6 +13,7 @@ import pandas as pd
 
 from ..core.classifier import MethylClassifier
 from ..utils.data_loader import DataLoader
+from ..utils.prediction_abstention import apply_min_observed_dmp_abstention
 from ..utils.calibration_split import stratified_calibration_fit_mask
 from ..utils.utils import extract_chrom_context_from_classifier, setup_logging
 from ..models.config_schema import ClassificationConfig
@@ -140,7 +141,8 @@ def classify_samples(classifier: MethylClassifier,
                     context: str = None,
                     output_file: Optional[Path] = None,
                     debug: bool = False,
-                    panel_spec: Optional[Dict[str, Any]] = None) -> None:
+                    panel_spec: Optional[Dict[str, Any]] = None,
+                    min_observed_dmp_fraction: float = 0.0) -> None:
     """
     Load samples from .h5 files and classify them using the trained classifier.
     
@@ -152,7 +154,12 @@ def classify_samples(classifier: MethylClassifier,
     # Handle samples list (multi-chromosome with merged contexts)
     if samples_list:
         return classify_samples_from_list(
-            classifier, samples_list, output_file, debug, panel_spec=panel_spec
+            classifier,
+            samples_list,
+            output_file,
+            debug,
+            panel_spec=panel_spec,
+            min_observed_dmp_fraction=min_observed_dmp_fraction,
         )
     
     # Legacy: single file or directory
@@ -222,8 +229,12 @@ def classify_samples(classifier: MethylClassifier,
     # Display prediction method
     print(f"\n🤖 Classifying samples using ECDF classifier...")
     
-    predictions, probabilities = classify_samples_batch(
-        classifier, feature_matrix, availability_mask, debug
+    predictions, probabilities, abstain_flags = classify_samples_batch(
+        classifier,
+        feature_matrix,
+        availability_mask,
+        debug,
+        min_observed_dmp_fraction=min_observed_dmp_fraction,
     )
 
     # Print classification genes (DMPs) information
@@ -330,16 +341,21 @@ def classify_samples(classifier: MethylClassifier,
     print("-" * header_width)
 
     class_counts = {i: 0 for i in range(classifier.n_classes)}
+    abstain_count = 0
     sample_type_counts = {}
     results_data = []
 
     for i, (name, sample_type, pred, prob, stats) in enumerate(zip(sample_names, sample_types, predictions, probabilities, stats_info)):
-        if classifier.class_names is not None and pred < len(classifier.class_names):
+        if pred < 0:
+            predicted_label = "abstain"
+            abstain_count += 1
+        elif classifier.class_names is not None and pred < len(classifier.class_names):
             predicted_label = str(classifier.class_names[pred])
         else:
             predicted_label = f"Class_{pred}"
 
-        class_counts[pred] += 1
+        if pred >= 0:
+            class_counts[pred] = class_counts.get(pred, 0) + 1
         sample_type_counts[sample_type] = sample_type_counts.get(sample_type, 0) + 1
 
         # Get coverage info for display
@@ -368,7 +384,8 @@ def classify_samples(classifier: MethylClassifier,
             'total_positions': len(samples[i][1].pos),
             'dmps_used': int(dmps_used),
             'dmps_total': len(dmp_positions),
-            'dmp_coverage_pct': float(dmps_used / len(dmp_positions) * 100)
+            'dmp_coverage_pct': float(dmps_used / len(dmp_positions) * 100),
+            'abstained': bool(abstain_flags[i]),
         }
 
         # Add probabilities for all classes
@@ -391,6 +408,8 @@ def classify_samples(classifier: MethylClassifier,
     for i in range(classifier.n_classes):
         class_name = classifier.class_names[i] if classifier.class_names is not None and i < len(classifier.class_names) else f"Class {i}"
         print(f"{class_name}: {class_counts[i]} samples")
+    if abstain_count:
+        print(f"abstain (low observed DMP fraction): {abstain_count} samples")
 
     # Display sample type breakdown if we have that information
     if sample_type_counts:
@@ -410,6 +429,8 @@ def classify_samples(classifier: MethylClassifier,
     for i in range(classifier.n_classes):
         class_name = classifier.class_names[i] if classifier.class_names is not None and i < len(classifier.class_names) else f"Class {i}"
         result_summary.append(f"{class_counts[i]} {class_name}")
+    if abstain_count:
+        result_summary.append(f"{abstain_count} abstain")
     print(f"  • Classification results: {', '.join(result_summary)}")
 
     # DMP usage by sample type
@@ -448,7 +469,11 @@ def classify_samples(classifier: MethylClassifier,
 
         with open(output_file, 'w', newline='') as csvfile:
             # Determine fieldnames based on available data
-            fieldnames = ['sample', 'sample_type', 'prediction', 'predicted_class'] + [f'prob_class{i}' for i in range(classifier.n_classes)] + ['avg_coverage', 'total_positions', 'dmps_used', 'dmps_total', 'dmp_coverage_pct']
+            fieldnames = (
+                ['sample', 'sample_type', 'prediction', 'predicted_class']
+                + [f'prob_class{i}' for i in range(classifier.n_classes)]
+                + ['avg_coverage', 'total_positions', 'dmps_used', 'dmps_total', 'dmp_coverage_pct', 'abstained']
+            )
 
             # Add statistical fields if any sample has them
             if any('avg_alpha' in result for result in results_data):
@@ -590,6 +615,7 @@ def classify_samples_from_list(
     dmp_positions_by_chrom: Optional[Union[Dict[str, np.ndarray], pd.DataFrame]] = None,
     expected_classes: Optional[List[int]] = None,
     panel_spec: Optional[Dict[str, Any]] = None,
+    min_observed_dmp_fraction: float = 0.0,
 ) -> None:
     """
     Classify samples from a list of directories, merging CG, CHG, CHH contexts.
@@ -607,6 +633,7 @@ def classify_samples_from_list(
         dmp_positions_by_chrom: DMP positions organized by chromosome (chromosome-specific optimization)
         expected_classes: Optional list of expected class (0/1) per sample; when set, CSV gets expected_class column and a summary is printed (centroid validation).
         panel_spec: Optional hierarchical panel readout (OvR + pairwise max-contrast only). Adds columns to CSV and writes ``panel_report.json`` next to the CSV when ``output_file`` is set. See ``methyl_classifier.core.panel_fusion``.
+        min_observed_dmp_fraction: If > 0, require at least this fraction of panel DMPs to be observed; otherwise abstain (uniform probabilities, prediction -1).
     """
     print(f"\n🔍 Loading {len(samples_list)} samples from directories...")
     
@@ -650,6 +677,7 @@ def classify_samples_from_list(
         classifier, samples_list, multichrom_dmp_df, debug
     )
     if fast is not None:
+        feature_matrix_fast, availability_fast, dmp_pos_fast, sample_names_fast, chrom_str = fast
         fc_exp = None
         if expected_classes is not None:
             fc_exp = [
@@ -657,8 +685,13 @@ def classify_samples_from_list(
                 for i in range(len(samples_list))
                 if i < len(expected_classes)
             ]
-        predictions, probabilities = classify_samples_batch(
-            classifier, feature_matrix_fast, availability_fast, debug, expected_classes=fc_exp
+        predictions, probabilities, _abst = classify_samples_batch(
+            classifier,
+            feature_matrix_fast,
+            availability_fast,
+            debug,
+            expected_classes=fc_exp,
+            min_observed_dmp_fraction=min_observed_dmp_fraction,
         )
         extra_cols = None
         if panel_spec and getattr(classifier, "_ovr_mode", False):
@@ -710,9 +743,13 @@ def classify_samples_from_list(
     if classifier.is_multi_chromosome:
         # Multi-chromosome mode: extract features per chromosome and combine
         _classify_multi_chromosome_samples(
-            classifier, loaded_samples, output_file, debug,
+            classifier,
+            loaded_samples,
+            output_file,
+            debug,
             expected_classes=expected_classes,
             panel_spec=panel_spec,
+            min_observed_dmp_fraction=min_observed_dmp_fraction,
         )
     elif (
         getattr(classifier, "dmp_positions_df", None) is not None
@@ -726,9 +763,13 @@ def classify_samples_from_list(
     ):
         # OvR union DMPs or single-file multiclass with DMPs spanning multiple chromosomes
         _classify_single_file_multichrom_dmps(
-            classifier, loaded_samples, output_file, debug,
+            classifier,
+            loaded_samples,
+            output_file,
+            debug,
             expected_classes=expected_classes,
             panel_spec=panel_spec,
+            min_observed_dmp_fraction=min_observed_dmp_fraction,
         )
     else:
         # Single chromosome mode: use first chromosome from merged samples
@@ -779,8 +820,13 @@ def classify_samples_from_list(
         
         feature_matrix = np.array(feature_matrix)
         availability_mask = np.array(availability_mask)
-        predictions, probabilities = classify_samples_batch(
-            classifier, feature_matrix, availability_mask, debug, expected_classes=single_expected_classes
+        predictions, probabilities, _abst = classify_samples_batch(
+            classifier,
+            feature_matrix,
+            availability_mask,
+            debug,
+            expected_classes=single_expected_classes,
+            min_observed_dmp_fraction=min_observed_dmp_fraction,
         )
         # Save results
         extra_cols = None
@@ -810,6 +856,7 @@ def _classify_single_file_multichrom_dmps(
     debug: bool = False,
     expected_classes: Optional[List[int]] = None,
     panel_spec: Optional[Dict[str, Any]] = None,
+    min_observed_dmp_fraction: float = 0.0,
 ) -> None:
     """
     Classify samples using a single-file classifier whose DMPs span multiple chromosomes
@@ -852,10 +899,20 @@ def _classify_single_file_multichrom_dmps(
             probabilities = classifier.calibrate_probabilities(probabilities, ec, fit_mask=fm)
         else:
             probabilities = classifier.calibrate_probabilities(probabilities)
-        predictions = np.argmax(probabilities, axis=1)
+        probabilities, predictions, _abst = apply_min_observed_dmp_abstention(
+            np.asarray(probabilities, dtype=np.float64),
+            availability_mask,
+            float(min_observed_dmp_fraction),
+            int(classifier.n_classes),
+        )
     else:
-        predictions, probabilities = classify_samples_batch(
-            classifier, feature_matrix, availability_mask, debug, expected_classes=expected_classes
+        predictions, probabilities, _abst = classify_samples_batch(
+            classifier,
+            feature_matrix,
+            availability_mask,
+            debug,
+            expected_classes=expected_classes,
+            min_observed_dmp_fraction=min_observed_dmp_fraction,
         )
     dmp_positions_flat = dmp_df["position"].values.astype(np.uint32)
     extra_cols = None
@@ -891,6 +948,7 @@ def _classify_multi_chromosome_samples(
     debug: bool = False,
     expected_classes: Optional[List[int]] = None,
     panel_spec: Optional[Dict[str, Any]] = None,
+    min_observed_dmp_fraction: float = 0.0,
 ) -> None:
     """
     Classify samples using multi-chromosome classifier.
@@ -1026,7 +1084,22 @@ def _classify_multi_chromosome_samples(
         probabilities = classifier.calibrate_probabilities(
             probabilities, ec_iso, fit_mask=fm_iso
         )
-    predictions = np.argmax(probabilities, axis=1)
+    dmp_positions = np.concatenate(
+        [
+            np.asarray(classifier.classifiers[chrom].get_feature_info()["positions"], dtype=np.uint32)
+            for chrom in classifier_chroms
+        ]
+    )
+    combined_mask = np.concatenate(
+        [chrom_masks[chrom] for chrom in classifier_chroms],
+        axis=1,
+    )
+    probabilities, predictions, _abst = apply_min_observed_dmp_abstention(
+        np.asarray(probabilities, dtype=np.float64),
+        combined_mask,
+        float(min_observed_dmp_fraction),
+        int(classifier.n_classes),
+    )
 
     # Optional chromosome probability matrix (store class-0 probabilities for continuity with existing output)
     chrom_proba_matrix = None
@@ -1050,18 +1123,6 @@ def _classify_multi_chromosome_samples(
         print("   ⚠️ Most predictions are near 0 or 1. If unexpected, check: DMP coverage (dmps_used in CSV), "
               "temperature in config, or run with --debug.")
 
-    # Flatten per-chromosome masks/positions so dmps_used and dmps_total reflect the full model.
-    dmp_positions = np.concatenate(
-        [
-            np.asarray(classifier.classifiers[chrom].get_feature_info()["positions"], dtype=np.uint32)
-            for chrom in classifier_chroms
-        ]
-    )
-    combined_mask = np.concatenate(
-        [chrom_masks[chrom] for chrom in classifier_chroms],
-        axis=1,
-    )
-    
     # Save results
     _save_classification_results(
         classifier, sample_names, predictions, probabilities,
@@ -1275,17 +1336,21 @@ def _save_classification_results(
     # Prepare results data
     results_data = []
     for i, (name, pred, prob) in enumerate(zip(sample_names, predictions, probabilities)):
-        if classifier.class_names is not None and pred < len(classifier.class_names):
-            predicted_label = str(classifier.class_names[pred])
+        pred_i = int(pred)
+        if pred_i < 0:
+            predicted_label = "abstain"
+        elif classifier.class_names is not None and pred_i < len(classifier.class_names):
+            predicted_label = str(classifier.class_names[pred_i])
         else:
-            predicted_label = f"Class_{pred}"
+            predicted_label = f"Class_{pred_i}"
 
         dmps_used = np.sum(availability_mask[i]) if i < len(availability_mask) else 0
 
         result_entry = {
             'sample': name,
-            'prediction': int(pred),
+            'prediction': pred_i,
             'predicted_class': predicted_label,
+            'abstained': bool(pred_i < 0),
         }
 
         # Add probabilities for all classes
@@ -1303,7 +1368,7 @@ def _save_classification_results(
         if expected_classes is not None and i < len(expected_classes):
             exp = expected_classes[i]
             result_entry['expected_class'] = int(exp)
-            result_entry['agrees'] = bool(pred == exp)
+            result_entry['agrees'] = bool(pred_i == exp)
 
         for col, vals in extra_columns.items():
             result_entry[col] = vals[i]
@@ -1311,7 +1376,7 @@ def _save_classification_results(
         results_data.append(result_entry)
 
     # Write CSV
-    fieldnames = ['sample', 'prediction', 'predicted_class'] + \
+    fieldnames = ['sample', 'prediction', 'predicted_class', 'abstained'] + \
                  [f'prob_class{i}' for i in range(classifier.n_classes)] + \
                  ['dmps_used', 'dmps_total']
 
@@ -1417,11 +1482,14 @@ def _save_chromosome_probability_matrix(
     print(f"🧬 Chromosome probability matrix saved to: {output_file}")
 
 
-def classify_samples_batch(classifier: MethylClassifier,
-                          methylation_data: np.ndarray,
-                          availability_mask: Optional[np.ndarray] = None,
-                          debug: bool = False,
-                          expected_classes: Optional[List[int]] = None):
+def classify_samples_batch(
+    classifier: MethylClassifier,
+    methylation_data: np.ndarray,
+    availability_mask: Optional[np.ndarray] = None,
+    debug: bool = False,
+    expected_classes: Optional[List[int]] = None,
+    min_observed_dmp_fraction: float = 0.0,
+):
     """
     Classify a batch of samples using the trained classifier.
 
@@ -1432,14 +1500,17 @@ def classify_samples_batch(classifier: MethylClassifier,
         availability_mask: Boolean mask indicating which positions are available
         debug: If True, enable debug output
         expected_classes: Ground truth labels (used for fitting Isotonic calibration if requested via config)
+        min_observed_dmp_fraction: If > 0, samples with fraction of available DMPs below this
+            threshold get uniform probabilities and prediction -1 (abstain).
 
     Returns:
-        predictions: Array of class predictions (0 or 1)
+        predictions: Array of class predictions (0 .. n_classes-1, or -1 when abstaining)
         probabilities: Array of posterior probabilities for each class
+        abstain_flags: Boolean array, True where prediction was abstained due to low DMP coverage
     """
     # Single predict_proba pass (predict() would call predict_proba again for multi-chromosome).
     probabilities = classifier.predict_proba(methylation_data, availability_mask, debug)
-    
+
     if expected_classes is not None and len(expected_classes) == methylation_data.shape[0] and len(methylation_data) >= 2:
         ec = np.array(expected_classes, dtype=np.float64)
         fm = _calibration_fit_mask_for_classifier(classifier, ec)
@@ -1447,9 +1518,14 @@ def classify_samples_batch(classifier: MethylClassifier,
     else:
         probabilities = classifier.calibrate_probabilities(probabilities)
 
-    predictions = np.argmax(np.asarray(probabilities), axis=1)
+    probabilities, predictions, abstain_flags = apply_min_observed_dmp_abstention(
+        np.asarray(probabilities, dtype=np.float64),
+        availability_mask,
+        float(min_observed_dmp_fraction),
+        int(classifier.n_classes),
+    )
 
-    return predictions, probabilities
+    return predictions, probabilities, abstain_flags
 
 
 def _apply_cli_path_overrides(config: ClassificationConfig, args: argparse.Namespace) -> None:
@@ -1462,6 +1538,8 @@ def _apply_cli_path_overrides(config: ClassificationConfig, args: argparse.Names
         config.input_path = str(args.input)
     if args.output:
         config.output_path = str(args.output)
+    if getattr(args, "min_observed_dmp_fraction", None) is not None:
+        config.min_observed_dmp_fraction = float(args.min_observed_dmp_fraction)
 
 
 def _resolve_ovr_export_output_path(
@@ -1646,6 +1724,7 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
             dmp_positions_by_chrom=dmp_positions_by_chrom,
             expected_classes=expected_classes,
             panel_spec=config.panel,
+            min_observed_dmp_fraction=float(config.min_observed_dmp_fraction),
         )
     else:
         classify_samples(
@@ -1656,6 +1735,7 @@ def _run_one_classification(config: ClassificationConfig, label: Optional[str] =
             output_file=Path(config.output_path) if config.output_path else None,
             debug=config.debug,
             panel_spec=config.panel,
+            min_observed_dmp_fraction=float(config.min_observed_dmp_fraction),
         )
     output_dir = Path(config.output_path).parent if config.output_path else Path.cwd()
     _save_classifier_and_sample_list(
@@ -1760,6 +1840,18 @@ Config fields (in JSON):
         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
         default='INFO',
         help='Set logging level (default: INFO)'
+    )
+
+    parser.add_argument(
+        '--min-observed-dmp-fraction',
+        type=float,
+        default=None,
+        metavar='F',
+        help=(
+            "Override config: require this fraction of panel DMPs observed per sample; "
+            "otherwise abstain (uniform probabilities, prediction -1). Omit to use "
+            "classification_config min_observed_dmp_fraction (default 0 = off)."
+        ),
     )
     
     # No new args for temperature/calibration - handled in config

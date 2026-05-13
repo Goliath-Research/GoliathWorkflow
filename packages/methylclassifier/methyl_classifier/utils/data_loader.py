@@ -425,14 +425,12 @@ class DataLoader:
         Returns:
             Tuple of (feature_vector, availability_mask, stats_info)
         """
-        # Get methylation levels with proper handling
+        # Methylation per genomic position; keep NaNs so matched DMPs with missing values
+        # are excluded via availability_mask (do not treat as observed 0.5).
         methylation_levels = sample.get_methylation_levels()
-        # Handle NaN values and ensure proper range
-        methylation_levels = np.nan_to_num(methylation_levels, nan=0.5)
-        methylation_levels = np.clip(methylation_levels, 0.0, 1.0)
+        meth_vals = np.asarray(methylation_levels, dtype=np.float64).ravel()
 
         pos_vals = np.asarray(sample.pos, dtype=np.uint32).ravel()
-        meth_vals = np.asarray(methylation_levels, dtype=np.float64).ravel()
         if pos_vals.size != meth_vals.size:
             n_common = min(pos_vals.size, meth_vals.size)
             pos_vals = pos_vals[:n_common]
@@ -457,12 +455,17 @@ class DataLoader:
             pos_hit = sp[safe_idx] == dmp_arr
             match = in_range & pos_hit
             feature_vector = np.full(len(dmp_arr), 0.5, dtype=np.float64)
+            availability_mask = np.zeros(len(dmp_arr), dtype=bool)
             if np.any(match):
                 mloc = np.flatnonzero(match)
-                feature_vector[mloc] = sm[safe_idx[mloc]]
-            feature_vector = np.clip(feature_vector, 0.0, 1.0)
-            availability_mask = match
-            missing_positions = int(np.sum(~match))
+                raw = sm[safe_idx[mloc]]
+                finite = np.isfinite(raw)
+                clipped = np.clip(raw[finite], 0.0, 1.0)
+                out = np.full(mloc.shape[0], 0.5, dtype=np.float64)
+                out[finite] = clipped
+                feature_vector[mloc] = out
+                availability_mask[mloc] = finite
+            missing_positions = int(np.sum(~availability_mask))
 
         # Collect statistical information
         coverage = sample.get_coverage()

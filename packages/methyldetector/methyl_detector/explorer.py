@@ -50,6 +50,24 @@ def _effective_min_samples(min_samples_abs: int, min_samples_pct: float, cohort_
     return max(min_samples_abs, ceil(min_samples_pct * cohort_size))
 
 
+def _min_samples_cohort_size_from_centroid(centroid: Any) -> int:
+    """Cohort size for min_samples_pct; align with MethylDetector._min_samples_cohort_size (no project paths)."""
+    meta = getattr(centroid, "metadata", None) or {}
+    ns = meta.get("n_samples")
+    if ns is not None:
+        try:
+            return max(1, int(ns))
+        except (TypeError, ValueError):
+            pass
+    raw = meta.get("sample_paths") or meta.get("samples_used")
+    if isinstance(raw, (list, tuple)) and len(raw) > 0:
+        return max(1, len(raw))
+    if getattr(centroid, "N", None) is not None:
+        nmax = int(np.max(_to_arr(centroid.N)))
+        return max(1, nmax)
+    return 1
+
+
 class MethylDetectorExplorer:
     """Analyze the staged detector pipeline with a single canonical effect_size."""
 
@@ -102,10 +120,10 @@ class MethylDetectorExplorer:
         _require_binned_stats(centroid2)
 
         # Per-centroid valid sets, then intersection (same logic as MethylDetector)
-        n1_max = int(np.max(_to_arr(centroid1.N))) if centroid1.N is not None else 1
-        n2_max = int(np.max(_to_arr(centroid2.N))) if centroid2.N is not None else 1
-        min_s1 = _effective_min_samples(self.min_samples_abs, self.min_samples_pct, n1_max)
-        min_s2 = _effective_min_samples(self.min_samples_abs, self.min_samples_pct, n2_max)
+        n1_cohort = _min_samples_cohort_size_from_centroid(centroid1)
+        n2_cohort = _min_samples_cohort_size_from_centroid(centroid2)
+        min_s1 = _effective_min_samples(self.min_samples_abs, self.min_samples_pct, n1_cohort)
+        min_s2 = _effective_min_samples(self.min_samples_abs, self.min_samples_pct, n2_cohort)
         pair = MethylCentroidPair(min_coverage=self.min_coverage, min_samples=(min_s1, min_s2))
         candidate_pos = pair._align_centroids(centroid1, centroid2)
         keep_mask = np.isin(common_pos, candidate_pos)

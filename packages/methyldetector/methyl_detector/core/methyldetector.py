@@ -540,10 +540,26 @@ class MethylDetector:
             centroid2_path,
             min_coverage=self.config.min_coverage,
         )
-        n1_max = int(centroid1.N.max()) if centroid1.N is not None else 10
-        n2_max = int(centroid2.N.max()) if centroid2.N is not None else 10
-        min_s1 = self.config.effective_min_samples(n1_max)
-        min_s2 = self.config.effective_min_samples(n2_max)
+        n1_cohort = self._min_samples_cohort_size(
+            centroid1, self.config.centroid1_dir, "centroid1"
+        )
+        n2_cohort = self._min_samples_cohort_size(
+            centroid2, self.config.centroid2_dir, "centroid2"
+        )
+        min_s1 = self.config.effective_min_samples(n1_cohort)
+        min_s2 = self.config.effective_min_samples(n2_cohort)
+        logger.info(
+            "Context %s: min_samples cohort sizes centroid1=%s centroid2=%s "
+            "-> per-position thresholds N>=%s and N>=%s "
+            "(min_samples_abs=%s min_samples_pct=%s)",
+            context,
+            n1_cohort,
+            n2_cohort,
+            min_s1,
+            min_s2,
+            self.config.min_samples_abs,
+            self.config.min_samples_pct,
+        )
 
         # Pre-filter aligned positions by delta_mean before the expensive statistical
         # comparison. This uses only the centroid means (N, Sx), which are cheap to
@@ -1068,6 +1084,44 @@ class MethylDetector:
             raise ValueError("DMPs DataFrame must have 'effect_size'")
         df = df.sort_values("effect_size", ascending=False).reset_index(drop=True)
         return df
+
+    def _min_samples_cohort_size(
+        self,
+        centroid: MethylSample,
+        centroid_dir: Optional[str],
+        centroid_name: str,
+    ) -> int:
+        """
+        Number of samples in the cohort used to interpret ``min_samples_pct`` / ``min_samples_abs``.
+
+        Prefer the resolved validation-sample list (explicit config paths or centroid metadata),
+        then centroid metadata ``n_samples`` or ``sample_paths`` / ``samples_used`` length.
+        Fall back to ``max(N)`` across positions (legacy; can underestimate cohort size when
+        coverage is sparse) and finally a small default.
+        """
+        cdir = (str(centroid_dir).strip() if centroid_dir else "") or None
+        class_cfg = getattr(self.config, f"{centroid_name}_validation_samples", None)
+        if class_cfg is None:
+            class_cfg = "use_metadata"
+        paths = self._get_validation_samples(class_cfg, cdir, centroid_name)
+        if paths:
+            return max(1, len(paths))
+
+        meta = getattr(centroid, "metadata", None) or {}
+        ns = meta.get("n_samples")
+        if ns is not None:
+            try:
+                return max(1, int(ns))
+            except (TypeError, ValueError):
+                pass
+        raw = meta.get("sample_paths") or meta.get("samples_used")
+        if isinstance(raw, (list, tuple)) and len(raw) > 0:
+            return max(1, len(raw))
+
+        if centroid.N is not None:
+            nmax = int(np.max(np.asarray(centroid.N)))
+            return max(1, nmax)
+        return 10
 
     def _get_validation_samples(
         self,
