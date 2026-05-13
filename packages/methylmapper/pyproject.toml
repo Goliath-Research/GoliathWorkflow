@@ -10,7 +10,7 @@ packages = [{include = "methyl_mapper"}]
 python = ">=3.10,<3.13"
 sqlalchemy = ">=1.4.0,<3.0.0"
 pandas = ">=2.1.0,<3.0.0"
-numpy = ">=1.26.0,<3.0.0"
+numpy = ">=2.0.0,<3.0.0"
 pydantic = ">=2.6.0,<3.0.0"
 pyodbc = ">=4.0.0"
 requests = ">=2.25.0"
