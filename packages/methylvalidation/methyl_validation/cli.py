@@ -3,6 +3,7 @@ CLI for Monte Carlo validation runner.
 """
 
 import argparse
+import copy
 import csv
 import hashlib
 import json
@@ -183,6 +184,49 @@ def _count_run_samples_from_existing_files(run_dir: Path) -> Tuple[int, int]:
     n_train = sum(_count_csv_data_rows(p) for p in train_files)
     n_val = sum(_count_csv_data_rows(p) for p in val_files)
     return int(n_train), int(n_val)
+
+
+def _deep_merge_dicts(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merge mappings, preferring values from updates."""
+    merged: Dict[str, Any] = copy.deepcopy(base)
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_dicts(merged[key], value)
+        else:
+            merged[key] = copy.deepcopy(value)
+    return merged
+
+
+def _sync_run_project_step_config(project_path: Path, base_step_config: Optional[Dict[str, Any]]) -> bool:
+    """
+    Update an existing run project.json step_config using current base project settings.
+
+    This keeps run-local additions (e.g. predictor controls/diseases for holdouts) while
+    refreshing values provided by the latest base project.
+    """
+    if not project_path.is_file():
+        return False
+    if not isinstance(base_step_config, dict) or not base_step_config:
+        return False
+
+    try:
+        payload = json.loads(project_path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    if not isinstance(payload, dict):
+        return False
+
+    run_step_cfg = payload.get("step_config")
+    if not isinstance(run_step_cfg, dict):
+        run_step_cfg = {}
+
+    merged_step_cfg = _deep_merge_dicts(run_step_cfg, base_step_config)
+    if merged_step_cfg == run_step_cfg:
+        return False
+
+    payload["step_config"] = merged_step_cfg
+    project_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return True
 
 
 def _write_model_mc_outputs(
@@ -2309,6 +2353,10 @@ def main() -> None:
                             progress.remove_task(task_current)
                             progress.advance(task_iter, 1)
                         continue
+                    _sync_run_project_step_config(
+                        project_path,
+                        getattr(base_project, "step_config", None),
+                    )
                     run_project = load_project(project_path)
                     comparisons = run_project.get_comparisons()
                     if comparisons:
@@ -2403,6 +2451,10 @@ def main() -> None:
                             progress.remove_task(task_current)
                             progress.advance(task_iter, 1)
                         continue
+                    _sync_run_project_step_config(
+                        project_path,
+                        getattr(base_project, "step_config", None),
+                    )
                     predictor_output_dir = run_dir / "predictors"
                     n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
                 else:
@@ -2466,6 +2518,10 @@ def main() -> None:
                             progress.remove_task(task_current)
                             progress.advance(task_iter, 1)
                         continue
+                    _sync_run_project_step_config(
+                        project_path,
+                        getattr(base_project, "step_config", None),
+                    )
                     predictor_output_dir = run_dir / "predictors"
                     n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
                 else:

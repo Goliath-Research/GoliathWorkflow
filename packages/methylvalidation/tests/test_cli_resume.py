@@ -7,9 +7,11 @@ import pytest
 
 from methyl_validation import cli
 from methyl_validation.cli import (
+    _deep_merge_dicts,
     _list_existing_run_numbers,
     _load_existing_step_timings,
     _resolve_resume_start_iteration,
+    _sync_run_project_step_config,
 )
 
 
@@ -66,6 +68,45 @@ def test_list_existing_run_numbers_and_load_step_timings(tmp_path: Path):
     assert kept[0]["run_id"] == "run_0001"
     assert isinstance(kept[0]["duration_seconds"], float)
     assert isinstance(kept[0]["return_code"], int)
+
+
+def test_deep_merge_dicts_prefers_updates_and_preserves_other_keys():
+    base = {"detection": {"min_samples_pct": 0.8, "debug": True}, "predictor": {"controls": {"foo": 1}}}
+    updates = {"detection": {"min_samples_pct": 0.0, "min_samples_abs": 5}, "predictor": {"model_path": "/tmp/m.pkl"}}
+    merged = _deep_merge_dicts(base, updates)
+    assert merged["detection"]["min_samples_pct"] == 0.0
+    assert merged["detection"]["min_samples_abs"] == 5
+    assert merged["detection"]["debug"] is True
+    assert merged["predictor"]["controls"] == {"foo": 1}
+    assert merged["predictor"]["model_path"] == "/tmp/m.pkl"
+
+
+def test_sync_run_project_step_config_merges_base_into_existing_run_project(tmp_path: Path):
+    run_project = tmp_path / "project.json"
+    run_project.write_text(
+        json.dumps(
+            {
+                "project_name": "run_0001",
+                "step_config": {
+                    "detection": {"min_samples_pct": 0.8, "min_samples_abs": 1, "debug": True},
+                    "predictor": {"controls": {"groups": []}, "diseases": {"groups": []}},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    base_step_config = {
+        "detection": {"min_samples_pct": 0.0, "min_samples_abs": 5},
+        "predictor": {"model_path": "/work/model.pkl"},
+    }
+    changed = _sync_run_project_step_config(run_project, base_step_config)
+    assert changed is True
+    payload = json.loads(run_project.read_text(encoding="utf-8"))
+    assert payload["step_config"]["detection"]["min_samples_pct"] == 0.0
+    assert payload["step_config"]["detection"]["min_samples_abs"] == 5
+    assert payload["step_config"]["detection"]["debug"] is True
+    assert "controls" in payload["step_config"]["predictor"]
+    assert payload["step_config"]["predictor"]["model_path"] == "/work/model.pkl"
 
 
 def test_post_model_validation_requires_production_project(tmp_path: Path, monkeypatch, capsys):
