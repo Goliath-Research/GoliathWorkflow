@@ -24,12 +24,15 @@ the same artifact layout consistently.
 """
 
 import json
+import logging
 import warnings
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, ClassVar, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
 
 
 class ControlDiseaseSide(BaseModel):
@@ -306,6 +309,9 @@ class ProjectConfig(BaseModel):
         "optional 'panel' adds hierarchical OvR readout during prediction. "
         "Under 'classifier', optional 'panel' (same shape) applies during classification when using samples_list / centroid validation (OvR pairwise max-contrast only).",
     )
+    _sample_qc_cache: Dict[str, List[Tuple[str, List[str], Literal["control", "disease"]]]] = PrivateAttr(
+        default_factory=dict
+    )
 
     @field_validator("output_base")
     @classmethod
@@ -438,6 +444,183 @@ class ProjectConfig(BaseModel):
     def _base_for(self, g: Any) -> Optional[str]:
         return getattr(g, "samples_base_path", None) or getattr(self, "samples_base_path", None)
 
+    def _chrom_context_pairs(self) -> List[Tuple[str, str]]:
+        chroms_raw: List[str]
+        if isinstance(self.chromosomes, list) and self.chromosomes:
+            chroms_raw = [str(c) for c in self.chromosomes]
+        elif isinstance(self.chromosomes, str) and self.chromosomes.strip():
+            chroms_raw = [str(self.chromosomes).strip()]
+        else:
+            chroms_raw = []
+        ctx_raw: List[str]
+        if isinstance(self.contexts, list) and self.contexts:
+            ctx_raw = [str(c) for c in self.contexts]
+        elif isinstance(self.contexts, str) and self.contexts.strip():
+            ctx_raw = [str(self.contexts).strip()]
+        else:
+            ctx_raw = ["CG"]
+        if not chroms_raw:
+            return []
+        return [(chrom, ctx) for chrom in chroms_raw for ctx in ctx_raw]
+
+    @staticmethod
+    def _looks_like_path_entry(entry: str) -> bool:
+        e = str(entry or "").strip()
+        return bool(e) and ("/" in e or "\\" in e or e.endswith(".h5"))
+
+    def _sample_h5_qc_record(self, sample_path: str) -> Dict[str, Any]:
+        text = str(sample_path or "").strip()
+        p = Path(text).expanduser()
+        sample_id = p.name if p.name else text
+        if not self._looks_like_path_entry(text):
+            return {
+                "sample_path": text,
+                "sample_id": sample_id,
+                "status": "unchecked_non_path",
+                "reason": "",
+                "expected_h5": 0,
+                "found_h5": 0,
+                "first_expected_missing_path": "",
+                "eligible": True,
+            }
+        expected = 0
+        found = 0
+        first_missing: Optional[str] = None
+        if p.suffix.lower() == ".h5" or p.is_file():
+            expected = 1
+            found = 1 if p.is_file() else 0
+            if found == 0:
+                first_missing = str(p)
+        else:
+            pairs = self._chrom_context_pairs()
+            if pairs:
+                expected = len(pairs)
+                for chrom, ctx in pairs:
+                    candidate = p / f"{chrom}-{ctx}.h5"
+                    if candidate.is_file():
+                        found += 1
+                    elif first_missing is None:
+                        first_missing = str(candidate)
+            else:
+                return {
+                    "sample_path": text,
+                    "sample_id": sample_id,
+                    "status": "unchecked_missing_chromosome_scope",
+                    "reason": "",
+                    "expected_h5": 0,
+                    "found_h5": 0,
+                    "first_expected_missing_path": "",
+                    "eligible": True,
+                }
+        eligible = found > 0
+        return {
+            "sample_path": text,
+            "sample_id": sample_id,
+            "status": "eligible" if eligible else "ineligible",
+            "reason": "" if eligible else "excluded_no_h5",
+            "expected_h5": int(expected),
+            "found_h5": int(found),
+            "first_expected_missing_path": str(first_missing or ""),
+            "eligible": bool(eligible),
+        }
+
+    def _write_sample_qc_artifacts(
+        self,
+        records: List[Dict[str, Any]],
+        eligible_sample_paths: List[str],
+        ineligible_sample_paths: List[str],
+    ) -> None:
+        import csv
+
+        qc_dir = Path(self.get_project_root()) / "sample_qc"
+        qc_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = qc_dir / "sample_qc_report.csv"
+        fields = [
+            "sample_id",
+            "sample_path",
+            "status",
+            "reason",
+            "expected_h5",
+            "found_h5",
+            "first_expected_missing_path",
+        ]
+        with open(csv_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            writer.writeheader()
+            for rec in records:
+                writer.writerow({k: rec.get(k, "") for k in fields})
+
+        with open(qc_dir / "eligible_samples.txt", "w", encoding="utf-8") as f:
+            for p in sorted(set(eligible_sample_paths)):
+                f.write(f"{p}\n")
+        with open(qc_dir / "ineligible_samples.txt", "w", encoding="utf-8") as f:
+            for p in sorted(set(ineligible_sample_paths)):
+                f.write(f"{p}\n")
+
+    def _apply_sample_qc_with_side(
+        self,
+        groups_with_side: List[Tuple[str, List[str], Literal["control", "disease"]]],
+        *,
+        cache_key: str,
+    ) -> List[Tuple[str, List[str], Literal["control", "disease"]]]:
+        cached = self._sample_qc_cache.get(cache_key)
+        if cached is not None:
+            return [(lbl, list(paths), side) for lbl, paths, side in cached]
+
+        qc_map: Dict[str, Dict[str, Any]] = {}
+        ordered_records: List[Dict[str, Any]] = []
+        filtered: List[Tuple[str, List[str], Literal["control", "disease"]]] = []
+        eligible_paths: List[str] = []
+        ineligible_paths: List[str] = []
+        removed_by_group: List[Tuple[str, str, List[str]]] = []
+
+        for label, paths, side in groups_with_side:
+            keep: List[str] = []
+            removed_ids: List[str] = []
+            for p in paths:
+                if p not in qc_map:
+                    rec = self._sample_h5_qc_record(p)
+                    qc_map[p] = rec
+                    ordered_records.append(rec)
+                rec = qc_map[p]
+                if bool(rec.get("eligible", False)):
+                    keep.append(p)
+                    eligible_paths.append(p)
+                else:
+                    ineligible_paths.append(p)
+                    removed_ids.append(str(rec.get("sample_id") or Path(str(p)).name))
+            if removed_ids:
+                removed_by_group.append((label, side, removed_ids))
+            filtered.append((label, keep, side))
+
+        for label, side, removed_ids in removed_by_group:
+            logger.warning(
+                "Sample QC: removed %s sample(s) from %s group %r due to missing H5 evidence: %s",
+                len(removed_ids),
+                side,
+                label,
+                ", ".join(sorted(set(removed_ids))),
+            )
+
+        removed_total = len(set(ineligible_paths))
+        logger.warning(
+            "Sample QC summary: eligible=%s ineligible=%s (reason=excluded_no_h5).",
+            len(set(eligible_paths)),
+            removed_total,
+        )
+        self._write_sample_qc_artifacts(ordered_records, eligible_paths, ineligible_paths)
+
+        emptied = [f"{side}:{label}" for label, paths, side in filtered if len(paths) == 0]
+        if emptied:
+            raise ValueError(
+                "Sample QC removed all samples from cohort(s): "
+                + ", ".join(emptied)
+                + ". Check sample names/paths and required H5 files."
+            )
+
+        self._sample_qc_cache[cache_key] = [(lbl, list(paths), side) for lbl, paths, side in filtered]
+        return [(lbl, list(paths), side) for lbl, paths, side in filtered]
+
     def _expand_side_groups(
         self, side_groups: List[GroupConfig], base_for_fn: Any, resolve_paths: bool = True
     ) -> List[Tuple[str, List[str]]]:
@@ -545,13 +728,24 @@ class ProjectConfig(BaseModel):
                     out.extend(self._expand_one_with_manifest(label, paths, "disease"))
                 else:
                     out.append((label, paths, "disease"))
-            return out
+            return self._apply_sample_qc_with_side(
+                out, cache_key=f"with_side:control_disease:{bool(expand_subclusters)}"
+            )
         # Flat groups or group1/group2: no subcluster expansion
-        resolved = self._get_resolved_groups()
-        return [
+        if self.groups:
+            resolved = self._expand_side_groups(self.groups, base_for)
+        else:
+            if self.group1 is None or self.group2 is None:
+                raise ValueError("group1 and group2 are required when groups is not set")
+            resolved = [
+                (self.group1.label, _resolve_sample_paths(self.group1.sample_paths, base_path=base_for(self.group1))),
+                (self.group2.label, _resolve_sample_paths(self.group2.sample_paths, base_path=base_for(self.group2))),
+            ]
+        with_side = [
             (label, paths, "control" if i == 0 else "disease")
             for i, (label, paths) in enumerate(resolved)
         ]
+        return self._apply_sample_qc_with_side(with_side, cache_key="with_side:flat")
 
     def _get_resolved_groups(self, expand_subclusters: bool = False) -> List[Tuple[str, List[str]]]:
         """
@@ -559,23 +753,8 @@ class ProjectConfig(BaseModel):
         When control/disease: control groups first, then disease. When groups set, expands by level_labels_path.
         If expand_subclusters is True, groups with subcluster+persist_centroids are expanded from clustering manifests.
         """
-        if expand_subclusters and self.control is not None and self.disease is not None:
-            with_side = self._get_resolved_groups_with_side(expand_subclusters=True)
-            return [(label, paths) for label, paths, _ in with_side]
-        base_for = self._base_for
-        if self.control is not None and self.disease is not None:
-            out: List[Tuple[str, List[str]]] = []
-            out.extend(self._expand_side_groups(self.control.groups, base_for))
-            out.extend(self._expand_side_groups(self.disease.groups, base_for))
-            return out
-        if self.groups:
-            return self._expand_side_groups(self.groups, base_for)
-        if self.group1 is None or self.group2 is None:
-            raise ValueError("group1 and group2 are required when groups is not set")
-        return [
-            (self.group1.label, _resolve_sample_paths(self.group1.sample_paths, base_path=base_for(self.group1))),
-            (self.group2.label, _resolve_sample_paths(self.group2.sample_paths, base_path=base_for(self.group2))),
-        ]
+        with_side = self._get_resolved_groups_with_side(expand_subclusters=expand_subclusters)
+        return [(label, list(paths)) for label, paths, _ in with_side]
 
     # Legacy fallback for flat two-group configs that do not have a disease-side label.
     CENTROID_DISEASE_SUBDIR: ClassVar[str] = "cancer"

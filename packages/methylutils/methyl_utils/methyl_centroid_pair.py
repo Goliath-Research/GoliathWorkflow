@@ -402,6 +402,7 @@ class MethylCentroidPair:
         n_missing_file = 0
         n_empty_align = 0
         n_error = 0
+        per_sample_issues: Dict[str, Dict[str, int]] = {}
         first_missing_path = None
         first_ctx = next(iter(reference_positions.keys()), "CG")
 
@@ -425,6 +426,12 @@ class MethylCentroidPair:
                     if first_missing_path is None:
                         first_missing_path = h5_file
                     n_missing_file += 1
+                    sid = sample_path.name or str(sample_path)
+                    stats = per_sample_issues.setdefault(
+                        sid,
+                        {"missing_file": 0, "empty_align": 0, "load_error": 0},
+                    )
+                    stats["missing_file"] += 1
                     continue
                 
                 try:
@@ -432,6 +439,12 @@ class MethylCentroidPair:
                     
                     if len(sample) == 0:
                         n_empty_align += 1
+                        sid = sample_path.name or str(sample_path)
+                        stats = per_sample_issues.setdefault(
+                            sid,
+                            {"missing_file": 0, "empty_align": 0, "load_error": 0},
+                        )
+                        stats["empty_align"] += 1
                         continue
 
                     # Extract methylation fractions efficiently
@@ -455,9 +468,35 @@ class MethylCentroidPair:
                 except Exception as e:
                     logger.debug(f"Failed to process {h5_file}: {e}")
                     n_error += 1
+                    sid = sample_path.name or str(sample_path)
+                    stats = per_sample_issues.setdefault(
+                        sid,
+                        {"missing_file": 0, "empty_align": 0, "load_error": 0},
+                    )
+                    stats["load_error"] += 1
                     continue
 
         n_with_data = int(np.sum(~np.isnan(X).all(axis=1)))
+        if per_sample_issues:
+            n_samples_with_issues = len(per_sample_issues)
+            logger.warning(
+                "Validation extraction (%s): encountered sample-level issues across %s sample(s): "
+                "missing_file=%s empty_align=%s load_error=%s",
+                chrom_str,
+                n_samples_with_issues,
+                n_missing_file,
+                n_empty_align,
+                n_error,
+            )
+            for sid in sorted(per_sample_issues.keys()):
+                s = per_sample_issues[sid]
+                logger.warning(
+                    "  sample=%s missing_file=%s empty_align=%s load_error=%s",
+                    sid,
+                    int(s.get("missing_file", 0)),
+                    int(s.get("empty_align", 0)),
+                    int(s.get("load_error", 0)),
+                )
         if n_with_data == 0 and sample_paths:
             logger.warning(
                 "Validation extraction: 0 samples had data. Each path must be a directory containing "
