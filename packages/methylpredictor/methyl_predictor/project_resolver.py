@@ -61,7 +61,10 @@ def _resolve_panel_for_predictor(
     c = cls_step.get("panel")
     if isinstance(c, dict) and c:
         return c
-    derived = project.derive_panel_spec_from_comparisons()
+    derive_fn = getattr(project, "derive_panel_spec_from_comparisons", None)
+    if not callable(derive_fn):
+        return None
+    derived = derive_fn()
     return derived if isinstance(derived, dict) else None
 
 
