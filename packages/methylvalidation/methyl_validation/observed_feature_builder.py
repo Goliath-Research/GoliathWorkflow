@@ -36,7 +36,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v15_remove_unweighted_centroid_features"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v17_weighted_progression_name"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -404,7 +404,7 @@ def _fixed_feature_names() -> List[str]:
         "weighted_dmp_global_mean",
         "weighted_dmp_global_std",
         "weighted_dmp_global_abs_shift_from_half",
-        "methylation_progression_score",
+        "weighted_methylation_progression_score",
         "weighted_js_distance_to_healthy_centroid",
         "weighted_js_distance_to_cancer_centroid",
         "weighted_mean_abs_error_to_healthy_centroid",
@@ -415,7 +415,6 @@ def _fixed_feature_names() -> List[str]:
         "weighted_centroid_contrast_score",
         "weighted_fraction_dmps_closer_to_cancer_centroid",
         "weighted_fraction_dmps_closer_to_healthy_centroid",
-        "mean_abs_distance_margin",
         "dmp_global_skewness",
         "dmp_global_kurtosis",
         "weighted_chrom_extreme_power_margin_p2",
@@ -557,11 +556,6 @@ def build_observed_hybrid_feature_table(
             else:
                 weighted_closer_to_cancer = float("nan")
                 weighted_closer_to_healthy = float("nan")
-            mean_abs_distance_margin = (
-                float(np.mean(dist_h) - np.mean(dist_c))
-                if dist_h.size > 0 and dist_c.size > 0
-                else float("nan")
-            )
         else:
             g_mean = float("nan")
             g_std = float("nan")
@@ -578,7 +572,6 @@ def build_observed_hybrid_feature_table(
             weighted_centroid_contrast_score = float("nan")
             weighted_closer_to_cancer = float("nan")
             weighted_closer_to_healthy = float("nan")
-            mean_abs_distance_margin = float("nan")
 
         if np.isfinite(g_mean) and np.isfinite(progression_denom):
             progression = float(
@@ -636,7 +629,7 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["weighted_dmp_global_mean"]] = g_mean
         X_feat[i, idx["weighted_dmp_global_std"]] = g_std
         X_feat[i, idx["weighted_dmp_global_abs_shift_from_half"]] = abs_shift
-        X_feat[i, idx["methylation_progression_score"]] = progression
+        X_feat[i, idx["weighted_methylation_progression_score"]] = progression
         X_feat[i, idx["weighted_js_distance_to_healthy_centroid"]] = wjs_h
         X_feat[i, idx["weighted_js_distance_to_cancer_centroid"]] = wjs_c
         X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
@@ -647,7 +640,6 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["weighted_centroid_contrast_score"]] = weighted_centroid_contrast_score
         X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
         X_feat[i, idx["weighted_fraction_dmps_closer_to_healthy_centroid"]] = weighted_closer_to_healthy
-        X_feat[i, idx["mean_abs_distance_margin"]] = mean_abs_distance_margin
         X_feat[i, idx["dmp_global_skewness"]] = skew
         X_feat[i, idx["dmp_global_kurtosis"]] = kurt
         X_feat[i, idx["weighted_chrom_extreme_power_margin_p2"]] = weighted_chrom_extreme_power_margin_p2

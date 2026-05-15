@@ -187,7 +187,7 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
         "weighted_dmp_global_mean",
         "weighted_dmp_global_std",
         "weighted_dmp_global_abs_shift_from_half",
-        "methylation_progression_score",
+        "weighted_methylation_progression_score",
         "weighted_js_distance_to_healthy_centroid",
         "weighted_js_distance_to_cancer_centroid",
         "weighted_mean_abs_error_to_healthy_centroid",
@@ -198,7 +198,6 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
         "weighted_centroid_contrast_score",
         "weighted_fraction_dmps_closer_to_cancer_centroid",
         "weighted_fraction_dmps_closer_to_healthy_centroid",
-        "mean_abs_distance_margin",
         "dmp_global_skewness",
         "dmp_global_kurtosis",
         "weighted_chrom_extreme_power_margin_p2",
@@ -224,10 +223,9 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     weighted_healthy_frac_idx = feat.feature_names.index(
         "weighted_fraction_dmps_closer_to_healthy_centroid"
     )
-    margin_idx = feat.feature_names.index("mean_abs_distance_margin")
     weighted_chrom_margin_p2_idx = feat.feature_names.index("weighted_chrom_extreme_power_margin_p2")
     weighted_chrom_het_idx = feat.feature_names.index("weighted_chrom_margin_heterogeneity")
-    prog_idx = feat.feature_names.index("methylation_progression_score")
+    prog_idx = feat.feature_names.index("weighted_methylation_progression_score")
 
     # First sample is healthy-like and should be closer to healthy anchor.
     assert float(feat.X[0, wjs_h_idx]) < float(feat.X[0, wjs_c_idx])
@@ -237,7 +235,6 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert float(feat.X[0, wcontrast_idx]) < 0.0
     assert float(feat.X[0, weighted_frac_idx]) <= 0.5
     assert float(feat.X[0, weighted_healthy_frac_idx]) >= 0.5
-    assert float(feat.X[0, margin_idx]) < 0.0
     assert float(feat.X[0, weighted_chrom_margin_p2_idx]) < 0.0
     assert np.isfinite(float(feat.X[0, weighted_chrom_het_idx]))
     assert float(feat.X[0, weighted_chrom_het_idx]) >= 0.0
@@ -250,7 +247,6 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert float(feat.X[2, wcontrast_idx]) > 0.0
     assert float(feat.X[2, weighted_frac_idx]) >= 0.5
     assert float(feat.X[2, weighted_healthy_frac_idx]) <= 0.5
-    assert float(feat.X[2, margin_idx]) > 0.0
     assert float(feat.X[2, weighted_chrom_margin_p2_idx]) > 0.0
     assert np.isfinite(float(feat.X[2, weighted_chrom_het_idx]))
     assert float(feat.X[2, weighted_chrom_het_idx]) >= 0.0
