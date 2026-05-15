@@ -36,7 +36,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v14_weighted_feature_rename"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v15_remove_unweighted_centroid_features"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -405,27 +405,19 @@ def _fixed_feature_names() -> List[str]:
         "weighted_dmp_global_std",
         "weighted_dmp_global_abs_shift_from_half",
         "methylation_progression_score",
-        "js_distance_to_healthy_centroid",
-        "js_distance_to_cancer_centroid",
         "weighted_js_distance_to_healthy_centroid",
         "weighted_js_distance_to_cancer_centroid",
         "weighted_mean_abs_error_to_healthy_centroid",
         "weighted_mean_abs_error_to_cancer_centroid",
         "weighted_mean_abs_distance_margin",
-        "cosine_similarity_to_healthy_centroid",
-        "cosine_similarity_to_cancer_centroid",
         "weighted_cosine_similarity_to_healthy_centroid",
         "weighted_cosine_similarity_to_cancer_centroid",
-        "centroid_contrast_score",
         "weighted_centroid_contrast_score",
-        "fraction_dmps_closer_to_cancer_centroid",
         "weighted_fraction_dmps_closer_to_cancer_centroid",
-        "fraction_dmps_closer_to_healthy_centroid",
         "weighted_fraction_dmps_closer_to_healthy_centroid",
         "mean_abs_distance_margin",
         "dmp_global_skewness",
         "dmp_global_kurtosis",
-        "avg_chrom_dev_from_healthy_centroid",
         "weighted_chrom_extreme_power_margin_p2",
         "weighted_chrom_margin_heterogeneity",
         "obs_fraction",
@@ -548,23 +540,16 @@ def build_observed_hybrid_feature_table(
 
             healthy_obs = healthy_ref[obs_mask]
             cancer_obs = cancer_ref[obs_mask]
-            js_h = _jensen_shannon_distance(obs_vals, healthy_obs)
-            js_c = _jensen_shannon_distance(obs_vals, cancer_obs)
             wjs_h = _weighted_jensen_shannon_distance(obs_vals, healthy_obs, obs_w)
             wjs_c = _weighted_jensen_shannon_distance(obs_vals, cancer_obs, obs_w)
             wmae_h = _weighted_mean_abs_error(obs_vals, healthy_obs, obs_w)
             wmae_c = _weighted_mean_abs_error(obs_vals, cancer_obs, obs_w)
             weighted_mean_abs_distance_margin = float(wmae_h - wmae_c)
-            cos_h = _cosine_similarity(obs_vals, healthy_obs)
-            cos_c = _cosine_similarity(obs_vals, cancer_obs)
             wcos_h = _weighted_cosine_similarity(obs_vals, healthy_obs, obs_w)
             wcos_c = _weighted_cosine_similarity(obs_vals, cancer_obs, obs_w)
-            centroid_contrast_score = (cos_c - cos_h) + (js_h - js_c)
             weighted_centroid_contrast_score = (wcos_c - wcos_h) + (wjs_h - wjs_c)
             dist_h = np.abs(obs_vals - healthy_obs)
             dist_c = np.abs(obs_vals - cancer_obs)
-            closer_to_cancer = float(np.mean(dist_c < dist_h)) if dist_h.size > 0 else float("nan")
-            closer_to_healthy = float(np.mean(dist_h < dist_c)) if dist_h.size > 0 else float("nan")
             obs_w_sum = float(np.sum(obs_w))
             if obs_w.size == obs_vals.size and obs_w_sum > 0.0:
                 weighted_closer_to_cancer = float(np.sum(obs_w[dist_c < dist_h]) / obs_w_sum)
@@ -583,21 +568,14 @@ def build_observed_hybrid_feature_table(
             abs_shift = float("nan")
             skew = float("nan")
             kurt = float("nan")
-            js_h = float("nan")
-            js_c = float("nan")
             wjs_h = float("nan")
             wjs_c = float("nan")
             wmae_h = float("nan")
             wmae_c = float("nan")
             weighted_mean_abs_distance_margin = float("nan")
-            cos_h = float("nan")
-            cos_c = float("nan")
             wcos_h = float("nan")
             wcos_c = float("nan")
-            centroid_contrast_score = float("nan")
             weighted_centroid_contrast_score = float("nan")
-            closer_to_cancer = float("nan")
-            closer_to_healthy = float("nan")
             weighted_closer_to_cancer = float("nan")
             weighted_closer_to_healthy = float("nan")
             mean_abs_distance_margin = float("nan")
@@ -609,7 +587,6 @@ def build_observed_hybrid_feature_table(
         else:
             progression = float("nan")
 
-        chrom_devs: List[float] = []
         chrom_margins: List[float] = []
         chrom_margin_weights: List[float] = []
         for chrom, idxs in chrom_to_indices.items():
@@ -623,8 +600,6 @@ def build_observed_hybrid_feature_table(
             w_c = w[idxs][mask_c]
             sample_chrom_mean = _weighted_mean_with_fallback(obs_c, w_c)
             healthy_chrom = healthy_chrom_mean.get(chrom, float("nan"))
-            if np.isfinite(sample_chrom_mean) and np.isfinite(healthy_chrom):
-                chrom_devs.append(float(sample_chrom_mean - healthy_chrom))
             cancer_chrom = _weighted_mean_with_fallback(cancer_ref[idxs], w[idxs])
             if np.isfinite(sample_chrom_mean) and np.isfinite(healthy_chrom) and np.isfinite(cancer_chrom):
                 margin_chrom = float(np.abs(sample_chrom_mean - healthy_chrom) - np.abs(sample_chrom_mean - cancer_chrom))
@@ -632,7 +607,6 @@ def build_observed_hybrid_feature_table(
                 if np.isfinite(margin_chrom) and np.isfinite(w_chrom) and w_chrom > 0.0:
                     chrom_margins.append(margin_chrom)
                     chrom_margin_weights.append(w_chrom)
-        avg_chrom_dev = float(np.mean(chrom_devs)) if chrom_devs else float("nan")
         if chrom_margins and chrom_margin_weights:
             margin_arr = np.asarray(chrom_margins, dtype=np.float64)
             margin_w = np.asarray(chrom_margin_weights, dtype=np.float64)
@@ -663,27 +637,19 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["weighted_dmp_global_std"]] = g_std
         X_feat[i, idx["weighted_dmp_global_abs_shift_from_half"]] = abs_shift
         X_feat[i, idx["methylation_progression_score"]] = progression
-        X_feat[i, idx["js_distance_to_healthy_centroid"]] = js_h
-        X_feat[i, idx["js_distance_to_cancer_centroid"]] = js_c
         X_feat[i, idx["weighted_js_distance_to_healthy_centroid"]] = wjs_h
         X_feat[i, idx["weighted_js_distance_to_cancer_centroid"]] = wjs_c
         X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
         X_feat[i, idx["weighted_mean_abs_error_to_cancer_centroid"]] = wmae_c
         X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
-        X_feat[i, idx["cosine_similarity_to_healthy_centroid"]] = cos_h
-        X_feat[i, idx["cosine_similarity_to_cancer_centroid"]] = cos_c
         X_feat[i, idx["weighted_cosine_similarity_to_healthy_centroid"]] = wcos_h
         X_feat[i, idx["weighted_cosine_similarity_to_cancer_centroid"]] = wcos_c
-        X_feat[i, idx["centroid_contrast_score"]] = centroid_contrast_score
         X_feat[i, idx["weighted_centroid_contrast_score"]] = weighted_centroid_contrast_score
-        X_feat[i, idx["fraction_dmps_closer_to_cancer_centroid"]] = closer_to_cancer
         X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
-        X_feat[i, idx["fraction_dmps_closer_to_healthy_centroid"]] = closer_to_healthy
         X_feat[i, idx["weighted_fraction_dmps_closer_to_healthy_centroid"]] = weighted_closer_to_healthy
         X_feat[i, idx["mean_abs_distance_margin"]] = mean_abs_distance_margin
         X_feat[i, idx["dmp_global_skewness"]] = skew
         X_feat[i, idx["dmp_global_kurtosis"]] = kurt
-        X_feat[i, idx["avg_chrom_dev_from_healthy_centroid"]] = avg_chrom_dev
         X_feat[i, idx["weighted_chrom_extreme_power_margin_p2"]] = weighted_chrom_extreme_power_margin_p2
         X_feat[i, idx["weighted_chrom_margin_heterogeneity"]] = weighted_chrom_margin_heterogeneity
         X_feat[i, idx["obs_fraction"]] = obs_frac
