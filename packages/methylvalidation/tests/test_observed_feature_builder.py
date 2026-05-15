@@ -184,9 +184,9 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     )
 
     expected_names = {
-        "dmp_global_weighted_mean",
-        "dmp_global_weighted_std",
-        "dmp_global_weighted_abs_shift_from_half",
+        "weighted_dmp_global_mean",
+        "weighted_dmp_global_std",
+        "weighted_dmp_global_abs_shift_from_half",
         "methylation_progression_score",
         "js_distance_to_healthy_centroid",
         "js_distance_to_cancer_centroid",
@@ -211,7 +211,7 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
         "weighted_chrom_extreme_power_margin_p2",
         "weighted_chrom_margin_heterogeneity",
         "obs_fraction",
-        "obs_weight_fraction",
+        "weighted_obs_fraction",
         "n_obs_dmps",
         "n_total_dmps",
     }

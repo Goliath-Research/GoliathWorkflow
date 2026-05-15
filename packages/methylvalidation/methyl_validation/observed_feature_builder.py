@@ -36,7 +36,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v13_weighted_chrom_distribution"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v14_weighted_feature_rename"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -401,9 +401,9 @@ def _weighted_mean_abs_error(values_a: np.ndarray, values_b: np.ndarray, weights
 
 def _fixed_feature_names() -> List[str]:
     names = [
-        "dmp_global_weighted_mean",
-        "dmp_global_weighted_std",
-        "dmp_global_weighted_abs_shift_from_half",
+        "weighted_dmp_global_mean",
+        "weighted_dmp_global_std",
+        "weighted_dmp_global_abs_shift_from_half",
         "methylation_progression_score",
         "js_distance_to_healthy_centroid",
         "js_distance_to_cancer_centroid",
@@ -429,7 +429,7 @@ def _fixed_feature_names() -> List[str]:
         "weighted_chrom_extreme_power_margin_p2",
         "weighted_chrom_margin_heterogeneity",
         "obs_fraction",
-        "obs_weight_fraction",
+        "weighted_obs_fraction",
         "n_obs_dmps",
         "n_total_dmps",
     ]
@@ -659,9 +659,9 @@ def build_observed_hybrid_feature_table(
         else:
             obs_w_frac = obs_frac
 
-        X_feat[i, idx["dmp_global_weighted_mean"]] = g_mean
-        X_feat[i, idx["dmp_global_weighted_std"]] = g_std
-        X_feat[i, idx["dmp_global_weighted_abs_shift_from_half"]] = abs_shift
+        X_feat[i, idx["weighted_dmp_global_mean"]] = g_mean
+        X_feat[i, idx["weighted_dmp_global_std"]] = g_std
+        X_feat[i, idx["weighted_dmp_global_abs_shift_from_half"]] = abs_shift
         X_feat[i, idx["methylation_progression_score"]] = progression
         X_feat[i, idx["js_distance_to_healthy_centroid"]] = js_h
         X_feat[i, idx["js_distance_to_cancer_centroid"]] = js_c
@@ -687,7 +687,7 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["weighted_chrom_extreme_power_margin_p2"]] = weighted_chrom_extreme_power_margin_p2
         X_feat[i, idx["weighted_chrom_margin_heterogeneity"]] = weighted_chrom_margin_heterogeneity
         X_feat[i, idx["obs_fraction"]] = obs_frac
-        X_feat[i, idx["obs_weight_fraction"]] = obs_w_frac
+        X_feat[i, idx["weighted_obs_fraction"]] = obs_w_frac
         X_feat[i, idx["n_obs_dmps"]] = float(n_obs)
         X_feat[i, idx["n_total_dmps"]] = float(n_loci)
 
