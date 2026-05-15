@@ -36,7 +36,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v12_feature_prune"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v13_weighted_chrom_distribution"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -426,6 +426,8 @@ def _fixed_feature_names() -> List[str]:
         "dmp_global_skewness",
         "dmp_global_kurtosis",
         "avg_chrom_dev_from_healthy_centroid",
+        "weighted_chrom_extreme_power_margin_p2",
+        "weighted_chrom_margin_heterogeneity",
         "obs_fraction",
         "obs_weight_fraction",
         "n_obs_dmps",
@@ -608,6 +610,8 @@ def build_observed_hybrid_feature_table(
             progression = float("nan")
 
         chrom_devs: List[float] = []
+        chrom_margins: List[float] = []
+        chrom_margin_weights: List[float] = []
         for chrom, idxs in chrom_to_indices.items():
             if idxs.size == 0:
                 continue
@@ -621,7 +625,33 @@ def build_observed_hybrid_feature_table(
             healthy_chrom = healthy_chrom_mean.get(chrom, float("nan"))
             if np.isfinite(sample_chrom_mean) and np.isfinite(healthy_chrom):
                 chrom_devs.append(float(sample_chrom_mean - healthy_chrom))
+            cancer_chrom = _weighted_mean_with_fallback(cancer_ref[idxs], w[idxs])
+            if np.isfinite(sample_chrom_mean) and np.isfinite(healthy_chrom) and np.isfinite(cancer_chrom):
+                margin_chrom = float(np.abs(sample_chrom_mean - healthy_chrom) - np.abs(sample_chrom_mean - cancer_chrom))
+                w_chrom = float(np.sum(w_c))
+                if np.isfinite(margin_chrom) and np.isfinite(w_chrom) and w_chrom > 0.0:
+                    chrom_margins.append(margin_chrom)
+                    chrom_margin_weights.append(w_chrom)
         avg_chrom_dev = float(np.mean(chrom_devs)) if chrom_devs else float("nan")
+        if chrom_margins and chrom_margin_weights:
+            margin_arr = np.asarray(chrom_margins, dtype=np.float64)
+            margin_w = np.asarray(chrom_margin_weights, dtype=np.float64)
+            w_sum = float(np.sum(margin_w))
+            if np.isfinite(w_sum) and w_sum > 0.0:
+                margin_w = margin_w / w_sum
+                weighted_chrom_extreme_power_margin_p2 = float(
+                    np.sum(margin_w * np.sign(margin_arr) * (np.abs(margin_arr) ** 2))
+                )
+                weighted_margin_mean = float(np.sum(margin_w * margin_arr))
+                weighted_chrom_margin_heterogeneity = float(
+                    np.sqrt(np.sum(margin_w * ((margin_arr - weighted_margin_mean) ** 2)))
+                )
+            else:
+                weighted_chrom_extreme_power_margin_p2 = float("nan")
+                weighted_chrom_margin_heterogeneity = float("nan")
+        else:
+            weighted_chrom_extreme_power_margin_p2 = float("nan")
+            weighted_chrom_margin_heterogeneity = float("nan")
 
         obs_frac = float(n_obs / max(1, n_loci))
         if w.size == n_loci and total_w > 0.0:
@@ -654,6 +684,8 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["dmp_global_skewness"]] = skew
         X_feat[i, idx["dmp_global_kurtosis"]] = kurt
         X_feat[i, idx["avg_chrom_dev_from_healthy_centroid"]] = avg_chrom_dev
+        X_feat[i, idx["weighted_chrom_extreme_power_margin_p2"]] = weighted_chrom_extreme_power_margin_p2
+        X_feat[i, idx["weighted_chrom_margin_heterogeneity"]] = weighted_chrom_margin_heterogeneity
         X_feat[i, idx["obs_fraction"]] = obs_frac
         X_feat[i, idx["obs_weight_fraction"]] = obs_w_frac
         X_feat[i, idx["n_obs_dmps"]] = float(n_obs)

@@ -208,6 +208,8 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
         "dmp_global_skewness",
         "dmp_global_kurtosis",
         "avg_chrom_dev_from_healthy_centroid",
+        "weighted_chrom_extreme_power_margin_p2",
+        "weighted_chrom_margin_heterogeneity",
         "obs_fraction",
         "obs_weight_fraction",
         "n_obs_dmps",
@@ -236,6 +238,8 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
         "weighted_fraction_dmps_closer_to_healthy_centroid"
     )
     margin_idx = feat.feature_names.index("mean_abs_distance_margin")
+    weighted_chrom_margin_p2_idx = feat.feature_names.index("weighted_chrom_extreme_power_margin_p2")
+    weighted_chrom_het_idx = feat.feature_names.index("weighted_chrom_margin_heterogeneity")
     prog_idx = feat.feature_names.index("methylation_progression_score")
 
     # First sample is healthy-like and should be closer to healthy anchor.
@@ -251,6 +255,9 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert float(feat.X[0, healthy_frac_idx]) >= 0.5
     assert float(feat.X[0, weighted_healthy_frac_idx]) >= 0.5
     assert float(feat.X[0, margin_idx]) < 0.0
+    assert float(feat.X[0, weighted_chrom_margin_p2_idx]) < 0.0
+    assert np.isfinite(float(feat.X[0, weighted_chrom_het_idx]))
+    assert float(feat.X[0, weighted_chrom_het_idx]) >= 0.0
 
     # Cancer-like sample should move towards cancer anchor.
     assert float(feat.X[2, js_c_idx]) < float(feat.X[2, js_h_idx])
@@ -264,6 +271,9 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert float(feat.X[2, healthy_frac_idx]) <= 0.5
     assert float(feat.X[2, weighted_healthy_frac_idx]) <= 0.5
     assert float(feat.X[2, margin_idx]) > 0.0
+    assert float(feat.X[2, weighted_chrom_margin_p2_idx]) > 0.0
+    assert np.isfinite(float(feat.X[2, weighted_chrom_het_idx]))
+    assert float(feat.X[2, weighted_chrom_het_idx]) >= 0.0
 
     # Progression should increase with higher methylation profiles in this synthetic setup.
     assert float(feat.X[2, prog_idx]) > float(feat.X[0, prog_idx])
