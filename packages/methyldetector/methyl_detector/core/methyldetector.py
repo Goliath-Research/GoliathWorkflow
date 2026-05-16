@@ -377,7 +377,7 @@ class MethylDetector:
             dmps_df['context_weight'] = 1.0 / len(self.config.contexts)
             logger.info("Using equal context weights")
 
-        # Optional: filter funnel sweep (range/step per biological filter → filter_funnel.csv)
+        # Optional: filter funnel sweep (range/step per biological filter → filter_funnel-{chrom}.csv)
         self._run_filter_funnel_sweep(dmps_df)
 
         # Filter biological DMPs (apply biological filters)
@@ -1029,7 +1029,7 @@ class MethylDetector:
     def _run_filter_funnel_sweep(self, dmps_df: pd.DataFrame) -> None:
         """
         If filter_funnel_explore is set, sweep effect_size_coverage over a range and write
-        filter_funnel.csv.
+        filter_funnel-{chromosome}.csv (same output_dir as results-{chromosome}.json).
         CSV columns: n_statistical_dmps, effect_size_coverage, n_biological_dmps.
         Uses statistical DMPs already in memory; one run, no large DMP CSV.
         """
@@ -1051,7 +1051,7 @@ class MethylDetector:
                 "n_biological_dmps": n,
             })
 
-        out_path = Path(self.config.output_dir) / "filter_funnel.csv"
+        out_path = Path(self.config.output_dir) / f"filter_funnel-{self.chromosome}.csv"
         out_path.parent.mkdir(parents=True, exist_ok=True)
         save_csv(csv_rows, out_path, csv_columns)
         logger.info(f"Filter funnel: wrote {len(csv_rows)} rows to {out_path}")
