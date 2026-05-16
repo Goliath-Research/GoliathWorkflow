@@ -152,7 +152,9 @@ class MethylDetector:
             # Single chromosome: process normally
             self._current_chromosome = chromosomes[0]
             try:
-                return self._run_multi_context()
+                result = self._run_multi_context()
+                self._aggregate_filter_funnel_csvs(chromosomes)
+                return result
             finally:
                 self._release_iteration_resources()
         else:
@@ -190,7 +192,8 @@ class MethylDetector:
                 for chrom, error in failed_chromosomes:
                     logger.warning(f"    - {chrom}: {error}")
             logger.info(f"{'='*80}\n")
-            
+
+            self._aggregate_filter_funnel_csvs(chromosomes)
             return results
 
     def _release_iteration_resources(self) -> None:
@@ -1055,6 +1058,41 @@ class MethylDetector:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         save_csv(csv_rows, out_path, csv_columns)
         logger.info(f"Filter funnel: wrote {len(csv_rows)} rows to {out_path}")
+
+    def _aggregate_filter_funnel_csvs(self, chromosomes: List[str]) -> None:
+        """
+        Combine per-chromosome filter_funnel-{chrom}.csv files into filter_funnel.csv.
+
+        Adds a leading ``chromosome`` column. Skips missing per-chrom files (e.g. failed
+        iterations). No-op when filter_funnel_explore is disabled or output_dir is unset.
+        """
+        if self.config.filter_funnel_explore is None or self.config.output_dir is None:
+            return
+        out_dir = Path(self.config.output_dir)
+        frames: List[pd.DataFrame] = []
+        for chrom in chromosomes:
+            per_chrom = out_dir / f"filter_funnel-{chrom}.csv"
+            if not per_chrom.is_file():
+                continue
+            try:
+                df = pd.read_csv(per_chrom)
+            except Exception as exc:
+                logger.warning(f"Filter funnel: could not read {per_chrom}: {exc}")
+                continue
+            if df.empty:
+                continue
+            df.insert(0, "chromosome", str(chrom))
+            frames.append(df)
+        if not frames:
+            return
+        combined = pd.concat(frames, ignore_index=True)
+        combined["chromosome"] = combined["chromosome"].astype(str)
+        agg_path = out_dir / "filter_funnel.csv"
+        combined.to_csv(agg_path, index=False)
+        logger.info(
+            f"Filter funnel: aggregated {len(frames)} chromosome file(s), "
+            f"{len(combined)} rows -> {agg_path}"
+        )
 
     def _load_binned_counts_from_centroids(
         self,
