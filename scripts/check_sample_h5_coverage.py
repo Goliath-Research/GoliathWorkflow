@@ -10,6 +10,9 @@ are inferred per sample (shared pool across diseases):
   - X only     → require X only (typical female); missing Y is OK
   - neither    → incomplete
 
+If samples use combined ``{chrom}.h5`` files (all contexts), run
+``scripts/split_sample_h5_by_context.py`` first to produce ``{chrom}-CG.h5``, etc.
+
 Usage:
   python scripts/check_sample_h5_coverage.py
   python scripts/check_sample_h5_coverage.py --samples-base /work/samples --report /tmp/sample_h5.csv
