@@ -65,15 +65,15 @@ class SplitResult:
 
 
 def parse_chromosome_list(raw: Optional[str]) -> List[str]:
-    if not raw or not str(raw).strip():
+    if not raw or not raw.strip():
         return list(DEFAULT_CHROMOSOMES)
-    return [p.strip() for p in str(raw).split(",") if p.strip()]
+    return [p.strip() for p in raw.split(",") if p.strip()]
 
 
 def parse_context_list(raw: Optional[str]) -> List[str]:
-    if not raw or not str(raw).strip():
+    if not raw or not raw.strip():
         return list(DEFAULT_CONTEXTS)
-    out = [p.strip().upper() for p in str(raw).split(",") if p.strip()]
+    out = [p.strip().upper() for p in raw.split(",") if p.strip()]
     bad = [c for c in out if c not in CONTEXT_FILTERS]
     if bad:
         raise ValueError(f"Unknown contexts: {bad}. Allowed: {sorted(CONTEXT_FILTERS)}")
@@ -82,7 +82,7 @@ def parse_context_list(raw: Optional[str]) -> List[str]:
 
 def _owner_uid_gid(username: str) -> Tuple[int, int]:
     pw = pwd.getpwnam(username)
-    return int(pw.pw_uid), int(pw.pw_gid)
+    return pw.pw_uid, pw.pw_gid
 
 
 def _can_chown(path: Path) -> bool:
@@ -211,7 +211,7 @@ def split_one_chromosome(
     for ctx in contexts:
         filt = CONTEXT_FILTERS[ctx]
         try:
-            part = filt(loaded)
+            part = filt(loaded)  # type: ignore[arg-type]
         except Exception as exc:
             result.status = "failed"
             result.message = f"filter {ctx} failed: {exc}"
