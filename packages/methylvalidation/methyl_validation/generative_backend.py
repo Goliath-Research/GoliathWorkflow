@@ -479,7 +479,6 @@ def predict_generative_model_from_project(
         meta = json.load(f)
     class_names = [str(x) for x in meta.get("class_names", [])]
     feature_mode = str(meta.get("feature_mode", "raw_dmp")).strip().lower()
-
     samples, y_true = _resolve_eval_paths_and_labels(project_json, class_names)
     if not samples:
         raise ValueError("No evaluation samples resolved for generative prediction.")

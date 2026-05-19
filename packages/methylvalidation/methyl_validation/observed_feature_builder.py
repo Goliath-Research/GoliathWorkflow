@@ -37,7 +37,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v20_add_max_weighted_directional_score"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v24_remove_histogram_log_density_margin"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -441,8 +441,7 @@ def _weighted_mean_abs_error(values_a: np.ndarray, values_b: np.ndarray, weights
 def _fixed_feature_names() -> List[str]:
     names = [
         "max_weighted_directional_score",
-        "weighted_js_distance_to_healthy_centroid",
-        "weighted_js_distance_to_cancer_centroid",
+        "weighted_directional_agreement",
         "weighted_mean_abs_error_to_healthy_centroid",
         "weighted_mean_abs_error_to_cancer_centroid",
         "weighted_mean_abs_distance_margin",
@@ -573,7 +572,6 @@ def build_observed_hybrid_feature_table(
             label_weight_vectors.append(_weights_for_cancer_label(cancer_labels_norm[j]))
         else:
             label_weight_vectors.append(default_weights)
-
     for i in range(n_samples):
         row = np.asarray(X_raw[i, :], dtype=np.float64)
         obs_mask = np.isfinite(row)
@@ -599,6 +597,14 @@ def build_observed_hybrid_feature_table(
                 fk = float(np.sum(wk_obs * directional) / wk_sum)
                 if not np.isfinite(max_weighted_directional_score) or fk > max_weighted_directional_score:
                     max_weighted_directional_score = fk
+            r_agg = (obs_vals - healthy_ref[obs_mask]) / (cancer_ref[obs_mask] - healthy_ref[obs_mask] + 1e-6)
+            z_agg = 2.0 * r_agg - 1.0
+            cancer_like = (z_agg > 0.0).astype(np.float64)
+            if obs_w.size == obs_vals.size and float(np.sum(obs_w)) > 0.0:
+                weighted_directional_agreement = float(np.sum(obs_w * cancer_like) / np.sum(obs_w))
+            else:
+                weighted_directional_agreement = float(np.mean(cancer_like))
+
             healthy_obs = healthy_ref[obs_mask]
             cancer_obs = cancer_ref[obs_mask]
             wjs_h = _weighted_jensen_shannon_distance(obs_vals, healthy_obs, obs_w)
@@ -620,6 +626,7 @@ def build_observed_hybrid_feature_table(
                 weighted_closer_to_healthy = float("nan")
         else:
             max_weighted_directional_score = float("nan")
+            weighted_directional_agreement = float("nan")
             wjs_h = float("nan")
             wjs_c = float("nan")
             wmae_h = float("nan")
@@ -638,8 +645,7 @@ def build_observed_hybrid_feature_table(
             obs_w_frac = obs_frac
 
         X_feat[i, idx["max_weighted_directional_score"]] = max_weighted_directional_score
-        X_feat[i, idx["weighted_js_distance_to_healthy_centroid"]] = wjs_h
-        X_feat[i, idx["weighted_js_distance_to_cancer_centroid"]] = wjs_c
+        X_feat[i, idx["weighted_directional_agreement"]] = weighted_directional_agreement
         X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
         X_feat[i, idx["weighted_mean_abs_error_to_cancer_centroid"]] = wmae_c
         X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
