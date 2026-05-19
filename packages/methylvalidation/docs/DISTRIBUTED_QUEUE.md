@@ -63,3 +63,30 @@ The queue manifest is **backend-agnostic** (JSON lines). A central service can h
 ## Task schema
 
 Task files use `task_schema_version: "1.0"` and the Pydantic model `DiscoveryRunTaskV1` in `methyl_validation.task_schema`. Extra fields are allowed for forward compatibility (`model_config = extra="allow"`).
+
+## Post-freeze enricher queue
+
+After **`--freeze`** (mapper complete), Enrichr can run as **one task per comparison** via `methyl-enricher` (not `methyl-validation`):
+
+```bash
+methyl-enricher plan-tasks --project /work/.../monte_carlo_runs/production/project.json
+methyl-enricher export-queue --project /work/.../monte_carlo_runs/production/project.json
+methyl-enricher run-task --task /work/.../production/enricher/queue/tasks/enricher_<label>.json
+methyl-enricher verify-complete --project /work/.../monte_carlo_runs/production/project.json
+```
+
+Artifacts live under `monte_carlo_runs/production/enricher/queue/` (manifest, `commands.sh`, per-task JSON).
+
+When `step_config.enricher.distributed` is **true**, monolithic freeze runs mapper + **plan-tasks** only; an external scheduler must run `run-task` workers, then `verify-complete`, before progression.
+
+Monolithic alternative (single host): `methyl-enricher --project .../production/project.json --ensure-complete` (used by default freeze when `ensure_complete` is true).
+
+## Biological readiness chain
+
+Before `--model`, run the combined gate:
+
+```bash
+methyl-validation biological-readiness /work/.../Healthy_vs_PCa1-5-CG
+```
+
+This runs `verify-complete` → `methyl-disease-progression --strict-missing` → `methyl-stability-freeze-readiness`, then set `biological_review_confirmed: true` in config.

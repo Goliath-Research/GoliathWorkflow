@@ -193,12 +193,43 @@ def run_mapper(project_json: str | Path, per_cancer_group: bool = False) -> tupl
     return run_cmd(cmd)
 
 
-def run_enricher(project_json: str | Path, per_cancer_group: bool = False) -> tuple[int, str, str]:
-    """Run methyl-enricher --project <project_json> [--per-cancer-group]."""
+def _enricher_step_config(project_json: str | Path) -> Dict[str, Any]:
+    try:
+        from methyl_utils import load_project
+
+        project = load_project(project_json)
+        return dict(project.get_step_config("enricher") or {})
+    except Exception:
+        return {}
+
+
+def run_enricher(
+    project_json: str | Path,
+    per_cancer_group: bool = False,
+    *,
+    ensure_complete: Optional[bool] = None,
+) -> tuple[int, str, str]:
+    """Run methyl-enricher --project <project_json> with optional --ensure-complete."""
+    cfg = _enricher_step_config(project_json)
+    use_ec = bool(ensure_complete) if ensure_complete is not None else bool(cfg.get("ensure_complete", True))
     cmd = ["methyl-enricher", "--project", str(project_json)]
+    if use_ec:
+        cmd.append("--ensure-complete")
+    if cfg.get("modules"):
+        cmd.append("--modules")
     if per_cancer_group:
-        cmd.append("--per-cancer-group")
+        pass  # per-comparison layout is automatic via --project
     return run_cmd(cmd)
+
+
+def run_enricher_plan_tasks(project_json: str | Path) -> tuple[int, str, str]:
+    """Plan distributed enricher tasks (does not call Enrichr)."""
+    return run_cmd(["methyl-enricher", "plan-tasks", "--project", str(project_json)])
+
+
+def run_enricher_verify_complete(project_json: str | Path) -> tuple[int, str, str]:
+    """Verify all enricher comparisons have complete library outputs."""
+    return run_cmd(["methyl-enricher", "verify-complete", "--project", str(project_json)])
 
 
 def _progression_settings(project_json: str | Path) -> Dict[str, Any]:
@@ -789,14 +820,30 @@ def run_pipeline_for_production(
     skip_enricher = config.skip_enricher if config is not None else False
     progression_cfg = _progression_settings(project_json)
     progression_enabled = bool(progression_cfg.get("enabled", False))
+    enricher_cfg = _enricher_step_config(project_json)
+    enricher_distributed = bool(enricher_cfg.get("distributed", False))
     if not skip_enricher:
-        steps.append(
-            ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=False)),
-        )
-        if progression_enabled:
+        if enricher_distributed:
             steps.append(
-                ("methyl-disease-progression", lambda: run_progression(project_json)),
+                (
+                    "methyl-enricher-plan-tasks",
+                    lambda: run_enricher_plan_tasks(project_json),
+                ),
             )
+            print(
+                "[freeze] enricher.distributed=true: planned queue tasks only. "
+                "Run workers (methyl-enricher run-task) then verify-complete before progression.",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            steps.append(
+                ("methyl-enricher", lambda: run_enricher(project_json, per_cancer_group=False)),
+            )
+            if progression_enabled:
+                steps.append(
+                    ("methyl-disease-progression", lambda: run_progression(project_json)),
+                )
 
     completed_seconds: List[float] = []
     total_steps = len(steps)

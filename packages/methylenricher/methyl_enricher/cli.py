@@ -14,6 +14,7 @@ from .enricher import (
     resolve_enrichr_libraries,
 )
 from .module_pipeline import run_module_pipeline
+from .queue_cli import QUEUE_SUBCOMMANDS, main_queue
 
 
 def parse_args():
@@ -382,6 +383,35 @@ For theory and package documentation, see:
         version='MethylEnricher 0.1.0'
     )
 
+    complete_group = parser.add_argument_group('Ensure-complete mode')
+    complete_group.add_argument(
+        '--ensure-complete',
+        action='store_true',
+        help='Retry failed libraries until all are present; exit 1 if any comparison incomplete',
+    )
+    complete_group.add_argument(
+        '--verify-only',
+        action='store_true',
+        help='With --ensure-complete: check artifacts only (no Enrichr API calls)',
+    )
+    complete_group.add_argument(
+        '--comparison',
+        type=str,
+        default=None,
+        metavar='LABEL',
+        help='Run or verify only this comparison label (e.g. PCa_PCa3)',
+    )
+    complete_group.add_argument(
+        '--force',
+        action='store_true',
+        help='Re-query Enrichr even when per-library CSV exists',
+    )
+    complete_group.add_argument(
+        '--no-retry',
+        action='store_true',
+        help='Disable retry/backoff on Enrichr failures (legacy fast-fail per library)',
+    )
+
     # Apply config file before parsing so CLI overrides config
     argv = sys.argv[1:]
     config_path = None
@@ -567,6 +597,9 @@ def list_available_libraries():
 
 def main():
     """Main entry point for MethylEnricher CLI."""
+    if len(sys.argv) > 1 and sys.argv[1] in QUEUE_SUBCOMMANDS:
+        sys.exit(main_queue(sys.argv[1:]))
+
     args = parse_args()
 
     # Resolve paths and apply step_config from --project if set
@@ -589,7 +622,26 @@ def main():
         if step_cfg:
             enricher_config = EnricherStepConfig.model_validate(step_cfg)
             _apply_enricher_config_to_args(args, enricher_config)
+        else:
+            enricher_config = None
         step_override = Path(args.step_override) if args.step_override else None
+        use_ensure = bool(getattr(args, "ensure_complete", False)) or bool(
+            enricher_config and enricher_config.ensure_complete
+        )
+        if use_ensure:
+            from .ensure_complete import run_project_ensure_complete
+
+            if enricher_config and enricher_config.modules and not getattr(args, "modules", False):
+                args.modules = True
+            all_ok, _ = run_project_ensure_complete(
+                project_path,
+                comparison=getattr(args, "comparison", None),
+                force=bool(getattr(args, "force", False)),
+                verify_only=bool(getattr(args, "verify_only", False)),
+                step_override_path=step_override,
+                run_kwargs={"modules": bool(getattr(args, "modules", False))},
+            )
+            sys.exit(0 if all_ok else 1)
         # Use per-comparison layout (enricher/<control>/<disease> per comparison) when project has multiple groups
         per_group = resolve_enricher_paths_per_cancer_group(project_path, step_override)
         if per_group and args.input is None and (args.outdir == "results" or args.outdir is None):

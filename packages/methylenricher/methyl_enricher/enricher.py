@@ -485,7 +485,10 @@ class EnrichmentAnalyzer:
     def run_enrichment(
         self,
         genes: List[str],
-        output_dir: Union[str, Path]
+        output_dir: Union[str, Path],
+        *,
+        force: bool = False,
+        retry_policy: Optional["RetryPolicy"] = None,
     ) -> pd.DataFrame:
         """
         Run enrichment analysis for all libraries.
@@ -497,94 +500,51 @@ class EnrichmentAnalyzer:
         Returns:
             Merged DataFrame with all enrichment results
         """
-        # Lazy import to allow installation without gseapy
-        try:
-            import gseapy as gp
-        except ImportError as ex:
-            raise ImportError(
-                "gseapy is required for enrichment analysis. "
-                "Install with: pip install gseapy"
-            ) from ex
-        
+        from .enricher_completeness import RetryPolicy, enrich_one_library, merge_library_results
+        import time
+
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+        policy = retry_policy or RetryPolicy(max_retries=0)
+
         print(f"[INFO] Running enrichment analysis on {len(genes)} genes")
         print(f"[INFO] Libraries: {', '.join(self.libraries)}")
-        
-        all_results = []
-        
-        for lib in self.libraries:
+
+        for i, lib in enumerate(self.libraries):
             print(f"\n[INFO] Querying {lib}...")
-            
-            try:
-                enr = gp.enrichr(
-                    gene_list=genes,
-                    gene_sets=[lib],
-                    outdir=str(output_dir),
-                    cutoff=1.0,  # Store all results; filter later
-                    background=None,  # Use Enrichr default
-                    organism=(self.organism or "Human").strip().lower()
-                )
-                
-                if hasattr(enr, "results") and enr.results is not None and not enr.results.empty:
-                    df = enr.results.copy()
-                    df["library"] = lib
-                    all_results.append(df)
-                    
-                    # Save per-library results
-                    per_lib_csv = output_dir / f"enrich_{lib}.csv"
-                    df.to_csv(per_lib_csv, index=False)
-                    print(f"[INFO] ✓ {lib}: {len(df)} terms found")
-                    
-                    # Show top hit if any significant
-                    sig_df = df[df["Adjusted P-value"] <= self.cutoff]
-                    if not sig_df.empty:
-                        top_term = sig_df.iloc[0]
-                        print(f"      Top hit: {top_term['Term']} (q={top_term['Adjusted P-value']:.2e})")
-                else:
-                    print(f"[WARN] No results returned for {lib}")
-                    
-            except Exception as e:
-                print(f"[ERROR] Failed to process {lib}: {e}")
-                continue
-        
-        if not all_results:
+            res = enrich_one_library(
+                lib,
+                genes,
+                output_dir,
+                organism=self.organism,
+                policy=policy,
+                force=force,
+            )
+            if res.success:
+                print(f"[INFO] ✓ {lib}: {res.n_terms} terms found")
+            else:
+                print(f"[ERROR] Failed to process {lib}: {res.error_message}")
+            if (
+                i + 1 < len(self.libraries)
+                and policy.inter_library_delay_seconds > 0
+                and policy.max_retries > 0
+            ):
+                time.sleep(policy.inter_library_delay_seconds)
+
+        merged = merge_library_results(output_dir, self.libraries, cutoff=self.cutoff)
+        if merged.empty:
             print("\n[WARN] No enrichment results found across any library")
-            return pd.DataFrame()
-        
-        # Merge and sort results
-        merged = pd.concat(all_results, ignore_index=True)
-        merged.sort_values(
-            ["Adjusted P-value", "P-value", "Odds Ratio"],
-            ascending=[True, True, False],
-            inplace=True
+            self.results = {"merged": merged, "significant": pd.DataFrame()}
+            return merged
+
+        print(f"\n[INFO] ✓ Merged results saved: {output_dir / 'enrichment_merged.csv'}")
+        top_hits = (
+            merged[merged["Adjusted P-value"] <= self.cutoff].copy().head(200)
+            if "Adjusted P-value" in merged.columns
+            else pd.DataFrame()
         )
-        
-        # Save merged results
-        merged_csv = output_dir / "enrichment_merged.csv"
-        merged.to_csv(merged_csv, index=False)
-        print(f"\n[INFO] ✓ Merged results saved: {merged_csv}")
-        
-        # Save top significant hits
-        top_hits = merged[merged["Adjusted P-value"] <= self.cutoff].copy()
-        if not top_hits.empty:
-            top_hits = top_hits.head(200)
-            top_csv = output_dir / f"enrichment_top_q{self.cutoff}.csv"
-            top_hits.to_csv(top_csv, index=False)
-            print(f"[INFO] ✓ Top significant hits: {top_csv} ({len(top_hits)} terms)")
-        else:
-            print(f"[WARN] No significant terms found at q ≤ {self.cutoff}")
-        
-        # Store results
-        self.results = {
-            "merged": merged,
-            "significant": top_hits
-        }
-        
-        # Print summary
+        self.results = {"merged": merged, "significant": top_hits}
         self._print_summary(merged, top_hits)
-        
         return merged
     
     def _print_summary(self, merged: pd.DataFrame, top_hits: pd.DataFrame):

@@ -1061,6 +1061,12 @@ def _run_model_mc_backend(
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "biological-readiness":
+        from .biological_readiness import main as biological_readiness_main
+
+        sys.exit(biological_readiness_main(sys.argv[2:]))
+        return
+
     if len(sys.argv) > 1 and sys.argv[1] in (
         "plan-runs",
         "run-task",
