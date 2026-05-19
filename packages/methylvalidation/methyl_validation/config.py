@@ -293,6 +293,13 @@ class MonteCarloConfig(BaseModel):
         default=False,
         description="After review, set True in step_config.validation to allow --model (classifier + predictor).",
     )
+    require_complete_enricher: bool = Field(
+        default=False,
+        description=(
+            "If True, readiness audit treats incomplete enricher_completeness.json as no_go "
+            "(not only a warning)."
+        ),
+    )
     model_backend: str = Field(
         default="ecdf",
         description=(

@@ -228,10 +228,46 @@ def _build_module_rows(stage: StageSpec) -> pd.DataFrame:
     )
 
 
+def _enricher_completeness_missing(project_path: Path) -> List[str]:
+    """Load production enricher_completeness.json and return human-readable gaps."""
+    try:
+        from methyl_utils import load_project
+    except ImportError:
+        return []
+
+    project = load_project(project_path)
+    manifest = Path(project.get_project_root()) / "enricher" / "enricher_completeness.json"
+    if not manifest.is_file():
+        return []
+
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except Exception:
+        return ["enricher: could not parse enricher_completeness.json"]
+
+    missing_msgs: List[str] = []
+    if not data.get("all_complete", False):
+        for label, comp in (data.get("comparisons") or {}).items():
+            if comp.get("complete"):
+                continue
+            miss_libs = comp.get("missing_libraries") or []
+            if miss_libs:
+                missing_msgs.append(
+                    f"{label}: enricher incomplete — missing libraries: {', '.join(miss_libs[:8])}"
+                    + ("..." if len(miss_libs) > 8 else "")
+                )
+            elif not comp.get("modules_present") and comp.get("modules_required"):
+                missing_msgs.append(f"{label}: enricher incomplete — modules_ranked.csv missing")
+            else:
+                missing_msgs.append(f"{label}: enricher incomplete")
+    return missing_msgs
+
+
 def aggregate_stage_tables(
     stage_specs: Sequence[StageSpec],
     *,
     strict_missing: bool = False,
+    extra_missing: Optional[Sequence[str]] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
     genes: List[pd.DataFrame] = []
     pathways: List[pd.DataFrame] = []
@@ -253,6 +289,8 @@ def aggregate_stage_tables(
     genes_df = pd.concat(genes, ignore_index=True) if genes else pd.DataFrame()
     pathways_df = pd.concat(pathways, ignore_index=True) if pathways else pd.DataFrame()
     modules_df = pd.concat(modules, ignore_index=True) if modules else pd.DataFrame()
+    if extra_missing:
+        missing = list(missing) + list(extra_missing)
     if strict_missing and missing:
         raise ValueError("Missing required progression inputs: " + "; ".join(missing))
     io_summary = {
@@ -434,10 +472,14 @@ def run_progression_report(
     out_dir = output_dir or (Path(meta["project_root"]) / "progression")
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    enricher_missing = _enricher_completeness_missing(project_path)
     genes_df, pathways_df, modules_df, io_summary = aggregate_stage_tables(
         stage_specs,
         strict_missing=strict_missing,
+        extra_missing=enricher_missing,
     )
+    if enricher_missing:
+        io_summary["enricher_completeness_missing"] = enricher_missing
     labels_df = compute_progression_labels(
         genes_df,
         pathways_df,
