@@ -424,6 +424,7 @@ def train_tabular_model(
     observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
     observed_healthy_reference: Optional[np.ndarray] = None
     observed_cancer_reference: Optional[np.ndarray] = None
+    observed_per_cancer_references: List[np.ndarray] = []
     observed_healthy_class_index: Optional[int] = None
     observed_healthy_class_label: Optional[str] = None
     observed_cancer_class_labels: List[str] = []
@@ -517,6 +518,12 @@ def train_tabular_model(
                     observed_cancer_reference = (
                         np.asarray(cref, dtype=np.float32) if isinstance(cref, list) and len(cref) > 0 else None
                     )
+                    pc_refs = train_meta.get("observed_per_cancer_reference_vectors")
+                    observed_per_cancer_references = []
+                    if isinstance(pc_refs, list):
+                        for item in pc_refs:
+                            if isinstance(item, list) and len(item) > 0:
+                                observed_per_cancer_references.append(np.asarray(item, dtype=np.float32))
                     observed_healthy_class_index = train_meta.get("observed_healthy_class_index")
                     observed_healthy_class_label = (
                         str(train_meta["observed_healthy_class_label"])
@@ -578,6 +585,7 @@ def train_tabular_model(
                 max_gene_features=int(max(0, observed_feature_max_genes)),
                 healthy_reference_vector=anchors.healthy_reference_vector,
                 cancer_reference_vector=anchors.cancer_reference_vector,
+                per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
                 healthy_class_label=anchors.healthy_class_label,
                 cancer_class_labels=anchors.cancer_class_labels,
                 anchor_strategy=anchors.anchor_strategy,
@@ -591,6 +599,9 @@ def train_tabular_model(
             observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
             observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
             observed_cancer_reference = anchors.cancer_reference_vector.astype(np.float32)
+            observed_per_cancer_references = [
+                np.asarray(v, dtype=np.float32) for v in anchors.per_cancer_reference_vectors
+            ]
             observed_healthy_class_index = int(anchors.healthy_class_index)
             observed_healthy_class_label = str(anchors.healthy_class_label)
             observed_cancer_class_labels = [str(x) for x in anchors.cancer_class_labels]
@@ -657,6 +668,9 @@ def train_tabular_model(
                     if observed_cancer_reference is not None
                     else None
                 ),
+                "observed_per_cancer_reference_vectors": [
+                    [float(v) for v in vec.tolist()] for vec in observed_per_cancer_references
+                ],
                 "observed_healthy_class_index": observed_healthy_class_index,
                 "observed_healthy_class_label": observed_healthy_class_label,
                 "observed_cancer_class_labels": observed_cancer_class_labels,
@@ -734,6 +748,7 @@ def train_tabular_model(
                     max_gene_features=int(max(0, observed_feature_max_genes)),
                     healthy_reference_vector=observed_healthy_reference,
                     cancer_reference_vector=observed_cancer_reference,
+                    per_cancer_reference_vectors=observed_per_cancer_references,
                     healthy_class_label=observed_healthy_class_label,
                     cancer_class_labels=observed_cancer_class_labels,
                     anchor_strategy=observed_anchor_strategy,
@@ -840,6 +855,9 @@ def train_tabular_model(
             "observed_cancer_reference_vector": (
                 [float(v) for v in observed_cancer_reference.tolist()] if observed_cancer_reference is not None else None
             ),
+            "observed_per_cancer_reference_vectors": [
+                [float(v) for v in vec.tolist()] for vec in observed_per_cancer_references
+            ],
             "observed_healthy_class_index": observed_healthy_class_index,
             "observed_healthy_class_label": observed_healthy_class_label,
             "observed_cancer_class_labels": observed_cancer_class_labels,
@@ -992,6 +1010,7 @@ def predict_tabular_model_from_project(
             max_gene_features=int(meta.get("observed_feature_max_genes", 32)),
             healthy_reference_vector=meta.get("observed_healthy_reference_vector"),
             cancer_reference_vector=meta.get("observed_cancer_reference_vector"),
+            per_cancer_reference_vectors=meta.get("observed_per_cancer_reference_vectors"),
             healthy_class_label=meta.get("observed_healthy_class_label"),
             cancer_class_labels=meta.get("observed_cancer_class_labels") or [],
             anchor_strategy=meta.get("observed_anchor_strategy"),

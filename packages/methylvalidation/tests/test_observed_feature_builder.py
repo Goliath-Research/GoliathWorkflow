@@ -184,6 +184,7 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     )
 
     expected_names = {
+        "max_weighted_directional_score",
         "weighted_js_distance_to_healthy_centroid",
         "weighted_js_distance_to_cancer_centroid",
         "weighted_mean_abs_error_to_healthy_centroid",
@@ -215,6 +216,7 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     weighted_healthy_frac_idx = feat.feature_names.index(
         "weighted_fraction_dmps_closer_to_healthy_centroid"
     )
+    max_wds_idx = feat.feature_names.index("max_weighted_directional_score")
 
     # First sample is healthy-like and should be closer to healthy anchor.
     assert float(feat.X[0, wjs_h_idx]) < float(feat.X[0, wjs_c_idx])
@@ -224,6 +226,7 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert float(feat.X[0, wcontrast_idx]) < 0.0
     assert float(feat.X[0, weighted_frac_idx]) <= 0.5
     assert float(feat.X[0, weighted_healthy_frac_idx]) >= 0.5
+    assert float(feat.X[0, max_wds_idx]) < 0.0
 
     # Cancer-like sample should move towards cancer anchor.
     assert float(feat.X[2, wjs_c_idx]) < float(feat.X[2, wjs_h_idx])
@@ -233,3 +236,4 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert float(feat.X[2, wcontrast_idx]) > 0.0
     assert float(feat.X[2, weighted_frac_idx]) >= 0.5
     assert float(feat.X[2, weighted_healthy_frac_idx]) <= 0.5
+    assert float(feat.X[2, max_wds_idx]) > 0.0
