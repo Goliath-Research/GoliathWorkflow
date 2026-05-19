@@ -445,7 +445,7 @@ var
 begin
   if not FRepository.TryGetNodeExecution(AParallelExecutionId, ParExec) then
     Exit;
-  AGraph.TryGetNode(AParExec.WorkflowNodeId, ParNode);
+  AGraph.TryGetNode(ParExec.WorkflowNodeId, ParNode);
   Total := Length(AGraph.GetChildEdges(ParNode.Id));
   Finished := 0;
   Failed := 0;

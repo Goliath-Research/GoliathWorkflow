@@ -1,20 +1,16 @@
-<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
     <PropertyGroup>
-        <ProjectGuid>{C5D6E7F8-90A1-B2C3-D4E5-F60718293A4B}</ProjectGuid>
+        <ProjectGuid>{F0CEA938-87AB-4D89-B063-5AB228D56509}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
         <Projects Include="WfEnginePkg.dproj">
             <Dependencies/>
         </Projects>
         <Projects Include="WfEngineSrv.dproj">
-            <Dependencies>
-                <Dependency Name="WfEnginePkg.bpl"/>
-            </Dependencies>
+            <Dependencies/>
         </Projects>
-        <Projects Include="tests\WfEngineTests.dproj">
-            <Dependencies>
-                <Dependency Name="WfEnginePkg.bpl"/>
-            </Dependencies>
+        <Projects Include="WfEngineTests.dproj">
+            <Dependencies/>
         </Projects>
     </ItemGroup>
     <ProjectExtensions>
@@ -30,17 +26,26 @@
     <Target Name="WfEnginePkg:Clean">
         <MSBuild Projects="WfEnginePkg.dproj" Targets="Clean"/>
     </Target>
+    <Target Name="WfEnginePkg:Make">
+        <MSBuild Projects="WfEnginePkg.dproj" Targets="Make"/>
+    </Target>
     <Target Name="WfEngineSrv">
         <MSBuild Projects="WfEngineSrv.dproj"/>
     </Target>
     <Target Name="WfEngineSrv:Clean">
         <MSBuild Projects="WfEngineSrv.dproj" Targets="Clean"/>
     </Target>
+    <Target Name="WfEngineSrv:Make">
+        <MSBuild Projects="WfEngineSrv.dproj" Targets="Make"/>
+    </Target>
     <Target Name="WfEngineTests">
-        <MSBuild Projects="tests\WfEngineTests.dproj"/>
+        <MSBuild Projects="WfEngineTests.dproj"/>
     </Target>
     <Target Name="WfEngineTests:Clean">
-        <MSBuild Projects="tests\WfEngineTests.dproj" Targets="Clean"/>
+        <MSBuild Projects="WfEngineTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="WfEngineTests:Make">
+        <MSBuild Projects="WfEngineTests.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
         <CallTarget Targets="WfEnginePkg;WfEngineSrv;WfEngineTests"/>
@@ -48,4 +53,8 @@
     <Target Name="Clean">
         <CallTarget Targets="WfEnginePkg:Clean;WfEngineSrv:Clean;WfEngineTests:Clean"/>
     </Target>
+    <Target Name="Make">
+        <CallTarget Targets="WfEnginePkg:Make;WfEngineSrv:Make;WfEngineTests:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

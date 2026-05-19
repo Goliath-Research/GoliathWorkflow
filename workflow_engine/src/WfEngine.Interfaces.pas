@@ -54,7 +54,7 @@ type
   end;
 
   IWorkflowJsonResolver = interface
-    ['{B2C3D4-E5F6-7890-ABCD-EF12345678901}']
+    ['{7409A9E3-5645-4085-BAE0-F559CDAB2B0C}']
     function ResolveTemplate(const ATemplate: string; const AScopeRootExecId: Int64;
       const AInstanceId: Int64): string;
     function ResolveInputForAction(const ANode: TWorkflowNode; const ANodeExecutionId: Int64;

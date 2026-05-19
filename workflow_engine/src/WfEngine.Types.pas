@@ -8,6 +8,7 @@ unit WfEngine.Types;
 interface
 
 uses
+  System.Generics.Defaults,
   System.Generics.Collections,
   System.SysUtils;
 

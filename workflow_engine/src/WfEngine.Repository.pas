@@ -65,6 +65,7 @@ type
     function LoadScopeDefaults(const ANodeId: Int64): TArray<TNodeScopeDefault>;
     function LoadOutputBindings(const ANodeId: Int64): TArray<TVariableOutputBinding>;
     function TryExtractOutputFragment(const AOutputJson, AJsonPath: string; out AFragmentJson: string): Boolean;
+    function ReadExecutionRow(Q: TUniQuery): TNodeExecution;
     procedure BeginTransaction;
     procedure CommitTransaction;
     procedure RollbackTransaction;

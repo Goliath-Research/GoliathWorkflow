@@ -57,8 +57,7 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.SchemaName := WF_SCHEMA;
-    P.StoredProcName := 'wf_worker_authenticate';
+    P.StoredProcName := WF_SCHEMA + '.wf_worker_authenticate';
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
     P.ExecProc;
@@ -76,8 +75,7 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.SchemaName := WF_SCHEMA;
-    P.StoredProcName := 'sp_worker_request_task';
+    P.StoredProcName := WF_SCHEMA + 'sp_worker_request_task';
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
     if ACapability = '' then
@@ -143,8 +141,7 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.SchemaName := WF_SCHEMA;
-    P.StoredProcName := 'sp_worker_submit_result';
+    P.StoredProcName := WF_SCHEMA + 'sp_worker_submit_result';
     P.Params.CreateParam(ftLargeint, 'node_execution_id', ptInput).AsLargeInt := ANodeExecutionId;
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
@@ -175,8 +172,7 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.SchemaName := WF_SCHEMA;
-    P.StoredProcName := 'sp_worker_heartbeat';
+    P.StoredProcName := WF_SCHEMA + 'sp_worker_heartbeat';
     P.Params.CreateParam(ftLargeint, 'node_execution_id', ptInput).AsLargeInt := ANodeExecutionId;
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
@@ -200,8 +196,7 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.SchemaName := WF_SCHEMA;
-    P.StoredProcName := 'sp_worker_fail_task';
+    P.StoredProcName := WF_SCHEMA + 'sp_worker_fail_task';
     P.Params.CreateParam(ftLargeint, 'node_execution_id', ptInput).AsLargeInt := ANodeExecutionId;
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;

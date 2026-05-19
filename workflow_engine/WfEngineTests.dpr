@@ -5,7 +5,7 @@ program WfEngineTests;
 
 uses
   System.SysUtils,
-  WfEngine.Integration.Tests in 'WfEngine.Integration.Tests.pas';
+  WfEngine.Integration.Tests in 'tests\WfEngine.Integration.Tests.pas';
 
 begin
   try

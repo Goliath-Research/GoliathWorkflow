@@ -5,8 +5,17 @@ program WfEngineSrv;
 
 uses
   System.SysUtils,
-  WfEngine.ServiceLoop,
-  WfEngine.Types;
+  WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
+  WfEngine.Types in 'src\WfEngine.Types.pas',
+  WfEngine.ControlFlow in 'src\WfEngine.ControlFlow.pas',
+  WfEngine.Exceptions in 'src\WfEngine.Exceptions.pas',
+  WfEngine.Interfaces in 'src\WfEngine.Interfaces.pas',
+  WfEngine.JsonResolver in 'src\WfEngine.JsonResolver.pas',
+  WfEngine in 'src\WfEngine.pas',
+  WfEngine.Repository in 'src\WfEngine.Repository.pas',
+  WfEngine.Scheduler in 'src\WfEngine.Scheduler.pas',
+  WfEngine.Scope in 'src\WfEngine.Scope.pas',
+  WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas';
 
 function GetArgValue(const Args: TArray<string>; const Name: string; const Default: string): string;
 var
