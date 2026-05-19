@@ -29,6 +29,7 @@ class ObservedFeatureArtifacts:
 class ObservedHybridAnchors:
     healthy_reference_vector: np.ndarray
     cancer_reference_vector: np.ndarray
+    per_cancer_reference_vectors: List[np.ndarray]
     healthy_class_index: int
     healthy_class_label: str
     cancer_class_labels: List[str]
@@ -36,7 +37,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v19_removed_progression_chrom_metrics"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v20_add_max_weighted_directional_score"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -104,7 +105,13 @@ def _normalize_feature_key(value: object) -> str:
 
 def _build_reference_map(
     dmp_df: pd.DataFrame,
-) -> Tuple[Dict[str, Dict[str, np.ndarray]], List[Tuple[str, str, int]], np.ndarray, pd.DataFrame]:
+) -> Tuple[
+    Dict[str, Dict[str, np.ndarray]],
+    List[Tuple[str, str, int]],
+    np.ndarray,
+    pd.DataFrame,
+    Dict[str, np.ndarray],
+]:
     refs: Dict[str, Dict[str, np.ndarray]] = {}
     order: List[Tuple[str, str, int]] = []
     weights: List[float] = []
@@ -160,14 +167,34 @@ def _build_reference_map(
 
     w = np.asarray(weights, dtype=np.float32)
     if w.size == 0:
-        return refs, order, w, locus_df.reset_index(drop=True)
+        return refs, order, w, locus_df.reset_index(drop=True), {}
     w = np.abs(np.nan_to_num(w, nan=0.0, posinf=0.0, neginf=0.0))
     mx = float(np.max(w))
     if mx <= 0.0:
         w = np.ones_like(w, dtype=np.float32)
     else:
         w = w / mx
-    return refs, order, w, locus_df.reset_index(drop=True)
+    order_to_idx = {key: idx for idx, key in enumerate(order)}
+    per_label_weights: Dict[str, np.ndarray] = {}
+    for comp_label, cdf in work_df.groupby("comparison_label", sort=False):
+        comp_vec = np.zeros((len(order),), dtype=np.float32)
+        if cdf.empty:
+            per_label_weights[str(comp_label)] = comp_vec
+            continue
+        cdf2 = cdf.copy()
+        cdf2["abs_effect"] = np.abs(pd.to_numeric(cdf2["effect_size"], errors="coerce").fillna(0.0).astype(float))
+        cdf2 = cdf2.sort_values(
+            ["abs_effect", "chromosome", "context", "position"],
+            ascending=[False, True, True, True],
+        ).drop_duplicates(["chromosome", "context", "position"], keep="first")
+        for _, row in cdf2.iterrows():
+            key = (str(row["chromosome"]), str(row["context"]), int(row["position"]))
+            idx = order_to_idx.get(key)
+            if idx is None:
+                continue
+            comp_vec[idx] = float(abs(float(pd.to_numeric(row["effect_size"], errors="coerce"))))
+        per_label_weights[str(comp_label)] = comp_vec.astype(np.float32)
+    return refs, order, w, locus_df.reset_index(drop=True), per_label_weights
 
 
 def _extract_matrix_for_samples(
@@ -248,7 +275,7 @@ def derive_observed_hybrid_anchors(
     *,
     min_coverage: int = 1,
 ) -> ObservedHybridAnchors:
-    refs, feature_order, _weights, _locus_df = _build_reference_map(dmp_df)
+    refs, feature_order, _weights, _locus_df, _per_label_weights = _build_reference_map(dmp_df)
     X_raw = _extract_matrix_for_samples(
         sample_paths,
         refs,
@@ -282,9 +309,21 @@ def derive_observed_hybrid_anchors(
     cancer_labels = [str(name) for i, name in enumerate(class_names) if i != int(healthy_index)]
     if not cancer_labels:
         cancer_labels = [str(class_names[int(healthy_index)])] if class_names else ["unknown"]
+    per_cancer_reference_vectors: List[np.ndarray] = []
+    for i, name in enumerate(class_names):
+        if int(i) == int(healthy_index):
+            continue
+        cls_mask = y == int(i)
+        if np.any(cls_mask):
+            per_cancer_reference_vectors.append(_safe_centroid(X_raw[cls_mask, :]))
+        else:
+            per_cancer_reference_vectors.append(cancer_vec.copy())
+    if not per_cancer_reference_vectors:
+        per_cancer_reference_vectors = [cancer_vec.copy()]
     return ObservedHybridAnchors(
         healthy_reference_vector=healthy_vec,
         cancer_reference_vector=cancer_vec,
+        per_cancer_reference_vectors=per_cancer_reference_vectors,
         healthy_class_index=int(healthy_index),
         healthy_class_label=(str(class_names[int(healthy_index)]) if class_names else "unknown"),
         cancer_class_labels=cancer_labels,
@@ -401,6 +440,7 @@ def _weighted_mean_abs_error(values_a: np.ndarray, values_b: np.ndarray, weights
 
 def _fixed_feature_names() -> List[str]:
     names = [
+        "max_weighted_directional_score",
         "weighted_js_distance_to_healthy_centroid",
         "weighted_js_distance_to_cancer_centroid",
         "weighted_mean_abs_error_to_healthy_centroid",
@@ -442,6 +482,7 @@ def build_observed_hybrid_feature_table(
     max_gene_features: int = 32,
     healthy_reference_vector: Optional[Sequence[float]] = None,
     cancer_reference_vector: Optional[Sequence[float]] = None,
+    per_cancer_reference_vectors: Optional[Sequence[Sequence[float]]] = None,
     healthy_class_label: Optional[str] = None,
     cancer_class_labels: Optional[Sequence[str]] = None,
     anchor_strategy: Optional[str] = None,
@@ -451,7 +492,7 @@ def build_observed_hybrid_feature_table(
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
     del include_dmp_features, include_chromosome_features, include_dmr_features, include_gene_features
 
-    refs, feature_order, weights, _locus_df = _build_reference_map(dmp_df)
+    refs, feature_order, weights, _locus_df, per_label_weights = _build_reference_map(dmp_df)
     X_raw = _extract_matrix_for_samples(
         sample_paths,
         refs,
@@ -479,6 +520,18 @@ def build_observed_hybrid_feature_table(
     cancer_ref = np.nan_to_num(cancer_ref, nan=0.5, posinf=0.5, neginf=0.5)
     healthy_ref = np.clip(healthy_ref, 0.0, 1.0)
     cancer_ref = np.clip(cancer_ref, 0.0, 1.0)
+    per_cancer_refs: List[np.ndarray] = []
+    if per_cancer_reference_vectors is not None:
+        for vec in per_cancer_reference_vectors:
+            v = np.asarray(vec, dtype=np.float64).reshape(-1)
+            if v.shape[0] != n_loci:
+                raise ValueError(
+                    f"Observed-hybrid per-cancer centroid reference length mismatch: "
+                    f"expected {n_loci}, got {v.shape[0]}"
+                )
+            per_cancer_refs.append(np.clip(np.nan_to_num(v, nan=0.5, posinf=0.5, neginf=0.5), 0.0, 1.0))
+    if not per_cancer_refs:
+        per_cancer_refs = [cancer_ref]
 
     observed_order_fp = _feature_order_fingerprint(feature_order)
     if expected_feature_order_fingerprint and observed_order_fp != str(expected_feature_order_fingerprint):
@@ -499,6 +552,28 @@ def build_observed_hybrid_feature_table(
     X_feat = np.full((n_samples, len(feature_names)), np.nan, dtype=np.float32)
 
     idx = {name: j for j, name in enumerate(feature_names)}
+    cancer_labels_norm = [str(lbl).strip().lower() for lbl in (cancer_class_labels or [])]
+    per_label_weights_norm = {
+        str(key).strip().lower(): np.asarray(vec, dtype=np.float64) for key, vec in per_label_weights.items()
+    }
+    default_weights = np.asarray(w, dtype=np.float64)
+
+    def _weights_for_cancer_label(cancer_label: str) -> np.ndarray:
+        label = str(cancer_label).strip().lower()
+        if label in per_label_weights_norm:
+            return per_label_weights_norm[label]
+        for k, v in per_label_weights_norm.items():
+            if label and (label in k or k.endswith(f"_vs_{label}") or k.endswith(f"-vs-{label}")):
+                return v
+        return default_weights
+
+    label_weight_vectors: List[np.ndarray] = []
+    for j in range(len(per_cancer_refs)):
+        if j < len(cancer_labels_norm):
+            label_weight_vectors.append(_weights_for_cancer_label(cancer_labels_norm[j]))
+        else:
+            label_weight_vectors.append(default_weights)
+
     for i in range(n_samples):
         row = np.asarray(X_raw[i, :], dtype=np.float64)
         obs_mask = np.isfinite(row)
@@ -507,6 +582,23 @@ def build_observed_hybrid_feature_table(
         n_obs = int(obs_vals.size)
 
         if n_obs > 0:
+            max_weighted_directional_score = float("nan")
+            for k_idx, mu_k in enumerate(per_cancer_refs):
+                mu_k_obs = mu_k[obs_mask]
+                numer = 2.0 * (obs_vals - healthy_ref[obs_mask])
+                denom = (mu_k_obs - healthy_ref[obs_mask]) + 1e-6
+                directional = np.clip((numer / denom) - 1.0, -1.0, 1.0)
+                wk = label_weight_vectors[k_idx]
+                wk_obs = wk[obs_mask] if wk.shape[0] == obs_mask.shape[0] else default_weights[obs_mask]
+                wk_obs = np.asarray(np.nan_to_num(wk_obs, nan=0.0, posinf=0.0, neginf=0.0), dtype=np.float64)
+                if wk_obs.shape[0] != directional.shape[0]:
+                    continue
+                wk_sum = float(np.sum(wk_obs))
+                if wk_sum <= 0.0:
+                    continue
+                fk = float(np.sum(wk_obs * directional) / wk_sum)
+                if not np.isfinite(max_weighted_directional_score) or fk > max_weighted_directional_score:
+                    max_weighted_directional_score = fk
             healthy_obs = healthy_ref[obs_mask]
             cancer_obs = cancer_ref[obs_mask]
             wjs_h = _weighted_jensen_shannon_distance(obs_vals, healthy_obs, obs_w)
@@ -527,6 +619,7 @@ def build_observed_hybrid_feature_table(
                 weighted_closer_to_cancer = float("nan")
                 weighted_closer_to_healthy = float("nan")
         else:
+            max_weighted_directional_score = float("nan")
             wjs_h = float("nan")
             wjs_c = float("nan")
             wmae_h = float("nan")
@@ -544,6 +637,7 @@ def build_observed_hybrid_feature_table(
         else:
             obs_w_frac = obs_frac
 
+        X_feat[i, idx["max_weighted_directional_score"]] = max_weighted_directional_score
         X_feat[i, idx["weighted_js_distance_to_healthy_centroid"]] = wjs_h
         X_feat[i, idx["weighted_js_distance_to_cancer_centroid"]] = wjs_c
         X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h

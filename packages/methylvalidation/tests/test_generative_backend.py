@@ -523,4 +523,8 @@ def test_generative_observed_hybrid_train_predict_schema_parity(tmp_path: Path, 
         ablation = json.load(f)
     assert ablation["backend"] == "generative_hybrid"
     assert "balanced_accuracy" in ablation
+    with open(model_dir / "generative-model-metadata.json", encoding="utf-8") as f:
+        meta = json.load(f)
+    assert isinstance(meta.get("observed_per_cancer_reference_vectors"), list)
+    assert "max_weighted_directional_score" in set(meta.get("observed_feature_names") or [])
 

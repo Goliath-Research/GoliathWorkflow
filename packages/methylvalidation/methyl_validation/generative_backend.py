@@ -268,6 +268,7 @@ def train_generative_model(
             max_gene_features=int(max(0, observed_feature_max_genes)),
             healthy_reference_vector=anchors.healthy_reference_vector,
             cancer_reference_vector=anchors.cancer_reference_vector,
+            per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
             healthy_class_label=anchors.healthy_class_label,
             cancer_class_labels=anchors.cancer_class_labels,
             anchor_strategy=anchors.anchor_strategy,
@@ -282,6 +283,9 @@ def train_generative_model(
         observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
         observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
         observed_cancer_reference = anchors.cancer_reference_vector.astype(np.float32)
+        observed_per_cancer_references = [
+            np.asarray(v, dtype=np.float32) for v in anchors.per_cancer_reference_vectors
+        ]
         observed_healthy_class_index = int(anchors.healthy_class_index)
         observed_healthy_class_label = str(anchors.healthy_class_label)
         observed_cancer_class_labels = [str(x) for x in anchors.cancer_class_labels]
@@ -305,6 +309,7 @@ def train_generative_model(
         observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
         observed_healthy_reference = None
         observed_cancer_reference = None
+        observed_per_cancer_references: List[np.ndarray] = []
         observed_healthy_class_index = None
         observed_healthy_class_label = None
         observed_cancer_class_labels = []
@@ -417,6 +422,9 @@ def train_generative_model(
         "observed_cancer_reference_vector": (
             [float(v) for v in observed_cancer_reference.tolist()] if observed_cancer_reference is not None else None
         ),
+        "observed_per_cancer_reference_vectors": [
+            [float(v) for v in vec.tolist()] for vec in observed_per_cancer_references
+        ],
         "observed_healthy_class_index": observed_healthy_class_index,
         "observed_healthy_class_label": observed_healthy_class_label,
         "observed_cancer_class_labels": observed_cancer_class_labels,
@@ -500,6 +508,7 @@ def predict_generative_model_from_project(
             max_gene_features=int(meta.get("observed_feature_max_genes", 32)),
             healthy_reference_vector=meta.get("observed_healthy_reference_vector"),
             cancer_reference_vector=meta.get("observed_cancer_reference_vector"),
+            per_cancer_reference_vectors=meta.get("observed_per_cancer_reference_vectors"),
             healthy_class_label=meta.get("observed_healthy_class_label"),
             cancer_class_labels=meta.get("observed_cancer_class_labels") or [],
             anchor_strategy=meta.get("observed_anchor_strategy"),

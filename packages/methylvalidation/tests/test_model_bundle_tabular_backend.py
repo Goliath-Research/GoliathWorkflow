@@ -499,8 +499,10 @@ def test_tabular_observed_hybrid_train_predict_schema_parity(tmp_path: Path, mon
         meta = json.load(f)
     assert isinstance(meta.get("observed_healthy_reference_vector"), list)
     assert isinstance(meta.get("observed_cancer_reference_vector"), list)
+    assert isinstance(meta.get("observed_per_cancer_reference_vectors"), list)
     assert meta.get("observed_healthy_class_label") == "healthy"
     assert meta.get("observed_feature_order_fingerprint")
+    assert "max_weighted_directional_score" in set(meta.get("observed_feature_names") or [])
 
 
 def test_tabular_multi_method_sequence_outputs_ranking(tmp_path: Path, monkeypatch):
