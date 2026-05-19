@@ -1,0 +1,423 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Devart (www.devart.com), compare document file -->
+<!-- Modifying this generated file will probably render it invalid -->
+<CompareDocument>
+  <Properties>
+    <DatabaseProvider>aa8afe9c-7d62-4564-b477-c12e62e0f440</DatabaseProvider>
+    <ProviderVersion>2026.1.31.0</ProviderVersion>
+    <SchemaVersion>2.1</SchemaVersion>
+  </Properties>
+  <Source Type="Database">
+    <ConnectionModel>
+      <PropertyValue Name="Database">aa8afe9c-7d62-4564-b477-c12e62e0f440</PropertyValue>
+      <PropertyValue Name="Id">6abe3154-d267-496a-bc64-105e90077597</PropertyValue>
+      <PropertyValue Name="ConnectionString" xml:space="preserve">Data Source=em-maindb.database.windows.net;Encrypt=False;Integrated Security=False;User ID=dba</PropertyValue>
+    </ConnectionModel>
+    <Schema>MethylPipeline</Schema>
+  </Source>
+  <Target Type="Database">
+    <ConnectionModel>
+      <PropertyValue Name="Database">aa8afe9c-7d62-4564-b477-c12e62e0f440</PropertyValue>
+      <PropertyValue Name="Id">6abe3154-d267-496a-bc64-105e90077597</PropertyValue>
+      <PropertyValue Name="ConnectionString" xml:space="preserve">Data Source=em-maindb.database.windows.net;Encrypt=False;Integrated Security=False;User ID=dba</PropertyValue>
+    </ConnectionModel>
+    <Schema>EpiPortalDB</Schema>
+  </Target>
+  <Filter Value="0" />
+  <HideUnmodifiedColumns>False</HideUnmodifiedColumns>
+  <Options>
+    <PropertyValue Name="CompareMemoryOptimizedTables">false</PropertyValue>
+    <PropertyValue Name="CompareColumnStoreTables">false</PropertyValue>
+    <PropertyValue Name="CompareTemporalHistoryTable">false</PropertyValue>
+    <PropertyValue Name="IgnoreTemporalTableSysColumns">false</PropertyValue>
+    <PropertyValue Name="CompareClrTypesAsBinary">false</PropertyValue>
+    <PropertyValue Name="IgnoreTimestampColumns">false</PropertyValue>
+    <PropertyValue Name="IgnoreRowguidColumns">false</PropertyValue>
+    <PropertyValue Name="IgnoreIdentityColumns">false</PropertyValue>
+    <PropertyValue Name="MappingIgnoreSpaces">true</PropertyValue>
+    <PropertyValue Name="MappingIgnoreCase">false</PropertyValue>
+    <PropertyValue Name="MappingIgnoreUnderscores">false</PropertyValue>
+    <PropertyValue Name="ExcludeObjectsByMask">false</PropertyValue>
+    <PropertyValue Name="IgnoreLeadingSpaces">false</PropertyValue>
+    <PropertyValue Name="IgnoreInternalSpaces">false</PropertyValue>
+    <PropertyValue Name="IgnoreEndOfLine">false</PropertyValue>
+    <PropertyValue Name="RoundFloatTypes">false</PropertyValue>
+    <PropertyValue Name="IgnoreCase">false</PropertyValue>
+    <PropertyValue Name="CompareViews">true</PropertyValue>
+    <PropertyValue Name="IsIgnoreTime">false</PropertyValue>
+    <PropertyValue Name="IgnoreTrailingSpaces">false</PropertyValue>
+    <PropertyValue Name="AppendTimestamp">true</PropertyValue>
+    <PropertyValue Name="IgnoreLobColumns">false</PropertyValue>
+    <PropertyValue Name="IgnoreColumnsByMask">false</PropertyValue>
+    <PropertyValue Name="MappingColumnsMaskUseRegexp">false</PropertyValue>
+    <PropertyValue Name="MappingColumnsMask" xml:space="preserve">*ModifiedDate*,*CreatedOn*,*UpdatedBy*</PropertyValue>
+    <PropertyValue Name="ExcludeObjectsMaskUseRegexp">false</PropertyValue>
+    <PropertyValue Name="ExcludeObjectsMask" xml:space="preserve">*Table*</PropertyValue>
+    <PropertyValue Name="IncludeObjectsByMask">false</PropertyValue>
+    <PropertyValue Name="IncludeObjectsMaskUseRegexp">false</PropertyValue>
+    <PropertyValue Name="IncludeObjectsMask" xml:space="preserve">*</PropertyValue>
+    <PropertyValue Name="IgnoreComputedColumns">true</PropertyValue>
+    <PropertyValue Name="ExcludeNewAddedObjects">false</PropertyValue>
+    <PropertyValue Name="CompareTables">true</PropertyValue>
+    <PropertyValue Name="RoundFloatTypesUpTo" xml:space="preserve">3</PropertyValue>
+    <PropertyValue Name="IsEmptyStringEqualsNull">false</PropertyValue>
+    <PropertyValue Name="ToleranceInterval">false</PropertyValue>
+    <PropertyValue Name="ToleranceIntervalValue" xml:space="preserve">0</PropertyValue>
+    <PropertyValue Name="CheckDifferent">true</PropertyValue>
+    <PropertyValue Name="CheckOnlyInSource">true</PropertyValue>
+    <PropertyValue Name="CheckOnlyInTarget">true</PropertyValue>
+    <PropertyValue Name="CheckIdentical">true</PropertyValue>
+  </Options>
+  <ModifiedObjects />
+  <SynchronizationOptions>
+    <PropertyValue Name="BackupDatabase">false</PropertyValue>
+    <PropertyValue Name="BackupExtension">false</PropertyValue>
+    <PropertyValue Name="CreateBackupFolder">true</PropertyValue>
+    <PropertyValue Name="NeedCompressBackup">true</PropertyValue>
+    <PropertyValue Name="AddBackupType">false</PropertyValue>
+    <PropertyValue Name="BackupType">0</PropertyValue>
+    <PropertyValue Name="ExecuteAsSingleTransaction">true</PropertyValue>
+    <PropertyValue Name="AddingErrorHandling">false</PropertyValue>
+    <PropertyValue Name="AddTransactionIsolationLevel">false</PropertyValue>
+    <PropertyValue Name="TransactionIsolationLevel">0</PropertyValue>
+    <PropertyValue Name="DeployDatabaseInSingleUserMode">false</PropertyValue>
+    <PropertyValue Name="UseSchemaNamePrefix">false</PropertyValue>
+    <PropertyValue Name="IncludeUseDatabase">true</PropertyValue>
+    <PropertyValue Name="CheckConcurrencyUpdates">false</PropertyValue>
+    <PropertyValue Name="DisableForeignKeys">true</PropertyValue>
+    <PropertyValue Name="DropKeys">false</PropertyValue>
+    <PropertyValue Name="DropCheckConstraints">false</PropertyValue>
+    <PropertyValue Name="DisableDmlTriggers">true</PropertyValue>
+    <PropertyValue Name="DisableDdlTriggers">false</PropertyValue>
+    <PropertyValue Name="SynchronizeViaFiles">false</PropertyValue>
+    <PropertyValue Name="IncludePrintComments">false</PropertyValue>
+    <PropertyValue Name="ExcludeComments">false</PropertyValue>
+    <PropertyValue Name="BulkInsert">false</PropertyValue>
+    <PropertyValue Name="SynchronizeType">0</PropertyValue>
+    <PropertyValue Name="SynchronizationFileName" xml:space="preserve">C:\Work\MethylPipeline\workflow_engine\MethylPipeline vs. EpiPortalDB (em-maindb.database.windows.net).sql</PropertyValue>
+    <PropertyValue Name="SynchronizationEditorFileName" xml:space="preserve" />
+    <PropertyValue Name="OpenScriptInEditor">false</PropertyValue>
+    <PropertyValue Name="RefreshAfterSynchronization">true</PropertyValue>
+    <PropertyValue Name="OpenScriptsFolder">false</PropertyValue>
+    <PropertyValue Name="BackupPathName" xml:space="preserve" />
+    <PropertyValue Name="BackupExtensionName" xml:space="preserve">.bak</PropertyValue>
+    <PropertyValue Name="UseCommitMode">false</PropertyValue>
+    <PropertyValue Name="CommitPageLength" xml:space="preserve">100</PropertyValue>
+    <PropertyValue Name="UseSqlExtensionCommands">true</PropertyValue>
+    <PropertyValue Name="ExecuteCustomScriptTypeBefore">0</PropertyValue>
+    <PropertyValue Name="EmbeddedScriptBefore" xml:space="preserve" />
+    <PropertyValue Name="ExternalScriptBefore" xml:space="preserve" />
+    <PropertyValue Name="ExecuteCustomScriptTypeAfter">0</PropertyValue>
+    <PropertyValue Name="IncludeStatementUSEBefore">false</PropertyValue>
+    <PropertyValue Name="EmbeddedScriptAfter" xml:space="preserve" />
+    <PropertyValue Name="ExternalScriptAfter" xml:space="preserve" />
+    <PropertyValue Name="IncludeStatementUSEAfter">false</PropertyValue>
+    <PropertyValue Name="ReseedIdentityColumns">true</PropertyValue>
+    <PropertyValue Name="UseExec">true</PropertyValue>
+    <PropertyValue Name="RestoreConstraintsWithCheck">false</PropertyValue>
+    <PropertyValue Name="UseSubSchemaNamePrefix">true</PropertyValue>
+  </SynchronizationOptions>
+  <Mapping>
+    <Schemas>
+      <Object SourceName="app" TargetName="app" State="DefaultMapped" Included="True" />
+      <Object SourceName="Contract" TargetName="Contract" State="DefaultMapped" Included="True" />
+      <Object SourceName="dbo" TargetName="dbo" State="DefaultMapped" Included="True" />
+      <Object SourceName="guest" TargetName="guest" State="DefaultMapped" Included="True" />
+      <Object SourceName="Meta" TargetName="Meta" State="DefaultMapped" Included="True" />
+      <Object SourceName="Onboarding" TargetName="Onboarding" State="DefaultMapped" Included="True" />
+      <Object SourceName="portal" TargetName="portal" State="DefaultMapped" Included="True" />
+      <Object SourceName="RBAC" TargetName="RBAC" State="DefaultMapped" Included="True" />
+      <Object SourceName="wf" TargetName="wf" State="DefaultMapped" Included="True" />
+    </Schemas>
+    <ComparedObjects>
+      <Object SourceName="Contract.ContractLimits" TargetName="Contract.ContractLimits" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="Contract.ContractRolePolicies" TargetName="Contract.ContractRolePolicies" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="Contract.Contracts" TargetName="Contract.Contracts" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="Contract.ContractScopes" TargetName="Contract.ContractScopes" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="Contract.ContractWorkflowEntitlements" TargetName="Contract.ContractWorkflowEntitlements" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="Contract.WorkflowUsageCounters" TargetName="Contract.WorkflowUsageCounters" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="dbo.[25834]" TargetName="dbo.[25834]" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.[25834].Sample" TargetName="dbo.[25834].Sample" />
+          <Column SourceName="dbo.[25834].Sample_Type" TargetName="dbo.[25834].Sample_Type" />
+          <Column SourceName="dbo.[25834].Condition" TargetName="dbo.[25834].Condition" />
+          <Column SourceName="dbo.[25834].Age" TargetName="dbo.[25834].Age" />
+          <Column SourceName="dbo.[25834].BMI" TargetName="dbo.[25834].BMI" />
+          <Column SourceName="dbo.[25834].Race" TargetName="dbo.[25834].Race" />
+          <Column SourceName="dbo.[25834].PSA" TargetName="dbo.[25834].PSA" />
+          <Column SourceName="dbo.[25834].DRE" TargetName="dbo.[25834].DRE" />
+          <Column SourceName="dbo.[25834].Gleason_Score" TargetName="dbo.[25834].Gleason_Score" />
+          <Column SourceName="dbo.[25834].Stage" TargetName="dbo.[25834].Stage" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.[25862]" TargetName="dbo.[25862]" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.[25862].Sample" TargetName="dbo.[25862].Sample" />
+          <Column SourceName="dbo.[25862].Stage" TargetName="dbo.[25862].Stage" />
+          <Column SourceName="dbo.[25862].Condition" TargetName="dbo.[25862].Condition" />
+          <Column SourceName="dbo.[25862].Age" TargetName="dbo.[25862].Age" />
+          <Column SourceName="dbo.[25862].Race" TargetName="dbo.[25862].Race" />
+          <Column SourceName="dbo.[25862].Ethnicity" TargetName="dbo.[25862].Ethnicity" />
+          <Column SourceName="dbo.[25862].BMI" TargetName="dbo.[25862].BMI" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.[26368]" TargetName="dbo.[26368]" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.[26368].Gender" TargetName="dbo.[26368].Gender" />
+          <Column SourceName="dbo.[26368].Age" TargetName="dbo.[26368].Age" />
+          <Column SourceName="dbo.[26368].Race" TargetName="dbo.[26368].Race" />
+          <Column SourceName="dbo.[26368].Ethnicity" TargetName="dbo.[26368].Ethnicity" />
+          <Column SourceName="dbo.[26368].[Height(CM)]" TargetName="dbo.[26368].[Height(CM)]" />
+          <Column SourceName="dbo.[26368].[Weight(KG)]" TargetName="dbo.[26368].[Weight(KG)]" />
+          <Column SourceName="dbo.[26368].BMI" TargetName="dbo.[26368].BMI" />
+          <Column SourceName="dbo.[26368].PSA" TargetName="dbo.[26368].PSA" />
+          <Column SourceName="dbo.[26368].[Digital Rectal Exam]" TargetName="dbo.[26368].[Digital Rectal Exam]" />
+          <Column SourceName="dbo.[26368].PsomagenID" TargetName="dbo.[26368].PsomagenID" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.[26418]" TargetName="dbo.[26418]" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.[26418].stage_group_name" TargetName="dbo.[26418].stage_group_name" />
+          <Column SourceName="dbo.[26418].gleason_score" TargetName="dbo.[26418].gleason_score" />
+          <Column SourceName="dbo.[26418].PsomagenID" TargetName="dbo.[26418].PsomagenID" />
+          <Column SourceName="dbo.[26418].Gender" TargetName="dbo.[26418].Gender" />
+          <Column SourceName="dbo.[26418].Age" TargetName="dbo.[26418].Age" />
+          <Column SourceName="dbo.[26418].Race" TargetName="dbo.[26418].Race" />
+          <Column SourceName="dbo.[26418].Ethnicity" TargetName="dbo.[26418].Ethnicity" />
+          <Column SourceName="dbo.[26418].BMI" TargetName="dbo.[26418].BMI" />
+          <Column SourceName="dbo.[26418].[Progression of Cancer Y/N]" TargetName="dbo.[26418].[Progression of Cancer Y/N]" />
+          <Column SourceName="dbo.[26418].[Recurrence Y/N]" TargetName="dbo.[26418].[Recurrence Y/N]" />
+          <Column SourceName="dbo.[26418].[Currently Alive/Deceased]" TargetName="dbo.[26418].[Currently Alive/Deceased]" />
+          <Column SourceName="dbo.[26418].[Recurrence Note]" TargetName="dbo.[26418].[Recurrence Note]" />
+          <Column SourceName="dbo.[26418].PSA" TargetName="dbo.[26418].PSA" />
+          <Column SourceName="dbo.[26418].DRE" TargetName="dbo.[26418].DRE" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.[26454]" TargetName="dbo.[26454]" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.[26454].PsomagenID" TargetName="dbo.[26454].PsomagenID" />
+          <Column SourceName="dbo.[26454].ER_Status" TargetName="dbo.[26454].ER_Status" />
+          <Column SourceName="dbo.[26454].PR_Status" TargetName="dbo.[26454].PR_Status" />
+          <Column SourceName="dbo.[26454].HER2_Status" TargetName="dbo.[26454].HER2_Status" />
+          <Column SourceName="dbo.[26454].Age" TargetName="dbo.[26454].Age" />
+          <Column SourceName="dbo.[26454].BMI" TargetName="dbo.[26454].BMI" />
+          <Column SourceName="dbo.[26454].Stage" TargetName="dbo.[26454].Stage" />
+          <Column SourceName="dbo.[26454].Race" TargetName="dbo.[26454].Race" />
+          <Column SourceName="dbo.[26454].Ethnicity" TargetName="dbo.[26454].Ethnicity" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.[26500]" TargetName="dbo.[26500]" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.[26500].PsomagenID" TargetName="dbo.[26500].PsomagenID" />
+          <Column SourceName="dbo.[26500].TNM_Stage" TargetName="dbo.[26500].TNM_Stage" />
+          <Column SourceName="dbo.[26500].Race" TargetName="dbo.[26500].Race" />
+          <Column SourceName="dbo.[26500].Age" TargetName="dbo.[26500].Age" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.all_batches" TargetName="dbo.all_batches" SourceType="Table" TargetType="Table" />
+      <Object SourceName="dbo.breast" TargetName="dbo.breast" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.breast.PatientID" TargetName="dbo.breast.PatientID" />
+          <Column SourceName="dbo.breast.ER_Status" TargetName="dbo.breast.ER_Status" />
+          <Column SourceName="dbo.breast.PR_Status" TargetName="dbo.breast.PR_Status" />
+          <Column SourceName="dbo.breast.HER2_Status" TargetName="dbo.breast.HER2_Status" />
+          <Column SourceName="dbo.breast.Age" TargetName="dbo.breast.Age" />
+          <Column SourceName="dbo.breast.BMI" TargetName="dbo.breast.BMI" />
+          <Column SourceName="dbo.breast.Stage" TargetName="dbo.breast.Stage" />
+          <Column SourceName="dbo.breast.Race" TargetName="dbo.breast.Race" />
+          <Column SourceName="dbo.breast.Ethnicity" TargetName="dbo.breast.Ethnicity" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.[colon-rectum]" TargetName="dbo.[colon-rectum]" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.[colon-rectum].cancer_type" TargetName="dbo.[colon-rectum].cancer_type" />
+          <Column SourceName="dbo.[colon-rectum].stage" TargetName="dbo.[colon-rectum].stage" />
+          <Column SourceName="dbo.[colon-rectum].[Psomagen ID]" TargetName="dbo.[colon-rectum].[Psomagen ID]" />
+          <Column SourceName="dbo.[colon-rectum].Participant_Age" TargetName="dbo.[colon-rectum].Participant_Age" />
+          <Column SourceName="dbo.[colon-rectum].Participant_Gender" TargetName="dbo.[colon-rectum].Participant_Gender" />
+          <Column SourceName="dbo.[colon-rectum].Participant_Race" TargetName="dbo.[colon-rectum].Participant_Race" />
+          <Column SourceName="dbo.[colon-rectum].Participant_Ethnicity" TargetName="dbo.[colon-rectum].Participant_Ethnicity" />
+          <Column SourceName="dbo.[colon-rectum].BMI" TargetName="dbo.[colon-rectum].BMI" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.HDiseases" TargetName="dbo.HDiseases" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.healthy_controls" TargetName="dbo.healthy_controls" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.healthy_controls.[Psomagen ID]" TargetName="dbo.healthy_controls.[Psomagen ID]" />
+          <Column SourceName="dbo.healthy_controls.Age" TargetName="dbo.healthy_controls.Age" />
+          <Column SourceName="dbo.healthy_controls.Gender" TargetName="dbo.healthy_controls.Gender" />
+          <Column SourceName="dbo.healthy_controls.Race" TargetName="dbo.healthy_controls.Race" />
+          <Column SourceName="dbo.healthy_controls.Ethnicity" TargetName="dbo.healthy_controls.Ethnicity" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.History" TargetName="dbo.History" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.HPatients" TargetName="dbo.HPatients" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.HSamples" TargetName="dbo.HSamples" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.Institutions" TargetName="dbo.Institutions" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.JsonValues" TargetName="dbo.JsonValues" SourceType="Table" TargetType="Table" />
+      <Object SourceName="dbo.Labs" TargetName="dbo.Labs" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.Links" TargetName="dbo.Links" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.Objs" TargetName="dbo.Objs" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.ObjValue" TargetName="dbo.ObjValue" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.pancreatic" TargetName="dbo.pancreatic" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.pancreatic.cancer_type" TargetName="dbo.pancreatic.cancer_type" />
+          <Column SourceName="dbo.pancreatic.stage" TargetName="dbo.pancreatic.stage" />
+          <Column SourceName="dbo.pancreatic.[Psomagen ID]" TargetName="dbo.pancreatic.[Psomagen ID]" />
+          <Column SourceName="dbo.pancreatic.Participant_Age" TargetName="dbo.pancreatic.Participant_Age" />
+          <Column SourceName="dbo.pancreatic.Participant_Gender" TargetName="dbo.pancreatic.Participant_Gender" />
+          <Column SourceName="dbo.pancreatic.Participant_Race" TargetName="dbo.pancreatic.Participant_Race" />
+          <Column SourceName="dbo.pancreatic.Participant_Ethnicity" TargetName="dbo.pancreatic.Participant_Ethnicity" />
+          <Column SourceName="dbo.pancreatic.BMI" TargetName="dbo.pancreatic.BMI" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.Patients" TargetName="dbo.Patients" SourceType="Table" TargetType="Table" />
+      <Object SourceName="dbo.PCa1" TargetName="dbo.PCa1" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.PCa1.sample" TargetName="dbo.PCa1.sample" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.PCa2" TargetName="dbo.PCa2" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.PCa2.sample" TargetName="dbo.PCa2.sample" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.PCa3" TargetName="dbo.PCa3" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.PCa3.sample" TargetName="dbo.PCa3.sample" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.PCa4" TargetName="dbo.PCa4" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.PCa4.sample" TargetName="dbo.PCa4.sample" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.PCaH" TargetName="dbo.PCaH" SourceType="Table" TargetType="Table" />
+      <Object SourceName="dbo.PCd" TargetName="dbo.PCd" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.PCd.Status" TargetName="dbo.PCd.Status" />
+          <Column SourceName="dbo.PCd.[Psomagen ID]" TargetName="dbo.PCd.[Psomagen ID]" />
+          <Column SourceName="dbo.PCd.RAND" TargetName="dbo.PCd.RAND" />
+          <Column SourceName="dbo.PCd.Source" TargetName="dbo.PCd.Source" />
+          <Column SourceName="dbo.PCd.Age" TargetName="dbo.PCd.Age" />
+          <Column SourceName="dbo.PCd.Race" TargetName="dbo.PCd.Race" />
+          <Column SourceName="dbo.PCd.Ethnicity" TargetName="dbo.PCd.Ethnicity" />
+          <Column SourceName="dbo.PCd.BMI" TargetName="dbo.PCd.BMI" />
+          <Column SourceName="dbo.PCd.PSA" TargetName="dbo.PCd.PSA" />
+          <Column SourceName="dbo.PCd.Gleason" TargetName="dbo.PCd.Gleason" />
+          <Column SourceName="dbo.PCd.GleasonN" TargetName="dbo.PCd.GleasonN" />
+          <Column SourceName="dbo.PCd.Stage" TargetName="dbo.PCd.Stage" />
+          <Column SourceName="dbo.PCd.GS" TargetName="dbo.PCd.GS" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.Samples" TargetName="dbo.Samples" SourceType="Table" TargetType="Table" />
+      <Object SourceName="dbo.Tree" TargetName="dbo.Tree" SourceType="Table" TargetType="Table" Included="False" IncludedInScript="False" />
+      <Object SourceName="dbo.viewNewPCaSamples" TargetName="dbo.viewNewPCaSamples" SourceType="View" TargetType="View" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.viewNewPCaSamples.PatientID" TargetName="dbo.viewNewPCaSamples.PatientID" />
+          <Column SourceName="dbo.viewNewPCaSamples.Age" TargetName="dbo.viewNewPCaSamples.Age" />
+          <Column SourceName="dbo.viewNewPCaSamples.BMI" TargetName="dbo.viewNewPCaSamples.BMI" />
+          <Column SourceName="dbo.viewNewPCaSamples.DiseaseID" TargetName="dbo.viewNewPCaSamples.DiseaseID" />
+          <Column SourceName="dbo.viewNewPCaSamples.Stage" TargetName="dbo.viewNewPCaSamples.Stage" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.viewPCaH" TargetName="dbo.viewPCaH" SourceType="View" TargetType="View" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.viewPCaH.PatientID" TargetName="dbo.viewPCaH.PatientID" />
+          <Column SourceName="dbo.viewPCaH.Name" TargetName="dbo.viewPCaH.Name" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.viewPCaHSamples" TargetName="dbo.viewPCaHSamples" SourceType="View" TargetType="View" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.viewPCaHSamples.GroupID" TargetName="dbo.viewPCaHSamples.GroupID" />
+          <Column SourceName="dbo.viewPCaHSamples.SampleID" TargetName="dbo.viewPCaHSamples.SampleID" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.viewSamples" TargetName="dbo.viewSamples" SourceType="View" TargetType="View" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.viewSamples.PatientID" TargetName="dbo.viewSamples.PatientID" />
+          <Column SourceName="dbo.viewSamples.Age" TargetName="dbo.viewSamples.Age" />
+          <Column SourceName="dbo.viewSamples.Height" TargetName="dbo.viewSamples.Height" />
+          <Column SourceName="dbo.viewSamples.Weight" TargetName="dbo.viewSamples.Weight" />
+          <Column SourceName="dbo.viewSamples.BMI" TargetName="dbo.viewSamples.BMI" />
+          <Column SourceName="dbo.viewSamples.DiseaseID" TargetName="dbo.viewSamples.DiseaseID" />
+          <Column SourceName="dbo.viewSamples.Stage" TargetName="dbo.viewSamples.Stage" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="dbo.vObjs" TargetName="dbo.vObjs" SourceType="View" TargetType="View" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="dbo.vObjs.ID" TargetName="dbo.vObjs.ID" />
+          <Column SourceName="dbo.vObjs.ClassID" TargetName="dbo.vObjs.ClassID" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="Meta.Classes" TargetName="Meta.Classes" SourceType="Table" TargetType="Table" />
+      <Object SourceName="Meta.Event" TargetName="Meta.Event" SourceType="Table" TargetType="Table" />
+      <Object SourceName="Meta.Links" TargetName="Meta.Links" SourceType="Table" TargetType="Table" />
+      <Object SourceName="Meta.LinkTypes" TargetName="Meta.LinkTypes" SourceType="Table" TargetType="Table" />
+      <Object SourceName="Meta.Operations" TargetName="Meta.Operations" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="Onboarding.ApprovalQueue" TargetName="Onboarding.ApprovalQueue" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="Onboarding.AuditLog" TargetName="Onboarding.AuditLog" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="Onboarding.InvitationBatches" TargetName="Onboarding.InvitationBatches" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="Onboarding.Invitations" TargetName="Onboarding.Invitations" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="portal.Batches" TargetName="portal.Batches" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.CustomerInstitutions" TargetName="portal.CustomerInstitutions" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.Customers" TargetName="portal.Customers" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.Diseases" TargetName="portal.Diseases" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.Groups" TargetName="portal.Groups" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.GroupSamples" TargetName="portal.GroupSamples" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.InstitutionLabs" TargetName="portal.InstitutionLabs" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.Institutions" TargetName="portal.Institutions" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.Labs" TargetName="portal.Labs" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.LabSamples" TargetName="portal.LabSamples" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.NavTree" TargetName="portal.NavTree" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.NodeInfos" TargetName="portal.NodeInfos" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.Patients" TargetName="portal.Patients" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.Role2Node" TargetName="portal.Role2Node" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.Samples" TargetName="portal.Samples" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.SamplesBreastCancer" TargetName="portal.SamplesBreastCancer" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.SamplesProstateCancer" TargetName="portal.SamplesProstateCancer" SourceType="Table" TargetType="Table" />
+      <Object SourceName="portal.viewUserAllRoles" TargetName="portal.viewUserAllRoles" SourceType="View" TargetType="View" Included="False" IncludedInScript="False" CustomMapped="True">
+        <ComparedColumns CustomMapped="True">
+          <Column SourceName="portal.viewUserAllRoles.UserId" TargetName="portal.viewUserAllRoles.UserId" />
+          <Column SourceName="portal.viewUserAllRoles.RoleId" TargetName="portal.viewUserAllRoles.RoleId" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="RBAC.BypassScopeApprovals" TargetName="RBAC.BypassScopeApprovals" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.ExternalIdentities" TargetName="RBAC.ExternalIdentities" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.Group_Roles" TargetName="RBAC.Group_Roles" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.Group_Users" TargetName="RBAC.Group_Users" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.Groups" TargetName="RBAC.Groups" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.IdentityProviders" TargetName="RBAC.IdentityProviders" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.Permissions" TargetName="RBAC.Permissions" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.Role_Permissions" TargetName="RBAC.Role_Permissions" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.Roles" TargetName="RBAC.Roles" SourceType="Table" TargetType="Table" />
+      <Object SourceName="RBAC.ScopeIdentityProviders" TargetName="RBAC.ScopeIdentityProviders" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.Scopes" TargetName="RBAC.Scopes" SourceType="Table" TargetType="Table" />
+      <Object SourceName="RBAC.Session_Roles" TargetName="RBAC.Session_Roles" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.Sessions" TargetName="RBAC.Sessions" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.UserRoleGrants" TargetName="RBAC.UserRoleGrants" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="RBAC.Users" TargetName="RBAC.Users" SourceType="Table" TargetType="Table" IncludedInScript="False">
+        <ComparedColumns>
+          <Column SourceName="RBAC.Users.username" TargetName="RBAC.Users.username" Included="False" />
+        </ComparedColumns>
+      </Object>
+      <Object SourceName="wf.cluster" TargetName="wf.cluster" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.execution_context" TargetName="wf.execution_context" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.instance_cursor" TargetName="wf.instance_cursor" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.loop_state" TargetName="wf.loop_state" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.node_execution" TargetName="wf.node_execution" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.task_lease" TargetName="wf.task_lease" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.worker" TargetName="wf.worker" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.worker_token" TargetName="wf.worker_token" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.workflow_action" TargetName="wf.workflow_action" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.workflow_def" TargetName="wf.workflow_def" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.workflow_edge" TargetName="wf.workflow_edge" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.workflow_input_binding" TargetName="wf.workflow_input_binding" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.workflow_input_template" TargetName="wf.workflow_input_template" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.workflow_instance" TargetName="wf.workflow_instance" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.workflow_node" TargetName="wf.workflow_node" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+      <Object SourceName="wf.workflow_version" TargetName="wf.workflow_version" SourceType="Table" TargetType="Table" IncludedInScript="False" />
+    </ComparedObjects>
+  </Mapping>
+  <Issues />
+</CompareDocument>

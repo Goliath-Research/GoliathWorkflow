@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copy to WfEngine.paths.cfg and adjust UniDAC paths for your machine.
+  WfEngine.paths.cfg is gitignored; the example file is committed as a template.
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <!-- Typical UniDAC install (edit version/path): -->
+    <DCC_UnitSearchPath>
+      C:\Program Files (x86)\Devart\UniDAC for RAD Studio 13\Source;
+      C:\Program Files (x86)\Devart\UniDAC for RAD Studio 13\Lib\Win64;
+      $(DCC_UnitSearchPath)
+    </DCC_UnitSearchPath>
+    <!-- Optional: add UniDAC runtime/design-time packages in IDE via Project > Requires -->
+  </PropertyGroup>
+</Project>

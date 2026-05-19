@@ -1,0 +1,29 @@
+package WfEnginePkg;
+
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This UNIT compiles into WfEnginePkg}
+{$ALIGN 8}
+{$ASSERT DBG ON}
+{$DEBUGINFO ON}
+{$LOCALSYMBOLS ON}
+{$REFERENCEINFO ON}
+{$ENDIF}
+
+requires
+  rtl,
+  dbrtl;
+
+contains
+  WfEngine.Types in 'src\WfEngine.Types.pas',
+  WfEngine.Exceptions in 'src\WfEngine.Exceptions.pas',
+  WfEngine.Interfaces in 'src\WfEngine.Interfaces.pas',
+  WfEngine.Repository in 'src\WfEngine.Repository.pas',
+  WfEngine.Scope in 'src\WfEngine.Scope.pas',
+  WfEngine.JsonResolver in 'src\WfEngine.JsonResolver.pas',
+  WfEngine.ControlFlow in 'src\WfEngine.ControlFlow.pas',
+  WfEngine.Scheduler in 'src\WfEngine.Scheduler.pas',
+  WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
+  WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
+  WfEngine in 'src\WfEngine.pas';
+
+end.

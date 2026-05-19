@@ -1,0 +1,51 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{C5D6E7F8-90A1-B2C3-D4E5-F60718293A4B}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="WfEnginePkg.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="WfEngineSrv.dproj">
+            <Dependencies>
+                <Dependency Name="WfEnginePkg.bpl"/>
+            </Dependencies>
+        </Projects>
+        <Projects Include="tests\WfEngineTests.dproj">
+            <Dependencies>
+                <Dependency Name="WfEnginePkg.bpl"/>
+            </Dependencies>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="WfEnginePkg">
+        <MSBuild Projects="WfEnginePkg.dproj"/>
+    </Target>
+    <Target Name="WfEnginePkg:Clean">
+        <MSBuild Projects="WfEnginePkg.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="WfEngineSrv">
+        <MSBuild Projects="WfEngineSrv.dproj"/>
+    </Target>
+    <Target Name="WfEngineSrv:Clean">
+        <MSBuild Projects="WfEngineSrv.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="WfEngineTests">
+        <MSBuild Projects="tests\WfEngineTests.dproj"/>
+    </Target>
+    <Target Name="WfEngineTests:Clean">
+        <MSBuild Projects="tests\WfEngineTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="WfEnginePkg;WfEngineSrv;WfEngineTests"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="WfEnginePkg:Clean;WfEngineSrv:Clean;WfEngineTests:Clean"/>
+    </Target>
+</Project>
