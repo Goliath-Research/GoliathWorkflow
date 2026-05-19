@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -9,12 +10,16 @@ import pandas as pd
 import pytest
 
 from methyl_enricher.enricher_completeness import (
+    COMPLETENESS_MANIFEST_FILENAME,
+    CompletenessReport,
     RetryPolicy,
     assess_completeness,
     classify_enrich_error,
+    completeness_manifest_path,
     enrich_one_library,
     is_retryable,
     merge_library_results,
+    production_enricher_root,
     EnrichErrorKind,
 )
 
@@ -37,6 +42,62 @@ def test_merge_library_results_from_csvs(tmp_path: Path):
     merged = merge_library_results(tmp_path, [lib], cutoff=0.05)
     assert len(merged) == 1
     assert (tmp_path / "enrichment_merged.csv").is_file()
+
+
+def test_production_enricher_root_not_control_subdir(tmp_path: Path):
+    """Manifest and queue must live under enricher/, not enricher/<control_group>/."""
+    sample_csv = tmp_path / "PCa1.csv"
+    sample_csv.write_text("sample_id\ns1\n", encoding="utf-8")
+    healthy_csv = tmp_path / "healthy.csv"
+    healthy_csv.write_text("sample_id\nh1\n", encoding="utf-8")
+    prod_dir = tmp_path / "production"
+    proj = {
+        "project_name": "production",
+        "output_base": str(tmp_path),
+        "controls": {
+            "label": "healthy",
+            "groups": [{"label": "all", "sample_paths": [str(healthy_csv)]}],
+        },
+        "diseases": {
+            "label": "cancer",
+            "groups": [
+                {
+                    "label": "PCa",
+                    "stages": [{"label": "PCa1", "sample_paths": [str(sample_csv)]}],
+                }
+            ],
+        },
+        "comparisons": "control_vs_each_disease",
+    }
+    prod_dir.mkdir(parents=True)
+    project_json = prod_dir / "project.json"
+    project_json.write_text(json.dumps(proj), encoding="utf-8")
+
+    root = production_enricher_root(project_json)
+    assert root == prod_dir / "enricher"
+    assert root != prod_dir / "enricher" / "all"
+
+    manifest = completeness_manifest_path(project_json)
+    assert manifest == prod_dir / "enricher" / COMPLETENESS_MANIFEST_FILENAME
+
+    from methyl_enricher.ensure_complete import write_project_completeness_manifest
+
+    write_project_completeness_manifest(
+        project_json,
+        {
+            "PCa_PCa1": CompletenessReport(
+                output_dir=str(prod_dir / "enricher" / "all" / "PCa_PCa1"),
+                expected_libraries=["KEGG_2021_Human"],
+                present_libraries=["KEGG_2021_Human"],
+                missing_libraries=[],
+                modules_required=False,
+                modules_present=False,
+                complete=True,
+            )
+        },
+    )
+    assert manifest.is_file()
+    assert not (prod_dir / "enricher" / "all" / COMPLETENESS_MANIFEST_FILENAME).is_file()
 
 
 def test_assess_completeness_detects_missing(tmp_path: Path):
