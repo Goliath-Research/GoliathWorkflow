@@ -15,6 +15,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score
 
 from methyl_predictor.project_resolver import resolve_predictor_config
+from methyl_utils import load_project
 
 from .model_bundle import build_model_feature_bundle, load_bundle_dmp_index
 from .observed_feature_builder import (
@@ -84,6 +85,21 @@ def _ensure_bundle_h5(project_json: Path, bundle_dir: Path) -> Path:
     return bundle_h5
 
 
+def _resolve_class_centroid_dirs(project_json: Path) -> Dict[str, str]:
+    label_to_dir: Dict[str, str] = {}
+    try:
+        project = load_project(project_json)
+        resolved = project.get_resolved_groups()
+        derived = project.get_derived_paths()
+        centroid_dirs = list(getattr(derived, "centroid_dirs", []) or [])
+        for idx, (label, _paths) in enumerate(resolved):
+            if idx < len(centroid_dirs):
+                label_to_dir[str(label)] = str(centroid_dirs[idx])
+    except Exception:
+        return {}
+    return {k: v for k, v in label_to_dir.items() if str(v).strip()}
+
+
 def _sample_paths_from_predictions(
     predictions_df: pd.DataFrame,
     project_json: Path,
@@ -150,6 +166,10 @@ def train_and_apply_ecdf_second_stage(
     dmr_window_bp: int = 100000,
     max_dmr_features: int = 32,
     max_gene_features: int = 32,
+    hist_eps: float = 1e-6,
+    hist_alpha: float = 0.5,
+    hist_evidence_clip_cap: float = 5.0,
+    hist_tail_agreement_threshold: float = 0.10,
 ) -> Dict[str, Any]:
     project_json = Path(project_json).resolve()
     predictor_output_dir = Path(predictor_output_dir).resolve()
@@ -178,10 +198,20 @@ def train_and_apply_ecdf_second_stage(
         raise ValueError("No sample paths were derived from predictions.csv for ECDF second-stage scorer.")
     y_for_anchor = pd.to_numeric(df["expected_class"], errors="coerce").fillna(0).astype(int).to_numpy()
     y_for_anchor = np.where(y_for_anchor > 0, 1, 0).astype(np.int32)
+    centroid_dirs = _resolve_class_centroid_dirs(project_json)
+    healthy_label = "healthy"
+    cancer_labels = ["cancer"]
+    if centroid_dirs:
+        labels = list(centroid_dirs.keys())
+        if labels:
+            healthy_label = labels[0]
+            if len(labels) > 1:
+                cancer_labels = [labels[1]]
+
     anchors = derive_observed_hybrid_anchors(
         sample_paths=sample_paths,
         sample_class_indices=y_for_anchor.tolist(),
-        class_names=["healthy", "cancer"],
+        class_names=[healthy_label] + cancer_labels,
         dmp_df=dmp_df,
         min_coverage=int(max(1, min_coverage)),
     )
@@ -199,10 +229,16 @@ def train_and_apply_ecdf_second_stage(
         max_gene_features=int(max(0, max_gene_features)),
         healthy_reference_vector=anchors.healthy_reference_vector,
         cancer_reference_vector=anchors.cancer_reference_vector,
+        per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
         healthy_class_label=anchors.healthy_class_label,
         cancer_class_labels=anchors.cancer_class_labels,
         anchor_strategy=anchors.anchor_strategy,
         expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        centroid_dir_by_class_label=centroid_dirs,
+        hist_eps=float(hist_eps),
+        hist_alpha=float(hist_alpha),
+        hist_evidence_clip_cap=float(hist_evidence_clip_cap),
+        hist_tail_agreement_threshold=float(hist_tail_agreement_threshold),
     )
     X_obs = np.asarray(feat.X, dtype=np.float32)
     fill_values = fit_feature_fill_values(X_obs)
@@ -258,6 +294,10 @@ def train_and_apply_ecdf_second_stage(
         "observed_feature_dmr_window_bp": int(max(1, dmr_window_bp)),
         "observed_feature_max_dmrs": int(max(0, max_dmr_features)),
         "observed_feature_max_genes": int(max(0, max_gene_features)),
+        "observed_hist_eps": float(hist_eps),
+        "observed_hist_alpha": float(hist_alpha),
+        "observed_hist_evidence_clip_cap": float(hist_evidence_clip_cap),
+        "observed_hist_tail_agreement_threshold": float(hist_tail_agreement_threshold),
     }
     verify_feature_schema(
         feat.feature_names,

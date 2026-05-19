@@ -182,6 +182,14 @@ def build_model_backend_steps(
                     observed_feature_max_genes=(
                         config.observed_feature_max_genes if config is not None else 32
                     ),
+                    observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
+                    observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
+                    observed_hist_evidence_clip_cap=(
+                        config.observed_hist_evidence_clip_cap if config is not None else 5.0
+                    ),
+                    observed_hist_tail_agreement_threshold=(
+                        config.observed_hist_tail_agreement_threshold if config is not None else 0.10
+                    ),
                     save_train_dataset=(
                         bool(config.tabular_save_train_dataset)
                         if config is not None and hasattr(config, "tabular_save_train_dataset")
@@ -317,6 +325,14 @@ def build_model_backend_steps(
                     observed_feature_max_genes=(
                         config.observed_feature_max_genes if config is not None else 32
                     ),
+                    observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
+                    observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
+                    observed_hist_evidence_clip_cap=(
+                        config.observed_hist_evidence_clip_cap if config is not None else 5.0
+                    ),
+                    observed_hist_tail_agreement_threshold=(
+                        config.observed_hist_tail_agreement_threshold if config is not None else 0.10
+                    ),
                 )
                 return 0, f"Generative model trained: {model_path}", ""
             except Exception as e:
@@ -377,6 +393,14 @@ def build_model_backend_steps(
                 dmr_window_bp=(config.observed_feature_dmr_window_bp if config is not None else 100000),
                 max_dmr_features=(config.observed_feature_max_dmrs if config is not None else 32),
                 max_gene_features=(config.observed_feature_max_genes if config is not None else 32),
+                hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
+                hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
+                hist_evidence_clip_cap=(
+                    config.observed_hist_evidence_clip_cap if config is not None else 5.0
+                ),
+                hist_tail_agreement_threshold=(
+                    config.observed_hist_tail_agreement_threshold if config is not None else 0.10
+                ),
             )
             if isinstance(out, dict):
                 out["training_metrics_saved"] = bool(tm_ok)

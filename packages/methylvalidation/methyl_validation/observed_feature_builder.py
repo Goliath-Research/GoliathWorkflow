@@ -37,7 +37,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v24_remove_histogram_log_density_margin"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v25_add_per_cancer_histogram_tail_features"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -438,7 +438,86 @@ def _weighted_mean_abs_error(values_a: np.ndarray, values_b: np.ndarray, weights
     return _weighted_mean_with_fallback(abs_err, weights)
 
 
-def _fixed_feature_names() -> List[str]:
+def _feature_label_token(label: object) -> str:
+    token = str(label or "").strip().lower().replace("-", "_").replace(" ", "_")
+    cleaned = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in token)
+    while "__" in cleaned:
+        cleaned = cleaned.replace("__", "_")
+    cleaned = cleaned.strip("_")
+    return cleaned or "cancer"
+
+
+def _prepare_histogram_density_artifacts(
+    locus_df: pd.DataFrame,
+    healthy_class_label: Optional[str],
+    cancer_class_labels: Sequence[str],
+    centroid_dir_by_class_label: Optional[Dict[str, str]],
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Dict[str, np.ndarray]]:
+    if centroid_dir_by_class_label is None or not centroid_dir_by_class_label:
+        return None, None, {}
+    healthy_label = str(healthy_class_label or "").strip()
+    if not healthy_label:
+        return None, None, {}
+    healthy_dir = centroid_dir_by_class_label.get(healthy_label)
+    if not healthy_dir:
+        return None, None, {}
+    if locus_df.empty:
+        return None, None, {}
+
+    n_loci = int(len(locus_df))
+    bin_edges_ref: Optional[np.ndarray] = None
+    healthy_counts_ref: Optional[np.ndarray] = None
+    cancer_counts: Dict[str, np.ndarray] = {}
+
+    by_chrom_indices: Dict[str, np.ndarray] = {}
+    for chrom, cdf in locus_df.groupby("chromosome", sort=False):
+        by_chrom_indices[str(chrom)] = cdf.index.to_numpy(dtype=np.int64)
+
+    for cancer_label in [str(x) for x in cancer_class_labels]:
+        cancer_dir = centroid_dir_by_class_label.get(cancer_label)
+        if not cancer_dir:
+            continue
+        cancer_counts_for_label: Optional[np.ndarray] = None
+        for chrom, idxs in by_chrom_indices.items():
+            sub_df = locus_df.loc[idxs, ["position", "context"]].reset_index(drop=True)
+            loaded = MethylCentroidPair.load_binned_counts_from_centroids(
+                sub_df,
+                centroid1_dir=healthy_dir,
+                centroid2_dir=cancer_dir,
+                chromosome=str(chrom),
+            )
+            if loaded is None:
+                continue
+            edges, healthy_sub, cancer_sub = loaded
+            edges = np.asarray(edges, dtype=np.float64)
+            healthy_sub = np.asarray(healthy_sub, dtype=np.float64)
+            cancer_sub = np.asarray(cancer_sub, dtype=np.float64)
+            if healthy_sub.ndim != 2 or cancer_sub.ndim != 2:
+                continue
+            if healthy_sub.shape[0] != len(sub_df) or cancer_sub.shape[0] != len(sub_df):
+                continue
+            if healthy_sub.shape[1] != cancer_sub.shape[1]:
+                continue
+            if edges.shape[0] != healthy_sub.shape[1] + 1:
+                continue
+            if bin_edges_ref is None:
+                bin_edges_ref = edges
+            elif bin_edges_ref.shape != edges.shape or not np.allclose(bin_edges_ref, edges):
+                # Do not adapt/rebin: skip incompatible sources.
+                continue
+            if healthy_counts_ref is None:
+                healthy_counts_ref = np.zeros((n_loci, healthy_sub.shape[1]), dtype=np.float64)
+            if cancer_counts_for_label is None:
+                cancer_counts_for_label = np.zeros((n_loci, healthy_sub.shape[1]), dtype=np.float64)
+            healthy_counts_ref[idxs, :] = healthy_sub
+            cancer_counts_for_label[idxs, :] = cancer_sub
+        if cancer_counts_for_label is not None:
+            cancer_counts[cancer_label] = cancer_counts_for_label
+
+    return bin_edges_ref, healthy_counts_ref, cancer_counts
+
+
+def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) -> List[str]:
     names = [
         "max_weighted_directional_score",
         "weighted_directional_agreement",
@@ -455,15 +534,28 @@ def _fixed_feature_names() -> List[str]:
         "n_obs_dmps",
         "n_total_dmps",
     ]
+    labels = [str(x) for x in (cancer_class_labels or [])]
+    if not labels:
+        labels = ["cancer"]
+    for label in labels:
+        suffix = _feature_label_token(label)
+        names.extend(
+            [
+                f"weighted_healthy_tail_evidence__{suffix}",
+                f"weighted_healthy_tail_agreement__{suffix}",
+                f"weighted_both_centroid_outlier_score__{suffix}",
+            ]
+        )
     return [name for name in names if name not in REMOVED_OBSERVED_HYBRID_FEATURES]
 
 
-def observed_hybrid_feature_names() -> List[str]:
-    return _fixed_feature_names()
+def observed_hybrid_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) -> List[str]:
+    return _fixed_feature_names(cancer_class_labels=cancer_class_labels)
 
 
-def observed_hybrid_schema_fingerprint() -> str:
-    return hashlib.sha256("\n".join(_fixed_feature_names()).encode("utf-8")).hexdigest()
+def observed_hybrid_schema_fingerprint(cancer_class_labels: Optional[Sequence[str]] = None) -> str:
+    names = _fixed_feature_names(cancer_class_labels=cancer_class_labels)
+    return hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest()
 
 
 def build_observed_hybrid_feature_table(
@@ -486,12 +578,17 @@ def build_observed_hybrid_feature_table(
     cancer_class_labels: Optional[Sequence[str]] = None,
     anchor_strategy: Optional[str] = None,
     expected_feature_order_fingerprint: Optional[str] = None,
+    centroid_dir_by_class_label: Optional[Dict[str, str]] = None,
+    hist_eps: float = 1e-6,
+    hist_alpha: float = 0.5,
+    hist_evidence_clip_cap: float = 5.0,
+    hist_tail_agreement_threshold: float = 0.10,
 ) -> ObservedFeatureArtifacts:
     del quantiles, dmr_window_bp, max_dmr_features, max_gene_features
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
     del include_dmp_features, include_chromosome_features, include_dmr_features, include_gene_features
 
-    refs, feature_order, weights, _locus_df, per_label_weights = _build_reference_map(dmp_df)
+    refs, feature_order, weights, locus_df, per_label_weights = _build_reference_map(dmp_df)
     X_raw = _extract_matrix_for_samples(
         sample_paths,
         refs,
@@ -547,11 +644,19 @@ def build_observed_hybrid_feature_table(
         w = np.ones((n_loci,), dtype=np.float64)
         total_w = float(np.sum(w))
 
-    feature_names = _fixed_feature_names()
+    cancer_labels_raw = [str(x) for x in (cancer_class_labels or [])]
+    if not cancer_labels_raw:
+        cancer_labels_raw = [f"cancer_{k+1}" for k in range(len(per_cancer_refs))]
+    if len(cancer_labels_raw) < len(per_cancer_refs):
+        cancer_labels_raw.extend(
+            [f"cancer_{k+1}" for k in range(len(cancer_labels_raw), len(per_cancer_refs))]
+        )
+    cancer_labels_raw = cancer_labels_raw[: len(per_cancer_refs)]
+    feature_names = _fixed_feature_names(cancer_class_labels=cancer_labels_raw)
     X_feat = np.full((n_samples, len(feature_names)), np.nan, dtype=np.float32)
 
     idx = {name: j for j, name in enumerate(feature_names)}
-    cancer_labels_norm = [str(lbl).strip().lower() for lbl in (cancer_class_labels or [])]
+    cancer_labels_norm = [str(lbl).strip().lower() for lbl in cancer_labels_raw]
     per_label_weights_norm = {
         str(key).strip().lower(): np.asarray(vec, dtype=np.float64) for key, vec in per_label_weights.items()
     }
@@ -572,6 +677,35 @@ def build_observed_hybrid_feature_table(
             label_weight_vectors.append(_weights_for_cancer_label(cancer_labels_norm[j]))
         else:
             label_weight_vectors.append(default_weights)
+    hist_eps = float(max(float(hist_eps), 1e-12))
+    hist_alpha = float(max(float(hist_alpha), 0.0))
+    hist_evidence_clip_cap = float(max(float(hist_evidence_clip_cap), 0.0))
+    hist_tail_agreement_threshold = float(
+        max(0.0, min(1.0, float(hist_tail_agreement_threshold)))
+    )
+    hist_min_delta = 0.0
+    hist_bin_edges, hist_healthy_counts, hist_cancer_counts = _prepare_histogram_density_artifacts(
+        locus_df,
+        healthy_class_label=healthy_class_label,
+        cancer_class_labels=cancer_labels_raw,
+        centroid_dir_by_class_label=centroid_dir_by_class_label,
+    )
+
+    def _ecdf_at(count_rows: np.ndarray, locus_indices: np.ndarray, bin_indices: np.ndarray) -> np.ndarray:
+        if count_rows.size == 0 or locus_indices.size == 0:
+            return np.asarray([], dtype=np.float64)
+        rows = count_rows[locus_indices, :]
+        n_bins = int(rows.shape[1])
+        if n_bins <= 0:
+            return np.asarray([], dtype=np.float64)
+        smoothed = np.asarray(rows, dtype=np.float64) + hist_alpha
+        totals = np.sum(smoothed, axis=1)
+        cumsum = np.cumsum(smoothed, axis=1)
+        picked = cumsum[np.arange(locus_indices.size), bin_indices]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out = np.where(totals > 0.0, picked / totals, np.nan)
+        return np.clip(out, hist_eps, 1.0 - hist_eps)
+
     for i in range(n_samples):
         row = np.asarray(X_raw[i, :], dtype=np.float64)
         obs_mask = np.isfinite(row)
@@ -597,6 +731,83 @@ def build_observed_hybrid_feature_table(
                 fk = float(np.sum(wk_obs * directional) / wk_sum)
                 if not np.isfinite(max_weighted_directional_score) or fk > max_weighted_directional_score:
                     max_weighted_directional_score = fk
+
+            tail_feature_values: Dict[str, float] = {}
+            if (
+                hist_bin_edges is not None
+                and hist_healthy_counts is not None
+                and hist_healthy_counts.shape[0] == n_loci
+            ):
+                obs_idx = np.where(obs_mask)[0].astype(np.int64)
+                obs_vals_safe = np.clip(np.asarray(obs_vals, dtype=np.float64), 0.0, 1.0)
+                bin_idx = np.searchsorted(hist_bin_edges, obs_vals_safe, side="right") - 1
+                bin_idx = np.clip(bin_idx, 0, max(0, len(hist_bin_edges) - 2)).astype(np.int64)
+                ecdf_h = _ecdf_at(hist_healthy_counts, obs_idx, bin_idx)
+                if ecdf_h.size == obs_vals.size:
+                    for k_idx, label_raw in enumerate(cancer_labels_raw):
+                        suffix = _feature_label_token(label_raw)
+                        key_e = f"weighted_healthy_tail_evidence__{suffix}"
+                        key_a = f"weighted_healthy_tail_agreement__{suffix}"
+                        key_o = f"weighted_both_centroid_outlier_score__{suffix}"
+                        tail_feature_values.setdefault(key_e, float("nan"))
+                        tail_feature_values.setdefault(key_a, float("nan"))
+                        tail_feature_values.setdefault(key_o, float("nan"))
+                        counts_c = hist_cancer_counts.get(label_raw)
+                        if counts_c is None or counts_c.shape != hist_healthy_counts.shape:
+                            continue
+                        ecdf_c = _ecdf_at(counts_c, obs_idx, bin_idx)
+                        if ecdf_c.size != ecdf_h.size:
+                            continue
+                        wk = label_weight_vectors[k_idx]
+                        wk_obs = wk[obs_mask] if wk.shape[0] == obs_mask.shape[0] else default_weights[obs_mask]
+                        wk_obs = np.asarray(
+                            np.nan_to_num(wk_obs, nan=0.0, posinf=0.0, neginf=0.0),
+                            dtype=np.float64,
+                        )
+                        mu_h_obs = healthy_ref[obs_mask]
+                        mu_k_obs = per_cancer_refs[k_idx][obs_mask]
+                        counts_h_rows = hist_healthy_counts[obs_idx, :]
+                        counts_c_rows = counts_c[obs_idx, :]
+                        tot_h = np.sum(counts_h_rows, axis=1)
+                        tot_c = np.sum(counts_c_rows, axis=1)
+                        delta = mu_k_obs - mu_h_obs
+                        direction_valid = np.logical_or(delta > 0.0, delta < 0.0)
+                        valid = (
+                            np.isfinite(obs_vals)
+                            & np.isfinite(mu_h_obs)
+                            & np.isfinite(mu_k_obs)
+                            & np.isfinite(wk_obs)
+                            & (wk_obs > 0.0)
+                            & (tot_h > 0.0)
+                            & (tot_c > 0.0)
+                            & direction_valid
+                            & (np.abs(delta) >= hist_min_delta)
+                        )
+                        if not np.any(valid):
+                            continue
+                        ecdf_h_v = ecdf_h[valid]
+                        ecdf_c_v = ecdf_c[valid]
+                        wk_v = wk_obs[valid]
+                        delta_v = delta[valid]
+                        upper_tail = 1.0 - ecdf_h_v
+                        lower_tail = ecdf_h_v
+                        t = np.where(delta_v > 0.0, upper_tail, lower_tail)
+                        t = np.clip(t, hist_eps, 1.0)
+                        evidence = np.minimum(-np.log(t + hist_eps), hist_evidence_clip_cap)
+                        agreement = (t < hist_tail_agreement_threshold).astype(np.float64)
+                        q_h = np.clip(2.0 * np.minimum(ecdf_h_v, 1.0 - ecdf_h_v), hist_eps, 1.0)
+                        q_c = np.clip(2.0 * np.minimum(ecdf_c_v, 1.0 - ecdf_c_v), hist_eps, 1.0)
+                        outside = np.minimum(
+                            -np.log(np.maximum(q_h, q_c) + hist_eps),
+                            hist_evidence_clip_cap,
+                        )
+                        wk_sum = float(np.sum(wk_v))
+                        if wk_sum <= 0.0:
+                            continue
+                        tail_feature_values[key_e] = float(np.sum(wk_v * evidence) / wk_sum)
+                        tail_feature_values[key_a] = float(np.sum(wk_v * agreement) / wk_sum)
+                        tail_feature_values[key_o] = float(np.sum(wk_v * outside) / wk_sum)
+
             r_agg = (obs_vals - healthy_ref[obs_mask]) / (cancer_ref[obs_mask] - healthy_ref[obs_mask] + 1e-6)
             z_agg = 2.0 * r_agg - 1.0
             cancer_like = (z_agg > 0.0).astype(np.float64)
@@ -626,6 +837,7 @@ def build_observed_hybrid_feature_table(
                 weighted_closer_to_healthy = float("nan")
         else:
             max_weighted_directional_score = float("nan")
+            tail_feature_values = {}
             weighted_directional_agreement = float("nan")
             wjs_h = float("nan")
             wjs_c = float("nan")
@@ -658,9 +870,12 @@ def build_observed_hybrid_feature_table(
         X_feat[i, idx["weighted_obs_fraction"]] = obs_w_frac
         X_feat[i, idx["n_obs_dmps"]] = float(n_obs)
         X_feat[i, idx["n_total_dmps"]] = float(n_loci)
+        for feat_name, feat_value in tail_feature_values.items():
+            if feat_name in idx:
+                X_feat[i, idx[feat_name]] = float(feat_value)
 
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()
-    schema_fingerprint = observed_hybrid_schema_fingerprint()
+    schema_fingerprint = observed_hybrid_schema_fingerprint(cancer_class_labels=cancer_labels_raw)
     report = {
         "n_samples": int(n_samples),
         "n_loci_reference": int(n_loci),
@@ -674,8 +889,12 @@ def build_observed_hybrid_feature_table(
             "gene": False,
         },
         "healthy_class_label": str(healthy_class_label or "unknown"),
-        "cancer_class_labels": [str(x) for x in (cancer_class_labels or [])],
+        "cancer_class_labels": [str(x) for x in cancer_labels_raw],
         "anchor_strategy": str(anchor_strategy or "unspecified"),
+        "hist_eps": hist_eps,
+        "hist_alpha": hist_alpha,
+        "hist_evidence_clip_cap": hist_evidence_clip_cap,
+        "hist_tail_agreement_threshold": hist_tail_agreement_threshold,
         "feature_order_fingerprint": observed_order_fp,
         "schema_fingerprint": schema_fingerprint,
         "feature_non_nan_counts": {feature_names[j]: int(non_nan[j]) for j in range(len(feature_names))},

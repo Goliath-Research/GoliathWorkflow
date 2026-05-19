@@ -527,4 +527,11 @@ def test_generative_observed_hybrid_train_predict_schema_parity(tmp_path: Path, 
         meta = json.load(f)
     assert isinstance(meta.get("observed_per_cancer_reference_vectors"), list)
     assert "max_weighted_directional_score" in set(meta.get("observed_feature_names") or [])
+    assert "weighted_healthy_tail_evidence__pca1" in set(meta.get("observed_feature_names") or [])
+    assert "weighted_healthy_tail_agreement__pca1" in set(meta.get("observed_feature_names") or [])
+    assert "weighted_both_centroid_outlier_score__pca1" in set(meta.get("observed_feature_names") or [])
+    assert float(meta.get("observed_hist_eps", 0.0)) > 0.0
+    assert float(meta.get("observed_hist_alpha", -1.0)) >= 0.0
+    assert float(meta.get("observed_hist_evidence_clip_cap", -1.0)) >= 0.0
+    assert 0.0 <= float(meta.get("observed_hist_tail_agreement_threshold", -1.0)) <= 1.0
 
