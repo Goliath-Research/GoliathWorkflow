@@ -293,6 +293,13 @@ class MonteCarloConfig(BaseModel):
         default=False,
         description="After review, set True in step_config.validation to allow --model (classifier + predictor).",
     )
+    require_complete_enricher: bool = Field(
+        default=False,
+        description=(
+            "If True, readiness audit treats incomplete enricher_completeness.json as no_go "
+            "(not only a warning)."
+        ),
+    )
     model_backend: str = Field(
         default="ecdf",
         description=(
@@ -447,6 +454,27 @@ class MonteCarloConfig(BaseModel):
         default=32,
         ge=0,
         description="Maximum number of genes retained in observed_hybrid schema (top-weighted).",
+    )
+    observed_hist_eps: float = Field(
+        default=1e-6,
+        gt=0.0,
+        description="Observed-hybrid histogram ECDF epsilon for boundary clamp and log safety.",
+    )
+    observed_hist_alpha: float = Field(
+        default=0.5,
+        ge=0.0,
+        description="Observed-hybrid histogram additive smoothing alpha applied to bin counts.",
+    )
+    observed_hist_evidence_clip_cap: float = Field(
+        default=5.0,
+        ge=0.0,
+        description="Observed-hybrid cap for per-locus tail/outlier evidence prior to weighted averaging.",
+    )
+    observed_hist_tail_agreement_threshold: float = Field(
+        default=0.10,
+        ge=0.0,
+        le=1.0,
+        description="Observed-hybrid threshold for cancer-direction tail agreement indicator.",
     )
     ecdf_second_stage_enabled: bool = Field(
         default=False,

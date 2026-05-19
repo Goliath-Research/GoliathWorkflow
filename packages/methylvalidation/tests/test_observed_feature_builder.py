@@ -184,87 +184,200 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     )
 
     expected_names = {
-        "dmp_global_weighted_mean",
-        "dmp_global_weighted_std",
-        "dmp_global_weighted_abs_shift_from_half",
-        "methylation_progression_score",
-        "js_distance_to_healthy_centroid",
-        "js_distance_to_cancer_centroid",
-        "weighted_js_distance_to_healthy_centroid",
-        "weighted_js_distance_to_cancer_centroid",
+        "max_weighted_directional_score",
+        "weighted_directional_agreement",
         "weighted_mean_abs_error_to_healthy_centroid",
         "weighted_mean_abs_error_to_cancer_centroid",
         "weighted_mean_abs_distance_margin",
-        "cosine_similarity_to_healthy_centroid",
-        "cosine_similarity_to_cancer_centroid",
         "weighted_cosine_similarity_to_healthy_centroid",
         "weighted_cosine_similarity_to_cancer_centroid",
         "weighted_centroid_contrast_score",
-        "fraction_dmps_closer_to_cancer_centroid",
         "weighted_fraction_dmps_closer_to_cancer_centroid",
-        "fraction_dmps_closer_to_healthy_centroid",
         "weighted_fraction_dmps_closer_to_healthy_centroid",
-        "mean_abs_distance_margin",
-        "dmp_global_skewness",
-        "dmp_global_kurtosis",
-        "avg_chrom_dev_from_healthy_centroid",
         "obs_fraction",
-        "obs_weight_fraction",
+        "weighted_obs_fraction",
         "n_obs_dmps",
         "n_total_dmps",
+        "weighted_healthy_tail_evidence__cancer",
+        "weighted_healthy_tail_agreement__cancer",
+        "weighted_both_centroid_outlier_score__cancer",
     }
     assert expected_names.issubset(set(feat.feature_names))
 
-    js_h_idx = feat.feature_names.index("js_distance_to_healthy_centroid")
-    js_c_idx = feat.feature_names.index("js_distance_to_cancer_centroid")
-    wjs_h_idx = feat.feature_names.index("weighted_js_distance_to_healthy_centroid")
-    wjs_c_idx = feat.feature_names.index("weighted_js_distance_to_cancer_centroid")
     wmae_h_idx = feat.feature_names.index("weighted_mean_abs_error_to_healthy_centroid")
     wmae_c_idx = feat.feature_names.index("weighted_mean_abs_error_to_cancer_centroid")
     wmae_margin_idx = feat.feature_names.index("weighted_mean_abs_distance_margin")
-    cos_h_idx = feat.feature_names.index("cosine_similarity_to_healthy_centroid")
-    cos_c_idx = feat.feature_names.index("cosine_similarity_to_cancer_centroid")
     wcos_h_idx = feat.feature_names.index("weighted_cosine_similarity_to_healthy_centroid")
     wcos_c_idx = feat.feature_names.index("weighted_cosine_similarity_to_cancer_centroid")
     wcontrast_idx = feat.feature_names.index("weighted_centroid_contrast_score")
-    frac_idx = feat.feature_names.index("fraction_dmps_closer_to_cancer_centroid")
     weighted_frac_idx = feat.feature_names.index(
         "weighted_fraction_dmps_closer_to_cancer_centroid"
     )
-    healthy_frac_idx = feat.feature_names.index("fraction_dmps_closer_to_healthy_centroid")
     weighted_healthy_frac_idx = feat.feature_names.index(
         "weighted_fraction_dmps_closer_to_healthy_centroid"
     )
-    margin_idx = feat.feature_names.index("mean_abs_distance_margin")
-    prog_idx = feat.feature_names.index("methylation_progression_score")
+    max_wds_idx = feat.feature_names.index("max_weighted_directional_score")
+    wda_idx = feat.feature_names.index("weighted_directional_agreement")
+    tail_e_idx = feat.feature_names.index("weighted_healthy_tail_evidence__cancer")
+    tail_a_idx = feat.feature_names.index("weighted_healthy_tail_agreement__cancer")
+    tail_o_idx = feat.feature_names.index("weighted_both_centroid_outlier_score__cancer")
 
     # First sample is healthy-like and should be closer to healthy anchor.
-    assert float(feat.X[0, js_h_idx]) < float(feat.X[0, js_c_idx])
-    assert float(feat.X[0, wjs_h_idx]) < float(feat.X[0, wjs_c_idx])
     assert float(feat.X[0, wmae_h_idx]) < float(feat.X[0, wmae_c_idx])
     assert float(feat.X[0, wmae_margin_idx]) < 0.0
-    assert float(feat.X[0, cos_h_idx]) > float(feat.X[0, cos_c_idx])
     assert float(feat.X[0, wcos_h_idx]) > float(feat.X[0, wcos_c_idx])
     assert float(feat.X[0, wcontrast_idx]) < 0.0
-    assert float(feat.X[0, frac_idx]) <= 0.5
     assert float(feat.X[0, weighted_frac_idx]) <= 0.5
-    assert float(feat.X[0, healthy_frac_idx]) >= 0.5
     assert float(feat.X[0, weighted_healthy_frac_idx]) >= 0.5
-    assert float(feat.X[0, margin_idx]) < 0.0
+    assert float(feat.X[0, max_wds_idx]) < 0.0
+    assert float(feat.X[0, wda_idx]) < 0.5
+    assert not np.isfinite(float(feat.X[0, tail_e_idx]))
+    assert not np.isfinite(float(feat.X[0, tail_a_idx]))
+    assert not np.isfinite(float(feat.X[0, tail_o_idx]))
 
     # Cancer-like sample should move towards cancer anchor.
-    assert float(feat.X[2, js_c_idx]) < float(feat.X[2, js_h_idx])
-    assert float(feat.X[2, wjs_c_idx]) < float(feat.X[2, wjs_h_idx])
     assert float(feat.X[2, wmae_c_idx]) < float(feat.X[2, wmae_h_idx])
     assert float(feat.X[2, wmae_margin_idx]) > 0.0
     assert float(feat.X[2, wcos_c_idx]) > float(feat.X[2, wcos_h_idx])
     assert float(feat.X[2, wcontrast_idx]) > 0.0
-    assert float(feat.X[2, frac_idx]) >= 0.5
     assert float(feat.X[2, weighted_frac_idx]) >= 0.5
-    assert float(feat.X[2, healthy_frac_idx]) <= 0.5
     assert float(feat.X[2, weighted_healthy_frac_idx]) <= 0.5
-    assert float(feat.X[2, margin_idx]) > 0.0
+    assert float(feat.X[2, max_wds_idx]) > 0.0
+    assert float(feat.X[2, wda_idx]) > 0.5
+    assert not np.isfinite(float(feat.X[2, tail_e_idx]))
+    assert not np.isfinite(float(feat.X[2, tail_a_idx]))
+    assert not np.isfinite(float(feat.X[2, tail_o_idx]))
 
-    # Progression should increase with higher methylation profiles in this synthetic setup.
-    assert float(feat.X[2, prog_idx]) > float(feat.X[0, prog_idx])
-    assert np.all((feat.X[:, prog_idx] >= 0.0) & (feat.X[:, prog_idx] <= 1.0))
+
+def test_observed_feature_builder_histogram_tail_features_multiclass_names(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4", "/tmp/S5", "/tmp/S6"]
+    y = [0, 0, 1, 1, 2, 2]
+    class_names = ["healthy", "pca1", "pca2"]
+    dmp_df = _dmp_df()
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+    )
+    assert "weighted_healthy_tail_evidence__pca1" in feat.feature_names
+    assert "weighted_healthy_tail_agreement__pca1" in feat.feature_names
+    assert "weighted_both_centroid_outlier_score__pca1" in feat.feature_names
+    assert "weighted_healthy_tail_evidence__pca2" in feat.feature_names
+    assert "weighted_healthy_tail_agreement__pca2" in feat.feature_names
+    assert "weighted_both_centroid_outlier_score__pca2" in feat.feature_names
+
+
+def test_observed_feature_builder_histogram_tail_features_behaviors(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+
+    def _fake_load_binned_counts(dmps_df, centroid1_dir, centroid2_dir, chromosome):
+        del chromosome
+        n = len(dmps_df)
+        bin_edges = np.asarray([0.0, 0.5, 1.0], dtype=np.float64)
+        healthy = np.zeros((n, 2), dtype=np.int32)
+        cancer = np.zeros((n, 2), dtype=np.int32)
+        healthy[:, 0] = 10
+        healthy[:, 1] = 90
+        if str(centroid2_dir).endswith("cancer"):
+            cancer[:, 0] = 5
+            cancer[:, 1] = 95
+        else:
+            cancer[:, 0] = 50
+            cancer[:, 1] = 50
+        return bin_edges, healthy, cancer
+
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "load_binned_counts_from_centroids",
+        staticmethod(_fake_load_binned_counts),
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    dmp_df = _dmp_df()
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        centroid_dir_by_class_label={"healthy": "/tmp/healthy", "cancer": "/tmp/cancer"},
+        hist_eps=1e-6,
+        hist_alpha=0.5,
+        hist_evidence_clip_cap=5.0,
+        hist_tail_agreement_threshold=0.10,
+    )
+    idx_e = feat.feature_names.index("weighted_healthy_tail_evidence__cancer")
+    idx_a = feat.feature_names.index("weighted_healthy_tail_agreement__cancer")
+    idx_o = feat.feature_names.index("weighted_both_centroid_outlier_score__cancer")
+    assert float(feat.X[0, idx_e]) < float(feat.X[2, idx_e])
+    assert float(feat.X[0, idx_a]) < float(feat.X[2, idx_a])
+    assert np.isfinite(float(feat.X[0, idx_o]))
+    assert np.isfinite(float(feat.X[2, idx_o]))
+    assert float(feat.X[2, idx_e]) <= 5.0
+
+
+def test_observed_feature_builder_histogram_tail_features_nan_when_invalid(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+
+    def _fake_load_zero_counts(dmps_df, centroid1_dir, centroid2_dir, chromosome):
+        del centroid1_dir, centroid2_dir, chromosome
+        n = len(dmps_df)
+        bin_edges = np.asarray([0.0, 0.5, 1.0], dtype=np.float64)
+        healthy = np.zeros((n, 2), dtype=np.int32)
+        cancer = np.zeros((n, 2), dtype=np.int32)
+        return bin_edges, healthy, cancer
+
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "load_binned_counts_from_centroids",
+        staticmethod(_fake_load_zero_counts),
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    dmp_df = _dmp_df()
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        centroid_dir_by_class_label={"healthy": "/tmp/healthy", "cancer": "/tmp/cancer"},
+    )
+    idx_e = feat.feature_names.index("weighted_healthy_tail_evidence__cancer")
+    idx_a = feat.feature_names.index("weighted_healthy_tail_agreement__cancer")
+    idx_o = feat.feature_names.index("weighted_both_centroid_outlier_score__cancer")
+    assert not np.isfinite(float(feat.X[0, idx_e]))
+    assert not np.isfinite(float(feat.X[0, idx_a]))
+    assert not np.isfinite(float(feat.X[0, idx_o]))

@@ -145,6 +145,35 @@ def _has_explicit_eval_split(predictor_cfg: Any) -> bool:
     return False
 
 
+def _resolve_class_centroid_dirs(project: Any, class_names: Sequence[str]) -> Dict[str, str]:
+    label_to_dir: Dict[str, str] = {}
+    try:
+        resolved = project.get_resolved_groups()
+        derived = project.get_derived_paths()
+        centroid_dirs = list(getattr(derived, "centroid_dirs", []) or [])
+        for idx, (label, _paths) in enumerate(resolved):
+            if idx < len(centroid_dirs):
+                label_to_dir[str(label)] = str(centroid_dirs[idx])
+    except Exception:
+        label_to_dir = {}
+    for name in class_names:
+        label_to_dir.setdefault(str(name), "")
+    return {k: v for k, v in label_to_dir.items() if str(v).strip()}
+
+
+def _select_healthy_index_for_labels(class_names: Sequence[str]) -> int:
+    if not class_names:
+        return 0
+    normalized = [str(x).strip().lower() for x in class_names]
+    for name in ("healthy", "control", "normal"):
+        if name in normalized:
+            return int(normalized.index(name))
+    for idx, name in enumerate(normalized):
+        if any(token in name for token in ("healthy", "control", "normal")):
+            return int(idx)
+    return 0
+
+
 def _build_reference_map(
     dmp_df: pd.DataFrame,
 ) -> Tuple[Dict[str, Dict[str, np.ndarray]], List[Tuple[str, str, int]]]:
@@ -366,6 +395,10 @@ def train_tabular_model(
     observed_feature_dmr_window_bp: int = 100000,
     observed_feature_max_dmrs: int = 32,
     observed_feature_max_genes: int = 32,
+    observed_hist_eps: float = 1e-6,
+    observed_hist_alpha: float = 0.5,
+    observed_hist_evidence_clip_cap: float = 5.0,
+    observed_hist_tail_agreement_threshold: float = 0.10,
     save_train_dataset: bool = False,
     reuse_train_dataset: bool = True,
     train_dataset_path: Optional[str | Path] = None,
@@ -384,6 +417,11 @@ def train_tabular_model(
 
     resolved = project.get_resolved_groups()
     class_names = [str(lbl) for lbl, _ in resolved]
+    class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
+    healthy_idx_for_schema = _select_healthy_index_for_labels(class_names)
+    schema_cancer_labels = [
+        str(name) for i, name in enumerate(class_names) if int(i) != int(healthy_idx_for_schema)
+    ]
     all_paths: List[str] = []
     y: List[int] = []
     sample_ids: List[str] = []
@@ -424,6 +462,7 @@ def train_tabular_model(
     observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
     observed_healthy_reference: Optional[np.ndarray] = None
     observed_cancer_reference: Optional[np.ndarray] = None
+    observed_per_cancer_references: List[np.ndarray] = []
     observed_healthy_class_index: Optional[int] = None
     observed_healthy_class_label: Optional[str] = None
     observed_cancer_class_labels: List[str] = []
@@ -439,7 +478,9 @@ def train_tabular_model(
             OBSERVED_HYBRID_SCHEMA_VERSION if feature_mode_norm == "observed_hybrid" else None
         ),
         "observed_hybrid_schema_fingerprint": (
-            observed_hybrid_schema_fingerprint() if feature_mode_norm == "observed_hybrid" else None
+            observed_hybrid_schema_fingerprint(cancer_class_labels=schema_cancer_labels)
+            if feature_mode_norm == "observed_hybrid"
+            else None
         ),
         "dmp_index_fingerprint": dmp_index_fingerprint,
         "max_dmps": int(max_dmps),
@@ -462,6 +503,10 @@ def train_tabular_model(
         "observed_feature_dmr_window_bp": int(max(1, observed_feature_dmr_window_bp)),
         "observed_feature_max_dmrs": int(max(0, observed_feature_max_dmrs)),
         "observed_feature_max_genes": int(max(0, observed_feature_max_genes)),
+        "observed_hist_eps": float(observed_hist_eps),
+        "observed_hist_alpha": float(observed_hist_alpha),
+        "observed_hist_evidence_clip_cap": float(observed_hist_evidence_clip_cap),
+        "observed_hist_tail_agreement_threshold": float(observed_hist_tail_agreement_threshold),
     }
     train_fingerprint = _fingerprint_payload(
         {
@@ -517,6 +562,12 @@ def train_tabular_model(
                     observed_cancer_reference = (
                         np.asarray(cref, dtype=np.float32) if isinstance(cref, list) and len(cref) > 0 else None
                     )
+                    pc_refs = train_meta.get("observed_per_cancer_reference_vectors")
+                    observed_per_cancer_references = []
+                    if isinstance(pc_refs, list):
+                        for item in pc_refs:
+                            if isinstance(item, list) and len(item) > 0:
+                                observed_per_cancer_references.append(np.asarray(item, dtype=np.float32))
                     observed_healthy_class_index = train_meta.get("observed_healthy_class_index")
                     observed_healthy_class_label = (
                         str(train_meta["observed_healthy_class_label"])
@@ -546,7 +597,7 @@ def train_tabular_model(
                             raise ValueError("observed_hybrid cache metadata is incomplete")
                         verify_feature_schema(
                             observed_feature_names,
-                            observed_hybrid_feature_names(),
+                            observed_hybrid_feature_names(cancer_class_labels=observed_cancer_class_labels),
                             context="tabular train cached observed_hybrid",
                         )
                     train_cache_hit = True
@@ -578,10 +629,16 @@ def train_tabular_model(
                 max_gene_features=int(max(0, observed_feature_max_genes)),
                 healthy_reference_vector=anchors.healthy_reference_vector,
                 cancer_reference_vector=anchors.cancer_reference_vector,
+                per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
                 healthy_class_label=anchors.healthy_class_label,
                 cancer_class_labels=anchors.cancer_class_labels,
                 anchor_strategy=anchors.anchor_strategy,
                 expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+                centroid_dir_by_class_label=class_centroid_dirs,
+                hist_eps=float(observed_hist_eps),
+                hist_alpha=float(observed_hist_alpha),
+                hist_evidence_clip_cap=float(observed_hist_evidence_clip_cap),
+                hist_tail_agreement_threshold=float(observed_hist_tail_agreement_threshold),
             )
             X = np.asarray(feat.X, dtype=np.float32)
             feature_fill_values = fit_feature_fill_values(X)
@@ -591,6 +648,9 @@ def train_tabular_model(
             observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
             observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
             observed_cancer_reference = anchors.cancer_reference_vector.astype(np.float32)
+            observed_per_cancer_references = [
+                np.asarray(v, dtype=np.float32) for v in anchors.per_cancer_reference_vectors
+            ]
             observed_healthy_class_index = int(anchors.healthy_class_index)
             observed_healthy_class_label = str(anchors.healthy_class_label)
             observed_cancer_class_labels = [str(x) for x in anchors.cancer_class_labels]
@@ -657,11 +717,18 @@ def train_tabular_model(
                     if observed_cancer_reference is not None
                     else None
                 ),
+                "observed_per_cancer_reference_vectors": [
+                    [float(v) for v in vec.tolist()] for vec in observed_per_cancer_references
+                ],
                 "observed_healthy_class_index": observed_healthy_class_index,
                 "observed_healthy_class_label": observed_healthy_class_label,
                 "observed_cancer_class_labels": observed_cancer_class_labels,
                 "observed_anchor_strategy": observed_anchor_strategy,
                 "observed_feature_order_fingerprint": observed_feature_order_fingerprint,
+                "observed_hist_eps": float(observed_hist_eps),
+                "observed_hist_alpha": float(observed_hist_alpha),
+                "observed_hist_evidence_clip_cap": float(observed_hist_evidence_clip_cap),
+                "observed_hist_tail_agreement_threshold": float(observed_hist_tail_agreement_threshold),
             }
             with open(train_dataset_meta_path, "w", encoding="utf-8") as f:
                 json.dump(train_dataset_meta, f, indent=2)
@@ -734,10 +801,16 @@ def train_tabular_model(
                     max_gene_features=int(max(0, observed_feature_max_genes)),
                     healthy_reference_vector=observed_healthy_reference,
                     cancer_reference_vector=observed_cancer_reference,
+                    per_cancer_reference_vectors=observed_per_cancer_references,
                     healthy_class_label=observed_healthy_class_label,
                     cancer_class_labels=observed_cancer_class_labels,
                     anchor_strategy=observed_anchor_strategy,
                     expected_feature_order_fingerprint=observed_feature_order_fingerprint,
+                    centroid_dir_by_class_label=class_centroid_dirs,
+                    hist_eps=float(observed_hist_eps),
+                    hist_alpha=float(observed_hist_alpha),
+                    hist_evidence_clip_cap=float(observed_hist_evidence_clip_cap),
+                    hist_tail_agreement_threshold=float(observed_hist_tail_agreement_threshold),
                 )
                 verify_feature_schema(
                     feat_eval.feature_names,
@@ -840,11 +913,18 @@ def train_tabular_model(
             "observed_cancer_reference_vector": (
                 [float(v) for v in observed_cancer_reference.tolist()] if observed_cancer_reference is not None else None
             ),
+            "observed_per_cancer_reference_vectors": [
+                [float(v) for v in vec.tolist()] for vec in observed_per_cancer_references
+            ],
             "observed_healthy_class_index": observed_healthy_class_index,
             "observed_healthy_class_label": observed_healthy_class_label,
             "observed_cancer_class_labels": observed_cancer_class_labels,
             "observed_anchor_strategy": observed_anchor_strategy,
             "observed_feature_order_fingerprint": observed_feature_order_fingerprint,
+            "observed_hist_eps": float(observed_hist_eps),
+            "observed_hist_alpha": float(observed_hist_alpha),
+            "observed_hist_evidence_clip_cap": float(observed_hist_evidence_clip_cap),
+            "observed_hist_tail_agreement_threshold": float(observed_hist_tail_agreement_threshold),
             "covariates_path": str(covariates_path) if covariates_path else None,
             "covariate_id_column": covariate_id_column,
             "covariates_strict_join": bool(covariates_strict_join),
@@ -965,7 +1045,9 @@ def predict_tabular_model_from_project(
         meta = json.load(f)
     class_names = [str(x) for x in meta.get("class_names", [])]
     feature_mode = str(meta.get("feature_mode", "raw_dmp")).strip().lower()
-
+    with _project_cwd(project_json):
+        project = load_project(project_json)
+    class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
     samples, y_true = _resolve_eval_paths_and_labels(project_json, class_names)
     sample_ids = sample_ids_from_paths(samples)
 
@@ -992,10 +1074,18 @@ def predict_tabular_model_from_project(
             max_gene_features=int(meta.get("observed_feature_max_genes", 32)),
             healthy_reference_vector=meta.get("observed_healthy_reference_vector"),
             cancer_reference_vector=meta.get("observed_cancer_reference_vector"),
+            per_cancer_reference_vectors=meta.get("observed_per_cancer_reference_vectors"),
             healthy_class_label=meta.get("observed_healthy_class_label"),
             cancer_class_labels=meta.get("observed_cancer_class_labels") or [],
             anchor_strategy=meta.get("observed_anchor_strategy"),
             expected_feature_order_fingerprint=meta.get("observed_feature_order_fingerprint"),
+            centroid_dir_by_class_label=class_centroid_dirs,
+            hist_eps=float(meta.get("observed_hist_eps", 1e-6)),
+            hist_alpha=float(meta.get("observed_hist_alpha", 0.5)),
+            hist_evidence_clip_cap=float(meta.get("observed_hist_evidence_clip_cap", 5.0)),
+            hist_tail_agreement_threshold=float(
+                meta.get("observed_hist_tail_agreement_threshold", 0.10)
+            ),
         )
         verify_feature_schema(
             feat.feature_names,

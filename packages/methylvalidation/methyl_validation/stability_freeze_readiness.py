@@ -47,6 +47,7 @@ class ReadinessVerdict:
     """Aggregate go / go_with_risks / no_go with reasons."""
 
     overall: str  # go | go_with_risks | no_go
+    enricher: str
     stability: str
     freeze: str
     progression: str
@@ -203,7 +204,47 @@ def _label_mix(labels_csv: Path) -> Dict[str, Any]:
     return out
 
 
-def analyze_project_root(project_root: Path) -> Dict[str, Any]:
+def _load_enricher_completeness(production_dir: Path) -> Dict[str, Any]:
+    manifest_path = production_dir / "enricher" / "enricher_completeness.json"
+    data = _safe_read_json(manifest_path)
+    if data is not None:
+        return {
+            "manifest_present": True,
+            "manifest_path": str(manifest_path),
+            "all_complete": bool(data.get("all_complete")),
+            "comparisons": data.get("comparisons") or {},
+        }
+
+    enricher_root = production_dir / "enricher"
+    if not enricher_root.is_dir():
+        return {"manifest_present": False, "all_complete": False, "comparisons": {}}
+
+    comparisons: Dict[str, Any] = {}
+    for sub in sorted(enricher_root.iterdir()):
+        if not sub.is_dir():
+            continue
+        for comp_dir in sorted(sub.iterdir()):
+            if not comp_dir.is_dir():
+                continue
+            label = comp_dir.name
+            n_csv = len(list(comp_dir.glob("enrich_*.csv")))
+            comparisons[label] = {
+                "present_libraries_count": n_csv,
+                "complete": n_csv > 0,
+            }
+    all_complete = bool(comparisons) and all(c.get("complete") for c in comparisons.values())
+    return {
+        "manifest_present": False,
+        "all_complete": all_complete,
+        "comparisons": comparisons,
+    }
+
+
+def analyze_project_root(
+    project_root: Path,
+    *,
+    require_complete_enricher: bool = False,
+) -> Dict[str, Any]:
     """
     Collect readiness metrics under ``project_root`` (directory that contains ``monte_carlo_runs``).
 
@@ -300,8 +341,11 @@ def analyze_project_root(project_root: Path) -> Dict[str, Any]:
             "ordered_stage_narratives": ordered_stage_narratives,
         },
         "panel_balance": _chromosome_panel_balance(merged_panel_path, dmp_freq_path),
+        "enricher": _load_enricher_completeness(production_dir),
     }
-    report["verdict"] = asdict(_compute_verdict(report))
+    report["verdict"] = asdict(
+        _compute_verdict(report, require_complete_enricher=require_complete_enricher)
+    )
     return report
 
 
@@ -314,14 +358,41 @@ def _count_csv_rows(path: Path) -> Optional[int]:
         return None
 
 
-def _compute_verdict(report: Dict[str, Any]) -> ReadinessVerdict:
+def _compute_verdict(
+    report: Dict[str, Any],
+    *,
+    require_complete_enricher: bool = False,
+) -> ReadinessVerdict:
     reasons: List[str] = []
     warnings: List[str] = []
 
     stab = report["stability"]
     fr = report["freeze"]
     prog = report["progression"]
+    enr = report.get("enricher") or {}
     balance = report["panel_balance"]
+
+    enricher_status = "unknown"
+    if not enr.get("manifest_present") and not enr.get("comparisons"):
+        enricher_status = "skipped"
+        warnings.append(
+            "No enricher_completeness.json — run methyl-enricher --ensure-complete or verify-complete."
+        )
+    elif enr.get("all_complete"):
+        enricher_status = "pass"
+    else:
+        incomplete = [
+            k
+            for k, v in (enr.get("comparisons") or {}).items()
+            if not v.get("complete")
+        ]
+        msg = f"Enricher incomplete for {len(incomplete)} comparison(s): {incomplete[:5]}"
+        if require_complete_enricher:
+            enricher_status = "fail"
+            reasons.append(msg)
+        else:
+            enricher_status = "warn"
+            warnings.append(msg)
 
     stab_status = "unknown"
     if not stab["present"]:
@@ -409,15 +480,22 @@ def _compute_verdict(report: Dict[str, Any]) -> ReadinessVerdict:
         )
 
     # Overall
-    if stab_status == "fail" or freeze_status == "fail":
+    if stab_status == "fail" or freeze_status == "fail" or enricher_status == "fail":
         overall = "no_go"
-    elif stab_status == "warn" or freeze_status == "warn" or prog_status == "warn" or warnings:
+    elif (
+        stab_status == "warn"
+        or freeze_status == "warn"
+        or prog_status == "warn"
+        or enricher_status == "warn"
+        or warnings
+    ):
         overall = "go_with_risks"
     else:
         overall = "go"
 
     return ReadinessVerdict(
         overall=overall,
+        enricher=enricher_status,
         stability=stab_status,
         freeze=freeze_status,
         progression=prog_status,
@@ -440,6 +518,7 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
     lines.extend(
         [
             f"- **Overall verdict**: **{v.get('overall', 'unknown')}**",
+            f"- **Enricher**: {v.get('enricher')}",
             f"- **Stability**: {v.get('stability')}",
             f"- **Freeze**: {v.get('freeze')}",
             f"- **Progression**: {v.get('progression')}",
@@ -476,6 +555,27 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
                 f"- Total unique DMPs seen: {ds.get('total_unique_dmps')}",
             ]
         )
+    lines.append("")
+
+    enr = src.get("enricher") or {}
+    lines.extend(
+        [
+            "## Enricher completeness",
+            "",
+            f"- Manifest present: {enr.get('manifest_present')}",
+            f"- All comparisons complete: {enr.get('all_complete')}",
+        ]
+    )
+    comps = enr.get("comparisons") or {}
+    if comps:
+        lines.append(f"- Comparisons tracked: {len(comps)}")
+        for label, comp in list(comps.items())[:8]:
+            if isinstance(comp, dict) and "missing_libraries" in comp:
+                n_ok = len(comp.get("present_libraries") or [])
+                n_miss = len(comp.get("missing_libraries") or [])
+                lines.append(f"  - `{label}`: {n_ok} libraries OK, {n_miss} missing")
+            else:
+                lines.append(f"  - `{label}`: complete={comp.get('complete')}")
     lines.append("")
 
     f = src.get("freeze") or {}
@@ -785,7 +885,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         return arg_rc
     args.project_root = proj_root
 
-    report = analyze_project_root(args.project_root)
+    require_enricher = False
+    prod_json = args.project_root / "monte_carlo_runs" / "production" / "project.json"
+    if prod_json.is_file():
+        try:
+            from methyl_utils import load_project
+
+            val_cfg = load_project(prod_json).get_step_config("validation") or {}
+            require_enricher = bool(val_cfg.get("require_complete_enricher", False))
+        except Exception:
+            require_enricher = False
+
+    report = analyze_project_root(
+        args.project_root,
+        require_complete_enricher=require_enricher,
+    )
 
     ai_review: Optional[Dict[str, Any]] = None
     if getattr(args, "grok_review", True):

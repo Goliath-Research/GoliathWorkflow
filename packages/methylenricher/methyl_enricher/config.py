@@ -67,6 +67,12 @@ class EnricherStepConfig(BaseModel):
     top: Optional[int] = None
     cutoff: Optional[float] = None
     organism: Optional[str] = None
+    ensure_complete: Optional[bool] = None
+    distributed: Optional[bool] = None
+    enricher_max_retries: Optional[int] = None
+    enricher_retry_base_seconds: Optional[float] = None
+    enricher_retry_max_seconds: Optional[float] = None
+    enricher_inter_library_delay_seconds: Optional[float] = None
 
     # Module pipeline
     modules: Optional[bool] = None

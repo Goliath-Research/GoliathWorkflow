@@ -39,7 +39,7 @@ class FilterFunnelRangeSpec(BaseModel):
 
 class FilterFunnelExplore(BaseModel):
     """
-    Optional exploration: sweep effect_size_coverage over a range and write filter_funnel.csv.
+    Optional exploration: sweep effect_size_coverage over a range and write filter_funnel-{chromosome}.csv.
     """
     effect_size_coverage: Optional[FilterFunnelRangeSpec] = Field(
         default=None,
@@ -315,7 +315,7 @@ class MethylDetectorConfig(BaseModel):
     # ----------------
     filter_funnel_explore: Optional[FilterFunnelExplore] = Field(
         default=None,
-        description="Optional. Sweep effect_size_coverage over a range and write filter_funnel.csv (n_statistical_dmps, effect_size_coverage, n_biological_dmps). One run; no large DMP CSV. Set to null to disable."
+        description="Optional. Sweep effect_size_coverage over a range and write filter_funnel-{chromosome}.csv per chromosome, then aggregate to filter_funnel.csv with a leading chromosome column. Set to null to disable."
     )
 
     # ----------------

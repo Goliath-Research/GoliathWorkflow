@@ -29,6 +29,7 @@ class ObservedFeatureArtifacts:
 class ObservedHybridAnchors:
     healthy_reference_vector: np.ndarray
     cancer_reference_vector: np.ndarray
+    per_cancer_reference_vectors: List[np.ndarray]
     healthy_class_index: int
     healthy_class_label: str
     cancer_class_labels: List[str]
@@ -36,7 +37,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v12_feature_prune"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v25_add_per_cancer_histogram_tail_features"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -104,7 +105,13 @@ def _normalize_feature_key(value: object) -> str:
 
 def _build_reference_map(
     dmp_df: pd.DataFrame,
-) -> Tuple[Dict[str, Dict[str, np.ndarray]], List[Tuple[str, str, int]], np.ndarray, pd.DataFrame]:
+) -> Tuple[
+    Dict[str, Dict[str, np.ndarray]],
+    List[Tuple[str, str, int]],
+    np.ndarray,
+    pd.DataFrame,
+    Dict[str, np.ndarray],
+]:
     refs: Dict[str, Dict[str, np.ndarray]] = {}
     order: List[Tuple[str, str, int]] = []
     weights: List[float] = []
@@ -160,14 +167,34 @@ def _build_reference_map(
 
     w = np.asarray(weights, dtype=np.float32)
     if w.size == 0:
-        return refs, order, w, locus_df.reset_index(drop=True)
+        return refs, order, w, locus_df.reset_index(drop=True), {}
     w = np.abs(np.nan_to_num(w, nan=0.0, posinf=0.0, neginf=0.0))
     mx = float(np.max(w))
     if mx <= 0.0:
         w = np.ones_like(w, dtype=np.float32)
     else:
         w = w / mx
-    return refs, order, w, locus_df.reset_index(drop=True)
+    order_to_idx = {key: idx for idx, key in enumerate(order)}
+    per_label_weights: Dict[str, np.ndarray] = {}
+    for comp_label, cdf in work_df.groupby("comparison_label", sort=False):
+        comp_vec = np.zeros((len(order),), dtype=np.float32)
+        if cdf.empty:
+            per_label_weights[str(comp_label)] = comp_vec
+            continue
+        cdf2 = cdf.copy()
+        cdf2["abs_effect"] = np.abs(pd.to_numeric(cdf2["effect_size"], errors="coerce").fillna(0.0).astype(float))
+        cdf2 = cdf2.sort_values(
+            ["abs_effect", "chromosome", "context", "position"],
+            ascending=[False, True, True, True],
+        ).drop_duplicates(["chromosome", "context", "position"], keep="first")
+        for _, row in cdf2.iterrows():
+            key = (str(row["chromosome"]), str(row["context"]), int(row["position"]))
+            idx = order_to_idx.get(key)
+            if idx is None:
+                continue
+            comp_vec[idx] = float(abs(float(pd.to_numeric(row["effect_size"], errors="coerce"))))
+        per_label_weights[str(comp_label)] = comp_vec.astype(np.float32)
+    return refs, order, w, locus_df.reset_index(drop=True), per_label_weights
 
 
 def _extract_matrix_for_samples(
@@ -248,7 +275,7 @@ def derive_observed_hybrid_anchors(
     *,
     min_coverage: int = 1,
 ) -> ObservedHybridAnchors:
-    refs, feature_order, _weights, _locus_df = _build_reference_map(dmp_df)
+    refs, feature_order, _weights, _locus_df, _per_label_weights = _build_reference_map(dmp_df)
     X_raw = _extract_matrix_for_samples(
         sample_paths,
         refs,
@@ -282,9 +309,21 @@ def derive_observed_hybrid_anchors(
     cancer_labels = [str(name) for i, name in enumerate(class_names) if i != int(healthy_index)]
     if not cancer_labels:
         cancer_labels = [str(class_names[int(healthy_index)])] if class_names else ["unknown"]
+    per_cancer_reference_vectors: List[np.ndarray] = []
+    for i, name in enumerate(class_names):
+        if int(i) == int(healthy_index):
+            continue
+        cls_mask = y == int(i)
+        if np.any(cls_mask):
+            per_cancer_reference_vectors.append(_safe_centroid(X_raw[cls_mask, :]))
+        else:
+            per_cancer_reference_vectors.append(cancer_vec.copy())
+    if not per_cancer_reference_vectors:
+        per_cancer_reference_vectors = [cancer_vec.copy()]
     return ObservedHybridAnchors(
         healthy_reference_vector=healthy_vec,
         cancer_reference_vector=cancer_vec,
+        per_cancer_reference_vectors=per_cancer_reference_vectors,
         healthy_class_index=int(healthy_index),
         healthy_class_label=(str(class_names[int(healthy_index)]) if class_names else "unknown"),
         cancer_class_labels=cancer_labels,
@@ -399,47 +438,124 @@ def _weighted_mean_abs_error(values_a: np.ndarray, values_b: np.ndarray, weights
     return _weighted_mean_with_fallback(abs_err, weights)
 
 
-def _fixed_feature_names() -> List[str]:
+def _feature_label_token(label: object) -> str:
+    token = str(label or "").strip().lower().replace("-", "_").replace(" ", "_")
+    cleaned = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in token)
+    while "__" in cleaned:
+        cleaned = cleaned.replace("__", "_")
+    cleaned = cleaned.strip("_")
+    return cleaned or "cancer"
+
+
+def _prepare_histogram_density_artifacts(
+    locus_df: pd.DataFrame,
+    healthy_class_label: Optional[str],
+    cancer_class_labels: Sequence[str],
+    centroid_dir_by_class_label: Optional[Dict[str, str]],
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Dict[str, np.ndarray]]:
+    if centroid_dir_by_class_label is None or not centroid_dir_by_class_label:
+        return None, None, {}
+    healthy_label = str(healthy_class_label or "").strip()
+    if not healthy_label:
+        return None, None, {}
+    healthy_dir = centroid_dir_by_class_label.get(healthy_label)
+    if not healthy_dir:
+        return None, None, {}
+    if locus_df.empty:
+        return None, None, {}
+
+    n_loci = int(len(locus_df))
+    bin_edges_ref: Optional[np.ndarray] = None
+    healthy_counts_ref: Optional[np.ndarray] = None
+    cancer_counts: Dict[str, np.ndarray] = {}
+
+    by_chrom_indices: Dict[str, np.ndarray] = {}
+    for chrom, cdf in locus_df.groupby("chromosome", sort=False):
+        by_chrom_indices[str(chrom)] = cdf.index.to_numpy(dtype=np.int64)
+
+    for cancer_label in [str(x) for x in cancer_class_labels]:
+        cancer_dir = centroid_dir_by_class_label.get(cancer_label)
+        if not cancer_dir:
+            continue
+        cancer_counts_for_label: Optional[np.ndarray] = None
+        for chrom, idxs in by_chrom_indices.items():
+            sub_df = locus_df.loc[idxs, ["position", "context"]].reset_index(drop=True)
+            loaded = MethylCentroidPair.load_binned_counts_from_centroids(
+                sub_df,
+                centroid1_dir=healthy_dir,
+                centroid2_dir=cancer_dir,
+                chromosome=str(chrom),
+            )
+            if loaded is None:
+                continue
+            edges, healthy_sub, cancer_sub = loaded
+            edges = np.asarray(edges, dtype=np.float64)
+            healthy_sub = np.asarray(healthy_sub, dtype=np.float64)
+            cancer_sub = np.asarray(cancer_sub, dtype=np.float64)
+            if healthy_sub.ndim != 2 or cancer_sub.ndim != 2:
+                continue
+            if healthy_sub.shape[0] != len(sub_df) or cancer_sub.shape[0] != len(sub_df):
+                continue
+            if healthy_sub.shape[1] != cancer_sub.shape[1]:
+                continue
+            if edges.shape[0] != healthy_sub.shape[1] + 1:
+                continue
+            if bin_edges_ref is None:
+                bin_edges_ref = edges
+            elif bin_edges_ref.shape != edges.shape or not np.allclose(bin_edges_ref, edges):
+                # Do not adapt/rebin: skip incompatible sources.
+                continue
+            if healthy_counts_ref is None:
+                healthy_counts_ref = np.zeros((n_loci, healthy_sub.shape[1]), dtype=np.float64)
+            if cancer_counts_for_label is None:
+                cancer_counts_for_label = np.zeros((n_loci, healthy_sub.shape[1]), dtype=np.float64)
+            healthy_counts_ref[idxs, :] = healthy_sub
+            cancer_counts_for_label[idxs, :] = cancer_sub
+        if cancer_counts_for_label is not None:
+            cancer_counts[cancer_label] = cancer_counts_for_label
+
+    return bin_edges_ref, healthy_counts_ref, cancer_counts
+
+
+def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) -> List[str]:
     names = [
-        "dmp_global_weighted_mean",
-        "dmp_global_weighted_std",
-        "dmp_global_weighted_abs_shift_from_half",
-        "methylation_progression_score",
-        "js_distance_to_healthy_centroid",
-        "js_distance_to_cancer_centroid",
-        "weighted_js_distance_to_healthy_centroid",
-        "weighted_js_distance_to_cancer_centroid",
+        "max_weighted_directional_score",
+        "weighted_directional_agreement",
         "weighted_mean_abs_error_to_healthy_centroid",
         "weighted_mean_abs_error_to_cancer_centroid",
         "weighted_mean_abs_distance_margin",
-        "cosine_similarity_to_healthy_centroid",
-        "cosine_similarity_to_cancer_centroid",
         "weighted_cosine_similarity_to_healthy_centroid",
         "weighted_cosine_similarity_to_cancer_centroid",
-        "centroid_contrast_score",
         "weighted_centroid_contrast_score",
-        "fraction_dmps_closer_to_cancer_centroid",
         "weighted_fraction_dmps_closer_to_cancer_centroid",
-        "fraction_dmps_closer_to_healthy_centroid",
         "weighted_fraction_dmps_closer_to_healthy_centroid",
-        "mean_abs_distance_margin",
-        "dmp_global_skewness",
-        "dmp_global_kurtosis",
-        "avg_chrom_dev_from_healthy_centroid",
         "obs_fraction",
-        "obs_weight_fraction",
+        "weighted_obs_fraction",
         "n_obs_dmps",
         "n_total_dmps",
     ]
+    labels = [str(x) for x in (cancer_class_labels or [])]
+    if not labels:
+        labels = ["cancer"]
+    for label in labels:
+        suffix = _feature_label_token(label)
+        names.extend(
+            [
+                f"weighted_healthy_tail_evidence__{suffix}",
+                f"weighted_healthy_tail_agreement__{suffix}",
+                f"weighted_both_centroid_outlier_score__{suffix}",
+            ]
+        )
     return [name for name in names if name not in REMOVED_OBSERVED_HYBRID_FEATURES]
 
 
-def observed_hybrid_feature_names() -> List[str]:
-    return _fixed_feature_names()
+def observed_hybrid_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) -> List[str]:
+    return _fixed_feature_names(cancer_class_labels=cancer_class_labels)
 
 
-def observed_hybrid_schema_fingerprint() -> str:
-    return hashlib.sha256("\n".join(_fixed_feature_names()).encode("utf-8")).hexdigest()
+def observed_hybrid_schema_fingerprint(cancer_class_labels: Optional[Sequence[str]] = None) -> str:
+    names = _fixed_feature_names(cancer_class_labels=cancer_class_labels)
+    return hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest()
 
 
 def build_observed_hybrid_feature_table(
@@ -457,16 +573,22 @@ def build_observed_hybrid_feature_table(
     max_gene_features: int = 32,
     healthy_reference_vector: Optional[Sequence[float]] = None,
     cancer_reference_vector: Optional[Sequence[float]] = None,
+    per_cancer_reference_vectors: Optional[Sequence[Sequence[float]]] = None,
     healthy_class_label: Optional[str] = None,
     cancer_class_labels: Optional[Sequence[str]] = None,
     anchor_strategy: Optional[str] = None,
     expected_feature_order_fingerprint: Optional[str] = None,
+    centroid_dir_by_class_label: Optional[Dict[str, str]] = None,
+    hist_eps: float = 1e-6,
+    hist_alpha: float = 0.5,
+    hist_evidence_clip_cap: float = 5.0,
+    hist_tail_agreement_threshold: float = 0.10,
 ) -> ObservedFeatureArtifacts:
     del quantiles, dmr_window_bp, max_dmr_features, max_gene_features
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
     del include_dmp_features, include_chromosome_features, include_dmr_features, include_gene_features
 
-    refs, feature_order, weights, _locus_df = _build_reference_map(dmp_df)
+    refs, feature_order, weights, locus_df, per_label_weights = _build_reference_map(dmp_df)
     X_raw = _extract_matrix_for_samples(
         sample_paths,
         refs,
@@ -494,6 +616,18 @@ def build_observed_hybrid_feature_table(
     cancer_ref = np.nan_to_num(cancer_ref, nan=0.5, posinf=0.5, neginf=0.5)
     healthy_ref = np.clip(healthy_ref, 0.0, 1.0)
     cancer_ref = np.clip(cancer_ref, 0.0, 1.0)
+    per_cancer_refs: List[np.ndarray] = []
+    if per_cancer_reference_vectors is not None:
+        for vec in per_cancer_reference_vectors:
+            v = np.asarray(vec, dtype=np.float64).reshape(-1)
+            if v.shape[0] != n_loci:
+                raise ValueError(
+                    f"Observed-hybrid per-cancer centroid reference length mismatch: "
+                    f"expected {n_loci}, got {v.shape[0]}"
+                )
+            per_cancer_refs.append(np.clip(np.nan_to_num(v, nan=0.5, posinf=0.5, neginf=0.5), 0.0, 1.0))
+    if not per_cancer_refs:
+        per_cancer_refs = [cancer_ref]
 
     observed_order_fp = _feature_order_fingerprint(feature_order)
     if expected_feature_order_fingerprint and observed_order_fp != str(expected_feature_order_fingerprint):
@@ -510,27 +644,68 @@ def build_observed_hybrid_feature_table(
         w = np.ones((n_loci,), dtype=np.float64)
         total_w = float(np.sum(w))
 
-    healthy_global_mean = _weighted_mean_with_fallback(healthy_ref, w)
-    cancer_global_mean = _weighted_mean_with_fallback(cancer_ref, w)
-    progression_denom = float(cancer_global_mean - healthy_global_mean + 1e-8)
-
-    chroms = sorted({c for c, _ctx, _pos in feature_order}, key=lambda x: (len(str(x)), str(x)))
-    chrom_to_indices: Dict[str, np.ndarray] = {}
-    for chrom in chroms:
-        idxs = [i for i, (c, _ctx, _pos) in enumerate(feature_order) if c == chrom]
-        chrom_to_indices[chrom] = np.asarray(idxs, dtype=np.int32)
-
-    healthy_chrom_mean: Dict[str, float] = {}
-    for chrom, idxs in chrom_to_indices.items():
-        if idxs.size == 0:
-            healthy_chrom_mean[chrom] = float("nan")
-            continue
-        healthy_chrom_mean[chrom] = _weighted_mean_with_fallback(healthy_ref[idxs], w[idxs])
-
-    feature_names = _fixed_feature_names()
+    cancer_labels_raw = [str(x) for x in (cancer_class_labels or [])]
+    if not cancer_labels_raw:
+        cancer_labels_raw = [f"cancer_{k+1}" for k in range(len(per_cancer_refs))]
+    if len(cancer_labels_raw) < len(per_cancer_refs):
+        cancer_labels_raw.extend(
+            [f"cancer_{k+1}" for k in range(len(cancer_labels_raw), len(per_cancer_refs))]
+        )
+    cancer_labels_raw = cancer_labels_raw[: len(per_cancer_refs)]
+    feature_names = _fixed_feature_names(cancer_class_labels=cancer_labels_raw)
     X_feat = np.full((n_samples, len(feature_names)), np.nan, dtype=np.float32)
 
     idx = {name: j for j, name in enumerate(feature_names)}
+    cancer_labels_norm = [str(lbl).strip().lower() for lbl in cancer_labels_raw]
+    per_label_weights_norm = {
+        str(key).strip().lower(): np.asarray(vec, dtype=np.float64) for key, vec in per_label_weights.items()
+    }
+    default_weights = np.asarray(w, dtype=np.float64)
+
+    def _weights_for_cancer_label(cancer_label: str) -> np.ndarray:
+        label = str(cancer_label).strip().lower()
+        if label in per_label_weights_norm:
+            return per_label_weights_norm[label]
+        for k, v in per_label_weights_norm.items():
+            if label and (label in k or k.endswith(f"_vs_{label}") or k.endswith(f"-vs-{label}")):
+                return v
+        return default_weights
+
+    label_weight_vectors: List[np.ndarray] = []
+    for j in range(len(per_cancer_refs)):
+        if j < len(cancer_labels_norm):
+            label_weight_vectors.append(_weights_for_cancer_label(cancer_labels_norm[j]))
+        else:
+            label_weight_vectors.append(default_weights)
+    hist_eps = float(max(float(hist_eps), 1e-12))
+    hist_alpha = float(max(float(hist_alpha), 0.0))
+    hist_evidence_clip_cap = float(max(float(hist_evidence_clip_cap), 0.0))
+    hist_tail_agreement_threshold = float(
+        max(0.0, min(1.0, float(hist_tail_agreement_threshold)))
+    )
+    hist_min_delta = 0.0
+    hist_bin_edges, hist_healthy_counts, hist_cancer_counts = _prepare_histogram_density_artifacts(
+        locus_df,
+        healthy_class_label=healthy_class_label,
+        cancer_class_labels=cancer_labels_raw,
+        centroid_dir_by_class_label=centroid_dir_by_class_label,
+    )
+
+    def _ecdf_at(count_rows: np.ndarray, locus_indices: np.ndarray, bin_indices: np.ndarray) -> np.ndarray:
+        if count_rows.size == 0 or locus_indices.size == 0:
+            return np.asarray([], dtype=np.float64)
+        rows = count_rows[locus_indices, :]
+        n_bins = int(rows.shape[1])
+        if n_bins <= 0:
+            return np.asarray([], dtype=np.float64)
+        smoothed = np.asarray(rows, dtype=np.float64) + hist_alpha
+        totals = np.sum(smoothed, axis=1)
+        cumsum = np.cumsum(smoothed, axis=1)
+        picked = cumsum[np.arange(locus_indices.size), bin_indices]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out = np.where(totals > 0.0, picked / totals, np.nan)
+        return np.clip(out, hist_eps, 1.0 - hist_eps)
+
     for i in range(n_samples):
         row = np.asarray(X_raw[i, :], dtype=np.float64)
         obs_mask = np.isfinite(row)
@@ -539,30 +714,120 @@ def build_observed_hybrid_feature_table(
         n_obs = int(obs_vals.size)
 
         if n_obs > 0:
-            g_mean = _weighted_mean_with_fallback(obs_vals, obs_w)
-            g_std = _weighted_std(obs_vals, obs_w) if obs_w.size == obs_vals.size else float(np.std(obs_vals))
-            abs_shift = _weighted_mean_with_fallback(np.abs(obs_vals - 0.5), obs_w)
-            skew, kurt = _weighted_skew_kurt_with_fallback(obs_vals, obs_w)
+            max_weighted_directional_score = float("nan")
+            for k_idx, mu_k in enumerate(per_cancer_refs):
+                mu_k_obs = mu_k[obs_mask]
+                numer = 2.0 * (obs_vals - healthy_ref[obs_mask])
+                denom = (mu_k_obs - healthy_ref[obs_mask]) + 1e-6
+                directional = np.clip((numer / denom) - 1.0, -1.0, 1.0)
+                wk = label_weight_vectors[k_idx]
+                wk_obs = wk[obs_mask] if wk.shape[0] == obs_mask.shape[0] else default_weights[obs_mask]
+                wk_obs = np.asarray(np.nan_to_num(wk_obs, nan=0.0, posinf=0.0, neginf=0.0), dtype=np.float64)
+                if wk_obs.shape[0] != directional.shape[0]:
+                    continue
+                wk_sum = float(np.sum(wk_obs))
+                if wk_sum <= 0.0:
+                    continue
+                fk = float(np.sum(wk_obs * directional) / wk_sum)
+                if not np.isfinite(max_weighted_directional_score) or fk > max_weighted_directional_score:
+                    max_weighted_directional_score = fk
+
+            tail_feature_values: Dict[str, float] = {}
+            if (
+                hist_bin_edges is not None
+                and hist_healthy_counts is not None
+                and hist_healthy_counts.shape[0] == n_loci
+            ):
+                obs_idx = np.where(obs_mask)[0].astype(np.int64)
+                obs_vals_safe = np.clip(np.asarray(obs_vals, dtype=np.float64), 0.0, 1.0)
+                bin_idx = np.searchsorted(hist_bin_edges, obs_vals_safe, side="right") - 1
+                bin_idx = np.clip(bin_idx, 0, max(0, len(hist_bin_edges) - 2)).astype(np.int64)
+                ecdf_h = _ecdf_at(hist_healthy_counts, obs_idx, bin_idx)
+                if ecdf_h.size == obs_vals.size:
+                    for k_idx, label_raw in enumerate(cancer_labels_raw):
+                        suffix = _feature_label_token(label_raw)
+                        key_e = f"weighted_healthy_tail_evidence__{suffix}"
+                        key_a = f"weighted_healthy_tail_agreement__{suffix}"
+                        key_o = f"weighted_both_centroid_outlier_score__{suffix}"
+                        tail_feature_values.setdefault(key_e, float("nan"))
+                        tail_feature_values.setdefault(key_a, float("nan"))
+                        tail_feature_values.setdefault(key_o, float("nan"))
+                        counts_c = hist_cancer_counts.get(label_raw)
+                        if counts_c is None or counts_c.shape != hist_healthy_counts.shape:
+                            continue
+                        ecdf_c = _ecdf_at(counts_c, obs_idx, bin_idx)
+                        if ecdf_c.size != ecdf_h.size:
+                            continue
+                        wk = label_weight_vectors[k_idx]
+                        wk_obs = wk[obs_mask] if wk.shape[0] == obs_mask.shape[0] else default_weights[obs_mask]
+                        wk_obs = np.asarray(
+                            np.nan_to_num(wk_obs, nan=0.0, posinf=0.0, neginf=0.0),
+                            dtype=np.float64,
+                        )
+                        mu_h_obs = healthy_ref[obs_mask]
+                        mu_k_obs = per_cancer_refs[k_idx][obs_mask]
+                        counts_h_rows = hist_healthy_counts[obs_idx, :]
+                        counts_c_rows = counts_c[obs_idx, :]
+                        tot_h = np.sum(counts_h_rows, axis=1)
+                        tot_c = np.sum(counts_c_rows, axis=1)
+                        delta = mu_k_obs - mu_h_obs
+                        direction_valid = np.logical_or(delta > 0.0, delta < 0.0)
+                        valid = (
+                            np.isfinite(obs_vals)
+                            & np.isfinite(mu_h_obs)
+                            & np.isfinite(mu_k_obs)
+                            & np.isfinite(wk_obs)
+                            & (wk_obs > 0.0)
+                            & (tot_h > 0.0)
+                            & (tot_c > 0.0)
+                            & direction_valid
+                            & (np.abs(delta) >= hist_min_delta)
+                        )
+                        if not np.any(valid):
+                            continue
+                        ecdf_h_v = ecdf_h[valid]
+                        ecdf_c_v = ecdf_c[valid]
+                        wk_v = wk_obs[valid]
+                        delta_v = delta[valid]
+                        upper_tail = 1.0 - ecdf_h_v
+                        lower_tail = ecdf_h_v
+                        t = np.where(delta_v > 0.0, upper_tail, lower_tail)
+                        t = np.clip(t, hist_eps, 1.0)
+                        evidence = np.minimum(-np.log(t + hist_eps), hist_evidence_clip_cap)
+                        agreement = (t < hist_tail_agreement_threshold).astype(np.float64)
+                        q_h = np.clip(2.0 * np.minimum(ecdf_h_v, 1.0 - ecdf_h_v), hist_eps, 1.0)
+                        q_c = np.clip(2.0 * np.minimum(ecdf_c_v, 1.0 - ecdf_c_v), hist_eps, 1.0)
+                        outside = np.minimum(
+                            -np.log(np.maximum(q_h, q_c) + hist_eps),
+                            hist_evidence_clip_cap,
+                        )
+                        wk_sum = float(np.sum(wk_v))
+                        if wk_sum <= 0.0:
+                            continue
+                        tail_feature_values[key_e] = float(np.sum(wk_v * evidence) / wk_sum)
+                        tail_feature_values[key_a] = float(np.sum(wk_v * agreement) / wk_sum)
+                        tail_feature_values[key_o] = float(np.sum(wk_v * outside) / wk_sum)
+
+            r_agg = (obs_vals - healthy_ref[obs_mask]) / (cancer_ref[obs_mask] - healthy_ref[obs_mask] + 1e-6)
+            z_agg = 2.0 * r_agg - 1.0
+            cancer_like = (z_agg > 0.0).astype(np.float64)
+            if obs_w.size == obs_vals.size and float(np.sum(obs_w)) > 0.0:
+                weighted_directional_agreement = float(np.sum(obs_w * cancer_like) / np.sum(obs_w))
+            else:
+                weighted_directional_agreement = float(np.mean(cancer_like))
 
             healthy_obs = healthy_ref[obs_mask]
             cancer_obs = cancer_ref[obs_mask]
-            js_h = _jensen_shannon_distance(obs_vals, healthy_obs)
-            js_c = _jensen_shannon_distance(obs_vals, cancer_obs)
             wjs_h = _weighted_jensen_shannon_distance(obs_vals, healthy_obs, obs_w)
             wjs_c = _weighted_jensen_shannon_distance(obs_vals, cancer_obs, obs_w)
             wmae_h = _weighted_mean_abs_error(obs_vals, healthy_obs, obs_w)
             wmae_c = _weighted_mean_abs_error(obs_vals, cancer_obs, obs_w)
             weighted_mean_abs_distance_margin = float(wmae_h - wmae_c)
-            cos_h = _cosine_similarity(obs_vals, healthy_obs)
-            cos_c = _cosine_similarity(obs_vals, cancer_obs)
             wcos_h = _weighted_cosine_similarity(obs_vals, healthy_obs, obs_w)
             wcos_c = _weighted_cosine_similarity(obs_vals, cancer_obs, obs_w)
-            centroid_contrast_score = (cos_c - cos_h) + (js_h - js_c)
             weighted_centroid_contrast_score = (wcos_c - wcos_h) + (wjs_h - wjs_c)
             dist_h = np.abs(obs_vals - healthy_obs)
             dist_c = np.abs(obs_vals - cancer_obs)
-            closer_to_cancer = float(np.mean(dist_c < dist_h)) if dist_h.size > 0 else float("nan")
-            closer_to_healthy = float(np.mean(dist_h < dist_c)) if dist_h.size > 0 else float("nan")
             obs_w_sum = float(np.sum(obs_w))
             if obs_w.size == obs_vals.size and obs_w_sum > 0.0:
                 weighted_closer_to_cancer = float(np.sum(obs_w[dist_c < dist_h]) / obs_w_sum)
@@ -570,58 +835,20 @@ def build_observed_hybrid_feature_table(
             else:
                 weighted_closer_to_cancer = float("nan")
                 weighted_closer_to_healthy = float("nan")
-            mean_abs_distance_margin = (
-                float(np.mean(dist_h) - np.mean(dist_c))
-                if dist_h.size > 0 and dist_c.size > 0
-                else float("nan")
-            )
         else:
-            g_mean = float("nan")
-            g_std = float("nan")
-            abs_shift = float("nan")
-            skew = float("nan")
-            kurt = float("nan")
-            js_h = float("nan")
-            js_c = float("nan")
+            max_weighted_directional_score = float("nan")
+            tail_feature_values = {}
+            weighted_directional_agreement = float("nan")
             wjs_h = float("nan")
             wjs_c = float("nan")
             wmae_h = float("nan")
             wmae_c = float("nan")
             weighted_mean_abs_distance_margin = float("nan")
-            cos_h = float("nan")
-            cos_c = float("nan")
             wcos_h = float("nan")
             wcos_c = float("nan")
-            centroid_contrast_score = float("nan")
             weighted_centroid_contrast_score = float("nan")
-            closer_to_cancer = float("nan")
-            closer_to_healthy = float("nan")
             weighted_closer_to_cancer = float("nan")
             weighted_closer_to_healthy = float("nan")
-            mean_abs_distance_margin = float("nan")
-
-        if np.isfinite(g_mean) and np.isfinite(progression_denom):
-            progression = float(
-                np.clip((g_mean - healthy_global_mean) / progression_denom, 0.0, 1.0)
-            )
-        else:
-            progression = float("nan")
-
-        chrom_devs: List[float] = []
-        for chrom, idxs in chrom_to_indices.items():
-            if idxs.size == 0:
-                continue
-            vals_c = row[idxs]
-            mask_c = np.isfinite(vals_c)
-            if not np.any(mask_c):
-                continue
-            obs_c = vals_c[mask_c]
-            w_c = w[idxs][mask_c]
-            sample_chrom_mean = _weighted_mean_with_fallback(obs_c, w_c)
-            healthy_chrom = healthy_chrom_mean.get(chrom, float("nan"))
-            if np.isfinite(sample_chrom_mean) and np.isfinite(healthy_chrom):
-                chrom_devs.append(float(sample_chrom_mean - healthy_chrom))
-        avg_chrom_dev = float(np.mean(chrom_devs)) if chrom_devs else float("nan")
 
         obs_frac = float(n_obs / max(1, n_loci))
         if w.size == n_loci and total_w > 0.0:
@@ -629,38 +856,26 @@ def build_observed_hybrid_feature_table(
         else:
             obs_w_frac = obs_frac
 
-        X_feat[i, idx["dmp_global_weighted_mean"]] = g_mean
-        X_feat[i, idx["dmp_global_weighted_std"]] = g_std
-        X_feat[i, idx["dmp_global_weighted_abs_shift_from_half"]] = abs_shift
-        X_feat[i, idx["methylation_progression_score"]] = progression
-        X_feat[i, idx["js_distance_to_healthy_centroid"]] = js_h
-        X_feat[i, idx["js_distance_to_cancer_centroid"]] = js_c
-        X_feat[i, idx["weighted_js_distance_to_healthy_centroid"]] = wjs_h
-        X_feat[i, idx["weighted_js_distance_to_cancer_centroid"]] = wjs_c
+        X_feat[i, idx["max_weighted_directional_score"]] = max_weighted_directional_score
+        X_feat[i, idx["weighted_directional_agreement"]] = weighted_directional_agreement
         X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
         X_feat[i, idx["weighted_mean_abs_error_to_cancer_centroid"]] = wmae_c
         X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
-        X_feat[i, idx["cosine_similarity_to_healthy_centroid"]] = cos_h
-        X_feat[i, idx["cosine_similarity_to_cancer_centroid"]] = cos_c
         X_feat[i, idx["weighted_cosine_similarity_to_healthy_centroid"]] = wcos_h
         X_feat[i, idx["weighted_cosine_similarity_to_cancer_centroid"]] = wcos_c
-        X_feat[i, idx["centroid_contrast_score"]] = centroid_contrast_score
         X_feat[i, idx["weighted_centroid_contrast_score"]] = weighted_centroid_contrast_score
-        X_feat[i, idx["fraction_dmps_closer_to_cancer_centroid"]] = closer_to_cancer
         X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
-        X_feat[i, idx["fraction_dmps_closer_to_healthy_centroid"]] = closer_to_healthy
         X_feat[i, idx["weighted_fraction_dmps_closer_to_healthy_centroid"]] = weighted_closer_to_healthy
-        X_feat[i, idx["mean_abs_distance_margin"]] = mean_abs_distance_margin
-        X_feat[i, idx["dmp_global_skewness"]] = skew
-        X_feat[i, idx["dmp_global_kurtosis"]] = kurt
-        X_feat[i, idx["avg_chrom_dev_from_healthy_centroid"]] = avg_chrom_dev
         X_feat[i, idx["obs_fraction"]] = obs_frac
-        X_feat[i, idx["obs_weight_fraction"]] = obs_w_frac
+        X_feat[i, idx["weighted_obs_fraction"]] = obs_w_frac
         X_feat[i, idx["n_obs_dmps"]] = float(n_obs)
         X_feat[i, idx["n_total_dmps"]] = float(n_loci)
+        for feat_name, feat_value in tail_feature_values.items():
+            if feat_name in idx:
+                X_feat[i, idx[feat_name]] = float(feat_value)
 
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()
-    schema_fingerprint = observed_hybrid_schema_fingerprint()
+    schema_fingerprint = observed_hybrid_schema_fingerprint(cancer_class_labels=cancer_labels_raw)
     report = {
         "n_samples": int(n_samples),
         "n_loci_reference": int(n_loci),
@@ -674,8 +889,12 @@ def build_observed_hybrid_feature_table(
             "gene": False,
         },
         "healthy_class_label": str(healthy_class_label or "unknown"),
-        "cancer_class_labels": [str(x) for x in (cancer_class_labels or [])],
+        "cancer_class_labels": [str(x) for x in cancer_labels_raw],
         "anchor_strategy": str(anchor_strategy or "unspecified"),
+        "hist_eps": hist_eps,
+        "hist_alpha": hist_alpha,
+        "hist_evidence_clip_cap": hist_evidence_clip_cap,
+        "hist_tail_agreement_threshold": hist_tail_agreement_threshold,
         "feature_order_fingerprint": observed_order_fp,
         "schema_fingerprint": schema_fingerprint,
         "feature_non_nan_counts": {feature_names[j]: int(non_nan[j]) for j in range(len(feature_names))},

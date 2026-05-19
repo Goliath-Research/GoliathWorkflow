@@ -119,6 +119,46 @@ The package can emit:
 - module rankings,
 - disease-relevance summaries and pathway-theme labels.
 
+## Ensure-complete mode
+
+Use **`--ensure-complete`** on production projects so every Enrichr library is present before progression or modeling:
+
+```bash
+methyl-enricher --project /path/to/monte_carlo_runs/production/project.json --ensure-complete
+```
+
+- Retries transient Enrichr failures (429, parse errors) with exponential backoff.
+- Skips libraries whose `enrich_<library>.csv` already exists (use `--force` to re-query).
+- Writes `enricher_task_status.json` per comparison and `enricher/enricher_completeness.json` at the enricher root.
+- Exit **0** only when all comparisons are complete; otherwise **1**.
+
+Config (`step_config.enricher`):
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `ensure_complete` | false | When true with `--project`, same as CLI flag |
+| `enricher_max_retries` | 5 | Per-library attempts |
+| `enricher_retry_base_seconds` | 30 | Initial backoff |
+| `enricher_retry_max_seconds` | 600 | Backoff cap |
+| `enricher_inter_library_delay_seconds` | 2 | Pause between libraries |
+| `distributed` | false | Freeze plans tasks only (see queue below) |
+
+Other flags: `--verify-only`, `--comparison LABEL`, `--no-retry`.
+
+## Distributed enricher queue (per comparison)
+
+After freeze mapper outputs exist:
+
+```bash
+methyl-enricher plan-tasks --project .../production/project.json
+methyl-enricher export-queue --project .../production/project.json
+# workers (one comparison each):
+methyl-enricher run-task --task .../enricher/queue/tasks/enricher_PCa_PCa1.json
+methyl-enricher verify-complete --project .../production/project.json
+```
+
+Set `step_config.enricher.distributed: true` in freeze config to run **plan-tasks** during `--freeze` instead of blocking on Enrichr (workers must finish before progression).
+
 ## Related Documentation
 
 - Theory: [`THEORY.md`](THEORY.md)

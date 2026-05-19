@@ -186,6 +186,22 @@ def _resolve_eval_paths_and_labels(project_json: str | Path, class_names: List[s
     )
 
 
+def _resolve_class_centroid_dirs(project: Any, class_names: Sequence[str]) -> Dict[str, str]:
+    label_to_dir: Dict[str, str] = {}
+    try:
+        resolved = project.get_resolved_groups()
+        derived = project.get_derived_paths()
+        centroid_dirs = list(getattr(derived, "centroid_dirs", []) or [])
+        for idx, (label, _paths) in enumerate(resolved):
+            if idx < len(centroid_dirs):
+                label_to_dir[str(label)] = str(centroid_dirs[idx])
+    except Exception:
+        label_to_dir = {}
+    for name in class_names:
+        label_to_dir.setdefault(str(name), "")
+    return {k: v for k, v in label_to_dir.items() if str(v).strip()}
+
+
 def train_generative_model(
     project_json: str | Path,
     bundle_h5: str | Path,
@@ -220,6 +236,10 @@ def train_generative_model(
     observed_feature_dmr_window_bp: int = 100000,
     observed_feature_max_dmrs: int = 32,
     observed_feature_max_genes: int = 32,
+    observed_hist_eps: float = 1e-6,
+    observed_hist_alpha: float = 0.5,
+    observed_hist_evidence_clip_cap: float = 5.0,
+    observed_hist_tail_agreement_threshold: float = 0.10,
 ) -> Path:
     np.random.seed(int(random_seed))
     with _project_cwd(project_json):
@@ -234,6 +254,7 @@ def train_generative_model(
 
     resolved = project.get_resolved_groups()
     class_names = [str(lbl) for lbl, _ in resolved]
+    class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
     all_paths: List[str] = []
     y: List[int] = []
     sample_ids: List[str] = []
@@ -268,10 +289,16 @@ def train_generative_model(
             max_gene_features=int(max(0, observed_feature_max_genes)),
             healthy_reference_vector=anchors.healthy_reference_vector,
             cancer_reference_vector=anchors.cancer_reference_vector,
+            per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
             healthy_class_label=anchors.healthy_class_label,
             cancer_class_labels=anchors.cancer_class_labels,
             anchor_strategy=anchors.anchor_strategy,
             expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+            centroid_dir_by_class_label=class_centroid_dirs,
+            hist_eps=float(observed_hist_eps),
+            hist_alpha=float(observed_hist_alpha),
+            hist_evidence_clip_cap=float(observed_hist_evidence_clip_cap),
+            hist_tail_agreement_threshold=float(observed_hist_tail_agreement_threshold),
         )
         X_methyl = np.asarray(feat.X, dtype=np.float32)
         feature_fill_values = fit_feature_fill_values(X_methyl)
@@ -282,6 +309,9 @@ def train_generative_model(
         observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
         observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
         observed_cancer_reference = anchors.cancer_reference_vector.astype(np.float32)
+        observed_per_cancer_references = [
+            np.asarray(v, dtype=np.float32) for v in anchors.per_cancer_reference_vectors
+        ]
         observed_healthy_class_index = int(anchors.healthy_class_index)
         observed_healthy_class_label = str(anchors.healthy_class_label)
         observed_cancer_class_labels = [str(x) for x in anchors.cancer_class_labels]
@@ -305,6 +335,7 @@ def train_generative_model(
         observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
         observed_healthy_reference = None
         observed_cancer_reference = None
+        observed_per_cancer_references: List[np.ndarray] = []
         observed_healthy_class_index = None
         observed_healthy_class_label = None
         observed_cancer_class_labels = []
@@ -407,6 +438,10 @@ def train_generative_model(
         "observed_feature_dmr_window_bp": int(max(1, observed_feature_dmr_window_bp)),
         "observed_feature_max_dmrs": int(max(0, observed_feature_max_dmrs)),
         "observed_feature_max_genes": int(max(0, observed_feature_max_genes)),
+        "observed_hist_eps": float(observed_hist_eps),
+        "observed_hist_alpha": float(observed_hist_alpha),
+        "observed_hist_evidence_clip_cap": float(observed_hist_evidence_clip_cap),
+        "observed_hist_tail_agreement_threshold": float(observed_hist_tail_agreement_threshold),
         "observed_feature_fill_values": (
             [float(v) for v in feature_fill_values.tolist()] if feature_fill_values is not None else None
         ),
@@ -417,6 +452,9 @@ def train_generative_model(
         "observed_cancer_reference_vector": (
             [float(v) for v in observed_cancer_reference.tolist()] if observed_cancer_reference is not None else None
         ),
+        "observed_per_cancer_reference_vectors": [
+            [float(v) for v in vec.tolist()] for vec in observed_per_cancer_references
+        ],
         "observed_healthy_class_index": observed_healthy_class_index,
         "observed_healthy_class_label": observed_healthy_class_label,
         "observed_cancer_class_labels": observed_cancer_class_labels,
@@ -471,7 +509,9 @@ def predict_generative_model_from_project(
         meta = json.load(f)
     class_names = [str(x) for x in meta.get("class_names", [])]
     feature_mode = str(meta.get("feature_mode", "raw_dmp")).strip().lower()
-
+    with _project_cwd(project_json):
+        project = load_project(project_json)
+    class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
     samples, y_true = _resolve_eval_paths_and_labels(project_json, class_names)
     if not samples:
         raise ValueError("No evaluation samples resolved for generative prediction.")
@@ -500,10 +540,18 @@ def predict_generative_model_from_project(
             max_gene_features=int(meta.get("observed_feature_max_genes", 32)),
             healthy_reference_vector=meta.get("observed_healthy_reference_vector"),
             cancer_reference_vector=meta.get("observed_cancer_reference_vector"),
+            per_cancer_reference_vectors=meta.get("observed_per_cancer_reference_vectors"),
             healthy_class_label=meta.get("observed_healthy_class_label"),
             cancer_class_labels=meta.get("observed_cancer_class_labels") or [],
             anchor_strategy=meta.get("observed_anchor_strategy"),
             expected_feature_order_fingerprint=meta.get("observed_feature_order_fingerprint"),
+            centroid_dir_by_class_label=class_centroid_dirs,
+            hist_eps=float(meta.get("observed_hist_eps", 1e-6)),
+            hist_alpha=float(meta.get("observed_hist_alpha", 0.5)),
+            hist_evidence_clip_cap=float(meta.get("observed_hist_evidence_clip_cap", 5.0)),
+            hist_tail_agreement_threshold=float(
+                meta.get("observed_hist_tail_agreement_threshold", 0.10)
+            ),
         )
         verify_feature_schema(
             feat.feature_names,
