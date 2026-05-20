@@ -13,6 +13,28 @@ type
   TActivateNodeProc = reference to procedure(const AGraph: TWorkflowGraph;
     const AContext: TActivationContext; const ANodeId: Int64);
 
+  {
+    Core control-flow runtime.
+
+    Responsibilities:
+    - Create node_execution rows for ACTION and composite nodes.
+    - Decide which child node to activate for each composite type.
+    - Persist loop bookkeeping (REPEAT) and propagate completion upward.
+    - Mark instance FAILED/COMPLETED when terminal conditions are reached.
+
+    Composite behavior at a glance:
+    - SEQUENCE: starts first child; then activates next child after each terminal child.
+    - PARALLEL: starts all children; completes when all children are terminal and none failed.
+    - IF: resolves condition to integer (non-zero = THEN, zero = ELSE).
+    - SWITCH: resolves integer value and selects matching CASE or DEFAULT.
+    - REPEAT: creates loop_state and re-enters BODY until target count is reached.
+    - WHILE: evaluates condition before each BODY activation; exits when condition = 0.
+
+    Scope behavior:
+    - Every composite opens a scope rooted at its own execution id.
+    - Parallel children receive a copied scope snapshot and write outputs into
+      child-local scope roots (isolation between branches).
+  }
   TWorkflowControlFlow = class(TInterfacedObject, IWorkflowControlFlow)
   private
     FRepository: IWorkflowRepository;
@@ -237,12 +259,14 @@ begin
   if not AGraph.TryGetNode(ANodeId, Node) then
     raise EWfState.Create('Unknown workflow node id: ' + IntToStr(ANodeId));
 
+  { ACTION is a leaf: create READY execution, seed context, resolve input JSON. }
   if Node.NodeType = ntAction then
   begin
     ActivateAction(AGraph, Node, AContext);
     Exit;
   end;
 
+  { Composite nodes are RUNNING and then dispatch to one or more children. }
   CompositeExecId := CreateCompositeExecution(AGraph, Node, AContext);
   FScope.OpenScope(AContext.WorkflowInstanceId, ScopeParentExecId(AContext), CompositeExecId, Node);
   ChildCtx := AContext;
@@ -252,6 +276,7 @@ begin
   case Node.NodeType of
     ntSequence:
       begin
+        { Execute child_order = 0 first; SequenceContinue handles the rest. }
         ChildEdges := AGraph.GetChildEdges(Node.Id);
         if Length(ChildEdges) = 0 then
         begin
@@ -265,6 +290,7 @@ begin
       end;
     ntParallel:
       begin
+        { Fan out immediately; ParallelContinue performs join semantics. }
         ChildEdges := AGraph.GetChildEdges(Node.Id);
         for I := 0 to High(ChildEdges) do
         begin
@@ -275,6 +301,7 @@ begin
       end;
     ntIf:
       begin
+        { Condition uses scoped variable or prior node result (non-zero = true). }
         CondRc := FScope.ResolveConditionInt(AGraph, Node, AContext.WorkflowInstanceId,
           ScopeParentExecId(AContext));
         ChildEdges := AGraph.GetChildEdges(Node.Id);
@@ -296,6 +323,7 @@ begin
       end;
     ntSwitch:
       begin
+        { First matching CASE wins; falls back to DEFAULT. }
         SwitchVal := FScope.ResolveSwitchInt(AGraph, Node, AContext.WorkflowInstanceId,
           ScopeParentExecId(AContext));
         BodyId := 0;
@@ -318,6 +346,7 @@ begin
       end;
     ntRepeat:
       begin
+        { REPEAT starts BODY at iteration 1 and tracks progress in wf.loop_state. }
         LoopSt.WorkflowInstanceId := AContext.WorkflowInstanceId;
         LoopSt.ControlNodeId := Node.Id;
         LoopSt.ScopeNodeExecutionId := CompositeExecId;
@@ -343,6 +372,7 @@ begin
       end;
     ntWhile:
       begin
+        { WHILE checks condition before each BODY dispatch and can finish immediately. }
         CondRc := FScope.ResolveConditionInt(AGraph, Node, AContext.WorkflowInstanceId,
           ScopeParentExecId(AContext));
         if CondRc = 0 then
@@ -547,6 +577,10 @@ var
 begin
   if not AGraph.TryGetNode(AParentExecution.WorkflowNodeId, ParentNode) then
     Exit;
+  {
+    Parent continuation is the "join point" after a child finishes.
+    Each composite decides whether to dispatch more children or mark itself done.
+  }
   case ParentNode.NodeType of
     ntSequence: SequenceContinue(AGraph, AParentExecution.Id);
     ntParallel: ParallelContinue(AGraph, AParentExecution.Id);
@@ -568,6 +602,7 @@ var
   ParentRec: TNodeExecution;
   ActionNode: TWorkflowNode;
 begin
+  { Convention: negative worker result code means business failure. }
   if AResultCode < 0 then
   begin
     FRepository.UpdateNodeExecutionStatus(AExecution.Id, nesFailed, AOutputJson,
@@ -581,6 +616,7 @@ begin
     AResultCode, True, 0, '');
   FRepository.DeleteTaskLease(AExecution.Id);
 
+  { Persist declared output bindings into the correct scope root. }
   if AGraph.TryGetNode(AExecution.WorkflowNodeId, ActionNode) then
     FScope.ApplyOutputBindings(AExecution.WorkflowInstanceId,
       ScopeWriteExecId(AGraph, AExecution), ActionNode, AResultCode, AOutputJson);

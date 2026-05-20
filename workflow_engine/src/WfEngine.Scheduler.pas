@@ -3,6 +3,15 @@ unit WfEngine.Scheduler;
 {
   Delphi workflow engine runtime (single-service).
   Generates READY tasks and advances control flow; does not call SQL wf_engine_activate.
+
+  Execution model:
+  1) StartInstance transitions workflow_instance to RUNNING, initializes instance scope
+     from context_json, and activates root node via control flow.
+  2) Action nodes become READY and are claimed by workers through worker API procedures.
+  3) ProcessWorkerSubmit/OnTaskCompleted commits action results and lets control flow
+     continue the parent composite until the instance reaches COMPLETED or FAILED.
+  4) RunSchedulerTick is currently observability-oriented (counts running instances and
+     ready tasks); it does not perform queue generation because activation happens inline.
 }
 
 interface

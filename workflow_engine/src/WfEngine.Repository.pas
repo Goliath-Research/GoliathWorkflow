@@ -13,6 +13,17 @@ uses
   WfEngine.Types;
 
 type
+  {
+    SQL-backed repository for wf schema state.
+
+    Notes:
+    - Graph metadata (workflow_node/workflow_edge/templates/bindings) is loaded into
+      TWorkflowGraph and indexed in memory by the engine.
+    - Runtime progression is persisted in node_execution, execution_context, loop_state,
+      task_lease and scope_variable.
+    - Scope variables are resolved hierarchically: current scope execution id, then
+      parent execution scopes, then instance scope (scope_node_execution_id = 0).
+  }
   TWorkflowRepository = class(TInterfacedObject, IWorkflowRepository)
   private
     FConnection: TUniConnection;

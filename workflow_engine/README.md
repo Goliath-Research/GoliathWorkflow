@@ -1,5 +1,7 @@
 # SQL Server Workflow Engine scripts
 
+Delphi runtime implementation notes and control-flow walkthrough: [`WORKFLOW_ENGINE_DELPHI.md`](WORKFLOW_ENGINE_DELPHI.md)
+
 **Azure SQL / bundled engine (`wf` schema):** use [`MethylPipeline_202604291041.sql`](MethylPipeline_202604291041.sql) as the single deploy script. It defines clusters, registered workers (`wf.worker`), bearer tokens (`wf.worker_token`), native `JSON` payload columns, and worker procedures that require `@worker_id BIGINT` (from `wf.worker.id`) plus `@worker_token`.
 
 ---
@@ -11,6 +13,8 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 3. [`workflow_constraints_indexes.sql`](workflow_constraints_indexes.sql) — extra indexes/constraints.
 4. [`workflow_worker_api.sql`](workflow_worker_api.sql) — functions + stored procedures (`sp_worker_request_task`, `sp_worker_submit_result`, engine activation).
 5. [`workflow_seed_examples.sql`](workflow_seed_examples.sql) — optional demo workflow (`DemoFlow`).
+6. [`workflow_tree_seed_example.sql`](workflow_tree_seed_example.sql) — optional tree workflow (`DelphiTreeFlow`) matching Delphi runtime walkthrough.
+7. [`workflow_tree_run_example.sql`](workflow_tree_run_example.sql) — optional end-to-end claim/submit simulation loop for `DelphiTreeFlow`.
 
 To redeploy from scratch, drop runtime tables before re-running `workflow_definition.sql` if `workflow_instance` exists (it references `workflow_version`). Example:
 
