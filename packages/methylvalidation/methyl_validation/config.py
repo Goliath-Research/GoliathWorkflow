@@ -357,7 +357,7 @@ class MonteCarloConfig(BaseModel):
         description="For model_backend=tabular_sklearn: cap number of DMP loci selected from bundle index.",
     )
     tabular_save_train_dataset: bool = Field(
-        default=False,
+        default=True,
         description=(
             "For model_backend=tabular_sklearn: if true, export the assembled training dataset "
             "(features + labels + sample_id) for reproducibility/auditing."
