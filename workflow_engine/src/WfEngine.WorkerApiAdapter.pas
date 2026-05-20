@@ -116,7 +116,7 @@ begin
   FillChar(Result, SizeOf(Result), 0);
   AuthenticateProc(AWorkerId, AWorkerToken);
 
-  if FEngine <> nil then
+  if Assigned(FEngine) then
   begin
     var LeaseOk := False;
     var Q := TUniQuery.Create(nil);
@@ -132,9 +132,8 @@ begin
     finally
       Q.Free;
     end;
-    if not LeaseOk then
-      Exit;
-    Result := FEngine.ProcessWorkerSubmit(ANodeExecutionId, AWorkerId, AResultCode, AOutputJson);
+    if LeaseOk then
+      Result := FEngine.ProcessWorkerSubmit(ANodeExecutionId, AWorkerId, AResultCode, AOutputJson);
     Exit;
   end;
 

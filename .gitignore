@@ -1,3 +1,6 @@
+# Delphi executables
+*.exe
+*.dcu
 # Python
 __pycache__/
 *.py[cod]
@@ -125,3 +128,4 @@ packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.aux
 /.quarto/
 **/*.quarto_ipynb
 *.dcu
+workflow_engine/WfEngineSrv.exe
