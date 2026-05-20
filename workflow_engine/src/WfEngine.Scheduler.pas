@@ -19,6 +19,7 @@ interface
 uses
   System.Generics.Collections,
   System.SysUtils,
+  System.JSON,
   Uni,
   WfEngine.ControlFlow,
   WfEngine.Exceptions,
@@ -44,6 +45,9 @@ type
     procedure InternalActivateNode(const AGraph: TWorkflowGraph;
       const AContext: TActivationContext; const ANodeId: Int64);
     function GetGraph(const AVersionId: Int64): TWorkflowGraph;
+    function JsonStringValue(const S: string): string;
+    procedure SeedMonteCarloScopeFromContext(const AInstanceId: Int64;
+      const AContextJson: string);
   public
     constructor Create(AConnection: TUniConnection; const ALogger: IWfEngineLogger = nil);
     destructor Destroy; override;
@@ -142,6 +146,80 @@ begin
   end;
 end;
 
+function TWorkflowEngine.JsonStringValue(const S: string): string;
+var
+  V: TJSONString;
+begin
+  V := TJSONString.Create(S);
+  try
+    Result := V.ToJSON;
+  finally
+    V.Free;
+  end;
+end;
+
+procedure TWorkflowEngine.SeedMonteCarloScopeFromContext(const AInstanceId: Int64;
+  const AContextJson: string);
+var
+  Root, Mc: TJSONValue;
+  McObj: TJSONObject;
+  Seed, FeatureIterations, QualityIterations: Integer;
+  Layout, BaseProject, RunId, TaskCfg: string;
+  I: Integer;
+begin
+  if Trim(AContextJson) = '' then
+    Exit;
+  Root := TJSONObject.ParseJSONValue(AContextJson);
+  try
+    if not (Root is TJSONObject) then
+      Exit;
+    Mc := TJSONObject(Root).GetValue('monteCarlo');
+    if not (Mc is TJSONObject) then
+      Exit;
+    McObj := TJSONObject(Mc);
+    Seed := StrToIntDef(McObj.GetValue<string>('seed', '0'), 0);
+    FeatureIterations := StrToIntDef(McObj.GetValue<string>('featureIterations', '0'), 0);
+    QualityIterations := StrToIntDef(McObj.GetValue<string>('qualityIterations', '0'), 0);
+    Layout := McObj.GetValue<string>('layout', 'binary');
+    BaseProject := McObj.GetValue<string>('baseProject', '');
+
+    FRepository.SetScopeVariable(AInstanceId, WF_INSTANCE_SCOPE_EXECUTION_ID, 'mc.enabled', '1');
+    FRepository.SetScopeVariable(AInstanceId, WF_INSTANCE_SCOPE_EXECUTION_ID, 'mc.seed', IntToStr(Seed));
+    FRepository.SetScopeVariable(AInstanceId, WF_INSTANCE_SCOPE_EXECUTION_ID, 'mc.layout', JsonStringValue(Layout));
+    FRepository.SetScopeVariable(AInstanceId, WF_INSTANCE_SCOPE_EXECUTION_ID,
+      'mc.featureIterations', IntToStr(FeatureIterations));
+    FRepository.SetScopeVariable(AInstanceId, WF_INSTANCE_SCOPE_EXECUTION_ID,
+      'mc.qualityIterations', IntToStr(QualityIterations));
+    FRepository.SetScopeVariable(AInstanceId, WF_INSTANCE_SCOPE_EXECUTION_ID,
+      'mc.totalIterations', IntToStr(FeatureIterations + QualityIterations));
+
+    if BaseProject <> '' then
+      FRepository.SetScopeVariable(AInstanceId, WF_INSTANCE_SCOPE_EXECUTION_ID,
+        'mc.baseProject', JsonStringValue(BaseProject));
+
+    FRepository.UpsertMonteCarloPlan(AInstanceId, BaseProject, Layout, Seed,
+      FeatureIterations, QualityIterations, McObj.ToJSON);
+
+    for I := 1 to FeatureIterations do
+    begin
+      RunId := Format('feature_run_%4.4d', [I]);
+      TaskCfg := Format('{"runId":"%s","phase":"feature","iteration":%d,"layout":"%s"}',
+        [RunId, I, Layout]);
+      FRepository.UpsertMonteCarloRun(AInstanceId, RunId, I, 'feature', TaskCfg);
+    end;
+
+    for I := 1 to QualityIterations do
+    begin
+      RunId := Format('quality_run_%4.4d', [I]);
+      TaskCfg := Format('{"runId":"%s","phase":"quality","iteration":%d,"layout":"%s"}',
+        [RunId, I, Layout]);
+      FRepository.UpsertMonteCarloRun(AInstanceId, RunId, I, 'quality', TaskCfg);
+    end;
+  finally
+    Root.Free;
+  end;
+end;
+
 procedure TWorkflowEngine.InternalActivateNode(const AGraph: TWorkflowGraph;
   const AContext: TActivationContext; const ANodeId: Int64);
 begin
@@ -154,6 +232,7 @@ var
   Graph: TWorkflowGraph;
   Ctx: TActivationContext;
   Status: TWorkflowInstanceStatus;
+  ContextJson: string;
 begin
   Status := FRepository.GetInstanceStatus(AWorkflowInstanceId);
   if Status = wisRunning then
@@ -166,8 +245,9 @@ begin
   FRepository.BeginTransaction;
   try
     FRepository.SetInstanceStatus(AWorkflowInstanceId, wisRunning);
-    FScope.InitInstanceScope(AWorkflowInstanceId,
-      FRepository.GetInstanceContextJson(AWorkflowInstanceId));
+    ContextJson := FRepository.GetInstanceContextJson(AWorkflowInstanceId);
+    FScope.InitInstanceScope(AWorkflowInstanceId, ContextJson);
+    SeedMonteCarloScopeFromContext(AWorkflowInstanceId, ContextJson);
     Ctx.WorkflowInstanceId := AWorkflowInstanceId;
     Ctx.HasParentExecution := False;
     Ctx.IterationNo := 0;

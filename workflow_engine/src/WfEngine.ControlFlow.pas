@@ -59,6 +59,8 @@ type
       const AContext: TActivationContext): Int64;
     procedure SeedContext(const ANodeExecutionId: Int64; const AContext: TActivationContext;
       const AParentExecutionId: Int64);
+    procedure SeedMonteCarloRunScope(const AContext: TActivationContext;
+      const AScopeRootExecId: Int64);
     procedure ActivateAction(const AGraph: TWorkflowGraph; const ANode: TWorkflowNode;
       const AContext: TActivationContext);
   public
@@ -76,7 +78,20 @@ implementation
 uses
   System.Generics.Collections,
   System.Math,
+  System.JSON,
   System.StrUtils;
+
+function JsonStringValue(const S: string): string;
+var
+  V: TJSONString;
+begin
+  V := TJSONString.Create(S);
+  try
+    Result := V.ToJSON;
+  finally
+    V.Free;
+  end;
+end;
 
 { TWorkflowControlFlow }
 
@@ -212,6 +227,7 @@ begin
       AContext.ParentNodeExecutionId, ExecId);
     ScopeRoot := ExecId;
   end;
+  SeedMonteCarloRunScope(AContext, ScopeRoot);
   Bindings := FRepository.LoadInputBindings(ANode.Id);
   try
     InputJson := FJsonResolver.ResolveInputForAction(ANode, ExecId, ScopeRoot,
@@ -224,6 +240,49 @@ begin
       raise;
     end;
   end;
+end;
+
+procedure TWorkflowControlFlow.SeedMonteCarloRunScope(
+  const AContext: TActivationContext; const AScopeRootExecId: Int64);
+var
+  Enabled, FeatureIterations, PhaseIter: Integer;
+  PhaseName, RunId, TaskCfg: string;
+begin
+  if not FRepository.TryGetScopeVariableInt(AContext.WorkflowInstanceId,
+    WF_INSTANCE_SCOPE_EXECUTION_ID, 'mc.enabled', Enabled) then
+    Exit;
+  if Enabled = 0 then
+    Exit;
+  if AContext.IterationNo <= 0 then
+    Exit;
+
+  if not FRepository.TryGetScopeVariableInt(AContext.WorkflowInstanceId,
+    WF_INSTANCE_SCOPE_EXECUTION_ID, 'mc.featureIterations', FeatureIterations) then
+    FeatureIterations := 0;
+
+  if AContext.IterationNo <= FeatureIterations then
+  begin
+    PhaseName := 'feature';
+    PhaseIter := AContext.IterationNo;
+  end
+  else
+  begin
+    PhaseName := 'quality';
+    PhaseIter := AContext.IterationNo - FeatureIterations;
+  end;
+
+  RunId := Format('%s_run_%4.4d', [PhaseName, PhaseIter]);
+
+  FRepository.SetScopeVariable(AContext.WorkflowInstanceId, AScopeRootExecId,
+    'mc.phase', JsonStringValue(PhaseName));
+  FRepository.SetScopeVariable(AContext.WorkflowInstanceId, AScopeRootExecId,
+    'mc.phaseIteration', IntToStr(PhaseIter));
+  FRepository.SetScopeVariable(AContext.WorkflowInstanceId, AScopeRootExecId,
+    'mc.runId', JsonStringValue(RunId));
+
+  if FRepository.TryGetMonteCarloRunTaskConfig(AContext.WorkflowInstanceId, RunId, TaskCfg) then
+    FRepository.SetScopeVariable(AContext.WorkflowInstanceId, AScopeRootExecId,
+      'mc.taskConfig', TaskCfg);
 end;
 
 function TWorkflowControlFlow.CreateCompositeExecution(const AGraph: TWorkflowGraph;

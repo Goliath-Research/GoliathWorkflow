@@ -124,3 +124,4 @@ packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.aux
 .hypothesis
 /.quarto/
 **/*.quarto_ipynb
+*.dcu

@@ -15,6 +15,10 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 5. [`workflow_seed_examples.sql`](workflow_seed_examples.sql) — optional demo workflow (`DemoFlow`).
 6. [`workflow_tree_seed_example.sql`](workflow_tree_seed_example.sql) — optional tree workflow (`DelphiTreeFlow`) matching Delphi runtime walkthrough.
 7. [`workflow_tree_run_example.sql`](workflow_tree_run_example.sql) — optional end-to-end claim/submit simulation loop for `DelphiTreeFlow`.
+8. [`wf_monte_carlo_support.sql`](wf_monte_carlo_support.sql) — Monte Carlo plan/run metadata tables for Delphi middle-tier orchestration.
+9. [`wf_sql_branch_parity.sql`](wf_sql_branch_parity.sql) — SQL IF/SWITCH/WHILE variable-branch parity (`condition_var`/`switch_var`) with Delphi runtime behavior.
+10. [`workflow_methylvalidation_seed.sql`](workflow_methylvalidation_seed.sql) — explicit MethylValidation workflow seed (MC centroid/detector loop + post-loop centroid/detector/mapper/enricher/disease progression).
+11. [`wf_sql_runtime_parity.sql`](wf_sql_runtime_parity.sql) — SQL-only parity for scope init from context, `${var.*}` resolution, and `mc.taskConfig` payload injection.
 
 To redeploy from scratch, drop runtime tables before re-running `workflow_definition.sql` if `workflow_instance` exists (it references `workflow_version`). Example:
 

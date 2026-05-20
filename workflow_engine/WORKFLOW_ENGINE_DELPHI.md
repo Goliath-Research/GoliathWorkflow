@@ -127,3 +127,85 @@ Expected high-level progression:
   - `/startinstance version=<id> [context={}]`
 - Required environment variable: `METHYLPIPELINE_DB` (UniDAC connection string).
 
+## Monte Carlo bridge (Delphi middle-tier)
+
+The current Delphi engine now seeds Monte Carlo metadata from `workflow_instance.context_json`
+when a `monteCarlo` object exists. This is intended to represent MethylValidation-style
+workflow phases explicitly in DB:
+
+- `feature` phase: stable-feature discovery runs
+- `quality` phase: post-model quality-metric runs
+
+Expected `context_json` shape fragment:
+
+```json
+{
+  "monteCarlo": {
+    "baseProject": "path/to/project.json",
+    "layout": "binary",
+    "seed": 42,
+    "featureIterations": 30,
+    "qualityIterations": 20
+  }
+}
+```
+
+Persistence:
+
+- `wf.monte_carlo_plan`: one row per workflow instance
+- `wf.monte_carlo_run`: one row per planned run (phase + iteration + task descriptor JSON)
+- scope variables at instance root:
+  - `mc.enabled`, `mc.seed`, `mc.layout`
+  - `mc.featureIterations`, `mc.qualityIterations`, `mc.totalIterations`
+
+Per action activation (especially inside iteration loops), the engine also seeds
+run-level variables in the action scope:
+
+- `mc.phase` (`feature` or `quality`)
+- `mc.phaseIteration` (1-based index within phase)
+- `mc.runId` (e.g. `feature_run_0007`)
+- `mc.taskConfig` (JSON descriptor from `wf.monte_carlo_run.task_config_json`)
+
+`ResolveInputForAction()` now auto-injects `mc.taskConfig` into action payloads:
+
+- if action input is `{}`, the payload becomes `mc.taskConfig`
+- otherwise, payload gets a top-level `mcTaskConfig` property
+
+`wf_monte_carlo_support.sql` also provides SQL helpers for parity work:
+
+- `wf.wf_get_scope_variable_json(...)`
+- `wf.wf_get_scope_variable_int(...)`
+
+For SQL-side activation parity (when using SQL `wf_engine_activate` path),
+run `sql/wf_sql_branch_parity.sql` after base deployment/migrations.
+It updates SQL IF/SWITCH/WHILE resolution to:
+
+1. evaluate `condition_var` / `switch_var` from scope first
+2. fall back to `condition_ref_node_key` / `switch_ref_node_key` task result codes
+
+For SQL-only runtime parity (Delphi optional), also run:
+
+- `sql/wf_sql_runtime_parity.sql`
+
+It adds SQL-side behaviors that previously required Delphi runtime code:
+
+1. initialize instance scope from `workflow_instance.context_json`
+2. resolve `${var.*}` in SQL placeholder resolver
+3. inject `mc.taskConfig` into action `input_json` in SQL path
+
+To materialize MethylValidation as an explicit DB workflow, use:
+
+- `sql/workflow_methylvalidation_seed.sql`
+
+It creates `MethylValidationFlow` with this stage topology:
+
+1. MC feature loop (`REPEAT`)
+   - `MethylCentroid`
+   - `MethylDetector`
+2. Post-loop final sample-set sequence
+   - `MethylCentroid`
+   - `MethylDetector`
+   - `MethylMapper`
+   - `MethylEnricher`
+   - `MethylDiseaseProgression`
+

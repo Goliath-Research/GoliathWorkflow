@@ -66,6 +66,14 @@ type
     function CountReadyTasks(const AInstanceId: Int64): Integer;
     function LoadInputBindings(const ANodeId: Int64): TArray<TPair<string, string>>;
     function GetInstanceContextJson(const AInstanceId: Int64): string;
+    procedure UpdateInstanceContextJson(const AInstanceId: Int64; const AContextJson: string);
+    procedure UpsertMonteCarloPlan(const AInstanceId: Int64; const ABaseProjectPath,
+      ALayout: string; ASeed, AFeatureIterations, AQualityIterations: Integer;
+      const AConfigJson: string);
+    procedure UpsertMonteCarloRun(const AInstanceId: Int64; const ARunId: string;
+      AIterationNo: Integer; const APhase, ATaskConfigJson: string);
+    function TryGetMonteCarloRunTaskConfig(const AInstanceId: Int64; const ARunId: string;
+      out ATaskConfigJson: string): Boolean;
     procedure DeleteScopeVariables(const AInstanceId: Int64; const AScopeExecId: Int64);
     procedure CopyScopeVariables(const AInstanceId, AFromScopeExecId, AToScopeExecId: Int64);
     procedure SetScopeVariable(const AInstanceId, AScopeExecId: Int64; const AVarName, AValueJson: string);
@@ -751,6 +759,62 @@ begin
   Result := ScalarStr(Format(
     'SELECT CAST(context_json AS NVARCHAR(MAX)) FROM %s.workflow_instance WHERE id = %d',
     [WF_SCHEMA, AInstanceId]));
+end;
+
+procedure TWorkflowRepository.UpdateInstanceContextJson(const AInstanceId: Int64;
+  const AContextJson: string);
+begin
+  ExecSql(Format(
+    'UPDATE %s.workflow_instance SET context_json = %s WHERE id = %d',
+    [WF_SCHEMA, IfThen(AContextJson <> '', QuotedStr(AContextJson), 'NULL'), AInstanceId]));
+end;
+
+procedure TWorkflowRepository.UpsertMonteCarloPlan(const AInstanceId: Int64;
+  const ABaseProjectPath, ALayout: string; ASeed, AFeatureIterations,
+  AQualityIterations: Integer; const AConfigJson: string);
+begin
+  ExecSql(Format(
+    'IF EXISTS (SELECT 1 FROM %s.monte_carlo_plan WHERE workflow_instance_id = %d) ' +
+    'UPDATE %s.monte_carlo_plan SET base_project_path = %s, layout_name = %s, seed = %d, ' +
+    'feature_iterations = %d, quality_iterations = %d, config_json = %s, updated_at_utc = SYSUTCDATETIME() ' +
+    'WHERE workflow_instance_id = %d ' +
+    'ELSE INSERT INTO %s.monte_carlo_plan ' +
+    '(workflow_instance_id, base_project_path, layout_name, seed, feature_iterations, quality_iterations, config_json) ' +
+    'VALUES (%d, %s, %s, %d, %d, %d, %s)',
+    [WF_SCHEMA, AInstanceId,
+     WF_SCHEMA, QuotedStr(ABaseProjectPath), QuotedStr(ALayout), ASeed,
+     AFeatureIterations, AQualityIterations, IfThen(AConfigJson <> '', QuotedStr(AConfigJson), 'NULL'),
+     AInstanceId,
+     WF_SCHEMA,
+     AInstanceId, QuotedStr(ABaseProjectPath), QuotedStr(ALayout), ASeed,
+     AFeatureIterations, AQualityIterations, IfThen(AConfigJson <> '', QuotedStr(AConfigJson), 'NULL')]));
+end;
+
+procedure TWorkflowRepository.UpsertMonteCarloRun(const AInstanceId: Int64;
+  const ARunId: string; AIterationNo: Integer; const APhase, ATaskConfigJson: string);
+begin
+  ExecSql(Format(
+    'IF EXISTS (SELECT 1 FROM %s.monte_carlo_run WHERE workflow_instance_id = %d AND run_id = %s) ' +
+    'UPDATE %s.monte_carlo_run SET iteration_no = %d, phase_name = %s, task_config_json = %s, updated_at_utc = SYSUTCDATETIME() ' +
+    'WHERE workflow_instance_id = %d AND run_id = %s ' +
+    'ELSE INSERT INTO %s.monte_carlo_run ' +
+    '(workflow_instance_id, run_id, iteration_no, phase_name, task_config_json) ' +
+    'VALUES (%d, %s, %d, %s, %s)',
+    [WF_SCHEMA, AInstanceId, QuotedStr(ARunId),
+     WF_SCHEMA, AIterationNo, QuotedStr(APhase), IfThen(ATaskConfigJson <> '', QuotedStr(ATaskConfigJson), 'NULL'),
+     AInstanceId, QuotedStr(ARunId),
+     WF_SCHEMA,
+     AInstanceId, QuotedStr(ARunId), AIterationNo, QuotedStr(APhase),
+     IfThen(ATaskConfigJson <> '', QuotedStr(ATaskConfigJson), 'NULL')]));
+end;
+
+function TWorkflowRepository.TryGetMonteCarloRunTaskConfig(const AInstanceId: Int64;
+  const ARunId: string; out ATaskConfigJson: string): Boolean;
+begin
+  ATaskConfigJson := ScalarStr(Format(
+    'SELECT task_config_json FROM %s.monte_carlo_run WHERE workflow_instance_id = %d AND run_id = %s',
+    [WF_SCHEMA, AInstanceId, QuotedStr(ARunId)]));
+  Result := ATaskConfigJson <> '';
 end;
 
 procedure TWorkflowRepository.DeleteScopeVariables(const AInstanceId: Int64;

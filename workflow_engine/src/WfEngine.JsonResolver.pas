@@ -20,6 +20,7 @@ type
       const AInstanceId: Int64): string;
     function JsonEscapeString(const S: string): string;
     function JsonModifyPath(const AJson: string; const APath, AFragment: string): string;
+    function InjectMonteCarloTaskConfig(const AInputJson, ATaskConfigJson: string): string;
   public
     constructor Create(const ARepository: IWorkflowRepository);
     function ResolveTemplate(const ATemplate: string; const AScopeRootExecId: Int64;
@@ -167,6 +168,41 @@ begin
   end;
 end;
 
+function TWorkflowJsonResolver.InjectMonteCarloTaskConfig(const AInputJson,
+  ATaskConfigJson: string): string;
+var
+  Root: TJSONValue;
+  TaskCfg: TJSONValue;
+  Obj: TJSONObject;
+begin
+  if Trim(ATaskConfigJson) = '' then
+    Exit(AInputJson);
+  if Trim(AInputJson) = '{}' then
+    Exit(ATaskConfigJson);
+
+  Root := TJSONObject.ParseJSONValue(AInputJson);
+  if Root = nil then
+    raise EWfJson.Create('Invalid input JSON before MC task injection.',
+      ENGINE_ERROR_INVALID_TEMPLATE_JSON);
+  try
+    if not (Root is TJSONObject) then
+      Exit(AInputJson);
+    Obj := TJSONObject(Root);
+    TaskCfg := TJSONObject.ParseJSONValue(ATaskConfigJson);
+    try
+      if TaskCfg = nil then
+        TaskCfg := TJSONString.Create(ATaskConfigJson);
+      Obj.RemovePair('mcTaskConfig');
+      Obj.AddPair('mcTaskConfig', TaskCfg.Clone as TJSONValue);
+      Result := Obj.ToJSON;
+    finally
+      TaskCfg.Free;
+    end;
+  finally
+    Root.Free;
+  end;
+end;
+
 function TWorkflowJsonResolver.ResolveInputForAction(const ANode: TWorkflowNode;
   const ANodeExecutionId, AScopeRootExecId, AInstanceId: Int64;
   const ABindings: TArray<TPair<string, string>>): string;
@@ -174,6 +210,7 @@ var
   Cur: string;
   Pair: TPair<string, string>;
   Frag: string;
+  McTaskCfg: string;
 begin
   if ANode.HasTemplate then
     Cur := ANode.TemplateJson
@@ -188,6 +225,8 @@ begin
     Frag := ResolvePlaceholders(Pair.Value, AScopeRootExecId, ANodeExecutionId, AInstanceId);
     Cur := JsonModifyPath(Cur, Pair.Key, Frag);
   end;
+  if FRepository.TryGetScopeVariable(AInstanceId, AScopeRootExecId, 'mc.taskConfig', McTaskCfg) then
+    Cur := InjectMonteCarloTaskConfig(Cur, McTaskCfg);
   Result := Cur;
 end;
 

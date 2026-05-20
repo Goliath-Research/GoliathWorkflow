@@ -38,6 +38,14 @@ type
     function CountReadyTasks(const AInstanceId: Int64): Integer;
     function LoadInputBindings(const ANodeId: Int64): TArray<TPair<string, string>>;
     function GetInstanceContextJson(const AInstanceId: Int64): string;
+    procedure UpdateInstanceContextJson(const AInstanceId: Int64; const AContextJson: string);
+    procedure UpsertMonteCarloPlan(const AInstanceId: Int64; const ABaseProjectPath,
+      ALayout: string; ASeed, AFeatureIterations, AQualityIterations: Integer;
+      const AConfigJson: string);
+    procedure UpsertMonteCarloRun(const AInstanceId: Int64; const ARunId: string;
+      AIterationNo: Integer; const APhase, ATaskConfigJson: string);
+    function TryGetMonteCarloRunTaskConfig(const AInstanceId: Int64; const ARunId: string;
+      out ATaskConfigJson: string): Boolean;
     procedure DeleteScopeVariables(const AInstanceId: Int64; const AScopeExecId: Int64);
     procedure CopyScopeVariables(const AInstanceId, AFromScopeExecId, AToScopeExecId: Int64);
     procedure SetScopeVariable(const AInstanceId, AScopeExecId: Int64; const AVarName, AValueJson: string);
