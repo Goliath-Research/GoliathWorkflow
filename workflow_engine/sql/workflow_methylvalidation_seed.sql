@@ -166,8 +166,8 @@ BEGIN
 
     INSERT INTO wf.workflow_input_template (workflow_node_id, template_json)
     VALUES
-      (@n_mc_centroid, N'{"phase":"feature","tool":"MethylCentroid","iteration":${ctx.iterationNo},"runId":"${var.mc.runId}","groups":${var.mc.groups},"comparisons":${var.mc.comparisons},"taskConfig":${var.mc.taskConfig}}'),
-      (@n_mc_detector, N'{"phase":"feature","tool":"MethylDetector","iteration":${ctx.iterationNo},"runId":"${var.mc.runId}","groups":${var.mc.groups},"comparisons":${var.mc.comparisons},"taskConfig":${var.mc.taskConfig}}'),
+      (@n_mc_centroid, N'{"phase":"feature","tool":"MethylCentroid","iteration":${ctx.iterationNo},"runId":${var.mc.runId},"groups":${var.mc.groups},"comparisons":${var.mc.comparisons},"taskConfig":${var.mc.taskConfig}}'),
+      (@n_mc_detector, N'{"phase":"feature","tool":"MethylDetector","iteration":${ctx.iterationNo},"runId":${var.mc.runId},"groups":${var.mc.groups},"comparisons":${var.mc.comparisons},"taskConfig":${var.mc.taskConfig}}'),
       (@n_final_centroid, N'{"phase":"quality","tool":"MethylCentroid","sampleSet":"final","groups":${var.mc.groups},"comparisons":${var.mc.comparisons},"taskConfig":${var.mc.finalTaskConfig}}'),
       (@n_final_detector, N'{"phase":"quality","tool":"MethylDetector","sampleSet":"final","groups":${var.mc.groups},"comparisons":${var.mc.comparisons},"taskConfig":${var.mc.finalTaskConfig}}'),
       (@n_final_mapper, N'{"phase":"quality","tool":"MethylMapper","sampleSet":"final","groups":${var.mc.groups},"comparisons":${var.mc.comparisons},"taskConfig":${var.mc.finalTaskConfig}}'),

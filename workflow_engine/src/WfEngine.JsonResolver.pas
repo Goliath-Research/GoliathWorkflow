@@ -174,6 +174,7 @@ var
   Root: TJSONValue;
   TaskCfg: TJSONValue;
   Obj: TJSONObject;
+  RemovedPair: TJSONPair;
 begin
   if Trim(ATaskConfigJson) = '' then
     Exit(AInputJson);
@@ -192,7 +193,8 @@ begin
     try
       if TaskCfg = nil then
         TaskCfg := TJSONString.Create(ATaskConfigJson);
-      Obj.RemovePair('mcTaskConfig');
+      RemovedPair := Obj.RemovePair('mcTaskConfig');
+      RemovedPair.Free;
       Obj.AddPair('mcTaskConfig', TaskCfg.Clone as TJSONValue);
       Result := Obj.ToJSON;
     finally
