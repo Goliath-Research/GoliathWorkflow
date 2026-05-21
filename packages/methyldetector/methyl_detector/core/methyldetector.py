@@ -100,6 +100,88 @@ def _select_by_effect_coverage(df: pd.DataFrame, coverage: float) -> pd.DataFram
     return df.loc[keep_idx].copy()
 
 
+def _validate_fixed_panel_recurrence_metadata(df: pd.DataFrame, panel_path: Path, eps: float = 1e-9) -> None:
+    """
+    Validate optional stability recurrence metadata in fixed DMP panels.
+
+    If any recurrence columns are present, enforce:
+      - finite numeric values
+      - 0 <= frequency <= 1
+      - 0 <= count <= n_runs and n_runs > 0
+      - frequency ~= count / n_runs when all three are present
+    """
+    recurrence_cols = {"frequency", "count", "n_runs"}
+    present = recurrence_cols.intersection(df.columns)
+    if not present:
+        return
+
+    numeric: Dict[str, pd.Series] = {}
+    for col in present:
+        s = pd.to_numeric(df[col], errors="coerce")
+        bad = ~np.isfinite(s.to_numpy(dtype=float))
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid recurrence metadata in fixed_dmp_panel {panel_path}: "
+                f"column '{col}' must be finite numeric values. "
+                f"Example row(s): {bad_rows}"
+            )
+        numeric[col] = s.astype(float)
+
+    if "frequency" in numeric:
+        freq = numeric["frequency"]
+        bad = (freq < 0.0 - eps) | (freq > 1.0 + eps)
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid recurrence metadata in fixed_dmp_panel {panel_path}: "
+                "column 'frequency' must be in [0, 1]. "
+                f"Example row(s): {bad_rows}"
+            )
+
+    for col in ("count", "n_runs"):
+        if col in numeric:
+            bad = numeric[col] < 0.0 - eps
+            if bad.any():
+                bad_rows = (df.index[bad][:5] + 1).tolist()
+                raise ValueError(
+                    f"Invalid recurrence metadata in fixed_dmp_panel {panel_path}: "
+                    f"column '{col}' must be >= 0. "
+                    f"Example row(s): {bad_rows}"
+                )
+
+    if "n_runs" in numeric:
+        bad = numeric["n_runs"] <= eps
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid recurrence metadata in fixed_dmp_panel {panel_path}: "
+                "column 'n_runs' must be > 0. "
+                f"Example row(s): {bad_rows}"
+            )
+
+    if {"count", "n_runs"}.issubset(numeric):
+        bad = numeric["count"] > (numeric["n_runs"] + eps)
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid recurrence metadata in fixed_dmp_panel {panel_path}: "
+                "column 'count' must be <= 'n_runs'. "
+                f"Example row(s): {bad_rows}"
+            )
+
+    if {"frequency", "count", "n_runs"}.issubset(numeric):
+        expected = numeric["count"] / numeric["n_runs"]
+        bad = (numeric["frequency"] - expected).abs() > eps
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid recurrence metadata in fixed_dmp_panel {panel_path}: "
+                "'frequency' must equal count / n_runs. "
+                f"Example row(s): {bad_rows}"
+            )
+
+
 class MethylDetector:
     """Main class for MethylDetector DMP detection and filtering."""
 
@@ -228,6 +310,7 @@ class MethylDetector:
             df_all = pd.read_csv(fixed_path)
             if not {"chromosome", "position"}.issubset(df_all.columns):
                 raise ValueError("fixed_dmp_panel CSV must contain 'chromosome' and 'position' columns")
+            _validate_fixed_panel_recurrence_metadata(df_all, fixed_path)
 
             # Filter to the current chromosome — the panel may cover the whole genome
             # but each _run_multi_context call handles exactly one chromosome.

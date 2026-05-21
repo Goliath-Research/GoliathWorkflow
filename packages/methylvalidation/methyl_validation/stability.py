@@ -394,6 +394,99 @@ def _frequency_count_distribution(
     return dist[["frequency_pct", "dmps_count"]]
 
 
+def _validate_stability_recurrence_metadata(
+    df: pd.DataFrame,
+    *,
+    source_label: str,
+    eps: float = 1e-9,
+) -> pd.DataFrame:
+    """
+    Validate recurrence metadata invariants for stability/fixed-panel tables.
+
+    Enforced when columns are present:
+      - frequency is finite and within [0, 1]
+      - count and n_runs are finite and non-negative
+      - n_runs > 0
+      - count <= n_runs
+      - frequency ~= count / n_runs when all three are present
+    """
+    if df is None or df.empty:
+        return df
+
+    recurrence_cols = {"frequency", "count", "n_runs"}
+    present = recurrence_cols.intersection(df.columns)
+    if not present:
+        return df
+
+    numeric: Dict[str, pd.Series] = {}
+    for col in present:
+        s = pd.to_numeric(df[col], errors="coerce")
+        bad = ~np.isfinite(s.to_numpy(dtype=float))
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid stability recurrence metadata in {source_label}: "
+                f"column '{col}' must be finite numeric values. "
+                f"Example row(s): {bad_rows}"
+            )
+        numeric[col] = s.astype(float)
+
+    if "frequency" in numeric:
+        freq = numeric["frequency"]
+        bad = (freq < 0.0 - eps) | (freq > 1.0 + eps)
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid stability recurrence metadata in {source_label}: "
+                "column 'frequency' must be in [0, 1]. "
+                f"Example row(s): {bad_rows}"
+            )
+
+    for col in ("count", "n_runs"):
+        if col in numeric:
+            bad = numeric[col] < 0.0 - eps
+            if bad.any():
+                bad_rows = (df.index[bad][:5] + 1).tolist()
+                raise ValueError(
+                    f"Invalid stability recurrence metadata in {source_label}: "
+                    f"column '{col}' must be >= 0. "
+                    f"Example row(s): {bad_rows}"
+                )
+
+    if "n_runs" in numeric:
+        bad = numeric["n_runs"] <= eps
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid stability recurrence metadata in {source_label}: "
+                "column 'n_runs' must be > 0. "
+                f"Example row(s): {bad_rows}"
+            )
+
+    if {"count", "n_runs"}.issubset(numeric):
+        bad = numeric["count"] > (numeric["n_runs"] + eps)
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid stability recurrence metadata in {source_label}: "
+                "column 'count' must be <= 'n_runs'. "
+                f"Example row(s): {bad_rows}"
+            )
+
+    if {"frequency", "count", "n_runs"}.issubset(numeric):
+        expected = numeric["count"] / numeric["n_runs"]
+        bad = (numeric["frequency"] - expected).abs() > eps
+        if bad.any():
+            bad_rows = (df.index[bad][:5] + 1).tolist()
+            raise ValueError(
+                f"Invalid stability recurrence metadata in {source_label}: "
+                "'frequency' must equal count / n_runs. "
+                f"Example row(s): {bad_rows}"
+            )
+
+    return df
+
+
 def _select_stable_dmps_df(
     dmp_freq_df: pd.DataFrame,
     min_frequency: float = 0.7,
@@ -1234,6 +1327,10 @@ def _merge_stable_dmp_panels(
             merged_df = merged_df.drop_duplicates(
                 subset=["chromosome", "position"], keep="first"
             ).reset_index(drop=True)
+            merged_df = _validate_stability_recurrence_metadata(
+                merged_df,
+                source_label=str(stable_path),
+            )
             merged_df.to_csv(merged_path, index=False)
             logger.info(
                 f"Merged {len(frames)} stable DMP CSVs → {len(merged_df):,} unique DMPs "
@@ -1250,7 +1347,12 @@ def _merge_stable_dmp_panels(
 
     # Single CSV case (default from write_stable_panel)
     if stable_path.suffix.lower() == ".csv":
-        shutil.copy2(stable_path, merged_path)
+        stable_df = pd.read_csv(stable_path)
+        stable_df = _validate_stability_recurrence_metadata(
+            stable_df,
+            source_label=str(stable_path),
+        )
+        stable_df.to_csv(merged_path, index=False)
         logger.info(f"Copied stable DMP panel to {merged_path}")
     else:
         merged_path = stable_path
