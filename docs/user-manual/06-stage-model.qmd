@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Train and select final production model artifacts after freeze.
+Train and select final production model artifacts after freeze and biological-readiness checks.
 
 ## Common execution patterns
 
@@ -10,6 +10,7 @@ Train and select final production model artifacts after freeze.
 
 ```bash
 source .venv/bin/activate
+methyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG
 methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model
 ```
 
@@ -90,10 +91,12 @@ Configured by `step_config.validation.model_backend` or CLI override.
 - final classifier/predictor artifacts exist in production root.
 - selected backend metadata exists when using selection workflow.
 - metrics summaries include expected selection metric fields.
+- the last biological-readiness report is `go`/`go_with_risks` and reviewed by humans.
 
 ## Do not do this
 
 - Do not run model before freeze.
+- Do not skip biological readiness review when production artifacts changed.
 - Do not claim backend superiority without model-MC summaries.
 
 ## See also

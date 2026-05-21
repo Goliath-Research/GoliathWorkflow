@@ -68,17 +68,25 @@ When the iteration count is high and a single host is too slow, the same stabili
 
 The freeze artifacts (`production/project.json`, fixed-panel detection outputs, mapper/enricher summaries) become the canonical handoff package for model release and review.
 
-#### Stage C — Modeling (`--model`)
+#### Stage C — Biological Gate + Modeling (`biological-readiness`, then `--model`)
 
-**Theoretical role.** This stage fits the final prediction function conditioned on the frozen panel and frozen production project. It separates *feature agreement* (handled in Stage A/B) from *final classifier parameter estimation* (handled here).
+**Theoretical role.** This stage first verifies biological/operational readiness from freeze artifacts, then fits the final prediction function conditioned on the frozen panel and frozen production project. It separates *feature agreement* (handled in Stage A/B) from *final classifier parameter estimation* (handled here).
 
-**Practical role.** This stage answers: "What trained model artifacts should be deployed?" In practice it uses `step_config.validation.model_backend`:
+**Practical role.** This stage answers: "Are we ready to promote the frozen artifacts to final model training, and which trained artifacts should be deployed?" In practice:
+
+1. Run `methyl-validation biological-readiness <project_root>` to chain:
+   - `methyl-enricher verify-complete`
+   - `methyl-disease-progression --strict-missing`
+   - `methyl-stability-freeze-readiness`
+2. If readiness passes, run `--model` using `step_config.validation.model_backend`:
 
 - `ecdf` (default): runs `methyl-classifier` then `methyl-predictor`,
 - `tabular_sklearn`: runs model bundle -> tabular training -> tabular predictor evaluation,
 - `generative_hybrid`: runs model bundle -> latent-density generative training -> generative predictor evaluation.
 
 For all backends, the optional biological gate (`require_biological_review_for_model`) is enforced before model creation.
+
+`biological-readiness` runs deterministic checks regardless of Grok/xAI availability. Advisory Grok commentary is **off by default** in the chained command and enabled with `--grok-review`.
 
 The resulting files under `production/classifiers/` and `production/predictors/` are the deployable model artifacts. Any rerun with changed panel or freeze inputs should be treated as a new model version.
 
@@ -134,7 +142,15 @@ This calls `freeze_production_model()` and then (optionally) progression synthes
 4. If `step_config.progression.enabled=true`, runs `methyl-disease-progression` to aggregate cross-stage mapper/enricher outputs.
 5. Writes `monte_carlo_runs/production/production_summary.json`.
 
-**Step 4: Run final model build**
+**Step 4: Run biological readiness gate**
+
+```bash
+methyl-validation biological-readiness /path/to/<project_root> --grok-review
+```
+
+Use `--grok-review` only when you want advisory LLM commentary in addition to deterministic verdicting.
+
+**Step 5: Run final model build**
 
 ```bash
 methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --model
@@ -161,7 +177,8 @@ If `step_config.validation.require_biological_review_for_model=true`, `--model` 
 9. `production/project.json` with `fixed_dmp_panel`
 10. Freeze on all samples: centroid -> detector(fixed) -> mapper -> enricher
 11. Optional disease progression synthesis
-12. `--model`: classifier -> predictor (biological gate optional)
+12. `biological-readiness`: enricher completeness + strict progression + readiness report
+13. `--model`: classifier -> predictor (and config-level biological gate check)
 :::
 
 ::: {.content-visible when-format="pdf"}
@@ -184,13 +201,14 @@ If `step_config.validation.require_biological_review_for_model=true`, `--model` 
 \node[box, below=of H] (I) {\texttt{production/project.json} with \texttt{fixed\_dmp\_panel}};
 \node[box, below=of I] (J) {Freeze on \emph{all} samples: centroid $\to$ detector(fixed) $\to$ mapper $\to$ enricher};
 \node[box, below=of J] (K) {Optional: disease progression synthesis};
-\node[box, below=of K] (L) {\texttt{--model}: classifier $\to$ predictor (biological gate optional)};
+\node[box, below=of K] (L) {\texttt{biological-readiness}: completeness + progression + readiness};
+\node[box, below=of L] (M) {\texttt{--model}: classifier $\to$ predictor (config gate optional)};
 \draw[arr] (A)--(B); \draw[arr] (B)--(C); \draw[arr] (C)--(D);
 \draw[arr] (D)--(E); \draw[arr] (E)--(F); \draw[arr] (F)--(G);
 \draw[arr] (G)--(H); \draw[arr] (H)--(I); \draw[arr] (I)--(J);
-\draw[arr] (J)--(K); \draw[arr] (K)--(L);
+\draw[arr] (J)--(K); \draw[arr] (K)--(L); \draw[arr] (L)--(M);
 \end{tikzpicture}
-\caption{Workflow 1: Model Creation --- from Monte Carlo splits to production freeze.}
+\caption{Workflow 1: Model Creation --- from Monte Carlo splits to freeze, biological gate, and model build.}
 \end{figure}
 ```
 :::

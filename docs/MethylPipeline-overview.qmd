@@ -52,6 +52,7 @@ This path is the most tightly coupled statistical spine of the repository.
 
 - `methylmapper` maps DMPs to genes and genomic regions.
 - `methylenricher` performs enrichment analysis, graph clustering, and module ranking.
+- `methyldiseaseprogression` aggregates staged mapper/enricher outputs into progression summaries and labels.
 - `methylalignmentqc` parses alignment/QC outputs from upstream sequencing workflows.
 - `methylutils` provides shared data structures, ECDF reconstruction, overlap metrics, tests, logging, configuration utilities, and classifier support code.
 

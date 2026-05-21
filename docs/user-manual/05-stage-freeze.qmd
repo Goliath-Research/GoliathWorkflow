@@ -61,6 +61,29 @@ methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa
 - expected mapper and enricher files are present.
 - stage-specific logs show successful return codes.
 
+## Recommended post-freeze gate
+
+Run biological readiness before model training:
+
+```bash
+source .venv/bin/activate
+methyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG
+```
+
+This chained gate verifies:
+
+- enricher completeness (`verify-complete`),
+- strict progression input completeness (`--strict-missing`),
+- stability/freeze/progression readiness verdict.
+
+To include advisory Grok commentary in the readiness section:
+
+```bash
+methyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG --grok-review
+```
+
+Without `--grok-review`, the chain keeps Grok disabled by default and still enforces deterministic checks.
+
 ## Do not do this
 
 - Do not run freeze before stability panel exists.

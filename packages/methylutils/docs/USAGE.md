@@ -48,7 +48,7 @@ Paths must be valid inside the container (e.g. `/workspace/...`).
 
 Use this when you run on the host (e.g. your laptop or a login node) and want to activate a virtual environment before running any pipeline tool.
 
-**Prerequisites:** Python 3.8+ (3.10+ recommended). Optional: CuPy for GPU acceleration.
+**Prerequisites:** Python 3.10+ (repository target is `<3.13`). Optional: CuPy for GPU acceleration.
 
 **1. Create a virtual environment**
 

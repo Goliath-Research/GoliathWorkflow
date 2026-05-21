@@ -243,7 +243,21 @@ This runs the production freeze pipeline on all samples using the stable DMP pan
 
 If `step_config.progression.enabled=true`, freeze also runs `methyl-disease-progression` and writes `production/progression/`.
 
-### Step 4: Run backend model-selection Monte Carlo
+### Step 4: Run biological readiness gate
+
+```bash
+methyl-validation biological-readiness /path/to/project_root
+```
+
+This chained gate runs:
+
+1. `methyl-enricher verify-complete`
+2. `methyl-disease-progression --strict-missing`
+3. `methyl-stability-freeze-readiness`
+
+Use `--grok-review` if you want advisory LLM commentary in readiness output. Without it, deterministic gating still runs and Grok commentary is disabled by default in the chain.
+
+### Step 5: Run backend model-selection Monte Carlo
 
 ```bash
 methyl-validation --project configs/my_project.json --model-mc --model-mc-all
@@ -257,7 +271,7 @@ This stage runs full retrain+test Monte Carlo loops for each backend and writes 
 
 Each backend directory contains `all_metrics.csv`, `metrics_summary.json`, and `metrics_distributions_plotly.html` (KDE + ECDF).
 
-### Step 5: Select best backend and train final model on all data
+### Step 6: Select best backend and train final model on all data
 
 ```bash
 methyl-validation --project configs/my_project.json --select-best-model --model-mc-all
@@ -271,7 +285,7 @@ Outputs include:
 - `monte_carlo_runs/model_mc/backend_ranking.json`
 - `production/selected_backend.json`
 
-### Step 6: Optional frozen-model post-validation
+### Step 7: Optional frozen-model post-validation
 
 ```bash
 methyl-validation --project configs/my_project.json --post-model-validation

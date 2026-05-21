@@ -6,7 +6,7 @@ This guide will help you get MethylDetector up and running quickly. For Docker v
 
 - Docker and Docker Compose (if using container)
 - NVIDIA GPU with CUDA support (optional, but recommended)
-- Python 3.8+ (if running directly)
+- Python 3.10+ (if running directly)
 
 ## Quick Start
 
@@ -32,14 +32,16 @@ Create a JSON configuration file with only the essential parameters:
 ### 2. Run Analysis
 
 ```bash
+source .venv/bin/activate
+
 # From command line
-./detector config.json
+methyl-detector --config config.json
 
 # With verbose output
-./detector config.json --verbose
+methyl-detector --config config.json --verbose
 
 # With log file
-./detector config.json --log-file output.log
+methyl-detector --config config.json --log-file output.log
 ```
 
 ### 3. Check Results

@@ -3,6 +3,12 @@
 Aggregate per-comparison MethylMapper/MethylEnricher outputs into a single
 disease-stage progression report.
 
+## Documentation
+
+- [`docs/USAGE.md`](docs/USAGE.md) - CLI usage, inputs/outputs, and workflow integration.
+- [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) - internal data flow and file contracts.
+- [`docs/THEORY.md`](docs/THEORY.md) - progression scoring/labeling conventions and caveats.
+
 ## CLI
 
 ```bash

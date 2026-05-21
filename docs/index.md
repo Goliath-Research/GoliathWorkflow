@@ -1,36 +1,51 @@
 # MethylPipeline Documentation
 
-This `docs/` tree is intentionally thin. The canonical mathematical and statistical reference now lives in the Quarto book under [`docs/theory/`](theory/README.md), while package-local documentation remains the operational entry point for CLI usage and implementation notes.
+This page maps the documentation system for the monorepo and identifies canonical sources for each audience and task.
 
-## Documentation Layers
+## Start Here
 
-- [`theory/README.md`](theory/README.md): build instructions and authoring guide for the Quarto theory book.
-- [`user-manual/index.qmd`](user-manual/index.qmd): workflow-first operational manual (package runbooks, stage checklists, troubleshooting).
-- [`theory/index.qmd`](theory/index.qmd): code-backed overview of the statistical pipeline, notation, and traceability rules.
-- [`config_parameter_matrix.md`](config_parameter_matrix.md): active-component config audit matrix (declared/consumed/inherited/legacy keys).
-- [`DEPLOYMENT.md`](DEPLOYMENT.md): environment setup for the monorepo and command-line tools.
-- `packages/*/docs/`: package-local summaries, usage notes, and implementation details.
+- Repository landing page: [`../README.md`](../README.md)
+- Environment setup: [`DEPLOYMENT.md`](DEPLOYMENT.md)
+- Operational runbook (stage-by-stage): [`user-manual/index.qmd`](user-manual/index.qmd)
+- Theory and reference: [`theory/README.md`](theory/README.md)
+- Code-backed configuration matrix: [`config_parameter_matrix.md`](config_parameter_matrix.md)
 
-Latest workflow additions reflected in code and docs:
+## Canonical Sources By Purpose
 
-- Monte Carlo (`methyl-validation --stability`) runs **centroid + detector only** per iteration.
-- Production freeze (`--freeze`) runs **centroid -> detector -> mapper -> enricher**, and can optionally run `methyl-disease-progression` when `step_config.progression.enabled=true`.
-- Final model build (`--model`) runs **classifier -> predictor** after freeze and can be gated by biological review (`step_config.validation.require_biological_review_for_model` + `biological_review_confirmed`).
-- New package: `packages/methyldiseaseprogression` (`methyl-disease-progression`) for cross-stage progression synthesis.
+- **Run the pipeline**:
+  - [`user-manual/index.qmd`](user-manual/index.qmd)
+- **Understand statistical/method details**:
+  - [`theory/index.qmd`](theory/index.qmd)
+- **Package-specific CLI/API behavior**:
+  - `packages/*/README.md`
+  - `packages/*/docs/USAGE.md`
+- **Implementation internals**:
+  - `packages/*/docs/IMPLEMENTATION.md`
+- **Parameter and schema traceability**:
+  - [`config_parameter_matrix.md`](config_parameter_matrix.md)
 
-## Source Of Truth
+## Current Workflow Contract
 
-For theory, the source of truth is the code. The Quarto book documents the mathematics and statistics that are actually implemented, and it labels each method as one of:
+- `methyl-validation --stability`
+  - Per-iteration MC path: `methyl-centroid` -> `methyl-detector`
+  - Followed by stability aggregation.
+- `methyl-validation --freeze`
+  - Production path: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`
+  - Optional `methyl-disease-progression` if enabled in project config.
+- `methyl-validation --model` / model-selection flow
+  - Final model build/selection after freeze artifacts are ready.
 
-- principled,
-- approximate,
-- heuristic, or
-- external-service-backed.
+Biological gate (recommended before final model promotion):
 
-That distinction matters for this repository. The centroid, detector, and classifier path is largely ECDF-centered, but downstream packages also include beta-based clustering, p-value aggregation, graph heuristics, and external biological knowledge services.
+- `methyl-validation biological-readiness <project_root>`
 
-## Recommended Reading Order
+## Reading Order
 
-1. Start with the [user manual](user-manual/index.qmd) for stage execution and operations.
-2. Use the [theory book](theory/README.md) for mathematical/statistical background.
-3. Use package `README.md`, `USAGE.md`, and `IMPLEMENTATION.md` for package-level specifics.
+1. [`user-manual/index.qmd`](user-manual/index.qmd)
+2. [`theory/README.md`](theory/README.md)
+3. Relevant package docs under `packages/*/docs/`
+
+## Notes On Documentation Ownership
+
+- Theory book and user manual intentionally overlap, but should not diverge in defaults/CLI semantics.
+- Package docs should hold package-specific operational details; cross-package workflows should live in user manual/theory workflow chapters.
