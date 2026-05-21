@@ -242,6 +242,35 @@ def test_run_stability_analysis_counts_each_dmp_once_per_run(tmp_path):
     assert summary["dmp_stability"]["n_runs_analyzed"] == 2
 
 
+def test_run_stability_analysis_counts_each_dmp_once_per_run_across_detection_dirs(tmp_path):
+    monte_root = tmp_path / "monte_carlo_runs"
+    _write_discovery_csv(
+        monte_root / "run_0001" / "detections" / "comparison_a" / "pca_pca1" / "dmps-1-discovery.csv",
+        [{"chromosome": 16, "position": 46428718, "effect_size": 0.1}],
+    )
+    _write_discovery_csv(
+        monte_root / "run_0001" / "detections" / "comparison_b" / "pca_pca1" / "dmps-1-discovery.csv",
+        [{"chromosome": 16, "position": 46428718, "effect_size": 0.2}],
+    )
+    _write_discovery_csv(
+        monte_root / "run_0002" / "detections" / "comparison_a" / "pca_pca1" / "dmps-1-discovery.csv",
+        [{"chromosome": 16, "position": 46428718, "effect_size": 0.3}],
+    )
+
+    run_stability_analysis(
+        monte_carlo_runs_root=monte_root,
+        output_dir=monte_root / "stability",
+        dmp_min_freq=0.0,
+    )
+    import pandas as pd
+
+    dmp_freq = pd.read_csv(monte_root / "stability" / "dmp_frequency.csv")
+    row = dmp_freq[(dmp_freq["chromosome"] == 16) & (dmp_freq["position"] == 46428718)].iloc[0]
+    assert row["count"] == 2
+    assert row["n_runs"] == 2
+    assert row["frequency"] == 1.0
+
+
 def test_run_balanced_accuracy_falls_back_to_detector_results(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "methyl_validation.validator_metrics.iteration_scalar_metrics_from_run_dir",

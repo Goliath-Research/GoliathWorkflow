@@ -836,7 +836,7 @@ def compute_dmp_stability(
     if not runs:
         runs = sorted(monte_carlo_runs_root.glob("run_0*"))
 
-    dmp_counts: Dict[Tuple[Any, int], int] = defaultdict(int)
+    dmp_run_hits: Dict[Tuple[Any, int], set[str]] = defaultdict(set)
     dmp_effect_sum: Dict[Tuple[Any, int], float] = defaultdict(float)
     dmp_effect_runs: Dict[Tuple[Any, int], int] = defaultdict(int)
     dmp_run_pvals: Dict[Tuple[Any, int], List[float]] = defaultdict(list)
@@ -864,8 +864,9 @@ def compute_dmp_stability(
             except Exception:
                 continue
             seen_keys.add(key)
+        run_id = str(run_dir.name)
         for key in seen_keys:
-            dmp_counts[key] += 1
+            dmp_run_hits[key].add(run_id)
 
         # Compute one effect-size value per DMP key per run (mean over run duplicates),
         # then average those values across runs where the DMP is present.
@@ -921,7 +922,8 @@ def compute_dmp_stability(
         }
 
     data = []
-    for (chrom, pos), count in dmp_counts.items():
+    for (chrom, pos), runs_with_hit in dmp_run_hits.items():
+        count = int(len(runs_with_hit))
         freq = count / run_count
         effect_runs = int(dmp_effect_runs.get((chrom, pos), 0))
         effect_size = (
@@ -957,16 +959,21 @@ def compute_dmp_stability(
             na_position="last",
         )
 
+    if not df.empty:
+        df = _validate_stability_recurrence_metadata(
+            df,
+            source_label=f"{monte_carlo_runs_root}/stability::dmp_frequency",
+        )
     stable = df[df["frequency"] >= min_frequency] if not df.empty else pd.DataFrame()
     summary = {
         "n_runs_analyzed": run_count,
         "skipped_no_discovery": skipped_no_discovery,
         "skipped_low_balanced_accuracy": skipped_low_ba,
         "min_balanced_accuracy": min_balanced_accuracy,
-        "total_unique_dmps": len(dmp_counts),
+        "total_unique_dmps": len(dmp_run_hits),
         "stable_dmps_at_threshold": len(stable),
         "min_frequency": min_frequency,
-        "stable_dmp_fraction": len(stable) / len(dmp_counts) if len(dmp_counts) > 0 else 0.0,
+        "stable_dmp_fraction": len(stable) / len(dmp_run_hits) if len(dmp_run_hits) > 0 else 0.0,
     }
 
     return df, summary
