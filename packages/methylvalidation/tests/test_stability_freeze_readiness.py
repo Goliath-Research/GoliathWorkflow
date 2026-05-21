@@ -385,3 +385,23 @@ def test_ordered_stage_narratives_in_report_grok_payload_and_markdown(tmp_path: 
     md = render_markdown(report)
     assert "Stage definitions (from project config)" in md
     assert "Early stage narrative" in md
+
+
+def test_ordered_stage_narratives_tolerates_project_without_ordered_label_api(tmp_path: Path):
+    root = tmp_path / "ProjLegacy"
+    root.mkdir()
+    _write_minimal_project(root)
+
+    class _LegacyProject:
+        def get_ordered_stage_narratives(self, ordered_tokens):
+            return [
+                {"comparison_label": tok, "disease_group": None, "description": f"desc:{tok}"}
+                for tok in ordered_tokens
+            ]
+
+    with patch("methyl_utils.pipeline_config.load_project", return_value=_LegacyProject()):
+        report = analyze_project_root(root)
+
+    narr = report["progression"]["ordered_stage_narratives"]
+    assert [n["comparison_label"] for n in narr] == ["g1", "g2", "g3", "g4"]
+    assert narr[0]["description"] == "desc:g1"

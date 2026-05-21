@@ -102,7 +102,7 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
     except Exception as exc:
         out["error"] = str(exc)
         return out
-    out["n_rows"] = int(len(df))
+    out["n_rows"] = len(df)
     comp_col, ent_col = _progression_entity_columns(df)
     if not comp_col or not ent_col or "stage_index" not in df.columns:
         out["error"] = "unexpected_columns"
@@ -113,7 +113,7 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
     work = work.dropna(subset=["stage_index", "score"])
     work[ent_col] = work[ent_col].astype(str)
     n_ent = work[ent_col].nunique()
-    out["n_unique_entities"] = int(n_ent)
+    out["n_unique_entities"] = n_ent
 
     stage_order = {lab: i for i, lab in enumerate(ordered_stages)}
     if not stage_order:
@@ -147,7 +147,7 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
     all_stage_labels = set(stage_order.keys())
     present_by_ent = work.groupby(ent_col)[comp_col].apply(lambda s: set(s.astype(str)))
     n_all = sum(1 for _e, labs in present_by_ent.items() if all_stage_labels <= labs)
-    out["entities_all_stages"] = int(n_all)
+    out["entities_all_stages"] = n_all
 
     if pearson_abs:
         out["median_abs_pearson_stage_vs_score"] = float(np.median(pearson_abs))
@@ -170,7 +170,7 @@ def _chromosome_panel_balance(panel_csv: Path, max_freq_csv: Optional[Path]) -> 
         path = max_freq_csv
         out["source"] = "dmp_frequency.csv"
     elif path is not None:
-        out["source"] = str(panel_csv.name)
+        out["source"] = panel_csv.name
     if path is None:
         return out
     try:
@@ -180,10 +180,10 @@ def _chromosome_panel_balance(panel_csv: Path, max_freq_csv: Optional[Path]) -> 
     if "chromosome" not in df.columns:
         return out
     vc = df["chromosome"].astype(str).value_counts(normalize=True)
-    out["n_positions"] = int(len(df))
-    out["fraction_by_chromosome"] = {str(k): round(float(v), 6) for k, v in vc.items()}
+    out["n_positions"] = len(df)
+    out["fraction_by_chromosome"] = {str(k): round(v, 6) for k, v in vc.items()}
     if len(vc):
-        out["max_chrom_share"] = round(float(vc.max()), 6)
+        out["max_chrom_share"] = round(vc.max(), 6)
     return out
 
 
@@ -195,7 +195,7 @@ def _label_mix(labels_csv: Path) -> Dict[str, Any]:
         df = pd.read_csv(labels_csv)
     except Exception:
         return out
-    out["n_entities"] = int(len(df))
+    out["n_entities"] = len(df)
     if "entity_type" in df.columns:
         out["by_type"] = df["entity_type"].value_counts().to_dict()
     if "progression_labels" in df.columns:
@@ -289,8 +289,31 @@ def analyze_project_root(
             from methyl_utils.pipeline_config import load_project
 
             proj = load_project(production_project_path)
-            tokens = ordered_labels or proj.get_ordered_comparison_labels()
-            ordered_stage_narratives = proj.get_ordered_stage_narratives(tokens)
+            tokens = ordered_labels
+            if not tokens:
+                get_ordered_labels = getattr(proj, "get_ordered_comparison_labels", None)
+                if callable(get_ordered_labels):
+                    ordered = get_ordered_labels()
+                    if isinstance(ordered, (list, tuple)):
+                        tokens = [t for t in ordered if isinstance(t, str) and t]
+                else:
+                    get_comparisons = getattr(proj, "get_comparisons", None)
+                    if callable(get_comparisons):
+                        comparisons = get_comparisons()
+                        if not isinstance(comparisons, (list, tuple)):
+                            comparisons = []
+                        tokens = [
+                            (getattr(c, "comparison_label", None) or getattr(c, "disease_group", None))
+                            for c in comparisons
+                        ]
+                        tokens = [t for t in tokens if isinstance(t, str) and t]
+            get_narratives = getattr(proj, "get_ordered_stage_narratives", None)
+            if callable(get_narratives):
+                narratives = get_narratives(tokens)
+                if isinstance(narratives, list):
+                    ordered_stage_narratives = [
+                        item for item in narratives if isinstance(item, dict)
+                    ]
         except Exception:
             ordered_stage_narratives = []
 
