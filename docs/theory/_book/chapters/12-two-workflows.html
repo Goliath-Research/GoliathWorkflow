@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.36">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>12&nbsp; The Two Workflows – MethylPipeline: Theory, Workflows, and Reference</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../chapters/13-configuration-reference.html" rel="next">
+<link href="../chapters/11-project-configuration.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-dc6ca2cd4fc154dd9d00f02dacb9d42f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/11-project-configuration.html">Part II: Workflows and Production</a></li><li class="breadcrumb-item"><a href="../chapters/12-two-workflows.html"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Two Workflows</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../">MethylPipeline: Theory, Workflows, and Reference</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Scope, Traceability, and Notation</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I: Mathematical and Statistical Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II: Workflows and Production</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-project-configuration.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">The Project Configuration File</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-two-workflows.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Two Workflows</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III: Configuration Reference</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/13-configuration-reference.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Configuration Reference</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part IV: User Guide</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/14-user-guide.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">User Guide</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part V: Model Training and Validation</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/15-model-creation-and-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Model Creation and Validation</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview"><span class="header-section-number">12.1</span> Overview</a></li>
+  <li><a href="#sec-workflow-model-creation" id="toc-sec-workflow-model-creation" class="nav-link" data-scroll-target="#sec-workflow-model-creation"><span class="header-section-number">12.2</span> Workflow 1: Model Creation</a>
+  <ul class="collapse">
+  <li><a href="#theoretical-motivation" id="toc-theoretical-motivation" class="nav-link" data-scroll-target="#theoretical-motivation"><span class="header-section-number">12.2.1</span> Theoretical Motivation</a></li>
+  <li><a href="#the-three-stages-of-workflow-1" id="toc-the-three-stages-of-workflow-1" class="nav-link" data-scroll-target="#the-three-stages-of-workflow-1"><span class="header-section-number">12.2.2</span> The Three Stages of Workflow 1</a></li>
+  <li><a href="#steps" id="toc-steps" class="nav-link" data-scroll-target="#steps"><span class="header-section-number">12.2.3</span> Steps</a></li>
+  <li><a href="#workflow-1-diagram" id="toc-workflow-1-diagram" class="nav-link" data-scroll-target="#workflow-1-diagram"><span class="header-section-number">12.2.4</span> Workflow 1 Diagram</a></li>
+  <li><a href="#expected-outputs" id="toc-expected-outputs" class="nav-link" data-scroll-target="#expected-outputs"><span class="header-section-number">12.2.5</span> Expected Outputs</a></li>
+  </ul></li>
+  <li><a href="#sec-workflow-prediction" id="toc-sec-workflow-prediction" class="nav-link" data-scroll-target="#sec-workflow-prediction"><span class="header-section-number">12.3</span> Workflow 2: Model Use for Prediction</a>
+  <ul class="collapse">
+  <li><a href="#theoretical-motivation-1" id="toc-theoretical-motivation-1" class="nav-link" data-scroll-target="#theoretical-motivation-1"><span class="header-section-number">12.3.1</span> Theoretical Motivation</a></li>
+  <li><a href="#steps-1" id="toc-steps-1" class="nav-link" data-scroll-target="#steps-1"><span class="header-section-number">12.3.2</span> Steps</a></li>
+  <li><a href="#workflow-2-diagram" id="toc-workflow-2-diagram" class="nav-link" data-scroll-target="#workflow-2-diagram"><span class="header-section-number">12.3.3</span> Workflow 2 Diagram</a></li>
+  </ul></li>
+  <li><a href="#sec-diag-dmp-coverage" id="toc-sec-diag-dmp-coverage" class="nav-link" data-scroll-target="#sec-diag-dmp-coverage"><span class="header-section-number">12.4</span> Diagnostic: DMP Coverage</a></li>
+  <li><a href="#sec-diag-class-imbalance" id="toc-sec-diag-class-imbalance" class="nav-link" data-scroll-target="#sec-diag-class-imbalance"><span class="header-section-number">12.5</span> Diagnostic: Class Imbalance</a></li>
+  <li><a href="#sec-diag-sklearn-version" id="toc-sec-diag-sklearn-version" class="nav-link" data-scroll-target="#sec-diag-sklearn-version"><span class="header-section-number">12.6</span> Diagnostic: Sklearn Version Mismatch</a></li>
+  <li><a href="#sec-workflow-parameters" id="toc-sec-workflow-parameters" class="nav-link" data-scroll-target="#sec-workflow-parameters"><span class="header-section-number">12.7</span> Choosing Workflow Parameters</a>
+  <ul class="collapse">
+  <li><a href="#train_fraction" id="toc-train_fraction" class="nav-link" data-scroll-target="#train_fraction"><span class="header-section-number">12.7.1</span> <code>train_fraction</code></a></li>
+  <li><a href="#n_iterations" id="toc-n_iterations" class="nav-link" data-scroll-target="#n_iterations"><span class="header-section-number">12.7.2</span> <code>n_iterations</code></a></li>
+  <li><a href="#stability_dmp_freq" id="toc-stability_dmp_freq" class="nav-link" data-scroll-target="#stability_dmp_freq"><span class="header-section-number">12.7.3</span> <code>stability_dmp_freq</code></a></li>
+  <li><a href="#stability_min_balanced_accuracy" id="toc-stability_min_balanced_accuracy" class="nav-link" data-scroll-target="#stability_min_balanced_accuracy"><span class="header-section-number">12.7.4</span> <code>stability_min_balanced_accuracy</code></a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/11-project-configuration.html">Part II: Workflows and Production</a></li><li class="breadcrumb-item"><a href="../chapters/12-two-workflows.html"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Two Workflows</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-two-workflows" class="quarto-section-identifier"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Two Workflows</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2" data-number="12.1">
+<h2 data-number="12.1" class="anchored" data-anchor-id="overview"><span class="header-section-number">12.1</span> Overview</h2>
+<p>MethylPipeline supports two primary end-to-end operational workflows. They are designed to be run sequentially: Workflow 1 produces the final production model; Workflow 2 evaluates that model on random holdouts.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>Workflow 1</th>
+<th>Workflow 2</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Goal</strong></td>
+<td>Build a stable, production-ready model</td>
+<td>Evaluate the frozen production model</td>
+</tr>
+<tr class="even">
+<td><strong>Flag</strong></td>
+<td><code>--stability</code>, then <code>--freeze</code>, then <code>--model</code></td>
+<td><code>--predictor-only</code></td>
+</tr>
+<tr class="odd">
+<td><strong>Steps run per iteration</strong></td>
+<td>centroid → detector</td>
+<td>predictor only</td>
+</tr>
+<tr class="even">
+<td><strong>Steps run once (freeze/model)</strong></td>
+<td>freeze/analysis: centroid → detector(fixed) → mapper → enricher (optional progression); model: classifier → predictor</td>
+<td>—</td>
+</tr>
+<tr class="odd">
+<td><strong>Output</strong></td>
+<td>stable panel, production biological outputs, final classifier/predictor outputs</td>
+<td><code>all_metrics.csv</code>, <code>metrics_summary.json</code></td>
+</tr>
+<tr class="even">
+<td><strong>Answers</strong></td>
+<td>Which positions and model best separate the classes on all data?</td>
+<td>What performance distribution does the frozen model achieve?</td>
+</tr>
+</tbody>
+</table>
+<p>Both workflows are controlled entirely by the project configuration file and the <code>step_config.validation</code> embedded settings (see <a href="11-project-configuration.html" class="quarto-xref"><span>Chapter 11</span></a>).</p>
+<hr>
+</section>
+<section id="sec-workflow-model-creation" class="level2" data-number="12.2">
+<h2 data-number="12.2" class="anchored" data-anchor-id="sec-workflow-model-creation"><span class="header-section-number">12.2</span> Workflow 1: Model Creation</h2>
+<section id="theoretical-motivation" class="level3" data-number="12.2.1">
+<h3 data-number="12.2.1" class="anchored" data-anchor-id="theoretical-motivation"><span class="header-section-number">12.2.1</span> Theoretical Motivation</h3>
+<p>A naive approach to building a classifier would be to detect DMPs on all available samples, then evaluate the same classifier on held-out subsets. This conflates feature selection with performance estimation: the DMP panel was implicitly chosen to fit all samples, making any leave-out evaluation optimistic.</p>
+<p>MethylValidation addresses this by repeating only the discovery portion of the pipeline on random train/validation splits. Each iteration rebuilds centroids and re-runs detection on the training cohort only. The resulting detector-side balanced accuracy summaries are used as internal estimates of discovery robustness and to filter stability runs when requested.</p>
+<p>After many such iterations, a DMP that appears consistently in the discovery sets of most runs is more likely to reflect a true biological signal than one that appears in only a few. This motivates the stability analysis: the stable panel is a consensus over repeated random partitions of the data.</p>
+<p>The production freeze then trains a final classifier on <strong>all available data</strong> restricted to the stable panel. Because the panel itself was selected using the full sample set (via the MC iterations), this is still an internal analysis; it is not a substitute for external validation on an independent cohort.</p>
+</section>
+<section id="the-three-stages-of-workflow-1" class="level3" data-number="12.2.2">
+<h3 data-number="12.2.2" class="anchored" data-anchor-id="the-three-stages-of-workflow-1"><span class="header-section-number">12.2.2</span> The Three Stages of Workflow 1</h3>
+<p>Workflow 1 is easiest to reason about as three explicit stages with different statistical roles.</p>
+<section id="stage-a-stability---stability" class="level4" data-number="12.2.2.1">
+<h4 data-number="12.2.2.1" class="anchored" data-anchor-id="stage-a-stability---stability"><span class="header-section-number">12.2.2.1</span> Stage A — Stability (<code>--stability</code>)</h4>
+<p><strong>Theoretical role.</strong> This stage estimates <em>feature-selection stability</em> rather than final predictive performance. Let <span class="math inline">\(\mathcal{D}_{\text{disc},r}\)</span> be the discovery DMP set from split <span class="math inline">\(r\)</span>. A locus-level recurrence estimator</p>
+<p><span class="math display">\[
+\hat{f}(d) = \frac{1}{R^*} \sum_{r=1}^{R^*} \mathbf{1}[d \in \mathcal{D}_{\text{disc},r}]
+\]</span></p>
+<p>acts as a Monte Carlo approximation to selection probability under re-sampling. Thresholding with <span class="math inline">\(\hat{f}(d)\ge\tau\)</span> (where <span class="math inline">\(\tau=\)</span> <code>stability_dmp_freq</code>) enforces reproducibility pressure on the panel.</p>
+<p><strong>Practical role.</strong> This stage answers: “Which loci survive repeated train/validation perturbations?” In practice:</p>
+<ul>
+<li>it runs only <code>centroid -&gt; detector</code> per split (fast enough for many iterations),</li>
+<li>it creates <code>all_metrics.csv</code>/<code>metrics_summary.json</code> for detector-side internal diagnostics,</li>
+<li>it writes <code>stability/stable_dmps_production.csv</code>, which is the only accepted panel input for <code>--freeze</code>,</li>
+<li>and it allows optional run-quality filtering via <code>stability_min_balanced_accuracy</code> before recurrence counting.</li>
+</ul>
+<p>For most projects, this is the stage where panel size and robustness are tuned (<code>n_iterations</code>, <code>train_fraction</code>, <code>stability_dmp_freq</code>).</p>
+<p>When the iteration count is high and a single host is too slow, the same stability stage can be <strong>executed in parallel</strong> across multiple machines, as long as all workers share one output tree; see <a href="15-model-creation-and-validation.html#sec-distributed-mc-shared-storage" class="quarto-xref"><span>Section 15.7</span></a> (and the user manual chapter on distributed MethylValidation).</p>
+</section>
+<section id="stage-b-freezeanalysis---freeze" class="level4" data-number="12.2.2.2">
+<h4 data-number="12.2.2.2" class="anchored" data-anchor-id="stage-b-freezeanalysis---freeze"><span class="header-section-number">12.2.2.2</span> Stage B — Freeze/Analysis (<code>--freeze</code>)</h4>
+<p><strong>Theoretical role.</strong> This stage converts the consensus panel into a deterministic production artifact. The key operation is a <em>panel-constrained rerun on all samples</em>: detector inference is no longer discovering a new panel; it is applying fixed loci and producing full downstream biological interpretation from a stable feature space.</p>
+<p><strong>Practical role.</strong> This stage answers: “Given a locked panel, what is the complete biological analysis on the full cohort?” In practice it:</p>
+<ol type="1">
+<li>injects <code>fixed_dmp_panel</code> into <code>production/project.json</code>,</li>
+<li>rebuilds centroids on all data,</li>
+<li>runs detector in fixed-panel mode,</li>
+<li>runs mapper and enricher to produce gene/pathway outputs,</li>
+<li>optionally runs progression synthesis for ordered disease-stage summaries.</li>
+</ol>
+<p>The freeze artifacts (<code>production/project.json</code>, fixed-panel detection outputs, mapper/enricher summaries) become the canonical handoff package for model release and review.</p>
+</section>
+<section id="stage-c-biological-gate-modeling-biological-readiness-then---model" class="level4" data-number="12.2.2.3">
+<h4 data-number="12.2.2.3" class="anchored" data-anchor-id="stage-c-biological-gate-modeling-biological-readiness-then---model"><span class="header-section-number">12.2.2.3</span> Stage C — Biological Gate + Modeling (<code>biological-readiness</code>, then <code>--model</code>)</h4>
+<p><strong>Theoretical role.</strong> This stage first verifies biological/operational readiness from freeze artifacts, then fits the final prediction function conditioned on the frozen panel and frozen production project. It separates <em>feature agreement</em> (handled in Stage A/B) from <em>final classifier parameter estimation</em> (handled here).</p>
+<p><strong>Practical role.</strong> This stage answers: “Are we ready to promote the frozen artifacts to final model training, and which trained artifacts should be deployed?” In practice:</p>
+<ol type="1">
+<li>Run <code>methyl-validation biological-readiness &lt;project_root&gt;</code> to chain:
+<ul>
+<li><code>methyl-enricher verify-complete</code></li>
+<li><code>methyl-disease-progression --strict-missing</code></li>
+<li><code>methyl-stability-freeze-readiness</code></li>
+</ul></li>
+<li>If readiness passes, run <code>--model</code> using <code>step_config.validation.model_backend</code>:</li>
+</ol>
+<ul>
+<li><code>ecdf</code> (default): runs <code>methyl-classifier</code> then <code>methyl-predictor</code>,</li>
+<li><code>tabular_sklearn</code>: runs model bundle -&gt; tabular training -&gt; tabular predictor evaluation,</li>
+<li><code>generative_hybrid</code>: runs model bundle -&gt; latent-density generative training -&gt; generative predictor evaluation.</li>
+</ul>
+<p>For all backends, the optional biological gate (<code>require_biological_review_for_model</code>) is enforced before model creation.</p>
+<p><code>biological-readiness</code> runs deterministic checks regardless of Grok/xAI availability. Advisory Grok commentary is <strong>off by default</strong> in the chained command and enabled with <code>--grok-review</code>.</p>
+<p>The resulting files under <code>production/classifiers/</code> and <code>production/predictors/</code> are the deployable model artifacts. Any rerun with changed panel or freeze inputs should be treated as a new model version.</p>
+</section>
+</section>
+<section id="steps" class="level3" data-number="12.2.3">
+<h3 data-number="12.2.3" class="anchored" data-anchor-id="steps"><span class="header-section-number">12.2.3</span> Steps</h3>
+<p><strong>Step 1: Prepare the project configuration</strong></p>
+<p>Ensure the project file has <code>step_config.validation</code> with at least <code>train_fraction</code>, <code>n_iterations</code>, <code>seed</code>, and <code>run_stability: true</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="st">"validation"</span><span class="er">:</span> <span class="fu">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"train_fraction"</span><span class="fu">:</span> <span class="fl">0.8</span><span class="fu">,</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"n_iterations"</span><span class="fu">:</span> <span class="dv">50</span><span class="fu">,</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"run_stability"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"stability_dmp_freq"</span><span class="fu">:</span> <span class="fl">0.7</span><span class="fu">,</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"stability_min_balanced_accuracy"</span><span class="fu">:</span> <span class="kw">null</span><span class="fu">,</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"abort_on_step_failure"</span><span class="fu">:</span> <span class="kw">false</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Step 2: Run Monte Carlo with stability</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--stability</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>This runs <code>n_iterations</code> stratified train/validation splits. Per iteration:</p>
+<ol type="1">
+<li><code>methyl-centroid --group group1</code> and <code>--group group2</code> build separate centroid H5 files for the training split.</li>
+<li><code>methyl-detector --project</code> detects DMPs between the training centroids.</li>
+</ol>
+<p>After all iterations, stability analysis counts DMP recurrence across the discovery sets:</p>
+<p><span class="math display">\[
+\hat{f}(d) = \frac{1}{R^*} \sum_{r=1}^{R^*} \mathbf{1}[d \in \mathcal{D}_{\text{disc},r}]
+\]</span></p>
+<p>and writes <code>monte_carlo_runs/stability/stable_dmps_production.csv</code>.</p>
+<p><strong>Step 3: Run the production freeze</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--freeze</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>This calls <code>freeze_production_model()</code> and then (optionally) progression synthesis which:</p>
+<ol type="1">
+<li>Merges stable DMP CSVs into <code>monte_carlo_runs/production/stable_dmps_genomewide.csv</code>.</li>
+<li>Creates <code>monte_carlo_runs/production/project.json</code> with <code>fixed_dmp_panel</code> injected into <code>step_config.detection</code>.</li>
+<li>Runs production freeze on <strong>all samples</strong>: centroid → detector(fixed panel) → mapper → enricher.</li>
+<li>If <code>step_config.progression.enabled=true</code>, runs <code>methyl-disease-progression</code> to aggregate cross-stage mapper/enricher outputs.</li>
+<li>Writes <code>monte_carlo_runs/production/production_summary.json</code>.</li>
+</ol>
+<p><strong>Step 4: Run biological readiness gate</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> biological-readiness /path/to/<span class="op">&lt;</span>project_root<span class="op">&gt;</span> --grok-review</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Use <code>--grok-review</code> only when you want advisory LLM commentary in addition to deterministic verdicting.</p>
+<p><strong>Step 5: Run final model build</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--model</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>This runs <code>run_pipeline_for_model()</code>:</p>
+<ol type="1">
+<li><code>methyl-classifier --project production/project.json</code></li>
+<li><code>methyl-predictor --project production/project.json</code></li>
+</ol>
+<p>If <code>step_config.validation.require_biological_review_for_model=true</code>, <code>--model</code> is blocked until <code>biological_review_confirmed=true</code>.</p>
+</section>
+<section id="workflow-1-diagram" class="level3" data-number="12.2.4">
+<h3 data-number="12.2.4" class="anchored" data-anchor-id="workflow-1-diagram"><span class="header-section-number">12.2.4</span> Workflow 1 Diagram</h3>
+<ol type="1">
+<li><code>project.json</code> (single unified config)</li>
+<li><code>--stability</code>: <code>R</code> full-pipeline iterations</li>
+<li>Per iteration: centroid -&gt; detector</li>
+<li>Detector metrics per iteration</li>
+<li>Stability computes recurrence <code>f̂(d)</code> across runs</li>
+<li><code>stable_dmps_production.csv</code></li>
+<li><code>--freeze</code></li>
+<li>Merge -&gt; <code>stable_dmps_genomewide.csv</code></li>
+<li><code>production/project.json</code> with <code>fixed_dmp_panel</code></li>
+<li>Freeze on all samples: centroid -&gt; detector(fixed) -&gt; mapper -&gt; enricher</li>
+<li>Optional disease progression synthesis</li>
+<li><code>biological-readiness</code>: enricher completeness + strict progression + readiness report</li>
+<li><code>--model</code>: classifier -&gt; predictor (and config-level biological gate check)</li>
+</ol>
+</section>
+<section id="expected-outputs" class="level3" data-number="12.2.5">
+<h3 data-number="12.2.5" class="anchored" data-anchor-id="expected-outputs"><span class="header-section-number">12.2.5</span> Expected Outputs</h3>
+<p>After Workflow 1 completes:</p>
+<pre><code>monte_carlo_runs/
+├── run_0001/ … run_000N/          ← per-iteration outputs
+│   └── detections/**/result*.json
+├── all_metrics.csv                ← one row per iteration
+├── metrics_summary.json           ← mean, std, percentiles per metric
+├── stability/
+│   ├── stable_dmps_production.csv
+│   └── stability_summary.json
+└── production/
+    ├── project.json               ← frozen project with fixed_dmp_panel
+    ├── centroids/                 ← built on all samples
+    ├── detections/                ← using fixed DMP panel
+    ├── mapper/
+    ├── enricher/
+    ├── progression/                    ← optional (when enabled)
+    ├── classifiers/                    ← created by --model
+    └── predictors/                     ← created by --model</code></pre>
+<hr>
+</section>
+</section>
+<section id="sec-workflow-prediction" class="level2" data-number="12.3">
+<h2 data-number="12.3" class="anchored" data-anchor-id="sec-workflow-prediction"><span class="header-section-number">12.3</span> Workflow 2: Model Use for Prediction</h2>
+<section id="theoretical-motivation-1" class="level3" data-number="12.3.1">
+<h3 data-number="12.3.1" class="anchored" data-anchor-id="theoretical-motivation-1"><span class="header-section-number">12.3.1</span> Theoretical Motivation</h3>
+<p>Once a production model exists, a natural question is: what balanced accuracy does it achieve on random holdouts drawn from the available cohort? This is not the same as the BA measured in Workflow 1, because Workflow 1 re-trained the model on each split while Workflow 2 applies the frozen model.</p>
+<p>Workflow 2 provides the empirical distribution of the frozen model’s performance under random sampling. It is faster than Workflow 1 (only the predictor runs per iteration), and it answers the question: <em>is the production model’s accuracy stable across different random splits, or does it depend heavily on which specific samples are held out?</em></p>
+<p><strong>Important caveat.</strong> The available cohort used in Workflow 2 overlaps with the training data for the production model (the production model was trained on all samples). This means Workflow 2 is not a hold-out evaluation in the classical sense; the test samples may also be in the training centroid. A truly external validation cohort would be needed to measure generalization to unseen data.</p>
+</section>
+<section id="steps-1" class="level3" data-number="12.3.2">
+<h3 data-number="12.3.2" class="anchored" data-anchor-id="steps-1"><span class="header-section-number">12.3.2</span> Steps</h3>
+<p><strong>Step 1: Confirm the production model exists</strong></p>
+<p>The file <code>monte_carlo_runs/production/project.json</code> must exist (created by Workflow 1’s <code>--freeze</code> step).</p>
+<p><strong>Step 2: Run predictor-only evaluation</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--predictor-only</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Per iteration, this:</p>
+<ol type="1">
+<li>Creates a new split-specific <code>project.json</code> with train/validation CSVs.</li>
+<li>Merges the production model paths from <code>production/project.json</code> into the run-specific project (via <code>apply_frozen_pipeline_artifacts_to_run_project()</code>).</li>
+<li>Runs only <code>methyl-predictor</code> on the validation split.</li>
+<li>Writes <code>validation_metrics.json</code>.</li>
+</ol>
+<p>After all iterations, the same aggregation as Workflow 1 produces <code>all_metrics.csv</code> and <code>metrics_summary.json</code>.</p>
+</section>
+<section id="workflow-2-diagram" class="level3" data-number="12.3.3">
+<h3 data-number="12.3.3" class="anchored" data-anchor-id="workflow-2-diagram"><span class="header-section-number">12.3.3</span> Workflow 2 Diagram</h3>
+<ol type="1">
+<li><code>production/project.json</code> (frozen model)</li>
+<li><code>project.json</code> (cohorts + validation settings)</li>
+<li><code>--predictor-only</code>: <code>R</code> iterations, predictor only</li>
+<li>Per iteration: split -&gt; merge frozen paths -&gt; predictor</li>
+<li><code>validation_metrics.json</code> per iteration</li>
+<li>Aggregate to <code>all_metrics.csv</code> + <code>metrics_summary.json</code></li>
+</ol>
+<hr>
+</section>
+</section>
+<section id="sec-diag-dmp-coverage" class="level2" data-number="12.4">
+<h2 data-number="12.4" class="anchored" data-anchor-id="sec-diag-dmp-coverage"><span class="header-section-number">12.4</span> Diagnostic: DMP Coverage</h2>
+<p><strong>Symptom.</strong> <code>sample_dmp_coverage.dmps_used_fraction_median &lt; 0.5</code> in <code>validation_metrics.json</code>. Values below 0.3 indicate severe degradation.</p>
+<p><strong>Cause.</strong> The centroid/detector <code>min_coverage</code> (e.g.&nbsp;4) is lower than the <strong>MethylClassifier</strong> per-locus coverage requirement for new samples, so many DMP loci are treated as missing in the feature matrix.</p>
+<p><strong>Fix.</strong> In <strong><code>step_config.classifier</code></strong> (MethylClassifier config), set <code>min_coverage</code> to match centroid <code>base_config.min_coverage</code> (see classifier documentation for the exact field name in your layout).</p>
+<p><strong>Verification.</strong> Re-run Workflow 2. <code>dmps_used_fraction_median</code> should rise to 0.6–0.9 for typical WGBS data.</p>
+<hr>
+</section>
+<section id="sec-diag-class-imbalance" class="level2" data-number="12.5">
+<h2 data-number="12.5" class="anchored" data-anchor-id="sec-diag-class-imbalance"><span class="header-section-number">12.5</span> Diagnostic: Class Imbalance</h2>
+<p><strong>Symptom.</strong> The confusion matrix shows near-perfect recall for the majority class (e.g.&nbsp;healthy/control) and near-zero recall for minority classes (disease stages). Balanced accuracy is close to <code>1/K</code> (random chance).</p>
+<p><strong>Cause.</strong> The training cohort has substantially more samples in one class. For example, 86 healthy vs 25–36 disease samples per stage (41% healthy in the example project). The multinomial logistic regression learned head defaults to the majority class when the histogram scores are ambiguous (which is common when DMP coverage is low).</p>
+<p><strong>Fix.</strong> In <code>step_config.detection</code>, add:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_train_learned_head"</span><span class="er">:</span> <span class="kw">true</span><span class="er">,</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="st">"multiclass_learned_class_weight"</span><span class="er">:</span> <span class="st">"balanced"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The <code>balanced</code> setting computes <span class="math inline">\(w_k = n_{\text{total}} / (K \cdot n_k)\)</span>, penalizing majority-class errors proportionally less than minority-class errors. See <a href="04-methylclassifier.html#sec-classifier-class-weight" class="quarto-xref"><span>Section 5.9</span></a> for the full derivation.</p>
+<hr>
+</section>
+<section id="sec-diag-sklearn-version" class="level2" data-number="12.6">
+<h2 data-number="12.6" class="anchored" data-anchor-id="sec-diag-sklearn-version"><span class="header-section-number">12.6</span> Diagnostic: Sklearn Version Mismatch</h2>
+<p><strong>Symptom.</strong> Warning messages during prediction: <code>InconsistentVersionWarning: Trying to unpickle estimator LogisticRegression from version X.Y.Z when using version A.B.C</code>.</p>
+<p><strong>Cause.</strong> The <code>multiclass-classifier.pkl</code> was serialized with a different version of scikit-learn than the one currently installed.</p>
+<p><strong>Diagnosis.</strong> Check the <code>sklearn_version</code> field in the model PKL metadata:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pickle</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> <span class="bu">open</span>(<span class="st">"monte_carlo_runs/production/classifiers/multiclass-classifier.pkl"</span>, <span class="st">"rb"</span>) <span class="im">as</span> f:</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> pickle.load(f)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(model[<span class="st">"metadata"</span>].get(<span class="st">"sklearn_version"</span>))  <span class="co"># version used at training time</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Compare to the current installed version:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sklearn<span class="op">;</span> <span class="bu">print</span>(sklearn.__version__)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Fix.</strong> Re-run the <code>--freeze</code> step with the current sklearn version. The logistic regression head will be retrained and the new PKL will record the correct version. New model PKLs produced after the fix always record <code>sklearn_version</code> in their metadata.</p>
+<hr>
+</section>
+<section id="sec-workflow-parameters" class="level2" data-number="12.7">
+<h2 data-number="12.7" class="anchored" data-anchor-id="sec-workflow-parameters"><span class="header-section-number">12.7</span> Choosing Workflow Parameters</h2>
+<section id="train_fraction" class="level3" data-number="12.7.1">
+<h3 data-number="12.7.1" class="anchored" data-anchor-id="train_fraction"><span class="header-section-number">12.7.1</span> <code>train_fraction</code></h3>
+<p>Higher values (0.8–0.9) leave less data for validation but produce more powerful centroids in training. For small cohorts (total <span class="math inline">\(n &lt; 50\)</span> per class), prefer 0.8. For large cohorts, 0.9 is reasonable.</p>
+</section>
+<section id="n_iterations" class="level3" data-number="12.7.2">
+<h3 data-number="12.7.2" class="anchored" data-anchor-id="n_iterations"><span class="header-section-number">12.7.2</span> <code>n_iterations</code></h3>
+<p>More iterations reduce the variance of the empirical performance summaries. 20–50 iterations is typically sufficient to characterize the mean and standard deviation of balanced accuracy. 100+ iterations are useful for stable percentile estimates (e.g.&nbsp;p5, p95).</p>
+</section>
+<section id="stability_dmp_freq" class="level3" data-number="12.7.3">
+<h3 data-number="12.7.3" class="anchored" data-anchor-id="stability_dmp_freq"><span class="header-section-number">12.7.3</span> <code>stability_dmp_freq</code></h3>
+<p>Higher values (0.8–1.0) produce smaller, more reproducible panels but may miss positions that are biologically informative but variable across splits. Lower values (0.5–0.7) retain more positions at the cost of including split-sensitive noise. A good starting point is 0.7.</p>
+</section>
+<section id="stability_min_balanced_accuracy" class="level3" data-number="12.7.4">
+<h3 data-number="12.7.4" class="anchored" data-anchor-id="stability_min_balanced_accuracy"><span class="header-section-number">12.7.4</span> <code>stability_min_balanced_accuracy</code></h3>
+<p>Setting this parameter (e.g.&nbsp;to 0.6) excludes iterations with poor validation performance from the DMP frequency count. This can improve panel quality by excluding outlier runs where the centroid construction or detection failed to find informative DMPs. It also reduces the effective <code>R*</code> and thus increases the variance of <span class="math inline">\(\hat{f}(d)\)</span>. Use with caution for small <code>n_iterations</code>.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../chapters/11-project-configuration.html" class="pagination-link" aria-label="The Project Configuration File">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">The Project Configuration File</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../chapters/13-configuration-reference.html" class="pagination-link" aria-label="Configuration Reference">
+        <span class="nav-page-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Configuration Reference</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
