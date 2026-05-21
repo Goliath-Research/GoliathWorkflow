@@ -503,6 +503,12 @@ def test_tabular_observed_hybrid_train_predict_schema_parity(tmp_path: Path, mon
     assert meta.get("observed_healthy_class_label") == "healthy"
     assert meta.get("observed_feature_order_fingerprint")
     assert "max_weighted_directional_score" in set(meta.get("observed_feature_names") or [])
+    assert "weighted_directional_agreement__pca1" in set(meta.get("observed_feature_names") or [])
+    assert "weighted_mean_abs_error_to_cancer_centroid__pca1" in set(meta.get("observed_feature_names") or [])
+    assert "weighted_cosine_similarity_to_cancer_centroid__pca1" in set(meta.get("observed_feature_names") or [])
+    assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca1" in set(
+        meta.get("observed_feature_names") or []
+    )
     assert "weighted_healthy_tail_evidence__pca1" in set(meta.get("observed_feature_names") or [])
     assert "weighted_healthy_tail_agreement__pca1" in set(meta.get("observed_feature_names") or [])
     assert "weighted_both_centroid_outlier_score__pca1" in set(meta.get("observed_feature_names") or [])

@@ -37,7 +37,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v25_add_per_cancer_histogram_tail_features"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v26_per_label_centroid_features"
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -520,14 +520,10 @@ def _prepare_histogram_density_artifacts(
 def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) -> List[str]:
     names = [
         "max_weighted_directional_score",
-        "weighted_directional_agreement",
         "weighted_mean_abs_error_to_healthy_centroid",
-        "weighted_mean_abs_error_to_cancer_centroid",
         "weighted_mean_abs_distance_margin",
         "weighted_cosine_similarity_to_healthy_centroid",
-        "weighted_cosine_similarity_to_cancer_centroid",
         "weighted_centroid_contrast_score",
-        "weighted_fraction_dmps_closer_to_cancer_centroid",
         "weighted_fraction_dmps_closer_to_healthy_centroid",
         "obs_fraction",
         "weighted_obs_fraction",
@@ -541,6 +537,10 @@ def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) ->
         suffix = _feature_label_token(label)
         names.extend(
             [
+                f"weighted_directional_agreement__{suffix}",
+                f"weighted_mean_abs_error_to_cancer_centroid__{suffix}",
+                f"weighted_cosine_similarity_to_cancer_centroid__{suffix}",
+                f"weighted_fraction_dmps_closer_to_cancer_centroid__{suffix}",
                 f"weighted_healthy_tail_evidence__{suffix}",
                 f"weighted_healthy_tail_agreement__{suffix}",
                 f"weighted_both_centroid_outlier_score__{suffix}",
@@ -715,7 +715,17 @@ def build_observed_hybrid_feature_table(
 
         if n_obs > 0:
             max_weighted_directional_score = float("nan")
+            per_label_feature_values: Dict[str, float] = {}
             for k_idx, mu_k in enumerate(per_cancer_refs):
+                suffix = _feature_label_token(cancer_labels_raw[k_idx])
+                key_da = f"weighted_directional_agreement__{suffix}"
+                key_wmae_c = f"weighted_mean_abs_error_to_cancer_centroid__{suffix}"
+                key_wcos_c = f"weighted_cosine_similarity_to_cancer_centroid__{suffix}"
+                key_frac_c = f"weighted_fraction_dmps_closer_to_cancer_centroid__{suffix}"
+                per_label_feature_values.setdefault(key_da, float("nan"))
+                per_label_feature_values.setdefault(key_wmae_c, float("nan"))
+                per_label_feature_values.setdefault(key_wcos_c, float("nan"))
+                per_label_feature_values.setdefault(key_frac_c, float("nan"))
                 mu_k_obs = mu_k[obs_mask]
                 numer = 2.0 * (obs_vals - healthy_ref[obs_mask])
                 denom = (mu_k_obs - healthy_ref[obs_mask]) + 1e-6
@@ -729,6 +739,15 @@ def build_observed_hybrid_feature_table(
                 if wk_sum <= 0.0:
                     continue
                 fk = float(np.sum(wk_obs * directional) / wk_sum)
+                rk = (obs_vals - healthy_ref[obs_mask]) / (mu_k_obs - healthy_ref[obs_mask] + 1e-6)
+                zk = 2.0 * rk - 1.0
+                cancer_like_k = (zk > 0.0).astype(np.float64)
+                per_label_feature_values[key_da] = float(np.sum(wk_obs * cancer_like_k) / wk_sum)
+                per_label_feature_values[key_wmae_c] = _weighted_mean_abs_error(obs_vals, mu_k_obs, wk_obs)
+                per_label_feature_values[key_wcos_c] = _weighted_cosine_similarity(obs_vals, mu_k_obs, wk_obs)
+                dist_h_k = np.abs(obs_vals - healthy_ref[obs_mask])
+                dist_c_k = np.abs(obs_vals - mu_k_obs)
+                per_label_feature_values[key_frac_c] = float(np.sum(wk_obs[dist_c_k < dist_h_k]) / wk_sum)
                 if not np.isfinite(max_weighted_directional_score) or fk > max_weighted_directional_score:
                     max_weighted_directional_score = fk
 
@@ -808,14 +827,6 @@ def build_observed_hybrid_feature_table(
                         tail_feature_values[key_a] = float(np.sum(wk_v * agreement) / wk_sum)
                         tail_feature_values[key_o] = float(np.sum(wk_v * outside) / wk_sum)
 
-            r_agg = (obs_vals - healthy_ref[obs_mask]) / (cancer_ref[obs_mask] - healthy_ref[obs_mask] + 1e-6)
-            z_agg = 2.0 * r_agg - 1.0
-            cancer_like = (z_agg > 0.0).astype(np.float64)
-            if obs_w.size == obs_vals.size and float(np.sum(obs_w)) > 0.0:
-                weighted_directional_agreement = float(np.sum(obs_w * cancer_like) / np.sum(obs_w))
-            else:
-                weighted_directional_agreement = float(np.mean(cancer_like))
-
             healthy_obs = healthy_ref[obs_mask]
             cancer_obs = cancer_ref[obs_mask]
             wjs_h = _weighted_jensen_shannon_distance(obs_vals, healthy_obs, obs_w)
@@ -830,15 +841,13 @@ def build_observed_hybrid_feature_table(
             dist_c = np.abs(obs_vals - cancer_obs)
             obs_w_sum = float(np.sum(obs_w))
             if obs_w.size == obs_vals.size and obs_w_sum > 0.0:
-                weighted_closer_to_cancer = float(np.sum(obs_w[dist_c < dist_h]) / obs_w_sum)
                 weighted_closer_to_healthy = float(np.sum(obs_w[dist_h < dist_c]) / obs_w_sum)
             else:
-                weighted_closer_to_cancer = float("nan")
                 weighted_closer_to_healthy = float("nan")
         else:
             max_weighted_directional_score = float("nan")
+            per_label_feature_values = {}
             tail_feature_values = {}
-            weighted_directional_agreement = float("nan")
             wjs_h = float("nan")
             wjs_c = float("nan")
             wmae_h = float("nan")
@@ -847,7 +856,6 @@ def build_observed_hybrid_feature_table(
             wcos_h = float("nan")
             wcos_c = float("nan")
             weighted_centroid_contrast_score = float("nan")
-            weighted_closer_to_cancer = float("nan")
             weighted_closer_to_healthy = float("nan")
 
         obs_frac = float(n_obs / max(1, n_loci))
@@ -857,19 +865,18 @@ def build_observed_hybrid_feature_table(
             obs_w_frac = obs_frac
 
         X_feat[i, idx["max_weighted_directional_score"]] = max_weighted_directional_score
-        X_feat[i, idx["weighted_directional_agreement"]] = weighted_directional_agreement
         X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
-        X_feat[i, idx["weighted_mean_abs_error_to_cancer_centroid"]] = wmae_c
         X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
         X_feat[i, idx["weighted_cosine_similarity_to_healthy_centroid"]] = wcos_h
-        X_feat[i, idx["weighted_cosine_similarity_to_cancer_centroid"]] = wcos_c
         X_feat[i, idx["weighted_centroid_contrast_score"]] = weighted_centroid_contrast_score
-        X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
         X_feat[i, idx["weighted_fraction_dmps_closer_to_healthy_centroid"]] = weighted_closer_to_healthy
         X_feat[i, idx["obs_fraction"]] = obs_frac
         X_feat[i, idx["weighted_obs_fraction"]] = obs_w_frac
         X_feat[i, idx["n_obs_dmps"]] = float(n_obs)
         X_feat[i, idx["n_total_dmps"]] = float(n_loci)
+        for feat_name, feat_value in per_label_feature_values.items():
+            if feat_name in idx:
+                X_feat[i, idx[feat_name]] = float(feat_value)
         for feat_name, feat_value in tail_feature_values.items():
             if feat_name in idx:
                 X_feat[i, idx[feat_name]] = float(feat_value)
