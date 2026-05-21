@@ -30,7 +30,9 @@ def _update_backend_params(config: MonteCarloConfig, backend: str, updates: dict
         profiles.generative_hybrid = profiles.generative_hybrid.model_copy(update={"params": params})
     else:
         raise ValueError(f"Unsupported backend {backend!r}")
-    return config.model_copy(update={"backend_profiles": profiles})
+    updated = config.model_copy(update={"backend_profiles": profiles})
+    updated._sync_runtime_backend_fields()
+    return updated
 
 
 def load_monte_carlo_config(

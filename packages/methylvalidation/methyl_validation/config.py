@@ -953,7 +953,9 @@ class MonteCarloConfig(BaseModel):
         backend = str(backend_name).strip().lower()
         if backend not in {"ecdf", "tabular_sklearn", "generative_hybrid"}:
             raise ValueError(f"Unknown backend: {backend_name}")
-        return self.model_copy(update={"model_backend": backend})
+        updated = self.model_copy(update={"model_backend": backend})
+        updated._sync_runtime_backend_fields()
+        return updated
 
     def _sync_runtime_backend_fields(self) -> None:
         params = self.get_backend_params(self.model_backend)

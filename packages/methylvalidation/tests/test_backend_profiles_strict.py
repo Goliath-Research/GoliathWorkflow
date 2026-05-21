@@ -4,6 +4,7 @@ import pytest
 
 from methyl_validation.cli import _resolve_model_mc_backends
 from methyl_validation.config import MonteCarloConfig
+from methyl_validation.mc_config_load import _update_backend_params
 from methyl_validation.utils.migrate_backend_config import _migrate_validation_section
 
 
@@ -51,3 +52,38 @@ def test_migration_moves_legacy_keys_into_backend_profiles():
     assert migrated["backend_profiles"]["tabular_sklearn"]["params"]["tabular_max_dmps"] == 7000
     assert migrated["backend_profiles"]["generative_hybrid"]["params"]["generative_latent_dim"] == 24
     assert summary["active_backend"] == "generative_hybrid"
+
+
+def test_with_backend_selection_resyncs_runtime_fields():
+    payload = _base_payload()
+    payload["backend_profiles"]["ecdf"]["enabled"] = True
+    payload["backend_profiles"]["generative_hybrid"]["enabled"] = False
+    payload["backend_profiles"]["ecdf"]["params"] = {
+        "feature_mode": "raw_dmp",
+        "tabular_max_dmps": 5000,
+    }
+    payload["backend_profiles"]["tabular_sklearn"]["params"] = {
+        "feature_mode": "observed_hybrid",
+        "tabular_max_dmps": 7777,
+    }
+    cfg = MonteCarloConfig.model_validate(payload)
+    switched = cfg.with_backend_selection("tabular_sklearn")
+    assert switched.model_backend == "tabular_sklearn"
+    assert switched.feature_mode == "observed_hybrid"
+    assert switched.tabular_max_dmps == 7777
+
+
+def test_update_backend_params_resyncs_runtime_fields():
+    payload = _base_payload()
+    payload["backend_profiles"]["ecdf"]["enabled"] = False
+    payload["backend_profiles"]["tabular_sklearn"]["enabled"] = False
+    payload["backend_profiles"]["generative_hybrid"]["enabled"] = True
+    cfg = MonteCarloConfig.model_validate(payload)
+    updated = _update_backend_params(
+        cfg,
+        "generative_hybrid",
+        {"generative_latent_dim": 31, "covariates_path": "/tmp/covariates.csv"},
+    )
+    assert updated.backend_profiles.generative_hybrid.params.generative_latent_dim == 31
+    assert updated.generative_latent_dim == 31
+    assert updated.covariates_path == "/tmp/covariates.csv"
