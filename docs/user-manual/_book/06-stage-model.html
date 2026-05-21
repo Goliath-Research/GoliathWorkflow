@@ -337,7 +337,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>tabular_sklearn</code>: in-process bundle -&gt; train -&gt; predict</li>
 <li><code>generative_hybrid</code>: in-process bundle -&gt; train -&gt; predict</li>
 </ul>
-<p>Configured by <code>step_config.validation.model_backend</code> or CLI override.</p>
+<p>Configured by <code>step_config.validation.backend_profiles</code> (plus optional CLI backend override).</p>
 </section>
 <section id="process-model" class="level2" data-number="7.4">
 <h2 data-number="7.4" class="anchored" data-anchor-id="process-model"><span class="header-section-number">7.4</span> Process model</h2>
@@ -346,12 +346,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="required-config-keys" class="level2" data-number="7.5">
 <h2 data-number="7.5" class="anchored" data-anchor-id="required-config-keys"><span class="header-section-number">7.5</span> Required config keys</h2>
 <ul>
-<li><code>model_backend</code></li>
-<li><code>feature_mode</code></li>
-<li><code>ecdf_second_stage_enabled</code></li>
+<li><code>backend_profiles</code></li>
+<li>backend-specific <code>params</code> under each profile (for example <code>feature_mode</code>, <code>ecdf_second_stage_enabled</code>, <code>tabular_methods</code>, <code>generative_latent_dim</code>)</li>
 <li>tabular controls:
 <ul>
-<li><code>tabular_methods</code> or <code>tabular_model_type</code></li>
+<li><code>tabular_methods</code></li>
 <li><code>tabular_method_selection_metric</code></li>
 </ul></li>
 <li>generative controls:
@@ -364,6 +363,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>biological_review_confirmed</code></li>
 </ul></li>
 </ul>
+<p>Legacy flat backend keys are rejected. Migrate older configs with:</p>
+<p><code>methyl-validation-migrate-backend-config /path/to/project.json --in-place</code></p>
 </section>
 <section id="expected-outputs" class="level2" data-number="7.6">
 <h2 data-number="7.6" class="anchored" data-anchor-id="expected-outputs"><span class="header-section-number">7.6</span> Expected outputs</h2>

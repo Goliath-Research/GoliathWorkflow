@@ -548,7 +548,7 @@
     "href": "06-stage-model.html#backend-behavior",
     "title": "7  Stage: Model",
     "section": "7.3 Backend behavior",
-    "text": "7.3 Backend behavior\n\necdf: methyl-classifier -&gt; methyl-predictor\ntabular_sklearn: in-process bundle -&gt; train -&gt; predict\ngenerative_hybrid: in-process bundle -&gt; train -&gt; predict\n\nConfigured by step_config.validation.model_backend or CLI override.",
+    "text": "7.3 Backend behavior\n\necdf: methyl-classifier -&gt; methyl-predictor\ntabular_sklearn: in-process bundle -&gt; train -&gt; predict\ngenerative_hybrid: in-process bundle -&gt; train -&gt; predict\n\nConfigured by step_config.validation.backend_profiles (plus optional CLI backend override).",
     "crumbs": [
       "Part II: Staged Solution Workflow",
       "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
@@ -570,7 +570,7 @@
     "href": "06-stage-model.html#required-config-keys",
     "title": "7  Stage: Model",
     "section": "7.5 Required config keys",
-    "text": "7.5 Required config keys\n\nmodel_backend\nfeature_mode\necdf_second_stage_enabled\ntabular controls:\n\ntabular_methods or tabular_model_type\ntabular_method_selection_metric\n\ngenerative controls:\n\ngenerative_latent_dim, generative_epochs, and related keys\n\noptional gate:\n\nrequire_biological_review_for_model\nbiological_review_confirmed",
+    "text": "7.5 Required config keys\n\nbackend_profiles\nbackend-specific params under each profile (for example feature_mode, ecdf_second_stage_enabled, tabular_methods, generative_latent_dim)\ntabular controls:\n\ntabular_methods\ntabular_method_selection_metric\n\ngenerative controls:\n\ngenerative_latent_dim, generative_epochs, and related keys\n\noptional gate:\n\nrequire_biological_review_for_model\nbiological_review_confirmed\n\n\nLegacy flat backend keys are rejected. Migrate older configs with:\nmethyl-validation-migrate-backend-config /path/to/project.json --in-place",
     "crumbs": [
       "Part II: Staged Solution Workflow",
       "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
