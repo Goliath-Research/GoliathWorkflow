@@ -656,7 +656,7 @@ def predict_generative_model_from_project(
             "worst_group_balanced_accuracy": worst_group_ba,
             "active_feature_family_set": active_family_set,
             "active_feature_families": {
-                "dmp": ("dmp" in active_family_set),
+                "dmp": ("dmp" in active_family_set or active_family_set == "hybrid-all"),
                 "chromosome": bool(meta.get("observed_feature_include_chromosome", True)),
                 "dmr": bool(meta.get("observed_feature_include_dmr", True)),
                 "gene": ("gene" in active_family_set or active_family_set == "hybrid-all"),

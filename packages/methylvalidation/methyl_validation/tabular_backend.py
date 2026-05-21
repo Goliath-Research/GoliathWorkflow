@@ -999,7 +999,14 @@ def train_tabular_model(
 
     method_df = pd.DataFrame(method_rows)
     if run_selection_eval and not method_df.empty:
-        method_df.sort_values(["robustness_score", "score", "method_index"], ascending=[False, False, True], inplace=True)
+        if feature_mode_norm == "observed_hybrid":
+            method_df.sort_values(
+                ["robustness_score", "score", "method_index"],
+                ascending=[False, False, True],
+                inplace=True,
+            )
+        else:
+            method_df.sort_values(["score", "method_index"], ascending=[False, True], inplace=True)
         method_df.reset_index(drop=True, inplace=True)
         method_df["rank"] = np.arange(1, len(method_df) + 1, dtype=int)
         method_df.to_csv(out_dir / "tabular_method_metrics.csv", index=False)
@@ -1176,7 +1183,7 @@ def predict_tabular_model_from_project(
             ),
             "active_feature_family_set": active_family_set,
             "active_feature_families": {
-                "dmp": ("dmp" in active_family_set),
+                "dmp": ("dmp" in active_family_set or active_family_set == "hybrid-all"),
                 "chromosome": bool(meta.get("observed_feature_include_chromosome", True)),
                 "dmr": bool(meta.get("observed_feature_include_dmr", True)),
                 "gene": ("gene" in active_family_set or active_family_set == "hybrid-all"),
