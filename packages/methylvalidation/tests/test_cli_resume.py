@@ -180,6 +180,57 @@ def test_model_mc_all_requires_model_mc(tmp_path: Path, monkeypatch, capsys):
     assert "--model-mc-all requires --model-mc" in err
 
 
+def test_skip_detection_runs_stability_only(tmp_path: Path, monkeypatch):
+    h = tmp_path / "healthy.csv"
+    d = tmp_path / "disease.csv"
+    h.write_text("sample\nH1\n", encoding="utf-8")
+    d.write_text("sample\nD1\n", encoding="utf-8")
+    out_dir = tmp_path / "out"
+    project = tmp_path / "project.json"
+    project.write_text(
+        f"""
+{{
+  "project_name": "x",
+  "output_base": "{out_dir.as_posix()}",
+  "samples_base_path": "{tmp_path.as_posix()}",
+  "groups": [
+    {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
+    {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
+  ],
+  "step_config": {{
+    "validation": {{
+      "train_fraction": 0.8,
+      "n_iterations": 2
+    }}
+  }}
+}}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    calls: dict[str, object] = {}
+
+    def _fake_stability(**kwargs):
+        calls["kwargs"] = kwargs
+        return {
+            "output_dir": str(out_dir / "x" / "monte_carlo_runs" / "stability"),
+            "dmp_stability": {"stable_dmps_at_threshold": 1},
+            "gene_stability": {"stable_genes_at_threshold": 0},
+            "tiered_stability_enabled": False,
+        }
+
+    monkeypatch.setattr(cli, "run_stability_analysis", _fake_stability)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["methyl-validation", "--project", str(project), "--stability", "--skip-detection"],
+    )
+    cli.main()
+    assert "kwargs" in calls
+    kwargs = calls["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["monte_carlo_runs_root"] == out_dir / "x" / "monte_carlo_runs"
+
+
 def test_model_mc_all_uses_shared_stage(tmp_path: Path, monkeypatch):
     h = tmp_path / "healthy.csv"
     d = tmp_path / "disease.csv"

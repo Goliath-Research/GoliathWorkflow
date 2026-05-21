@@ -1219,6 +1219,14 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--skip-detection",
+        action="store_true",
+        help=(
+            "Reuse existing MC run detections and recompute only stability artifacts "
+            "(requires --stability)."
+        ),
+    )
+    parser.add_argument(
         "--skip-enricher",
         action="store_true",
         help="Skip methyl-enricher step (useful when Grok API calls are slow).",
@@ -1475,6 +1483,22 @@ def main() -> None:
         sys.exit(1)
     if args.skip_centroid and config.predictor_only:
         print("Error: --skip-centroid is incompatible with --predictor-only.", file=sys.stderr)
+        sys.exit(1)
+    if args.skip_detection and not (args.stability or config.run_stability):
+        print("Error: --skip-detection requires --stability.", file=sys.stderr)
+        sys.exit(1)
+    if args.skip_detection and (
+        args.freeze
+        or args.model
+        or args.model_mc
+        or args.post_model_validation
+        or args.select_best_model
+        or config.predictor_only
+    ):
+        print(
+            "Error: --skip-detection is only supported for stability recalculation mode.",
+            file=sys.stderr,
+        )
         sys.exit(1)
     if args.post_model_validation and (args.freeze or args.model):
         print("Error: --post-model-validation cannot be combined with --freeze or --model.", file=sys.stderr)
@@ -2198,6 +2222,44 @@ def main() -> None:
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+
+    if args.skip_detection:
+        print("\nRunning stability analysis on existing discovery outputs (skip-detection mode)...")
+        stability_summary = run_stability_analysis(
+            monte_carlo_runs_root=monte_carlo_runs_root,
+            dmp_min_freq=config.stability_dmp_freq,
+            gene_min_freq=config.stability_gene_freq,
+            min_balanced_accuracy=config.stability_min_balanced_accuracy,
+            prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+            dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
+            relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
+            relaxed_multiplier=config.stability_relaxed_multiplier,
+            score_eps=config.stability_score_eps,
+            tiered_stability_enabled=bool(config.stability_tiers_enabled),
+            tier_core_frequency=config.stability_tier_core_freq,
+            tier_extended_frequency=config.stability_tier_extended_freq,
+            tier_exploratory_frequency=config.stability_tier_exploratory_freq,
+            default_freeze_tier=config.stability_default_freeze_tier,
+        )
+        print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
+        print(f"  Stable DMPs: {stability_summary['dmp_stability'].get('stable_dmps_at_threshold', 0)}")
+        if stability_summary.get("tiered_stability_enabled"):
+            print(
+                f"  Tiered panels enabled (default freeze tier: {stability_summary.get('stability_default_freeze_tier')})"
+            )
+            tiers = stability_summary.get("stability_tiers") or {}
+            for tier_name in ("core", "extended", "exploratory"):
+                tier = tiers.get(tier_name) or {}
+                if not tier:
+                    continue
+                print(
+                    f"    {tier_name}: min_freq={tier.get('min_frequency')} "
+                    f"strict={tier.get('n_strict_selected')} relaxed={tier.get('n_relaxed_selected')}"
+                )
+        gs = stability_summary.get("gene_stability") or {}
+        print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (non-zero only if enricher ran in iterations)")
+        print("Done.")
+        return
 
     cohort_paths_list: List[Tuple[str, List[str]]] = []
     for c in config.cohorts:
