@@ -116,7 +116,11 @@ def build_model_backend_steps(
                     project_json=project_json,
                     output_dir=bundle_dir,
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
-                    extra_metadata={"model_backend": "tabular_sklearn"},
+                    extra_metadata={
+                        "model_backend": "tabular_sklearn",
+                        "feature_mode": (config.feature_mode if config is not None else "raw_dmp"),
+                        "feature_family_set": (config.feature_family_set if config is not None else "dmp"),
+                    },
                 )
                 return 0, f"Bundle written to {bundle_dir}", ""
             except Exception as e:
@@ -182,6 +186,7 @@ def build_model_backend_steps(
                     observed_feature_max_genes=(
                         config.observed_feature_max_genes if config is not None else 32
                     ),
+                    feature_family_set=(config.feature_family_set if config is not None else "dmp"),
                     observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
                     observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
                     observed_hist_evidence_clip_cap=(
@@ -261,7 +266,11 @@ def build_model_backend_steps(
                     project_json=project_json,
                     output_dir=bundle_dir,
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
-                    extra_metadata={"model_backend": "generative_hybrid"},
+                    extra_metadata={
+                        "model_backend": "generative_hybrid",
+                        "feature_mode": (config.feature_mode if config is not None else "raw_dmp"),
+                        "feature_family_set": (config.feature_family_set if config is not None else "dmp"),
+                    },
                 )
                 return 0, f"Bundle written to {bundle_dir}", ""
             except Exception as e:
@@ -325,6 +334,7 @@ def build_model_backend_steps(
                     observed_feature_max_genes=(
                         config.observed_feature_max_genes if config is not None else 32
                     ),
+                    feature_family_set=(config.feature_family_set if config is not None else "dmp"),
                     observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
                     observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
                     observed_hist_evidence_clip_cap=(

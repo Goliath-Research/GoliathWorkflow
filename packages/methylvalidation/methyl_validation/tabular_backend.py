@@ -39,6 +39,7 @@ from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, trans
 from .eval_split_resolver import resolve_eval_paths_and_labels
 from .model_bundle import load_bundle_dmp_index
 from .observed_feature_builder import (
+    HYBRID_FEATURE_FAMILY_SETS,
     OBSERVED_HYBRID_SCHEMA_VERSION,
     apply_feature_fill_values,
     build_observed_hybrid_feature_table,
@@ -395,6 +396,7 @@ def train_tabular_model(
     observed_feature_dmr_window_bp: int = 100000,
     observed_feature_max_dmrs: int = 32,
     observed_feature_max_genes: int = 32,
+    feature_family_set: str = "dmp",
     observed_hist_eps: float = 1e-6,
     observed_hist_alpha: float = 0.5,
     observed_hist_evidence_clip_cap: float = 5.0,
@@ -432,6 +434,11 @@ def train_tabular_model(
             sample_ids.append(Path(str(p)).name)
 
     feature_mode_norm = str(feature_mode or "raw_dmp").strip().lower()
+    feature_family_set_norm = str(feature_family_set or "dmp").strip().lower()
+    if feature_family_set_norm not in HYBRID_FEATURE_FAMILY_SETS:
+        raise ValueError(
+            f"feature_family_set must be one of {list(HYBRID_FEATURE_FAMILY_SETS)}, got {feature_family_set!r}"
+        )
     y_arr = np.asarray(y, dtype=np.int32)
     dmp_index_fingerprint = _dmp_index_fingerprint(dmp_df)
     bundle_dir_path: Optional[Path] = None
@@ -474,6 +481,7 @@ def train_tabular_model(
     fingerprint_common_payload: Dict[str, Any] = {
         "schema_version": 1,
         "feature_mode": feature_mode_norm,
+        "feature_family_set": feature_family_set_norm,
         "observed_hybrid_schema_version": (
             OBSERVED_HYBRID_SCHEMA_VERSION if feature_mode_norm == "observed_hybrid" else None
         ),
@@ -639,6 +647,7 @@ def train_tabular_model(
                 hist_alpha=float(observed_hist_alpha),
                 hist_evidence_clip_cap=float(observed_hist_evidence_clip_cap),
                 hist_tail_agreement_threshold=float(observed_hist_tail_agreement_threshold),
+                feature_family_set=feature_family_set_norm,
             )
             X = np.asarray(feat.X, dtype=np.float32)
             feature_fill_values = fit_feature_fill_values(X)
@@ -811,6 +820,7 @@ def train_tabular_model(
                     hist_alpha=float(observed_hist_alpha),
                     hist_evidence_clip_cap=float(observed_hist_evidence_clip_cap),
                     hist_tail_agreement_threshold=float(observed_hist_tail_agreement_threshold),
+                    feature_family_set=feature_family_set_norm,
                 )
                 verify_feature_schema(
                     feat_eval.feature_names,
@@ -885,6 +895,7 @@ def train_tabular_model(
             "method": method_name,
             "params": resolved_params,
             "feature_mode": feature_mode_norm,
+            "feature_family_set": feature_family_set_norm,
             "class_names": class_names,
             "project_json": str(Path(project_json).resolve()),
             "bundle_h5": str(Path(bundle_h5).resolve()),
@@ -972,6 +983,12 @@ def train_tabular_model(
                 "selection_metric": selection_metric,
                 "selection_stat": selection_stat,
                 "score": float(score) if np.isfinite(score) else float("-inf"),
+                "train_balanced_accuracy": float(train_metrics.get("balanced_accuracy", float("nan"))),
+                "robustness_score": (
+                    float(score) - abs(float(score) - float(train_metrics.get("balanced_accuracy", 0.0)))
+                    if np.isfinite(score)
+                    else float("-inf")
+                ),
                 "model_dir": str(method_dir),
                 "params_json": json.dumps(resolved_params, sort_keys=True),
             }
@@ -982,7 +999,7 @@ def train_tabular_model(
 
     method_df = pd.DataFrame(method_rows)
     if run_selection_eval and not method_df.empty:
-        method_df.sort_values(["score", "method_index"], ascending=[False, True], inplace=True)
+        method_df.sort_values(["robustness_score", "score", "method_index"], ascending=[False, False, True], inplace=True)
         method_df.reset_index(drop=True, inplace=True)
         method_df["rank"] = np.arange(1, len(method_df) + 1, dtype=int)
         method_df.to_csv(out_dir / "tabular_method_metrics.csv", index=False)
@@ -1086,6 +1103,7 @@ def predict_tabular_model_from_project(
             hist_tail_agreement_threshold=float(
                 meta.get("observed_hist_tail_agreement_threshold", 0.10)
             ),
+            feature_family_set=str(meta.get("feature_family_set", "dmp")),
         )
         verify_feature_schema(
             feat.feature_names,
@@ -1136,22 +1154,41 @@ def predict_tabular_model_from_project(
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
     if feature_mode == "observed_hybrid":
+        active_family_set = str(meta.get("feature_family_set", "dmp"))
+        cm = metrics.get("confusion_matrix") or []
+        worst_group_ba = None
+        if isinstance(cm, list) and cm:
+            recalls: List[float] = []
+            for i, row in enumerate(cm):
+                denom = float(np.sum(row))
+                recalls.append(float(row[i]) / denom if denom > 0 else 0.0)
+            if recalls:
+                worst_group_ba = float(min(recalls))
         ablation_report = {
             "backend": "tabular_sklearn",
             "feature_mode": feature_mode,
             "balanced_accuracy": metrics.get("balanced_accuracy"),
+            "worst_group_balanced_accuracy": worst_group_ba,
+            "robustness_score": (
+                float(metrics.get("balanced_accuracy", 0.0)) - float(max(0.0, (1.0 - (worst_group_ba or 0.0))))
+                if worst_group_ba is not None
+                else None
+            ),
+            "active_feature_family_set": active_family_set,
             "active_feature_families": {
-                "dmp": bool(meta.get("observed_feature_include_dmp", True)),
+                "dmp": ("dmp" in active_family_set),
                 "chromosome": bool(meta.get("observed_feature_include_chromosome", True)),
                 "dmr": bool(meta.get("observed_feature_include_dmr", True)),
-                "gene": bool(meta.get("observed_feature_include_gene", True)),
+                "gene": ("gene" in active_family_set or active_family_set == "hybrid-all"),
+                "structural": ("structural" in active_family_set or active_family_set == "hybrid-all"),
             },
-            "recommended_ablation_matrix": [
-                {"name": "baseline", "include_dmp": False, "include_dmr": False, "include_gene": False},
-                {"name": "plus_dmp", "include_dmp": True, "include_dmr": False, "include_gene": False},
-                {"name": "plus_dmr", "include_dmp": False, "include_dmr": True, "include_gene": False},
-                {"name": "plus_gene", "include_dmp": False, "include_dmr": False, "include_gene": True},
-                {"name": "all", "include_dmp": True, "include_dmr": True, "include_gene": True},
+            "mandatory_ablation_matrix": [
+                {"name": "dmp", "feature_family_set": "dmp"},
+                {"name": "gene", "feature_family_set": "gene"},
+                {"name": "structural", "feature_family_set": "structural"},
+                {"name": "dmp+gene", "feature_family_set": "dmp+gene"},
+                {"name": "dmp+structural", "feature_family_set": "dmp+structural"},
+                {"name": "hybrid-all", "feature_family_set": "hybrid-all"},
             ],
         }
         with open(out_dir / "feature_family_ablation.json", "w", encoding="utf-8") as f:

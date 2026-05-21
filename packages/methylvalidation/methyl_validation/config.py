@@ -402,6 +402,13 @@ class MonteCarloConfig(BaseModel):
             "observed_hybrid (observed-only aggregated features)."
         ),
     )
+    feature_family_set: str = Field(
+        default="dmp",
+        description=(
+            "For feature_mode=observed_hybrid, controls active feature families: "
+            "dmp | gene | structural | dmp+gene | dmp+structural | hybrid-all."
+        ),
+    )
     observed_feature_quantiles: List[float] = Field(
         default_factory=lambda: [0.10, 0.25, 0.50, 0.75, 0.90],
         description=(
@@ -684,6 +691,15 @@ class MonteCarloConfig(BaseModel):
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"feature_mode must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("feature_family_set")
+    @classmethod
+    def _validate_feature_family_set(cls, value: str) -> str:
+        allowed = {"dmp", "gene", "structural", "dmp+gene", "dmp+structural", "hybrid-all"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
         return normalized
 
     @field_validator("observed_feature_quantiles")

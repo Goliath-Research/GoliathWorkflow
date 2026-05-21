@@ -133,6 +133,26 @@ def compute_summary(df: pd.DataFrame) -> Dict[str, Any]:
         except Exception:
             pass
     summary["metrics"] = per_metric
+    robustness: Dict[str, Any] = {}
+    ba_candidates = [
+        c for c in ("holdout_balanced_accuracy", "balanced_accuracy", "training_balanced_accuracy") if c in df.columns
+    ]
+    if ba_candidates:
+        key = ba_candidates[0]
+        series = pd.to_numeric(df[key], errors="coerce").dropna()
+        if len(series) > 0:
+            robustness["balanced_accuracy_key"] = key
+            robustness["balanced_accuracy_mean"] = float(series.mean())
+            robustness["balanced_accuracy_variance"] = float(series.var()) if len(series) > 1 else 0.0
+            robustness["balanced_accuracy_std"] = float(series.std()) if len(series) > 1 else 0.0
+            robustness["balanced_accuracy_worst_run"] = float(series.min())
+    if "ece" in df.columns:
+        ece = pd.to_numeric(df["ece"], errors="coerce").dropna()
+        if len(ece) > 0:
+            robustness["calibration_ece_mean"] = float(ece.mean())
+            robustness["calibration_ece_worst_run"] = float(ece.max())
+    if robustness:
+        summary["robustness"] = robustness
     # Backward compatibility: keep legacy top-level per-metric keys.
     summary.update(per_metric)
     return summary

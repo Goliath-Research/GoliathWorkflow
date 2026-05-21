@@ -22,7 +22,7 @@ from methyl_utils import load_project
 if TYPE_CHECKING:
     from methyl_utils import ComparisonSpec, ProjectConfig
 
-BUNDLE_SCHEMA_VERSION = 1
+BUNDLE_SCHEMA_VERSION = 2
 BUNDLE_MANIFEST_NAME = "model_feature_bundle.json"
 BUNDLE_H5_NAME = "model_feature_bundle.h5"
 DETECTOR_POINTER_NAME = "detection_model_bundle.json"
@@ -59,6 +59,8 @@ class ModelFeatureBundleManifest(BaseModel):
     classes: List[str]
     comparisons: List[BundleComparison]
     dmp_columns: List[str]
+    feature_families: List[str] = Field(default_factory=lambda: ["dmp", "gene", "structural"])
+    feature_contract_version: str = Field(default="hybrid_bundle_v1")
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -131,6 +133,16 @@ def _load_dmps_table(
     # Keep the parameter for API compatibility, but canonicalize model weighting to effect_size.
     del weight_column
     effect_size = pd.to_numeric(df["effect_size"], errors="coerce").fillna(0.0).astype(float)
+    feature_col = None
+    for candidate in ("feature_type", "gene_feature", "region_type", "annotation_feature"):
+        if candidate in df.columns:
+            feature_col = candidate
+            break
+    region_weight_col = None
+    for candidate in ("region_weight", "combined_weight", "feature_weight"):
+        if candidate in df.columns:
+            region_weight_col = candidate
+            break
     out = pd.DataFrame(
         {
             "comparison_label": str(comparison_label),
@@ -141,6 +153,12 @@ def _load_dmps_table(
             "weight": effect_size,
             "gene_name": (df[gene_col].astype(str) if gene_col is not None else "unknown"),
             "dmr_region": (df[dmr_col].astype(str) if dmr_col is not None else "unknown"),
+            "feature_type": (df[feature_col].astype(str) if feature_col is not None else "unknown"),
+            "region_weight": (
+                pd.to_numeric(df[region_weight_col], errors="coerce").fillna(1.0).astype(float)
+                if region_weight_col is not None
+                else 1.0
+            ),
             "source_csv": str(csv_path.absolute()),
         }
     )
@@ -178,6 +196,13 @@ def _write_bundle_h5(bundle_h5: Path, dmp_df: pd.DataFrame, class_names: List[st
         )
         _h5_write_str(g, "gene_name", dmp_df["gene_name"].fillna("unknown").astype(str).tolist())
         _h5_write_str(g, "dmr_region", dmp_df["dmr_region"].fillna("unknown").astype(str).tolist())
+        _h5_write_str(g, "feature_type", dmp_df["feature_type"].fillna("unknown").astype(str).tolist())
+        g.create_dataset(
+            "region_weight",
+            data=dmp_df["region_weight"].fillna(1.0).astype(np.float32).values,
+            compression="gzip",
+            compression_opts=4,
+        )
         _h5_write_str(g, "source_csv", dmp_df["source_csv"].astype(str).tolist())
         _h5_write_str(f, "classes", [str(x) for x in class_names])
 
@@ -204,6 +229,16 @@ def load_bundle_dmp_index(bundle_h5: str | Path) -> pd.DataFrame:
                     _decode_bytes(np.asarray(g["dmr_region"])).astype(str)
                     if "dmr_region" in g
                     else np.asarray(["unknown"] * len(np.asarray(g["position"])), dtype=object)
+                ),
+                "feature_type": (
+                    _decode_bytes(np.asarray(g["feature_type"])).astype(str)
+                    if "feature_type" in g
+                    else np.asarray(["unknown"] * len(np.asarray(g["position"])), dtype=object)
+                ),
+                "region_weight": (
+                    np.asarray(g["region_weight"], dtype=np.float32)
+                    if "region_weight" in g
+                    else np.asarray([1.0] * len(np.asarray(g["position"])), dtype=np.float32)
                 ),
                 "source_csv": _decode_bytes(np.asarray(g["source_csv"])).astype(str),
             }
@@ -291,6 +326,25 @@ def build_model_feature_bundle(
     bundle_h5 = out_dir / BUNDLE_H5_NAME
     _write_bundle_h5(bundle_h5, dmp_df, classes)
 
+    bundle_metadata: Dict[str, Any] = dict(extra_metadata or {})
+    bundle_metadata.setdefault(
+        "feature_aggregation",
+        {
+            "weight_column": "effect_size",
+            "region_weight_column": "region_weight",
+            "gene_column": "gene_name",
+            "structural_column": "feature_type",
+            "supported_structural_features": [
+                "promoter",
+                "exon",
+                "intron",
+                "gene_body",
+                "terminator",
+                "unknown",
+            ],
+            "effect_size_transform": "abs(effect_size) normalized",
+        },
+    )
     manifest = ModelFeatureBundleManifest(
         project_json=str(project_json),
         project_name=str(project.project_name),
@@ -307,9 +361,11 @@ def build_model_feature_bundle(
             "weight",
             "gene_name",
             "dmr_region",
+            "feature_type",
+            "region_weight",
             "source_csv",
         ],
-        metadata=extra_metadata or {},
+        metadata=bundle_metadata,
     )
     manifest_path = out_dir / BUNDLE_MANIFEST_NAME
     with open(manifest_path, "w", encoding="utf-8") as f:

@@ -38,6 +38,15 @@ class ObservedHybridAnchors:
 
 
 OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v25_add_per_cancer_histogram_tail_features"
+HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v1"
+HYBRID_FEATURE_FAMILY_SETS = (
+    "dmp",
+    "gene",
+    "structural",
+    "dmp+gene",
+    "dmp+structural",
+    "hybrid-all",
+)
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -101,6 +110,39 @@ def _first_existing_column(df: pd.DataFrame, candidates: Sequence[str]) -> Optio
 def _normalize_feature_key(value: object) -> str:
     text = str(value or "").strip()
     return text if text else "unknown"
+
+
+def _normalize_structural_feature(value: object) -> str:
+    token = _normalize_feature_key(value).lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "promoter_region": "promoter",
+        "genebody": "gene_body",
+        "body": "gene_body",
+        "terminator_region": "terminator",
+    }
+    token = aliases.get(token, token)
+    allowed = {"promoter", "exon", "intron", "gene_body", "terminator"}
+    return token if token in allowed else "unknown"
+
+
+def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool]:
+    token = str(feature_family_set or "dmp").strip().lower()
+    if token == "dmp":
+        return True, False, False
+    if token == "gene":
+        return False, True, False
+    if token == "structural":
+        return False, False, True
+    if token == "dmp+gene":
+        return True, True, False
+    if token == "dmp+structural":
+        return True, False, True
+    if token == "hybrid-all":
+        return True, True, True
+    raise ValueError(
+        f"Unsupported feature_family_set={feature_family_set!r}; "
+        f"allowed={list(HYBRID_FEATURE_FAMILY_SETS)}"
+    )
 
 
 def _build_reference_map(
@@ -549,6 +591,31 @@ def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) ->
     return [name for name in names if name not in REMOVED_OBSERVED_HYBRID_FEATURES]
 
 
+def _gene_structural_feature_names(include_gene: bool, include_structural: bool) -> List[str]:
+    names: List[str] = []
+    if include_gene:
+        names.extend(
+            [
+                "gene_weighted_mean_methylation",
+                "gene_weighted_shift_vs_healthy",
+                "gene_weighted_abs_shift_vs_healthy",
+                "gene_weighted_shift_vs_cancer",
+                "gene_weighted_abs_shift_vs_cancer",
+                "gene_weighted_direction_balance",
+            ]
+        )
+    if include_structural:
+        for feat in ("promoter", "exon", "intron", "gene_body", "terminator", "unknown"):
+            names.extend(
+                [
+                    f"struct_{feat}_obs_fraction",
+                    f"struct_{feat}_weighted_shift_vs_healthy",
+                    f"struct_{feat}_weighted_shift_vs_cancer",
+                ]
+            )
+    return names
+
+
 def observed_hybrid_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) -> List[str]:
     return _fixed_feature_names(cancer_class_labels=cancer_class_labels)
 
@@ -583,11 +650,13 @@ def build_observed_hybrid_feature_table(
     hist_alpha: float = 0.5,
     hist_evidence_clip_cap: float = 5.0,
     hist_tail_agreement_threshold: float = 0.10,
+    feature_family_set: str = "dmp",
 ) -> ObservedFeatureArtifacts:
     del quantiles, dmr_window_bp, max_dmr_features, max_gene_features
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
     del include_dmp_features, include_chromosome_features, include_dmr_features, include_gene_features
 
+    include_dmp_family, include_gene_family, include_structural_family = _family_flags(feature_family_set)
     refs, feature_order, weights, locus_df, per_label_weights = _build_reference_map(dmp_df)
     X_raw = _extract_matrix_for_samples(
         sample_paths,
@@ -652,7 +721,15 @@ def build_observed_hybrid_feature_table(
             [f"cancer_{k+1}" for k in range(len(cancer_labels_raw), len(per_cancer_refs))]
         )
     cancer_labels_raw = cancer_labels_raw[: len(per_cancer_refs)]
-    feature_names = _fixed_feature_names(cancer_class_labels=cancer_labels_raw)
+    feature_names = []
+    if include_dmp_family:
+        feature_names.extend(_fixed_feature_names(cancer_class_labels=cancer_labels_raw))
+    feature_names.extend(
+        _gene_structural_feature_names(
+            include_gene=include_gene_family,
+            include_structural=include_structural_family,
+        )
+    )
     X_feat = np.full((n_samples, len(feature_names)), np.nan, dtype=np.float32)
 
     idx = {name: j for j, name in enumerate(feature_names)}
@@ -856,23 +933,72 @@ def build_observed_hybrid_feature_table(
         else:
             obs_w_frac = obs_frac
 
-        X_feat[i, idx["max_weighted_directional_score"]] = max_weighted_directional_score
-        X_feat[i, idx["weighted_directional_agreement"]] = weighted_directional_agreement
-        X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
-        X_feat[i, idx["weighted_mean_abs_error_to_cancer_centroid"]] = wmae_c
-        X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
-        X_feat[i, idx["weighted_cosine_similarity_to_healthy_centroid"]] = wcos_h
-        X_feat[i, idx["weighted_cosine_similarity_to_cancer_centroid"]] = wcos_c
-        X_feat[i, idx["weighted_centroid_contrast_score"]] = weighted_centroid_contrast_score
-        X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
-        X_feat[i, idx["weighted_fraction_dmps_closer_to_healthy_centroid"]] = weighted_closer_to_healthy
-        X_feat[i, idx["obs_fraction"]] = obs_frac
-        X_feat[i, idx["weighted_obs_fraction"]] = obs_w_frac
-        X_feat[i, idx["n_obs_dmps"]] = float(n_obs)
-        X_feat[i, idx["n_total_dmps"]] = float(n_loci)
-        for feat_name, feat_value in tail_feature_values.items():
-            if feat_name in idx:
-                X_feat[i, idx[feat_name]] = float(feat_value)
+        if include_dmp_family:
+            X_feat[i, idx["max_weighted_directional_score"]] = max_weighted_directional_score
+            X_feat[i, idx["weighted_directional_agreement"]] = weighted_directional_agreement
+            X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
+            X_feat[i, idx["weighted_mean_abs_error_to_cancer_centroid"]] = wmae_c
+            X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
+            X_feat[i, idx["weighted_cosine_similarity_to_healthy_centroid"]] = wcos_h
+            X_feat[i, idx["weighted_cosine_similarity_to_cancer_centroid"]] = wcos_c
+            X_feat[i, idx["weighted_centroid_contrast_score"]] = weighted_centroid_contrast_score
+            X_feat[i, idx["weighted_fraction_dmps_closer_to_cancer_centroid"]] = weighted_closer_to_cancer
+            X_feat[i, idx["weighted_fraction_dmps_closer_to_healthy_centroid"]] = weighted_closer_to_healthy
+            X_feat[i, idx["obs_fraction"]] = obs_frac
+            X_feat[i, idx["weighted_obs_fraction"]] = obs_w_frac
+            X_feat[i, idx["n_obs_dmps"]] = float(n_obs)
+            X_feat[i, idx["n_total_dmps"]] = float(n_loci)
+            for feat_name, feat_value in tail_feature_values.items():
+                if feat_name in idx:
+                    X_feat[i, idx[feat_name]] = float(feat_value)
+
+        if (include_gene_family or include_structural_family) and n_obs > 0:
+            obs_df = locus_df.loc[np.where(obs_mask)[0]].copy()
+            obs_df["_obs_val"] = obs_vals
+            obs_df["_healthy_ref"] = healthy_ref[obs_mask]
+            obs_df["_cancer_ref"] = cancer_ref[obs_mask]
+            obs_df["_w"] = obs_w if obs_w.size == obs_vals.size else 1.0
+            obs_df["feature_type"] = obs_df.get("feature_type", "unknown").apply(_normalize_structural_feature)
+            obs_df["gene_name"] = obs_df.get("gene_name", "unknown").apply(_normalize_feature_key)
+            obs_df["_delta_h"] = obs_df["_obs_val"] - obs_df["_healthy_ref"]
+            obs_df["_delta_c"] = obs_df["_obs_val"] - obs_df["_cancer_ref"]
+            abs_w = np.abs(pd.to_numeric(obs_df["_w"], errors="coerce").fillna(0.0).to_numpy(dtype=float))
+            if include_gene_family:
+                X_feat[i, idx["gene_weighted_mean_methylation"]] = _weighted_mean_with_fallback(
+                    obs_df["_obs_val"].to_numpy(dtype=float), abs_w
+                )
+                X_feat[i, idx["gene_weighted_shift_vs_healthy"]] = _weighted_mean_with_fallback(
+                    obs_df["_delta_h"].to_numpy(dtype=float), abs_w
+                )
+                X_feat[i, idx["gene_weighted_abs_shift_vs_healthy"]] = _weighted_mean_with_fallback(
+                    np.abs(obs_df["_delta_h"].to_numpy(dtype=float)), abs_w
+                )
+                X_feat[i, idx["gene_weighted_shift_vs_cancer"]] = _weighted_mean_with_fallback(
+                    obs_df["_delta_c"].to_numpy(dtype=float), abs_w
+                )
+                X_feat[i, idx["gene_weighted_abs_shift_vs_cancer"]] = _weighted_mean_with_fallback(
+                    np.abs(obs_df["_delta_c"].to_numpy(dtype=float)), abs_w
+                )
+                signs = np.sign(obs_df["_delta_h"].to_numpy(dtype=float))
+                X_feat[i, idx["gene_weighted_direction_balance"]] = _weighted_mean_with_fallback(
+                    signs, abs_w
+                )
+            if include_structural_family:
+                for feat in ("promoter", "exon", "intron", "gene_body", "terminator", "unknown"):
+                    sdf = obs_df[obs_df["feature_type"] == feat]
+                    if sdf.empty:
+                        X_feat[i, idx[f"struct_{feat}_obs_fraction"]] = 0.0
+                        X_feat[i, idx[f"struct_{feat}_weighted_shift_vs_healthy"]] = np.nan
+                        X_feat[i, idx[f"struct_{feat}_weighted_shift_vs_cancer"]] = np.nan
+                        continue
+                    sw = np.abs(pd.to_numeric(sdf["_w"], errors="coerce").fillna(0.0).to_numpy(dtype=float))
+                    X_feat[i, idx[f"struct_{feat}_obs_fraction"]] = float(len(sdf) / max(1, len(obs_df)))
+                    X_feat[i, idx[f"struct_{feat}_weighted_shift_vs_healthy"]] = _weighted_mean_with_fallback(
+                        sdf["_delta_h"].to_numpy(dtype=float), sw
+                    )
+                    X_feat[i, idx[f"struct_{feat}_weighted_shift_vs_cancer"]] = _weighted_mean_with_fallback(
+                        sdf["_delta_c"].to_numpy(dtype=float), sw
+                    )
 
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()
     schema_fingerprint = observed_hybrid_schema_fingerprint(cancer_class_labels=cancer_labels_raw)
@@ -880,14 +1006,16 @@ def build_observed_hybrid_feature_table(
         "n_samples": int(n_samples),
         "n_loci_reference": int(n_loci),
         "n_features": int(len(feature_names)),
-        "schema_version": OBSERVED_HYBRID_SCHEMA_VERSION,
+        "schema_version": HYBRID_FEATURE_SCHEMA_VERSION if (include_gene_family or include_structural_family) else OBSERVED_HYBRID_SCHEMA_VERSION,
         "quantiles": [0.10, 0.50, 0.90],
         "feature_families": {
-            "dmp": True,
+            "dmp": bool(include_dmp_family),
             "chromosome": False,
             "dmr": False,
-            "gene": False,
+            "gene": bool(include_gene_family),
+            "structural": bool(include_structural_family),
         },
+        "feature_family_set": str(feature_family_set),
         "healthy_class_label": str(healthy_class_label or "unknown"),
         "cancer_class_labels": [str(x) for x in cancer_labels_raw],
         "anchor_strategy": str(anchor_strategy or "unspecified"),

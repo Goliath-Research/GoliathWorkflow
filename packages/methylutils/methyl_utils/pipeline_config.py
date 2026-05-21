@@ -307,7 +307,10 @@ class ProjectConfig(BaseModel):
         "multiclass_learned_standardize, multiclass_learned_random_state. "
         "Under 'predictor', optional multiclass_model_path forces a specific PKL for multiclass runs; "
         "optional 'panel' adds hierarchical OvR readout during prediction. "
-        "Under 'classifier', optional 'panel' (same shape) applies during classification when using samples_list / centroid validation (OvR pairwise max-contrast only).",
+        "Under 'classifier', optional 'panel' (same shape) applies during classification when using samples_list / centroid validation (OvR pairwise max-contrast only). "
+        "Under 'validation', model-backend settings support hybrid observed features via feature_mode='observed_hybrid' "
+        "and feature_family_set in {dmp,gene,structural,dmp+gene,dmp+structural,hybrid-all}; "
+        "bundle manifests persist schema and aggregation metadata for reproducible train/inference contracts.",
     )
     _sample_qc_cache: Dict[str, List[Tuple[str, List[str], Literal["control", "disease"]]]] = PrivateAttr(
         default_factory=dict
