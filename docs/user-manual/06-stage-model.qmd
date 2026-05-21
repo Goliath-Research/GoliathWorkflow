@@ -29,7 +29,7 @@ methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa
 - `tabular_sklearn`: in-process bundle -> train -> predict
 - `generative_hybrid`: in-process bundle -> train -> predict
 
-Configured by `step_config.validation.model_backend` or CLI override.
+Configured by `step_config.validation.backend_profiles` (plus optional CLI backend override).
 
 ## Process model
 
@@ -64,17 +64,20 @@ Configured by `step_config.validation.model_backend` or CLI override.
 
 ## Required config keys
 
-- `model_backend`
-- `feature_mode`
-- `ecdf_second_stage_enabled`
+- `backend_profiles`
+- backend-specific `params` under each profile (for example `feature_mode`, `ecdf_second_stage_enabled`, `tabular_methods`, `generative_latent_dim`)
 - tabular controls:
-  - `tabular_methods` or `tabular_model_type`
+  - `tabular_methods`
   - `tabular_method_selection_metric`
 - generative controls:
   - `generative_latent_dim`, `generative_epochs`, and related keys
 - optional gate:
   - `require_biological_review_for_model`
   - `biological_review_confirmed`
+
+Legacy flat backend keys are rejected. Migrate older configs with:
+
+`methyl-validation-migrate-backend-config /path/to/project.json --in-place`
 
 ## Expected outputs
 

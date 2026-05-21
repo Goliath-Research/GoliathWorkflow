@@ -399,9 +399,13 @@ def test_pipeline_runner_generative_backend_dispatch(tmp_path: Path, monkeypatch
             "n_iterations": 2,
             "base_project": str(tmp_path / "project.json"),
             "output_base": str(tmp_path),
-            "model_backend": "generative_hybrid",
+            "backend_profiles": {
+                "ecdf": {"enabled": False, "params": {}},
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": True, "params": {}},
+            },
         }
-    )
+    ).with_backend_selection("generative_hybrid")
     ok, errors, timings = pipeline_runner.run_pipeline_for_model(
         project_json=tmp_path / "project.json",
         predictor_output_dir=tmp_path / "predictors",
@@ -413,7 +417,7 @@ def test_pipeline_runner_generative_backend_dispatch(tmp_path: Path, monkeypatch
 
 
 def test_generative_config_validation_strict_fields():
-    with pytest.raises(ValueError, match="model_backend must be one of"):
+    with pytest.raises(ValueError, match="Legacy backend config keys"):
         MonteCarloConfig.model_validate(
             {
                 "samples_base_path": "/tmp",
@@ -434,8 +438,14 @@ def test_generative_config_validation_strict_fields():
                 "n_iterations": 1,
                 "base_project": "/tmp/project.json",
                 "output_base": "/tmp",
-                "model_backend": "generative_hybrid",
-                "generative_density_type": "full_covariance",
+                "backend_profiles": {
+                    "ecdf": {"enabled": False, "params": {}},
+                    "tabular_sklearn": {"enabled": False, "params": {}},
+                    "generative_hybrid": {
+                        "enabled": True,
+                        "params": {"generative_density_type": "full_covariance"},
+                    },
+                },
             }
         )
 
@@ -448,9 +458,17 @@ def test_generative_config_validation_strict_fields():
                 "n_iterations": 1,
                 "base_project": "/tmp/project.json",
                 "output_base": "/tmp",
-                "model_backend": "tabular_sklearn",
-                "covariate_numeric_columns": ["age"],
-                "covariate_ordinal_columns": ["age"],
+                "backend_profiles": {
+                    "ecdf": {"enabled": False, "params": {}},
+                    "tabular_sklearn": {
+                        "enabled": True,
+                        "params": {
+                            "covariate_numeric_columns": ["age"],
+                            "covariate_ordinal_columns": ["age"],
+                        },
+                    },
+                    "generative_hybrid": {"enabled": False, "params": {}},
+                },
             }
         )
 
@@ -463,9 +481,17 @@ def test_generative_config_validation_strict_fields():
                 "n_iterations": 1,
                 "base_project": "/tmp/project.json",
                 "output_base": "/tmp",
-                "model_backend": "tabular_sklearn",
-                "covariate_ordinal_columns": ["severity"],
-                "covariate_ordinal_maps": {"risk_band": {"low": 1, "high": 2}},
+                "backend_profiles": {
+                    "ecdf": {"enabled": False, "params": {}},
+                    "tabular_sklearn": {
+                        "enabled": True,
+                        "params": {
+                            "covariate_ordinal_columns": ["severity"],
+                            "covariate_ordinal_maps": {"risk_band": {"low": 1, "high": 2}},
+                        },
+                    },
+                    "generative_hybrid": {"enabled": False, "params": {}},
+                },
             }
         )
 

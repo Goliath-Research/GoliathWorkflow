@@ -11,7 +11,7 @@ from methyl_validation.pipeline_runner import (
 
 
 def _mc_config(tmp_path: Path, backend: str) -> MonteCarloConfig:
-    return MonteCarloConfig.model_validate(
+    cfg = MonteCarloConfig.model_validate(
         {
             "samples_base_path": "/tmp/samples",
             "cohorts": [{"label": "healthy", "csv": "healthy.csv"}, {"label": "disease", "csv": "disease.csv"}],
@@ -19,9 +19,14 @@ def _mc_config(tmp_path: Path, backend: str) -> MonteCarloConfig:
             "n_iterations": 2,
             "base_project": str(tmp_path / "project.json"),
             "output_base": str(tmp_path),
-            "model_backend": backend,
+            "backend_profiles": {
+                "ecdf": {"enabled": True, "params": {}},
+                "tabular_sklearn": {"enabled": True, "params": {}},
+                "generative_hybrid": {"enabled": True, "params": {}},
+            },
         }
     )
+    return cfg.with_backend_selection(backend)
 
 
 def test_post_model_runner_binary_ecdf(monkeypatch, tmp_path: Path):

@@ -16,6 +16,23 @@ from .cohort_inference import infer_monte_carlo_cohorts_from_project
 from .config import MonteCarloConfig
 
 
+def _update_backend_params(config: MonteCarloConfig, backend: str, updates: dict[str, Any]) -> MonteCarloConfig:
+    current = config.get_backend_params(backend)
+    params_cls = type(current)
+    merged = {**current.model_dump(mode="python"), **updates}
+    params = params_cls.model_validate(merged)
+    profiles = config.backend_profiles.model_copy(deep=True)
+    if backend == "ecdf":
+        profiles.ecdf = profiles.ecdf.model_copy(update={"params": params})
+    elif backend == "tabular_sklearn":
+        profiles.tabular_sklearn = profiles.tabular_sklearn.model_copy(update={"params": params})
+    elif backend == "generative_hybrid":
+        profiles.generative_hybrid = profiles.generative_hybrid.model_copy(update={"params": params})
+    else:
+        raise ValueError(f"Unsupported backend {backend!r}")
+    return config.model_copy(update={"backend_profiles": profiles})
+
+
 def load_monte_carlo_config(
     args: Namespace,
     parser: Union[ArgumentParser, None] = None,
@@ -120,19 +137,20 @@ def apply_monte_carlo_config_overrides(
             sys.exit(1)
     selected_backend = getattr(args, "post_model_backend", None) or getattr(args, "model_backend", None)
     if selected_backend:
-        config = config.model_copy(update={"model_backend": str(selected_backend)})
+        config = config.with_backend_selection(str(selected_backend))
 
     if getattr(args, "covariates_path", None) is not None:
-        config = config.model_copy(update={"covariates_path": str(args.covariates_path)})
+        for backend in ("ecdf", "tabular_sklearn", "generative_hybrid"):
+            config = _update_backend_params(config, backend, {"covariates_path": str(args.covariates_path)})
     if getattr(args, "tabular_max_dmps", None) is not None:
-        config = config.model_copy(update={"tabular_max_dmps": int(args.tabular_max_dmps)})
+        for backend in ("ecdf", "tabular_sklearn", "generative_hybrid"):
+            config = _update_backend_params(config, backend, {"tabular_max_dmps": int(args.tabular_max_dmps)})
     if getattr(args, "tabular_model_type", None):
         mt = str(args.tabular_model_type)
-        config = config.model_copy(
-            update={
-                "tabular_model_type": mt,
-                "tabular_methods": [{"method": mt, "params": {}}],
-            }
+        config = _update_backend_params(
+            config,
+            "tabular_sklearn",
+            {"tabular_model_type": mt, "tabular_methods": [{"method": mt, "params": {}}]},
         )
     if getattr(args, "tabular_methods_json", None):
         try:
@@ -143,33 +161,55 @@ def apply_monte_carlo_config_overrides(
         if not isinstance(parsed_methods, list) or not parsed_methods:
             print("Error: --tabular-methods-json must be a non-empty JSON array.", file=sys.stderr)
             sys.exit(1)
-        config = config.model_copy(update={"tabular_methods": parsed_methods})
+        config = _update_backend_params(config, "tabular_sklearn", {"tabular_methods": parsed_methods})
     if getattr(args, "tabular_save_train_dataset", None):
-        config = config.model_copy(update={"tabular_save_train_dataset": True})
+        config = _update_backend_params(config, "tabular_sklearn", {"tabular_save_train_dataset": True})
     if getattr(args, "no_tabular_reuse_train_dataset", None):
-        config = config.model_copy(update={"tabular_reuse_train_dataset": False})
+        config = _update_backend_params(config, "tabular_sklearn", {"tabular_reuse_train_dataset": False})
     if getattr(args, "tabular_train_dataset_path", None) is not None:
-        config = config.model_copy(update={"tabular_train_dataset_path": str(args.tabular_train_dataset_path)})
+        config = _update_backend_params(
+            config,
+            "tabular_sklearn",
+            {"tabular_train_dataset_path": str(args.tabular_train_dataset_path)},
+        )
     if getattr(args, "no_tabular_save_test_dataset", None):
-        config = config.model_copy(update={"tabular_save_test_dataset": False})
+        config = _update_backend_params(config, "tabular_sklearn", {"tabular_save_test_dataset": False})
     if getattr(args, "tabular_test_dataset_path", None) is not None:
-        config = config.model_copy(update={"tabular_test_dataset_path": str(args.tabular_test_dataset_path)})
+        config = _update_backend_params(
+            config,
+            "tabular_sklearn",
+            {"tabular_test_dataset_path": str(args.tabular_test_dataset_path)},
+        )
     if getattr(args, "generative_latent_dim", None) is not None:
-        config = config.model_copy(update={"generative_latent_dim": int(args.generative_latent_dim)})
+        config = _update_backend_params(
+            config, "generative_hybrid", {"generative_latent_dim": int(args.generative_latent_dim)}
+        )
     if getattr(args, "generative_kl_weight", None) is not None:
-        config = config.model_copy(update={"generative_kl_weight": float(args.generative_kl_weight)})
+        config = _update_backend_params(
+            config, "generative_hybrid", {"generative_kl_weight": float(args.generative_kl_weight)}
+        )
     if getattr(args, "generative_density_type", None):
-        config = config.model_copy(update={"generative_density_type": str(args.generative_density_type)})
+        config = _update_backend_params(
+            config, "generative_hybrid", {"generative_density_type": str(args.generative_density_type)}
+        )
     if getattr(args, "generative_epochs", None) is not None:
-        config = config.model_copy(update={"generative_epochs": int(args.generative_epochs)})
+        config = _update_backend_params(
+            config, "generative_hybrid", {"generative_epochs": int(args.generative_epochs)}
+        )
     if getattr(args, "generative_batch_size", None) is not None:
-        config = config.model_copy(update={"generative_batch_size": int(args.generative_batch_size)})
+        config = _update_backend_params(
+            config, "generative_hybrid", {"generative_batch_size": int(args.generative_batch_size)}
+        )
     if getattr(args, "generative_seed", None) is not None:
-        config = config.model_copy(update={"generative_seed": int(args.generative_seed)})
+        config = _update_backend_params(
+            config, "generative_hybrid", {"generative_seed": int(args.generative_seed)}
+        )
     if getattr(args, "generative_calibrate", None):
-        config = config.model_copy(update={"generative_calibrate": True})
+        config = _update_backend_params(config, "generative_hybrid", {"generative_calibrate": True})
     if getattr(args, "no_generative_covariates_strict", None):
-        config = config.model_copy(update={"generative_covariates_strict": False})
+        config = _update_backend_params(
+            config, "generative_hybrid", {"generative_covariates_strict": False}
+        )
 
     return config
 

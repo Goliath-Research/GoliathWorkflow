@@ -16,12 +16,20 @@ def _base_config(tmp_path: Path, enabled: bool) -> MonteCarloConfig:
             "n_iterations": 1,
             "base_project": str(tmp_path / "project.json"),
             "output_base": str(tmp_path),
-            "model_backend": "ecdf",
-            "ecdf_second_stage_enabled": enabled,
-            "observed_feature_include_dmr": True,
-            "observed_feature_include_gene": True,
-            "observed_feature_max_dmrs": 7,
-            "observed_feature_max_genes": 9,
+            "backend_profiles": {
+                "ecdf": {
+                    "enabled": True,
+                    "params": {
+                        "ecdf_second_stage_enabled": enabled,
+                        "observed_feature_include_dmr": True,
+                        "observed_feature_include_gene": True,
+                        "observed_feature_max_dmrs": 7,
+                        "observed_feature_max_genes": 9,
+                    },
+                },
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
         }
     )
 
@@ -59,6 +67,8 @@ def test_build_model_backend_steps_ecdf_includes_second_stage(tmp_path: Path, mo
     assert payload["training_metrics_saved"] is True
     assert called["n"] == 1
     assert tm_called["n"] == 1
+    assert called["kwargs"] is not None
+    assert tm_called["args"] is not None
     assert called["kwargs"]["max_dmr_features"] == 7
     assert called["kwargs"]["max_gene_features"] == 9
 

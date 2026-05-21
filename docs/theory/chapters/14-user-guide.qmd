@@ -301,12 +301,14 @@ If `step_config.validation.require_biological_review_for_model=true`, final all-
 
 ### Choosing model backends
 
-By default, backend selection starts from `model_backend: "ecdf"`. Advanced projects can choose different backends in `step_config.validation`, run them in `--model-mc`, and then select the best for final all-data training:
+Backend selection is driven by `step_config.validation.backend_profiles`. Enable one backend for single-backend runs, or multiple backends when using `--model-mc-all`.
 
-- `model_backend: "tabular_sklearn"`
-- `model_backend: "generative_hybrid"`
+- `backend_profiles.ecdf.enabled`
+- `backend_profiles.tabular_sklearn.enabled`
+- `backend_profiles.generative_hybrid.enabled`
 
 `--post-model-validation` supports all model backends (`ecdf`, `tabular_sklearn`, `generative_hybrid`) and is an optional descriptive stage after final model build.
+Legacy flat backend keys are rejected; migrate old project files with `methyl-validation-migrate-backend-config <project.json> --in-place`.
 
 ### Recommended backend-selection defaults (PCa)
 
@@ -339,14 +341,22 @@ Example:
 
 ```json
 "validation": {
-  "model_backend": "generative_hybrid",
-  "model_weight_column": "effect_size",
-  "tabular_max_dmps": 5000,
-  "generative_latent_dim": 16,
-  "generative_density_type": "diag_gaussian",
-  "generative_epochs": 50,
-  "generative_batch_size": 64,
-  "generative_seed": 13
+  "backend_profiles": {
+    "ecdf": {"enabled": false, "params": {}},
+    "tabular_sklearn": {"enabled": false, "params": {}},
+    "generative_hybrid": {
+      "enabled": true,
+      "params": {
+        "model_weight_column": "effect_size",
+        "tabular_max_dmps": 5000,
+        "generative_latent_dim": 16,
+        "generative_density_type": "diag_gaussian",
+        "generative_epochs": 50,
+        "generative_batch_size": 64,
+        "generative_seed": 13
+      }
+    }
+  }
 }
 ```
 

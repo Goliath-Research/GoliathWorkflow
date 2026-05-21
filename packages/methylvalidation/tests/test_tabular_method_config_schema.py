@@ -13,13 +13,17 @@ def _base_payload() -> dict:
         "n_iterations": 1,
         "base_project": "/tmp/project.json",
         "output_base": "/tmp",
-        "model_backend": "tabular_sklearn",
+        "backend_profiles": {
+            "ecdf": {"enabled": False, "params": {}},
+            "tabular_sklearn": {"enabled": True, "params": {}},
+            "generative_hybrid": {"enabled": False, "params": {}},
+        },
     }
 
 
 def test_tabular_methods_discriminated_union_parses():
     payload = _base_payload()
-    payload["tabular_methods"] = [
+    payload["backend_profiles"]["tabular_sklearn"]["params"]["tabular_methods"] = [
         {"method": "random_forest", "params": {"n_estimators": 123}},
         {"method": "xgboost", "params": {"n_estimators": 333, "max_depth": 4}},
         {"method": "logistic_regression", "params": {"max_iter": 222, "c": 0.5}},
@@ -34,27 +38,16 @@ def test_tabular_methods_discriminated_union_parses():
     assert cfg.tabular_methods[2].params.max_iter == 222
 
 
-def test_tabular_methods_synthesized_from_legacy_model_type():
+def test_rejects_legacy_tabular_model_type():
     payload = _base_payload()
     payload["tabular_model_type"] = "hist_gradient_boosting"
-    cfg = MonteCarloConfig.model_validate(payload)
-    assert cfg.tabular_methods is not None
-    assert len(cfg.tabular_methods) == 1
-    assert cfg.tabular_methods[0].method == "hist_gradient_boosting"
-
-
-def test_tabular_methods_synthesized_from_legacy_xgboost_model_type():
-    payload = _base_payload()
-    payload["tabular_model_type"] = "xgboost"
-    cfg = MonteCarloConfig.model_validate(payload)
-    assert cfg.tabular_methods is not None
-    assert len(cfg.tabular_methods) == 1
-    assert cfg.tabular_methods[0].method == "xgboost"
+    with pytest.raises(ValueError, match="Legacy backend config keys"):
+        MonteCarloConfig.model_validate(payload)
 
 
 def test_tabular_method_selection_metric_is_validated():
     payload = _base_payload()
-    payload["tabular_method_selection_metric"] = "roc_auc"
+    payload["backend_profiles"]["tabular_sklearn"]["params"]["tabular_method_selection_metric"] = "roc_auc"
     with pytest.raises(ValueError, match="tabular_method_selection_metric"):
         MonteCarloConfig.model_validate(payload)
 

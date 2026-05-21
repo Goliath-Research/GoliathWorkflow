@@ -3,9 +3,9 @@ Runner config schema for Monte Carlo validation.
 """
 
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, ClassVar, Dict, FrozenSet, List, Literal, Optional, Union, cast
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class CohortCsv(BaseModel):
@@ -90,8 +90,210 @@ TabularMethodConfig = Annotated[
 ]
 
 
+class BackendSharedParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    model_bundle_dir: Optional[str] = Field(default=None)
+    model_weight_column: str = Field(default="effect_size")
+    tabular_max_dmps: int = Field(default=5000, ge=10)
+
+    feature_mode: str = Field(default="raw_dmp")
+    feature_family_set: str = Field(default="dmp")
+    observed_feature_quantiles: List[float] = Field(default_factory=lambda: [0.10, 0.25, 0.50, 0.75, 0.90])
+    observed_feature_min_coverage: int = Field(default=1, ge=1)
+    observed_feature_min_obs_fraction: float = Field(default=0.0, ge=0.0, le=1.0)
+    observed_feature_include_dmp: bool = Field(default=True)
+    observed_feature_include_chromosome: bool = Field(default=True)
+    observed_feature_include_dmr: bool = Field(default=True)
+    observed_feature_include_gene: bool = Field(default=True)
+    observed_feature_dmr_window_bp: int = Field(default=100000, ge=1)
+    observed_feature_max_dmrs: int = Field(default=32, ge=0)
+    observed_feature_max_genes: int = Field(default=32, ge=0)
+    observed_hist_eps: float = Field(default=1e-6, gt=0.0)
+    observed_hist_alpha: float = Field(default=0.5, ge=0.0)
+    observed_hist_evidence_clip_cap: float = Field(default=5.0, ge=0.0)
+    observed_hist_tail_agreement_threshold: float = Field(default=0.10, ge=0.0, le=1.0)
+
+    covariates_path: Optional[str] = Field(default=None)
+    covariate_id_column: str = Field(default="sample_id")
+    covariate_numeric_columns: Optional[List[str]] = Field(default=None)
+    covariate_ordinal_columns: Optional[List[str]] = Field(default=None)
+    covariate_ordinal_maps: Optional[Dict[str, Dict[str, float]]] = Field(default=None)
+    covariate_ordinal_unknown_value: float = Field(default=0.0)
+    covariate_categorical_columns: Optional[List[str]] = Field(default=None)
+    covariate_missing_numeric_strategy: str = Field(default="mean")
+    covariate_standardize_numeric: bool = Field(default=True)
+    covariates_strict_join: bool = Field(default=False)
+
+    @field_validator("feature_mode")
+    @classmethod
+    def _validate_feature_mode(cls, value: str) -> str:
+        allowed = {"raw_dmp", "observed_hybrid"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"feature_mode must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("feature_family_set")
+    @classmethod
+    def _validate_feature_family_set(cls, value: str) -> str:
+        allowed = {"dmp", "gene", "structural", "dmp+gene", "dmp+structural", "hybrid-all"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("observed_feature_quantiles")
+    @classmethod
+    def _validate_observed_feature_quantiles(cls, value: List[float]) -> List[float]:
+        out: List[float] = []
+        for q in value:
+            fq = float(q)
+            if 0.0 <= fq <= 1.0:
+                out.append(fq)
+        return out or [0.5]
+
+    @field_validator("covariate_missing_numeric_strategy")
+    @classmethod
+    def _validate_covariate_missing_numeric_strategy(cls, value: str) -> str:
+        allowed = {"mean", "median", "zero"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"covariate_missing_numeric_strategy must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("covariate_ordinal_maps")
+    @classmethod
+    def _normalize_covariate_ordinal_maps(
+        cls, value: Optional[Dict[str, Dict[str, float]]]
+    ) -> Optional[Dict[str, Dict[str, float]]]:
+        if value is None:
+            return None
+        out: Dict[str, Dict[str, float]] = {}
+        for col, mapping in value.items():
+            c = str(col)
+            if not isinstance(mapping, dict) or not mapping:
+                raise ValueError(f"covariate_ordinal_maps[{c!r}] must be a non-empty object")
+            out[c] = {str(k).strip().lower(): float(v) for k, v in mapping.items()}
+        return out
+
+    @model_validator(mode="after")
+    def _validate_covariate_roles(self) -> "BackendSharedParams":
+        numeric = set(self.covariate_numeric_columns or [])
+        ordinal = set(self.covariate_ordinal_columns or [])
+        categorical = set(self.covariate_categorical_columns or [])
+        overlap = (numeric & ordinal) | (numeric & categorical) | (ordinal & categorical)
+        if overlap:
+            raise ValueError(f"covariate role columns overlap across types: {sorted(overlap)}")
+        if self.covariate_ordinal_maps:
+            missing = sorted(set(self.covariate_ordinal_maps.keys()) - ordinal)
+            if missing:
+                raise ValueError(
+                    "covariate_ordinal_maps has columns not listed in covariate_ordinal_columns: "
+                    f"{missing}"
+                )
+        return self
+
+
+class EcdfBackendParams(BackendSharedParams):
+    model_config = ConfigDict(extra="forbid")
+    ecdf_second_stage_enabled: bool = Field(default=False)
+
+
+class TabularBackendParams(BackendSharedParams):
+    model_config = ConfigDict(extra="forbid")
+    tabular_model_type: str = Field(default="random_forest")
+    tabular_methods: List[TabularMethodConfig] = Field(
+        default_factory=lambda: cast(
+            List[TabularMethodConfig],
+            [RandomForestMethodConfig(method="random_forest")],
+        )
+    )
+    tabular_method_selection_metric: str = Field(default="balanced_accuracy")
+    tabular_method_selection_stat: str = Field(default="mean")
+    tabular_save_train_dataset: bool = Field(default=True)
+    tabular_reuse_train_dataset: bool = Field(default=True)
+    tabular_train_dataset_path: Optional[str] = Field(default=None)
+    tabular_save_test_dataset: bool = Field(default=True)
+    tabular_test_dataset_path: Optional[str] = Field(default=None)
+
+    @field_validator("tabular_methods")
+    @classmethod
+    def _validate_non_empty_methods(cls, value: List[TabularMethodConfig]) -> List[TabularMethodConfig]:
+        if not value:
+            raise ValueError("tabular_methods must contain at least one entry")
+        return value
+
+    @field_validator("tabular_method_selection_metric")
+    @classmethod
+    def _validate_tabular_method_selection_metric(cls, value: str) -> str:
+        allowed = {"balanced_accuracy", "accuracy", "macro_f1", "weighted_f1"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"tabular_method_selection_metric must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("tabular_method_selection_stat")
+    @classmethod
+    def _validate_tabular_method_selection_stat(cls, value: str) -> str:
+        allowed = {"mean", "median"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"tabular_method_selection_stat must be one of {sorted(allowed)}")
+        return normalized
+
+
+class GenerativeBackendParams(BackendSharedParams):
+    model_config = ConfigDict(extra="forbid")
+    generative_latent_dim: int = Field(default=16, ge=2)
+    generative_kl_weight: float = Field(default=0.1, ge=0.0)
+    generative_density_type: str = Field(default="diag_gaussian")
+    generative_epochs: int = Field(default=50, ge=1)
+    generative_batch_size: int = Field(default=64, ge=1)
+    generative_seed: int = Field(default=13)
+    generative_calibrate: bool = Field(default=False)
+    generative_covariates_strict: bool = Field(default=True)
+
+    @field_validator("generative_density_type")
+    @classmethod
+    def _validate_generative_density_type(cls, value: str) -> str:
+        allowed = {"diag_gaussian"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"generative_density_type must be one of {sorted(allowed)}")
+        return normalized
+
+
+class EcdfBackendProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = Field(default=True)
+    params: EcdfBackendParams = Field(default_factory=EcdfBackendParams)
+
+
+class TabularBackendProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = Field(default=False)
+    params: TabularBackendParams = Field(default_factory=TabularBackendParams)
+
+
+class GenerativeBackendProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = Field(default=False)
+    params: GenerativeBackendParams = Field(default_factory=GenerativeBackendParams)
+
+
+class BackendProfilesConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ecdf: EcdfBackendProfile = Field(default_factory=EcdfBackendProfile)
+    tabular_sklearn: TabularBackendProfile = Field(default_factory=TabularBackendProfile)
+    generative_hybrid: GenerativeBackendProfile = Field(default_factory=GenerativeBackendProfile)
+
+
 class MonteCarloConfig(BaseModel):
     """Configuration for the Monte Carlo validation runner (binary K=2 or multiclass K>=2)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     samples_base_path: str = Field(
         ...,
@@ -300,13 +502,17 @@ class MonteCarloConfig(BaseModel):
             "(not only a warning)."
         ),
     )
+    backend_profiles: BackendProfilesConfig = Field(
+        default_factory=BackendProfilesConfig,
+        description=(
+            "Typed backend profile registry. Runtime backend config is resolved exclusively from this field."
+        ),
+    )
     model_backend: str = Field(
         default="ecdf",
         description=(
-            "Backend for --model. "
-            "'ecdf' runs methyl-classifier -> methyl-predictor (default). "
-            "'tabular_sklearn' builds a ModelFeatureBundle and trains/evaluates a tabular sklearn model. "
-            "'generative_hybrid' trains an encoder + class-conditional latent density model."
+            "Runtime backend selector used by CLI mode execution. "
+            "Project JSON must not define this key directly; use backend_profiles + CLI override semantics."
         ),
     )
     model_bundle_dir: Optional[str] = Field(
@@ -620,15 +826,72 @@ class MonteCarloConfig(BaseModel):
         description="Validation/Monte Carlo settings when embedded in a project as step_config.validation.",
     )
 
+    _LEGACY_BACKEND_KEYS: ClassVar[FrozenSet[str]] = frozenset(
+        {
+            "model_backend",
+            "model_bundle_dir",
+            "model_weight_column",
+            "tabular_model_type",
+            "tabular_methods",
+            "tabular_method_selection_metric",
+            "tabular_method_selection_stat",
+            "tabular_max_dmps",
+            "tabular_save_train_dataset",
+            "tabular_reuse_train_dataset",
+            "tabular_train_dataset_path",
+            "tabular_save_test_dataset",
+            "tabular_test_dataset_path",
+            "feature_mode",
+            "feature_family_set",
+            "observed_feature_quantiles",
+            "observed_feature_min_coverage",
+            "observed_feature_min_obs_fraction",
+            "observed_feature_include_dmp",
+            "observed_feature_include_chromosome",
+            "observed_feature_include_dmr",
+            "observed_feature_include_gene",
+            "observed_feature_dmr_window_bp",
+            "observed_feature_max_dmrs",
+            "observed_feature_max_genes",
+            "observed_hist_eps",
+            "observed_hist_alpha",
+            "observed_hist_evidence_clip_cap",
+            "observed_hist_tail_agreement_threshold",
+            "ecdf_second_stage_enabled",
+            "covariates_path",
+            "covariate_id_column",
+            "covariate_numeric_columns",
+            "covariate_ordinal_columns",
+            "covariate_ordinal_maps",
+            "covariate_ordinal_unknown_value",
+            "covariate_categorical_columns",
+            "covariate_missing_numeric_strategy",
+            "covariate_standardize_numeric",
+            "covariates_strict_join",
+            "generative_latent_dim",
+            "generative_kl_weight",
+            "generative_density_type",
+            "generative_epochs",
+            "generative_batch_size",
+            "generative_seed",
+            "generative_calibrate",
+            "generative_covariates_strict",
+        }
+    )
+
     @model_validator(mode="before")
     @classmethod
     def _synthesize_cohorts_from_legacy(cls, data: object) -> object:
         if not isinstance(data, dict):
             return data
         data = dict(data)
-        if not data.get("tabular_methods"):
-            mt = str(data.get("tabular_model_type") or "random_forest").strip().lower()
-            data["tabular_methods"] = [{"method": mt, "params": {}}]
+        legacy_backend_keys = sorted(k for k in cls._LEGACY_BACKEND_KEYS if k in data)
+        if legacy_backend_keys:
+            raise ValueError(
+                "Legacy backend config keys are no longer supported. "
+                "Use step_config.validation.backend_profiles instead. "
+                f"Found: {legacy_backend_keys}"
+            )
         cohorts = data.get("cohorts")
         if isinstance(cohorts, list) and len(cohorts) >= 2:
             return data
@@ -653,9 +916,102 @@ class MonteCarloConfig(BaseModel):
 
     @model_validator(mode="after")
     def _require_tabular_methods(self) -> "MonteCarloConfig":
-        if self.model_backend == "tabular_sklearn" and not self.tabular_methods:
-            raise ValueError("tabular_methods must contain at least one entry")
+        if not self.get_enabled_backends():
+            raise ValueError("At least one backend profile must have enabled=true.")
+        if self.model_backend not in {"ecdf", "tabular_sklearn", "generative_hybrid"}:
+            self.model_backend = self.get_enabled_backends()[0]
+        if self.model_backend not in self.get_enabled_backends():
+            self.model_backend = self.get_enabled_backends()[0]
+        if self.model_backend == "tabular_sklearn" and not self.backend_profiles.tabular_sklearn.params.tabular_methods:
+            raise ValueError("backend_profiles.tabular_sklearn.params.tabular_methods must contain at least one entry")
+        self._sync_runtime_backend_fields()
         return self
+
+    def get_enabled_backends(self) -> List[str]:
+        enabled: List[str] = []
+        if self.backend_profiles.ecdf.enabled:
+            enabled.append("ecdf")
+        if self.backend_profiles.tabular_sklearn.enabled:
+            enabled.append("tabular_sklearn")
+        if self.backend_profiles.generative_hybrid.enabled:
+            enabled.append("generative_hybrid")
+        return enabled
+
+    def get_backend_params(
+        self, backend_name: str
+    ) -> Union[EcdfBackendParams, TabularBackendParams, GenerativeBackendParams]:
+        backend = str(backend_name).strip().lower()
+        if backend == "ecdf":
+            return self.backend_profiles.ecdf.params
+        if backend == "tabular_sklearn":
+            return self.backend_profiles.tabular_sklearn.params
+        if backend == "generative_hybrid":
+            return self.backend_profiles.generative_hybrid.params
+        raise ValueError(f"Unknown backend: {backend_name}")
+
+    def with_backend_selection(self, backend_name: str) -> "MonteCarloConfig":
+        backend = str(backend_name).strip().lower()
+        if backend not in {"ecdf", "tabular_sklearn", "generative_hybrid"}:
+            raise ValueError(f"Unknown backend: {backend_name}")
+        return self.model_copy(update={"model_backend": backend})
+
+    def _sync_runtime_backend_fields(self) -> None:
+        params = self.get_backend_params(self.model_backend)
+        shared_fields = [
+            "model_bundle_dir",
+            "model_weight_column",
+            "tabular_max_dmps",
+            "feature_mode",
+            "feature_family_set",
+            "observed_feature_quantiles",
+            "observed_feature_min_coverage",
+            "observed_feature_min_obs_fraction",
+            "observed_feature_include_dmp",
+            "observed_feature_include_chromosome",
+            "observed_feature_include_dmr",
+            "observed_feature_include_gene",
+            "observed_feature_dmr_window_bp",
+            "observed_feature_max_dmrs",
+            "observed_feature_max_genes",
+            "observed_hist_eps",
+            "observed_hist_alpha",
+            "observed_hist_evidence_clip_cap",
+            "observed_hist_tail_agreement_threshold",
+            "covariates_path",
+            "covariate_id_column",
+            "covariate_numeric_columns",
+            "covariate_ordinal_columns",
+            "covariate_ordinal_maps",
+            "covariate_ordinal_unknown_value",
+            "covariate_categorical_columns",
+            "covariate_missing_numeric_strategy",
+            "covariate_standardize_numeric",
+            "covariates_strict_join",
+        ]
+        for field_name in shared_fields:
+            setattr(self, field_name, getattr(params, field_name))
+        self.ecdf_second_stage_enabled = bool(
+            self.backend_profiles.ecdf.params.ecdf_second_stage_enabled
+        )
+        tab_params = self.backend_profiles.tabular_sklearn.params
+        self.tabular_model_type = tab_params.tabular_model_type
+        self.tabular_methods = tab_params.tabular_methods
+        self.tabular_method_selection_metric = tab_params.tabular_method_selection_metric
+        self.tabular_method_selection_stat = tab_params.tabular_method_selection_stat
+        self.tabular_save_train_dataset = bool(tab_params.tabular_save_train_dataset)
+        self.tabular_reuse_train_dataset = bool(tab_params.tabular_reuse_train_dataset)
+        self.tabular_train_dataset_path = tab_params.tabular_train_dataset_path
+        self.tabular_save_test_dataset = bool(tab_params.tabular_save_test_dataset)
+        self.tabular_test_dataset_path = tab_params.tabular_test_dataset_path
+        gen_params = self.backend_profiles.generative_hybrid.params
+        self.generative_latent_dim = int(gen_params.generative_latent_dim)
+        self.generative_kl_weight = float(gen_params.generative_kl_weight)
+        self.generative_density_type = str(gen_params.generative_density_type)
+        self.generative_epochs = int(gen_params.generative_epochs)
+        self.generative_batch_size = int(gen_params.generative_batch_size)
+        self.generative_seed = int(gen_params.generative_seed)
+        self.generative_calibrate = bool(gen_params.generative_calibrate)
+        self.generative_covariates_strict = bool(gen_params.generative_covariates_strict)
 
     @field_validator("model_backend")
     @classmethod

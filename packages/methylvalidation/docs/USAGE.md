@@ -147,8 +147,8 @@ When to change defaults:
 | Monte Carlo loop (`methyl-validation` default, optional `--stability`) | Per iteration: `methyl-centroid` + `methyl-detector` |
 | `--stability` | Uses the same Monte Carlo loop above, then runs stability aggregation over discovery DMP outputs (`run_stability_analysis`) |
 | `--freeze` | `methyl-centroid` + `methyl-detector` (fixed panel) + `methyl-mapper` + `methyl-enricher` + optional `methyl-disease-progression` |
-| `--model` (`model_backend="ecdf"`) | `methyl-classifier` + `methyl-predictor` on frozen `production/project.json` |
-| `--model` (`model_backend="tabular_sklearn"` / `"generative_hybrid"`) | In-process backend flow: model bundle -> train -> predict (consumes freeze outputs; does not re-run `methyl-detector`) |
+| `--model` (`backend_profiles.ecdf.enabled=true`) | `methyl-classifier` + `methyl-predictor` on frozen `production/project.json` |
+| `--model` (`backend_profiles.tabular_sklearn/generative_hybrid enabled`) | In-process backend flow: model bundle -> train -> predict (consumes freeze outputs; does not re-run `methyl-detector`) |
 | `--model-mc` | Full MC retraining per split: centroid -> detector -> backend train/predict; writes isolated results under `model_mc/<backend>/`. With `--model-mc-all`, centroid+detector runs are built once and reused by all backends. |
 | `--post-model-validation` | MC holdout evaluation on frozen production artifacts (no retraining): `ecdf` uses predictor-only runs, tabular/generative use frozen model inference |
 | `--predictor-only` | Monte Carlo iterations where each iteration runs only `methyl-predictor` with frozen artifacts |
@@ -166,13 +166,13 @@ When to change defaults:
 | `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If `step_config.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. | `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher` (+ optional progression). |
 | `--model` | Run production model builder after freeze (Workflow 1, Step 3). | `ecdf`: `methyl-classifier` -> `methyl-predictor`; other backends: bundle -> train -> predict. |
 | `--model-mc` | Run full backend MC retraining+evaluation loop for model selection. | Per iteration: centroid -> detector -> backend train -> backend predict. |
-| `--model-mc-all` | With `--model-mc`, run all supported backends with isolated outputs while reusing one shared MC run set. | Creates `model_mc/shared/run_XXXX` plus `model_mc/ecdf`, `model_mc/tabular_sklearn`, `model_mc/generative_hybrid`. |
+| `--model-mc-all` | With `--model-mc`, run only enabled backend profiles with isolated outputs while reusing one shared MC run set. | Creates `model_mc/shared/run_XXXX` plus per-enabled-backend folders. |
 | `--select-best-model` | Rank backend model-MC summaries and train final production model on all data. | Reads `model_mc/*/metrics_summary.json`, picks best by `--selection-metric`/`--selection-stat`, then runs production model build. |
 | `--rollout-compare` + `--baseline-summary` + `--candidate-summary` | Compare dual-run summaries and emit promote/hold recommendation JSON using rollout thresholds from `step_config.validation`. | In-process comparison (no training/inference run). |
 | `--selection-metric METRIC` | Metric for backend ranking in `--select-best-model`. | Default: `balanced_accuracy`. |
 | `--selection-stat {mean,median}` | Statistic for backend ranking in `--select-best-model`. | Default: `median` (p50). |
 | `--post-model-validation` | Run descriptive MC holdout evaluation with frozen production artifacts (no retraining). | `ecdf`: predictor-only evaluation; tabular/generative: in-process frozen model predict. Outputs to `monte_carlo_runs/post_model_validation/`. |
-| `--model-backend` / `--post-model-backend` | Override backend used by `--model`, `--model-mc`, or `--post-model-validation`. If omitted, backend is read from `step_config.validation.model_backend`. | `ecdf` \| `tabular_sklearn` \| `generative_hybrid` |
+| `--model-backend` / `--post-model-backend` | Override backend used by `--model`, `--model-mc`, or `--post-model-validation`. Backend must be enabled in `step_config.validation.backend_profiles`. | `ecdf` \| `tabular_sklearn` \| `generative_hybrid` |
 | `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). | Monte Carlo iterations, predictor only. |
 | `--skip-enricher` | Skip the enricher inside MC iterations even when `run_mapper_and_enricher: true`. | Also short-circuits enricher (and therefore progression) in `--freeze`. |
 | `--iterations N` | Override `n_iterations` from config. | Affects MC loop count (`--stability` and `--predictor-only`). |
@@ -304,7 +304,7 @@ Example (`step_config.validation`) using all covariate types:
 
 ### Disease-feature controls for `observed_hybrid`
 
-When `step_config.validation.feature_mode` is `observed_hybrid`, you can explicitly control which disease-aware feature families are included:
+When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is `observed_hybrid`, you can explicitly control which disease-aware feature families are included:
 
 - `observed_feature_include_dmp` (default `true`): DMP-derived global/quantile and disease-comparison summaries
 - `observed_feature_include_dmr` (default `true`): DMR/region aggregates
@@ -323,7 +323,7 @@ These options are used by all three model backends in model-build flows:
 
 ### Tabular method configs (`tabular_sklearn`)
 
-`step_config.validation` now supports canonical nested method configs for tabular backends:
+`step_config.validation.backend_profiles.tabular_sklearn.params` supports canonical nested method configs:
 
 - `tabular_methods`: ordered list of one or more entries
 - each entry uses a `method` discriminator and method-specific `params`
@@ -341,21 +341,27 @@ Canonical nested JSON example:
 
 ```json
 "validation": {
-  "model_backend": "tabular_sklearn",
-  "tabular_methods": [
-    {"method": "random_forest", "params": {"n_estimators": 500, "min_samples_leaf": 2, "class_weight": "balanced_subsample"}},
-    {"method": "xgboost", "params": {"n_estimators": 500, "max_depth": 6, "learning_rate": 0.05, "subsample": 0.9}}
-  ],
-  "tabular_method_selection_metric": "balanced_accuracy",
-  "tabular_method_selection_stat": "mean"
+  "backend_profiles": {
+    "ecdf": {"enabled": false, "params": {"ecdf_second_stage_enabled": false}},
+    "tabular_sklearn": {
+      "enabled": true,
+      "params": {
+        "tabular_methods": [
+          {"method": "random_forest", "params": {"n_estimators": 500, "min_samples_leaf": 2, "class_weight": "balanced_subsample"}},
+          {"method": "xgboost", "params": {"n_estimators": 500, "max_depth": 6, "learning_rate": 0.05, "subsample": 0.9}}
+        ],
+        "tabular_method_selection_metric": "balanced_accuracy",
+        "tabular_method_selection_stat": "mean"
+      }
+    },
+    "generative_hybrid": {"enabled": false, "params": {}}
+  }
 }
 ```
 
-Backward compatibility:
+Legacy backend keys are rejected at config validation time. Use:
 
-- legacy `tabular_model_type` still works unchanged
-- CLI shorthand `--tabular-model-type` maps to a single-entry `tabular_methods` list
-- optional `--tabular-methods-json` allows direct nested list overrides from CLI
+`methyl-validation-migrate-backend-config /path/to/project.json --in-place`
 
 ### Optional: `step_config.progression`
 

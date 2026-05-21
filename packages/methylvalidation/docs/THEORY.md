@@ -20,6 +20,14 @@ The canonical mathematical and statistical reference for this package is the Qua
 
 This package supports internal repeated-split validation. It should not be described as a substitute for independent external validation.
 
+## Backend Configuration Contract
+
+Model backend behavior is controlled by `step_config.validation.backend_profiles` only. Legacy flat backend keys are intentionally rejected to avoid ambiguous runtime semantics.
+
+- `--model-mc-all` evaluates only profiles with `enabled: true`.
+- Single-backend modes require the selected backend to be enabled.
+- Migration from legacy keys is explicit via `methyl-validation-migrate-backend-config`.
+
 ## Key Code Paths
 
 - `methyl_validation/split.py`

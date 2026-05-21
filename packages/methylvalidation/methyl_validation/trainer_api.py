@@ -197,27 +197,27 @@ def build_model_backend_steps(
                     ),
                     save_train_dataset=(
                         bool(config.tabular_save_train_dataset)
-                        if config is not None and hasattr(config, "tabular_save_train_dataset")
+                        if config is not None
                         else False
                     ),
                     reuse_train_dataset=(
                         bool(config.tabular_reuse_train_dataset)
-                        if config is not None and hasattr(config, "tabular_reuse_train_dataset")
+                        if config is not None
                         else True
                     ),
                     train_dataset_path=(
                         config.tabular_train_dataset_path
-                        if config is not None and hasattr(config, "tabular_train_dataset_path")
+                        if config is not None
                         else None
                     ),
                     save_test_dataset=(
                         bool(config.tabular_save_test_dataset)
-                        if config is not None and hasattr(config, "tabular_save_test_dataset")
+                        if config is not None
                         else True
                     ),
                     test_dataset_path=(
                         config.tabular_test_dataset_path
-                        if config is not None and hasattr(config, "tabular_test_dataset_path")
+                        if config is not None
                         else None
                     ),
                 )
@@ -381,7 +381,7 @@ def build_model_backend_steps(
         )
         tm_ok, tm_msg = _write_ecdf_training_metrics(project_json, classifier_output_dir)
         try:
-            if config is None or not bool(getattr(config, "ecdf_second_stage_enabled", False)):
+            if config is None or not bool(config.ecdf_second_stage_enabled):
                 if tm_ok:
                     return 0, f"ECDF second-stage scorer disabled. Training metrics saved: {tm_msg}", ""
                 return 0, f"ECDF second-stage scorer disabled. {tm_msg}", ""

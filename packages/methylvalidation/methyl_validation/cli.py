@@ -69,6 +69,36 @@ from .mc_manifest import write_baseline_manifest, write_detector_featurecuts_ove
 
 
 _RUN_ID_RE = re.compile(r"^run_(\d{4})$")
+_KNOWN_BACKENDS = ("ecdf", "tabular_sklearn", "generative_hybrid")
+
+
+def _resolve_single_backend(config: MonteCarloConfig, override_backend: Optional[str] = None) -> str:
+    if override_backend:
+        backend = str(override_backend).strip().lower()
+    else:
+        backend = str(config.model_backend or "").strip().lower() or (
+            config.get_enabled_backends()[0] if config.get_enabled_backends() else "ecdf"
+        )
+    if backend not in _KNOWN_BACKENDS:
+        raise ValueError(f"Unsupported backend: {backend}")
+    if backend not in config.get_enabled_backends():
+        raise ValueError(
+            f"Backend '{backend}' is not enabled in step_config.validation.backend_profiles. "
+            f"Enabled backends: {config.get_enabled_backends()}"
+        )
+    return backend
+
+
+def _resolve_model_mc_backends(config: MonteCarloConfig, run_all: bool) -> List[str]:
+    if run_all:
+        enabled = config.get_enabled_backends()
+        if not enabled:
+            raise ValueError(
+                "No enabled backend profiles found for --model-mc-all. "
+                "Set step_config.validation.backend_profiles.<backend>.enabled=true."
+            )
+        return enabled
+    return [_resolve_single_backend(config)]
 
 
 def _format_duration(seconds: float) -> str:
@@ -654,7 +684,7 @@ def _run_model_mc_backend_from_shared_runs(
         else:
             predictor_output_dir = backend_run_dir / "predictors"
 
-        backend_config = config.model_copy(update={"model_backend": backend})
+        backend_config = config.with_backend_selection(backend)
         if (
             backend in {"tabular_sklearn", "generative_hybrid"}
             and not backend_config.model_bundle_dir
@@ -1024,7 +1054,7 @@ def _run_model_mc_backend(
             logs_dir=run_dir / "logs" / "model",
             predictor_output_dir=predictor_output_dir,
             per_cancer_group=per_cancer_group,
-            config=config.model_copy(update={"model_backend": backend}),
+            config=config.with_backend_selection(backend),
         )
         for t in timings_model:
             all_timings.append(
@@ -1280,8 +1310,8 @@ def main() -> None:
         choices=["ecdf", "tabular_sklearn", "generative_hybrid"],
         default=None,
         help=(
-            "Override validation.model_backend for --model, --model-mc, and --post-model-validation "
-            "(default comes from step_config.validation.model_backend or ecdf)."
+            "Select backend for --model, --model-mc, and --post-model-validation. "
+            "Backend must exist and be enabled in step_config.validation.backend_profiles."
         ),
     )
     parser.add_argument(
@@ -1290,7 +1320,7 @@ def main() -> None:
         default=None,
         help=(
             "Alias for backend override used with --post-model-validation. "
-            "When omitted, uses step_config.validation.model_backend."
+            "When omitted, uses the selected/default enabled backend profile."
         ),
     )
     parser.add_argument(
@@ -1427,6 +1457,12 @@ def main() -> None:
 
     config, _ = load_monte_carlo_config(args, parser)
     config = apply_monte_carlo_config_overrides(config, args)
+    if args.model or args.post_model_validation or (args.model_mc and not args.model_mc_all):
+        try:
+            config = config.with_backend_selection(_resolve_single_backend(config))
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
     base_project, base_project_config, output_base, monte_carlo_runs_root = ensure_monte_carlo_output_tree(
         config
     )
@@ -1635,11 +1671,11 @@ def main() -> None:
             cohort_paths_list=cohort_paths_list,
             split_reuse_source_root=monte_carlo_runs_root,
         )
-        configured_backends = (
-            ["ecdf", "tabular_sklearn", "generative_hybrid"]
-            if args.model_mc_all
-            else [str(config.model_backend or "ecdf").strip().lower()]
-        )
+        try:
+            configured_backends = _resolve_model_mc_backends(config, bool(args.model_mc_all))
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
         if args.select_best_model and not args.model_mc:
             discovered = [
                 p.name
@@ -1683,7 +1719,7 @@ def main() -> None:
                     try:
                         _run_model_mc_backend_from_shared_runs(
                             backend=backend,
-                            config=config.model_copy(update={"model_backend": backend}),
+                            config=config.with_backend_selection(backend),
                             layout=layout,
                             cohort_paths_list=cohort_paths_list,
                             backend_root=backend_root,
@@ -1728,7 +1764,7 @@ def main() -> None:
                         if use_shared_runs:
                             _run_model_mc_backend_from_shared_runs(
                                 backend=backend,
-                                config=config.model_copy(update={"model_backend": backend}),
+                                config=config.with_backend_selection(backend),
                                 layout=layout,
                                 cohort_paths_list=cohort_paths_list,
                                 backend_root=backend_root,
@@ -1742,7 +1778,7 @@ def main() -> None:
                             _run_model_mc_backend(
                                 backend=backend,
                                 base_project_for_runs=base_project_for_runs,
-                                config=config.model_copy(update={"model_backend": backend}),
+                                config=config.with_backend_selection(backend),
                                 layout=layout,
                                 cohort_paths_list=cohort_paths_list,
                                 cohort_labels=cohort_labels,
@@ -1779,7 +1815,7 @@ def main() -> None:
                 summary = build_production_model(
                     monte_carlo_runs_root=monte_carlo_runs_root,
                     production_output_dir=config.production_output_dir,
-                    config=config.model_copy(update={"model_backend": best_backend}),
+                    config=config.with_backend_selection(best_backend),
                 )
             except Exception as e:
                 print(f"Error: failed final all-data model build for backend={best_backend}: {e}", file=sys.stderr)
@@ -1830,7 +1866,7 @@ def main() -> None:
                 file=sys.stderr,
             )
             sys.exit(1)
-        if (config.model_backend or "ecdf").strip().lower() in {"tabular_sklearn", "generative_hybrid"}:
+        if str(config.model_backend).strip().lower() in {"tabular_sklearn", "generative_hybrid"}:
             model_dir = production_dir / "classifiers"
             if not model_dir.is_dir():
                 print(
@@ -2031,7 +2067,7 @@ def main() -> None:
                         val_disease,
                         config.samples_base_path,
                     )
-                    if (config.model_backend or "ecdf").strip().lower() == "ecdf":
+                    if str(config.model_backend).strip().lower() == "ecdf":
                         apply_frozen_pipeline_artifacts_to_run_project(project_path, production_project)
                     run_project = load_project(project_path)
                     comparisons = run_project.get_comparisons()
@@ -2075,7 +2111,7 @@ def main() -> None:
                             cohort_labels,
                             config.samples_base_path,
                         )
-                    if (config.model_backend or "ecdf").strip().lower() == "ecdf":
+                    if str(config.model_backend).strip().lower() == "ecdf":
                         apply_frozen_pipeline_artifacts_to_run_project(project_path, production_project)
                     predictor_output_dir = run_dir / "predictors"
                     n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
