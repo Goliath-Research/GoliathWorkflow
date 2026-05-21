@@ -185,14 +185,14 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
 
     expected_names = {
         "max_weighted_directional_score",
-        "weighted_directional_agreement",
+        "weighted_directional_agreement__cancer",
         "weighted_mean_abs_error_to_healthy_centroid",
-        "weighted_mean_abs_error_to_cancer_centroid",
+        "weighted_mean_abs_error_to_cancer_centroid__cancer",
         "weighted_mean_abs_distance_margin",
         "weighted_cosine_similarity_to_healthy_centroid",
-        "weighted_cosine_similarity_to_cancer_centroid",
+        "weighted_cosine_similarity_to_cancer_centroid__cancer",
         "weighted_centroid_contrast_score",
-        "weighted_fraction_dmps_closer_to_cancer_centroid",
+        "weighted_fraction_dmps_closer_to_cancer_centroid__cancer",
         "weighted_fraction_dmps_closer_to_healthy_centroid",
         "obs_fraction",
         "weighted_obs_fraction",
@@ -205,19 +205,19 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert expected_names.issubset(set(feat.feature_names))
 
     wmae_h_idx = feat.feature_names.index("weighted_mean_abs_error_to_healthy_centroid")
-    wmae_c_idx = feat.feature_names.index("weighted_mean_abs_error_to_cancer_centroid")
+    wmae_c_idx = feat.feature_names.index("weighted_mean_abs_error_to_cancer_centroid__cancer")
     wmae_margin_idx = feat.feature_names.index("weighted_mean_abs_distance_margin")
     wcos_h_idx = feat.feature_names.index("weighted_cosine_similarity_to_healthy_centroid")
-    wcos_c_idx = feat.feature_names.index("weighted_cosine_similarity_to_cancer_centroid")
+    wcos_c_idx = feat.feature_names.index("weighted_cosine_similarity_to_cancer_centroid__cancer")
     wcontrast_idx = feat.feature_names.index("weighted_centroid_contrast_score")
     weighted_frac_idx = feat.feature_names.index(
-        "weighted_fraction_dmps_closer_to_cancer_centroid"
+        "weighted_fraction_dmps_closer_to_cancer_centroid__cancer"
     )
     weighted_healthy_frac_idx = feat.feature_names.index(
         "weighted_fraction_dmps_closer_to_healthy_centroid"
     )
     max_wds_idx = feat.feature_names.index("max_weighted_directional_score")
-    wda_idx = feat.feature_names.index("weighted_directional_agreement")
+    wda_idx = feat.feature_names.index("weighted_directional_agreement__cancer")
     tail_e_idx = feat.feature_names.index("weighted_healthy_tail_evidence__cancer")
     tail_a_idx = feat.feature_names.index("weighted_healthy_tail_agreement__cancer")
     tail_o_idx = feat.feature_names.index("weighted_both_centroid_outlier_score__cancer")
@@ -274,9 +274,17 @@ def test_observed_feature_builder_histogram_tail_features_multiclass_names(monke
     assert "weighted_healthy_tail_evidence__pca1" in feat.feature_names
     assert "weighted_healthy_tail_agreement__pca1" in feat.feature_names
     assert "weighted_both_centroid_outlier_score__pca1" in feat.feature_names
+    assert "weighted_directional_agreement__pca1" in feat.feature_names
+    assert "weighted_mean_abs_error_to_cancer_centroid__pca1" in feat.feature_names
+    assert "weighted_cosine_similarity_to_cancer_centroid__pca1" in feat.feature_names
+    assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca1" in feat.feature_names
     assert "weighted_healthy_tail_evidence__pca2" in feat.feature_names
     assert "weighted_healthy_tail_agreement__pca2" in feat.feature_names
     assert "weighted_both_centroid_outlier_score__pca2" in feat.feature_names
+    assert "weighted_directional_agreement__pca2" in feat.feature_names
+    assert "weighted_mean_abs_error_to_cancer_centroid__pca2" in feat.feature_names
+    assert "weighted_cosine_similarity_to_cancer_centroid__pca2" in feat.feature_names
+    assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca2" in feat.feature_names
 
 
 def test_observed_feature_builder_histogram_tail_features_behaviors(monkeypatch):
