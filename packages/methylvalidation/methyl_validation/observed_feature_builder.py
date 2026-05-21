@@ -616,8 +616,21 @@ def _gene_structural_feature_names(include_gene: bool, include_structural: bool)
     return names
 
 
-def observed_hybrid_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) -> List[str]:
-    return _fixed_feature_names(cancer_class_labels=cancer_class_labels)
+def observed_hybrid_feature_names(
+    cancer_class_labels: Optional[Sequence[str]] = None,
+    feature_family_set: str = "dmp",
+) -> List[str]:
+    include_dmp_family, include_gene_family, include_structural_family = _family_flags(feature_family_set)
+    names: List[str] = []
+    if include_dmp_family:
+        names.extend(_fixed_feature_names(cancer_class_labels=cancer_class_labels))
+    names.extend(
+        _gene_structural_feature_names(
+            include_gene=include_gene_family,
+            include_structural=include_structural_family,
+        )
+    )
+    return names
 
 
 def observed_hybrid_schema_fingerprint(cancer_class_labels: Optional[Sequence[str]] = None) -> str:

@@ -605,7 +605,10 @@ def train_tabular_model(
                             raise ValueError("observed_hybrid cache metadata is incomplete")
                         verify_feature_schema(
                             observed_feature_names,
-                            observed_hybrid_feature_names(cancer_class_labels=observed_cancer_class_labels),
+                            observed_hybrid_feature_names(
+                                cancer_class_labels=observed_cancer_class_labels,
+                                feature_family_set=feature_family_set_norm,
+                            ),
                             context="tabular train cached observed_hybrid",
                         )
                     train_cache_hit = True
