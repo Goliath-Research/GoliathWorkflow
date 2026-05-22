@@ -146,11 +146,12 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
             rho = float(np.corrcoef(xs, ys)[0, 1])
             if np.isnan(rho):
                 rho = 0.0
+            xs_rank = pd.Series(xs).rank(method="average").to_numpy(dtype=float)
             ys_rank = pd.Series(ys).rank(method="average").to_numpy(dtype=float)
-            if np.std(ys_rank) < 1e-12:
+            if np.std(xs_rank) < 1e-12 or np.std(ys_rank) < 1e-12:
                 rho_s = 0.0
             else:
-                rho_s = float(np.corrcoef(xs, ys_rank)[0, 1])
+                rho_s = float(np.corrcoef(xs_rank, ys_rank)[0, 1])
                 if np.isnan(rho_s):
                     rho_s = 0.0
         pearson_abs.append(abs(rho))
@@ -610,6 +611,79 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
         except Exception:
             return "n/a"
 
+    def _md_cell(x: Any) -> str:
+        return str(x if x is not None else "").replace("|", r"\|")
+
+    def _trend_label_from_series(vals: List[float]) -> str:
+        if len(vals) < 2:
+            return "insufficient"
+        diffs = np.diff(np.asarray(vals, dtype=float))
+        if len(diffs) == 0:
+            return "insufficient"
+        if np.all(diffs >= 0) and np.any(diffs > 0):
+            return "strict_up"
+        if np.all(diffs <= 0) and np.any(diffs < 0):
+            return "strict_down"
+        up_steps = int(np.sum(diffs > 0))
+        down_steps = int(np.sum(diffs < 0))
+        if up_steps > down_steps and down_steps <= 1:
+            return "mostly_up"
+        if down_steps > up_steps and up_steps <= 1:
+            return "mostly_down"
+        if up_steps == down_steps and up_steps > 0:
+            net = float(vals[-1] - vals[0])
+            if net > 0 and down_steps <= 1:
+                return "mostly_up"
+            if net < 0 and up_steps <= 1:
+                return "mostly_down"
+        return "mixed"
+
+    def _append_stage_matrix(
+        lines: List[str],
+        *,
+        traj: Dict[str, Any],
+        ordered_labels: List[str],
+        top_n: int = 8,
+    ) -> None:
+        csv_path = traj.get("modules_csv")
+        if not isinstance(csv_path, str) or not csv_path.strip():
+            return
+        pth = Path(csv_path)
+        if not pth.is_file():
+            return
+        try:
+            df = pd.read_csv(pth)
+        except Exception:
+            return
+        comp_col, ent_col = _progression_entity_columns(df)
+        if not comp_col or not ent_col or "score" not in df.columns:
+            return
+        work = df[[comp_col, ent_col, "score"]].copy()
+        work[ent_col] = work[ent_col].astype(str)
+        work["score"] = pd.to_numeric(work["score"], errors="coerce")
+        work = work.dropna(subset=["score"])
+        if work.empty:
+            return
+        stage_cols = [str(s) for s in ordered_labels if str(s)]
+        if not stage_cols:
+            stage_cols = [str(s) for s in work[comp_col].astype(str).drop_duplicates().tolist()]
+        top_entities = [str(r.get("entity")) for r in (traj.get("top_by_abs_trend") or []) if r.get("entity")]
+        if not top_entities:
+            top_entities = work[ent_col].drop_duplicates().astype(str).tolist()
+        top_entities = top_entities[: max(1, int(top_n))]
+        lines.extend(["", "#### Score matrix (entity × stage)", ""])
+        lines.append("| Entity | Trend | " + " | ".join(stage_cols) + " |")
+        lines.append("|--------|-------|" + "|".join(["---"] * len(stage_cols)) + "|")
+        for ent in top_entities:
+            sub = work[work[ent_col] == ent]
+            by_stage: Dict[str, float] = {}
+            for st, g in sub.groupby(sub[comp_col].astype(str)):
+                by_stage[str(st)] = float(pd.to_numeric(g["score"], errors="coerce").dropna().mean())
+            series_vals = [by_stage[s] for s in stage_cols if s in by_stage]
+            trend = _trend_label_from_series(series_vals)
+            row_vals = [f"{by_stage[s]:.4f}" if s in by_stage else "" for s in stage_cols]
+            lines.append(f"| {_md_cell(ent)} | {_md_cell(trend)} | " + " | ".join(row_vals) + " |")
+
     def _physician_focus_lines(src_report: Dict[str, Any], verdict: Dict[str, Any]) -> List[str]:
         prog = src_report.get("progression") or {}
         traj = prog.get("module_trajectory") or {}
@@ -793,6 +867,7 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
     lines.append("")
 
     p = src.get("progression") or {}
+    ordered_stage_cols = [str(x) for x in (p.get("ordered_comparison_labels") or []) if str(x)]
     lines.extend(
         [
             "## Progression",
@@ -849,8 +924,9 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             lines.extend(["", "| Entity | Pearson | Mean score |", "|--------|---------|------------|"])
             for row in top[:10]:
                 lines.append(
-                    f"| {row.get('entity')} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
+                    f"| {_md_cell(row.get('entity'))} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
                 )
+        _append_stage_matrix(lines, traj=traj, ordered_labels=ordered_stage_cols, top_n=8)
     traj_var = p.get("module_trajectory_variant") or {}
     if traj_var:
         lines.extend(
@@ -885,8 +961,9 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             lines.extend(["", "| Entity | Pearson | Mean score |", "|--------|---------|------------|"])
             for row in top_var[:10]:
                 lines.append(
-                    f"| {row.get('entity')} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
+                    f"| {_md_cell(row.get('entity'))} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
                 )
+        _append_stage_matrix(lines, traj=traj_var, ordered_labels=ordered_stage_cols, top_n=8)
     traj_det = p.get("module_trajectory_detailed") or {}
     if traj_det:
         lines.extend(
@@ -921,8 +998,9 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             lines.extend(["", "| Entity | Pearson | Mean score |", "|--------|---------|------------|"])
             for row in top_det[:10]:
                 lines.append(
-                    f"| {row.get('entity')} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
+                    f"| {_md_cell(row.get('entity'))} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
                 )
+        _append_stage_matrix(lines, traj=traj_det, ordered_labels=ordered_stage_cols, top_n=8)
     labels = p.get("entity_labels") or {}
     if labels.get("label_counts"):
         lines.extend(["", "### Progression label counts (entities_progression_labels)", ""])

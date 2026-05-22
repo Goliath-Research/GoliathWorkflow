@@ -147,6 +147,7 @@ def test_analyze_and_render_go(tmp_path: Path):
     assert "Physician-focused interpretation" in md
     assert "Full technical details remain in sections below" in md
     assert "Granularity risk indicator" in md
+    assert "Score matrix (entity × stage)" in md
     assert "## Progression" in md
     assert "ModA" in md or "module" in md.lower()
 
@@ -453,3 +454,19 @@ def test_mostly_monotone_uses_single_dominant_direction(tmp_path: Path):
     assert traj["monotone_denominator"] == 1
     assert traj["mostly_monotone_up_count"] == 0
     assert traj["mostly_monotone_down_count"] == 0
+
+
+def test_spearman_ranks_both_axes_with_missing_stage_gaps(tmp_path: Path):
+    mod_csv = tmp_path / "modules_long.csv"
+    # Missing stage g3 -> non-uniform x-spacing [0, 1, 3].
+    pd.DataFrame(
+        [
+            {"stage_index": 0, "comparison": "g1", "rank": 1, "score": 10.0, "module": "A"},
+            {"stage_index": 1, "comparison": "g2", "rank": 1, "score": 5.0, "module": "A"},
+            {"stage_index": 3, "comparison": "g4", "rank": 1, "score": 8.0, "module": "A"},
+        ]
+    ).to_csv(mod_csv, index=False)
+
+    traj = _module_trajectory_summary(mod_csv, ["g1", "g2", "g3", "g4"])
+    # True Spearman corr(rank([0,1,3]), rank([10,5,8])) = corr([1,2,3], [3,1,2]) = -0.5
+    assert abs(float(traj["median_abs_spearman_stage_vs_score"]) - 0.5) < 1e-9
