@@ -89,8 +89,16 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
         "n_unique_entities": 0,
         "entities_all_stages": 0,
         "median_abs_pearson_stage_vs_score": None,
+        "median_abs_spearman_stage_vs_score": None,
         "fraction_monotone_up": None,
         "fraction_monotone_down": None,
+        "fraction_mostly_monotone_up": None,
+        "fraction_mostly_monotone_down": None,
+        "monotone_denominator": 0,
+        "monotone_up_count": 0,
+        "monotone_down_count": 0,
+        "mostly_monotone_up_count": 0,
+        "mostly_monotone_down_count": 0,
         "top_by_abs_trend": [],
         "error": None,
     }
@@ -120,7 +128,9 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
         stage_order = {str(k): int(k) for k in sorted(work["stage_index"].unique())}
     work["_ord"] = work[comp_col].map(stage_order).fillna(work["stage_index"])
     pearson_abs: List[float] = []
+    spearman_abs: List[float] = []
     mono_up = mono_down = 0
+    mostly_mono_up = mostly_mono_down = 0
     ent_details: List[Tuple[str, float, float]] = []
 
     for ent, g in work.groupby(ent_col, sort=False):
@@ -131,17 +141,40 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
         ys = gg["score"].to_numpy(dtype=float)
         if np.std(xs) < 1e-12 or np.std(ys) < 1e-12:
             rho = 0.0
+            rho_s = 0.0
         else:
             rho = float(np.corrcoef(xs, ys)[0, 1])
             if np.isnan(rho):
                 rho = 0.0
+            ys_rank = pd.Series(ys).rank(method="average").to_numpy(dtype=float)
+            if np.std(ys_rank) < 1e-12:
+                rho_s = 0.0
+            else:
+                rho_s = float(np.corrcoef(xs, ys_rank)[0, 1])
+                if np.isnan(rho_s):
+                    rho_s = 0.0
         pearson_abs.append(abs(rho))
+        spearman_abs.append(abs(rho_s))
         diffs = np.diff(ys)
         if len(diffs) >= 2:
             if np.all(diffs >= 0) and np.any(diffs > 0):
                 mono_up += 1
             if np.all(diffs <= 0) and np.any(diffs < 0):
                 mono_down += 1
+            up_steps = int(np.sum(diffs > 0))
+            down_steps = int(np.sum(diffs < 0))
+            # Disease biology is often non-linear: allow one opposite-direction step,
+            # but classify to a single dominant direction only.
+            if up_steps > down_steps and down_steps <= 1:
+                mostly_mono_up += 1
+            elif down_steps > up_steps and up_steps <= 1:
+                mostly_mono_down += 1
+            elif up_steps == down_steps and up_steps > 0:
+                net_delta = float(ys[-1] - ys[0])
+                if net_delta > 0 and down_steps <= 1:
+                    mostly_mono_up += 1
+                elif net_delta < 0 and up_steps <= 1:
+                    mostly_mono_down += 1
         ent_details.append((str(ent), rho, float(np.mean(ys))))
 
     all_stage_labels = set(stage_order.keys())
@@ -151,9 +184,17 @@ def _module_trajectory_summary(modules_csv: Path, ordered_stages: List[str]) -> 
 
     if pearson_abs:
         out["median_abs_pearson_stage_vs_score"] = float(np.median(pearson_abs))
+        out["median_abs_spearman_stage_vs_score"] = float(np.median(spearman_abs))
         denom = len(pearson_abs)
+        out["monotone_denominator"] = int(denom)
+        out["monotone_up_count"] = int(mono_up)
+        out["monotone_down_count"] = int(mono_down)
+        out["mostly_monotone_up_count"] = int(mostly_mono_up)
+        out["mostly_monotone_down_count"] = int(mostly_mono_down)
         out["fraction_monotone_up"] = mono_up / denom
         out["fraction_monotone_down"] = mono_down / denom
+        out["fraction_mostly_monotone_up"] = mostly_mono_up / denom
+        out["fraction_mostly_monotone_down"] = mostly_mono_down / denom
     ent_details.sort(key=lambda t: abs(t[1]), reverse=True)
     out["top_by_abs_trend"] = [
         {"entity": e, "pearson_stage_vs_score": round(r, 4), "mean_score": round(m, 6)}
@@ -558,6 +599,17 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
         except Exception:
             return "n/a"
 
+    def _fmt_frac_with_counts(frac: Any, num: Any, den: Any) -> str:
+        try:
+            f = float(frac)
+            n = int(num)
+            d = int(den)
+            if d <= 0:
+                return "n/a"
+            return f"{f:.3f} ({n}/{d})"
+        except Exception:
+            return "n/a"
+
     def _physician_focus_lines(src_report: Dict[str, Any], verdict: Dict[str, Any]) -> List[str]:
         prog = src_report.get("progression") or {}
         traj = prog.get("module_trajectory") or {}
@@ -773,8 +825,23 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
                 f"- Entities with rows: {traj.get('n_unique_entities')}",
                 f"- Entities present all stages: {traj.get('entities_all_stages')}",
                 f"- Median |Pearson(stage_ord, score)|: {traj.get('median_abs_pearson_stage_vs_score')}",
-                f"- Fraction monotone up (among scored): {traj.get('fraction_monotone_up')}",
-                f"- Fraction monotone down (among scored): {traj.get('fraction_monotone_down')}",
+                f"- Median |Spearman(stage_ord, score)|: {traj.get('median_abs_spearman_stage_vs_score')}",
+                (
+                    f"- Fraction monotone up (among scored): "
+                    f"{_fmt_frac_with_counts(traj.get('fraction_monotone_up'), traj.get('monotone_up_count'), traj.get('monotone_denominator'))}"
+                ),
+                (
+                    f"- Fraction monotone down (among scored): "
+                    f"{_fmt_frac_with_counts(traj.get('fraction_monotone_down'), traj.get('monotone_down_count'), traj.get('monotone_denominator'))}"
+                ),
+                (
+                    f"- Fraction mostly monotone up (<=1 reversal): "
+                    f"{_fmt_frac_with_counts(traj.get('fraction_mostly_monotone_up'), traj.get('mostly_monotone_up_count'), traj.get('monotone_denominator'))}"
+                ),
+                (
+                    f"- Fraction mostly monotone down (<=1 reversal): "
+                    f"{_fmt_frac_with_counts(traj.get('fraction_mostly_monotone_down'), traj.get('mostly_monotone_down_count'), traj.get('monotone_denominator'))}"
+                ),
             ]
         )
         top = traj.get("top_by_abs_trend") or []
@@ -794,8 +861,23 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
                 f"- Entities with rows: {traj_var.get('n_unique_entities')}",
                 f"- Entities present all stages: {traj_var.get('entities_all_stages')}",
                 f"- Median |Pearson(stage_ord, score)|: {traj_var.get('median_abs_pearson_stage_vs_score')}",
-                f"- Fraction monotone up (among scored): {traj_var.get('fraction_monotone_up')}",
-                f"- Fraction monotone down (among scored): {traj_var.get('fraction_monotone_down')}",
+                f"- Median |Spearman(stage_ord, score)|: {traj_var.get('median_abs_spearman_stage_vs_score')}",
+                (
+                    f"- Fraction monotone up (among scored): "
+                    f"{_fmt_frac_with_counts(traj_var.get('fraction_monotone_up'), traj_var.get('monotone_up_count'), traj_var.get('monotone_denominator'))}"
+                ),
+                (
+                    f"- Fraction monotone down (among scored): "
+                    f"{_fmt_frac_with_counts(traj_var.get('fraction_monotone_down'), traj_var.get('monotone_down_count'), traj_var.get('monotone_denominator'))}"
+                ),
+                (
+                    f"- Fraction mostly monotone up (<=1 reversal): "
+                    f"{_fmt_frac_with_counts(traj_var.get('fraction_mostly_monotone_up'), traj_var.get('mostly_monotone_up_count'), traj_var.get('monotone_denominator'))}"
+                ),
+                (
+                    f"- Fraction mostly monotone down (<=1 reversal): "
+                    f"{_fmt_frac_with_counts(traj_var.get('fraction_mostly_monotone_down'), traj_var.get('mostly_monotone_down_count'), traj_var.get('monotone_denominator'))}"
+                ),
             ]
         )
         top_var = traj_var.get("top_by_abs_trend") or []
@@ -815,8 +897,23 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
                 f"- Entities with rows: {traj_det.get('n_unique_entities')}",
                 f"- Entities present all stages: {traj_det.get('entities_all_stages')}",
                 f"- Median |Pearson(stage_ord, score)|: {traj_det.get('median_abs_pearson_stage_vs_score')}",
-                f"- Fraction monotone up (among scored): {traj_det.get('fraction_monotone_up')}",
-                f"- Fraction monotone down (among scored): {traj_det.get('fraction_monotone_down')}",
+                f"- Median |Spearman(stage_ord, score)|: {traj_det.get('median_abs_spearman_stage_vs_score')}",
+                (
+                    f"- Fraction monotone up (among scored): "
+                    f"{_fmt_frac_with_counts(traj_det.get('fraction_monotone_up'), traj_det.get('monotone_up_count'), traj_det.get('monotone_denominator'))}"
+                ),
+                (
+                    f"- Fraction monotone down (among scored): "
+                    f"{_fmt_frac_with_counts(traj_det.get('fraction_monotone_down'), traj_det.get('monotone_down_count'), traj_det.get('monotone_denominator'))}"
+                ),
+                (
+                    f"- Fraction mostly monotone up (<=1 reversal): "
+                    f"{_fmt_frac_with_counts(traj_det.get('fraction_mostly_monotone_up'), traj_det.get('mostly_monotone_up_count'), traj_det.get('monotone_denominator'))}"
+                ),
+                (
+                    f"- Fraction mostly monotone down (<=1 reversal): "
+                    f"{_fmt_frac_with_counts(traj_det.get('fraction_mostly_monotone_down'), traj_det.get('mostly_monotone_down_count'), traj_det.get('monotone_denominator'))}"
+                ),
             ]
         )
         top_det = traj_det.get("top_by_abs_trend") or []

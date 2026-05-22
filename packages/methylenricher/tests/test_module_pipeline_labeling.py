@@ -16,7 +16,7 @@ class _FakeAnalyzerLabeling:
         weights = {"TP53": 0.9, "EGFR": 0.85, "AKT1": 0.8, "MTOR": 0.75}
         return genes, weights
 
-    def run_enrichment(self, genes, _output_dir):
+    def run_enrichment(self, genes, _output_dir, **_kwargs):
         assert genes
         return pd.DataFrame(
             {

@@ -2,6 +2,7 @@ import csv
 import json
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from methyl_disease_progression.progression import run_progression_report
@@ -222,3 +223,29 @@ def test_progression_variant_derives_stable_family_from_legacy_columns(tmp_path:
     assert "Drug_pca_pca1" not in mod_variant_text
     assert "Drug_pca_pca2" not in mod_variant_text
     assert "Drug_pca_pca3" not in mod_variant_text
+
+
+def test_progression_detailed_matches_similar_noncanonical_entities(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    root = tmp_path / "out" / "prog"
+    specs = [
+        ("pca_pca1", "Cluster Alpha (M1)", "State A", "TP53, EGFR, AKT1", "HIF1 signaling; angiogenesis"),
+        ("pca_pca2", "Cluster Beta (M7)", "State B", "TP53, EGFR, AKT1", "angiogenesis; HIF1 signaling"),
+        ("pca_pca3", "Cluster Gamma (M4)", "State C", "TP53, EGFR, AKT1", "HIF1 signaling; angiogenesis"),
+    ]
+    for stage, module_name, primary, overlap, pathways in specs:
+        enricher_dir = root / "enricher" / "all" / stage
+        md_rows = [
+            "Module,Module_primary,Score,Overlap_genes,Main_pathways",
+            f"{module_name},{primary},0.5,\"{overlap}\",\"{pathways}\"",
+        ]
+        (enricher_dir / "modules_ranked_detailed.csv").write_text(
+            "\n".join(md_rows) + "\n", encoding="utf-8"
+        )
+
+    summary = run_progression_report(project_path=project_path)
+    out_dir = Path(summary["output_dir"])
+    detailed = pd.read_csv(out_dir / "modules_long_detailed.csv")
+    assert detailed["module"].nunique() == 1
+    assert detailed["module"].iloc[0].endswith("family_001")

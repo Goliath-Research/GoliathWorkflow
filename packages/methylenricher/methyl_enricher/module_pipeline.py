@@ -607,7 +607,7 @@ def run_module_pipeline(
         logger.warning("No genes loaded; cannot run module pipeline.")
         return pd.DataFrame()
 
-    merged_df = analyzer.run_enrichment(genes, output_dir)
+    merged_df = analyzer.run_enrichment(genes, output_dir, gene_weights=gene_weights)
     if merged_df.empty:
         logger.warning("No enrichment results; cannot build modules.")
         return pd.DataFrame()

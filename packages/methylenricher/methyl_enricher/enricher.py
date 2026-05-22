@@ -487,6 +487,7 @@ class EnrichmentAnalyzer:
         genes: List[str],
         output_dir: Union[str, Path],
         *,
+        gene_weights: Optional[Dict[str, float]] = None,
         force: bool = False,
         retry_policy: Optional["RetryPolicy"] = None,
     ) -> pd.DataFrame:
@@ -536,6 +537,8 @@ class EnrichmentAnalyzer:
             print("\n[WARN] No enrichment results found across any library")
             self.results = {"merged": merged, "significant": pd.DataFrame()}
             return merged
+        merged = self._attach_weighted_overlap_metrics(merged, gene_weights)
+        merged.to_csv(output_dir / "enrichment_merged.csv", index=False)
 
         print(f"\n[INFO] ✓ Merged results saved: {output_dir / 'enrichment_merged.csv'}")
         top_hits = (
@@ -546,6 +549,76 @@ class EnrichmentAnalyzer:
         self.results = {"merged": merged, "significant": top_hits}
         self._print_summary(merged, top_hits)
         return merged
+
+    def _attach_weighted_overlap_metrics(
+        self,
+        merged: pd.DataFrame,
+        gene_weights: Optional[Dict[str, float]],
+    ) -> pd.DataFrame:
+        """
+        Add overlap-weight metrics using per-gene effect-size/importance weights.
+
+        Enrichr ORA itself remains unweighted, but these columns provide
+        effect-size-aware pathway precision for downstream module scoring.
+        """
+        if merged.empty:
+            return merged
+        out = merged.copy()
+        lookup = {
+            str(k).strip().upper(): float(v)
+            for k, v in (gene_weights or {}).items()
+            if str(k).strip()
+        }
+        if not lookup:
+            out["overlap_weight_mean"] = 1.0
+            out["overlap_weight_abs_mean"] = 1.0
+            out["overlap_weight_sum"] = 1.0
+            out["overlap_weight_n"] = 0
+            return out
+
+        genes_col = "Genes" if "Genes" in out.columns else None
+        overlap_col = "Overlap" if "Overlap" in out.columns else None
+        means: List[float] = []
+        abs_means: List[float] = []
+        sums: List[float] = []
+        counts: List[int] = []
+
+        def _tokens_from_row(row: pd.Series) -> List[str]:
+            if genes_col and pd.notna(row.get(genes_col)):
+                raw = str(row.get(genes_col))
+                sep = ";" if ";" in raw else ","
+                toks = [t.strip().upper() for t in raw.split(sep) if t.strip()]
+                if toks:
+                    return toks
+            if overlap_col and pd.notna(row.get(overlap_col)):
+                raw = str(row.get(overlap_col))
+                if "/" in raw:
+                    left = raw.split("/", 1)[0]
+                    sep = ";" if ";" in left else ","
+                    toks = [t.strip().upper() for t in left.split(sep) if t.strip()]
+                    if toks:
+                        return toks
+            return []
+
+        for _, row in out.iterrows():
+            toks = _tokens_from_row(row)
+            vals = [lookup[g] for g in toks if g in lookup]
+            if vals:
+                means.append(float(sum(vals) / len(vals)))
+                abs_means.append(float(sum(abs(v) for v in vals) / len(vals)))
+                sums.append(float(sum(vals)))
+                counts.append(int(len(vals)))
+            else:
+                means.append(0.0)
+                abs_means.append(0.0)
+                sums.append(0.0)
+                counts.append(0)
+
+        out["overlap_weight_mean"] = means
+        out["overlap_weight_abs_mean"] = abs_means
+        out["overlap_weight_sum"] = sums
+        out["overlap_weight_n"] = counts
+        return out
     
     def _print_summary(self, merged: pd.DataFrame, top_hits: pd.DataFrame):
         """Print a summary of enrichment results."""
@@ -605,7 +678,7 @@ def run_enrichment(
         cutoff=cutoff
     )
     
-    genes = analyzer.load_gene_list(
+    genes, gene_weights = analyzer.load_gene_list_with_weights(
         input_file,
         top_n=top_n,
         gene_column=gene_column,
@@ -624,7 +697,7 @@ def run_enrichment(
         sort_by=sort_by,
         sort_ascending=sort_ascending
     )
-    results = analyzer.run_enrichment(genes, output_dir)
+    results = analyzer.run_enrichment(genes, output_dir, gene_weights=gene_weights)
     
     return results
 

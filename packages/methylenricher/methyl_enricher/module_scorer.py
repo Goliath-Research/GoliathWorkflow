@@ -23,10 +23,11 @@ def compute_module_enrichment_score(
     merged_df: pd.DataFrame,
     pathway_to_genes: Dict[str, Set[str]],
     gene_weights: Optional[Dict[str, float]] = None,
-    w_mean_log10q: float = 0.4,
-    w_n_pathways: float = 0.2,
-    w_n_genes: float = 0.2,
-    w_mean_gene_weight: float = 0.2,
+    w_mean_log10q: float = 0.35,
+    w_n_pathways: float = 0.15,
+    w_n_genes: float = 0.15,
+    w_mean_gene_weight: float = 0.15,
+    w_overlap_weight_abs_mean: float = 0.20,
 ) -> float:
     """
     Compute a single scalar enrichment score for a module.
@@ -50,12 +51,18 @@ def compute_module_enrichment_score(
     if gene_weights and all_genes:
         vals = [gene_weights.get(g, 1.0) for g in all_genes]
         mean_gw = float(np.mean(vals)) if vals else 1.0
+    mean_overlap_abs_weight = 0.0
+    if "overlap_weight_abs_mean" in sub.columns:
+        mean_overlap_abs_weight = float(
+            pd.to_numeric(sub["overlap_weight_abs_mean"], errors="coerce").fillna(0.0).mean()
+        )
     # Normalize components to ~[0,1] scale then weighted sum
     score = (
         w_mean_log10q * _normalize_score(mean_log10q / 10.0)  # -log10(q) often 1–20
         + w_n_pathways * _normalize_score(n_pathways / 50.0)
         + w_n_genes * _normalize_score(n_genes / 200.0)
         + w_mean_gene_weight * _normalize_score(mean_gw)
+        + w_overlap_weight_abs_mean * _normalize_score(mean_overlap_abs_weight)
     )
     return _normalize_score(score)
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -327,6 +328,114 @@ def _build_module_detailed_rows(stage: StageSpec) -> pd.DataFrame:
     )
 
 
+def _token_set(raw: Any) -> set[str]:
+    txt = str(raw or "").strip()
+    if not txt:
+        return set()
+    parts = [p.strip().lower() for p in re.split(r"[;,|]", txt) if p.strip()]
+    return set(parts)
+
+
+def _jaccard(a: set[str], b: set[str]) -> float:
+    if not a and not b:
+        return 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return float(inter / union) if union else 0.0
+
+
+def _build_module_detailed_rows_with_families(
+    stage_specs: Sequence[StageSpec],
+    *,
+    similarity_threshold: float = 0.35,
+) -> pd.DataFrame:
+    """
+    Build cluster-level module rows with cross-stage family matching.
+
+    Family matching uses non-canonical similarity (overlap genes + pathways)
+    so detailed modules can remain granular but still be tracked longitudinally.
+    """
+    out_rows: List[Dict[str, Any]] = []
+    family_registry: Dict[int, Dict[str, Any]] = {}
+    family_display_label: Dict[int, str] = {}
+    next_family_id = 1
+
+    for spec in stage_specs:
+        if not spec.modules_detailed_csv.exists():
+            continue
+        df = pd.read_csv(spec.modules_detailed_csv)
+        label_col = _first_existing_column(
+            df, ["Module_primary", "Module_theme", "Module", "module", "module_name"]
+        )
+        display_col = _first_existing_column(df, ["Module", "module", "module_name", "Module_display"])
+        if label_col is None:
+            continue
+        score_col = _first_existing_column(df, ["Score", "score"])
+        genes_col = _first_existing_column(df, ["Overlap_genes", "Main_genes"])
+        pathways_col = _first_existing_column(df, ["Main_pathways", "Module_supporting_perturbation"])
+
+        work_cols = [label_col] + ([display_col] if display_col and display_col != label_col else [])
+        if score_col:
+            work_cols.append(score_col)
+        if genes_col:
+            work_cols.append(genes_col)
+        if pathways_col and pathways_col not in work_cols:
+            work_cols.append(pathways_col)
+        work = df[work_cols].copy()
+        work[label_col] = work[label_col].astype(str).str.strip()
+        work = work[work[label_col] != ""]
+        if score_col:
+            work[score_col] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0)
+            work = work.sort_values(score_col, ascending=False).reset_index(drop=True)
+            work["score"] = work[score_col]
+        else:
+            work = work.reset_index(drop=True)
+            work["score"] = 0.0
+
+        used_family_ids: set[int] = set()
+        for rank_idx, (_, row) in enumerate(work.iterrows(), start=1):
+            label = str(row.get(label_col) or "").strip()
+            display = str(row.get(display_col) or label).strip()
+            genes = _token_set(row.get(genes_col)) if genes_col else set()
+            pathways = _token_set(row.get(pathways_col)) if pathways_col else set()
+
+            best_family: Optional[int] = None
+            best_score = -1.0
+            for fam_id, sig in family_registry.items():
+                if fam_id in used_family_ids:
+                    continue
+                g_sim = _jaccard(genes, sig.get("genes", set()))
+                p_sim = _jaccard(pathways, sig.get("pathways", set()))
+                sim = 0.7 * g_sim + 0.3 * p_sim
+                if label and label == sig.get("label"):
+                    sim = max(sim, 0.5)
+                if sim > best_score:
+                    best_score = sim
+                    best_family = fam_id
+
+            if best_family is not None and best_score >= float(similarity_threshold):
+                fam_id = best_family
+            else:
+                fam_id = next_family_id
+                next_family_id += 1
+                family_display_label[fam_id] = display or label or f"detailed_module_{fam_id}"
+
+            used_family_ids.add(fam_id)
+            family_registry[fam_id] = {"genes": genes, "pathways": pathways, "label": label}
+            family_key = f"{family_display_label[fam_id]} | family_{fam_id:03d}"
+            out_rows.append(
+                {
+                    "stage_index": spec.stage_index,
+                    "comparison": spec.comparison_label,
+                    "rank": rank_idx,
+                    "score": float(row["score"]),
+                    "module": family_key,
+                }
+            )
+
+    return pd.DataFrame(out_rows)
+
+
 def _enricher_completeness_missing(project_path: Path) -> List[str]:
     """Load production enricher_completeness.json and return human-readable gaps."""
     try:
@@ -372,7 +481,6 @@ def aggregate_stage_tables(
     pathways: List[pd.DataFrame] = []
     modules: List[pd.DataFrame] = []
     module_variants: List[pd.DataFrame] = []
-    module_detailed: List[pd.DataFrame] = []
     missing: List[str] = []
 
     for spec in stage_specs:
@@ -380,7 +488,6 @@ def aggregate_stage_tables(
         p = _build_pathway_rows(spec)
         m = _build_module_rows(spec)
         mv = _build_module_variant_rows(spec)
-        md = _build_module_detailed_rows(spec)
         if g.empty:
             missing.append(f"{spec.comparison_label}: mapper missing or no gene columns ({spec.mapper_combined_csv})")
         if p.empty:
@@ -389,7 +496,6 @@ def aggregate_stage_tables(
         pathways.append(p)
         modules.append(m)
         module_variants.append(mv)
-        module_detailed.append(md)
 
     genes_df = pd.concat(genes, ignore_index=True) if genes else pd.DataFrame()
     pathways_df = pd.concat(pathways, ignore_index=True) if pathways else pd.DataFrame()
@@ -397,9 +503,7 @@ def aggregate_stage_tables(
     modules_variant_df = (
         pd.concat(module_variants, ignore_index=True) if module_variants else pd.DataFrame()
     )
-    modules_detailed_df = (
-        pd.concat(module_detailed, ignore_index=True) if module_detailed else pd.DataFrame()
-    )
+    modules_detailed_df = _build_module_detailed_rows_with_families(stage_specs)
     if extra_missing:
         missing = list(missing) + list(extra_missing)
     if strict_missing and missing:

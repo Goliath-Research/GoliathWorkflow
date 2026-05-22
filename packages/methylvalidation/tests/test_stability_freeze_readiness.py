@@ -14,6 +14,7 @@ from methyl_validation.grok_readiness import (
     resolve_grok_api_key,
 )
 from methyl_validation.stability_freeze_readiness import (
+    _module_trajectory_summary,
     _resolve_report_output_path,
     analyze_project_root,
     main,
@@ -435,3 +436,20 @@ def test_ordered_stage_narratives_tolerates_project_without_ordered_label_api(tm
     narr = report["progression"]["ordered_stage_narratives"]
     assert [n["comparison_label"] for n in narr] == ["g1", "g2", "g3", "g4"]
     assert narr[0]["description"] == "desc:g1"
+
+
+def test_mostly_monotone_uses_single_dominant_direction(tmp_path: Path):
+    mod_csv = tmp_path / "modules_long.csv"
+    pd.DataFrame(
+        [
+            {"stage_index": 0, "comparison": "g1", "rank": 1, "score": 1.0, "module": "A"},
+            {"stage_index": 1, "comparison": "g2", "rank": 1, "score": 2.0, "module": "A"},
+            {"stage_index": 2, "comparison": "g3", "rank": 1, "score": 1.0, "module": "A"},
+            {"stage_index": 3, "comparison": "g4", "rank": 1, "score": 1.0, "module": "A"},
+        ]
+    ).to_csv(mod_csv, index=False)
+
+    traj = _module_trajectory_summary(mod_csv, ["g1", "g2", "g3", "g4"])
+    assert traj["monotone_denominator"] == 1
+    assert traj["mostly_monotone_up_count"] == 0
+    assert traj["mostly_monotone_down_count"] == 0
