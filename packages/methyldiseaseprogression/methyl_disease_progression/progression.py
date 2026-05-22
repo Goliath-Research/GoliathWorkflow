@@ -211,7 +211,10 @@ def _build_module_rows(stage: StageSpec) -> pd.DataFrame:
     if not stage.modules_csv.exists():
         return pd.DataFrame()
     df = pd.read_csv(stage.modules_csv)
-    module_col = _first_existing_column(df, ["Module", "module", "module_name"])
+    module_col = _first_existing_column(
+        df,
+        ["Module_display", "Module_primary", "Module", "module", "module_name"],
+    )
     if module_col is None:
         return pd.DataFrame()
     score_col = _first_existing_column(df, ["Score", "score"])
