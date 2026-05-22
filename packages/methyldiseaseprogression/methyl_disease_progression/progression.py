@@ -64,7 +64,17 @@ def resolve_stage_specs(
         if isinstance(cfg_order, list):
             ordered_labels = [str(x) for x in cfg_order]
     if not ordered_labels:
-        ordered_labels = project.get_ordered_comparison_labels()
+        # Backward-compatible fallback: older methyl_utils ProjectConfig versions may not
+        # expose get_ordered_comparison_labels(), so use comparison iteration order.
+        get_ordered = getattr(project, "get_ordered_comparison_labels", None)
+        if callable(get_ordered):
+            resolved_order = get_ordered()
+            if isinstance(resolved_order, list):
+                ordered_labels = [str(x) for x in resolved_order]
+            elif isinstance(resolved_order, tuple):
+                ordered_labels = [str(x) for x in resolved_order]
+        else:
+            ordered_labels = [str(c.comparison_label or c.disease_group) for c in comparisons]
     if ordered_labels:
         for token in ordered_labels:
             c = by_disease_group.get(token) or by_label.get(token)
