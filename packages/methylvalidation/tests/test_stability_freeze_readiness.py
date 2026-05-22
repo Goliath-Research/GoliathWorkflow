@@ -87,7 +87,9 @@ def _write_minimal_project(tree: Path) -> None:
         "genes_rows": 10,
         "pathways_rows": 20,
         "modules_rows": 8,
+        "modules_variant_rows": 8,
         "modules_long_csv": str(prog / "modules_long.csv"),
+        "modules_long_variant_csv": str(prog / "modules_long_variant.csv"),
     }
     (prog / "summary.json").write_text(json.dumps(progression_summary), encoding="utf-8")
 
@@ -101,6 +103,7 @@ def _write_minimal_project(tree: Path) -> None:
             {"stage_index": si, "comparison": comp, "rank": 2, "score": 0.5, "module": "ModB"}
         )
     pd.DataFrame(rows).to_csv(prog / "modules_long.csv", index=False)
+    pd.DataFrame(rows).to_csv(prog / "modules_long_variant.csv", index=False)
     pd.DataFrame(
         {
             "entity_type": ["module"],
@@ -160,6 +163,9 @@ def test_build_sanitized_ai_payload_no_path_like_strings(tmp_path: Path):
     report = analyze_project_root(root)
     payload = build_sanitized_ai_payload(report, disease_context="Example disease", top_n=5)
     assert not payload_contains_path_like_strings(payload)
+    ps = payload.get("progression_summary") or {}
+    assert "module_trajectory_variant" in ps
+    assert "module_top_trends_variant" in ps
 
 
 def test_build_sanitized_ai_payload_scrubs_paths_in_verdict_text(tmp_path: Path):
@@ -361,7 +367,9 @@ def test_ordered_stage_narratives_in_report_grok_payload_and_markdown(tmp_path: 
         "genes_rows": 10,
         "pathways_rows": 20,
         "modules_rows": 8,
+        "modules_variant_rows": 8,
         "modules_long_csv": str(prog / "modules_long.csv"),
+        "modules_long_variant_csv": str(prog / "modules_long_variant.csv"),
     }
     (prog / "summary.json").write_text(json.dumps(progression_summary), encoding="utf-8")
 
@@ -369,6 +377,7 @@ def test_ordered_stage_narratives_in_report_grok_payload_and_markdown(tmp_path: 
     for si, comp in enumerate(["pca_pca1", "pca_pca2"]):
         rows.append({"stage_index": si, "comparison": comp, "rank": 1, "score": 0.2, "module": "ModA"})
     pd.DataFrame(rows).to_csv(prog / "modules_long.csv", index=False)
+    pd.DataFrame(rows).to_csv(prog / "modules_long_variant.csv", index=False)
 
     report = analyze_project_root(root)
     narr = report["progression"]["ordered_stage_narratives"]

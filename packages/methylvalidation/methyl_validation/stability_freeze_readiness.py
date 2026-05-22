@@ -282,6 +282,12 @@ def analyze_project_root(
     ordered_labels = list(progression_summary.get("ordered_comparison_labels") or [])
     modules_long = progression_summary.get("modules_long_csv")
     mod_path = Path(modules_long) if modules_long else progression_dir / "modules_long.csv"
+    modules_long_variant = progression_summary.get("modules_long_variant_csv")
+    mod_variant_path = (
+        Path(modules_long_variant)
+        if modules_long_variant
+        else progression_dir / "modules_long_variant.csv"
+    )
 
     ordered_stage_narratives: List[Dict[str, Any]] = []
     if production_project_path.is_file():
@@ -358,8 +364,10 @@ def analyze_project_root(
                 "genes": progression_summary.get("genes_rows"),
                 "pathways": progression_summary.get("pathways_rows"),
                 "modules": progression_summary.get("modules_rows"),
+                "modules_variant": progression_summary.get("modules_variant_rows"),
             },
             "module_trajectory": _module_trajectory_summary(mod_path, ordered_labels),
+            "module_trajectory_variant": _module_trajectory_summary(mod_variant_path, ordered_labels),
             "entity_labels": _label_mix(progression_dir / "entities_progression_labels.csv"),
             "ordered_stage_narratives": ordered_stage_narratives,
         },
@@ -667,6 +675,27 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
         if top:
             lines.extend(["", "| Entity | Pearson | Mean score |", "|--------|---------|------------|"])
             for row in top[:10]:
+                lines.append(
+                    f"| {row.get('entity')} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
+                )
+    traj_var = p.get("module_trajectory_variant") or {}
+    if traj_var:
+        lines.extend(
+            [
+                "",
+                "### Module variant trajectory (dual-label view)",
+                "",
+                f"- Entities with rows: {traj_var.get('n_unique_entities')}",
+                f"- Entities present all stages: {traj_var.get('entities_all_stages')}",
+                f"- Median |Pearson(stage_ord, score)|: {traj_var.get('median_abs_pearson_stage_vs_score')}",
+                f"- Fraction monotone up (among scored): {traj_var.get('fraction_monotone_up')}",
+                f"- Fraction monotone down (among scored): {traj_var.get('fraction_monotone_down')}",
+            ]
+        )
+        top_var = traj_var.get("top_by_abs_trend") or []
+        if top_var:
+            lines.extend(["", "| Entity | Pearson | Mean score |", "|--------|---------|------------|"])
+            for row in top_var[:10]:
                 lines.append(
                     f"| {row.get('entity')} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
                 )

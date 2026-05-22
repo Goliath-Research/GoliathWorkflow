@@ -241,6 +241,41 @@ def _build_module_rows(stage: StageSpec) -> pd.DataFrame:
     )
 
 
+def _build_module_variant_rows(stage: StageSpec) -> pd.DataFrame:
+    """Variant module rows for supplementary trend analysis (display-level labels)."""
+    if not stage.modules_csv.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(stage.modules_csv)
+    module_col = _first_existing_column(
+        df,
+        ["Module_display", "Module", "module", "module_name"],
+    )
+    if module_col is None:
+        return pd.DataFrame()
+    score_col = _first_existing_column(df, ["Score", "score"])
+    work_cols = [module_col] + ([score_col] if score_col else [])
+    work = df[work_cols].copy()
+    work[module_col] = work[module_col].astype(str).str.strip()
+    work = work[work[module_col] != ""]
+    if score_col:
+        work[score_col] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0)
+        work = work.sort_values(score_col, ascending=False).reset_index(drop=True)
+        work["score"] = work[score_col]
+    else:
+        work = work.reset_index(drop=True)
+        work["score"] = 0.0
+    work["rank"] = work.index + 1
+    return pd.DataFrame(
+        {
+            "stage_index": stage.stage_index,
+            "comparison": stage.comparison_label,
+            "rank": work["rank"],
+            "score": work["score"],
+            "module": work[module_col].astype(str),
+        }
+    )
+
+
 def _enricher_completeness_missing(project_path: Path) -> List[str]:
     """Load production enricher_completeness.json and return human-readable gaps."""
     try:
@@ -281,16 +316,18 @@ def aggregate_stage_tables(
     *,
     strict_missing: bool = False,
     extra_missing: Optional[Sequence[str]] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
     genes: List[pd.DataFrame] = []
     pathways: List[pd.DataFrame] = []
     modules: List[pd.DataFrame] = []
+    module_variants: List[pd.DataFrame] = []
     missing: List[str] = []
 
     for spec in stage_specs:
         g = _build_gene_rows(spec)
         p = _build_pathway_rows(spec)
         m = _build_module_rows(spec)
+        mv = _build_module_variant_rows(spec)
         if g.empty:
             missing.append(f"{spec.comparison_label}: mapper missing or no gene columns ({spec.mapper_combined_csv})")
         if p.empty:
@@ -298,10 +335,14 @@ def aggregate_stage_tables(
         genes.append(g)
         pathways.append(p)
         modules.append(m)
+        module_variants.append(mv)
 
     genes_df = pd.concat(genes, ignore_index=True) if genes else pd.DataFrame()
     pathways_df = pd.concat(pathways, ignore_index=True) if pathways else pd.DataFrame()
     modules_df = pd.concat(modules, ignore_index=True) if modules else pd.DataFrame()
+    modules_variant_df = (
+        pd.concat(module_variants, ignore_index=True) if module_variants else pd.DataFrame()
+    )
     if extra_missing:
         missing = list(missing) + list(extra_missing)
     if strict_missing and missing:
@@ -311,8 +352,9 @@ def aggregate_stage_tables(
         "genes_rows": int(len(genes_df)),
         "pathways_rows": int(len(pathways_df)),
         "modules_rows": int(len(modules_df)),
+        "modules_variant_rows": int(len(modules_variant_df)),
     }
-    return genes_df, pathways_df, modules_df, io_summary
+    return genes_df, pathways_df, modules_df, modules_variant_df, io_summary
 
 
 def _labels_for_entity(stages_present: List[int], scores: List[float], max_stage_index: int) -> List[str]:
@@ -486,7 +528,7 @@ def run_progression_report(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     enricher_missing = _enricher_completeness_missing(project_path)
-    genes_df, pathways_df, modules_df, io_summary = aggregate_stage_tables(
+    genes_df, pathways_df, modules_df, modules_variant_df, io_summary = aggregate_stage_tables(
         stage_specs,
         strict_missing=strict_missing,
         extra_missing=enricher_missing,
@@ -523,12 +565,14 @@ def run_progression_report(
     genes_path = out_dir / "genes_long.csv"
     pathways_path = out_dir / "pathways_long.csv"
     modules_path = out_dir / "modules_long.csv"
+    modules_variant_path = out_dir / "modules_long_variant.csv"
     labels_path = out_dir / "entities_progression_labels.csv"
     summary_path = out_dir / "summary.json"
 
     genes_df.to_csv(genes_path, index=False)
     pathways_df.to_csv(pathways_path, index=False)
     modules_df.to_csv(modules_path, index=False)
+    modules_variant_df.to_csv(modules_variant_path, index=False)
     labels_df.to_csv(labels_path, index=False)
 
     summary: Dict[str, Any] = {
@@ -538,6 +582,7 @@ def run_progression_report(
         "genes_long_csv": str(genes_path),
         "pathways_long_csv": str(pathways_path),
         "modules_long_csv": str(modules_path),
+        "modules_long_variant_csv": str(modules_variant_path),
         "labels_csv": str(labels_path),
     }
     _gsm = gene_set_fractions_summary(metrics_df, gene_cfg)

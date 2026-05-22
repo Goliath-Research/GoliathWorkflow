@@ -102,10 +102,14 @@ def build_sanitized_ai_payload(
     fr = report.get("freeze") or {}
     prog = report.get("progression") or {}
     traj = dict(prog.get("module_trajectory") or {})
+    traj_variant = dict(prog.get("module_trajectory_variant") or {})
     traj.pop("modules_csv", None)
     traj.pop("error", None)
+    traj_variant.pop("modules_csv", None)
+    traj_variant.pop("error", None)
 
     top_trend = list((traj.get("top_by_abs_trend") or [])[:top_n])
+    top_trend_variant = list((traj_variant.get("top_by_abs_trend") or [])[:top_n])
     labels = prog.get("entity_labels") or {}
     lc = labels.get("label_counts") or {}
     top_labels = dict(list(lc.items())[:top_n]) if isinstance(lc, dict) else {}
@@ -149,7 +153,20 @@ def build_sanitized_ai_payload(
                 )
                 if k in traj
             },
+            "module_trajectory_variant": {
+                k: traj_variant[k]
+                for k in (
+                    "n_rows",
+                    "n_unique_entities",
+                    "entities_all_stages",
+                    "median_abs_pearson_stage_vs_score",
+                    "fraction_monotone_up",
+                    "fraction_monotone_down",
+                )
+                if k in traj_variant
+            },
             "module_top_trends": top_trend,
+            "module_top_trends_variant": top_trend_variant,
             "progression_label_counts_top": top_labels,
             "entity_counts_by_type": labels.get("by_type"),
             "ordered_stage_narratives": prog.get("ordered_stage_narratives") or [],
