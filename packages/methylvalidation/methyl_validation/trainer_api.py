@@ -148,7 +148,7 @@ def build_model_backend_steps(
                     tabular_method_selection_stat=(
                         config.tabular_method_selection_stat if config is not None else "mean"
                     ),
-                    max_dmps=(config.tabular_max_dmps if config is not None else 5000),
+                    max_dmps=(config.tabular_max_dmps if config is not None else 0),
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                     covariates_strict_join=(config.covariates_strict_join if config is not None else False),
@@ -289,7 +289,7 @@ def build_model_backend_steps(
                     project_json=project_json,
                     bundle_h5=bundle_dir / "model_feature_bundle.h5",
                     output_dir=model_dir,
-                    max_dmps=(config.tabular_max_dmps if config is not None else 5000),
+                    max_dmps=(config.tabular_max_dmps if config is not None else 0),
                     latent_dim=(config.generative_latent_dim if config is not None else 16),
                     kl_weight=(config.generative_kl_weight if config is not None else 0.1),
                     density_type=(config.generative_density_type if config is not None else "diag_gaussian"),
@@ -391,7 +391,7 @@ def build_model_backend_steps(
                 project_json=project_json,
                 predictor_output_dir=(predictor_output_dir or (project_json.parent / "predictors")),
                 classifier_output_dir=(predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"),
-                max_dmps=(config.tabular_max_dmps if config is not None else 5000),
+                max_dmps=(config.tabular_max_dmps if config is not None else 0),
                 quantiles=(config.observed_feature_quantiles if config is not None else None),
                 min_coverage=(config.observed_feature_min_coverage if config is not None else 1),
                 include_dmp_features=(config.observed_feature_include_dmp if config is not None else True),

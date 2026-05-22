@@ -208,7 +208,7 @@ def train_generative_model(
     bundle_h5: str | Path,
     output_dir: str | Path,
     *,
-    max_dmps: int = 5000,
+    max_dmps: Optional[int] = None,
     latent_dim: int = 16,
     kl_weight: float = 0.1,
     density_type: str = "diag_gaussian",
@@ -250,8 +250,9 @@ def train_generative_model(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dmp_df = load_bundle_dmp_index(bundle_h5)
-    if max_dmps and len(dmp_df) > max_dmps:
-        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps).copy()
+    max_dmps_norm = int(max_dmps) if (max_dmps is not None and int(max_dmps) > 0) else 0
+    if max_dmps_norm and len(dmp_df) > max_dmps_norm:
+        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
     refs, feature_order = _build_reference_map(dmp_df)
 
     resolved = project.get_resolved_groups()
@@ -431,7 +432,7 @@ def train_generative_model(
         "n_classes": int(n_classes),
         "project_json": str(Path(project_json).resolve()),
         "bundle_h5": str(Path(bundle_h5).resolve()),
-        "max_dmps": int(max_dmps),
+        "max_dmps": int(max_dmps_norm),
         "n_features": int(X.shape[1]),
         "n_dmps": int(len(feature_order)),
         "n_covariates": int(n_covariates),

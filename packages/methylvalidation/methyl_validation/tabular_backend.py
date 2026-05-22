@@ -374,7 +374,7 @@ def train_tabular_model(
     tabular_methods: Optional[Sequence[Any]] = None,
     tabular_method_selection_metric: str = "balanced_accuracy",
     tabular_method_selection_stat: str = "mean",
-    max_dmps: int = 5000,
+    max_dmps: Optional[int] = None,
     covariates_path: Optional[str] = None,
     covariate_id_column: str = "sample_id",
     covariates_strict_join: bool = False,
@@ -413,8 +413,9 @@ def train_tabular_model(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dmp_df = load_bundle_dmp_index(bundle_h5)
-    if max_dmps and len(dmp_df) > max_dmps:
-        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps).copy()
+    max_dmps_norm = int(max_dmps) if (max_dmps is not None and int(max_dmps) > 0) else 0
+    if max_dmps_norm and len(dmp_df) > max_dmps_norm:
+        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
     refs, feature_order = _build_reference_map(dmp_df)
 
     resolved = project.get_resolved_groups()
@@ -491,7 +492,7 @@ def train_tabular_model(
             else None
         ),
         "dmp_index_fingerprint": dmp_index_fingerprint,
-        "max_dmps": int(max_dmps),
+        "max_dmps": int(max_dmps_norm),
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": str(covariate_id_column),
         "covariates_strict_join": bool(covariates_strict_join),
@@ -902,7 +903,7 @@ def train_tabular_model(
             "class_names": class_names,
             "project_json": str(Path(project_json).resolve()),
             "bundle_h5": str(Path(bundle_h5).resolve()),
-            "max_dmps": int(max_dmps),
+            "max_dmps": int(max_dmps_norm),
             "n_features": int(X.shape[1]),
             "n_dmps": int(len(feature_order)),
             "feature_order": [{"chromosome": c, "context": ctx, "position": int(pos)} for c, ctx, pos in feature_order],

@@ -156,7 +156,7 @@ def train_and_apply_ecdf_second_stage(
     project_json: str | Path,
     predictor_output_dir: str | Path,
     classifier_output_dir: str | Path,
-    max_dmps: int = 5000,
+    max_dmps: Optional[int] = None,
     quantiles: Optional[List[float]] = None,
     min_coverage: int = 1,
     include_dmp_features: bool = True,
@@ -190,8 +190,9 @@ def train_and_apply_ecdf_second_stage(
     bundle_dir = project_json.parent / "model_bundle"
     bundle_h5 = _ensure_bundle_h5(project_json, bundle_dir)
     dmp_df = load_bundle_dmp_index(bundle_h5)
-    if max_dmps and len(dmp_df) > max_dmps:
-        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps).copy()
+    max_dmps_norm = int(max_dmps) if (max_dmps is not None and int(max_dmps) > 0) else 0
+    if max_dmps_norm and len(dmp_df) > max_dmps_norm:
+        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
 
     sample_paths = _sample_paths_from_predictions(df, project_json)
     if not sample_paths:
@@ -283,7 +284,7 @@ def train_and_apply_ecdf_second_stage(
         "observed_cancer_class_labels": [str(x) for x in anchors.cancer_class_labels],
         "observed_anchor_strategy": str(anchors.anchor_strategy),
         "observed_feature_order_fingerprint": str(anchors.feature_order_fingerprint),
-        "max_dmps": int(max_dmps),
+        "max_dmps": int(max_dmps_norm),
         "quantiles": [float(q) for q in (feat.report.get("quantiles") or [])],
         "min_coverage": int(max(1, min_coverage)),
         "refined_balanced_accuracy_labeled_rows": refined_balanced_accuracy,

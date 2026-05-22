@@ -95,7 +95,11 @@ class BackendSharedParams(BaseModel):
 
     model_bundle_dir: Optional[str] = Field(default=None)
     model_weight_column: str = Field(default="effect_size")
-    tabular_max_dmps: int = Field(default=5000, ge=10)
+    tabular_max_dmps: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Optional cap for loci retained from model bundle. null/0 means keep all stable DMPs.",
+    )
 
     feature_mode: str = Field(default="raw_dmp")
     feature_family_set: str = Field(default="dmp")
@@ -557,10 +561,13 @@ class MonteCarloConfig(BaseModel):
             "Current per-run selection uses direct metric values."
         ),
     )
-    tabular_max_dmps: int = Field(
-        default=5000,
-        ge=10,
-        description="For model_backend=tabular_sklearn: cap number of DMP loci selected from bundle index.",
+    tabular_max_dmps: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description=(
+            "For model_backend=tabular_sklearn: optional cap on number of loci selected from bundle index. "
+            "Set null or 0 to keep all stable DMPs."
+        ),
     )
     tabular_save_train_dataset: bool = Field(
         default=True,
