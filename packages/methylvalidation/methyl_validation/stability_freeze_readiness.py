@@ -288,6 +288,12 @@ def analyze_project_root(
         if modules_long_variant
         else progression_dir / "modules_long_variant.csv"
     )
+    modules_long_detailed = progression_summary.get("modules_long_detailed_csv")
+    mod_detailed_path = (
+        Path(modules_long_detailed)
+        if modules_long_detailed
+        else progression_dir / "modules_long_detailed.csv"
+    )
 
     ordered_stage_narratives: List[Dict[str, Any]] = []
     if production_project_path.is_file():
@@ -365,9 +371,11 @@ def analyze_project_root(
                 "pathways": progression_summary.get("pathways_rows"),
                 "modules": progression_summary.get("modules_rows"),
                 "modules_variant": progression_summary.get("modules_variant_rows"),
+                "modules_detailed": progression_summary.get("modules_detailed_rows"),
             },
             "module_trajectory": _module_trajectory_summary(mod_path, ordered_labels),
             "module_trajectory_variant": _module_trajectory_summary(mod_variant_path, ordered_labels),
+            "module_trajectory_detailed": _module_trajectory_summary(mod_detailed_path, ordered_labels),
             "entity_labels": _label_mix(progression_dir / "entities_progression_labels.csv"),
             "ordered_stage_narratives": ordered_stage_narratives,
         },
@@ -544,10 +552,17 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
         except Exception:
             return "n/a"
 
+    def _fmt_pp(x: Any) -> str:
+        try:
+            return f"{float(x):+.1f} pp"
+        except Exception:
+            return "n/a"
+
     def _physician_focus_lines(src_report: Dict[str, Any], verdict: Dict[str, Any]) -> List[str]:
         prog = src_report.get("progression") or {}
         traj = prog.get("module_trajectory") or {}
         traj_var = prog.get("module_trajectory_variant") or {}
+        traj_det = prog.get("module_trajectory_detailed") or {}
         ai = report.get("ai_review") if isinstance(report.get("ai_review"), dict) else {}
         structured = ai.get("structured") if isinstance(ai, dict) else {}
         impact = (
@@ -587,6 +602,31 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             f"- **Directional progression signal**: monotone-up fraction { _fmt_pct(traj.get('fraction_monotone_up')) } (canonical) and { _fmt_pct(traj_var.get('fraction_monotone_up')) } (variant-family).",
             f"- **Canonical vs variant-family agreement**: `{track_match}`.",
         ]
+        if traj_det:
+            out.append(
+                f"- **Cluster-level granularity check**: {traj_det.get('n_unique_entities', 'n/a')} detailed entities with rows; {traj_det.get('entities_all_stages', 'n/a')} present across all stages."
+            )
+            try:
+                canon_n = max(1, int(traj.get("n_unique_entities") or 0))
+                canon_all = int(traj.get("entities_all_stages") or 0)
+                det_n = max(1, int(traj_det.get("n_unique_entities") or 0))
+                det_all = int(traj_det.get("entities_all_stages") or 0)
+                canon_ratio = canon_all / canon_n
+                det_ratio = det_all / det_n
+                delta_pp = (det_ratio - canon_ratio) * 100.0
+                if delta_pp <= -30.0:
+                    granularity_risk = "high"
+                elif delta_pp <= -10.0:
+                    granularity_risk = "medium"
+                else:
+                    granularity_risk = "low"
+                out.append(
+                    "- **Granularity risk indicator**: "
+                    f"`{granularity_risk}` (canonical continuity {_fmt_pct(canon_ratio)}, "
+                    f"detailed continuity {_fmt_pct(det_ratio)}, delta {_fmt_pp(delta_pp)})."
+                )
+            except Exception:
+                out.append("- **Granularity risk indicator**: `unknown` (insufficient continuity metadata).")
         if top:
             top_names = ", ".join(str(r.get("entity")) for r in top if r.get("entity"))
             if top_names:
@@ -765,6 +805,27 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
                 lines.append(
                     f"| {row.get('entity')} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
                 )
+    traj_det = p.get("module_trajectory_detailed") or {}
+    if traj_det:
+        lines.extend(
+            [
+                "",
+                "### Module detailed trajectory (cluster-level view)",
+                "",
+                f"- Entities with rows: {traj_det.get('n_unique_entities')}",
+                f"- Entities present all stages: {traj_det.get('entities_all_stages')}",
+                f"- Median |Pearson(stage_ord, score)|: {traj_det.get('median_abs_pearson_stage_vs_score')}",
+                f"- Fraction monotone up (among scored): {traj_det.get('fraction_monotone_up')}",
+                f"- Fraction monotone down (among scored): {traj_det.get('fraction_monotone_down')}",
+            ]
+        )
+        top_det = traj_det.get("top_by_abs_trend") or []
+        if top_det:
+            lines.extend(["", "| Entity | Pearson | Mean score |", "|--------|---------|------------|"])
+            for row in top_det[:10]:
+                lines.append(
+                    f"| {row.get('entity')} | {row.get('pearson_stage_vs_score')} | {row.get('mean_score')} |"
+                )
     labels = p.get("entity_labels") or {}
     if labels.get("label_counts"):
         lines.extend(["", "### Progression label counts (entities_progression_labels)", ""])
@@ -822,6 +883,7 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             for key, title in (
                 ("canonical_track_assessment", "Canonical track assessment"),
                 ("variant_track_assessment", "Variant track assessment"),
+                ("detailed_track_assessment", "Detailed track assessment"),
                 ("track_divergence_assessment", "Track divergence assessment"),
             ):
                 txt = struct.get(key)

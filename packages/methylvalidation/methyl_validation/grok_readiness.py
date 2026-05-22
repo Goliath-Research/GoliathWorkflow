@@ -103,22 +103,30 @@ def build_sanitized_ai_payload(
     prog = report.get("progression") or {}
     traj = dict(prog.get("module_trajectory") or {})
     traj_variant = dict(prog.get("module_trajectory_variant") or {})
+    traj_detailed = dict(prog.get("module_trajectory_detailed") or {})
     traj.pop("modules_csv", None)
     traj.pop("error", None)
     traj_variant.pop("modules_csv", None)
     traj_variant.pop("error", None)
+    traj_detailed.pop("modules_csv", None)
+    traj_detailed.pop("error", None)
 
     top_trend = list((traj.get("top_by_abs_trend") or [])[:top_n])
     top_trend_variant = list((traj_variant.get("top_by_abs_trend") or [])[:top_n])
+    top_trend_detailed = list((traj_detailed.get("top_by_abs_trend") or [])[:top_n])
     track_comparison = {
         "canonical_entities_all_stages": traj.get("entities_all_stages"),
         "variant_entities_all_stages": traj_variant.get("entities_all_stages"),
+        "detailed_entities_all_stages": traj_detailed.get("entities_all_stages"),
         "canonical_fraction_monotone_up": traj.get("fraction_monotone_up"),
         "canonical_fraction_monotone_down": traj.get("fraction_monotone_down"),
         "variant_fraction_monotone_up": traj_variant.get("fraction_monotone_up"),
         "variant_fraction_monotone_down": traj_variant.get("fraction_monotone_down"),
+        "detailed_fraction_monotone_up": traj_detailed.get("fraction_monotone_up"),
+        "detailed_fraction_monotone_down": traj_detailed.get("fraction_monotone_down"),
         "canonical_median_abs_pearson": traj.get("median_abs_pearson_stage_vs_score"),
         "variant_median_abs_pearson": traj_variant.get("median_abs_pearson_stage_vs_score"),
+        "detailed_median_abs_pearson": traj_detailed.get("median_abs_pearson_stage_vs_score"),
     }
     labels = prog.get("entity_labels") or {}
     lc = labels.get("label_counts") or {}
@@ -175,8 +183,21 @@ def build_sanitized_ai_payload(
                 )
                 if k in traj_variant
             },
+            "module_trajectory_detailed": {
+                k: traj_detailed[k]
+                for k in (
+                    "n_rows",
+                    "n_unique_entities",
+                    "entities_all_stages",
+                    "median_abs_pearson_stage_vs_score",
+                    "fraction_monotone_up",
+                    "fraction_monotone_down",
+                )
+                if k in traj_detailed
+            },
             "module_top_trends": top_trend,
             "module_top_trends_variant": top_trend_variant,
+            "module_top_trends_detailed": top_trend_detailed,
             "module_track_comparison": track_comparison,
             "progression_label_counts_top": top_labels,
             "entity_counts_by_type": labels.get("by_type"),
@@ -225,6 +246,12 @@ def redact_report_for_export(report: Dict[str, Any]) -> Dict[str, Any]:
         mt = prog.get("module_trajectory")
         if isinstance(mt, dict):
             mt.pop("modules_csv", None)
+        mt_var = prog.get("module_trajectory_variant")
+        if isinstance(mt_var, dict):
+            mt_var.pop("modules_csv", None)
+        mt_det = prog.get("module_trajectory_detailed")
+        if isinstance(mt_det, dict):
+            mt_det.pop("modules_csv", None)
     return out
 
 
@@ -320,13 +347,15 @@ def run_grok_readiness_review(
         '"suggested_human_checks":["string",...],'
         '"canonical_track_assessment":"short paragraph",'
         '"variant_track_assessment":"short paragraph",'
+        '"detailed_track_assessment":"short paragraph",'
         '"track_divergence_assessment":"short paragraph",'
         '"impact_on_confidence":"high|medium|low",'
         '"disease_progression_alignment":"short paragraph"} '
         "Assess whether the progression/module signals appear broadly plausible for the stated disease context "
         "and ordered stages; flag contradictions and uncertainty. "
-        "You MUST explicitly compare canonical module trajectory vs variant module trajectory. "
-        "If the tracks diverge, explain why and how that should affect confidence. "
+        "You MUST explicitly compare canonical module trajectory vs variant module trajectory, "
+        "and when a detailed cluster-level module trajectory is provided, compare that too. "
+        "If tracks diverge, explain why and how that should affect confidence. "
         "Do not invent unseen statistics."
     )
     user_prompt = (

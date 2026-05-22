@@ -85,6 +85,8 @@ def _write_stage_outputs(tmp_path: Path) -> None:
         (enricher_dir / "enrichment_merged.csv").write_text("\n".join(p_rows) + "\n", encoding="utf-8")
         m_rows = ["Module,Score", f"Module_{stage},0.5"]
         (enricher_dir / "modules_ranked.csv").write_text("\n".join(m_rows) + "\n", encoding="utf-8")
+        md_rows = ["Module,Score", f"Module_{stage} (M1),0.5"]
+        (enricher_dir / "modules_ranked_detailed.csv").write_text("\n".join(md_rows) + "\n", encoding="utf-8")
 
 
 def test_progression_report_writes_outputs(tmp_path: Path):
@@ -97,6 +99,7 @@ def test_progression_report_writes_outputs(tmp_path: Path):
     assert (out_dir / "pathways_long.csv").exists()
     assert (out_dir / "modules_long.csv").exists()
     assert (out_dir / "modules_long_variant.csv").exists()
+    assert (out_dir / "modules_long_detailed.csv").exists()
     assert (out_dir / "entities_progression_labels.csv").exists()
     assert (out_dir / "summary.json").exists()
     assert (out_dir / "report.md").exists()
@@ -112,6 +115,7 @@ def test_progression_report_writes_outputs(tmp_path: Path):
     assert _header(out_dir / "pathways_long.csv") == _LONG_PATHWAY_COLS
     assert _header(out_dir / "modules_long.csv") == _LONG_MODULE_COLS
     assert _header(out_dir / "modules_long_variant.csv") == _LONG_MODULE_COLS
+    assert _header(out_dir / "modules_long_detailed.csv") == _LONG_MODULE_COLS
 
     mod_text = (out_dir / "modules_long.csv").read_text(encoding="utf-8")
     for legacy in _LEGACY_LONG_COLS:

@@ -88,8 +88,10 @@ def _write_minimal_project(tree: Path) -> None:
         "pathways_rows": 20,
         "modules_rows": 8,
         "modules_variant_rows": 8,
+        "modules_detailed_rows": 8,
         "modules_long_csv": str(prog / "modules_long.csv"),
         "modules_long_variant_csv": str(prog / "modules_long_variant.csv"),
+        "modules_long_detailed_csv": str(prog / "modules_long_detailed.csv"),
     }
     (prog / "summary.json").write_text(json.dumps(progression_summary), encoding="utf-8")
 
@@ -104,6 +106,7 @@ def _write_minimal_project(tree: Path) -> None:
         )
     pd.DataFrame(rows).to_csv(prog / "modules_long.csv", index=False)
     pd.DataFrame(rows).to_csv(prog / "modules_long_variant.csv", index=False)
+    pd.DataFrame(rows).to_csv(prog / "modules_long_detailed.csv", index=False)
     pd.DataFrame(
         {
             "entity_type": ["module"],
@@ -142,6 +145,7 @@ def test_analyze_and_render_go(tmp_path: Path):
     assert "Stability and freeze readiness report" in md
     assert "Physician-focused interpretation" in md
     assert "Full technical details remain in sections below" in md
+    assert "Granularity risk indicator" in md
     assert "## Progression" in md
     assert "ModA" in md or "module" in md.lower()
 
@@ -168,7 +172,9 @@ def test_build_sanitized_ai_payload_no_path_like_strings(tmp_path: Path):
     assert not payload_contains_path_like_strings(payload)
     ps = payload.get("progression_summary") or {}
     assert "module_trajectory_variant" in ps
+    assert "module_trajectory_detailed" in ps
     assert "module_top_trends_variant" in ps
+    assert "module_top_trends_detailed" in ps
     assert "module_track_comparison" in ps
 
 
@@ -220,6 +226,7 @@ def test_render_markdown_ai_advisory_section(tmp_path: Path):
             "suggested_human_checks": ["Review pathways"],
             "canonical_track_assessment": "Canonical track is stable.",
             "variant_track_assessment": "Variant track is sparse.",
+            "detailed_track_assessment": "Detailed clusters provide finer granularity.",
             "track_divergence_assessment": "Tracks diverge due to label granularity.",
             "impact_on_confidence": "medium",
             "disease_progression_alignment": "Placeholder alignment text.",
@@ -230,6 +237,7 @@ def test_render_markdown_ai_advisory_section(tmp_path: Path):
     assert "mixed" in md
     assert "Signal A" in md
     assert "Canonical track assessment" in md
+    assert "Detailed track assessment" in md
     assert "Impact on confidence" in md
 
 
@@ -378,8 +386,10 @@ def test_ordered_stage_narratives_in_report_grok_payload_and_markdown(tmp_path: 
         "pathways_rows": 20,
         "modules_rows": 8,
         "modules_variant_rows": 8,
+        "modules_detailed_rows": 8,
         "modules_long_csv": str(prog / "modules_long.csv"),
         "modules_long_variant_csv": str(prog / "modules_long_variant.csv"),
+        "modules_long_detailed_csv": str(prog / "modules_long_detailed.csv"),
     }
     (prog / "summary.json").write_text(json.dumps(progression_summary), encoding="utf-8")
 
@@ -388,6 +398,7 @@ def test_ordered_stage_narratives_in_report_grok_payload_and_markdown(tmp_path: 
         rows.append({"stage_index": si, "comparison": comp, "rank": 1, "score": 0.2, "module": "ModA"})
     pd.DataFrame(rows).to_csv(prog / "modules_long.csv", index=False)
     pd.DataFrame(rows).to_csv(prog / "modules_long_variant.csv", index=False)
+    pd.DataFrame(rows).to_csv(prog / "modules_long_detailed.csv", index=False)
 
     report = analyze_project_root(root)
     narr = report["progression"]["ordered_stage_narratives"]
