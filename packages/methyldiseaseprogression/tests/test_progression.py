@@ -197,3 +197,24 @@ def test_progression_variant_prefers_stable_family_key(tmp_path: Path):
     assert "Stable_PI3K_variant" in mod_variant_text
     assert "Display_pca_pca1" not in mod_variant_text
 
+
+def test_progression_variant_derives_stable_family_from_legacy_columns(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    root = tmp_path / "out" / "prog"
+    stages = ["pca_pca1", "pca_pca2", "pca_pca3"]
+    for stage in stages:
+        enricher_dir = root / "enricher" / "all" / stage
+        m_rows = [
+            "Module_primary,Module_display,Module,Score",
+            f"PI3K / growth-factor signaling,PI3K / growth-factor signaling | Drug_{stage},Legacy_{stage},0.5",
+        ]
+        (enricher_dir / "modules_ranked.csv").write_text("\n".join(m_rows) + "\n", encoding="utf-8")
+
+    summary = run_progression_report(project_path=project_path)
+    out_dir = Path(summary["output_dir"])
+    mod_variant_text = (out_dir / "modules_long_variant.csv").read_text(encoding="utf-8")
+    assert "PI3K / growth-factor signaling | perturbation_evidence" in mod_variant_text
+    assert "Drug_pca_pca1" not in mod_variant_text
+    assert "Drug_pca_pca2" not in mod_variant_text
+    assert "Drug_pca_pca3" not in mod_variant_text

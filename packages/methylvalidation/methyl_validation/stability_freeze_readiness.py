@@ -538,6 +538,71 @@ def _compute_verdict(
 def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> str:
     from .grok_readiness import redact_report_for_export
 
+    def _fmt_pct(x: Any) -> str:
+        try:
+            return f"{float(x) * 100:.1f}%"
+        except Exception:
+            return "n/a"
+
+    def _physician_focus_lines(src_report: Dict[str, Any], verdict: Dict[str, Any]) -> List[str]:
+        prog = src_report.get("progression") or {}
+        traj = prog.get("module_trajectory") or {}
+        traj_var = prog.get("module_trajectory_variant") or {}
+        ai = report.get("ai_review") if isinstance(report.get("ai_review"), dict) else {}
+        structured = ai.get("structured") if isinstance(ai, dict) else {}
+        impact = (
+            str(structured.get("impact_on_confidence")).strip().lower()
+            if isinstance(structured, dict) and structured.get("impact_on_confidence")
+            else None
+        )
+        consistency = (
+            str(structured.get("consistency_assessment")).strip().lower()
+            if isinstance(structured, dict) and structured.get("consistency_assessment")
+            else None
+        )
+        top = (traj.get("top_by_abs_trend") or [])[:3]
+        track_match = "unknown"
+        if traj and traj_var:
+            keys = (
+                "entities_all_stages",
+                "median_abs_pearson_stage_vs_score",
+                "fraction_monotone_up",
+                "fraction_monotone_down",
+            )
+            try:
+                track_match = (
+                    "similar"
+                    if all((traj.get(k) == traj_var.get(k)) for k in keys)
+                    else "different"
+                )
+            except Exception:
+                track_match = "unknown"
+
+        out = [
+            "## Physician-focused interpretation",
+            "",
+            "- This section is plain-language. Full technical details remain in sections below.",
+            f"- **Readiness verdict**: `{verdict.get('overall', 'unknown')}` (enricher: {verdict.get('enricher')}, stability: {verdict.get('stability')}, freeze: {verdict.get('freeze')}, progression: {verdict.get('progression')}).",
+            f"- **Module persistence across all ordered stages**: {traj.get('entities_all_stages', 'n/a')} canonical entities; {traj_var.get('entities_all_stages', 'n/a')} variant-family entities.",
+            f"- **Directional progression signal**: monotone-up fraction { _fmt_pct(traj.get('fraction_monotone_up')) } (canonical) and { _fmt_pct(traj_var.get('fraction_monotone_up')) } (variant-family).",
+            f"- **Canonical vs variant-family agreement**: `{track_match}`.",
+        ]
+        if top:
+            top_names = ", ".join(str(r.get("entity")) for r in top if r.get("entity"))
+            if top_names:
+                out.append(f"- **Top biology linked to stage trend**: {top_names}.")
+        if impact:
+            out.append(f"- **AI-estimated impact on confidence**: `{impact}`.")
+        if consistency:
+            out.append(f"- **AI consistency assessment**: `{consistency}`.")
+        out.extend(
+            [
+                "- **Suggested physician review**: confirm whether leading modules align with expected Gleason-stage biology and treatment context.",
+                "",
+            ]
+        )
+        return out
+
     src = redact_report_for_export(report) if redact_paths else report
     v = src.get("verdict") or {}
     lines = [
@@ -556,6 +621,7 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             "",
         ]
     )
+    lines.extend(_physician_focus_lines(src, v))
     if v.get("reasons"):
         lines.extend(["## Blocking issues", ""])
         lines.extend(f"- {r}" for r in v["reasons"])

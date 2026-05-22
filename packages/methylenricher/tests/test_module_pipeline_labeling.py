@@ -90,3 +90,21 @@ def test_canonical_only_mode_does_not_append_subtitle(monkeypatch, tmp_path: Pat
     display = str(out_df.iloc[0]["Module_display"])
     assert display == primary
     assert "|" not in display
+
+
+def test_module_variant_family_is_deterministic_from_qvalue_order():
+    merged_df = pd.DataFrame(
+        {
+            "Term": ["A", "B", "C"],
+            "_library_category": ["perturbation", "perturbation", "canonical"],
+            "_library_name": ["LINCS", "DSigDB", "KEGG_2021_Human"],
+            "Adjusted P-value": [0.05, 0.001, 1e-6],
+        }
+    )
+    family = module_pipeline._module_variant_family(  # noqa: SLF001 - intentional unit test of helper
+        "PI3K / growth-factor signaling",
+        pathways=[module_pipeline.canonical_pathway_key(t) for t in ["A", "B", "C"]],
+        merged_df=merged_df,
+        top_k=2,
+    )
+    assert family == "PI3K / growth-factor signaling | DSigDB + LINCS"

@@ -140,6 +140,9 @@ def test_analyze_and_render_go(tmp_path: Path):
     assert report["verdict"]["freeze"] == "pass"
     md = render_markdown(report)
     assert "Stability and freeze readiness report" in md
+    assert "Physician-focused interpretation" in md
+    assert "Full technical details remain in sections below" in md
+    assert "## Progression" in md
     assert "ModA" in md or "module" in md.lower()
 
 

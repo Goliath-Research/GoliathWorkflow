@@ -246,6 +246,19 @@ def _build_module_variant_rows(stage: StageSpec) -> pd.DataFrame:
     if not stage.modules_csv.exists():
         return pd.DataFrame()
     df = pd.read_csv(stage.modules_csv)
+    if "Module_variant_family" not in df.columns and "Module_primary" in df.columns:
+        # Backward-compatible stable family derivation for legacy enricher outputs:
+        # preserve variant-vs-canonical distinction without stage-volatile subtitles.
+        primary = df["Module_primary"].astype(str).str.strip()
+        has_supporting = (
+            df["Module_display"].astype(str).str.contains(r"\|", regex=True)
+            if "Module_display" in df.columns
+            else False
+        )
+        df["Module_variant_family"] = primary.where(
+            ~has_supporting,
+            primary + " | perturbation_evidence",
+        )
     module_col = _first_existing_column(
         df,
         ["Module_variant_family", "Module_display", "Module", "module", "module_name"],

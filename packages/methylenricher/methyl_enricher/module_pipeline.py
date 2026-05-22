@@ -416,6 +416,14 @@ def _module_variant_family(primary: str, pathways: List[str], merged_df: pd.Data
     lib_col = "_library_name" if "_library_name" in pert.columns else _resolve_library_column(pert)
     if not lib_col:
         return f"{primary} | perturbation_evidence"
+    # Deterministic ordering is required for a stable cross-stage key.
+    pert["_lib_key"] = pert[lib_col].astype(str).map(canonical_pathway_key)
+    pert["_lib_token"] = pert[lib_col].astype(str).str.strip().str.lower()
+    if "Adjusted P-value" in pert.columns:
+        pert["_q"] = pd.to_numeric(pert["Adjusted P-value"], errors="coerce").fillna(1.0)
+        pert.sort_values(["_q", "_lib_key", "_lib_token"], ascending=[True, True, True], inplace=True)
+    else:
+        pert.sort_values(["_lib_key", "_lib_token"], ascending=[True, True], inplace=True)
     libs: List[str] = []
     seen: Set[str] = set()
     for raw in pert[lib_col].astype(str).tolist():
