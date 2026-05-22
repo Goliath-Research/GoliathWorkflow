@@ -242,13 +242,13 @@ def _build_module_rows(stage: StageSpec) -> pd.DataFrame:
 
 
 def _build_module_variant_rows(stage: StageSpec) -> pd.DataFrame:
-    """Variant module rows for supplementary trend analysis (display-level labels)."""
+    """Variant module rows using a stable family key with display-label fallbacks."""
     if not stage.modules_csv.exists():
         return pd.DataFrame()
     df = pd.read_csv(stage.modules_csv)
     module_col = _first_existing_column(
         df,
-        ["Module_display", "Module", "module", "module_name"],
+        ["Module_variant_family", "Module_display", "Module", "module", "module_name"],
     )
     if module_col is None:
         return pd.DataFrame()

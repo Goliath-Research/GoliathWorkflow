@@ -55,11 +55,19 @@ def test_dual_label_mode_keeps_canonical_primary(monkeypatch, tmp_path: Path):
     )
 
     assert not out_df.empty
-    assert {"Module_primary", "Module_supporting_perturbation", "Module_display"}.issubset(set(out_df.columns))
+    assert {
+        "Module_primary",
+        "Module_variant_family",
+        "Module_supporting_perturbation",
+        "Module_display",
+    }.issubset(set(out_df.columns))
     primary = str(out_df.iloc[0]["Module_primary"])
+    variant_family = str(out_df.iloc[0]["Module_variant_family"])
     supporting = str(out_df.iloc[0]["Module_supporting_perturbation"])
     display = str(out_df.iloc[0]["Module_display"])
     assert primary == "PI3K / growth-factor signaling"
+    assert variant_family.startswith("PI3K / growth-factor signaling | ")
+    assert "perturbation_evidence" in variant_family
     assert "metformin hydrochloride" in supporting.lower()
     assert "|" in display
     assert "metformin hydrochloride" not in primary.lower()

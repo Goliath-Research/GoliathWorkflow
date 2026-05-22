@@ -205,9 +205,15 @@ def _collapse_modules_by_theme(
                         seen_supporting.add(key)
                         supporting_vals.append(token)
         supporting = "; ".join(supporting_vals[:3])
+        variant_family = (
+            f"{str(theme)} | perturbation_evidence"
+            if supporting
+            else str(theme)
+        )
         row = {
             "Module": str(theme),
             "Module_primary": str(theme),
+            "Module_variant_family": variant_family,
             "Module_supporting_perturbation": supporting,
             "Module_display": _build_module_display(
                 str(theme),
@@ -392,6 +398,40 @@ def _build_module_display(primary: str, supporting: str, *, mode: str) -> str:
     if str(mode).strip().lower() == "dual_label" and supporting:
         return f"{primary} | {supporting}"
     return primary
+
+
+def _module_variant_family(primary: str, pathways: List[str], merged_df: pd.DataFrame, *, top_k: int = 3) -> str:
+    """
+    Stable variant key for cross-stage tracking.
+
+    Uses canonical primary label plus perturbation library evidence buckets
+    instead of raw perturbation term strings (which are stage-volatile).
+    """
+    module_rows = _module_rows_by_pathways(pathways, merged_df)
+    if module_rows.empty or "_library_category" not in module_rows.columns:
+        return primary
+    pert = module_rows[module_rows["_library_category"] == "perturbation"].copy()
+    if pert.empty:
+        return primary
+    lib_col = "_library_name" if "_library_name" in pert.columns else _resolve_library_column(pert)
+    if not lib_col:
+        return f"{primary} | perturbation_evidence"
+    libs: List[str] = []
+    seen: Set[str] = set()
+    for raw in pert[lib_col].astype(str).tolist():
+        token = str(raw).strip()
+        if not token:
+            continue
+        key = canonical_pathway_key(token)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        libs.append(token)
+        if len(libs) >= max(1, int(top_k)):
+            break
+    if not libs:
+        return f"{primary} | perturbation_evidence"
+    return f"{primary} | {' + '.join(libs)}"
 
 
 def _overlap_genes_str(module_genes: Set[str], cap: int = OVERLAP_GENES_CAP) -> str:
@@ -762,6 +802,7 @@ def run_module_pipeline(
         module_name = f"{label} (M{int(mid)})"
         supporting_perturbation = _module_supporting_perturbation(pathways, clustering_df)
         module_display = _build_module_display(label, supporting_perturbation, mode=label_mode)
+        module_variant_family = _module_variant_family(label, pathways, clustering_df)
         main_genes = _main_genes_for_module(module_genes, gene_weights, top_k=10)
         main_pathways = _main_pathways_for_module(pathways, clustering_df, top_k=5)
         overlap_genes = _overlap_genes_str(module_genes)
@@ -771,6 +812,7 @@ def run_module_pipeline(
         out_rows.append({
             "Module": module_name,
             "Module_primary": label,
+            "Module_variant_family": module_variant_family,
             "Module_supporting_perturbation": supporting_perturbation,
             "Module_display": module_display,
             "Module_theme": label,
