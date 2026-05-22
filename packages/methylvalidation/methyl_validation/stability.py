@@ -1183,7 +1183,26 @@ def run_stability_analysis(
     dmp_frequency_plot_path = None
     dmp_frequency_plot_by_chrom = {}
     dmp_frequency_counts_by_chrom = {}
+    root_strict_path = output_dir / "stable_dmps_strict.csv"
+    root_relaxed_path = output_dir / "stable_dmps_relaxed.csv"
+    root_scored_path = output_dir / "stable_dmps_scored.csv"
+    root_diag_json_path = output_dir / "stable_dmp_score_diagnostics.json"
+    root_diag_csv_path = output_dir / "stable_dmp_score_diagnostics.csv"
     if tiered_stability_enabled:
+        # Tiered mode writes strict/relaxed/scored artifacts under tier_* directories.
+        # Remove root dual-cutoff files to avoid stale-table confusion.
+        for stale in (
+            root_strict_path,
+            root_relaxed_path,
+            root_scored_path,
+            root_diag_json_path,
+            root_diag_csv_path,
+        ):
+            try:
+                if stale.exists():
+                    stale.unlink()
+            except OSError:
+                pass
         tier_thresholds = {
             "core": float(tier_core_frequency),
             "extended": float(tier_extended_frequency),
@@ -1230,12 +1249,24 @@ def run_stability_analysis(
         score_diagnostics_csv_path = dual_paths["diagnostics_csv_path"]
         score_diagnostics = dual_paths["diagnostics"]
     else:
+        # Legacy single-cutoff mode: materialize strict/relaxed aliases so callers
+        # never read stale dual-cutoff files from previous runs.
         selected_dmp_df = _select_stable_dmps_df(
             dmp_df, min_frequency=dmp_min_freq, top_n=top_n_dmps
         )
         # Always materialize the stable panel path so --freeze has a deterministic input artifact,
         # even when no DMP passes thresholds (empty CSV with canonical headers).
         stable_dmp_path = write_stable_panel(dmp_df, output_dir, dmp_min_freq, top_n_dmps)
+        selected_dmp_df.to_csv(root_strict_path, index=False)
+        selected_dmp_df.to_csv(root_relaxed_path, index=False)
+        strict_dmp_path = root_strict_path
+        relaxed_dmp_path = root_relaxed_path
+        for stale in (root_scored_path, root_diag_json_path, root_diag_csv_path):
+            try:
+                if stale.exists():
+                    stale.unlink()
+            except OSError:
+                pass
     if not dmp_df.empty:
         (
             dmp_frequency_plot_path,

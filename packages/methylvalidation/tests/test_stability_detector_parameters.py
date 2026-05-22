@@ -271,6 +271,42 @@ def test_run_stability_analysis_counts_each_dmp_once_per_run_across_detection_di
     assert row["frequency"] == 1.0
 
 
+def test_run_stability_analysis_refreshes_root_strict_relaxed_in_legacy_mode(tmp_path):
+    monte_root = tmp_path / "monte_carlo_runs"
+    stability_dir = monte_root / "stability"
+    stability_dir.mkdir(parents=True, exist_ok=True)
+    # Seed stale dual-cutoff artifacts that should be replaced in legacy mode.
+    stale = "chromosome,position,frequency,count,n_runs\n1,100,4.0,120,30\n"
+    (stability_dir / "stable_dmps_strict.csv").write_text(stale, encoding="utf-8")
+    (stability_dir / "stable_dmps_relaxed.csv").write_text(stale, encoding="utf-8")
+
+    _write_discovery_csv(
+        monte_root / "run_0001" / "detections" / "all" / "pca_pca1" / "dmps-1-discovery.csv",
+        [{"chromosome": 1, "position": 100, "effect_size": 0.5}],
+    )
+    _write_discovery_csv(
+        monte_root / "run_0002" / "detections" / "all" / "pca_pca1" / "dmps-1-discovery.csv",
+        [{"chromosome": 1, "position": 100, "effect_size": 0.4}],
+    )
+
+    run_stability_analysis(
+        monte_carlo_runs_root=monte_root,
+        output_dir=stability_dir,
+        dmp_min_freq=0.0,
+        dual_cutoff_enabled=False,
+        tiered_stability_enabled=False,
+    )
+
+    import pandas as pd
+
+    strict_df = pd.read_csv(stability_dir / "stable_dmps_strict.csv")
+    relaxed_df = pd.read_csv(stability_dir / "stable_dmps_relaxed.csv")
+    assert strict_df["frequency"].max() <= 1.0
+    assert relaxed_df["frequency"].max() <= 1.0
+    assert (strict_df["count"] <= strict_df["n_runs"]).all()
+    assert (relaxed_df["count"] <= relaxed_df["n_runs"]).all()
+
+
 def test_run_balanced_accuracy_falls_back_to_detector_results(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "methyl_validation.validator_metrics.iteration_scalar_metrics_from_run_dir",
