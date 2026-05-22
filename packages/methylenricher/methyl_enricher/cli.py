@@ -251,6 +251,13 @@ For theory and package documentation, see:
         help='When --modules: keep top N terms per library before clustering (default: disabled).'
     )
     parser.add_argument(
+        '--module-label-mode',
+        type=str,
+        choices=['canonical_only', 'dual_label'],
+        default='dual_label',
+        help='When --modules: module label policy. canonical_only uses canonical library evidence only; dual_label appends perturbation support as subtitle.'
+    )
+    parser.add_argument(
         '--network-plot',
         type=str,
         default=None,
@@ -742,6 +749,7 @@ def main():
                 "Module term filter: "
                 f"top {args.module_cluster_top_terms_per_library} terms/library"
             )
+        print(f"Module label mode: {getattr(args, 'module_label_mode', 'dual_label')}")
         _np = getattr(args, "network_plot", None)
         effective_network_plot = "plotly" if _np is None else _np
         if effective_network_plot and effective_network_plot.lower() != "none":
@@ -797,6 +805,7 @@ def main():
                 module_cluster_top_terms_per_library=getattr(
                     args, "module_cluster_top_terms_per_library", None
                 ),
+                module_label_mode=getattr(args, "module_label_mode", "dual_label"),
                 network_plot=effective_network_plot,
                 network_refinement_enabled=getattr(args, "network_refinement_enabled", False),
                 network_refinement_source=getattr(args, "network_refinement_source", "string_api"),

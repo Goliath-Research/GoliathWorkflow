@@ -28,6 +28,37 @@ from .ppi_network import (
 logger = logging.getLogger(__name__)
 
 OVERLAP_GENES_CAP = 50
+_VALID_MODULE_LABEL_MODES = {"canonical_only", "dual_label"}
+_CANONICAL_LIBRARY_TOKENS = (
+    "kegg",
+    "reactome",
+    "wikipathway",
+    "go_biological_process",
+    "go_molecular_function",
+    "go_cellular_component",
+    "msigdb_hallmark",
+)
+_DISEASE_LIBRARY_TOKENS = (
+    "disgenet",
+    "jensen_diseases",
+    "gwas_catalog",
+    "disease",
+)
+_PERTURBATION_LIBRARY_TOKENS = (
+    "lincs",
+    "dsigdb",
+    "drugmatrix",
+    "drug",
+    "chem_pert",
+    "geo_pert",
+    "treatment",
+)
+_TF_LIBRARY_TOKENS = (
+    "chea",
+    "trrust",
+    "chip",
+    "transcription_factor",
+)
 
 
 def _disease_relevance_tier(score: float) -> str:
@@ -134,7 +165,12 @@ def _derive_disease_prior_genes(
     return genes
 
 
-def _collapse_modules_by_theme(df: pd.DataFrame, *, include_disease_columns: bool) -> pd.DataFrame:
+def _collapse_modules_by_theme(
+    df: pd.DataFrame,
+    *,
+    include_disease_columns: bool,
+    module_label_mode: str = "dual_label",
+) -> pd.DataFrame:
     """
     Collapse module rows by Module_theme so each theme appears once.
 
@@ -159,8 +195,25 @@ def _collapse_modules_by_theme(df: pd.DataFrame, *, include_disease_columns: boo
             return ", ".join(vals[:top_k])
 
         row0 = sub.iloc[0]
+        supporting_vals = []
+        seen_supporting: Set[str] = set()
+        if "Module_supporting_perturbation" in sub.columns:
+            for raw in sub["Module_supporting_perturbation"].dropna().astype(str):
+                for token in [p.strip() for p in raw.split(";") if p.strip()]:
+                    key = canonical_pathway_key(token)
+                    if key and key not in seen_supporting:
+                        seen_supporting.add(key)
+                        supporting_vals.append(token)
+        supporting = "; ".join(supporting_vals[:3])
         row = {
             "Module": str(theme),
+            "Module_primary": str(theme),
+            "Module_supporting_perturbation": supporting,
+            "Module_display": _build_module_display(
+                str(theme),
+                supporting,
+                mode=module_label_mode,
+            ),
             "Module_theme": str(theme),
             "Theme_cluster_count": int(len(sub)),
             "Score": float(row0["Score"]),
@@ -239,6 +292,106 @@ def _reduce_terms_for_clustering(
     if drop_cols:
         work = work.drop(columns=drop_cols)
     return work
+
+
+def _resolve_library_column(df: pd.DataFrame) -> Optional[str]:
+    for name in ("library", "Library", "Gene_set", "gene_set"):
+        if name in df.columns:
+            return name
+    return None
+
+
+def _library_category(name: object) -> str:
+    token = str(name or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if not token:
+        return "unknown"
+    if any(t in token for t in _CANONICAL_LIBRARY_TOKENS):
+        return "canonical"
+    if any(t in token for t in _DISEASE_LIBRARY_TOKENS):
+        return "disease"
+    if any(t in token for t in _PERTURBATION_LIBRARY_TOKENS):
+        return "perturbation"
+    if any(t in token for t in _TF_LIBRARY_TOKENS):
+        return "tf"
+    return "other"
+
+
+def _annotate_library_categories(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+    lib_col = _resolve_library_column(out)
+    if lib_col is None:
+        out["_library_name"] = ""
+        out["_library_category"] = "unknown"
+        return out
+    out["_library_name"] = out[lib_col].astype(str)
+    out["_library_category"] = out["_library_name"].map(_library_category)
+    return out
+
+
+def _module_rows_by_pathways(pathways: List[str], merged_df: pd.DataFrame) -> pd.DataFrame:
+    if not pathways or "Term" not in merged_df.columns:
+        return pd.DataFrame(columns=list(merged_df.columns))
+    key_set = set(pathways)
+    ck = merged_df["Term"].map(canonical_pathway_key)
+    return merged_df[ck.isin(key_set)].copy()
+
+
+def _theme_from_terms(terms: List[str], normalizer: PathwayNormalizer) -> str:
+    if not terms:
+        return "Other"
+    themes = [normalizer.normalize(str(t)) for t in terms if str(t).strip()]
+    if not themes:
+        return "Other"
+    from collections import Counter
+
+    return Counter(themes).most_common(1)[0][0]
+
+
+def _module_primary_theme(
+    pathways: List[str],
+    merged_df: pd.DataFrame,
+    normalizer: PathwayNormalizer,
+) -> str:
+    module_rows = _module_rows_by_pathways(pathways, merged_df)
+    if module_rows.empty:
+        return _theme_from_terms(pathways, normalizer)
+    canonical_terms = (
+        module_rows[module_rows["_library_category"] == "canonical"]["Term"].astype(str).tolist()
+        if "_library_category" in module_rows.columns
+        else []
+    )
+    if canonical_terms:
+        return _theme_from_terms(canonical_terms, normalizer)
+    return _theme_from_terms(module_rows["Term"].astype(str).tolist(), normalizer)
+
+
+def _module_supporting_perturbation(pathways: List[str], merged_df: pd.DataFrame, *, top_k: int = 3) -> str:
+    module_rows = _module_rows_by_pathways(pathways, merged_df)
+    if module_rows.empty or "_library_category" not in module_rows.columns:
+        return ""
+    pert = module_rows[module_rows["_library_category"] == "perturbation"].copy()
+    if pert.empty:
+        return ""
+    if "Adjusted P-value" in pert.columns:
+        pert["_q"] = pd.to_numeric(pert["Adjusted P-value"], errors="coerce").fillna(1.0)
+        pert.sort_values("_q", ascending=True, inplace=True)
+    seen: Set[str] = set()
+    terms: List[str] = []
+    for term in pert["Term"].astype(str).tolist():
+        key = canonical_pathway_key(term)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        terms.append(term)
+        if len(terms) >= max(1, int(top_k)):
+            break
+    return "; ".join(terms)
+
+
+def _build_module_display(primary: str, supporting: str, *, mode: str) -> str:
+    if str(mode).strip().lower() == "dual_label" and supporting:
+        return f"{primary} | {supporting}"
+    return primary
 
 
 def _overlap_genes_str(module_genes: Set[str], cap: int = OVERLAP_GENES_CAP) -> str:
@@ -351,6 +504,7 @@ def run_module_pipeline(
     cluster_seed: int = 42,
     module_cluster_max_q: Optional[float] = None,
     module_cluster_top_terms_per_library: Optional[int] = None,
+    module_label_mode: str = "dual_label",
     disease_genes: Optional[Set[str]] = None,
     network_plot: Optional[str] = None,
     network_refinement_enabled: bool = False,
@@ -376,6 +530,10 @@ def run_module_pipeline(
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    label_mode = str(module_label_mode or "dual_label").strip().lower()
+    if label_mode not in _VALID_MODULE_LABEL_MODES:
+        valid = ", ".join(sorted(_VALID_MODULE_LABEL_MODES))
+        raise ValueError(f"module_label_mode must be one of: {valid}")
 
     analyzer = EnrichmentAnalyzer(libraries=libraries, organism=organism, cutoff=cutoff)
     genes, gene_weights = analyzer.load_gene_list_with_weights(
@@ -405,6 +563,7 @@ def run_module_pipeline(
     if merged_df.empty:
         logger.warning("No enrichment results; cannot build modules.")
         return pd.DataFrame()
+    merged_df = _annotate_library_categories(merged_df)
 
     clustering_df = _reduce_terms_for_clustering(
         merged_df,
@@ -599,8 +758,10 @@ def run_module_pipeline(
         module_genes = set()
         for p in pathways:
             module_genes |= pathway_to_genes.get(p, set())
-        label = _module_label_from_themes(pathways, normalizer)
+        label = _module_primary_theme(pathways, clustering_df, normalizer)
         module_name = f"{label} (M{int(mid)})"
+        supporting_perturbation = _module_supporting_perturbation(pathways, clustering_df)
+        module_display = _build_module_display(label, supporting_perturbation, mode=label_mode)
         main_genes = _main_genes_for_module(module_genes, gene_weights, top_k=10)
         main_pathways = _main_pathways_for_module(pathways, clustering_df, top_k=5)
         overlap_genes = _overlap_genes_str(module_genes)
@@ -609,6 +770,9 @@ def run_module_pipeline(
         main_theme = theme_descriptions.get(label, label)
         out_rows.append({
             "Module": module_name,
+            "Module_primary": label,
+            "Module_supporting_perturbation": supporting_perturbation,
+            "Module_display": module_display,
             "Module_theme": label,
             "Module_id": int(mid),
             "Score": round(row["final_score"], 4),
@@ -649,7 +813,11 @@ def run_module_pipeline(
     logger.info(f"Wrote {detailed_path} with {len(out_df)} module clusters.")
 
     # Primary output: one row per normalized theme (what users typically want to review).
-    collapsed_df = _collapse_modules_by_theme(out_df, include_disease_columns=include_disease_columns)
+    collapsed_df = _collapse_modules_by_theme(
+        out_df,
+        include_disease_columns=include_disease_columns,
+        module_label_mode=label_mode,
+    )
     out_path = output_dir / "modules_ranked.csv"
     collapsed_df.to_csv(out_path, index=False)
     logger.info(
@@ -681,7 +849,7 @@ def run_module_pipeline(
         module_id_to_label = {}
         for mid in set(pathway_to_module_id.values()):
             pathways_in_module = [p for p, m in pathway_to_module_id.items() if m == mid]
-            module_id_to_label[mid] = _module_label_from_themes(pathways_in_module, normalizer)
+            module_id_to_label[mid] = _module_primary_theme(pathways_in_module, clustering_df, normalizer)
         module_network_plot.write_network_plots(
             output_dir=output_dir,
             pathway_to_module_id=pathway_to_module_id,

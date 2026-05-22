@@ -81,6 +81,7 @@ class EnricherStepConfig(BaseModel):
     cluster_seed: Optional[int] = None
     module_cluster_max_q: Optional[float] = None
     module_cluster_top_terms_per_library: Optional[int] = None
+    module_label_mode: Optional[str] = "dual_label"
     network_plot: Optional[str] = None
     dash_host: Optional[str] = None
     dash_port: Optional[int] = None

@@ -41,6 +41,16 @@ Presets currently include `cancer-core` and `cancer-extended`.
 
 With `--modules`, MethylEnricher runs enrichment + pathway graph clustering and writes `modules_ranked.csv`.
 
+Module naming is disease-agnostic by default:
+
+- Primary labels are derived from canonical library evidence (KEGG/Reactome/GO/Hallmark/WikiPathways) when present.
+- Perturbation/drug libraries (for example LINCS/DSigDB) are retained as supporting evidence, not primary names.
+- `modules_ranked.csv` now includes:
+  - `Module_primary` (canonical label),
+  - `Module_supporting_perturbation` (top perturbation signatures),
+  - `Module_display` (presentation label).
+- Use `--module-label-mode canonical_only|dual_label` (or `step_config.enricher.module_label_mode`) to control display behavior. Default: `dual_label`.
+
 Disease columns in module outputs are conditional:
 
 - When a disease prior can be inferred from mapper-style disease columns in the input CSV (or explicitly provided by callers), `modules_ranked.csv` includes `Disease_relevance_score` and `Disease_relevance_tier`.

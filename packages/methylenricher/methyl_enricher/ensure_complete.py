@@ -294,6 +294,7 @@ def _module_kwargs_from_config(config: Any, libraries: List[str]) -> Dict[str, A
         "cluster_seed": c.cluster_seed or 42,
         "module_cluster_max_q": c.module_cluster_max_q,
         "module_cluster_top_terms_per_library": c.module_cluster_top_terms_per_library,
+        "module_label_mode": c.module_label_mode or "dual_label",
         "network_plot": c.network_plot or "plotly",
         "network_refinement_enabled": bool(c.network_refinement_enabled),
         "network_refinement_source": c.network_refinement_source or "string_api",
