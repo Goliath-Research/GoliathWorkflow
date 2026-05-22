@@ -166,6 +166,7 @@ def test_build_sanitized_ai_payload_no_path_like_strings(tmp_path: Path):
     ps = payload.get("progression_summary") or {}
     assert "module_trajectory_variant" in ps
     assert "module_top_trends_variant" in ps
+    assert "module_track_comparison" in ps
 
 
 def test_build_sanitized_ai_payload_scrubs_paths_in_verdict_text(tmp_path: Path):
@@ -214,6 +215,10 @@ def test_render_markdown_ai_advisory_section(tmp_path: Path):
             "summary_bullets": ["Signal A", "Signal B"],
             "caveats": ["Limited stages"],
             "suggested_human_checks": ["Review pathways"],
+            "canonical_track_assessment": "Canonical track is stable.",
+            "variant_track_assessment": "Variant track is sparse.",
+            "track_divergence_assessment": "Tracks diverge due to label granularity.",
+            "impact_on_confidence": "medium",
             "disease_progression_alignment": "Placeholder alignment text.",
         },
     }
@@ -221,6 +226,8 @@ def test_render_markdown_ai_advisory_section(tmp_path: Path):
     assert "AI readiness commentary (advisory)" in md
     assert "mixed" in md
     assert "Signal A" in md
+    assert "Canonical track assessment" in md
+    assert "Impact on confidence" in md
 
 
 def test_redact_report_for_export_strips_paths(tmp_path: Path):

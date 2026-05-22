@@ -110,6 +110,16 @@ def build_sanitized_ai_payload(
 
     top_trend = list((traj.get("top_by_abs_trend") or [])[:top_n])
     top_trend_variant = list((traj_variant.get("top_by_abs_trend") or [])[:top_n])
+    track_comparison = {
+        "canonical_entities_all_stages": traj.get("entities_all_stages"),
+        "variant_entities_all_stages": traj_variant.get("entities_all_stages"),
+        "canonical_fraction_monotone_up": traj.get("fraction_monotone_up"),
+        "canonical_fraction_monotone_down": traj.get("fraction_monotone_down"),
+        "variant_fraction_monotone_up": traj_variant.get("fraction_monotone_up"),
+        "variant_fraction_monotone_down": traj_variant.get("fraction_monotone_down"),
+        "canonical_median_abs_pearson": traj.get("median_abs_pearson_stage_vs_score"),
+        "variant_median_abs_pearson": traj_variant.get("median_abs_pearson_stage_vs_score"),
+    }
     labels = prog.get("entity_labels") or {}
     lc = labels.get("label_counts") or {}
     top_labels = dict(list(lc.items())[:top_n]) if isinstance(lc, dict) else {}
@@ -167,6 +177,7 @@ def build_sanitized_ai_payload(
             },
             "module_top_trends": top_trend,
             "module_top_trends_variant": top_trend_variant,
+            "module_track_comparison": track_comparison,
             "progression_label_counts_top": top_labels,
             "entity_counts_by_type": labels.get("by_type"),
             "ordered_stage_narratives": prog.get("ordered_stage_narratives") or [],
@@ -307,9 +318,16 @@ def run_grok_readiness_review(
         '"summary_bullets":["string",...],'
         '"caveats":["string",...],'
         '"suggested_human_checks":["string",...],'
+        '"canonical_track_assessment":"short paragraph",'
+        '"variant_track_assessment":"short paragraph",'
+        '"track_divergence_assessment":"short paragraph",'
+        '"impact_on_confidence":"high|medium|low",'
         '"disease_progression_alignment":"short paragraph"} '
         "Assess whether the progression/module signals appear broadly plausible for the stated disease context "
-        "and ordered stages; flag contradictions and uncertainty. Do not invent unseen statistics."
+        "and ordered stages; flag contradictions and uncertainty. "
+        "You MUST explicitly compare canonical module trajectory vs variant module trajectory. "
+        "If the tracks diverge, explain why and how that should affect confidence. "
+        "Do not invent unseen statistics."
     )
     user_prompt = (
         "Review this readiness summary JSON and assess biological narrative consistency.\n\n"
@@ -351,7 +369,20 @@ def run_grok_readiness_review(
         bullets = d.get("summary_bullets") if isinstance(d.get("summary_bullets"), list) else []
         narrative = (d.get("narrative_text") or "").strip()
         align = (d.get("disease_progression_alignment") or "").strip()
-        return bool(ca or bullets or narrative or align)
+        canonical_track = (d.get("canonical_track_assessment") or "").strip()
+        variant_track = (d.get("variant_track_assessment") or "").strip()
+        divergence = (d.get("track_divergence_assessment") or "").strip()
+        impact = (d.get("impact_on_confidence") or "").strip()
+        return bool(
+            ca
+            or bullets
+            or narrative
+            or align
+            or canonical_track
+            or variant_track
+            or divergence
+            or impact
+        )
 
     if not _structured_usable(parsed):
         preview = content.strip()[:2000]

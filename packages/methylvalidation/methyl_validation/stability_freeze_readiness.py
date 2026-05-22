@@ -753,6 +753,17 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
                     lines.extend(["", f"### {title}", ""])
                     for item in items:
                         lines.append(f"- {item}")
+            for key, title in (
+                ("canonical_track_assessment", "Canonical track assessment"),
+                ("variant_track_assessment", "Variant track assessment"),
+                ("track_divergence_assessment", "Track divergence assessment"),
+            ):
+                txt = struct.get(key)
+                if isinstance(txt, str) and txt.strip():
+                    lines.extend(["", f"### {title}", "", txt.strip()])
+            impact = struct.get("impact_on_confidence")
+            if isinstance(impact, str) and impact.strip():
+                lines.extend(["", f"- **Impact on confidence**: `{impact.strip()}`"])
             dp = struct.get("disease_progression_alignment")
             if isinstance(dp, str) and dp.strip():
                 lines.extend(["", "### Disease progression alignment", "", dp.strip(), ""])
