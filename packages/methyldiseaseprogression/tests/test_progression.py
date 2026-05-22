@@ -135,7 +135,7 @@ def test_progression_report_strict_missing_fails(tmp_path: Path):
         run_progression_report(project_path=project_path, strict_missing=True)
 
 
-def test_progression_prefers_module_display_for_long_table(tmp_path: Path):
+def test_progression_prefers_module_primary_for_long_table(tmp_path: Path):
     project_path = _write_project(tmp_path)
     _write_stage_outputs(tmp_path)
     root = tmp_path / "out" / "prog"
@@ -151,8 +151,27 @@ def test_progression_prefers_module_display_for_long_table(tmp_path: Path):
     summary = run_progression_report(project_path=project_path)
     out_dir = Path(summary["output_dir"])
     mod_text = (out_dir / "modules_long.csv").read_text(encoding="utf-8")
+    assert "Primary_pca_pca1" in mod_text
+    assert "Primary_pca_pca2" in mod_text
+    assert "Primary_pca_pca3" in mod_text
+    assert "Display_pca_pca1" not in mod_text
+
+
+def test_progression_falls_back_to_module_display_when_primary_missing(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    root = tmp_path / "out" / "prog"
+    stages = ["pca_pca1", "pca_pca2", "pca_pca3"]
+    for stage in stages:
+        enricher_dir = root / "enricher" / "all" / stage
+        m_rows = [
+            "Module_display,Module,Score",
+            f"Display_{stage},Legacy_{stage},0.5",
+        ]
+        (enricher_dir / "modules_ranked.csv").write_text("\n".join(m_rows) + "\n", encoding="utf-8")
+
+    summary = run_progression_report(project_path=project_path)
+    out_dir = Path(summary["output_dir"])
+    mod_text = (out_dir / "modules_long.csv").read_text(encoding="utf-8")
     assert "Display_pca_pca1" in mod_text
-    assert "Display_pca_pca2" in mod_text
-    assert "Display_pca_pca3" in mod_text
-    assert "Legacy_pca_pca1" not in mod_text
 
