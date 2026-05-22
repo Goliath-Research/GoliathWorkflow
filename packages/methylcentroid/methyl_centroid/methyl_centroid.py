@@ -715,9 +715,7 @@ class MethylCentroid:
             return False
         try:
             # Load the centroid as MethylCentroid (data)
-            from methyl_utils.core.io import load_from_h5
-
-            loaded_centroid = load_from_h5(centroid_path)
+            loaded_centroid = MethylSample.load_from_h5(centroid_path)
 
             # Ensure it's a centroid (full schema with Sm, Su, Sc2, Swx2)
             if not isinstance(loaded_centroid, MethylCentroidData):
@@ -1733,8 +1731,6 @@ class MethylCentroid:
         Returns:
             MethylCentroidData (or MethylSample) instance, or None if no centroid.
         """
-        from methyl_utils import load_from_h5
-
         path = getattr(self, "centroid_path", None) or getattr(self, "centroid", None)
         if path is not None:
             path = Path(path)
@@ -1742,12 +1738,17 @@ class MethylCentroid:
             return self._centroid if (positions is None and indices is None) else None
 
         if positions is not None or indices is not None:
-            loaded = load_from_h5(path, positions=positions, indices=indices)
+            loaded = MethylSample.load_from_h5(
+                path,
+                positions=positions,
+                indices=indices,
+                align_positions=False,
+            )
             return loaded.to_cpu() if hasattr(loaded, "to_cpu") else loaded
 
         if self._centroid is not None:
             return self._centroid
-        loaded = load_from_h5(path)
+        loaded = MethylSample.load_from_h5(path)
         return loaded.to_cpu() if hasattr(loaded, "to_cpu") else loaded
 
     def load_sample(
@@ -2128,8 +2129,7 @@ class MethylCentroid:
                 self.logger.info(
                     "Centroid already built: loading from H5 in chunks (using H5 pos index)"
                 )
-                from methyl_utils import load_pos_from_h5, load_from_h5
-                from methyl_utils.core.io import _indices_for_positions
+                from methyl_utils import load_pos_from_h5
 
                 pos_arr = load_pos_from_h5(path)
                 sorted_idx = np.argsort(pos_arr)
@@ -2146,10 +2146,14 @@ class MethylCentroid:
                     start_pos = chunk_idx * chunk_size_positions
                     end_pos = min(start_pos + chunk_size_positions, total_positions)
                     chunk_positions = sorted_positions[start_pos:end_pos]
-                    idx = _indices_for_positions(pos_arr, chunk_positions)
+                    idx = MethylSample.position_indices_from_h5(
+                        path,
+                        chunk_positions,
+                        pos_cache=pos_arr,
+                    )
                     if len(idx) == 0:
                         continue
-                    loaded = load_from_h5(path, indices=idx)
+                    loaded = MethylSample.load_from_h5(path, indices=idx, align_positions=False)
                     if loaded is None or len(loaded) == 0:
                         continue
                     arr = loaded.to_numpy(extended=extended) if hasattr(loaded, "to_numpy") else None
@@ -2290,8 +2294,7 @@ class MethylCentroid:
         Returns:
             Centroid data for these positions, or None if no data
         """
-        from methyl_utils import load_from_h5, load_pos_from_h5
-        from methyl_utils.core.io import _indices_for_positions
+        from methyl_utils import load_pos_from_h5
 
         sample_count = len(self.active_samples) if self._centroid is not None else 0
         if sample_count == 0:
@@ -2333,10 +2336,18 @@ class MethylCentroid:
                     if path_key not in pos_cache:
                         pos_cache[path_key] = load_pos_from_h5(sample_path)
                     pos_arr = pos_cache[path_key]
-                    idx = _indices_for_positions(pos_arr, positions)
+                    idx = MethylSample.position_indices_from_h5(
+                        sample_path,
+                        positions,
+                        pos_cache=pos_arr,
+                    )
                     if len(idx) == 0:
                         continue
-                    sample_data_obj = load_from_h5(sample_path, indices=idx)
+                    sample_data_obj = MethylSample.load_from_h5(
+                        sample_path,
+                        indices=idx,
+                        align_positions=False,
+                    )
                     sample_data_obj = self._ensure_numpy_arrays(sample_data_obj)
                 else:
                     sample_data_obj = self.load_sample(sample_path)

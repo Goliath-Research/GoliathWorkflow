@@ -20,7 +20,6 @@ from methyl_utils.core.methyl_frame import MethylSample
 # Import MethylCentroidPair from MethylUtils for mathematical operations
 from methyl_utils import MethylCentroidPair
 
-from methyl_utils import load_from_h5
 from methyl_utils.ecdf_classifier import ECDFClassifier, _LOG_PDF_CAP as LOG_PDF_CAP
 
 # Handle relative imports - try module import first, fall back to direct execution setup
@@ -3508,8 +3507,8 @@ class MethylDetector:
             )
             return None
 
-        c1 = load_from_h5(c1_path)
-        c2 = load_from_h5(c2_path)
+        c1 = MethylSample.load_from_h5(c1_path)
+        c2 = MethylSample.load_from_h5(c2_path)
         try:
             bs1 = c1.binned_stats if c1 else None
             bs2 = c2.binned_stats if c2 else None

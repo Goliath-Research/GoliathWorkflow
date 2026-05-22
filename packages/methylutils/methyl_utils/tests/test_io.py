@@ -14,6 +14,7 @@ from methyl_utils.core.io import (
     _indices_for_positions_h5,
     load_from_h5,
 )
+from methyl_utils.core.methyl_frame import MethylSample
 
 
 def test_indices_for_positions_h5_matches_full_load():
@@ -97,3 +98,46 @@ def test_load_from_h5_positions_subset_equals_full_then_filter():
             assert subset.uC.values[idx_sub] == full.uC.values[idx_full]
     finally:
         path.unlink(missing_ok=True)
+
+
+def test_methylsample_load_from_h5_with_indices():
+    """MethylSample.load_from_h5 supports indexed loads via shared API."""
+    pos_full = np.array([10, 20, 30, 40], dtype=np.uint32)
+    mC = np.array([1, 2, 3, 4], dtype=np.uint32)
+    uC = np.array([9, 8, 7, 6], dtype=np.uint32)
+    tnc = np.zeros(4, dtype=np.uint8)
+    with tempfile.NamedTemporaryFile(suffix=".h5", delete=False) as tmp:
+        path = Path(tmp.name)
+    try:
+        with h5py.File(path, "w") as f:
+            g = f.create_group("methylation_data")
+            g.create_dataset("pos", data=pos_full)
+            g.create_dataset("mC", data=mC)
+            g.create_dataset("uC", data=uC)
+            g.create_dataset("tnc", data=tnc)
+
+        loaded = MethylSample.load_from_h5(path, indices=np.array([0, 2], dtype=np.int32))
+        np.testing.assert_array_equal(np.asarray(loaded.pos.values, dtype=np.uint32), np.array([10, 30], dtype=np.uint32))
+        np.testing.assert_array_equal(np.asarray(loaded.mC.values, dtype=np.uint32), np.array([1, 3], dtype=np.uint32))
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def test_methylsample_lookup_at_positions_reference_order_and_coverage():
+    """lookup_at_positions preserves reference order and applies coverage threshold."""
+    pos = np.array([10, 20, 30], dtype=np.uint32)
+    mC = np.array([5, 0, 2], dtype=np.uint32)
+    uC = np.array([5, 1, 0], dtype=np.uint32)
+    tnc = np.zeros(3, dtype=np.uint8)
+    sample = MethylSample.from_sample_data(pos=pos, mC=mC, uC=uC, tnc=tnc)
+
+    query = np.array([20, 40, 10, 30], dtype=np.uint32)
+    values, availability = sample.lookup_at_positions(query, min_coverage=2, missing_value=np.nan)
+
+    # pos=20 has coverage 1 -> unavailable, pos=40 missing -> unavailable
+    assert availability.tolist() == [False, False, True, True]
+    # returned in query order
+    assert np.isnan(values[0])
+    assert np.isnan(values[1])
+    assert values[2] == pytest.approx(0.5)
+    assert values[3] == pytest.approx(1.0)

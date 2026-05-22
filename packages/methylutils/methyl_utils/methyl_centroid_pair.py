@@ -366,7 +366,6 @@ class MethylCentroidPair:
             - contexts_array: (n_positions,) array of context (e.g. 'CG') per column; column j is (positions_array[j], contexts_array[j])
             - context_indices_dict: Dictionary mapping context to index arrays in the full position array
         """
-        from methyl_utils.core.io import load_from_h5
         from pathlib import Path
         import numpy as np
         
@@ -435,7 +434,11 @@ class MethylCentroidPair:
                     continue
                 
                 try:
-                    sample = load_from_h5(h5_file, positions=ctx_positions)
+                    sample = MethylSample.load_from_h5(
+                        h5_file,
+                        positions=ctx_positions,
+                        align_positions=False,
+                    )
                     
                     if len(sample) == 0:
                         n_empty_align += 1
@@ -447,23 +450,14 @@ class MethylCentroidPair:
                         stats["empty_align"] += 1
                         continue
 
-                    # Extract methylation fractions efficiently
-                    mC_vals = sample.mC.values if hasattr(sample.mC, 'values') else np.asarray(sample.mC)
-                    uC_vals = sample.uC.values if hasattr(sample.uC, 'values') else np.asarray(sample.uC)
-                    pos_vals = sample.pos.values if hasattr(sample.pos, 'values') else np.asarray(sample.pos)
-                    
-                    # Calculate methylation fractions
-                    total_reads = mC_vals + uC_vals
-                    with np.errstate(divide='ignore', invalid='ignore'):
-                        meth_fractions = np.where(total_reads >= min_coverage, mC_vals / total_reads, np.nan)
-                    
-                    mapped_indices = np.asarray(
-                        [position_to_index.get((int(pos), ctx), -1) for pos in pos_vals],
-                        dtype=np.int32,
+                    ctx_values, _ctx_availability = sample.lookup_at_positions(
+                        ctx_positions,
+                        min_coverage=min_coverage,
+                        missing_value=np.nan,
                     )
-                    valid = mapped_indices >= 0
-                    if np.any(valid):
-                        X[i, mapped_indices[valid]] = meth_fractions[valid]
+                    ctx_indices = context_indices_dict.get(ctx)
+                    if ctx_indices is not None and int(ctx_indices.size) == int(ctx_values.size):
+                        X[i, np.asarray(ctx_indices, dtype=np.int32)] = np.asarray(ctx_values, dtype=np.float32)
                             
                 except Exception as e:
                     logger.debug(f"Failed to process {h5_file}: {e}")

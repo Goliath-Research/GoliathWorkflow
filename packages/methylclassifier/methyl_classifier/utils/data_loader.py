@@ -425,47 +425,42 @@ class DataLoader:
         Returns:
             Tuple of (feature_vector, availability_mask, stats_info)
         """
-        # Methylation per genomic position; keep NaNs so matched DMPs with missing values
-        # are excluded via availability_mask (do not treat as observed 0.5).
-        methylation_levels = sample.get_methylation_levels()
-        meth_vals = np.asarray(methylation_levels, dtype=np.float64).ravel()
-
-        pos_vals = np.asarray(sample.pos, dtype=np.uint32).ravel()
-        if pos_vals.size != meth_vals.size:
+        dmp_arr = np.asarray(dmp_positions, dtype=np.uint32).ravel()
+        if hasattr(sample, "lookup_at_positions"):
+            values, availability_mask = sample.lookup_at_positions(
+                dmp_arr,
+                min_coverage=1,
+                missing_value=np.nan,
+            )
+        else:
+            # Backward-compatible fallback for test doubles / legacy sample adapters.
+            methylation_levels = sample.get_methylation_levels()
+            meth_vals = np.asarray(methylation_levels, dtype=np.float64).ravel()
+            pos_vals = np.asarray(sample.pos, dtype=np.uint32).ravel()
             n_common = min(pos_vals.size, meth_vals.size)
             pos_vals = pos_vals[:n_common]
             meth_vals = meth_vals[:n_common]
-        dmp_arr = np.asarray(dmp_positions, dtype=np.uint32).ravel()
-
-        if len(pos_vals) == 0:
-            feature_vector = np.full(len(dmp_arr), 0.5, dtype=np.float64)
+            values = np.full(len(dmp_arr), np.nan, dtype=np.float64)
             availability_mask = np.zeros(len(dmp_arr), dtype=bool)
-            missing_positions = len(dmp_arr)
-        else:
-            order = np.argsort(pos_vals, kind="mergesort")
-            sp = pos_vals[order]
-            sm = meth_vals[order]
-            n = int(sp.size)
-            hi = max(n - 1, 0)
-            idx = np.searchsorted(sp, dmp_arr, side="left").astype(np.int32, copy=False)
-            safe_idx = np.minimum(np.maximum(idx, 0), hi)
-            # Avoid boolean & / np.where evaluating sm[...] for buckets where idx == n (past end of sp):
-            # NumPy evaluates both ufunc operands and both np.where branches eagerly.
-            in_range = idx < n
-            pos_hit = sp[safe_idx] == dmp_arr
-            match = in_range & pos_hit
-            feature_vector = np.full(len(dmp_arr), 0.5, dtype=np.float64)
-            availability_mask = np.zeros(len(dmp_arr), dtype=bool)
-            if np.any(match):
-                mloc = np.flatnonzero(match)
-                raw = sm[safe_idx[mloc]]
-                finite = np.isfinite(raw)
-                clipped = np.clip(raw[finite], 0.0, 1.0)
-                out = np.full(mloc.shape[0], 0.5, dtype=np.float64)
-                out[finite] = clipped
-                feature_vector[mloc] = out
-                availability_mask[mloc] = finite
-            missing_positions = int(np.sum(~availability_mask))
+            if pos_vals.size:
+                order = np.argsort(pos_vals, kind="mergesort")
+                sp = pos_vals[order]
+                sm = meth_vals[order]
+                n = int(sp.size)
+                idx = np.searchsorted(sp, dmp_arr, side="left").astype(np.int32, copy=False)
+                safe_idx = np.minimum(np.maximum(idx, 0), max(n - 1, 0))
+                match = (idx < n) & (sp[safe_idx] == dmp_arr)
+                if np.any(match):
+                    mloc = np.flatnonzero(match)
+                    raw = sm[safe_idx[mloc]]
+                    finite = np.isfinite(raw)
+                    values[mloc[finite]] = raw[finite]
+                    availability_mask[mloc[finite]] = True
+        feature_vector = np.full(len(dmp_arr), 0.5, dtype=np.float64)
+        if values.size:
+            valid = np.isfinite(values)
+            feature_vector[valid] = np.clip(values[valid], 0.0, 1.0)
+        missing_positions = int(np.sum(~availability_mask))
 
         # Collect statistical information
         coverage = sample.get_coverage()

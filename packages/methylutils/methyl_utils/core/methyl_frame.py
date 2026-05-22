@@ -503,23 +503,58 @@ class MethylFrame:
         return self.coverage.values if hasattr(self.coverage, 'values') else np.asarray(self.coverage)
 
     @classmethod
-    def load_from_h5(cls, path: Union[str, Path], positions: Optional[np.ndarray] = None) -> "MethylFrame":
+    def load_from_h5(
+        cls,
+        path: Union[str, Path],
+        positions: Optional[np.ndarray] = None,
+        indices: Optional[np.ndarray] = None,
+        *,
+        align_positions: bool = True,
+    ) -> "MethylFrame":
         """
-        Load from HDF5 file. When positions is given, only those rows are read from disk
-        (same hyperslice approach as MethylDetector validation).
+        Load from HDF5 file.
+
+        When ``positions`` is given, only matching rows are read from disk (same
+        hyperslice approach used in detector/validation extraction). When
+        ``indices`` is given, only those H5 row indices are loaded. ``indices``
+        takes precedence over ``positions``.
 
         Args:
             path: Path to HDF5 file
             positions: Optional positions to load; only these rows are read (saves memory).
+            indices: Optional row indices to load directly from the H5 file.
+            align_positions: If True and ``positions`` is provided (without
+                ``indices``), align in-memory output to exactly the requested
+                positions.
 
         Returns:
             MethylSample or MethylCentroid instance
         """
         from .io import load_from_h5
-        result = load_from_h5(path, positions=positions)
-        if positions is not None:
+        result = load_from_h5(path, positions=positions, indices=indices)
+        if align_positions and indices is None and positions is not None:
             result = result.align_to_positions(positions)
         return result
+
+    @staticmethod
+    def position_indices_from_h5(
+        path: Union[str, Path],
+        positions: np.ndarray,
+        *,
+        pos_cache: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
+        """
+        Resolve H5 row indices for the requested genomic positions.
+
+        This keeps the low-level indexed loading behavior centralized in
+        ``MethylSample``/``MethylFrame`` so downstream packages can avoid
+        re-implementing indexing logic.
+        """
+        from .io import _indices_for_positions, load_pos_from_h5
+
+        pos_arr = np.asarray(pos_cache, dtype=np.uint32) if pos_cache is not None else load_pos_from_h5(path)
+        want = np.asarray(positions, dtype=np.uint32)
+        return np.asarray(_indices_for_positions(pos_arr, want), dtype=np.int32)
 
     def save_to_h5(self, path: Union[str, Path], compressed: bool = True) -> Path:
         """
@@ -625,6 +660,62 @@ class MethylSample(MethylFrame):
         call more than once. After close(), the instance must not be used.
         """
         super().close(free_gpu_pool=free_gpu_pool)
+
+    def lookup_at_positions(
+        self,
+        reference_positions: np.ndarray,
+        *,
+        min_coverage: int = 1,
+        missing_value: float = np.nan,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Return methylation values in *reference_positions* order.
+
+        The method performs exact-position lookup, preserving caller order, and
+        returns both values and an availability mask. Positions that are missing
+        (or that fail coverage threshold) are marked unavailable.
+        """
+        dmp_arr = np.asarray(reference_positions, dtype=np.uint32).ravel()
+        out = np.full(dmp_arr.shape[0], float(missing_value), dtype=np.float64)
+        availability = np.zeros(dmp_arr.shape[0], dtype=bool)
+        if dmp_arr.size == 0 or len(self) == 0:
+            return out, availability
+
+        pos_vals = np.asarray(self.pos, dtype=np.uint32).ravel()
+        meth_vals = np.asarray(self.get_methylation_levels(), dtype=np.float64).ravel()
+        cov_vals = np.asarray(self.get_coverage(), dtype=np.float64).ravel()
+        n = min(pos_vals.size, meth_vals.size, cov_vals.size)
+        if n == 0:
+            return out, availability
+
+        pos_vals = pos_vals[:n]
+        meth_vals = meth_vals[:n]
+        cov_vals = cov_vals[:n]
+
+        order = np.argsort(pos_vals, kind="mergesort")
+        sp = pos_vals[order]
+        sm = meth_vals[order]
+        sc = cov_vals[order]
+
+        idx = np.searchsorted(sp, dmp_arr, side="left").astype(np.int32, copy=False)
+        in_range = idx < sp.size
+        safe_idx = np.minimum(idx, max(sp.size - 1, 0))
+        matched = in_range & (sp[safe_idx] == dmp_arr)
+        if not np.any(matched):
+            return out, availability
+
+        match_idx = np.flatnonzero(matched)
+        raw = sm[safe_idx[match_idx]]
+        cov = sc[safe_idx[match_idx]]
+        finite = np.isfinite(raw)
+        if int(min_coverage) > 0:
+            finite &= cov >= float(min_coverage)
+        if np.any(finite):
+            clip_vals = np.clip(raw[finite], 0.0, 1.0)
+            out_idx = match_idx[finite]
+            out[out_idx] = clip_vals
+            availability[out_idx] = True
+        return out, availability
 
     def cap_coverage_binomial(
         self,
