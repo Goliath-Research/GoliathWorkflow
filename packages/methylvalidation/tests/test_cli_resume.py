@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,6 +29,20 @@ def _valid_production_project_text(
                 {"label": "healthy", "sample_paths": [str(healthy_csv)]},
                 {"label": "disease", "sample_paths": [str(disease_csv)]},
             ],
+            "step_config": {
+                "validation": {
+                    "train_fraction": 0.8,
+                    "n_iterations": 2,
+                    "backend_profiles": {
+                        "ecdf": {"enabled": True, "params": {}},
+                        "tabular_sklearn": {
+                            "enabled": True,
+                            "params": {"tabular_methods": [{"method": "random_forest", "params": {}}]},
+                        },
+                        "generative_hybrid": {"enabled": True, "params": {}},
+                    },
+                }
+            },
         }
     )
 
@@ -162,7 +177,12 @@ def test_model_mc_all_requires_model_mc(tmp_path: Path, monkeypatch, capsys):
   "step_config": {{
     "validation": {{
       "train_fraction": 0.8,
-      "n_iterations": 2
+      "n_iterations": 2,
+      "backend_profiles": {{
+        "ecdf": {{"enabled": true, "params": {{}}}},
+        "tabular_sklearn": {{"enabled": true, "params": {{"tabular_methods": [{{"method": "random_forest", "params": {{}}}}]}}}},
+        "generative_hybrid": {{"enabled": true, "params": {{}}}}
+      }}
     }}
   }}
 }}
@@ -200,7 +220,11 @@ def test_skip_detection_runs_stability_only(tmp_path: Path, monkeypatch):
   "step_config": {{
     "validation": {{
       "train_fraction": 0.8,
-      "n_iterations": 2
+      "n_iterations": 2,
+      "backend_profiles": {{
+        "ecdf": {{"enabled": true, "params": {{}}}},
+        "generative_hybrid": {{"enabled": true, "params": {{}}}}
+      }}
     }}
   }}
 }}
@@ -256,7 +280,12 @@ def test_model_mc_all_uses_shared_stage(tmp_path: Path, monkeypatch):
   "step_config": {{
     "validation": {{
       "train_fraction": 0.8,
-      "n_iterations": 2
+      "n_iterations": 2,
+      "backend_profiles": {{
+        "ecdf": {{"enabled": true, "params": {{}}}},
+        "tabular_sklearn": {{"enabled": true, "params": {{"tabular_methods": [{{"method": "random_forest", "params": {{}}}}]}}}},
+        "generative_hybrid": {{"enabled": true, "params": {{}}}}
+      }}
     }}
   }}
 }}
@@ -327,7 +356,11 @@ def test_select_best_model_ignores_shared_directory(tmp_path: Path, monkeypatch)
   "step_config": {{
     "validation": {{
       "train_fraction": 0.8,
-      "n_iterations": 2
+      "n_iterations": 2,
+      "backend_profiles": {{
+        "ecdf": {{"enabled": true, "params": {{}}}},
+        "generative_hybrid": {{"enabled": true, "params": {{}}}}
+      }}
     }}
   }}
 }}
@@ -335,7 +368,7 @@ def test_select_best_model_ignores_shared_directory(tmp_path: Path, monkeypatch)
         encoding="utf-8",
     )
 
-    captured: dict[str, object] = {}
+    captured: dict[str, list[str]] = {}
 
     def _fake_rank(**kwargs):
         captured["backends"] = list(kwargs["backends"])
@@ -354,7 +387,7 @@ def test_select_best_model_ignores_shared_directory(tmp_path: Path, monkeypatch)
         ["methyl-validation", "--project", str(project), "--select-best-model", "--model-mc-all"],
     )
     cli.main()
-    assert set(captured["backends"]) == {"ecdf", "tabular_sklearn", "generative_hybrid"}
+    assert set(captured.get("backends", [])) == {"ecdf", "tabular_sklearn", "generative_hybrid"}
 
 
 def test_model_mc_single_backend_reuses_existing_shared_runs(tmp_path: Path, monkeypatch):
@@ -385,7 +418,11 @@ def test_model_mc_single_backend_reuses_existing_shared_runs(tmp_path: Path, mon
   "step_config": {{
     "validation": {{
       "train_fraction": 0.8,
-      "n_iterations": 2
+      "n_iterations": 2,
+      "backend_profiles": {{
+        "ecdf": {{"enabled": true, "params": {{}}}},
+        "generative_hybrid": {{"enabled": true, "params": {{}}}}
+      }}
     }}
   }}
 }}
@@ -417,3 +454,63 @@ def test_model_mc_single_backend_reuses_existing_shared_runs(tmp_path: Path, mon
     cli.main()
     assert calls["shared_runner"] == 1
     assert calls["legacy_runner"] == 0
+
+
+def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Path, monkeypatch):
+    primary_root = tmp_path / "primary_mc"
+    run1 = primary_root / "run_0001"
+    (run1 / "detections" / "all" / "pca_pca1").mkdir(parents=True, exist_ok=True)
+    (run1 / "centroids").mkdir(parents=True, exist_ok=True)
+    (run1 / "project.json").write_text("{}", encoding="utf-8")
+    (primary_root / "step_timings.csv").write_text(
+        "step_name,duration_seconds,return_code,run_id,run_dir,n_train_samples,n_val_samples\n"
+        "methyl-detector,12.0,0,run_0001,/tmp/run_0001,8,2\n",
+        encoding="utf-8",
+    )
+
+    calls = {"generated_project": 0, "ran_pipeline": 0}
+
+    def _fake_resolve_iteration_split(**kwargs):
+        return (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]), "reused"
+
+    def _forbidden_generate_run_project(*args, **kwargs):
+        calls["generated_project"] += 1
+        raise AssertionError("generate_run_project should not be called when reusable run exists")
+
+    def _forbidden_run_pipeline(*args, **kwargs):
+        calls["ran_pipeline"] += 1
+        raise AssertionError("run_pipeline_for_iteration should not be called when reusable run exists")
+
+    monkeypatch.setattr(cli, "resolve_iteration_split", _fake_resolve_iteration_split)
+    monkeypatch.setattr(cli, "generate_run_project", _forbidden_generate_run_project)
+    monkeypatch.setattr(cli, "run_pipeline_for_iteration", _forbidden_run_pipeline)
+
+    config = SimpleNamespace(
+        n_iterations=1,
+        train_fraction=0.8,
+        seed=42,
+        samples_base_path=str(tmp_path),
+        abort_on_step_failure=True,
+    )
+    shared_root = tmp_path / "model_mc" / "shared"
+    rows = cli._build_model_mc_shared_runs(
+        base_project_for_runs=tmp_path / "production_project.json",
+        config=config,
+        layout="binary",
+        cohort_paths_list=[("healthy", ["h1", "h2", "h3"]), ("disease", ["d1", "d2", "d3"])],
+        cohort_labels=["healthy", "disease"],
+        control_paths=["h1", "h2", "h3"],
+        disease_paths=["d1", "d2", "d3"],
+        shared_root=shared_root,
+        resume_arg=None,
+        per_cancer_group=False,
+        primary_monte_carlo_runs_root=primary_root,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["run_id"] == "run_0001"
+    linked_run = shared_root / "run_0001"
+    assert linked_run.is_symlink()
+    assert linked_run.resolve() == run1.resolve()
+    assert calls["generated_project"] == 0
+    assert calls["ran_pipeline"] == 0

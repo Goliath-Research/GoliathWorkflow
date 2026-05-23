@@ -427,6 +427,30 @@ def _build_model_mc_shared_runs(
         "generated": 0,
         "per_iteration": [],
     }
+    primary_timings = _load_existing_step_timings(
+        primary_monte_carlo_runs_root / "step_timings.csv",
+        keep_until_iteration_exclusive=config.n_iterations + 1,
+    )
+    primary_timings_by_run: Dict[str, List[Dict[str, Any]]] = {}
+    for row in primary_timings:
+        rid = str(row.get("run_id") or "")
+        if rid:
+            primary_timings_by_run.setdefault(rid, []).append(row)
+
+    def _has_reusable_source_run(run_path: Path) -> bool:
+        return (
+            run_path.is_dir()
+            and (run_path / "project.json").is_file()
+            and (run_path / "detections").is_dir()
+            and (run_path / "centroids").is_dir()
+        )
+
+    def _replace_with_symlink(link_path: Path, target_path: Path) -> None:
+        if link_path.is_symlink() or link_path.is_file():
+            link_path.unlink()
+        elif link_path.is_dir():
+            shutil.rmtree(link_path)
+        link_path.symlink_to(target_path, target_is_directory=True)
     completed_iteration_seconds: List[float] = []
     for i in range(start_iteration_idx, config.n_iterations):
         iteration_t0 = time.perf_counter()
@@ -476,6 +500,62 @@ def _build_model_mc_shared_runs(
             continue
 
         if layout == "binary":
+            n_train_samples = len(train_control) + len(train_disease)
+            n_val_samples = len(val_control) + len(val_disease)
+        else:
+            n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
+            n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
+
+        source_run_dir = primary_monte_carlo_runs_root / run_id
+        if split_src == "reused" and _has_reusable_source_run(source_run_dir):
+            _replace_with_symlink(run_dir, source_run_dir)
+            source_timings = primary_timings_by_run.get(run_id, [])
+            if source_timings:
+                for t in source_timings:
+                    all_timings.append(
+                        {
+                            **t,
+                            "run_id": run_id,
+                            "run_dir": str(run_dir),
+                            "n_train_samples": n_train_samples,
+                            "n_val_samples": n_val_samples,
+                            "model_backend": "shared",
+                        }
+                    )
+            else:
+                all_timings.append(
+                    {
+                        "step_name": "methyl-detector",
+                        "duration_seconds": 0.0,
+                        "return_code": 0,
+                        "run_id": run_id,
+                        "run_dir": str(run_dir),
+                        "n_train_samples": n_train_samples,
+                        "n_val_samples": n_val_samples,
+                        "model_backend": "shared",
+                    }
+                )
+            rows.append(
+                {
+                    "iteration": i + 1,
+                    "run_id": run_id,
+                    "run_dir": str(run_dir),
+                    "project_json": str(run_dir / "project.json"),
+                    "n_train_samples": n_train_samples,
+                    "n_val_samples": n_val_samples,
+                }
+            )
+            elapsed = time.perf_counter() - iteration_t0
+            completed_iteration_seconds.append(elapsed)
+            eta = _estimate_iteration_eta(completed_iteration_seconds, config.n_iterations - (i + 1))
+            print(
+                f"[model-mc:shared] Reused centroid/detector artifacts for {run_id} "
+                f"in {_format_duration(elapsed)} (ETA {eta})",
+                file=sys.stderr,
+            )
+            continue
+
+        if layout == "binary":
             (
                 project_path,
                 _,
@@ -495,8 +575,6 @@ def _build_model_mc_shared_runs(
                 val_disease,
                 config.samples_base_path,
             )
-            n_train_samples = len(train_control) + len(train_disease)
-            n_val_samples = len(val_control) + len(val_disease)
             ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration(
                 project_path,
                 per_cancer_group=per_cancer_group,
@@ -533,8 +611,6 @@ def _build_model_mc_shared_runs(
                     cohort_labels,
                     config.samples_base_path,
                 )
-            n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
-            n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
             ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration_multiclass(
                 project_path,
                 per_cancer_group=per_cancer_group,
