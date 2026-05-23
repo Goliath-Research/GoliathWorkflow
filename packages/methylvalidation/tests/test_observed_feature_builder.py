@@ -200,7 +200,6 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
         "n_total_dmps",
         "weighted_healthy_tail_evidence__cancer",
         "weighted_healthy_tail_agreement__cancer",
-        "weighted_both_centroid_outlier_score__cancer",
     }
     assert expected_names.issubset(set(feat.feature_names))
 
@@ -220,7 +219,6 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     wda_idx = feat.feature_names.index("weighted_directional_agreement__cancer")
     tail_e_idx = feat.feature_names.index("weighted_healthy_tail_evidence__cancer")
     tail_a_idx = feat.feature_names.index("weighted_healthy_tail_agreement__cancer")
-    tail_o_idx = feat.feature_names.index("weighted_both_centroid_outlier_score__cancer")
 
     # First sample is healthy-like and should be closer to healthy anchor.
     assert float(feat.X[0, wmae_h_idx]) < float(feat.X[0, wmae_c_idx])
@@ -233,7 +231,6 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert float(feat.X[0, wda_idx]) < 0.5
     assert not np.isfinite(float(feat.X[0, tail_e_idx]))
     assert not np.isfinite(float(feat.X[0, tail_a_idx]))
-    assert not np.isfinite(float(feat.X[0, tail_o_idx]))
 
     # Cancer-like sample should move towards cancer anchor.
     assert float(feat.X[2, wmae_c_idx]) < float(feat.X[2, wmae_h_idx])
@@ -246,7 +243,6 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     assert float(feat.X[2, wda_idx]) > 0.5
     assert not np.isfinite(float(feat.X[2, tail_e_idx]))
     assert not np.isfinite(float(feat.X[2, tail_a_idx]))
-    assert not np.isfinite(float(feat.X[2, tail_o_idx]))
 
 
 def test_observed_feature_builder_histogram_tail_features_multiclass_names(monkeypatch):
@@ -273,14 +269,12 @@ def test_observed_feature_builder_histogram_tail_features_multiclass_names(monke
     )
     assert "weighted_healthy_tail_evidence__pca1" in feat.feature_names
     assert "weighted_healthy_tail_agreement__pca1" in feat.feature_names
-    assert "weighted_both_centroid_outlier_score__pca1" in feat.feature_names
     assert "weighted_directional_agreement__pca1" in feat.feature_names
     assert "weighted_mean_abs_error_to_cancer_centroid__pca1" in feat.feature_names
     assert "weighted_cosine_similarity_to_cancer_centroid__pca1" in feat.feature_names
     assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca1" in feat.feature_names
     assert "weighted_healthy_tail_evidence__pca2" in feat.feature_names
     assert "weighted_healthy_tail_agreement__pca2" in feat.feature_names
-    assert "weighted_both_centroid_outlier_score__pca2" in feat.feature_names
     assert "weighted_directional_agreement__pca2" in feat.feature_names
     assert "weighted_mean_abs_error_to_cancer_centroid__pca2" in feat.feature_names
     assert "weighted_cosine_similarity_to_cancer_centroid__pca2" in feat.feature_names
@@ -338,11 +332,8 @@ def test_observed_feature_builder_histogram_tail_features_behaviors(monkeypatch)
     )
     idx_e = feat.feature_names.index("weighted_healthy_tail_evidence__cancer")
     idx_a = feat.feature_names.index("weighted_healthy_tail_agreement__cancer")
-    idx_o = feat.feature_names.index("weighted_both_centroid_outlier_score__cancer")
     assert float(feat.X[0, idx_e]) < float(feat.X[2, idx_e])
     assert float(feat.X[0, idx_a]) < float(feat.X[2, idx_a])
-    assert np.isfinite(float(feat.X[0, idx_o]))
-    assert np.isfinite(float(feat.X[2, idx_o]))
     assert float(feat.X[2, idx_e]) <= 5.0
 
 
@@ -385,7 +376,5 @@ def test_observed_feature_builder_histogram_tail_features_nan_when_invalid(monke
     )
     idx_e = feat.feature_names.index("weighted_healthy_tail_evidence__cancer")
     idx_a = feat.feature_names.index("weighted_healthy_tail_agreement__cancer")
-    idx_o = feat.feature_names.index("weighted_both_centroid_outlier_score__cancer")
     assert not np.isfinite(float(feat.X[0, idx_e]))
     assert not np.isfinite(float(feat.X[0, idx_a]))
-    assert not np.isfinite(float(feat.X[0, idx_o]))

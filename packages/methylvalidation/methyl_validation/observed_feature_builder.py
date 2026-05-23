@@ -585,7 +585,6 @@ def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) ->
                 f"weighted_fraction_dmps_closer_to_cancer_centroid__{suffix}",
                 f"weighted_healthy_tail_evidence__{suffix}",
                 f"weighted_healthy_tail_agreement__{suffix}",
-                f"weighted_both_centroid_outlier_score__{suffix}",
             ]
         )
     return [name for name in names if name not in REMOVED_OBSERVED_HYBRID_FEATURES]
@@ -857,10 +856,8 @@ def build_observed_hybrid_feature_table(
                         suffix = _feature_label_token(label_raw)
                         key_e = f"weighted_healthy_tail_evidence__{suffix}"
                         key_a = f"weighted_healthy_tail_agreement__{suffix}"
-                        key_o = f"weighted_both_centroid_outlier_score__{suffix}"
                         tail_feature_values.setdefault(key_e, float("nan"))
                         tail_feature_values.setdefault(key_a, float("nan"))
-                        tail_feature_values.setdefault(key_o, float("nan"))
                         counts_c = hist_cancer_counts.get(label_raw)
                         if counts_c is None or counts_c.shape != hist_healthy_counts.shape:
                             continue
@@ -904,18 +901,11 @@ def build_observed_hybrid_feature_table(
                         t = np.clip(t, hist_eps, 1.0)
                         evidence = np.minimum(-np.log(t + hist_eps), hist_evidence_clip_cap)
                         agreement = (t < hist_tail_agreement_threshold).astype(np.float64)
-                        q_h = np.clip(2.0 * np.minimum(ecdf_h_v, 1.0 - ecdf_h_v), hist_eps, 1.0)
-                        q_c = np.clip(2.0 * np.minimum(ecdf_c_v, 1.0 - ecdf_c_v), hist_eps, 1.0)
-                        outside = np.minimum(
-                            -np.log(np.maximum(q_h, q_c) + hist_eps),
-                            hist_evidence_clip_cap,
-                        )
                         wk_sum = float(np.sum(wk_v))
                         if wk_sum <= 0.0:
                             continue
                         tail_feature_values[key_e] = float(np.sum(wk_v * evidence) / wk_sum)
                         tail_feature_values[key_a] = float(np.sum(wk_v * agreement) / wk_sum)
-                        tail_feature_values[key_o] = float(np.sum(wk_v * outside) / wk_sum)
 
             healthy_obs = healthy_ref[obs_mask]
             cancer_obs = cancer_ref[obs_mask]
