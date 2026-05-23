@@ -612,6 +612,32 @@ def _patch_step_config_predictor_multiclass_holdouts(
                 {"label": lbl, "paths": [str(testing_csv_by_label[lbl].resolve())]}
             )
         pred["test_group_paths"] = test_group_paths
+        # Keep predictor nested controls/diseases aligned to testing CSVs too,
+        # but use resolved-order patching so parent labels can differ.
+        n_ctrl = _control_leaf_count_from_project_dict(project)
+        ctrl_labs = cohort_labels[:n_ctrl]
+        dis_labs = cohort_labels[n_ctrl:]
+        if isinstance(pred.get("controls"), dict) and pred["controls"].get("groups"):
+            pred["controls"] = _patch_predictor_side_holdouts_ordered(
+                pred["controls"], ctrl_labs, testing_csv_by_label
+            )
+        if "control" in pred:
+            pred["control"] = (
+                copy.deepcopy(pred["controls"])
+                if isinstance(pred.get("controls"), dict)
+                else pred.get("control")
+            )
+        if isinstance(pred.get("diseases"), dict) and pred["diseases"].get("groups"):
+            pred["diseases"] = _patch_predictor_side_holdouts_ordered(
+                pred["diseases"], dis_labs, testing_csv_by_label
+            )
+        if "disease" in pred:
+            pred["disease"] = (
+                copy.deepcopy(pred["diseases"])
+                if isinstance(pred.get("diseases"), dict)
+                else pred.get("disease")
+            )
+        return
     else:
         pred.pop("test_group_paths", None)
         n_ctrl = _control_leaf_count_from_project_dict(project)
@@ -757,8 +783,10 @@ def generate_run_project_hierarchical_multiclass(
             side["groups"] = _patch_side_groups_for_mc(side["groups"], train_csv_by_label)
             project[key] = side
 
+    # Keep explicit multiclass holdout class paths on per-run projects so backend
+    # evaluation cannot silently fall back to training cohorts.
     _patch_step_config_predictor_multiclass_holdouts(
-        project, testing_csv_by_label, cohort_labels, embed_test_group_paths=False
+        project, testing_csv_by_label, cohort_labels, embed_test_group_paths=True
     )
 
     project_path = run_dir / "project.json"

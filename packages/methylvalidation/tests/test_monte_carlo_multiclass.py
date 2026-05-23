@@ -306,7 +306,11 @@ def test_hierarchical_mc_run_project_predictor_points_at_testing_csvs(tmp_path: 
     run_proj = json.loads(project_path.read_text(encoding="utf-8"))
     pred = run_proj["step_config"]["predictor"]
     assert "should_not_remain" not in json.dumps(pred)
-    assert "test_group_paths" not in pred
+    assert "test_group_paths" in pred
+    assert len(pred["test_group_paths"]) == len(cohort_labels)
+    assert [str(row["label"]) for row in pred["test_group_paths"]] == cohort_labels
+    for row in pred["test_group_paths"]:
+        assert Path(row["paths"][0]).name.startswith("testing_")
 
     pc = pred["controls"]["groups"][0]["sample_paths"][0]
     assert Path(pc).name.startswith("testing_")
@@ -399,6 +403,8 @@ def test_hierarchical_mc_run_project_without_predictor_nested_sides(tmp_path: Pa
     run_proj = json.loads(project_path.read_text(encoding="utf-8"))
     pred = run_proj["step_config"]["predictor"]
     assert "train_group_paths" not in pred
+    assert "test_group_paths" in pred
+    assert len(pred["test_group_paths"]) == len(cohort_labels)
     assert pred["controls"]["groups"][0]["label"] == "all"
     assert len(pred["diseases"]["groups"][0]["stages"]) == 4
     assert Path(pred["diseases"]["groups"][0]["stages"][0]["sample_paths"][0]).name.startswith("testing_")
