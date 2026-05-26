@@ -473,16 +473,38 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
     def _fake_resolve_iteration_split(**kwargs):
         return (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]), "reused"
 
-    def _forbidden_generate_run_project(*args, **kwargs):
+    def _fake_generate_run_project(
+        base_project_path,
+        run_dir,
+        run_id,
+        output_base,
+        train_control,
+        train_disease,
+        val_control,
+        val_disease,
+        samples_base_path,
+    ):
         calls["generated_project"] += 1
-        raise AssertionError("generate_run_project should not be called when reusable run exists")
+        run_dir = Path(run_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        project_path = run_dir / "project.json"
+        project_path.write_text("{}", encoding="utf-8")
+        return (
+            project_path,
+            run_dir / "training_control.csv",
+            run_dir / "training_disease.csv",
+            run_dir / "testing_control.csv",
+            run_dir / "testing_disease.csv",
+            None,
+            None,
+        )
 
     def _forbidden_run_pipeline(*args, **kwargs):
         calls["ran_pipeline"] += 1
         raise AssertionError("run_pipeline_for_iteration should not be called when reusable run exists")
 
     monkeypatch.setattr(cli, "resolve_iteration_split", _fake_resolve_iteration_split)
-    monkeypatch.setattr(cli, "generate_run_project", _forbidden_generate_run_project)
+    monkeypatch.setattr(cli, "generate_run_project", _fake_generate_run_project)
     monkeypatch.setattr(cli, "run_pipeline_for_iteration", _forbidden_run_pipeline)
 
     config = SimpleNamespace(
@@ -510,7 +532,12 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
     assert len(rows) == 1
     assert rows[0]["run_id"] == "run_0001"
     linked_run = shared_root / "run_0001"
-    assert linked_run.is_symlink()
-    assert linked_run.resolve() == run1.resolve()
-    assert calls["generated_project"] == 0
+    assert linked_run.is_dir()
+    assert not linked_run.is_symlink()
+    assert (linked_run / "project.json").is_file()
+    assert (linked_run / "centroids").is_symlink()
+    assert (linked_run / "detections").is_symlink()
+    assert (linked_run / "centroids").resolve() == (run1 / "centroids").resolve()
+    assert (linked_run / "detections").resolve() == (run1 / "detections").resolve()
+    assert calls["generated_project"] == 1
     assert calls["ran_pipeline"] == 0

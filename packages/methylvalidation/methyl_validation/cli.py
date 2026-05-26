@@ -445,12 +445,11 @@ def _build_model_mc_shared_runs(
             and (run_path / "centroids").is_dir()
         )
 
-    def _replace_with_symlink(link_path: Path, target_path: Path) -> None:
-        if link_path.is_symlink() or link_path.is_file():
-            link_path.unlink()
-        elif link_path.is_dir():
-            shutil.rmtree(link_path)
-        link_path.symlink_to(target_path, target_is_directory=True)
+    def _clean_path(path: Path) -> None:
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
     completed_iteration_seconds: List[float] = []
     for i in range(start_iteration_idx, config.n_iterations):
         iteration_t0 = time.perf_counter()
@@ -508,7 +507,62 @@ def _build_model_mc_shared_runs(
 
         source_run_dir = primary_monte_carlo_runs_root / run_id
         if split_src == "reused" and _has_reusable_source_run(source_run_dir):
-            _replace_with_symlink(run_dir, source_run_dir)
+            _clean_path(run_dir)
+            run_dir.mkdir(parents=True, exist_ok=True)
+            if layout == "binary":
+                (
+                    project_path,
+                    _,
+                    _,
+                    _val_control_csv,
+                    _val_disease_csv,
+                    _centroid_group1_override,
+                    _centroid_group2_override,
+                ) = generate_run_project(
+                    base_project_for_runs,
+                    run_dir,
+                    run_id,
+                    str(shared_root),
+                    train_control,
+                    train_disease,
+                    val_control,
+                    val_disease,
+                    config.samples_base_path,
+                )
+            elif layout == "multiclass":
+                project_path, _val_groups_json = generate_run_project_multiclass(
+                    base_project_for_runs,
+                    run_dir,
+                    run_id,
+                    str(shared_root),
+                    train_m,
+                    val_m,
+                    cohort_labels,
+                    config.samples_base_path,
+                )
+            else:
+                project_path, _val_groups_json = generate_run_project_hierarchical_multiclass(
+                    base_project_for_runs,
+                    run_dir,
+                    run_id,
+                    str(shared_root),
+                    train_m,
+                    val_m,
+                    cohort_labels,
+                    config.samples_base_path,
+                )
+            for artifact_dir in ("centroids", "detections"):
+                src = source_run_dir / artifact_dir
+                dst = run_dir / artifact_dir
+                if src.is_dir():
+                    _clean_path(dst)
+                    dst.symlink_to(src, target_is_directory=True)
+            for optional_file in ("detector_step_override.json",):
+                srcf = source_run_dir / optional_file
+                dstf = run_dir / optional_file
+                if srcf.is_file():
+                    _clean_path(dstf)
+                    dstf.symlink_to(srcf)
             source_timings = primary_timings_by_run.get(run_id, [])
             if source_timings:
                 for t in source_timings:
@@ -540,7 +594,7 @@ def _build_model_mc_shared_runs(
                     "iteration": i + 1,
                     "run_id": run_id,
                     "run_dir": str(run_dir),
-                    "project_json": str(run_dir / "project.json"),
+                    "project_json": str(project_path),
                     "n_train_samples": n_train_samples,
                     "n_val_samples": n_val_samples,
                 }
