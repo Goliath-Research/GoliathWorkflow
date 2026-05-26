@@ -716,6 +716,19 @@ class MonteCarloConfig(BaseModel):
             "using observed_hybrid features and append extra prediction columns."
         ),
     )
+    ecdf_aggregated_enabled: Optional[bool] = Field(
+        default=None,
+        description=(
+            "If set for model_backend=ecdf, force enable/disable aggregated observed-hybrid ECDF OvR. "
+            "If null, auto-enable when feature_mode=observed_hybrid and feature_family_set!=dmp."
+        ),
+    )
+    ecdf_aggregated_n_bins: int = Field(
+        default=100,
+        ge=8,
+        le=512,
+        description="Histogram bin count per feature for aggregated ECDF OvR heads.",
+    )
     covariates_path: Optional[str] = Field(
         default=None,
         description=(
@@ -1015,6 +1028,8 @@ class MonteCarloConfig(BaseModel):
         self.ecdf_second_stage_enabled = bool(
             self.backend_profiles.ecdf.params.ecdf_second_stage_enabled
         )
+        self.ecdf_aggregated_enabled = self.backend_profiles.ecdf.params.ecdf_aggregated_enabled
+        self.ecdf_aggregated_n_bins = int(self.backend_profiles.ecdf.params.ecdf_aggregated_n_bins)
         tab_params = self.backend_profiles.tabular_sklearn.params
         self.tabular_model_type = tab_params.tabular_model_type
         self.tabular_methods = tab_params.tabular_methods

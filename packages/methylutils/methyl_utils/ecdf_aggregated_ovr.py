@@ -366,9 +366,11 @@ def predict_aggregated_ecdf_ovr_proba(
 
     logits = np.nan_to_num(logits, nan=0.0, posinf=20.0, neginf=-20.0)
     logits = np.clip(logits, -40.0, 40.0)
-    logits = logits - np.max(logits, axis=1, keepdims=True)
-    probs = np.exp(logits)
+    # Preserve raw OvR evidence for diagnostics before softmax stabilization.
+    evidence_logits = np.asarray(logits, dtype=np.float64).copy()
+    logits_stable = logits - np.max(logits, axis=1, keepdims=True)
+    probs = np.exp(logits_stable)
     denom = np.sum(probs, axis=1, keepdims=True)
     denom = np.where(denom <= 0.0, 1.0, denom)
     probs = probs / denom
-    return probs.astype(np.float64), logits.astype(np.float64)
+    return probs.astype(np.float64), evidence_logits.astype(np.float64)

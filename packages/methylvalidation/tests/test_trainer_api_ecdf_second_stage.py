@@ -133,3 +133,90 @@ def test_build_model_backend_steps_ecdf_observed_hybrid_uses_aggregated_path(tmp
         "ecdf-aggregated-predictor",
         "ecdf-second-stage",
     ]
+
+
+def test_build_model_backend_steps_ecdf_aggregated_can_be_explicitly_disabled(tmp_path: Path):
+    cfg = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": str(tmp_path / "project.json"),
+            "output_base": str(tmp_path),
+            "backend_profiles": {
+                "ecdf": {
+                    "enabled": True,
+                    "params": {
+                        "feature_mode": "observed_hybrid",
+                        "feature_family_set": "gene",
+                        "ecdf_aggregated_enabled": False,
+                    },
+                },
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+        }
+    )
+    steps = build_model_backend_steps(
+        project_json=tmp_path / "project.json",
+        predictor_output_dir=tmp_path / "predictors",
+        config=cfg,
+        per_cancer_group=False,
+        run_classifier_fn=lambda _p, _g: (0, "classifier ok", ""),
+        run_predictor_fn=lambda _p, _o: (0, "predictor ok", ""),
+    )
+    assert [name for name, _ in steps] == ["methyl-classifier", "methyl-predictor", "ecdf-second-stage"]
+
+
+def test_build_model_backend_steps_ecdf_aggregated_uses_configured_n_bins(tmp_path: Path, monkeypatch):
+    captured: dict[str, object] = {}
+
+    def _fake_train(**kwargs):
+        captured.update(kwargs)
+        out = tmp_path / "classifiers" / "ecdf_aggregated_ovr.pkl"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text("x", encoding="utf-8")
+        return out
+
+    def _fake_predict(**kwargs):
+        return {"ok": True}
+
+    monkeypatch.setattr("methyl_validation.ecdf_aggregated_backend.train_ecdf_aggregated_ovr_model", _fake_train)
+    monkeypatch.setattr("methyl_validation.ecdf_aggregated_backend.predict_ecdf_aggregated_ovr_from_project", _fake_predict)
+
+    cfg = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": str(tmp_path / "project.json"),
+            "output_base": str(tmp_path),
+            "backend_profiles": {
+                "ecdf": {
+                    "enabled": True,
+                    "params": {
+                        "feature_mode": "observed_hybrid",
+                        "feature_family_set": "gene",
+                        "ecdf_aggregated_enabled": True,
+                        "ecdf_aggregated_n_bins": 211,
+                    },
+                },
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+        }
+    )
+    steps = build_model_backend_steps(
+        project_json=tmp_path / "project.json",
+        predictor_output_dir=tmp_path / "predictors",
+        config=cfg,
+        per_cancer_group=False,
+        run_classifier_fn=lambda _p, _g: (0, "classifier ok", ""),
+        run_predictor_fn=lambda _p, _o: (0, "predictor ok", ""),
+    )
+    assert [name for name, _ in steps][:2] == ["model-bundle", "ecdf-aggregated-train"]
+    rc, _out, _err = steps[1][1]()
+    assert rc == 0
+    assert captured.get("n_bins") == 211

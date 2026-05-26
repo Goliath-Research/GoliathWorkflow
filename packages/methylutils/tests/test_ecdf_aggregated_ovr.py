@@ -54,5 +54,10 @@ def test_train_and_predict_aggregated_package_roundtrip() -> None:
     assert probs.shape == (4, 2)
     assert evidence.shape == (4, 2)
     np.testing.assert_allclose(np.sum(probs, axis=1), np.ones((4,)), rtol=1e-6, atol=1e-6)
+    stabilized = evidence - np.max(evidence, axis=1, keepdims=True)
+    assert not np.allclose(
+        evidence,
+        stabilized,
+    ), "evidence logits must be raw pre-softmax values, not max-shifted"
     pred = np.argmax(probs, axis=1)
     assert set(pred.tolist()) <= {0, 1}

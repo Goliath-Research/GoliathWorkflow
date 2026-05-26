@@ -382,8 +382,8 @@ def build_model_backend_steps(
 
     ecdf_aggregated_auto = feature_mode == "observed_hybrid" and feature_family_set != "dmp"
     ecdf_aggregated_enabled = (
-        bool(getattr(config, "ecdf_aggregated_enabled"))
-        if config is not None and getattr(config, "ecdf_aggregated_enabled", None) is not None
+        bool(config.ecdf_aggregated_enabled)
+        if config is not None and config.ecdf_aggregated_enabled is not None
         else ecdf_aggregated_auto
     )
     if backend == "ecdf" and ecdf_aggregated_enabled:
@@ -442,7 +442,7 @@ def build_model_backend_steps(
                     observed_hist_tail_agreement_threshold=(
                         config.observed_hist_tail_agreement_threshold if config is not None else 0.10
                     ),
-                    n_bins=(getattr(config, "ecdf_aggregated_n_bins", 100) if config is not None else 100),
+                    n_bins=(config.ecdf_aggregated_n_bins if config is not None else 100),
                     temperature=1.0,
                 )
                 return 0, f"Aggregated ECDF model trained: {model_path}", ""

@@ -541,3 +541,114 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
     assert (linked_run / "detections").resolve() == (run1 / "detections").resolve()
     assert calls["generated_project"] == 1
     assert calls["ran_pipeline"] == 0
+
+
+def test_run_model_mc_backend_reuses_primary_centroid_detector_artifacts(tmp_path: Path, monkeypatch):
+    primary_root = tmp_path / "primary_mc"
+    run1 = primary_root / "run_0001"
+    (run1 / "detections" / "all" / "pca_pca1").mkdir(parents=True, exist_ok=True)
+    (run1 / "centroids").mkdir(parents=True, exist_ok=True)
+    (run1 / "project.json").write_text("{}", encoding="utf-8")
+    (primary_root / "step_timings.csv").write_text(
+        "step_name,duration_seconds,return_code,run_id,run_dir,n_train_samples,n_val_samples\n"
+        "methyl-detector,9.0,0,run_0001,/tmp/run_0001,8,2\n",
+        encoding="utf-8",
+    )
+
+    calls = {"generated_project": 0, "ran_detector_stage": 0, "ran_model_stage": 0}
+
+    def _fake_resolve_iteration_split(**kwargs):
+        return (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]), "reused"
+
+    def _fake_generate_run_project(
+        base_project_path,
+        run_dir,
+        run_id,
+        output_base,
+        train_control,
+        train_disease,
+        val_control,
+        val_disease,
+        samples_base_path,
+    ):
+        calls["generated_project"] += 1
+        run_dir = Path(run_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        project_path = run_dir / "project.json"
+        project_path.write_text("{}", encoding="utf-8")
+        return (
+            project_path,
+            run_dir / "training_control.csv",
+            run_dir / "training_disease.csv",
+            run_dir / "testing_control.csv",
+            run_dir / "testing_disease.csv",
+            None,
+            None,
+        )
+
+    def _forbidden_run_pipeline(*args, **kwargs):
+        calls["ran_detector_stage"] += 1
+        raise AssertionError("run_pipeline_for_iteration should not be called when reusable run exists")
+
+    def _fake_run_pipeline_for_model(**kwargs):
+        calls["ran_model_stage"] += 1
+        pred_dir = Path(kwargs["predictor_output_dir"])
+        pred_dir.mkdir(parents=True, exist_ok=True)
+        (pred_dir / "validation_metrics.json").write_text(
+            json.dumps({"balanced_accuracy": 0.9}),
+            encoding="utf-8",
+        )
+        return True, [], []
+
+    class _Cfg(SimpleNamespace):
+        def with_backend_selection(self, _backend):
+            return self
+
+    monkeypatch.setattr(cli, "resolve_iteration_split", _fake_resolve_iteration_split)
+    monkeypatch.setattr(cli, "generate_run_project", _fake_generate_run_project)
+    monkeypatch.setattr(cli, "run_pipeline_for_iteration", _forbidden_run_pipeline)
+    monkeypatch.setattr(cli, "run_pipeline_for_model", _fake_run_pipeline_for_model)
+    monkeypatch.setattr(cli, "_write_model_mc_outputs", lambda **kwargs: None)
+    monkeypatch.setattr(cli, "iteration_scalar_metrics_from_run_dir", lambda _run_dir: {"balanced_accuracy": 0.9})
+    monkeypatch.setattr(
+        cli,
+        "load_project",
+        lambda _path: SimpleNamespace(
+            get_comparisons=lambda: [
+                SimpleNamespace(control_group="healthy", disease_group="disease")
+            ]
+        ),
+    )
+
+    config = _Cfg(
+        n_iterations=1,
+        train_fraction=0.8,
+        seed=42,
+        samples_base_path=str(tmp_path),
+        abort_on_step_failure=True,
+    )
+    backend_root = tmp_path / "model_mc" / "ecdf"
+    cli._run_model_mc_backend(
+        backend="ecdf",
+        base_project_for_runs=tmp_path / "production_project.json",
+        config=config,
+        layout="binary",
+        cohort_paths_list=[("healthy", ["h1", "h2", "h3"]), ("disease", ["d1", "d2", "d3"])],
+        cohort_labels=["healthy", "disease"],
+        control_paths=["h1", "h2", "h3"],
+        disease_paths=["d1", "d2", "d3"],
+        backend_root=backend_root,
+        resume_arg=None,
+        per_cancer_group=False,
+        primary_monte_carlo_runs_root=primary_root,
+    )
+
+    linked_run = backend_root / "run_0001"
+    assert linked_run.is_dir()
+    assert (linked_run / "centroids").is_symlink()
+    assert (linked_run / "detections").is_symlink()
+    assert (linked_run / "centroids").resolve() == (run1 / "centroids").resolve()
+    assert (linked_run / "detections").resolve() == (run1 / "detections").resolve()
+    assert calls["generated_project"] == 1
+    assert calls["ran_detector_stage"] == 0
+    assert calls["ran_model_stage"] == 1

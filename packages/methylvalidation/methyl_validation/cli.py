@@ -1034,6 +1034,30 @@ def _run_model_mc_backend(
         "generated": 0,
         "per_iteration": [],
     }
+    primary_timings = _load_existing_step_timings(
+        primary_monte_carlo_runs_root / "step_timings.csv",
+        keep_until_iteration_exclusive=config.n_iterations + 1,
+    )
+    primary_timings_by_run: Dict[str, List[Dict[str, Any]]] = {}
+    for row in primary_timings:
+        rid = str(row.get("run_id") or "")
+        if rid:
+            primary_timings_by_run.setdefault(rid, []).append(row)
+
+    def _has_reusable_source_run(run_path: Path) -> bool:
+        return (
+            run_path.is_dir()
+            and (run_path / "project.json").is_file()
+            and (run_path / "detections").is_dir()
+            and (run_path / "centroids").is_dir()
+        )
+
+    def _clean_path(path: Path) -> None:
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+        elif path.is_dir():
+            shutil.rmtree(path)
+
     completed_iteration_seconds: List[float] = []
 
     for i in range(start_iteration_idx, config.n_iterations):
@@ -1112,19 +1136,46 @@ def _run_model_mc_backend(
                 predictor_output_dir = run_dir / "predictors"
             n_train_samples = len(train_control) + len(train_disease)
             n_val_samples = len(val_control) + len(val_disease)
-            ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration(
-                project_path,
-                per_cancer_group=per_cancer_group,
-                logs_dir=run_dir / "logs",
-                progress_callback=None,
-                centroid_step_overrides={
-                    "group1": centroid_group1_override,
-                    "group2": centroid_group2_override,
-                },
-                detector_step_override=None,
-                skip_centroid=False,
-                config=config,
-            )
+            source_run_dir = primary_monte_carlo_runs_root / run_id
+            if split_src == "reused" and _has_reusable_source_run(source_run_dir):
+                for artifact_dir in ("centroids", "detections"):
+                    src = source_run_dir / artifact_dir
+                    dst = run_dir / artifact_dir
+                    if src.is_dir():
+                        _clean_path(dst)
+                        dst.symlink_to(src, target_is_directory=True)
+                for optional_file in ("detector_step_override.json",):
+                    srcf = source_run_dir / optional_file
+                    dstf = run_dir / optional_file
+                    if srcf.is_file():
+                        _clean_path(dstf)
+                        dstf.symlink_to(srcf)
+                source_timings = primary_timings_by_run.get(run_id, [])
+                if source_timings:
+                    timings_iter = [dict(t) for t in source_timings]
+                else:
+                    timings_iter = [
+                        {
+                            "step_name": "methyl-detector",
+                            "duration_seconds": 0.0,
+                            "return_code": 0,
+                        }
+                    ]
+                ok_iter, errors_iter = True, []
+            else:
+                ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration(
+                    project_path,
+                    per_cancer_group=per_cancer_group,
+                    logs_dir=run_dir / "logs",
+                    progress_callback=None,
+                    centroid_step_overrides={
+                        "group1": centroid_group1_override,
+                        "group2": centroid_group2_override,
+                    },
+                    detector_step_override=None,
+                    skip_centroid=False,
+                    config=config,
+                )
         else:
             if layout == "multiclass":
                 project_path, _val_groups_json = generate_run_project_multiclass(
@@ -1151,15 +1202,42 @@ def _run_model_mc_backend(
             predictor_output_dir = run_dir / "predictors"
             n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
             n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
-            ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration_multiclass(
-                project_path,
-                per_cancer_group=per_cancer_group,
-                logs_dir=run_dir / "logs",
-                progress_callback=None,
-                detector_step_override=None,
-                skip_centroid=False,
-                config=config,
-            )
+            source_run_dir = primary_monte_carlo_runs_root / run_id
+            if split_src == "reused" and _has_reusable_source_run(source_run_dir):
+                for artifact_dir in ("centroids", "detections"):
+                    src = source_run_dir / artifact_dir
+                    dst = run_dir / artifact_dir
+                    if src.is_dir():
+                        _clean_path(dst)
+                        dst.symlink_to(src, target_is_directory=True)
+                for optional_file in ("detector_step_override.json",):
+                    srcf = source_run_dir / optional_file
+                    dstf = run_dir / optional_file
+                    if srcf.is_file():
+                        _clean_path(dstf)
+                        dstf.symlink_to(srcf)
+                source_timings = primary_timings_by_run.get(run_id, [])
+                if source_timings:
+                    timings_iter = [dict(t) for t in source_timings]
+                else:
+                    timings_iter = [
+                        {
+                            "step_name": "methyl-detector",
+                            "duration_seconds": 0.0,
+                            "return_code": 0,
+                        }
+                    ]
+                ok_iter, errors_iter = True, []
+            else:
+                ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration_multiclass(
+                    project_path,
+                    per_cancer_group=per_cancer_group,
+                    logs_dir=run_dir / "logs",
+                    progress_callback=None,
+                    detector_step_override=None,
+                    skip_centroid=False,
+                    config=config,
+                )
 
         for t in timings_iter:
             all_timings.append(
