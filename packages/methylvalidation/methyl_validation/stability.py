@@ -1479,11 +1479,39 @@ def freeze_production_model(
         skip_centroid=bool(skip_centroid),
         config=config,
     )
+    mapper_annotation_cache: Dict[str, Any] = {}
+    if success:
+        try:
+            from .model_bundle import (
+                MAPPER_ANNOTATION_NAME,
+                build_mapper_annotation_cache,
+            )
+
+            bundle_dir = prod_dir / "model_bundle"
+            bundle_dir.mkdir(parents=True, exist_ok=True)
+            mapper_annotation_cache = build_mapper_annotation_cache(
+                project_json=prod_project_path,
+                output_csv=bundle_dir / MAPPER_ANNOTATION_NAME,
+            )
+            with open(prod_project_path, encoding="utf-8") as f:
+                prod_project_payload = json.load(f)
+            step_cfg = prod_project_payload.setdefault("step_config", {})
+            model_bundle_cfg = step_cfg.setdefault("model_bundle", {})
+            model_bundle_cfg["mapper_annotation_csv"] = str(
+                mapper_annotation_cache.get("path")
+            )
+            with open(prod_project_path, "w", encoding="utf-8") as f:
+                json.dump(prod_project_payload, f, indent=2)
+        except Exception as e:
+            success = False
+            errors = list(errors) + [f"Mapper annotation cache build failed: {e}"]
+            mapper_annotation_cache = {}
 
     summary = {
         "output_dir": str(prod_dir),
         "fixed_dmp_panel": str(merged_panel),
         "production_project": str(prod_project_path),
+        "mapper_annotation_cache": mapper_annotation_cache,
         "success": success,
         "errors": errors,
         "timings": timings,

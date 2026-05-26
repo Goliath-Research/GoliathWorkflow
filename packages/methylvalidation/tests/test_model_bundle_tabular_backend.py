@@ -40,6 +40,31 @@ class _StubProject:
         ]
 
 
+class _StubProjectWithMapper(_StubProject):
+    def __init__(self, detection_dir: Path, mapper_dir: Path):
+        super().__init__(detection_dir)
+        self._mapper = mapper_dir
+
+    def get_mapper_output_dir(self, control_group: str, disease_group: str) -> str:
+        assert control_group == "healthy"
+        assert disease_group == "pca1"
+        return str(self._mapper)
+
+    def get_step_config(self, step_name: str):
+        return {}
+
+
+class _StubProjectWithModelBundleConfig(_StubProject):
+    def __init__(self, detection_dir: Path, mapper_annotation_csv: Path):
+        super().__init__(detection_dir)
+        self._mapper_annotation_csv = mapper_annotation_csv
+
+    def get_step_config(self, step_name: str):
+        if step_name == "model_bundle":
+            return {"mapper_annotation_csv": str(self._mapper_annotation_csv)}
+        return {}
+
+
 def test_build_model_feature_bundle_and_load(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     det.mkdir(parents=True)
@@ -77,6 +102,147 @@ def test_build_model_feature_bundle_and_load(tmp_path: Path, monkeypatch):
         "gene_name",
         "dmr_region",
     }
+
+
+def test_build_mapper_annotation_cache_deterministic_collapse(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    mapper = tmp_path / "mapper" / "healthy" / "pca1"
+    mapper.mkdir(parents=True)
+    intersections = pd.DataFrame(
+        {
+            "dmp_name": ["1:100:CG:eff=0.20", "1:100:CG:eff=0.20", "1:200:CG:eff=0.10"],
+            "feature_chrom": ["chr1", "chr1", "chr1"],
+            "gene_name": ["GENE_WEAK", "GENE_STRONG", "GENE2"],
+            "feature_type": ["intron", "promoter", "exon"],
+            "region_weight": [0.7, 2.0, 1.5],
+            "combined_weight": [0.5, 1.8, 1.1],
+            "effect_size": [0.20, 0.20, 0.10],
+            "context": ["CG", "CG", "CG"],
+        }
+    )
+    intersections.to_csv(mapper / "chr1-intersections.csv", index=False)
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithMapper(det, mapper),
+    )
+
+    out_csv = tmp_path / "bundle" / "mapper_dmp_annotations.csv"
+    cache_info = model_bundle.build_mapper_annotation_cache(
+        project_json=tmp_path / "project.json",
+        output_csv=out_csv,
+    )
+    assert out_csv.is_file()
+    assert cache_info["rows"] == 2
+
+    out_df = pd.read_csv(out_csv)
+    row_100 = out_df[(out_df["chromosome"].astype(str) == "1") & (out_df["position"] == 100)]
+    assert len(row_100) == 1
+    assert row_100.iloc[0]["gene_name"] == "GENE_STRONG"
+    assert row_100.iloc[0]["feature_type"] == "promoter"
+    assert float(row_100.iloc[0]["region_weight"]) == pytest.approx(2.0)
+
+
+def test_build_model_feature_bundle_merges_mapper_annotations(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1"],
+            "position": [100],
+            "context": ["CG"],
+            "effect_size": [0.5],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    ann_csv = tmp_path / "mapper_dmp_annotations.csv"
+    pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_pca1"],
+            "chromosome": ["1"],
+            "position": [100],
+            "context": ["CG"],
+            "gene_name": ["TP53"],
+            "feature_type": ["promoter"],
+            "region_weight": [2.0],
+            "mapper_source_csv": ["/tmp/mapper.csv"],
+        }
+    ).to_csv(ann_csv, index=False)
+
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+    model_bundle.build_model_feature_bundle(
+        project_json=tmp_path / "project.json",
+        output_dir=tmp_path / "bundle",
+        feature_family_set="gene",
+        require_mapper_annotations=True,
+        mapper_annotation_csv=ann_csv,
+    )
+    out_df = model_bundle.load_bundle_dmp_index(tmp_path / "bundle" / "model_feature_bundle.h5")
+    assert out_df.iloc[0]["gene_name"] == "TP53"
+    assert out_df.iloc[0]["feature_type"] == "promoter"
+    assert float(out_df.iloc[0]["region_weight"]) == pytest.approx(2.0)
+
+
+def test_build_model_feature_bundle_uses_project_mapper_annotation_pointer(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1"],
+            "position": [101],
+            "context": ["CG"],
+            "effect_size": [0.6],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    ann_csv = tmp_path / "cached_mapper_annotations.csv"
+    pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_pca1"],
+            "chromosome": ["1"],
+            "position": [101],
+            "context": ["CG"],
+            "gene_name": ["BRCA1"],
+            "feature_type": ["exon"],
+            "region_weight": [1.5],
+            "mapper_source_csv": ["/tmp/mapper.csv"],
+        }
+    ).to_csv(ann_csv, index=False)
+
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithModelBundleConfig(det, ann_csv),
+    )
+    model_bundle.build_model_feature_bundle(
+        project_json=tmp_path / "project.json",
+        output_dir=tmp_path / "bundle",
+        feature_family_set="gene",
+        require_mapper_annotations=True,
+    )
+    out_df = model_bundle.load_bundle_dmp_index(tmp_path / "bundle" / "model_feature_bundle.h5")
+    assert out_df.iloc[0]["gene_name"] == "BRCA1"
+
+
+def test_build_model_feature_bundle_requires_mapper_annotations_for_non_dmp(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1"],
+            "position": [100],
+            "context": ["CG"],
+            "effect_size": [0.7],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+
+    with pytest.raises(FileNotFoundError, match="Mapper annotation cache is required"):
+        model_bundle.build_model_feature_bundle(
+            project_json=tmp_path / "project.json",
+            output_dir=tmp_path / "bundle",
+            feature_family_set="gene",
+            require_mapper_annotations=True,
+        )
 
 
 def test_build_model_feature_bundle_canonicalizes_weight_to_effect_size(tmp_path: Path, monkeypatch):

@@ -123,6 +123,8 @@ def build_model_backend_steps(
                     project_json=project_json,
                     output_dir=bundle_dir,
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
+                    feature_family_set=feature_family_set,
+                    require_mapper_annotations=(feature_family_set != "dmp"),
                     extra_metadata={
                         "model_backend": "tabular_sklearn",
                         "feature_mode": (config.feature_mode if config is not None else "raw_dmp"),
@@ -273,6 +275,8 @@ def build_model_backend_steps(
                     project_json=project_json,
                     output_dir=bundle_dir,
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
+                    feature_family_set=feature_family_set,
+                    require_mapper_annotations=(feature_family_set != "dmp"),
                     extra_metadata={
                         "model_backend": "generative_hybrid",
                         "feature_mode": (config.feature_mode if config is not None else "raw_dmp"),
@@ -406,6 +410,8 @@ def build_model_backend_steps(
                     project_json=project_json,
                     output_dir=bundle_dir,
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
+                    feature_family_set=feature_family_set,
+                    require_mapper_annotations=(feature_family_set != "dmp"),
                     extra_metadata={
                         "model_backend": "ecdf",
                         "classifier_type": "ecdf_aggregated_one_vs_rest",
