@@ -99,15 +99,19 @@ def _choose_detector_csvs(detection_dir: Path) -> Dict[str, List[Path]]:
 
 
 def _normalize_chromosome(value: Any) -> str:
-    text = str(value or "").strip()
+    if value is None or pd.isna(value):
+        return ""
+    text = str(value).strip()
     if text.lower().startswith("chr"):
         text = text[3:]
     return text
 
 
-def _normalize_context(value: Any) -> str:
-    text = str(value or "").strip().upper()
-    return text if text else "CG"
+def _normalize_context(value: Any, *, default: str = "CG") -> str:
+    if value is None or pd.isna(value):
+        return default
+    text = str(value).strip().upper()
+    return text if text else default
 
 
 def _parse_dmp_name_locus(value: Any) -> Tuple[Optional[str], Optional[int], Optional[str]]:
@@ -150,7 +154,7 @@ def _normalize_mapper_intersections(
             chrom_col = candidate
             break
     pos_col = None
-    for candidate in ("position", "pos", "feature_start"):
+    for candidate in ("position", "pos"):
         if candidate in work.columns:
             pos_col = candidate
             break
@@ -182,7 +186,7 @@ def _normalize_mapper_intersections(
     else:
         pos_series = pd.to_numeric(pos_from_dmp, errors="coerce")
     if ctx_col is not None:
-        ctx_series = work[ctx_col].map(_normalize_context).replace("", pd.NA)
+        ctx_series = work[ctx_col].map(lambda v: _normalize_context(v, default="")).replace("", pd.NA)
         ctx_series = pd.Series(
             np.where(ctx_series.isna(), ctx_from_dmp, ctx_series),
             index=work.index,

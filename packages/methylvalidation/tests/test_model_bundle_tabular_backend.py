@@ -144,6 +144,47 @@ def test_build_mapper_annotation_cache_deterministic_collapse(tmp_path: Path, mo
     assert float(row_100.iloc[0]["region_weight"]) == pytest.approx(2.0)
 
 
+def test_normalize_mapper_intersections_uses_dmp_fallback_for_nan_keys(tmp_path: Path):
+    intersections = pd.DataFrame(
+        {
+            "dmp_name": ["1:100:CG:eff=0.20"],
+            "chromosome": [np.nan],
+            "context": [np.nan],
+            "gene_name": ["GENE1"],
+            "feature_type": ["promoter"],
+        }
+    )
+    out = model_bundle._normalize_mapper_intersections(
+        intersections,
+        comparison_label="healthy_vs_pca1",
+        source_csv=tmp_path / "chr1-intersections.csv",
+    )
+    assert len(out) == 1
+    assert out.iloc[0]["chromosome"] == "1"
+    assert int(out.iloc[0]["position"]) == 100
+    assert out.iloc[0]["context"] == "CG"
+
+
+def test_normalize_mapper_intersections_does_not_use_feature_start_as_dmp_position(tmp_path: Path):
+    intersections = pd.DataFrame(
+        {
+            "dmp_name": ["1:100:CG:eff=0.20"],
+            "feature_start": [9999],
+            "feature_chrom": ["chr1"],
+            "context": ["CG"],
+            "gene_name": ["GENE1"],
+            "feature_type": ["promoter"],
+        }
+    )
+    out = model_bundle._normalize_mapper_intersections(
+        intersections,
+        comparison_label="healthy_vs_pca1",
+        source_csv=tmp_path / "chr1-intersections.csv",
+    )
+    assert len(out) == 1
+    assert int(out.iloc[0]["position"]) == 100
+
+
 def test_build_model_feature_bundle_merges_mapper_annotations(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     det.mkdir(parents=True)
