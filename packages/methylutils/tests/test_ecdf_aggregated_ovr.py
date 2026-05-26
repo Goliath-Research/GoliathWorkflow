@@ -97,3 +97,25 @@ def test_build_effect_size_feature_weights_supports_dynamic_keys() -> None:
         rtol=1e-6,
         atol=1e-6,
     )
+
+
+def test_build_effect_size_feature_weights_struct_keys_use_canonical_feature_aliases() -> None:
+    dmp_df = pd.DataFrame(
+        {
+            "effect_size": [2.0, 10.0, 4.0],
+            "gene_name": ["A", "A", "A"],
+            "feature_type": ["promoter_region", "exon", "genebody"],
+        }
+    )
+    names = [
+        "struct::A::promoter",
+        "struct::A::exon",
+        "struct::A::gene_body",
+    ]
+    weights = build_effect_size_feature_weights(dmp_df, names)
+    np.testing.assert_allclose(
+        weights,
+        np.asarray([0.2, 1.0, 0.4], dtype=np.float64),
+        rtol=1e-6,
+        atol=1e-6,
+    )

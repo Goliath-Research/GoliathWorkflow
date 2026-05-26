@@ -19,6 +19,19 @@ AGGREGATED_ECDF_OVR_TYPE = "ecdf_aggregated_one_vs_rest"
 AGGREGATED_ECDF_OVR_VERSION = 1
 
 
+def _normalize_structural_token(value: Any) -> str:
+    token = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "promoter_region": "promoter",
+        "genebody": "gene_body",
+        "body": "gene_body",
+        "terminator_region": "terminator",
+    }
+    token = aliases.get(token, token)
+    allowed = {"promoter", "exon", "intron", "gene_body", "terminator"}
+    return token if token in allowed else "unknown"
+
+
 def _safe_numeric(values: Any) -> np.ndarray:
     arr = np.asarray(values, dtype=np.float64).reshape(-1)
     if arr.size == 0:
@@ -85,11 +98,14 @@ def build_effect_size_feature_weights(
     ) if gene_col_l is not None else np.zeros((len(work),), dtype=bool)
 
     feat_col = work["feature_type"].astype(str).str.strip().str.lower() if "feature_type" in work.columns else None
+    feat_col_norm = feat_col.map(_normalize_structural_token) if feat_col is not None else None
     structural_tokens = ("promoter", "exon", "intron", "gene_body", "terminator")
     structural_masks: Dict[str, np.ndarray] = {}
-    if feat_col is not None:
+    if feat_col is not None and feat_col_norm is not None:
         for token in structural_tokens:
-            structural_masks[token] = feat_col.str.contains(token, regex=False, na=False).to_numpy(dtype=bool)
+            contains_mask = feat_col.str.contains(token, regex=False, na=False)
+            canonical_mask = feat_col_norm == token
+            structural_masks[token] = (contains_mask | canonical_mask).to_numpy(dtype=bool)
     else:
         for token in structural_tokens:
             structural_masks[token] = np.zeros((len(work),), dtype=bool)
@@ -104,11 +120,11 @@ def build_effect_size_feature_weights(
         return (gene_col == g).to_numpy(dtype=bool)
 
     def _struct_key_mask(gene_key: str, feature_key: str) -> np.ndarray:
-        if gene_col is None or feat_col is None:
+        if gene_col is None or feat_col_norm is None:
             return np.zeros((len(work),), dtype=bool)
         g = str(gene_key).strip()
-        f = str(feature_key).strip().lower()
-        return ((gene_col == g) & (feat_col == f)).to_numpy(dtype=bool)
+        f = _normalize_structural_token(feature_key)
+        return ((gene_col == g) & (feat_col_norm == f)).to_numpy(dtype=bool)
 
     out = np.zeros((len(names),), dtype=np.float64)
     for i, name in enumerate(names):
