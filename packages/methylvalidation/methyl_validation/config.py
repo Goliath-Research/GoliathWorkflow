@@ -202,6 +202,19 @@ class BackendSharedParams(BaseModel):
 class EcdfBackendParams(BackendSharedParams):
     model_config = ConfigDict(extra="forbid")
     ecdf_second_stage_enabled: bool = Field(default=False)
+    ecdf_aggregated_enabled: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When true, train/use aggregated observed-hybrid ECDF OvR package. "
+            "When null, auto-enable for feature_mode=observed_hybrid and feature_family_set!=dmp."
+        ),
+    )
+    ecdf_aggregated_n_bins: int = Field(
+        default=100,
+        ge=8,
+        le=512,
+        description="Histogram bin count per feature for aggregated ECDF heads.",
+    )
 
 
 class TabularBackendParams(BackendSharedParams):

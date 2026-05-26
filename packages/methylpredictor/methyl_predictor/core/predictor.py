@@ -18,6 +18,10 @@ from sklearn.metrics import (
 )
 
 from ..models.config import PredictorConfig
+from methyl_utils.ecdf_aggregated_ovr import (
+    AGGREGATED_ECDF_OVR_TYPE,
+    predict_aggregated_ecdf_ovr_proba,
+)
 
 
 def _extract_probability_matrix_from_df(
@@ -594,6 +598,83 @@ def _dmp_coverage_stats_from_predictions_df(df: pd.DataFrame) -> Optional[Dict[s
     return out if out else None
 
 
+def _predict_aggregated_ecdf_samples(
+    *,
+    classifier: Any,
+    samples_list: List[str],
+    predictions_csv: Path,
+    expected_classes: Optional[List[int]],
+    split_tags: Optional[List[str]],
+) -> pd.DataFrame:
+    pkg = getattr(classifier, "_aggregated_package", None)
+    if not isinstance(pkg, dict):
+        raise ValueError("Aggregated ECDF classifier package is unavailable")
+    if str(pkg.get("classifier_type")) != AGGREGATED_ECDF_OVR_TYPE:
+        raise ValueError("Aggregated ECDF classifier_type mismatch")
+    obs = pkg.get("observed_hybrid") or {}
+    dmp_df = obs.get("dmp_df")
+    if dmp_df is None or not hasattr(dmp_df, "columns"):
+        raise ValueError("Aggregated ECDF package is missing observed_hybrid.dmp_df")
+
+    try:
+        from methyl_validation.observed_feature_builder import build_observed_hybrid_feature_table
+    except Exception as e:  # pragma: no cover
+        raise RuntimeError(f"Aggregated ECDF predictor requires methyl_validation package: {e}") from e
+
+    feat = build_observed_hybrid_feature_table(
+        samples_list,
+        dmp_df,
+        min_coverage=int(obs.get("min_coverage", 1)),
+        healthy_reference_vector=np.asarray(obs.get("healthy_reference_vector"), dtype=np.float64),
+        cancer_reference_vector=np.asarray(obs.get("cancer_reference_vector"), dtype=np.float64),
+        per_cancer_reference_vectors=[
+            np.asarray(v, dtype=np.float64) for v in (obs.get("per_cancer_reference_vectors") or [])
+        ],
+        healthy_class_label=str(obs.get("healthy_class_label") or ""),
+        cancer_class_labels=[str(x) for x in (obs.get("cancer_class_labels") or [])],
+        anchor_strategy=str(obs.get("anchor_strategy") or "class_centroid"),
+        expected_feature_order_fingerprint=str(obs.get("feature_order_fingerprint") or ""),
+        centroid_dir_by_class_label={str(k): str(v) for k, v in (obs.get("class_centroid_dirs") or {}).items()},
+        hist_eps=float(obs.get("hist_eps", 1e-6)),
+        hist_alpha=float(obs.get("hist_alpha", 0.5)),
+        hist_evidence_clip_cap=float(obs.get("hist_evidence_clip_cap", 5.0)),
+        hist_tail_agreement_threshold=float(obs.get("hist_tail_agreement_threshold", 0.10)),
+        feature_family_set=str(obs.get("feature_family_set") or "gene"),
+    )
+
+    schema_names = [str(x) for x in ((pkg.get("feature_schema") or {}).get("feature_names") or [])]
+    if list(feat.feature_names) != schema_names:
+        raise ValueError("Aggregated ECDF feature schema mismatch during prediction")
+
+    probs, evidence = predict_aggregated_ecdf_ovr_proba(pkg, np.asarray(feat.X, dtype=np.float64))
+    pred = np.argmax(probs, axis=1).astype(int)
+    class_names = [str(x) for x in (pkg.get("class_names") or [])]
+
+    df = pd.DataFrame(
+        {
+            "sample": [str(p) for p in samples_list],
+            "prediction": pred.astype(int),
+            "prediction_label": [
+                class_names[int(i)] if int(i) < len(class_names) else f"Class_{int(i)}"
+                for i in pred.tolist()
+            ],
+        }
+    )
+    for j in range(probs.shape[1]):
+        df[f"prob_class{j}"] = probs[:, j]
+        df[f"evidence_class{j}"] = evidence[:, j]
+    if expected_classes is not None:
+        if len(expected_classes) != len(df):
+            raise ValueError("expected_classes length mismatch for aggregated ECDF prediction")
+        df["expected_class"] = np.asarray(expected_classes, dtype=int)
+    if split_tags is not None:
+        if len(split_tags) != len(df):
+            raise ValueError("evaluation_split length mismatch for aggregated ECDF prediction")
+        df["evaluation_split"] = [str(x) for x in split_tags]
+    df.to_csv(predictions_csv, index=False)
+    return df
+
+
 def _warn_if_degenerate_predictions(
     y_pred: np.ndarray, n_classes: int, class_names: List[str]
 ) -> None:
@@ -879,51 +960,61 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     predictions_csv = output_dir / "predictions.csv"
 
-    # Run classification with same DMP-based loading as MethylClassifier (required_chromosomes +
-    # dmp_positions_by_chrom so only classifier chromosomes and DMP positions are read from H5).
-    required_chromosomes: Optional[List[str]] = None
-    dmp_positions_by_chrom: Optional[Any] = None
-    if classifier.is_multi_chromosome:
-        required_chromosomes = list(classifier.classifiers.keys())
-        dmp_positions_by_chrom = getattr(classifier, "dmp_positions_df", None)
-        if dmp_positions_by_chrom is None or len(dmp_positions_by_chrom) == 0:
-            dmp_positions_by_chrom = {}
-            for chrom, clf in classifier.classifiers.items():
-                fi = clf.get_feature_info()
-                dmp_positions_by_chrom[chrom] = fi["positions"]
+    classifier_type = str(getattr(classifier, "metadata", {}).get("classifier_type") or "").strip().lower()
+    if classifier_type == AGGREGATED_ECDF_OVR_TYPE:
+        df = _predict_aggregated_ecdf_samples(
+            classifier=classifier,
+            samples_list=samples_list,
+            predictions_csv=predictions_csv,
+            expected_classes=expected_classes,
+            split_tags=split_tags,
+        )
     else:
-        # Single-file (single-chromosome or multiclass): prefer dmp_positions_df when present (multiclass with dmp_df)
-        dmp_df = getattr(classifier, "dmp_positions_df", None)
-        if dmp_df is not None and len(dmp_df) > 0 and hasattr(dmp_df, "columns") and "chromosome" in dmp_df.columns:
-            required_chromosomes = sorted(dmp_df["chromosome"].astype(str).unique().tolist())
-            dmp_positions_by_chrom = dmp_df
-        elif getattr(classifier, "classifier", None) is not None:
-            feature_info = classifier.get_feature_info()
-            chrom = getattr(classifier, "chromosome", None) or feature_info.get("chromosome") or "unknown"
-            if chrom == "unknown":
-                chrom = "1"
-            required_chromosomes = [chrom]
-            dmp_positions_by_chrom = {chrom: feature_info["positions"]}
+        # Run classification with same DMP-based loading as MethylClassifier (required_chromosomes +
+        # dmp_positions_by_chrom so only classifier chromosomes and DMP positions are read from H5).
+        required_chromosomes: Optional[List[str]] = None
+        dmp_positions_by_chrom: Optional[Any] = None
+        if classifier.is_multi_chromosome:
+            required_chromosomes = list(classifier.classifiers.keys())
+            dmp_positions_by_chrom = getattr(classifier, "dmp_positions_df", None)
+            if dmp_positions_by_chrom is None or len(dmp_positions_by_chrom) == 0:
+                dmp_positions_by_chrom = {}
+                for chrom, clf in classifier.classifiers.items():
+                    fi = clf.get_feature_info()
+                    dmp_positions_by_chrom[chrom] = fi["positions"]
         else:
-            required_chromosomes = None
-            dmp_positions_by_chrom = None
+            # Single-file (single-chromosome or multiclass): prefer dmp_positions_df when present (multiclass with dmp_df)
+            dmp_df = getattr(classifier, "dmp_positions_df", None)
+            if dmp_df is not None and len(dmp_df) > 0 and hasattr(dmp_df, "columns") and "chromosome" in dmp_df.columns:
+                required_chromosomes = sorted(dmp_df["chromosome"].astype(str).unique().tolist())
+                dmp_positions_by_chrom = dmp_df
+            elif getattr(classifier, "classifier", None) is not None:
+                feature_info = classifier.get_feature_info()
+                chrom = getattr(classifier, "chromosome", None) or feature_info.get("chromosome") or "unknown"
+                if chrom == "unknown":
+                    chrom = "1"
+                required_chromosomes = [chrom]
+                dmp_positions_by_chrom = {chrom: feature_info["positions"]}
+            else:
+                required_chromosomes = None
+                dmp_positions_by_chrom = None
 
-    classify_samples_from_list(
-        classifier=classifier,
-        samples_list=samples_list,
-        output_file=predictions_csv,
-        debug=config.debug,
-        required_chromosomes=required_chromosomes,
-        positions=None,
-        dmp_positions_by_chrom=dmp_positions_by_chrom,
-        expected_classes=expected_classes,
-        panel_spec=config.panel,
-    )
+        classify_samples_from_list(
+            classifier=classifier,
+            samples_list=samples_list,
+            output_file=predictions_csv,
+            debug=config.debug,
+            required_chromosomes=required_chromosomes,
+            positions=None,
+            dmp_positions_by_chrom=dmp_positions_by_chrom,
+            expected_classes=expected_classes,
+            panel_spec=config.panel,
+        )
 
-    if not predictions_csv.exists():
-        raise RuntimeError(f"Expected output CSV not found: {predictions_csv}")
+        if not predictions_csv.exists():
+            raise RuntimeError(f"Expected output CSV not found: {predictions_csv}")
 
-    df = pd.read_csv(predictions_csv)
+        df = pd.read_csv(predictions_csv)
     if "prediction" not in df.columns:
         raise RuntimeError("predictions CSV must contain prediction column")
 

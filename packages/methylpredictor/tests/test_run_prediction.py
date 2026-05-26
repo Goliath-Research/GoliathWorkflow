@@ -3,6 +3,7 @@
 import csv
 import importlib
 import json
+from types import SimpleNamespace
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,7 @@ import pytest
 
 from methyl_predictor.models.config import PredictorConfig
 from methyl_predictor.core.predictor import _expand_nested_labeled_paths, run_prediction
+from methyl_utils.ecdf_aggregated_ovr import train_aggregated_ecdf_ovr_package
 
 pytestmark = pytest.mark.filterwarnings(
     "ignore:Labeled metrics are undifferentiated:UserWarning",
@@ -44,6 +46,59 @@ class _DummyOvRClassifier:
 
     def get_feature_info(self):
         return {"positions": np.array([10, 20], dtype=np.uint32), "n_features": 2}
+
+
+class _DummyAggregatedOvRClassifier:
+    def __init__(self, *_args, **_kwargs):
+        self.n_classes = 2
+        self.class_names = ["healthy", "disease"]
+        self.is_multi_chromosome = False
+        self.classifier = None
+        self._ovr_mode = False
+        self._aggregated_ovr_mode = True
+        self.metadata = {"classifier_type": "ecdf_aggregated_one_vs_rest"}
+        X = np.asarray(
+            [
+                [0.1, 0.2, 0.1],
+                [0.2, 0.2, 0.2],
+                [0.8, 0.9, 0.8],
+                [0.9, 0.9, 0.9],
+            ],
+            dtype=np.float64,
+        )
+        y = np.asarray([0, 0, 1, 1], dtype=np.int32)
+        pkg = train_aggregated_ecdf_ovr_package(
+            X,
+            y,
+            class_names=["healthy", "disease"],
+            feature_names=["gene_obs_fraction", "gene_weighted_shift_vs_healthy", "struct_promoter_obs_fraction"],
+            feature_weights=np.asarray([1.0, 1.0, 1.0], dtype=np.float64),
+            feature_family_set="gene",
+            feature_mode="observed_hybrid",
+            n_bins=16,
+            temperature=1.0,
+        )
+        pkg["observed_hybrid"] = {
+            "dmp_df": pd.DataFrame({"effect_size": [0.2], "gene_name": ["A"], "feature_type": ["promoter"]}),
+            "healthy_reference_vector": np.asarray([0.5], dtype=np.float64),
+            "cancer_reference_vector": np.asarray([0.6], dtype=np.float64),
+            "per_cancer_reference_vectors": [np.asarray([0.6], dtype=np.float64)],
+            "healthy_class_label": "healthy",
+            "cancer_class_labels": ["disease"],
+            "anchor_strategy": "class_centroid",
+            "feature_order_fingerprint": "",
+            "feature_family_set": "gene",
+            "class_centroid_dirs": {},
+            "min_coverage": 1,
+            "hist_eps": 1e-6,
+            "hist_alpha": 0.5,
+            "hist_evidence_clip_cap": 5.0,
+            "hist_tail_agreement_threshold": 0.1,
+        }
+        self._aggregated_package = pkg
+
+    def get_feature_info(self):
+        return {"n_features": 3}
 
 
 def test_run_prediction_multiclass_ovr_k3_writes_validation_metrics(monkeypatch, tmp_path):
@@ -181,6 +236,49 @@ def test_run_prediction_train_holdout_binary_writes_dual_metrics(monkeypatch, tm
 
     df = pd.read_csv(output_dir / "predictions.csv")
     assert list(df["evaluation_split"]) == ["training", "training", "holdout", "holdout"]
+
+
+def test_run_prediction_aggregated_ecdf_path_writes_evidence_columns(monkeypatch, tmp_path):
+    output_dir = tmp_path / "pred_agg"
+    s1 = str(tmp_path / "s1")
+    s2 = str(tmp_path / "s2")
+    config = PredictorConfig(
+        model_path=str(tmp_path / "agg.pkl"),
+        output_dir=str(output_dir),
+        test_group_paths=[
+            {"label": "healthy", "paths": [s1], "class_index": 0},
+            {"label": "disease", "paths": [s2], "class_index": 1},
+        ],
+        sample_lineage=[],
+    )
+
+    monkeypatch.setattr(
+        "methyl_classifier.core.classifier.MethylClassifier",
+        _DummyAggregatedOvRClassifier,
+    )
+
+    def _fake_build_features(sample_paths, *_args, **_kwargs):
+        assert sample_paths == [s1, s2]
+        return SimpleNamespace(
+            X=np.asarray([[0.1, 0.2, 0.1], [0.9, 0.9, 0.9]], dtype=np.float64),
+            feature_names=[
+                "gene_obs_fraction",
+                "gene_weighted_shift_vs_healthy",
+                "struct_promoter_obs_fraction",
+            ],
+        )
+
+    monkeypatch.setattr(
+        "methyl_validation.observed_feature_builder.build_observed_hybrid_feature_table",
+        _fake_build_features,
+    )
+
+    metrics = run_prediction(config)
+    assert metrics["n_classes"] == 2
+    assert metrics["accuracy"] >= 0.0
+    df = pd.read_csv(output_dir / "predictions.csv")
+    assert "evidence_class0" in df.columns
+    assert "evidence_class1" in df.columns
 
 
 def test_run_prediction_ovr_k2_uses_test_group_paths_only(monkeypatch, tmp_path):

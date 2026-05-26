@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
 import pandas as pd
+from methyl_utils.ecdf_aggregated_ovr import (
+    AGGREGATED_ECDF_OVR_TYPE,
+    predict_aggregated_ecdf_ovr_proba,
+)
 
 # Import from parent package
 from ..models.config import ClassifierConfig
@@ -82,6 +86,8 @@ class MethylClassifier:
         self._ovr_mode = False
         self._ovr_binary_classifiers: List[Any] = []
         self._ovr_column_indices: List[np.ndarray] = []
+        self._aggregated_ovr_mode = False
+        self._aggregated_package: Optional[Dict[str, Any]] = None
 
         p_ovr = self.config.ovr_binary_model_paths or []
         d_ovr = self.config.ovr_detection_dirs or []
@@ -731,9 +737,30 @@ class MethylClassifier:
             if isinstance(model_package, dict) and model_package.get("classifier_type") == ECDF_ONE_VS_REST_TYPE:
                 print(f"✅ Loaded OvR ECDF model package (v{model_package.get('package_version', 'unknown')})")
                 self._load_ovr_ecdf_package(model_package)
+            elif isinstance(model_package, dict) and model_package.get("classifier_type") == AGGREGATED_ECDF_OVR_TYPE:
+                self._ovr_mode = False
+                self._aggregated_ovr_mode = True
+                self._aggregated_package = dict(model_package)
+                self.classifier = None
+                self.classifiers = {}
+                self._ovr_binary_classifiers = []
+                self._ovr_column_indices = []
+                self.metadata = dict(model_package.get("metadata") or {})
+                self.metadata.setdefault("classifier_type", AGGREGATED_ECDF_OVR_TYPE)
+                self.class_names = [str(x) for x in (model_package.get("class_names") or [])]
+                self.n_classes = int(len(self.class_names))
+                self.dmp_positions_df = pd.DataFrame(columns=["chromosome", "position"])
+                feat_names = list(((model_package.get("feature_schema") or {}).get("feature_names") or []))
+                self.metadata["aggregated_feature_names"] = feat_names
+                print(
+                    f"✅ Loaded aggregated ECDF OvR package "
+                    f"(classes={self.n_classes}, features={len(feat_names)})"
+                )
             elif isinstance(model_package, dict) and 'classifier' in model_package:
                 # New enhanced PKL format
                 self._ovr_mode = False
+                self._aggregated_ovr_mode = False
+                self._aggregated_package = None
                 self._ovr_binary_classifiers = []
                 self._ovr_column_indices = []
                 pkg_ver = model_package.get("package_version", "unknown")
@@ -844,6 +871,8 @@ class MethylClassifier:
                 else:
                     # Legacy format: raw classifier (single chromosome)
                     self._ovr_mode = False
+                    self._aggregated_ovr_mode = False
+                    self._aggregated_package = None
                     self._ovr_binary_classifiers = []
                     self._ovr_column_indices = []
                     print("✅ Loaded classifier (legacy format)")
@@ -1513,6 +1542,15 @@ class MethylClassifier:
 
     def get_feature_info(self) -> Dict[str, Any]:
         """Get information about the classifier's features."""
+        if getattr(self, "_aggregated_ovr_mode", False):
+            schema = (self._aggregated_package or {}).get("feature_schema") or {}
+            names = list(schema.get("feature_names") or [])
+            return {
+                "n_features": int(len(names)),
+                "feature_names": names,
+                "feature_mode": str(schema.get("feature_mode") or "observed_hybrid"),
+                "feature_family_set": schema.get("feature_family_set"),
+            }
         if getattr(self, "_ovr_mode", False):
             if self.dmp_positions_df is None or len(self.dmp_positions_df) == 0:
                 raise RuntimeError("OvR mode: empty dmp_positions_df")
@@ -1641,6 +1679,9 @@ class MethylClassifier:
         if getattr(self, "_ovr_mode", False):
             probas = self.predict_proba(methylation_data, availability_mask, debug)
             return np.argmax(probas, axis=1)
+        if getattr(self, "_aggregated_ovr_mode", False):
+            probas = self.predict_proba(methylation_data, availability_mask, debug)
+            return np.argmax(probas, axis=1)
         if self.is_multi_chromosome:
             # Multi-chromosome mode: combine predictions from all chromosomes
             probas = self.predict_proba(methylation_data, availability_mask, debug)
@@ -1668,6 +1709,14 @@ class MethylClassifier:
         Returns:
             Array of class probabilities (n_samples, n_classes)
         """
+        if getattr(self, "_aggregated_ovr_mode", False):
+            if self._aggregated_package is None:
+                raise RuntimeError("Aggregated ECDF package not loaded")
+            probs, _evidence = predict_aggregated_ecdf_ovr_proba(
+                self._aggregated_package,
+                np.asarray(methylation_data, dtype=np.float64),
+            )
+            return probs
         if getattr(self, "_ovr_mode", False):
             return self._predict_proba_ovr(methylation_data, availability_mask, debug)
         if self.is_multi_chromosome:

@@ -9,6 +9,7 @@ The canonical mathematical and statistical reference for this package is the Qua
 - binary classification,
 - chromosome-weighted multi-chromosome classification,
 - one-vs-rest multiclass fusion,
+- aggregated-feature OvR bundles (`classifier_type: ecdf_aggregated_one_vs_rest`) over observed-hybrid feature families,
 - pairwise control aggregation and bipartite aggregation,
 - optional probability calibration.
 
@@ -28,6 +29,16 @@ The binary head is the cleanest part of the model and now has an explicit poster
 - optional post-hoc calibration.
 
 Multiclass and multi-chromosome behavior remain an engineered ensemble on top of that core; inference semantics are explicitly versioned in package metadata.
+
+## Aggregated ECDF OvR Semantics
+
+`ecdf_aggregated_one_vs_rest` packages use observed-hybrid engineered features (for example gene and structural families) instead of raw DMP coordinates as the ECDF domain. Training stores:
+
+- feature schema and deterministic per-feature effect-size-aware weights,
+- per-feature transform parameters (fill + min/max clip to `[0,1]` for ECDF histograms),
+- one binary ECDF head per class.
+
+Inference returns posterior `prob_class*` values after OvR fusion and optional `evidence_class*` diagnostics. `evidence_class*` values are pre-softmax OvR log-evidence and are **not** p-values.
 
 ## Key Code Paths
 

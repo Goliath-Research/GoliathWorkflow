@@ -5,7 +5,7 @@ This document describes how MethylPredictor is implemented: it uses **MethylClas
 ## Architecture Overview
 
 - **MethylPredictor** does not train or implement a classifier. It loads a **MethylClassifier**, runs it on labeled cohorts (control + disease, multiclass groups, or CLI lists) or on **blind** paths only, then writes **prediction_report.json** with **`mode": "labeled"`** or **`"blind"`**.
-- **MethylClassifier** (and its dependency MethylUtils) handles model loading, DMP-based feature extraction, and prediction. MethylPredictor only orchestrates the run and post-processes the results.
+- **MethylClassifier** (and its dependency MethylUtils) handles model loading and posterior scoring. For classic ECDF/tabular flows prediction is DMP-loader based; for `classifier_type: ecdf_aggregated_one_vs_rest`, Predictor builds observed-hybrid aggregated features before scoring.
 
 ```mermaid
 flowchart LR
@@ -33,7 +33,7 @@ flowchart LR
 2. **Path resolution once**: **`_prepare_predictor_paths_and_mode`** expands either blind nested JSON into **`test_blind_paths`** + lineage, or labeled nested/flat paths—never both in one run—and returns **`labeled`** vs **`blind`**. That mode threads through sample-list construction, reporting, and console output; it does not trigger a second classification pass.
 3. **Load classifier**: MethylPredictor builds a **ClassifierConfig** from `model_path`/`model_dir` and merges **`classifier_step_snapshot`** (copied from `step_config.classifier` by the project resolver): `temperature`, `use_isotonic_calibration`, `weight_method`, stacking flags, etc., so inference matches the training project. **`model_path`** to a **saved** PKL (post–MethylClassifier `save` / `--export-ovr-pkl`) loads **one** aggregated artifact (OvR dict or pickled multi-chromosome bundle). **`model_dir`** reloads **every** per-chromosome detector pickle each run — correct but heavier; prefer **`model_path`** when the classifier step has already written **`save_classifier_path`**.
 4. **Test sample list**: From resolved paths: labeled binary: `samples_list = test_control_paths + test_disease_paths`, `expected_classes = [0]*n_control + [1]*n_disease`, unless **train/holdout** lists are set (`train_*` + `holdout_*` paths), in which case samples and parallel **`evaluation_split`** tags are concatenated in train-then-holdout order. **Blind**: `samples_list = test_blind_paths`, `expected_classes = None`. Multiclass labeled: paths from `test_group_paths`, or from **`train_group_paths` + `holdout_group_paths`** when holdout groups are configured. **`sample_lineage`** uses `side` ∈ `{control, disease, blind, multiclass}` and may add **`evaluation_split`** ∈ `{training, holdout}`.
-5. **Classification** (single pass): **classify_samples_from_list** with `expected_classes` or `None`, same DMP-based loading as elsewhere. Skipped samples are dropped from the CSV; labeled runs realign expected classes to loaded rows.
+5. **Classification** (single pass): either **classify_samples_from_list** (DMP-based models) or the aggregated-feature branch for `ecdf_aggregated_one_vs_rest` (observed-hybrid feature build + OvR scoring). Skipped samples are dropped from the CSV for DMP loaders; aggregated mode writes one row per input sample.
 6. **Post-process by mode**: If `expected_class` is in the CSV, compute sklearn metrics and write **validation_metrics.json** with **`evaluation_semantics`** (`undifferentiated` vs `train_holdout`) and optional nested **`training_metrics` / `holdout_metrics`**. Undifferentiated labeled runs emit a **UserWarning**. **Blind** runs skip metrics and build **`blind_summary`** (predicted class counts, mean probability per class, mean entropy) for **prediction_report.json**.
 7. **Output**: **prediction_report.json** always includes **`mode`**, **`class_names`**, and cohort-specific blocks; blind runs add per-sample **`probabilities`**, **`predicted_subgroup`**, **`max_probability`**, **`entropy`**. When the project defines **`cohort_hierarchy`** (e.g. disease type → stages), **`hierarchy_summary`** adds mean probabilities by class, pooled controls, and by disease family. Return the metrics dict when labeled, else a small summary dict.
 
@@ -53,6 +53,7 @@ MethylPredictor does not call MethylUtils for metrics; it uses **sklearn.metrics
 - **validation_metrics.json**: Present only for **labeled** runs; same schema as before (sklearn-based).
 - **predictions.csv**: One row per scored sample; **`expected_class`** only when labels were passed to the classifier helper.
 - **prediction_report.json**: **`mode": "labeled"`** or **`"blind"`**; blind branch includes **`blind_summary`** and rich per-sample probability fields under **`blind.groups[].samples`**.
+- Aggregated ECDF runs also include `evidence_class*` columns in `predictions.csv` for interpretability diagnostics.
 
 ## Accuracy Metrics (Summary)
 
@@ -73,6 +74,7 @@ For **multiclass**, the same structure with more classes; sensitivity/specificit
 - `validation_metrics.json` now includes a `probability_semantics` block documenting whether Platt/isotonic calibration flags were enabled during inference.
 - Proper-score diagnostics (`nll`, `brier_score`, `ece`) are computed from exported `prob_class*` columns, so reliability can be monitored alongside discrimination.
 - Calibration remains an optional post-hoc layer; core posterior semantics are preserved in classifier metadata and output reporting.
+- Aggregated ECDF `evidence_class*` columns are pre-softmax OvR evidence diagnostics and should not be interpreted as p-values.
 
 ### Multiclass OvR ECDF (`classifier_type: ecdf_one_vs_rest`)
 

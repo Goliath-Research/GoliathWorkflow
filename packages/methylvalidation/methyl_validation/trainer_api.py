@@ -80,7 +80,12 @@ def _write_ecdf_training_metrics(project_json: Path, classifier_output_dir: Path
         payload["metrics_source"] = "ecdf_train"
         payload["evaluation_split"] = "training"
         payload["model_backend"] = "ecdf"
-        payload["n_train_samples"] = int(sum(len(g.get("paths") or []) for g in test_group_paths))
+        n_train_samples = 0
+        for g in test_group_paths:
+            paths = g.get("paths")
+            if isinstance(paths, list):
+                n_train_samples += len(paths)
+        payload["n_train_samples"] = int(n_train_samples)
         payload["n_train_groups"] = int(len(test_group_paths))
         out_path = classifier_output_dir / "training_metrics.json"
         with open(out_path, "w", encoding="utf-8") as f:
@@ -100,6 +105,8 @@ def build_model_backend_steps(
     run_predictor_fn: Callable[[Path, Optional[Path]], tuple[int, str, str]],
 ) -> List[TrainerStep]:
     backend = (config.model_backend if config is not None else "ecdf").strip().lower()
+    feature_mode = (config.feature_mode if config is not None else "raw_dmp").strip().lower()
+    feature_family_set = (config.feature_family_set if config is not None else "dmp").strip().lower()
     if backend == "tabular_sklearn":
         model_dir = predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"
 
@@ -371,6 +378,99 @@ def build_model_backend_steps(
             ("model-bundle", _run_generative_bundle),
             ("generative-train", _run_generative_train),
             ("generative-predictor", _run_generative_predict),
+        ]
+
+    ecdf_aggregated_auto = feature_mode == "observed_hybrid" and feature_family_set != "dmp"
+    ecdf_aggregated_enabled = (
+        bool(getattr(config, "ecdf_aggregated_enabled"))
+        if config is not None and getattr(config, "ecdf_aggregated_enabled", None) is not None
+        else ecdf_aggregated_auto
+    )
+    if backend == "ecdf" and ecdf_aggregated_enabled:
+        model_dir = (
+            predictor_output_dir.parent / "classifiers"
+            if predictor_output_dir is not None
+            else project_json.parent / "classifiers"
+        )
+
+        def _run_ecdf_aggregated_bundle() -> tuple[int, str, str]:
+            try:
+                from .model_bundle import build_model_feature_bundle
+
+                bundle_dir = (
+                    Path(config.model_bundle_dir)
+                    if config is not None and config.model_bundle_dir
+                    else (project_json.parent / "model_bundle")
+                )
+                build_model_feature_bundle(
+                    project_json=project_json,
+                    output_dir=bundle_dir,
+                    weight_column=(config.model_weight_column if config is not None else "effect_size"),
+                    extra_metadata={
+                        "model_backend": "ecdf",
+                        "classifier_type": "ecdf_aggregated_one_vs_rest",
+                        "feature_mode": feature_mode,
+                        "feature_family_set": feature_family_set,
+                    },
+                )
+                return 0, f"Bundle written to {bundle_dir}", ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        def _run_ecdf_aggregated_train() -> tuple[int, str, str]:
+            try:
+                from .ecdf_aggregated_backend import train_ecdf_aggregated_ovr_model
+
+                bundle_dir = (
+                    Path(config.model_bundle_dir)
+                    if config is not None and config.model_bundle_dir
+                    else (project_json.parent / "model_bundle")
+                )
+                model_path = train_ecdf_aggregated_ovr_model(
+                    project_json=project_json,
+                    bundle_h5=bundle_dir / "model_feature_bundle.h5",
+                    output_dir=model_dir,
+                    feature_family_set=feature_family_set,
+                    observed_feature_min_coverage=(
+                        config.observed_feature_min_coverage if config is not None else 1
+                    ),
+                    observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
+                    observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
+                    observed_hist_evidence_clip_cap=(
+                        config.observed_hist_evidence_clip_cap if config is not None else 5.0
+                    ),
+                    observed_hist_tail_agreement_threshold=(
+                        config.observed_hist_tail_agreement_threshold if config is not None else 0.10
+                    ),
+                    n_bins=(getattr(config, "ecdf_aggregated_n_bins", 100) if config is not None else 100),
+                    temperature=1.0,
+                )
+                return 0, f"Aggregated ECDF model trained: {model_path}", ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        def _run_ecdf_aggregated_predict() -> tuple[int, str, str]:
+            try:
+                from .ecdf_aggregated_backend import predict_ecdf_aggregated_ovr_from_project
+
+                model_path = model_dir / "ecdf_aggregated_ovr.pkl"
+                metrics = predict_ecdf_aggregated_ovr_from_project(
+                    project_json=project_json,
+                    model_path=model_path,
+                    output_dir=(predictor_output_dir or (project_json.parent / "predictors")),
+                )
+                return 0, json.dumps(metrics), ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        def _skip_ecdf_second_stage_aggregated() -> tuple[int, str, str]:
+            return 0, "ECDF second-stage scorer skipped for aggregated ECDF OvR mode.", ""
+
+        return [
+            ("model-bundle", _run_ecdf_aggregated_bundle),
+            ("ecdf-aggregated-train", _run_ecdf_aggregated_train),
+            ("ecdf-aggregated-predictor", _run_ecdf_aggregated_predict),
+            ("ecdf-second-stage", _skip_ecdf_second_stage_aggregated),
         ]
 
     def _run_ecdf_second_stage() -> tuple[int, str, str]:
