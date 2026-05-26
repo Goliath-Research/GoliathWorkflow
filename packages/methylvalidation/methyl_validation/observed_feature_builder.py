@@ -125,6 +125,86 @@ def _normalize_structural_feature(value: object) -> str:
     return token if token in allowed else "unknown"
 
 
+def _is_known_mapped_token(value: object) -> bool:
+    token = str(value or "").strip().lower()
+    return token not in {"", "unknown", "nan", "none"}
+
+
+def _build_dynamic_mapped_feature_names(
+    locus_df: pd.DataFrame,
+    *,
+    include_gene: bool,
+    include_structural: bool,
+) -> Tuple[List[str], List[str], Dict[str, Dict[str, Any]]]:
+    gene_names: List[str] = []
+    struct_names: List[str] = []
+    metadata: Dict[str, Dict[str, Any]] = {}
+    if locus_df is None or locus_df.empty:
+        return gene_names, struct_names, metadata
+
+    work = locus_df.copy()
+    if "gene_name" in work.columns:
+        gene_series = work["gene_name"]
+    else:
+        gene_series = pd.Series(["unknown"] * len(work), index=work.index, dtype=object)
+    if "feature_type" in work.columns:
+        feature_series = work["feature_type"]
+    else:
+        feature_series = pd.Series(["unknown"] * len(work), index=work.index, dtype=object)
+    work["gene_name"] = gene_series.apply(_normalize_feature_key)
+    work["feature_type"] = feature_series.apply(_normalize_structural_feature)
+    if "effect_size" in work.columns:
+        effect_series = work["effect_size"]
+    else:
+        effect_series = pd.Series([0.0] * len(work), index=work.index, dtype=float)
+    work["effect_size"] = pd.to_numeric(effect_series, errors="coerce").fillna(0.0).astype(float)
+    work["_abs_effect"] = np.abs(work["effect_size"].to_numpy(dtype=float))
+
+    if include_gene:
+        valid_gene = work["gene_name"].apply(_is_known_mapped_token)
+        if bool(valid_gene.any()):
+            genes = sorted(set(work.loc[valid_gene, "gene_name"].astype(str).tolist()))
+            gene_names = [f"gene::{g}" for g in genes]
+            for g in genes:
+                mask = valid_gene & (work["gene_name"] == g)
+                metadata[f"gene::{g}"] = {
+                    "family": "gene",
+                    "gene_name": g,
+                    "n_loci": int(mask.sum()),
+                    "sum_abs_effect_size": float(work.loc[mask, "_abs_effect"].sum()),
+                }
+
+    if include_structural:
+        valid_struct = (
+            work["gene_name"].apply(_is_known_mapped_token)
+            & work["feature_type"].apply(_is_known_mapped_token)
+            & (work["feature_type"] != "unknown")
+        )
+        if bool(valid_struct.any()):
+            pairs = sorted(
+                set(
+                    (str(g), str(f))
+                    for g, f in zip(
+                        work.loc[valid_struct, "gene_name"].tolist(),
+                        work.loc[valid_struct, "feature_type"].tolist(),
+                    )
+                )
+            )
+            struct_names = [f"struct::{g}::{f}" for g, f in pairs]
+            for g, f in pairs:
+                key = f"struct::{g}::{f}"
+                mask = valid_struct & (work["gene_name"] == g) & (work["feature_type"] == f)
+                metadata[key] = {
+                    "family": "structural",
+                    "gene_name": g,
+                    "feature_type": f,
+                    "n_loci": int(mask.sum()),
+                    "sum_abs_effect_size": float(work.loc[mask, "_abs_effect"].sum()),
+                }
+
+    return gene_names, struct_names, metadata
+
+
 def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool]:
     token = str(feature_family_set or "dmp").strip().lower()
     if token == "dmp":
@@ -590,34 +670,27 @@ def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) ->
     return [name for name in names if name not in REMOVED_OBSERVED_HYBRID_FEATURES]
 
 
-def _gene_structural_feature_names(include_gene: bool, include_structural: bool) -> List[str]:
+def _gene_structural_feature_names(
+    *,
+    include_gene: bool,
+    include_structural: bool,
+    locus_df: Optional[pd.DataFrame] = None,
+) -> List[str]:
+    gene_names, struct_names, _meta = _build_dynamic_mapped_feature_names(
+        locus_df if locus_df is not None else pd.DataFrame(),
+        include_gene=include_gene,
+        include_structural=include_structural,
+    )
     names: List[str] = []
-    if include_gene:
-        names.extend(
-            [
-                "gene_weighted_mean_methylation",
-                "gene_weighted_shift_vs_healthy",
-                "gene_weighted_abs_shift_vs_healthy",
-                "gene_weighted_shift_vs_cancer",
-                "gene_weighted_abs_shift_vs_cancer",
-                "gene_weighted_direction_balance",
-            ]
-        )
-    if include_structural:
-        for feat in ("promoter", "exon", "intron", "gene_body", "terminator", "unknown"):
-            names.extend(
-                [
-                    f"struct_{feat}_obs_fraction",
-                    f"struct_{feat}_weighted_shift_vs_healthy",
-                    f"struct_{feat}_weighted_shift_vs_cancer",
-                ]
-            )
+    names.extend(gene_names)
+    names.extend(struct_names)
     return names
 
 
 def observed_hybrid_feature_names(
     cancer_class_labels: Optional[Sequence[str]] = None,
     feature_family_set: str = "dmp",
+    dmp_df: Optional[pd.DataFrame] = None,
 ) -> List[str]:
     include_dmp_family, include_gene_family, include_structural_family = _family_flags(feature_family_set)
     names: List[str] = []
@@ -627,13 +700,23 @@ def observed_hybrid_feature_names(
         _gene_structural_feature_names(
             include_gene=include_gene_family,
             include_structural=include_structural_family,
+            locus_df=dmp_df,
         )
     )
     return names
 
 
-def observed_hybrid_schema_fingerprint(cancer_class_labels: Optional[Sequence[str]] = None) -> str:
-    names = _fixed_feature_names(cancer_class_labels=cancer_class_labels)
+def observed_hybrid_schema_fingerprint(
+    cancer_class_labels: Optional[Sequence[str]] = None,
+    *,
+    feature_family_set: str = "dmp",
+    dmp_df: Optional[pd.DataFrame] = None,
+) -> str:
+    names = observed_hybrid_feature_names(
+        cancer_class_labels=cancer_class_labels,
+        feature_family_set=feature_family_set,
+        dmp_df=dmp_df,
+    )
     return hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest()
 
 
@@ -733,23 +816,31 @@ def build_observed_hybrid_feature_table(
             [f"cancer_{k+1}" for k in range(len(cancer_labels_raw), len(per_cancer_refs))]
         )
     cancer_labels_raw = cancer_labels_raw[: len(per_cancer_refs)]
-    feature_names = []
-    if include_dmp_family:
-        feature_names.extend(_fixed_feature_names(cancer_class_labels=cancer_labels_raw))
-    feature_names.extend(
-        _gene_structural_feature_names(
-            include_gene=include_gene_family,
-            include_structural=include_structural_family,
-        )
+    feature_names = observed_hybrid_feature_names(
+        cancer_class_labels=cancer_labels_raw,
+        feature_family_set=str(feature_family_set),
+        dmp_df=locus_df,
+    )
+    gene_feature_names, struct_feature_names, mapped_feature_meta = _build_dynamic_mapped_feature_names(
+        locus_df,
+        include_gene=include_gene_family,
+        include_structural=include_structural_family,
     )
     X_feat = np.full((n_samples, len(feature_names)), np.nan, dtype=np.float32)
 
     idx = {name: j for j, name in enumerate(feature_names)}
+    gene_feature_set = set(gene_feature_names)
+    struct_feature_set = set(struct_feature_names)
     cancer_labels_norm = [str(lbl).strip().lower() for lbl in cancer_labels_raw]
     per_label_weights_norm = {
         str(key).strip().lower(): np.asarray(vec, dtype=np.float64) for key, vec in per_label_weights.items()
     }
     default_weights = np.asarray(w, dtype=np.float64)
+    if "effect_size" in locus_df.columns:
+        effect_series = pd.to_numeric(locus_df["effect_size"], errors="coerce")
+    else:
+        effect_series = pd.Series([0.0] * len(locus_df), index=locus_df.index, dtype=float)
+    effect_loci = effect_series.fillna(0.0).to_numpy(dtype=np.float64)
 
     def _weights_for_cancer_label(cancer_label: str) -> np.ndarray:
         label = str(cancer_label).strip().lower()
@@ -968,50 +1059,97 @@ def build_observed_hybrid_feature_table(
             obs_df["_healthy_ref"] = healthy_ref[obs_mask]
             obs_df["_cancer_ref"] = cancer_ref[obs_mask]
             obs_df["_w"] = obs_w if obs_w.size == obs_vals.size else 1.0
-            obs_df["feature_type"] = obs_df.get("feature_type", "unknown").apply(_normalize_structural_feature)
-            obs_df["gene_name"] = obs_df.get("gene_name", "unknown").apply(_normalize_feature_key)
+            if "feature_type" in obs_df.columns:
+                feature_series = obs_df["feature_type"]
+            else:
+                feature_series = pd.Series(["unknown"] * len(obs_df), index=obs_df.index, dtype=object)
+            if "gene_name" in obs_df.columns:
+                gene_series = obs_df["gene_name"]
+            else:
+                gene_series = pd.Series(["unknown"] * len(obs_df), index=obs_df.index, dtype=object)
+            obs_df["feature_type"] = feature_series.apply(_normalize_structural_feature)
+            obs_df["gene_name"] = gene_series.apply(_normalize_feature_key)
             obs_df["_delta_h"] = obs_df["_obs_val"] - obs_df["_healthy_ref"]
             obs_df["_delta_c"] = obs_df["_obs_val"] - obs_df["_cancer_ref"]
-            abs_w = np.abs(pd.to_numeric(obs_df["_w"], errors="coerce").fillna(0.0).to_numpy(dtype=float))
+            obs_idx = np.where(obs_mask)[0]
+            eff_signed = effect_loci[obs_idx]
+            abs_eff = np.abs(eff_signed)
+            centered_beta = np.asarray(obs_df["_obs_val"], dtype=np.float64) - 0.5
+            obs_df["_eff_signed"] = eff_signed
+            obs_df["_eff_abs"] = abs_eff
+            obs_df["_centered_beta"] = centered_beta
+
             if include_gene_family:
-                X_feat[i, idx["gene_weighted_mean_methylation"]] = _weighted_mean_with_fallback(
-                    obs_df["_obs_val"].to_numpy(dtype=float), abs_w
-                )
-                X_feat[i, idx["gene_weighted_shift_vs_healthy"]] = _weighted_mean_with_fallback(
-                    obs_df["_delta_h"].to_numpy(dtype=float), abs_w
-                )
-                X_feat[i, idx["gene_weighted_abs_shift_vs_healthy"]] = _weighted_mean_with_fallback(
-                    np.abs(obs_df["_delta_h"].to_numpy(dtype=float)), abs_w
-                )
-                X_feat[i, idx["gene_weighted_shift_vs_cancer"]] = _weighted_mean_with_fallback(
-                    obs_df["_delta_c"].to_numpy(dtype=float), abs_w
-                )
-                X_feat[i, idx["gene_weighted_abs_shift_vs_cancer"]] = _weighted_mean_with_fallback(
-                    np.abs(obs_df["_delta_c"].to_numpy(dtype=float)), abs_w
-                )
-                signs = np.sign(obs_df["_delta_h"].to_numpy(dtype=float))
-                X_feat[i, idx["gene_weighted_direction_balance"]] = _weighted_mean_with_fallback(
-                    signs, abs_w
-                )
+                gdf = obs_df[
+                    obs_df["gene_name"].apply(_is_known_mapped_token)
+                    & np.isfinite(obs_df["_eff_abs"])
+                    & (obs_df["_eff_abs"] > 0.0)
+                    & np.isfinite(obs_df["_centered_beta"])
+                ].copy()
+                if not gdf.empty:
+                    grouped = gdf.groupby("gene_name", sort=False, dropna=False)
+                    for gene_name, g in grouped:
+                        feature_name = f"gene::{gene_name}"
+                        if feature_name not in gene_feature_set or feature_name not in idx:
+                            continue
+                        denom = float(np.sum(g["_eff_abs"].to_numpy(dtype=np.float64)))
+                        if denom <= 0.0:
+                            continue
+                        numer = float(
+                            np.sum(
+                                g["_eff_signed"].to_numpy(dtype=np.float64)
+                                * g["_centered_beta"].to_numpy(dtype=np.float64)
+                            )
+                        )
+                        X_feat[i, idx[feature_name]] = float(numer / denom)
+
             if include_structural_family:
-                for feat in ("promoter", "exon", "intron", "gene_body", "terminator", "unknown"):
-                    sdf = obs_df[obs_df["feature_type"] == feat]
-                    if sdf.empty:
-                        X_feat[i, idx[f"struct_{feat}_obs_fraction"]] = 0.0
-                        X_feat[i, idx[f"struct_{feat}_weighted_shift_vs_healthy"]] = np.nan
-                        X_feat[i, idx[f"struct_{feat}_weighted_shift_vs_cancer"]] = np.nan
-                        continue
-                    sw = np.abs(pd.to_numeric(sdf["_w"], errors="coerce").fillna(0.0).to_numpy(dtype=float))
-                    X_feat[i, idx[f"struct_{feat}_obs_fraction"]] = float(len(sdf) / max(1, len(obs_df)))
-                    X_feat[i, idx[f"struct_{feat}_weighted_shift_vs_healthy"]] = _weighted_mean_with_fallback(
-                        sdf["_delta_h"].to_numpy(dtype=float), sw
+                sdf = obs_df[
+                    obs_df["gene_name"].apply(_is_known_mapped_token)
+                    & obs_df["feature_type"].apply(_is_known_mapped_token)
+                    & (obs_df["feature_type"] != "unknown")
+                    & np.isfinite(obs_df["_eff_abs"])
+                    & (obs_df["_eff_abs"] > 0.0)
+                    & np.isfinite(obs_df["_centered_beta"])
+                ].copy()
+                if not sdf.empty:
+                    sdf["_struct_key"] = (
+                        "struct::"
+                        + sdf["gene_name"].astype(str)
+                        + "::"
+                        + sdf["feature_type"].astype(str)
                     )
-                    X_feat[i, idx[f"struct_{feat}_weighted_shift_vs_cancer"]] = _weighted_mean_with_fallback(
-                        sdf["_delta_c"].to_numpy(dtype=float), sw
-                    )
+                    grouped_s = sdf.groupby("_struct_key", sort=False, dropna=False)
+                    for s_key, g in grouped_s:
+                        if s_key not in struct_feature_set or s_key not in idx:
+                            continue
+                        denom = float(np.sum(g["_eff_abs"].to_numpy(dtype=np.float64)))
+                        if denom <= 0.0:
+                            continue
+                        numer = float(
+                            np.sum(
+                                g["_eff_signed"].to_numpy(dtype=np.float64)
+                                * g["_centered_beta"].to_numpy(dtype=np.float64)
+                            )
+                        )
+                        X_feat[i, idx[s_key]] = float(numer / denom)
 
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()
-    schema_fingerprint = observed_hybrid_schema_fingerprint(cancer_class_labels=cancer_labels_raw)
+    gene_col_idx = [j for j, name in enumerate(feature_names) if str(name).startswith("gene::")]
+    struct_col_idx = [j for j, name in enumerate(feature_names) if str(name).startswith("struct::")]
+    if gene_col_idx:
+        gene_non_empty_per_sample = np.isfinite(X_feat[:, gene_col_idx]).sum(axis=1).astype(int)
+    else:
+        gene_non_empty_per_sample = np.zeros((n_samples,), dtype=int)
+    if struct_col_idx:
+        struct_non_empty_per_sample = np.isfinite(X_feat[:, struct_col_idx]).sum(axis=1).astype(int)
+    else:
+        struct_non_empty_per_sample = np.zeros((n_samples,), dtype=int)
+    schema_fingerprint = observed_hybrid_schema_fingerprint(
+        cancer_class_labels=cancer_labels_raw,
+        feature_family_set=str(feature_family_set),
+        dmp_df=locus_df,
+    )
     report = {
         "n_samples": int(n_samples),
         "n_loci_reference": int(n_loci),
@@ -1036,6 +1174,21 @@ def build_observed_hybrid_feature_table(
         "feature_order_fingerprint": observed_order_fp,
         "schema_fingerprint": schema_fingerprint,
         "feature_non_nan_counts": {feature_names[j]: int(non_nan[j]) for j in range(len(feature_names))},
+        "raw_mapped_feature_formula": "signed_weighted_centered_beta",
+        "raw_mapped_feature_counts": {
+            "gene": int(len(gene_feature_names)),
+            "structural": int(len(struct_feature_names)),
+            "total_mapped": int(len(gene_feature_names) + len(struct_feature_names)),
+        },
+        "raw_mapped_non_empty_per_sample": {
+            "gene_mean": float(np.mean(gene_non_empty_per_sample)) if n_samples > 0 else 0.0,
+            "gene_min": int(np.min(gene_non_empty_per_sample)) if n_samples > 0 else 0,
+            "gene_max": int(np.max(gene_non_empty_per_sample)) if n_samples > 0 else 0,
+            "structural_mean": float(np.mean(struct_non_empty_per_sample)) if n_samples > 0 else 0.0,
+            "structural_min": int(np.min(struct_non_empty_per_sample)) if n_samples > 0 else 0,
+            "structural_max": int(np.max(struct_non_empty_per_sample)) if n_samples > 0 else 0,
+        },
+        "raw_mapped_feature_metadata": mapped_feature_meta,
     }
     return ObservedFeatureArtifacts(X=X_feat, feature_names=feature_names, report=report)
 

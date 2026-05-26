@@ -487,7 +487,11 @@ def train_tabular_model(
             OBSERVED_HYBRID_SCHEMA_VERSION if feature_mode_norm == "observed_hybrid" else None
         ),
         "observed_hybrid_schema_fingerprint": (
-            observed_hybrid_schema_fingerprint(cancer_class_labels=schema_cancer_labels)
+            observed_hybrid_schema_fingerprint(
+                cancer_class_labels=schema_cancer_labels,
+                feature_family_set=feature_family_set_norm,
+                dmp_df=dmp_df,
+            )
             if feature_mode_norm == "observed_hybrid"
             else None
         ),
@@ -609,6 +613,7 @@ def train_tabular_model(
                             observed_hybrid_feature_names(
                                 cancer_class_labels=observed_cancer_class_labels,
                                 feature_family_set=feature_family_set_norm,
+                                dmp_df=dmp_df,
                             ),
                             context="tabular train cached observed_hybrid",
                         )

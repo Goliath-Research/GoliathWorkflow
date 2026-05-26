@@ -46,11 +46,12 @@ def build_effect_size_feature_weights(
     """
     Deterministic effect-size-aware feature weights for observed-hybrid features.
 
-    - DMP-family engineered features -> mean absolute DMP effect size.
-    - Gene-family engineered features -> mean absolute effect size over loci with
-      mapped genes.
-    - Structural-family engineered features -> mean absolute effect size over loci
-      with matching feature_type token (promoter/exon/intron/gene_body/terminator).
+    - DMP-family features -> mean absolute DMP effect size.
+    - Dynamic gene features (`gene::<GENE>`) -> mean absolute effect size over
+      loci mapped to that gene.
+    - Dynamic structural features (`struct::<GENE>::<FEATURE>`) -> mean absolute
+      effect size over loci mapped to that exact `(gene, feature_type)` key.
+    - Legacy engineered names are still supported as fallbacks.
     """
     names = [str(x) for x in feature_names]
     if not names:
@@ -75,12 +76,13 @@ def build_effect_size_feature_weights(
     if default_weight <= 0.0:
         default_weight = 1.0
 
-    gene_col = work["gene_name"].astype(str).str.strip().str.lower() if "gene_name" in work.columns else None
+    gene_col = work["gene_name"].astype(str).str.strip() if "gene_name" in work.columns else None
+    gene_col_l = gene_col.str.lower() if gene_col is not None else None
     gene_mask = (
-        gene_col.notna()
-        & (gene_col != "")
-        & (~gene_col.isin({"unknown", "nan", "none"}))
-    ) if gene_col is not None else np.zeros((len(work),), dtype=bool)
+        gene_col_l.notna()
+        & (gene_col_l != "")
+        & (~gene_col_l.isin({"unknown", "nan", "none"}))
+    ) if gene_col_l is not None else np.zeros((len(work),), dtype=bool)
 
     feat_col = work["feature_type"].astype(str).str.strip().str.lower() if "feature_type" in work.columns else None
     structural_tokens = ("promoter", "exon", "intron", "gene_body", "terminator")
@@ -95,9 +97,33 @@ def build_effect_size_feature_weights(
     gene_weight = _masked_mean(np.asarray(gene_mask, dtype=bool))
     structural_weight_map = {token: _masked_mean(mask) for token, mask in structural_masks.items()}
 
+    def _gene_key_mask(gene_key: str) -> np.ndarray:
+        if gene_col is None:
+            return np.zeros((len(work),), dtype=bool)
+        g = str(gene_key).strip()
+        return (gene_col == g).to_numpy(dtype=bool)
+
+    def _struct_key_mask(gene_key: str, feature_key: str) -> np.ndarray:
+        if gene_col is None or feat_col is None:
+            return np.zeros((len(work),), dtype=bool)
+        g = str(gene_key).strip()
+        f = str(feature_key).strip().lower()
+        return ((gene_col == g) & (feat_col == f)).to_numpy(dtype=bool)
+
     out = np.zeros((len(names),), dtype=np.float64)
     for i, name in enumerate(names):
         lname = name.strip().lower()
+        if lname.startswith("gene::"):
+            raw_gene = name.split("::", 1)[1] if "::" in name else ""
+            out[i] = _masked_mean(_gene_key_mask(raw_gene))
+            continue
+        if lname.startswith("struct::"):
+            parts = name.split("::", 2)
+            if len(parts) == 3:
+                out[i] = _masked_mean(_struct_key_mask(parts[1], parts[2]))
+            else:
+                out[i] = default_weight
+            continue
         if lname.startswith("gene_"):
             out[i] = gene_weight
             continue

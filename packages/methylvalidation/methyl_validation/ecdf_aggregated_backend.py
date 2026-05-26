@@ -180,6 +180,7 @@ def train_ecdf_aggregated_ovr_model(
             "package_notes": "Aggregated observed-hybrid ECDF OvR",
         },
     )
+    package["feature_report"] = dict(feat.report)
     package["observed_hybrid"] = {
         "dmp_df": dmp_df,
         "healthy_reference_vector": anchors.healthy_reference_vector.astype(np.float64),
@@ -212,6 +213,12 @@ def train_ecdf_aggregated_ovr_model(
                 "class_names": [str(x) for x in class_names],
                 "n_features": int(len(feature_names)),
                 "feature_family_set": str(feature_family_set),
+                "raw_mapped_feature_formula": str(
+                    feat.report.get("raw_mapped_feature_formula", "unknown")
+                ),
+                "raw_mapped_feature_counts": dict(
+                    feat.report.get("raw_mapped_feature_counts") or {}
+                ),
             },
             f,
             indent=2,

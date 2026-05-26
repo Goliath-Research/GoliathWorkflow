@@ -61,3 +61,39 @@ def test_train_and_predict_aggregated_package_roundtrip() -> None:
     ), "evidence logits must be raw pre-softmax values, not max-shifted"
     pred = np.argmax(probs, axis=1)
     assert set(pred.tolist()) <= {0, 1}
+
+
+def test_build_effect_size_feature_weights_supports_dynamic_keys() -> None:
+    dmp_df = pd.DataFrame(
+        {
+            "effect_size": [1.0, -2.0, 4.0],
+            "gene_name": ["A", "A", "B"],
+            "feature_type": ["promoter", "exon", "promoter"],
+        }
+    )
+    names = [
+        "gene::A",
+        "gene::B",
+        "struct::A::promoter",
+        "struct::A::exon",
+        "struct::B::promoter",
+        "gene_weighted_shift_vs_healthy",
+    ]
+    weights = build_effect_size_feature_weights(dmp_df, names)
+    # Normalized by max(4.0), preserving per-key relative means.
+    np.testing.assert_allclose(
+        weights,
+        np.asarray(
+            [
+                1.5 / 4.0,
+                4.0 / 4.0,
+                1.0 / 4.0,
+                2.0 / 4.0,
+                4.0 / 4.0,
+                ((1.0 + 2.0 + 4.0) / 3.0) / 4.0,
+            ],
+            dtype=np.float64,
+        ),
+        rtol=1e-6,
+        atol=1e-6,
+    )

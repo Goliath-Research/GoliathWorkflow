@@ -80,14 +80,18 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **`--predictor-only`**: MC iterations that run only `methyl-predictor` using frozen artifacts.
 - **`--rollout-compare`**: compares baseline/candidate `metrics_summary.json` and writes promotion/hold report using rollout thresholds in `MonteCarloConfig`.
 
-ECDF/Bayesian remains DMP-only by design at the first stage. The optional ECDF second stage and the `observed_hybrid` path used by tabular/generative backends now share a unified disease-feature builder with explicit feature-family toggles:
+ECDF/Bayesian remains DMP-only by design at the first stage. The optional ECDF second stage and the `observed_hybrid` path used by ECDF-aggregated/tabular/generative backends share a unified mapped-feature builder with explicit family toggles:
 
-- DMP-derived global/quantile/disease-comparison summaries
-- DMR/region aggregates
-- Gene-level aggregates
-- Chromosome-level aggregates
+- `feature_family_set=dmp`: fixed DMP-family observed metrics (legacy behavior).
+- `feature_family_set=gene`: dynamic one-feature-per-mapped-gene keys (`gene::<GENE>`).
+- `feature_family_set=structural`: dynamic one-feature-per-mapped `(gene, feature_type)` keys (`struct::<GENE>::<FEATURE>`).
+- combined families (`dmp+gene`, `dmp+structural`, `hybrid-all`) concatenate families in deterministic order.
 
-All backends persist observed-feature schema + fill values, and prediction enforces strict parity via `verify_feature_schema`. This avoids silent train/predict drift while allowing disease-aware second-stage feature families beyond chromosome-only summaries.
+For gene/structural keys, per-sample value uses signed weighted centered methylation over observed loci:
+
+- `sum(sign(effect_size) * abs(effect_size) * (beta - 0.5)) / sum(abs(effect_size))`
+
+Only mapped keys present in the stable DMP bundle are emitted (no synthetic all-feature expansion). All backends persist observed-feature schema/report/fill values, and prediction enforces strict parity via `verify_feature_schema` to prevent train/predict drift.
 
 The main components are:
 

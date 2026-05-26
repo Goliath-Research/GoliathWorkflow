@@ -378,3 +378,135 @@ def test_observed_feature_builder_histogram_tail_features_nan_when_invalid(monke
     idx_a = feat.feature_names.index("weighted_healthy_tail_agreement__cancer")
     assert not np.isfinite(float(feat.X[0, idx_e]))
     assert not np.isfinite(float(feat.X[0, idx_a]))
+
+
+def _dmp_df_with_mapped_features() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "chromosome": ["1", "1", "1", "1"],
+            "context": ["CG", "CG", "CG", "CG"],
+            "position": [100, 120, 200, 220],
+            "weight": [1.0, 2.0, 0.5, 0.7],
+            "effect_size": [1.0, -2.0, 0.5, 0.7],
+            "gene_name": ["G1", "G1", "G2", "unknown"],
+            "feature_type": ["promoter", "exon", "intron", "promoter"],
+        }
+    )
+
+
+def test_observed_feature_builder_gene_family_uses_dynamic_mapped_keys(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    dmp_df = _dmp_df_with_mapped_features()
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        feature_family_set="gene",
+    )
+    assert feat.feature_names == ["gene::G1", "gene::G2"]
+    g1_idx = feat.feature_names.index("gene::G1")
+    g2_idx = feat.feature_names.index("gene::G2")
+    # S1 values from _fake_extract_complete: [0.10, 0.20, 0.30, 0.40]
+    # centered: [-0.4, -0.3, -0.2, -0.1]
+    # G1: (1*-0.4 + -2*-0.3) / (1+2) = 0.066666...
+    # G2: (0.5*-0.2)/(0.5) = -0.2
+    assert float(feat.X[0, g1_idx]) == pytest.approx(0.0666666667, rel=1e-5, abs=1e-6)
+    assert float(feat.X[0, g2_idx]) == pytest.approx(-0.2, rel=1e-5, abs=1e-6)
+    # S3 values from _fake_extract_complete: [0.70, 0.80, 0.90, 0.95]
+    # centered: [0.2, 0.3, 0.4, 0.45]
+    # G1: (1*0.2 + -2*0.3) / 3 = -0.133333...
+    # G2: (0.5*0.4)/(0.5) = 0.4
+    assert float(feat.X[2, g1_idx]) == pytest.approx(-0.1333333333, rel=1e-5, abs=1e-6)
+    assert float(feat.X[2, g2_idx]) == pytest.approx(0.4, rel=1e-5, abs=1e-6)
+    assert feat.report["raw_mapped_feature_formula"] == "signed_weighted_centered_beta"
+    assert feat.report["raw_mapped_feature_counts"]["gene"] == 2
+
+
+def test_observed_feature_builder_structural_family_uses_mapped_combinations(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    dmp_df = _dmp_df_with_mapped_features()
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        feature_family_set="structural",
+    )
+    assert feat.feature_names == [
+        "struct::G1::exon",
+        "struct::G1::promoter",
+        "struct::G2::intron",
+    ]
+    # S1 centered locus values are [-0.4, -0.3, -0.2, -0.1]
+    assert float(feat.X[0, feat.feature_names.index("struct::G1::promoter")]) == pytest.approx(
+        -0.4, rel=1e-5, abs=1e-6
+    )
+    assert float(feat.X[0, feat.feature_names.index("struct::G1::exon")]) == pytest.approx(
+        0.3, rel=1e-5, abs=1e-6
+    )
+    assert float(feat.X[0, feat.feature_names.index("struct::G2::intron")]) == pytest.approx(
+        -0.2, rel=1e-5, abs=1e-6
+    )
+    assert feat.report["raw_mapped_feature_counts"]["structural"] == 3
+
+
+def test_observed_feature_builder_dynamic_schema_is_deterministic(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    dmp_df = _dmp_df_with_mapped_features()
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat_a = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        feature_family_set="dmp+gene",
+    )
+    feat_b = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df.sample(frac=1.0, random_state=11).reset_index(drop=True),
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        feature_family_set="dmp+gene",
+    )
+    assert feat_a.feature_names == feat_b.feature_names
+    assert feat_a.report["schema_fingerprint"] == feat_b.report["schema_fingerprint"]
