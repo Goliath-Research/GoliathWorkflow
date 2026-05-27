@@ -135,8 +135,23 @@ if [ "$SKIP_MARP" -eq 1 ]; then
 else
     if command -v npm >/dev/null 2>&1; then
         echo "   • Installing Marp CLI via npm (global)..."
-        npm install -g @marp-team/marp-cli
-        NPM_GLOBAL_BIN="$(npm config get prefix)/bin"
+        if npm install -g @marp-team/marp-cli; then
+            NPM_GLOBAL_BIN="$(npm config get prefix)/bin"
+        else
+            echo "   ⚠ Global npm install failed. Falling back to user-local npm prefix..."
+            USER_NPM_PREFIX="${HOME}/.npm-global"
+            mkdir -p "$USER_NPM_PREFIX"
+            npm config set prefix "$USER_NPM_PREFIX"
+            if npm install -g @marp-team/marp-cli; then
+                NPM_GLOBAL_BIN="${USER_NPM_PREFIX}/bin"
+                echo "   ✓ Marp installed with user prefix: $USER_NPM_PREFIX"
+                echo "     Add this to your shell profile if needed:"
+                echo "       export PATH=\"$USER_NPM_PREFIX/bin:\$PATH\""
+            else
+                echo "   ⚠ Marp installation failed in both global and user-local modes."
+                NPM_GLOBAL_BIN="$(npm config get prefix)/bin"
+            fi
+        fi
         if ! command -v marp >/dev/null 2>&1 && [ -x "$NPM_GLOBAL_BIN/marp" ]; then
             export PATH="$NPM_GLOBAL_BIN:$PATH"
         fi
