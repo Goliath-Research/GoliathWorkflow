@@ -39,6 +39,10 @@ env/
 .vscode/
 *.code-workspace
 
+# Cursor IDE internal planning artifacts (keep .cursor/rules tracked)
+.cursor/plans/
+.cursor/**/*.plan.md
+
 # Jupyter Notebook
 .ipynb_checkpoints
 *.ipynb
