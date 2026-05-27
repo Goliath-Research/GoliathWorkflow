@@ -95,8 +95,10 @@ flowchart TD
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
+  scale=0.86,
+  every node/.style={transform shape},
   node distance=0.9cm and 0.9cm,
-  base/.style={draw, rounded corners=3pt, align=center, font=\small, minimum height=0.95cm, text width=3.4cm},
+  base/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.82cm, text width=3.0cm},
   shared/.style={base, fill=blue!8},
   core/.style={base, fill=green!8},
   support/.style={base, fill=orange!10},
@@ -197,18 +199,28 @@ methyl-validation --project configs/my_project.json --select-best-model --model-
 
 ::: {.content-visible when-format="html"}
 ```mermaid
-flowchart TD
+flowchart LR
     A["project.json"] --> B["--stability"]
-    B --> C["Repeated splits"]
-    C --> D["centroid -> detector"]
-    D --> E["stable DMP panel"]
+    subgraph S1["Stage A: Stability Discovery"]
+      B --> C["Repeated train/validation splits"]
+      C --> D["centroid -> detector per split"]
+      D --> E["stable_dmps_production.csv"]
+    end
     E --> F["--freeze"]
-    F --> G["all-sample centroid -> detector(fixed) -> mapper -> enricher"]
-    G --> H["production/project.json"]
+    subgraph S2["Stage B: Production Freeze"]
+      F --> G["all-sample centroid -> detector(fixed) -> mapper -> enricher"]
+      G --> H["production/project.json"]
+      G --> H2["production/model_bundle/mapper_dmp_annotations.csv"]
+    end
     H --> I["--model-mc --model-mc-all"]
-    I --> J["backend ranking"]
-    J --> K["--select-best-model"]
-    K --> L["final production model artifacts"]
+    subgraph S3["Stage C: Backend Model-MC"]
+      I --> J["shared runs + backend-local train/predict"]
+      J --> K["model_mc/backend_ranking.json"]
+    end
+    K --> L["--select-best-model"]
+    subgraph S4["Stage D: Final Production Model"]
+      L --> M["production/classifiers/*"]
+    end
 ```
 :::
 
@@ -217,22 +229,28 @@ flowchart TD
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
-  node distance=0.6cm and 0cm,
-  box/.style={draw, rounded corners=2pt, text width=8.5cm, align=center, font=\small, minimum height=0.7cm, fill=gray!8},
+  scale=0.74,
+  every node/.style={transform shape},
+  node distance=0.52cm and 0cm,
+  cmd/.style={draw, rounded corners=2pt, text width=7.2cm, align=center, font=\footnotesize\bfseries, minimum height=0.56cm, fill=blue!10},
+  proc/.style={draw, rounded corners=2pt, text width=7.2cm, align=center, font=\footnotesize, minimum height=0.56cm, fill=green!10},
+  art/.style={draw, rounded corners=2pt, text width=7.2cm, align=center, font=\footnotesize\ttfamily, minimum height=0.56cm, fill=orange!14},
   arr/.style={-{Latex[length=2mm]}, thick}
 ]
-\node[box] (A) {\texttt{project.json}};
-\node[box, below=of A] (B) {\texttt{--stability}};
-\node[box, below=of B] (C) {Repeated train-validation splits};
-\node[box, below=of C] (D) {Per split: centroid $\to$ detector};
-\node[box, below=of D] (E) {Stable DMP panel};
-\node[box, below=of E] (F) {\texttt{--freeze}};
-\node[box, below=of F] (G) {All-sample rerun: centroid $\to$ detector(fixed) $\to$ mapper $\to$ enricher};
-\node[box, below=of G] (H) {\texttt{production/project.json}};
-\node[box, below=of H] (I) {\texttt{--model-mc --model-mc-all}};
-\node[box, below=of I] (J) {Backend metrics and ranking};
-\node[box, below=of J] (K) {\texttt{--select-best-model}};
-\node[box, below=of K] (L) {Final production model artifacts};
+\node[art] (A) {\texttt{project.json}};
+\node[cmd, below=of A] (B) {\texttt{--stability}};
+\node[proc, below=of B] (C) {Repeated train/validation splits};
+\node[proc, below=of C] (D) {Per split: centroid $\to$ detector};
+\node[art, below=of D] (E) {\texttt{stable\_dmps\_production.csv}};
+\node[cmd, below=of E] (F) {\texttt{--freeze}};
+\node[proc, below=of F] (G) {All-sample: centroid $\to$ detector(fixed) $\to$ mapper $\to$ enricher};
+\node[art, below=of G] (H) {\texttt{production/project.json}};
+\node[art, below=of H] (H2) {\texttt{production/model\_bundle/mapper\_dmp\_annotations.csv}};
+\node[cmd, below=of H2] (I) {\texttt{--model-mc --model-mc-all}};
+\node[proc, below=of I] (J) {Shared runs + backend-local train/predict};
+\node[art, below=of J] (K) {\texttt{model\_mc/backend\_ranking.json}};
+\node[cmd, below=of K] (L) {\texttt{--select-best-model}};
+\node[art, below=of L] (M) {\texttt{production/classifiers/*}};
 \draw[arr] (A)--(B);
 \draw[arr] (B)--(C);
 \draw[arr] (C)--(D);
@@ -240,12 +258,14 @@ flowchart TD
 \draw[arr] (E)--(F);
 \draw[arr] (F)--(G);
 \draw[arr] (G)--(H);
-\draw[arr] (H)--(I);
+\draw[arr] (H)--(H2);
+\draw[arr] (H2)--(I);
 \draw[arr] (I)--(J);
 \draw[arr] (J)--(K);
 \draw[arr] (K)--(L);
+\draw[arr] (L)--(M);
 \end{tikzpicture}
-\caption{Workflow 1 for creating a stable production model.}
+\caption{Workflow 1 for stable production model creation with explicit freeze and model-MC artifacts.}
 \end{figure}
 ```
 :::
@@ -262,14 +282,15 @@ The second workflow assumes a frozen production project already exists and evalu
 
 ::: {.content-visible when-format="html"}
 ```mermaid
-flowchart TD
+flowchart LR
     A["production/project.json"] --> B["--model-mc"]
-    C["primary monte_carlo_runs"] --> D["split reuse resolver"]
-    B --> D
+    C["primary monte_carlo_runs/run_XXXX"] -. reusable split artifacts .-> F
+    B --> D["split reuse resolver"]
     D --> E["model_mc/shared/run_XXXX"]
-    E --> F["symlink centroids/detections when reusable"]
-    F --> G["backend-local train/predict runs"]
-    G --> H["backend metrics + ranking"]
+    E --> F["centroid/detector reused by symlink when compatible"]
+    F --> G["backend-local train/predict"]
+    G --> H["model_mc/<backend>/metrics_summary.json"]
+    H --> I["backend_ranking.csv/json"]
 ```
 :::
 
@@ -278,25 +299,34 @@ flowchart TD
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
-  node distance=0.6cm and 0cm,
-  box/.style={draw, rounded corners=2pt, text width=8.5cm, align=center, font=\small, minimum height=0.7cm, fill=gray!8},
-  arr/.style={-{Latex[length=2mm]}, thick}
+  scale=0.74,
+  every node/.style={transform shape},
+  node distance=0.52cm and 0cm,
+  cmd/.style={draw, rounded corners=2pt, text width=7.2cm, align=center, font=\footnotesize\bfseries, minimum height=0.56cm, fill=blue!10},
+  proc/.style={draw, rounded corners=2pt, text width=7.2cm, align=center, font=\footnotesize, minimum height=0.56cm, fill=green!10},
+  art/.style={draw, rounded corners=2pt, text width=7.2cm, align=center, font=\footnotesize\ttfamily, minimum height=0.56cm, fill=orange!14},
+  arr/.style={-{Latex[length=2mm]}, thick},
+  reuse/.style={-{Latex[length=2mm]}, thick, dashed}
 ]
-\node[box] (A) {\texttt{production/project.json} (frozen production context)};
-\node[box, below=of A] (B) {\texttt{--model-mc} (\texttt{--model-mc-all} optional)};
-\node[box, below=of B] (C) {Split reuse from primary \texttt{monte\_carlo\_runs} when compatible};
-\node[box, below=of C] (D) {\texttt{model\_mc/shared/run\_XXXX} preparation};
-\node[box, below=of D] (E) {Symlink centroid/detector artifacts if reusable};
-\node[box, below=of E] (F) {Backend-local train/predict stages};
-\node[box, below=of F] (G) {Per-backend metrics and ranking outputs};
+\node[art] (A) {\texttt{production/project.json}};
+\node[cmd, below=of A] (B) {\texttt{--model-mc} (\texttt{--model-mc-all} optional)};
+\node[proc, below=of B] (C) {Split reuse resolver (seed/fraction/layout compatibility)};
+\node[art, below=of C] (D) {\texttt{model\_mc/shared/run\_XXXX}};
+\node[proc, below=of D] (E) {Centroid/detector artifacts linked when reusable};
+\node[proc, below=of E] (F) {Backend-local train/predict (ecdf, tabular, generative)};
+\node[art, below=of F] (G) {\texttt{model\_mc/<backend>/metrics\_summary.json}};
+\node[art, below=of G] (H) {\texttt{model\_mc/backend\_ranking.csv/json}};
+\node[art, right=2.0cm of E] (R) {\texttt{primary monte\_carlo\_runs/run\_XXXX/}\\\texttt{centroids + detections}};
 \draw[arr] (A)--(B);
 \draw[arr] (B)--(C);
 \draw[arr] (C)--(D);
 \draw[arr] (D)--(E);
+\draw[reuse] (R)--(E);
 \draw[arr] (E)--(F);
 \draw[arr] (F)--(G);
+\draw[arr] (G)--(H);
 \end{tikzpicture}
-\caption{Workflow 2 for backend model-selection Monte Carlo over frozen production context.}
+\caption{Workflow 2 backend model-selection Monte Carlo with explicit split/artifact reuse path.}
 \end{figure}
 ```
 :::
