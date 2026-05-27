@@ -42,6 +42,7 @@ Recommended rendering command (includes Mermaid chart enablement in HTML output)
 ```
 
 This script embeds Mermaid JS directly into each generated HTML file, so charts render from local `file://` copies without CDN/network access.
+It also renders with Marp's `bare` template to avoid `file://` iframe security-origin warnings from bespoke/presenter features.
 
 ```bash
 marp "docs/presentations/methylpipeline-theory-implementation.md" --html

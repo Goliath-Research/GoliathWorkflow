@@ -30,7 +30,8 @@ fi
 echo "Rendering presentation decks with Marp..."
 for f in "$PRESENTATIONS_DIR"/*.md; do
     [ "$(basename "$f")" = "README.md" ] && continue
-    marp --no-stdin "$f" --html --output "${f%.md}.html"
+    # Use the bare template to avoid iframe/presenter features that break under file:// origins.
+    marp --no-stdin --template bare "$f" --html --output "${f%.md}.html"
 done
 
 echo "Injecting Mermaid runtime into generated HTML..."
