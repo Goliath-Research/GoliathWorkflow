@@ -140,6 +140,7 @@ else
         else
             echo "   ⚠ Global npm install failed. Falling back to user-local npm prefix..."
             USER_NPM_PREFIX="${HOME}/.npm-global"
+            ORIGINAL_NPM_PREFIX="$(npm config get prefix)"
             mkdir -p "$USER_NPM_PREFIX"
             npm config set prefix "$USER_NPM_PREFIX"
             if npm install -g @marp-team/marp-cli; then
@@ -149,6 +150,8 @@ else
                 echo "       export PATH=\"$USER_NPM_PREFIX/bin:\$PATH\""
             else
                 echo "   ⚠ Marp installation failed in both global and user-local modes."
+                echo "   • Restoring original npm prefix: $ORIGINAL_NPM_PREFIX"
+                npm config set prefix "$ORIGINAL_NPM_PREFIX" || true
                 NPM_GLOBAL_BIN="$(npm config get prefix)/bin"
             fi
         fi
