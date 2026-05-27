@@ -95,10 +95,10 @@ flowchart TD
 \begin{figure}[htbp]
 \centering
 \begin{tikzpicture}[
-  scale=0.86,
+  scale=0.82,
   every node/.style={transform shape},
-  node distance=0.9cm and 0.9cm,
-  base/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.82cm, text width=3.0cm},
+  node distance=0.78cm and 0.55cm,
+  base/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.78cm, text width=2.55cm},
   shared/.style={base, fill=blue!8},
   core/.style={base, fill=green!8},
   support/.style={base, fill=orange!10},
@@ -106,35 +106,29 @@ flowchart TD
 ]
 \node[shared] (utils) {methylutils\\shared math, IO, config, classifier support};
 
-\node[core, above left=1.4cm and 2.2cm of utils] (centroid) {methylcentroid\\cohort centroids};
+\node[core, above left=1.2cm and 1.45cm of utils] (centroid) {methylcentroid\\cohort centroids};
 \node[core, above=1.4cm of utils] (detector) {methyldetector\\DMP discovery};
-\node[core, above right=1.4cm and 2.2cm of utils] (classifier) {methylclassifier\\classification};
-\node[core, right=3.8cm of classifier] (predictor) {methylpredictor\\prediction metrics};
-\node[core, left=3.8cm of centroid] (validation) {methylvalidation\\stability, freeze, model build};
+\node[core, above right=1.2cm and 1.45cm of utils] (classifier) {methylclassifier\\classification};
+\node[core, right=2.35cm of classifier] (predictor) {methylpredictor\\prediction metrics};
+\node[core, left=2.35cm of centroid] (validation) {methylvalidation\\stability, freeze, model build};
 
 \node[support, below=1.5cm of utils] (mapper) {methylmapper\\gene and region mapping};
-\node[support, below right=1.5cm and 2.2cm of utils] (enricher) {methylenricher\\enrichment and modules};
-\node[support, right=3.8cm of enricher] (qc) {methylalignmentqc\\alignment QC parsing};
+\node[support, below right=1.25cm and 1.45cm of utils] (enricher) {methylenricher\\enrichment and modules};
+\node[support, right=2.35cm of enricher] (qc) {methylalignmentqc\\alignment QC parsing};
 
 \draw[arr] (utils) -- (centroid);
 \draw[arr] (utils) -- (detector);
 \draw[arr] (utils) -- (classifier);
-\draw[arr] (utils) -- (predictor);
-\draw[arr] (utils) -- (validation);
 \draw[arr] (utils) -- (mapper);
-\draw[arr] (utils) -- (enricher);
+\draw[arr] (utils) -- (validation);
 \draw[arr] (centroid) -- (detector);
 \draw[arr] (detector) -- (classifier);
 \draw[arr] (classifier) -- (predictor);
-
-\draw[arr] (validation) -- (centroid);
-\draw[arr] (validation) -- (detector);
-\draw[arr] (validation) -- (classifier);
-\draw[arr] (validation) -- (predictor);
-
 \draw[arr] (detector) -- (mapper);
 \draw[arr] (mapper) -- (enricher);
-\draw[arr] (qc) -- (validation);
+\draw[arr] (validation) -- (centroid);
+\draw[arr] (validation) -- (detector);
+\draw[arr] (qc) to[out=170,in=-35] (validation);
 \end{tikzpicture}
 \caption{High-level package architecture of MethylPipeline.}
 \end{figure}
