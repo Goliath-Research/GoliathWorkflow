@@ -255,6 +255,210 @@ def test_skip_detection_runs_stability_only(tmp_path: Path, monkeypatch):
     assert kwargs["monte_carlo_runs_root"] == out_dir / "x" / "monte_carlo_runs"
 
 
+def test_stability_early_stop_breaks_loop_and_writes_diagnostics(tmp_path: Path, monkeypatch):
+    h = tmp_path / "healthy.csv"
+    d = tmp_path / "disease.csv"
+    h.write_text("sample\nH1\nH2\n", encoding="utf-8")
+    d.write_text("sample\nD1\nD2\n", encoding="utf-8")
+    out_dir = tmp_path / "out"
+    project = tmp_path / "project.json"
+    project.write_text(
+        f"""
+{{
+  "project_name": "x",
+  "output_base": "{out_dir.as_posix()}",
+  "samples_base_path": "{tmp_path.as_posix()}",
+  "groups": [
+    {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
+    {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
+  ],
+  "step_config": {{
+    "validation": {{
+      "train_fraction": 0.8,
+      "n_iterations": 6,
+      "run_stability": true,
+      "stability_early_stop_enabled": true,
+      "stability_min_iterations": 2,
+      "stability_convergence_window": 1,
+      "stability_convergence_jaccard": 0.95,
+      "stability_convergence_max_size_delta": 0.2,
+      "stability_convergence_patience": 2,
+      "backend_profiles": {{
+        "ecdf": {{"enabled": true, "params": {{}}}},
+        "tabular_sklearn": {{"enabled": true, "params": {{"tabular_methods": [{{"method": "random_forest", "params": {{}}}}]}}}},
+        "generative_hybrid": {{"enabled": true, "params": {{}}}}
+      }}
+    }}
+  }}
+}}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    state = {"iterations_run": 0, "checkpoints": 0, "stability_kwargs": None}
+
+    monkeypatch.setattr(cli, "infer_monte_carlo_layout", lambda *_args, **_kwargs: "binary")
+    monkeypatch.setattr(cli, "load_and_resolve_sample_paths", lambda *_args, **_kwargs: (["H1", "H2"], ["D1", "D2"]))
+    monkeypatch.setattr(cli, "stratified_split", lambda *_args, **_kwargs: (["H1"], ["D1"], ["H2"], ["D2"]))
+    monkeypatch.setattr(cli, "write_detector_featurecuts_override", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        cli,
+        "load_project",
+        lambda _path: SimpleNamespace(
+            get_comparisons=lambda: [SimpleNamespace(control_group="healthy", disease_group="disease")]
+        ),
+    )
+
+    def _fake_generate_run_project(*args, **kwargs):
+        run_dir = Path(args[1])
+        run_dir.mkdir(parents=True, exist_ok=True)
+        project_path = run_dir / "project.json"
+        project_path.write_text("{}", encoding="utf-8")
+        val_control_csv = run_dir / "val_control.csv"
+        val_disease_csv = run_dir / "val_disease.csv"
+        val_control_csv.write_text("sample\nH2\n", encoding="utf-8")
+        val_disease_csv.write_text("sample\nD2\n", encoding="utf-8")
+        return project_path, None, None, val_control_csv, val_disease_csv, None, None
+
+    def _fake_run_pipeline_for_iteration(*_args, **kwargs):
+        state["iterations_run"] += 1
+        logs_dir = Path(kwargs["logs_dir"])
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        return True, [], []
+
+    def _fake_evaluate_dmp_stability_convergence(*_args, **_kwargs):
+        state["checkpoints"] += 1
+        return {
+            "eligible_for_check": True,
+            "converged_checkpoint": True,
+            "jaccard": 1.0,
+            "relative_size_delta": 0.0,
+            "n_runs_analyzed": state["checkpoints"],
+        }
+
+    def _fake_stability(**kwargs):
+        state["stability_kwargs"] = kwargs
+        return {
+            "output_dir": str(out_dir / "x" / "monte_carlo_runs" / "stability"),
+            "dmp_stability": {"stable_dmps_at_threshold": 1},
+            "gene_stability": {"stable_genes_at_threshold": 0},
+            "tiered_stability_enabled": False,
+        }
+
+    monkeypatch.setattr(cli, "generate_run_project", _fake_generate_run_project)
+    monkeypatch.setattr(cli, "run_pipeline_for_iteration", _fake_run_pipeline_for_iteration)
+    monkeypatch.setattr(cli, "run_stability_analysis", _fake_stability)
+    monkeypatch.setattr(cli, "iteration_scalar_metrics_from_run_dir", lambda _run_dir: {"balanced_accuracy": 0.91})
+    monkeypatch.setattr(cli, "evaluate_dmp_stability_convergence", _fake_evaluate_dmp_stability_convergence)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["methyl-validation", "--project", str(project), "--stability"],
+    )
+
+    cli.main()
+    assert state["iterations_run"] == 2
+    assert state["checkpoints"] == 2
+    stability_kwargs = state["stability_kwargs"]
+    assert isinstance(stability_kwargs, dict)
+    early = stability_kwargs["convergence_diagnostics"]
+    assert early["enabled"] is True
+    assert early["triggered"] is True
+    assert early["stopped_after_iteration"] == 2
+    assert len(early["checkpoint_history"]) == 2
+
+
+def test_stability_early_stop_disabled_keeps_full_iteration_budget(tmp_path: Path, monkeypatch):
+    h = tmp_path / "healthy.csv"
+    d = tmp_path / "disease.csv"
+    h.write_text("sample\nH1\nH2\n", encoding="utf-8")
+    d.write_text("sample\nD1\nD2\n", encoding="utf-8")
+    out_dir = tmp_path / "out"
+    project = tmp_path / "project.json"
+    project.write_text(
+        f"""
+{{
+  "project_name": "x",
+  "output_base": "{out_dir.as_posix()}",
+  "samples_base_path": "{tmp_path.as_posix()}",
+  "groups": [
+    {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
+    {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
+  ],
+  "step_config": {{
+    "validation": {{
+      "train_fraction": 0.8,
+      "n_iterations": 3,
+      "run_stability": true,
+      "stability_early_stop_enabled": false,
+      "backend_profiles": {{
+        "ecdf": {{"enabled": true, "params": {{}}}},
+        "tabular_sklearn": {{"enabled": true, "params": {{"tabular_methods": [{{"method": "random_forest", "params": {{}}}}]}}}},
+        "generative_hybrid": {{"enabled": true, "params": {{}}}}
+      }}
+    }}
+  }}
+}}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    state = {"iterations_run": 0}
+    monkeypatch.setattr(cli, "infer_monte_carlo_layout", lambda *_args, **_kwargs: "binary")
+    monkeypatch.setattr(cli, "load_and_resolve_sample_paths", lambda *_args, **_kwargs: (["H1", "H2"], ["D1", "D2"]))
+    monkeypatch.setattr(cli, "stratified_split", lambda *_args, **_kwargs: (["H1"], ["D1"], ["H2"], ["D2"]))
+    monkeypatch.setattr(cli, "write_detector_featurecuts_override", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        cli,
+        "load_project",
+        lambda _path: SimpleNamespace(
+            get_comparisons=lambda: [SimpleNamespace(control_group="healthy", disease_group="disease")]
+        ),
+    )
+
+    def _fake_generate_run_project(*args, **kwargs):
+        run_dir = Path(args[1])
+        run_dir.mkdir(parents=True, exist_ok=True)
+        project_path = run_dir / "project.json"
+        project_path.write_text("{}", encoding="utf-8")
+        val_control_csv = run_dir / "val_control.csv"
+        val_disease_csv = run_dir / "val_disease.csv"
+        val_control_csv.write_text("sample\nH2\n", encoding="utf-8")
+        val_disease_csv.write_text("sample\nD2\n", encoding="utf-8")
+        return project_path, None, None, val_control_csv, val_disease_csv, None, None
+
+    def _fake_run_pipeline_for_iteration(*_args, **kwargs):
+        state["iterations_run"] += 1
+        logs_dir = Path(kwargs["logs_dir"])
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        return True, [], []
+
+    monkeypatch.setattr(cli, "generate_run_project", _fake_generate_run_project)
+    monkeypatch.setattr(cli, "run_pipeline_for_iteration", _fake_run_pipeline_for_iteration)
+    monkeypatch.setattr(cli, "iteration_scalar_metrics_from_run_dir", lambda _run_dir: {"balanced_accuracy": 0.91})
+    monkeypatch.setattr(
+        cli,
+        "evaluate_dmp_stability_convergence",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("early-stop evaluator should not be called")),
+    )
+    monkeypatch.setattr(
+        cli,
+        "run_stability_analysis",
+        lambda **_kwargs: {
+            "output_dir": str(out_dir / "x" / "monte_carlo_runs" / "stability"),
+            "dmp_stability": {"stable_dmps_at_threshold": 1},
+            "gene_stability": {"stable_genes_at_threshold": 0},
+            "tiered_stability_enabled": False,
+        },
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        ["methyl-validation", "--project", str(project), "--stability"],
+    )
+
+    cli.main()
+    assert state["iterations_run"] == 3
+
+
 def test_model_mc_all_uses_shared_stage(tmp_path: Path, monkeypatch):
     h = tmp_path / "healthy.csv"
     d = tmp_path / "disease.csv"

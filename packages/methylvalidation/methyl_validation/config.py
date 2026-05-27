@@ -384,6 +384,50 @@ class MonteCarloConfig(BaseModel):
             "balanced_accuracy is >= this value. Frequencies are over those qualifying runs only."
         ),
     )
+    stability_early_stop_enabled: bool = Field(
+        default=False,
+        description=(
+            "If true, evaluate convergence of stable DMP panels during the MC loop "
+            "and stop early when convergence thresholds hold for the configured patience."
+        ),
+    )
+    stability_min_iterations: int = Field(
+        default=20,
+        ge=1,
+        description=(
+            "Minimum number of qualifying runs required before stability convergence checks can trigger."
+        ),
+    )
+    stability_convergence_window: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "Window size (in qualifying runs) for comparing stable panels S_k vs S_(k-window)."
+        ),
+    )
+    stability_convergence_jaccard: float = Field(
+        default=0.98,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum Jaccard similarity required between current and lagged stable DMP panels."
+        ),
+    )
+    stability_convergence_max_size_delta: float = Field(
+        default=0.02,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Maximum allowed relative panel-size change between current and lagged stable DMP panels."
+        ),
+    )
+    stability_convergence_patience: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "Number of consecutive convergence checkpoints that must pass before stopping early."
+        ),
+    )
     stability_gene_freq: float = Field(
         default=0.5,
         ge=0.0,
@@ -1165,6 +1209,19 @@ class MonteCarloConfig(BaseModel):
             ):
                 raise ValueError(
                     "stability tiers require core >= extended >= exploratory frequency thresholds."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_stability_early_stop(self) -> "MonteCarloConfig":
+        if self.stability_early_stop_enabled:
+            if self.stability_min_iterations > self.n_iterations:
+                raise ValueError(
+                    "stability_min_iterations must be <= n_iterations when stability_early_stop_enabled=true."
+                )
+            if self.stability_convergence_window >= self.stability_min_iterations:
+                raise ValueError(
+                    "stability_convergence_window must be smaller than stability_min_iterations when stability_early_stop_enabled=true."
                 )
         return self
 

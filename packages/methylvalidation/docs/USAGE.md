@@ -217,6 +217,12 @@ Rather than a separate Monte Carlo config file, embed the validation settings di
     "seed": 42,
     "run_stability": true,
     "stability_dmp_freq": 0.7,
+    "stability_early_stop_enabled": false,
+    "stability_min_iterations": 20,
+    "stability_convergence_window": 5,
+    "stability_convergence_jaccard": 0.98,
+    "stability_convergence_max_size_delta": 0.02,
+    "stability_convergence_patience": 3,
     "stability_min_balanced_accuracy": null,
     "abort_on_step_failure": false
   }
@@ -232,6 +238,12 @@ Common fields for production staging:
 - `run_stability`: enable stability aggregation after MC iterations.
 - `stability_dmp_freq`: recurrence threshold for stable DMP selection.
 - `stability_min_balanced_accuracy`: optional run-quality gate; only qualifying runs contribute to stability counts.
+- `stability_early_stop_enabled`: opt-in adaptive stopping during `--stability` Monte Carlo loops.
+- `stability_min_iterations`: minimum qualifying runs before convergence checks can stop the loop.
+- `stability_convergence_window`: compare stable set at `k` vs `k-window` qualifying runs.
+- `stability_convergence_jaccard`: required Jaccard overlap between the two stable sets.
+- `stability_convergence_max_size_delta`: max allowed relative panel-size change across checkpoints.
+- `stability_convergence_patience`: consecutive passing checkpoints required before early stop triggers.
 - `stability_gene_freq`: recurrence threshold for stable genes (when enricher outputs are available).
 - `stability_featurecuts_enabled`: force detector FeatureCuts policy in MC (`classifier_dmp_selection=featurecuts_validation`).
 - `stability_target_balanced_accuracy` / `stability_min_selected_dmps`: optional FeatureCuts constraints used in MC detector overrides.
@@ -266,7 +278,7 @@ Use this profile when you want conservative run filtering and classifier-panel-a
 }
 ```
 
-This keeps runtime fixed while enforcing high per-run detector quality and explicit classifier-panel constraints.
+This keeps runtime mostly bounded while enforcing high per-run detector quality and explicit classifier-panel constraints.
 
 ### Covariate contract for `tabular_sklearn` / `generative_hybrid`
 
@@ -433,7 +445,7 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `stability/stable_dmps_production.csv` (tiered mode) | Root alias copied from `stability_default_freeze_tier` (default: `tier_extended`) so `--freeze` works without extra path overrides. |
 | `stability/dmp_frequency_by_chromosome.html` | Combined Plotly chart with one series per chromosome (both `all` and `selected` traces): X = DMP frequency across runs (%), Y = DMP count. |
 | `stability/dmp_frequency_chr_<chrom>.html` | Per-chromosome Plotly chart files, each showing `all` vs `selected` DMP count distributions over frequency (%). |
-| `stability/stability_summary.json` | Stability run summary for DMP/gene frequency plus detector parameter extraction. Includes `detector_parameters.per_run` and `detector_parameters.aggregates` built from `detections/**/results-*.json` (minimal fields: exported/statistical/biological DMP totals, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). |
+| `stability/stability_summary.json` | Stability run summary for DMP/gene frequency plus detector parameter extraction. Includes `detector_parameters.per_run` and `detector_parameters.aggregates` built from `detections/**/results-*.json` (minimal fields: exported/statistical/biological DMP totals, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`), plus `early_stopping` diagnostics (`triggered`, stop iteration, per-checkpoint history). |
 | `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |
 | `model_mc/shared/run_000N/` | Shared per-iteration artifacts (split projects + centroid/detector outputs) reused by all backends in `--model-mc --model-mc-all`. |
 | `model_mc/<backend>/run_000N/` | Per-iteration backend model outputs (predictor/model artifacts and logs) produced from shared runs. |

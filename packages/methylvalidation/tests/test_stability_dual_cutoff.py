@@ -4,6 +4,7 @@ from methyl_validation.stability import (
     _detect_log_score_elbow,
     _score_stable_dmps,
     _select_dual_cutoff_dmps,
+    evaluate_dmp_stability_convergence,
     run_stability_analysis,
 )
 
@@ -190,3 +191,47 @@ def test_run_stability_analysis_legacy_mode_has_no_tier_outputs(tmp_path):
     assert summary["tiered_stability_enabled"] is False
     assert summary["stability_tiers"] == {}
     assert summary["stable_dmp_csv"] is not None
+
+
+def test_evaluate_dmp_stability_convergence_detects_converged_panel(tmp_path):
+    monte_root = tmp_path / "monte_carlo_runs"
+    shared_positions = [100, 200, 300]
+    for idx in range(1, 7):
+        _write_discovery_csv(
+            monte_root / f"run_{idx:04d}" / "detections" / "all" / "pca_pca1" / "dmps-1-discovery.csv",
+            [
+                {"chromosome": 1, "position": p, "effect_size": 0.9}
+                for p in shared_positions
+            ],
+        )
+
+    result = evaluate_dmp_stability_convergence(
+        monte_carlo_runs_root=monte_root,
+        min_frequency=0.8,
+        min_iterations=5,
+        convergence_window=2,
+        convergence_jaccard=0.99,
+        convergence_max_size_delta=0.0,
+    )
+    assert result["eligible_for_check"] is True
+    assert result["converged_checkpoint"] is True
+    assert result["jaccard"] == 1.0
+    assert result["relative_size_delta"] == 0.0
+
+
+def test_evaluate_dmp_stability_convergence_reports_insufficient_runs(tmp_path):
+    monte_root = tmp_path / "monte_carlo_runs"
+    for idx, pos in enumerate([100, 200, 300], start=1):
+        _write_discovery_csv(
+            monte_root / f"run_{idx:04d}" / "detections" / "all" / "pca_pca1" / "dmps-1-discovery.csv",
+            [{"chromosome": 1, "position": pos, "effect_size": 0.9}],
+        )
+
+    result = evaluate_dmp_stability_convergence(
+        monte_carlo_runs_root=monte_root,
+        min_frequency=0.8,
+        min_iterations=5,
+        convergence_window=2,
+    )
+    assert result["eligible_for_check"] is False
+    assert result["reason"] == "insufficient_qualifying_runs"

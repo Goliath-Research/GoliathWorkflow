@@ -819,23 +819,20 @@ def write_dmp_frequency_plot_by_chromosome(
     return combined_path, per_chrom_paths, count_summary_by_chrom
 
 
-def compute_dmp_stability(
-    monte_carlo_runs_root: Path,
-    min_frequency: float = 0.7,
-    min_balanced_accuracy: Optional[float] = None,
-    prefer_classifier_panel_dmps: bool = False,
-) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-    """
-    Count how often each DMP appears in detector exports across runs.
-
-    If ``min_balanced_accuracy`` is set, only iterations whose ``validation_metrics.json``
-    reports ``balanced_accuracy >= min_balanced_accuracy`` contribute DMPs and define the
-    frequency denominator.
-    """
+def _list_monte_carlo_run_dirs(monte_carlo_runs_root: Path) -> List[Path]:
     runs = sorted(monte_carlo_runs_root.glob("run_*"))
     if not runs:
         runs = sorted(monte_carlo_runs_root.glob("run_0*"))
+    return [p for p in runs if p.is_dir()]
 
+
+def _compute_dmp_stability_from_run_dirs(
+    run_dirs: List[Path],
+    min_frequency: float = 0.7,
+    min_balanced_accuracy: Optional[float] = None,
+    prefer_classifier_panel_dmps: bool = False,
+    source_label: str = "stability::dmp_frequency",
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     dmp_run_hits: Dict[Tuple[Any, int], set[str]] = defaultdict(set)
     dmp_effect_sum: Dict[Tuple[Any, int], float] = defaultdict(float)
     dmp_effect_runs: Dict[Tuple[Any, int], int] = defaultdict(int)
@@ -846,7 +843,7 @@ def compute_dmp_stability(
     skipped_no_discovery = 0
     skipped_low_ba = 0
 
-    for run_dir in runs:
+    for run_dir in run_dirs:
         df = load_discovery_dmps(run_dir, prefer_classifier_panel=prefer_classifier_panel_dmps)
         if df is None or "position" not in df.columns or "chromosome" not in df.columns:
             skipped_no_discovery += 1
@@ -962,7 +959,7 @@ def compute_dmp_stability(
     if not df.empty:
         df = _validate_stability_recurrence_metadata(
             df,
-            source_label=f"{monte_carlo_runs_root}/stability::dmp_frequency",
+            source_label=source_label,
         )
     stable = df[df["frequency"] >= min_frequency] if not df.empty else pd.DataFrame()
     summary = {
@@ -975,8 +972,153 @@ def compute_dmp_stability(
         "min_frequency": min_frequency,
         "stable_dmp_fraction": len(stable) / len(dmp_run_hits) if len(dmp_run_hits) > 0 else 0.0,
     }
-
     return df, summary
+
+
+def compute_dmp_stability(
+    monte_carlo_runs_root: Path,
+    min_frequency: float = 0.7,
+    min_balanced_accuracy: Optional[float] = None,
+    prefer_classifier_panel_dmps: bool = False,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """
+    Count how often each DMP appears in detector exports across runs.
+
+    If ``min_balanced_accuracy`` is set, only iterations whose ``validation_metrics.json``
+    reports ``balanced_accuracy >= min_balanced_accuracy`` contribute DMPs and define the
+    frequency denominator.
+    """
+    runs = _list_monte_carlo_run_dirs(monte_carlo_runs_root)
+    return _compute_dmp_stability_from_run_dirs(
+        run_dirs=runs,
+        min_frequency=min_frequency,
+        min_balanced_accuracy=min_balanced_accuracy,
+        prefer_classifier_panel_dmps=prefer_classifier_panel_dmps,
+        source_label=f"{monte_carlo_runs_root}/stability::dmp_frequency",
+    )
+
+
+def _stable_dmp_key_set(dmp_freq_df: pd.DataFrame, min_frequency: float) -> set[Tuple[str, int]]:
+    if dmp_freq_df.empty:
+        return set()
+    selected = dmp_freq_df[dmp_freq_df["frequency"] >= float(min_frequency)]
+    keys: set[Tuple[str, int]] = set()
+    for _, row in selected.iterrows():
+        chrom = row.get("chromosome")
+        pos = row.get("position")
+        if pd.isna(chrom) or pd.isna(pos):
+            continue
+        try:
+            keys.add((str(chrom), int(pos)))
+        except Exception:
+            continue
+    return keys
+
+
+def _jaccard_similarity(a: set[Tuple[str, int]], b: set[Tuple[str, int]]) -> float:
+    if not a and not b:
+        return 1.0
+    union = a | b
+    if not union:
+        return 1.0
+    return float(len(a & b) / len(union))
+
+
+def evaluate_dmp_stability_convergence(
+    monte_carlo_runs_root: Path,
+    *,
+    min_frequency: float = 0.7,
+    min_balanced_accuracy: Optional[float] = None,
+    prefer_classifier_panel_dmps: bool = False,
+    min_iterations: int = 20,
+    convergence_window: int = 5,
+    convergence_jaccard: float = 0.98,
+    convergence_max_size_delta: float = 0.02,
+) -> Dict[str, Any]:
+    """
+    Compare stable panel at k qualifying runs vs k-window qualifying runs.
+
+    Returns convergence diagnostics for one checkpoint. Caller handles patience.
+    """
+    all_runs = _list_monte_carlo_run_dirs(monte_carlo_runs_root)
+    qualifying_runs: List[Path] = []
+    skipped_no_discovery = 0
+    skipped_low_ba = 0
+    for run_dir in all_runs:
+        df = load_discovery_dmps(run_dir, prefer_classifier_panel=prefer_classifier_panel_dmps)
+        if df is None or "position" not in df.columns or "chromosome" not in df.columns:
+            skipped_no_discovery += 1
+            continue
+        if min_balanced_accuracy is not None:
+            ba = run_balanced_accuracy(run_dir)
+            if ba is None or ba < float(min_balanced_accuracy):
+                skipped_low_ba += 1
+                continue
+        qualifying_runs.append(run_dir)
+
+    k = len(qualifying_runs)
+    eligible = (k >= int(min_iterations)) and (k > int(convergence_window))
+    if not eligible:
+        return {
+            "eligible_for_check": False,
+            "converged_checkpoint": False,
+            "n_attempted_runs": len(all_runs),
+            "n_runs_analyzed": k,
+            "skipped_no_discovery": skipped_no_discovery,
+            "skipped_low_balanced_accuracy": skipped_low_ba,
+            "min_balanced_accuracy": min_balanced_accuracy,
+            "min_frequency": float(min_frequency),
+            "min_iterations": int(min_iterations),
+            "convergence_window": int(convergence_window),
+            "convergence_jaccard": float(convergence_jaccard),
+            "convergence_max_size_delta": float(convergence_max_size_delta),
+            "reason": "insufficient_qualifying_runs",
+        }
+
+    current_df, _ = _compute_dmp_stability_from_run_dirs(
+        run_dirs=qualifying_runs,
+        min_frequency=min_frequency,
+        min_balanced_accuracy=None,
+        prefer_classifier_panel_dmps=prefer_classifier_panel_dmps,
+        source_label=f"{monte_carlo_runs_root}/stability::convergence_current",
+    )
+    previous_df, _ = _compute_dmp_stability_from_run_dirs(
+        run_dirs=qualifying_runs[: k - int(convergence_window)],
+        min_frequency=min_frequency,
+        min_balanced_accuracy=None,
+        prefer_classifier_panel_dmps=prefer_classifier_panel_dmps,
+        source_label=f"{monte_carlo_runs_root}/stability::convergence_previous",
+    )
+    stable_current = _stable_dmp_key_set(current_df, min_frequency=min_frequency)
+    stable_previous = _stable_dmp_key_set(previous_df, min_frequency=min_frequency)
+    jaccard = _jaccard_similarity(stable_current, stable_previous)
+    prev_size = len(stable_previous)
+    curr_size = len(stable_current)
+    size_delta = float(abs(curr_size - prev_size) / max(1, prev_size))
+    converged_checkpoint = (
+        (jaccard >= float(convergence_jaccard))
+        and (size_delta <= float(convergence_max_size_delta))
+    )
+    return {
+        "eligible_for_check": True,
+        "converged_checkpoint": bool(converged_checkpoint),
+        "n_attempted_runs": len(all_runs),
+        "n_runs_analyzed": k,
+        "skipped_no_discovery": skipped_no_discovery,
+        "skipped_low_balanced_accuracy": skipped_low_ba,
+        "min_balanced_accuracy": min_balanced_accuracy,
+        "min_frequency": float(min_frequency),
+        "min_iterations": int(min_iterations),
+        "convergence_window": int(convergence_window),
+        "convergence_jaccard": float(convergence_jaccard),
+        "convergence_max_size_delta": float(convergence_max_size_delta),
+        "jaccard": float(jaccard),
+        "relative_size_delta": float(size_delta),
+        "stable_panel_size_current": int(curr_size),
+        "stable_panel_size_previous": int(prev_size),
+        "k_qualifying_runs_current": int(k),
+        "k_qualifying_runs_previous": int(k - int(convergence_window)),
+    }
 
 
 def compute_gene_stability(
@@ -1156,6 +1298,7 @@ def run_stability_analysis(
     tier_extended_frequency: float = 0.80,
     tier_exploratory_frequency: float = 0.70,
     default_freeze_tier: str = "extended",
+    convergence_diagnostics: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Main entry point for stability analysis."""
     if output_dir is None:
@@ -1298,6 +1441,7 @@ def run_stability_analysis(
         "dmp_frequency_plot_html": str(dmp_frequency_plot_path) if dmp_frequency_plot_path else None,
         "dmp_frequency_charts_by_chromosome": dmp_frequency_plot_by_chrom,
         "dmp_frequency_counts_by_chromosome": dmp_frequency_counts_by_chrom,
+        "early_stopping": convergence_diagnostics or {},
         "output_dir": str(output_dir),
     }
 

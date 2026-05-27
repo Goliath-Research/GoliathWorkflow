@@ -87,3 +87,22 @@ def test_update_backend_params_resyncs_runtime_fields():
     assert updated.backend_profiles.generative_hybrid.params.generative_latent_dim == 31
     assert updated.generative_latent_dim == 31
     assert updated.covariates_path == "/tmp/covariates.csv"
+
+
+def test_stability_early_stop_requires_min_iterations_within_budget():
+    payload = _base_payload()
+    payload["n_iterations"] = 5
+    payload["stability_early_stop_enabled"] = True
+    payload["stability_min_iterations"] = 6
+    with pytest.raises(ValueError, match="stability_min_iterations must be <= n_iterations"):
+        MonteCarloConfig.model_validate(payload)
+
+
+def test_stability_early_stop_requires_window_smaller_than_min_iterations():
+    payload = _base_payload()
+    payload["n_iterations"] = 10
+    payload["stability_early_stop_enabled"] = True
+    payload["stability_min_iterations"] = 5
+    payload["stability_convergence_window"] = 5
+    with pytest.raises(ValueError, match="stability_convergence_window must be smaller"):
+        MonteCarloConfig.model_validate(payload)

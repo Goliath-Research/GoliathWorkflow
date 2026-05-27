@@ -58,7 +58,12 @@ from .validator_metrics import (
     write_step_timings_csv,
     write_summary_json,
 )
-from .stability import run_stability_analysis, freeze_production_model, build_production_model
+from .stability import (
+    run_stability_analysis,
+    freeze_production_model,
+    build_production_model,
+    evaluate_dmp_stability_convergence,
+)
 from .rollout import evaluate_dual_run, write_rollout_report
 from .mc_config_load import (
     apply_monte_carlo_config_overrides,
@@ -2570,6 +2575,18 @@ def main() -> None:
             task_iter = None
 
         completed_iteration_seconds: List[float] = []
+        early_stop_active = bool(
+            (args.stability or config.run_stability) and config.stability_early_stop_enabled
+        )
+        convergence_pass_streak = 0
+        early_stop_checkpoint_history: List[Dict[str, Any]] = []
+        early_stop_summary: Dict[str, Any] = {
+            "enabled": bool(early_stop_active),
+            "triggered": False,
+            "stopped_after_iteration": None,
+            "patience_required": int(config.stability_convergence_patience),
+            "checkpoint_history": early_stop_checkpoint_history,
+        }
         for i in range(start_iteration_idx, config.n_iterations):
             iteration_t0 = time.perf_counter()
             run_id = f"run_{i + 1:04d}"
@@ -2907,6 +2924,26 @@ def main() -> None:
             scalar = iteration_scalar_metrics_from_run_dir(run_dir)
             row = {"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), **scalar}
             rows.append(row)
+            if early_stop_active:
+                checkpoint = evaluate_dmp_stability_convergence(
+                    monte_carlo_runs_root=monte_carlo_runs_root,
+                    min_frequency=float(config.stability_dmp_freq),
+                    min_balanced_accuracy=config.stability_min_balanced_accuracy,
+                    prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+                    min_iterations=int(config.stability_min_iterations),
+                    convergence_window=int(config.stability_convergence_window),
+                    convergence_jaccard=float(config.stability_convergence_jaccard),
+                    convergence_max_size_delta=float(config.stability_convergence_max_size_delta),
+                )
+                checkpoint["iteration"] = int(i + 1)
+                checkpoint["run_id"] = run_id
+                if checkpoint.get("eligible_for_check") and checkpoint.get("converged_checkpoint"):
+                    convergence_pass_streak += 1
+                else:
+                    convergence_pass_streak = 0
+                checkpoint["consecutive_passes"] = int(convergence_pass_streak)
+                checkpoint["patience_required"] = int(config.stability_convergence_patience)
+                early_stop_checkpoint_history.append(checkpoint)
             elapsed = time.perf_counter() - iteration_t0
             completed_iteration_seconds.append(elapsed)
             if progress is None:
@@ -2921,6 +2958,24 @@ def main() -> None:
                 )
             else:
                 progress.advance(task_iter, 1)
+            if (
+                early_stop_active
+                and convergence_pass_streak >= int(config.stability_convergence_patience)
+            ):
+                early_stop_summary["triggered"] = True
+                early_stop_summary["stopped_after_iteration"] = int(i + 1)
+                if progress is not None:
+                    progress.update(task_iter, completed=i + 1)
+                print(
+                    "Early stopping triggered for stability MC: "
+                    f"iteration={i + 1}, "
+                    f"patience={config.stability_convergence_patience}, "
+                    f"window={config.stability_convergence_window}, "
+                    f"jaccard>={config.stability_convergence_jaccard}, "
+                    f"max_size_delta<={config.stability_convergence_max_size_delta}",
+                    file=sys.stderr,
+                )
+                break
 
     if not rows:
         print("No successful iterations; nothing to aggregate.", file=sys.stderr)
@@ -2943,6 +2998,7 @@ def main() -> None:
             tier_extended_frequency=config.stability_tier_extended_freq,
             tier_exploratory_frequency=config.stability_tier_exploratory_freq,
             default_freeze_tier=config.stability_default_freeze_tier,
+            convergence_diagnostics=early_stop_summary,
         )
         print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
         print(f"  Stable DMPs: {stability_summary['dmp_stability'].get('stable_dmps_at_threshold', 0)}")

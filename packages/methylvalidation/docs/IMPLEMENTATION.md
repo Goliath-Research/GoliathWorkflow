@@ -174,6 +174,7 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
    - **Binary:** `stratified_split` → `generate_run_project` → `run_pipeline_for_iteration` (centroid group1/group2 overrides).
    - **Multiclass:** `stratified_split_multiclass` → `generate_run_project_multiclass` → `run_pipeline_for_iteration_multiclass` (centroid + detector only).
    - Read metrics via `iteration_scalar_metrics_from_run_dir(run_dir)` (predictor JSON if present, else detector `result*.json`).
+   - If `stability_early_stop_enabled=true` and stability mode is active, evaluate convergence at each checkpoint (`S_k` vs `S_(k-window)` by Jaccard + size delta) and stop when thresholds pass for `stability_convergence_patience` consecutive checkpoints.
 5. Aggregate → `all_metrics.csv`, `metrics_summary.json`, `step_timings.csv`, optional `resource_summary.json`.
 6. For `--model-mc`, run shared split+centroid+detector preparation once (for `--model-mc-all`), then run backend model stages under isolated backend roots and emit cross-backend ranking files (`backend_ranking.csv`, `backend_ranking.json`).
 7. For `--rollout-compare`, load baseline/candidate summaries, apply configured rollout thresholds, and emit `rollout_decision.json` (or `--rollout-report` path).
@@ -203,6 +204,6 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 | **classifiers/tabular_method_ranking.json** | JSON ranking payload for tabular multi-method selection, including method params and selection rationale fields. |
 | **stability/dmp_frequency_by_chromosome.html** | Combined Plotly stability chart with per-chromosome traces for both candidate (`all`) and final (`selected`) DMPs. X=frequency (% of runs), Y=DMP count. |
 | **stability/dmp_frequency_chr_<chrom>.html** | Per-chromosome Plotly charts with `all` vs `selected` count curves over frequency (%). |
-| **stability/stability_summary.json** | Stability summary now includes `detector_parameters` extracted from `detections/**/results-*.json`: per-run records plus aggregated numeric/categorical distributions for minimal detector/filter fields (`n_dmps_exported`, `total_statistical_dmps`, `total_biological_dmps`, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). |
+| **stability/stability_summary.json** | Stability summary now includes `detector_parameters` extracted from `detections/**/results-*.json`: per-run records plus aggregated numeric/categorical distributions for minimal detector/filter fields (`n_dmps_exported`, `total_statistical_dmps`, `total_biological_dmps`, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`). When adaptive stop is enabled, `early_stopping` diagnostics are also recorded (`enabled`, `triggered`, stop iteration, and checkpoint history with Jaccard/size-delta stats). |
 
 For setup (Docker, venv), config reference, and how to use these outputs for metric distributions and processing/storage estimation, see [USAGE.md](USAGE.md).
