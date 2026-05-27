@@ -31,6 +31,8 @@ The decks use standard Markdown slide separators (`---`) and can be rendered by 
 ```bash
 marp "docs/presentations/methylpipeline-theory-implementation.md" --html
 marp "docs/presentations/methylpipeline-workflows-model-prediction.md" --html
+marp "docs/presentations/methylpipeline-theory-implementation-executive.md" --html
+marp "docs/presentations/methylpipeline-workflows-model-prediction-executive.md" --html
 ```
 
 ### Option B: Quarto revealjs (quick wrapper)
