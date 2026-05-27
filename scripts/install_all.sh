@@ -11,6 +11,7 @@ Usage: scripts/install_all.sh [options]
 Options:
   --pipeline-reqs   Install pipeline-level Python requirements first
   --gpu-reqs        Install GPU requirements (CUDA 13.x stack)
+  --skip-marp       Skip Marp CLI installation
   -h, --help        Show this help
 
 Notes:
@@ -20,11 +21,13 @@ EOF
 
 PIPELINE_REQS=0
 GPU_REQS=0
+SKIP_MARP=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --pipeline-reqs) PIPELINE_REQS=1; shift ;;
         --gpu-reqs) GPU_REQS=1; shift ;;
+        --skip-marp) SKIP_MARP=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
@@ -126,6 +129,30 @@ for pkg in "${PACKAGES[@]}"; do
 done
 
 echo ""
+echo "🖼️ Presentation tooling..."
+if [ "$SKIP_MARP" -eq 1 ]; then
+    echo "   • Skipping Marp installation (--skip-marp)"
+else
+    if command -v npm >/dev/null 2>&1; then
+        echo "   • Installing @marp-team/marp-cli via npm (global)..."
+        npm install -g @marp-team/marp-cli
+        NPM_GLOBAL_BIN="$(npm config get prefix)/bin"
+        if ! command -v marp >/dev/null 2>&1 && [ -x "$NPM_GLOBAL_BIN/marp" ]; then
+            export PATH="$NPM_GLOBAL_BIN:$PATH"
+        fi
+        if command -v marp >/dev/null 2>&1; then
+            echo "   ✓ Marp installed: $(marp --version)"
+        else
+            echo "   ⚠ Marp installation completed but 'marp' is not on PATH"
+            echo "     Add this to your shell profile: export PATH=\"\$(npm config get prefix)/bin:\$PATH\""
+        fi
+    else
+        echo "   ⚠ npm not found; Marp CLI was not installed."
+        echo "     Install Node.js/npm, then run: npm install -g @marp-team/marp-cli"
+    fi
+fi
+
+echo ""
 echo "============================================="
 echo "✅ Package installation complete!"
 echo "============================================="
@@ -142,9 +169,11 @@ echo "   • methyldiseaseprogression - Cross-stage progression synthesis (methy
 echo "   • methylalignmentqc - Alignment QC extraction (methyl-qc)"
 echo "   • methylpredictor - Prediction and validation metrics (methyl-predictor)"
 echo "   • methylvalidation - Monte Carlo validation workflows (methyl-validation)"
+echo "   • marp-cli        - Presentation rendering for docs/presentations/"
 echo ""
 echo "🧪 Test the installation:"
 echo "   python -c \"from methyl_utils import get_logger; print('✓ MethylUtils OK')\""
 echo "   python -c \"from methyl_detector import MethylDetector; print('✓ MethylDetector OK')\""
+echo "   marp --version"
 echo ""
 

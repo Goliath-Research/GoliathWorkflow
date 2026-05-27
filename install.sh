@@ -38,5 +38,6 @@ echo "You can now use the CLI wrappers:"
 echo "  ./packages/methyldetector/modeler config.json"
 echo "  ./packages/methylcentroid/mc config.json"
 echo "  ./packages/methylmapper/mm --help"
+echo "  marp --version"
 echo ""
 

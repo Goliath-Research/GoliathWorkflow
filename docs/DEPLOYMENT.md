@@ -40,6 +40,23 @@ methyl-validation --help
 methyl-stability-freeze-readiness --help
 ```
 
+### Presentation tooling (Marp)
+
+Presentation decks under `docs/presentations/` use Marp-compatible Markdown.
+Install Marp CLI with Node.js/npm:
+
+```bash
+npm install -g @marp-team/marp-cli
+marp --version
+```
+
+Then render decks, for example:
+
+```bash
+marp "docs/presentations/methylpipeline-theory-implementation.md" --html
+marp "docs/presentations/methylpipeline-workflows-model-prediction.md" --html
+```
+
 ### Rule: always use `.venv`
 
 Run tests and CLI tools from the local virtual environment:
@@ -69,6 +86,7 @@ Example:
 cd docker
 docker compose up -d
 docker exec -w /workspace methylpipeline methyl-validation --help
+docker exec -w /workspace methylpipeline marp --version
 ```
 
 ## Documentation Contract

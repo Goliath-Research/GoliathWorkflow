@@ -28,6 +28,13 @@ The decks use standard Markdown slide separators (`---`) and can be rendered by 
 
 ### Option A: Marp
 
+`scripts/install_all.sh` now installs Marp CLI by default (use `--skip-marp` to opt out).
+If `marp` is still not found, add npm global bin to `PATH`:
+
+```bash
+export PATH="$(npm config get prefix)/bin:$PATH"
+```
+
 ```bash
 marp "docs/presentations/methylpipeline-theory-implementation.md" --html
 marp "docs/presentations/methylpipeline-workflows-model-prediction.md" --html
