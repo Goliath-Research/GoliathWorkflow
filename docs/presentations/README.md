@@ -35,14 +35,14 @@ If `marp` is still not found, add npm global bin to `PATH`:
 export PATH="$(npm config get prefix)/bin:$PATH"
 ```
 
-Recommended rendering command (includes Mermaid chart enablement in HTML output):
+Recommended rendering command:
 
 ```bash
 ./scripts/render_presentations.sh
 ```
 
-This script embeds Mermaid JS directly into each generated HTML file, so charts render from local `file://` copies without CDN/network access.
-It also renders with Marp's `bare` template to avoid `file://` iframe security-origin warnings from bespoke/presenter features.
+This script uses Marp's `bare` template to keep output minimal.
+It does not embed Mermaid runtime in the generated HTML.
 
 ```bash
 marp "docs/presentations/methylpipeline-theory-implementation.md" --html
