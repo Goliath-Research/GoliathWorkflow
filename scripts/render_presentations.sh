@@ -44,13 +44,18 @@ presentations = root / "docs" / "presentations"
 mermaid_bundle = Path(os.environ["MERMAID_BUNDLE"]).read_text(encoding="utf-8")
 
 inject = (
-    "<script>\n"
+    """<script>
+window.__MP_MERMAID_CONFIG__ = { startOnLoad: false, securityLevel: "loose" };
+window.mermaid = window.__MP_MERMAID_CONFIG__;
+</script>
+"""
+    + "<script>\n"
     + mermaid_bundle
     + "\n</script>\n"
     + """<script>
 (function () {
   if (!window.mermaid) return;
-  mermaid.initialize({ startOnLoad: false, securityLevel: "loose" });
+  mermaid.initialize(window.__MP_MERMAID_CONFIG__ || { startOnLoad: false, securityLevel: "loose" });
   const blocks = document.querySelectorAll("pre code.language-mermaid");
   blocks.forEach((code) => {
     const pre = code.closest("pre");
