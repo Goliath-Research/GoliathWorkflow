@@ -27,10 +27,11 @@ execute:
 
 MethylPipeline is a monorepo for DNA methylation analysis. Its core supervised path centers on empirical cumulative distribution functions (ECDFs) and histogram-backed centroid summaries rather than forcing the full workflow into a single parametric family. Around that core, the repository adds packages for gene mapping, enrichment, prediction, repeated validation, and alignment quality control.
 
-At a practical level, the repository supports two major modes of work:
+At a practical level, the repository supports three major modes of work:
 
 1. building a stable production model from repeated train-validation splits, and
-2. applying a frozen model for predictor-only evaluation.
+2. performing backend model-selection Monte Carlo (`--model-mc`) over frozen production context, and
+3. applying frozen artifacts for holdout evaluation (`--post-model-validation` and `--predictor-only`).
 
 The codebase is organized as cooperating packages with `methylutils` as the shared mathematical and utility layer.
 
@@ -178,9 +179,19 @@ Model creation is the longer production workflow. It is intentionally separated 
 
 1. `--stability`: repeated train-validation splits that rerun centroid and detector on the training subset only.
 2. `--freeze`: rerun the stable panel on all samples and produce downstream biological interpretation.
-3. `--model`: train the final deployable classifier and predictor artifacts using the frozen production project.
+3. `--model-mc`: run backend model-selection Monte Carlo from frozen production context.
+4. `--select-best-model`: rank backends and train final all-data production model.
 
 This split matters statistically because it reduces leakage between feature discovery and final model construction, even though it is still an internal workflow rather than external validation on an independent cohort.
+
+Canonical command sequence:
+
+```bash
+methyl-validation --project configs/my_project.json --stability
+methyl-validation --project configs/my_project.json --freeze
+methyl-validation --project configs/my_project.json --model-mc --model-mc-all
+methyl-validation --project configs/my_project.json --select-best-model --model-mc-all
+```
 
 ### Workflow 1 Diagram
 
@@ -194,8 +205,10 @@ flowchart TD
     E --> F["--freeze"]
     F --> G["all-sample centroid -> detector(fixed) -> mapper -> enricher"]
     G --> H["production/project.json"]
-    H --> I["--model"]
-    I --> J["classifier -> predictor artifacts"]
+    H --> I["--model-mc --model-mc-all"]
+    I --> J["backend ranking"]
+    J --> K["--select-best-model"]
+    K --> L["final production model artifacts"]
 ```
 :::
 
@@ -216,8 +229,10 @@ flowchart TD
 \node[box, below=of E] (F) {\texttt{--freeze}};
 \node[box, below=of F] (G) {All-sample rerun: centroid $\to$ detector(fixed) $\to$ mapper $\to$ enricher};
 \node[box, below=of G] (H) {\texttt{production/project.json}};
-\node[box, below=of H] (I) {\texttt{--model}};
-\node[box, below=of I] (J) {Classifier and predictor artifacts};
+\node[box, below=of H] (I) {\texttt{--model-mc --model-mc-all}};
+\node[box, below=of I] (J) {Backend metrics and ranking};
+\node[box, below=of J] (K) {\texttt{--select-best-model}};
+\node[box, below=of K] (L) {Final production model artifacts};
 \draw[arr] (A)--(B);
 \draw[arr] (B)--(C);
 \draw[arr] (C)--(D);
@@ -227,28 +242,34 @@ flowchart TD
 \draw[arr] (G)--(H);
 \draw[arr] (H)--(I);
 \draw[arr] (I)--(J);
+\draw[arr] (J)--(K);
+\draw[arr] (K)--(L);
 \end{tikzpicture}
 \caption{Workflow 1 for creating a stable production model.}
 \end{figure}
 ```
 :::
 
-## Workflow 2: Frozen-Model Prediction
+## Workflow 2: Backend Model-Selection Monte Carlo
 
-The second workflow assumes a frozen production project already exists. It runs predictor-only evaluation across repeated splits while reusing the frozen model artifacts.
+The second workflow assumes a frozen production project already exists and evaluates backend model behavior across repeated holdout splits:
 
-This workflow answers a different question from Workflow 1. Instead of re-discovering loci and re-training the pipeline for each split, it asks how stable the frozen model's prediction metrics are across sampled validation subsets.
+- `--model-mc --model-backend <backend>` evaluates one backend.
+- `--model-mc --model-mc-all` builds shared split+centroid+detector runs once, then executes backend-local model stages.
+- when a split is compatible with primary MC runs, centroid/detector artifacts are symlinked instead of recomputed.
 
 ### Workflow 2 Diagram
 
 ::: {.content-visible when-format="html"}
 ```mermaid
 flowchart TD
-    A["production/project.json"] --> B["--predictor-only"]
-    C["project.json"] --> B
-    B --> D["Repeated splits"]
-    D --> E["merge frozen paths -> predictor"]
-    E --> F["validation metrics"]
+    A["production/project.json"] --> B["--model-mc"]
+    C["primary monte_carlo_runs"] --> D["split reuse resolver"]
+    B --> D
+    D --> E["model_mc/shared/run_XXXX"]
+    E --> F["symlink centroids/detections when reusable"]
+    F --> G["backend-local train/predict runs"]
+    G --> H["backend metrics + ranking"]
 ```
 :::
 
@@ -261,22 +282,33 @@ flowchart TD
   box/.style={draw, rounded corners=2pt, text width=8.5cm, align=center, font=\small, minimum height=0.7cm, fill=gray!8},
   arr/.style={-{Latex[length=2mm]}, thick}
 ]
-\node[box] (A) {\texttt{production/project.json} (frozen model)};
-\node[box, below=of A] (B) {\texttt{project.json} (cohorts and validation settings)};
-\node[box, below=of B] (C) {\texttt{--predictor-only}};
-\node[box, below=of C] (D) {Repeated splits};
-\node[box, below=of D] (E) {Merge frozen paths $\to$ predictor};
-\node[box, below=of E] (F) {Validation metrics and aggregated summaries};
+\node[box] (A) {\texttt{production/project.json} (frozen production context)};
+\node[box, below=of A] (B) {\texttt{--model-mc} (\texttt{--model-mc-all} optional)};
+\node[box, below=of B] (C) {Split reuse from primary \texttt{monte\_carlo\_runs} when compatible};
+\node[box, below=of C] (D) {\texttt{model\_mc/shared/run\_XXXX} preparation};
+\node[box, below=of D] (E) {Symlink centroid/detector artifacts if reusable};
+\node[box, below=of E] (F) {Backend-local train/predict stages};
+\node[box, below=of F] (G) {Per-backend metrics and ranking outputs};
 \draw[arr] (A)--(B);
 \draw[arr] (B)--(C);
 \draw[arr] (C)--(D);
 \draw[arr] (D)--(E);
 \draw[arr] (E)--(F);
+\draw[arr] (F)--(G);
 \end{tikzpicture}
-\caption{Workflow 2 for predictor-only evaluation of a frozen model.}
+\caption{Workflow 2 for backend model-selection Monte Carlo over frozen production context.}
 \end{figure}
 ```
 :::
+
+## Workflow 3: Frozen-Artifact Holdout Evaluation
+
+This workflow evaluates frozen artifacts without retraining:
+
+- `--post-model-validation` runs Monte Carlo holdout evaluation using frozen production artifacts (backend-aware dispatch).
+- `--predictor-only` executes repeated predictor-only runs that reuse frozen paths.
+
+It answers a deployment-style question: how stable are frozen-model metrics across sampled validation subsets when training is fixed.
 
 # Statistical Character
 
@@ -297,7 +329,10 @@ Common outputs across the repository include:
 - detector outputs containing DMP statistics and filtered panels,
 - classifier artifacts and predictor metrics,
 - stability summaries across Monte Carlo iterations,
+- model-MC shared/backend roots with split-reuse diagnostics and backend ranking,
 - mapping and enrichment outputs for downstream biological interpretation,
+- mapper annotation cache files under `production/model_bundle/` for mapped-family model builds,
+- aggregated ECDF OvR artifacts (`ecdf_aggregated_ovr.pkl` + `.meta.json`) for observed-hybrid ECDF mode,
 - QC summaries extracted from external alignment reports.
 
 A typical production-oriented run produces a `monte_carlo_runs/production/` tree containing the frozen project, stable panel outputs, downstream interpretation products, and final deployable model artifacts.
