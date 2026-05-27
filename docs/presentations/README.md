@@ -35,6 +35,12 @@ If `marp` is still not found, add npm global bin to `PATH`:
 export PATH="$(npm config get prefix)/bin:$PATH"
 ```
 
+Recommended rendering command (includes Mermaid chart enablement in HTML output):
+
+```bash
+./scripts/render_presentations.sh
+```
+
 ```bash
 marp "docs/presentations/methylpipeline-theory-implementation.md" --html
 marp "docs/presentations/methylpipeline-workflows-model-prediction.md" --html
